@@ -1245,14 +1245,18 @@ int ObWindowFunctionVecOp::eval_prev_part_exprs(const ObCompactRow *last_row, Ob
       } else {
         ObIVector *part_res_vec = part_expr->get_vector(eval_ctx_);
         part_res_vec->get_payload(0, is_null, payload, len);
-        if (OB_ISNULL(part_res_buf = (char *)alloc.alloc(len))) {
+        if (is_null || len <= 0) {
+          part_res_buf = nullptr;
+          len = 0;
+        } else if (OB_ISNULL(part_res_buf = (char *)alloc.alloc(len))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("allocate memory failed", K(ret));
         } else {
           MEMCPY(part_res_buf, payload, len);
-          if (OB_FAIL(last_part_infos.push_back(cell_info(is_null, len, part_res_buf)))) {
-            LOG_WARN("push back element failed", K(ret));
-          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(last_part_infos.push_back(cell_info(is_null, len, part_res_buf)))) {
+          LOG_WARN("push back element failed", K(ret));
         }
       }
     }
