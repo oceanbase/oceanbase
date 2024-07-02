@@ -21,7 +21,7 @@ namespace oceanbase
 namespace sql
 {
 
-OB_SERIALIZE_MEMBER((ObScalarAggregateSpec, ObGroupBySpec));
+OB_SERIALIZE_MEMBER((ObScalarAggregateSpec, ObGroupBySpec), enable_hash_base_distinct_);
 
 int ObScalarAggregateOp::inner_open()
 {

@@ -25,8 +25,11 @@ class ObScalarAggregateSpec : public ObGroupBySpec
   OB_UNIS_VERSION_V(1);
 public:
   ObScalarAggregateSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
-    : ObGroupBySpec(alloc, type)
+    : ObGroupBySpec(alloc, type), enable_hash_base_distinct_(false)
   {}
+
+public:
+  bool enable_hash_base_distinct_;
 
 private:
   // disallow copy
