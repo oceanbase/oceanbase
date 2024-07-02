@@ -474,7 +474,8 @@ ObDASInsertResult::ObDASInsertResult()
     result_buffer_(),
     result_newrow_iter_(),
     output_types_(nullptr),
-    is_duplicated_(false)
+    is_duplicated_(false),
+    response_snapshot_()
 {
 }
 
@@ -571,7 +572,8 @@ int ObDASInsertResult::reuse()
 OB_SERIALIZE_MEMBER((ObDASInsertResult, ObIDASTaskResult),
                     affected_rows_,
                     result_buffer_,
-                    is_duplicated_);
+                    is_duplicated_,
+                    response_snapshot_);
 
 
 void ObDASConflictIterator::reset()

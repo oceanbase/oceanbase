@@ -130,6 +130,7 @@ public:
 
   bool is_duplicated() { return is_duplicated_; }
   void set_is_duplicated(bool is_duplicated) { is_duplicated_ = is_duplicated; }
+  transaction::ObTxReadSnapshot &get_response_snapshot() { return response_snapshot_; }
 
   INHERIT_TO_STRING_KV("ObIDASTaskResult", ObIDASTaskResult,
                         K_(affected_rows));
@@ -139,6 +140,7 @@ private:
   ObDASWriteBuffer::NewRowIterator result_newrow_iter_;
   const ObjMetaFixedArray *output_types_;
   bool is_duplicated_;
+  transaction::ObTxReadSnapshot response_snapshot_;
 };
 }  // namespace sql
 }  // namespace oceanbase
