@@ -54,8 +54,6 @@ private:
                                      JoinedTable *join_table,
                                      bool &trans_happened);
 
-  ObItemType get_opposite_expr_type(ObItemType item_type);
-
   int add_limit_for_exists_subquery(ObDMLStmt *stmt,bool &trans_happened);
 
   int recursive_add_limit_for_exists_expr(ObRawExpr *expr, bool &trans_happened);
@@ -200,17 +198,7 @@ private:
                                   ObNotNullContext *not_null_ctx,
                                   bool is_bool_expr,
                                   bool &trans_happened);
-  int do_trans_any_all_as_exists(ObRawExpr *&expr,
-                                 ObNotNullContext *not_null_ctx,
-                                 bool &trans_happened);
-  int check_can_trans_as_exists(ObRawExpr* expr, bool is_bool_expr, bool &is_valid);
-  int check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
-                                     bool is_correlated,
-                                     bool &match_index,
-                                     bool &is_valid);
-  int query_cmp_to_exists_value_cmp(ObItemType type, bool is_with_all, ObItemType& new_type);
   int add_limit_for_any_all_subquery(ObRawExpr *stmt,bool &trans_happened);
-  int prepare_trans_any_all_as_exists(ObQueryRefRawExpr* expr, ObSelectStmt *&trans_stmt);
   int transform_any_all_as_exists(ObDMLStmt *stmt, bool &trans_happened);
   int transform_any_all_as_exists_joined_table(ObDMLStmt* stmt,
                                                TableItem *table,

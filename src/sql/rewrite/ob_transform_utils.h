@@ -1997,6 +1997,28 @@ public:
                                            const ObIArray<ObRawExpr*> &raw_having_exprs,
                                            const ObIArray<ObRawExpr*> &group_clause_exprs,
                                            ObIArray<ObRawExpr*> &having_exprs_for_deduce);
+  static int check_expr_used_as_condition(ObDMLStmt *stmt,
+                                          ObRawExpr *root_expr,
+                                          ObRawExpr *expr,
+                                          bool &used_as_condition);
+  static int inner_check_expr_used_as_condition(ObRawExpr *cur_expr,
+                                                ObRawExpr *expr,
+                                                bool parent_as_condition,
+                                                bool &used_as_condition);
+  static int check_can_trans_any_all_as_exists(ObTransformerCtx *ctx,
+                                               ObRawExpr* expr,
+                                               bool used_as_condition,
+                                               bool need_match_index,
+                                               bool& is_valid);
+  static int do_trans_any_all_as_exists(ObTransformerCtx *ctx,
+                                        ObRawExpr *&expr,
+                                        ObNotNullContext *not_null_ctx,
+                                        bool &trans_happened);
+  static ObItemType get_opposite_sq_cmp_type(ObItemType item_type);
+  static int check_enable_global_parallel_execution(ObDMLStmt *stmt,
+                                                    ObSQLSessionInfo *session,
+                                                    ObQueryCtx *query_ctx,
+                                                    bool &enable_parallel);
 private:
   static int inner_get_lazy_left_join(ObDMLStmt *stmt,
                                       TableItem *table,
@@ -2070,6 +2092,16 @@ private:
                                               ObRawExpr* match_expr,
                                               bool &need_calc,
                                               ObIArray<ObExprConstraint> &constraints);
+  static int check_stmt_can_trans_as_exists(ObSelectStmt *stmt,
+                                            ObTransformerCtx *ctx,
+                                            bool is_correlated,
+                                            bool need_match_index,
+                                            bool &match_index,
+                                            bool &is_valid);
+  static int prepare_trans_any_all_as_exists(ObTransformerCtx *ctx,
+                                             ObQueryRefRawExpr* right_hand,
+                                             ObSelectStmt *&trans_stmt);
+  static int query_cmp_to_exists_value_cmp(ObItemType type, bool is_with_all, ObItemType& new_type);
 };
 
 class StmtUniqueKeyProvider
