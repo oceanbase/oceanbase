@@ -355,6 +355,8 @@ int64_t ObS2Adapter::init(const ObString &swkb, const ObSrsBoundsItem *bound)
         geo_ = geo;
         if (OB_FAIL(geo->do_visit(*visitor_))) {
           LOG_WARN("fail to do_visit by ObWkbToS2Visitor", K(ret));
+        } else if (OB_FAIL(visitor_->get_s2_cell_union())) {
+          LOG_WARN("fail to get s2 cell union", K(ret));
         } else if (visitor_->is_invalid()) {
           // 1. get valid geo inside bounds
           ObGeometry *corrected_geo = NULL;
@@ -375,6 +377,8 @@ int64_t ObS2Adapter::init(const ObString &swkb, const ObSrsBoundsItem *bound)
             // 3. do_visit again
             if (OB_FAIL(corrected_geo->do_visit(*visitor_))) {
               LOG_WARN("fail to do_visit by ObWkbToS2Visitor", K(ret));
+            } else if (OB_FAIL(visitor_->get_s2_cell_union())) {
+              LOG_WARN("fail to get s2 cell union", K(ret));
             }
           }
         }
