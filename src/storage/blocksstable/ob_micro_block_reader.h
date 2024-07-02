@@ -92,7 +92,7 @@ public:
   int get_rows(
       const common::ObIArray<int32_t> &cols_projector,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const blocksstable::ObDatumRow *default_row,
+      common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
       const int32_t *row_ids,
       const int64_t row_cap,
       ObDatumRow &row_buf,
@@ -164,7 +164,7 @@ public:
   int get_rows(
       const common::ObIArray<int32_t> &cols_projector,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-      const blocksstable::ObDatumRow *default_row,
+      common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
       const int32_t *row_ids,
       const int64_t vector_offset,
       const int64_t row_cap,

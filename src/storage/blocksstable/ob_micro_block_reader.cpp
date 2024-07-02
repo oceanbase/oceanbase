@@ -790,7 +790,7 @@ int ObMicroBlockReader::filter_pushdown_filter(
 int ObMicroBlockReader::get_rows(
     const common::ObIArray<int32_t> &cols_projector,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const blocksstable::ObDatumRow *default_row,
+    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
     const int32_t *row_ids,
     const int64_t row_cap,
     ObDatumRow &row_buf,
@@ -832,16 +832,12 @@ int ObMicroBlockReader::get_rows(
           } else if (row_buf.storage_datums_[col_idx].is_null()) {
             datum.set_null();
           } else if (row_buf.storage_datums_[col_idx].is_nop()) {
-            if (OB_ISNULL(default_row)) {
-              ret = OB_ERR_UNEXPECTED;
-              STORAGE_LOG(WARN, "Unexpected null default row", K(ret), KP(default_row));
-            } else if (default_row->storage_datums_[i].is_nop()) {
-              // virtual columns will be calculated in sql
-            } else if (OB_FAIL(datum.from_storage_datum(default_row->storage_datums_[i], datum_infos.at(i).get_obj_datum_map()))) {
+            if (default_datums[i].is_nop()) {// virtual columns will be calculated in sql
+            } else if (OB_FAIL(datum.from_storage_datum(default_datums[i], datum_infos.at(i).get_obj_datum_map()))) {
               // fill columns added
-              LOG_WARN("Fail to transfer datum", K(ret), K(i), K(idx), K(row_idx), KPC(default_row));
+              LOG_WARN("Fail to transfer datum", K(ret), K(i), K(idx), K(row_idx), K(default_datums));
             }
-            LOG_TRACE("Transfer nop value", K(ret), K(idx), K(row_idx), K(col_idx), KPC(default_row));
+            LOG_TRACE("Transfer nop value", K(ret), K(idx), K(row_idx), K(col_idx), K(default_datums));
           } else {
             bool need_copy = false;
             if (row_buf.storage_datums_[col_idx].need_copy_for_encoding_column_with_flat_format(datum_infos.at(i).get_obj_datum_map())) {
@@ -880,7 +876,7 @@ int ObMicroBlockReader::get_rows(
 int ObMicroBlockReader::get_rows(
     const common::ObIArray<int32_t> &cols_projector,
     const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
-    const blocksstable::ObDatumRow *default_row,
+    common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
     const int32_t *row_ids,
     const int64_t vector_offset,
     const int64_t row_cap,
@@ -922,13 +918,10 @@ int ObMicroBlockReader::get_rows(
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("Unexpected col idx", K(ret), K(i), K(col_idx), K(read_info_->get_request_count()));
           } else if (row_buf.storage_datums_[col_idx].is_nop()) {
-            if (OB_ISNULL(default_row)) {
-              ret = OB_ERR_UNEXPECTED;
-              STORAGE_LOG(WARN, "Unexpected null default row", K(ret), KP(default_row));
-            } else if (default_row->storage_datums_[i].is_nop()) {
+            if (default_datums[i].is_nop()) {
               // virtual columns will be calculated in sql
             } else {
-              col_datum = &(default_row->storage_datums_[i]);
+              col_datum = &(default_datums[i]);
             }
           } else {
             ObStorageDatum &tmp_datum = row_buf.storage_datums_[col_idx];

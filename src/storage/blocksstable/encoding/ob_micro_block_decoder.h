@@ -36,6 +36,9 @@ struct ObColumnDecoder
 {
 public:
   ObColumnDecoder() : decoder_(nullptr), ctx_(nullptr) {}
+
+  virtual ~ObColumnDecoder() {}
+
   void reset()
   {
     decoder_ = nullptr;
@@ -299,6 +302,7 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
       const int32_t *row_ids,
       const char **cell_datas,
       const int64_t row_cap,
@@ -340,7 +344,7 @@ public:
   virtual bool can_apply_black(const common::ObIArray<int32_t> &col_offsets) const override
   {
     return 1 == col_offsets.count() &&
-        ObColumnHeader::DICT == decoders_[col_offsets.at(0)].ctx_->col_header_->type_ &&
+        (decoders_[col_offsets.at(0)].ctx_->col_header_ == NULL || ObColumnHeader::DICT == decoders_[col_offsets.at(0)].ctx_->col_header_->type_ )&&
         header_->all_lob_in_row_;
   }
   virtual int get_distinct_count(const int32_t group_by_col, int64_t &distinct_cnt) const override;
@@ -361,6 +365,7 @@ public:
   virtual int get_rows(
       const common::ObIArray<int32_t> &cols,
       const common::ObIArray<const share::schema::ObColumnParam *> &col_params,
+      common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> &default_datums,
       const int32_t *row_ids,
       const int64_t row_cap,
       const char **cell_datas,

@@ -35,7 +35,7 @@ ObVectorStore::ObVectorStore(
     datum_infos_(*context_.stmt_allocator_),
     col_params_(*context_.stmt_allocator_),
     group_idx_expr_(nullptr),
-    default_row_(),
+    default_datums_(*context_.stmt_allocator_),
     group_by_cell_(nullptr),
     iter_param_(nullptr)
   {}
@@ -55,7 +55,7 @@ void ObVectorStore::reset()
   col_params_.reset();
   group_idx_expr_ = nullptr;
   iter_param_ = nullptr;
-  default_row_.reset();
+  default_datums_.reset();
   if (nullptr != group_by_cell_) {
     group_by_cell_->~ObGroupByCell();
     context_.stmt_allocator_->free(group_by_cell_);
@@ -87,8 +87,8 @@ int ObVectorStore::init(const ObTableAccessParam &param)
     const bool use_new_format = param.iter_param_.use_new_format();
     if (OB_FAIL(exprs_.init(expr_count))) {
       LOG_WARN("Failed to init exprs", K(ret));
-    } else if (OB_FAIL(default_row_.init(*context_.stmt_allocator_, out_cols_param->count()))) {
-      STORAGE_LOG(WARN, "Failed to init datum row", K(ret), K(out_cols_param->count()));
+    } else if (OB_FAIL(default_datums_.init(expr_count))) {
+      STORAGE_LOG(WARN, "Failed to init datum row", K(ret));
     } else if (OB_FAIL(cols_projector_.init(expr_count))) {
       LOG_WARN("Failed to init cols", K(ret));
     } else if (OB_FAIL(datum_infos_.init(expr_count))) {
@@ -135,9 +135,11 @@ int ObVectorStore::init(const ObTableAccessParam &param)
             col_param = out_cols_param->at(out_cols_projector.at(i));
           }
           ObObj def_cell(out_cols_param->at(out_cols_projector.at(i))->get_orig_default_value());
+          blocksstable::ObStorageDatum default_datum;
+          default_datum.from_obj(def_cell);
           if (def_cell.is_nop_value()) {
-            default_row_.storage_datums_[col_params_.count()].set_nop();
-          } else if (OB_FAIL(default_row_.storage_datums_[col_params_.count()].from_obj(def_cell, expr->obj_datum_map_))) {
+            default_datums_[col_params_.count()].set_nop();
+          } else if (OB_FAIL(default_datums_.push_back(default_datum))) {
             LOG_WARN("convert obj to datum failed", K(ret), K(col_params_.count()), K(def_cell));
           }
 
@@ -148,7 +150,6 @@ int ObVectorStore::init(const ObTableAccessParam &param)
         }
       }
     }
-    default_row_.count_ = col_params_.count();
   }
   if (OB_SUCC(ret) && param.iter_param_.enable_pd_group_by()) {
     void *buf = nullptr;
@@ -285,7 +286,7 @@ int ObVectorStore::fill_output_rows(
                                                   cell_data_ptrs_,
                                                   len_array_,
                                                   exprs_,
-                                                  &default_row_))) {
+                                                  default_datums_))){
       LOG_WARN("Failed to get rows for rich format", K(ret));
     }
   } else if (OB_FAIL(scanner->get_rows_for_old_format(cols_projector_,
@@ -296,7 +297,7 @@ int ObVectorStore::fill_output_rows(
                                                       cell_data_ptrs_,
                                                       exprs_,
                                                       datum_infos_,
-                                                      &default_row_))) {
+                                                      default_datums_))){
     LOG_WARN("Failed to get rows for old format", K(ret));
   }
   if (OB_SUCC(ret)) {
@@ -505,7 +506,7 @@ int64_t ObVectorStore::to_string(char *buf, const int64_t buf_len) const
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K_(exprs),
-       K_(default_row),
+       K_(default_datums),
        K_(cols_projector),
        K_(count),
        K_(batch_size),
