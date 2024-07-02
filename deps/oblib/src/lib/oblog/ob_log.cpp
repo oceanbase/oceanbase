@@ -1558,7 +1558,7 @@ int ObLogger::init(const ObBaseLogWriterCfg &log_cfg,
     }
     if (OB_SUCC(ret)) {
       allocator_->set_limit(limit);
-      allocator_->set_nway(4);
+      allocator_->set_nway(8);
       if (OB_FAIL(ObBaseLogWriter::init(log_cfg, thread_name))) {
         LOG_STDERR("init ObBaseLogWriter error. ret=%d\n", ret);
       } else if (OB_FAIL(ObBaseLogWriter::start())) {
