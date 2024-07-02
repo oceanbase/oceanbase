@@ -44,19 +44,19 @@ using namespace oceanbase::common;
  * where v1.c1 = v2.c1 group by v1.c2;
  *
  */
-int ObTransformGroupByPushdown::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                                                             ObDMLStmt *&stmt,
-                                                             bool &trans_happened)
-{
+int ObTransformGroupByPushdown::transform_one_stmt(
+    common::ObIArray<ObParentDMLStmt> &parent_stmts,
+    ObDMLStmt *&stmt,
+    bool &trans_happened) {
   int ret = OB_SUCCESS;
   bool trans_pushdown_happened = false;
   bool trans_pushdown_to_union_happened = false;
-  if (OB_FAIL(transform_one_stmt_groupby_pushdown(parent_stmts, stmt,
+  if (OB_FAIL(try_push_down_groupby_into_join(parent_stmts, stmt,
                                                   trans_pushdown_happened))) {
     LOG_WARN("failed to transform one stmt groupby pushdown");
   } else if (trans_pushdown_happened){
     // do nothing
-  } else if (OB_FAIL(transform_one_stmt_groupby_pushdown_to_union(
+  } else if (OB_FAIL(try_push_down_groupby_into_union(
                  parent_stmts, stmt, trans_pushdown_to_union_happened))) {
     LOG_WARN("failed to transform one stmt groupby pushdown to union");
   }
@@ -64,8 +64,9 @@ int ObTransformGroupByPushdown::transform_one_stmt(common::ObIArray<ObParentDMLS
   return ret;
 }
 
-int ObTransformGroupByPushdown::transform_one_stmt_groupby_pushdown(
-    common::ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *&stmt,
+int ObTransformGroupByPushdown::try_push_down_groupby_into_join(
+    common::ObIArray<ObParentDMLStmt> &parent_stmts,
+    ObDMLStmt *&stmt,
     bool &trans_happened) {
   int ret = OB_SUCCESS;
   trans_happened = false;
@@ -85,7 +86,7 @@ int ObTransformGroupByPushdown::transform_one_stmt_groupby_pushdown(
     LOG_WARN("stmt is null", K(ret));
   } else if (!stmt->is_select_stmt()) {
     // do nothing
-  } else if (OB_FAIL(check_groupby_push_down_validity(
+  } else if (OB_FAIL(check_push_down_into_join_validity(
                        static_cast<ObSelectStmt *>(stmt), is_valid))) {
     LOG_WARN("failed to check group by push down validity", K(ret));
   } else if (!is_valid) {
@@ -99,7 +100,7 @@ int ObTransformGroupByPushdown::transform_one_stmt_groupby_pushdown(
     LOG_TRACE("param is not valid");
   } else if (OB_FAIL(try_trans_helper.fill_helper(stmt->get_query_ctx()))) {
     LOG_WARN("failed to fill try trans helper", K(ret));
-  } else if (OB_FAIL(do_groupby_push_down(static_cast<ObSelectStmt *>(stmt),
+  } else if (OB_FAIL(do_groupby_push_down_into_join(static_cast<ObSelectStmt *>(stmt),
                                           params,
                                           flattern_joined_tables,
                                           trans_stmt,
@@ -129,14 +130,15 @@ int ObTransformGroupByPushdown::transform_one_stmt_groupby_pushdown(
   return ret;
 }
 
-int ObTransformGroupByPushdown::transform_one_stmt_groupby_pushdown_to_union(
-    common::ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *&stmt,
+int ObTransformGroupByPushdown::try_push_down_groupby_into_union(
+    common::ObIArray<ObParentDMLStmt> &parent_stmts,
+    ObDMLStmt *&stmt,
     bool &trans_happened) {
   int ret = OB_SUCCESS;
   bool is_valid = true;
   ObSelectStmt *select_stmt = NULL;
   ObSelectStmt *union_stmt = NULL;
-  ObSEArray<ObSelectStmt *, 2> child_stmts_of_union;
+  ObSEArray<ObSelectStmt *, 2> child_stmts;
   ObSEArray<ObSEArray<TableItem *, 4>, 4> trans_tables;
   ObSEArray<TableItem *, 4> trans_table;
   TableItem *single_trans_table = NULL;
@@ -153,15 +155,15 @@ int ObTransformGroupByPushdown::transform_one_stmt_groupby_pushdown_to_union(
   } else if ((OB_NOT_NULL(myhint) && myhint->is_disable_hint())) {
     LOG_TRACE("hint disable");
   } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
-  } else if (OB_FAIL(check_groupby_push_down_to_union_validity(
-                 select_stmt, union_stmt, child_stmts_of_union, is_valid))) {
+  } else if (OB_FAIL(check_push_down_into_union_validity(
+                 select_stmt, union_stmt, child_stmts, is_valid))) {
     LOG_WARN("failed to check group by push down to union validity", K(ret));
   } else if (!is_valid) {
     LOG_TRACE("push down to union is not valid");
   } else if (OB_FAIL(get_new_columns(select_stmt, groupby_col_ids, new_columns))) {
     LOG_WARN("failed to get new columns", K(ret));
-  } else if (OB_FAIL(do_groupby_push_down_to_union(
-                  select_stmt, union_stmt, child_stmts_of_union,
+  } else if (OB_FAIL(do_groupby_push_down_into_union(
+                  select_stmt, union_stmt, child_stmts,
                   groupby_col_ids, new_columns, trans_happened))) {
     LOG_WARN("failed to do groupby push down to union");
   } else if (OB_ISNULL(single_trans_table = select_stmt->get_table_item(0))) {
@@ -179,23 +181,23 @@ int ObTransformGroupByPushdown::transform_one_stmt_groupby_pushdown_to_union(
   return ret;
 }
 
-int ObTransformGroupByPushdown::do_groupby_push_down_to_union(
-    ObSelectStmt *stmt, ObSelectStmt *union_stmt,
-    ObIArray<ObSelectStmt *> &child_stmts_of_union,
-    ObIArray<uint64_t> &groupby_col_ids, ObIArray<NewColumnDesc> &new_columns,
+int ObTransformGroupByPushdown::do_groupby_push_down_into_union(
+    ObSelectStmt *stmt,
+    ObSelectStmt *union_stmt,
+    ObIArray<ObSelectStmt *> &child_stmts,
+    ObIArray<uint64_t> &groupby_col_ids,
+    ObIArray<NewColumnDesc> &new_columns,
     bool &trans_happened) {
   int ret = OB_SUCCESS;
   bool is_basic = false;
-  bool happened = false;
-  trans_happened = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(union_stmt) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   }
   // transform child stmts of union
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts_of_union.count(); ++i) {
-    ObSelectStmt *child_stmt_of_union = child_stmts_of_union.at(i);
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    ObSelectStmt *child_stmt_of_union = child_stmts.at(i);
     if (OB_ISNULL(child_stmt_of_union)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("child stmt of stmt is null", K(ret));
@@ -205,39 +207,71 @@ int ObTransformGroupByPushdown::do_groupby_push_down_to_union(
       if (is_basic) {
         // pushdown group by
         if (OB_FAIL(transform_basic_child_stmt_of_union(
-                child_stmt_of_union, groupby_col_ids, new_columns, happened))) {
+                child_stmt_of_union, groupby_col_ids, new_columns))) {
           LOG_WARN("failed to transform basic child stmt of union", K(ret));
-        } else {
-          trans_happened |= happened;
         }
       } else {
         // only change projection
-        if (OB_FAIL(transform_non_basic_child_stmt_of_union(
-                child_stmt_of_union, new_columns, happened))) {
+        if (OB_FAIL(transform_non_basic_child_stmt_of_union(child_stmt_of_union,
+                                                            new_columns))) {
           LOG_WARN("failed to transform non-basic child stmt of union", K(ret));
-        } else {
-          trans_happened |= happened;
         }
       }
     }
   }
-  if (OB_SUCC(ret) && trans_happened) {
-    union_stmt->clear_select_item();
-    if (OB_FAIL(union_stmt->create_select_list_for_set_stmt(*ctx_->expr_factory_))) {
-      LOG_WARN("failed to create select list for set stmt", K(ret));
-    } else if (OB_FAIL(union_stmt->formalize_stmt(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize union_stmt info", K(ret));
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(transform_union_stmt(union_stmt, child_stmts))) {
+      LOG_WARN("failed to transform union stmt", K(ret));
     } else if (OB_FAIL(transform_parent_stmt_of_union(stmt, union_stmt,
-                                                      new_columns, happened))) {
+                                                      new_columns))) {
       LOG_WARN("failed to transform parent stmt of union", K(ret));
+    } else {
+      trans_happened = true;
     }
+  }
+  return ret;
+}
+
+int ObTransformGroupByPushdown::transform_union_stmt(
+    ObSelectStmt *union_stmt,
+    ObIArray<ObSelectStmt *> &child_stmts) {
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSelectStmt *, 2> left_childs;
+  ObSEArray<ObSelectStmt *, 2> right_childs;
+  ObSEArray<ObExprResType, 2> res_type;
+  // check ctx
+  if (OB_ISNULL(union_stmt) || OB_UNLIKELY(child_stmts.count() < 2) ||
+      OB_ISNULL(ctx_) || OB_ISNULL(ctx_->allocator_) ||
+      OB_ISNULL(ctx_->session_info_) || OB_ISNULL(ctx_->expr_factory_)) {
+    LOG_WARN("invalid argument", K(union_stmt), K(child_stmts));
+  } else if (FALSE_IT(union_stmt->clear_select_item())) {
+  } else if (OB_FAIL(left_childs.push_back(child_stmts.at(0)))) {
+    LOG_WARN("failed to push back", K(ret));
+  }
+  for (int64_t i = 1; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    if (OB_FAIL(right_childs.push_back(child_stmts.at(i)))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(ObOptimizerUtil::gen_set_target_list(ctx_->allocator_,
+                                                          ctx_->session_info_,
+                                                          ctx_->expr_factory_,
+                                                          left_childs, right_childs,
+                                                          union_stmt))) {
+    LOG_WARN("failed to get set target list", K(ret));
+  } else if (OB_FAIL(union_stmt->formalize_stmt(ctx_->session_info_))) {
+    LOG_WARN("failed to formalize union_stmt info", K(ret));
   }
   return ret;
 }
 
 int ObTransformGroupByPushdown::find_new_column_expr(
     ObIArray<NewColumnDesc> &new_columns,
-    ObIArray<ObRawExpr *> &new_column_exprs, ObItemType type, uint64_t col_id,
+    ObIArray<ObRawExpr *> &new_column_exprs,
+    ObItemType type,
+    uint64_t col_id,
     ObColumnRefRawExpr *&col_ref_expr) {
   int ret = OB_SUCCESS;
   col_ref_expr = NULL;
@@ -246,12 +280,10 @@ int ObTransformGroupByPushdown::find_new_column_expr(
     if (type == col.aggr_func_type_ && col_id == col.col_id_) {
       ObRawExpr *new_child_expr = NULL;
       // get and check col expr
-      if (OB_ISNULL(new_child_expr = new_column_exprs.at(i))) {
+      if (OB_ISNULL(new_child_expr = new_column_exprs.at(i)) ||
+          OB_UNLIKELY(!new_child_expr->is_column_ref_expr())) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (OB_UNLIKELY(!new_child_expr->is_column_ref_expr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("new column expr is not column ref", K(ret));
+        LOG_WARN("invalid new_child_expr", K(ret), K(new_child_expr));
       } else {
         col_ref_expr = static_cast<ObColumnRefRawExpr *>(new_child_expr);
         // 理论上来说，new_columns的下标应当就是对应的col_id
@@ -268,8 +300,9 @@ int ObTransformGroupByPushdown::find_new_column_expr(
 }
 
 int ObTransformGroupByPushdown::transform_parent_stmt_of_union(
-    ObSelectStmt *stmt, ObSelectStmt *union_stmt,
-    ObIArray<NewColumnDesc> &new_columns, bool &trans_happend) {
+    ObSelectStmt *stmt,
+    ObSelectStmt *union_stmt,
+    ObIArray<NewColumnDesc> &new_columns) {
   int ret = OB_SUCCESS;
   TableItem *table_item = NULL;
   ObSEArray<ObRawExpr *, 4> new_column_exprs;
@@ -281,17 +314,12 @@ int ObTransformGroupByPushdown::transform_parent_stmt_of_union(
       OB_ISNULL(ctx_->expr_factory_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (OB_UNLIKELY(1 != stmt->get_from_item_size())) {
+  } else if (OB_UNLIKELY(1 != stmt->get_from_item_size()) ||
+             OB_ISNULL(table_item = stmt->get_table_item(stmt->get_from_item(0))) ||
+             OB_UNLIKELY(!table_item->is_generated_table()) ||
+             OB_UNLIKELY(table_item->ref_query_ != union_stmt)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected from item size", K(stmt->get_from_items()));
-  } else if (OB_ISNULL(table_item =
-                           stmt->get_table_item(stmt->get_from_item(0)))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is null", K(stmt->get_from_items()));
-  } else if (OB_UNLIKELY(!table_item->is_generated_table() ||
-                         table_item->ref_query_ != union_stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item don't ref union_stmt", K(stmt->get_from_items()));
+    LOG_WARN("invalid argument", K(ret), K(stmt->get_from_items()), K(table_item));
   } else if (FALSE_IT(stmt->clear_column_items())) {
   } else if (OB_FAIL(ObTransformUtils::create_columns_for_view(
                  ctx_, *table_item, stmt, new_column_exprs))) {
@@ -310,21 +338,23 @@ int ObTransformGroupByPushdown::transform_parent_stmt_of_union(
                                             new_column_exprs,
                                             new_aggr_col_exprs))) {
     LOG_WARN("failed to get new aggr column exprs", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_aggr_item_size(); ++i) {
-      OZ (old_aggr_exprs.push_back(stmt->get_aggr_item(i)));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_aggr_item_size(); ++i) {
+    if (OB_FAIL(old_aggr_exprs.push_back(stmt->get_aggr_item(i)))) {
+      LOG_WARN("failed to push back", K(ret));
     }
-    if (OB_FAIL(replace_aggr_and_aggr_col_exprs(stmt, old_aggr_exprs,
-                                                new_aggr_exprs, aggr_col_exprs,
-                                                new_aggr_col_exprs))) {
-      LOG_WARN("failed to replace aggr and column exprs", K(ret));
-    }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(replace_aggr_and_aggr_col_exprs(
+                          stmt, old_aggr_exprs, new_aggr_exprs, aggr_col_exprs,
+                          new_aggr_col_exprs))) {
+    LOG_WARN("failed to replace aggr and column exprs", K(ret));
   }
   return ret;
 }
 
 int ObTransformGroupByPushdown::get_new_aggr_col_exprs(
-    ObIArray<ObRawExpr *> &aggr_col_exprs, ObIArray<NewColumnDesc> &new_columns,
+    ObIArray<ObRawExpr *> &aggr_col_exprs,
+    ObIArray<NewColumnDesc> &new_columns,
     ObIArray<ObRawExpr *> &new_column_exprs,
     ObIArray<ObRawExpr *> &new_aggr_col_exprs) {
   int ret = OB_SUCCESS;
@@ -333,12 +363,10 @@ int ObTransformGroupByPushdown::get_new_aggr_col_exprs(
     ObRawExpr *aggr_col_expr = NULL;
     ObColumnRefRawExpr *new_column_expr = NULL;
     uint64_t col_id = 0;
-    if (OB_ISNULL(aggr_col_expr = aggr_col_exprs.at(i))) {
+    if (OB_ISNULL(aggr_col_expr = aggr_col_exprs.at(i)) ||
+        OB_UNLIKELY(!aggr_col_expr->is_column_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("aggr col expr is null", K(ret));
-    } else if (!aggr_col_expr->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("aggr col expr is not column ref expr", K(ret));
+      LOG_WARN("invalid aggr_col_expr", K(ret), K(aggr_col_expr));
     } else {
       col_id = static_cast<ObColumnRefRawExpr *>(aggr_col_expr)->get_column_id();
       if (OB_FAIL(find_new_column_expr(new_columns, new_column_exprs, T_NULL,
@@ -346,8 +374,8 @@ int ObTransformGroupByPushdown::get_new_aggr_col_exprs(
       } else if (OB_ISNULL(new_column_expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else {
-        OZ(new_aggr_col_exprs.push_back(new_column_expr));
+      } else if (OB_FAIL(new_aggr_col_exprs.push_back(new_column_expr))) {
+        LOG_WARN("failed to push back", K(ret));
       }
     }
   }
@@ -382,7 +410,8 @@ int ObTransformGroupByPushdown::get_new_aggr_exprs(
 
 int ObTransformGroupByPushdown::get_new_aggr_expr(
     ObIArray<NewColumnDesc> &new_columns,
-    ObIArray<ObRawExpr *> &new_column_exprs, ObAggFunRawExpr *aggr_expr,
+    ObIArray<ObRawExpr *> &new_column_exprs,
+    ObAggFunRawExpr *aggr_expr,
     ObAggFunRawExpr *&new_aggr_expr) {
   int ret = OB_SUCCESS;
   ObItemType aggr_type = aggr_expr->get_expr_type();
@@ -408,12 +437,10 @@ int ObTransformGroupByPushdown::get_new_aggr_expr(
     if (OB_UNLIKELY(1 != aggr_expr->get_param_count())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid aggr param", K(ret));
-    } else if (OB_ISNULL(child_expr = aggr_expr->get_param_expr(0))) {
+    } else if (OB_ISNULL(child_expr = aggr_expr->get_param_expr(0)) ||
+               OB_UNLIKELY(!child_expr->is_column_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_UNLIKELY(!child_expr->is_column_ref_expr())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected child expr type", K(ret));
+      LOG_WARN("invalid child_expr", K(ret), K(child_expr));
     } else {
       col_id = static_cast<ObColumnRefRawExpr *>(child_expr)->get_column_id();
     }
@@ -434,7 +461,8 @@ int ObTransformGroupByPushdown::get_new_aggr_expr(
   }
 
 int ObTransformGroupByPushdown::replace_aggr_and_aggr_col_exprs(
-    ObSelectStmt *stmt, ObIArray<ObRawExpr *> &old_aggr_exprs,
+    ObSelectStmt *stmt,
+    ObIArray<ObRawExpr *> &old_aggr_exprs,
     ObIArray<ObRawExpr *> &new_aggr_exprs,
     ObIArray<ObRawExpr *> &old_aggr_col_exprs,
     ObIArray<ObRawExpr *> &new_aggr_col_exprs) {
@@ -477,13 +505,11 @@ int ObTransformGroupByPushdown::replace_aggr_and_aggr_col_exprs(
 int ObTransformGroupByPushdown::transform_basic_child_stmt_of_union(
     ObSelectStmt *stmt,
     ObIArray<uint64_t> &groupby_col_ids,
-    ObIArray<NewColumnDesc> &new_columns,
-    bool &trans_happened) {
+    ObIArray<NewColumnDesc> &new_columns) {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> exprs;
   ObSEArray<SelectItem, 4> old_select_items;
   SelectItem select_item;
-  trans_happened = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
@@ -493,7 +519,6 @@ int ObTransformGroupByPushdown::transform_basic_child_stmt_of_union(
     LOG_WARN("failed to assign select items", K(ret));
   } else {
     stmt->clear_select_item();
-    trans_happened = true;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < new_columns.count(); ++i) {
     NewColumnDesc &col = new_columns.at(i);
@@ -515,15 +540,13 @@ int ObTransformGroupByPushdown::transform_basic_child_stmt_of_union(
   for (int64_t i = 0; OB_SUCC(ret) && i < groupby_col_ids.count(); ++i) {
     int64_t expr_id = groupby_col_ids.at(i) - OB_APP_MIN_COLUMN_ID;
     ObRawExpr *group_expr = NULL;
-    if (expr_id < 0 || expr_id >= exprs.count()) {
+    if (OB_UNLIKELY(expr_id < 0) ||
+        OB_UNLIKELY(expr_id >= exprs.count()) ||
+        OB_ISNULL(group_expr = exprs.at(expr_id))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected expr_id", K(ret), K(expr_id), K(exprs.count()));
-    } else if (OB_ISNULL(group_expr = exprs.at(expr_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null", K(ret), K(expr_id), K(exprs));
+      LOG_WARN("invalid expr", K(ret), K(expr_id), K(group_expr));
     } else if (!group_expr->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("group is not column ref expr", K(ret), K(group_expr));
+      // group expr is const expr, do nothing
     } else if (OB_FAIL(stmt->add_group_expr(group_expr))) {
       LOG_WARN("failed to add group expr", K(ret));
     }
@@ -535,13 +558,12 @@ int ObTransformGroupByPushdown::transform_basic_child_stmt_of_union(
 }
 
 int ObTransformGroupByPushdown::transform_non_basic_child_stmt_of_union(
-    ObSelectStmt *stmt, ObIArray<NewColumnDesc> &new_columns,
-    bool &trans_happened) {
+    ObSelectStmt *stmt,
+    ObIArray<NewColumnDesc> &new_columns) {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> old_exprs;
   ObSEArray<SelectItem, 4> old_select_items;
   SelectItem select_item;
-  trans_happened = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
@@ -551,7 +573,6 @@ int ObTransformGroupByPushdown::transform_non_basic_child_stmt_of_union(
     LOG_WARN("failed to assign select items", K(ret));
   } else {
     stmt->clear_select_item();
-    trans_happened = true;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < new_columns.count(); ++i) {
     NewColumnDesc &col = new_columns.at(i);
@@ -572,8 +593,10 @@ int ObTransformGroupByPushdown::transform_non_basic_child_stmt_of_union(
 }
 
 int ObTransformGroupByPushdown::get_select_item_of_basic_child(
-    NewColumnDesc &new_column, ObIArray<ObRawExpr *> &old_exprs,
-    ObIArray<SelectItem> &old_select_items, SelectItem &new_select_item) {
+    NewColumnDesc &new_column,
+    ObIArray<ObRawExpr *> &old_exprs,
+    ObIArray<SelectItem> &old_select_items,
+    SelectItem &new_select_item) {
   // TODO 补全select item 的其他属性
   int ret = OB_SUCCESS;
   ObRawExpr *child_expr = NULL;
@@ -582,26 +605,26 @@ int ObTransformGroupByPushdown::get_select_item_of_basic_child(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (new_column.col_id_ < OB_APP_MIN_COLUMN_ID /* count(*) */) {
+    ObAggFunRawExpr *count_expr = NULL;
     if (new_column.aggr_func_type_ != T_FUN_COUNT) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid aggr_func_type(expect T_FUN_COUNT)",
               K(new_column.aggr_func_type_));
+    } else if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_FUN_COUNT,
+                                                            count_expr))) {
+      LOG_WARN("failed to create new aggregation expr", K(ret));
+    } else if (OB_ISNULL(count_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the copied aggregation expr is null", K(ret), K(count_expr));
+    } else if (OB_FAIL(count_expr->formalize(ctx_->session_info_))) {
+      LOG_WARN("failed to formalize count expr", K(ret));
     } else {
-      ObAggFunRawExpr *count_expr = NULL;
-      if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_FUN_COUNT, count_expr))) {
-        LOG_WARN("failed to create new aggregation expr", K(ret));
-      } else if (OB_ISNULL(count_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the copied aggregation expr is null", K(ret), K(count_expr));
-      } else if (OB_FAIL(count_expr->formalize(ctx_->session_info_))) {
-        LOG_WARN("failed to formalize count expr", K(ret));
-      } else {
-        new_select_item.expr_ = count_expr;
-        // TODO (maybe) new_select_item.alias_name_ = "count(*)";
-      }
+      new_select_item.expr_ = count_expr;
+      // TODO (maybe) 用工具函数生产select item
     }
   } else {
     int64_t idx = new_column.col_id_ - OB_APP_MIN_COLUMN_ID;
+    ObAggFunRawExpr *agg_expr = NULL;
     SelectItem &old_select_item = old_select_items.at(idx);
     new_select_item.alias_name_ = old_select_item.alias_name_;
     if (OB_ISNULL(child_expr = old_exprs.at(idx))) {
@@ -609,25 +632,24 @@ int ObTransformGroupByPushdown::get_select_item_of_basic_child(
       LOG_WARN("child expr is null", K(ret));
     } else if (T_NULL == new_column.aggr_func_type_) {
       new_select_item.expr_ = child_expr;
+    } else if (OB_FAIL(create_aggr_expr(ctx_, new_column.aggr_func_type_,
+                                        agg_expr, child_expr))) {
+      LOG_WARN("failed to build aggr expr", K(ret));
+    } else if (OB_ISNULL(agg_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("agg expr is null", K(ret));
     } else {
-      ObAggFunRawExpr *agg_expr = NULL;
-      if (OB_FAIL(create_aggr_expr(ctx_, new_column.aggr_func_type_, agg_expr,
-                                   child_expr))) {
-        LOG_WARN("failed to build aggr expr", K(ret));
-      } else if (OB_ISNULL(agg_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("agg expr is null", K(ret));
-      } else {
-        new_select_item.expr_ = agg_expr;
-      }
+      new_select_item.expr_ = agg_expr;
     }
   }
   return ret;
 }
 
 int ObTransformGroupByPushdown::get_select_item_of_non_basic_child(
-    NewColumnDesc &new_column, ObIArray<ObRawExpr *> &old_exprs,
-    ObIArray<SelectItem> &old_select_items, SelectItem &new_select_item) {
+    NewColumnDesc &new_column,
+    ObIArray<ObRawExpr *> &old_exprs,
+    ObIArray<SelectItem> &old_select_items,
+    SelectItem &new_select_item) {
   int ret = OB_SUCCESS;
   ObRawExpr *child_expr = NULL;
   // TODO 补全new_select item 的名字等属性
@@ -646,6 +668,7 @@ int ObTransformGroupByPushdown::get_select_item_of_non_basic_child(
       new_select_item.expr_name_ = "1";
       new_select_item.alias_name_ = "1";
       new_select_item.is_real_alias_ = true;
+      // TODO 用工具函数生成select item
     }
   } else {
     int64_t idx = new_column.col_id_ - OB_APP_MIN_COLUMN_ID;
@@ -687,12 +710,18 @@ int ObTransformGroupByPushdown::get_select_item_of_non_basic_child(
   return ret;
 }
 
-int ObTransformGroupByPushdown::get_new_columns(ObSelectStmt *stmt, ObIArray<uint64_t> &groupby_col_ids, ObIArray<NewColumnDesc> &new_columns)
-{
+int ObTransformGroupByPushdown::get_new_columns(
+    ObSelectStmt *stmt,
+    ObIArray<uint64_t> &groupby_col_ids,
+    ObIArray<NewColumnDesc> &new_columns) {
   int ret = OB_SUCCESS;
   // extract from aggr
   ObIArray<ObAggFunRawExpr *> &agg_exprs = stmt->get_aggr_items();
   ObSEArray<ObRawExpr*, 2> group_cols;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
+  }
   new_columns.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < agg_exprs.count(); ++i) {
     ObAggFunRawExpr *agg_expr = NULL;
@@ -700,44 +729,44 @@ int ObTransformGroupByPushdown::get_new_columns(ObSelectStmt *stmt, ObIArray<uin
     if (OB_ISNULL(agg_expr = agg_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("agg_expr is null", K(ret));
+    } else if (0 == agg_expr->get_param_count() &&
+               T_FUN_COUNT == agg_expr->get_expr_type()) {
+      if (OB_FAIL(new_columns.push_back((NewColumnDesc){
+              0,                         // col_id_
+              agg_expr->get_expr_type(), // aggr_func_type_
+          }))) {
+          LOG_WARN("failed to push back", K(ret));
+      }
+    } else if (1 != agg_expr->get_param_count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected agg_expr with param count not 1", K(ret));
+    } else if (OB_ISNULL(child_expr = agg_expr->get_param_expr(0)) ||
+               OB_UNLIKELY(!child_expr->is_column_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid child_expr", K(ret));
     } else {
-      if (0 == agg_expr->get_param_count() && T_FUN_COUNT == agg_expr->get_expr_type()) {
-        OZ(new_columns.push_back((NewColumnDesc){
-            0,                         // col_id_
-            agg_expr->get_expr_type(), // aggr_func_type_
-        }));
-      } else if (1 != agg_expr->get_param_count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected agg_expr with param count not 1", K(ret));
-      } else if (OB_ISNULL(child_expr = agg_expr->get_param_expr(0))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("agg_expr is null", K(ret));
-      } else if (!child_expr->is_column_ref_expr()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child expr is not column ref expr", K(ret));
-      } else {
-        ObColumnRefRawExpr *col_ref_expr =
-            static_cast<ObColumnRefRawExpr *>(child_expr);
-        OZ(new_columns.push_back((NewColumnDesc) {
-            col_ref_expr->get_column_id(), // col_id_
-            agg_expr->get_expr_type(),     // aggr_func_type_
-        }));
+      ObColumnRefRawExpr *col_ref_expr =
+          static_cast<ObColumnRefRawExpr *>(child_expr);
+      if (OB_FAIL(new_columns.push_back((NewColumnDesc){
+              col_ref_expr->get_column_id(), // col_id_
+              agg_expr->get_expr_type(),     // aggr_func_type_
+          }))) {
+          LOG_WARN("failed to push back", K(ret));
       }
     }
   }
   // extract from group by expr
-  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(stmt->get_group_exprs(), group_cols))) {
+  if (OB_FAIL(ObRawExprUtils::extract_column_exprs(stmt->get_group_exprs(),
+                                                   group_cols))) {
     LOG_WARN("failed to extract column from group expr", K(ret));
   }
   groupby_col_ids.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < group_cols.count(); ++i) {
     ObRawExpr *expr = NULL;
-    if (OB_ISNULL(expr = group_cols.at(i))) {
+    if (OB_ISNULL(expr = group_cols.at(i)) ||
+        OB_UNLIKELY(!expr->is_column_ref_expr())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null", K(ret));
-    } else if (!expr->is_column_ref_expr()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected expr type", K(expr), K(ret));
+      LOG_WARN("unexpected expr", K(ret), K(expr));
     } else {
       ObColumnRefRawExpr *col_ref_expr = static_cast<ObColumnRefRawExpr *>(expr);
       if (OB_FAIL(groupby_col_ids.push_back(col_ref_expr->get_column_id()))) {
@@ -753,9 +782,11 @@ int ObTransformGroupByPushdown::get_new_columns(ObSelectStmt *stmt, ObIArray<uin
   return ret;
 }
 
-int ObTransformGroupByPushdown::check_groupby_push_down_to_union_validity(
-    ObSelectStmt *stmt, ObSelectStmt *&union_stmt,
-    ObIArray<ObSelectStmt *> &child_stmts_of_union, bool &is_valid) {
+int ObTransformGroupByPushdown::check_push_down_into_union_validity(
+    ObSelectStmt *stmt,
+    ObSelectStmt *&union_stmt,
+    ObIArray<ObSelectStmt *> &child_stmts_of_union,
+    bool &is_valid) {
   // TODO 可能有更多边界情况需要考虑
   int ret = OB_SUCCESS;
   bool has_rownum = false;
@@ -767,8 +798,7 @@ int ObTransformGroupByPushdown::check_groupby_push_down_to_union_validity(
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
-  } else if (!stmt->is_select_stmt() ||
-             stmt->has_rollup() ||
+  } else if (stmt->has_rollup() ||
              stmt->get_aggr_item_size() <= 0 ||
              stmt->is_hierarchical_query()) {
     is_valid = false;
@@ -799,8 +829,8 @@ int ObTransformGroupByPushdown::check_groupby_push_down_to_union_validity(
     }
   }
   if (OB_SUCC(ret) && is_valid) { // 检查 child stmt
-    TableItem *sub_query_table_item;
-    if (!(1 == stmt->get_from_item_size())) {
+    TableItem *sub_query_table_item = NULL;
+    if (1 != stmt->get_from_item_size()) {
       OPT_TRACE("stmt is not single from stmt, can not transform");
       is_valid = false;
     } else if (OB_ISNULL(sub_query_table_item =
@@ -813,7 +843,7 @@ int ObTransformGroupByPushdown::check_groupby_push_down_to_union_validity(
     } else if (OB_ISNULL(union_stmt = sub_query_table_item->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (!(ObSelectStmt::UNION == union_stmt->get_set_op())) {
+    } else if (ObSelectStmt::UNION != union_stmt->get_set_op()) {
       is_valid = false;
       OPT_TRACE("child stmt type is not union, can not transform");
     } else if (union_stmt->has_limit() || union_stmt->has_order_by() ||
@@ -838,11 +868,6 @@ int ObTransformGroupByPushdown::check_groupby_push_down_to_union_validity(
       OPT_TRACE("invalid aggregation type for group by placement", aggr_expr);
       LOG_TRACE("invalid aggregation type for group by placement", K(is_valid),
                 K(aggr_expr->get_expr_type()), K(aggr_expr->is_param_distinct()));
-    } else if (aggr_expr->get_param_count() != 1 &&
-        !(0 == aggr_expr->get_param_count() &&
-          T_FUN_COUNT == aggr_expr->get_expr_type())) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid param of aggr func", K(ret), K(aggr_expr));
     } else {
       if (1 == aggr_expr->get_param_count()) {
         if (OB_ISNULL(child_expr = aggr_expr->get_param_expr(0))) {
@@ -856,8 +881,12 @@ int ObTransformGroupByPushdown::check_groupby_push_down_to_union_validity(
               only_min_max = false;
           }
         }
-      } else {
+      } else if (0 == aggr_expr->get_param_count() &&
+                 T_FUN_COUNT == aggr_expr->get_expr_type()) {
         only_min_max = false;
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid param of aggr func", K(ret), K(aggr_expr));
       }
     }
   }
@@ -876,12 +905,11 @@ int ObTransformGroupByPushdown::check_groupby_push_down_to_union_validity(
       if (OB_ISNULL(child_stmt_of_union = child_stmts_of_union.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
-      } else {
-        if (OB_FAIL(is_basic_select_stmt(child_stmt_of_union, exist_basic_select))) {
-          LOG_WARN("failed to check the child stmt of union stmt", K(ret));
-        } else if (exist_basic_select) {
-          break;
-        }
+      } else if (OB_FAIL(is_basic_select_stmt(child_stmt_of_union,
+                                              exist_basic_select))) {
+        LOG_WARN("failed to check the child stmt of union stmt", K(ret));
+      } else if (exist_basic_select) {
+        break;
       }
     }
     if (!exist_basic_select) {
@@ -981,7 +1009,7 @@ int ObTransformGroupByPushdown::adjust_transform_types(uint64_t &transform_types
   return ret;
 }
 
-int ObTransformGroupByPushdown::check_groupby_push_down_validity(ObSelectStmt *stmt,
+int ObTransformGroupByPushdown::check_push_down_into_join_validity(ObSelectStmt *stmt,
                                                                   bool &is_valid)
 {
   int ret = OB_SUCCESS;
@@ -1474,7 +1502,7 @@ int ObTransformGroupByPushdown::check_join_expr_validity(ObSelectStmt *stmt,
   return ret;
 }
 
-int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
+int ObTransformGroupByPushdown::do_groupby_push_down_into_join(ObSelectStmt *stmt,
                                                       ObIArray<PushDownParam> &params,
                                                       ObIArray<uint64_t> &flattern_joined_tables,
                                                       ObSelectStmt *&trans_stmt,
