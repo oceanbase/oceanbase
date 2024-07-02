@@ -562,6 +562,21 @@ STAT_EVENT_ADD_DEF(APWAIT_TIME, "application wait total time", ObStatClassIds::S
 STAT_EVENT_ADD_DEF(SCHEDULE_WAIT_TIME, "schedule wait total time", ObStatClassIds::SYS, 220004, true, true, true)
 STAT_EVENT_ADD_DEF(NETWORK_WAIT_TIME, "network wait total time", ObStatClassIds::SYS, 220005, true, true, true)
 
+// shared-storage local_cache(2400xx)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HIT, "ss_micro_cache hit count", ObStatClassIds::CACHE, 240001, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_MISS, "ss_micro_cache miss count", ObStatClassIds::CACHE, 240002, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_FAIL_ADD, "ss_micro_cache failure count of adding cache", ObStatClassIds::CACHE, 240003, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_FAIL_GET, "ss_micro_cache failure count of getting cache", ObStatClassIds::CACHE, 240004, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_MC_PREWARM, "ss_micro_cache major_compaction prewarm count", ObStatClassIds::CACHE, 240005, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HA_PREWARM, "ss_micro_cache migrate prewarm count", ObStatClassIds::CACHE, 240006, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_REPLICA_PREWARM, "ss_micro_cache repliace prewarm count", ObStatClassIds::CACHE, 240007, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_DDL_PREWARM, "ss_micro_cache ddl prewarm count", ObStatClassIds::CACHE, 240008, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HOLD_COUNT, "ss_micro_cache total hold micro_block count", ObStatClassIds::CACHE, 240009, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HOLD_SIZE, "ss_micro_cache total hold micro_block size", ObStatClassIds::CACHE, 240010, true, true, true)
+STAT_EVENT_ADD_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE, "ss_local_cache tmpfile used disk size", ObStatClassIds::CACHE, 240011, true, true, true)
+STAT_EVENT_ADD_DEF(SS_LOCAL_CACHE_META_USED_DISK_SIZE, "ss_local_cache meta file used disk size", ObStatClassIds::CACHE, 240012, true, true, true)
+STAT_EVENT_ADD_DEF(SS_LOCAL_CACHE_MINOR_USED_DISK_SIZE, "ss_local_cache minor data used disk size", ObStatClassIds::CACHE, 240013, true, true, true)
+
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
 
@@ -659,6 +674,13 @@ STAT_EVENT_SET_DEF(RS_START_SERVICE_TIME, "rootservice start time", ObStatClassI
 // das
 STAT_EVENT_SET_DEF(DAS_PARALLEL_TENANT_MEMORY_USAGE, "the memory use of all DAS parallel task", ObStatClassIds::SQL, 230001, false, true, true)
 STAT_EVENT_SET_DEF(DAS_PARALLEL_TENANT_TASK_CNT, "the count of DAS parallel task", ObStatClassIds::SQL, 230002, false, true, true)
+
+// shared-storage local_cache(start from 245001)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_USED_MEM_SIZE, "ss_micro_cache micro_meta used memory size", ObStatClassIds::CACHE, 245001, false, true, true)
+STAT_EVENT_SET_DEF(SS_MICRO_CACHE_ALLOC_DISK_SIZE, "ss_micro_cache total alloc disk size", ObStatClassIds::CACHE, 245002, false, true, true)
+STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_ALLOC_SIZE, "ss_local_cache tmpfile alloc disk size", ObStatClassIds::CACHE, 245003, false, true, true)
+STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_META_ALLOC_SIZE, "ss_local_cache meta file alloc disk size", ObStatClassIds::CACHE, 245004, false, true, true)
+STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_MINOR_ALLOC_SIZE, "ss_local_cache minor data alloc disk size", ObStatClassIds::CACHE, 245005, false, true, true)
 
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
