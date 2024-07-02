@@ -1,0 +1,122 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: tuliwei.tlw 
+# owner group: sql
+# description: groupby下推入union测试
+# tags: optimizer
+--disable_warnings
+drop table if exists t1,t2,t3;
+--enable_warnings
+
+create table t1(c1 int, c2 int);
+create table t2(c1 int, c2 int);
+
+insert into t1 values(1, 1);
+insert into t1 values(2, 1);
+insert into t1 values(1, 2);
+insert into t1 values(3, 2);
+insert into t1 values(2, 3);
+insert into t1 values(3, 3);
+insert into t1 values(4, 3);
+insert into t1 values(3, 4);
+
+insert into t2 values(1, 1);
+insert into t2 values(2, 1);
+insert into t2 values(NULL, 1);
+insert into t2 values(1, 2);
+insert into t2 values(3, 2);
+insert into t2 values(2, 3);
+insert into t2 values(3, 3);
+insert into t2 values(4, 3);
+insert into t2 values(NULL, 4);
+
+create view v as
+(
+    select * from t1
+    union all
+    select * from t2
+);
+
+create view v_distinct as
+(
+    select * from t1
+    union
+    select * from t2
+);
+
+select sum(c1), count(c1), c2 from v group by c2;
+select /*+no_rewrite*/ sum(c1), count(c1), c2 from v group by c2;
+explain select sum(c1), count(c1), c2 from v group by c2;
+
+select min(c1), max(c1), c2 from v group by c2;
+select /*+no_rewrite*/ min(c1), max(c1), c2 from v group by c2;
+explain select min(c1), max(c1), c2 from v group by c2;
+
+select min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+select /*+no_rewrite*/ min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+explain select min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+
+select avg(c1), min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+select /*+no_rewrite*/ avg(c1), min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+explain select avg(c1), min(c1), max(c1), sum(c1), count(c1), c2 from v group by c2;
+
+select avg(c1), min(c1), max(c1), sum(c1), count(c1), count(*), c2 from v group by c2;
+select /*+no_rewrite*/ avg(c1), min(c1), max(c1), sum(c1), count(c1), count(*), c2 from v group by c2;
+explain select avg(c1), min(c1), max(c1), sum(c1), count(c1), count(*), c2 from v group by c2;
+
+select sum(c1), count(c1), c2 from v_distinct group by c2;
+select /*+no_rewrite*/ sum(c1), count(c1), c2 from v_distinct group by c2;
+explain select sum(c1), count(c1), c2 from v_distinct group by c2;
+
+select min(c1), max(c1), c2 from v_distinct group by c2;
+select /*+no_rewrite*/ min(c1), max(c1), c2 from v_distinct group by c2;
+explain select min(c1), max(c1), c2 from v_distinct group by c2;
+
+select sum(c1), count(c1), min(c1), max(c1), c2 from v_distinct group by c2;
+select /*+no_rewrite*/ sum(c1), count(c1), min(c1), max(c1), c2 from v_distinct group by c2;
+explain select sum(c1), count(c1), min(c1), max(c1), c2 from v_distinct group by c2;
+
+select sum(distinct c1), c2 from v group by c2;
+select /*+no_rewrite*/ sum(distinct c1), c2 from v group by c2;
+explain select sum(distinct c1), c2 from v group by c2;
+
+select sum(c1) from (select * from t1 union all select * from t2 order by c2 limit 3) as v_order_limit;
+select /*+no_rewrite*/ sum(c1) from (select * from t1 union all select * from t2 order by c2 limit 3) as v_order_limit;
+explain select sum(c1) from (select * from t1 union all select * from t2 order by c2 limit 3) as v_order_limit;
+
+select sum(c1), count(*), min(c2), max(c1), avg(c2) from v;
+select /*+no_rewrite*/ sum(c1), count(*), min(c2), max(c1), avg(c2) from v;
+explain select sum(c1), count(*), min(c2), max(c1), avg(c2) from v;
+
+select sum(c1), c1, c2 from v group by c2;
+select /*+no_rewrite*/ sum(c1), c1, c2 from v group by c2;
+explain select sum(c1), c1, c2 from v group by c2;
+
+select sum(c1 + c2), count(c1 / c2) from v;
+select /*+no_rewrite*/ sum(c1 + c2), count(c1 / c2) from v;
+explain select sum(c1 + c2), count(c1 / c2) from v;
+
+select sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select * from t2) v2 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select * from t2) v2 group by c2;
+explain select sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select * from t2) v2 group by c2;
+
+select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+explain select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+
+select sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select c1 + c2, c1 * c2 from t2) v2 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select c1 + c2, c1 * c2 from t2) v2 group by c2;
+explain select sum(c1), c2 from ( select c1 * c2 as c1, c1 + c2 as c2 from t1 union all select c1 + c2, c1 * c2 from t2) v2 group by c2;
+
+select sum(c1), c2 from ( (select * from t1) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( (select * from t1) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+explain select sum(c1), c2 from ( (select * from t1) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+
+select sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+explain select sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
+
+select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+explain select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
