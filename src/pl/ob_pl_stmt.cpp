@@ -884,7 +884,12 @@ int ObPLRoutineTable::set_routine_info(int64_t routine_idx, ObPLRoutineInfo *rou
 {
   int ret = OB_SUCCESS;
   CK (routine_idx >= 0 && routine_idx < get_count());
-  CK (OB_ISNULL(routine_infos_.at(routine_idx)));
+  if (OB_SUCC(ret) && OB_NOT_NULL(routine_infos_.at(routine_idx))) {
+    ret = OB_ERR_ATTR_FUNC_CONFLICT;
+    LOG_USER_ERROR(OB_ERR_ATTR_FUNC_CONFLICT,
+                   routine_infos_.at(routine_idx)->get_name().length(),
+                   routine_infos_.at(routine_idx)->get_name().ptr());
+  }
   OX (routine_infos_.at(routine_idx) = routine_info);
   OZ (routine_info->set_idx(routine_idx));
   return ret;
@@ -894,7 +899,12 @@ int ObPLRoutineTable::set_routine_ast(int64_t routine_idx, ObPLFunctionAST *rout
 {
   int ret = OB_SUCCESS;
   CK (routine_idx >= 0 && routine_idx < get_count());
-  CK (OB_ISNULL(routine_asts_.at(routine_idx)));
+  if (OB_SUCC(ret) && OB_NOT_NULL(routine_asts_.at(routine_idx))) {
+    ret = OB_ERR_ATTR_FUNC_CONFLICT;
+    LOG_USER_ERROR(OB_ERR_ATTR_FUNC_CONFLICT,
+                   routine_asts_.at(routine_idx)->get_name().length(),
+                   routine_asts_.at(routine_idx)->get_name().ptr());
+  }
   OX (routine_asts_.at(routine_idx) = routine_ast);
   return ret;
 }
