@@ -46,7 +46,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObCharType,        /* CharType  */
     ObHexStringType,   /* HexStringType  */
     ObMaxType,         /* ExtendType  */
-    ObIntType,          /* UnknownType  */
+    ObMaxType,          /* UnknownType  */
     ObTinyTextType,       /*TinyTextType*/
     ObTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
@@ -356,7 +356,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -409,7 +409,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -462,7 +462,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -515,7 +515,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -568,7 +568,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -901,11 +901,11 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,       /*TextType*/
     ObNumberType,       /*MediumTextType*/
     ObNumberType,        /*LongTextType*/
-    ObUNumberType,      /*BitType*/
-    ObUNumberType,      /*EnumType*/
-    ObUNumberType,      /*SetType*/
-    ObUNumberType,      /*EnumInnerType*/
-    ObUNumberType,      /*SetInnerType*/
+    ObNumberType,       /*BitType*/
+    ObNumberType,       /*EnumType*/
+    ObNumberType,       /*SetType*/
+    ObNumberType,       /*EnumInnerType*/
+    ObNumberType,       /*SetInnerType*/
     ObTimestampTZType,    /* ObTimestampTZType */
     ObTimestampLTZType,   /* ObTimestampLTZType */
     ObTimestampNanoType,  /* ObTimestampNanoType */
@@ -1151,7 +1151,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObVarcharType,     /* DateTimeType  */
     ObVarcharType,     /* TimestampType  */
     ObVarcharType,     /* DateType  */
@@ -1235,7 +1235,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNVarchar2Type,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
-    ObVarcharType,       /* ObJsonType */
+    ObJsonType,         /* ObJsonType */
     ObHexStringType,        /* ObGeometryType */
   },
 
@@ -1257,7 +1257,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -1310,7 +1310,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -1338,7 +1338,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
     ObNVarchar2Type,      /* ObNVarchar2Type */
-    ObNCharType,          /* ObNCharType */
+    ObNVarchar2Type,      /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObJsonType,       /* ObJsonType */
@@ -1425,17 +1425,17 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntType,         /* VarcharType  */
     ObIntType,         /* CharType  */
     ObIntType,         /* HexStringType  */
-    ObIntType,         /* ExtendType  */
+    ObMaxType,         /* ExtendType  */
     ObIntType,          /* UnknownType  */
     ObIntType,       /*TinyTextType*/
     ObIntType,       /*TextType*/
     ObIntType,       /*MediumTextType*/
     ObIntType,        /*LongTextType*/
     ObIntType,        /*BitType*/
-    ObIntType,        /*EnumType*/
-    ObIntType,        /*SetType*/
-    ObIntType,        /*EnumInnerType*/
-    ObIntType,        /*SetInnerType*/
+    ObMaxType,        /*EnumType*/
+    ObMaxType,        /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
     ObIntType,       /* ObTimestampTZType */
     ObIntType,       /* ObTimestampLTZType */
     ObIntType,       /* ObTimestampNanoType */
@@ -1447,7 +1447,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntType,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
-    ObNullType,       /* ObJsonType */
+    ObMaxType,        /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
   },
   /*TinyTextType*/
@@ -1468,7 +1468,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -1504,7 +1504,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
   },
 /*TextType*/
   {
-    ObMediumTextType,     /* NullType  */
+    ObTextType,     /* NullType  */
     ObNumberType,      /* TinyIntType  */
     ObNumberType,      /* SmallIntType  */
     ObNumberType,      /* MediumIntType  */
@@ -1520,7 +1520,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -1556,7 +1556,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
   },
  /*MediumTextType*/
   {
-    ObTextType,     /* NullType  */
+    ObMediumTextType,  /* NullType  */
     ObNumberType,      /* TinyIntType  */
     ObNumberType,      /* SmallIntType  */
     ObNumberType,      /* MediumIntType  */
@@ -1572,7 +1572,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -1608,7 +1608,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
   },
  /*LongTextType*/
   {
-    ObMediumTextType,     /* NullType  */
+    ObLongTextType,    /* NullType  */
     ObNumberType,      /* TinyIntType  */
     ObNumberType,      /* SmallIntType  */
     ObNumberType,      /* MediumIntType  */
@@ -1624,7 +1624,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -1756,8 +1756,8 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
-    ObNumberType,      /* ObNVarchar2Type */
-    ObNumberType,          /* ObNCharType */
+    ObNVarchar2Type,    /* ObNVarchar2Type */
+    ObNVarchar2Type,    /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNumberType,       /* ObJsonType */
@@ -1808,8 +1808,8 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
-    ObVarcharType,      /* ObNVarchar2Type */
-    ObVarcharType,          /* ObNCharType */
+    ObNVarchar2Type,    /* ObNVarchar2Type */
+    ObNVarchar2Type,    /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNumberType,       /* ObJsonType */
@@ -1818,16 +1818,16 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
   /*EnumInnerType*/
   {
     ObNumberType,      /* NullType  */
-    ObUInt64Type,      /* TinyIntType  */
-    ObUInt64Type,      /* SmallIntType  */
-    ObUInt64Type,      /* MediumIntType  */
-    ObUInt64Type,      /* Int32Type  */
-    ObUInt64Type,      /* IntType  */
-    ObUInt64Type,      /* UTinyIntType  */
-    ObUInt64Type,      /* USmallIntType  */
-    ObUInt64Type,      /* UMediumIntType  */
-    ObUInt64Type,      /* UInt32Type  */
-    ObUInt64Type,      /* UIntType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
     ObDoubleType,      /* FloatType  */
     ObDoubleType,      /* DoubleType  */
     ObDoubleType,      /* UFloatType  */
@@ -1860,8 +1860,8 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
-    ObVarcharType,      /* ObNVarchar2Type */
-    ObVarcharType,          /* ObNCharType */
+    ObNVarchar2Type,    /* ObNVarchar2Type */
+    ObNVarchar2Type,    /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNumberType,       /* ObJsonType */
@@ -1870,16 +1870,16 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
   /*SetInnerType*/
   {
     ObNumberType,      /* NullType  */
-    ObUInt64Type,      /* TinyIntType  */
-    ObUInt64Type,      /* SmallIntType  */
-    ObUInt64Type,      /* MediumIntType  */
-    ObUInt64Type,      /* Int32Type  */
-    ObUInt64Type,      /* IntType  */
-    ObUInt64Type,      /* UTinyIntType  */
-    ObUInt64Type,      /* USmallIntType  */
-    ObUInt64Type,      /* UMediumIntType  */
-    ObUInt64Type,      /* UInt32Type  */
-    ObUInt64Type,      /* UIntType  */
+    ObNumberType,      /* TinyIntType  */
+    ObNumberType,      /* SmallIntType  */
+    ObNumberType,      /* MediumIntType  */
+    ObNumberType,      /* Int32Type  */
+    ObNumberType,      /* IntType  */
+    ObNumberType,      /* UTinyIntType  */
+    ObNumberType,      /* USmallIntType  */
+    ObNumberType,      /* UMediumIntType  */
+    ObNumberType,      /* UInt32Type  */
+    ObNumberType,      /* UIntType  */
     ObDoubleType,      /* FloatType  */
     ObDoubleType,      /* DoubleType  */
     ObDoubleType,      /* UFloatType  */
@@ -1912,8 +1912,8 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
-    ObVarcharType,      /* ObNVarchar2Type */
-    ObVarcharType,          /* ObNCharType */
+    ObNVarchar2Type,    /* ObNVarchar2Type */
+    ObNVarchar2Type,    /* ObNCharType */
     ObNullType,         /* ObURowIDType */
     ObNullType,         /* ObLobType */
     ObNumberType,       /* ObJsonType */
@@ -1952,7 +1952,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObTimestampTZType,      /* TextType */
     ObTimestampTZType,      /* MediumTextType */
     ObTimestampTZType,      /* LongTextType */
-    ObNumberType,           /* BitType */
+    ObTimestampTZType,      /* BitType */
     ObTimestampTZType,      /* EnumType */
     ObTimestampTZType,      /* SetType */
     ObTimestampTZType,      /* EnumInnerType */
@@ -2004,7 +2004,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObTimestampLTZType,      /* TextType */
     ObTimestampLTZType,      /* MediumTextType */
     ObTimestampLTZType,      /* LongTextType */
-    ObNumberType,            /* BitType */
+    ObTimestampLTZType,      /* BitType */
     ObTimestampLTZType,      /* EnumType */
     ObTimestampLTZType,      /* SetType */
     ObTimestampLTZType,      /* EnumInnerType */
@@ -2056,7 +2056,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObTimestampNanoType,      /* TextType */
     ObTimestampNanoType,      /* MediumTextType */
     ObTimestampNanoType,      /* LongTextType */
-    ObNumberType,             /* BitType */
+    ObTimestampNanoType,      /* BitType */
     ObTimestampNanoType,      /* EnumType */
     ObTimestampNanoType,      /* SetType */
     ObTimestampNanoType,      /* EnumInnerType */
@@ -2170,7 +2170,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,      /* ObTimestampNanoType */
     ObIntervalYMType,      /* ObRawType           */
     ObIntervalYMType,     /* ObIntervalYMType */
-    ObIntervalYMType,     /* ObIntervalDSType */
+    ObIntervalDSType,     /* ObIntervalDSType */
     ObIntervalYMType,     /* ObNumberFloatType */
     ObIntervalYMType,      /* ObNVarchar2Type */
     ObIntervalYMType,          /* ObNCharType */
@@ -2302,7 +2302,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -2316,7 +2316,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,         /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObNVarchar2Type,     /* EnumType  */
     ObNVarchar2Type,     /* SetType  */
@@ -2337,9 +2337,9 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* ObGeometryType */
   },
 
-  /*CharType*/
+  /*NCharType*/
   {
-    ObCharType,        /* NullType  */
+    ObNCharType,       /* NullType  */
     ObNumberType,      /* TinyIntType  */
     ObNumberType,      /* SmallIntType  */
     ObNumberType,      /* MediumIntType  */
@@ -2355,21 +2355,21 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObDoubleType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
     ObTimeType,        /* TimeType  */
     ObNumberType,      /* YearType  */
-    ObNVarchar2Type,     /* VarcharType  */
-    ObCharType,        /* CharType  */
-    ObVarcharType,     /* HexStringType  */
-    ObNCharType,         /* ExtendType  */
+    ObNVarchar2Type,   /* VarcharType  */
+    ObNCharType,       /* CharType  */
+    ObNVarchar2Type,   /* HexStringType  */
+    ObMaxType,         /* ExtendType  */
     ObIntType,          /* UnknownType  */
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,         /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObNVarchar2Type,     /* EnumType  */
     ObNVarchar2Type,     /* SetType  */
@@ -2437,6 +2437,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNullType,      /* ObNVarchar2Type */
     ObNullType,          /* ObNCharType */
     ObNullType,         /* ObURowIDType */
+    ObNullType,         /* ObLobType */
     ObNullType,       /* ObJsonType */
     ObMaxType,        /* ObGeometryType */
   },
@@ -2520,7 +2521,7 @@ static ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObJsonType,        /* CharType  */
     ObJsonType,     /* HexStringType  */
     ObMaxType,         /* ExtendType  */
-    ObJsonType,          /* UnknownType  */
+    ObMaxType,        /* UnknownType  */
     ObJsonType,       /*TinyTextType*/
     ObJsonType,       /*TextType*/
     ObJsonType,       /*MediumTextType*/
@@ -2630,7 +2631,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObCharType,        /* CharType  */
     ObHexStringType,   /* HexStringType  */
     ObMaxType,         /* ExtendType  */
-    ObIntType,          /* UnknownType  */
+    ObMaxType,         /* UnknownType  */
     ObTinyTextType,       /*TinyTextType*/
     ObTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
@@ -2922,7 +2923,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -2972,7 +2973,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -3022,7 +3023,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -3072,7 +3073,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -3122,7 +3123,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObNumberType,      /* UNumberType  */
+    ObUNumberType,     /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateType,        /* DateType  */
@@ -3437,11 +3438,11 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,       /*TextType*/
     ObNumberType,       /*MediumTextType*/
     ObNumberType,        /*LongTextType*/
-    ObUNumberType,      /*BitType*/
-    ObUNumberType,      /*EnumType*/
-    ObUNumberType,      /*SetType*/
-    ObUNumberType,      /*EnumInnerType*/
-    ObUNumberType,      /*SetInnerType*/
+    ObNumberType,       /*BitType*/
+    ObNumberType,       /*EnumType*/
+    ObNumberType,       /*SetType*/
+    ObNumberType,       /*EnumInnerType*/
+    ObNumberType,       /*SetInnerType*/
     ObTimestampTZType,    /* ObTimestampTZType */
     ObTimestampLTZType,   /* ObTimestampLTZType */
     ObTimestampNanoType,  /* ObTimestampNanoType */
@@ -3672,7 +3673,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObVarcharType,     /* DateTimeType  */
     ObVarcharType,     /* TimestampType  */
     ObVarcharType,     /* DateType  */
@@ -3722,7 +3723,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -3736,7 +3737,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,         /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObVarcharType,     /* EnumType  */
     ObVarcharType,     /* SetType  */
@@ -3772,7 +3773,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -3786,7 +3787,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,         /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObVarcharType,     /* EnumType  */
     ObVarcharType,     /* SetType  */
@@ -3822,7 +3823,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -3836,7 +3837,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,         /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObVarcharType,     /* EnumType  */
     ObVarcharType,     /* SetType  */
@@ -3850,7 +3851,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
     ObNVarchar2Type,      /* ObNVarchar2Type */
-    ObNCharType,          /* ObNCharType */
+    ObNVarchar2Type,      /* ObNCharType */
     ObURowIDType,         /* ObURowIDType */
   },
 
@@ -3931,17 +3932,17 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntType,         /* VarcharType  */
     ObIntType,         /* CharType  */
     ObIntType,         /* HexStringType  */
-    ObIntType,         /* ExtendType  */
+    ObMaxType,         /* ExtendType  */
     ObIntType,          /* UnknownType  */
     ObIntType,       /*TinyTextType*/
     ObIntType,       /*TextType*/
     ObIntType,       /*MediumTextType*/
     ObIntType,        /*LongTextType*/
     ObIntType,        /*BitType*/
-    ObIntType,        /*EnumType*/
-    ObIntType,        /*SetType*/
-    ObIntType,        /*EnumInnerType*/
-    ObIntType,        /*SetInnerType*/
+    ObMaxType,        /*EnumType*/
+    ObMaxType,        /*SetType*/
+    ObMaxType,        /*EnumInnerType*/
+    ObMaxType,        /*SetInnerType*/
     ObIntType,       /* ObTimestampTZType */
     ObIntType,       /* ObTimestampLTZType */
     ObIntType,       /* ObTimestampNanoType */
@@ -3971,7 +3972,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -4004,7 +4005,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
   },
 /*TextType*/
   {
-    ObMediumTextType,     /* NullType  */
+    ObTextType,        /* NullType  */
     ObNumberType,      /* TinyIntType  */
     ObNumberType,      /* SmallIntType  */
     ObNumberType,      /* MediumIntType  */
@@ -4020,7 +4021,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -4053,7 +4054,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
   },
  /*MediumTextType*/
   {
-    ObTextType,     /* NullType  */
+    ObMediumTextType,  /* NullType  */
     ObNumberType,      /* TinyIntType  */
     ObNumberType,      /* SmallIntType  */
     ObNumberType,      /* MediumIntType  */
@@ -4069,7 +4070,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -4118,7 +4119,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -4187,9 +4188,9 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObNumberType,       /*SetType*/
     ObNumberType,       /*EnumInnerType*/
     ObNumberType,       /*SetInnerType*/
-    ObTimestampTZType,   /* ObTimestampTZType */
-    ObTimestampLTZType,  /* ObTimestampLTZType */
-    ObTimestampNanoType, /* ObTimestampNanoType */
+    ObNumberType,       /* ObTimestampTZType */
+    ObNumberType,       /* ObTimestampLTZType */
+    ObNumberType,       /* ObTimestampNanoType */
     ObRawType,           /* ObRawType */
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
@@ -4244,8 +4245,8 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
-    ObNumberType,      /* ObNVarchar2Type */
-    ObNumberType,          /* ObNCharType */
+    ObNVarchar2Type,      /* ObNVarchar2Type */
+    ObNVarchar2Type,      /* ObNCharType */
     ObURowIDType,         /* ObURowIDType */
   },
   /*SetType*/
@@ -4293,8 +4294,8 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
-    ObVarcharType,      /* ObNVarchar2Type */
-    ObVarcharType,          /* ObNCharType */
+    ObNVarchar2Type,      /* ObNVarchar2Type */
+    ObNVarchar2Type,      /* ObNCharType */
     ObURowIDType,         /* ObURowIDType */
   },
   /*EnumInnerType*/
@@ -4342,8 +4343,8 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
-    ObVarcharType,      /* ObNVarchar2Type */
-    ObVarcharType,          /* ObNCharType */
+    ObNVarchar2Type,      /* ObNVarchar2Type */
+    ObNVarchar2Type,      /* ObNCharType */
     ObURowIDType,         /* ObURowIDType */
   },
   /*SetInnerType*/
@@ -4391,8 +4392,8 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,     /* ObIntervalYMType */
     ObIntervalDSType,     /* ObIntervalDSType */
     ObNumberType,     /* ObNumberFloatType */
-    ObVarcharType,      /* ObNVarchar2Type */
-    ObVarcharType,          /* ObNCharType */
+    ObNVarchar2Type,      /* ObNVarchar2Type */
+    ObNVarchar2Type,      /* ObNCharType */
     ObURowIDType,         /* ObURowIDType */
   },
   /*ObTimestampTZType*/
@@ -4634,7 +4635,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObIntervalYMType,      /* ObTimestampNanoType */
     ObIntervalYMType,      /* ObRawType           */
     ObIntervalYMType,     /* ObIntervalYMType */
-    ObIntervalYMType,     /* ObIntervalDSType */
+    ObIntervalDSType,     /* ObIntervalDSType */
     ObIntervalYMType,     /* ObNumberFloatType */
     ObIntervalYMType,      /* ObNVarchar2Type */
     ObIntervalYMType,          /* ObNCharType */
@@ -4757,7 +4758,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
@@ -4771,7 +4772,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,         /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObNVarchar2Type,     /* EnumType  */
     ObNVarchar2Type,     /* SetType  */
@@ -4807,21 +4808,21 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObFloatType,      /* UFloatType  */
     ObDoubleType,      /* UDoubleType  */
     ObNumberType,      /* NumberType  */
-    ObUNumberType,     /* UNumberType  */
+    ObNumberType,      /* UNumberType  */
     ObDateTimeType,    /* DateTimeType  */
     ObTimestampType,   /* TimestampType  */
     ObDateTimeType,    /* DateType  */
     ObTimeType,        /* TimeType  */
     ObNumberType,      /* YearType  */
     ObNVarchar2Type,     /* VarcharType  */
-    ObNCharType,        /* CharType  */
+    ObNCharType,         /* CharType  */
     ObNVarchar2Type,     /* HexStringType  */
-    ObNCharType,         /* ExtendType  */
+    ObMaxType,          /* ExtendType  */
     ObIntType,          /* UnknownType  */
     ObMediumTextType,       /*TinyTextType*/
     ObMediumTextType,       /*TextType*/
     ObMediumTextType,       /*MediumTextType*/
-    ObMediumTextType,        /*LongTextType*/
+    ObLongTextType,         /*LongTextType*/
     ObNumberType,      /*BitType*/
     ObNVarchar2Type,     /* EnumType  */
     ObNVarchar2Type,     /* SetType  */
@@ -4872,7 +4873,7 @@ static ObObjType ORACLE_RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObURowIDType,       /*TextType*/
     ObURowIDType,       /*MediumTextType*/
     ObURowIDType,        /*LongTextType*/
-    ObNumberType,      /*BitType*/
+    ObURowIDType,      /*BitType*/
     ObURowIDType,     /* EnumType  */
     ObURowIDType,     /* SetType  */
     ObURowIDType,     /* EnumInnerType  */
