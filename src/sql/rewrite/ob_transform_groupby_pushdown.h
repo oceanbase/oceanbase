@@ -76,7 +76,7 @@ private:
     ObSqlBitSet<> new_table_relids_;
   };
 
-  struct NewColumnDesc {
+  struct UnionPushdownParam {
     uint64_t col_id_;
     ObItemType aggr_func_type_;
     TO_STRING_KV(K_(col_id), K_(aggr_func_type));
@@ -97,49 +97,46 @@ private:
 
   int is_basic_select_stmt(ObSelectStmt *stmt, bool &is_basic);
 
-  int get_new_columns(ObSelectStmt *stmt,
-                      ObIArray<uint64_t> &groupby_col_ids,
-                      ObIArray<NewColumnDesc> &new_columns);
+  int get_union_pushdown_param(ObSelectStmt *stmt,
+                               ObIArray<UnionPushdownParam> &param);
 
   int do_groupby_push_down_into_union(ObSelectStmt *stmt,
                                       ObSelectStmt *union_stmt,
                                       ObIArray<ObSelectStmt *> &child_stmts,
-                                      ObIArray<uint64_t> &groupby_col_ids,
-                                      ObIArray<NewColumnDesc> &new_colomns,
+                                      ObIArray<UnionPushdownParam> &new_colomns,
                                       bool &trans_happend);
 
   int transform_union_stmt(ObSelectStmt *union_stmt,
                            ObIArray<ObSelectStmt *> &child_stmts);
 
-  int transform_basic_child_stmt_of_union(ObSelectStmt *stmt,
-                                          ObIArray<uint64_t> &groupby_col_ids,
-                                          ObIArray<NewColumnDesc> &new_colomns);
+  int transform_basic_child_stmt(ObSelectStmt *stmt,
+                                          ObIArray<UnionPushdownParam> &new_colomns);
 
-  int get_select_item_of_basic_child(NewColumnDesc &new_column,
+  int get_select_item_of_basic_child(UnionPushdownParam &new_column,
                                      ObIArray<ObRawExpr *> &old_exprs,
                                      ObIArray<SelectItem> &old_select_items,
                                      SelectItem &new_select_item);
 
-  int get_select_item_of_non_basic_child(NewColumnDesc &new_column,
+  int get_select_item_of_non_basic_child(UnionPushdownParam &new_column,
                                          ObIArray<ObRawExpr *> &old_exprs,
                                          ObIArray<SelectItem> &old_select_items,
                                          SelectItem &new_select_item);
 
-  int transform_non_basic_child_stmt_of_union(ObSelectStmt *stmt,
-                                              ObIArray<NewColumnDesc> &new_colomns);
+  int transform_non_basic_child_stmt(ObSelectStmt *stmt,
+                                              ObIArray<UnionPushdownParam> &new_colomns);
 
-  int get_new_aggr_exprs(ObIArray<NewColumnDesc> &new_columns,
+  int get_new_aggr_exprs(ObIArray<UnionPushdownParam> &param,
                         ObIArray<ObRawExpr *> &new_column_exprs,
                         ObIArray<ObAggFunRawExpr *> &aggr_exprs,
                         ObIArray<ObRawExpr *> &new_aggr_exprs);
 
-  int get_new_aggr_expr(ObIArray<NewColumnDesc> &new_columns,
+  int get_new_aggr_expr(ObIArray<UnionPushdownParam> &param,
                         ObIArray<ObRawExpr *> &new_column_exprs,
                         ObAggFunRawExpr *aggr_expr,
                         ObAggFunRawExpr *&new_aggr_expr);
 
   int get_new_aggr_col_exprs(ObIArray<ObRawExpr *> &aggr_col_exprs,
-                             ObIArray<NewColumnDesc> &new_columns,
+                             ObIArray<UnionPushdownParam> &param,
                              ObIArray<ObRawExpr *> &new_column_exprs,
                              ObIArray<ObRawExpr *> &new_aggr_col_exprs);
 
@@ -152,9 +149,9 @@ private:
 
   int transform_parent_stmt_of_union(ObSelectStmt *stmt,
                                      ObSelectStmt *union_stmt,
-                                     ObIArray<NewColumnDesc> &new_colomns);
+                                     ObIArray<UnionPushdownParam> &new_colomns);
 
-  int find_new_column_expr(ObIArray<NewColumnDesc> &new_columns,
+  int find_new_column_expr(ObIArray<UnionPushdownParam> &param,
                            ObIArray<ObRawExpr *> &new_column_exprs,
                            ObItemType type,
                            uint64_t col_id,
