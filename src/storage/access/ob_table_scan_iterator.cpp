@@ -159,7 +159,8 @@ bool ObTableScanIterator::can_use_global_iter_pool(const ObQRIterType iter_type)
              main_table_param_.iter_param_.has_lob_column_out_) {
   } else {
     const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
-    const int64_t col_cnt = main_table_param_.get_max_out_col_cnt();
+    const int64_t col_cnt = MAX(scan_param_->table_param_->get_read_info().get_schema_column_count(),
+                                get_table_param_.tablet_iter_.get_tablet()->get_rowkey_read_info().get_schema_column_count());
     ObGlobalIteratorPool *iter_pool = MTL(ObGlobalIteratorPool*);
     if (OB_NOT_NULL(iter_pool)) {
        use_pool = iter_pool->can_use_iter_pool(table_cnt, col_cnt, iter_type);
@@ -189,17 +190,23 @@ int ObTableScanIterator::prepare_cached_iter_node()
 
 void ObTableScanIterator::try_release_cached_iter_node(const ObQRIterType rescan_iter_type)
 {
-  if (nullptr != cached_iter_node_ && current_iter_type_ != rescan_iter_type) {
-    STORAGE_LOG(INFO, "iter type is changed in rescan", KPC(cached_iter_node_),
-      K(current_iter_type_), K(rescan_iter_type), KP(cached_iter_),
-      KP(single_merge_), KP(get_merge_), KP(scan_merge_), KP(multi_scan_merge_));
-    main_table_param_.diable_use_global_iter_pool();
-    main_table_ctx_.reset_cached_iter_node();
-    MTL(ObGlobalIteratorPool*)->release(cached_iter_node_);
-    cached_iter_node_ = nullptr;
-    current_iter_type_ = T_INVALID_ITER_TYPE;
-    if (nullptr != cached_iter_) {
-      *cached_iter_ = nullptr;
+  if (nullptr != cached_iter_node_) {
+    const int64_t table_cnt = get_table_param_.tablet_iter_.table_iter()->count();
+    const int64_t col_cnt = get_table_param_.tablet_iter_.get_tablet()->get_rowkey_read_info().get_request_count();
+    bool use_pool = current_iter_type_ == rescan_iter_type &&
+                    MTL(ObGlobalIteratorPool*)->can_use_iter_pool(table_cnt, col_cnt, rescan_iter_type);
+    if (!use_pool) {
+      STORAGE_LOG(INFO, "iter type/table cnt/col cnt is changed in rescan, disable global cache", KPC(cached_iter_node_),
+        K(table_cnt), K(col_cnt), K(current_iter_type_), K(rescan_iter_type), KP(cached_iter_),
+        KP(single_merge_), KP(get_merge_), KP(scan_merge_), KP(multi_scan_merge_));
+      main_table_param_.diable_use_global_iter_pool();
+      main_table_ctx_.reset_cached_iter_node();
+      MTL(ObGlobalIteratorPool*)->release(cached_iter_node_);
+      cached_iter_node_ = nullptr;
+      current_iter_type_ = T_INVALID_ITER_TYPE;
+      if (nullptr != cached_iter_) {
+        *cached_iter_ = nullptr;
+      }
     }
   }
 }
@@ -347,11 +354,11 @@ int ObTableScanIterator::switch_param(ObTableScanParam &scan_param, const ObTabl
     STORAGE_LOG(WARN, "Failed to init table scan range", K(ret), K(scan_param));
   } else if (OB_FAIL(table_scan_range_.get_query_iter_type(rescan_iter_type))) {
     STORAGE_LOG(WARN, "Failed to get query iter type", K(ret));
-  } else if (FALSE_IT(try_release_cached_iter_node(rescan_iter_type))) {
   } else {
     scan_param_ = &scan_param;
     if (OB_FAIL(get_table_param_.tablet_iter_.set_tablet_handle(tablet_handle))) {
       STORAGE_LOG(WARN, "Fail to set tablet handle to iter", K(ret));
+    } else if (FALSE_IT(try_release_cached_iter_node(rescan_iter_type))) {
     } else if (OB_FAIL(prepare_table_param(tablet_handle))) {
       STORAGE_LOG(WARN, "Fail to prepare table param, ", K(ret));
     } else if (OB_FAIL(prepare_table_context())) {

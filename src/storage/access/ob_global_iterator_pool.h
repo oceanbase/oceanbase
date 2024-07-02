@@ -77,7 +77,7 @@ public:
   {
     return is_valid() &&
            table_cnt <= ITER_POOL_MAX_TABLE_CNT_LIMIT &&
-           col_cnt <= ITER_POOL_MAX_COL_CNT_LIMIT &&
+           col_cnt + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt() <= ITER_POOL_MAX_COL_CNT_LIMIT &&
            iter_type <= ITER_POOL_MAX_CACHED_ITER_TYPE;
   }
   OB_INLINE bool is_valid() const
