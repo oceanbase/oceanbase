@@ -943,7 +943,10 @@ int ObWindowFunctionVecOp::init()
         // win_expr(T_WIN_FUN_RANK()), partition_by([testwn1.c], [testwn1.a], [testwn1.b]),
         // win_expr(T_WIN_FUN_RANK()), partition_by([testwn1.b], [testwn1.a])
         // if so, we need a idx array to correctly compare partition exprs
-        bool same_part_order = true;
+
+        // partition exprs may have `partition_by(t.a, t.a)`
+        // in this case, reorderd_pby_row_idx_ will be [0, 0]
+        bool same_part_order = (it->wf_info_.partition_exprs_.count() <= all_part_exprs_.count());
         for (int i = 0; OB_SUCC(ret) && i < it->wf_info_.partition_exprs_.count() && same_part_order; i++) {
           same_part_order = (it->wf_info_.partition_exprs_.at(i) == all_part_exprs_.at(i));
         }
