@@ -2038,16 +2038,21 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
       }
     }
     if (OB_NOT_NULL(slice_writer)) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(sqc_build_ctx_.slice_mgr_map_.erase_refactored(slice_info.slice_id_))) {
-        LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
+      if (OB_SUCC(ret) && is_data_direct_load(direct_load_type_) && slice_writer->need_column_store()) {
+        //ignore, free after rescan
       } else {
-        LOG_INFO("erase a slice writer", K(ret), KP(slice_writer), K(sqc_build_ctx_.slice_mgr_map_.size()));
-        slice_writer->~ObDirectLoadSliceWriter();
-        sqc_build_ctx_.slice_writer_allocator_.free(slice_writer);
-        slice_writer = nullptr;
+        // for ddl, delete slice_writer regardless of success or failure
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(sqc_build_ctx_.slice_mgr_map_.erase_refactored(slice_info.slice_id_))) {
+          LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
+        } else {
+          LOG_INFO("erase a slice writer", K(ret), KP(slice_writer), K(sqc_build_ctx_.slice_mgr_map_.size()));
+          slice_writer->~ObDirectLoadSliceWriter();
+          sqc_build_ctx_.slice_writer_allocator_.free(slice_writer);
+          slice_writer = nullptr;
+        }
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
       }
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
   return ret;
