@@ -160,7 +160,7 @@ int ObInnerTableSchema::dba_ob_aux_statistics_ora_schema(ObTableSchema &table_sc
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   	SELECT       LAST_ANALYZED,       CPU_SPEED AS "CPU_SPEED(MHZ)",       DISK_SEQ_READ_SPEED AS "DISK_SEQ_READ_SPEED(MB/S)",       DISK_RND_READ_SPEED AS "DISK_RND_READ_SPEED(MB/S)",       NETWORK_SPEED AS "NETWORK_SPEED(MB/S)"     FROM SYS.ALL_VIRTUAL_AUX_STAT_REAL_AGENT     WHERE TENANT_ID = EFFECTIVE_TENANT_ID(); )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__( 	SELECT       LAST_ANALYZED,       CPU_SPEED AS "CPU_SPEED(MHZ)",       DISK_SEQ_READ_SPEED AS "DISK_SEQ_READ_SPEED(MB/S)",       DISK_RND_READ_SPEED AS "DISK_RND_READ_SPEED(MB/S)",       NETWORK_SPEED AS "NETWORK_SPEED(MB/S)"     FROM SYS.ALL_VIRTUAL_AUX_STAT_REAL_AGENT     WHERE TENANT_ID = EFFECTIVE_TENANT_ID(); )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

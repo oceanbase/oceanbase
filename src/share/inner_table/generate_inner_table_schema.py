@@ -1112,6 +1112,8 @@ def replace_agent_table_columns_def(columns):
       pass
     elif t == "longtext":
       pass
+    elif t == "longblob":
+      pass
     elif t.startswith("varchar:") or t.startswith("varbinary:"):
       if len(column) >= 4 and "false" == column[2] and "" == column[3]:
         column[2] = "true"

@@ -46,6 +46,30 @@ enum ObIvfflatBuildStatus {
 // use KMeans++ and ElkanKmeans to opt
 class ObIvfflatIndexBuildHelper {
 public:
+  struct IvfflatCentersMemCtx {
+    common::ObSEArray<int64_t, OB_DEFAULT_VECTOR_IVFFLAT_LISTS> center_cnt_per_part_;
+    int64_t cur_centers_offsets_;  // float
+
+    IvfflatCentersMemCtx(): cur_centers_offsets_(0) {}
+    void reset() {
+      center_cnt_per_part_.reset();
+      cur_centers_offsets_ = 0;
+    }
+    int64_t get_cur_total_size() { return cur_centers_offsets_; }
+    int64_t get_partition_num() { return center_cnt_per_part_.count(); }
+    // Only be called when add_new_centers finished.
+    common::ObIArray<int64_t>* get_center_cnt_per_part() {
+      for (int64_t i = 1; i < center_cnt_per_part_.count(); ++i) {
+        center_cnt_per_part_.at(i) += center_cnt_per_part_.at(i - 1);
+      }
+      return &center_cnt_per_part_;
+    }
+    void add_new_centers(int64_t center_cnt, int64_t dims) {
+      center_cnt_per_part_.push_back(center_cnt);
+      cur_centers_offsets_ += (center_cnt * dims);
+    }
+  };
+
   ObIvfflatIndexBuildHelper()
       : is_init_(false), tenant_id_(OB_INVALID_TENANT_ID),
         lists_(OB_DEFAULT_VECTOR_IVFFLAT_LISTS),
@@ -56,11 +80,13 @@ public:
         center_vectors_(), allocator_(), arena_allocator_(), select_sql_str_(),
         nearest_centers_(nullptr), lower_bounds_(nullptr),
         upper_bounds_(nullptr), weight_(nullptr), cache_(nullptr),
-        partition_name_(), partition_idx_(-1)
+        partition_name_(), partition_idx_(-1), partition_num_(0), centers_(),
+        vector_dim_(0)
   {}
   virtual ~ObIvfflatIndexBuildHelper() { destroy(); }
   int init(const int64_t tenant_id, const int64_t lists,
-           const ObVectorDistanceType distance_type);
+           const ObVectorDistanceType distance_type, const int64_t partition_num,
+           uint64_t vector_dim = 0);
   bool is_inited() const { return is_init_; }
   void destroy();
   void reuse();
@@ -69,6 +95,8 @@ public:
   bool is_finish() const { return FINISH == status_; }
   bool skip_insert() const { return FINISH == status_ && 0 == total_cnt_; }
   int64_t get_lists() const { return lists_; }
+  ObVectorArray &get_centers() { return centers_; }
+  int get_serialized_centers(char *&buf, int64_t &size, ObIAllocator &allocator);
 
   int set_sample_cache(ObIvfflatFixSampleCache *cache);
   int set_center_cache(const int64_t table_id);
@@ -85,8 +113,15 @@ public:
   int construct_select_sql_string_simple(common::ObSqlString &select_string,
                                          const int64_t dest_table_id,
                                          const int64_t data_table_id);
+  int construct_part_select_sql_string(share::schema::ObSchemaGetterGuard &schema_guard,
+                                       common::ObSqlString &select_string,
+                                       ObTableSchema &data_schema,
+                                       const int64_t partition_index,
+                                       const int64_t index_column_id);
   int init_center_dummy_pkeys_array();
   int get_patch_pkeys_for_center_dummy_pkeys_array(ObString &patch_str);
+  int copy_centers(ObIAllocator &allocator);
+  void reset_centers();
   DECLARE_TO_STRING;
 
 private:
@@ -153,6 +188,10 @@ private:
   ObString partition_name_;
   int64_t partition_idx_;
   common::ObArenaAllocator allocator_for_partition_name_;
+  int64_t partition_num_;
+  ObVectorArray centers_; // TODO(@jingshui): use raw ptr to opt
+  uint64_t vector_dim_;
+  IvfflatCentersMemCtx centers_mem_ctx_;
 };
 
 } // namespace share

@@ -687,6 +687,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_transaction_id.cpp
   engine/expr/ob_expr_inner_row_cmp_val.cpp
   engine/expr/ob_expr_vector.cpp
+  engine/expr/ob_expr_ivfflat_vec_cluster_id.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

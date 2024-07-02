@@ -95,7 +95,13 @@ public:
 
   int init(const int64_t tenant_id);
   void destroy();
-
+  static int decode_centers(
+      common::ObIArray<ObTypeVector *> &array,
+      ObIAllocator &allocator,
+      ObVectorArray &vec_array,
+      const int64_t dims,
+      const int64_t index);
+  int put(const schema::ObTableSchema &table_schema);
   // TODO(@jingshui): 需要考虑回收问题，在读取状态要禁止回收；put的并发问题；put的覆盖写问题
   // 当前只考虑了并发问题
   int put(
@@ -110,6 +116,19 @@ public:
       const int64_t table_id,
       const ObTabletID &tablet_id,
       ObObj &cell);
+    
+  static int check_ivfflat_index_table_id_valid(
+    const int64_t tenant_id,
+    const int64_t ivfflat_index_table_id,
+    const int64_t base_table_id
+  );
+
+  static int get_partition_index_with_tablet_id(
+      const int64_t tenant_id,
+      const int64_t table_id,
+      const uint64_t tablet_id,
+      int64_t &partition_index
+  );
 
   static int set_partition_name(
       const int64_t tenant_id,

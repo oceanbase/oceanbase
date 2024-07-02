@@ -118,9 +118,6 @@ public:
       related_ctdefs_(op_alloc),
       related_rtdefs_(op_alloc),
       related_tablet_ids_(op_alloc),
-      container_ctdefs_(op_alloc),
-      container_rtdefs_(op_alloc),
-      container_tablet_ids_(op_alloc),
       task_status_(ObDasTaskStatus::UNSTART),
       das_task_node_(),
       agg_tasks_(nullptr),
@@ -164,9 +161,6 @@ public:
   DASCtDefFixedArray &get_related_ctdefs() { return related_ctdefs_; }
   DASRtDefFixedArray &get_related_rtdefs() { return related_rtdefs_; }
   ObTabletIDFixedArray &get_related_tablet_ids() { return related_tablet_ids_; }
-  DASCtDefFixedArray &get_container_ctdefs() { return container_ctdefs_; }
-  DASRtDefFixedArray &get_container_rtdefs() { return container_rtdefs_; }
-  ObTabletIDFixedArray &get_container_tablet_ids() { return container_tablet_ids_; }
   virtual int dump_data() const { return common::OB_SUCCESS; }
   const DasTaskNode &get_node() const { return das_task_node_; }
   DasTaskNode &get_node() { return das_task_node_; }
@@ -265,9 +259,6 @@ protected:
   DASCtDefFixedArray related_ctdefs_;
   DASRtDefFixedArray related_rtdefs_;
   ObTabletIDFixedArray related_tablet_ids_;
-  DASCtDefFixedArray container_ctdefs_;
-  DASRtDefFixedArray container_rtdefs_;
-  ObTabletIDFixedArray container_tablet_ids_;
   ObDasTaskStatus task_status_;  // do not serialize
   DasTaskNode das_task_node_;  // tasks's linked list node, do not serialize
   ObDasAggregatedTasks *agg_tasks_;  // task's agg task, do not serialize

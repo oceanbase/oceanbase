@@ -407,6 +407,7 @@
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_inner_row_cmp_val.h"
 #include "sql/engine/expr/ob_expr_vector.h"
+#include "sql/engine/expr/ob_expr_ivfflat_vec_cluster_id.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -1009,6 +1010,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprVectorL2Distance);
     REG_OP(ObExprVectorIpDistance);
     REG_OP(ObExprVectorCosineDistance);
+    REG_OP(ObExprIvfflatVecClusterId);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

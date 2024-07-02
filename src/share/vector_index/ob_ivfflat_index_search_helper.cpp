@@ -56,7 +56,6 @@ int ObIvfflatIndexSearchHelper::init(
     conn_ = conn;
     allocator_.set_attr(lib::ObMemAttr(tenant_id, "IvfflatScan"));
     const schema::ObTableSchema *index_table_schema = nullptr;
-    const schema::ObTableSchema *container_table_schema = nullptr;
     schema::ObSchemaGetterGuard schema_guard;
     if (OB_FAIL(schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
         tenant_id_, schema_guard))) {
@@ -71,6 +70,7 @@ int ObIvfflatIndexSearchHelper::init(
     } else {
       distance_type_ = static_cast<ObVectorDistanceType>(index_table_schema->get_vector_distance_func());
       if (n_probes_ == 0) {
+        // TODO:(@wangmiao) don't use ivfflat_lists any more.
         n_probes_ = sqrt(index_table_schema->get_vector_ivfflat_lists());
         n_probes_ = n_probes_ > 0 ? n_probes_ : 1;
       }
@@ -108,8 +108,28 @@ int ObIvfflatIndexSearchHelper::reset_centers()
 {
   int ret = OB_SUCCESS;
   centers_ = nullptr; // reset
+  LOG_INFO("######ivfflatindexcache###### reset centers", K(index_table_id_), K(partition_idx_));
   if (OB_FAIL(MTL(ObTenantIvfflatCenterCache*)->get(index_table_id_, partition_idx_, centers_))) {
     LOG_WARN("failed to get center cache", K(ret), K(index_table_id_), K(partition_idx_));
+  }
+  if (OB_HASH_NOT_EXIST == ret) {
+    const schema::ObTableSchema *index_table_schema = nullptr;
+    schema::ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+        tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get tenant schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.check_formal_guard())) {
+      LOG_WARN("fail to check formal guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, index_table_id_, index_table_schema))) {
+      LOG_WARN("fail to get table schema", K(ret), K_(tenant_id), K(index_table_id_));
+    } else if (OB_ISNULL(index_table_schema)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("fail to get table schema", K(ret), KP(index_table_schema), K_(tenant_id), K(index_table_id_));
+    } else if (OB_FAIL(MTL(ObTenantIvfflatCenterCache*)->put(*index_table_schema))) {
+      LOG_WARN("failed to push center", K(ret));
+    } else if (OB_FAIL(MTL(ObTenantIvfflatCenterCache*)->get(index_table_id_, partition_idx_, centers_))) {
+      LOG_WARN("failed to get center cache", K(ret), K(index_table_id_), K(partition_idx_));
+    }
   }
   return ret;
 }

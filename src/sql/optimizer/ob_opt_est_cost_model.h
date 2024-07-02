@@ -109,8 +109,7 @@ struct ObIndexMetaInfo
       is_global_index_(false),
       is_geo_index_(false),
       index_micro_block_count_(-1),
-      is_vector_index_(false),
-      container_table_id_(OB_INVALID_ID)
+      is_vector_index_(false)
   { }
   virtual ~ObIndexMetaInfo()
   { }

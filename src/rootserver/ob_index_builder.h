@@ -78,11 +78,6 @@ public:
                       const bool global_index_without_column_info,
                       const bool generate_id,
                       share::schema::ObTableSchema &index_schema);
-  int generate_container_schema(
-      obrpc::ObCreateIndexArg &arg,
-      const ObTableSchema &data_schema,
-      const share::schema::ObTableSchema &index_schema,
-      const bool generate_id);
   int submit_drop_index_task(
       common::ObMySQLTransaction &trans,
       const share::schema::ObTableSchema &data_schema,
@@ -90,8 +85,7 @@ public:
       const int64_t schema_version,
       const obrpc::ObDropIndexArg &arg,
       common::ObIAllocator &allocator,
-      ObDDLTaskRecord &task_record,
-      const ObTableSchema *container_schema = nullptr);
+      ObDDLTaskRecord &task_record);
   int submit_build_index_task(common::ObMySQLTransaction &trans,
                               const obrpc::ObCreateIndexArg &arg,
                               const share::schema::ObTableSchema *data_schema,
@@ -102,8 +96,7 @@ public:
                               const int64_t group_id,
                               const uint64_t tenant_data_version,
                               common::ObIAllocator &allocator,
-                              ObDDLTaskRecord &task_record,
-                              const ObTableSchema *container_schema = nullptr);
+                              ObDDLTaskRecord &task_record);
 private:
   typedef common::ObArray<std::pair<int64_t, common::ObString> > OrderFTColumns;
   class FulltextColumnOrder
@@ -133,6 +126,10 @@ private:
 
   int create_index_column_group(const obrpc::ObCreateIndexArg &arg,
                                 share::schema::ObTableSchema &index_table_schema);
+  int build_ivfflat_centers(share::schema::ObSchemaGetterGuard &schema_guard,
+                            common::ObISQLClient &sql_client,
+                            ObTableSchema &index_schema,
+                            ObTableSchema &data_schema);
 
 private:
   ObDDLService &ddl_service_;

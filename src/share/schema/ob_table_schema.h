@@ -1483,7 +1483,12 @@ public:
   void set_vector_ivfflat_lists(const int64_t vector_ivfflat_lists) { vector_ivfflat_lists_ = vector_ivfflat_lists; }
   int64_t get_vector_distance_func() const { return static_cast<int64_t>(vector_distance_func_); }
   void set_vector_distance_func(const ObVectorDistanceType distance_func) { vector_distance_func_ = distance_func; }
-
+  inline const char *get_vector_ivfflat_centers() const { return extract_str(vector_ivfflat_centers_); }
+  inline const common::ObString &get_vector_ivfflat_centers_str() const { return vector_ivfflat_centers_; }
+  int set_vector_ivfflat_centers(const common::ObString &vector_ivfflat_centers)
+  {
+    return deep_copy_str(vector_ivfflat_centers, vector_ivfflat_centers_);
+  }
   //other methods
   int64_t get_convert_size() const;
   void reset();
@@ -1906,6 +1911,7 @@ protected:
   // vector index
   int64_t vector_ivfflat_lists_;
   ObVectorDistanceType vector_distance_func_;
+  ObString vector_ivfflat_centers_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

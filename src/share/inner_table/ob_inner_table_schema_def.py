@@ -315,6 +315,7 @@ all_table_def = dict(
       ('auto_increment_cache_size', 'int', 'false', '0'),
       ('vector_ivfflat_lists', 'int', 'false', '128'),
       ('vector_distance_func', 'int', 'false', '0'),
+      ('vector_ivfflat_centers', 'longblob', 'true'),
     ],
 )
 

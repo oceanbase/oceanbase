@@ -25,6 +25,38 @@ namespace oceanbase
 {
 namespace common
 {
+struct ObVectorArray
+{
+  ObVectorArray()
+    : ptr_(nullptr),
+      length_(0),
+      part_cnts_(nullptr),
+      part_cnt_length_(0)
+  {}
+  void reset() 
+  {
+    ptr_ = nullptr;
+    length_ = 0;
+    part_cnts_ = nullptr;
+    part_cnt_length_ = 0;
+  }
+  void set_part_cnts(const int64_t *part_cnts) 
+  {
+    part_cnts_ = part_cnts;
+  }
+  void set_part_cnt_length(int64_t length)
+  {
+    part_cnt_length_ = length;
+  }
+  void set_real_length(int64_t real_length) { length_ = real_length; }
+  int get_part_cnt(int64_t idx, int64_t& part_cnt);
+  int get_part_offset(int64_t idx, int64_t dims, int64_t& part_offset);
+  NEED_SERIALIZE_AND_DESERIALIZE;
+  float *ptr_;
+  int64_t length_;
+  const int64_t *part_cnts_;
+  int64_t part_cnt_length_;
+};
 
 class ObTypeVector
 {

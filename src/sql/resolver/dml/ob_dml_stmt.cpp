@@ -1788,6 +1788,32 @@ int ObDMLStmt::formalize_relation_exprs(ObSQLSessionInfo *session_info)
         // Add IS_JOIN_COND flag need use expr relation_ids, here call extract_info() again.
         LOG_WARN("failed to extract info", K(*expr));
       }
+      // @wangmiao: set extra for T_FUN_SYS_CALC_IVFFLAT_VECTOR_CLUSTER_ID system function expr.
+      if (OB_SUCC(ret) && T_FUN_SYS_CALC_IVFFLAT_VECTOR_CLUSTER_ID == expr->get_expr_type()) {
+        ObRawExpr *param_expr = nullptr;
+        ObColumnRefRawExpr *column_ref_expr = nullptr;
+        ObSchemaGetterGuard guard;
+        uint64_t tenant_id = session_info->get_effective_tenant_id();
+        uint64_t table_id = OB_INVALID_ID;
+        if (OB_ISNULL(param_expr = expr->get_param_expr(0))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ivfflat_vec_cluster_id function argument is null", K(ret));
+        } else if (OB_UNLIKELY(!param_expr->is_column_ref_expr())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("ivfflat_vec_cluster_id function argument not a column ref expr", K(ret), K(param_expr));
+        } else if (OB_FALSE_IT(column_ref_expr = reinterpret_cast<ObColumnRefRawExpr*>(param_expr))) {
+        } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard))) {
+          LOG_WARN("get schema guard failed", K(ret));
+        } else if (OB_FAIL(guard.get_table_id(tenant_id, column_ref_expr->get_database_name(), column_ref_expr->get_table_name(), false, 
+                                      ObSchemaGetterGuard::CheckTableType::ALL_NON_HIDDEN_TYPES, table_id))) {
+          LOG_WARN("fail to get table id", K(tenant_id), K(column_ref_expr->get_database_name()), K(column_ref_expr->get_table_name()));
+        } else if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("table_id is invalid", K(ret), K(table_id));
+        } else {
+          expr->set_extra(table_id);
+        }
+      }
     }
   }
   return ret;

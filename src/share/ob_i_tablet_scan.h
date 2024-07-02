@@ -216,6 +216,7 @@ ObVTableScanParam() :
       force_refresh_lc_(false),
       is_for_foreign_check_(false),
       output_exprs_(NULL),
+      extra_access_exprs_(NULL),
       calc_exprs_(NULL),
       aggregate_exprs_(NULL),
       op_(NULL),
@@ -288,6 +289,7 @@ ObVTableScanParam() :
   //
   // output column expressions, same size as %column_ids_.
   const sql::ExprFixedArray *output_exprs_;
+  const sql::ExprFixedArray *extra_access_exprs_;
   const sql::ExprFixedArray *calc_exprs_;
   // aggregate expressions, for calculating aggregation in storage layer.
   const sql::ExprFixedArray *aggregate_exprs_;

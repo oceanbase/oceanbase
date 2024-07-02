@@ -30,7 +30,9 @@ namespace share {
  */
 int ObIvfflatIndexBuildHelper::init(const int64_t tenant_id,
                                     const int64_t lists,
-                                    const ObVectorDistanceType distance_type) {
+                                    const ObVectorDistanceType distance_type,
+                                    const int64_t partition_num,
+                                    uint64_t vector_dim) {
   int ret = OB_SUCCESS;
   if (0 >= lists_ ||
       ObVectorDistanceType::INVALID_DISTANCE_TYPE == distance_type) {
@@ -58,6 +60,8 @@ int ObIvfflatIndexBuildHelper::init(const int64_t tenant_id,
     tenant_id_ = tenant_id;
     lists_ = lists;
     init_lists_ = lists;
+    partition_num_ = partition_num;
+    vector_dim_ = vector_dim;
     is_init_ = true;
   }
   return ret;
@@ -111,6 +115,11 @@ void ObIvfflatIndexBuildHelper::destroy() {
     allocator_.free(upper_bounds_);
     upper_bounds_ = nullptr;
   }
+  if (OB_NOT_NULL(centers_.ptr_)) {
+    allocator_.free(centers_.ptr_);
+    centers_.reset();
+    centers_mem_ctx_.reset();
+  }
   if (OB_NOT_NULL(weight_)) {
     arena_allocator_.free(weight_);
     weight_ = nullptr;
@@ -129,10 +138,10 @@ int64_t ObIvfflatIndexBuildHelper::to_string(char *buf,
     J_KV(K_(lists), K_(total_cnt), "center_count",
          center_vectors_[cur_idx_].count(), K_(iterate_times),
          K_(max_iterate_times), K_(status), K_(elkan_kmeans));
-    // for (int64_t i = 0; i < center_vectors_[cur_idx_].count(); ++i) {
-    //   J_COMMA();
-    //   BUF_PRINTO(center_vectors_[cur_idx_].at(i));
-    // }
+    for (int64_t i = 0; i < center_vectors_[cur_idx_].count(); ++i) {
+      J_COMMA();
+      BUF_PRINTO(center_vectors_[cur_idx_].at(i));
+    }
     J_OBJ_END();
   }
   return pos;
@@ -821,6 +830,118 @@ int ObIvfflatIndexBuildHelper::construct_select_sql_string_simple(
   return ret;
 }
 
+int ObIvfflatIndexBuildHelper::construct_part_select_sql_string(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    common::ObSqlString &select_string,
+    ObTableSchema &data_schema,
+    const int64_t partition_index,
+    const int64_t index_column_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString query_column_sql_string;
+  bool oracle_mode = false;
+  select_string.reset();
+  partition_idx_ = partition_index;
+  // get table_name and database_name
+  const ObString &source_table_name = data_schema.get_table_name_str();
+  const uint64_t source_database_id = data_schema.get_database_id();
+  ObString source_database_name;
+  const schema::ObDatabaseSchema *db_schema = nullptr;
+  if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, source_database_id, db_schema))) {
+    LOG_WARN("fail to get database schema", K(ret), K_(tenant_id), K(source_database_id), K(data_schema));
+  } else if (OB_ISNULL(db_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected, database schema must not be nullptr", K(ret));
+  } else {
+    source_database_name = db_schema->get_database_name_str();
+    // fill select columns
+    bool is_shadow_column = false;
+    ObArray<ObColumnNameInfo> column_names;
+    const ObRowkeyInfo &rowkey_info = data_schema.get_rowkey_info();
+    const ObRowkeyColumn *rowkey_column = nullptr;
+    const schema::ObColumnSchemaV2 *column_schema = nullptr;
+    const schema::ObColumnSchemaV2 *first_rowkey_schema = nullptr;
+    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+      int64_t col_id = 0;
+      if (OB_ISNULL(rowkey_column = rowkey_info.get_column(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, rowkey column must not be nullptr", K(ret));
+      } else if (FALSE_IT(is_shadow_column = rowkey_column->column_id_ >= OB_MIN_SHADOW_COLUMN_ID)) {
+      } else if (FALSE_IT(col_id = is_shadow_column
+                                       ? rowkey_column->column_id_ -
+                                             OB_MIN_SHADOW_COLUMN_ID
+                                       : rowkey_column->column_id_)) {
+      } else if (OB_ISNULL(column_schema = data_schema.get_column_schema(col_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected, column schema must not be nullptr", K(ret), K(col_id));
+      } else if (i == 0) {
+        first_rowkey_schema = column_schema;
+        break;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(column_schema = data_schema.get_column_schema(index_column_id))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+    } else if (OB_FAIL(column_names.push_back(
+                    ObColumnNameInfo(column_schema->get_column_name_str(),
+                                    false /* is_shadow_column */)))) {
+      LOG_WARN("fail to push back column name", K(ret));
+    } else if (OB_FAIL(ObDDLUtil::generate_column_name_str(
+                    column_names, oracle_mode, true /*with origin name*/,
+                    true /*with alias name*/,
+                    false /*use_heap_table_ddl_plan*/,
+                    query_column_sql_string))) {
+      LOG_WARN("fail to generate column name str", K(ret));
+    } else {
+      const ObPartition *part = nullptr;
+      if (PARTITION_LEVEL_ZERO == data_schema.get_part_level()) {
+        if (OB_FAIL(select_string.assign_fmt(
+                    "SELECT %.*s from `%.*s`.`%.*s`",
+                    static_cast<int>(query_column_sql_string.length()),
+                    query_column_sql_string.ptr(),
+                    static_cast<int>(source_database_name.length()),
+                    source_database_name.ptr(),
+                    static_cast<int>(source_table_name.length()),
+                    source_table_name.ptr()))) {
+          LOG_WARN("fail to assign select sql string", K(ret));
+        }
+      } else if (OB_FAIL(data_schema.get_partition_by_partition_index(partition_index, CHECK_PARTITION_MODE_NORMAL, part))) {
+        LOG_WARN("fail to get partition", K(ret), K(partition_index));
+      } else if (OB_UNLIKELY(OB_ISNULL(part))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition is null", K(ret));
+      } else if (OB_FAIL(select_string.assign_fmt(
+                    "SELECT %.*s from `%.*s`.`%.*s` partition(%.*s)",
+                    static_cast<int>(query_column_sql_string.length()),
+                    query_column_sql_string.ptr(),
+                    static_cast<int>(source_database_name.length()),
+                    source_database_name.ptr(),
+                    static_cast<int>(source_table_name.length()),
+                    source_table_name.ptr(),
+                    static_cast<int>(part->get_part_name().length()),
+                    part->get_part_name().ptr()))) {
+        LOG_WARN("fail to assign select sql string", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        if (elkan_kmeans_ && OB_FAIL(select_string.append_fmt(
+                        " order by %.*s",
+                        static_cast<int>(first_rowkey_schema->get_column_name_str().length()),
+                        first_rowkey_schema->get_column_name_str().ptr()))) {
+          LOG_WARN("fail to append select sql string", K(ret));
+        } else if (OB_FAIL(select_sql_str_.assign(select_string))) {
+          LOG_WARN("fail to assign string", K(ret), K(select_string));
+        } else {
+          LOG_TRACE("success to construct select sql from data table", K(ret),
+                    K(select_string));
+        }
+      }
+    }
+  }
+  
+  return ret;
+}
+
 int ObIvfflatIndexBuildHelper::set_sample_cache(
     ObIvfflatFixSampleCache *cache) {
   int ret = OB_SUCCESS;
@@ -921,6 +1042,8 @@ int ObIvfflatIndexBuildHelper::init_first_center() {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("status not match", K(ret), K_(status));
   } else if (0 == total_cnt_) {
+    // TODO:(@wangmiao)
+    
     status_ = FINISH; // do nothing
   } else {
     LOG_INFO("start to init_first_center", K(ret), KPC(this));
@@ -1082,7 +1205,7 @@ int ObIvfflatIndexBuildHelper::ivfflat_kmeans() {
     ++iterate_times_;
     // 1. init next_idx array
     ObTypeVector *new_vector = nullptr;
-    const int64_t vector_length = center_vectors_[cur_idx_].at(0)->dims();
+    const int64_t vector_length = vector_dim_;
     while (OB_SUCC(ret) && lists_ > center_vectors_[next_idx].count()) {
       if (OB_FAIL(alloc_vector(new_vector, vector_length))) {
         LOG_WARN("failed to alloc vector", K(ret));
@@ -1208,6 +1331,7 @@ int ObIvfflatIndexBuildHelper::init_first_center_elkan() {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("status not match", K(ret), K_(status));
   } else if (0 == total_cnt_) {
+    // TODO:(@wangmiao)
     status_ = FINISH; // do nothing
   } else {
     LOG_INFO("start to init_first_center", K(ret), KPC(this));
@@ -1458,7 +1582,7 @@ int ObIvfflatIndexBuildHelper::ivfflat_elkan_kmeans() {
     }
     // 3. init next_idx array // only once
     ObTypeVector *new_vector = nullptr;
-    const int64_t vector_length = center_vectors_[cur_idx_].at(0)->dims();
+    const int64_t vector_length = vector_dim_;
     while (OB_SUCC(ret) && lists_ > center_vectors_[next_idx].count()) {
       if (OB_FAIL(alloc_vector(new_vector, vector_length))) {
         LOG_WARN("failed to alloc vector", K(ret));
@@ -1657,5 +1781,68 @@ int ObIvfflatIndexBuildHelper::get_nearest_center(const ObTypeVector &vector,
   return ret;
 }
 
+int ObIvfflatIndexBuildHelper::copy_centers(ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (ObIvfflatBuildStatus::FINISH != status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("status not match", K(ret), K_(status));
+  } else {
+    const int64_t dims = vector_dim_;
+    const int64_t cur_lists = center_vectors_[cur_idx_].count();
+    if (OB_ISNULL(centers_.ptr_)) {
+      // alloc maximum centers memory space
+      centers_.length_ = dims * init_lists_ * partition_num_;
+      int64_t size = centers_.length_ * sizeof(float);
+      if (0 == size) {
+      } else if (OB_ISNULL(centers_.ptr_ = (float*)allocator.alloc(size))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret), K(dims), K(init_lists_), K(partition_num_));
+      } else {
+        MEMSET(centers_.ptr_, 0, size);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // get memory offset from center_cnt_per_part_
+      float *base_ptr = centers_.ptr_ + centers_mem_ctx_.get_cur_total_size();
+      centers_mem_ctx_.add_new_centers(cur_lists, dims);
+      for (int64_t i = 0; i < cur_lists; ++i) {
+        float *ptr = base_ptr + dims * i;
+        MEMCPY(ptr, center_vectors_[cur_idx_].at(i)->ptr(), sizeof(float) * dims);
+      }
+    }
+  }
+  return ret;
+}
+
+void ObIvfflatIndexBuildHelper::reset_centers()
+{
+  centers_.reset();
+  centers_mem_ctx_.reset();
+}
+
+int ObIvfflatIndexBuildHelper::get_serialized_centers(char *&buf, int64_t &size, ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (ObIvfflatBuildStatus::FINISH != status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("status not match", K(ret), K_(status));
+  } else {
+    int64_t pos = 0;
+    buf = nullptr;
+    centers_.set_part_cnts(centers_mem_ctx_.get_center_cnt_per_part()->get_data());
+    centers_.set_part_cnt_length(centers_mem_ctx_.get_partition_num());
+    centers_.set_real_length(centers_mem_ctx_.get_cur_total_size());
+    size = centers_.get_serialize_size();
+    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate", K(ret));
+    } else if (OB_FAIL(centers_.serialize(buf, size, pos))) {
+      LOG_WARN("failed to serialize arg", K(ret));
+    }
+  }
+  return ret;
+}
 } // namespace share
 } // namespace oceanbase

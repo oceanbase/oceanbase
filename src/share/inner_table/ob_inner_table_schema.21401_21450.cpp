@@ -1360,7 +1360,7 @@ int ObInnerTableSchema::dba_wr_control_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING    WHERE      SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       SETTING.TENANT_ID AS TENANT_ID,       SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,       SETTING.RETENTION AS RETENTION,       SETTING.TOPNSQL AS TOPNSQL   FROM     OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING   WHERE     SETTING.TENANT_ID = EFFECTIVE_TENANT_ID()   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1410,7 +1410,7 @@ int ObInnerTableSchema::cdb_wr_control_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT        SETTING.TENANT_ID AS TENANT_ID,        SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,        SETTING.RETENTION AS RETENTION,        SETTING.TOPNSQL AS TOPNSQL   FROM      OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT       SETTING.TENANT_ID AS TENANT_ID,       SETTING.SNAP_INTERVAL AS SNAP_INTERVAL,       SETTING.RETENTION AS RETENTION,       SETTING.TOPNSQL AS TOPNSQL   FROM     OCEANBASE.__ALL_VIRTUAL_WR_CONTROL SETTING   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1460,7 +1460,7 @@ int ObInnerTableSchema::dba_ob_ls_history_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT            (CASE                 WHEN A.LS_ID IS NULL THEN B.LS_ID                ELSE A.LS_ID END) AS LS_ID,           (CASE                WHEN A.LS_GROUP_ID IS NULL THEN B.LS_GROUP_ID                ELSE A.LS_GROUP_ID END) AS LS_GROUP_ID,           (CASE                WHEN A.STATUS IS NULL THEN B.STATUS                ELSE A.STATUS END) AS STATUS,           (CASE                WHEN A.FLAG IS NULL THEN B.FLAG                ELSE A.FLAG END) AS FLAG,           (CASE                 WHEN A.LS_ID = 1 THEN 0                ELSE B.CREATE_SCN END) AS CREATE_SCN     FROM OCEANBASE.DBA_OB_LS AS A          FULL JOIN OCEANBASE.__ALL_LS AS B               ON A.LS_ID = B.LS_ID   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT           (CASE                WHEN A.LS_ID IS NULL THEN B.LS_ID                ELSE A.LS_ID END) AS LS_ID,           (CASE                WHEN A.LS_GROUP_ID IS NULL THEN B.LS_GROUP_ID                ELSE A.LS_GROUP_ID END) AS LS_GROUP_ID,           (CASE                WHEN A.STATUS IS NULL THEN B.STATUS                ELSE A.STATUS END) AS STATUS,           (CASE                WHEN A.FLAG IS NULL THEN B.FLAG                ELSE A.FLAG END) AS FLAG,           (CASE                WHEN A.LS_ID = 1 THEN 0                ELSE B.CREATE_SCN END) AS CREATE_SCN     FROM OCEANBASE.DBA_OB_LS AS A          FULL JOIN OCEANBASE.__ALL_LS AS B               ON A.LS_ID = B.LS_ID   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -1510,7 +1510,7 @@ int ObInnerTableSchema::cdb_ob_ls_history_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT           (CASE                 WHEN A.TENANT_ID IS NULL THEN B.TENANT_ID                ELSE A.TENANT_ID END) AS TENANT_ID,           (CASE                 WHEN A.LS_ID IS NULL THEN B.LS_ID                ELSE A.LS_ID END) AS LS_ID,           (CASE                WHEN A.LS_GROUP_ID IS NULL THEN B.LS_GROUP_ID                ELSE A.LS_GROUP_ID END) AS LS_GROUP_ID,           (CASE                WHEN A.STATUS IS NULL THEN B.STATUS                ELSE A.STATUS END) AS STATUS,           (CASE                WHEN A.FLAG IS NULL THEN B.FLAG                ELSE A.FLAG END) AS FLAG,           (CASE                 WHEN A.LS_ID = 1 THEN 0                ELSE B.CREATE_SCN END) AS CREATE_SCN     FROM OCEANBASE.CDB_OB_LS AS A          FULL JOIN OCEANBASE.__ALL_VIRTUAL_LS AS B               ON A.LS_ID = B.LS_ID AND A.TENANT_ID = B.TENANT_ID   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT           (CASE                WHEN A.TENANT_ID IS NULL THEN B.TENANT_ID                ELSE A.TENANT_ID END) AS TENANT_ID,           (CASE                WHEN A.LS_ID IS NULL THEN B.LS_ID                ELSE A.LS_ID END) AS LS_ID,           (CASE                WHEN A.LS_GROUP_ID IS NULL THEN B.LS_GROUP_ID                ELSE A.LS_GROUP_ID END) AS LS_GROUP_ID,           (CASE                WHEN A.STATUS IS NULL THEN B.STATUS                ELSE A.STATUS END) AS STATUS,           (CASE                WHEN A.FLAG IS NULL THEN B.FLAG                ELSE A.FLAG END) AS FLAG,           (CASE                WHEN A.LS_ID = 1 THEN 0                ELSE B.CREATE_SCN END) AS CREATE_SCN     FROM OCEANBASE.CDB_OB_LS AS A          FULL JOIN OCEANBASE.__ALL_VIRTUAL_LS AS B               ON A.LS_ID = B.LS_ID AND A.TENANT_ID = B.TENANT_ID   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

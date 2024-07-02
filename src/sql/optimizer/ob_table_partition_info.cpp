@@ -161,12 +161,10 @@ int ObTablePartitionInfo::calc_phy_table_loc_and_select_leader(ObExecContext &ex
 //the ref_table_id in the ObTableLocation needs to be replaced eventually
 int ObTablePartitionInfo::replace_final_location_key(ObExecContext &exec_ctx,
                                                      uint64_t ref_table_id,
-                                                     bool is_local_index,
-                                                     uint64_t container_table_id)
+                                                     bool is_local_index)
 {
   int ret = OB_SUCCESS;
   bool is_das_dyn_prune_part = table_location_.use_das() && table_location_.get_has_dynamic_exec_param();
-  bool need_container_table = OB_INVALID_ID != container_table_id;
   if (table_location_.get_ref_table_id() != ref_table_id) {
     if (is_local_index && !is_das_dyn_prune_part) {
       //only use to calc local index and main table related tablet info
@@ -176,17 +174,11 @@ int ObTablePartitionInfo::replace_final_location_key(ObExecContext &exec_ctx,
       DASRelatedTabletMap *related_map = nullptr;
 
       loc_meta.related_table_ids_.reset();
-      if (need_container_table) { // need container table
-        loc_meta.related_table_ids_.set_capacity(2);
-      } else {
-        loc_meta.related_table_ids_.set_capacity(1);
-      }
+      loc_meta.related_table_ids_.set_capacity(1);
       ref_table_id = share::is_oracle_mapping_real_virtual_table(ref_table_id) ?
         ObSchemaUtils::get_real_table_mappings_tid(ref_table_id) : ref_table_id;
       if (OB_FAIL(loc_meta.related_table_ids_.push_back(ref_table_id))) {
         LOG_WARN("store related table ids failed", K(ret));
-      } else if (need_container_table && OB_FAIL(loc_meta.related_table_ids_.push_back(container_table_id))) {
-        LOG_WARN("store related container table ids failed", K(ret));
       } else if (OB_FAIL(ObPhyLocationGetter::build_related_tablet_info(table_location_, exec_ctx, related_map))) {
         LOG_WARN("build related tablet info failed", K(ret));
       } else if (OB_FAIL(candi_table_loc_.replace_local_index_loc(*related_map, ref_table_id))) {

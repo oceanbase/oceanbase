@@ -142,8 +142,6 @@ public:
       scan_ctdef_(allocator),
       lookup_ctdef_(nullptr),
       lookup_loc_meta_(nullptr),
-      container_ctdef_(nullptr),
-      container_loc_meta_(nullptr),
       das_dppr_tbl_(nullptr),
       allocator_(allocator),
       calc_part_id_expr_(NULL),
@@ -170,8 +168,6 @@ public:
                K_(scan_ctdef),
                KPC_(lookup_ctdef),
                KPC_(lookup_loc_meta),
-               KP_(container_ctdef),
-               KP_(container_loc_meta),
                KPC_(das_dppr_tbl),
                KPC_(calc_part_id_expr),
                K_(global_index_rowkey_exprs),
@@ -197,9 +193,6 @@ public:
   //lookup_loc_meta_ used to calc the main table tablet location
   //when query access the global index and lookup the main table
   ObDASTableLocMeta *lookup_loc_meta_;
-  // 用于查ivfflat索引表前查询container表 // 和ivfflat索引表强绑定
-  ObDASScanCtDef *container_ctdef_;
-  ObDASTableLocMeta *container_loc_meta_;
   //used for dynamic partition pruning
   ObTableLocation *das_dppr_tbl_;
   common::ObIAllocator &allocator_;
@@ -220,7 +213,6 @@ struct ObTableScanRtDef
     : bnlj_params_(allocator),
       scan_rtdef_(),
       lookup_rtdef_(nullptr),
-      container_rtdef_(nullptr),
       range_buffers_(nullptr),
       range_buffer_idx_(0),
       group_size_(0),
@@ -246,7 +238,6 @@ struct ObTableScanRtDef
   GroupRescanParamArray bnlj_params_;
   ObDASScanRtDef scan_rtdef_;
   ObDASScanRtDef *lookup_rtdef_;
-  ObDASScanRtDef *container_rtdef_;
   // for equal_query_range opt
   void *range_buffers_;
   int64_t range_buffer_idx_;

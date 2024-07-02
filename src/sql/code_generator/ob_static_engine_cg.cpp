@@ -974,14 +974,10 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
     ObTableScanSpec &tsc_spec = static_cast<ObTableScanSpec&>(spec);
     ObDASScanCtDef &scan_ctdef = tsc_spec.tsc_ctdef_.scan_ctdef_;
     ObDASScanCtDef *lookup_ctdef = tsc_spec.tsc_ctdef_.lookup_ctdef_;
-    ObDASScanCtDef *container_ctdef = tsc_spec.tsc_ctdef_.container_ctdef_;
     if (OB_FAIL(scan_ctdef.pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
       LOG_WARN("assign all pushdown exprs failed", K(ret));
     } else if (lookup_ctdef != nullptr &&
         OB_FAIL(lookup_ctdef->pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
-      LOG_WARN("assign all pushdown exprs failed", K(ret));
-    } else if (container_ctdef != nullptr &&
-        OB_FAIL(container_ctdef->pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
       LOG_WARN("assign all pushdown exprs failed", K(ret));
     }
   }

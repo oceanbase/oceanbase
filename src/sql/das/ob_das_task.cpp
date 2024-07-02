@@ -277,10 +277,7 @@ OB_SERIALIZE_MEMBER(ObIDASTaskOp,
                     ls_id_,
                     related_ctdefs_,
                     related_rtdefs_,
-                    related_tablet_ids_,
-                    container_ctdefs_,
-                    container_rtdefs_,
-                    container_tablet_ids_);
+                    related_tablet_ids_);
 
 ObDASTaskArg::ObDASTaskArg()
   : timeout_ts_(0),
