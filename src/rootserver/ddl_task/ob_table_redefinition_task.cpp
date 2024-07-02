@@ -920,7 +920,7 @@ int ObTableRedefinitionTask::repending(const share::ObDDLTaskStatus next_task_st
     switch (task_type_) {
       case DDL_DIRECT_LOAD:
       case DDL_DIRECT_LOAD_INSERT:
-        if (get_is_do_finish()) {
+        if (get_is_do_finish() || get_is_abort()) {
           if (OB_FAIL(switch_status(next_task_status, true, ret))) {
             LOG_WARN("fail to switch status", K(ret));
           }
