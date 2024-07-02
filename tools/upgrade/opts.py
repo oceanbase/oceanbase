@@ -173,15 +173,15 @@ def deal_with_local_opt(opt, filename):
   if 'help' == opt.get_long_name():
     if 'upgrade_pre' == filename:
       global pre_help_str
-      print pre_help_str
+      print(pre_help_str)
     elif 'upgrade_post' == filename:
       global post_help_str
-      print post_help_str
+      print(post_help_str)
     else:
             raise MyError('not supported filename:{0} for help option'.format(filename))
   elif 'version' == opt.get_long_name():
     global version_str
-    print version_str
+    print(version_str)
 
 def deal_with_local_opts(filename):
   global g_opts
