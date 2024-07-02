@@ -341,6 +341,24 @@ int ObTableLoadSchema::check_has_unused_column(const ObTableSchema *table_schema
   return ret;
 }
 
+int ObTableLoadSchema::check_has_lob_column(const ObTableSchema *table_schema, bool &bret)
+{
+  int ret = OB_SUCCESS;
+  bret = false;
+  for (ObTableSchema::const_column_iterator iter = table_schema->column_begin();
+       OB_SUCC(ret) && iter != table_schema->column_end(); ++iter) {
+    ObColumnSchemaV2 *column_schema = *iter;
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("invalid column schema", K(column_schema));
+    } else if (column_schema->get_meta_type().is_lob_storage()) {
+      bret = true;
+      break;
+    }
+  }
+  return ret;
+}
+
 int ObTableLoadSchema::get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
                                                  ObCompressorType &compressor_type)
 {

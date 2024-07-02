@@ -241,6 +241,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_load_data_impl.cpp
   engine/cmd/ob_load_data_parser.cpp
   engine/cmd/ob_load_data_rpc.cpp
+  engine/cmd/ob_load_data_storage_info.cpp
   engine/cmd/ob_load_data_utils.cpp
   engine/cmd/ob_lock_table_executor.cpp
   engine/cmd/ob_outline_executor.cpp

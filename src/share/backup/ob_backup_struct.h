@@ -880,7 +880,7 @@ struct ObNonFrozenBackupPieceInfo final
   DECLARE_TO_STRING;
 };
 
-class ObBackupStorageInfo final : public common::ObObjectStorageInfo
+class ObBackupStorageInfo : public common::ObObjectStorageInfo
 {
 public:
   using common::ObObjectStorageInfo::set;

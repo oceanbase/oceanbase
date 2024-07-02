@@ -146,6 +146,7 @@ private:
   ObTableLoadClientExecCtx *exec_ctx_;
   int64_t session_count_;
   ObTableLoadInstance instance_;
+  ObTableLoadInstance::TransCtx trans_ctx_;
   int64_t next_batch_id_ CACHE_ALIGNED;
   mutable obsys::ObRWLock rw_lock_;
   table::ObTableLoadClientStatus client_status_;

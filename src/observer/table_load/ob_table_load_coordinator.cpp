@@ -1467,108 +1467,29 @@ int ObTableLoadCoordinator::check_peers_trans_commit(ObTableLoadCoordinatorTrans
   return ret;
 }
 
-class ObTableLoadCoordinator::CheckPeersTransCommitTaskProcessor : public ObITableLoadTaskProcessor
-{
-public:
-  CheckPeersTransCommitTaskProcessor(ObTableLoadTask &task, ObTableLoadTableCtx *ctx,
-                                     ObTableLoadCoordinatorTrans *trans)
-    : ObITableLoadTaskProcessor(task), ctx_(ctx), trans_(trans)
-  {
-    ctx_->inc_ref_count();
-    trans_->inc_ref_count();
-  }
-  virtual ~CheckPeersTransCommitTaskProcessor()
-  {
-    ctx_->coordinator_ctx_->put_trans(trans_);
-    ObTableLoadService::put_ctx(ctx_);
-  }
-  int process() override
-  {
-    int ret = OB_SUCCESS;
-    bool is_peers_commit = false;
-    ObTableLoadCoordinator coordinator(ctx_);
-    if (OB_FAIL(coordinator.init())) {
-      LOG_WARN("fail to init coordinator", KR(ret));
-    }
-    ObTableLoadIndexLongWait wait_obj(10 * 1000, WAIT_INTERVAL_US);
-    while (OB_SUCC(ret)) {
-      // 确认trans状态为frozen
-      if (OB_FAIL(trans_->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
-        LOG_WARN("fail to check trans status frozen", KR(ret));
-      }
-      // 向对端发送pre finish
-      else if (OB_FAIL(coordinator.check_peers_trans_commit(trans_, is_peers_commit))) {
-        LOG_WARN("fail to check peers trans commit", KR(ret));
-      } else if (!is_peers_commit) {
-        wait_obj.wait();
-      } else {
-        break;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(coordinator.confirm_finish_trans_peers(trans_))) {
-        LOG_WARN("fail to confirm finish trans peers", KR(ret));
-      } else if (OB_FAIL(coordinator.commit_trans(trans_))) {
-        LOG_WARN("fail to coordinator commit trans", KR(ret));
-      }
-    }
-    return ret;
-  }
-private:
-  ObTableLoadTableCtx * const ctx_;
-  ObTableLoadCoordinatorTrans * const trans_;
-};
-
-class ObTableLoadCoordinator::CheckPeersTransCommitTaskCallback : public ObITableLoadTaskCallback
-{
-public:
-  CheckPeersTransCommitTaskCallback(ObTableLoadTableCtx *ctx, ObTableLoadCoordinatorTrans *trans)
-    : ctx_(ctx), trans_(trans)
-  {
-    ctx_->inc_ref_count();
-    trans_->inc_ref_count();
-  }
-  virtual ~CheckPeersTransCommitTaskCallback()
-  {
-    ctx_->coordinator_ctx_->put_trans(trans_);
-    ObTableLoadService::put_ctx(ctx_);
-  }
-  void callback(int ret_code, ObTableLoadTask *task) override
-  {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(ret_code)) {
-      trans_->set_trans_status_error(ret);
-    }
-    ctx_->free_task(task);
-  }
-private:
-  ObTableLoadTableCtx * const ctx_;
-  ObTableLoadCoordinatorTrans * const trans_;
-};
-
-int ObTableLoadCoordinator::add_check_peers_trans_commit_task(ObTableLoadCoordinatorTrans *trans)
+int ObTableLoadCoordinator::check_trans_commit(ObTableLoadCoordinatorTrans *trans)
 {
   int ret = OB_SUCCESS;
-  ObTableLoadTask *task = nullptr;
-  // 1. 分配task
-  if (OB_FAIL(ctx_->alloc_task(task))) {
-    LOG_WARN("fail to alloc task", KR(ret));
+  bool is_peers_commit = false;
+  while (OB_SUCC(ret)) {
+    // 确认trans状态为frozen
+    if (OB_FAIL(trans->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
+      LOG_WARN("fail to check trans status frozen", KR(ret));
+    }
+    // 向对端发送pre finish
+    else if (OB_FAIL(check_peers_trans_commit(trans, is_peers_commit))) {
+      LOG_WARN("fail to check peers trans commit", KR(ret));
+    } else if (!is_peers_commit) {
+      usleep(WAIT_INTERVAL_US);  // 等待1s后重试
+    } else {
+      break;
+    }
   }
-  // 2. 设置processor
-  else if (OB_FAIL(task->set_processor<CheckPeersTransCommitTaskProcessor>(ctx_, trans))) {
-    LOG_WARN("fail to set check peer trans commit task processor", KR(ret));
-  }
-  // 3. 设置callback
-  else if (OB_FAIL(task->set_callback<CheckPeersTransCommitTaskCallback>(ctx_, trans))) {
-    LOG_WARN("fail to set check peer trans commit task callback", KR(ret));
-  }
-  // 4. 把task放入调度器
-  else if (OB_FAIL(coordinator_ctx_->task_scheduler_->add_task(0, task))) {
-    LOG_WARN("fail to add task", KR(ret), KPC(task));
-  }
-  if (OB_FAIL(ret)) {
-    if (nullptr != task) {
-      ctx_->free_task(task);
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(confirm_finish_trans_peers(trans))) {
+      LOG_WARN("fail to confirm finish trans peers", KR(ret));
+    } else if (OB_FAIL(commit_trans(trans))) {
+      LOG_WARN("fail to coordinator commit trans", KR(ret));
     }
   }
   return ret;
@@ -1584,8 +1505,8 @@ int ObTableLoadCoordinator::finish_trans_peers(ObTableLoadCoordinatorTrans *tran
     LOG_INFO("coordinator finish trans peers");
     if (OB_FAIL(pre_finish_trans_peers(trans))) {
       LOG_WARN("fail to pre finish trans peers", KR(ret));
-    } else if (OB_FAIL(add_check_peers_trans_commit_task(trans))) {
-      LOG_WARN("fail to add check peers trans commit task", KR(ret));
+    } else if (OB_FAIL(check_trans_commit(trans))) {
+      LOG_WARN("fail to check trans commit", KR(ret));
     }
   }
   return ret;

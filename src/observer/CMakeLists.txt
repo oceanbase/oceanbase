@@ -177,6 +177,16 @@ ob_set_subtarget(ob_server table
 )
 
 ob_set_subtarget(ob_server table_load
+  table_load/backup/v_1_4/ob_table_load_backup_macro_block_meta_v_1_4.cpp
+  table_load/backup/v_1_4/ob_table_load_backup_macro_block_reader_v_1_4.cpp
+  table_load/backup/v_1_4/ob_table_load_backup_macro_block_scanner_v_1_4.cpp
+  table_load/backup/v_1_4/ob_table_load_backup_micro_block_scanner_v_1_4.cpp
+  table_load/backup/v_1_4/ob_table_load_backup_partition_scanner_v_1_4.cpp
+  table_load/backup/v_1_4/ob_table_load_backup_row_reader_v_1_4.cpp
+  table_load/backup/v_1_4/ob_table_load_backup_table_v_1_4.cpp
+  table_load/backup/v_1_4/ob_table_load_backup_util_v_1_4.cpp
+  table_load/backup/ob_table_load_backup_file_util.cpp
+  table_load/backup/ob_table_load_backup_table.cpp
   table_load/client/ob_table_direct_load_rpc_executor.cpp
   table_load/client/ob_table_direct_load_rpc_proxy.cpp
   table_load/client/ob_table_direct_load_rpc_struct.cpp

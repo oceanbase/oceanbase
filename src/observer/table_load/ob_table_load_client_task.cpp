@@ -242,6 +242,7 @@ ObTableLoadClientTask::~ObTableLoadClientTask()
     ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
     session_info_ = nullptr;
   }
+  trans_ctx_.reset();
 }
 
 int ObTableLoadClientTask::init(const ObTableLoadClientTaskParam &param)
@@ -429,8 +430,8 @@ int ObTableLoadClientTask::write(ObTableLoadObjRowArray &obj_rows)
       row.seq_no_ = start_seq_no++;
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(instance_.write(session_id, obj_rows))) {
-        LOG_WARN("fail to write", KR(ret));
+      if (OB_FAIL(instance_.write_trans(trans_ctx_, session_id, obj_rows))) {
+        LOG_WARN("fail to write trans", KR(ret));
       }
     }
   }
@@ -654,6 +655,8 @@ int ObTableLoadClientTask::init_instance()
       const ObTableLoadTableCtx *tmp_ctx = nullptr;
       if (OB_FAIL(instance_.init(load_param, column_ids, exec_ctx_))) {
         LOG_WARN("fail to init instance", KR(ret));
+      } else if (OB_FAIL(instance_.start_trans(trans_ctx_, ObTableLoadInstance::DEFAULT_SEGMENT_ID, allocator_))) {
+        LOG_WARN("fail to start trans", KR(ret));
       } else if (OB_ISNULL(tmp_ctx = instance_.get_table_ctx())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get table ctx", KR(ret));
@@ -673,7 +676,9 @@ int ObTableLoadClientTask::commit_instance()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadClientTask not init", KR(ret));
   } else {
-    if (OB_FAIL(instance_.commit())) {
+    if (OB_FAIL(instance_.commit_trans(trans_ctx_))) {
+      LOG_WARN("fail to commit trans", KR(ret));
+    } else if (OB_FAIL(instance_.commit())) {
       LOG_WARN("fail to commit instance", KR(ret));
     } else {
       result_info_ = instance_.get_result_info();

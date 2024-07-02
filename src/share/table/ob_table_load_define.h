@@ -451,13 +451,19 @@ public:
   static const int32_t DATA_ID_SHIFT = 48;   // multi file sequence_no_ = [data_id << 48 | data_seq_no]
   static const int32_t CHUNK_ID_SHIFT = 32;  // single file sequence_no_ = [chunk_id << 32 | chunk_seq_no]
   static const int32_t BATCH_ID_SHIFT = 16;  // java client sequence_no_ = [batch_id << 16 | batch_seq_no]
+  // backup sequence_no_ = [ partition_idx << 40 | subpart_idx << 32 | seq_no ]
+  static const int32_t BACKUP_PARTITION_IDX_SHIFT = 40;
+  static const int32_t BACKUP_SUBPART_IDX_SHIFT = 32;
 
   static const uint64_t MAX_DATA_ID  = (1LL << (64 - DATA_ID_SHIFT)) - 1;
   static const uint64_t MAX_CHUNK_ID  = (1LL << (64 - CHUNK_ID_SHIFT)) - 1;
   static const uint64_t MAX_BATCH_ID  = (1LL << (64 - BATCH_ID_SHIFT)) - 1;
+  static const uint64_t MAX_BACKUP_PARTITION_IDX = (1LL << (64 - BACKUP_PARTITION_IDX_SHIFT)) -1;
+  static const uint64_t MAX_BACKUP_SUBPART_IDX = (1LL << (BACKUP_PARTITION_IDX_SHIFT - BACKUP_SUBPART_IDX_SHIFT)) - 1;
   static const uint64_t MAX_DATA_SEQ_NO  = (1LL << DATA_ID_SHIFT) - 1;
   static const uint64_t MAX_CHUNK_SEQ_NO  = (1LL << CHUNK_ID_SHIFT) - 1;
   static const uint64_t MAX_BATCH_SEQ_NO  = (1LL << BATCH_ID_SHIFT) - 1;
+  static const uint64_t MAX_BACKUP_SEQ_NO = (1LL << BACKUP_SUBPART_IDX_SHIFT) - 1;
   uint64_t sequence_no_;
 
   ObTableLoadSequenceNo() : sequence_no_(OB_INVALID_ID) {}
