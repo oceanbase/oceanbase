@@ -2907,9 +2907,13 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
     set_dist_methods &= DIST_PULL_TO_LOCAL | DIST_BASIC_METHOD;
   }
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_NONE_ALL)) {
+    bool is_compatible = false;
     if (left_sharding->is_distributed() && right_sharding->is_match_all() &&
         !right_child.get_contains_das_op() && !right_child.get_contains_fake_cte() &&
-        ObSelectStmt::UNION != set_op) {
+        (ObSelectStmt::INTERSECT == set_op || ObSelectStmt::EXCEPT == set_op) &&
+        OB_FAIL(left_child.check_sharding_compatible_with_reduce_expr(left_set_keys, is_compatible))) {
+      LOG_WARN("failed to check sharding compatible with reduce expr", K(ret));
+    } else if (is_compatible) {
       set_dist_methods = DistAlgo::DIST_NONE_ALL;
     } else {
       set_dist_methods &= ~DistAlgo::DIST_NONE_ALL;
@@ -2917,9 +2921,13 @@ int ObSelectLogPlan::get_distributed_set_methods(const EqualSets &equal_sets,
   }
 
   if (OB_SUCC(ret) && (set_dist_methods & DistAlgo::DIST_ALL_NONE)) {
+    bool is_compatible = false;
     if (right_sharding->is_distributed() && left_sharding->is_match_all() &&
         !left_child.get_contains_das_op() && !left_child.get_contains_fake_cte() &&
-        ObSelectStmt::UNION != set_op) {
+        ObSelectStmt::INTERSECT == set_op &&
+        OB_FAIL(right_child.check_sharding_compatible_with_reduce_expr(right_set_keys, is_compatible))) {
+      LOG_WARN("failed to check sharding compatible with reduce expr", K(ret));
+    } else if (is_compatible) {
       set_dist_methods = DistAlgo::DIST_ALL_NONE;
     } else {
       set_dist_methods &= ~DistAlgo::DIST_ALL_NONE;
