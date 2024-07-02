@@ -213,6 +213,8 @@ private:
         all_cells_->reset();
       }
       nbuckets_ = 0;
+      row_count_ = 0;
+      inited_ = false;
     }
     int init(ObIAllocator &alloc);
     void free(ObIAllocator *alloc)
