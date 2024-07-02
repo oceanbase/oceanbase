@@ -250,6 +250,7 @@ int ObTableLoadCoordinator::init()
 int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg)
 {
   int ret = OB_SUCCESS;
+  const int64_t MIN_THREAD_COUNT = 2;
   ObTenant *tenant = nullptr;
   int64_t tenant_id = MTL_ID();
   uint64_t cluster_version = ctx_->ddl_param_.cluster_version_;
@@ -261,10 +262,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
     if (OB_FAIL(coordinator_ctx_->init_partition_location())) {
       LOG_WARN("fail to init partition location", KR(ret));
     } else {
-      ctx_->param_.session_count_ = MIN(ctx_->param_.parallel_, (int64_t)tenant->unit_max_cpu() * 2);
-      if (ctx_->param_.need_sort_) {
-        ctx_->param_.session_count_ = MAX(ctx_->param_.session_count_, 2);
-      }
+      ctx_->param_.session_count_ = MAX(MIN(ctx_->param_.parallel_, (int64_t)tenant->unit_max_cpu() * 2), MIN_THREAD_COUNT);
       ctx_->param_.write_session_count_ = ctx_->param_.session_count_;
     }
   } else {
@@ -296,7 +294,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         ObArray<int64_t> partitions;
         int64_t store_server_count = all_leader_info_array.count();
         int64_t coordinator_session_count = 0;
-        int64_t min_session_count = ctx_->param_.parallel_;
+        int64_t min_session_count = MAX(ctx_->param_.parallel_, 2);
         int64_t max_session_count = (int64_t)tenant->unit_max_cpu() * 2;
         int64_t total_session_count = MIN(ctx_->param_.parallel_, max_session_count * store_server_count);
         int64_t remain_session_count = total_session_count;
@@ -320,8 +318,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
           if (OB_FAIL(partitions.push_back(all_leader_info_array[i].partition_id_array_.count()))) {
             LOG_WARN("fail to push back", KR(ret));
           } else {
-            unit.thread_count_ = MAX((!ctx_->schema_.is_heap_table_ && ctx_->param_.need_sort_ ? 2 : 1),
-                                     MIN(max_session_count, total_session_count * partitions[i] / total_partitions));
+            unit.thread_count_ = MAX(MIN(max_session_count, total_session_count * partitions[i] / total_partitions), MIN_THREAD_COUNT);
             if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
               LOG_WARN("fail to push back", KR(ret));
             } else {
@@ -332,7 +329,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
         if (OB_SUCC(ret) && !include_cur_addr) {
           ObDirectLoadResourceUnit unit;
           unit.addr_ = coordinator_addr;
-          unit.thread_count_ = MAX(1, total_session_count / store_server_count);
+          unit.thread_count_ = MAX(total_session_count / store_server_count, MIN_THREAD_COUNT);
           unit.memory_size_ = 0;
           coordinator_session_count = unit.thread_count_;
           min_session_count = MIN(min_session_count, unit.thread_count_);
