@@ -75,6 +75,289 @@ class ObExprLike : public ObFuncExprOperator
     char *instr_buf_;
     uint32_t instr_buf_length_;
   };
+
+  class StringSearcher {
+#if defined(__x86_64__)
+  private:
+    static constexpr int m128_size_ = sizeof(__m128i);
+    const int page_size_ = sysconf(_SC_PAGESIZE);
+
+    bool page_safe(const void *const ptr) const {
+      return ((page_size_ - 1) & reinterpret_cast<std::uintptr_t>(ptr)) <= page_size_ - m128_size_;
+    }
+    template <typename T>
+    T unaligned_load(const void *address) const
+    {
+      T res{};
+      memcpy(&res, address, sizeof(res));
+      return res;
+    }
+#endif
+
+  public:
+    StringSearcher() : pattern_(nullptr), pattern_end_(nullptr), pattern_len_(0) {}
+    StringSearcher(const char *pattern, const size_t pattern_size) {
+      init(pattern, pattern_size);
+    }
+    __attribute__((target("sse4.1")))
+    inline void init(const char *pattern, size_t len) {
+      if (0 == len) {
+        return;
+      }
+      pattern_ = pattern;
+      pattern_end_ = pattern_ + len;
+      pattern_len_ = len;
+
+      first_ = *pattern;
+#if defined(__x86_64__)
+      first_pattern_ = _mm_set1_epi8(first_);
+      if (pattern_ + 1 < pattern_end_) {
+        second_ = *(pattern_ + 1);
+        second_pattern_ = _mm_set1_epi8(second_);
+      }
+
+      const char *pattern_pos = pattern_;
+      for (size_t i = 0; i < m128_size_; i++) {
+        cache_ = _mm_srli_si128(cache_, 1);
+        if (pattern_pos != pattern_end_) {
+          cache_ = _mm_insert_epi8(cache_, *pattern_pos, m128_size_ - 1);
+          cache_mask_ |= 1 << i;
+          ++pattern_pos;
+        }
+      }
+#endif
+    }
+    inline const char *get_pattern() { return pattern_; }
+    inline const char *get_patterne_end() { return pattern_end_; }
+    inline size_t get_pattern_length() { return pattern_len_; }
+
+  public:
+    // determines if pattern_ is a substring of text
+    inline bool is_substring(const char *text, const char *text_end) const {
+      // pattern_ will not be null becauce it is preprared in set_instr_info().
+      if (text == text_end) {
+        return false;
+      }
+#if defined(__x86_64__)
+      // here is the quick path when pattern_len_ is 1.
+      if (pattern_len_ == 1) {
+        while (text < text_end) {
+          if (text + m128_size_ <= text_end && page_safe(text)) {
+            __m128i v_text = _mm_loadu_si128(reinterpret_cast<const __m128i *>(text));
+            __m128i v_against_pattern = _mm_cmpeq_epi8(v_text, first_pattern_);
+            int mask = _mm_movemask_epi8(v_against_pattern);
+            if (mask == 0) {
+              text += m128_size_;
+              continue;
+            }
+            int offset = __builtin_ctz(mask);
+            text += offset;
+            return true;
+          }
+          if (text == text_end) {
+            return false;
+          }
+          if (*text == first_) {
+            return true;
+          }
+          ++text;
+        }
+        return false;
+      }
+#endif
+      while (text < text_end && text_end - text >= pattern_len_) {
+#if defined(__x86_64__)
+        if ((text + 1 + m128_size_) <= text_end && page_safe(text)) {
+          // find first and second byte of text
+          __m128i first_block = _mm_loadu_si128(reinterpret_cast<const __m128i *>(text));
+          __m128i second_block = _mm_loadu_si128(reinterpret_cast<const __m128i *>(text + 1));
+          __m128i first_cmp = _mm_cmpeq_epi8(first_block, first_pattern_);
+          __m128i second_cmp = _mm_cmpeq_epi8(second_block, second_pattern_);
+          int mask = _mm_movemask_epi8(_mm_and_si128(first_cmp, second_cmp));
+          // first and second byte not present in 16 octets starting at `text`
+          if (mask == 0) {
+            text += m128_size_;
+            continue;
+          }
+          int offset = __builtin_ctz(mask);
+          text += offset;
+          if (text + m128_size_ <= text_end && page_safe(text)) {
+            // check for first 16 octets
+            __m128i v_text_offset = _mm_loadu_si128(reinterpret_cast<const __m128i *>(text));
+            __m128i v_against_cache = _mm_cmpeq_epi8(v_text_offset, cache_);
+            int mask_offset = _mm_movemask_epi8(v_against_cache);
+            if (0xffff == cache_mask_) {
+              if (mask_offset == cache_mask_) {
+                const char *text_pos = text + m128_size_;
+                const char *pattern_pos = pattern_ + m128_size_;
+                while (text_pos < text_end &&
+                       pattern_pos < pattern_end_ &&
+                       *text_pos == *pattern_pos) {
+                  ++text_pos, ++pattern_pos;
+                }
+                if (pattern_pos == pattern_end_) {
+                  return true;
+                }
+              }
+            } else if ((mask_offset & cache_mask_) == cache_mask_) {
+              return true;
+            }
+            ++text;
+            continue;
+          }
+        }
+#endif
+        if (text == text_end) {
+          return false;
+        }
+        if (*text == first_) {
+          const char *text_pos = text + 1;
+          const char *pattern_pos = pattern_ + 1;
+          while (text_pos < text_end && pattern_pos < pattern_end_ && *text_pos == *pattern_pos) {
+            ++text_pos, ++pattern_pos;
+          }
+          if (pattern_pos == pattern_end_) {
+            return true;
+          }
+        }
+        ++text;
+      }
+      return false;
+    }
+    // determines if text starts with pattern_
+    inline bool start_with(const char *text, const char *text_end) const {
+      // pattern_ will not be null becauce it is preprared in set_instr_info().
+      if (pattern_len_ > text_end - text) {
+        return false;
+      }
+      return memequal_opt(text, pattern_, pattern_len_);
+    }
+    // determines if text ends with pattern_
+    inline bool end_with(const char *text, const char *text_end) const {
+      // pattern_ will not be null becauce it is preprared in set_instr_info().
+      if (pattern_len_ > text_end - text) {
+        return false;
+      }
+      return memequal_opt(text_end - pattern_len_, pattern_, pattern_len_);
+    }
+    // determines if text equals with pattern_
+    inline bool equal(const char *text, const char *text_end) const {
+      // pattern_ will not be null becauce it is preprared in set_instr_info().
+      if (pattern_len_ != text_end - text) {
+        return false;
+      }
+      return memequal_opt(text, pattern_, pattern_len_);
+    }
+
+    inline bool memequal_opt(const char *s1, const char *s2, size_t n) const {
+      switch (n)
+      {
+      case 1:
+        return *s1 == *s2;
+      case 2:
+        return unaligned_load<uint16_t>(s1) == unaligned_load<uint16_t>(s2);
+      case 3:
+        return unaligned_load<uint16_t>(s1) == unaligned_load<uint16_t>(s2) &&
+               unaligned_load<uint8_t>(s1 + 2) == unaligned_load<uint8_t>(s2 + 2);
+      case 4:
+        return unaligned_load<uint32_t>(s1) == unaligned_load<uint32_t>(s2);
+      case 5:
+        return unaligned_load<uint32_t>(s1) == unaligned_load<uint32_t>(s2) &&
+               unaligned_load<uint8_t>(s1 + 4) == unaligned_load<uint8_t>(s2 + 4);
+      case 6:
+        return unaligned_load<uint32_t>(s1) == unaligned_load<uint32_t>(s2) &&
+               unaligned_load<uint16_t>(s1 + 4) == unaligned_load<uint16_t>(s2 + 4);
+      case 7:
+        return unaligned_load<uint32_t>(s1) == unaligned_load<uint32_t>(s2) &&
+               unaligned_load<uint16_t>(s1 + 4) == unaligned_load<uint16_t>(s2 + 4) &&
+               unaligned_load<uint8_t>(s1 + 6) == unaligned_load<uint8_t>(s2 + 6);
+      case 8:
+        return unaligned_load<uint64_t>(s1) == unaligned_load<uint64_t>(s2);
+      default:
+        break;
+      }
+      if (n <= 16) {
+        return unaligned_load<uint64_t>(s1) == unaligned_load<uint64_t>(s2) &&
+               unaligned_load<uint64_t>(s1 + n - 8) == unaligned_load<uint64_t>(s2 + n - 8);
+      }
+#if defined(__x86_64__)
+      while (n >= 64) {
+        if (memequal_sse<4>(s1, s2)) {
+          s1 += 64;
+          s2 += 64;
+          n -= 64;
+        } else {
+          return false;
+        }
+      }
+      switch (n / 16) {
+      case 3:
+        if (!memequal_sse<1>(s1 + 32, s2 + 32)) {
+          return false;
+        }
+      case 2:
+        if (!memequal_sse<1>(s1 + 16, s2 + 16)) {
+          return false;
+        }
+      case 1:
+        if (!memequal_sse<1>(s1, s2)) {
+          return false;
+        }
+      }
+      return memequal_sse<1>(s1 + n - 16, s2 + n - 16);
+#else
+      return 0 == MEMCMP(s1, s2, n);
+#endif
+    }
+#if defined(__x86_64__)
+    // cnt means the count of __m128i to compare
+    template <int cnt>
+    inline bool memequal_sse(const char *p1, const char *p2) const {
+      if (cnt == 1) {
+        return 0xFFFF == _mm_movemask_epi8(
+            _mm_cmpeq_epi8(
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1)),
+                _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2))));
+      }
+      if (cnt == 4) {
+        return 0xFFFF == _mm_movemask_epi8(
+            _mm_and_si128(
+                _mm_and_si128(
+                    _mm_cmpeq_epi8(
+                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1)),
+                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2))),
+                    _mm_cmpeq_epi8(
+                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 1),
+                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 1))),
+                _mm_and_si128(
+                    _mm_cmpeq_epi8(
+                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 2),
+                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 2)),
+                    _mm_cmpeq_epi8(
+                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(p1) + 3),
+                        _mm_loadu_si128(reinterpret_cast<const __m128i *>(p2) + 3)))));
+      }
+    }
+#endif
+  private:
+    // string to be searched for
+    const char *pattern_;
+    const char *pattern_end_;
+    size_t pattern_len_;
+    // first byte of `pattern_`
+    uint8_t first_;
+#if defined(__x86_64__)
+    // second byte of `pattern_`
+    uint8_t second_;
+    // vector filled `first_` or `second_`
+    __m128i first_pattern_;
+    __m128i second_pattern_;
+    // vector filled first 16 bytes of `pattern_` and the mask of cache
+    __m128i cache_ = _mm_setzero_si128();
+    int cache_mask_ = 0;
+#endif
+  };
+
   class ObExprLikeContext : public ObExprOperatorCtx
   {
   public:
@@ -113,6 +396,8 @@ class ObExprLike : public ObFuncExprOperator
     uint32_t last_escape_len_;
     uint32_t escape_buf_len_;
     bool same_as_last;
+    // string helper to calc substring etc.
+    StringSearcher string_searcher_;
   };
   OB_UNIS_VERSION_V(1);
 public:
@@ -128,16 +413,19 @@ public:
                                         const common::ObCollationType coll_type,
                                         const int32_t escape_wc,
                                         const common::ObString &pattern_val,
-                                        const InstrInfo instr_info);
+                                        const InstrInfo instr_info,
+                                        const StringSearcher &string_searcher);
 template <typename TextVec, typename ResVec, bool NullCheck, bool UseInstrMode, INSTR_MODE InstrMode>
   static int match_text_vector(VECTOR_EVAL_FUNC_ARG_DECL,
                                         const common::ObCollationType coll_type,
                                         const int32_t escape_wc,
                                         const common::ObString &pattern_val,
-                                        const InstrInfo instr_info);
+                                        const InstrInfo instr_info,
+                                        const StringSearcher &string_searcher);
   template <bool percent_sign_start, bool percent_sign_end>
   static int64_t match_with_instr_mode(const common::ObString &text_val,
-                                       const InstrInfo instr_info);
+                                       const InstrInfo instr_info,
+                                       const StringSearcher &string_searcher);
   template <typename T>
   static int calc_with_non_instr_mode(T &result,
                                       const common::ObCollationType coll_type,
