@@ -417,7 +417,7 @@ int ObExternalTableUtils::calc_assigned_files_to_sqcs(
   }
   std::sort(sorted_files.begin(), sorted_files.end(),
             [](const FileInfoWithIdx &l, const FileInfoWithIdx &r) -> bool {
-              return l.file_info_->file_size_ >= r.file_info_->file_size_; });
+              return l.file_info_->file_size_ > r.file_info_->file_size_; });
   for (int64_t i = 0; OB_SUCC(ret) && i < sqc_count; i++) {
     SqcFileSet new_set;
     new_set.total_file_size_ = sorted_files.at(i).file_info_->file_size_;
