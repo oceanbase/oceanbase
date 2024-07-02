@@ -60,10 +60,10 @@ private:
   template<typename T>
   ObSmallObjPool<T> &get_pool();
 private:
-  static const int64_t MAX_DECODER_CNT = 4096;
+  static const int64_t MAX_DECODER_CNT = 40960;
   static const int64_t MID_DECODER_CNT = MAX_DECODER_CNT / 2;
   static const int64_t MIN_DECODER_CNT = MAX_DECODER_CNT / 4;
-  static const int64_t MAX_CS_DECODER_CNT = 4096;
+  static const int64_t MAX_CS_DECODER_CNT = 40960;
   static const int64_t MAX_CTX_BLOCK_CNT =
       MAX_DECODER_CNT * ObColumnHeader::MAX_TYPE / ObColumnDecoderCtxBlock::CTX_NUMS;
   static const int64_t MAX_CS_CTX_BLOCK_CNT =
