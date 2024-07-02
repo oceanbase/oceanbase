@@ -705,6 +705,12 @@ int ObTableApiSessNode::init()
         }
       }
     }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(mem_ctx_)) {
+      DESTROY_CONTEXT(mem_ctx_);
+      mem_ctx_ = nullptr;
+    }
+
   }
 
   return ret;
