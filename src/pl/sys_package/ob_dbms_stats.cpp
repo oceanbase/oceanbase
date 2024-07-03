@@ -5931,6 +5931,13 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
     } else {
       stat_pref = tmp_pref;
     }
+  } else if (0 == opt_name.case_compare("ONLINE_ESTIMATE_PERCENT")) {
+    ObOnlineEstimatePercentPrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(allocator, ctx.get_my_session(), opt_value, tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else {
+      stat_pref = tmp_pref;
+    }
   } else {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Invalid input values for pname", K(ret), K(opt_name));
@@ -5938,7 +5945,7 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
                                           "DEGREE | ESTIMATE_PERCENT | GRANULARITY | INCREMENTAL |"\
                                           "INCREMENTAL_LEVEL | METHOD_OPT | NO_INVALIDATE | OPTIONS |"\
                                           "STALE_PERCENT | ESTIMATE_BLOCK | BLOCK_SAMPLE |"\
-                                          "APPROXIMATE_NDV(global prefs unique) prefs");
+                                          "APPROXIMATE_NDV(global prefs unique) | ONLINE_ESTIMATE_PERCENT prefs");
   }
   return ret;
 }

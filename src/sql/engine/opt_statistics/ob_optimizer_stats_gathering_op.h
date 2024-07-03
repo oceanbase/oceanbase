@@ -102,7 +102,7 @@ private:
   // calc stats for each column
   int calc_column_stats(ObExpr *expr, uint64_t column_id, int64_t &row_len);
   int calc_columns_stats(int64_t &row_len);
-  int calc_table_stats(int64_t &row_len);
+  int calc_table_stats(int64_t &row_len, bool is_sample_row);
   // generate stat_param that is used to write inner_table.
   int generate_stat_param(ObTableStatParam &param);
 
@@ -127,6 +127,7 @@ private:
   // ------- data struct for piece msg;
   ObOptStatsGatherPieceMsg piece_msg_;
   ObArenaAllocator arena_;
+  ObOptOSGSampleHelper sample_helper_;
 };
 }
 }

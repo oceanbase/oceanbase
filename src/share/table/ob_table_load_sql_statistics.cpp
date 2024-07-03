@@ -37,6 +37,7 @@ void ObTableLoadSqlStatistics::reset()
   }
   table_stat_array_.reset();
   allocator_.reset();
+  sample_helper_.reset();
 }
 
 int ObTableLoadSqlStatistics::create(int64_t column_count)
@@ -319,6 +320,7 @@ OB_DEF_SERIALIZE(ObTableLoadSqlStatistics)
       OB_UNIS_ENCODE(*col_stat_array_.at(i));
     }
   }
+  OB_UNIS_ENCODE(sample_helper_);
   return ret;
 }
 
@@ -378,6 +380,7 @@ OB_DEF_DESERIALIZE(ObTableLoadSqlStatistics)
       }
     }
   }
+  OB_UNIS_DECODE(sample_helper_);
   return ret;
 }
 
@@ -405,6 +408,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableLoadSqlStatistics)
       OB_UNIS_ADD_LEN(*col_stat);
     }
   }
+  OB_UNIS_ADD_LEN(sample_helper_);
   return len;
 }
 

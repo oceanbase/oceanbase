@@ -118,11 +118,13 @@ struct ObColDataStoreDesc
   int init(
     const bool is_major,
     const share::schema::ObMergeSchema &merge_schema,
-    const uint16_t table_cg_idx);
+    const uint16_t table_cg_idx,
+    const int64_t major_working_cluster_version);
   int init(const bool is_major,
           const share::schema::ObMergeSchema &merge_schema,
           const storage::ObStorageColumnGroupSchema &cg_schema,
-          const uint16_t table_cg_idx);
+          const uint16_t table_cg_idx,
+          const int64_t major_working_cluster_version);
   // be carefule to cal mock function
   int mock_valid_col_default_checksum_array(int64_t column_cnt);
   OB_INLINE int add_col_desc(const ObObjMeta meta, int64_t col_idx);
@@ -137,7 +139,8 @@ private:
   // simplified do not generate skip index, do not init agg_meta_array
   int generate_skip_index_meta(
       const share::schema::ObMergeSchema &schema,
-      const storage::ObStorageColumnGroupSchema *cg_schema);
+      const storage::ObStorageColumnGroupSchema *cg_schema,
+      const int64_t major_working_cluster_version);
   void fresh_col_meta(const share::schema::ObMergeSchema &merge_schema);
   int gene_col_default_checksum_array(
       const share::schema::ObMergeSchema &merge_schema);
@@ -145,7 +148,10 @@ private:
       const share::schema::ObMergeSchema &merge_schema);
   int init_col_default_checksum_array(
       const int64_t column_cnt);
-  int generate_single_cg_skip_index_meta(const storage::ObStorageColumnGroupSchema &cg_schema);
+  int generate_single_cg_skip_index_meta(
+    const ObSkipIndexColumnAttr &skip_idx_attr_by_user,
+    const storage::ObStorageColumnGroupSchema &cg_schema,
+    const int64_t major_working_cluster_version);
   int add_col_desc_from_cg_schema(
     const share::schema::ObMergeSchema &merge_schema,
     const storage::ObStorageColumnGroupSchema &cg_schema);

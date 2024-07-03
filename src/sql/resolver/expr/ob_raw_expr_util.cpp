@@ -5162,6 +5162,18 @@ bool ObRawExprUtils::need_column_conv(const ColumnItem &column, ObRawExpr &expr)
   } else { /*do nothing*/ }
   return bret;
 }
+
+bool ObRawExprUtils::check_exprs_type_collation_accuracy_equal(const ObRawExpr *expr1, const ObRawExpr *expr2)
+{
+  int equal = false;
+  if (expr1->get_data_type() == expr2->get_data_type()
+      && expr1->get_collation_type() == expr2->get_collation_type()
+      && expr1->get_accuracy() == expr2->get_accuracy()) {
+    equal = true;
+  }
+  return equal;
+}
+
 // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
 int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                            const share::schema::ObColumnSchemaV2 *column_schema,

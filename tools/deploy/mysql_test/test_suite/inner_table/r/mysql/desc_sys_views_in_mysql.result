@@ -3037,7 +3037,7 @@ IM_IMCU_COUNT	decimal(10,0)	NO
 IM_BLOCK_COUNT	decimal(10,0)	NO			
 IM_STAT_UPDATE_TIME	datetime	NO			
 SCAN_RATE	decimal(10,0)	NO			
-SAMPLE_SIZE	decimal(10,0)	NO			
+SAMPLE_SIZE	decimal(10,0)	YES		NULL	
 LAST_ANALYZED	datetime(6)	NO		NULL	
 GLOBAL_STATS	varchar(3)	NO			
 USER_STATS	varchar(3)	NO			

@@ -43,7 +43,8 @@ int ObTableDirectInsertCtx::init(
     const int64_t parallel,
     const bool is_incremental,
     const bool enable_inc_replace,
-    const bool is_insert_overwrite)
+    const bool is_insert_overwrite,
+    const double online_sample_percent)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -124,6 +125,7 @@ int ObTableDirectInsertCtx::init(
         param.insert_mode_ = insert_mode;
         param.load_mode_ = load_mode;
         param.compressor_type_ = compressor_type;
+        param.online_sample_percent_ = online_sample_percent;
         if (OB_FAIL(table_load_instance_->init(param, column_ids, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));
         } else {

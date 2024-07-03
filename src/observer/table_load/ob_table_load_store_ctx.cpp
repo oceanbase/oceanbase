@@ -229,6 +229,7 @@ int ObTableLoadStoreCtx::init(
       insert_table_param.datum_utils_ = &(ctx_->schema_.datum_utils_);
       insert_table_param.col_descs_ = &(ctx_->schema_.column_descs_);
       insert_table_param.cmp_funcs_ = &(ctx_->schema_.cmp_funcs_);
+      insert_table_param.online_sample_percent_ = ctx_->param_.online_sample_percent_;
       if (OB_ISNULL(insert_table_ctx_ =
                          OB_NEWx(ObDirectLoadInsertTableContext, (&allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;

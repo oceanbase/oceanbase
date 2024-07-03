@@ -1079,6 +1079,11 @@ int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statist
     } else if (OB_UNLIKELY(global_table_stats.empty() || global_column_stats.empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected empty sql stats", KR(ret), K(global_table_stats), K(global_column_stats));
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0 &&
+               OB_FAIL(ObDbmsStatsUtils::scale_col_stats(tenant_id,
+                                                         global_table_stats,
+                                                         global_column_stats))) {
+      LOG_WARN("failed to scale col stats", KR(ret));
     } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(&schema_guard,
                                                            ctx_->session_info_,
                                                            GCTX.sql_proxy_,

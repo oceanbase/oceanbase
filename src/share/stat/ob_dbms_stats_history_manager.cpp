@@ -78,7 +78,8 @@ namespace common {
                                                   row_cnt,             \
                                                   avg_row_len,         \
                                                   index_type,          \
-                                                  stattype_locked) %s"
+                                                  stattype_locked,     \
+                                                  spare1) %s"
 
 #define SELECT_TABLE_STAT                "SELECT tenant_id,           \
                                                   table_id,            \
@@ -96,11 +97,12 @@ namespace common {
                                                   row_cnt,             \
                                                   avg_row_len,         \
                                                   index_type,          \
-                                                  stattype_locked      \
+                                                  stattype_locked,     \
+                                                  spare1               \
                                              FROM %s                   \
                                              WHERE tenant_id = %lu and table_id = %lu %s"
 
-#define TABLE_STAT_MOCK_VALUE_PATTERN "(%lu, %lu, %ld, usec_to_time(%ld), 0, 0, 0, 0, -1, -1, 0, 0, -1, 0, 0, 0, 0)"
+#define TABLE_STAT_MOCK_VALUE_PATTERN "(%lu, %lu, %ld, usec_to_time(%ld), 0, 0, 0, 0, -1, -1, 0, 0, -1, 0, 0, 0, 0, 0)"
 
 #define INSERT_COLUMN_STAT_HISTORY "INSERT INTO %s(tenant_id,                 \
                                                    table_id,                  \

@@ -18,6 +18,7 @@
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -167,9 +168,17 @@ int ObPDMLOpDataDriver::get_next_row(ObExecContext &ctx, const ObExprPtrIArray &
 int ObPDMLOpDataDriver::fill_cache_unitl_cache_full_or_child_iter_end(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
+  bool is_direct_load = false;
+  const ObPhysicalPlanCtx *plan_ctx = nullptr;
+  const ObPhysicalPlan *plan = nullptr;
   if (OB_ISNULL(reader_) || OB_ISNULL(eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the reader is null", K(ret));
+  } else if (OB_ISNULL(plan_ctx = ctx.get_physical_plan_ctx())
+      || OB_ISNULL(plan = plan_ctx->get_phy_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null physical plan (ctx)", KR(ret), KP(plan_ctx), KP(plan));
+  } else if (OB_FALSE_IT(is_direct_load = ObTableDirectInsertService::is_direct_insert(*plan))) {
     // 尝试追加上一次从child中读取出来，但是没有添加到cache中的row数据
   } else if (OB_FAIL(try_write_last_pending_row())) {
     LOG_WARN("fail write last pending row into cache", K(ret));
@@ -187,7 +196,8 @@ int ObPDMLOpDataDriver::fill_cache_unitl_cache_full_or_child_iter_end(ObExecCont
         }
       } else if (is_skipped) {
         //need to skip this row
-      } else if (is_heap_table_insert_ && OB_FAIL(set_heap_table_hidden_pk(row, tablet_id))) {
+      } else if ((is_heap_table_insert_ && !is_direct_load) // direct-load generates hidden pk by itself
+                  && OB_FAIL(set_heap_table_hidden_pk(row, tablet_id))) {
         LOG_WARN("fail to set heap table hidden pk", K(ret), K(*row), K(tablet_id));
       } else if (OB_FAIL(cache_.add_row(*row, tablet_id))) {
         if (!with_barrier_ && OB_EXCEED_MEM_LIMIT == ret) {

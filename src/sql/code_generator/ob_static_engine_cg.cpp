@@ -1599,6 +1599,7 @@ int ObStaticEngineCG::generate_spec(ObLogOptimizerStatsGathering &op, ObOptimize
     spec.table_id_ = op.get_table_id();
     spec.type_ = op.get_osg_type();
     spec.part_level_ = op.get_part_level();
+    spec.online_sample_rate_ = op.get_online_sample_percent();
     if (op.is_gather_osg()) {
       uint64_t target_id = 0;
       // default target is 0(root operator), here we traversal the tree to avoid no osg in the root.
@@ -6788,6 +6789,9 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
       spec.plan_->set_enable_append(global_hint.has_direct_load());
       spec.plan_->set_enable_inc_direct_load(global_hint.has_inc_direct_load());
       spec.plan_->set_enable_replace(global_hint.has_replace());
+      spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
+                                                           .get_exec_ctx()->get_table_direct_insert_ctx()
+                                                           .get_online_sample_percent());
       // check is insert overwrite
       bool is_insert_overwrite = false;
       if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {

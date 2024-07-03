@@ -8118,9 +8118,14 @@ int ObDMLResolver::add_additional_function_according_to_type(const ColumnItem *c
         OZ(build_padding_expr(session_info_, column, expr));
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
-                                                  *params_.allocator_,
-                                                  *column->get_expr(), expr, session_info_))) {
+        bool need_column_convert = true;
+        if (OB_FAIL(check_insert_into_select_need_column_convert(column->get_expr(), expr, need_column_convert))) {
+          LOG_WARN("fail to check insert into select need column conv expr", K(ret));
+        } else if (need_column_convert && OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                              *params_.allocator_,
+                                                              *column->get_expr(),
+                                                              expr,
+                                                              session_info_))) {
           LOG_WARN("fail to build column conv expr", K(ret));
         } else if (column->is_geo_ && T_FUN_COLUMN_CONV == expr->get_expr_type()) {
           // 1. set geo sub type to cast mode to column covert expr when update
@@ -13736,6 +13741,83 @@ int ObDMLResolver::check_index_table_has_partition_keys(const ObTableSchema *ind
       }
     }
   }
+  return ret;
+}
+
+int ObDMLResolver::check_insert_into_select_need_column_convert(const ObColumnRefRawExpr *target_expr,
+                                                                 const ObRawExpr *source_expr,
+                                                                 bool &need_column_convert)
+{
+  int ret = OB_SUCCESS;
+  need_column_convert = true;
+  ObDMLStmt *stmt = get_stmt();
+  if (stmt->is_insert_stmt() && GCONF._ob_enable_direct_load) {
+    const ObInsertStmt *insert_stmt = reinterpret_cast<ObInsertStmt *>(stmt);
+    ObQueryCtx *query_ctx = insert_stmt->get_query_ctx();
+    if (insert_stmt->value_from_select() && query_ctx->get_query_hint().get_global_hint().has_direct_load()) {
+      // 1.first get actual raw expr
+      const ObRawExpr *target_real_ref = target_expr;
+      const ObRawExpr *source_real_ref = source_expr;
+      while (target_real_ref != NULL && T_REF_ALIAS_COLUMN == target_real_ref->get_expr_type()) {
+        target_real_ref = static_cast<const ObAliasRefRawExpr *>(target_real_ref)->get_ref_expr();
+      }
+      while (source_real_ref != NULL && T_REF_ALIAS_COLUMN == source_real_ref->get_expr_type()) {
+        source_real_ref = static_cast<const ObAliasRefRawExpr *>(source_real_ref)->get_ref_expr();
+      }
+
+      if (OB_ISNULL(target_real_ref)
+          || OB_ISNULL(source_real_ref)
+          || OB_ISNULL(session_info_)
+          || OB_ISNULL(schema_checker_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(target_real_ref), K(source_real_ref), K(session_info_), K(schema_checker_));
+      } else if (target_real_ref->is_column_ref_expr() && source_real_ref->is_column_ref_expr()) {
+        // 2.make sure they are all column_ref expr
+        const ObColumnRefRawExpr *source_real_col_ref_expr =
+          reinterpret_cast<const ObColumnRefRawExpr *>(source_real_ref);
+        const ObColumnRefRawExpr *target_real_col_ref_expr =
+          reinterpret_cast<const ObColumnRefRawExpr *>(target_real_ref);
+
+        const ColumnItem *source_expr_column_item = stmt->get_column_item_by_id(
+          source_real_col_ref_expr->get_table_id(), source_real_col_ref_expr->get_column_id());
+        const TableItem *target_table_item =
+          stmt->get_table_item_by_id(target_real_col_ref_expr->get_table_id());
+
+          target_real_col_ref_expr->is_not_null_for_write();
+
+        const schema::ObTableSchema *source_base_table_schema = nullptr;
+        if (OB_ISNULL(source_expr_column_item) || OB_ISNULL(target_table_item)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(source_expr_column_item), K(target_table_item));
+        } else if (source_expr_column_item->base_tid_ != OB_INVALID_ID) {
+          if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                        source_expr_column_item->base_tid_,
+                                                        source_base_table_schema))) {
+            // get base table from source_expr_column_item->base_tid_
+            LOG_WARN("fail to get source base table schema", K(ret));
+          } else if (OB_ISNULL(source_base_table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected null", K(ret), K(source_base_table_schema));
+          } else if (source_base_table_schema->is_user_table()
+                     && ObRawExprUtils::check_exprs_type_collation_accuracy_equal(target_real_ref,
+                                                                                  source_real_ref)
+                     && (!target_real_col_ref_expr->is_not_null_for_write()
+                         || source_real_col_ref_expr->is_not_null_for_read())) {
+            // 3.then satisfy:
+            // 2-1.source col ref expr is from base table
+            // 2-2.they have same type and collation and accuracy
+            // 2-3.
+            // a.target column is nullable
+            // or
+            // b.target column is not allowed have NULL and can not read NULL from source column
+            // we just skip allocate column_conv expr
+            need_column_convert = false;
+          }
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

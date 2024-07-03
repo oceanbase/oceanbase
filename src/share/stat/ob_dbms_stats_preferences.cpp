@@ -562,6 +562,22 @@ int ObDbmsStatsPreferences::gen_init_global_prefs_sql(ObSqlString &raw_sql,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
                                        K(prefs.get_stat_pref_default_value()));
+    } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s'),",
+                                            prefs.get_stat_pref_name(),
+                                            null_str,
+                                            time_str,
+                                            prefs.get_stat_pref_default_value()))) {
+      LOG_WARN("failed to append", K(ret));
+    } else {
+      ++ total_rows;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObOnlineEstimatePercentPrefs prefs;
+    if (OB_ISNULL(prefs.get_stat_pref_name()) || OB_ISNULL(prefs.get_stat_pref_default_value())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
+                                       K(prefs.get_stat_pref_default_value()));
     } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s');",
                                             prefs.get_stat_pref_name(),
                                             null_str,
@@ -1135,6 +1151,35 @@ int ObMethodOptPrefs::check_global_method_opt_prefs_value_validity(ObString &met
              " when gathering statistics on a group of tables", K(ret), K(method_opt_val));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "method_opt should follow the syntax \"[FOR ALL [INDEXED|HIDDEN]"
                           " COLUMNS [size_caluse]]\" when gathering statistics on a group of tables");
+  }
+  return ret;
+}
+
+int ObOnlineEstimatePercentPrefs::check_pref_value_validity(ObTableStatParam *param)
+{
+  int ret = OB_SUCCESS;
+  if (!pvalue_.empty()) {
+    ObObj src_obj;
+    ObObj dest_obj;
+    src_obj.set_string(ObVarcharType, pvalue_);
+    ObArenaAllocator calc_buf(ObModIds::OB_SQL_PARSER);
+    ObCastCtx cast_ctx(&calc_buf, NULL, CM_NONE, ObCharset::get_system_collation());
+    double dst_val = 0.0;
+    if (OB_FAIL(ObObjCaster::to_type(ObNumberType, cast_ctx, src_obj, dest_obj))) {
+      LOG_WARN("failed to type", K(ret), K(src_obj));
+    } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(dest_obj.get_number(), dst_val))) {
+      LOG_WARN("failed to cast number to double", K(ret), K(src_obj));
+    } else if (dst_val < 0.000001 || dst_val > 100.0) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("Illegal value for online estimate percent", K(ret), K(dst_val));
+    } else if (param != NULL) {
+      param->online_sample_percent_ = dst_val;
+    } else {/*do nothing*/}
+
+    if (OB_FAIL(ret)) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal online sample percent: must be in the range [1,100]");
+    }
   }
   return ret;
 }

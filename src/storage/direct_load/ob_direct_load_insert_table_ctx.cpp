@@ -54,7 +54,8 @@ ObDirectLoadInsertTableParam::ObDirectLoadInsertTableParam()
     is_incremental_(false),
     datum_utils_(nullptr),
     col_descs_(nullptr),
-    cmp_funcs_(nullptr)
+    cmp_funcs_(nullptr),
+    online_sample_percent_(1.)
 {
 }
 
@@ -814,6 +815,7 @@ int ObDirectLoadInsertTableContext::get_sql_statistics(ObTableLoadSqlStatistics 
           LOG_WARN("fail to new ObTableLoadSqlStatistics", KR(ret));
         } else if (OB_FAIL(new_sql_statistics->create(column_count))) {
           LOG_WARN("fail to create sql stat", KR(ret), K(column_count));
+        } else if (OB_FALSE_IT(new_sql_statistics->get_sample_helper().init(param_.online_sample_percent_))) {
         } else if (OB_FAIL(sql_stat_map_.set_refactored(part_id, new_sql_statistics))) {
           LOG_WARN("fail to set sql stat back", KR(ret), K(part_id));
         } else {
@@ -836,6 +838,7 @@ int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatisti
                                                           const ObDatumRow &datum_row)
 {
   int ret = OB_SUCCESS;
+  bool ignore = false;
   const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -846,6 +849,10 @@ int ObDirectLoadInsertTableContext::update_sql_statistics(ObTableLoadSqlStatisti
   } else if (OB_UNLIKELY(datum_row.get_column_count() != param_.column_count_ + extra_rowkey_cnt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid datum row", KR(ret), K(param_), K(datum_row));
+  } else if (OB_FAIL(sql_statistics.get_sample_helper().sample_row(ignore))) {
+    LOG_WARN("failed to sample row", KR(ret));
+  } else if (ignore) {
+    // do nothing
   } else {
     ObOptOSGColumnStat *col_stat = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < param_.column_count_; i++) {
@@ -946,6 +953,7 @@ int ObDirectLoadInsertTableContext::collect_sql_statistics(ObTableLoadSqlStatist
     }
     if (OB_SUCC(ret)) {
       ObOptTableStat *table_stat = nullptr;
+      uint64_t sample_value = 0;
       if (OB_FAIL(sql_statistics.get_table_stat(0, table_stat))) {
         LOG_WARN("fail to get table stat", KR(ret));
       } else {
@@ -955,11 +963,26 @@ int ObDirectLoadInsertTableContext::collect_sql_statistics(ObTableLoadSqlStatist
           ObDirectLoadInsertTabletContext *tablet_ctx = iter->second;
           row_count += tablet_ctx->get_row_count();
         }
-        table_stat->set_table_id(param_.table_id_);
-        table_stat->set_partition_id(partition_id);
-        table_stat->set_object_type(stat_level);
-        table_stat->set_row_count(row_count);
-        table_stat->set_avg_row_size(table_avg_len);
+        if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
+          FOREACH_X(iter, sql_stat_map_, OB_SUCC(ret)) {
+            const int64_t part_id = iter->first;
+            ObTableLoadSqlStatistics *part_sql_statistics = iter->second;
+            if (OB_ISNULL(part_sql_statistics)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected sql stat is null", KR(ret), K(part_id));
+            } else {
+              sample_value += part_sql_statistics->get_sample_helper().sample_value_;
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          table_stat->set_table_id(param_.table_id_);
+          table_stat->set_partition_id(partition_id);
+          table_stat->set_object_type(stat_level);
+          table_stat->set_row_count(row_count);
+          table_stat->set_avg_row_size(table_avg_len);
+          table_stat->set_sample_size(sample_value);
+        }
       }
     }
   }

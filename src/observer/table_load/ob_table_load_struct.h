@@ -114,7 +114,8 @@ public:
       method_(storage::ObDirectLoadMethod::INVALID_METHOD),
       insert_mode_(storage::ObDirectLoadInsertMode::INVALID_INSERT_MODE),
       load_mode_(storage::ObDirectLoadMode::INVALID_MODE),
-      compressor_type_(ObCompressorType::INVALID_COMPRESSOR)
+      compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
+      online_sample_percent_(1.)
   {
   }
 
@@ -171,7 +172,8 @@ public:
                "method", storage::ObDirectLoadMethod::get_type_string(method_),
                "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
                "direct_load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
-               K_(compressor_type));
+               K_(compressor_type),
+               K_(online_sample_percent));
 
 public:
   uint64_t tenant_id_;
@@ -193,6 +195,7 @@ public:
   storage::ObDirectLoadInsertMode::Type insert_mode_;
   storage::ObDirectLoadMode::Type load_mode_;
   ObCompressorType compressor_type_;
+  double online_sample_percent_;
 };
 
 struct ObTableLoadDDLParam

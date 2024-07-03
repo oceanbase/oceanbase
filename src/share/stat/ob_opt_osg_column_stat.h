@@ -14,6 +14,7 @@
 #define _OB_OPT_OSG_COLUMN_STAT_H_
 
 #include <stdint.h>
+#include <random>
 #include "lib/allocator/ob_malloc.h"
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/datum/ob_datum.h"
@@ -112,8 +113,87 @@ public:
 private:
   int inner_merge_min(const ObDatum &datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);
   int inner_merge_max(const ObDatum &datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);
+  int inner_merge_min_max(const ObDatum &datum, const ObObjMeta &meta, const ObDatumCmpFuncType cmp_func);
   int calc_col_len(const ObDatum &datum, const ObObjMeta &meta, int64_t &col_len);
   DISALLOW_COPY_AND_ASSIGN(ObOptOSGColumnStat);
+};
+
+struct ObOptOSGSampleHelper
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObOptOSGSampleHelper() :
+    sample_value_(0),
+    k_(0),
+    sample_rate_(1),
+    sample_step_(100) {}
+
+  ~ObOptOSGSampleHelper() {}
+
+  OB_INLINE uint64_t gcd(uint64_t a, uint64_t b)
+  {
+    uint64_t c = 0;
+    while (b != 0) {
+      c = a % b;
+      a = b;
+      b = c;
+    }
+    return a;
+ }
+
+  OB_INLINE void init(double sample_rate)
+  {
+    const static uint64_t RATE_BASE = 100000;
+    const static uint64_t RATE_BASE100 = 10000000;
+    k_ = 0;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
+      uint64_t rate = static_cast<uint64_t>(ceil(sample_rate * RATE_BASE));
+      uint64_t divisor = gcd(rate, RATE_BASE100);
+      sample_rate_ = rate / divisor;
+      sample_step_ = RATE_BASE100 / divisor;
+    } else {
+      sample_rate_ = 1;
+      sample_step_ = 1;
+    }
+  }
+
+  OB_INLINE int sample_row(bool &ignore)
+  {
+    int ret = OB_SUCCESS;
+    ignore = false;
+    if (sample_value_ < SAMPLING_BOUNDARY) {
+      ignore = false;
+    } else if (k_ <= sample_rate_) {
+      ignore = false;
+    } else {
+      ignore = true;
+    }
+    if (!ignore) {
+      ++sample_value_;
+    }
+    if (++k_ > sample_step_) {
+      k_ = 1;
+    }
+
+    return ret;
+  }
+
+  OB_INLINE void reset()
+  {
+    sample_value_ = 0;
+    k_ = 0;
+  }
+
+  TO_STRING_KV(K_(sample_value),
+               K_(sample_rate),
+               K_(sample_step));
+
+  uint64_t sample_value_;
+  uint64_t k_;
+  uint64_t sample_rate_;
+  uint64_t sample_step_;
+  const static int SAMPLING_BOUNDARY = 10000;
+  DISALLOW_COPY_AND_ASSIGN(ObOptOSGSampleHelper);
 };
 
 }

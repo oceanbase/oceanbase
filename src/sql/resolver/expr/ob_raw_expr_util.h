@@ -609,6 +609,7 @@ public:
                             const ObLocalSessionVar *local_vars = NULL,
                             int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static bool need_column_conv(const ObExprResType &expected_type, const ObRawExpr &expr);
+  static bool check_exprs_type_collation_accuracy_equal(const ObRawExpr *expr1, const ObRawExpr *expr2);
   // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
                                     const share::schema::ObColumnSchemaV2 *column_schema,

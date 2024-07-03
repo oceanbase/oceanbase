@@ -225,6 +225,7 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   need_approx_ndv_ = other.need_approx_ndv_;
   duration_time_ = other.duration_time_;
   allocator_ = other.allocator_;
+  online_sample_percent_ = other.online_sample_percent_;
   return ret;
 }
 

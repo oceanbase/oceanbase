@@ -89,6 +89,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
 
     bool need_osg = false;
     OSGShareInfo *osg_info = NULL;
+    double online_sample_percent = 100.;
     if (OB_SUCC(ret)) {
       // compute parallel before check allocate stats gather
       if (OB_FAIL(compute_dml_parallel())) {
@@ -100,10 +101,17 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         bool tmp_need_osg = false;
         if (OB_FAIL(check_need_online_stats_gather(tmp_need_osg))) {
           LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
+        } else if (tmp_need_osg &&
+                   get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_2 &&
+                   OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*get_optimizer_context().get_exec_ctx(),
+                                                                             online_sample_percent))) {
+          LOG_WARN("failed to get sys online sample percent", K(ret));
         } else {
           if (is_direct_insert()) {
             get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
               .set_is_online_gather_statistics(tmp_need_osg);
+            get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
+              .set_online_sample_percent(online_sample_percent);
           } else {
             need_osg = tmp_need_osg;
           }
@@ -116,6 +124,8 @@ int ObInsertLogPlan::generate_normal_raw_plan()
       } else if (need_osg && OB_ISNULL(osg_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null");
+      } else if (need_osg) {
+        osg_info->online_sample_rate_ = online_sample_percent;
       }
     }
 

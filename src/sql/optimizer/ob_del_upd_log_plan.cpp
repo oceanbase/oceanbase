@@ -1225,6 +1225,7 @@ int ObDelUpdLogPlan::allocate_optimizer_stats_gathering_as_top(ObLogicalOperator
     osg->set_generated_column_exprs(info.generated_column_exprs_);
     osg->set_col_conv_exprs(info.col_conv_exprs_);
     osg->set_column_ids(info.column_ids_);
+    osg->set_online_sample_percent(info.online_sample_rate_);
     if (type == OSG_TYPE::GATHER_OSG) {
       osg->set_need_osg_merge(true);
     }

@@ -65,8 +65,12 @@ int ObOptTableStat::merge_table_stat(const ObOptTableStat &other)
     double avg_len = 0;
     other.get_avg_row_size(avg_len);
     add_avg_row_size(avg_len, other.get_row_count());
+    if (sample_size_ == 0) {
+      sample_size_ = row_count_;
+    }
     row_count_ += other.get_row_count();
     stattype_locked_ = other.get_stattype_locked();
+    sample_size_ += (other.sample_size_ == 0 ? other.get_row_count() : other.sample_size_);
   }
 
   return ret;
