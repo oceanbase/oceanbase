@@ -95,10 +95,27 @@ private:
                                           ObIArray<ObSelectStmt *> &child_stmts_of_union,
                                           bool &is_valid);
 
+  int check_union_stmt_valid(ObSelectStmt &stmt,
+                             ObSelectStmt *&union_stmt,
+                             bool &is_valid);
+
+  int check_aggr_exprs_valid(ObSelectStmt &stmt,
+                             bool &is_valid,
+                             bool &only_min_max);
+
+  int check_child_stmts_valid(ObSelectStmt &union_stmt,
+                              ObIArray<ObSelectStmt *> &child_stmts,
+                              bool &is_valid);
+
   int is_basic_select_stmt(ObSelectStmt *stmt, bool &is_basic);
 
-  int get_union_pushdown_param(ObSelectStmt *stmt,
+  int get_union_pushdown_param(ObSelectStmt &stmt,
+                               ObSelectStmt &union_stmt,
                                ObIArray<UnionPushdownParam> &param);
+
+  int get_col_id_of_child(ObSelectStmt &union_stmt,
+                          uint64_t union_col_id,
+                          uint64_t &child_col_id);
 
   int do_groupby_push_down_into_union(ObSelectStmt *stmt,
                                       ObSelectStmt *union_stmt,
@@ -110,17 +127,15 @@ private:
                            ObIArray<ObSelectStmt *> &child_stmts);
 
   int transform_basic_child_stmt(ObSelectStmt *stmt,
-                                          ObIArray<UnionPushdownParam> &new_colomns);
+                                 ObIArray<UnionPushdownParam> &new_colomns);
 
-  int get_select_item_of_basic_child(UnionPushdownParam &new_column,
-                                     ObIArray<ObRawExpr *> &old_exprs,
-                                     ObIArray<SelectItem> &old_select_items,
-                                     SelectItem &new_select_item);
-
-  int get_select_item_of_non_basic_child(UnionPushdownParam &new_column,
+  int get_new_select_expr_of_basic_child(UnionPushdownParam &param,
                                          ObIArray<ObRawExpr *> &old_exprs,
-                                         ObIArray<SelectItem> &old_select_items,
-                                         SelectItem &new_select_item);
+                                         ObRawExpr *&new_expr);
+
+  int get_new_select_expr_of_non_basic_child(UnionPushdownParam &param,
+                                             ObIArray<ObRawExpr *> &old_exprs,
+                                             ObRawExpr *&new_expr);
 
   int transform_non_basic_child_stmt(ObSelectStmt *stmt,
                                               ObIArray<UnionPushdownParam> &new_colomns);
