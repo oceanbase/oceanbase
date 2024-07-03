@@ -327,7 +327,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[d1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_SORT_DESC], str_value_=[], value=[2]
-		|--[15],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
+		|--[16],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
@@ -380,7 +380,7 @@ question_mask_size: 0
 						|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_SORT_DESC], str_value_=[], value=[2]
-		|--[15],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
+		|--[16],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
@@ -428,7 +428,7 @@ question_mask_size: 0
 					|--[0],[T_COLUMN_REF], str_value_=[c1], value=[9223372036854775807]
 						|--[2],[T_IDENT], str_value_=[c1], value=[9223372036854775807]
 					|--[1],[T_SORT_DESC], str_value_=[], value=[2]
-		|--[15],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
+		|--[16],[T_COMMA_LIMIT_CLAUSE], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_INT], str_value_=[0], value=[0]
 			|--[1],[T_INT], str_value_=[1], value=[1]
 
@@ -3303,7 +3303,7 @@ question_mask_size: 0
 			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[17],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
+		|--[18],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
 
 **************   Case 168   ***************
 select /*+max_concurrent(10)*/* from t1;
@@ -3318,7 +3318,7 @@ question_mask_size: 0
 			|--[0],[T_ORG], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_RELATION_FACTOR], str_value_=[t1], value=[9223372036854775807]
 					|--[1],[T_IDENT], str_value_=[t1], value=[9223372036854775807]
-		|--[17],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
+		|--[18],[T_HINT_OPTION_LIST], str_value_=[], value=[9223372036854775807]
 			|--[0],[T_MAX_CONCURRENT], str_value_=[], value=[9223372036854775807]
 				|--[0],[T_INT], str_value_=[10], value=[10]
 

@@ -245,9 +245,7 @@ user_block_cache_priority
 user_row_cache_priority
 use_ipv6
 use_large_pages
-vector_hnsw_ef_construction
 vector_hnsw_ef_search
-vector_hnsw_m
 vector_ivfflat_elkan
 vector_ivfflat_iters_count
 vector_ivfflat_sample_count

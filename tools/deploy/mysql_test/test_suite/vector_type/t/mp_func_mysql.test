@@ -1,0 +1,76 @@
+#owner: shanhaikang.shk huhaosheng.hhs
+#description: vector functional testing for mutil partition table
+#author: shanhaikang.shk huhaosheng.hhs
+
+connect (conn,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn;
+
+set @@ob_query_timeout=3216672000000000;
+
+--disable_warnings
+drop database if exists vector_test;
+--enable_warnings
+create database vector_test;
+use vector_test;
+
+create table t1 (p1 int, v1 vector(3), gh int, primary key(p1, gh)) partition by KEY(gh) partitions 100;
+insert into t1 values (1, '[1.1, 2.2, 3.3]', 124), (2, '[2.1, 3.2, 4.3]', 124), (3, '[3.1, 4.2, 5.3]', 124);
+insert into t1 values (2, '[  9.1, 3.14, 2.14]', 243), (3, '[7576.42, 467.23, 2913.762]', 546), (4, '[3,1,2]', 467), (5, '[42.4,53.1,5.23]', 4232);
+create vector index vidx_v1_t1 on t1 (v1 vector_l2_ops) with(type=ivfflat);
+show create table t1;
+show index from t1;
+
+set @@vector_ivfflat_probes=1; # 不设置的话值为 sqrt(128) = 11
+explain select * from t1 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+explain select /*+parallel(5)*/ * from t1 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+explain select * from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+explain select /*+parallel(5)*/ * from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+
+select * from t1 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+select /*+parallel(5)*/  * from t1 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+select * from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+select /*+parallel(5)*/ * from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+select /*+parallel(5) probes(2)*/* from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+
+delete from t1 where gh < 200 and gh > 100;
+select * from t1;
+
+create table tib (p1 int, n1 int, v1 vector(3), gh int, primary key(p1, gh)) partition by KEY(gh) partitions 100;
+insert into tib values (1, 1, '[1.1, 2.2, 3.3]', 124);
+insert into tib values (2, 2, '[  9.1, 3.14, 2.14]', 243), (3, 3, '[7576.42, 467.23, 2913.762]', 546), (4, 4, '[3,1,2]', 467), (5, 5, '[42.4,53.1,5.23]', 4232);
+alter system set vector_ivfflat_elkan = "false";
+create vector index vidx_v1_t1 on tib (v1 vector_l2_ops) with(type=ivfflat);
+
+explain select n1 from tib order by l2_distance(v1, '[0,0,0]') approx limit 3;
+explain select /*+parallel(10)*/ n1 from tib order by l2_distance(v1, '[0,0,0]') approx limit 3;
+
+select n1 from tib order by l2_distance(v1, '[0,0,0]') approx limit 3;
+select /*+parallel(10)*/ n1 from tib order by l2_distance(v1, '[0,0,0]') approx limit 3;
+
+drop table t1;
+drop table tib;
+
+create table ivfflat_test (c1 int, c2 vector(3), c3 int, c4 int, primary key(c1,c3)) partition by hash(c3) partitions 2;
+insert into ivfflat_test values(1,'[1,2,3]',2,3),(2,'[2,3,4]',3,4),(4,'[4,5,6]',5,6),(10,'[10,11,12]',11,12),(11,'[11,12,13]',12,13),(25,'[25,26,27]',26,27),(31,'[31,32,33]',32,33),(50,'[50,51,52]',51,52),(55,'[55,56,57]',56,57);
+
+alter system set vector_ivfflat_elkan = "true";
+create vector index ivfflat_idx1 on ivfflat_test (c2 vector_l2_ops) with(type=ivfflat, lists=3);
+create vector index ivfflat_idx2 on ivfflat_test (c2 vector_ip_ops) with(type=ivfflat, lists=3);
+create vector index ivfflat_idx3 on ivfflat_test (c2 vector_cosine_ops) with(type=ivfflat, lists=3);
+
+select * from ivfflat_test partition(p0);
+select * from ivfflat_test partition(p1);
+
+select *, l2_distance(c2, '[3,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3,2,1]') approx limit 5;
+select /*+probes(2)*/*, l2_distance(c2, '[3,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3,2,1]') approx limit 5;
+select /*+probes(2) parallel(2)*/*, l2_distance(c2, '[3,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3,2,1]') approx limit 5;
+
+insert into ivfflat_test values(0,'[0,1,2]',1,2);
+insert into ivfflat_test values(60,'[60,61,62]',61,62),(101,'[101,102,103]',102,103);
+
+select *, l2_distance(c2, '[3.2,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3.2,2,1]') approx limit 5;
+select /*+parallel(2)*/*, l2_distance(c2, '[3.2,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3.2,2,1]') approx limit 5;
+
+drop index ivfflat_idx1 on ivfflat_test;
+drop table ivfflat_test;
+drop database if exists vector_test;

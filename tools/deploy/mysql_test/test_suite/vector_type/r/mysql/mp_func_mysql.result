@@ -1,0 +1,377 @@
+set @@ob_query_timeout=3216672000000000;
+drop database if exists vector_test;
+create database vector_test;
+use vector_test;
+create table t1 (p1 int, v1 vector(3), gh int, primary key(p1, gh)) partition by KEY(gh) partitions 100;
+insert into t1 values (1, '[1.1, 2.2, 3.3]', 124), (2, '[2.1, 3.2, 4.3]', 124), (3, '[3.1, 4.2, 5.3]', 124);
+insert into t1 values (2, '[  9.1, 3.14, 2.14]', 243), (3, '[7576.42, 467.23, 2913.762]', 546), (4, '[3,1,2]', 467), (5, '[42.4,53.1,5.23]', 4232);
+create vector index vidx_v1_t1 on t1 (v1 vector_l2_ops) with(type=ivfflat);
+show create table t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `p1` int(11) NOT NULL,
+  `v1` vector(3) DEFAULT NULL,
+  `gh` int(11) NOT NULL,
+  PRIMARY KEY (`p1`, `gh`),
+  KEY `vidx_v1_t1` (`v1`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+ partition by key(gh)
+(partition `p0`,
+partition `p1`,
+partition `p2`,
+partition `p3`,
+partition `p4`,
+partition `p5`,
+partition `p6`,
+partition `p7`,
+partition `p8`,
+partition `p9`,
+partition `p10`,
+partition `p11`,
+partition `p12`,
+partition `p13`,
+partition `p14`,
+partition `p15`,
+partition `p16`,
+partition `p17`,
+partition `p18`,
+partition `p19`,
+partition `p20`,
+partition `p21`,
+partition `p22`,
+partition `p23`,
+partition `p24`,
+partition `p25`,
+partition `p26`,
+partition `p27`,
+partition `p28`,
+partition `p29`,
+partition `p30`,
+partition `p31`,
+partition `p32`,
+partition `p33`,
+partition `p34`,
+partition `p35`,
+partition `p36`,
+partition `p37`,
+partition `p38`,
+partition `p39`,
+partition `p40`,
+partition `p41`,
+partition `p42`,
+partition `p43`,
+partition `p44`,
+partition `p45`,
+partition `p46`,
+partition `p47`,
+partition `p48`,
+partition `p49`,
+partition `p50`,
+partition `p51`,
+partition `p52`,
+partition `p53`,
+partition `p54`,
+partition `p55`,
+partition `p56`,
+partition `p57`,
+partition `p58`,
+partition `p59`,
+partition `p60`,
+partition `p61`,
+partition `p62`,
+partition `p63`,
+partition `p64`,
+partition `p65`,
+partition `p66`,
+partition `p67`,
+partition `p68`,
+partition `p69`,
+partition `p70`,
+partition `p71`,
+partition `p72`,
+partition `p73`,
+partition `p74`,
+partition `p75`,
+partition `p76`,
+partition `p77`,
+partition `p78`,
+partition `p79`,
+partition `p80`,
+partition `p81`,
+partition `p82`,
+partition `p83`,
+partition `p84`,
+partition `p85`,
+partition `p86`,
+partition `p87`,
+partition `p88`,
+partition `p89`,
+partition `p90`,
+partition `p91`,
+partition `p92`,
+partition `p93`,
+partition `p94`,
+partition `p95`,
+partition `p96`,
+partition `p97`,
+partition `p98`,
+partition `p99`)
+show index from t1;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+t1	0	PRIMARY	1	p1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+t1	0	PRIMARY	2	gh	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+t1	1	vidx_v1_t1	1	v1	A	NULL	NULL	NULL	YES	IVFFLAT	available		YES	NULL
+set @@vector_ivfflat_probes=1;
+explain select * from t1 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+Query Plan
+=======================================================================
+|ID|OPERATOR                     |NAME          |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |LIMIT                        |              |2       |214         |
+|1 |└─PX COORDINATOR MERGE SORT  |              |2       |214         |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000      |2       |213         |
+|3 |    └─TOP-N SORT             |              |2       |211         |
+|4 |      └─PX PARTITION ITERATOR|              |7       |211         |
+|5 |        └─TABLE FULL SCAN    |t1(vidx_v1_t1)|7       |211         |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.p1], [t1.v1], [t1.gh]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([t1.p1], [t1.v1], [t1.gh]), filter(nil), rowset=16
+      sort_keys([l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC])
+  2 - output([t1.p1], [t1.v1], [t1.gh], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      dop=1
+  3 - output([t1.p1], [t1.v1], [t1.gh], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      sort_keys([l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC]), topn(2)
+  4 - output([t1.p1], [t1.gh], [t1.v1], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      force partition granule
+  5 - output([t1.p1], [t1.gh], [t1.v1], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([t1.p1], [t1.gh], [t1.v1]), partitions(p[0-99])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.center_idx], [t1.p1], [t1.gh]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select /*+parallel(5)*/ * from t1 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+Query Plan
+=======================================================================
+|ID|OPERATOR                     |NAME          |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |LIMIT                        |              |2       |44          |
+|1 |└─PX COORDINATOR MERGE SORT  |              |2       |44          |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000      |2       |43          |
+|3 |    └─TOP-N SORT             |              |2       |43          |
+|4 |      └─PX PARTITION ITERATOR|              |7       |43          |
+|5 |        └─TABLE FULL SCAN    |t1(vidx_v1_t1)|7       |43          |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.p1], [t1.v1], [t1.gh]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([t1.p1], [t1.v1], [t1.gh]), filter(nil), rowset=16
+      sort_keys([l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC])
+  2 - output([t1.p1], [t1.v1], [t1.gh], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      dop=5
+  3 - output([t1.p1], [t1.v1], [t1.gh], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      sort_keys([l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC]), topn(2)
+  4 - output([t1.p1], [t1.gh], [t1.v1], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      force partition granule
+  5 - output([t1.p1], [t1.gh], [t1.v1], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([t1.p1], [t1.gh], [t1.v1]), partitions(p[0-99])
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.center_idx], [t1.p1], [t1.gh]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select * from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+Query Plan
+=========================================================
+|ID|OPERATOR       |NAME          |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |TABLE FULL SCAN|t1(vidx_v1_t1)|1       |3           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.p1], [t1.v1], [t1.gh]), filter([t1.gh = 124]), rowset=16
+      access([t1.p1], [t1.gh], [t1.v1]), partitions(p21)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.center_idx], [t1.p1], [t1.gh]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select /*+parallel(5)*/ * from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+Query Plan
+=======================================================================
+|ID|OPERATOR                     |NAME          |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |LIMIT                        |              |1       |2           |
+|1 |└─PX COORDINATOR MERGE SORT  |              |1       |2           |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000      |1       |1           |
+|3 |    └─TOP-N SORT             |              |1       |1           |
+|4 |      └─PX PARTITION ITERATOR|              |1       |1           |
+|5 |        └─TABLE FULL SCAN    |t1(vidx_v1_t1)|1       |1           |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.p1], [t1.v1], [t1.gh]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([t1.p1], [t1.v1], [t1.gh]), filter(nil), rowset=16
+      sort_keys([l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC])
+  2 - output([t1.p1], [t1.v1], [t1.gh], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      dop=5
+  3 - output([t1.p1], [t1.v1], [t1.gh], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      sort_keys([l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC]), topn(2)
+  4 - output([t1.p1], [t1.gh], [t1.v1], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      force partition granule
+  5 - output([t1.p1], [t1.gh], [t1.v1], [l2_distance(t1.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter([t1.gh = 124]), rowset=16
+      access([t1.p1], [t1.gh], [t1.v1]), partitions(p21)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.center_idx], [t1.p1], [t1.gh]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select * from t1 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+p1	v1	gh
+4	[3.00000000,1.00000000,2.00000000]	467
+1	[1.10000002,2.20000005,3.29999995]	124
+select /*+parallel(5)*/  * from t1 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+p1	v1	gh
+4	[3.00000000,1.00000000,2.00000000]	467
+1	[1.10000002,2.20000005,3.29999995]	124
+select * from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+p1	v1	gh
+1	[1.10000002,2.20000005,3.29999995]	124
+select /*+parallel(5)*/ * from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+p1	v1	gh
+1	[1.10000002,2.20000005,3.29999995]	124
+select /*+parallel(5) probes(2)*/* from t1 where gh=124 order by l2_distance(v1, '[0,0,0]') approx limit 2;
+p1	v1	gh
+1	[1.10000002,2.20000005,3.29999995]	124
+2	[2.09999990,3.20000005,4.30000019]	124
+delete from t1 where gh < 200 and gh > 100;
+select * from t1;
+p1	v1	gh
+3	[ 7576.419922, 467.230011, 2913.761963, ]	546
+4	[ 3.000000, 1.000000, 2.000000, ]	467
+2	[ 9.100000, 3.140000, 2.140000, ]	243
+5	[ 42.400002, 53.099998, 5.230000, ]	4232
+create table tib (p1 int, n1 int, v1 vector(3), gh int, primary key(p1, gh)) partition by KEY(gh) partitions 100;
+insert into tib values (1, 1, '[1.1, 2.2, 3.3]', 124);
+insert into tib values (2, 2, '[  9.1, 3.14, 2.14]', 243), (3, 3, '[7576.42, 467.23, 2913.762]', 546), (4, 4, '[3,1,2]', 467), (5, 5, '[42.4,53.1,5.23]', 4232);
+alter system set vector_ivfflat_elkan = "false";
+create vector index vidx_v1_t1 on tib (v1 vector_l2_ops) with(type=ivfflat);
+explain select n1 from tib order by l2_distance(v1, '[0,0,0]') approx limit 3;
+Query Plan
+========================================================================
+|ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |LIMIT                        |               |3       |434         |
+|1 |└─PX COORDINATOR MERGE SORT  |               |3       |434         |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000       |3       |434         |
+|3 |    └─TOP-N SORT             |               |3       |433         |
+|4 |      └─PX PARTITION ITERATOR|               |5       |432         |
+|5 |        └─TABLE FULL SCAN    |tib(vidx_v1_t1)|5       |432         |
+========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([tib.n1]), filter(nil), rowset=16
+      limit(3), offset(nil)
+  1 - output([tib.n1]), filter(nil), rowset=16
+      sort_keys([l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC])
+  2 - output([tib.n1], [l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      dop=1
+  3 - output([tib.n1], [l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      sort_keys([l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC]), topn(3)
+  4 - output([tib.n1], [l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      force partition granule
+  5 - output([tib.n1], [l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([tib.p1], [tib.gh], [tib.n1], [tib.v1]), partitions(p[0-99])
+      is_index_back=true, is_global_index=false, 
+      range_key([tib.center_idx], [tib.p1], [tib.gh]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select /*+parallel(10)*/ n1 from tib order by l2_distance(v1, '[0,0,0]') approx limit 3;
+Query Plan
+========================================================================
+|ID|OPERATOR                     |NAME           |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------------------------
+|0 |LIMIT                        |               |3       |44          |
+|1 |└─PX COORDINATOR MERGE SORT  |               |3       |44          |
+|2 |  └─EXCHANGE OUT DISTR       |:EX10000       |3       |44          |
+|3 |    └─TOP-N SORT             |               |3       |44          |
+|4 |      └─PX PARTITION ITERATOR|               |5       |44          |
+|5 |        └─TABLE FULL SCAN    |tib(vidx_v1_t1)|5       |44          |
+========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([tib.n1]), filter(nil), rowset=16
+      limit(3), offset(nil)
+  1 - output([tib.n1]), filter(nil), rowset=16
+      sort_keys([l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC])
+  2 - output([tib.n1], [l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      dop=10
+  3 - output([tib.n1], [l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      sort_keys([l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1))), ASC]), topn(3)
+  4 - output([tib.n1], [l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      force partition granule
+  5 - output([tib.n1], [l2_distance(tib.v1, cast('[0,0,0]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([tib.p1], [tib.gh], [tib.n1], [tib.v1]), partitions(p[0-99])
+      is_index_back=true, is_global_index=false, 
+      range_key([tib.center_idx], [tib.p1], [tib.gh]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select n1 from tib order by l2_distance(v1, '[0,0,0]') approx limit 3;
+n1
+4
+1
+2
+select /*+parallel(10)*/ n1 from tib order by l2_distance(v1, '[0,0,0]') approx limit 3;
+n1
+4
+1
+2
+drop table t1;
+drop table tib;
+create table ivfflat_test (c1 int, c2 vector(3), c3 int, c4 int, primary key(c1,c3)) partition by hash(c3) partitions 2;
+insert into ivfflat_test values(1,'[1,2,3]',2,3),(2,'[2,3,4]',3,4),(4,'[4,5,6]',5,6),(10,'[10,11,12]',11,12),(11,'[11,12,13]',12,13),(25,'[25,26,27]',26,27),(31,'[31,32,33]',32,33),(50,'[50,51,52]',51,52),(55,'[55,56,57]',56,57);
+alter system set vector_ivfflat_elkan = "true";
+create vector index ivfflat_idx1 on ivfflat_test (c2 vector_l2_ops) with(type=ivfflat, lists=3);
+create vector index ivfflat_idx2 on ivfflat_test (c2 vector_ip_ops) with(type=ivfflat, lists=3);
+create vector index ivfflat_idx3 on ivfflat_test (c2 vector_cosine_ops) with(type=ivfflat, lists=3);
+select * from ivfflat_test partition(p0);
+c1	c2	c3	c4
+1	[1.00000000,2.00000000,3.00000000]	2	3
+11	[11.00000000,12.00000000,13.00000000]	12	13
+25	[25.00000000,26.00000000,27.00000000]	26	27
+31	[31.00000000,32.00000000,33.00000000]	32	33
+55	[55.00000000,56.00000000,57.00000000]	56	57
+select * from ivfflat_test partition(p1);
+c1	c2	c3	c4
+2	[2.00000000,3.00000000,4.00000000]	3	4
+4	[4.00000000,5.00000000,6.00000000]	5	6
+10	[10.00000000,11.00000000,12.00000000]	11	12
+50	[50.00000000,51.00000000,52.00000000]	51	52
+select *, l2_distance(c2, '[3,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3,2,1]') approx limit 5;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000]	2	3	2.8284271247461903
+2	[2.00000000,3.00000000,4.00000000]	3	4	3.3166247903554
+4	[4.00000000,5.00000000,6.00000000]	5	6	5.916079783099616
+11	[11.00000000,12.00000000,13.00000000]	12	13	17.549928774784245
+select /*+probes(2)*/*, l2_distance(c2, '[3,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3,2,1]') approx limit 5;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000]	2	3	2.8284271247461903
+2	[2.00000000,3.00000000,4.00000000]	3	4	3.3166247903554
+4	[4.00000000,5.00000000,6.00000000]	5	6	5.916079783099616
+10	[10.00000000,11.00000000,12.00000000]	11	12	15.84297951775486
+11	[11.00000000,12.00000000,13.00000000]	12	13	17.549928774784245
+select /*+probes(2) parallel(2)*/*, l2_distance(c2, '[3,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3,2,1]') approx limit 5;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000]	2	3	2.8284271247461903
+2	[2.00000000,3.00000000,4.00000000]	3	4	3.3166247903554
+4	[4.00000000,5.00000000,6.00000000]	5	6	5.916079783099616
+10	[10.00000000,11.00000000,12.00000000]	11	12	15.84297951775486
+11	[11.00000000,12.00000000,13.00000000]	12	13	17.549928774784245
+insert into ivfflat_test values(0,'[0,1,2]',1,2);
+insert into ivfflat_test values(60,'[60,61,62]',61,62),(101,'[101,102,103]',102,103);
+select *, l2_distance(c2, '[3.2,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3.2,2,1]') approx limit 5;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000]	2	3	2.9732137847467937
+2	[2.00000000,3.00000000,4.00000000]	3	4	3.382306921975136
+0	[0.00000000,1.00000000,2.00000000]	1	2	3.498571180521526
+4	[4.00000000,5.00000000,6.00000000]	5	6	5.8855755813434305
+11	[11.00000000,12.00000000,13.00000000]	12	13	17.459667894191572
+select /*+parallel(2)*/*, l2_distance(c2, '[3.2,2,1]') as dis from ivfflat_test order by l2_distance(c2, '[3.2,2,1]') approx limit 5;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000]	2	3	2.9732137847467937
+2	[2.00000000,3.00000000,4.00000000]	3	4	3.382306921975136
+0	[0.00000000,1.00000000,2.00000000]	1	2	3.498571180521526
+4	[4.00000000,5.00000000,6.00000000]	5	6	5.8855755813434305
+11	[11.00000000,12.00000000,13.00000000]	12	13	17.459667894191572
+drop index ivfflat_idx1 on ivfflat_test;
+drop table ivfflat_test;
+drop database if exists vector_test;
