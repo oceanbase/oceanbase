@@ -4388,7 +4388,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
-              enable_rich_vector_format_);
+              enable_rich_vector_format_,
+              enable_sql_plan_monitor_);
   return ret;
 }
 
@@ -4419,7 +4420,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
-              enable_rich_vector_format_);
+              enable_rich_vector_format_,
+              enable_sql_plan_monitor_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
   set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
@@ -4455,7 +4457,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
-              enable_rich_vector_format_);
+              enable_rich_vector_format_,
+              enable_sql_plan_monitor_);
   return len;
 }
 

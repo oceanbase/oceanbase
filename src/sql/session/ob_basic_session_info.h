@@ -1978,6 +1978,8 @@ public:
     ObCharsetType ncharacter_set_connection_;
     share::ObCompatType compat_type_;
     uint64_t compat_version_;
+    // No use. Placeholder.
+    bool enable_sql_plan_monitor_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
