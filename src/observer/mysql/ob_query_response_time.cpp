@@ -159,6 +159,108 @@ int ObRespTimeInfoCollector::collect(const sql::stmt::StmtType sql_type, const b
         }
         break;
       }
+      case sql::stmt::T_KV_GET :
+      case sql::stmt::T_KV_QUERY :
+      case sql::stmt::T_KV_MULTI_GET : {
+        if (OB_FAIL(tableapi_select_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("tableapi select sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_KV_INSERT_OR_UPDATE :
+      case sql::stmt::T_KV_MULTI_INSERT_OR_UPDATE :
+      case sql::stmt::T_KV_INSERT :
+      case sql::stmt::T_KV_MULTI_INSERT : {
+        if (OB_FAIL(tableapi_insert_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("tableapi insert sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_KV_DELETE :
+      case sql::stmt::T_KV_MULTI_DELETE : {
+        if (OB_FAIL(tableapi_delete_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("tableapi delete sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_KV_UPDATE :
+      case sql::stmt::T_KV_APPEND :
+      case sql::stmt::T_KV_INCREMENT :
+      case sql::stmt::T_KV_MULTI_UPDATE :
+      case sql::stmt::T_KV_MULTI_INCREMENT :
+      case sql::stmt::T_KV_MULTI_APPEND : {
+        if (OB_FAIL(tableapi_update_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("tableapi update sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_KV_REPLACE :
+      case sql::stmt::T_KV_MULTI_REPLACE : {
+        if (OB_FAIL(tableapi_replace_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("tableapi replace sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_KV_QUERY_AND_MUTATE : {
+        if (OB_FAIL(tableapi_query_and_mutate_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("tableapi query and mutate sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_KV_OTHER : {
+        if (OB_FAIL(tableapi_other_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("tableapi other sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_SCAN : {
+        if (OB_FAIL(hbase_scan_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase scan sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_PUT : {
+        if (OB_FAIL(hbase_put_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase put sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_DELETE : {
+        if (OB_FAIL(hbase_delete_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase delete sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_APPEND : {
+        if (OB_FAIL(hbase_append_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase append sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_INCREMENT : {
+        if (OB_FAIL(hbase_increment_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase increment sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_CHECK_AND_PUT : {
+        if (OB_FAIL(hbase_check_and_put_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase check and put sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_CHECK_AND_DELETE : {
+        if (OB_FAIL(hbase_check_and_delete_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase check and delete sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
+      case sql::stmt::T_HBASE_HYBRID_BATCH : {
+        if (OB_FAIL(hbase_hybrid_batch_sql_info_.collect(pos, resp_time))) {
+          LOG_WARN("hbase bybrid batch sql info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));
+        }
+        break;
+      }
       default: {
         if (OB_FAIL(other_sql_info_.collect(pos, resp_time))) {
           LOG_WARN("other info failed to collect resp time", K(ret), K(pos), K(resp_time), K(utility_.bound_count()));

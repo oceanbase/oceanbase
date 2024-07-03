@@ -60,6 +60,7 @@ enum ObTableProccessType
   TABLE_API_TABLE_QUERY,
   TABLE_API_HBASE_QUERY,
   TABLE_API_TABLE_QUERY_SYNC,
+  TABLE_API_HBASE_QUERY_SYNC,
 
   // query_and_mutate
   TABLE_API_QUERY_AND_MUTATE,
@@ -71,6 +72,14 @@ enum ObTableProccessType
 static const char op_type##_name[] = "table api: " #op_type; \
 audit_record.sql_ = const_cast<char *>(op_type##_name); \
 audit_record.sql_len_ = sizeof(op_type##_name)
+
+#define COLLECT_RESPONSE_TIME(stmt_type, elapsed_us) \
+do { \
+  observer::ObTenantQueryRespTimeCollector *collector = MTL(observer::ObTenantQueryRespTimeCollector *); \
+  if (OB_NOT_NULL(collector)) { \
+    collector->collect(stmt_type, false, elapsed_us); \
+  } \
+} while (0);
 
 class ObTableRpcProcessorUtil
 {
@@ -109,41 +118,49 @@ public:
         EVENT_INC(TABLEAPI_INSERT_COUNT);
         EVENT_ADD(TABLEAPI_INSERT_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_insert);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_INSERT, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_SINGLE_GET:
         EVENT_INC(TABLEAPI_RETRIEVE_COUNT);
         EVENT_ADD(TABLEAPI_RETRIEVE_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_get);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_GET, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_SINGLE_DELETE:
         EVENT_INC(TABLEAPI_DELETE_COUNT);
         EVENT_ADD(TABLEAPI_DELETE_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_delete);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_DELETE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_SINGLE_UPDATE:
         EVENT_INC(TABLEAPI_UPDATE_COUNT);
         EVENT_ADD(TABLEAPI_UPDATE_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_update);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_UPDATE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_SINGLE_INSERT_OR_UPDATE:
         EVENT_INC(TABLEAPI_INSERT_OR_UPDATE_COUNT);
         EVENT_ADD(TABLEAPI_INSERT_OR_UPDATE_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_insert_or_update);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_INSERT_OR_UPDATE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_SINGLE_REPLACE:
         EVENT_INC(TABLEAPI_REPLACE_COUNT);
         EVENT_ADD(TABLEAPI_REPLACE_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_replace);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_REPLACE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_SINGLE_INCREMENT:
         EVENT_INC(TABLEAPI_INCREMENT_COUNT);
         EVENT_ADD(TABLEAPI_INCREMENT_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_increment);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_INCREMENT, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_SINGLE_APPEND:
         EVENT_INC(TABLEAPI_APPEND_COUNT);
         EVENT_ADD(TABLEAPI_APPEND_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_append);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_APPEND, elapsed_us);
         break;
 
       // table batch mutate
@@ -152,60 +169,70 @@ public:
         EVENT_ADD(TABLEAPI_MULTI_INSERT_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_INSERT_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_insert);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_INSERT, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_MULTI_GET:
         EVENT_INC(TABLEAPI_MULTI_RETRIEVE_COUNT);
         EVENT_ADD(TABLEAPI_MULTI_RETRIEVE_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_RETRIEVE_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_get);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_GET, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_MULTI_DELETE:
         EVENT_INC(TABLEAPI_MULTI_DELETE_COUNT);
         EVENT_ADD(TABLEAPI_MULTI_DELETE_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_DELETE_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_delete);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_DELETE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_MULTI_UPDATE:
         EVENT_INC(TABLEAPI_MULTI_UPDATE_COUNT);
         EVENT_ADD(TABLEAPI_MULTI_UPDATE_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_UPDATE_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_update);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_UPDATE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_MULTI_INSERT_OR_UPDATE:
         EVENT_INC(TABLEAPI_MULTI_INSERT_OR_UPDATE_COUNT);
         EVENT_ADD(TABLEAPI_MULTI_INSERT_OR_UPDATE_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_INSERT_OR_UPDATE_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_insert_or_update);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_INSERT_OR_UPDATE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_MULTI_REPLACE:
         EVENT_INC(TABLEAPI_MULTI_REPLACE_COUNT);
         EVENT_ADD(TABLEAPI_MULTI_REPLACE_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_REPLACE_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_replace);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_REPLACE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_MULTI_INCREMENT:
         EVENT_INC(TABLEAPI_MULTI_INCREMENT_COUNT);
         EVENT_ADD(TABLEAPI_MULTI_INCREMENT_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_INCREMENT_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_increment);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_INCREMENT, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_MULTI_APPEND:
         EVENT_INC(TABLEAPI_MULTI_APPEND_COUNT);
         EVENT_ADD(TABLEAPI_MULTI_APPEND_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_MULTI_APPEND_ROW, rows);
         SET_AUDIT_SQL_STRING(multi_append);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_APPEND, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_BATCH_RETRIVE:
         EVENT_INC(TABLEAPI_BATCH_RETRIEVE_COUNT);
         EVENT_ADD(TABLEAPI_BATCH_RETRIEVE_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_BATCH_RETRIEVE_ROW, rows);
         SET_AUDIT_SQL_STRING(batch_retrieve);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_MULTI_GET, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_BATCH_HYBRID:
         EVENT_INC(TABLEAPI_BATCH_HYBRID_COUNT);
         EVENT_ADD(TABLEAPI_BATCH_HYBRID_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_BATCH_HYBRID_INSERT_OR_UPDATE_ROW, rows); // @todo row count for each type
         SET_AUDIT_SQL_STRING(batch_hybrid);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_OTHER, elapsed_us);
         break;
 
       // hbase mutate
@@ -214,42 +241,49 @@ public:
         EVENT_ADD(HBASEAPI_DELETE_TIME, elapsed_us);
         EVENT_ADD(HBASEAPI_DELETE_ROW, rows);
         SET_AUDIT_SQL_STRING(hbase_delete);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_DELETE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_HBASE_PUT:
         EVENT_INC(HBASEAPI_PUT_COUNT);
         EVENT_ADD(HBASEAPI_PUT_TIME, elapsed_us);
         EVENT_ADD(HBASEAPI_PUT_ROW, rows);
         SET_AUDIT_SQL_STRING(hbase_put);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_PUT, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE:
         EVENT_INC(HBASEAPI_CHECK_DELETE_COUNT);
         EVENT_ADD(HBASEAPI_CHECK_DELETE_TIME, elapsed_us);
         EVENT_ADD(HBASEAPI_CHECK_DELETE_ROW, rows);
         SET_AUDIT_SQL_STRING(hbase_check_and_delete);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_CHECK_AND_DELETE, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_HBASE_CHECK_AND_PUT:
         EVENT_INC(HBASEAPI_CHECK_PUT_COUNT);
         EVENT_ADD(HBASEAPI_CHECK_PUT_TIME, elapsed_us);
         EVENT_ADD(HBASEAPI_CHECK_PUT_ROW, rows);
         SET_AUDIT_SQL_STRING(hbase_check_and_put);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_CHECK_AND_PUT, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_HBASE_INCREMENT:
         EVENT_INC(HBASEAPI_INCREMENT_COUNT);
         EVENT_ADD(HBASEAPI_INCREMENT_TIME, elapsed_us);
         EVENT_ADD(HBASEAPI_INCREMENT_ROW, rows);
         SET_AUDIT_SQL_STRING(hbase_increment);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_INCREMENT, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_HBASE_APPEND:
         EVENT_INC(HBASEAPI_APPEND_COUNT);
         EVENT_ADD(HBASEAPI_APPEND_TIME, elapsed_us);
         EVENT_ADD(HBASEAPI_APPEND_ROW, rows);
         SET_AUDIT_SQL_STRING(hbase_append);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_APPEND, elapsed_us);
         break;
       case ObTableProccessType::TABLE_API_HBASE_HYBRID:
         EVENT_INC(HBASEAPI_HYBRID_COUNT);
         EVENT_ADD(HBASEAPI_HYBRID_TIME, elapsed_us);
         EVENT_ADD(HBASEAPI_HYBRID_ROW, rows);
         SET_AUDIT_SQL_STRING(hbase_hybrid);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_OTHER, elapsed_us);
         break;
 
       // table query
@@ -258,6 +292,7 @@ public:
         EVENT_ADD(TABLEAPI_QUERY_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_QUERY_ROW, rows);
         SET_AUDIT_SQL_STRING(table_query);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_QUERY, elapsed_us);
         break;
 
       // hbase query
@@ -266,6 +301,7 @@ public:
         EVENT_ADD(HBASEAPI_SCAN_TIME, elapsed_us);
         EVENT_ADD(HBASEAPI_SCAN_ROW, rows);
         SET_AUDIT_SQL_STRING(hbase_scan);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_SCAN, elapsed_us);
         break;
 
       // table query sync
@@ -274,6 +310,16 @@ public:
         EVENT_ADD(TABLEAPI_QUERY_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_QUERY_ROW, rows);
         SET_AUDIT_SQL_STRING(table_query_sync);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_QUERY, elapsed_us);
+        break;
+
+      // hbase query sync
+      case ObTableProccessType::TABLE_API_HBASE_QUERY_SYNC:
+        EVENT_INC(HBASEAPI_SCAN_COUNT);
+        EVENT_ADD(HBASEAPI_SCAN_TIME, elapsed_us);
+        EVENT_ADD(HBASEAPI_SCAN_ROW, rows);
+        SET_AUDIT_SQL_STRING(hbase_scan_sync);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_HBASE_SCAN, elapsed_us);
         break;
 
       // table query_and_mutate
@@ -282,6 +328,7 @@ public:
         EVENT_ADD(TABLEAPI_QUERY_AND_MUTATE_TIME, elapsed_us);
         EVENT_ADD(TABLEAPI_QUERY_AND_MUTATE_ROW, rows);
         SET_AUDIT_SQL_STRING(table_query_and_mutate);
+        COLLECT_RESPONSE_TIME(sql::stmt::T_KV_QUERY_AND_MUTATE, elapsed_us);
         break;
 
       default:

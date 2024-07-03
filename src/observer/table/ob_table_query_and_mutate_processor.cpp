@@ -128,6 +128,38 @@ ObTableAPITransCb *ObTableQueryAndMutateP::new_callback(rpc::ObRequest *req)
   return nullptr;
 }
 
+int32_t ObTableQueryAndMutateP::get_process_type(bool is_hkv, ObTableOperationType::Type type)
+{
+  int32_t process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
+  if (is_hkv) {
+    switch (type) {
+      case ObTableOperationType::DEL: {
+        process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE;
+        break;
+      }
+      case ObTableOperationType::INSERT_OR_UPDATE: {
+        process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_PUT;
+        break;
+      }
+      case ObTableOperationType::INCREMENT: {
+        process_type = ObTableProccessType::TABLE_API_HBASE_INCREMENT;
+        break;
+      }
+      case ObTableOperationType::APPEND: {
+        process_type = ObTableProccessType::TABLE_API_HBASE_APPEND;
+        break;
+      }
+      default: {
+        process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
+        break;
+      }
+    }
+  } else { // tableapi
+    process_type = ObTableProccessType::TABLE_API_QUERY_AND_MUTATE;
+  }
+  return process_type;
+}
+
 int ObTableQueryAndMutateP::try_process()
 {
   int ret = OB_SUCCESS;
@@ -140,6 +172,7 @@ int ObTableQueryAndMutateP::try_process()
   ObHTableLockHandle *lock_handle = nullptr;
   ObLSID ls_id;
   bool exist_global_index = false;
+  stat_event_type_ = get_process_type(is_hkv, arg_.query_and_mutate_.get_mutations().at(0).type());
 
   if (FALSE_IT(table_id_ = arg_.table_id_)) {
   } else if (OB_FAIL(get_tablet_id(arg_.tablet_id_, arg_.table_id_, tablet_id_))) {

@@ -45,6 +45,8 @@ protected:
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
 private:
+  int32_t get_process_type(bool is_hkv, table::ObTableOperationType::Type type);
+private:
   common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;

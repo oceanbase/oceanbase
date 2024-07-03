@@ -166,6 +166,21 @@ static inline const char *sql_type_to_string(RespTimeSqlType type)
     case(RespTimeSqlType::replace_sql): return "REPLACE";
     case(RespTimeSqlType::commit_sql): return "COMMIT";
     case(RespTimeSqlType::other_sql): return "OTHER";
+    case(RespTimeSqlType::tableapi_select_sql): return "TABLEAPI SELECT";
+    case(RespTimeSqlType::tableapi_insert_sql): return "TABLEAPI INSERT";
+    case(RespTimeSqlType::tableapi_delete_sql): return "TABLEAPI DELETE";
+    case(RespTimeSqlType::tableapi_update_sql): return "TABLEAPI UPDATE";
+    case(RespTimeSqlType::tableapi_replace_sql): return "TABLEAPI REPLACE";
+    case(RespTimeSqlType::tableapi_query_and_mutate_sql): return "TABLEAPI QUERY AND MUTATE";
+    case(RespTimeSqlType::tableapi_other_sql): return "TABLEAPI OTHER";
+    case(RespTimeSqlType::hbase_scan_sql): return "HBASE SCAN";
+    case(RespTimeSqlType::hbase_put_sql): return "HBASE PUT";
+    case(RespTimeSqlType::hbase_delete_sql): return "HBASE DELETE";
+    case(RespTimeSqlType::hbase_append_sql): return "HBASE APPEND";
+    case(RespTimeSqlType::hbase_increment_sql): return "HBASE INCREMENT";
+    case(RespTimeSqlType::hbase_check_and_put_sql): return "HBASE CHECK AND PUT";
+    case(RespTimeSqlType::hbase_check_and_delete_sql): return "HBASE CHECK AND DELETE";
+    case(RespTimeSqlType::hbase_hybrid_batch_sql): return "HBASE HYBRID BATCH";
     case(RespTimeSqlType::inner_sql): return "INNER SQL";
     default: return "";
   }

@@ -594,7 +594,6 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
     if (OB_SUCC(ret) && check_passed) {
       switch(mutation.type()) {
         case ObTableOperationType::DEL: { // checkAndDelete
-          // stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE;
           if (OB_FAIL(execute_htable_delete())) {
             LOG_WARN("fail to execute hatable delete", K(ret));
           } else {
@@ -603,7 +602,6 @@ int QueryAndMutateHelper::execute_htable_mutation(ObTableQueryResultIterator *re
           break;
         }
         case ObTableOperationType::INSERT_OR_UPDATE:  { // checkAndPut
-          // stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_PUT;
           if (OB_FAIL(execute_htable_put())) {
             LOG_WARN("fail to execute hatable put", K(ret));
           } else {
@@ -801,7 +799,6 @@ int QueryAndMutateHelper::execute_table_mutation(ObTableQueryResultIterator *res
   if (OB_FAIL(get_rowkey_column_names(rowkey_column_names))) {
     LOG_WARN("fail to get rowkey column names", K(ret));
   } else {
-    // stat_event_type_ = ObTableProccessType::TABLE_API_QUERY_AND_MUTATE;
     ObTableQueryResult *one_result = nullptr;
     bool end_in_advance = false;
     while (OB_SUCC(ret) && !end_in_advance) { // 在check and insert 情境下会有提前终止
@@ -856,7 +853,6 @@ int QueryAndMutateHelper::execute_query_and_mutate()
   } else if (OB_FAIL(cache_guard.get_spec<TABLE_API_EXEC_SCAN>(&tb_ctx_, scan_spec))) {
     LOG_WARN("fail to get scan spec from cache", K(ret));
   } else if (is_hkv_ && ObTableOperationType::INCREMENT == mutation.type()) {
-    // stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_INCREMENT;
     if (OB_FAIL(execute_htable_increment(*scan_spec))) {
       LOG_WARN("fail to execute hatable increment", K(ret));
     } else {
@@ -864,7 +860,6 @@ int QueryAndMutateHelper::execute_query_and_mutate()
       set_result_affected_rows(1);
     }
   } else if (is_hkv_ && ObTableOperationType::APPEND == mutation.type()) {
-    // stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_APPEND;
     if (OB_FAIL(execute_htable_increment(*scan_spec))) {
       LOG_WARN("fail to execute hatable increment", K(ret));
     } else {

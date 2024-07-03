@@ -671,8 +671,12 @@ int ObTableQuerySyncP::try_process()
     LOG_TRACE("[TABLE] execute query", K(ret), K_(arg), K_(timeout_ts), K_(retry_count), K(result_.is_end_),
               "receive_ts", get_receive_timestamp(), K_(result_row_count));
   #endif
-
-  stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_SYNC;  // table querysync
+  bool is_hkv = (ObTableEntityType::ET_HKV == arg_.entity_type_);
+  if (is_hkv) {
+    stat_event_type_ = ObTableProccessType::TABLE_API_HBASE_QUERY_SYNC;
+  } else {
+    stat_event_type_ = ObTableProccessType::TABLE_API_TABLE_QUERY_SYNC;
+  }
   return ret;
 }
 
