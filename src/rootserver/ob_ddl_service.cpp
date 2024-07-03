@@ -11948,7 +11948,10 @@ int ObDDLService::check_is_oracle_mode_add_column_not_null_ddl(const obrpc::ObAl
             && !alter_column_schema->is_xmltype()
             && !alter_column_schema->is_first_
             && !alter_column_schema->get_next_column_name()
-            && !alter_column_schema->get_prev_column_name()) {
+            && !alter_column_schema->get_prev_column_name()
+            && !is_lob_storage(alter_column_schema->get_data_type())) {
+          // MDS can not register more than 1 buffer ctx in the same trans(RW defensive and create lob),
+          // so that add not null lob will not hit the fast path.
         } else {
           is_oracle_mode_add_column_not_null_ddl = false;
         }
@@ -12463,6 +12466,13 @@ int ObDDLService::add_not_null_column_to_table_schema(
     } else if (OB_FAIL(ddl_operator.update_table_attribute(new_table_schema, trans,
         OB_DDL_ALTER_TABLE, &alter_table_arg.ddl_stmt_str_))) {
       LOG_WARN("failed to update data table schema attribute", K(ret));
+    } else {
+      ObArray<ObTabletID> new_tablet_ids;
+      if (OB_FAIL(new_table_schema.get_tablet_ids(new_tablet_ids))) {
+        LOG_WARN("failed to get tablet ids", K(ret));
+      } else if (OB_FAIL(build_single_table_rw_defensive(new_table_schema.get_tenant_id(), new_tablet_ids, new_table_schema.get_schema_version(), trans))) {
+        LOG_WARN("failed to build rw defensive", K(ret));
+      }
     }
   }
   return ret;
@@ -12502,13 +12512,6 @@ int ObDDLService::add_not_null_column_default_null_to_table_schema(
                                                          ddl_operator,
                                                          trans))) {
     LOG_WARN("failed to add new column to table schema");
-  } else {
-    ObArray<ObTabletID> new_tablet_ids;
-    if (OB_FAIL(new_table_schema.get_tablet_ids(new_tablet_ids))) {
-      LOG_WARN("failed to get tablet ids", K(ret));
-    } else if (OB_FAIL(build_single_table_rw_defensive(tenant_id, new_tablet_ids, new_table_schema.get_schema_version(), trans))) {
-      LOG_WARN("failed to build rw defensive", K(ret));
-    }
   }
   return ret;
 }
@@ -12586,12 +12589,11 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
             const bool has_lob_in_origin_table = origin_table_schema->has_lob_column();
             const bool has_lob_in_new_table = new_table_schema.has_lob_column();
             if (!has_lob_in_origin_table && has_lob_in_new_table) {
-              // origin table doesnt has lob, fast add not null lob column should create new lobs.
-              bool is_add_lob = false;
-              if (OB_FAIL(create_aux_lob_table_if_need(new_table_schema, schema_guard, ddl_operator, trans,
-                true/*need_sync_table_schema_version*/, is_add_lob))) {
-                LOG_WARN("fail to create_aux_lob_table_if_need", K(ret), K(new_table_schema));
-              }
+              // ATTENTION.
+              // MDS can not register more than 1 buffer ctx in the same trans(RW defensive and create lob),
+              // so that add not null lob will not hit the fast path.
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("Not supported to fast add not null lob column in this path", K(ret), K(alter_table_arg));
             }
           }
         }
