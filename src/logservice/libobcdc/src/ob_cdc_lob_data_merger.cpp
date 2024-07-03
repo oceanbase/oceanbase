@@ -178,11 +178,12 @@ int ObCDCLobDataMerger::push_task_(
     ObLobDataGetCtxList &lob_data_get_ctx_list = task.get_lob_data_get_ctx_list();
     ObLobDataGetCtx *cur_lob_data_get_ctx = lob_data_get_ctx_list.head_;
 
-    while (OB_SUCC(ret) && ! is_in_stop_status(stop_flag) && cur_lob_data_get_ctx) {
+    while (OB_SUCC(ret) && ! is_in_stop_status(stop_flag) && OB_NOT_NULL(cur_lob_data_get_ctx)) {
+      ObLobDataGetCtx *next_lob_data_get_ctx = cur_lob_data_get_ctx->get_next();
       if (OB_FAIL(push_lob_column_(allocator, task, *cur_lob_data_get_ctx, stop_flag))) {
         LOG_ERROR("push_lob_column_ failed", KR(ret));
       } else {
-        cur_lob_data_get_ctx = cur_lob_data_get_ctx->get_next();
+        cur_lob_data_get_ctx = next_lob_data_get_ctx;
       }
     }
 
@@ -372,9 +373,10 @@ int ObCDCLobDataMerger::push_lob_col_fra_ctx_list_(
   if (lob_col_fra_ctx_list.num_ <= 0) {
     // do nothing
   } else {
-    while (OB_SUCC(ret) && ! is_in_stop_status(stop_flag) && cur_lob_col_fragment_ctx) {
+    while (OB_SUCC(ret) && ! is_in_stop_status(stop_flag) && OB_NOT_NULL(cur_lob_col_fragment_ctx)) {
       uint64_t hash_value = ATOMIC_FAA(&round_value_, 1);
       void *push_task = static_cast<void *>(cur_lob_col_fragment_ctx);
+      LobColumnFragmentCtx *next_lob_col_fragment_ct = cur_lob_col_fragment_ctx->get_next();
       ret = OB_TIMEOUT;
 
       while (OB_TIMEOUT == ret && ! is_in_stop_status(stop_flag)) {
@@ -386,8 +388,12 @@ int ObCDCLobDataMerger::push_lob_col_fra_ctx_list_(
       }
 
       if (OB_SUCC(ret)) {
-        cur_lob_col_fragment_ctx = cur_lob_col_fragment_ctx->get_next();
+        cur_lob_col_fragment_ctx = next_lob_col_fragment_ct;
       }
+    }
+
+    if (is_in_stop_status(stop_flag)) {
+      ret = OB_IN_STOP_STATE;
     }
   }
 

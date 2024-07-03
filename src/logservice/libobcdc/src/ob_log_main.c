@@ -22,6 +22,7 @@ const char* build_version();
 const char* build_date();
 const char* build_time();
 const char* build_flags();
+const char* build_info();
 
 int so_main()
 {
@@ -38,6 +39,7 @@ int so_main()
   fprintf(stdout, "BUILD_VERSION: %s\n",    build_version());
   fprintf(stdout, "BUILD_TIME: %s %s\n",  build_date(), build_time());
   fprintf(stdout, "BUILD_FLAGS: %s%s\n",    build_flags(), extra_flags);
+  fprintf(stdout, "BUILD_INFO: %s\n",    build_info());
   exit(0);
 }
 
