@@ -583,6 +583,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       }
       OX (call_proc_info->get_stat_for_update().type_ = pl::ObPLCacheObjectType::CALL_STMT_TYPE);
       OX (call_proc_info->get_stat_for_update().compile_time_ = compile_end - compile_start);
+      OX (call_proc_info->get_stat_for_update().raw_sql_ = params_.cur_sql_);
       OZ (add_call_proc_info(call_proc_info));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < call_proc_info->get_dependency_table().count(); ++i) {
