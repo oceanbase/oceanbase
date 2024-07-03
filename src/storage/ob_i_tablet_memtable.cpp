@@ -280,6 +280,10 @@ int ObITabletMemtable::set_max_end_scn(const SCN scn, bool allow_backoff)
     TRANS_LOG(INFO, "set max_end_scn force", K(scn), K(max_end_scn_.atomic_get()), K(key_), KPC(this));
     if (scn != max_end_scn_.atomic_get()) {
       max_end_scn_.dec_update(scn);
+      if (rec_scn_.atomic_get() > max_end_scn_) {
+        TRANS_LOG(INFO, "rec_scn is greater than max_end_scn, set it to max", K_(rec_scn), K_(max_end_scn));
+        rec_scn_.set_max();
+      }
     }
   } else {
     SCN old_max_end_scn;
