@@ -2615,6 +2615,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             LOG_WARN("using PARTITION_TYPE as a table option is support in external table only", K(ret));
           } else {
             arg.schema_.set_user_specified_partition_for_external_table();
+            if (arg.schema_.get_external_table_auto_refresh() != 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("user specified partition without auto refresh off not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition without auto refresh off");
+            }
           }
         }
         break;
@@ -2633,6 +2638,12 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
              LOG_WARN("unexpected child num", K(option_node->num_child_));
            } else {
              arg.schema_.set_external_table_auto_refresh(option_node->children_[0]->value_);
+             if (arg.schema_.get_external_table_auto_refresh() != 0
+                && arg.schema_.is_user_specified_partition_for_external_table()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("user specified partition without auto refresh off not supported", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition without auto refresh off");
+             }
            }
          } else if (stmt_->get_stmt_type() == stmt::T_ALTER_TABLE) {
            ObAlterTableArg &arg = static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg();
@@ -2647,6 +2658,12 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
              LOG_WARN("unexpected child num", K(option_node->num_child_));
            } else {
              arg.alter_table_schema_.set_external_table_auto_refresh(option_node->children_[0]->value_);
+             if (arg.alter_table_schema_.get_external_table_auto_refresh() != 0
+                && arg.alter_table_schema_.is_user_specified_partition_for_external_table()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("user specified partition without auto refresh off not supported", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition without auto refresh off");
+             }
            }
          } else {
            ret = OB_ERR_UNEXPECTED;

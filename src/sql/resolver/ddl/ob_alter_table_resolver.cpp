@@ -218,6 +218,9 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         OZ (alter_schema.set_external_file_location(table_schema_->get_external_file_location()));
         OZ (alter_schema.set_external_file_location_access_info(table_schema_->get_external_file_location_access_info()));
         OZ (alter_schema.set_external_file_pattern(table_schema_->get_external_file_pattern()));
+        if (OB_SUCC(ret) && table_schema_->is_user_specified_partition_for_external_table()) {
+          alter_schema.set_user_specified_partition_for_external_table();
+        }
       }
     }
     //resolve action list
