@@ -39,7 +39,8 @@ ObOptimizerStatsGatheringSpec::ObOptimizerStatsGatheringSpec(ObIAllocator &alloc
       target_osg_id_(OB_INVALID_ID),
       generated_column_exprs_(alloc),
       col_conv_exprs_(alloc),
-      column_ids_(alloc)
+      column_ids_(alloc),
+      online_sample_rate_(1.)
 {
 }
 
@@ -76,7 +77,8 @@ OB_SERIALIZE_MEMBER((ObOptimizerStatsGatheringSpec, ObOpSpec),
                     target_osg_id_,
                     generated_column_exprs_,
                     col_conv_exprs_,
-                    column_ids_);
+                    column_ids_,
+                    online_sample_rate_);
 
 ObOptimizerStatsGatheringOp::ObOptimizerStatsGatheringOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
   : ObOperator(exec_ctx, spec, input),

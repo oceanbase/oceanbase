@@ -55,6 +55,7 @@ public:
   ExprFixedArray generated_column_exprs_;
   ExprFixedArray col_conv_exprs_;
   ObFixedArray<uint64_t, common::ObIAllocator> column_ids_;
+  double online_sample_rate_;
 };
 
 class ObOptimizerStatsGatheringOp : public ObOperator
