@@ -15032,6 +15032,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15460: idx_scheduler_job_run_detail_v2_time_real_agent
 # 15461: __all_virtual_log_transport_dest_stat
 # 15462: __all_virtual_ss_local_cache_info
+# 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -64037,6 +64038,7 @@ def_sys_index_table(
 # 101103: __all_user_proxy_role_info_history
 # 101104: __all_tablet_reorganize_history
 # 101105: __all_scheduler_job_run_detail_v2
+# 101106: __all_scheduler_job_run_detail_v2
 #
 def_sys_index_table(
   index_name = 'idx_user_proxy_info_proxy_user_id',
