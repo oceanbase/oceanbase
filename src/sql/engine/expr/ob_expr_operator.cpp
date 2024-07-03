@@ -6472,7 +6472,8 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     const ObCollationType cs_type = rt_expr.args_[0]->datum_meta_.cs_type_;
     if (ObDatumFuncs::is_string_type(input_type1) && ObDatumFuncs::is_string_type(input_type2)) {
       CK(rt_expr.args_[0]->datum_meta_.cs_type_ == rt_expr.args_[1]->datum_meta_.cs_type_);
-    } else if (ob_is_double_tc(input_type1) && ob_is_double_tc(input_type2)) {
+    } else if (lib::is_mysql_mode() &&
+        ob_is_double_tc(input_type1) && ob_is_double_tc(input_type2)) {
       CK(rt_expr.args_[0]->datum_meta_.scale_ == rt_expr.args_[1]->datum_meta_.scale_);
     }
     if (OB_SUCC(ret)) {
