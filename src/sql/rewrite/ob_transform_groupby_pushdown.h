@@ -123,11 +123,18 @@ private:
                                       ObIArray<UnionPushdownParam> &new_colomns,
                                       bool &trans_happend);
 
+  int transform_basic_child_stmt(ObSelectStmt *stmt,
+                                 ObIArray<UnionPushdownParam> &new_colomns);
+
+  int transform_non_basic_child_stmt(ObSelectStmt *stmt,
+                                     ObIArray<UnionPushdownParam> &new_colomns);
+
   int transform_union_stmt(ObSelectStmt *union_stmt,
                            ObIArray<ObSelectStmt *> &child_stmts);
 
-  int transform_basic_child_stmt(ObSelectStmt *stmt,
-                                 ObIArray<UnionPushdownParam> &new_colomns);
+  int transform_parent_stmt_of_union(ObSelectStmt *stmt,
+                                     ObSelectStmt *union_stmt,
+                                     ObIArray<UnionPushdownParam> &new_colomns);
 
   int get_new_select_expr_of_basic_child(UnionPushdownParam &param,
                                          ObIArray<ObRawExpr *> &old_exprs,
@@ -136,9 +143,6 @@ private:
   int get_new_select_expr_of_non_basic_child(UnionPushdownParam &param,
                                              ObIArray<ObRawExpr *> &old_exprs,
                                              ObRawExpr *&new_expr);
-
-  int transform_non_basic_child_stmt(ObSelectStmt *stmt,
-                                              ObIArray<UnionPushdownParam> &new_colomns);
 
   int get_new_aggr_exprs(ObIArray<UnionPushdownParam> &param,
                         ObIArray<ObRawExpr *> &new_column_exprs,
@@ -155,22 +159,18 @@ private:
                              ObIArray<ObRawExpr *> &new_column_exprs,
                              ObIArray<ObRawExpr *> &new_aggr_col_exprs);
 
+  int find_new_column_expr(ObIArray<UnionPushdownParam> &param,
+                           ObIArray<ObRawExpr *> &new_column_exprs,
+                           ObItemType type,
+                           uint64_t col_id,
+                           ObColumnRefRawExpr *&col_ref_exp);
+
   int replace_aggr_and_aggr_col_exprs(
       ObSelectStmt *stmt,
       ObIArray<ObRawExpr *> &old_aggr_exprs,
       ObIArray<ObRawExpr *> &new_aggr_exprs,
       ObIArray<ObRawExpr *> &old_aggr_col_exprs,
       ObIArray<ObRawExpr *> &new_aggr_col_exprs);
-
-  int transform_parent_stmt_of_union(ObSelectStmt *stmt,
-                                     ObSelectStmt *union_stmt,
-                                     ObIArray<UnionPushdownParam> &new_colomns);
-
-  int find_new_column_expr(ObIArray<UnionPushdownParam> &param,
-                           ObIArray<ObRawExpr *> &new_column_exprs,
-                           ObItemType type,
-                           uint64_t col_id,
-                           ObColumnRefRawExpr *&col_ref_exp);
 
   int check_push_down_into_join_validity(ObSelectStmt *stmt, bool &is_valid);
 
