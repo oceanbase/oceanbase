@@ -497,10 +497,23 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           obrpc::ObAlterTableRes res;
           alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
-          if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
-            LOG_WARN("failed to update table session", K(ret), K(alter_table_arg));
-            if (alter_table_arg.compat_mode_ == lib::Worker::CompatMode::ORACLE && OB_ERR_TABLE_EXIST == ret) {
-              ret = OB_ERR_EXIST_OBJECT;
+          bool finish = false;
+          while (OB_SUCC(ret) && !finish) {
+            if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
+              LOG_WARN("failed to update table session", K(ret), K(alter_table_arg));
+              if (alter_table_arg.compat_mode_ == lib::Worker::CompatMode::ORACLE && OB_ERR_TABLE_EXIST == ret) {
+                ret = OB_ERR_EXIST_OBJECT;
+              } else if (OB_EAGAIN == ret) {
+                ret = OB_SUCCESS; // maybe table lock conflict, retry
+                if (OB_UNLIKELY(THIS_WORKER.get_timeout_remain() <= 0)) {
+                  ret = OB_TIMEOUT;
+                  LOG_WARN("timeout", K(ret));
+                } else if (OB_FAIL(THIS_WORKER.check_status())) {
+                  LOG_WARN("failed to check status", K(ret));
+                }
+              }
+            } else {
+              finish = true;
             }
           }
         }
