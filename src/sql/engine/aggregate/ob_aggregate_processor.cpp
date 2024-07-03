@@ -8424,6 +8424,8 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
         LOG_WARN("get unexpected null", K(ret), K(storted_row));
       } else {
         // get obj
+        uint64_t val = 0;
+        bool null_val = false;
         if (!inited_tmp_obj
             && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -8432,14 +8434,30 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
         } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
           LOG_WARN("failed to convert datum to obj", K(ret));
         } else if (tmp_obj->is_null()) {
-          // do noting for null
-        } else if (!tmp_obj->is_integer_type()) {
+          null_val = true;
+        } else if (tmp_obj->is_unsigned_integer()) {
+          val = tmp_obj->get_uint64();
+        } else if (tmp_obj->is_signed_integer())  {
+          int64_t val_64 = tmp_obj->get_int();
+          if (val_64 < INT32_MIN) {
+            ret = OB_SIZE_OVERFLOW;
+            LOG_WARN("negative integer not in the range of int32", K(ret), K(val_64));
+          } else if (val_64 < 0) {
+            // convert negative integer to uint32
+            uint32_t val_u32 = static_cast<uint32_t>(val_64);
+            val = static_cast<uint64_t>(val_u32);
+          } else {
+            val = static_cast<uint64_t>(val_64);
+          }
+        } else {
           ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
           LOG_WARN("invalid data type for roaringbitmap build agg");
+        }
+        if (OB_FAIL(ret) || null_val) {
         } else if (OB_ISNULL(rb) && OB_ISNULL(rb = OB_NEWx(ObRoaringBitmap, &tmp_alloc, (&tmp_alloc)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
-        } else if (OB_FAIL(rb->value_add(tmp_obj->get_uint64()))) {
+        } else if (OB_FAIL(rb->value_add(val))) {
           LOG_WARN("failed to add value to roaringbitmap", K(ret), K(tmp_obj->get_uint64()));
         }
       }

@@ -531,9 +531,18 @@ int ObRbUtils::str_read_value_(const char *str, size_t len,  char *&value_end, u
   int ret = OB_SUCCESS;
   int err = 0;
   if (*str == '-') {
-    int64_t get_int64 = ObCharset::strntoll(str, len, 10, &value_end, &err);
+    int64_t val_64 = ObCharset::strntoll(str, len, 10, &value_end, &err);
     if (err == 0) {
-      value = static_cast<uint64_t>(get_int64);
+      if (val_64 < INT32_MIN) {
+        ret = OB_SIZE_OVERFLOW;
+        LOG_WARN("negative integer not in the range of int32", K(ret), K(val_64));
+      } else if (val_64 < 0) {
+        // convert negative integer to uint32
+        uint32_t val_u32 = static_cast<uint32_t>(val_64);
+        value = static_cast<uint64_t>(val_u32);
+      } else {
+        value = static_cast<uint64_t>(val_64);
+      }
     } else if (err == ERANGE) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("int64 value out of range", K(ret), K(str));
@@ -542,9 +551,9 @@ int ObRbUtils::str_read_value_(const char *str, size_t len,  char *&value_end, u
       LOG_WARN("invalid int64 value", K(ret), K(str));
     }
   } else {
-    uint64_t get_uint64 = ObCharset::strntoull(str, len, 10, &value_end, &err);
+    uint64_t val_u64 = ObCharset::strntoull(str, len, 10, &value_end, &err);
     if (err == 0) {
-      value = get_uint64;
+      value = val_u64;
     } else if (err == ERANGE) {
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("uint64 value out of range", K(ret), K(str));
