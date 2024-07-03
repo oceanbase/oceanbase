@@ -553,6 +553,8 @@ GLOBAL_ERRSIM_POINT_DEF(2401, EN_TEST_FOR_HASH_UNION, "Used to control whether t
 GLOBAL_ERRSIM_POINT_DEF(2450, COM_STMT_PREXECUTE_PREPARE_ERROR, "inject error at prepare stage for pr-exec protocol");
 GLOBAL_ERRSIM_POINT_DEF(2451, COM_STMT_PREXECUTE_PS_CURSOR_OPEN_ERROR, "inject error at cursor open stage for pr-exec protocol");
 GLOBAL_ERRSIM_POINT_DEF(2452, COM_STMT_PREXECUTE_EXECUTE_ERROR, "inject error at execute stage for pr-exec protocol");
+GLOBAL_ERRSIM_POINT_DEF(2453, EN_ENABLE_NEW_RESULT_META_DATA, "For testing enable new result meta data, off by default");
+
 // Protocol end
 
 GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
