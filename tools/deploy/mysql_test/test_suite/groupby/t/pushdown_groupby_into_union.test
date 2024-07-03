@@ -7,17 +7,18 @@ set @@session.explicit_defaults_for_timestamp=off;
 # tags: optimizer
 --disable_warnings
 drop table if exists t1,t2,t3;
+drop view if exists v, v_distinct;
 --enable_warnings
 
 create table t1(c1 int, c2 int);
 create table t2(c1 int, c2 int);
 
 insert into t1 values(1, 1);
-insert into t1 values(2, 1);
+insert into t1 values(2, NULL);
 insert into t1 values(1, 2);
-insert into t1 values(3, 2);
+insert into t1 values(NULL, 2);
 insert into t1 values(2, 3);
-insert into t1 values(3, 3);
+insert into t1 values(3, NULL);
 insert into t1 values(4, 3);
 insert into t1 values(3, 4);
 
@@ -27,7 +28,7 @@ insert into t2 values(NULL, 1);
 insert into t2 values(1, 2);
 insert into t2 values(3, 2);
 insert into t2 values(2, 3);
-insert into t2 values(3, 3);
+insert into t2 values(3, NULL);
 insert into t2 values(4, 3);
 insert into t2 values(NULL, 4);
 
@@ -120,3 +121,15 @@ explain select sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2)
 select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
 select /*+no_rewrite*/ sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
 explain select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
+
+select sum(c1), c2 from ( select * from t1 union all (select * from t2 union select * from t1)) v2 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( select * from t1 union all (select * from t2 union select * from t1)) v2 group by c2;
+explain select sum(c1), c2 from ( select * from t1 union all (select * from t2 union select * from t1)) v2 group by c2;
+ 
+select count(c1), c2 from ( select * from t1 union all select distinct * from t2) v2 group by c2;
+select /*+no_rewrite*/ count(c1), c2 from ( select * from t1 union all select distinct * from t2) v2 group by c2;
+explain select count(c1), c2 from ( select * from t1 union all select distinct * from t2) v2 group by c2;
+
+select sum(c1), c2 from ( select * from t1 union all select * from t2) v2 where c2=1 or c2=2 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( select * from t1 union all select * from t2) v2 where c2=1 or c2=2 group by c2;
+explain select sum(c1), c2 from ( select * from t1 union all select * from t2) v2 where c2=1 or c2=2 group by c2;
