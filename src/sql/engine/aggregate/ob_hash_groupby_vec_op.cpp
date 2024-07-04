@@ -2099,7 +2099,12 @@ int ObHashGroupByVecOp::by_pass_prepare_one_batch(const int64_t batch_size)
     }
   }
   if (OB_FAIL(ret) || no_non_distinct_aggr_) {
-    brs_.all_rows_active_ = by_pass_child_brs_->all_rows_active_;
+    if (last_group && no_non_distinct_aggr_) {
+      // in bypass && last_group && no_non_distinct_aggr_, brs_.skip_ will be set_all (all skip)
+      brs_.all_rows_active_ = false;
+    } else {
+      brs_.all_rows_active_ = by_pass_child_brs_->all_rows_active_;
+    }
   } else if (OB_UNLIKELY(by_pass_batch_size_ <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("by pass group row is not init", K(ret), K(by_pass_batch_size_));
