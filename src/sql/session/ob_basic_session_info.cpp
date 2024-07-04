@@ -4305,6 +4305,7 @@ OB_SERIALIZE_MEMBER(ObBasicSessionInfo::TableStmtType, table_id_, stmt_type_);
 OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 {
   int ret = OB_SUCCESS;
+  bool mock_enable_rich_vector_format = false;
   LST_DO_CODE(OB_UNIS_ENCODE,
               autocommit_,
               ob_enable_trace_log_,
@@ -4329,6 +4330,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
+              mock_enable_rich_vector_format,
               enable_sql_plan_monitor_);
   return ret;
 }
@@ -4336,6 +4338,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 {
   int ret = OB_SUCCESS;
+  bool mock_enable_rich_vector_format = false;
   LST_DO_CODE(OB_UNIS_DECODE,
               autocommit_,
               ob_enable_trace_log_,
@@ -4360,6 +4363,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
+              mock_enable_rich_vector_format,
               enable_sql_plan_monitor_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
@@ -4372,6 +4376,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
 OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
 {
   int64_t len = 0;
+  bool mock_enable_rich_vector_format = false;
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               autocommit_,
               ob_enable_trace_log_,
@@ -4396,6 +4401,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
+              mock_enable_rich_vector_format,
               enable_sql_plan_monitor_);
   return len;
 }
