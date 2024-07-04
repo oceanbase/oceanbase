@@ -176,6 +176,9 @@ public:
                K_(start_scn),
                K_(handle),
                K_(row_count),
+               K_(open_err),
+               K_(is_open),
+               K_(is_create),
                K_(is_cancel));
 private:
   int get_pk_interval(uint64_t count, share::ObTabletCacheInterval &pk_interval);
@@ -197,6 +200,8 @@ private:
   share::SCN start_scn_;
   ObTabletDirectLoadMgrHandle handle_;
   int64_t row_count_;
+  int open_err_;
+  volatile bool is_open_;
   bool is_create_;
   bool is_cancel_;
   bool is_inited_;

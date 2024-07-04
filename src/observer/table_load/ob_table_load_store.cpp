@@ -158,8 +158,14 @@ int ObTableLoadStore::confirm_begin()
     LOG_INFO("store confirm begin");
     store_ctx_->heart_beat(); // init heart beat
     store_ctx_->set_enable_heart_beat_check(true);
-    if (OB_FAIL(open_insert_table_ctx())) {
-      LOG_WARN("fail to open insert_table_ctx", KR(ret));
+    if (ObDirectLoadMethod::is_incremental(param_.method_)) {
+      if (OB_FAIL(open_insert_table_ctx())) {
+        LOG_WARN("fail to open insert_table_ctx", KR(ret));
+      }
+    } else {
+      if (OB_FAIL(ctx_->store_ctx_->set_status_loading())) {
+        LOG_WARN("fail to set store status loading", KR(ret));
+      }
     }
   }
 
