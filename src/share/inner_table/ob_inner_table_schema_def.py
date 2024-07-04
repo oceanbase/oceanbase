@@ -6962,7 +6962,6 @@ def_table_schema(
   rowkey_columns = [
     ('job_name', 'varchar:128', 'false'),
     ('time', 'timestamp', 'false'),
-    ('job_class', 'varchar:128', 'false'),
   ],
   in_tenant_space = True,
   is_cluster_private = False,
@@ -6972,6 +6971,7 @@ def_table_schema(
     ('log_date', 'timestamp', 'true'),
     ('owner', 'varchar:128', 'true'),
     ('job_subname', 'varchar:128', 'true'),
+    ('job_class', 'varchar:128', 'true'),
     ('operation', 'varchar:128', 'true'),
     ('status', 'varchar:128', 'true'),
     ('code', 'int', 'true', '0'),

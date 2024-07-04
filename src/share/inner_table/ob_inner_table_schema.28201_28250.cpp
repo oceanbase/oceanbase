@@ -12620,7 +12620,7 @@ int ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_de
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(3);
+  table_schema.set_rowkey_column_num(2);
   table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
   table_schema.set_table_type(USER_INDEX);
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
@@ -12685,26 +12685,11 @@ int ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_de
       false,//is_nullable
       false); //is_autoincrement
   }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("job_class", //column_name
-      column_id + 3, //column_id
-      3, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObVarcharType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      128, //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false,//is_nullable
-      false); //is_autoincrement
-  }
   table_schema.set_index_status(INDEX_STATUS_AVAILABLE);
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID);
 
-  table_schema.set_max_used_column_id(column_id + 3);
+  table_schema.set_max_used_column_id(column_id + 2);
   return ret;
 }
 
@@ -12721,7 +12706,7 @@ int ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_de
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(3);
+  table_schema.set_rowkey_column_num(2);
   table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
   table_schema.set_table_type(USER_INDEX);
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
@@ -12758,7 +12743,7 @@ int ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_de
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("job_class", //column_name
-      column_id + 3, //column_id
+      column_id + 8, //column_id
       1, //rowkey_id
       1, //index_id
       0, //part_key_pos
@@ -12767,7 +12752,7 @@ int ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_de
       128, //column_length
       -1, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false); //is_autoincrement
   }
 
@@ -12805,7 +12790,7 @@ int ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_de
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID);
 
-  table_schema.set_max_used_column_id(column_id + 3);
+  table_schema.set_max_used_column_id(column_id + 8);
   return ret;
 }
 
@@ -20153,7 +20138,7 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_i
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(3);
+  table_schema.set_rowkey_column_num(2);
   table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
   table_schema.set_table_type(USER_INDEX);
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
@@ -20209,26 +20194,11 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_i
       false,//is_nullable
       false); //is_autoincrement
   }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("JOB_CLASS", //column_name
-      column_id + 3, //column_id
-      3, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObVarcharType, //column_type
-      CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      128, //column_length
-      2, //column_precision
-      -1, //column_scale
-      false,//is_nullable
-      false); //is_autoincrement
-  }
   table_schema.set_index_status(INDEX_STATUS_AVAILABLE);
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA_TID);
 
-  table_schema.set_max_used_column_id(column_id + 3);
+  table_schema.set_max_used_column_id(column_id + 2);
   return ret;
 }
 
@@ -20245,7 +20215,7 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_i
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(3);
+  table_schema.set_rowkey_column_num(2);
   table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
   table_schema.set_table_type(USER_INDEX);
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
@@ -20274,7 +20244,7 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_i
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("JOB_CLASS", //column_name
-      column_id + 3, //column_id
+      column_id + 8, //column_id
       1, //rowkey_id
       1, //index_id
       0, //part_key_pos
@@ -20283,7 +20253,7 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_i
       128, //column_length
       2, //column_precision
       -1, //column_scale
-      false,//is_nullable
+      true,//is_nullable
       false); //is_autoincrement
   }
 
@@ -20320,7 +20290,7 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_i
   table_schema.set_index_type(INDEX_TYPE_NORMAL_LOCAL);
   table_schema.set_data_table_id(OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA_TID);
 
-  table_schema.set_max_used_column_id(column_id + 3);
+  table_schema.set_max_used_column_id(column_id + 8);
   return ret;
 }
 
