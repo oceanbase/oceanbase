@@ -81,7 +81,7 @@ typedef enum ObItemType
   T_JSON        = 47,
   T_GEOMETRY    = 48,
   T_UDT_SQL     = 49,
-  T_ROARINGBITMAP = 52,
+  T_ROARINGBITMAP = 54,
 
   T_IEEE754_NAN = 61,
   T_IEEE754_INFINITE = 62,
