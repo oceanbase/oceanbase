@@ -87,6 +87,7 @@ struct ObClassOp
   static int construct_and_assign(const T &src, T &addr);
   static int array_remove(T* arr, int64_t &arr_size, int64_t idx);
   static T* default_construct(T &addr);
+  static void default_destruct(T &addr);
   static void array_default_construct(T *addr, int64_t arr_size);
   static int array_assign(const T *src_arr, T *dst_arr, int64_t arr_size);
   static int array_expand(const T *orig_arr, T *new_arr, int64_t orig_size);
@@ -120,6 +121,10 @@ struct ObClassOp<T, true>
   OB_INLINE static T* default_construct(T &addr)
   {
     return &addr;
+  }
+  OB_INLINE static void default_destruct(T &addr)
+  {
+    UNUSED(addr);
   }
   OB_INLINE static void array_default_construct(T *addr, int64_t arr_size)
   {
@@ -186,6 +191,10 @@ struct ObClassOp<T, false>
   OB_INLINE static T* default_construct(T &addr)
   {
     return new(&addr) T();
+  }
+  OB_INLINE static void default_destruct(T &addr)
+  {
+    addr.~T();
   }
   OB_INLINE static void array_default_construct(T *addr, int64_t arr_size)
   {
@@ -578,7 +587,7 @@ void ObSEArrayImpl<T, LOCAL_ARRAY_SIZE, BlockAllocatorT, auto_free>::pop_back()
 {
   if (OB_UNLIKELY(count_ <= 0)) {
   } else {
-    --count_;
+    MyOp::default_destruct(data_[--count_]);
   }
 }
 
