@@ -5668,10 +5668,10 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx,
     // do nothing
   } else {
     int64_t slice_cnt = 10000; // maximum tables we can gather stats at each iteration
-    int64_t offset = 0;
+    int64_t last_table_id = 0;
     do {
       table_ids.reuse();
-      if (OB_FAIL(ObBasicStatsEstimator::get_need_stats_tables(ctx, tenant_id, offset, slice_cnt, table_ids))) {
+      if (OB_FAIL(ObBasicStatsEstimator::get_need_stats_tables(ctx, tenant_id, last_table_id, slice_cnt, table_ids))) {
         LOG_WARN("failed to get need stats tables", K(ret));
       } else {
         task_info.task_table_count_ += table_ids.count();
@@ -5686,7 +5686,9 @@ int ObDbmsStats::gather_database_table_stats(sql::ObExecContext &ctx,
           }
         }
       }
-      offset += slice_cnt;
+      if (!table_ids.empty()) {
+        last_table_id = table_ids.at(table_ids.count() - 1);
+      }
     } while (OB_SUCC(ret) && table_ids.count() == slice_cnt);
   }
   return ret;
