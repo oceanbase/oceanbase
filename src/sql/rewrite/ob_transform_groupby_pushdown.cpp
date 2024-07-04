@@ -359,39 +359,31 @@ int ObTransformGroupByPushdown::check_child_stmts_valid(
 int ObTransformGroupByPushdown::is_basic_select_stmt(ObSelectStmt *stmt, bool &is_basic) {
   // TODO may need more check
   int ret = OB_SUCCESS;
-  bool has_rownum = false;
   ObSEArray<ObRawExpr *, 4> select_exprs;
   is_basic = true;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else if (stmt->has_limit() || stmt->has_group_by() || stmt->has_order_by() ||
-      stmt->has_window_function() || stmt->has_distinct() ||
+      stmt->has_window_function() || stmt->has_distinct() || stmt->has_rollup() ||
       stmt->is_set_stmt() || stmt->is_hierarchical_query()) {
     is_basic = false;
-  } else if (0 != stmt->get_subquery_expr_size() ||
-             0 != stmt->get_aggr_item_size()) {
+  } else if (0 != stmt->get_aggr_item_size()) {
     is_basic = false;
-  } else if (OB_FAIL(stmt->has_rownum(has_rownum))) {
-    LOG_WARN("failed to check if stmt has rownum", K(ret));
-  } else if (has_rownum) {
-    is_basic = false;
+  } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
+    LOG_WARN("failed to get select exprs", K(ret));
   }
-  if (OB_SUCC(ret) && is_basic) {
-    if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
-      LOG_WARN("failed to get select exprs", K(ret));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && is_basic && i < select_exprs.count(); ++i) {
-        ObRawExpr * expr = NULL;
-        if (OB_ISNULL(expr = select_exprs.at(i))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected null", K(ret));
-        } else if (!expr->is_column_ref_expr() && !expr->is_const_expr()) {
-          is_basic = false;
-        }
-      }
-    }
-  }
+  // else {
+  //   for (int64_t i = 0; OB_SUCC(ret) && is_basic && i < select_exprs.count(); ++i) {
+  //     ObRawExpr * expr = NULL;
+  //     if (OB_ISNULL(expr = select_exprs.at(i))) {
+  //       ret = OB_ERR_UNEXPECTED;
+  //       LOG_WARN("unexpected null", K(ret));
+  //     } else if (!expr->is_column_ref_expr() && !expr->is_const_expr()) {
+  //       is_basic = false;
+  //     }
+  //   }
+  // }
   return ret;
 }
 
@@ -473,15 +465,16 @@ int ObTransformGroupByPushdown::get_col_id_of_child(ObSelectStmt &union_stmt,
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 4> select_exprs;
   ObRawExpr *expr = NULL;
-  if (union_col_id >= union_stmt.get_select_item_size()) {
+  int64_t idx = union_col_id - OB_APP_MIN_COLUMN_ID;
+  if (idx < 0 || idx >= union_stmt.get_select_item_size()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid union col id", K(ret));
-  } else if (OB_ISNULL(expr = union_stmt.get_select_item(union_col_id).expr_) ||
+  } else if (OB_ISNULL(expr = union_stmt.get_select_item(idx).expr_) ||
              OB_UNLIKELY(!expr->is_set_op_expr())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid select expr of union stmt", K(ret), K(expr));
   } else {
-    child_col_id = static_cast<ObSetOpRawExpr *>(expr)->get_idx();
+    child_col_id = OB_APP_MIN_COLUMN_ID + static_cast<ObSetOpRawExpr *>(expr)->get_idx();
   }
   return ret;
 }
@@ -568,13 +561,10 @@ int ObTransformGroupByPushdown::transform_basic_child_stmt(
       if (OB_FAIL(stmt->add_agg_item(*agg_expr))) {
         LOG_WARN("failed to add agg item", K(ret));
       }
-    } else if (new_expr->is_column_ref_expr()){
-      if (OB_FAIL(stmt->add_group_expr(new_expr))) {
-        LOG_WARN("failed to add group expr");
-      }
-    } else if (OB_UNLIKELY(!new_expr->is_const_expr())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected new expr", K(ret), K(new_expr));
+    } else if (OB_FAIL(stmt->add_group_expr(new_expr))) {
+      LOG_WARN("failed to add group expr");
+    } else {
+      /* do nothing */
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
