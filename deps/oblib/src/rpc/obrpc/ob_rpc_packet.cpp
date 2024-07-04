@@ -37,7 +37,8 @@ int ObRpcPacketHeader::serialize(char* buf, const int64_t buf_len, int64_t& pos)
   if (buf_len - pos >= get_encoded_size()) {
     seq_no_ = ObSequence::get_max_seq_no();
     data_version_ = 0;
-    if (ObRpcNetHandler::is_self_cluster(dst_cluster_id_) && ODV_MGR.is_enable_compatible_monotonic()) {
+    if (ObRpcNetHandler::is_self_cluster(dst_cluster_id_) &&
+        ODV_MGR.is_enable_compatible_monotonic() && tenant_id_ > 0) {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(ODV_MGR.get(tenant_id_, data_version_))) {
         data_version_ = LAST_BARRIER_DATA_VERSION;
@@ -200,9 +201,8 @@ int ObRpcPacketHeader::deserialize(const char* buf, const int64_t data_len, int6
     // for RPC response, if the src_cluster_id is the same as current cluster id, we set the
     // data_version here. for RPC request, the failure of setting data_version may cause
     // disconnection, to avoid it, we delay setting to the RPC process phase.
-    if (OB_SUCC(ret) &&
-        flags_ & ObRpcPacketHeader::RESP_FLAG &&
-        ObRpcNetHandler::is_self_cluster(src_cluster_id_) && data_version_ > 0) {
+    if (OB_SUCC(ret) && flags_ & ObRpcPacketHeader::RESP_FLAG &&
+        ObRpcNetHandler::is_self_cluster(src_cluster_id_) && data_version_ > 0 && tenant_id_ > 0) {
       if (OB_FAIL(ODV_MGR.set(tenant_id_, data_version_))) {
         LOG_WARN("fail to update data_version", K(ret), KP(tenant_id_), KDV(data_version_));
       }
