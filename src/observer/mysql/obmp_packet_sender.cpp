@@ -517,6 +517,24 @@ int ObMPPacketSender::send_error_packet(int err,
     }
   }
 
+  // rollback autocommit transaction which is active
+  if (OB_SUCC(ret) && conn_valid_ && conn_->is_sess_alloc_ && !conn_->is_sess_free_) {
+    transaction::ObTransID trans_id;
+    if (OB_ISNULL(session) && OB_FAIL(get_session(session))) {
+      LOG_WARN("get session failed", K(ret));
+    } else {
+      ObSQLSessionInfo::LockGuard lock_guard(session->get_query_lock());
+      if (session->has_active_autocommit_trans(trans_id)) {
+        bool need_disconnect = false;
+        if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
+          LOG_WARN("rollback autocommit trans failed", K(ret), K(need_disconnect));
+        } else {
+          LOG_INFO("rollback autocommit trans succeed", K(trans_id));
+        }
+      }
+    }
+  }
+
   // TODO: 应该把下面这部分逻辑从send_error_packet中剥离开，因为connect失败的时候，
   // 也需要调用send_error_packet，而此时没有session
   //

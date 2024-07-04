@@ -6964,5 +6964,21 @@ intptr_t ObBasicSessionInfo::get_json_pl_mngr()
   return json_pl_mngr_;
 }
 
+
+bool ObBasicSessionInfo::has_active_autocommit_trans(transaction::ObTransID & trans_id)
+{
+  bool ac = false;
+  bool ret = false;
+  get_autocommit(ac);
+  if (ac
+      && tx_desc_
+      && !tx_desc_->is_explicit()
+      && tx_desc_->in_tx_or_has_extra_state()) {
+    trans_id = tx_desc_->get_tx_id();
+    ret =  true;
+  }
+  return ret;
+}
+
 }//end of namespace sql
 }//end of namespace oceanbase

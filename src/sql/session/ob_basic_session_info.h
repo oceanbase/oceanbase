@@ -1360,6 +1360,7 @@ public:
 
   bool has_explicit_start_trans() const { return tx_desc_ != NULL && tx_desc_->is_explicit(); }
   bool is_in_transaction() const { return tx_desc_ != NULL && tx_desc_->is_in_tx(); }
+  bool has_active_autocommit_trans(transaction::ObTransID &trans_id);
   virtual bool is_txn_free_route_temp() const { return false; }
   bool get_in_transaction() const { return is_in_transaction(); }
   uint64_t get_trans_flags() const { return trans_flags_.get_flags(); }
