@@ -1086,6 +1086,7 @@ int ObTabletPersister::fetch_and_persist_sstable(
   int ret = OB_SUCCESS;
   SharedMacroMap shared_macro_map;
   common::ObSEArray<ObITable *, 8> tables;
+  common::ObSEArray<ObCOSSTableV2 *, 1> big_co_tables; // used to recycle mem
   common::ObSEArray<ObMetaDiskAddr, 8> addrs;
   common::ObSEArray<ObMetaDiskAddr, 8> cg_addrs;
   common::ObSEArray<ObSharedBlocksWriteCtx, 8> write_ctxs;
@@ -1094,6 +1095,7 @@ int ObTabletPersister::fetch_and_persist_sstable(
                        ? ObCtxIds::MERGE_RESERVE_CTX_ID
                        : ObCtxIds::DEFAULT_CTX_ID;
   tables.set_attr(lib::ObMemAttr(MTL_ID(), "PerstTables", ctx_id));
+  big_co_tables.set_attr(lib::ObMemAttr(MTL_ID(), "PerstBigTbls", ctx_id));
   addrs.set_attr(lib::ObMemAttr(MTL_ID(), "PerstAddrs", ctx_id));
   cg_addrs.set_attr(lib::ObMemAttr(MTL_ID(), "PerstCGAddrs", ctx_id));
   write_ctxs.set_attr(lib::ObMemAttr(MTL_ID(), "PerstWriteCtxs", ctx_id));
@@ -1122,7 +1124,6 @@ int ObTabletPersister::fetch_and_persist_sstable(
       // serialize full co sstable and shell cg sstables when the serialize size of CO reached the limit.
       FLOG_INFO("cannot full serialize CO within 2MB buffer, should serialize CO with Shell CG", K(ret), KPC(table));
       cg_addrs.reset();
-      tmp_allocator.reuse();
       ObCOSSTableV2 *tmp_co_sstable = nullptr;
       ObSSTableMetaHandle co_meta_handle;
 
@@ -1140,6 +1141,8 @@ int ObTabletPersister::fetch_and_persist_sstable(
           LOG_WARN("failed to fill sstable write info", K(ret));
         } else if (OB_FAIL(tables.push_back(tmp_co_sstable))) {
           LOG_WARN("failed to add table", K(ret));
+        } else if (OB_FAIL(big_co_tables.push_back(tmp_co_sstable))) {
+          LOG_WARN("failed to add co to big tables", K(ret));
         } else if (OB_FAIL(copy_sstable_macro_info(*tmp_co_sstable, shared_macro_map, block_info_set))) {
           LOG_WARN("fail to call sstable macro info", K(ret));
         }
@@ -1225,6 +1228,15 @@ int ObTabletPersister::fetch_and_persist_sstable(
       sstable_meta_size += addrs.at(i).size();
     }
     total_tablet_meta_size += upper_align(sstable_meta_size, DIO_READ_ALIGN_SIZE);
+  }
+
+  // recycle big co table mem
+  for (int64_t idx = 0; idx < big_co_tables.count(); ++idx) {
+    ObCOSSTableV2 *co_table = big_co_tables.at(idx);
+    if (OB_NOT_NULL(co_table)) {
+      co_table->~ObCOSSTableV2();
+      tmp_allocator.free(co_table);
+    }
   }
   return ret;
 }
