@@ -1803,6 +1803,7 @@ int ObLSTabletService::replay_create_tablet(
     int64_t pos = 0;
     ObMetaDiskAddr old_addr;
     ObTabletPoolType pool_type(ObTabletPoolType::TP_MAX);
+    int64_t try_cache_size = 0;
     ObBucketHashWLockGuard lock_guard(bucket_lock_, tablet_id.hash());
     time_guard.click("Lock");
     if (OB_FAIL(ObTabletCreateDeleteHelper::create_tmp_tablet(key, allocator, tablet_hdl))) {
@@ -1827,7 +1828,7 @@ int ObLSTabletService::replay_create_tablet(
       if (tablet->is_empty_shell()) {
         pool_type = ObTabletPoolType::TP_NORMAL;
       } else {
-        const int64_t try_cache_size = tablet->get_try_cache_size();
+        try_cache_size = tablet->get_try_cache_size();
         if (try_cache_size > ObTenantMetaMemMgr::NORMAL_TABLET_POOL_SIZE) {
           pool_type = ObTabletPoolType::TP_LARGE;
         } else {
@@ -1852,7 +1853,7 @@ int ObLSTabletService::replay_create_tablet(
 
     if (OB_SUCC(ret)) {
       tablet_transfer_info = tablet->get_tablet_meta().transfer_info_;
-      FLOG_INFO("succeeded to replay create one tablet", K(ret), K(ls_id), K(tablet_id), KPC(tablet));
+      FLOG_INFO("succeeded to replay create one tablet", K(ret), K(ls_id), K(tablet_id), K(try_cache_size), K(pool_type), KPC(tablet));
     } else {
       int tmp_ret = OB_SUCCESS;
       if (OB_TMP_FAIL(rollback_remove_tablet_without_lock(ls_id, tablet_id))) {

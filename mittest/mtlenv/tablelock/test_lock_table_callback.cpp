@@ -65,16 +65,10 @@ public:
   {
     create_memtable();
     init_mem_ctx(handle_);
-    created_cb_list_.reset();
     LOG_INFO("set up success");
   }
   virtual void TearDown() override
   {
-    //release all callbacks
-    ObOBJLockCallback *cb;
-    ARRAY_FOREACH_NORET(created_cb_list_, i) {
-      mt_ctx_.free_table_lock_callback(created_cb_list_[i]);
-    }
     LOG_INFO("tear down success");
   }
 private:
@@ -112,7 +106,6 @@ private:
     ret = mt_key.encode(&rowkey);
     ASSERT_EQ(OB_SUCCESS, ret);
     cb->set(mt_key, lock_op_node);
-    ASSERT_EQ(OB_SUCCESS, created_cb_list_.push_back(cb));
   }
   void free_callback(ObOBJLockCallback *&cb)
   {
@@ -128,7 +121,6 @@ private:
   ObFreezer freezer_;
 
   ObMemtableCtx mt_ctx_;
-  ObSEArray<ObOBJLockCallback*, 16>created_cb_list_;
 };
 
 void TestLockTableCallback::SetUpTestCase()

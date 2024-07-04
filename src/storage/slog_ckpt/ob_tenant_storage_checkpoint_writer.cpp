@@ -382,7 +382,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
   } else {
     old_tablet = old_tablet_handle.get_obj();
     ObTablet *src_tablet = nullptr;
-    const bool need_compat = old_tablet->get_version() < ObTabletBlockHeader::TABLET_VERSION_V4;
+    const bool need_compat = old_tablet->get_version() < ObTablet::VERSION_V4;
     if (!need_compat) {
       src_tablet = old_tablet;
     } else if (OB_FAIL(handle_old_version_tablet_for_compat(allocator, tablet_key, *old_tablet, tmp_tablet_handle))) {

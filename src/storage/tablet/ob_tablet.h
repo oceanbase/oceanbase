@@ -792,11 +792,15 @@ private:
       ObMigrationTabletParam &mig_tablet_param);
 
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
+public:
+  static constexpr int32_t VERSION_V1 = 1;
+  static constexpr int32_t VERSION_V2 = 2;
+  static constexpr int32_t VERSION_V3 = 3;
+  static constexpr int32_t VERSION_V4 = 4;
 private:
   // ObTabletDDLKvMgr::MAX_DDL_KV_CNT_IN_STORAGE
   // Array size is too large, need to shrink it if possible
   static const int64_t DDL_KV_ARRAY_SIZE = 64;
-  static const int64_t ON_DEMAND_LOAD_SIZE = 4096; //4k
   static const int64_t SHARED_MACRO_BUCKET_CNT = 100;
   static const int64_t MAX_PRINT_COUNT = 100;
 private:
@@ -844,12 +848,6 @@ private:
   ObDDLInfoCache ddl_data_cache_;                            // size: 24B, alignment: 8B
   ObTableStoreCache table_store_cache_; // no need to serialize, should be initialized after table store is initialized.
 };
-
-inline int64_t ObTablet::get_try_cache_size() const
-{
-  return sizeof(ObTablet) + (OB_ISNULL(rowkey_read_info_) ? 0 : rowkey_read_info_->get_deep_copy_size())
-                          + (ddl_kv_count_ > 0 ? sizeof(ObDDLKV *) * DDL_KV_ARRAY_SIZE : 0);
-}
 
 inline bool ObTablet::is_ls_inner_tablet() const
 {

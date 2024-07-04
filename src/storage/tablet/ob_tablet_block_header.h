@@ -57,12 +57,13 @@ public:
   static const int32_t TABLET_VERSION_V1 = 1;
   static const int32_t TABLET_VERSION_V2 = 2;
   static const int32_t TABLET_VERSION_V3 = 3;
-  static const int32_t TABLET_VERSION_V4 = 4; // for mds mvs(multi version storage)
 
   ObTabletBlockHeader()
     : is_inited_(false), pushed_inline_meta_cnt_(0),
-      version_(TABLET_VERSION_V4), length_(0),
-      checksum_(0), inline_meta_count_(0) {}
+      version_(TABLET_VERSION_V3), length_(0),
+      checksum_(0), inline_meta_count_(0)
+  {
+  }
 
   int init(const int32_t secondary_meta_count);
   bool is_valid() const

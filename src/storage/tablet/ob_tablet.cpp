@@ -230,7 +230,7 @@ void check_size()
 }
 
 ObTablet::ObTablet()
-  : version_(ObTabletBlockHeader::TABLET_VERSION_V4),
+  : version_(VERSION_V4),
     length_(0),
     wash_score_(INT64_MIN),
     mds_data_(nullptr),
@@ -297,11 +297,29 @@ void ObTablet::reset()
   ddl_data_cache_.reset();
   next_tablet_guard_.reset();
   // allocator_ = nullptr;  can't reset allocator_ which would be used when gc tablet
-  version_ = ObTabletBlockHeader::TABLET_VERSION_V4;
+  version_ = VERSION_V4;
   length_ = 0;
   next_tablet_ = nullptr;
   hold_ref_cnt_ = false;
   is_inited_ = false;
+}
+
+int64_t ObTablet::get_try_cache_size() const
+{
+  int64_t size = 0;
+  size += sizeof(ObTablet);
+
+  if (OB_NOT_NULL(rowkey_read_info_)) {
+    size += rowkey_read_info_->get_deep_copy_size();
+  }
+  if (ddl_kv_count_ > 0) {
+    size += (sizeof(ObDDLKV *) * DDL_KV_ARRAY_SIZE);
+  }
+  if (version_ < VERSION_V4) {
+    size += sizeof(ObTabletMdsData);
+  }
+
+  return size;
 }
 
 int ObTablet::init_for_first_time_creation(
@@ -1567,7 +1585,7 @@ int ObTablet::serialize(char *buf, const int64_t len, int64_t &pos, const ObSArr
   } else if (OB_UNLIKELY(!is_valid() && !is_empty_shell())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tablet is invalid", K(ret), K(*this));
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V4 != version_) {
+  } else if (OB_UNLIKELY(VERSION_V4 != version_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid version", K(ret), K_(version));
   } else if (OB_FAIL(block_header.init(meta_arr.count()))) {
@@ -1704,7 +1722,7 @@ int ObTablet::partial_deserialize(
     LOG_WARN("unexpected tablet version", K(ret));
   } else {
     do {
-      if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv || ObTabletBlockHeader::TABLET_VERSION_V4 == bhv) {
+      if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv) {
         if (OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, false/*pull memtable*/))) {
           LOG_WARN("fail to load deserialize tablet v3", K(ret), KPC(this));
         }
@@ -1753,7 +1771,7 @@ int ObTablet::deserialize_for_replay(
     } else {
       pos = new_pos;
     }
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv || ObTabletBlockHeader::TABLET_VERSION_V4 == bhv) {
+  } else if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv) {
     if (OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, false/*pull memtable*/))) {
       LOG_WARN("fail to deserialize with id array", K(ret));
     } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
@@ -1812,7 +1830,7 @@ int ObTablet::load_deserialize(
   } else if (ObTabletBlockHeader::TABLET_VERSION_V2 == bhv &&
       OB_FAIL(load_deserialize_v2(allocator, buf, len, new_pos, true/*prepare_memtable*/))) {
     LOG_WARN("failed to load deserialize v2", K(ret), K(pos), KPC(this));
-  } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv || ObTabletBlockHeader::TABLET_VERSION_V4 == bhv)
+  } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv)
       && OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, true/*prepare_memtable*/))) {
     LOG_WARN("failed to load deserialize v3", K(ret), K(pos), KPC(this));
   } else if (tablet_meta_.has_next_tablet_) {
@@ -1843,9 +1861,9 @@ int ObTablet::deserialize_post_work(common::ObArenaAllocator &allocator)
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot deserialize inited tablet meta", K(ret), K_(is_inited));
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V2 == version_
-      || ObTabletBlockHeader::TABLET_VERSION_V3 == version_
-      || ObTabletBlockHeader::TABLET_VERSION_V4 == version_) {
+  } else if (VERSION_V2 == version_
+      || VERSION_V3 == version_
+      || VERSION_V4 == version_) {
     if (!table_store_addr_.addr_.is_none()) {
       IO_AND_DESERIALIZE(allocator, table_store_addr_.addr_, table_store_addr_.ptr_, *this);
       if (FAILEDx(table_store_addr_.ptr_->batch_cache_sstable_meta(allocator, INT64_MAX))) {// cache all
@@ -2100,7 +2118,7 @@ int ObTablet::load_deserialize_v2(
     LOG_WARN("fail to allocate and new rowkey read info", K(ret));
   } else if (!is_empty_shell() && new_pos - pos < length_ && OB_FAIL(rowkey_read_info_->deserialize(allocator, buf, len, new_pos))) {
     LOG_WARN("fail to deserialize rowkey read info", K(ret), K(len), K(new_pos));
-  } else if (version_ < ObTabletBlockHeader::TABLET_VERSION_V4 && new_pos - pos < length_) {
+  } else if (version_ < VERSION_V4 && new_pos - pos < length_) {
     if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, mds_data_))) {
       LOG_WARN("fail to alloc and new", K(ret));
     } else if (OB_FAIL(mds_data_->deserialize(buf, len, new_pos))) {
@@ -2118,6 +2136,7 @@ int ObTablet::load_deserialize_v2(
   }
 
   if (OB_FAIL(ret)) {
+    ObTabletObjLoadHelper::free(allocator, rowkey_read_info_);
     ObTabletObjLoadHelper::free(allocator, mds_data_);
   }
 
@@ -2213,12 +2232,11 @@ int ObTablet::deserialize(
     LOG_WARN("invalid args", K(ret), K(buf), K(len), K(pos));
   } else if (OB_FAIL(get_tablet_block_header_version(buf + pos, len - pos, bhv))) {
     LOG_WARN("fail to get tablet block header version", K(ret));
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V2 != bhv
-      && ObTabletBlockHeader::TABLET_VERSION_V3 != bhv
-      && ObTabletBlockHeader::TABLET_VERSION_V4 != bhv) {
+  } else if (OB_UNLIKELY(ObTabletBlockHeader::TABLET_VERSION_V2 != bhv
+      && ObTabletBlockHeader::TABLET_VERSION_V3 != bhv)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("invalid version", K(ret), K(bhv));
-  } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv || ObTabletBlockHeader::TABLET_VERSION_V4 == bhv)
+  } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv)
       && OB_FAIL(header.deserialize(buf, len, pos))) {
     LOG_WARN("fail to deserialize ObTabletBlockHeader", K(ret));
   } else {
@@ -2283,7 +2301,7 @@ int ObTablet::deserialize(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (version_ < ObTabletBlockHeader::TABLET_VERSION_V4 && new_pos - pos < length_) {
+    } else if (version_ < VERSION_V4 && new_pos - pos < length_) {
       ObTabletMdsData *mds_data = nullptr;
       if (remain < sizeof(ObTabletMdsData)) {
         ret = OB_BUF_NOT_ENOUGH;
@@ -2305,7 +2323,7 @@ int ObTablet::deserialize(
     }
 
     if (OB_FAIL(ret)) {
-    } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv || ObTabletBlockHeader::TABLET_VERSION_V4 == bhv)
+    } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv)
         && new_pos - pos < length_
         && OB_FAIL(macro_info_addr_.addr_.deserialize(buf, len, new_pos))) {
       LOG_WARN("fail to deserialize macro info addr", K(ret), K(len), K(new_pos));
@@ -2381,7 +2399,7 @@ int ObTablet::deserialize(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv || ObTabletBlockHeader::TABLET_VERSION_V4 == bhv) {
+    } else if (ObTabletBlockHeader::TABLET_VERSION_V3 == bhv) {
       if (OB_UNLIKELY(1 < header.inline_meta_count_)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("shouldn't have more than one inline meta", K(ret), K(header));
@@ -2599,7 +2617,7 @@ int ObTablet::inner_inc_macro_ref_cnt()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_meta_addr())) {
     LOG_WARN("fail to check meta addrs", K(ret));
-  } else if (OB_UNLIKELY((ObTabletBlockHeader::TABLET_VERSION_V3 == version_ || ObTabletBlockHeader::TABLET_VERSION_V4 == version_)
+  } else if (OB_UNLIKELY((VERSION_V3 == version_ || VERSION_V4 == version_)
       && !is_empty_shell()
       && macro_info_addr_.is_none_object())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2856,7 +2874,7 @@ void ObTablet::dec_macro_ref_cnt()
       K(table_store_addr_.addr_), K(tablet_addr_), KP(this), K(lbt()));
   } else if (OB_FAIL(check_meta_addr())) {
     LOG_ERROR("fail to check meta addrs", K(ret));
-  } else if (OB_UNLIKELY((ObTabletBlockHeader::TABLET_VERSION_V3 == version_ || ObTabletBlockHeader::TABLET_VERSION_V4 == version_)
+  } else if (OB_UNLIKELY((VERSION_V3 == version_ || VERSION_V4 == version_)
       && !is_empty_shell()
       && macro_info_addr_.is_none_object())) {
     ret = OB_ERR_UNEXPECTED;
@@ -3941,7 +3959,7 @@ int ObTablet::get_tablet_size(const bool ignore_shared_block, int64_t &meta_size
     meta_size = 0;
     data_size = 0;
     const ObTabletSpaceUsage &space_usage = tablet_meta_.space_usage_;
-    if (ObTabletBlockHeader::TABLET_VERSION_V3 == version_ || ObTabletBlockHeader::TABLET_VERSION_V4 == version_) {
+    if (VERSION_V3 == version_ || VERSION_V4 == version_) {
       meta_size += space_usage.shared_meta_size_ + space_usage.meta_size_;
       data_size += space_usage.data_size_;
       if (!ignore_shared_block) {
@@ -5900,7 +5918,6 @@ int ObTablet::scan_mds_table_with_op(
     } else {
       LOG_WARN("failed to get mds table", K(ret), KPC(this));
     }
-    LOG_WARN("failed to get mds table", K(ret));
   } else if (CLICK_FAIL((mds_table_handle.scan_all_nodes_to_dump<mds::ScanRowOrder::ASC, mds::ScanNodeOrder::FROM_NEW_TO_OLD>(
       op, mds_construct_sequence, op.for_flush())))) {
     LOG_WARN("failed to traverse mds table", K(ret), K(tablet_id));
