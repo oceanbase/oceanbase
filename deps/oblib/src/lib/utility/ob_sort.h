@@ -24,7 +24,7 @@ template <class RandomAccessIterator, class Compare>
 void ob_sort(RandomAccessIterator first, RandomAccessIterator last, Compare comp)
 {
   int ret = OB_E(EventTable::EN_CHECK_SORT_CMP) OB_SUCCESS;
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && std::is_empty<Compare>::value) {
     ret = OB_SUCCESS;
     for (RandomAccessIterator iter = first; OB_SUCC(ret) && iter != last; ++iter) {
       if (comp(*iter, *iter)) {
