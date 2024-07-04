@@ -312,7 +312,11 @@ private:
                               ObIArray<ObTableHandleV2> &frozen_memtable_handles);
   int handle_no_active_memtable_(const ObTabletID &tablet_id,
                                  const ObTablet *tablet,
-                                 const share::SCN freeze_snapshot_version);
+                                 share::SCN freeze_snapshot_version);
+  int decide_real_snapshot_version_(const ObTabletID &tablet_id,
+                                    const ObTablet *tablet,
+                                    const SCN freeze_snapshot_version,
+                                    SCN &real_snapshot_version);
   void handle_set_tablet_freeze_failed(const bool need_rewrite_meta,
                                        const ObTabletID &tablet_id,
                                        const ObLSID &ls_id,

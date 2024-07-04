@@ -983,15 +983,53 @@ void ObFreezer::handle_set_tablet_freeze_failed(const bool need_rewrite_meta,
   }
 }
 
+int ObFreezer::decide_real_snapshot_version_(const ObTabletID &tablet_id,
+                                             const ObTablet *tablet,
+                                             const SCN freeze_snapshot_version,
+                                             SCN &real_snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  ObTabletCreateDeleteMdsUserData user_data;
+  bool is_committed = false;
+  share::SCN transfer_scn = share::SCN::max_scn();
+
+  if (tablet_id.is_ls_inner_tablet()) {
+    //do nothing
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(user_data,
+                                                                             is_committed))) {
+    LOG_WARN("fail to get latest tablet status", K(ret), KPC(tablet));
+  } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
+             && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
+    //do nothing
+  } else if (user_data.transfer_scn_.is_valid()) {
+    transfer_scn = user_data.transfer_scn_;
+  }
+
+  if (OB_SUCC(ret)) {
+    real_snapshot_version = MIN(freeze_snapshot_version, transfer_scn);
+    if (real_snapshot_version != freeze_snapshot_version) {
+      FLOG_INFO("update tablet snapshot version changed snapshot version for transfer",
+                K(real_snapshot_version), K(freeze_snapshot_version), K(transfer_scn), K(user_data));
+    }
+  }
+
+  return ret;
+}
+
 int ObFreezer::handle_no_active_memtable_(const ObTabletID &tablet_id,
                                           const ObTablet *tablet,
-                                          const SCN freeze_snapshot_version)
+                                          SCN freeze_snapshot_version)
 {
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
   ObProtectedMemtableMgrHandle *protected_handle = NULL;
   if (OB_FAIL(tablet->get_protected_memtable_mgr_handle(protected_handle))) {
     LOG_WARN("failed to get_protected_memtable_mgr_handle", K(ret), KPC(tablet));
+  } else if (OB_FAIL(decide_real_snapshot_version_(tablet_id,
+                                                   tablet,
+                                                   freeze_snapshot_version,
+                                                   freeze_snapshot_version))) {
+    LOG_WARN("failed to decide real snapshot version", K(ret), KPC(tablet));
   } else if (!protected_handle->has_memtable()) {
     // We need trigger a dag to rewrite the snapshot version of tablet
     // meta for the major merge and medium merge. While the implementation
