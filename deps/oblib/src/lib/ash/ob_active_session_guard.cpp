@@ -190,7 +190,7 @@ void ObAshBuffer::fixup_stat(int64_t index, const ObWaitEventDesc &desc)
 
 void ObAshBuffer::set_read_pos(int64_t pos)
 {
-  if (OB_UNLIKELY(pos >= write_pos_)) {
+  if (OB_UNLIKELY(pos >= write_pos_ || pos < 0)) {
     // index invalid for read_pos, do nothing.
   } else {
     read_pos_ = pos;

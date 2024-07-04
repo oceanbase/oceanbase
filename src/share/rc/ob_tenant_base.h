@@ -204,6 +204,7 @@ class ObTenantErrsimEventMgr;
 class ObIndexUsageInfoMgr;
 class ObSharedMemAllocMgr;
 class ObResourceLimitCalculator;
+class ObWorkloadRepositoryContext;
 namespace schema
 {
   class ObTenantSchemaService;
@@ -347,7 +348,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       ObTenantDblinkKeep                            \
       table::ObTableGroupCommitMgr*,                \
       sql::ObAuditLogger*,                          \
-      sql::ObAuditLogUpdater*                       \
+      sql::ObAuditLogUpdater*,                      \
+      share::ObWorkloadRepositoryContext*           \
   )
 
 

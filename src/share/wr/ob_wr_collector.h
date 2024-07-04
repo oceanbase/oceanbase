@@ -338,11 +338,11 @@ public:
   ~ObWrCollector() = default;
   DISABLE_COPY_ASSIGN(ObWrCollector);
   int collect();
+  int collect_ash();
   TO_STRING_KV(K_(snap_id), K_(snapshot_begin_time), K_(snapshot_end_time), K_(timeout_ts));
 
 private:
   int collect_sysstat();
-  int collect_ash();
   int collect_statname();
   int collect_eventname();
   int collect_system_event();
@@ -351,6 +351,10 @@ private:
   int collect_sqltext();
   int collect_sql_plan();
   int write_to_wr(ObDMLSqlSplicer &dml_splicer, const char *table_name, int64_t tenant_id);
+  int fetch_snapshot_id_sequence_curval(int64_t &snap_id);
+  int get_cur_snapshot_id(int64_t &snap_id);
+  int get_begin_interval_time(int64_t &begin_interval_time);
+  int update_last_snapshot_end_time();
   int64_t snap_id_;
   int64_t snapshot_begin_time_;
   int64_t snapshot_end_time_;
