@@ -889,7 +889,7 @@ void ObDDLScheduler::run1()
     lib::set_thread_name("DDLTaskExecutor");
     THIS_WORKER.set_worker_level(1);
     THIS_WORKER.set_curr_request_level(1);
-    while (!has_set_stop()) {
+    while (!has_set_stop() && !lib::Thread::current().has_set_stop()) {
       const bool stop = task_queue_.has_set_stop();
       bool do_idle = false;
       if (OB_FAIL(task_queue_.get_next_task(task))) {
