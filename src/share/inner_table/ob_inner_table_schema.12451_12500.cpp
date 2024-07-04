@@ -4018,7 +4018,7 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_schema(ObTableSc
   table_schema.set_rowkey_split_pos(0);
   table_schema.set_is_use_bloomfilter(false);
   table_schema.set_progressive_merge_num(0);
-  table_schema.set_rowkey_column_num(3);
+  table_schema.set_rowkey_column_num(4);
   table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
   table_schema.set_table_type(VIRTUAL_TABLE);
   table_schema.set_index_type(INDEX_TYPE_IS_NOT);
@@ -4083,6 +4083,21 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_schema(ObTableSc
       false, //is_nullable
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("job_class", //column_name
+      ++column_id, //column_id
+      4, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      128, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
   }
 
   if (OB_SUCC(ret)) {
@@ -4188,21 +4203,6 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_schema(ObTableSc
 
   if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("job_subname", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObVarcharType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      128, //column_length
-      -1, //column_precision
-      -1, //column_scale
-      true, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("job_class", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

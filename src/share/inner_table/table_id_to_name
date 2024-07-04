@@ -2973,6 +2973,9 @@
 # 101105: __idx_519_idx_scheduler_job_run_detail_v2_time
 # 101105: idx_scheduler_job_run_detail_v2_time  # INDEX_NAME
 # 101105: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
+# 101106: __idx_519_idx_scheduler_job_run_detail_v2_job_class_time
+# 101106: idx_scheduler_job_run_detail_v2_job_class_time  # INDEX_NAME
+# 101106: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
 # 15306: __idx_15120_idx_data_table_id_real_agent
 # 15306: idx_data_table_id_real_agent  # INDEX_NAME
 # 15306: __all_table  # DATA_BASE_TABLE_NAME
@@ -3269,3 +3272,7 @@
 # 15460: idx_scheduler_job_run_detail_v2_time_real_agent  # INDEX_NAME
 # 15460: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
 # 15460: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15463: __idx_15458_idx_scheduler_job_run_detail_v2_job_class_time_real_agent
+# 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent  # INDEX_NAME
+# 15463: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
+# 15463: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT  # DATA_BASE_TABLE_NAME1
