@@ -355,7 +355,7 @@ TEST_F(TestMdsCompat, migration_param)
   ObMigrationTabletParam param;
   ret = tablet->build_migration_tablet_param(param);
   param.last_persisted_committed_tablet_status_.on_init();
-  ASSERT_EQ(OB_NOT_SUPPORTED, ret);
+  ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(param.is_valid());
 
   // replace mds data in migration tablet param with our mocked mds data

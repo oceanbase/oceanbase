@@ -4911,7 +4911,6 @@ int ObTablet::build_migration_tablet_param(
     ObMigrationTabletParam &mig_tablet_param) const
 {
   int ret = OB_SUCCESS;
-  uint64_t data_version = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -4953,11 +4952,6 @@ int ObTablet::build_migration_tablet_param(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-      LOG_WARN("fail to get data version", K(ret));
-    } else if (data_version < DATA_VERSION_4_3_2_0) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("data version is less than 4.3.2, should not do migration", K(ret), K(data_version));
     } else {
       mig_tablet_param.version_ = ObMigrationTabletParam::PARAM_VERSION_V3;
       mig_tablet_param.extra_medium_info_.info_ = tablet_meta_.extra_medium_info_.info_;
@@ -4966,7 +4960,7 @@ int ObTablet::build_migration_tablet_param(
         LOG_WARN("fail to assign mig tablet param from tablet meta",
             K(ret), K(tablet_meta_.last_persisted_committed_tablet_status_));
       } else {
-        LOG_INFO("mds data is deprecated under current data version", K(ret), K(data_version));
+        LOG_INFO("build migration tablet param successfully", K(mig_tablet_param));
       }
     }
   }
