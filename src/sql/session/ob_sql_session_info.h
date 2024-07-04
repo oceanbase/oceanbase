@@ -1528,6 +1528,10 @@ public:
   int set_service_name(const ObString& service_name);
   int check_service_name_and_failover_mode() const;
   int check_service_name_and_failover_mode(const uint64_t tenant_id) const;
+  int64_t get_tx_id_with_thread_data_lock() {
+    ObSQLSessionInfo::LockGuard guard(get_thread_data_lock());
+    return tx_desc_ != NULL ? tx_desc_->get_tx_id().get_id() : transaction::ObTransID().get_id();
+  }
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
 private:

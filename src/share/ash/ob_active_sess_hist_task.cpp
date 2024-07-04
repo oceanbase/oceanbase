@@ -209,7 +209,7 @@ bool ObActiveSessHistTask::operator()(sql::ObSQLSessionMgr::Key key, ObSQLSessio
 
       stat.stmt_type_ = sess_info->get_stmt_type();
       stat.plan_hash_ = sess_info->get_current_plan_hash();
-      stat.tx_id_ = sess_info->get_tx_id().get_id();
+      stat.tx_id_ = sess_info->get_tx_id_with_thread_data_lock();
       ObActiveSessionStat::calc_db_time(stat, sample_time_);
 
       stat.program_[0] = '\0';
