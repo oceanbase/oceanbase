@@ -4166,6 +4166,8 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ddl_service_.get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
       LOG_WARN("get schema guard in inner table failed", K(ret));
+    } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
+      LOG_WARN("check parallel ddl conflict failed", KR(ret));
     } else if (OB_FAIL(table_allow_ddl_operation(arg))) {
       LOG_WARN("table can't do ddl now", K(ret));
     } else if (nonconst_arg.is_add_to_scheduler_) {
