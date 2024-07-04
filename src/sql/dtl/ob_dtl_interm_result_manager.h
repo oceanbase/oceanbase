@@ -210,6 +210,18 @@ public:
   bool is_eof_;
 };
 
+class ObAtomicGetDirIdCall
+{
+public:
+  ObAtomicGetDirIdCall() : dir_id_(-1), ret_(common::OB_SUCCESS) {}
+  ~ObAtomicGetDirIdCall() = default;
+  void operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
+      ObDTLIntermResultInfo *> &entry);
+public:
+  int64_t dir_id_;
+  int ret_;
+};
+
 class ObEraseTenantIntermResultInfo
 {
 public:
@@ -265,6 +277,7 @@ private:
                                int64_t channel_id,
                                int64_t &dir_id,
                                ObDTLIntermResultInfo *result_info);
+  int atomic_get_dir_id(ObDTLIntermResultKey &key, ObAtomicGetDirIdCall &call);
 private:
   // 由于此中间结果管理器是全局结构, 基于性能考虑,减少锁冲突设置bucket_num为50w.
   static const int64_t BUCKET_NUM = 500000; //50w

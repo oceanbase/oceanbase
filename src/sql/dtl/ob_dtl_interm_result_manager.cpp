@@ -448,12 +448,14 @@ int ObDTLIntermResultManager::init_store_dir_id(int64_t batch_id,
     ObDTLIntermResultKey first_key;
     first_key.batch_id_ = 0;
     first_key.channel_id_ = channel_id;
-    ObDTLIntermResultInfo first_result_info;
-    if (OB_FAIL(ObDTLIntermResultManager::getInstance().get_interm_result_info(first_key,
-                first_result_info))) {
-      LOG_WARN("Fail to get interm_result_info", K(ret), K(first_key));
+    ObAtomicGetDirIdCall call;
+    if (OB_FAIL(ObDTLIntermResultManager::getInstance().
+                            atomic_get_dir_id(first_key, call))) {
+      LOG_WARN("Fail to get dir_id", K(ret), K(first_key));
+    } else if (OB_FAIL(call.ret_)){
+      LOG_WARN("Fail to get dir_id", K(ret), K(first_key));
     } else {
-      dir_id = DTL_IR_STORE_DO(first_result_info, get_file_dir_id);
+      dir_id = call.dir_id_;
       DTL_IR_STORE_DO(*result_info, set_dir_id, dir_id);
     }
   } else {  // batch_id == 0
@@ -464,6 +466,33 @@ int ObDTLIntermResultManager::init_store_dir_id(int64_t batch_id,
     }
   }
   return ret;
+}
+
+int ObDTLIntermResultManager::atomic_get_dir_id(ObDTLIntermResultKey &key, ObAtomicGetDirIdCall &call)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(map_.atomic_refactored(key, call))) {
+    LOG_WARN("fail to get dir_id in result manager", K(ret));
+  }
+  return ret;
+}
+
+void ObAtomicGetDirIdCall::operator() (common::hash::HashMapPair<ObDTLIntermResultKey,
+      ObDTLIntermResultInfo *> &entry)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entry.second)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result_info is null", K(ret), K(entry.first));
+  } else if (OB_FAIL(entry.second->ret_)) {
+    LOG_WARN("result_info ret error", K(ret), K(entry.first));
+  } else if (OB_UNLIKELY(!entry.second->is_store_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result_info store invalid", K(ret), K(entry.first));
+  } else {
+    dir_id_ = DTL_IR_STORE_DO(*(entry.second), get_file_dir_id);
+  }
+  ret_ = ret;
 }
 
 int ObDTLIntermResultManager::process_interm_result(ObDtlLinkedBuffer *buffer, int64_t channel_id)
