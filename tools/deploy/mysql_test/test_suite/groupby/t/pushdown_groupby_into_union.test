@@ -118,10 +118,6 @@ select sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union a
 select /*+no_rewrite*/ sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
 explain select sum(c1), c2 from ( (select sum(c1) as c1, c2 from t1 group by c2) union all (select * from t2 order by t2.c1 limit 2)) v2 group by c2;
 
-select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
-select /*+no_rewrite*/ sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
-explain select sum(c1), c2 from ( select c1, 1 as c2 from t1 union all select * from t2) v2 group by c2;
-
 select sum(c1), c2 from ( select * from t1 union all (select * from t2 union select * from t1)) v2 group by c2;
 select /*+no_rewrite*/ sum(c1), c2 from ( select * from t1 union all (select * from t2 union select * from t1)) v2 group by c2;
 explain select sum(c1), c2 from ( select * from t1 union all (select * from t2 union select * from t1)) v2 group by c2;
@@ -133,3 +129,11 @@ explain select count(c1), c2 from ( select * from t1 union all select distinct *
 select sum(c1), c2 from ( select * from t1 union all select * from t2) v2 where c2=1 or c2=2 group by c2;
 select /*+no_rewrite*/ sum(c1), c2 from ( select * from t1 union all select * from t2) v2 where c2=1 or c2=2 group by c2;
 explain select sum(c1), c2 from ( select * from t1 union all select * from t2) v2 where c2=1 or c2=2 group by c2;
+
+select sum(c1), c2 from ( select * from t1 union all select c1, (select /*+no_rewrite*/ sum(t3.c2) from t1 t3 where t3.c1=t2.c1) as c2 from t2) v3 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( select * from t1 union all select c1, (select /*+no_rewrite*/ sum(t3.c2) from t1 t3 where t3.c1=t2.c1) as c2 from t2) v3 group by c2;
+explain select sum(c1), c2 from ( select * from t1 union all select c1, (select /*+no_rewrite*/ sum(t3.c2) from t1 t3 where t3.c1=t2.c1) as c2 from t2) v3 group by c2;
+
+select sum(c1), c2 from ( select * from t1 union all select (select /*+no_rewrite*/ sum(t3.c2) from t1 t3 where t3.c1=t2.c1) as c1, c2 from t2) v3 group by c2;
+select /*+no_rewrite*/ sum(c1), c2 from ( select * from t1 union all select (select /*+no_rewrite*/ sum(t3.c2) from t1 t3 where t3.c1=t2.c1) as c1, c2 from t2) v3 group by c2;
+explain select sum(c1), c2 from ( select * from t1 union all select (select /*+no_rewrite*/ sum(t3.c2) from t1 t3 where t3.c1=t2.c1) as c1, c2 from t2) v3 group by c2;
