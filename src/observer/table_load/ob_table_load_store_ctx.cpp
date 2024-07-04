@@ -52,6 +52,7 @@ ObTableLoadStoreCtx::ObTableLoadStoreCtx(ObTableLoadTableCtx *ctx)
     opened_insert_tablet_count_(0),
     is_multiple_mode_(false),
     is_fast_heap_table_(false),
+    px_writer_count_(0),
     tmp_file_mgr_(nullptr),
     error_row_handler_(nullptr),
     sequence_schema_(&allocator_),

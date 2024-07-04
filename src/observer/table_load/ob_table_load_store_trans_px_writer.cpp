@@ -31,6 +31,7 @@ ObTableLoadStoreTransPXWriter::ObTableLoadStoreTransPXWriter()
     trans_(nullptr),
     writer_(nullptr),
     column_count_(0),
+    row_count_(0),
     is_heap_table_(false),
     can_write_(false),
     is_inited_(false)
@@ -48,6 +49,7 @@ void ObTableLoadStoreTransPXWriter::reset()
   can_write_ = false;
   is_heap_table_ = false;
   column_count_ = 0;
+  row_count_ = 0;
   if (nullptr != store_ctx_) {
     if (nullptr != trans_) {
       if (nullptr != writer_) {
@@ -57,6 +59,7 @@ void ObTableLoadStoreTransPXWriter::reset()
       store_ctx_->put_trans(trans_);
       trans_ = nullptr;
     }
+    ATOMIC_AAF(&store_ctx_->px_writer_count_, -1);
     store_ctx_ = nullptr;
   }
 }
@@ -72,17 +75,16 @@ int ObTableLoadStoreTransPXWriter::init(ObTableLoadStoreCtx *store_ctx,
   } else if (OB_UNLIKELY(nullptr == store_ctx || nullptr == trans || nullptr == writer)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(store_ctx), KP(trans), KP(writer));
-  } else if (OB_FAIL(store_ctx->check_status(ObTableLoadStatusType::LOADING))) {
-    LOG_WARN("fail to check status", KR(ret));
-  } else if (OB_FAIL(trans->check_trans_status(ObTableLoadTransStatusType::RUNNING))) {
-    LOG_WARN("fail to check trans status", KR(ret));
   } else {
     store_ctx_ = store_ctx;
     trans_ = trans;
     writer_ = writer;
     trans_->inc_ref_count();
     writer_->inc_ref_count();
-    is_inited_ = true;
+    ATOMIC_AAF(&store_ctx_->px_writer_count_, 1);
+    if (OB_SUCC(check_status())) {
+      is_inited_ = true;
+    }
   }
   return ret;
 }
@@ -173,6 +175,17 @@ int ObTableLoadStoreTransPXWriter::check_columns(const ObIArray<uint64_t> &colum
   return ret;
 }
 
+int ObTableLoadStoreTransPXWriter::check_status()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(store_ctx_->check_status(ObTableLoadStatusType::LOADING))) {
+    LOG_WARN("fail to check status", KR(ret));
+  } else if (OB_FAIL(trans_->check_trans_status(ObTableLoadTransStatusType::RUNNING))) {
+    LOG_WARN("fail to check trans status", KR(ret));
+  }
+  return ret;
+}
+
 int ObTableLoadStoreTransPXWriter::write(const ObNewRow &row)
 {
   int ret = OB_SUCCESS;
@@ -194,6 +207,13 @@ int ObTableLoadStoreTransPXWriter::write(const ObNewRow &row)
     }
     if (OB_FAIL(writer_->px_write(tablet_id_, new_row))) {
       LOG_WARN("fail to px write", KR(ret), K(row), K(new_row));
+    } else {
+      row_count_++;
+      if (row_count_ % CHECK_STATUS_CYCLE == 0) {
+        if (OB_FAIL(check_status())) {
+          LOG_WARN("fail to check status", KR(ret));
+        }
+      }
     }
   }
   return ret;

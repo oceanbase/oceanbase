@@ -156,6 +156,7 @@ public:
   int64_t opened_insert_tablet_count_;
   bool is_multiple_mode_;
   bool is_fast_heap_table_;
+  int64_t px_writer_count_;
   storage::ObDirectLoadTmpFileManager *tmp_file_mgr_;
   ObTableLoadErrorRowHandler *error_row_handler_;
   share::schema::ObSequenceSchema sequence_schema_;

@@ -83,7 +83,7 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     ctx->store_ctx_->insert_table_ctx_->cancel();
     ctx->store_ctx_->merger_->stop();
     ctx->store_ctx_->task_scheduler_->stop();
-    is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped();
+    is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped() && (0 == ATOMIC_LOAD(&ctx->store_ctx_->px_writer_count_));
   }
 }
 
