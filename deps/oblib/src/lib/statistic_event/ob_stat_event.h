@@ -573,9 +573,15 @@ STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_REPLICA_PREWARM, "ss_micro_cache repliace prew
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_DDL_PREWARM, "ss_micro_cache ddl prewarm count", ObStatClassIds::CACHE, 240008, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HOLD_COUNT, "ss_micro_cache total hold micro_block count", ObStatClassIds::CACHE, 240009, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HOLD_SIZE, "ss_micro_cache total hold micro_block size", ObStatClassIds::CACHE, 240010, true, true, true)
-STAT_EVENT_ADD_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE, "ss_local_cache tmpfile used disk size", ObStatClassIds::CACHE, 240011, true, true, true)
-STAT_EVENT_ADD_DEF(SS_LOCAL_CACHE_META_USED_DISK_SIZE, "ss_local_cache meta file used disk size", ObStatClassIds::CACHE, 240012, true, true, true)
-STAT_EVENT_ADD_DEF(SS_LOCAL_CACHE_MINOR_USED_DISK_SIZE, "ss_local_cache minor data used disk size", ObStatClassIds::CACHE, 240013, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HIT_BYTES, "ss_micro_cache hit total bytes", ObStatClassIds::CACHE, 240014, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_MISS_BYTES, "ss_micro_cache miss total bytes", ObStatClassIds::CACHE, 240015, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_MC_PREWARM_BYTES, "ss_micro_cache major_compaction prewarm bytes", ObStatClassIds::CACHE, 240016, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HA_PREWARM_BYTES, "ss_micro_cache migrate prewarm bytes", ObStatClassIds::CACHE, 240017, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_REPLICA_PREWARM_BYTES, "ss_micro_cache repliace prewarm count", ObStatClassIds::CACHE, 240018, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_DDL_PREWARM_BYTES, "ss_micro_cache ddl prewarm count", ObStatClassIds::CACHE, 240019, true, true, true)
+STAT_EVENT_ADD_DEF(SS_TMP_FILE_CACHE_HIT, "ss_micro_cache tmpfile hit count", ObStatClassIds::CACHE, 240020, true, true, true)
+STAT_EVENT_ADD_DEF(SS_TMP_FILE_CACHE_MISS, "ss_micro_cache tmpfile miss count", ObStatClassIds::CACHE, 240021, true, true, true)
+
 
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
@@ -681,6 +687,11 @@ STAT_EVENT_SET_DEF(SS_MICRO_CACHE_ALLOC_DISK_SIZE, "ss_micro_cache total alloc d
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_ALLOC_SIZE, "ss_local_cache tmpfile alloc disk size", ObStatClassIds::CACHE, 245003, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_META_ALLOC_SIZE, "ss_local_cache meta file alloc disk size", ObStatClassIds::CACHE, 245004, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_MINOR_ALLOC_SIZE, "ss_local_cache minor data alloc disk size", ObStatClassIds::CACHE, 245005, false, true, true)
+STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_W, "ss_local_cache tmpfile write cache used disk size", ObStatClassIds::CACHE, 245006, false, true, true)
+STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_R, "ss_local_cache tmpfile read cache used disk size", ObStatClassIds::CACHE, 245007, false, true, true)
+STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_META_USED_DISK_SIZE, "ss_local_cache meta file used disk size", ObStatClassIds::CACHE, 245008, false, true, true)
+STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_MINOR_USED_DISK_SIZE, "ss_local_cache minor data used disk size", ObStatClassIds::CACHE, 245009, false, true, true)
+
 
 // END
 STAT_EVENT_SET_DEF(STAT_EVENT_SET_END, "event set end", ObStatClassIds::DEBUG, 300000, false, false, true)
