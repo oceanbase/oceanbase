@@ -4165,18 +4165,18 @@ CAST_FUNC_NAME(string, roaringbitmap)
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
       ObString in_str = child_res->get_string();
-      ObRbBinType bin_type;
+      ObString out_str = nullptr;
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res,
                     expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str))) {
         LOG_WARN("failed to get real data.", K(ret), K(in_str));
-      } else if (OB_FAIL(ObRbUtils::check_get_bin_type(in_str, bin_type))) {
-        LOG_WARN("invalid roaringbitmap binary string", K(ret));
+      } else if (OB_FAIL(ObRbUtils::build_binary(temp_allocator, in_str, out_str))) {
+        LOG_WARN("failed to build rb binary", K(ret));
       } else {
         ObTextStringDatumResult text_result(ObRoaringBitmapType, &expr, &ctx, &res_datum);
-        if (OB_FAIL(text_result.init(in_str.length()))) {
+        if (OB_FAIL(text_result.init(out_str.length()))) {
           LOG_WARN("Lob: init lob result failed");
-        } else if (OB_FAIL(text_result.append(in_str.ptr(), in_str.length()))) {
-          LOG_WARN("failed to append realdata", K(ret), K(in_str), K(text_result));
+        } else if (OB_FAIL(text_result.append(out_str.ptr(), out_str.length()))) {
+          LOG_WARN("failed to append realdata", K(ret), K(out_str), K(text_result));
         } else {
           text_result.set_result();
         }

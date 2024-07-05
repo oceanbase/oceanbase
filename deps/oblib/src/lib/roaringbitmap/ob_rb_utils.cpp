@@ -129,14 +129,11 @@ int ObRbUtils::check_get_bin_type(const ObString &rb_bin, ObRbBinType &bin_type)
   return ret;
 }
 
-int ObRbUtils::get_cardinality(ObIAllocator &allocator, ObString &rb_bin, uint64_t &cardinality)
+int ObRbUtils::get_cardinality(ObIAllocator &allocator, const ObString &rb_bin, ObRbBinType bin_type, uint64_t &cardinality)
 {
   int ret = OB_SUCCESS;
-  ObRbBinType bin_type;
   uint32_t offset = RB_VERSION_SIZE + RB_BIN_TYPE_SIZE;
-  if (OB_FAIL(ObRbUtils::check_get_bin_type(rb_bin, bin_type))) {
-    LOG_WARN("invalid roaringbitmap binary string", K(ret));
-  } else if (bin_type == ObRbBinType::EMPTY) {
+  if (bin_type == ObRbBinType::EMPTY) {
     cardinality = 0;
   } else if (bin_type == ObRbBinType::SINGLE_32 || bin_type == ObRbBinType::SINGLE_64) {
     cardinality = 1;
@@ -203,6 +200,54 @@ int ObRbUtils::rb_serialize(ObIAllocator &allocator, ObString &res_rb_bin, ObRoa
     LOG_WARN("failed to serialize the roaringbitmap");
   } else {
     res_rb_bin.assign_ptr(res_buf.ptr(), res_buf.length());
+  }
+  return ret;
+}
+
+int ObRbUtils::build_binary(ObIAllocator &allocator, ObString &rb_bin, ObString &res_rb_bin)
+{
+  int ret = OB_SUCCESS;
+  ObRbBinType bin_type;
+  uint64_t cardinality = 0;
+  if (OB_FAIL(check_get_bin_type(rb_bin, bin_type))) {
+    LOG_WARN("invalid roaringbitmap binary string", K(ret));
+  } else if (OB_FAIL(get_cardinality(allocator, rb_bin, bin_type, cardinality))) {
+    LOG_WARN("failed to get cardinality from roaringbitmap binary", K(ret));
+  } else if (((bin_type == ObRbBinType::BITMAP_32 || bin_type == ObRbBinType::BITMAP_64) && cardinality <= MAX_BITMAP_SET_VALUES)
+              || (bin_type == ObRbBinType::SET_32 && cardinality < 2)
+              || bin_type == ObRbBinType::SET_64) {
+    // deserialize -> optimize -> serialize
+    ObRoaringBitmap *rb = NULL;
+    if (OB_FAIL(rb_deserialize(allocator, rb_bin, rb))) {
+      LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+    } else if (OB_FAIL(rb_serialize(allocator, res_rb_bin, rb))) {
+      LOG_WARN("failed to serialize roaringbitmap", K(ret));
+    }
+    rb_destroy(rb);
+  } else if (bin_type == ObRbBinType::BITMAP_64) {
+    uint32_t offset = RB_VERSION_SIZE + RB_BIN_TYPE_SIZE;
+    uint64_t buckets = *reinterpret_cast<uint64_t*>(rb_bin.ptr() + offset);
+    offset += sizeof(uint64_t);
+    uint32_t high32 = *reinterpret_cast<uint32_t*>(rb_bin.ptr() + offset);
+    offset += sizeof(uint32_t);
+    if (buckets == 1 && high32 == 0) {
+      // BITMAP_32 is enough
+      bin_type = ObRbBinType::BITMAP_32;
+      ObStringBuffer res_buf(&allocator);
+      if (OB_FAIL(res_buf.append(rb_bin.ptr(), RB_VERSION_SIZE))) {
+        LOG_WARN("failed to append version", K(ret), K(rb_bin));
+      } else if (OB_FAIL(res_buf.append(reinterpret_cast<const char*>(&bin_type), RB_BIN_TYPE_SIZE))) {
+        LOG_WARN("failed to append bin_type", K(ret));
+      } else if (OB_FAIL(res_buf.append(rb_bin.ptr() + offset, rb_bin.length() - offset))) {
+        LOG_WARN("failed to append roaing binary", K(ret), K(rb_bin));
+      } else {
+        res_rb_bin.assign_ptr(res_buf.ptr(), res_buf.length());
+      }
+    } else {
+      res_rb_bin = rb_bin;
+    }
+  } else {
+    res_rb_bin = rb_bin;
   }
   return ret;
 }

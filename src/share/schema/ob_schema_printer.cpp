@@ -361,10 +361,6 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                     if (OB_SUCC(ret) && OB_FAIL(databuff_printf(buf, buf_len, pos, "'%s'", to_cstring(ObHexEscapeSqlStr(out_str))))) {
                       SHARE_SCHEMA_LOG(WARN, "fail to print default value of string tc", K(ret));
                     }
-                  } else if (ob_is_roaringbitmap_tc(default_value.get_type())) {
-                     if (OB_FAIL(print_roaringbitmap_default_value(table_schema, default_value, buf, buf_len, pos))) {
-                      SHARE_SCHEMA_LOG(WARN, "fail to print default value of roaringbitmap", K(ret));
-                     }
                   } else if (OB_FAIL(default_value.print_varchar_literal(buf, buf_len, pos, tz_info))) {
                     SHARE_SCHEMA_LOG(WARN, "fail to print sql literal", K(ret));
                   }
@@ -5727,27 +5723,6 @@ int ObSchemaPrinter::print_table_definition_lob_params(const ObTableSchema &tabl
     SHARE_SCHEMA_LOG(INFO, "new default inrow threashold not display", K(ret), "lob inrow threshold", table_schema.get_lob_inrow_threshold());
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "LOB_INROW_THRESHOLD=%ld ", table_schema.get_lob_inrow_threshold()))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print lob inrow threshold", K(ret), K(table_schema));
-  }
-  return ret;
-}
-
- int ObSchemaPrinter::print_roaringbitmap_default_value(const ObTableSchema &table_schema,
-                                                        ObObj &default_value,
-                                                        char* buf,
-                                                        const int64_t& buf_len,
-                                                        int64_t& pos) const
-{
-  int ret = OB_SUCCESS;
-  ObString out_str = default_value.get_string();
-  const char *HEXCHARS = "0123456789ABCDEF";
-  for (int i = 0; OB_SUCC(ret) && i < out_str.length(); ++i) {
-    if (i == 0 && OB_FAIL(databuff_printf(buf, buf_len, pos, " 0x"))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print default value", K(ret));
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%c%c",
-                                        HEXCHARS[*(out_str.ptr() + i) >> 4 & 0xF],
-                                        HEXCHARS[*(out_str.ptr() + i) & 0xF]))) {
-      SHARE_SCHEMA_LOG(WARN, "fail to print default value hex", K(ret));
-    }
   }
   return ret;
 }

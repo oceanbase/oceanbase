@@ -10675,18 +10675,18 @@ static int string_roaringbitmap(const ObObjType expect_type, ObObjCastParams &pa
     LOG_WARN("invalid allocator", K(ret));
   } else {
     ObIAllocator &temp_allocator = *params.allocator_v2_;
-    ObString in_str;
-    ObRbBinType bin_type;
+    ObString in_str = nullptr;
+    ObString out_str = nullptr;
     if (OB_FAIL(in.get_string(in_str))) {
       LOG_WARN("fail to get string", K(ret));
-    } else if (OB_FAIL(ObRbUtils::check_get_bin_type(in_str, bin_type))){
-      LOG_WARN("invalid roaringbitmap binary string", K(ret));
+    } else if (OB_FAIL(ObRbUtils::build_binary(temp_allocator, in_str, out_str))) {
+      LOG_WARN("failed to build rb binary", K(ret));
     } else {
       sql::ObTextStringObObjResult text_result(ObRoaringBitmapType, &params, &out, true /*has_lob_header*/);
-      if (OB_FAIL(text_result.init(in_str.length(), params.allocator_v2_))) {
+      if (OB_FAIL(text_result.init(out_str.length(), params.allocator_v2_))) {
         LOG_WARN("init lob result failed");
-      } else if (OB_FAIL(text_result.append(in_str.ptr(), in_str.length()))) {
-        LOG_WARN("failed to append realdata", K(ret), K(in_str), K(text_result));
+      } else if (OB_FAIL(text_result.append(out_str.ptr(), out_str.length()))) {
+        LOG_WARN("failed to append realdata", K(ret), K(out_str), K(text_result));
       } else {
         text_result.set_result();
       }

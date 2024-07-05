@@ -517,6 +517,16 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
             cur_row_.cells_[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
             cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_system_collation());
           }
+        } else if (ob_is_roaringbitmap(def_obj.get_type())) {
+          if (min_data_version_ < DATA_VERSION_4_3_2_0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "roaringbitmap type in data version less than 4.3.2.0");
+          } else if (OB_FAIL(def_obj.print_varchar_literal(buf, buf_len, pos, TZ_INFO(session_)))) {
+            LOG_WARN("fail to print varchar literal", K(ret), K(def_obj), K(buf_len), K(pos), K(buf));
+          } else {
+            cur_row_.cells_[cell_idx].set_varchar(ObString(static_cast<int32_t>(pos), buf));
+            cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_system_collation());
+          }
         } else if (column_schema.is_default_expr_v2_column()) {
           cur_row_.cells_[cell_idx].set_varchar(column_schema.get_cur_default_value().get_string());
           cur_row_.cells_[cell_idx].set_collation_type(ObCharset::get_system_collation());

@@ -5918,6 +5918,16 @@ BINARY opt_string_length_i_v2
   $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
 }
+| ROARINGBITMAP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_ROARINGBITMAP;    /* data type */
+  $$->int16_values_[OB_NODE_CAST_COLL_IDX] = BINARY_COLLATION;   /* data collation */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;                 /* length */
+  $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
+}
 ;
 
 opt_integer:
