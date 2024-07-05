@@ -1682,8 +1682,8 @@ public:
         enable_rich_vector_format_(false),
         ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID),
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
-        compat_version_(0)
-
+        compat_version_(0),
+        enable_sql_plan_monitor_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1748,6 +1748,7 @@ public:
       default_lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
       compat_type_ = share::ObCompatType::COMPAT_MYSQL57;
       compat_version_ = 0;
+      enable_sql_plan_monitor_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2098,6 +2099,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, default_lob_inrow_threshold);
     DEF_SYS_VAR_CACHE_FUNCS(share::ObCompatType, compat_type);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, compat_version);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, enable_sql_plan_monitor);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2171,6 +2173,7 @@ private:
         bool inc_ob_enable_pl_cache_:1;
         bool inc_compat_type_:1;
         bool inc_compat_version_:1;
+        bool inc_enable_sql_plan_monitor_:1;
       };
     };
   };
