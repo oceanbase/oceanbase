@@ -1,0 +1,130 @@
+#owner: huhaosheng.hhs
+#description: vector basic functional testing
+#author: huhaosheng.hhs
+
+connect (conn,$OBMYSQL_MS0,$OBMYSQL_USR,$OBMYSQL_PWD,oceanbase,$OBMYSQL_PORT);
+connection conn;
+SET @@recyclebin = off;
+
+--disable_warnings
+drop database if exists vector_test;
+--enable_warnings
+create database vector_test;
+use vector_test;
+
+create table hnsw_test (c1 vector(3), c2 int, c3 float, primary key (c2));
+insert into hnsw_test values ('[1.1, 2.2, 3.3]', 1, 1.1), ('[  9.1, 3.14, 2.14]', 2, 2.43), ('[7576.42, 467.23, 2913.762]', 3, 54.6), ('[3,1,2]', 4, 4.67), ('[42.4,53.1,5.23]', 5, 423.2), ('[  3.1, 1.5, 2.12]', 6, 32.1), ('[4,6,12]', 7, 23), ('[2.3,66.77,34.35]', 8, 67), ('[0.43,8.342,0.43]', 9, 67), ('[9.99,23.2,5.88]', 10, 67),('[23.5,76.5,6.34]',11,11);
+select count(1) from hnsw_test;
+delete from hnsw_test where c2 = 1;
+select c1 * 2, 3 * c1, l2_distance(c1, '[4,1,1]') as l2, inner_product(c1,'[4,1,1]') as ip, cosine_distance(c1, '[4,1,1]') as cosine from hnsw_test;
+insert into hnsw_test values ('[1.1, 2.2, 3.3]', 1, 1.1);
+select *, l2_distance(c1, '[3,1,2]') as dis from hnsw_test order by l2_distance(c1,'[3,1,2]');
+select *, inner_product(c1, '[3,1,2]') as dis from hnsw_test order by inner_product(c1, '[3,1,2]');
+select *, cosine_distance(c1, '[3,1,2]') as dis from hnsw_test order by cosine_distance(c1, '[3,1,2]');
+
+create vector index hnsw_idx1 on hnsw_test (c1 vector_l2_ops) with(type=hnsw, m=16, ef_construction=200);
+create vector index hnsw_idx2 on hnsw_test (c1 vector_ip_ops) with(type=hnsw, m=16, ef_construction=200);
+create vector index hnsw_idx3 on hnsw_test (c1 vector_cosine_ops) with(type=hnsw, m=16, ef_construction=200);
+create index idx on hnsw_test (c3);
+
+show index from hnsw_test;
+show create table hnsw_test;
+
+explain select * from hnsw_test order by l2_distance(c1, '[3,1,2]');
+explain select * from hnsw_test order by l2_distance(c1, '[3,1,2]') approx limit 3;
+explain select * from hnsw_test order by inner_product(c1, '[3,1,2]');
+explain select * from hnsw_test order by inner_product(c1, '[3,1,2]') approximate limit 3;
+explain select * from hnsw_test order by cosine_distance(c1, '[3,1,2]');
+explain select * from hnsw_test order by cosine_distance(c1, '[3,1,2]') approximate limit 3;
+
+select *, l2_distance(c1, '[3,1,2]') as dis from hnsw_test order by l2_distance(c1, '[3,1,2]') approx limit 3;
+select *, inner_product(c1, '[3,1,2]') as dis from hnsw_test order by inner_product(c1, '[3,1,2]') approximate limit 3;
+select *, cosine_distance(c1, '[3,1,2]') as dis from hnsw_test order by cosine_distance(c1, '[3,1,2]') approximate limit 3;
+
+#delete from hnsw_test where c2 = 2;
+#select count(1) from hnsw_test;
+
+drop index hnsw_idx3 on hnsw_test;
+show index from hnsw_test;
+show create table hnsw_test;
+select count(1) from oceanbase.__all_table where table_name like "%hnsw_idx3%";
+
+drop table hnsw_test;
+select count(1) from oceanbase.__all_table where table_name like "%hnsw%";
+
+drop database if exists vector_test;
+
+
+create database vector_test;
+use vector_test;
+
+create table ivfflat_test (c1 int, c2 vector(3), c3 int, c4 int, primary key (c1,c3));
+insert into ivfflat_test values(1,'[1,2,3]',2,3),(2,'[2,3,4]',3,4),(4,'[4,5,6]',5,6),(10,'[10,11,12]',11,12),(11,'[11,12,13]',12,13),(25,'[25,26,27]',26,27),(31,'[31,32,33]',32,33),(50,'[50,51,52]',51,52),(55,'[55,56,57]',56,57);
+select count(1) from ivfflat_test;
+
+create vector index ivfflat_idx1 on ivfflat_test (c2 vector_l2_ops) with(type=ivfflat, lists=3);
+create vector index ivfflat_idx2 on ivfflat_test (c2 vector_ip_ops) with(type=ivfflat, lists=3);
+create vector index ivfflat_idx3 on ivfflat_test (c2 vector_cosine_ops) with(type=ivfflat, lists=3);
+create index idx on ivfflat_test (c4);
+
+show index from ivfflat_test;
+show create table ivfflat_test;
+
+explain select * from ivfflat_test order by l2_distance(c2, '[3,1,2]');
+explain select * from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 7;
+explain select * from ivfflat_test order by inner_product(c2, '[3,1,2]');
+explain select * from ivfflat_test order by inner_product(c2, '[3,1,2]') approx limit 7;
+explain select * from ivfflat_test order by cosine_distance(c2, '[3,1,2]');
+explain select * from ivfflat_test order by cosine_distance(c2, '[3,1,2]') approx limit 7;
+
+select *, l2_distance(c2, '[3,1,2]') as dis from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 7;
+select /*+probes(2)*/ *, l2_distance(c2, '[3,1,2]') as dis from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 7;
+select *, inner_product(c2, '[3,1,2]') as dis from ivfflat_test order by inner_product(c2, '[3,1,2]') approx limit 7;
+select *, cosine_distance(c2, '[3,1,2]') as dis from ivfflat_test order by cosine_distance(c2, '[3,1,2]') approx limit 7;
+set @@vector_ivfflat_probes=2;
+select * from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 7;
+
+delete from ivfflat_test where c1 = 2;
+delete from ivfflat_test where c4 = 6;
+select count(1) from ivfflat_test;
+
+insert into ivfflat_test values(0,'[0,1,2]',1,2),(58,'[58,59,60]',59,60);
+insert into ivfflat_test values(100,'[100,200,300]',200,300);
+select count(1) from ivfflat_test;
+
+explain select /*+probes(1)*/ *, l2_distance(c2, '[60,61,62]') as dis from ivfflat_test order by l2_distance(c2, '[60,61,62]') approx limit 5;
+select /*+probes(1)*/ *, l2_distance(c2, '[60,61,62]') as dis from ivfflat_test order by l2_distance(c2, '[60,61,62]') approx limit 5;
+select *, inner_product(c2, '[60,61,62]') as dis from ivfflat_test order by inner_product(c2, '[60,61,62]') approx limit 5;
+select *, cosine_distance(c2, '[60,61,62]') as dis from ivfflat_test order by cosine_distance(c2, '[60,61,62]') approx limit 5;
+
+drop index ivfflat_idx1 on ivfflat_test;
+show index from ivfflat_test;
+show create table ivfflat_test;
+select count(1) from oceanbase.__all_table where table_name like "%ivfflat_idx1%";
+
+alter system set vector_ivfflat_elkan = "false";
+create vector index ivfflat_idx1 on ivfflat_test (c2 vector_l2_ops) with(type=ivfflat); # without lists
+explain select * from ivfflat_test order by l2_distance(c2, '[3,1,2]');
+explain select * from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 3;
+
+select /*+probes(2)*/* from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 3;
+
+drop table ivfflat_test;
+select count(1) from oceanbase.__all_table where table_name like "%ivfflat%";
+
+drop database if exists vector_test;
+
+# 
+create database vector_test;
+use vector_test;
+
+create table vector_test (c1 int, c2 vector(3), c3 int, c4 int, primary key (c1,c3));
+create index idx on vector_test (c4);
+create vector index ivfflat_idx on vector_test (c2 vector_l2_ops) with(type=ivfflat,lists=3);
+create vector index hnsw_idx on vector_test (c2 vector_l2_ops) with(type=hnsw);
+
+drop table vector_test;
+select count(1) from oceanbase.__all_table where table_name like "%ivfflat%";
+select count(1) from oceanbase.__all_table where table_name like "%hnsw%";
+select count(1) from oceanbase.__all_table where table_name like "%vector%";
+drop database if exists vector_test;

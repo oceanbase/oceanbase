@@ -1,0 +1,497 @@
+SET @@recyclebin = off;
+drop database if exists vector_test;
+create database vector_test;
+use vector_test;
+create table hnsw_test (c1 vector(3), c2 int, c3 float, primary key (c2));
+insert into hnsw_test values ('[1.1, 2.2, 3.3]', 1, 1.1), ('[  9.1, 3.14, 2.14]', 2, 2.43), ('[7576.42, 467.23, 2913.762]', 3, 54.6), ('[3,1,2]', 4, 4.67), ('[42.4,53.1,5.23]', 5, 423.2), ('[  3.1, 1.5, 2.12]', 6, 32.1), ('[4,6,12]', 7, 23), ('[2.3,66.77,34.35]', 8, 67), ('[0.43,8.342,0.43]', 9, 67), ('[9.99,23.2,5.88]', 10, 67),('[23.5,76.5,6.34]',11,11);
+select count(1) from hnsw_test;
+count(1)
+11
+delete from hnsw_test where c2 = 1;
+select c1 * 2, 3 * c1, l2_distance(c1, '[4,1,1]') as l2, inner_product(c1,'[4,1,1]') as ip, cosine_distance(c1, '[4,1,1]') as cosine from hnsw_test;
+c1 * 2	3 * c1	l2	ip	cosine
+[18.20000076,6.28000021,4.28000021]	[27.30000114,9.42000008,6.42000008]	5.6470527338747925	-41.680001735687256	0.0037956299388424153
+[15152.83984375,934.46002197,5827.52392578]	[22729.25976562,1401.69006348,8741.28613281]	8126.6903564007	-33686.67166137695	0.023467312833269305
+[6.00000000,2.00000000,4.00000000]	[9.00000000,3.00000000,6.00000000]	1.4142135623730951	-15	0.05508881747693195
+[84.80000305,106.19999695,10.46000004]	[127.20000458,159.29998779,15.69000053]	64.8603334739522	-227.9300045967102	0.21171122529794828
+[6.19999981,3.00000000,4.23999977]	[9.29999924,4.50000000,6.35999966]	1.521315192625691	-16.019999504089355	0.0662965822665702
+[8.00000000,12.00000000,24.00000000]	[12.00000000,18.00000000,36.00000000]	12.083045973594572	-34	0.42758022475374724
+[4.59999990,133.53999329,68.69999695]	[6.89999962,200.30999756,103.04999542]	73.76181164271232	-110.31999492645264	0.6538647413034062
+[0.86000001,16.68400002,0.86000001]	[1.28999996,25.02600098,1.28999996]	8.18381106986407	-10.492000043392181	0.7043342900472607
+[19.97999954,46.40000153,11.76000023]	[29.96999931,69.60000610,17.63999939]	23.50605309807351	-69.03999996185303	0.37254670862923256
+[47.00000000,153.00000000,12.68000031]	[70.50000000,229.50000000,19.02000046]	78.1601919242119	-176.8400001525879	0.4807899988893799
+insert into hnsw_test values ('[1.1, 2.2, 3.3]', 1, 1.1);
+select *, l2_distance(c1, '[3,1,2]') as dis from hnsw_test order by l2_distance(c1,'[3,1,2]');
+c1	c2	c3	dis
+[3.00000000,1.00000000,2.00000000]	4	4.67	0
+[3.09999990,1.50000000,2.11999989]	6	32.1	0.5238319897263964
+[1.10000002,2.20000005,3.29999995]	1	1.1	2.5961509778639997
+[9.10000038,3.14000010,2.14000010]	2	2.43	6.466003799279264
+[0.43000001,8.34200001,0.43000001]	9	67	7.935664027621154
+[4.00000000,6.00000000,12.00000000]	7	23	11.224972160321824
+[9.98999977,23.20000076,5.88000011]	10	67	23.59564645358982
+[42.40000153,53.09999847,5.23000002]	5	423.2	65.40032768546267
+[2.29999995,66.76999664,34.34999847]	8	67	73.2987370953372
+[23.50000000,76.50000000,6.34000015]	11	11	78.35391248255867
+[7576.41992188,467.23001099,2913.76196289]	3	54.6	8127.263836294113
+select *, inner_product(c1, '[3,1,2]') as dis from hnsw_test order by inner_product(c1, '[3,1,2]');
+c1	c2	c3	dis
+[7576.41992188,467.23001099,2913.76196289]	3	54.6	-29024.013702392578
+[42.40000153,53.09999847,5.23000002]	5	423.2	-190.76000308990479
+[23.50000000,76.50000000,6.34000015]	11	11	-159.68000030517578
+[2.29999995,66.76999664,34.34999847]	8	67	-142.36999320983887
+[9.98999977,23.20000076,5.88000011]	10	67	-64.93000030517578
+[4.00000000,6.00000000,12.00000000]	7	23	-42
+[9.10000038,3.14000010,2.14000010]	2	2.43	-34.720001459121704
+[3.09999990,1.50000000,2.11999989]	6	32.1	-15.039999008178711
+[3.00000000,1.00000000,2.00000000]	4	4.67	-14
+[1.10000002,2.20000005,3.29999995]	1	1.1	-12.100000143051147
+[0.43000001,8.34200001,0.43000001]	9	67	-10.491999983787537
+select *, cosine_distance(c1, '[3,1,2]') as dis from hnsw_test order by cosine_distance(c1, '[3,1,2]');
+c1	c2	c3	dis
+[3.00000000,1.00000000,2.00000000]	4	4.67	0
+[3.09999990,1.50000000,2.11999989]	6	32.1	0.006045526863112993
+[7576.41992188,467.23001099,2913.76196289]	3	54.6	0.045978007353714934
+[9.10000038,3.14000010,2.14000010]	2	2.43	0.05903670332358224
+[4.00000000,6.00000000,12.00000000]	7	23	0.1982162742627268
+[1.10000002,2.20000005,3.29999995]	1	1.1	0.21428569526530794
+[42.40000153,53.09999847,5.23000002]	5	423.2	0.2519280019544977
+[9.98999977,23.20000076,5.88000011]	10	67	0.33088886238824766
+[23.50000000,76.50000000,6.34000015]	11	11	0.4683995961439317
+[2.29999995,66.76999664,34.34999847]	8	67	0.49349666841218776
+[0.43000001,8.34200001,0.43000001]	9	67	0.6647465991570032
+create vector index hnsw_idx1 on hnsw_test (c1 vector_l2_ops) with(type=hnsw, m=16, ef_construction=200);
+create vector index hnsw_idx2 on hnsw_test (c1 vector_ip_ops) with(type=hnsw, m=16, ef_construction=200);
+create vector index hnsw_idx3 on hnsw_test (c1 vector_cosine_ops) with(type=hnsw, m=16, ef_construction=200);
+create index idx on hnsw_test (c3);
+show index from hnsw_test;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+hnsw_test	0	PRIMARY	1	c2	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+hnsw_test	1	hnsw_idx1	1	c1	A	NULL	NULL	NULL	YES	HNSW	available		YES	NULL
+hnsw_test	1	hnsw_idx2	1	c1	A	NULL	NULL	NULL	YES	HNSW	available		YES	NULL
+hnsw_test	1	hnsw_idx3	1	c1	A	NULL	NULL	NULL	YES	HNSW	available		YES	NULL
+hnsw_test	1	idx	1	c3	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+show create table hnsw_test;
+Table	Create Table
+hnsw_test	CREATE TABLE `hnsw_test` (
+  `c1` vector(3) DEFAULT NULL,
+  `c2` int(11) NOT NULL,
+  `c3` float DEFAULT NULL,
+  PRIMARY KEY (`c2`),
+  KEY `hnsw_idx1` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  KEY `hnsw_idx2` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  KEY `hnsw_idx3` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  KEY `idx` (`c3`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+explain select * from hnsw_test order by l2_distance(c1, '[3,1,2]');
+Query Plan
+======================================================
+|ID|OPERATOR         |NAME     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |SORT             |         |11      |5           |
+|1 |└─TABLE FULL SCAN|hnsw_test|11      |3           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([hnsw_test.c1], [hnsw_test.c2], [hnsw_test.c3]), filter(nil), rowset=16
+      sort_keys([l2_distance(hnsw_test.c1, cast('[3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3], [l2_distance(hnsw_test.c1, cast('[3,1,2]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([hnsw_test.c2]), range(MIN ; MAX)always true
+explain select * from hnsw_test order by l2_distance(c1, '[3,1,2]') approx limit 3;
+Query Plan
+===============================================================
+|ID|OPERATOR       |NAME                |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |TABLE FULL SCAN|hnsw_test(hnsw_idx1)|11      |32          |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([hnsw_test.c1], [hnsw_test.c2], [hnsw_test.c3]), filter(nil), rowset=16
+      access([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([hnsw_test.c2], [hnsw_test.level], [hnsw_test.ref_pk0]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select * from hnsw_test order by inner_product(c1, '[3,1,2]');
+Query Plan
+======================================================
+|ID|OPERATOR         |NAME     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |SORT             |         |11      |5           |
+|1 |└─TABLE FULL SCAN|hnsw_test|11      |3           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([hnsw_test.c1], [hnsw_test.c2], [hnsw_test.c3]), filter(nil), rowset=16
+      sort_keys([inner_product(hnsw_test.c1, cast('[3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3], [inner_product(hnsw_test.c1, cast('[3,1,2]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([hnsw_test.c2]), range(MIN ; MAX)always true
+explain select * from hnsw_test order by inner_product(c1, '[3,1,2]') approximate limit 3;
+Query Plan
+===============================================================
+|ID|OPERATOR       |NAME                |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |TABLE FULL SCAN|hnsw_test(hnsw_idx2)|11      |32          |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([hnsw_test.c1], [hnsw_test.c2], [hnsw_test.c3]), filter(nil), rowset=16
+      access([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([hnsw_test.c2], [hnsw_test.level], [hnsw_test.ref_pk0]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select * from hnsw_test order by cosine_distance(c1, '[3,1,2]');
+Query Plan
+======================================================
+|ID|OPERATOR         |NAME     |EST.ROWS|EST.TIME(us)|
+------------------------------------------------------
+|0 |SORT             |         |11      |5           |
+|1 |└─TABLE FULL SCAN|hnsw_test|11      |3           |
+======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([hnsw_test.c1], [hnsw_test.c2], [hnsw_test.c3]), filter(nil), rowset=16
+      sort_keys([cosine_distance(hnsw_test.c1, cast('[3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3], [cosine_distance(hnsw_test.c1, cast('[3,1,2]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([hnsw_test.c2]), range(MIN ; MAX)always true
+explain select * from hnsw_test order by cosine_distance(c1, '[3,1,2]') approximate limit 3;
+Query Plan
+===============================================================
+|ID|OPERATOR       |NAME                |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------
+|0 |TABLE FULL SCAN|hnsw_test(hnsw_idx3)|11      |32          |
+===============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([hnsw_test.c1], [hnsw_test.c2], [hnsw_test.c3]), filter(nil), rowset=16
+      access([hnsw_test.c2], [hnsw_test.c1], [hnsw_test.c3]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([hnsw_test.c2], [hnsw_test.level], [hnsw_test.ref_pk0]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select *, l2_distance(c1, '[3,1,2]') as dis from hnsw_test order by l2_distance(c1, '[3,1,2]') approx limit 3;
+c1	c2	c3	dis
+[3.00000000,1.00000000,2.00000000]	4	4.67	0
+[3.09999990,1.50000000,2.11999989]	6	32.1	0.5238319897263964
+[1.10000002,2.20000005,3.29999995]	1	1.1	2.5961509778639997
+select *, inner_product(c1, '[3,1,2]') as dis from hnsw_test order by inner_product(c1, '[3,1,2]') approximate limit 3;
+c1	c2	c3	dis
+[7576.41992188,467.23001099,2913.76196289]	3	54.6	-29024.013702392578
+[42.40000153,53.09999847,5.23000002]	5	423.2	-190.76000308990479
+[23.50000000,76.50000000,6.34000015]	11	11	-159.68000030517578
+select *, cosine_distance(c1, '[3,1,2]') as dis from hnsw_test order by cosine_distance(c1, '[3,1,2]') approximate limit 3;
+c1	c2	c3	dis
+[3.00000000,1.00000000,2.00000000]	4	4.67	0
+[3.09999990,1.50000000,2.11999989]	6	32.1	0.006045526863112993
+[7576.41992188,467.23001099,2913.76196289]	3	54.6	0.045978007353714934
+drop index hnsw_idx3 on hnsw_test;
+show index from hnsw_test;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+hnsw_test	0	PRIMARY	1	c2	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+hnsw_test	1	hnsw_idx1	1	c1	A	NULL	NULL	NULL	YES	HNSW	available		YES	NULL
+hnsw_test	1	hnsw_idx2	1	c1	A	NULL	NULL	NULL	YES	HNSW	available		YES	NULL
+hnsw_test	1	idx	1	c3	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+show create table hnsw_test;
+Table	Create Table
+hnsw_test	CREATE TABLE `hnsw_test` (
+  `c1` vector(3) DEFAULT NULL,
+  `c2` int(11) NOT NULL,
+  `c3` float DEFAULT NULL,
+  PRIMARY KEY (`c2`),
+  KEY `hnsw_idx1` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  KEY `hnsw_idx2` (`c1`) BLOCK_SIZE 16384 LOCAL,
+  KEY `idx` (`c3`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+select count(1) from oceanbase.__all_table where table_name like "%hnsw_idx3%";
+count(1)
+0
+drop table hnsw_test;
+select count(1) from oceanbase.__all_table where table_name like "%hnsw%";
+count(1)
+3
+drop database if exists vector_test;
+create database vector_test;
+use vector_test;
+create table ivfflat_test (c1 int, c2 vector(3), c3 int, c4 int, primary key (c1,c3));
+insert into ivfflat_test values(1,'[1,2,3]',2,3),(2,'[2,3,4]',3,4),(4,'[4,5,6]',5,6),(10,'[10,11,12]',11,12),(11,'[11,12,13]',12,13),(25,'[25,26,27]',26,27),(31,'[31,32,33]',32,33),(50,'[50,51,52]',51,52),(55,'[55,56,57]',56,57);
+select count(1) from ivfflat_test;
+count(1)
+9
+create vector index ivfflat_idx1 on ivfflat_test (c2 vector_l2_ops) with(type=ivfflat, lists=3);
+create vector index ivfflat_idx2 on ivfflat_test (c2 vector_ip_ops) with(type=ivfflat, lists=3);
+create vector index ivfflat_idx3 on ivfflat_test (c2 vector_cosine_ops) with(type=ivfflat, lists=3);
+create index idx on ivfflat_test (c4);
+show index from ivfflat_test;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+ivfflat_test	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+ivfflat_test	0	PRIMARY	2	c3	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+ivfflat_test	1	ivfflat_idx1	1	c2	A	NULL	NULL	NULL	YES	IVFFLAT	available		YES	NULL
+ivfflat_test	1	ivfflat_idx2	1	c2	A	NULL	NULL	NULL	YES	IVFFLAT	available		YES	NULL
+ivfflat_test	1	ivfflat_idx3	1	c2	A	NULL	NULL	NULL	YES	IVFFLAT	available		YES	NULL
+ivfflat_test	1	idx	1	c4	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+show create table ivfflat_test;
+Table	Create Table
+ivfflat_test	CREATE TABLE `ivfflat_test` (
+  `c1` int(11) NOT NULL,
+  `c2` vector(3) DEFAULT NULL,
+  `c3` int(11) NOT NULL,
+  `c4` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c3`),
+  KEY `ivfflat_idx1` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `ivfflat_idx2` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `ivfflat_idx3` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `idx` (`c4`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+explain select * from ivfflat_test order by l2_distance(c2, '[3,1,2]');
+Query Plan
+=========================================================
+|ID|OPERATOR         |NAME        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT             |            |9       |5           |
+|1 |└─TABLE FULL SCAN|ivfflat_test|9       |3           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4]), filter(nil), rowset=16
+      sort_keys([l2_distance(ivfflat_test.c2, cast('[3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4], [l2_distance(ivfflat_test.c2, cast('[3,1,2]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN ; MAX,MAX)always true
+explain select * from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 7;
+Query Plan
+=====================================================================
+|ID|OPERATOR       |NAME                      |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfflat_test(ivfflat_idx1)|9       |28          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfflat_test.center_idx], [ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select * from ivfflat_test order by inner_product(c2, '[3,1,2]');
+Query Plan
+=========================================================
+|ID|OPERATOR         |NAME        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT             |            |9       |5           |
+|1 |└─TABLE FULL SCAN|ivfflat_test|9       |3           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4]), filter(nil), rowset=16
+      sort_keys([inner_product(ivfflat_test.c2, cast('[3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4], [inner_product(ivfflat_test.c2, cast('[3,1,2]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN ; MAX,MAX)always true
+explain select * from ivfflat_test order by inner_product(c2, '[3,1,2]') approx limit 7;
+Query Plan
+=====================================================================
+|ID|OPERATOR       |NAME                      |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfflat_test(ivfflat_idx2)|9       |28          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfflat_test.center_idx], [ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+explain select * from ivfflat_test order by cosine_distance(c2, '[3,1,2]');
+Query Plan
+=========================================================
+|ID|OPERATOR         |NAME        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT             |            |9       |5           |
+|1 |└─TABLE FULL SCAN|ivfflat_test|9       |3           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4]), filter(nil), rowset=16
+      sort_keys([cosine_distance(ivfflat_test.c2, cast('[3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4], [cosine_distance(ivfflat_test.c2, cast('[3,1,2]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN ; MAX,MAX)always true
+explain select * from ivfflat_test order by cosine_distance(c2, '[3,1,2]') approx limit 7;
+Query Plan
+=====================================================================
+|ID|OPERATOR       |NAME                      |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfflat_test(ivfflat_idx3)|9       |28          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfflat_test.center_idx], [ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select *, l2_distance(c2, '[3,1,2]') as dis from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 7;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000]	2	3	2.449489742783178
+2	[2.00000000,3.00000000,4.00000000]	3	4	3
+4	[4.00000000,5.00000000,6.00000000]	5	6	5.744562646538029
+10	[10.00000000,11.00000000,12.00000000]	11	12	15.7797338380595
+11	[11.00000000,12.00000000,13.00000000]	12	13	17.4928556845359
+select /*+probes(2)*/ *, l2_distance(c2, '[3,1,2]') as dis from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 7;
+c1	c2	c3	c4	dis
+1	[1.00000000,2.00000000,3.00000000]	2	3	2.449489742783178
+2	[2.00000000,3.00000000,4.00000000]	3	4	3
+4	[4.00000000,5.00000000,6.00000000]	5	6	5.744562646538029
+10	[10.00000000,11.00000000,12.00000000]	11	12	15.7797338380595
+11	[11.00000000,12.00000000,13.00000000]	12	13	17.4928556845359
+25	[25.00000000,26.00000000,27.00000000]	26	27	41.641325627314025
+31	[31.00000000,32.00000000,33.00000000]	32	33	52.01922721455981
+select *, inner_product(c2, '[3,1,2]') as dis from ivfflat_test order by inner_product(c2, '[3,1,2]') approx limit 7;
+c1	c2	c3	c4	dis
+55	[55.00000000,56.00000000,57.00000000]	56	57	-335
+50	[50.00000000,51.00000000,52.00000000]	51	52	-305
+31	[31.00000000,32.00000000,33.00000000]	32	33	-191
+25	[25.00000000,26.00000000,27.00000000]	26	27	-155
+11	[11.00000000,12.00000000,13.00000000]	12	13	-71
+10	[10.00000000,11.00000000,12.00000000]	11	12	-65
+select *, cosine_distance(c2, '[3,1,2]') as dis from ivfflat_test order by cosine_distance(c2, '[3,1,2]') approx limit 7;
+c1	c2	c3	c4	dis
+55	[55.00000000,56.00000000,57.00000000]	56	57	0.07703341641900951
+50	[50.00000000,51.00000000,52.00000000]	51	52	0.07732369488767032
+31	[31.00000000,32.00000000,33.00000000]	32	33	0.07930153767997983
+25	[25.00000000,26.00000000,27.00000000]	26	27	0.08056790161930749
+11	[11.00000000,12.00000000,13.00000000]	12	13	0.08914453972135583
+10	[10.00000000,11.00000000,12.00000000]	11	12	0.09070897061213423
+set @@vector_ivfflat_probes=2;
+select * from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 7;
+c1	c2	c3	c4
+1	[1.00000000,2.00000000,3.00000000]	2	3
+2	[2.00000000,3.00000000,4.00000000]	3	4
+4	[4.00000000,5.00000000,6.00000000]	5	6
+10	[10.00000000,11.00000000,12.00000000]	11	12
+11	[11.00000000,12.00000000,13.00000000]	12	13
+25	[25.00000000,26.00000000,27.00000000]	26	27
+31	[31.00000000,32.00000000,33.00000000]	32	33
+delete from ivfflat_test where c1 = 2;
+delete from ivfflat_test where c4 = 6;
+select count(1) from ivfflat_test;
+count(1)
+7
+insert into ivfflat_test values(0,'[0,1,2]',1,2),(58,'[58,59,60]',59,60);
+insert into ivfflat_test values(100,'[100,200,300]',200,300);
+select count(1) from ivfflat_test;
+count(1)
+10
+explain select /*+probes(1)*/ *, l2_distance(c2, '[60,61,62]') as dis from ivfflat_test order by l2_distance(c2, '[60,61,62]') approx limit 5;
+Query Plan
+=====================================================================
+|ID|OPERATOR       |NAME                      |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfflat_test(ivfflat_idx1)|10      |36          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4], [l2_distance(ivfflat_test.c2, cast('[60,61,62]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfflat_test.center_idx], [ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select /*+probes(1)*/ *, l2_distance(c2, '[60,61,62]') as dis from ivfflat_test order by l2_distance(c2, '[60,61,62]') approx limit 5;
+c1	c2	c3	c4	dis
+58	[58.00000000,59.00000000,60.00000000]	59	60	3.4641016151377544
+55	[55.00000000,56.00000000,57.00000000]	56	57	8.660254037844387
+50	[50.00000000,51.00000000,52.00000000]	51	52	17.320508075688775
+100	[100.00000000,200.00000000,300.00000000]	200	300	278.5049371196137
+select *, inner_product(c2, '[60,61,62]') as dis from ivfflat_test order by inner_product(c2, '[60,61,62]') approx limit 5;
+c1	c2	c3	c4	dis
+58	[58.00000000,59.00000000,60.00000000]	59	60	-10799
+55	[55.00000000,56.00000000,57.00000000]	56	57	-10250
+50	[50.00000000,51.00000000,52.00000000]	51	52	-9335
+31	[31.00000000,32.00000000,33.00000000]	32	33	-5858
+25	[25.00000000,26.00000000,27.00000000]	26	27	-4760
+select *, cosine_distance(c2, '[60,61,62]') as dis from ivfflat_test order by cosine_distance(c2, '[60,61,62]') approx limit 5;
+c1	c2	c3	c4	dis
+58	[58.00000000,59.00000000,60.00000000]	59	60	0.00000010289969709642577
+55	[55.00000000,56.00000000,57.00000000]	56	57	0.0000007138600326417333
+50	[50.00000000,51.00000000,52.00000000]	51	52	0.0000034426301465106945
+31	[31.00000000,32.00000000,33.00000000]	32	33	0.00007351409642730733
+25	[25.00000000,26.00000000,27.00000000]	26	27	0.00016215778058559227
+drop index ivfflat_idx1 on ivfflat_test;
+show index from ivfflat_test;
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Visible	Expression
+ivfflat_test	0	PRIMARY	1	c1	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+ivfflat_test	0	PRIMARY	2	c3	A	NULL	NULL	NULL		BTREE	available		YES	NULL
+ivfflat_test	1	ivfflat_idx2	1	c2	A	NULL	NULL	NULL	YES	IVFFLAT	available		YES	NULL
+ivfflat_test	1	ivfflat_idx3	1	c2	A	NULL	NULL	NULL	YES	IVFFLAT	available		YES	NULL
+ivfflat_test	1	idx	1	c4	A	NULL	NULL	NULL	YES	BTREE	available		YES	NULL
+show create table ivfflat_test;
+Table	Create Table
+ivfflat_test	CREATE TABLE `ivfflat_test` (
+  `c1` int(11) NOT NULL,
+  `c2` vector(3) DEFAULT NULL,
+  `c3` int(11) NOT NULL,
+  `c4` int(11) DEFAULT NULL,
+  PRIMARY KEY (`c1`, `c3`),
+  KEY `ivfflat_idx2` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `ivfflat_idx3` (`c2`) BLOCK_SIZE 16384 LOCAL,
+  KEY `idx` (`c4`) BLOCK_SIZE 16384 LOCAL
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0
+select count(1) from oceanbase.__all_table where table_name like "%ivfflat_idx1%";
+count(1)
+0
+alter system set vector_ivfflat_elkan = "false";
+create vector index ivfflat_idx1 on ivfflat_test (c2 vector_l2_ops) with(type=ivfflat);
+explain select * from ivfflat_test order by l2_distance(c2, '[3,1,2]');
+Query Plan
+=========================================================
+|ID|OPERATOR         |NAME        |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------
+|0 |SORT             |            |10      |5           |
+|1 |└─TABLE FULL SCAN|ivfflat_test|10      |3           |
+=========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4]), filter(nil), rowset=16
+      sort_keys([l2_distance(ivfflat_test.c2, cast('[3,1,2]', VECTOR(-1, -1))), ASC])
+  1 - output([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4], [l2_distance(ivfflat_test.c2, cast('[3,1,2]', VECTOR(-1, -1)))]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN ; MAX,MAX)always true
+explain select * from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 3;
+Query Plan
+=====================================================================
+|ID|OPERATOR       |NAME                      |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TABLE FULL SCAN|ivfflat_test(ivfflat_idx1)|10      |31          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([ivfflat_test.c1], [ivfflat_test.c2], [ivfflat_test.c3], [ivfflat_test.c4]), filter(nil), rowset=16
+      access([ivfflat_test.c1], [ivfflat_test.c3], [ivfflat_test.c2], [ivfflat_test.c4]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([ivfflat_test.center_idx], [ivfflat_test.c1], [ivfflat_test.c3]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true
+select /*+probes(2)*/* from ivfflat_test order by l2_distance(c2, '[3,1,2]') approx limit 3;
+c1	c2	c3	c4
+1	[1.00000000,2.00000000,3.00000000]	2	3
+0	[0.00000000,1.00000000,2.00000000]	1	2
+drop table ivfflat_test;
+select count(1) from oceanbase.__all_table where table_name like "%ivfflat%";
+count(1)
+0
+drop database if exists vector_test;
+create database vector_test;
+use vector_test;
+create table vector_test (c1 int, c2 vector(3), c3 int, c4 int, primary key (c1,c3));
+create index idx on vector_test (c4);
+create vector index ivfflat_idx on vector_test (c2 vector_l2_ops) with(type=ivfflat,lists=3);
+create vector index hnsw_idx on vector_test (c2 vector_l2_ops) with(type=hnsw);
+drop table vector_test;
+select count(1) from oceanbase.__all_table where table_name like "%ivfflat%";
+count(1)
+0
+select count(1) from oceanbase.__all_table where table_name like "%hnsw%";
+count(1)
+3
+select count(1) from oceanbase.__all_table where table_name like "%vector%";
+count(1)
+3
+drop database if exists vector_test;
