@@ -339,6 +339,25 @@ int ObSSTableRowWholeScanner::open_next_valid_micro_block()
   return ret;
 }
 
+void ObSSTableRowWholeScanner::reset_query_range()
+{
+  query_range_.reset();
+}
+
+int ObSSTableRowWholeScanner::switch_query_range(const blocksstable::ObDatumRange &query_range)
+{
+  int ret = OB_SUCCESS;
+  if (FALSE_IT(query_range_ = query_range)) {
+  } else if (OB_FAIL(micro_scanner_->set_range(query_range_))) {
+    LOG_WARN("failed to set range", K(ret), K(query_range_));
+  } else if (OB_FAIL(open_macro_block())) {
+    STORAGE_LOG(WARN, "fail to open macro block", K(ret));
+  } else if (OB_FAIL(open_next_valid_micro_block())) {
+    LOG_WARN("Fail to open next valid micro block", K(ret));
+  }
+  return ret;
+}
+
 int ObSSTableRowWholeScanner::prefetch()
 {
   int ret = OB_SUCCESS;
@@ -406,6 +425,7 @@ int ObSSTableRowWholeScanner::open_macro_block()
       const int64_t io_timeout_ms = std::max(DEFAULT_IO_WAIT_TIME_MS, GCONF._data_storage_io_timeout / 1000);
       MacroScanHandle &scan_handle = scan_handles_[cur_macro_cursor_ % PREFETCH_DEPTH];
       scan_handle.is_right_border_ = (cur_macro_cursor_ == prefetch_macro_cursor_ - 1);
+      micro_block_iter_.reset();
       if (access_ctx_->query_flag_.is_multi_version_minor_merge() &&
           OB_FAIL(check_macro_block_recycle(scan_handle.macro_block_desc_, can_recycle))) {
         LOG_WARN("failed to check macro block recycle", K(ret), K(cur_macro_cursor_));

@@ -302,7 +302,8 @@ ObPartitionMacroMergeIter::ObPartitionMacroMergeIter()
     macro_block_iter_(nullptr),
     curr_block_desc_(),
     curr_block_meta_(),
-    macro_block_opened_(false)
+    macro_block_opened_(false),
+    macro_block_opened_for_cmp_(false)
 {
   curr_block_desc_.macro_meta_ = &curr_block_meta_;
 }
@@ -357,6 +358,7 @@ int ObPartitionMacroMergeIter::next_range()
     ret = OB_ITER_END;
   } else if (FALSE_IT(reset_macro_block_desc())) {
   } else if (OB_SUCC(macro_block_iter_->get_next_macro_block(curr_block_desc_))) {
+    macro_block_opened_for_cmp_ = false;
     macro_block_opened_ = false;
     bool need_open = false;
     if (OB_FAIL(check_merge_range_cross(curr_block_desc_.range_, need_open))) {
@@ -389,16 +391,24 @@ int ObPartitionMacroMergeIter::open_curr_range(const bool for_rewrite, const boo
     LOG_WARN("Unepxcted opened macro block to open", K(ret));
   } else {
     ObSSTableRowWholeScanner *iter = reinterpret_cast<ObSSTableRowWholeScanner *>(row_iter_);
-    iter->reset();
-    if (OB_FAIL(iter->open(
-        access_param_.iter_param_,
-        access_context_,
-        merge_range_,
-        curr_block_desc_,
-        *reinterpret_cast<ObSSTable *>(table_)))) {
-      LOG_WARN("fail to set context", K(ret));
+    if (macro_block_opened_for_cmp_) {
+      if (OB_FAIL(iter->switch_query_range(merge_range_))) {
+        LOG_WARN("fail to switch_query_range", K(ret));
+      }
     } else {
+      iter->reuse();
+      if (OB_FAIL(iter->open(
+          access_param_.iter_param_,
+          access_context_,
+          merge_range_,
+          curr_block_desc_,
+          *reinterpret_cast<ObSSTable *>(table_)))) {
+        LOG_WARN("fail to set context", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       macro_block_opened_ = true;
+      macro_block_opened_for_cmp_ = false;
       ret = next();
     }
   }
@@ -469,35 +479,71 @@ int ObPartitionMacroMergeIter::get_curr_range(ObDatumRange &range) const
   return ret;
 }
 
-int ObPartitionMacroMergeIter::exist(const ObDatumRow *row, bool &is_exist)
+int ObPartitionMacroMergeIter::need_open_curr_range(const blocksstable::ObDatumRow &row, bool &need_open)
 {
   int ret = OB_SUCCESS;
-  is_exist = true;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObPartitionMacroMergeIter is not inited", K(ret), K(*this));
-  } else if (OB_ISNULL(row)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument to check row exist", K(ret), KP(row));
-  } else {
-   common::ObIAllocator *allocator = access_context_.allocator_;
-   common::ObIAllocator *stmt_allocator = access_context_.stmt_allocator_;
-    access_context_.allocator_ = &exister_allocator_;
-    access_context_.stmt_allocator_ = &exister_allocator_;
-    bool has_found = false;
-    ObDatumRowkey rowkey;
-    if (OB_FAIL(rowkey.assign(row->storage_datums_, schema_rowkey_column_cnt_))) {
-      STORAGE_LOG(WARN, "Failed to assign rowkey", K(ret), KPC(row), K_(schema_rowkey_column_cnt));
-    } else if (OB_FAIL(table_->exist(access_param_.iter_param_, access_context_, rowkey, is_exist, has_found))) {
-      LOG_WARN("Failed to check row if exist", K(ret), KPC(row));
-    } else {
-      exister_allocator_.reuse();
+  need_open = true;
+  // when check exist in macro, cur macro maybe opened before, but have not called get_next_row()
+  if (OB_UNLIKELY(get_curr_row() != nullptr || table_ == nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected macro_block_opened or table", K(ret), K(macro_block_opened_), KPC(table_));
+  } else if (row.row_flag_.is_delete()) {
+    if (OB_FAIL(exist(row, need_open))) {
+      STORAGE_LOG(WARN, "fail to check exist", K(ret));
     }
-    access_context_.allocator_ = allocator;
-    access_context_.stmt_allocator_ = stmt_allocator;
   }
+  return ret;
+}
 
+int ObPartitionMacroMergeIter::exist(const ObDatumRow &row, bool &is_exist)
+{
+  int ret = OB_SUCCESS;
+  ObDatumRowkey rowkey;
+  const blocksstable::ObDatumRow *temp_row = nullptr;
+  blocksstable::ObDatumRange query_range;
+  query_range.end_key_.set_max_rowkey();
+  query_range.set_left_closed();
+  ObSSTableRowWholeScanner *iter = reinterpret_cast<ObSSTableRowWholeScanner *>(row_iter_);
+
+  if (OB_FAIL(query_range.start_key_.assign(row.storage_datums_, schema_rowkey_column_cnt_))) {
+    STORAGE_LOG(WARN, "Failed to assign rowkey", K(ret), K(row), K_(schema_rowkey_column_cnt));
+  } else if (macro_block_opened_for_cmp_) { // have opened before, just switch range
+    if (OB_FAIL(iter->switch_query_range(query_range))) {
+      LOG_WARN("fail to switch_query_range", K(ret), K(query_range));
+    }
+  } else {
+    // use range [rowkey, MAX) to get rowkey
+    // if rowkey exist, can use this iter to get_next_row
+    iter->reuse();
+    if (OB_FAIL(iter->open(
+              access_param_.iter_param_,
+              access_context_,
+              query_range,
+              curr_block_desc_,
+              *static_cast<ObSSTable *>(table_)))) {
+      LOG_WARN("fail to open iter", K(ret), KPC(table_), K(query_range));
+    } else {
+      macro_block_opened_for_cmp_ = true;
+    }
+  }
+  if (FAILEDx(iter->get_next_row(temp_row))) {
+    STORAGE_LOG(WARN, "fail to get next row", K(ret), KPC(iter));
+  } else if (OB_ISNULL(temp_row)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unecxpected null row", K(ret));
+  } else if (OB_FAIL(rowkey.assign(temp_row->storage_datums_, schema_rowkey_column_cnt_))) {
+    STORAGE_LOG(WARN, "Failed to assign rowkey", K(ret), KPC(temp_row), K_(schema_rowkey_column_cnt));
+  } else {
+    int temp_cmp_ret = 0;
+    if (OB_FAIL(query_range.start_key_.compare(rowkey, read_info_.get_datum_utils(), temp_cmp_ret))) {
+      STORAGE_LOG(WARN, "Failed to compare rowkey", K(ret), K(rowkey), K(query_range.start_key_), K(read_info_));
+    } else if (temp_cmp_ret == 0) {
+      is_exist = true;
+    } else {
+      is_exist = false;
+    }
+  }
+  iter->reset_query_range();
   return ret;
 }
 
@@ -626,6 +672,7 @@ int ObPartitionMicroMergeIter::next_range()
   } else if (FALSE_IT(reset_macro_block_desc())) {
   } else if (OB_SUCC(macro_block_iter_->get_next_macro_block(curr_block_desc_))) {
     check_need_reuse_micro_block();
+    macro_block_opened_for_cmp_ = false;
     macro_block_opened_ = false;
     micro_block_opened_ = false;
   } else if (OB_UNLIKELY(OB_ITER_END != ret)) {
