@@ -2409,11 +2409,11 @@
   "_nlj_batching_enabled": {
     "id": 10080,
     "name": "_nlj_batching_enabled",
-    "default_value": "0",
+    "default_value": "1",
     "base_value": "1",
     "data_type": "bool",
     "info": "enable batching of the RHS IO in NLJ",
-    "flags": "GLOBAL | SESSION | NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
+    "flags": "GLOBAL | SESSION | QUERY_SENSITIVE| NEED_SERIALIZE | INVISIBLE | INFLUENCE_PLAN",
     "publish_version": "",
     "info_cn": "",
     "background_cn": "",
