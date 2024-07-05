@@ -1029,7 +1029,7 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
       result.reset_handle_and_range();
       for (int64_t i = 0; OB_SUCC(ret) && i < mini_tables.get_count(); i++) {
         ObTableHandleV2 tmp_table_handle;
-        if (OB_FAIL(result.handle_.get_table(i, tmp_table_handle))) {
+        if (OB_FAIL(mini_tables.get_table(i, tmp_table_handle))) {
           LOG_WARN("failed to get table from handles array", K(ret), K(i));
         } else if (OB_UNLIKELY(0 != i
             && tmp_table_handle.get_table()->get_start_scn() != result.scn_range_.end_scn_)) {
