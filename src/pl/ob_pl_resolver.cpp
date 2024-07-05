@@ -7563,6 +7563,26 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
         if (OB_SUCC(ret)
             && (PL_PARAM_INOUT == param_mode || PL_PARAM_OUT == param_mode)) {
           OZ (resolve_inout_param(params.at(i), param_mode, out_idx), K(i), K(params), K(exprs));
+          if (OB_SUCC(ret) && is_question_mark_value(params.at(i), &(current_block_->get_namespace()))) {
+            ObPLDataType data_type;
+            if (param_info->is_schema_routine_param()) {
+              const ObRoutineParam* iparam = static_cast<const ObRoutineParam*>(param_info);
+              OZ (pl::ObPLDataType::transform_from_iparam(iparam,
+                                                          resolve_ctx_.schema_guard_,
+                                                          resolve_ctx_.session_info_,
+                                                          resolve_ctx_.allocator_,
+                                                          resolve_ctx_.sql_proxy_,
+                                                          data_type));
+              const ObUserDefinedType *user_type = NULL;
+              if (OB_SUCC(ret) && OB_INVALID_ID != data_type.get_user_type_id()) {
+                OZ (current_block_->get_namespace().get_pl_data_type_by_id(data_type.get_user_type_id(), user_type));
+              }
+            } else {
+              const ObPLRoutineParam* iparam = static_cast<const ObPLRoutineParam*>(param_info);
+              OX (data_type = iparam->get_type());
+            }
+            OZ (set_question_mark_type(params.at(i), &(current_block_->get_namespace()), &data_type));
+          }
         }
         if (OB_SUCC(ret)
             && OB_LIKELY(OB_INVALID_INDEX != expr_idx.at(i))) {
@@ -13560,7 +13580,7 @@ int ObPLResolver::resolve_local_var(const ObString &var_name,
   }
   if (OB_SUCC(ret) && for_write) {
     const ObPLVar *var = NULL;
-    const ObPLSymbolTable *symbol_table = NULL;
+    const ObPLSymbolTable *symbol_table = ns.get_symbol_table();
     CK (OB_NOT_NULL(symbol_table))
     CK (OB_NOT_NULL(var = symbol_table->get_symbol(var_index)));
     if (OB_SUCC(ret) && var->is_readonly()) {
