@@ -340,7 +340,8 @@ int ObTransformGroupByPushdown::check_child_stmts_valid(
     if (OB_ISNULL(child_stmt = child_stmts.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (child_stmt->is_set_stmt() || child_stmt->has_distinct()) {
+    } else if (child_stmt->is_set_stmt() || child_stmt->has_distinct() ||
+               child_stmt->is_hierarchical_query()) {
       is_valid = false;
     } else if (OB_FAIL(is_basic_select_stmt(child_stmt, is_basic))) {
       LOG_WARN("failed to check the child stmt of union stmt", K(ret));
@@ -370,20 +371,7 @@ int ObTransformGroupByPushdown::is_basic_select_stmt(ObSelectStmt *stmt, bool &i
     is_basic = false;
   } else if (0 != stmt->get_aggr_item_size()) {
     is_basic = false;
-  } else if (OB_FAIL(stmt->get_select_exprs(select_exprs))) {
-    LOG_WARN("failed to get select exprs", K(ret));
-  }
-  // else {
-  //   for (int64_t i = 0; OB_SUCC(ret) && is_basic && i < select_exprs.count(); ++i) {
-  //     ObRawExpr * expr = NULL;
-  //     if (OB_ISNULL(expr = select_exprs.at(i))) {
-  //       ret = OB_ERR_UNEXPECTED;
-  //       LOG_WARN("unexpected null", K(ret));
-  //     } else if (!expr->is_column_ref_expr() && !expr->is_const_expr()) {
-  //       is_basic = false;
-  //     }
-  //   }
-  // }
+  } else { /* do nothing */ }
   return ret;
 }
 
@@ -772,50 +760,36 @@ int ObTransformGroupByPushdown::get_new_select_expr_of_non_basic_child(
     if (OB_ISNULL(child_expr = old_exprs.at(idx))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("child expr is null", K(ret));
-    } else {
-      switch (param.aggr_func_type_) {
-      case T_NULL: {
-          new_expr = child_expr;
-        }
-      case T_FUN_SUM: {
-          new_expr = child_expr;
-          break;
-        }
-      case T_FUN_COUNT: {
-          ObConstRawExpr *zero_expr = NULL;
-          ObConstRawExpr *one_expr = NULL;
-          ObRawExpr *is_not_null_expr = NULL;
-          if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
-                  *ctx_->expr_factory_, ObIntType, 0, zero_expr)) ||
-              OB_ISNULL(zero_expr) ||
-              OB_FAIL(ObRawExprUtils::build_const_int_expr(
-                  *ctx_->expr_factory_, ObIntType, 1, one_expr)) ||
-              OB_ISNULL(one_expr) ||
-              OB_FAIL(ObRawExprUtils::build_is_not_null_expr(
-                  *ctx_->expr_factory_, child_expr, true, is_not_null_expr)) ||
-              OB_ISNULL(is_not_null_expr) ||
-              OB_FAIL(ObRawExprUtils::build_case_when_expr(
-                  *ctx_->expr_factory_, is_not_null_expr, one_expr, zero_expr,
-                  new_expr))) {
-            if (OB_SUCC(ret)) {
-              // unexpected null
-              ret = OB_ERR_UNEXPECTED;
-            }
-            LOG_WARN("failed to build expr", K(ret));
-          }
-          break;
-        }
-      case T_FUN_MAX:
-      case T_FUN_MIN: {
-          new_expr = child_expr;
-          break;
-        }
-      default: {
+    } else if (param.aggr_func_type_ == T_NULL ||
+               param.aggr_func_type_ == T_FUN_SUM ||
+               param.aggr_func_type_ == T_FUN_MIN ||
+               param.aggr_func_type_ == T_FUN_MAX) {
+      new_expr = child_expr;
+    } else if (param.aggr_func_type_ == T_FUN_COUNT) {
+      ObConstRawExpr *zero_expr = NULL;
+      ObConstRawExpr *one_expr = NULL;
+      ObRawExpr *is_not_null_expr = NULL;
+      if (OB_FAIL(ObRawExprUtils::build_const_int_expr(
+              *ctx_->expr_factory_, ObIntType, 0, zero_expr)) ||
+          OB_ISNULL(zero_expr) ||
+          OB_FAIL(ObRawExprUtils::build_const_int_expr(
+              *ctx_->expr_factory_, ObIntType, 1, one_expr)) ||
+          OB_ISNULL(one_expr) ||
+          OB_FAIL(ObRawExprUtils::build_is_not_null_expr(
+              *ctx_->expr_factory_, child_expr, true, is_not_null_expr)) ||
+          OB_ISNULL(is_not_null_expr) ||
+          OB_FAIL(ObRawExprUtils::build_case_when_expr(
+              *ctx_->expr_factory_, is_not_null_expr, one_expr, zero_expr,
+              new_expr))) {
+        if (OB_SUCC(ret)) {
+          // unexpected null
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected aggr_func_type:", K(ret),
-                   K(param.aggr_func_type_));
         }
+        LOG_WARN("failed to build expr", K(ret));
       }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected aggr_func_type:", K(ret), K(param.aggr_func_type_));
     }
   }
   return ret;
