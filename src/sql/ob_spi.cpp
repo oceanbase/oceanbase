@@ -3565,14 +3565,14 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           LOG_WARN("close mysql result failed", K(ret), K(close_ret));
         }
         ret = (OB_SUCCESS == ret ? close_ret : ret);
+        if (!is_dbms_cursor) {
+          spi_result.destruct_exec_params(session_info);
+        }
 
       } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(spi_cursor)) {
       spi_cursor->~ObSPICursor();
-    }
-    if (!is_dbms_cursor) {
-      spi_result.destruct_exec_params(session_info);
     }
     spi_result.end_nested_stmt_if_need(ctx, ret);
   }
