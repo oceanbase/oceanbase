@@ -3,7 +3,7 @@
   "item_type":"T_OP_LIKE",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -125,7 +125,7 @@
   "item_type":"T_OP_LIKE",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -251,7 +251,7 @@
   "item_type":"T_OP_IN",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -310,7 +310,7 @@
       "item_type":"T_OP_ROW",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -432,7 +432,7 @@
   "item_type":"T_OP_NOT_IN",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -491,7 +491,7 @@
       "item_type":"T_OP_ROW",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -613,7 +613,7 @@
   "item_type":"T_OP_OR",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -642,7 +642,7 @@
       "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -702,7 +702,7 @@
       "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -765,7 +765,7 @@
   "item_type":"T_OP_AND",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -792,7 +792,7 @@
       "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -852,7 +852,7 @@
       "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -915,7 +915,7 @@
   "item_type":"T_OP_OR",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -944,7 +944,7 @@
       "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -1004,7 +1004,7 @@
       "item_type":"T_OP_AND",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -1031,7 +1031,7 @@
           "item_type":"T_OP_BOOL",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -1091,7 +1091,7 @@
           "item_type":"T_OP_BOOL",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -1156,7 +1156,7 @@
   "item_type":"T_OP_ARG_CASE",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -1182,7 +1182,7 @@
     "item_type":"T_REF_COLUMN",
     "result_type": {
       "meta": {
-        "type":"",
+        "type":null,
         "collation":"binary",
         "coercibility":"NUMERIC"
       },
@@ -1397,7 +1397,7 @@
   "item_type":"T_OP_CASE",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -1457,7 +1457,7 @@
       "item_type":"T_OP_GT",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -1584,7 +1584,7 @@
   "item_type":"T_FUN_SYS_CUR_TIMESTAMP",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -1624,7 +1624,7 @@
   "item_type":"T_FUN_SYS_UTC_TIMESTAMP",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -1664,7 +1664,7 @@
   "item_type":"T_FUN_SYS_FLOOR",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -1733,7 +1733,7 @@
   "item_type":"T_FUN_COUNT",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -1777,7 +1777,7 @@
   "item_type":"T_FUN_MAX",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -1806,7 +1806,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -1870,7 +1870,7 @@
   "item_type":"T_OP_SQ_EQ",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -1898,7 +1898,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -1946,7 +1946,7 @@
       "item_type":"T_REF_QUERY",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -1987,7 +1987,7 @@
   "item_type":"T_OP_EQ",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -2045,7 +2045,7 @@
       "item_type":"T_REF_QUERY",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -2086,7 +2086,7 @@
   "item_type":"T_OP_EQ",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -2114,7 +2114,7 @@
       "item_type":"T_OP_ROW",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -2140,7 +2140,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -2188,7 +2188,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -2238,7 +2238,7 @@
       "item_type":"T_REF_QUERY",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -2310,7 +2310,7 @@
   "item_type":"T_OP_GET_SYS_VAR",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -2411,7 +2411,7 @@
   "item_type":"T_OP_GET_USER_VAR",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -2484,7 +2484,7 @@
   "item_type":"T_REF_COLUMN",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -2533,7 +2533,7 @@
   "item_type":"T_OP_ADD",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -2623,7 +2623,7 @@
   "item_type":"T_OP_NOT",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -2652,7 +2652,7 @@
       "item_type":"T_OP_BOOL",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -2715,7 +2715,7 @@
   "item_type":"T_OP_EQ",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -2742,7 +2742,7 @@
       "item_type":"T_OP_ADD",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -2768,7 +2768,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -2816,7 +2816,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -2866,7 +2866,7 @@
       "item_type":"T_OP_ADD",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -2892,7 +2892,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -2940,7 +2940,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -2993,7 +2993,7 @@
   "item_type":"T_OP_EQ",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -3021,7 +3021,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3102,7 +3102,7 @@
   "item_type":"T_OP_GT",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -3130,7 +3130,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3211,7 +3211,7 @@
   "item_type":"T_OP_GT",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -3237,7 +3237,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3285,7 +3285,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3336,7 +3336,7 @@
   "item_type":"T_OP_IN",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -3366,7 +3366,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3414,7 +3414,7 @@
       "item_type":"T_OP_ROW",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3566,7 +3566,7 @@
   "item_type":"T_OP_AND",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -3593,7 +3593,7 @@
       "item_type":"T_OP_GE",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3621,7 +3621,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -3701,7 +3701,7 @@
       "item_type":"T_OP_LE",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3729,7 +3729,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -3812,7 +3812,7 @@
   "item_type":"T_OP_ADD",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -3840,7 +3840,7 @@
       "item_type":"T_OP_ADD",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3929,7 +3929,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -3980,7 +3980,7 @@
   "item_type":"T_OP_EQ",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -4009,7 +4009,7 @@
       "item_type":"T_REF_COLUMN",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -4057,7 +4057,7 @@
       "item_type":"T_OP_ADD",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -4149,7 +4149,7 @@
   "item_type":"T_OP_AND",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -4177,7 +4177,7 @@
       "item_type":"T_OP_GE",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -4206,7 +4206,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -4345,7 +4345,7 @@
       "item_type":"T_OP_LE",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -4373,7 +4373,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -4456,7 +4456,7 @@
   "item_type":"T_OP_OR",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -4487,7 +4487,7 @@
       "item_type":"T_OP_AND",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -4516,7 +4516,7 @@
           "item_type":"T_OP_GT",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -4544,7 +4544,7 @@
               "item_type":"T_OP_ADD",
               "result_type": {
                 "meta": {
-                  "type":"",
+                  "type":null,
                   "collation":"binary",
                   "coercibility":"NUMERIC"
                 },
@@ -4601,7 +4601,7 @@
                   "item_type":"T_REF_COLUMN",
                   "result_type": {
                     "meta": {
-                      "type":"",
+                      "type":null,
                       "collation":"binary",
                       "coercibility":"NUMERIC"
                     },
@@ -4685,7 +4685,7 @@
           "item_type":"T_OP_BOOL",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -4749,7 +4749,7 @@
       "item_type":"T_OP_EQ",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -4777,7 +4777,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -4862,7 +4862,7 @@
   "item_type":"T_FUN_SYS_CAST",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -4892,7 +4892,7 @@
       "item_type":"T_FUN_SYS_CAST",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -4922,7 +4922,7 @@
           "item_type":"T_FUN_SYS_SET_COLLATION",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -4952,7 +4952,7 @@
               "item_type":"T_FUN_SYS_SET_COLLATION",
               "result_type": {
                 "meta": {
-                  "type":"",
+                  "type":null,
                   "collation":"binary",
                   "coercibility":"NUMERIC"
                 },
@@ -5167,7 +5167,7 @@
   "item_type":"T_OP_NOT",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -5196,7 +5196,7 @@
       "item_type":"T_OP_LIKE",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -5223,7 +5223,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -5271,7 +5271,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -5356,7 +5356,7 @@
   "item_type":"T_OP_NOT",
   "result_type": {
     "meta": {
-      "type":"",
+      "type":null,
       "collation":"binary",
       "coercibility":"NUMERIC"
     },
@@ -5384,7 +5384,7 @@
       "item_type":"T_OP_REGEXP",
       "result_type": {
         "meta": {
-          "type":"",
+          "type":null,
           "collation":"binary",
           "coercibility":"NUMERIC"
         },
@@ -5410,7 +5410,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },
@@ -5458,7 +5458,7 @@
           "item_type":"T_REF_COLUMN",
           "result_type": {
             "meta": {
-              "type":"",
+              "type":null,
               "collation":"binary",
               "coercibility":"NUMERIC"
             },

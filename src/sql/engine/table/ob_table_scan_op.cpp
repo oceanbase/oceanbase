@@ -1875,7 +1875,8 @@ int ObTableScanOp::do_init_before_get_row()
           LOG_WARN("fail to set partition name", K(ret), K(info.tablet_loc_->tablet_id_));
         }
       }
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret) || OB_UNLIKELY(iter_end_)) {
+        // do nothing
       } else if (OB_FAIL(prepare_all_das_tasks())) {
         LOG_WARN("prepare das task failed", K(ret));
       } else if (OB_FAIL(do_table_scan())) {

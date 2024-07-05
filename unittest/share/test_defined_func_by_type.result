@@ -51,6 +51,7 @@
 <NULL, GEOMETRY> : defined
 <NULL, UDT> : not defined
 <NULL, DECIMAL_INT> : defined
+<NULL, VECTOR> : defined
 
 /**************** TINYINT ****************/
 
@@ -105,6 +106,7 @@
 <TINYINT, GEOMETRY> : not defined
 <TINYINT, UDT> : not defined
 <TINYINT, DECIMAL_INT> : not defined
+<TINYINT, VECTOR> : not defined
 
 /**************** SMALLINT ****************/
 
@@ -159,6 +161,7 @@
 <SMALLINT, GEOMETRY> : not defined
 <SMALLINT, UDT> : not defined
 <SMALLINT, DECIMAL_INT> : not defined
+<SMALLINT, VECTOR> : not defined
 
 /**************** MEDIUMINT ****************/
 
@@ -213,6 +216,7 @@
 <MEDIUMINT, GEOMETRY> : not defined
 <MEDIUMINT, UDT> : not defined
 <MEDIUMINT, DECIMAL_INT> : not defined
+<MEDIUMINT, VECTOR> : not defined
 
 /**************** INT ****************/
 
@@ -267,6 +271,7 @@
 <INT, GEOMETRY> : not defined
 <INT, UDT> : not defined
 <INT, DECIMAL_INT> : not defined
+<INT, VECTOR> : not defined
 
 /**************** BIGINT ****************/
 
@@ -321,6 +326,7 @@
 <BIGINT, GEOMETRY> : not defined
 <BIGINT, UDT> : not defined
 <BIGINT, DECIMAL_INT> : not defined
+<BIGINT, VECTOR> : not defined
 
 /**************** TINYINT UNSIGNED ****************/
 
@@ -375,6 +381,7 @@
 <TINYINT UNSIGNED, GEOMETRY> : not defined
 <TINYINT UNSIGNED, UDT> : not defined
 <TINYINT UNSIGNED, DECIMAL_INT> : not defined
+<TINYINT UNSIGNED, VECTOR> : not defined
 
 /**************** SMALLINT UNSIGNED ****************/
 
@@ -429,6 +436,7 @@
 <SMALLINT UNSIGNED, GEOMETRY> : not defined
 <SMALLINT UNSIGNED, UDT> : not defined
 <SMALLINT UNSIGNED, DECIMAL_INT> : not defined
+<SMALLINT UNSIGNED, VECTOR> : not defined
 
 /**************** MEDIUMINT UNSIGNED ****************/
 
@@ -483,6 +491,7 @@
 <MEDIUMINT UNSIGNED, GEOMETRY> : not defined
 <MEDIUMINT UNSIGNED, UDT> : not defined
 <MEDIUMINT UNSIGNED, DECIMAL_INT> : not defined
+<MEDIUMINT UNSIGNED, VECTOR> : not defined
 
 /**************** INT UNSIGNED ****************/
 
@@ -537,6 +546,7 @@
 <INT UNSIGNED, GEOMETRY> : not defined
 <INT UNSIGNED, UDT> : not defined
 <INT UNSIGNED, DECIMAL_INT> : not defined
+<INT UNSIGNED, VECTOR> : not defined
 
 /**************** BIGINT UNSIGNED ****************/
 
@@ -591,6 +601,7 @@
 <BIGINT UNSIGNED, GEOMETRY> : not defined
 <BIGINT UNSIGNED, UDT> : not defined
 <BIGINT UNSIGNED, DECIMAL_INT> : not defined
+<BIGINT UNSIGNED, VECTOR> : not defined
 
 /**************** FLOAT ****************/
 
@@ -645,6 +656,7 @@
 <FLOAT, GEOMETRY> : not defined
 <FLOAT, UDT> : not defined
 <FLOAT, DECIMAL_INT> : not defined
+<FLOAT, VECTOR> : not defined
 
 /**************** DOUBLE ****************/
 
@@ -699,6 +711,7 @@
 <DOUBLE, GEOMETRY> : not defined
 <DOUBLE, UDT> : not defined
 <DOUBLE, DECIMAL_INT> : not defined
+<DOUBLE, VECTOR> : not defined
 
 /**************** FLOAT UNSIGNED ****************/
 
@@ -753,6 +766,7 @@
 <FLOAT UNSIGNED, GEOMETRY> : not defined
 <FLOAT UNSIGNED, UDT> : not defined
 <FLOAT UNSIGNED, DECIMAL_INT> : not defined
+<FLOAT UNSIGNED, VECTOR> : not defined
 
 /**************** DOUBLE UNSIGNED ****************/
 
@@ -807,6 +821,7 @@
 <DOUBLE UNSIGNED, GEOMETRY> : not defined
 <DOUBLE UNSIGNED, UDT> : not defined
 <DOUBLE UNSIGNED, DECIMAL_INT> : not defined
+<DOUBLE UNSIGNED, VECTOR> : not defined
 
 /**************** DECIMAL ****************/
 
@@ -861,6 +876,7 @@
 <DECIMAL, GEOMETRY> : not defined
 <DECIMAL, UDT> : not defined
 <DECIMAL, DECIMAL_INT> : not defined
+<DECIMAL, VECTOR> : not defined
 
 /**************** DECIMAL UNSIGNED ****************/
 
@@ -915,6 +931,7 @@
 <DECIMAL UNSIGNED, GEOMETRY> : not defined
 <DECIMAL UNSIGNED, UDT> : not defined
 <DECIMAL UNSIGNED, DECIMAL_INT> : not defined
+<DECIMAL UNSIGNED, VECTOR> : not defined
 
 /**************** DATETIME ****************/
 
@@ -969,6 +986,7 @@
 <DATETIME, GEOMETRY> : not defined
 <DATETIME, UDT> : not defined
 <DATETIME, DECIMAL_INT> : not defined
+<DATETIME, VECTOR> : not defined
 
 /**************** TIMESTAMP ****************/
 
@@ -1023,6 +1041,7 @@
 <TIMESTAMP, GEOMETRY> : not defined
 <TIMESTAMP, UDT> : not defined
 <TIMESTAMP, DECIMAL_INT> : not defined
+<TIMESTAMP, VECTOR> : not defined
 
 /**************** DATE ****************/
 
@@ -1077,6 +1096,7 @@
 <DATE, GEOMETRY> : not defined
 <DATE, UDT> : not defined
 <DATE, DECIMAL_INT> : not defined
+<DATE, VECTOR> : not defined
 
 /**************** TIME ****************/
 
@@ -1131,6 +1151,7 @@
 <TIME, GEOMETRY> : not defined
 <TIME, UDT> : not defined
 <TIME, DECIMAL_INT> : not defined
+<TIME, VECTOR> : not defined
 
 /**************** YEAR ****************/
 
@@ -1185,6 +1206,7 @@
 <YEAR, GEOMETRY> : not defined
 <YEAR, UDT> : not defined
 <YEAR, DECIMAL_INT> : not defined
+<YEAR, VECTOR> : not defined
 
 /**************** VARCHAR ****************/
 
@@ -1239,6 +1261,7 @@
 <VARCHAR, GEOMETRY> : not defined
 <VARCHAR, UDT> : not defined
 <VARCHAR, DECIMAL_INT> : not defined
+<VARCHAR, VECTOR> : not defined
 
 /**************** CHAR ****************/
 
@@ -1293,6 +1316,7 @@
 <CHAR, GEOMETRY> : not defined
 <CHAR, UDT> : not defined
 <CHAR, DECIMAL_INT> : not defined
+<CHAR, VECTOR> : not defined
 
 /**************** HEX_STRING ****************/
 
@@ -1347,6 +1371,7 @@
 <HEX_STRING, GEOMETRY> : not defined
 <HEX_STRING, UDT> : not defined
 <HEX_STRING, DECIMAL_INT> : not defined
+<HEX_STRING, VECTOR> : not defined
 
 /**************** EXT ****************/
 
@@ -1401,6 +1426,7 @@
 <EXT, GEOMETRY> : defined
 <EXT, UDT> : not defined
 <EXT, DECIMAL_INT> : defined
+<EXT, VECTOR> : defined
 
 /**************** UNKNOWN ****************/
 
@@ -1455,6 +1481,7 @@
 <UNKNOWN, GEOMETRY> : not defined
 <UNKNOWN, UDT> : not defined
 <UNKNOWN, DECIMAL_INT> : not defined
+<UNKNOWN, VECTOR> : not defined
 
 /**************** TINYTEXT ****************/
 
@@ -1509,6 +1536,7 @@
 <TINYTEXT, GEOMETRY> : not defined
 <TINYTEXT, UDT> : not defined
 <TINYTEXT, DECIMAL_INT> : not defined
+<TINYTEXT, VECTOR> : not defined
 
 /**************** TEXT ****************/
 
@@ -1563,6 +1591,7 @@
 <TEXT, GEOMETRY> : not defined
 <TEXT, UDT> : not defined
 <TEXT, DECIMAL_INT> : not defined
+<TEXT, VECTOR> : not defined
 
 /**************** MEDIUMTEXT ****************/
 
@@ -1617,6 +1646,7 @@
 <MEDIUMTEXT, GEOMETRY> : not defined
 <MEDIUMTEXT, UDT> : not defined
 <MEDIUMTEXT, DECIMAL_INT> : not defined
+<MEDIUMTEXT, VECTOR> : not defined
 
 /**************** LONGTEXT ****************/
 
@@ -1671,6 +1701,7 @@
 <LONGTEXT, GEOMETRY> : not defined
 <LONGTEXT, UDT> : not defined
 <LONGTEXT, DECIMAL_INT> : not defined
+<LONGTEXT, VECTOR> : not defined
 
 /**************** BIT ****************/
 
@@ -1725,6 +1756,7 @@
 <BIT, GEOMETRY> : not defined
 <BIT, UDT> : not defined
 <BIT, DECIMAL_INT> : not defined
+<BIT, VECTOR> : not defined
 
 /**************** ENUM ****************/
 
@@ -1779,6 +1811,7 @@
 <ENUM, GEOMETRY> : not defined
 <ENUM, UDT> : not defined
 <ENUM, DECIMAL_INT> : not defined
+<ENUM, VECTOR> : not defined
 
 /**************** SET ****************/
 
@@ -1833,6 +1866,7 @@
 <SET, GEOMETRY> : not defined
 <SET, UDT> : not defined
 <SET, DECIMAL_INT> : not defined
+<SET, VECTOR> : not defined
 
 /**************** ENUM_INNER ****************/
 
@@ -1887,6 +1921,7 @@
 <ENUM_INNER, GEOMETRY> : not defined
 <ENUM_INNER, UDT> : not defined
 <ENUM_INNER, DECIMAL_INT> : not defined
+<ENUM_INNER, VECTOR> : not defined
 
 /**************** SET_INNER ****************/
 
@@ -1941,6 +1976,7 @@
 <SET_INNER, GEOMETRY> : not defined
 <SET_INNER, UDT> : not defined
 <SET_INNER, DECIMAL_INT> : not defined
+<SET_INNER, VECTOR> : not defined
 
 /**************** TIMESTAMP_WITH_TIME_ZONE ****************/
 
@@ -1995,6 +2031,7 @@
 <TIMESTAMP_WITH_TIME_ZONE, GEOMETRY> : not defined
 <TIMESTAMP_WITH_TIME_ZONE, UDT> : not defined
 <TIMESTAMP_WITH_TIME_ZONE, DECIMAL_INT> : not defined
+<TIMESTAMP_WITH_TIME_ZONE, VECTOR> : not defined
 
 /**************** TIMESTAMP_WITH_LOCAL_TIME_ZONE ****************/
 
@@ -2049,6 +2086,7 @@
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, GEOMETRY> : not defined
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, UDT> : not defined
 <TIMESTAMP_WITH_LOCAL_TIME_ZONE, DECIMAL_INT> : not defined
+<TIMESTAMP_WITH_LOCAL_TIME_ZONE, VECTOR> : not defined
 
 /**************** TIMESTAMP ****************/
 
@@ -2103,6 +2141,7 @@
 <TIMESTAMP, GEOMETRY> : not defined
 <TIMESTAMP, UDT> : not defined
 <TIMESTAMP, DECIMAL_INT> : not defined
+<TIMESTAMP, VECTOR> : not defined
 
 /**************** RAW ****************/
 
@@ -2157,6 +2196,7 @@
 <RAW, GEOMETRY> : not defined
 <RAW, UDT> : not defined
 <RAW, DECIMAL_INT> : not defined
+<RAW, VECTOR> : not defined
 
 /**************** INTERVAL_YEAR_TO_MONTH ****************/
 
@@ -2211,6 +2251,7 @@
 <INTERVAL_YEAR_TO_MONTH, GEOMETRY> : not defined
 <INTERVAL_YEAR_TO_MONTH, UDT> : not defined
 <INTERVAL_YEAR_TO_MONTH, DECIMAL_INT> : not defined
+<INTERVAL_YEAR_TO_MONTH, VECTOR> : not defined
 
 /**************** INTERVAL_DAY_TO_SECOND ****************/
 
@@ -2265,6 +2306,7 @@
 <INTERVAL_DAY_TO_SECOND, GEOMETRY> : not defined
 <INTERVAL_DAY_TO_SECOND, UDT> : not defined
 <INTERVAL_DAY_TO_SECOND, DECIMAL_INT> : not defined
+<INTERVAL_DAY_TO_SECOND, VECTOR> : not defined
 
 /**************** NUMBER_FLOAT ****************/
 
@@ -2319,6 +2361,7 @@
 <NUMBER_FLOAT, GEOMETRY> : not defined
 <NUMBER_FLOAT, UDT> : not defined
 <NUMBER_FLOAT, DECIMAL_INT> : not defined
+<NUMBER_FLOAT, VECTOR> : not defined
 
 /**************** NVARCHAR2 ****************/
 
@@ -2373,6 +2416,7 @@
 <NVARCHAR2, GEOMETRY> : not defined
 <NVARCHAR2, UDT> : not defined
 <NVARCHAR2, DECIMAL_INT> : not defined
+<NVARCHAR2, VECTOR> : not defined
 
 /**************** NCHAR ****************/
 
@@ -2427,6 +2471,7 @@
 <NCHAR, GEOMETRY> : not defined
 <NCHAR, UDT> : not defined
 <NCHAR, DECIMAL_INT> : not defined
+<NCHAR, VECTOR> : not defined
 
 /**************** ROWID ****************/
 
@@ -2481,6 +2526,7 @@
 <ROWID, GEOMETRY> : not defined
 <ROWID, UDT> : not defined
 <ROWID, DECIMAL_INT> : not defined
+<ROWID, VECTOR> : not defined
 
 /**************** LOB ****************/
 
@@ -2535,6 +2581,7 @@
 <LOB, GEOMETRY> : not defined
 <LOB, UDT> : not defined
 <LOB, DECIMAL_INT> : not defined
+<LOB, VECTOR> : not defined
 
 /**************** JSON ****************/
 
@@ -2589,6 +2636,7 @@
 <JSON, GEOMETRY> : not defined
 <JSON, UDT> : not defined
 <JSON, DECIMAL_INT> : not defined
+<JSON, VECTOR> : not defined
 
 /**************** GEOMETRY ****************/
 
@@ -2643,6 +2691,7 @@
 <GEOMETRY, GEOMETRY> : defined
 <GEOMETRY, UDT> : not defined
 <GEOMETRY, DECIMAL_INT> : not defined
+<GEOMETRY, VECTOR> : not defined
 
 /**************** UDT ****************/
 
@@ -2697,6 +2746,7 @@
 <UDT, GEOMETRY> : not defined
 <UDT, UDT> : not defined
 <UDT, DECIMAL_INT> : not defined
+<UDT, VECTOR> : not defined
 
 /**************** DECIMAL_INT ****************/
 
@@ -2751,4 +2801,60 @@
 <DECIMAL_INT, GEOMETRY> : not defined
 <DECIMAL_INT, UDT> : not defined
 <DECIMAL_INT, DECIMAL_INT> : defined
+<DECIMAL_INT, VECTOR> : not defined
+
+/**************** VECTOR ****************/
+
+<VECTOR, NULL> : defined
+<VECTOR, TINYINT> : not defined
+<VECTOR, SMALLINT> : not defined
+<VECTOR, MEDIUMINT> : not defined
+<VECTOR, INT> : not defined
+<VECTOR, BIGINT> : not defined
+<VECTOR, TINYINT UNSIGNED> : not defined
+<VECTOR, SMALLINT UNSIGNED> : not defined
+<VECTOR, MEDIUMINT UNSIGNED> : not defined
+<VECTOR, INT UNSIGNED> : not defined
+<VECTOR, BIGINT UNSIGNED> : not defined
+<VECTOR, FLOAT> : not defined
+<VECTOR, DOUBLE> : not defined
+<VECTOR, FLOAT UNSIGNED> : not defined
+<VECTOR, DOUBLE UNSIGNED> : not defined
+<VECTOR, DECIMAL> : not defined
+<VECTOR, DECIMAL UNSIGNED> : not defined
+<VECTOR, DATETIME> : not defined
+<VECTOR, TIMESTAMP> : not defined
+<VECTOR, DATE> : not defined
+<VECTOR, TIME> : not defined
+<VECTOR, YEAR> : not defined
+<VECTOR, VARCHAR> : not defined
+<VECTOR, CHAR> : not defined
+<VECTOR, HEX_STRING> : not defined
+<VECTOR, EXT> : defined
+<VECTOR, UNKNOWN> : not defined
+<VECTOR, TINYTEXT> : not defined
+<VECTOR, TEXT> : not defined
+<VECTOR, MEDIUMTEXT> : not defined
+<VECTOR, LONGTEXT> : not defined
+<VECTOR, BIT> : not defined
+<VECTOR, ENUM> : not defined
+<VECTOR, SET> : not defined
+<VECTOR, ENUM_INNER> : not defined
+<VECTOR, SET_INNER> : not defined
+<VECTOR, TIMESTAMP_WITH_TIME_ZONE> : not defined
+<VECTOR, TIMESTAMP_WITH_LOCAL_TIME_ZONE> : not defined
+<VECTOR, TIMESTAMP> : not defined
+<VECTOR, RAW> : not defined
+<VECTOR, INTERVAL_YEAR_TO_MONTH> : not defined
+<VECTOR, INTERVAL_DAY_TO_SECOND> : not defined
+<VECTOR, NUMBER_FLOAT> : not defined
+<VECTOR, NVARCHAR2> : not defined
+<VECTOR, NCHAR> : not defined
+<VECTOR, ROWID> : not defined
+<VECTOR, LOB> : not defined
+<VECTOR, JSON> : not defined
+<VECTOR, GEOMETRY> : not defined
+<VECTOR, UDT> : not defined
+<VECTOR, DECIMAL_INT> : not defined
+<VECTOR, VECTOR> : defined
 
