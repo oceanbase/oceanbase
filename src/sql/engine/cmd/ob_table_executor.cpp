@@ -823,7 +823,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
   ObSArray<obrpc::ObIndexArg *> drop_index_args;
   alter_table_arg.index_arg_list_.reset();
-
+  DEBUG_SYNC(BEFORE_SEND_ALTER_TABLE);
   if (OB_ISNULL(my_session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -867,7 +867,9 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
         || obrpc::ObAlterTableArg::INTERVAL_TO_RANGE == alter_table_arg.alter_part_type_) {
       alter_table_arg.is_alter_partitions_ = true;
     }
-    if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
+    if (OB_FAIL(populate_based_schema_obj_info_(alter_table_arg))) {
+      LOG_WARN("fail to populate based schema obj info", KR(ret));
+    } else if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
       LOG_WARN("rpc proxy alter table failed", KR(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
     } else {
       // 在回滚时不会重试，也不检查 schema version
@@ -2542,6 +2544,51 @@ int ObOptimizeAllExecutor::execute(ObExecContext &ctx, ObOptimizeAllStmt &stmt)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObAlterTableExecutor::populate_based_schema_obj_info_(obrpc::ObAlterTableArg &alter_table_arg) {
+  int ret = OB_SUCCESS;
+  const uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
+  if (OB_INVALID_ID != table_id) {
+    const uint64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
+    SMART_VAR(ObSchemaGetterGuard, guard) {
+    const ObTableSchema *orig_table = nullptr;
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+                tenant_id, guard))) {
+      LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(guard.get_table_schema(tenant_id, table_id, orig_table))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(orig_table)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exits", KR(ret), K(table_id));
+    } else {
+      bool find = false;
+      for (int i = 0; i < OB_SUCC(ret) && alter_table_arg.based_schema_object_infos_.count(); ++i) {
+        ObBasedSchemaObjectInfo &based_schema_object_info =
+                                alter_table_arg.based_schema_object_infos_.at(i);
+        if (based_schema_object_info.schema_id_ == alter_table_arg.table_id_) {
+          find = true;
+          if (based_schema_object_info.schema_version_ == orig_table->get_schema_version()) {
+            break;
+          } else {
+            ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+            LOG_WARN("schema version not consistent", KR(ret), K(based_schema_object_info.schema_version_),
+                                                      K(orig_table->get_schema_version()));
+          }
+        }
+      }
+      if (false == find) {
+        if (OB_FAIL(alter_table_arg.based_schema_object_infos_.push_back(
+                    ObBasedSchemaObjectInfo(table_id, TABLE_SCHEMA,
+                                            orig_table->get_schema_version())))) {
+          LOG_WARN("fail to push back based schema object info", KR(ret), K(alter_table_arg.table_id_),
+                   K(orig_table->get_schema_version()));
+        }
+      }
+    }
+    } // end smart var
   }
   return ret;
 }
