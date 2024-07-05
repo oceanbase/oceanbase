@@ -714,9 +714,7 @@ int ObLogRestoreHandler::check_restore_to_newest(share::SCN &end_scn, share::SCN
   if (OB_SUCC(ret) && NULL != source) {
     if (share::is_location_log_source_type(source->get_source_type())) {
       ObRemoteLocationParent *location_source = dynamic_cast<ObRemoteLocationParent *>(source);
-      ObLogArchivePieceContext *piece_context = NULL;
-      location_source->get(dest, piece_context, restore_scn);
-      ret = check_restore_to_newest_from_archive_(*piece_context, end_lsn, end_scn, archive_scn);
+      ret = check_restore_to_newest_from_archive_(*location_source, end_lsn, end_scn, archive_scn);
     } else if (share::is_service_log_source_type(source->get_source_type())) {
       ObRemoteSerivceParent *service_source = dynamic_cast<ObRemoteSerivceParent *>(source);
       share::ObRestoreSourceServiceAttr *service_attr = NULL;
@@ -923,24 +921,93 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
 }
 
 int ObLogRestoreHandler::check_restore_to_newest_from_archive_(
-    ObLogArchivePieceContext &piece_context,
+    ObRemoteLocationParent &location_parent,
     const palf::LSN &end_lsn,
     const share::SCN &end_scn,
-    share::SCN &archive_scn)
+    share::SCN &archive_next_scn)
 {
   int ret = OB_SUCCESS;
-  palf::LSN archive_lsn;
-  if (OB_FAIL(piece_context.get_max_archive_log(archive_lsn, archive_scn))) {
+  ObLogArchivePieceContext *piece_context = NULL;
+  share::ObBackupDest *dest = NULL;
+  share::SCN restore_scn;
+  if (OB_FAIL(get_next_log_after_end_lsn_(location_parent, end_lsn, end_scn, archive_next_scn))) {
     CLOG_LOG(WARN, "get max archive log failed", K(id_));
-  } else if (archive_lsn == end_lsn && archive_scn == SCN::min_scn()) {
-    archive_scn = end_scn;
-    CLOG_LOG(INFO, "rewrite archive_scn while end_lsn equals to archive_lsn and archive_scn not got",
-        K(id_), K(archive_lsn), K(archive_scn), K(end_lsn), K(end_scn));
-  } else if (end_scn < archive_scn) {
-    CLOG_LOG(INFO, "end_scn smaller than archive_scn", K(id_), K(archive_scn), K(end_scn));
+  } else if (end_scn < archive_next_scn) {
+    CLOG_LOG(INFO, "end_scn smaller than archive_scn", K(id_), K(archive_next_scn), K(end_scn));
   } else {
-    CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_scn), K(end_scn));
+    CLOG_LOG(INFO, "check_restore_to_newest succ", K(id_), K(archive_next_scn), K(end_scn));
   }
+  return ret;
+}
+
+int ObLogRestoreHandler::get_next_log_after_end_lsn_(ObRemoteLocationParent &location_parent,
+  const palf::LSN &end_lsn, const share::SCN &end_scn, share::SCN &archive_scn)
+{
+  int ret = OB_SUCCESS;
+
+  class GetSourceFunctor {
+  public:
+    GetSourceFunctor(ObRemoteLocationParent &location_parent):
+        location_parent_(location_parent) {}
+    int operator()(const share::ObLSID &id, ObRemoteSourceGuard &guard)
+    {
+      int ret = OB_SUCCESS;
+      ObRemoteLocationParent *location_parent = static_cast<ObRemoteLocationParent*>(ObResSrcAlloctor::alloc(share::ObLogRestoreSourceType::LOCATION, id));
+      if (OB_ISNULL(location_parent)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        CLOG_LOG(WARN, "failed to allocate location_parent", K(id));
+      } else if (OB_FAIL(location_parent_.deep_copy_to(*location_parent))) {
+        CLOG_LOG(WARN, "failed to deep copy to location_parent");
+      } else if (OB_FAIL(guard.set_source(location_parent))) {
+        CLOG_LOG(WARN, "failed to set location source");
+      }
+
+      if (OB_FAIL(ret) && OB_NOT_NULL(location_parent)) {
+        ObResSrcAlloctor::free(location_parent);
+        location_parent = nullptr;
+      }
+      return ret;
+    }
+  private:
+    ObRemoteLocationParent &location_parent_;
+  };
+  GetSourceFunctor get_source_func(location_parent);
+  ObRemoteLogGroupEntryIterator remote_iter(get_source_func);
+  LargeBufferPool tmp_buffer_pool;
+  ObLogExternalStorageHandler tmp_handler;
+  LogGroupEntry tmp_entry;
+  LSN tmp_lsn;
+  const char *tmp_buf = NULL;
+  int64_t tmp_buf_len = 0;
+  constexpr int64_t DEFAULT_BUF_SIZE = 64L * 1024 * 1024;
+
+  if (OB_FAIL(tmp_buffer_pool.init("TmpLargePool", 1024L * 1024 * 1024))) {
+    CLOG_LOG(WARN, "failed to init tmp_buffer_pool");
+  } else if (OB_FAIL(tmp_handler.init())) {
+    CLOG_LOG(WARN, "failed to init tmp_handler");
+  } else if (OB_FAIL(tmp_handler.start(0))) {
+    CLOG_LOG(WARN, "failed to start tmp_handler");
+  } else if (OB_FAIL(remote_iter.init(MTL_ID(), ObLSID(id_), end_scn, end_lsn, palf::LSN(palf::LOG_MAX_LSN_VAL), &tmp_buffer_pool, &tmp_handler, DEFAULT_BUF_SIZE))) {
+    CLOG_LOG(WARN, "failed to init remote_iter");
+  } else if (OB_FAIL(remote_iter.next(tmp_entry, tmp_lsn, tmp_buf, tmp_buf_len))) {
+    if (OB_ITER_END == ret) {
+      archive_scn = end_scn;
+      ret = OB_SUCCESS;
+    } else if (OB_ARCHIVE_ROUND_NOT_CONTINUOUS == ret) {
+      // return
+      CLOG_LOG(WARN, "round not continuous, there could be newer archivelog");
+    } else {
+      CLOG_LOG(WARN, "failed to iterate remote_log");
+    }
+  } else {
+    archive_scn = tmp_entry.get_scn();
+  }
+  remote_iter.reset();
+  tmp_handler.stop();
+  tmp_handler.wait();
+  tmp_handler.destroy();
+  tmp_buffer_pool.destroy();
+
   return ret;
 }
 

@@ -1378,7 +1378,7 @@ int ObTenantRoleTransitionService::get_checkpoints_by_rpc(const uint64_t tenant_
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("result is null", KR(ret), K(i));
           } else {
-            ObCheckpoint checkpoint(result->get_ls_id(), result->get_cur_sync_scn(), result->get_cur_restore_source_max_scn());
+            ObCheckpoint checkpoint(result->get_ls_id(), result->get_cur_sync_scn(), result->get_cur_restore_source_next_scn());
             if (OB_FAIL(checkpoints.push_back(checkpoint))) {
               LOG_WARN("failed to push back checkpoint", KR(ret), K(checkpoint));
             }

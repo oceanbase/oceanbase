@@ -6944,12 +6944,12 @@ public:
   ObGetLSSyncScnRes(): tenant_id_(OB_INVALID_TENANT_ID),
                        ls_id_(),
                        cur_sync_scn_(share::SCN::min_scn()),
-                       cur_restore_source_max_scn_(share::SCN::min_scn()) {}
+                       cur_restore_source_next_scn_(share::SCN::min_scn()) {}
   ~ObGetLSSyncScnRes() {}
   bool is_valid() const;
-  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn);
+  int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_next_scn);
   int assign(const ObGetLSSyncScnRes &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_max_scn));
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_next_scn));
   uint64_t get_tenant_id() const
   {
     return tenant_id_;
@@ -6962,9 +6962,9 @@ public:
   {
     return cur_sync_scn_;
   }
-  share::SCN get_cur_restore_source_max_scn() const
+  share::SCN get_cur_restore_source_next_scn() const
   {
-    return cur_restore_source_max_scn_;
+    return cur_restore_source_next_scn_;
   }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObGetLSSyncScnRes);
@@ -6972,7 +6972,7 @@ private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;
-  share::SCN cur_restore_source_max_scn_;
+  share::SCN cur_restore_source_next_scn_;
 };
 
 struct ObRefreshTenantInfoArg
@@ -7077,16 +7077,16 @@ public:
   ObCheckpoint():
     ls_id_(),
     cur_sync_scn_(share::SCN::min_scn()),
-    cur_restore_source_max_scn_(share::SCN::min_scn()) {}
-  explicit ObCheckpoint(const int64_t id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn):
+    cur_restore_source_next_scn_(share::SCN::min_scn()) {}
+  explicit ObCheckpoint(const int64_t id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_next_scn):
     ls_id_(id),
     cur_sync_scn_(cur_sync_scn),
-    cur_restore_source_max_scn_(cur_restore_source_max_scn) {}
+    cur_restore_source_next_scn_(cur_restore_source_next_scn) {}
 
-  explicit ObCheckpoint(const share::ObLSID id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_max_scn):
+  explicit ObCheckpoint(const share::ObLSID id, const share::SCN &cur_sync_scn, const share::SCN &cur_restore_source_next_scn):
     ls_id_(id),
     cur_sync_scn_(cur_sync_scn),
-    cur_restore_source_max_scn_(cur_restore_source_max_scn) {}
+    cur_restore_source_next_scn_(cur_restore_source_next_scn) {}
 
   bool is_valid() const;
   bool operator==(const obrpc::ObCheckpoint &r) const;
@@ -7098,22 +7098,22 @@ public:
   {
     return cur_sync_scn_;
   }
-  share::SCN get_cur_restore_source_max_scn() const
+  share::SCN get_cur_restore_source_next_scn() const
   {
-    return cur_restore_source_max_scn_;
+    return cur_restore_source_next_scn_;
   }
 
   bool is_sync_to_latest() const
   {
-    return (cur_sync_scn_ >= cur_restore_source_max_scn_
-            && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_max_scn_.is_valid_and_not_min());
+    return (cur_sync_scn_ >= cur_restore_source_next_scn_
+            && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_next_scn_.is_valid_and_not_min());
   }
 
-  TO_STRING_KV(K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_max_scn));
+  TO_STRING_KV(K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_next_scn));
 
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;
-  share::SCN cur_restore_source_max_scn_;
+  share::SCN cur_restore_source_next_scn_;
 };
 
 struct ObGetLSReplayedScnArg
