@@ -114,6 +114,7 @@ public:
       ObBackfillTabletsTableMgr *tablets_table_mgr);
   virtual int generate_next_dag(share::ObIDag *&dag);
   int get_tablet_handle(ObTabletHandle &tablet_handle);
+  int init_tablet_handle();
 
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
 protected:
@@ -173,6 +174,8 @@ private:
   int generate_mds_table_backfill_task_(
       share::ObITask *finish_task,
       share::ObITask *&child);
+  int wait_memtable_frozen_();
+  int init_tablet_handle_();
 
   int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &backfill_scn) const;
   void process_transfer_perf_diagnose_(

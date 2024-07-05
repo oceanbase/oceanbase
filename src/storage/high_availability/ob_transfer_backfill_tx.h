@@ -216,7 +216,10 @@ private:
       const ObTablet *tablet,
       const ObTablesHandleArray &table_handle_array,
       ObTablesHandleArray &sstable_handles);
-  int check_src_tablet_sstables_(const ObTablet *tablet, ObTablesHandleArray &tables_handle);
+  int check_src_tablet_sstables_(
+      const ObTabletBackfillInfo &tablet_info,
+      const ObTablet *tablet,
+      ObTablesHandleArray &tables_handle);
   int check_source_minor_end_scn_(
       const ObTabletBackfillInfo &tablet_info,
       const ObTablesHandleArray &tables_handle,

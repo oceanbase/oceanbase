@@ -1231,6 +1231,13 @@ int ObTransferReplaceTableTask::check_src_memtable_is_valid_(
     } else if (OB_FAIL(tablet->get_memtables(memtables, need_active))) {
       LOG_WARN("failed to get_memtable_mgr for get all memtable", K(ret), KPC(tablet));
     } else {
+      //memtable check condition:
+      //need to be discussed based on the relationship between the left boundary of the memtable and the right boundary of the minor sstable
+      //1.memtable should be forzen memtable
+      //2.memtable start scn >= filled_max_minor_end_scn
+      //   a.frozen memtable must has empty version range
+      //3.memtable start scn < filled_max_minor_end_scn
+      //   a.memtable end scn <= filled_max_minor_end_scn, it means minor sstable contain memtable whole data.
       for (int64_t i = 0; OB_SUCC(ret) && i < memtables.count(); ++i) {
         ObITable *table = memtables.at(i).get_table();
         memtable::ObMemtable *memtable = static_cast<memtable::ObMemtable *>(table);
@@ -1240,44 +1247,31 @@ int ObTransferReplaceTableTask::check_src_memtable_is_valid_(
         } else if (table->is_direct_load_memtable()) {
           ret = OB_TRANSFER_SYS_ERROR;
           LOG_ERROR("find a direct load memtable", K(ret), KPC(table));
-        } else if (!filled_max_minor_end_scn.is_min() && memtable->get_start_scn() >= filled_max_minor_end_scn) {
-          if (memtable->is_active_memtable()) {
-            if (memtable->not_empty()) {
-              if (tablet_info.is_committed_) {
-                ret = OB_TRANSFER_SYS_ERROR;
-                LOG_ERROR("memtable should not be active", K(ret), KPC_(ctx),
-                    KPC(memtable), "transfer meta", tablet->get_tablet_meta());
-              } else {
-                ret = OB_EAGAIN;
-                LOG_WARN("transfer src has active memtable and not empty, maybe transfer transaction rollback, need retry",
-                    K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(tablet_info));
-              }
-            }
-          } else if (!memtable->get_key().scn_range_.is_empty()) {
+        } else if (!memtable->is_frozen_memtable()) {
+          if (tablet_info.is_committed_) {
+            ret = OB_TRANSFER_SYS_ERROR;
+            LOG_ERROR("memtable should not be active", K(ret), KPC_(ctx),
+                KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(filled_max_minor_end_scn));
+          } else {
+            ret = OB_EAGAIN;
+            LOG_WARN("transfer src has active memtable and not empty, maybe transfer transaction rollback, need retry",
+                K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(tablet_info), K(filled_max_minor_end_scn));
+          }
+        } else if (memtable->get_start_scn() >= filled_max_minor_end_scn) {
+          if (memtable->not_empty() || !memtable->get_key().scn_range_.is_empty()) {
             if (tablet_info.is_committed_) {
               ret = OB_TRANSFER_SYS_ERROR;
-              LOG_ERROR("The range of the memtable is not empty", K(ret), KPC(memtable));
+              LOG_ERROR("memtable should be empty", K(ret), KPC_(ctx),
+                  KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(filled_max_minor_end_scn));
             } else {
               ret = OB_EAGAIN;
-              LOG_WARN("transfer src forzen memtable scn range is not empty, maybe transfer transaction rollback, need retry",
-                  K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(tablet_info));
+              LOG_WARN("transfer src has active memtable and not empty, maybe transfer transaction rollback, need retry",
+                  K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(tablet_info), K(filled_max_minor_end_scn));
             }
-          } else if (memtable->not_empty()
-              && memtable->get_start_scn() >= transfer_scn) {
-            LOG_ERROR("There have been transactions in memtable but no data", K(OB_TRANSFER_SYS_ERROR), KPC_(ctx), KPC(memtable));
           }
         } else {
-          //memtable start scn < max_minor_end_scn
-          if (memtable->get_max_end_scn() > transfer_scn) {
-            if (tablet_info.is_committed_) {
-              ret = OB_TRANSFER_SYS_ERROR;
-              LOG_ERROR("memtable max end scn is bigger than transfer scn, unexpected", K(ret), KPC(memtable));
-            } else {
-              ret = OB_EAGAIN;
-              LOG_WARN("memtable max end scn is bigger than transfer scn, maybe transfer transaction rollback, need retry",
-                  K(ret), KPC(memtable), "transfer meta", tablet->get_tablet_meta(), K(tablet_info));
-            }
-          } else if (memtable->get_max_end_scn() > filled_max_minor_end_scn) {
+          //memtable start scn < filled_max_minor_end_scn
+          if (memtable->get_end_scn() > filled_max_minor_end_scn) {
             if (tablet_info.is_committed_) {
               ret = OB_TRANSFER_SYS_ERROR;
               LOG_ERROR("memtable max end scn is bigger than filled_max_minor_end_scn, unexpected", K(ret),
@@ -1545,13 +1539,14 @@ int ObTransferReplaceTableTask::get_source_tablet_tables_(
   } else if (OB_FAIL(fill_empty_minor_sstable(tablet, need_backill,
       dest_tablet->get_tablet_meta().transfer_info_.transfer_start_scn_, filled_table_handle_array, allocator, tables_handle))) {
     LOG_WARN("failed to check src minor sstables", K(ret), KPC(tablet));
-  } else if (OB_FAIL(check_src_tablet_sstables_(tablet, tables_handle))) {
+  } else if (OB_FAIL(check_src_tablet_sstables_(tablet_info, tablet, tables_handle))) {
     LOG_WARN("failed to check src minor sstables", K(ret), KPC(tablet));
   }
   return ret;
 }
 
 int ObTransferReplaceTableTask::check_src_tablet_sstables_(
+    const ObTabletBackfillInfo &tablet_info,
     const ObTablet *tablet,
     ObTablesHandleArray &tables_handle)
 {
@@ -1575,9 +1570,15 @@ int ObTransferReplaceTableTask::check_src_tablet_sstables_(
         sstable = static_cast<ObSSTable *>(table);
         if (sstable->contain_uncommitted_row()) {
           if (sstable->get_filled_tx_scn() > ctx_->backfill_scn_) {
-            ret = OB_TRANSFER_SYS_ERROR;
-            LOG_ERROR("src sstable filled_tx_scn bigger than transfer_scn, unexpected", K(ret), KPC(sstable), KPC(ctx_),
-                      K(sstable->get_filled_tx_scn()), K(ctx_->backfill_scn_));
+            if (tablet_info.is_committed_) {
+              ret = OB_TRANSFER_SYS_ERROR;
+              LOG_ERROR("src sstable filled_tx_scn bigger than transfer_scn, unexpected", K(ret), KPC(sstable), KPC(ctx_),
+                        "sstable filled tx scn", sstable->get_filled_tx_scn(), "backfill scn", ctx_->backfill_scn_);
+            } else {
+              ret = OB_EAGAIN;
+              LOG_WARN("src sstable filled tx scn bigger than transfer scn, may transaction rollback",
+                  K(ret), K(tablet_info), "sstable filled tx scn", sstable->get_filled_tx_scn(), "backfill scn", ctx_->backfill_scn_);
+            }
           } else if (sstable->get_filled_tx_scn() == ctx_->backfill_scn_) {
             LOG_INFO("src minor has backfill to transfer_scn, when new transfer active tx has move to dest_ls", KPC(sstable), KPC(ctx_));
           } else {
@@ -1593,8 +1594,14 @@ int ObTransferReplaceTableTask::check_src_tablet_sstables_(
       if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
         LOG_WARN("failed to get src user data", K(ret), KPC(tablet));
       } else if (user_data.transfer_scn_ != ctx_->backfill_scn_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("src tablet transfer scn is unexpected", K(ret), K(user_data), KPC(ctx_));
+        if (tablet_info.is_committed_) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("src tablet transfer scn is unexpected", K(ret), K(user_data), KPC(ctx_));
+        } else {
+          ret = OB_EAGAIN;
+          LOG_WARN("user data transfer scn is not equal to backfill scn, may transaction rollback",
+              K(ret), K(tablet_info), K(user_data), "backfill scn", ctx_->backfill_scn_);
+        }
       } else if (tablet->get_tablet_meta().ha_status_.is_restore_status_full() && !has_major_sstable) {
         ret = OB_TRANSFER_SYS_ERROR;
         LOG_ERROR("major sstable is not exist ", K(ret), K(tables_handle));
