@@ -3871,7 +3871,7 @@ authpwd	varchar(128)	YES
 passwordx	varbinary(128)	YES			
 authpwdx	varbinary(128)	YES			
 encrypted_password	varchar(512)	YES		NULL	
-reverse_host_ip	varchar(46)	YES		NULL	
+reverse_host_ip	varchar(240)	YES		NULL	
 reverse_host_port	bigint(20)	YES		NULL	
 reverse_cluster_name	varchar(128)	YES		NULL	
 reverse_tenant_name	varchar(128)	YES		NULL	
@@ -3906,7 +3906,7 @@ authpwd	varchar(128)	YES
 passwordx	varbinary(128)	YES			
 authpwdx	varbinary(128)	YES			
 encrypted_password	varchar(512)	YES		NULL	
-reverse_host_ip	varchar(46)	YES		NULL	
+reverse_host_ip	varchar(240)	YES		NULL	
 reverse_host_port	bigint(20)	YES		NULL	
 reverse_cluster_name	varchar(128)	YES		NULL	
 reverse_tenant_name	varchar(128)	YES		NULL	

@@ -2030,7 +2030,7 @@ all_dblink_def = dict(
     ('passwordx', 'varbinary:OB_MAX_PASSWORD_LENGTH', 'true', ''),
     ('authpwdx', 'varbinary:OB_MAX_PASSWORD_LENGTH', 'true', ''),
     ('encrypted_password', 'varchar:OB_MAX_ENCRYPTED_PASSWORD_LENGTH', 'true'),
-    ('reverse_host_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('reverse_host_ip', 'varchar:OB_MAX_DOMIN_NAME_LENGTH', 'true'),
     ('reverse_host_port', 'int', 'true'),
     ('reverse_cluster_name', 'varchar:OB_MAX_CLUSTER_NAME_LENGTH', 'true'),
     ('reverse_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'true'),
