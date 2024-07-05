@@ -263,6 +263,7 @@ int ObDDLIncRedoLogWriter::write_inc_start_log_with_retry(
       usleep(1000L * 1000L); // 1s
       ++retry_count;
       LOG_WARN("retry write ddl inc start log", K(ret), K(ls_id_), K(tablet_id_), K(retry_count));
+      ret = OB_SUCCESS;
     } else {
       break;
     }
