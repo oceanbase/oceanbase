@@ -7912,13 +7912,25 @@ int ObTransformPreProcess::transform_for_batch_stmt(ObDMLStmt *batch_stmt, bool 
 int ObTransformPreProcess::check_insert_can_batch(ObInsertStmt *insert_stmt, bool &can_batch)
 {
   int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = nullptr;
+  bool is_multi_query = false;
   can_batch = true;
-  if (insert_stmt->value_from_select()) {
+  if (OB_ISNULL(ctx_) ||
+      OB_ISNULL(exec_ctx = ctx_->exec_ctx_) ||
+      OB_ISNULL(exec_ctx->get_sql_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ctx_), K(exec_ctx), K(ret));
+  } else if (FALSE_IT(is_multi_query = exec_ctx->get_sql_ctx()->multi_stmt_item_.is_batched_multi_stmt())) {
+    // do nothing
+  } else if (insert_stmt->value_from_select()) {
     can_batch = false;
     LOG_TRACE("insert select stmt not supported batch exec opt", K(ret));
   } else if (!insert_stmt->is_insert_single_value()) {
     can_batch = false;
     LOG_TRACE("multi row insert not supported batch exec opt", K(ret));
+  } else if (is_multi_query && (insert_stmt->is_insert_up() || insert_stmt->is_replace())) {
+    can_batch = false;
+    LOG_TRACE("replace and insertup not supported batch exec opt", K(ret));
   } else {
     common::ObIArray<ObRawExpr*> &value_vector = insert_stmt->get_values_vector();
     for (int64_t i = 0; OB_SUCC(ret) && i < value_vector.count(); i++) {
