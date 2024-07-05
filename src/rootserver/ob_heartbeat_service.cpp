@@ -35,7 +35,6 @@ namespace oceanbase
 {
 using namespace common;
 using namespace share;
-using observer::ObServerHealthStatus;
 namespace rootserver
 {
 #define HBS_LOG_INFO(fmt, args...) FLOG_INFO("[HEARTBEAT_SERVICE] " fmt, ##args)

@@ -11547,5 +11547,52 @@ int ObDumpServerUsageResult::assign(const ObDumpServerUsageResult &rhs)
   }
   return ret;
 }
+
+OB_SERIALIZE_MEMBER(ObCheckServerMachineStatusArg, rs_addr_, target_addr_);
+int ObCheckServerMachineStatusArg::init(const common::ObAddr &rs_addr, const common::ObAddr &target_addr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!rs_addr.is_valid() || !target_addr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(rs_addr), K(target_addr));
+  } else {
+    rs_addr_ = rs_addr;
+    target_addr_ = target_addr;
+  }
+  return ret;
+}
+int ObCheckServerMachineStatusArg::assign(const ObCheckServerMachineStatusArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    rs_addr_ = other.rs_addr_;
+    target_addr_ = other.target_addr_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObCheckServerMachineStatusResult, server_health_status_);
+int ObCheckServerMachineStatusResult::init(const share::ObServerHealthStatus &server_health_status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!server_health_status.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", KR(ret), K(server_health_status));
+  } else if (OB_FAIL(server_health_status_.assign(server_health_status))) {
+    LOG_WARN("fail to assign server_health_status_", KR(ret), K(server_health_status));
+  }
+  return ret;
+}
+
+int ObCheckServerMachineStatusResult::assign(const ObCheckServerMachineStatusResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    if (OB_FAIL(server_health_status_.assign(other.server_health_status_))) {
+      LOG_WARN("fail to assign server_health_status_", KR(ret), K(other));
+    }
+  }
+  return ret;
+}
 }//end namespace obrpc
 }//end namespace oceanbase

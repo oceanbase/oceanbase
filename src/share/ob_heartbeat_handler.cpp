@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 #define USING_LOG_PREFIX SERVER
-#include "observer/ob_heartbeat_handler.h"
+#include "ob_heartbeat_handler.h"
 
 #include "observer/ob_server.h"
 #include "share/ob_version.h"
@@ -18,7 +18,7 @@
 
 namespace oceanbase
 {
-namespace observer
+namespace share
 {
 static const char *OB_DATA_DISK_STATUS_STR[] = {"INVALID", "NORMAL", "ERROR"};
 OB_SERIALIZE_MEMBER(
@@ -132,7 +132,7 @@ int ObHeartbeatHandler::handle_heartbeat(
   }
   return ret;
 }
-int ObHeartbeatHandler::check_disk_status_(ObServerHealthStatus &server_health_status)
+int ObHeartbeatHandler::check_disk_status(ObServerHealthStatus &server_health_status)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -161,7 +161,7 @@ int ObHeartbeatHandler::init_hb_response_(share::ObHBResponse &hb_response)
 {
   int ret = OB_SUCCESS;
   ObServerHealthStatus server_health_status;
-  if (OB_FAIL(check_disk_status_(server_health_status))) {
+  if (OB_FAIL(check_disk_status(server_health_status))) {
     LOG_WARN("fail to check disk status", KR(ret));
   } else {
     int64_t sql_port = GCONF.mysql_port;
@@ -174,7 +174,7 @@ int ObHeartbeatHandler::init_hb_response_(share::ObHBResponse &hb_response)
     }
     if (OB_FAIL(zone.assign(GCONF.zone.str()))) {
       LOG_WARN("fail to assign zone", KR(ret), K(GCONF.zone.str()));
-    } else if (OB_FAIL(ObService::get_build_version(build_version))) {
+    } else if (OB_FAIL(observer::ObService::get_build_version(build_version))) {
       LOG_WARN("fail to get build_version", KR(ret), K(build_version));
     } else if (OB_FAIL(hb_response.init(
         zone,

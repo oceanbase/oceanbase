@@ -53,7 +53,7 @@ int ObServerHBInfo::init(
       || hb_status >= ObServerStatus::OB_HEARTBEAT_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(server), K(last_hb_time), K(hb_status));
-  } else if (OB_FAIL(server_health_status_.init(observer::ObServerHealthStatus::DATA_DISK_STATUS_NORMAL))) {
+  } else if (OB_FAIL(server_health_status_.init(ObServerHealthStatus::DATA_DISK_STATUS_NORMAL))) {
     LOG_WARN("fail to init server_health_status_", KR(ret));
   } else {
     server_ = server;
@@ -167,7 +167,7 @@ int ObHBResponse::init(
     const int64_t sql_port,
     const ObServerInfoInTable::ObBuildVersion &build_version,
     const int64_t start_service_time,
-    const observer::ObServerHealthStatus server_health_status)
+    const ObServerHealthStatus server_health_status)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(zone.is_empty()

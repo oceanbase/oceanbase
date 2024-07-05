@@ -78,7 +78,7 @@
 #include "share/tenant_snapshot/ob_tenant_snapshot_id.h"
 #include "share/location_cache/ob_location_update_task.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
-
+#include "share/ob_heartbeat_handler.h"
 namespace oceanbase
 {
 namespace rootserver
@@ -11825,6 +11825,38 @@ public:
   ObServerInfo server_info_;
   // unit info
   ObSArray<ObUnitInfo> unit_info_;
+};
+struct ObCheckServerMachineStatusArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckServerMachineStatusArg() : rs_addr_(), target_addr_() {}
+  ~ObCheckServerMachineStatusArg() {}
+  int init(const common::ObAddr &rs_addr, const common::ObAddr &target_addr);
+  bool is_valid() const { return rs_addr_.is_valid() && target_addr_.is_valid(); }
+  void reset() { rs_addr_.reset(); target_addr_.reset(); }
+  int assign(const ObCheckServerMachineStatusArg &other);
+  TO_STRING_KV(K_(rs_addr), K_(target_addr));
+
+private:
+  common::ObAddr rs_addr_;
+  common::ObAddr target_addr_;
+};
+
+struct ObCheckServerMachineStatusResult final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObCheckServerMachineStatusResult() : server_health_status_() {}
+  ~ObCheckServerMachineStatusResult() {}
+  int init(const share::ObServerHealthStatus &server_health_status);
+  int assign(const ObCheckServerMachineStatusResult &other);
+  void reset() { server_health_status_.reset(); }
+  bool is_valid() const { return server_health_status_.is_valid(); }
+  const share::ObServerHealthStatus &get_server_health_status() const { return server_health_status_; }
+  TO_STRING_KV(K_(server_health_status));
+private:
+  share::ObServerHealthStatus server_health_status_;
 };
 }//end namespace obrpc
 }//end namespace oceanbase

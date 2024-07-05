@@ -30158,7 +30158,7 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
   } else if (OB_UNLIKELY(!rs_addr.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rs_addr is invalid", KR(ret), K(rs_addr));
-  } else if (OB_FAIL(SVR_TRACER.get_alive_servers(zone, server_list))) {
+  } else if (OB_FAIL(SVR_TRACER.get_alive_and_not_stopped_servers(zone, server_list))) {
     LOG_WARN("get alive server failed", KR(ret), K(zone));
   } else if (OB_FAIL(schema_service_->get_refresh_schema_info(local_schema_info))) {
     LOG_WARN("fail to get schema info", KR(ret));
