@@ -5088,7 +5088,12 @@ int ObSelectResolver::resolve_into_file_node(const ParseNode *list_node, ObSelec
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("child of list node is null", K(ret));
       } else if (T_SINGLE_OPT == node->type_) {
-        into_item.is_single_ = node->value_;
+        if (node->num_child_ != 1 || OB_ISNULL(node->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected single node", K(ret));
+        } else {
+          into_item.is_single_ = node->children_[0]->value_;
+        }
       } else if (T_MAX_FILE_SIZE == node->type_) {
         if (OB_FAIL(resolve_max_file_size_node(node, into_item))) {
           LOG_WARN("failed to resolve max file size", K(ret));

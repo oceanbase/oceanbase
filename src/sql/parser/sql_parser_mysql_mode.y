@@ -10331,9 +10331,7 @@ file_option:
 SINGLE opt_equal_mark BOOL_VALUE
 {
   (void)($2);
-  malloc_terminal_node($$, result->malloc_pool_, T_SINGLE_OPT);
-  $$->value_ = $3->value_;
-  $$->is_hidden_const_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SINGLE_OPT, 1, $3);
 }
 | MAX_FILE_SIZE opt_equal_mark file_size_const
 {
