@@ -64072,6 +64072,14 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
 
+def_sys_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_job_class_time',
+  index_table_id = 101106,
+  index_columns = ['job_class', 'time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################
@@ -64857,6 +64865,16 @@ def_agent_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   real_table_name = '__all_scheduler_job_run_detail_v2' ,
   real_index_name = 'idx_scheduler_job_run_detail_v2_time',
+  keywords = all_def_keywords['ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_job_class_time_real_agent',
+  index_table_id = 15463,
+  index_columns = ['job_class', 'time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_scheduler_job_run_detail_v2' ,
+  real_index_name = 'idx_scheduler_job_run_detail_v2_job_class_time',
   keywords = all_def_keywords['ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA'])
 
 # End Oracle Agent table Index

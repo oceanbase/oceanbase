@@ -5012,6 +5012,7 @@ case OB_ALL_USER_PROXY_INFO_IDX_USER_PROXY_INFO_PROXY_USER_ID_TID:
 case OB_ALL_USER_PROXY_INFO_HISTORY_IDX_USER_PROXY_INFO_PROXY_USER_ID_HISTORY_TID:
 case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID:
 case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_TIME_TID:
+case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_JOB_CLASS_TIME_TID:
 
 #endif
 
@@ -5627,6 +5628,9 @@ case OB_ALL_SYNONYM_TID: {
 }
 case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID: {
   if (FAILEDx(index_tids.push_back(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_TIME_TID))) {
+    LOG_WARN("fail to push back index tid", KR(ret));
+  }
+  if (FAILEDx(index_tids.push_back(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_JOB_CLASS_TIME_TID))) {
     LOG_WARN("fail to push back index tid", KR(ret));
   }
   break;
@@ -6505,6 +6509,12 @@ case OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TID: {
   } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
     LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
   }
+  index_schema.reset();
+  if (FAILEDx(ObInnerTableSchema::all_scheduler_job_run_detail_v2_idx_scheduler_job_run_detail_v2_job_class_time_schema(index_schema))) {
+    LOG_WARN("fail to create index schema", KR(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(append_table_(tenant_id, index_schema, tables))) {
+    LOG_WARN("fail to append", KR(ret), K(tenant_id), K(data_table_id));
+  }
   break;
 }
 case OB_ALL_TENANT_SECURITY_AUDIT_TID: {
@@ -6787,6 +6797,8 @@ case OB_ALL_FOREIGN_KEY_TID: {
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_IDX_USER_PROXY_ROLE_INFO_PROXY_USER_ID_HISTORY_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(table_ids.push_back(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_TIME_TID))) {
+    LOG_WARN("add index id failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(table_ids.push_back(OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_IDX_SCHEDULER_JOB_RUN_DETAIL_V2_JOB_CLASS_TIME_TID))) {
     LOG_WARN("add index id failed", KR(ret), K(tenant_id));
 
 #endif
