@@ -70,9 +70,9 @@ int ObTableDirectInsertCtx::init(
     LOG_WARN("unexpected mview complete refresh enable inc replace", KR(ret));
   } else {
     is_direct_ = true;
-    if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadSqlExecCtx, &exec_ctx->get_allocator()))) {
+    if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadExecCtx, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObTableLoadSqlExecCtx", KR(ret));
+      LOG_WARN("fail to new ObTableLoadExecCtx", KR(ret));
     } else if (OB_ISNULL(table_load_instance_ =
                            OB_NEWx(ObTableLoadInstance, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -174,7 +174,7 @@ void ObTableDirectInsertCtx::destroy()
     table_load_instance_ = nullptr;
   }
   if (OB_NOT_NULL(load_exec_ctx_)) {
-    load_exec_ctx_->~ObTableLoadSqlExecCtx();
+    load_exec_ctx_->~ObTableLoadExecCtx();
     load_exec_ctx_ = nullptr;
   }
   is_inited_ = false;

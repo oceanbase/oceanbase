@@ -124,7 +124,7 @@ private:
     bool is_valid() const;
     TO_STRING_KV(K_(exec_ctx), KP_(allocator), KP_(direct_loader), KP_(job_stat), KP_(logger));
   public:
-    observer::ObTableLoadSqlExecCtx exec_ctx_;
+    observer::ObTableLoadExecCtx exec_ctx_;
     common::ObIAllocator *allocator_;
     observer::ObTableLoadInstance *direct_loader_;
     sql::ObLoadDataStat *job_stat_;

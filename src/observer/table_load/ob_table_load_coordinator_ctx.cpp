@@ -101,8 +101,7 @@ int ObTableLoadCoordinatorCtx::init(const ObIArray<uint64_t> &column_ids,
     LOG_WARN("ObTableLoadCoordinatorCtx init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(
                column_ids.count() != ctx_->param_.column_count_ || nullptr == exec_ctx ||
-               !exec_ctx->is_valid() ||
-               (ctx_->param_.online_opt_stat_gather_ && nullptr == exec_ctx->get_exec_ctx()))) {
+               !exec_ctx->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ctx_->param_), K(column_ids), KPC(exec_ctx));
   } else {

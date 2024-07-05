@@ -1101,7 +1101,7 @@ int ObTableLoadCoordinator::write_sql_stat(ObTableLoadSqlStatistics &sql_statist
     if (OB_UNLIKELY(sql_statistics.is_empty() || dml_stats.is_empty())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid args", KR(ret), K(sql_statistics), K(dml_stats));
-    } else if (OB_ISNULL(exec_ctx = coordinator_ctx_->exec_ctx_->get_exec_ctx())) {
+    } else if (OB_ISNULL(exec_ctx = coordinator_ctx_->exec_ctx_->exec_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected exec ctx is null", KR(ret));
     } else if (OB_FAIL(inc_table_stats.create(1,

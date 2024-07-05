@@ -18,7 +18,7 @@ namespace oceanbase
 {
 namespace observer
 {
-class ObTableLoadSqlExecCtx;
+class ObTableLoadExecCtx;
 class ObTableLoadInstance;
 }
 
@@ -74,7 +74,7 @@ private:
   int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
                           ObCompressorType &compressor_type);
 private:
-  observer::ObTableLoadSqlExecCtx *load_exec_ctx_;
+  observer::ObTableLoadExecCtx *load_exec_ctx_;
   observer::ObTableLoadInstance *table_load_instance_;
   bool is_inited_;
   bool is_direct_; //indict whether the plan is direct load plan including insert into append and load data direct

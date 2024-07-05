@@ -268,7 +268,7 @@ int ObTableLoadInstance::start_sql_tx()
       LOG_WARN("tx_desc of insert into select should be valid", KR(ret), KPC(tx_desc));
     } else {
       stmt_ctx_.tx_desc_ = tx_desc;
-      execute_ctx_->set_tx_desc(tx_desc);
+      execute_ctx_->tx_desc_ = tx_desc;
       LOG_INFO("use insert into select tx", KPC(tx_desc));
     }
   } else { // other path, tx_desc could be null, tx_param needs to be set manually
@@ -290,7 +290,7 @@ int ObTableLoadInstance::start_sql_tx()
       }
     } else {
       stmt_ctx_.tx_desc_ = tx_desc;
-      execute_ctx_->set_tx_desc(tx_desc);
+      execute_ctx_->tx_desc_ = tx_desc;
       LOG_INFO("start tx succeed", KPC(tx_desc));
     }
   }
@@ -304,7 +304,7 @@ int ObTableLoadInstance::end_sql_tx(const bool commit)
   ObTransService *txs = MTL(ObTransService *);
   ObSQLSessionInfo *session_info = stmt_ctx_.session_info_;
   ObTxDesc *tx_desc = stmt_ctx_.tx_desc_;
-  execute_ctx_->set_tx_desc(nullptr);
+  execute_ctx_->tx_desc_ = nullptr;
   if (stmt_ctx_.use_insert_into_select_tx_) {
     // do nothing
   } else {
