@@ -457,8 +457,7 @@ void ObWindowFunctionVecOp::destroy()
   input_stores_.destroy();
   for (WinFuncColExpr *it = wf_list_.get_first(); it != wf_list_.get_header();
        it = it->get_next()) {
-    it->res_->destroy();
-    it->res_ = nullptr;
+    it->destroy();
   }
   wf_list_.~WinFuncColExprList();
   rescan_alloc_.~ObArenaAllocator();
@@ -3566,9 +3565,11 @@ void WinFuncColExpr::reset()
 {
   if (wf_expr_ != nullptr) {
     wf_expr_->destroy();
+    wf_expr_ = nullptr;
   }
   if (res_ != nullptr) {
     res_->reset();
+    res_ = nullptr;
   }
   agg_ctx_ = nullptr;
   wf_res_row_meta_.reset();

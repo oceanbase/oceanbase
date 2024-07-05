@@ -1285,6 +1285,7 @@ void AggrExpr::destroy()
 {
   if (aggr_processor_ != nullptr) {
     aggr_processor_->destroy();
+    aggr_processor_ = nullptr;
   }
 }
 
