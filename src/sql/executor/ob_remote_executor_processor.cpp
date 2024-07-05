@@ -708,7 +708,7 @@ int ObRemoteBaseExecuteP<T>::execute_with_sql(ObRemoteTask &task)
         NG_TRACE_EXT(execute_task, OB_ID(task), task, OB_ID(stmt_type), plan->get_stmt_type());
         if (OB_FAIL(execute_remote_plan(exec_ctx_, *plan))) {
           LOG_WARN("execute remote plan failed", K(ret), K(task), K(exec_ctx_.get_das_ctx().get_snapshot()));
-        } else if (plan->need_record_plan_info()) {
+        } else if (plan->try_record_plan_info()) {
           if(exec_ctx_.get_feedback_info().is_valid() &&
              plan->get_logical_plan().is_valid() &&
              OB_FAIL(plan->set_feedback_info(exec_ctx_))) {
