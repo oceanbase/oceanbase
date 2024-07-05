@@ -74,7 +74,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* COLLECTION */
     ObMySQLDateType,      /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
-    ObHexStringType,        /* RoaringBitmap */
+    ObHexStringType,      /* RoaringBitmap */
   },
 
   /*TinyIntType*/
@@ -1374,7 +1374,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* COLLECTION */
     ObMySQLDateTimeType,  /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
-    ObHexStringType,  /* RoaringBitmap */
+    ObMaxType,            /* RoaringBitmap */
   },
 
   /*CharType*/
@@ -1433,7 +1433,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* COLLECTION */
     ObMySQLDateTimeType,  /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
-    ObHexStringType,  /* RoaringBitmap */
+    ObMaxType,            /* RoaringBitmap */
   },
 
   /*HexStringType*/
@@ -1492,7 +1492,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,        /* COLLECTION */
     ObMySQLDateTimeType,  /* MySQLDateType */
     ObMySQLDateTimeType,  /* MySQLDateTimeType */
-    ObHexStringType,  /* RoaringBitmap */
+    ObMaxType,            /* RoaringBitmap */
   },
 
   /*ExtendType*/
@@ -3205,9 +3205,9 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* DateType  */
     ObMaxType,            /* TimeType  */
     ObMaxType,            /* YearType  */
-    ObHexStringType,      /* VarcharType  */
-    ObHexStringType,      /* CharType  */
-    ObHexStringType,      /* HexStringType  */
+    ObMaxType,            /* VarcharType  */
+    ObMaxType,            /* CharType  */
+    ObMaxType,            /* HexStringType  */
     ObMaxType,            /* ExtendType  */
     ObMaxType,            /* UnknownType  */
     ObMaxType,            /* TinyTextType*/
@@ -3237,7 +3237,7 @@ static constexpr ObObjType RELATIONAL_CMP_TYPE[ObMaxType][ObMaxType] =
     ObMaxType,            /* COLLECTION */
     ObMaxType,            /* MySQLDateType */
     ObMaxType,            /* MySQLDateTimeType */
-    ObHexStringType,      /* RoaringBitmap */
+    ObMaxType,            /* RoaringBitmap */
   },
 };
 

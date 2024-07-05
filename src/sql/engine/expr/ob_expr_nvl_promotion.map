@@ -31,7 +31,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Collection Sql Type*/
     ObMySQLDateType, /*mysql date*/
     ObMySQLDateTimeType, /*mysql datetime*/
-    ObMaxType, /*RoaringBitmap*/
+    ObRoaringBitmapType, /*RoaringBitmap*/
   },
   {
     /*int -> XXX*/
@@ -959,7 +959,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
   },
  {
     /*RoaringBitmap -> XXX*/
-    ObMaxType, /*null*/
+    ObRoaringBitmapType, /*null*/
     ObMaxType, /*int*/
     ObMaxType, /*uint*/
     ObMaxType, /*float*/
@@ -988,7 +988,7 @@ static const ObObjType NVL_TYPE_PROMOTION[ObMaxTC][ObMaxTC] =
     ObMaxType, /*Collection Sql Type*/
     ObMaxType, /*mysql date*/
     ObMaxType, /*mysql datetime*/
-    ObMaxType, /*RoaringBitmap*/
+    ObRoaringBitmapType, /*RoaringBitmap*/
   },
 };
 
