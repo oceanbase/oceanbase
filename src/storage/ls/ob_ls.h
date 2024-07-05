@@ -937,7 +937,6 @@ public:
       const ObBatchUpdateTableStoreParam &param);
   int build_new_tablet_from_mds_table(
       compaction::ObTabletMergeCtx &ctx,
-      const int64_t ls_rebuild_seq,
       const common::ObTabletID &tablet_id,
       const ObTableHandleV2 &mds_mini_sstable_handle,
       const share::SCN &flush_scn,

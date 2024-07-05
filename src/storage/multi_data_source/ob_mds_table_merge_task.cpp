@@ -89,7 +89,6 @@ int ObMdsTableMergeTask::process()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is unexpected null", KR(ret), KPC_(mds_merge_dag), KPC(mds_merge_dag_));
   } else {
-    int tmp_ret = OB_SUCCESS;
     ObLS *ls = nullptr;
     ObTablet *tablet = nullptr;
     ObTabletMergeCtx &ctx = *ctx_ptr;
@@ -106,6 +105,7 @@ int ObMdsTableMergeTask::process()
     ctx.static_param_.scn_range_.end_scn_ = flush_scn;
     ctx.static_param_.version_range_.snapshot_version_ = flush_scn.get_val_for_tx();
     ObTabletHandle new_tablet_handle;
+    mds::MdsTableHandle mds_table;
     const int64_t mds_construct_sequence = mds_merge_dag_->get_mds_construct_sequence();
     ObTableHandleV2 table_handle;
     if (OB_FAIL(ctx.get_ls_and_tablet())) {
@@ -118,32 +118,40 @@ int ObMdsTableMergeTask::process()
       LOG_INFO("ls offline, skip merge", K(ret), K(ctx), KPC(mds_merge_dag_));
     } else if (OB_FAIL(ctx.init_tablet_merge_info(false/*need_check*/))) {
       LOG_WARN("failed to init tablet merge info", K(ret), K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
+    } else if (OB_ISNULL(tablet = ctx.get_tablet())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet is null", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(tablet->get_mds_table_for_dump(mds_table))) {
+      LOG_WARN("fail to get mds table", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_UNLIKELY(!mds_table.get_mds_table_ptr()->is_construct_sequence_matched(mds_construct_sequence))) {
+      ret = OB_NO_NEED_MERGE;
+      LOG_WARN("construct sequence does not match with current mds table", K(ret), K(ls_id), K(tablet_id), K(mds_construct_sequence));
     } else if (ctx.get_tablet()->get_mds_checkpoint_scn() >= flush_scn) {
-      tablet = ctx.get_tablet();
       need_schedule_mds_minor = false;
       FLOG_INFO("flush scn smaller than mds ckpt scn, only flush nodes of mds table and do not generate mds mini",
-          K(ls_id), K(tablet_id), K(flush_scn),
-          "mds_checkpoint_scn", ctx.get_tablet()->get_mds_checkpoint_scn(), KPC(mds_merge_dag_));
+          K(ret), K(ls_id), K(tablet_id), K(flush_scn),
+          "mds_checkpoint_scn", ctx.get_tablet()->get_mds_checkpoint_scn(),
+          KPC(mds_merge_dag_));
       ctx.time_guard_click(ObStorageCompactionTimeGuard::EXECUTE);
       share::dag_yield();
     } else if (FALSE_IT(ctx.static_param_.scn_range_.start_scn_ = ctx.get_tablet()->get_mds_checkpoint_scn())) {
     } else if (MDS_FAIL(build_mds_sstable(ctx, mds_construct_sequence, table_handle))) {
       LOG_WARN("fail to build mds sstable", K(ret), K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
-    } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(ctx, ctx.get_ls_rebuild_seq(), tablet_id, table_handle, flush_scn, new_tablet_handle))) {
-      LOG_WARN("failed to build new tablet from mds table", K(ret), K(ctx), K(ls_id), K(tablet_id), K(ctx.get_ls_rebuild_seq()), K(flush_scn), KPC(mds_merge_dag_));
+    } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(
+        ctx,
+        tablet_id,
+        table_handle,
+        flush_scn,
+        new_tablet_handle))) {
+      LOG_WARN("failed to build new tablet from mds table", K(ret), K(ctx), K(ls_id), K(tablet_id), K(flush_scn), KPC(mds_merge_dag_));
     } else {
-      tablet = ctx.get_tablet();
       ctx.time_guard_click(ObStorageCompactionTimeGuard::EXECUTE);
       share::dag_yield();
     }
 
-    // always notify flush ret
-    if (OB_NOT_NULL(tablet) && MDS_TMP_FAIL(tablet->notify_mds_table_flush_ret(flush_scn, ret))) {
-      LOG_WARN("failed to notify mds table flush ret", K(tmp_ret), K(ls_id), K(tablet_id), K(flush_scn), "flush_ret", ret, KPC(mds_merge_dag_));
-      if (OB_SUCC(ret)) {
-        // ret equals to OB_SUCCESS, use tmp_ret as return value
-        ret = tmp_ret;
-      }
+    // notify flush ret if ret is not OB_NO_NEED_MERGE
+    if (mds_table.is_valid() && OB_NO_NEED_MERGE != ret) {
+      mds_table.on_flush(flush_scn, ret);
     }
     ctx.time_guard_click(ObStorageCompactionTimeGuard::DAG_FINISH);
     if (OB_SUCC(ret)) {

@@ -495,9 +495,6 @@ public:
       const bool for_flush,
       const int64_t mds_construct_sequence = 0) const;
   int get_mds_table_for_dump(mds::MdsTableHandle &mds_table) const;
-  int notify_mds_table_flush_ret(
-      const share::SCN &flush_scn,
-      const int flush_ret);
   int64_t get_memtable_count() const { return memtable_count_; }
 
   int check_new_mds_with_cache(const int64_t snapshot_version, const int64_t timeout);

@@ -177,6 +177,7 @@ public:
   void mark_switched_to_empty_shell();
   bool is_switched_to_empty_shell() const;
   bool is_removed_from_t3m() const;
+  bool is_construct_sequence_matched(const int64_t seq) const { return seq == construct_sequence_; }
   int64_t get_removed_from_t3m_ts() const;
   int64_t get_trace_id() const { return trace_id_; }
   void set_trace_id(int64_t trace_id)

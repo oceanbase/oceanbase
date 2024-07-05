@@ -1310,6 +1310,8 @@ int ObTablet::init_with_mds_sstable(
         "merge_type", merge_type_to_str(param.merge_type_),
         K(flush_scn),
         "mds_checkpoint_scn", old_tablet.tablet_meta_.mds_checkpoint_scn_);
+  } else if (param.need_check_transfer_seq_ && OB_FAIL(check_transfer_seq_equal(old_tablet, param.transfer_seq_))) {
+    LOG_WARN("failed to check transfer seq eq", K(ret), K(old_tablet), K(param));
   } else if (CLICK_FAIL(old_tablet.fetch_table_store(old_table_store_wrapper))) {
     LOG_WARN("failed to fetch old table store", K(ret), K(old_tablet));
   } else if (CLICK_FAIL(old_table_store_wrapper.get_member(old_table_store))) {
@@ -6521,7 +6523,7 @@ int ObTablet::get_mds_table_for_dump(mds::MdsTableHandle &mds_table) const
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(inner_get_mds_table(mds_table))) {
+  } else if (OB_FAIL(inner_get_mds_table(mds_table, false/*not_exist_create*/))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_EMPTY_RESULT;
       LOG_INFO("mds table does not exist, may be released",
@@ -6530,34 +6532,6 @@ int ObTablet::get_mds_table_for_dump(mds::MdsTableHandle &mds_table) const
       LOG_WARN("failed to get mds table", K(ret), K(tablet_meta_.ls_id_), K(tablet_meta_.ls_id_));
     }
   }
-  return ret;
-}
-
-int ObTablet::notify_mds_table_flush_ret(
-    const share::SCN &flush_scn,
-    const int flush_ret)
-{
-  TIMEGUARD_INIT(STORAGE, 10_ms);
-  int ret = OB_SUCCESS;
-  mds::MdsTableHandle mds_table;
-  const share::ObLSID &ls_id = tablet_meta_.ls_id_;
-  const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (is_ls_inner_tablet()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("inner tablet does not have mds table", K(ret), K(ls_id), K(tablet_id));
-  } else if (CLICK_FAIL(inner_get_mds_table(mds_table))) {
-    LOG_WARN("failed to get mds table", K(ret), K(ls_id), K(tablet_id));
-  } else if (CLICK() && !mds_table.is_valid()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("mds table is null", K(ret), K(ls_id), K(tablet_id));
-  } else {
-    mds_table.on_flush(flush_scn, flush_ret);
-  }
-
   return ret;
 }
 
