@@ -201,7 +201,7 @@ public:
   virtual ~ObTabletTableBackfillTXTask();
   int init(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
+      const ObTabletBackfillInfo &tablet_info,
       ObTabletHandle &tablet_handle,
       ObTableHandleV2 &table_handle,
       share::ObITask *child);
@@ -224,7 +224,7 @@ private:
   ObBackfillTXCtx *backfill_tx_ctx_;
   ObIHADagNetCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
+  ObTabletBackfillInfo tablet_info_;
   ObTabletHandle tablet_handle_;
   ObTableHandleV2 table_handle_;
   ObBackfillTabletsTableMgr *tablets_table_mgr_;
@@ -239,7 +239,7 @@ public:
   virtual ~ObTabletTableFinishBackfillTXTask();
   int init(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
+      const ObTabletBackfillInfo &tablet_info,
       ObTabletHandle &tablet_handle,
       ObTableHandleV2 &table_handle,
       share::ObITask *child);
@@ -256,7 +256,7 @@ private:
   ObBackfillTXCtx *backfill_tx_ctx_;
   ObIHADagNetCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
+  ObTabletBackfillInfo tablet_info_;
   ObTabletHandle tablet_handle_;
   ObTableHandleV2 table_handle_;
   compaction::ObTabletMergeDagParam param_;
@@ -318,7 +318,7 @@ public:
   virtual ~ObTabletMdsTableBackfillTXTask();
   int init(
       const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
+      const ObTabletBackfillInfo &tablet_info,
       ObTabletHandle &tablet_handle);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletMdsTableBackfillTXTask"), KP(this), KPC(ha_dag_net_ctx_));
@@ -349,7 +349,7 @@ private:
   ObBackfillTXCtx *backfill_tx_ctx_;
   ObIHADagNetCtx *ha_dag_net_ctx_;
   share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
+  ObTabletBackfillInfo tablet_info_;
   ObTabletHandle tablet_handle_;
   common::ObArenaAllocator allocator_;
   compaction::ObLocalArena merger_arena_;
