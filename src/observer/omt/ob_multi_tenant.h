@@ -127,6 +127,7 @@ public:
   int update_tenant_freezer_mem_limit(const uint64_t tenant_id,
                                       const int64_t tenant_min_mem,
                                       const int64_t tenant_max_mem);
+  int update_tenant_decode_resource(const uint64_t tenant_id);
 
   inline TenantList &get_tenant_list();
   int for_each(std::function<int(ObTenant &)> func);
