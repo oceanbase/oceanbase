@@ -1425,6 +1425,13 @@ int ObLogJoin::check_if_disable_batch(ObLogicalOperator* root, bool &can_use_bat
     }
   } else if (log_op_def::LOG_SET == root->get_type()) {
     ObLogSet *log_set = static_cast<ObLogSet *>(root);
+    if (log_set->get_set_op() != ObSelectStmt::UNION) {
+      if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_1_0) {
+        // if the min cluster version is less than 4.3.1.0, don't uses NLJ group-rescan because the old version don't adaptive group-rescan
+        can_use_batch_nlj = false;
+        LOG_TRACE("updrade stage don't support group-rescan if the min cluster version is less than 4.3.1.0 for distinct and except operator");
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && can_use_batch_nlj && i < root->get_num_of_child(); ++i) {
       ObLogicalOperator *child = root->get_child(i);
       if (OB_ISNULL(child)) {
