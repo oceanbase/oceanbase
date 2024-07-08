@@ -1079,7 +1079,7 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
   int ret = OB_SUCCESS;
   const ObPartitionKeyInfo &part_key_info = table_schema.get_partition_key_info();
   const ObPartitionKeyColumn *part_column = NULL;
-  const ObColumnSchemaV2 *column_schema = NULL;
+  ObColumnSchemaV2 *column_schema = NULL;
   ObRawExpr *dependant_expr = NULL;
   ObString expr_def;
   ObArray<int64_t> external_part_idx;
@@ -1102,7 +1102,18 @@ int ObCreateTableResolver::check_generated_partition_column(ObTableSchema &table
                                                                      schema_checker_))) {
         LOG_WARN("build generated column expr failed", K(ret));
       } else if (table_schema.is_external_table()) {
-        OZ (check_external_table_generated_partition_column_sanity(table_schema, dependant_expr, external_part_idx));
+        if (table_schema.is_user_specified_partition_for_external_table()
+            && mocked_external_table_column_ids_.has_member(column_schema->get_column_id())) {
+          ObSqlString temp_str;
+          ObString new_gen_def;
+          OZ (temp_str.assign_fmt("%s%ld", N_PARTITION_LIST_COL, idx + 1));
+          CK (OB_NOT_NULL(allocator_));
+          OZ (ob_write_string(*allocator_, temp_str.string(), new_gen_def));
+          OX (column_schema->get_cur_default_value().set_varchar(new_gen_def));
+          OZ (external_part_idx.push_back(idx + 1));
+        } else {
+          OZ (check_external_table_generated_partition_column_sanity(table_schema, dependant_expr, external_part_idx));
+        }
       } /*
         if gc column is partition key, then this is no restriction
         else {

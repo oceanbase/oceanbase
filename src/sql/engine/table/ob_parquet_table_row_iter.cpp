@@ -191,6 +191,12 @@ bool mem_zero_detect(void *buf, size_t n)
   return false;
 }
 
+ObParquetTableRowIterator::~ObParquetTableRowIterator()
+{
+  for (int i = 0; i < column_readers_.count(); i++) {
+    column_readers_.at(i) = NULL;
+  }
+}
 int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
 {
   int ret = OB_SUCCESS;

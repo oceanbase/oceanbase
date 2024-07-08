@@ -119,7 +119,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     is_set_lob_inrow_threshold_(false),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
     auto_increment_cache_size_(0),
-    external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT)
+    external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT),
+    mocked_external_table_column_ids_()
 {
   table_mode_.reset();
 }
@@ -3384,6 +3385,11 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
           if (is_pad_char_to_full_length(session_info_->get_sql_mode())) {
             column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
           }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(mocked_external_table_column_ids_.add_member(column.get_column_id()))) {
+          LOG_WARN("fail to add bitset", K(ret));
         }
       }
     }

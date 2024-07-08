@@ -133,7 +133,7 @@ public:
     file_column_exprs_(allocator_),
     file_meta_column_exprs_(allocator_),
     bit_vector_cache_(NULL) {}
-  virtual ~ObParquetTableRowIterator() {}
+  virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
   int get_next_row() override;
