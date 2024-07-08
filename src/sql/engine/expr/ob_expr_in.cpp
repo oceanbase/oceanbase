@@ -1091,6 +1091,9 @@ int ObExprInOrNotIn::inner_eval_vector_in_without_row_fallback(const ObExpr &exp
   my_skip.deep_copy(skip, bound.start(), bound.end());
   bool left_all_null = true;
   for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+    if (my_skip.at(idx) || eval_flags.at(idx)) {
+      continue;
+    }
     if (input_left_vec->is_null(idx)) {
       my_skip.set(idx);
       res_vec->set_null(idx);
