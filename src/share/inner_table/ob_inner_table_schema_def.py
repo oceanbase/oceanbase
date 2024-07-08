@@ -14547,6 +14547,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12492: __all_virtual_ss_local_cache_info
 
+# 12493: __all_virtual_kv_group_commit_status
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15033,6 +15035,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15461: __all_virtual_log_transport_dest_stat
 # 15462: __all_virtual_ss_local_cache_info
 # 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent
+# 15464: __all_virtual_kv_group_commit_status
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -35335,6 +35338,8 @@ SELECT
 # 21598: V$OB_LOG_TRANSPORT_DEST_STAT
 # 21599: GV$OB_SS_LOCAL_CACHE
 # 21600: V$OB_SS_LOCAL_CACHE
+# 21601: V$OB_KV_GROUP_COMMIT_STATUS
+# 21602: GV$OB_KV_GROUP_COMMIT_STATUS
 
 
 # 余留位置（此行之前占位）
@@ -63143,6 +63148,8 @@ left join
 # 28239: V$OB_LOG_TRANSPORT_DEST_STAT
 # 28240: GV$OB_SS_LOCAL_CACHE
 # 28241: V$OB_SS_LOCAL_CACHE
+# 28242: V$OB_KV_GROUP_COMMIT_STATUS
+# 28243: GV$OB_KV_GROUP_COMMIT_STATUS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
