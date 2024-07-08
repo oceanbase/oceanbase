@@ -405,11 +405,14 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString 
         if (OB_ISNULL(bitmap = roaring::api::roaring_bitmap_portable_deserialize_safe(rb_bin.ptr() + offset, rb_bin.length() - offset))) {
           ret = OB_DESERIALIZE_ERROR;
           LOG_WARN("failed to deserialize the bitmap", K(ret));
+        } else if (!roaring::api::roaring_bitmap_internal_validate(bitmap, NULL)) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("bitmap internal consistency checks failed", K(ret));
         } else if (roaring::api::roaring_bitmap_get_cardinality(bitmap) > max_rb_to_string_cardinality) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("cardinality of roaringbitmap is over 1000000", K(ret), K(roaring::api::roaring_bitmap_get_cardinality(bitmap)));
         } else if (OB_ISNULL(iter = roaring_iterator_create(bitmap))) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to get iterate from bitmap", K(ret));
         } else if (iter->has_value) {
           do {
@@ -439,11 +442,14 @@ int ObRbUtils::rb_to_string(ObIAllocator &allocator, ObString &rb_bin, ObString 
                                                  rb_bin.length() - offset))) {
           ret = OB_DESERIALIZE_ERROR;
           LOG_WARN("failed to deserialize the bitmap", K(ret));
+        } else if (!roaring::api::roaring64_bitmap_internal_validate(bitmap, NULL)) {
+          ret = OB_INVALID_DATA;
+          LOG_WARN("bitmap internal consistency checks failed", K(ret));
         } else if (roaring::api::roaring64_bitmap_get_cardinality(bitmap) > max_rb_to_string_cardinality) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("cardinality of roaringbitmap is over 1000000", K(ret), K(roaring::api::roaring64_bitmap_get_cardinality(bitmap)));
         } else if (OB_ISNULL(iter = roaring::api::roaring64_iterator_create(bitmap))) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to get iterate from bitmap", K(ret));
         } else if (roaring::api::roaring64_iterator_has_value(iter)) {
           do {

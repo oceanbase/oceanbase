@@ -36,16 +36,35 @@ int ObRoaringBin::init()
   }
 
   /* roaring_bitmap binary format
+   * Only 2 cookies are accepted for the roaring binary: ROARING_SERIAL_COOKIE_NO_RUNCONTAINER and ROARING_SERIAL_COOKIE (start with 3A30 and 3B30)
+   *
+   * The 3A30 binary format as below:
    *  | cookie | size  | keyscards[0] | ... | keyscards[size - 1] | offset[0] | ... | offset[size - 1] | container_data[0] | ... | container_data[size - 1] |
    *  | 4Byte  | 4Byte |    8Byte     | ... |        8Byte        |   8Byte   | ... |      8Byte       |     not fixed     | ... |        not fixed         |
    *
-   * This is the typical format of roaring_bitmap without run containers (starts with '3A30').
+   * This is the format of roaring_bitmap without run containers.
    * - size: number of containers in the bitmaps
    * - keyscards[i]: keys and cardinality for each container. The keys refer to the high 16 bits of the value.
    *                 The cardinality is the real cardinality - 1, because the maximum cardinality is 65536(2^16)
    * - offset[i]: offsets for each container, the offsets are relative to the beginning of the binary
    * - container_data[i]: for cardinality less than 4096, the data is stored as a uint16 array,
-   *                      for else, the data stored as in a 2^16 bits bitset.
+   *                      for else, the data stored as in a 2^16 bits (8192 Bytes) bitset.
+   *
+   * The 3B30 binary format as below:
+   *  | cookie | size  |     run_bitmap      | keyscards[0] | ... | keyscards[size - 1] | offset[0] | ... | offset[size - 1] | container_data[0] | ... | container_data[size - 1] |
+   *  | 2Byte  | 2Byte | (size + 7) / 8 Byte |    8Byte     | ... |        8Byte        |   8Byte   | ... |      8Byte       |     not fixed     | ... |        not fixed         |
+   * This is the format of roaring_bitmap includes one or more run containers.
+   * - size: number of containers in the bitmaps (real size - 1), no possible to have 0 container in 3B30.
+   * - run_bitmap: to mark which container is the run container.
+   * - keyscards: same as 3A30
+   * - offset: exists only when container number greater or equal to 5 (size >= 4).
+   * - keyscards: same as 3A30
+   *
+   * The binary format of run container as below:
+   *  | n_runs | start_val[0] | length[0] | ... | start_val[n_runs - 1] | length[n_runs - 1] |
+   *  | 2Bytes |    2Bytes    |   2Bytes  | ... |         2Bytes        |        2Bytes      |
+   * - n_runs: number of start_val/length pairs
+   *
    */
 
   // read cookies
@@ -53,7 +72,7 @@ int ObRoaringBin::init()
   } else if (OB_FALSE_IT(read_bytes += sizeof(int32_t))) {
   } else if (read_bytes > roaring_bin_.length()) {
     ret = OB_INVALID_DATA;
-    LOG_WARN("ran out of bytes while reading cookies", K(ret), K(read_bytes));
+    LOG_WARN("ran out of bytes while reading cookies", K(ret), K(read_bytes), K(roaring_bin_.length()));
   } else {
     cookie = *reinterpret_cast<const int32_t*>(buf);
     buf +=  sizeof(int32_t);
@@ -65,7 +84,7 @@ int ObRoaringBin::init()
     } else if (OB_FALSE_IT(read_bytes += sizeof(int32_t))){
     } else if (read_bytes > roaring_bin_.length()) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("ran out of bytes while reading second part of the cookie", K(ret), K(read_bytes));
+      LOG_WARN("ran out of bytes while reading second part of the cookie", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else {
       size_ = *reinterpret_cast<const int32_t*>(buf);
       buf += sizeof(int32_t);
@@ -80,13 +99,13 @@ int ObRoaringBin::init()
   // get run container bitmap
   if (OB_FAIL(ret)) {
   } else {
-    bool hasrun = (cookie & 0xFFFF) == ROARING_SERIAL_COOKIE;
-    if (hasrun) {
+    hasrun_ = (cookie & 0xFFFF) == ROARING_SERIAL_COOKIE;
+    if (hasrun_) {
       int32_t s = (size_ + 7) / 8;
       read_bytes += s;
       if(read_bytes > roaring_bin_.length()) {
         ret = OB_INVALID_DATA;
-        LOG_WARN("ran out of bytes while reading run bitmap", K(ret), K(read_bytes));
+        LOG_WARN("ran out of bytes while reading run bitmap", K(ret), K(read_bytes), K(roaring_bin_.length()));
       } else {
         bitmapOfRunContainers_ = buf;
         buf += s;
@@ -98,7 +117,7 @@ int ObRoaringBin::init()
   } else if (OB_FALSE_IT(read_bytes += size_ * 2 * sizeof(uint16_t))) {
   } else if (read_bytes > roaring_bin_.length()) {
     ret = OB_INVALID_DATA;
-    LOG_WARN("ran out of bytes while reading keycards", K(ret), K(read_bytes));
+    LOG_WARN("ran out of bytes while reading keycards", K(ret), K(read_bytes), K(roaring_bin_.length()));
   } else if (OB_ISNULL(keyscards_ = static_cast<uint16_t *>(allocator_->alloc(size_ * 2 * sizeof(uint16_t))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory for keyscards", K(ret), K(size_ * 2 * sizeof(uint16_t)));
@@ -113,7 +132,7 @@ int ObRoaringBin::init()
     read_bytes += size_ * sizeof(uint32_t);
     if (read_bytes > roaring_bin_.length()) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("ran out of bytes while reading offsets", K(ret), K(read_bytes));
+      LOG_WARN("ran out of bytes while reading offsets", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else if ((uintptr_t)buf % sizeof(uint32_t) == 0) {
       // use buffer directly
       offsets_ = (uint32_t *)buf;
@@ -135,7 +154,7 @@ int ObRoaringBin::init()
         LOG_WARN("failed to get container size", K(ret), K(size_));
       } else if (offset + container_size > roaring_bin_.length()) {
         ret = OB_INVALID_DATA;
-        LOG_WARN("ran out of bytes while checking the last container", K(ret), K(size_), K(offset), K(container_size));
+        LOG_WARN("ran out of bytes while checking the last container", K(ret), K(size_), K(offset), K(container_size), K(roaring_bin_.length()));
       } else {
         bin_length_ = offset + container_size;
       }
@@ -157,7 +176,7 @@ int ObRoaringBin::init()
     if (OB_FAIL(ret)) {
     } else if (read_bytes > roaring_bin_.length()) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("ran out of bytes while reading offsets", K(ret), K(read_bytes));
+      LOG_WARN("ran out of bytes while filling offsets", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else {
       // set the bin_length
       bin_length_ = read_bytes;
@@ -203,10 +222,10 @@ int ObRoaringBin::get_container_size(uint32_t n, size_t &container_size)
     // run container
     if (offset + sizeof(uint16_t) > roaring_bin_.length()) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("ran out of bytes while reading a run container (header)", K(ret), K(offset), K(n));
+      LOG_WARN("ran out of bytes while reading a run container (header)", K(ret), K(offset), K(n), K(roaring_bin_.length()));
     } else {
-      int32_t n_runs = *reinterpret_cast<const int32_t*>(roaring_bin_.ptr() + offset);
-      container_size = sizeof(int32_t) + n_runs * 2 * sizeof(uint16_t);
+      uint16_t n_runs = *reinterpret_cast<const uint16_t*>(roaring_bin_.ptr() + offset);
+      container_size = sizeof(uint16_t) + n_runs * 2 * sizeof(uint16_t);
     }
   } else {
     // array container
@@ -243,7 +262,7 @@ int ObRoaring64Bin::init()
     read_bytes += sizeof(buckets_);
     if (read_bytes > roaring_bin_.length()) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("ran out of bytes while reading buckets", K(ret), K(read_bytes));
+      LOG_WARN("ran out of bytes while reading buckets", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else {
       buckets_ = *reinterpret_cast<uint64_t*>(buf);
       buf += sizeof(buckets_);
@@ -271,7 +290,7 @@ int ObRoaring64Bin::init()
       read_bytes += sizeof(uint32_t);
       if (read_bytes > roaring_bin_.length()) {
         ret = OB_INVALID_DATA;
-        LOG_WARN("ran out of bytes while reading high32", K(ret), K(read_bytes), K(bucket));
+        LOG_WARN("ran out of bytes while reading high32", K(ret), K(read_bytes), K(bucket), K(roaring_bin_.length()));
       } else {
         high32_[bucket] = *reinterpret_cast<uint32_t*>(buf);
         buf += sizeof(uint32_t);

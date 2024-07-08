@@ -450,7 +450,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin)
         ret = OB_DESERIALIZE_ERROR;
         LOG_WARN("failed to deserialize the bitmap", K(ret));
       } else if (!roaring::api::roaring64_bitmap_internal_validate(bitmap_, NULL)) {
-        ret = OB_DESERIALIZE_ERROR;
+        ret = OB_INVALID_DATA;
         LOG_WARN("bitmap internal consistency checks failed", K(ret));
       } else {
         type_ = ObRbType::BITMAP;
@@ -464,7 +464,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin)
         ret = OB_DESERIALIZE_ERROR;
         LOG_WARN("failed to deserialize the bitmap", K(ret));
       } else if (!roaring::api::roaring64_bitmap_internal_validate(bitmap_, NULL)) {
-        ret = OB_DESERIALIZE_ERROR;
+        ret = OB_INVALID_DATA;
         LOG_WARN("bitmap internal consistency checks failed", K(ret));
       } else {
         type_ = ObRbType::BITMAP;
