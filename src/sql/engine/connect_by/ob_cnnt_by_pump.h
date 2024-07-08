@@ -204,7 +204,8 @@ private:
           ht_alloc_(nullptr)
     {
     }
-    void reset()
+    // The state after reuse should be same as that after init
+    void reuse()
     {
       if (nullptr != buckets_) {
         buckets_->reset();
@@ -214,12 +215,11 @@ private:
       }
       nbuckets_ = 0;
       row_count_ = 0;
-      inited_ = false;
     }
     int init(ObIAllocator &alloc);
     void free(ObIAllocator *alloc)
     {
-      reset();
+      reuse();
       if (OB_NOT_NULL(buckets_)) {
         buckets_->destroy();
         if (!OB_ISNULL(alloc)) {
