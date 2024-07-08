@@ -51,19 +51,22 @@ public:
   static int mtl_init(ObDecodeResourcePool *&ctx_array_pool);
   void destroy();
   int init();
+  int reload_config();
   template <typename T>
   int alloc(T *&item);
   template <typename T>
   int free(T *item);
-
 private:
+  uint64_t get_adaptive_factor(const uint64_t tenant_id) const;
   template<typename T>
   ObSmallObjPool<T> &get_pool();
 private:
-  static const int64_t MAX_DECODER_CNT = 40960;
+  static const uint64_t MIN_FACTOR = 1; // 5.5M
+  static const uint64_t MAX_FACTOR = 50; // 275.5M
+  static const int64_t MAX_DECODER_CNT = 4096;
   static const int64_t MID_DECODER_CNT = MAX_DECODER_CNT / 2;
   static const int64_t MIN_DECODER_CNT = MAX_DECODER_CNT / 4;
-  static const int64_t MAX_CS_DECODER_CNT = 40960;
+  static const int64_t MAX_CS_DECODER_CNT = 4096;
   static const int64_t MAX_CTX_BLOCK_CNT =
       MAX_DECODER_CNT * ObColumnHeader::MAX_TYPE / ObColumnDecoderCtxBlock::CTX_NUMS;
   static const int64_t MAX_CS_CTX_BLOCK_CNT =
