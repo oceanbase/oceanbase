@@ -15654,7 +15654,7 @@ def_table_schema(
                     t.table_name collate utf8mb4_name_case as TABLE_NAME,
                     c.column_name as COLUMN_NAME,
                     fc.position as ORDINAL_POSITION,
-                    CAST(NULL as UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
+                    CAST(fc.position AS UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT,
                     d2.database_name as REFERENCED_TABLE_SCHEMA,
                     t2.table_name as REFERENCED_TABLE_NAME,
                     c2.column_name as REFERENCED_COLUMN_NAME
@@ -15685,7 +15685,7 @@ def_table_schema(
                     t.table_name collate utf8mb4_name_case as TABLE_NAME,
                     c.column_name as COLUMN_NAME,
                     fc.position as ORDINAL_POSITION,
-                    CAST(NULL as UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
+                    CAST(fc.position AS UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT,
                     d.database_name as REFERENCED_TABLE_SCHEMA,
                     t2.mock_fk_parent_table_name as REFERENCED_TABLE_NAME,
                     c2.parent_column_name as REFERENCED_COLUMN_NAME
