@@ -2859,8 +2859,8 @@
 #
 #    times -= 1
 #    if times == -1:
-#      logging.warn("""check {0} job timeout""".format(job_name))
-#      raise MyError("""check {0} job timeout""".format(job_name))
+#      logging.warn("""result not expected, sql: '{0}', expected: '{1}', current: '{2}'""".format(sql, value, results[0][0]))
+#      raise MyError("""result not expected, sql: '{0}', expected: '{1}', current: '{2}'""".format(sql, value, results[0][0]))
 #    time.sleep(10)
 #
 ## 开始健康检查
