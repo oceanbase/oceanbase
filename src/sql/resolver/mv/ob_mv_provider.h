@@ -52,6 +52,9 @@ public:
 private:
   int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt);
   int check_mv_column_type(const ObColumnSchemaV2 &org_column, const ObColumnSchemaV2 &cur_column);
+  int check_column_type_and_accuracy(const ObColumnSchemaV2 &org_column,
+                                     const ObColumnSchemaV2 &cur_column,
+                                     bool &is_match);
   int generate_mv_stmt(ObIAllocator &alloc,
                        ObStmtFactory &stmt_factory,
                        ObRawExprFactory &expr_factory,
