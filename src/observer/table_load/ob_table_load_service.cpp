@@ -599,7 +599,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with foreign keys");
-      } else if (table_schema->has_check_constraint() && (ObDirectLoadMode::LOAD_DATA == load_mode)) {
+      } else if (table_schema->has_check_constraint() && (ObDirectLoadMode::LOAD_DATA == load_mode || ObDirectLoadMode::TABLE_LOAD == load_mode)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with check constraints", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with check constraints");
