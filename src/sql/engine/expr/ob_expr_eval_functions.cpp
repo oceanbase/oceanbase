@@ -1227,6 +1227,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprMinus::minus_vec_vec,                                /* 734 */
   NULL, // ObExprMul::mul_vec_vec,                                    /* 735 */
   NULL, // ObExprDiv::div_vec,                                        /* 736 */
+  NULL, // ObExprVecKey::generate_vec_key,                            /* 737 */
+  NULL, // ObExprVecScn::generate_vec_scn,                            /* 738 */
+  NULL, // ObExprVecVid::generate_vec_id,                             /* 739 */
+  NULL, // ObExprVecData::generate_vec_data,                          /* 740 */
+  NULL, // ObExprVecType::generate_vec_type,                          /* 741 */
+  NULL, // ObExprVecVector::generate_vec_vector,                      /* 742 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
