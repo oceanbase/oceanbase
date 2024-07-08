@@ -29,6 +29,7 @@
 #include "storage/ls/ob_ls_saved_info.h"
 #include "share/scn.h"
 #include "storage/high_availability/ob_ls_transfer_info.h"
+#include "storage/mview/ob_major_mv_merge_info.h"
 
 namespace oceanbase
 {
@@ -202,6 +203,7 @@ private:
   share::SCN transfer_scn_;
   ObLSRebuildInfo rebuild_info_;
   ObLSTransferMetaInfo transfer_meta_info_; //transfer_dml_ctrl_42x # placeholder
+  ObMajorMVMergeInfo major_mv_merge_info_;
 };
 
 }  // namespace storage

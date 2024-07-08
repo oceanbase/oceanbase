@@ -841,6 +841,7 @@ ob_set_subtarget(ob_storage mview
   mview/ob_mview_refresh.cpp
   mview/ob_mview_transaction.cpp
   mview/ob_mview_sched_job_utils.cpp
+  mview/ob_major_mv_merge_info.cpp
 )
 
 ob_set_subtarget(ob_storage tenant_snapshot
