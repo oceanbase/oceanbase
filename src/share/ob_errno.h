@@ -1901,6 +1901,7 @@ constexpr int OB_INVALID_EXTERNAL_FILE = -11018;
 constexpr int OB_INVALID_EXTERNAL_FILE_COLUMN_PATH = -11046;
 constexpr int OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH = -11047;
 constexpr int OB_ERR_DDL_RESOURCE_NOT_ENOUGH = -11048;
+constexpr int OB_EXCEED_QUERY_MEM_LIMIT = -11049;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4217,6 +4218,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_EXTERNAL_FILE_COLUMN_PATH__USER_ERROR_MSG "Invalid path: %.*s"
 #define OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH__USER_ERROR_MSG "Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s"
 #define OB_ERR_DDL_RESOURCE_NOT_ENOUGH__USER_ERROR_MSG "The tenant ddl resource is not enough, please retry"
+#define OB_EXCEED_QUERY_MEM_LIMIT__USER_ERROR_MSG "Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -6533,6 +6535,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INVALID_EXTERNAL_FILE_COLUMN_PATH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11046, Invalid path: %.*s"
 #define OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11047, Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s"
 #define OB_ERR_DDL_RESOURCE_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11048, The tenant ddl resource is not enough, please retry"
+#define OB_EXCEED_QUERY_MEM_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11049, Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6543,7 +6546,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2312];
+extern int g_all_ob_errnos[2313];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
