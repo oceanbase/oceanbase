@@ -204,7 +204,7 @@ int ObDirectLoadInsertTabletContext::open()
       } else {
         is_open_ = true;
       }
-      if (OB_FAIL(ret)) {
+      if (OB_FAIL(ret) && !param_->is_incremental_) {
         open_err_ = ret; // avoid open repeatedly when failed
       }
     }
