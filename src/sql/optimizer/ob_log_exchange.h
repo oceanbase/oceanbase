@@ -31,6 +31,8 @@ public:
       dfo_id_(common::OB_INVALID_ID),
       px_id_(common::OB_INVALID_ID),
       expected_worker_count_(0),
+      pipeline_depth_(0),
+      need_early_sched_(false),
       is_remote_(false),
       is_task_order_(false),
       is_merge_sort_(false),
@@ -122,6 +124,10 @@ public:
   bool is_px_single() const { return is_single(); }
   void set_expected_worker_count(int64_t c) { expected_worker_count_ = c; }
   int64_t get_expected_worker_count() const { return expected_worker_count_; }
+  void set_pipeline_depth(int64_t c) { pipeline_depth_ = c; }
+  int64_t get_pipeline_depth() const { return pipeline_depth_; }
+  void set_need_early_sched() { need_early_sched_ = true; }
+  int64_t need_early_sched() const { return need_early_sched_; }
   virtual int px_pipe_blocking_pre(ObPxPipeBlockingCtx &ctx) override;
   virtual int px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx) override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;
@@ -222,6 +228,8 @@ private:
   int64_t dfo_id_; // 在 CG 之前就给 dfo 定下 id
   int64_t px_id_; // 在 CG 之前就给多个 px 的 plan 定下每个 px 的 id
   int64_t expected_worker_count_; // 仅供 QC 节点使用，其余 exchange 节点均为 0
+  int64_t pipeline_depth_; // only valid on QC (default as 0)
+  bool need_early_sched_; // true if the dfo this exchange belongs to could be early scheduled
 
   bool is_remote_; /* true if the exchange is remote single-server */
   bool is_task_order_; // true if the input data is task order

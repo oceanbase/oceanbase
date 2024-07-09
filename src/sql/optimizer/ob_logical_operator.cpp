@@ -3007,18 +3007,18 @@ int ObLogicalOperator::find_all_tsc(ObIArray<ObLogicalOperator *> &tsc_ops,
   return ret;
 }
 
-int ObLogicalOperator::allocate_material(const int64_t index)
+int ObLogicalOperator::allocate_material(const int64_t index, bool bypassable)
 {
   int ret = OB_SUCCESS;
   ObLogPlan *plan = NULL;
   ObLogicalOperator *child = NULL;
   ObLogPlan *child_plan = NULL;
-  ObLogicalOperator* mat_op = NULL;
+  ObLogMaterial* mat_op = NULL;
   if (OB_ISNULL(plan = get_plan()) || OB_ISNULL(child = get_child(index)) ||
       OB_ISNULL(child_plan = child->get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child), K(plan), K(child_plan));
-  } else if (OB_ISNULL(mat_op = child_plan->get_log_op_factory().allocate(*child_plan, log_op_def::LOG_MATERIAL))) {
+  } else if (OB_ISNULL(mat_op = static_cast<ObLogMaterial*>(child_plan->get_log_op_factory().allocate(*child_plan, log_op_def::LOG_MATERIAL)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to allocate material operator", K(ret));
   } else {
@@ -3026,7 +3026,9 @@ int ObLogicalOperator::allocate_material(const int64_t index)
     child->set_parent(mat_op);
     mat_op->set_parent(this);
     set_child(index, mat_op);
-    if (OB_FAIL(mat_op->compute_property())) {
+
+    if (OB_FALSE_IT(mat_op->set_bypassable(bypassable))) {
+    } else if (OB_SUCC(ret) && OB_FAIL(mat_op->compute_property())) {
       LOG_WARN("failed to compute property");
     } else {
       mat_op->set_op_cost(0.0);
@@ -4102,7 +4104,6 @@ int ObLogicalOperator::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
         if (child_op_ctx->has_dfo_below_) {
           child_dfo_cnt += 1;
           max_dfo_child_idx = max(max_dfo_child_idx, i);
-        } else {
         }
         if (child_op_ctx->in_.is_exch() && !is_block_input(i)) {
           if (child_dfo_cnt > 1 && !is_consume_child_1by1()) {
@@ -4111,7 +4112,7 @@ int ObLogicalOperator::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
                 && !static_cast<ObLogDistinct *>(child)->is_push_down()) {
               static_cast<ObLogDistinct*>(child)->set_block_mode(true);
               LOG_DEBUG("distinct block mode", K(lbt()));
-            } else if (OB_FAIL(allocate_material(i))) {
+            } else if (OB_FAIL(allocate_material(i, false))) {
               LOG_WARN("allocate material failed", K(ret));
             }
           } else if (!got_in_exch) {

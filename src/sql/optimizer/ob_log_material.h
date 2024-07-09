@@ -22,13 +22,17 @@ namespace sql
   class ObLogMaterial : public ObLogicalOperator
   {
   public:
-    ObLogMaterial(ObLogPlan &plan) : ObLogicalOperator(plan)
+    ObLogMaterial(ObLogPlan &plan) : ObLogicalOperator(plan), is_bypassable_(false)
     {}
     virtual ~ObLogMaterial() {}
     virtual int est_cost() override;
     virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
     virtual bool is_block_op() const override { return true; }
+    // During execution, MATERIAL operators could be bypassed iff is_bypassable is set
+    bool get_bypassable() const { return is_bypassable_; }
+    void set_bypassable(bool bypass) { is_bypassable_ = bypass; }
   private:
+    bool is_bypassable_;
     DISALLOW_COPY_AND_ASSIGN(ObLogMaterial);
   };
 }

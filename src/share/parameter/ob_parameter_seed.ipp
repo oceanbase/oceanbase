@@ -1223,9 +1223,9 @@ DEF_CAP(stack_size, OB_CLUSTER_PARAMETER, "512K", "[512K, 20M]",
 DEF_INT(__easy_memory_reserved_percentage, OB_CLUSTER_PARAMETER, "0", "[0,100]",
         "the percentage of easy memory reserved size. The default value is 0. Range: [0,100]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_INT(_px_max_pipeline_depth, OB_CLUSTER_PARAMETER, "2", "[2,3]",
+DEF_INT(_px_max_pipeline_depth, OB_CLUSTER_PARAMETER, "2", "[2,5]",
         "max parallel execution pipeline depth, "
-        "range: [2,3]",
+        "range: [2,5]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 //ssl
 DEF_BOOL(ssl_client_authentication, OB_CLUSTER_PARAMETER, "False",

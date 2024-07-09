@@ -67,16 +67,14 @@ int ObDfoSchedOrderGenerator::do_generate_sched_order(ObDfoMgr &dfo_mgr, ObDfo &
   return ret;
 }
 
-int ObDfoSchedDepthGenerator::generate_sched_depth(ObExecContext &exec_ctx,
-                                                   ObDfoMgr &dfo_mgr)
-{
+int ObDfoSchedDepthGenerator::generate_sched_depth(ObExecContext &exec_ctx, ObDfoMgr &dfo_mgr, const int64_t pipeline_depth) {
   int ret = OB_SUCCESS;
-  if (GCONF._px_max_pipeline_depth > 2) {
+  if (pipeline_depth > 2) {
     ObDfo *dfo_tree = dfo_mgr.get_root_dfo();
     if (OB_ISNULL(dfo_tree)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("NULL unexpected", K(ret));
-    } else if (OB_FAIL(do_generate_sched_depth(exec_ctx, dfo_mgr, *dfo_tree))) {
+    } else if (OB_FAIL(do_generate_sched_depth(exec_ctx, dfo_mgr, *dfo_tree, pipeline_depth))) {
       LOG_WARN("fail generate dfo edges", K(ret));
     }
   }
@@ -84,9 +82,8 @@ int ObDfoSchedDepthGenerator::generate_sched_depth(ObExecContext &exec_ctx,
 }
 
 // dfo_tree 后序遍历，定出哪些 dfo 可以做 material op bypass
-int ObDfoSchedDepthGenerator::do_generate_sched_depth(ObExecContext &exec_ctx,
-                                                      ObDfoMgr &dfo_mgr,
-                                                      ObDfo &parent)
+int ObDfoSchedDepthGenerator::do_generate_sched_depth(ObExecContext &exec_ctx, ObDfoMgr &dfo_mgr,
+                                                      ObDfo &parent, const int64_t pipeline_depth)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < parent.get_child_count(); ++i) {
@@ -95,24 +92,52 @@ int ObDfoSchedDepthGenerator::do_generate_sched_depth(ObExecContext &exec_ctx,
       LOG_WARN("fail get child dfo", K(i), K(parent), K(ret));
     } else if (OB_ISNULL(child)) {
       ret = OB_ERR_UNEXPECTED;
-    } else if (OB_FAIL(do_generate_sched_depth(exec_ctx, dfo_mgr, *child))) {
+    } else if (OB_FAIL(do_generate_sched_depth(exec_ctx, dfo_mgr, *child, pipeline_depth))) {
       LOG_WARN("fail do generate edge", K(*child), K(ret));
     } else {
-      bool need_earlier_sched = check_if_need_do_earlier_sched(*child);
+      bool need_earlier_sched = check_if_need_do_earlier_sched(*child, pipeline_depth);
       if (need_earlier_sched) {
-        // child 里面的 material 被改造成了 bypass 的，所以 parent 必须提前调度起来
-        // 同时，parent 中如果也有 material，必须标记为 block，不可 bypass。否则会 hang。
-        if (OB_FAIL(try_set_dfo_unblock(exec_ctx, *child))) {
-          // 既然 parent 被提前调度了，那么 parent 千万要阻塞
-          // 否则 parent 往外吐数据，就会卡住
+        // current pair of DFOs are earlier scheduled, block the parent DFO's material
+        // (parent DFO maybe unblocked later) to prevent unexpected hang
+        if (OB_FAIL(bypass_material(exec_ctx, child->get_root_op_spec()->get_child(), true))) {
           LOG_WARN("fail set dfo block", K(ret), K(*child), K(parent));
-        } else if (OB_FAIL(try_set_dfo_block(exec_ctx, parent))) {
-          // 既然 parent 被提前调度了，那么 parent 千万要阻塞
-          // 否则 parent 往外吐数据，就会卡住
+        } else if (OB_FAIL(bypass_material(exec_ctx, parent.get_root_op_spec()->get_child(), false))) {
           LOG_WARN("fail set dfo block", K(ret), K(*child), K(parent));
         } else {
-          parent.set_earlier_sched(true);
-          LOG_DEBUG("parent dfo can do earlier scheduling", K(*child), K(parent));
+          /*
+            pipeline        pipeline_pos_
+
+            +------------+
+            |            |
+            |  ancestor  |          2 (earlier scheduled)
+            |            |
+            +------+-----+
+                   ^
+                   |
+                   |
+            +------+-----+
+            |            |
+            |   parent   |          1
+            |            |
+            +------+-----+
+                   ^
+                   |
+                   |
+            +------+-----+
+            |            |
+            |    child   |          0
+            |            |
+            +------------+
+          */
+          if (child->get_pipeline_pos() == 0 && !child->is_leaf_dfo()) {
+            child->set_pipeline_pos(1);
+          }
+
+          // to match the optimizer, disable the early scheduling of root DFO
+          if (parent.get_pipeline_pos() == 0 && parent.get_dfo_id() != ObDfo::MAX_DFO_ID) {
+            parent.set_pipeline_pos(child->get_pipeline_pos() + 1);
+          }
+          LOG_INFO("parent dfo can do earlier scheduling", K(child->get_dfo_id()), K(parent.get_dfo_id()));
         }
       }
     }
@@ -120,21 +145,71 @@ int ObDfoSchedDepthGenerator::do_generate_sched_depth(ObExecContext &exec_ctx,
   return ret;
 }
 
-bool ObDfoSchedDepthGenerator::check_if_need_do_earlier_sched(ObDfo &child)
+bool ObDfoSchedDepthGenerator::check_if_need_do_earlier_sched(ObDfo &dfo,
+                                                              const int64_t pipeline_depth)
 {
   bool do_earlier_sched = false;
-  if (child.is_earlier_sched() == false) {
-    const ObOpSpec *phy_op = child.get_root_op_spec();
-    if (OB_NOT_NULL(phy_op) && IS_PX_TRANSMIT(phy_op->type_)) {
-      phy_op = static_cast<const ObTransmitSpec *>(phy_op)->get_child();
-      do_earlier_sched = phy_op && (PHY_MATERIAL == phy_op->type_ || PHY_MATERIAL == phy_op->type_);
+  if (dfo.get_pipeline_pos() + 1 < pipeline_depth) {
+    const ObOpSpec *phy_op = dfo.get_root_op_spec();
+    const ObPxTransmitSpec *trans_op = NULL;
+    if (OB_NOT_NULL(phy_op) && IS_PX_TRANSMIT(phy_op->type_)
+        && OB_NOT_NULL(trans_op = static_cast<const ObPxTransmitSpec *>(phy_op))) {
+      do_earlier_sched = trans_op->need_early_sched_;
+      if (do_earlier_sched) { LOG_INFO("dfo could be early scheduled", K(phy_op->get_id())); }
     }
-  } else {
-    // dfo (child) 是 earlier sched，那么可以知道 dfo 的 material 会阻塞对外吐数据.
-    // 此时 dfo 的 parent 没有必要提前调度，因为没有任何数据给它消费. parent 依靠
-    // 稍后的 2-DFO 普通调度即可。
   }
   return do_earlier_sched;
+}
+
+int ObDfoSchedDepthGenerator::bypass_material(ObExecContext &exec_ctx, const ObOpSpec *phy_op,
+                                              bool bypass)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(phy_op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("phy_op is null", K(ret));
+  } else if (PHY_MATERIAL == phy_op->get_type()) {
+    const ObMaterialSpec *mat = static_cast<const ObMaterialSpec *>(phy_op);
+    ObOperatorKit *kit = exec_ctx.get_operator_kit(mat->id_);
+    if (OB_ISNULL(kit) || OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObMaterialOpInput *mat_input = static_cast<ObMaterialOpInput *>(kit->input_);
+      if (bypass) {
+        // only bypass material marked as bypassable
+        mat_input->set_bypass(mat->get_bypassable());
+      } else {
+        mat_input->set_bypass(false);
+      }
+    }
+  } else if (PHY_VEC_MATERIAL == phy_op->get_type()) {
+    const ObMaterialVecSpec *mat = static_cast<const ObMaterialVecSpec *>(phy_op);
+    ObOperatorKit *kit = exec_ctx.get_operator_kit(mat->id_);
+    if (OB_ISNULL(kit) || OB_ISNULL(kit->input_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("operator is NULL", K(ret), KP(kit));
+    } else {
+      ObMaterialVecOpInput *mat_input = static_cast<ObMaterialVecOpInput *>(kit->input_);
+      if (bypass) {
+        // only bypass material marked as bypassable
+        mat_input->set_bypass(mat->get_bypassable());
+      } else {
+        mat_input->set_bypass(false);
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !IS_PX_TRANSMIT(phy_op->get_type())) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < phy_op->get_child_num(); ++i) {
+      const ObOpSpec *child = phy_op->get_child(i);
+      if (OB_FAIL(bypass_material(exec_ctx, child, bypass))) {
+        LOG_WARN("failed to bypass material of child", K(ret));
+      }
+    } // end for
+  }
+
+  return ret;
 }
 
 int ObDfoSchedDepthGenerator::try_set_dfo_unblock(ObExecContext &exec_ctx, ObDfo &dfo)
@@ -175,6 +250,295 @@ int ObDfoSchedDepthGenerator::try_set_dfo_block(ObExecContext &exec_ctx, ObDfo &
         ObMaterialVecOpInput *mat_input = static_cast<ObMaterialVecOpInput *>(kit->input_);
         mat_input->set_bypass(!block); // so that this dfo will have a blocked material op
       }
+    }
+  }
+  return ret;
+}
+
+int64_t ObDfoSchedSimulator::ObFinalCountGetter::operator()(const ObDfo &dfo) const
+{
+  return dfo.get_assigned_worker_count();
+}
+
+int64_t ObDfoSchedSimulator::ObDopCountGetter::operator()(const ObDfo &dfo) const
+{
+  return dfo.get_dop();
+}
+
+int ObDfoSchedSimulator::create(const ObDfoAssignGetter &dfo_assign_getter,
+                                bool collect_maximum_worker)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dfo_state_map_.create(dfos_.count(), ObModIds::OB_SQL_PX, ObModIds::OB_SQL_PX))) {
+    LOG_WARN("fail to create hash map", K(ret));
+  } else if (OB_FAIL(dfo_start_ts_map_.create(dfos_.count() << 1, ObModIds::OB_SQL_PX,
+                                              ObModIds::OB_SQL_PX))) {
+    LOG_WARN("fail to create hash map", K(ret));
+  } else if (OB_FAIL(dfo_max_wokrer_cnt_map_.create(dfos_.count(), ObModIds::OB_SQL_PX,
+                                                    ObModIds::OB_SQL_PX))) {
+    LOG_WARN("fail to create hash map", K(ret));
+  } else {
+    inited_ = true;
+    dfo_assign_getter_ = dfo_assign_getter;
+    collect_maximum_worker_ = collect_maximum_worker;
+  }
+
+  return ret;
+}
+
+int ObDfoSchedSimulator::destroy()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dfo_state_map_.destroy())) {
+    LOG_WARN("fail to destroy hash map");
+  } else if (OB_FAIL(dfo_start_ts_map_.destroy())) {
+    LOG_WARN("fail to destroy hash map");
+  } else if (OB_FAIL(dfo_max_wokrer_cnt_map_.destroy())) {
+    LOG_WARN("fail to destroy hash map");
+  } else {
+    ts_worker_cnt_map_.destroy();
+  }
+  return ret;
+}
+
+int ObDfoSchedSimulator::get_max_assigned_worker(int64_t &max_assigned) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dfo scheduling simulator is not inited", K(ret));
+  } else {
+    max_assigned = max_assigned_;
+  }
+  return ret;
+}
+
+int ObDfoSchedSimulator::get_max_concurrent_workers(const ObDfo *dfo,
+                                                    int64_t &max_concurrent_worker) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dfo scheduling simulator is not inited", K(ret));
+  } else if (OB_FAIL(
+               dfo_max_wokrer_cnt_map_.get_refactored(dfo->get_dfo_id(), max_concurrent_worker))) {
+    LOG_WARN("fail to get hash map", K(ret));
+  }
+  return ret;
+}
+
+int ObDfoSchedSimulator::schedule()
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dfo scheduling simulator is not inited", K(ret));
+  } else {
+    int64_t assigned = 0;
+    ARRAY_FOREACH_X(dfos_, idx, cnt, OB_SUCC(ret))
+    {
+      if (OB_FAIL(
+            dfo_state_map_.set_refactored(dfos_.at(idx)->get_dfo_id(), ObDfoState::WAIT, 1))) {
+        LOG_WARN("fail to set hash map", K(ret));
+      }
+    }
+
+    ARRAY_FOREACH_X(dfos_, idx, cnt, OB_SUCC(ret))
+    {
+      const ObDfo *child = dfos_.at(idx);
+      const ObDfo *parent = child->parent();
+      // Simulate the scheduling and get the maximum of concurrent worker count
+      // TODO: nested PX is not considered now
+      if (OB_ISNULL(parent) || OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dfo edges expect to have parent", KPC(parent), KPC(child), K(ret));
+      } else if (OB_FAIL(schedule_dfo(child, assigned, max_assigned_))) {
+        LOG_WARN("fail to schedule dfo", K(ret));
+      } else if (OB_FAIL(schedule_dfo(parent, assigned, max_assigned_))) {
+        LOG_WARN("fail to schedule dfo", K(ret));
+      } else if (child->has_depend_sibling()) {
+        // In the extreme scenario, all ancestor and sibling DFOs will be scheduled concurrently
+        if (OB_FAIL(schedule_ancester_dfos(parent, assigned, max_assigned_))) {
+          LOG_WARN("fail to schedule ancester dfos", K(ret));
+        } else if (OB_FAIL(schedule_sibling_dfos(child, assigned, max_assigned_))) {
+          LOG_WARN("fail to schedule sibling dfos", K(ret));
+        }
+      } else if (OB_FAIL(schedule_ancester_dfos(parent, assigned, max_assigned_))) {
+        LOG_WARN("fail to schedule ancester dfos", K(ret));
+      }
+      
+      if (OB_SUCC(ret) && OB_FAIL(finish_dfo(child, assigned))) {
+        LOG_WARN("fail to finish dfo", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDfoSchedSimulator::all_child_dfo_finish(const ObDfo *dfo, bool &all_finish)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObDfo *> &child_dfos = dfo->get_child_dfos();
+  ObDfoState child_state;
+  all_finish = true;
+  ARRAY_FOREACH(child_dfos, idx)
+  {
+    if (OB_ISNULL(child_dfos.at(idx))) {
+      LOG_WARN("unexpected null child dfo", K(ret));
+    } else if (OB_FAIL(
+                 dfo_state_map_.get_refactored(child_dfos.at(idx)->get_dfo_id(), child_state))) {
+      LOG_WARN("fail to get hash map", K(ret));
+    } else if (child_state != ObDfoState::FINISH) {
+      LOG_INFO("child is not finished", K(child_dfos.at(idx)->get_dfo_id()));
+      all_finish = false;
+    }
+  }
+
+  return ret;
+}
+
+int ObDfoSchedSimulator::schedule_dfo(const ObDfo *dfo, int64_t &assigned, int64_t &max_assigned)
+{
+  int ret = OB_SUCCESS;
+  ObDfoState state;
+  if (OB_FAIL(dfo_state_map_.get_refactored(dfo->get_dfo_id(), state))) {
+    // ignore the TOP dfo to match the scheduling of optimizer
+    if (ret == OB_HASH_NOT_EXIST
+        && dfo->get_dfo_id() == ObDfo::MAX_DFO_ID) { // use ObDfo::MAX_DFO_ID instead
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("fail to get hash map", K(dfo->get_dfo_id()), K(ret));
+    }
+  } else if (state == ObDfoState::WAIT) {
+    // current dfo hasn't been scheduled yet, schedule it
+    if (OB_FAIL(dfo_state_map_.set_refactored(dfo->get_dfo_id(), ObDfoState::RUNNING, 1))) {
+      LOG_WARN("fail to set hash map", K(dfo->get_dfo_id()), K(ret));
+    } else {
+      assigned += dfo_assign_getter_(*dfo);
+      LOG_INFO("schedule a dfo", K(assigned), K(dfo->get_dfo_id()),
+               K(dfo->get_assigned_worker_count()));
+
+      // when a DFO is scheduled, record its timestamp (currently, ts is the index
+      // when the DFO is inserted into the ts_worker_cnt_map_)
+      if (collect_maximum_worker_) {
+        int64_t start_timestamp = ts_worker_cnt_map_.count();
+        if (OB_FAIL(ts_worker_cnt_map_.push_back(assigned))) {
+          LOG_WARN("fail to record the worker count", K(ret));
+        } else if (OB_FAIL(dfo_start_ts_map_.set_refactored(dfo->get_dfo_id(), start_timestamp))) {
+          LOG_WARN("fail to record the dfo's timestamp", K(ret));
+        }
+      }
+
+      if (assigned > max_assigned) {
+        max_assigned = assigned;
+        LOG_TRACE("update total assigned by sibling dfos", K(dfo->get_dfo_id()),
+                  K(dfo->get_assigned_worker_count()), K(max_assigned));
+      }
+    }
+  } else {
+    LOG_INFO("dfo is not for scheduling", K(dfo->get_dfo_id()), K(state));
+  }
+  return ret;
+}
+
+int ObDfoSchedSimulator::finish_dfo(const ObDfo *dfo, int64_t &assigned)
+{
+  int ret = OB_SUCCESS;
+  ObDfoState state;
+  if (OB_FAIL(dfo_state_map_.get_refactored(dfo->get_dfo_id(), state))) {
+    LOG_WARN("fail to get hash map", K(ret));
+  } else if (state == ObDfoState::RUNNING) {
+    bool all_child_finish;
+    // if DFO has no child dfos or all child DFOs are finished, stop currentDFO
+    if (OB_FAIL(all_child_dfo_finish(dfo, all_child_finish))) {
+      LOG_WARN("fail to get child states", K(ret));
+    } else if (all_child_finish) {
+      if (OB_FAIL(dfo_state_map_.set_refactored(dfo->get_dfo_id(), ObDfoState::FINISH, 1))) {
+        LOG_WARN("fail to set hash map", K(ret));
+      } else {
+        assigned -= dfo_assign_getter_(*dfo);
+
+        if (collect_maximum_worker_) {
+          int64_t start_timestamp;
+          if (OB_FAIL(dfo_start_ts_map_.get_refactored(dfo->get_dfo_id(), start_timestamp))) {
+            LOG_WARN("fail to get the dfo's timestamp", K(ret));
+          } else {
+            int64_t max_worker_cnt = -1;
+            // the following method is O(n), so the total time complexity
+            // is O(n^2), optimize it iterate [start_timestamp,
+            // current_timestamp] to find the max worker count
+            for (int64_t idx = start_timestamp; idx < ts_worker_cnt_map_.count(); ++idx) {
+              if (ts_worker_cnt_map_.at(idx) > max_worker_cnt) {
+                max_worker_cnt = ts_worker_cnt_map_.at(idx);
+              }
+            }
+
+            if (-1 == max_worker_cnt) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("fail to get max worker count for current DFO");
+            } else if (OB_FAIL(dfo_max_wokrer_cnt_map_.set_refactored(dfo->get_dfo_id(),
+                                                                      max_worker_cnt))) {
+              LOG_WARN("fail to set hashmap");
+            }
+          }
+        }
+
+        if (OB_SUCC(ret)) {
+          LOG_INFO("finish a dfo", K(assigned), K(dfo->get_dfo_id()),
+                   K(dfo->get_assigned_worker_count()));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDfoSchedSimulator::schedule_ancester_dfos(const ObDfo *dfo, int64_t &assigned,
+                                                int64_t &max_assigned)
+{
+  int ret = OB_SUCCESS;
+  // To bypass MATERIAL operators, ancestor DFOs will be scheduled.
+  const ObDfo *cur = dfo->parent();
+  ObDfoState state;
+
+  while (OB_SUCC(ret) && OB_NOT_NULL(cur) && cur->is_earlier_sched()) {
+    if (OB_FAIL(schedule_dfo(cur, assigned, max_assigned))) {
+      LOG_WARN("fail to schedule dfo", K(cur->get_dfo_id()), K(ret));
+    } else {
+      cur = cur->parent();
+    }
+  }
+  return ret;
+}
+
+int ObDfoSchedSimulator::schedule_sibling_dfos(const ObDfo *dfo, int64_t &assigned,
+                                               int64_t &max_assigned)
+{
+  // 局部右深树的场景，depend_sibling 和当前 child dfo 都会被调度
+  /* Why need extra flag has_depend_sibling_? Why not use NULL !=
+   * depend_sibling_? dfo5 (dop=2)
+   *         /      |      \
+   *      dfo1(2) dfo2 (4) dfo4 (1)
+   *                        |
+   *                      dfo3 (2)
+   * Schedule order: (4,3) => (4,5) => (4,5,1) => (4,5,2) => (4,5) => (5).
+   * max_dop = (4,5,2) = 1 + 2 + 4 = 7. Depend sibling: dfo4 -> dfo1 ->
+   * dfo2. Depend sibling is stored as a list. We thought dfo2 is depend
+   * sibling of dfo1, and calculated incorrect max_dop = (1,2,5) = 2 + 4 +
+   * 2 = 8. Actually, dfo1 and dfo2 are depend sibling of dfo4, but dfo2
+   * is not depend sibling of dfo1. So we use has_depend_sibling_ record
+   * whether the dfo is the header of list.
+   */
+  int ret = OB_SUCCESS;
+  const ObDfo *child = dfo;
+  while (OB_NOT_NULL(child->depend_sibling())) {
+    child = child->depend_sibling();
+    // sibling dfo are leaf dfos, so they will end quickly
+    if (OB_FAIL(schedule_dfo(child, assigned, max_assigned))) {
+      LOG_WARN("fail to schedule dfo", K(ret));
+    } else if (OB_FAIL(finish_dfo(child, assigned))) {
+      LOG_WARN("fail to finish dfo", K(ret));
     }
   }
   return ret;
@@ -223,6 +587,9 @@ int ObDfoWorkerAssignment::calc_admited_worker_count(const ObIArray<ObDfo*> &dfo
       const int64_t extra_expected = px_expected - px_minimal;
       px_admited = px_minimal + extra_expected * extra_worker / (query_expected - query_minimal);
     }
+
+    LOG_INFO("calc px worker count", K(query_expected), K(query_minimal), K(query_admited),
+                            K(px_expected), K(px_minimal), K(px_admited));
     LOG_TRACE("calc px worker count", K(query_expected), K(query_minimal), K(query_admited),
                             K(px_expected), K(px_minimal), K(px_admited));
   }
@@ -235,60 +602,27 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
                                          int64_t admited_worker_count)
 {
   int ret = OB_SUCCESS;
-  /*  算法： */
-  /*  1. 基于优化器给出的 dop，给每个 dfo 分配 worker */
-  /*  2. 理想情况是 dop = worker 数 */
-  /*  3. 但是，如果 worker 数不足，则需要降级。降级策略: 每个 dfo 等比少用 worker */
-  /*  4. 为了确定比例，需要找到同时调度时占用 worker 数最多的一组 dop，以它为基准 */
-  /*     计算比例，才能保证其余 dfo 都能获得足够 worker 数 */
 
-  /*  算法可提升点（TODO）： */
-  /*  考虑 expected_worker_count > admited_worker_count 场景， */
-  /*  本算法中计算出 scale rate < 1 ，于是会导致每个 dfo 会做 dop 降级 */
-  /*  而实际上，可以让部分 dfo 的执行不降级。考虑下面这种场景： */
-  /*  */
-  /*          dfo5 */
-  /*         /   \ */
-  /*       dfo1  dfo4 */
-  /*               \ */
-  /*                dfo3 */
-  /*                 \ */
-  /*                 dfo2 */
-  /*  */
-  /*  假设 dop = 5, 那么 expected_worker_count = 3 * 5 = 15 */
-  /*  */
-  /*  考虑线程不足场景，设 admited_worker_count = 10， */
-  /*  那么，算法最优的情况下，我们可以这样分配： */
-  /*  */
-  /*          dfo5 (3 threads) */
-  /*         /   \ */
-  /*   (3)dfo1  dfo4 (4) */
-  /*               \ */
-  /*                dfo3 (5) */
-  /*                 \ */
-  /*                 dfo2 (5) */
-  /*  */
-  /*  当前的实现，由于 dop 等比降低，降低后的 dop = 5 * 10 / 15 = 3，实际分配结果为： */
-  /*  */
-  /*          dfo5 (3) */
-  /*         /   \ */
-  /*   (3)dfo1  dfo4 (3) */
-  /*               \ */
-  /*                dfo3 (3) */
-  /*                 \ */
-  /*                 dfo2 (3) */
-  /*  */
-  /*  显然，当前实现对 CPU 资源的利用不是最高效的。这部分工作可以留到稍后完善。暂时先这样 */
-
+  /*
+   * Dynamically allocate DOP for each worker.
+   * Based on the most extreme scheduling sequence in the actual scenario,
+   * record the maximum number of concurrent workers that may be scheduled simultaneously for each DFO.
+   * Then, perform downgrading based on that number.
+   */
   const ObIArray<ObDfo *> & dfos = dfo_mgr.get_all_dfos();
-
-  // 基于优化器给出的 dop，给每个 dfo 分配 worker
-  // 实际分配的 worker 数一定不大于 dop，但可能小于 dop 给定值
-  // admited_worker_count在rpc作为worker的场景下，值为0.
+  common::hash::ObHashMap<int64_t, int64_t> dfo_start_ts_map;
+  ObSEArray<int64_t, 16> ts_worker_cnt_map;
+   
   double scale_rate = 1.0;
   bool match_expected = false;
   bool compatible_before_420 = false;
-  if (OB_UNLIKELY(admited_worker_count < 0 || expected_worker_count <= 0 || minimal_worker_count <= 0)) {
+  int64_t total_assigned = 0;
+  if (OB_FAIL(dfo_start_ts_map.create(dfos.count(), ObModIds::OB_SQL_PX,
+                                      ObModIds::OB_SQL_PX))) {
+    LOG_WARN("fail to create hash map", K(ret));
+  } else if (OB_UNLIKELY(admited_worker_count < 0 ||
+                         expected_worker_count <= 0 ||
+                         minimal_worker_count <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("should have at least one worker",  K(ret), K(admited_worker_count),
                                         K(expected_worker_count), K(minimal_worker_count));
@@ -298,25 +632,49 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
     // compatible with version before 4.2
     compatible_before_420 = true;
     scale_rate = static_cast<double>(admited_worker_count) / static_cast<double>(expected_worker_count);
-  } else if (0 >= admited_worker_count || minimal_worker_count == admited_worker_count) {
+  } else if (0 >= admited_worker_count ||
+             minimal_worker_count == admited_worker_count) {
     scale_rate = 0.0;
-  } else if (OB_UNLIKELY(minimal_worker_count > admited_worker_count
-                         || minimal_worker_count >= expected_worker_count)) {
+  } else if (OB_UNLIKELY(minimal_worker_count > admited_worker_count ||
+                         minimal_worker_count >= expected_worker_count)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected params", K(ret), K(minimal_worker_count), K(admited_worker_count), K(expected_worker_count));
   } else {
+    // simulate the schedule and get every worker's max concurrent worker number
     scale_rate = static_cast<double>(admited_worker_count - minimal_worker_count)
                  / static_cast<double>(expected_worker_count - minimal_worker_count);
   }
+
+  ObDfoSchedSimulator dfo_sched_simulator(dfos);
+  if (OB_FAIL(dfo_sched_simulator.create(ObDfoSchedSimulator::ObDopCountGetter(), true))) {
+    LOG_WARN("fail to create dfo schedule simulator");
+  } else if (OB_FAIL(dfo_sched_simulator.schedule())) {
+    LOG_WARN("fail to simulate dfo scheduling");
+  } else if (OB_FAIL(
+                 dfo_sched_simulator.get_max_assigned_worker(total_assigned))) {
+    LOG_WARN("fail to get max assigned worker");
+  }
+
   ARRAY_FOREACH_X(dfos, idx, cnt, OB_SUCC(ret)) {
     ObDfo *child = dfos.at(idx);
     int64_t val = 0;
+    int64_t max_concurrent_worker = 0;
     if (match_expected) {
       val = child->get_dop();
     } else if (compatible_before_420) {
       val = std::max(1L, static_cast<int64_t>(static_cast<double>(child->get_dop()) * scale_rate));
     } else {
-      val = 1L + static_cast<int64_t>(std::max(static_cast<double>(child->get_dop() - 1), 0.0) * scale_rate);
+      if (OB_FAIL(dfo_sched_simulator.get_max_concurrent_workers(child, max_concurrent_worker))) {
+        LOG_WARN("fail to get max concurrent workers for DFO", K(ret), K(child->get_dfo_id())); 
+      } else {
+        if (admited_worker_count >= max_concurrent_worker) {
+          val = child->get_dop(); 
+        } else {
+          val = 1L + static_cast<int64_t>(std::max(static_cast<double>(child->get_dop() - 1), 0.0) * static_cast<double>(admited_worker_count - minimal_worker_count)
+                 / static_cast<double>(max_concurrent_worker - minimal_worker_count));
+        }
+        LOG_TRACE("get max concurrent worker count", K(child->get_dfo_id()), K(max_concurrent_worker), K(admited_worker_count), K(val));
+      }
     }
     child->set_assigned_worker_count(val);
     if (child->is_single() && val > 1) {
@@ -330,7 +688,6 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
   }
 
   // 因为上面取了 max，所以可能实际 assigned 的会超出 admission 数，这时应该报错
-  int64_t total_assigned = 0;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_dfos_worker_count(dfos, false, total_assigned))) {
     LOG_WARN("failed to get dfos worker count", K(ret));
@@ -348,56 +705,27 @@ int ObDfoWorkerAssignment::assign_worker(ObDfoMgr &dfo_mgr,
   return ret;
 }
 
-int ObDfoWorkerAssignment::get_dfos_worker_count(const ObIArray<ObDfo*> &dfos,
+int ObDfoWorkerAssignment::get_dfos_worker_count(const ObIArray<ObDfo *> &dfos,
                                                  const bool get_minimal,
-                                                 int64_t &total_assigned)
-{
+                                                 int64_t &total_assigned) {
   int ret = OB_SUCCESS;
-  total_assigned = 0;
-  ARRAY_FOREACH_X(dfos, idx, cnt, OB_SUCC(ret)) {
-    const ObDfo *child  = dfos.at(idx);
-    const ObDfo *parent = child->parent();
-    // 计算当前 dfo 和“孩子们”一起调度时消耗的线程数
-    // 找到 expected worker cnt 值最大的一组
-    if (OB_ISNULL(parent) || OB_ISNULL(child)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("dfo edges expect to have parent", KPC(parent), KPC(child), K(ret));
-    } else {
-      int64_t child_assigned = get_minimal ? 1 : child->get_assigned_worker_count();
-      int64_t parent_assigned = get_minimal ? 1 : parent->get_assigned_worker_count();
-      int64_t assigned = parent_assigned + child_assigned;
-      // 局部右深树的场景，depend_sibling 和当前 child dfo 都会被调度
-      /* Why need extra flag has_depend_sibling_? Why not use NULL != depend_sibling_?
-       *               dfo5 (dop=2)
-       *         /      |      \
-       *      dfo1(2) dfo2 (4) dfo4 (1)
-       *                        |
-       *                      dfo3 (2)
-       * Schedule order: (4,3) => (4,5) => (4,5,1) => (4,5,2) => (4,5) => (5). max_dop = (4,5,2) = 1 + 2 + 4 = 7.
-       * Depend sibling: dfo4 -> dfo1 -> dfo2.
-       * Depend sibling is stored as a list.
-       * We thought dfo2 is depend sibling of dfo1, and calculated incorrect max_dop = (1,2,5) = 2 + 4 + 2 = 8.
-       * Actually, dfo1 and dfo2 are depend sibling of dfo4, but dfo2 is not depend sibling of dfo1.
-       * So we use has_depend_sibling_ record whether the dfo is the header of list.
-      */
-      int64_t max_depend_sibling_assigned_worker = 0;
-      if (child->has_depend_sibling()) {
-        while (NULL != child->depend_sibling()) {
-          child = child->depend_sibling();
-          child_assigned = get_minimal ? 1 : child->get_assigned_worker_count();
-          if (max_depend_sibling_assigned_worker < child_assigned) {
-            max_depend_sibling_assigned_worker = child_assigned;
-          }
-        }
-      }
-      assigned += max_depend_sibling_assigned_worker;
-      if (assigned > total_assigned) {
-        total_assigned = assigned;
-        LOG_TRACE("update total assigned", K(idx), K(get_minimal), K(parent_assigned),
-                K(child_assigned), K(max_depend_sibling_assigned_worker), K(total_assigned));
-      }
-    }
+  ObDfoSchedSimulator dfo_sched_simulator(dfos);
+  if (get_minimal && OB_FAIL(dfo_sched_simulator.create(
+                         ObDfoSchedSimulator::ObMinimalCountGetter(), false))) {
+    LOG_WARN("fail to create dfo schedule simulator");
+  } else if (!get_minimal &&
+             OB_FAIL(dfo_sched_simulator.create(
+                 ObDfoSchedSimulator::ObFinalCountGetter(), false))) {
+    LOG_WARN("fail to create dfo schedule simulator");
+  } else if (OB_FAIL(dfo_sched_simulator.schedule())) {
+    LOG_WARN("fail to simulate dfo scheduling");
+  } else if (OB_FAIL(
+                 dfo_sched_simulator.get_max_assigned_worker(total_assigned))) {
+    LOG_WARN("fail to get max assigned worker");
+  } else if (OB_FAIL(dfo_sched_simulator.destroy())) {
+    LOG_WARN("fail to destroy dfo schedule simulator");
   }
+
   return ret;
 }
 
@@ -426,29 +754,31 @@ int ObDfoMgr::init(ObExecContext &exec_ctx,
   int64_t px_expected = 0;
   int64_t px_minimal = 0;
   int64_t px_admited = 0;
+  int64_t px_max_pipeline_depth =
+    min(static_cast<const ObPxCoordSpec *>(&root_op_spec)->get_pipeline_depth(),
+        GCONF._px_max_pipeline_depth);
   if (inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("dfo mgr init twice", K(ret));
-  } else if (OB_FAIL(do_split(exec_ctx, allocator_, &root_op_spec, root_dfo_, dfo_int_gen, px_coord_info))) {
+  } else if (OB_FAIL(do_split(exec_ctx, allocator_, &root_op_spec, root_dfo_, dfo_int_gen,
+                              px_coord_info))) {
     LOG_WARN("fail split ops into dfo", K(ret));
   } else if (OB_ISNULL(root_dfo_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL dfo unexpected", K(ret));
   } else if (!px_coord_info.rf_dpd_info_.is_empty()
-      && OB_FAIL(px_coord_info.rf_dpd_info_.describe_dependency(root_dfo_))) {
+             && OB_FAIL(px_coord_info.rf_dpd_info_.describe_dependency(root_dfo_))) {
     LOG_WARN("failed to describe rf dependency");
   } else if (OB_FAIL(ObDfoSchedOrderGenerator::generate_sched_order(*this))) {
     LOG_WARN("fail init dfo mgr", K(ret));
-  } else if (OB_FAIL(ObDfoSchedDepthGenerator::generate_sched_depth(exec_ctx, *this))) {
+  } else if (OB_FAIL(ObDfoSchedDepthGenerator::generate_sched_depth(exec_ctx, *this,
+                                                                    px_max_pipeline_depth))) {
     LOG_WARN("fail init dfo mgr", K(ret));
-  } else if (OB_FAIL(ObDfoWorkerAssignment::calc_admited_worker_count(get_all_dfos(),
-                                                                      exec_ctx,
-                                                                      root_op_spec,
-                                                                      px_expected,
-                                                                      px_minimal,
-                                                                      px_admited))) {
+  } else if (OB_FAIL(ObDfoWorkerAssignment::calc_admited_worker_count(
+               get_all_dfos(), exec_ctx, root_op_spec, px_expected, px_minimal, px_admited))) {
     LOG_WARN("fail to calc admited worler count", K(ret));
-  } else if (OB_FAIL(ObDfoWorkerAssignment::assign_worker(*this, px_expected, px_minimal, px_admited))) {
+  } else if (OB_FAIL(ObDfoWorkerAssignment::assign_worker(*this, px_expected, px_minimal,
+                                                                 px_admited))) {
     LOG_WARN("fail assign worker to dfos", K(ret),  K(px_expected), K(px_minimal), K(px_admited));
   } else {
     inited_ = true;
@@ -771,6 +1101,21 @@ int ObDfoMgr::get_ready_dfo(ObDfo *&dfo) const
   return ret;
 }
 
+// schdule child dfo and its parent dfo
+int ObDfoMgr::schedule_child_parent(ObIArray<ObDfo *> &dfos, ObDfo *child) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(dfos.push_back(child))) {
+    LOG_WARN("fail to push dfo", K(ret));
+  } else if (NULL == child->parent()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("parent is NULL, unexpected", K(ret));
+  } else if (OB_FAIL(dfos.push_back(child->parent()))) {
+    LOG_WARN("fail push dfo", K(ret));
+  }
+  return ret;
+}
+
 // 注意区别两种返回状态：
 //   - 如果有 edge 还没有 finish，且不能调度更多 dfo，则返回空集合
 //   - 如果所有 edge 都已经 finish，则返回 ITER_END
@@ -779,7 +1124,6 @@ int ObDfoMgr::get_ready_dfos(ObIArray<ObDfo*> &dfos) const
 {
   int ret = OB_SUCCESS;
   bool all_finish = true;
-  bool got_pair_dfo = false;
   dfos.reset();
 
   LOG_TRACE("ready dfos", K(edges_.count()));
@@ -791,21 +1135,14 @@ int ObDfoMgr::get_ready_dfos(ObIArray<ObDfo*> &dfos) const
       LOG_TRACE("finish dfo", K(*edge));
       continue;
     } else {
-      // edge 没有完成，调度的目标就是促成这条边尽快完成，包括调度起它所依赖的 DFO，即：
-      //  - edge 没有调度起来，立即调度
-      //  - edge 已经调度起来，则看这个 edge 是否依赖其它 dfo 才能完成执行
+      // if the DFO is not scheduled, schedule it immediately
+      // else check if this DFO depends on other DFOs to complete execution
       all_finish = false;
       if (!edge->is_active()) {
-        if (OB_FAIL(dfos.push_back(edge))) {
-          LOG_WARN("fail push dfo", K(ret));
-        } else if (NULL == edge->parent()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("parent is NULL, unexpected", K(ret));
-        } else if (OB_FAIL(dfos.push_back(edge->parent()))) {
-          LOG_WARN("fail push dfo", K(ret));
+        if (OB_FAIL(schedule_child_parent(dfos, edge))) {
+          LOG_WARN("fail to schedule current dfo and its parent", K(ret));
         } else {
           edge->set_active();
-          got_pair_dfo = true;
         }
       } else if (edge->has_depend_sibling()) {
         // 找到 dependence 链条中优先依赖的 dfo，
@@ -821,31 +1158,22 @@ int ObDfoMgr::get_ready_dfos(ObIArray<ObDfo*> &dfos) const
         } else if (sibling_edge->is_active()) {
           // nop, wait for a sibling finish.
           // after then can we shedule next edge
-        } else if (OB_FAIL(dfos.push_back(sibling_edge))) {
-          LOG_WARN("fail push dfo", K(ret));
-        } else if (NULL == sibling_edge->parent()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("parent is NULL, unexpected", K(ret));
-        } else if (OB_FAIL(dfos.push_back(sibling_edge->parent()))) {
-          LOG_WARN("fail push dfo", K(ret));
+        } else if (OB_FAIL(schedule_child_parent(dfos, sibling_edge))) {
+          LOG_WARN("fail to schedule current dfo and its parent", K(ret));
         } else {
           sibling_edge->set_active();
-          got_pair_dfo = true;
           LOG_TRACE("start schedule dfo", K(*sibling_edge), K(*sibling_edge->parent()));
         }
-      }else {
-        // 当前 edge 还没有完成，也没有 sibling edge 需要调度，返回 dfos 空集，继续等待
       }
 
-      // 三层 DFO 调度逻辑
-      // 注意：即使上面有 sibling 被调度起来了，已经调度了 3 个 DFO
-      // 也还是会去尝试调度第 4 个 depend parent dfo
-      if (OB_SUCC(ret) && !got_pair_dfo && GCONF._px_max_pipeline_depth > 2) {
+      // Attempt to schedule the parent's parent DFO earlier. Note that the DFO being scheduled 
+      // earlier may run concurrently with the depend sibling DFOs.
+      if (OB_SUCC(ret) && dfos.empty() && GCONF._px_max_pipeline_depth > 2) {
         ObDfo *parent_edge = edge->parent();
-        if (NULL != parent_edge &&
-            !parent_edge->is_active() &&
-            NULL != parent_edge->parent() &&
+        while (OB_NOT_NULL(parent_edge) &&
+            OB_NOT_NULL(parent_edge->parent()) &&
             parent_edge->parent()->is_earlier_sched()) {
+              
           /* 为了便于描述，考虑如下场景：
            *       parent-parent
            *           |
@@ -856,20 +1184,22 @@ int ObDfoMgr::get_ready_dfos(ObIArray<ObDfo*> &dfos) const
            * 并且，parent 的执行依赖于 parent-parent 也被调度（2+dfo调度优化，hash join 的
            * 结果可以直接输出，无需在上面加 material 算子）
            */
-          if (OB_FAIL(dfos.push_back(parent_edge))) {
-            LOG_WARN("fail push dfo", K(ret));
-          } else if (OB_FAIL(dfos.push_back(parent_edge->parent()))) {
-            LOG_WARN("fail push dfo", K(ret));
+          if (parent_edge->is_active()) {
+            // check if current parent's parent depends on ancester
+            parent_edge = parent_edge->parent();
+            continue;
+          } else if (OB_FAIL(schedule_child_parent(dfos, parent_edge))) {
+            LOG_WARN("fail to schedule current dfo and its parent", K(ret));
           } else {
             parent_edge->set_active();
-            got_pair_dfo = true;
-            LOG_DEBUG("dfo do earlier scheduling", K(*parent_edge->parent()));
+            LOG_INFO("dfo do earlier scheduling", K(parent_edge->parent()->get_root_op_spec()->get_id()));
           }
+          break;
         }
       }
 
       // If one of root_edge's child has scheduled, we try to start the root_dfo.
-      if (OB_SUCC(ret) && !got_pair_dfo) {
+      if (OB_SUCC(ret) && dfos.empty()) {
         if (edge->is_active() &&
             !root_edge->is_active() &&
             edge->has_parent() &&
@@ -889,7 +1219,6 @@ int ObDfoMgr::get_ready_dfos(ObIArray<ObDfo*> &dfos) const
             LOG_WARN("Fail to push dfo", K(ret));
           } else {
             root_edge->set_active();
-            got_pair_dfo = true;
             LOG_TRACE("Try to schedule root dfo", KP(root_edge), KP(root_dfo_));
           }
         }

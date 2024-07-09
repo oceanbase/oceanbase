@@ -142,6 +142,8 @@
 #include "sql/engine/basic/ob_json_table_op.h"
 #include "sql/engine/table/ob_link_scan_op.h"
 #include "sql/engine/dml/ob_link_dml_op.h"
+#include "sql/engine/basic/ob_material_op.h"
+#include "sql/engine/basic/ob_material_vec_op.h"
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
@@ -1506,25 +1508,19 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct &op, ObHashDistinctVecSpec &sp
   return ret;
 }
 
-/*
- * Material算子由于本身没有其他额外运行时的变量需要进行处理，所以Codegen时，不需要做任何处理
- * 都交给了basic等公共方法弄好了，所以这里实现不需要任何处理，全部为UNUSED
- */
 int ObStaticEngineCG::generate_spec(ObLogMaterial &op, ObMaterialSpec &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
-  UNUSED(op);
-  UNUSED(spec);
   UNUSED(in_root_job);
+  spec.set_bypassable(op.get_bypassable());
   return ret;
 }
 
 int ObStaticEngineCG::generate_spec(ObLogMaterial &op, ObMaterialVecSpec &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
-  UNUSED(op);
-  UNUSED(spec);
   UNUSED(in_root_job);
+  spec.set_bypassable(op.get_bypassable());
   return ret;
 }
 int ObStaticEngineCG::generate_spec(ObLogTempTableInsert &op, ObTempTableInsertVecOpSpec &spec, const bool in_root_job)
@@ -4072,6 +4068,7 @@ int ObStaticEngineCG::generate_basic_transmit_spec(
     spec.repartition_table_id_ = op.get_repartition_table_id();
     OZ(check_rollup_distributor(&spec));
     spec.use_rich_format_ &= op.support_rich_format_vectorize();
+    spec.need_early_sched_ = op.need_early_sched();
     LOG_TRACE("CG transmit", K(op.get_dfo_id()), K(op.get_op_id()),
               K(op.get_dist_method()), K(op.get_unmatch_row_dist_method()),
               K(op.support_rich_format_vectorize()));
@@ -4141,6 +4138,7 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
     } else if (IS_PX_COORD(spec.get_type())) {
       ObPxCoordSpec *coord = static_cast<ObPxCoordSpec*>(&spec);
       coord->set_expected_worker_count(op.get_expected_worker_count());
+      coord->set_pipeline_depth(op.get_pipeline_depth());
       const ObTransmitSpec *transmit_spec = static_cast<const ObTransmitSpec*>(spec.get_child());
       coord->qc_id_ = transmit_spec->get_px_id();
       if (op.get_px_batch_op_id() != OB_INVALID_ID) {

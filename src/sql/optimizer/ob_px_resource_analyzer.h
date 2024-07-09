@@ -76,6 +76,7 @@ struct DfoInfo {
     force_bushy_(false),
     root_op_(nullptr),
     has_nested_px_(false),
+    pipeline_pos_(0),
     nested_px_thread_cnt_(0),
     nested_px_group_cnt_(0)
   {}
@@ -88,6 +89,7 @@ struct DfoInfo {
   bool force_bushy_;
   ObLogicalOperator *root_op_;
   bool has_nested_px_;
+  int64_t pipeline_pos_;    // 0 if the DFO isn't earlier scheduled and positive for the postion in the 'bypass chain'
   int64_t nested_px_thread_cnt_;
   int64_t nested_px_group_cnt_;
   ObHashMap<ObAddr, int64_t> nested_px_thread_map_;
@@ -105,7 +107,7 @@ struct DfoInfo {
   }
 
   inline void set_root_op(ObLogicalOperator *root_op) { root_op_ = root_op;}
-  inline ObLogicalOperator *get_root_op() { return root_op_;}
+  inline ObLogicalOperator *get_root_op() const { return root_op_;}
   inline void set_force_bushy(bool flag) { force_bushy_ = flag; }
   inline bool force_bushy() { return force_bushy_; }
   bool has_sibling() const { return nullptr != depend_sibling_; }
@@ -119,11 +121,13 @@ struct DfoInfo {
   inline void set_parent(DfoInfo *p) { parent_ = p; }
   void set_dop(int64_t dop) { dop_ = dop; }
   int64_t get_dop() const { return dop_; }
+  void set_pipeline_pos(int pos) { pipeline_pos_ = pos; }
+  int64_t get_pipeline_pos() const { return pipeline_pos_; }
+  bool is_earlier_sched() const { return 1 < pipeline_pos_; }
   bool not_scheduled() { return DfoStatus::INIT == status_; }
   bool is_scheduling() { return DfoStatus::SCHED == status_; }
   void set_scheduled() { status_ = DfoStatus::SCHED; }
   void set_finished() { status_ = DfoStatus::FINISH; }
-  void set_has_depend_sibling(bool has_depend_sibling) { UNUSED(has_depend_sibling); }
   bool is_finish() const
   {
     return DfoStatus::FINISH == status_;
@@ -139,7 +143,7 @@ struct DfoInfo {
     }
     return f;
   }
-  TO_STRING_KV(K_(status), K_(dop), K_(has_nested_px));
+  TO_STRING_KV(K_(status), K_(dop), K_(has_nested_px), K_(pipeline_pos));
 };
 
 struct LogRuntimeFilterDependencyInfo
@@ -165,10 +169,10 @@ class ObPxResourceAnalyzer
 public:
 struct PxInfo {
   PxInfo() : inited_(false), root_op_(nullptr), root_dfo_(nullptr), threads_cnt_(0), group_cnt_(0),
-             rf_dpd_info_() {}
+             pipeline_depth_(0),rf_dpd_info_() {}
   PxInfo(ObLogExchange *root_op, DfoInfo *root_dfo)
       : inited_(false), root_op_(root_op), root_dfo_(root_dfo),
-        threads_cnt_(0), group_cnt_(0), rf_dpd_info_()
+        threads_cnt_(0), group_cnt_(0), pipeline_depth_(0), rf_dpd_info_()
   {}
   ~PxInfo() {
     destroy();
@@ -188,6 +192,7 @@ struct PxInfo {
   // count of required threads for scheduling this px.
   int64_t threads_cnt_;
   int64_t group_cnt_;
+  int64_t pipeline_depth_;
   ObHashMap<ObAddr, int64_t> thread_map_;
   ObHashMap<ObAddr, int64_t> group_map_;
   LogRuntimeFilterDependencyInfo rf_dpd_info_;
@@ -223,6 +228,7 @@ private:
       PxInfo &px_root,
       int64_t &max_parallel_thread_count,
       int64_t &max_parallel_group_count,
+      int64_t &max_pipeline_depth,
       ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
       ObHashMap<ObAddr, int64_t> &max_parallel_group_map);
   int create_dfo(DfoInfo *&dfo, int64_t dop);
@@ -261,6 +267,13 @@ int update_max_thead_group_info(
     int64_t &max_groups,
     ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
     ObHashMap<ObAddr, int64_t> &max_parallel_group_map);
+int schedule_ancester_dfos(
+    DfoInfo &child,
+    int64_t &threads,
+    int64_t &groups,
+    ObHashMap<ObAddr, int64_t> &current_thread_map,
+    ObHashMap<ObAddr, int64_t> &current_group_map);
+
 private:
   void print_px_usage(const ObHashMap<ObAddr, int64_t> &max_map);
 private:
@@ -328,7 +341,6 @@ int DfoTreeNormalizer<T>::normalize(T &root)
       root.child_dfos_.at(i - 1)->set_depend_sibling(root.child_dfos_.at(i));
     }
     inode->set_depend_sibling(root.child_dfos_.at(0));
-    inode->set_has_depend_sibling(true);
 
     // (2) transform
     // 将 inode 节点"荡"到最开始的位置

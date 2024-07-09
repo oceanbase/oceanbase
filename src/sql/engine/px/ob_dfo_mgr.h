@@ -14,13 +14,13 @@
 #define __OCEANBASE_SQL_ENGINE_PX_DFO_MGR_H__
 
 #include "lib/container/ob_se_array.h"
+#include "lib/hash/ob_hashmap.h"
 #include "sql/engine/px/ob_dfo.h"
 
 namespace oceanbase
 {
 namespace sql
 {
-
 class ObPxCoordInfo;
 class ObDfoMgr
 {
@@ -64,6 +64,8 @@ private:
   int create_dfo(common::ObIAllocator &allocator,
                  const ObOpSpec *dfo_root_op,
                  ObDfo *&dfo) const;
+
+  inline int schedule_child_parent(ObIArray<ObDfo *> &dfos, ObDfo *child) const;
 protected:
   common::ObIAllocator &allocator_;
   bool inited_;
@@ -84,12 +86,93 @@ private:
 class ObDfoSchedDepthGenerator
 {
 public:
-  static int generate_sched_depth(ObExecContext &ctx, ObDfoMgr &dfo_mgr);
+  static int generate_sched_depth(ObExecContext &ctx, ObDfoMgr &dfo_mgr, const int64_t pipeline_depth);
 private:
-  static int do_generate_sched_depth(ObExecContext &ctx, ObDfoMgr &dfo_mgr, ObDfo &root);
+  static int do_generate_sched_depth(ObExecContext &ctx, ObDfoMgr &dfo_mgr, ObDfo &root, const int64_t pipeline_depth);
   static int try_set_dfo_block(ObExecContext &exec_ctx, ObDfo &dfo, bool block = true);
   static int try_set_dfo_unblock(ObExecContext &exec_ctx, ObDfo &dfo);
-  static bool check_if_need_do_earlier_sched(ObDfo &child);
+  static bool check_if_need_do_earlier_sched(ObDfo &child, const int64_t pipeline_depth);
+  static int bypass_material(ObExecContext &exec_ctx, const ObOpSpec *phy_op, bool bypass);
+};
+
+class ObDfoSchedSimulator
+{
+  enum class ObDfoState
+  {
+    WAIT,
+    BLOCK,
+    RUNNING,
+    FINISH,
+    FAIL
+  };
+  using ObDfoAssignGetter = std::function<int64_t(const ObDfo &)>;
+  using ObDfoStateMap = common::hash::ObHashMap<int64_t, ObDfoState>;
+
+public:
+  ObDfoSchedSimulator(const ObIArray<ObDfo *> &dfos) :
+    dfos_(dfos), dfo_state_map_(), dfo_start_ts_map_(), ts_worker_cnt_map_(), dfo_assign_getter_(),
+    inited_(false), collect_maximum_worker_(false), max_assigned_(0)
+  {}
+
+  ~ObDfoSchedSimulator() = default;
+
+public:
+  int create(const ObDfoAssignGetter &dfo_assign_getter, bool collect_maximum_worker);
+
+  int destroy();
+
+  int schedule();
+
+  int get_max_assigned_worker(int64_t &max_assigned) const;
+
+  int get_max_concurrent_workers(const ObDfo *dfo, int64_t &max_concurrent_worker) const;
+
+public:
+  // different Getter of DFO's worker count
+  struct ObMinimalCountGetter
+  {
+    int64_t operator()(const ObDfo &dfo) const
+    {
+      UNUSED(dfo);
+      return 1;
+    }
+  };
+
+  struct ObFinalCountGetter
+  {
+    int64_t operator()(const ObDfo &dfo) const;
+  };
+
+  struct ObDopCountGetter
+  {
+    int64_t operator()(const ObDfo &dfo) const;
+  };
+
+private:
+  bool is_inited() const
+  {
+    return inited_;
+  }
+  int all_child_dfo_finish(const ObDfo *dfo, bool &all_finish);
+
+  int schedule_dfo(const ObDfo *dfo, int64_t &assigned, int64_t &max_assigned);
+
+  int finish_dfo(const ObDfo *dfo, int64_t &assigned);
+
+  int schedule_ancester_dfos(const ObDfo *dfo, int64_t &assigned, int64_t &max_assigned);
+
+  int schedule_sibling_dfos(const ObDfo *dfo, int64_t &assigned, int64_t &max_assigned);
+
+private:
+  const ObIArray<ObDfo *> &dfos_;
+  ObDfoStateMap dfo_state_map_;
+  common::hash::ObHashMap<int64_t, int64_t> dfo_start_ts_map_;
+  common::hash::ObHashMap<int64_t, int64_t> dfo_max_wokrer_cnt_map_;
+  ObSEArray<int64_t, 16> ts_worker_cnt_map_;
+  ObDfoAssignGetter dfo_assign_getter_;
+  bool inited_;
+  bool collect_maximum_worker_;
+  int64_t max_assigned_;
 };
 
 class ObDfoWorkerAssignment

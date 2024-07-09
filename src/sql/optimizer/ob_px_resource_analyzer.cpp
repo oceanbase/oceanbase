@@ -14,6 +14,7 @@
 #include "sql/optimizer/ob_px_resource_analyzer.h"
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_exchange.h"
+#include "sql/optimizer/ob_log_material.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_del_upd.h"
 #include "sql/optimizer/ob_log_join_filter.h"
@@ -33,7 +34,21 @@ public:
   ~SchedOrderGenerator() = default;
   int generate(DfoInfo &root, ObIArray<DfoInfo *> &edges);
 };
-}
+
+// Mark the DFOs that will be earlier scheduled
+class SchedDepthGenerator
+{
+public:
+  SchedDepthGenerator() = default;
+  ~SchedDepthGenerator() = default;
+  int generate(DfoInfo &root, ObIArray<DfoInfo *> &edges);
+
+private:
+  int check_if_need_do_earlier_sched(const DfoInfo &child, bool &do_earlier_sched);
+  int has_bypassable_material(const ObLogicalOperator *op, bool &found) const;
+  int set_dfo_need_early_sched(ObLogicalOperator *log_op);
+};
+} // namespace sql
 }
 
 // 后序遍历 dfo tree 即为调度顺序
@@ -64,7 +79,129 @@ int SchedOrderGenerator::generate(
   return ret;
 }
 
+int SchedDepthGenerator::generate(DfoInfo &root, ObIArray<DfoInfo *> &edges)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < root.get_child_count(); ++i) {
+    DfoInfo *child = NULL;
+    if (OB_FAIL(root.get_child(i, child))) {
+      LOG_WARN("fail get child dfo", K(i), K(root), K(ret));
+    } else if (OB_ISNULL(child)) {
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(generate(*child, edges))) {
+      LOG_WARN("fail do generate edge", K(*child), K(ret));
+    } else {
+      bool do_earlier_sched = false;
+      if (OB_FAIL(check_if_need_do_earlier_sched(*child, do_earlier_sched))) {
+        LOG_WARN("fail to check if need do earlier schedule");
+      } else if (!do_earlier_sched) {
+        // do nothing
+      } else if (OB_FAIL(set_dfo_need_early_sched(child->get_root_op()))) {
+        LOG_WARN("fail to set dfo early scheduled");
+      } else {
+        /*
+          pipeline        pipeline_pos_
 
+          +------------+
+          |            |
+          |  ancestor  |          2 (earlier scheduled)
+          |            |
+          +------+-----+
+                 ^
+                 |
+                 |
+          +------+-----+
+          |            |
+          |   parent   |          1
+          |            |
+          +------+-----+
+                 ^
+                 |
+                 |
+          +------+-----+
+          |            |
+          |    child   |          0
+          |            |
+          +------------+
+        */
+        if (child->get_pipeline_pos() == 0 && !child->is_leaf_node()) {
+          child->set_pipeline_pos(1);
+        }
+
+        if (root.get_pipeline_pos() == 0) { root.set_pipeline_pos(child->get_pipeline_pos() + 1); }
+
+        LOG_TRACE("earlier schedule", K(root.get_pipeline_pos()),
+                  K(root.get_root_op()->get_op_id()), K(child->get_pipeline_pos()),
+                  K(child->get_root_op()->get_op_id()));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int SchedDepthGenerator::check_if_need_do_earlier_sched(const DfoInfo &child,
+                                                        bool &do_earlier_sched)
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *root_op = child.get_root_op();
+  if (OB_ISNULL(root_op) || log_op_def::LOG_EXCHANGE != root_op->get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("the root operator of DFO should be exchange");
+  } else if (OB_FAIL(has_bypassable_material(root_op->get_child(ObLogicalOperator::first_child),
+                                             do_earlier_sched))) {
+    LOG_WARN("fail to detect bypassable material");
+  }
+
+  return ret;
+}
+
+int SchedDepthGenerator::has_bypassable_material(const ObLogicalOperator *op, bool &found) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(op)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operator shouldn't be null");
+  } else if (log_op_def::LOG_EXCHANGE == op->get_type()) {
+    found = false;
+  } else if (log_op_def::LOG_MATERIAL == op->get_type()) {
+    const ObLogMaterial *mat_op = static_cast<const ObLogMaterial *>(op);
+    if (OB_ISNULL(mat_op)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to cast ObLogicalOperator to ObLogMaterial");
+    } else {
+      found = mat_op->get_bypassable();
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !found && i < op->get_num_of_child(); ++i) {
+      bool tmp_found = false;
+      const ObLogicalOperator *child = op->get_child(i);
+      if (OB_FAIL(has_bypassable_material(child, tmp_found))) {
+        LOG_WARN("failed to process block parent", K(ret));
+      } else if (tmp_found) {
+        if (!op->is_block_input(i)) {
+          found = true;
+        }
+      }
+    } // end for
+  }
+
+  return ret;
+}
+
+int SchedDepthGenerator::set_dfo_need_early_sched(ObLogicalOperator *op)
+{
+  int ret = OB_SUCCESS;
+  ObLogExchange *exchange_out = static_cast<ObLogExchange *>(op);
+  if (OB_ISNULL(exchange_out) || !exchange_out->is_producer()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root op of dfo should be exchange out");
+  } else {
+    exchange_out->set_need_early_sched();
+    LOG_INFO("mark a exchange as early sched", K(exchange_out->get_op_id()));
+  }
+  return ret;
+}
 
 // ===================================================================================
 // ===================================================================================
@@ -538,7 +675,8 @@ int ObPxResourceAnalyzer::recursive_walk_through_px_tree(PxInfo &px_tree)
     } else if (OB_FAIL(px_tree.rf_dpd_info_.describe_dependency(px_tree.root_dfo_))) {
       LOG_WARN("failed to describe dependency");
     } else if (OB_FAIL(walk_through_dfo_tree(px_tree, px_tree.threads_cnt_, px_tree.group_cnt_,
-                                            px_tree.thread_map_, px_tree.group_map_))) {
+                                             px_tree.pipeline_depth_, px_tree.thread_map_,
+                                             px_tree.group_map_))) {
       LOG_WARN("fail calc px thread group count", K(ret));
     } else {
       int64_t op_id = OB_ISNULL(px_tree.root_op_) ? OB_INVALID_ID : px_tree.root_op_->get_op_id();
@@ -551,6 +689,7 @@ int ObPxResourceAnalyzer::recursive_walk_through_px_tree(PxInfo &px_tree)
     } else {
       // 将当前 px 的 expected 线程数设置到 QC 算子中
       px_tree.root_op_->set_expected_worker_count(px_tree.threads_cnt_);
+      px_tree.root_op_->set_pipeline_depth(px_tree.pipeline_depth_);
     }
     px_tree.inited_ = true;
   }
@@ -562,8 +701,9 @@ int ObPxResourceAnalyzer::recursive_walk_through_px_tree(PxInfo &px_tree)
  * Then for each edge:
  * 1. Schedule this edge if not scheduled.
  * 2. Schedule parent of this edge if not scheduled.
- * 3. Schedule depend siblings of this edge one by one. One by one means finish (i-1)th sibling before schedule i-th sibling.
- * 4. Finish this edge if it is a leaf node or all children are finished.
+ * 3. Schedule ancesters of parent if earlier scheduling is possbile. 
+ * 4. Schedule depend siblings of this edge one by one. One by one means finish (i-1)th sibling before schedule i-th sibling.
+ * 5. Finish this edge if it is a leaf node or all children are finished.
 */
 
 /* This function also generate a ObHashMap<ObAddr, int64_t> max_parallel_thread_map.
@@ -576,6 +716,7 @@ int ObPxResourceAnalyzer::walk_through_dfo_tree(
     PxInfo &px_root,
     int64_t &max_parallel_thread_count,
     int64_t &max_parallel_group_count,
+    int64_t &max_pipeline_depth,
     ObHashMap<ObAddr, int64_t> &max_parallel_thread_map,
     ObHashMap<ObAddr, int64_t> &max_parallel_group_map)
 {
@@ -583,6 +724,7 @@ int ObPxResourceAnalyzer::walk_through_dfo_tree(
   // 模拟调度过程
   ObArray<DfoInfo *> edges;
   SchedOrderGenerator sched_order_gen;
+  SchedDepthGenerator sched_depth_gen;
   int64_t bucket_size = cal_next_prime(10);
   ObHashMap<ObAddr, int64_t> current_thread_map;
   ObHashMap<ObAddr, int64_t> current_group_map;
@@ -594,6 +736,8 @@ int ObPxResourceAnalyzer::walk_through_dfo_tree(
     LOG_WARN("fail normalize px tree", K(ret));
   } else if (OB_FAIL(sched_order_gen.generate(*px_root.root_dfo_, edges))) {
     LOG_WARN("fail generate sched order", K(ret));
+  } else if (OB_FAIL(sched_depth_gen.generate(*px_root.root_dfo_, edges))) {
+    LOG_WARN("fail generate sched depth", K(ret));
   } else if (OB_FAIL(current_thread_map.create(bucket_size,
                                                ObModIds::OB_SQL_PX,
                                                ObModIds::OB_SQL_PX))){
@@ -621,6 +765,17 @@ int ObPxResourceAnalyzer::walk_through_dfo_tree(
                                                           current_thread_map, current_group_map))) {
       LOG_WARN("schedule parent dfo failed", K(ret));
     } else if (child.has_sibling() && child.depend_sibling_->not_scheduled()) {
+      // In the extreme scenario, all ancestor and sibling DFOs will be scheduled concurrently
+      if (OB_FAIL(schedule_ancester_dfos(child, threads, groups, current_thread_map,
+                                         current_group_map))) {
+        LOG_WARN("fail to schedule ancestor dfos", K(ret));
+      } else if (OB_FAIL(update_max_thead_group_info(
+                   threads, groups, current_thread_map, current_group_map, max_threads, max_groups,
+                   max_parallel_thread_map, max_parallel_group_map))) {
+        LOG_WARN("update max_thead group info failed", K(ret));
+      }
+
+      // schedule all of the sibling DFOs
       DfoInfo *sibling = child.depend_sibling_;
       while (NULL != sibling && OB_SUCC(ret)) {
         if (OB_UNLIKELY(!sibling->is_leaf_node())) {
@@ -641,21 +796,21 @@ int ObPxResourceAnalyzer::walk_through_dfo_tree(
           sibling = sibling->depend_sibling_;
         }
       }
-    } else {
-      if (OB_FAIL(update_max_thead_group_info(threads, groups,
-                    current_thread_map, current_group_map,
-                    max_threads, max_groups,
-                    max_parallel_thread_map, max_parallel_group_map))) {
-        LOG_WARN("update max_thead group info failed", K(ret));
-      }
+    } else if (OB_FAIL(schedule_ancester_dfos(child, threads, groups, current_thread_map,
+                                              current_group_map))) {
+      // current DFO depends on no sibling DFOS
+      LOG_WARN("fail to schedule ancestor dfos");
+    } else if (OB_FAIL(update_max_thead_group_info(
+                 threads, groups, current_thread_map, current_group_map, max_threads, max_groups,
+                 max_parallel_thread_map, max_parallel_group_map))) {
+      LOG_WARN("update max_thead group info failed", K(ret));
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(finish_dfo(child, threads, groups, current_thread_map,
+    if (OB_SUCC(ret) && OB_FAIL(finish_dfo(child, threads, groups, current_thread_map,
                                         current_group_map))) {
         LOG_WARN("finish sibling failed", K(ret));
-      }
     }
 
+    max_pipeline_depth = max(edges[i]->get_pipeline_pos() + 1, max_pipeline_depth);
 #ifndef NDEBUG
       for (int x = 0; x < edges.count(); ++x) {
         LOG_DEBUG("dump dfo step.finish",
@@ -695,6 +850,26 @@ int ObPxResourceAnalyzer::px_tree_append(ObHashMap<ObAddr, int64_t> &max_paralle
       }
     }
   }
+  return ret;
+}
+
+int ObPxResourceAnalyzer::schedule_ancester_dfos(DfoInfo &child, int64_t &threads, int64_t &groups,
+                                                 ObHashMap<ObAddr, int64_t> &current_thread_map,
+                                                 ObHashMap<ObAddr, int64_t> &current_group_map)
+{
+  int ret = OB_SUCCESS;
+  // schedule earlier ancestor dfos of current DFO's parent
+  DfoInfo *cur = child.parent_;
+  while (OB_SUCC(ret) && OB_NOT_NULL(cur) && cur->has_parent()
+         && cur->parent_->is_earlier_sched()) {
+    if (OB_FAIL(
+          schedule_dfo(*cur->parent_, threads, groups, current_thread_map, current_group_map))) {
+      LOG_WARN("fail to ealier schedule the ancester");
+    } else {
+      cur = cur->parent_;
+    }
+  }
+
   return ret;
 }
 

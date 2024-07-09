@@ -27,9 +27,21 @@ class ObMaterialSpec : public ObOpSpec
 {
 OB_UNIS_VERSION_V(1);
 public:
-  ObMaterialSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
-    : ObOpSpec(alloc, type)
+  ObMaterialSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type) :
+    ObOpSpec(alloc, type), bypassable_(false)
   {}
+
+  bool get_bypassable() const
+  {
+    return bypassable_;
+  }
+  void set_bypassable(bool bypassable)
+  {
+    bypassable_ = bypassable;
+  }
+
+private:
+  bool bypassable_;
 };
 
 class ObMaterialOpInput : public ObOpInput

@@ -24,7 +24,7 @@ using namespace common;
 namespace sql
 {
 
-OB_SERIALIZE_MEMBER((ObMaterialSpec, ObOpSpec));
+OB_SERIALIZE_MEMBER((ObMaterialSpec, ObOpSpec), bypassable_);
 OB_SERIALIZE_MEMBER(ObMaterialOpInput, bypass_);
 
 int ObMaterialOp::inner_open()

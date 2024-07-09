@@ -64,6 +64,7 @@ OB_DEF_SERIALIZE(ObPxCoordSpec)
   BASE_SER((ObPxCoordSpec, ObPxReceiveSpec));
   LST_DO_CODE(OB_UNIS_ENCODE,
               px_expected_worker_count_,
+              px_pipeline_depth,
               qc_id_,
               batch_op_info_,
               table_locations_,
@@ -77,7 +78,7 @@ OB_DEF_DESERIALIZE(ObPxCoordSpec)
 {
   int ret = OB_SUCCESS;
   BASE_DESER((ObPxCoordSpec, ObPxReceiveSpec));
-  LST_DO_CODE(OB_UNIS_DECODE, px_expected_worker_count_, qc_id_, batch_op_info_);
+  LST_DO_CODE(OB_UNIS_DECODE, px_expected_worker_count_, px_pipeline_depth, qc_id_, batch_op_info_);
   int64_t count = 0;
   OB_UNIS_DECODE(count);
   if (OB_SUCC(ret) && count > 0) {
@@ -104,6 +105,7 @@ OB_DEF_SERIALIZE_SIZE(ObPxCoordSpec)
   BASE_ADD_LEN((ObPxCoordSpec, ObPxReceiveSpec));
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               px_expected_worker_count_,
+              px_pipeline_depth,
               qc_id_,
               batch_op_info_,
               table_locations_,

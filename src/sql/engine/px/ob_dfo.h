@@ -44,16 +44,6 @@ class ObIDetectCallback;
 }
 namespace sql
 {
-
-enum class ObDfoState
-{
-  WAIT,
-  BLOCK,
-  RUNNING,
-  FINISH,
-  FAIL
-};
-
 #define SQC_TASK_START (1 << 0)
 #define SQC_TASK_EXIT  (1 << 1)
 
@@ -467,6 +457,7 @@ public:
     dop_(0),
     assigned_worker_cnt_(0),
     used_worker_cnt_(0),
+    pipeline_pos_(0),
     is_single_(false),
     is_root_dfo_(false),
     prealloced_receive_channel_(false),
@@ -527,6 +518,8 @@ public:
   int64_t get_assigned_worker_count() const { return assigned_worker_cnt_; }
   void set_used_worker_count(int64_t cnt) { used_worker_cnt_ = cnt; }
   int64_t get_used_worker_count() const { return used_worker_cnt_; }
+  void set_pipeline_pos(int64_t pos) { pipeline_pos_ = pos; }
+  int64_t get_pipeline_pos() const { return pipeline_pos_; }
   inline void set_single(const bool single) { is_single_ = single; }
   inline bool is_single() const { return is_single_; }
   inline void set_root_dfo(bool is_root) {is_root_dfo_ = is_root;}
@@ -586,20 +579,18 @@ public:
   inline int get_child_dfo(int64_t idx, ObDfo *&dfo) const { return child_dfos_.at(idx, dfo); }
   inline int64_t get_child_count() const { return child_dfos_.count(); }
   ObIArray<ObDfo*> &get_child_dfos() { return child_dfos_; }
+  const ObIArray<ObDfo*> &get_child_dfos() const { return child_dfos_; }
   inline bool has_child_dfo() const { return get_child_count() > 0; }
   // 本 DFO 即使优先调度，但可能依赖于另外的 DFO 调度才能推进本 DFO
   // 使用 depend_sibling 记录依赖的 DFO
   void set_depend_sibling(ObDfo *sibling) { depend_sibling_ = sibling; }
-  void set_has_depend_sibling(bool has_depend_sibling) { has_depend_sibling_ = has_depend_sibling; }
-  bool has_depend_sibling() const { return has_depend_sibling_; }
+  bool has_depend_sibling() const { return NULL != depend_sibling_; }
   ObDfo *depend_sibling() const { return depend_sibling_; }
   void set_parent(ObDfo *parent) { parent_ = parent; }
   bool has_parent() const { return NULL != parent_; }
   ObDfo *parent() const { return parent_; }
-  // 下面两个函数用于3层DFO 调度，使得HASH JOIN上面无需接MATERIAL算子，
-  // 流式输出结果集，被标记为 earlier_sched_ 的 dfo 被提前调度，直接消费JOIN结果
-  void set_earlier_sched(bool earlier) { earlier_sched_ = earlier; }
-  bool is_earlier_sched() const { return earlier_sched_; }
+  // DFOs will be marked as earlier sched to bypass MATERIAL operators
+  bool is_earlier_sched() const { return pipeline_pos_ > 1; }
   void set_dfo_id(int64_t dfo_id) { dfo_id_ = dfo_id; }
   int64_t get_dfo_id() const { return dfo_id_; }
 
@@ -734,6 +725,32 @@ private:
   int64_t dop_;
   int64_t assigned_worker_cnt_;
   int64_t used_worker_cnt_;
+  /*
+       pipeline        pipeline_pos_
+
+    +------------+
+    |            |
+    |  ancestor  |          2 (earlier scheduled)
+    |            |
+    +------+-----+
+           ^
+           |
+           |
+    +------+-----+
+    |            |
+    |   parent   |          1
+    |            |
+    +------+-----+
+           ^
+           |
+           |
+    +------+-----+
+    |            |
+    |    child   |          0
+    |            |
+    +------------+
+   */
+  int64_t pipeline_pos_;
   // is_single 用于标记此dfo用一个线程去调度, 既可能在本地, 也可能在远程.
   // 如果此dfo包含table scan算子, 调度时将跟随table scan location调度
   // 如果此dfo不包含table scan算子, 调度时理论上可以在任意server去调度,

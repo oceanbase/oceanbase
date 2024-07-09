@@ -164,6 +164,7 @@ public:
   ObPxCoordSpec(common::ObIAllocator &alloc, const ObPhyOperatorType type)
   : ObPxReceiveSpec(alloc, type),
     px_expected_worker_count_(0),
+    px_pipeline_depth(2),
     qc_id_(common::OB_INVALID_ID),
     batch_op_info_(),
     table_locations_(alloc),
@@ -181,6 +182,14 @@ public:
   {
     return px_expected_worker_count_;
   }
+  inline void set_pipeline_depth(int64_t c)
+  {
+    px_pipeline_depth = c;
+  }
+  inline int64_t get_pipeline_depth() const
+  {
+    return px_pipeline_depth;
+  }
   inline void set_px_batch_op_info(int64_t id, ObPhyOperatorType type)
   {
     batch_op_info_.op_id_ = id;
@@ -189,6 +198,7 @@ public:
   TableLocationFixedArray &get_table_locations()
   { return table_locations_; }
   int64_t px_expected_worker_count_; // 当前 px 可以分到的线程数上限，用于multi-px 限流场景
+  int64_t px_pipeline_depth; // the max pipeline depth of px (minimum is 2) 
   int64_t qc_id_;
   // px在支持分布式batch rescan时需要感知做rescan的算子id以及算子类型
   // 是1对1的对应关系

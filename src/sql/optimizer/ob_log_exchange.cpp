@@ -736,7 +736,7 @@ int ObLogExchange::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
             && !static_cast<ObLogDistinct *>(child)->is_push_down()) {
           static_cast<ObLogDistinct*>(child)->set_block_mode(true);
           LOG_DEBUG("distinct block mode", K(lbt()));
-        } else if (OB_FAIL(allocate_material(first_child))) {
+        } else if (OB_FAIL(allocate_material(first_child, true))) {
           LOG_WARN("allocate material failed", K(ret));
         }
       } else if (!child_op_ctx->in_.is_exch() && dist_method_ == ObPQDistributeMethod::RANGE) {
@@ -745,7 +745,11 @@ int ObLogExchange::px_pipe_blocking_post(ObPxPipeBlockingCtx &ctx)
           if (OB_FAIL(child->has_block_parent_for_shj(has_non_block_shj))) {
             LOG_WARN("failed to proces block parent", K(ret));
           } else if (has_non_block_shj) {
-            if (OB_FAIL(allocate_material(first_child))) {
+            // if the parent consumes the data one dfo by one dfo(e.g., UNION ALL, HASH JOIN),
+            // the material could be safely bypassed since no deadlock will occur
+            if (OB_FAIL(allocate_material(
+                  first_child, OB_NOT_NULL(exchange_in->get_parent())
+                                 && exchange_in->get_parent()->is_consume_child_1by1()))) {
               LOG_WARN("allocate material failed", K(ret));
             }
           }

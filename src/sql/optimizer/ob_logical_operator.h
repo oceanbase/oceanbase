@@ -1576,7 +1576,7 @@ public:
   //       or you MAY NEED TO CHANGE EVERY CALLER of this method.
   virtual bool is_table_scan() const { return false; }
 
-  int allocate_material(const int64_t index);
+  int allocate_material(const int64_t index, bool bypassable = false);
 
   // Find the first operator through the child operators recursively
   // Found: return OB_SUCCESS, set %op

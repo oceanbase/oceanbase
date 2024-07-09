@@ -81,6 +81,8 @@ public:
   ObPxSampleType sample_type_;  //for range/pkey range
   // for null aware anti join, broadcast first line && null join key
   bool need_null_aware_shuffle_;
+  // true if the corresponding DFO could be early sched
+  bool need_early_sched_;
   // Fill the partition id to this expr for the above pdml or nlj partition pruning,
   ObExpr *tablet_id_expr_;
 
