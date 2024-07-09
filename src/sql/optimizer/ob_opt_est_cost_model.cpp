@@ -1391,7 +1391,7 @@ int ObOptEstCostModel::cost_basic_table(const ObCostTableScanInfo &est_cost_info
     double row_count_per_part = row_count / part_count;
     double index_scan_cost = 0;
     double index_back_cost = 0;
-    double prefix_filter_sel = est_cost_info.join_filter_sel_;
+    double prefix_filter_sel = 1.0;
     // calc scan one partition cost
     if (OB_FAIL(cost_index_scan(est_cost_info,
                                 row_count_per_part,
@@ -1466,6 +1466,7 @@ int ObOptEstCostModel::cost_column_store_index_scan(const ObCostTableScanInfo &e
                                                     double &index_scan_cost)
 {
   int ret = OB_SUCCESS;
+  double runtime_filter_sel = est_cost_info.join_filter_sel_;
   SMART_VAR(ObCostTableScanInfo, column_group_est_cost_info, OB_INVALID_ID, OB_INVALID_ID, OB_INVALID_ID) {
     if (OB_FAIL(column_group_est_cost_info.assign(est_cost_info))) {
       LOG_WARN("failed to assign est cost info", K(ret));
@@ -1500,6 +1501,10 @@ int ObOptEstCostModel::cost_column_store_index_scan(const ObCostTableScanInfo &e
         index_scan_cost += column_group_cost;
         OPT_TRACE_COST_MODEL(KV(index_scan_cost), "+=", KV(column_group_cost));
         prefix_filter_sel *= cg_info.filter_sel_;
+        if (cg_info.filters_.empty() && runtime_filter_sel < 1.0) {
+          prefix_filter_sel *= runtime_filter_sel;
+          runtime_filter_sel = 1.0;
+        }
         LOG_TRACE("OPT:[COST ONE COLUMN GROUP]", K(row_count), K(prefix_filter_sel), K(column_group_cost));
       }
     }
