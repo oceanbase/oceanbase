@@ -8892,6 +8892,14 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                           exec_params, call_stmt, *routine_info, udts,
                                           session->get_timezone_info()), call_stmt);
     OZ (spi_after_execute_dblink(session, routine_info, allocator, params, exec_params));
+    for (int64_t i = 0; i < exec_params.count(); i++) {
+      if (exec_params.at(i).is_pl_extend()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(exec_params.at(i)))) {
+          LOG_WARN("destruct obj failed", K(ret), K(exec_params.at(i)));
+        }
+      }
+    }
   }
 
   return ret;
@@ -8917,7 +8925,6 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
       } else {
         if (ob_is_extend(param->get_param_type().get_obj_type())) {
           OZ (ObUserDefinedType::deep_copy_obj(allocator, exec_params.at(i),  params.at(i), true));
-          ObUserDefinedType::destruct_obj(exec_params.at(i));
         } else if (param->get_param_type().get_obj_type() != exec_params.at(i).get_param_meta().get_type()) {
           const ObDataType &datatype = param->get_param_type();
           ObObjParam result_value;
@@ -8933,8 +8940,6 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
           OX (params.at(i).set_param_meta());
         }
       }
-    } else if ((ob_is_extend(param->get_param_type().get_obj_type()))) {
-      ObUserDefinedType::destruct_obj(exec_params.at(i));
     }
   }
   return ret;
