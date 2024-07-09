@@ -2662,6 +2662,32 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
       }
     }
   }
+  // set length semantics
+  if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+    const ObLengthSemantics default_length_semantics = ctx_.session_info_->get_actual_nls_length_semantics();
+    if (MYSQL_TYPE_OB_NVARCHAR2 == type || MYSQL_TYPE_VAR_STRING == type ||
+                MYSQL_TYPE_OB_NCHAR == type || MYSQL_TYPE_VARCHAR == type ||
+                MYSQL_TYPE_STRING == type) {
+      if (length == 0) {
+        param.set_length_semantics(default_length_semantics);
+      } else {
+        ObLengthSemantics length_semantics = LS_DEFAULT;
+        if ((MYSQL_TYPE_OB_NVARCHAR2 == type || MYSQL_TYPE_VAR_STRING == type || MYSQL_TYPE_OB_NCHAR == type)) {
+          length_semantics = LS_CHAR;
+        } else {
+          length_semantics = default_length_semantics;
+        }
+        if (is_oracle_byte_length(true, length_semantics)
+            && MYSQL_TYPE_OB_NVARCHAR2 != type
+            && MYSQL_TYPE_VAR_STRING != type
+            && MYSQL_TYPE_OB_NCHAR != type) {
+          param.set_length_semantics(LS_BYTE);
+        } else {
+          param.set_length_semantics(LS_CHAR);
+        }
+      }
+    }
+  }
   return ret;
 }
 
