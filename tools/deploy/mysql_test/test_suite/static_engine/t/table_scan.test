@@ -10,6 +10,7 @@ connection default;
 
 --disable_warnings
 drop table if exists t1;
+drop table if exists t2;
 --enable_warnings
 create table t1 (c1 number, c2 number, c3 char(20), c4 varchar(20), primary key(c1, c2), index i1 (c2));
 
@@ -69,6 +70,14 @@ select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c3 != 1 limit 2;
 --disable_warnings
 drop table t1;
 --enable_warnings
+
+CREATE TABLE t1 (c1 bigint, c2 bigint);
+CREATE TABLE t2 (c1 NUMERIC(64,19), c2 DECIMAL(64,16), c3 INTEGER(127), c4 NUMERIC(64,18), c5 DECIMAL(64,0) GENERATED always AS (c3 + c4), c6 int);
+CREATE UNIQUE INDEX idx1 ON t2(c2, c1, c5) GLOBAL ;
+select /*+use_nl(t1 t2) parallel(2) */t1.c1, t2.c6 FROM t1 LEFT JOIN t2 ON t1.c1 = t2.c2 AND t1.c2 <= t2.c5;
+
+drop table t1;
+drop table t2;
 
 connection syscon;
 --sleep 2
