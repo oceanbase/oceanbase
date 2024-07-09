@@ -445,6 +445,13 @@ void ObTimer::run1()
       }
     }
 
+    if (NULL == running_task_)
+    {
+      // If running_task_ is NULL, the token is not associated with any task,
+      // so we reset it to avoid the task being scheduled unexpectedly.
+      token.reset();
+    }
+
     if (token.task != NULL && running_task_ != NULL && !is_destroyed_ && !is_stopped_) {
       bool timeout_check = token.task->timeout_check();
       const int64_t start_time = ::oceanbase::common::ObTimeUtility::current_time();
