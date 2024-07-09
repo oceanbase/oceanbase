@@ -95,7 +95,7 @@ private:
   int gather_stat_();
   //process current job
   int try_process_current_job(int64_t &job_cnt);
-  //accordint to primary_zone and unit group
+  //according to primary_zone and unit group
   int ls_balance_(int64_t &job_cnt);
   // according balance group strategy
   int partition_balance_(bool enable_transfer = false);

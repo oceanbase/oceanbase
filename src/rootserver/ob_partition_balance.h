@@ -35,7 +35,7 @@ using namespace oceanbase::share;
 
 typedef hash::ObHashMap<share::ObLSID, ObLSDesc*> ObLSDescMap;
 
-// Partition Balance implment
+// Partition Balance implement
 class ObPartitionBalance final : public ObAllBalanceGroupBuilder::NewPartitionCallback
 {
 public:

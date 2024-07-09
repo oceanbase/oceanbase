@@ -118,7 +118,7 @@ int ObLSBalanceTaskHelper::init(const uint64_t tenant_id,
         if (OB_ENTRY_NOT_EXIST == ret) {
           //normal, ls status must has target unit_group,
           //but maybe migrate unit and ls group balance concurrency
-          LOG_WARN("has ls in not valid unit group", KR(ret), K(ls_status), K(unit_group_array));
+          LOG_WARN("ls is not in a valid unit group", KR(ret), K(ls_status), K(unit_group_array));
           ret = OB_SUCCESS;
           index = unit_group_balance_array_.count();
           ObSimpleUnitGroup unit_group(ls_status.unit_group_id_, ObUnit::UNIT_STATUS_DELETING);
@@ -295,7 +295,7 @@ int ObLSBalanceTaskHelper::generate_balance_job_()
     int64_t unit_group_num = 0;
     ObBalanceJobID job_id;
     ObString comment;
-    ObBalanceStrategy balance_stradegy;
+    ObBalanceStrategy balance_strategy;
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_group_balance_array_.count(); ++i) {
       const ObUnitGroupBalanceInfo &balance_info = unit_group_balance_array_.at(i);
       if (balance_info.is_active_unit_group()) {
@@ -315,13 +315,13 @@ int ObLSBalanceTaskHelper::generate_balance_job_()
     }
     if (OB_SUCC(ret)) {
       if (need_modify_ls_group) {
-        balance_stradegy = ObBalanceStrategy::LB_ALTER;
+        balance_strategy = ObBalanceStrategy::LB_ALTER;
       } else if (lack_ls && redundant_ls) {
-        balance_stradegy = ObBalanceStrategy::LB_MIGRATE;
+        balance_strategy = ObBalanceStrategy::LB_MIGRATE;
       } else if (lack_ls) {
-        balance_stradegy = ObBalanceStrategy::LB_EXPAND;
+        balance_strategy = ObBalanceStrategy::LB_EXPAND;
       } else if (redundant_ls || has_redundant_dup_ls_()) {
-        balance_stradegy = ObBalanceStrategy::LB_SHRINK;
+        balance_strategy = ObBalanceStrategy::LB_SHRINK;
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("must has balance job for ls", KR(ret), K(unit_group_balance_array_));
@@ -330,9 +330,9 @@ int ObLSBalanceTaskHelper::generate_balance_job_()
       if (FAILEDx(ObCommonIDUtils::gen_unique_id(tenant_id_, job_id))) {
         LOG_WARN("generate unique id for balance job fail", KR(ret), K(tenant_id_));
       } else if (OB_FAIL(job_.init(tenant_id_, job_id, job_type, job_status, primary_zone_num_,
-              unit_group_num, comment, balance_stradegy))) {
+              unit_group_num, comment, balance_strategy))) {
         LOG_WARN("failed to init job", KR(ret), K(tenant_id_), K(job_id), K(job_type),
-            K(job_status), K(primary_zone_num_), K(unit_group_num), K(balance_stradegy));
+            K(job_status), K(primary_zone_num_), K(unit_group_num), K(balance_strategy));
       }
     }
   }
@@ -491,9 +491,6 @@ int ObLSBalanceTaskHelper::generate_expand_task_()
         } else {
           ++dest_ls_index;
         }
-      }
-      if (OB_SUCC(ret)) {
-        lack_count += balance_info.get_lack_ls_count();
       }
     }
   }

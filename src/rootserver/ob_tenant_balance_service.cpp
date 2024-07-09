@@ -427,7 +427,6 @@ int ObTenantBalanceService::try_process_current_job(int64_t &job_cnt)
   } else if (OB_FAIL(check_ls_job_need_cancel_(job, job_need_cancel, comment))) {
     LOG_WARN("failed to check exist job need continue", KR(ret), K(job));
   } else if (job_need_cancel) {
-    int tmp_ret = OB_SUCCESS;
     if (OB_FAIL(ObBalanceJobTableOperator::update_job_status(tenant_id_,
             job.get_job_id(), job.get_job_status(),
             ObBalanceJobStatus(ObBalanceJobStatus::BALANCE_JOB_STATUS_CANCELING),
@@ -702,7 +701,7 @@ int ObTenantBalanceService::check_ls_job_need_cancel_(const share::ObBalanceJob 
       LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job));
     }
     ISTAT("tenant balance or transfer is disabled, need cancel current job", K(job), K(comment),
-        "enable_balance", ObShareUtil::is_tenant_enable_transfer(tenant_id_),
+        "enable_rebalance", ObShareUtil::is_tenant_enable_rebalance(tenant_id_),
         "enable_transfer", ObShareUtil::is_tenant_enable_transfer(tenant_id_));
   } else if (job.get_primary_zone_num() != primary_zone_num_) {
     need_cancel = true;

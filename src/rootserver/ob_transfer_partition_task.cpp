@@ -85,6 +85,7 @@ void ObTransferPartitionHelper::destroy()
   max_task_id_.reset();
   job_generator_.reset();
 }
+
 int ObTransferPartitionHelper::check_inner_stat_()
 {
   int ret = OB_SUCCESS;
@@ -392,7 +393,6 @@ int ObTransferPartitionHelper::get_tablet_in_order_array(
   }
   return ret;
 }
-
 
 int ObTransferPartitionHelper::set_task_src_ls_()
 {

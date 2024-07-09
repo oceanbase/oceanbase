@@ -92,7 +92,7 @@ void ObTenantTransferService::do_work()
     const uint64_t thread_idx = get_thread_idx();
     if (OB_UNLIKELY(thread_idx >= thread_count)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected tread_idx", KR(ret), K(thread_idx), K(thread_count), K_(tenant_id));
+      LOG_WARN("unexpected thread_idx", KR(ret), K(thread_idx), K(thread_count), K_(tenant_id));
     } else {
       int tmp_ret = OB_SUCCESS;
       int64_t idle_time_us = IDLE_TIME_US;
@@ -662,11 +662,11 @@ int ObTenantTransferService::lock_table_and_part_(
           LOG_WARN("add in trans lock and refresh schema failed", KR(ret),
               K(part_info), K(tablet_id), K(part_idx), K(subpart_idx));
         }
-      } else if (ObTabletToLSTableOperator::get_ls_by_tablet(
+      } else if (OB_FAIL(ObTabletToLSTableOperator::get_ls_by_tablet(
           *sql_proxy_,
           tenant_id_,
           tablet_id,
-          ls_id)) { // double check to make sure tablet exists on src_ls
+          ls_id))) { // double check to make sure tablet exists on src_ls
         if (OB_ENTRY_NOT_EXIST == ret) {
           is_not_exist = true;
           TTS_INFO("discard part_info because tablet not exists",
@@ -1689,8 +1689,6 @@ int ObTenantTransferService::get_latest_table_schema_(
 {
   int ret = OB_SUCCESS;
   table_schema = NULL;
-  ObSEArray<ObObjectID, 1> table_ids;
-  ObSEArray<ObSimpleTableSchemaV2 *, 1> table_schemas;
   if (IS_NOT_INIT || OB_ISNULL(sql_proxy_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
