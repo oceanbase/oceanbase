@@ -97,7 +97,7 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
     int64_t max_len = 0;
     if (lib::is_oracle_mode()) {
       result_len = types_array[0].get_calc_length();
-      if (param_num == 2 || types_array[2].is_null()) {
+      if (param_num == 2 || types_array[2].is_null() || types_array[2].get_calc_length() == 0) {
         // do nothing
       } else {
         OX(result_len *= types_array[2].get_calc_length());
