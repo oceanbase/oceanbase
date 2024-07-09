@@ -552,7 +552,7 @@ int ObMPStmtExecute::before_process()
       const bool enable_sql_audit =
       GCONF.enable_sql_audit && session->get_local_ob_enable_sql_audit();
       OZ (request_params(session, pos, ps_stmt_checksum, alloc, -1));
-      if (!is_pl_stmt(stmt_type_) && enable_sql_audit) {
+      if (enable_sql_audit) {
         OZ (store_params_value_to_str(alloc, *session));
       }
     }
