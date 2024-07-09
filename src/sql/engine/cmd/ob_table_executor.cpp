@@ -663,7 +663,7 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
                    "table_name", create_table_arg.schema_.get_table_name());
         }
       }
-      if (OB_SUCC(ret) && table_schema.is_external_table()) {
+      if (OB_SUCC(ret) && table_schema.is_external_table() && is_valid_id(res.table_id_)) {
         //auto refresh after create external table
         OZ (ObAlterTableExecutor::update_external_file_list(
               table_schema.get_tenant_id(), res.table_id_,
