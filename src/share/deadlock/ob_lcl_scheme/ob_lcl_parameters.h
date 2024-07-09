@@ -27,11 +27,12 @@ constexpr const int64_t SEND_MSG_LIMIT_INTERVAL = 10L * 1000L;// 10ms
 constexpr const int64_t MIN_CYCLY_SIZE_SUPPORTED = 10;// 10 node
 constexpr const int64_t RANDOM_DELAY_RANGE = 100L * 1000L;// 100ms
 constexpr const int64_t TIMER_SCHEDULE_RESERVE_TIME = 1L * 1000L;// 1ms
-constexpr const int64_t PHASE_TIME = 2 * MAX_CLOCK_DIFF +
+constexpr const int64_t PHASE_TIME_US = 2 * MAX_CLOCK_DIFF +
                                      RANDOM_DELAY_RANGE + 
                                      (MAX_MSG_DELAY + SEND_MSG_LIMIT_INTERVAL) * 
                                      MIN_CYCLY_SIZE_SUPPORTED;// 700ms
-constexpr const int64_t PERIOD = 2 * PHASE_TIME;// 1.4s
+constexpr const int64_t PHASE_TIME_MS = PHASE_TIME_US / 1000;                               
+constexpr const int64_t PERIOD = 2 * PHASE_TIME_MS;// 1.4s
 constexpr const int64_t COMMON_BLOCK_SIZE = 3;// assume element number in block list not more than 3
                                               // in most scenarios
 }// namespace detector

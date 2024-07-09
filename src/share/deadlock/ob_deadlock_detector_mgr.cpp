@@ -246,7 +246,7 @@ void ObDeadLockDetectorMgr::stop()
   int ret = OB_SUCCESS;
   ActivateFn fn;
   detector_map_.for_each(fn);
-  ob_usleep(PHASE_TIME * 2);
+  ob_usleep(PHASE_TIME_US * 2);
   sender_thread_.stop();
   if (OB_FAIL(time_wheel_.stop())) {
     DETECT_LOG(WARN, "ObDeadLockDetectorMgr stop time wheel failed", KR(ret));
