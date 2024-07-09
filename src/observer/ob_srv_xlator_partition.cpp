@@ -22,6 +22,7 @@
 #include "share/rpc/ob_blacklist_req_processor.h"
 #include "share/rpc/ob_blacklist_resp_processor.h"
 #include "share/deadlock/ob_deadlock_detector_rpc.h"
+#include "share/deadlock/ob_lcl_time_sync/ob_lcl_time_sync_rpc.h"
 #include "sql/executor/ob_executor_rpc_processor.h"
 #include "sql/engine/cmd/ob_kill_executor.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
@@ -235,6 +236,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObDeadLockCollectInfoMessageP, gctx_);
   RPC_PROCESSOR(ObDetectorLCLMessageP, gctx_);
   RPC_PROCESSOR(ObDeadLockNotifyParentMessageP, gctx_);
+  RPC_PROCESSOR(ObDeadLockTimeSyncMessageP, gctx_);
 
   // table lock rpc
   RPC_PROCESSOR(ObTableLockTaskP, gctx_);
