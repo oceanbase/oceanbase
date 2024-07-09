@@ -693,6 +693,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
       tablet,
       old_meta_handle.get_sstable_meta().get_basic_meta(),
       merge_type,
+      old_sstable.get_key(),
       tablet.get_snapshot_version(),
       data_version,
       old_sstable.get_end_scn(),
@@ -761,6 +762,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     const ObTablet &tablet,
     const ObSSTableBasicMeta &basic_meta,
     const ObMergeType &merge_type,
+    const storage::ObITable::TableKey &table_key,
     const int64_t snapshot_version,
     const int64_t cluster_version,
     const share::SCN &end_scn,
@@ -789,23 +791,40 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     }
   } else {
     ObArenaAllocator tmp_arena("ShrBlkMgrTmp");
+    const uint16_t cg_idx = table_key.get_column_group_id();
+    const ObStorageColumnGroupSchema *cg_schema = nullptr;
     ObStorageSchema *storage_schema = nullptr;
     if (OB_FAIL(tablet.load_storage_schema(tmp_arena, storage_schema))) {
     LOG_WARN("fail to load storage schema", K(ret), K(tablet));
-    } else if (OB_FAIL(data_desc.init(
+    } else {
+      if (table_key.is_cg_sstable()) {
+        if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= storage_schema->get_column_group_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected cg idx", K(ret), K(cg_idx), KPC(storage_schema));
+        } else {
+          cg_schema = &storage_schema->get_column_groups().at(cg_idx);
+        }
+      }
+    }
+
+    if (FAILEDx(data_desc.init(
           *storage_schema,
           tablet.get_tablet_meta().ls_id_,
           tablet.get_tablet_meta().tablet_id_,
           merge_type,
           snapshot_version,
           cluster_version,
-          end_scn))) {
-      LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema),
+          end_scn,
+          cg_schema,
+          cg_idx))) {
+      LOG_WARN("failed to init static desc", K(ret), KPC(storage_schema), KPC(cg_schema), K(cg_idx),
         K(tablet), "merge_type", merge_type_to_str(merge_type), K(snapshot_version), K(cluster_version));
     } else if (OB_FAIL(data_desc.get_desc().update_basic_info_from_macro_meta(basic_meta))) {
       // overwrite the encryption related memberships, otherwise these memberships of new sstable may differ
       // from that of old sstable, since the encryption method of one tablet may change before defragmentation
       LOG_WARN("failed to update basic info from macro_meta", KR(ret), K(basic_meta));
+    } else if (OB_FAIL(data_desc.get_col_desc().mock_valid_col_default_checksum_array(basic_meta.column_cnt_))) {
+      LOG_WARN("fail to mock valid col default checksum array", K(ret), K(basic_meta.column_cnt_));
     }
     ObTabletObjLoadHelper::free(tmp_arena, storage_schema);
   }

@@ -152,6 +152,7 @@ private:
       const ObTablet &tablet,
       const ObSSTableBasicMeta &basic_meta,
       const compaction::ObMergeType &merge_type,
+      const storage::ObITable::TableKey &table_key,
       const int64_t snapshot_version,
       const int64_t cluster_version,
       const share::SCN &end_scn,
