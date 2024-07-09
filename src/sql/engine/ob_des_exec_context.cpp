@@ -191,6 +191,7 @@ DEFINE_DESERIALIZE(ObDesExecContext)
   OB_UNIS_DECODE(task_executor_ctx_);
   OB_UNIS_DECODE(das_ctx_);
   OB_UNIS_DECODE(sql_ctx_);
+  OB_UNIS_DECODE(should_do_bypass_material_);
   if (OB_SUCC(ret)) {
     if (OB_FAIL(init_expr_op(phy_plan_ctx_->get_expr_op_size()))) {
       LOG_WARN("init exec context expr op failed", K(ret));

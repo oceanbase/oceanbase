@@ -519,6 +519,8 @@ public:
   int get_local_var_array(int64_t local_var_array_id, const ObSolidifiedVarsContext *&var_array);
   void set_is_online_stats_gathering(bool v) { is_online_stats_gathering_ = v; }
   bool is_online_stats_gathering() const { return is_online_stats_gathering_; }
+  bool should_do_bypass_material() const { return should_do_bypass_material_; }
+  void set_should_do_bypass_material(bool v) { should_do_bypass_material_ = v; }
 
   int get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx);
 
@@ -700,6 +702,8 @@ protected:
   ObUserLoggingCtx user_logging_ctx_;
   // for online stats gathering
   bool is_online_stats_gathering_;
+  // for bypass material
+  bool should_do_bypass_material_;
   //---------------
 
   ObLobAccessCtx *lob_access_ctx_;

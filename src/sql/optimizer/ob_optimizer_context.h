@@ -217,6 +217,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     minimal_worker_count_(0),
     expected_worker_map_(),
     minimal_worker_map_(),
+    bypass_material_expected_worker_map_(),
+    bypass_material_minimal_worker_map_(),
     all_exprs_(false),
     model_type_(ObOptEstCost::VECTOR_MODEL),
     px_object_sample_rate_(-1),
@@ -243,7 +245,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   virtual ~ObOptimizerContext()
   {
     expected_worker_map_.destroy();
+    bypass_material_expected_worker_map_.destroy();
     minimal_worker_map_.destroy();
+    bypass_material_minimal_worker_map_.destroy();
     log_plan_factory_.destroy();
   }
   inline const ObSQLSessionInfo *get_session_info() const { return session_info_; }
@@ -525,10 +529,31 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   void set_minimal_worker_count(int64_t c) { minimal_worker_count_ = c; }
   int64_t get_minimal_worker_count() const { return minimal_worker_count_; }
 
+  void set_bypass_material_expected_worker_count(int64_t c) { bypass_material_expected_worker_count_ = c; }
+  int64_t get_bypass_material_expected_worker_count() const { return bypass_material_expected_worker_count_; }
+  void set_bypass_material_minimal_worker_count(int64_t c) { bypass_material_minimal_worker_count_ = c; }
+  int64_t get_bypass_material_minimal_worker_count() const { return bypass_material_minimal_worker_count_; }
+
   common::hash::ObHashMap<ObAddr, int64_t>& get_expected_worker_map() { return expected_worker_map_; }
   common::hash::ObHashMap<ObAddr, int64_t>& get_minimal_worker_map() { return minimal_worker_map_; }
   const common::hash::ObHashMap<ObAddr, int64_t>& get_expected_worker_map() const { return expected_worker_map_; }
   const common::hash::ObHashMap<ObAddr, int64_t>& get_minimal_worker_map() const { return minimal_worker_map_; }
+  common::hash::ObHashMap<ObAddr, int64_t> &get_bypass_material_expected_worker_map()
+  {
+    return bypass_material_expected_worker_map_;
+  }
+  common::hash::ObHashMap<ObAddr, int64_t> &get_bypass_material_minimal_worker_map()
+  {
+    return bypass_material_minimal_worker_map_;
+  }
+  const common::hash::ObHashMap<ObAddr, int64_t> &get_bypass_material_expected_worker_map() const
+  {
+    return bypass_material_expected_worker_map_;
+  }
+  const common::hash::ObHashMap<ObAddr, int64_t> &get_bypass_material_minimal_worker_map() const
+  {
+    return bypass_material_minimal_worker_map_;
+  }
   const ObRawExprUniqueSet &get_all_exprs() const { return all_exprs_; };
   ObRawExprUniqueSet &get_all_exprs() { return all_exprs_; };
   inline void set_cost_model_type(ObOptEstCost::MODEL_TYPE type) { model_type_ = type; }
@@ -657,8 +682,12 @@ private:
   bool is_ps_protocol_;
   int64_t expected_worker_count_;
   int64_t minimal_worker_count_;
+  int64_t bypass_material_expected_worker_count_;
+  int64_t bypass_material_minimal_worker_count_;
   common::hash::ObHashMap<ObAddr, int64_t> expected_worker_map_;
   common::hash::ObHashMap<ObAddr, int64_t> minimal_worker_map_;
+  common::hash::ObHashMap<ObAddr, int64_t> bypass_material_expected_worker_map_;
+  common::hash::ObHashMap<ObAddr, int64_t> bypass_material_minimal_worker_map_;
   ObRawExprUniqueSet all_exprs_;
   ObOptEstCost::MODEL_TYPE model_type_;
   double px_object_sample_rate_;

@@ -387,7 +387,7 @@ int ObPxTenantTargetMonitor::reset_leader_statistics()
 
 int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &worker_map,
                               int64_t wait_time_us, int64_t session_target, int64_t req_cnt,
-                              int64_t &admit_count, uint64_t &admit_version)
+                              int64_t &admit_count, uint64_t &admit_version, bool bypass_material)
 {
   int ret = OB_SUCCESS;
   admit_count = 0;
@@ -464,7 +464,8 @@ int ObPxTenantTargetMonitor::apply_target(hash::ObHashMap<ObAddr, int64_t> &work
         admit_version = version;
         parallel_session_count_++;
       } else {
-        need_wait = true;
+        // try again with plan without bypassing material
+        need_wait = !bypass_material;
       }
     }
   }

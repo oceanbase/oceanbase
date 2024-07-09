@@ -540,6 +540,8 @@ struct ObPlanStat
   int64_t delayed_px_querys_;    // px query 被丢回队列重试的次数
   int64_t expected_worker_count_;  // px 预期分配线程数
   int64_t minimal_worker_count_;  // minimal threads required for query
+  int64_t bypass_material_expected_worker_count_;  // px 预期分配线程数
+  int64_t bypass_material_minimal_worker_count_;  // minimal threads required for query
   int64_t outline_version_;
   int64_t outline_id_;
   bool is_last_exec_succ_;        // record whether last execute success
@@ -615,6 +617,9 @@ struct ObPlanStat
   PreCalcExprHandler* pre_cal_expr_handler_; //the handler that pre-calculable expression holds
   AddrMap expected_worker_map_; // px 全局预期分配线程数
   AddrMap minimal_worker_map_;  // global minial threads required for query
+  AddrMap bypass_material_expected_worker_map_; // px threads needed to be allocated(when bypass material)
+  AddrMap bypass_material_minimal_worker_map_;  // global minial threads required for query(when bypass material)
+
   uint64_t plan_hash_value_;
   common::ObString outline_data_;
   common::ObString hints_info_;
@@ -649,6 +654,8 @@ struct ObPlanStat
       delayed_px_querys_(0),
       expected_worker_count_(-1),
       minimal_worker_count_(-1),
+      bypass_material_expected_worker_count_(-1),
+      bypass_material_minimal_worker_count_(-1),
       outline_version_(common::OB_INVALID_VERSION),
       outline_id_(common::OB_INVALID_ID),
       is_last_exec_succ_(true),
@@ -725,6 +732,8 @@ struct ObPlanStat
       delayed_px_querys_(rhs.delayed_px_querys_),
       expected_worker_count_(rhs.expected_worker_count_),
       minimal_worker_count_(rhs.minimal_worker_count_),
+      bypass_material_expected_worker_count_(rhs.bypass_material_expected_worker_count_),
+      bypass_material_minimal_worker_count_(rhs.bypass_material_minimal_worker_count_),
       outline_version_(rhs.outline_version_),
       outline_id_(rhs.outline_id_),
       is_last_exec_succ_(rhs.is_last_exec_succ_),

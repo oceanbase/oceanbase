@@ -1188,6 +1188,30 @@ int ObPhysicalPlan::set_minimal_worker_map(const common::hash::ObHashMap<ObAddr,
   return ret;
 }
 
+int ObPhysicalPlan::set_bypass_material_expected_worker_map(
+  const common::hash::ObHashMap<ObAddr, int64_t> &c)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(assign_worker_map(stat_.bypass_material_expected_worker_map_, c))) {
+    LOG_WARN("set expected worker map failed", K(ret));
+  }
+  return ret;
+}
+const ObPlanStat::AddrMap &ObPhysicalPlan::get_bypass_material_expected_worker_map() const
+{
+  return stat_.bypass_material_expected_worker_map_;
+}
+
+int ObPhysicalPlan::set_bypass_material_minimal_worker_map(
+  const common::hash::ObHashMap<ObAddr, int64_t> &c)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(assign_worker_map(stat_.bypass_material_minimal_worker_map_, c))) {
+    LOG_WARN("set minimal worker map failed", K(ret));
+  }
+  return ret;
+}
+
 int ObPhysicalPlan::assign_worker_map(ObPlanStat::AddrMap &worker_map, const common::hash::ObHashMap<ObAddr, int64_t> &c)
 {
   int ret = OB_SUCCESS;

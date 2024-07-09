@@ -142,6 +142,8 @@
 #include "sql/engine/basic/ob_json_table_op.h"
 #include "sql/engine/table/ob_link_scan_op.h"
 #include "sql/engine/dml/ob_link_dml_op.h"
+#include "sql/engine/basic/ob_material_op.h"
+#include "sql/engine/basic/ob_material_vec_op.h"
 #include "sql/engine/dml/ob_table_insert_all_op.h"
 #include "sql/engine/basic/ob_stat_collector_op.h"
 #include "sql/engine/opt_statistics/ob_optimizer_stats_gathering_op.h"
@@ -1480,25 +1482,19 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct &op, ObHashDistinctVecSpec &sp
   return ret;
 }
 
-/*
- * Material算子由于本身没有其他额外运行时的变量需要进行处理，所以Codegen时，不需要做任何处理
- * 都交给了basic等公共方法弄好了，所以这里实现不需要任何处理，全部为UNUSED
- */
 int ObStaticEngineCG::generate_spec(ObLogMaterial &op, ObMaterialSpec &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
-  UNUSED(op);
-  UNUSED(spec);
   UNUSED(in_root_job);
+  spec.set_bypassable(op.get_bypassable());
   return ret;
 }
 
 int ObStaticEngineCG::generate_spec(ObLogMaterial &op, ObMaterialVecSpec &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
-  UNUSED(op);
-  UNUSED(spec);
   UNUSED(in_root_job);
+  spec.set_bypassable(op.get_bypassable());
   return ret;
 }
 int ObStaticEngineCG::generate_spec(ObLogTempTableInsert &op, ObTempTableInsertVecOpSpec &spec, const bool in_root_job)
@@ -4057,6 +4053,8 @@ int ObStaticEngineCG::generate_basic_transmit_spec(
     spec.repartition_table_id_ = op.get_repartition_table_id();
     OZ(check_rollup_distributor(&spec));
     spec.use_rich_format_ &= op.support_rich_format_vectorize();
+    spec.need_early_sched_ = op.need_early_sched();
+    spec.child_finish_for_early_sched_ = op.child_finish_for_early_sched();
     LOG_TRACE("CG transmit", K(op.get_dfo_id()), K(op.get_op_id()),
               K(op.get_dist_method()), K(op.get_unmatch_row_dist_method()),
               K(op.support_rich_format_vectorize()));
@@ -4126,6 +4124,7 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
     } else if (IS_PX_COORD(spec.get_type())) {
       ObPxCoordSpec *coord = static_cast<ObPxCoordSpec*>(&spec);
       coord->set_expected_worker_count(op.get_expected_worker_count());
+      coord->set_pipeline_depth(op.get_pipeline_depth());
       const ObTransmitSpec *transmit_spec = static_cast<const ObTransmitSpec*>(spec.get_child());
       coord->qc_id_ = transmit_spec->get_px_id();
       if (op.get_px_batch_op_id() != OB_INVALID_ID) {
@@ -8377,6 +8376,10 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     phy_plan.set_px_dop(log_plan.get_optimizer_context().get_max_parallel());
     phy_plan.set_expected_worker_count(log_plan.get_optimizer_context().get_expected_worker_count());
     phy_plan.set_minimal_worker_count(log_plan.get_optimizer_context().get_minimal_worker_count());
+    phy_plan.set_bypass_material_expected_worker_count(
+      log_plan.get_optimizer_context().get_bypass_material_expected_worker_count());
+    phy_plan.set_bypass_material_minimal_worker_count(
+      log_plan.get_optimizer_context().get_bypass_material_minimal_worker_count());
     phy_plan.set_is_batched_multi_stmt(log_plan.get_optimizer_context().is_batched_multi_stmt());
     phy_plan.set_need_consistent_snapshot(log_plan.need_consistent_read());
     // only if all servers's version >= CLUSTER_VERSION_4_2_0_0
@@ -8386,6 +8389,12 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
     if (OB_FAIL(phy_plan.set_expected_worker_map(log_plan.get_optimizer_context().get_expected_worker_map()))) {
       LOG_WARN("set expected worker map", K(ret));
     } else if (OB_FAIL(phy_plan.set_minimal_worker_map(log_plan.get_optimizer_context().get_minimal_worker_map()))) {
+      LOG_WARN("set minimal worker map", K(ret));
+    } else if (OB_FAIL(phy_plan.set_bypass_material_expected_worker_map(
+                 log_plan.get_optimizer_context().get_bypass_material_expected_worker_map()))) {
+      LOG_WARN("set expected worker map", K(ret));
+    } else if (OB_FAIL(phy_plan.set_bypass_material_minimal_worker_map(
+                 log_plan.get_optimizer_context().get_bypass_material_minimal_worker_map()))) {
       LOG_WARN("set minimal worker map", K(ret));
     } else if (OB_FAIL(phy_plan.set_mview_ids(mview_ids_))) {
       LOG_WARN("failed to set set mview_ids", K(ret), K(mview_ids_.count()));

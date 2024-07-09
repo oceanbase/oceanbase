@@ -179,10 +179,18 @@ public:
   int64_t get_expected_worker_count() const { return stat_.expected_worker_count_; }
   void set_minimal_worker_count(int64_t c) { stat_.minimal_worker_count_ = c; }
   int64_t get_minimal_worker_count() const { return stat_.minimal_worker_count_; }
+  void set_bypass_material_expected_worker_count(int64_t c) { stat_.bypass_material_expected_worker_count_ = c; }
+  int64_t get_bypass_material_expected_worker_count() const { return stat_.bypass_material_expected_worker_count_; }
+  void set_bypass_material_minimal_worker_count(int64_t c) { stat_.bypass_material_minimal_worker_count_ = c; }
+  int64_t get_bypass_material_minimal_worker_count() const { return stat_.bypass_material_minimal_worker_count_; }
   int set_expected_worker_map(const common::hash::ObHashMap<ObAddr, int64_t> &c);
   const ObPlanStat::AddrMap& get_expected_worker_map() const;
   int set_minimal_worker_map(const common::hash::ObHashMap<ObAddr, int64_t> &c);
   const common::hash::ObHashMap<ObAddr, int64_t>& get_minimal_worker_map() const;
+  int set_bypass_material_expected_worker_map(const common::hash::ObHashMap<ObAddr, int64_t> &c);
+  const ObPlanStat::AddrMap& get_bypass_material_expected_worker_map() const;
+  int set_bypass_material_minimal_worker_map(const common::hash::ObHashMap<ObAddr, int64_t> &c);
+  const common::hash::ObHashMap<ObAddr, int64_t>& get_bypass_material_minimal_worker_map() const;
   int assign_worker_map(ObPlanStat::AddrMap &worker_map,
                         const common::hash::ObHashMap<ObAddr, int64_t> &c);
   const char* get_sql_id() const { return stat_.sql_id_.ptr(); }

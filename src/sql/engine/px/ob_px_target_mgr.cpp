@@ -350,11 +350,11 @@ int ObPxTargetMgr::reset_leader_statistics(uint64_t tenant_id)
 
 int ObPxTargetMgr::apply_target(uint64_t tenant_id, hash::ObHashMap<ObAddr, int64_t> &worker_map,
                                 int64_t wait_time_us, int64_t session_target, int64_t req_cnt,
-                                int64_t &admit_count, uint64_t &admit_version)
+                                int64_t &admit_count, uint64_t &admit_version, bool bypass_material)
 {
   int ret = OB_SUCCESS;
   GET_TARGET_MONITOR(tenant_id, {
-    if (OB_FAIL(target_monitor->apply_target(worker_map, wait_time_us, session_target, req_cnt, admit_count, admit_version))) {
+    if (OB_FAIL(target_monitor->apply_target(worker_map, wait_time_us, session_target, req_cnt, admit_count, admit_version, bypass_material))) {
       LOG_WARN("apply target failed", K(ret), K(tenant_id), K(session_target), K(req_cnt));
     }
   });

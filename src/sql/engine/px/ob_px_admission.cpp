@@ -66,8 +66,9 @@ int ObPxAdmission::get_parallel_session_target(ObSQLSessionInfo &session,
 //   推论：一个需要**过量**线程的请求，只会在系统空闲下来之后才会被调度
 int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
                              int64_t wait_time_us, int64_t session_target,
+                             ObHashMap<ObAddr, int64_t> &bypass_worker_map,
                              ObHashMap<ObAddr, int64_t> &worker_map,
-                             int64_t req_cnt, int64_t &admit_cnt)
+                             int64_t bypass_req_cnt, int64_t req_cnt, int64_t &admit_cnt)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = session.get_effective_tenant_id();
@@ -76,14 +77,23 @@ int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
   int64_t left_time_us = wait_time_us;
   int64_t start_time_us = ObClockGenerator::getClock();
   bool need_retry = false;
+  // switch the cur_worker_map and cur_req_cnt when bypassable plan is not valid
+  ObHashMap<ObAddr,int64_t>* cur_worker_map = &bypass_worker_map;
+  int cur_req_cnt = bypass_req_cnt;
+  bool bypass_material = true;
   do {
-    if (OB_FAIL(THIS_WORKER.check_status())) {
+    if (OB_ISNULL(cur_worker_map)) {
+      ret = OB_ERR_UNEXPECTED; 
+      LOG_WARN("worker map should not be null");
+    } else if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("fail check query status", K(ret));
-    } else if (OB_FAIL(OB_PX_TARGET_MGR.apply_target(tenant_id, worker_map, wait_time_us, session_target, req_cnt, admit_cnt, admission_version))) {
-      LOG_WARN("apply target failed", K(ret), K(tenant_id), K(req_cnt));
+    } else if (OB_FAIL(OB_PX_TARGET_MGR.apply_target(tenant_id, *cur_worker_map, wait_time_us,
+                                                     session_target, req_cnt, admit_cnt,
+                                                     admission_version, bypass_material))) {
+      LOG_WARN("apply target failed", K(ret), K(tenant_id), K(cur_req_cnt));
     } else if (0 != admit_cnt) {
       exec_ctx.set_admission_version(admission_version);
-      LOG_TRACE("after enter admission", K(ret), K(req_cnt), K(admit_cnt));
+      LOG_TRACE("after enter admission", K(ret), K(cur_req_cnt), K(admit_cnt));
     }
     left_time_us = wait_time_us - (ObClockGenerator::getClock() - start_time_us);
     if (OB_SUCC(ret) && 0 == admit_cnt && left_time_us > 0) {
@@ -91,9 +101,15 @@ int64_t ObPxAdmission::admit(ObSQLSessionInfo &session, ObExecContext &exec_ctx,
         // only print once
         LOG_INFO("Not enough PX thread to execute query."
                  "should wait and re-acquire thread resource from target queue",
-                 K(req_cnt), K(left_time_us));
+                 K(cur_req_cnt), K(left_time_us), K(session_target), K(bypass_req_cnt), K(req_cnt));
         // fake one retry record, not really a query retry
         session.get_retry_info_for_update().set_last_query_retry_err(OB_ERR_INSUFFICIENT_PX_WORKER);
+ 
+        // fallback to plan w/o bypassing material
+        exec_ctx.set_should_do_bypass_material(false);
+        cur_worker_map = &worker_map;
+        cur_req_cnt = req_cnt;
+        bypass_material = false;
       }
       need_retry = true;
     } else {
@@ -116,23 +132,46 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
       && 1 != plan.get_px_dop()
       && plan.get_expected_worker_count() > 0) {
     // use for appointment
-    const auto &req_px_worker_map = plan.get_expected_worker_map();
+    const auto &bypass_material_expected_worker_map = plan.get_bypass_material_expected_worker_map();
+    const auto &expected_worker_map = plan.get_expected_worker_map();
+    
     ObHashMap<ObAddr, int64_t> &acl_px_worker_map = exec_ctx.get_admission_addr_map();
+    ObHashMap<ObAddr, int64_t> mutable_worker_map; 
+    ObHashMap<ObAddr, int64_t> mutable_bypass_material_worker_map; 
     if (acl_px_worker_map.created()) {
       acl_px_worker_map.clear();
     } else if (OB_FAIL(acl_px_worker_map.create(hash::cal_next_prime(10), ObModIds::OB_SQL_PX, ObModIds::OB_SQL_PX))){
       LOG_WARN("create hash map failed", K(ret));
     }
+
     if (OB_SUCC(ret)) {
-      for (auto it = req_px_worker_map.begin();
-          OB_SUCC(ret) && it != req_px_worker_map.end(); ++it) {
-        if (OB_FAIL(acl_px_worker_map.set_refactored(it->first, it->second))){
-          LOG_WARN("set refactored failed", K(ret), K(it->first), K(it->second));
+      if (OB_FAIL(mutable_worker_map.create(hash::cal_next_prime(10), ObModIds::OB_SQL_PX,
+                                            ObModIds::OB_SQL_PX))) {
+        LOG_WARN("create hash map failed", K(ret));
+      } else if (OB_FAIL(mutable_bypass_material_worker_map.create(
+                   hash::cal_next_prime(10), ObModIds::OB_SQL_PX, ObModIds::OB_SQL_PX))) {
+        LOG_WARN("create hash map failed", K(ret));
+      } else {
+        for (auto it = bypass_material_expected_worker_map.begin();
+             OB_SUCC(ret) && it != bypass_material_expected_worker_map.end(); ++it) {
+          if (OB_FAIL(mutable_bypass_material_worker_map.set_refactored(it->first, it->second))) {
+            LOG_WARN("set refactored failed", K(ret), K(it->first), K(it->second));
+          }
+        }
+        for (auto it = expected_worker_map.begin(); OB_SUCC(ret) && it != expected_worker_map.end();
+             ++it) {
+          if (OB_FAIL(mutable_worker_map.set_refactored(it->first, it->second))) {
+            LOG_WARN("set refactored failed", K(ret), K(it->first), K(it->second));
+          }
         }
       }
+    }
+    if (OB_SUCC(ret)) {
       // use for exec
       int64_t req_worker_count = plan.get_expected_worker_count();
+      int64_t bypass_material_req_worker_count = plan.get_bypass_material_expected_worker_count();
       int64_t minimal_px_worker_count = plan.get_minimal_worker_count();
+      int64_t bypass_material_minimal_px_worker_count = plan.get_bypass_material_minimal_worker_count();
       int64_t admit_worker_count = 0;
       // 如果一直得不到线程资源，需要超时退出。
       // 下面处理带 timeout hint 的情景
@@ -148,7 +187,11 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
         LOG_WARN("fail check query status", K(ret));
       } else if (OB_FAIL(ObPxAdmission::admit(session, exec_ctx,
                                               wait_time_us, session_target,
-                                              acl_px_worker_map, req_worker_count, admit_worker_count))) {
+                                              mutable_bypass_material_worker_map, 
+                                              mutable_worker_map,
+                                              bypass_material_req_worker_count,
+                                              req_worker_count,
+                                              admit_worker_count))) {
         LOG_WARN("fail do px admission",
                 K(ret), K(wait_time_us), K(session_target));
       } else if (admit_worker_count <= 0) {
@@ -168,12 +211,30 @@ int ObPxAdmission::enter_query_admission(ObSQLSessionInfo &session,
         } else {
           plan_ctx->set_worker_count(admit_worker_count);
           // 表示 optimizer 计算的数量
-          task_exec_ctx->set_expected_worker_cnt(req_worker_count);
-          task_exec_ctx->set_minimal_worker_cnt(minimal_px_worker_count);
+          task_exec_ctx->set_expected_worker_cnt(exec_ctx.should_do_bypass_material() ?
+                                                   bypass_material_req_worker_count :
+                                                   req_worker_count);
+          task_exec_ctx->set_minimal_worker_cnt(exec_ctx.should_do_bypass_material() ?
+                                                  bypass_material_minimal_px_worker_count :
+                                                  minimal_px_worker_count);
           // 表示 admission 根据当前资源排队情况实际分配的数量
           task_exec_ctx->set_admited_worker_cnt(admit_worker_count);
         }
         LOG_TRACE("PX admission set the plan worker count", K(req_worker_count), K(minimal_px_worker_count), K(admit_worker_count));
+        LOG_INFO("PX admission set the plan worker count", K(req_worker_count), K(minimal_px_worker_count), K(admit_worker_count));
+      }
+    }
+    
+    if (OB_SUCC(ret)) {
+      // assign the final output to the acl_px_worker_map by if the bypass take effects
+      ObHashMap<ObAddr, int64_t> &req_px_worker_map = exec_ctx.should_do_bypass_material() ?
+                                                        mutable_bypass_material_worker_map :
+                                                        mutable_worker_map;
+      for (auto it = req_px_worker_map.begin(); OB_SUCC(ret) && it != req_px_worker_map.end();
+           ++it) {
+        if (OB_FAIL(acl_px_worker_map.set_refactored(it->first, it->second))){
+          LOG_WARN("set refactored failed", K(ret), K(it->first), K(it->second));
+        }
       }
     }
   }

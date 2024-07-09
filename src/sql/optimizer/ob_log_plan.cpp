@@ -11416,23 +11416,36 @@ int ObLogPlan::calc_plan_resource()
   ObLogicalOperator *plan_root = nullptr;
   int64_t max_parallel_thread_count = 0;
   int64_t max_parallel_group_count = 0;
+  int64_t bypass_mtrl_max_parallel_thread_count = 0;
+  int64_t bypass_mtrl_max_parallel_group_count = 0;
   if (OB_ISNULL(stmt = get_stmt()) ||
       OB_ISNULL(plan_root = get_plan_root())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else {
     ObPxResourceAnalyzer analyzer;
+    // we need to run 2 pass to 
     if (OB_FAIL(analyzer.analyze(*plan_root,
                                  max_parallel_thread_count,
                                  max_parallel_group_count,
                                  get_optimizer_context().get_expected_worker_map(),
                                  get_optimizer_context().get_minimal_worker_map()))) {
       LOG_WARN("fail analyze px stmt thread group reservation count", K(ret));
+    } else if (!OB_FALSE_IT(analyzer.set_do_bypass()) && OB_FAIL(analyzer.analyze(*plan_root,
+                                 bypass_mtrl_max_parallel_thread_count,
+                                 bypass_mtrl_max_parallel_group_count,
+                                 get_optimizer_context().get_bypass_material_expected_worker_map(),
+                                 get_optimizer_context().get_bypass_material_minimal_worker_map()))) {
+      LOG_WARN("fail analyze px stmt thread group reservation count", K(ret));
     } else {
       LOG_TRACE("[PxResAnaly]max parallel thread group count",
                K(max_parallel_thread_count), K(max_parallel_group_count));
+      LOG_TRACE("[PxResAnaly]max parallel thread group count with bypass",
+               K(bypass_mtrl_max_parallel_thread_count), K(bypass_mtrl_max_parallel_group_count));
       get_optimizer_context().set_expected_worker_count(max_parallel_thread_count);
       get_optimizer_context().set_minimal_worker_count(max_parallel_group_count);
+      get_optimizer_context().set_bypass_material_expected_worker_count(bypass_mtrl_max_parallel_thread_count);
+      get_optimizer_context().set_bypass_material_minimal_worker_count(bypass_mtrl_max_parallel_group_count);
     }
   }
   return ret;

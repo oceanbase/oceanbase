@@ -132,6 +132,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     dblink_snapshot_map_(),
     user_logging_ctx_(),
     is_online_stats_gathering_(false),
+    should_do_bypass_material_(true),
     lob_access_ctx_(nullptr)
 {
 }
@@ -1005,6 +1006,8 @@ DEFINE_SERIALIZE(ObExecContext)
     OB_UNIS_ENCODE(task_executor_ctx_);
     OB_UNIS_ENCODE(das_ctx_);
     OB_UNIS_ENCODE(*sql_ctx_);
+    
+    OB_UNIS_ENCODE(should_do_bypass_material_);
   }
   return ret;
 }
@@ -1036,6 +1039,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObExecContext)
     OB_UNIS_ADD_LEN(task_executor_ctx_);
     OB_UNIS_ADD_LEN(das_ctx_);
     OB_UNIS_ADD_LEN(*sql_ctx_);
+
+    OB_UNIS_ADD_LEN(should_do_bypass_material_);
   }
   return len;
 }
