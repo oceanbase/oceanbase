@@ -492,6 +492,7 @@ int ObGranuleIteratorOp::inner_open()
         }
       }
       if (OB_SUCC(ret)) {
+        state_ = GI_PREPARED;
         skip_prepare_table_scan = true;
       }
       LOG_TRACE("runtime filter extract query range in GI", K(ret), K(query_range_rf_keys_));
