@@ -25,7 +25,8 @@ OB_DEF_SERIALIZE(ObOptTableStat) {
               partition_id_,
               object_type_,
               row_count_,
-              avg_row_size_
+              avg_row_size_,
+              sample_size_
               );
   return ret;
 }
@@ -37,7 +38,8 @@ OB_DEF_SERIALIZE_SIZE(ObOptTableStat) {
               partition_id_,
               object_type_,
               row_count_,
-              avg_row_size_
+              avg_row_size_,
+              sample_size_
               );
   return len;
 }
@@ -49,7 +51,8 @@ OB_DEF_DESERIALIZE(ObOptTableStat) {
               partition_id_,
               object_type_,
               row_count_,
-              avg_row_size_
+              avg_row_size_,
+              sample_size_
               );
   return ret;
 }
