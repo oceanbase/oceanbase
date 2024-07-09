@@ -485,7 +485,8 @@ int ObLogWindowFunction::compute_op_ordering()
     is_local_order_ = (range_dist_parallel_ || is_fully_partition_wise()
                        || (get_sort_keys().empty()
                            && child->get_is_local_order())
-                      ) && !get_op_ordering().empty();
+                      ) && !get_op_ordering().empty()
+                      && !is_range_order_;
   }
   return ret;
 }
