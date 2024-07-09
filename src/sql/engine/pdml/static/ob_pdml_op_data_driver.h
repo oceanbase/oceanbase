@@ -76,7 +76,12 @@ private:
   int barrier(ObExecContext &ctx);
   int next_row_from_cache_for_returning(const ObExprPtrIArray &row);
   int write_partitions(ObExecContext &ctx);
-  int set_heap_table_hidden_pk(const ObExprPtrIArray *&row, common::ObTabletID &tablet_id);
+  int set_heap_table_hidden_pk(const ObExprPtrIArray *&row,
+                               common::ObTabletID &tablet_id,
+                               const bool is_direct_load = false);
+  int set_heap_table_hidden_pk_value(const ObExprPtrIArray *&row,
+                                     common::ObTabletID &tablet_id,
+                                     const uint64_t pk_value);
 
 private:
   // 因为 cache 中会缓存多个分区的数据，迭代的过程中需要
