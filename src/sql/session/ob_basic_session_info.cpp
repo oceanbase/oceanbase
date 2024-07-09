@@ -4488,8 +4488,7 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
   if (CACHED_SYS_VAR_VERSION != sys_var_base_version_) {
     OZ (load_all_sys_vars_default());
   } else {
-    // cached already, skip load default vars
-    OZ (process_session_variable_fast());
+    // delay set.
   }
 
   if (OB_SUCC(ret)) {
@@ -4558,8 +4557,15 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo)
         next_tx_read_only_ = tx_read_only;
       }
     }
+
   }
 
+  if (CACHED_SYS_VAR_VERSION != sys_var_base_version_) {
+    // do nothing.
+  } else {
+    // cached already, skip load default vars
+    OZ (process_session_variable_fast());
+  }
   // split function, make stack checker happy
   [&]() {
   int64_t unused_inner_safe_weak_read_snapshot = 0;
