@@ -182,7 +182,8 @@ public:
   void destroy();
   int init(const uint64_t tenant_id,
            const common::ObAddr &scheduler,
-           const uint32_t session_id_,
+           const uint32_t session_id,
+           const uint32_t associated_session_id,
            const ObTransID &trans_id,
            const int64_t trans_expired_time,
            const share::ObLSID &ls_id,
@@ -291,6 +292,7 @@ private:
   ON_DEMAND_TO_STRING_KV_("self_ls_id",
                           ls_id_,
                           K_(session_id),
+                          K_(associated_session_id),
                           K_(part_trans_action),
                           K_(pending_write),
                           "2pc_role",

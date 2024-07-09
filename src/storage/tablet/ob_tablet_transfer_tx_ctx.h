@@ -31,6 +31,7 @@ public:
   transaction::ObTransID tx_id_;
   int64_t epoch_;
   uint32_t session_id_;
+  uint32_t associated_session_id_;
   transaction::ObTxState tx_state_;
   share::SCN trans_version_;
   share::SCN prepare_version_;
