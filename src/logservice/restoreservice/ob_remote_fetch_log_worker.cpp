@@ -277,7 +277,7 @@ int ObRemoteFetchWorker::handle_single_task_()
     }
 
     // only fatal error report fail, retry with others
-    if (is_fatal_error_(ret) && need_fetch_log_(task->id_)) {
+    if (is_fatal_error_(ret) && need_fetch_log_(id)) {
       report_error_(id, ret, cur_lsn, ObLogRestoreErrorContext::ErrorType::FETCH_LOG);
     }
 //errsim: inject restore failed error
