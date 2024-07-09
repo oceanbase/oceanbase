@@ -832,7 +832,6 @@ int ObNewTableTabletAllocator::alloc_tablet_for_add_balance_group(
   } else {
     common::ObArray<ObBalanceGroupLSStat> final_ls_stat_array;
     int64_t total_alloc_num = partition_num;
-    int64_t valid_bg_cnt = total_alloc_num;
     for (int64_t i = 0; OB_SUCC(ret) && i < ls_id_array.count(); ++i) {
       const share::ObLSID &ls_id = ls_id_array.at(i);
       if (OB_FAIL(ls_id_set.set_refactored(ls_id, 0/*not overwrite*/))) {
@@ -850,8 +849,6 @@ int ObNewTableTabletAllocator::alloc_tablet_for_add_balance_group(
           LOG_WARN("fail to push back", KR(ret));
         } else if (OB_FAIL(ls_id_set.erase_refactored(ls_id))) {
           LOG_WARN("fail to erase refactored", KR(ret));
-        } else {
-          valid_bg_cnt += bg_ls_stat_array.at(i).get_tablet_group_count();
         }
       } else {
         ret = tmp_ret;
@@ -884,7 +881,6 @@ int ObNewTableTabletAllocator::alloc_tablet_for_add_balance_group(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("final ls stat array count unexpected", KR(ret), K(final_ls_stat_array));
     } else {
-      lib::ob_sort(final_ls_stat_array.begin(), final_ls_stat_array.end());
       for (int64_t alloc_seq = 0; OB_SUCC(ret) && alloc_seq < total_alloc_num; alloc_seq++) {
         int64_t min_ls_tg_idx = 0;
         int64_t min_ls_tg_cnt = final_ls_stat_array.at(0).get_tablet_group_count();
