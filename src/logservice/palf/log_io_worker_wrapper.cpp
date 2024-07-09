@@ -124,6 +124,26 @@ int LogIOWorkerWrapper::notify_need_writing_throttling(const bool &need_throttli
   return ret;
 }
 
+int64_t LogIOWorkerWrapper::get_last_working_time() const
+{
+  int64_t last_working_time = OB_INVALID_TIMESTAMP;
+  if (IS_NOT_INIT) {
+    PALF_LOG_RET(ERROR, OB_NOT_INIT, "LogIOWorkerWrapper not inited", KPC(this));
+  } else {
+    for (int64_t i = 0; i < log_writer_parallelism_; i++) {
+      const int64_t this_time = log_io_workers_[i].get_last_working_time();
+      if (OB_INVALID_TIMESTAMP == this_time) {
+        // skip
+      } else if (OB_INVALID_TIMESTAMP == last_working_time) {
+        last_working_time = this_time;
+      } else {
+        last_working_time = MIN(last_working_time, this_time);
+      }
+    }
+  }
+  return last_working_time;
+}
+
 int LogIOWorkerWrapper::create_and_init_log_io_workers_(const LogIOWorkerConfig &config,
                                                         const int64_t tenant_id,
                                                         const int cb_thread_pool_tg_id,

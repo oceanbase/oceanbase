@@ -1288,7 +1288,9 @@ int PalfEnvImpl::get_io_statistic_info(int64_t &last_working_time,
   } else if (OB_FAIL(palf_handle_impl_map_.for_each(functor))) {
     PALF_LOG(WARN, "for_each failed", K(ret), K(functor));
   } else {
-    last_working_time = functor.last_working_time_;
+    // use last_working_time of IOWorker to detect
+    // more IO operations including: pwrite, rename, ...
+    last_working_time = log_io_worker_wrapper_.get_last_working_time();
     pending_write_size = functor.pending_write_size_;
     pending_write_count = functor.pending_write_count_;
     pending_write_rt = functor.pending_write_rt_;
