@@ -417,7 +417,7 @@ int ObTableLockOp::lock_batch_to_das(const ObBatchRows *child_brs)
   ObEvalCtx::BatchInfoScopeGuard operator_evalctx_guard(eval_ctx_);
   operator_evalctx_guard.set_batch_size(child_brs->size_);
   (void) brs_.copy(child_brs);
-  for (auto i = 0; OB_SUCC(ret) && i < child_brs->size_; i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_brs->size_; i++) {
     need_return_row_ = false;
     if (child_brs->skip_->at(i)) {
       continue;
