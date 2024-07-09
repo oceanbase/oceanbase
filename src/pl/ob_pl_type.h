@@ -1076,6 +1076,9 @@ protected:
   int64_t ref_count_; // a ref cursor may referenced by many ref cursor
   bool is_scrollable_; // 是否是滚动游标
   transaction::ObTxReadSnapshot snapshot_;
+  // If cursor has an validate snapshot
+  // and the snapshot are acquired in an active transaction
+  // it is required to check snapshot state is valid before doing fetch
   bool is_need_check_snapshot_;
   int64_t last_execute_time_; // 记录上一次cursor操作的时间点
   bool last_stream_cursor_; // cursor复用场景下，记录上一次是否是流式cursor

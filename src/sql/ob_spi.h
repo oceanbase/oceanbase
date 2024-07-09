@@ -1094,6 +1094,8 @@ private:
                                     const int64_t *formal_param_idxs,
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
+private:
+  static int setup_cursor_snapshot_verify_(pl::ObPLCursorInfo *cursor, ObSPIResultSet *spi_result);
 };
 
 }

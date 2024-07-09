@@ -428,6 +428,7 @@ public:
   inline bool is_insert_select() const { return is_insert_select_; }
   inline void set_is_plain_insert(bool v) { is_plain_insert_ = v; }
   inline bool is_plain_insert() const { return is_plain_insert_; }
+  inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
@@ -489,6 +490,8 @@ public:
 
   void set_enable_px_fast_reclaim(bool value) { is_enable_px_fast_reclaim_ = value; }
   bool is_enable_px_fast_reclaim() const { return is_enable_px_fast_reclaim_; }
+  ObIArray<uint64_t> &get_dml_table_ids() { return dml_table_ids_; }
+  const ObIArray<uint64_t> &get_dml_table_ids() const { return dml_table_ids_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -666,6 +669,11 @@ public:
   // for detector manager
   bool is_enable_px_fast_reclaim_;
   bool udf_has_dml_stmt_;
+private:
+  // used to record transaction modified tables and
+  // further cursor stmt will check agains
+  // to decide whether it read uncommitted data
+  common::ObSEArray<uint64_t, 1> dml_table_ids_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

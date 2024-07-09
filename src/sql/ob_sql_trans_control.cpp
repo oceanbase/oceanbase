@@ -1057,6 +1057,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   bool is_plain_select = false;
   transaction::ObTxSEQ savepoint = das_ctx.get_savepoint();
   int exec_errcode = exec_ctx.get_errcode();
+  bool need_rollback = rollback;
 
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx));
   CK (OB_NOT_NULL(plan = plan_ctx->get_phy_plan()));
@@ -1064,30 +1065,58 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   OX (stmt_type = plan->get_stmt_type());
   OX (is_plain_select = plan->is_plain_select());
   OZ (get_tx_service(session, txs), *session);
+
+  if (!is_plain_select) {
+    // NOTE: for plain select tx_desc may be NULL
+    // because the select may be a cursor open
+    // the cursor remain open even after transaction terminated
+    // and then the closed of cursor will call end_stmt
+    CK (OB_NOT_NULL(tx_desc));
+  }
+
   // plain select stmt don't require txn descriptor
   if (OB_SUCC(ret) && !is_plain_select) {
-    CK (OB_NOT_NULL(tx_desc));
     ObTransID tx_id_before_rollback;
     OX (tx_id_before_rollback = tx_desc->get_tx_id());
     OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
-    auto &tx_result = session->get_trans_result();
-    if (OB_FAIL(ret)) {
-    } else if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_sessid()) tx_result.is_incomplete()) {
+
+    // if stmt is dml, record its table_id set, used by cursor verify snapshot
+    if (OB_SUCC(ret) && !rollback && plan->is_dml_write_stmt()) {
+      const int64_t tenant_id = session->get_effective_tenant_id();
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (tenant_config.is_valid() && tenant_config->_enable_enhanced_cursor_validation) {
+        OZ (tx_desc->add_modified_tables(plan->get_dml_table_ids()), plan->get_dml_table_ids());
+      }
+    }
+    ObTxExecResult &tx_result = session->get_trans_result();
+    if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_sessid()) tx_result.is_incomplete()) {
       if (!rollback) {
         LOG_ERROR("trans result incomplete, but rollback not issued");
       }
-      OZ (txs->abort_tx(*tx_desc, ObTxAbortCause::TX_RESULT_INCOMPLETE));
+      (void)txs->abort_tx(*tx_desc, ObTxAbortCause::TX_RESULT_INCOMPLETE);
+      // overwrite ret
       ret = OB_TRANS_NEED_ROLLBACK;
       LOG_WARN("trans result incomplete, trans aborted", K(ret));
-    } else if (rollback) {
-      auto stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
-      auto &touched_ls = tx_result.get_touched_ls();
-      OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls, exec_errcode),
-          savepoint, stmt_expire_ts, touched_ls);
-      // prioritize returning session error code
-      if (session->is_terminate(ret)) {
-        LOG_INFO("trans has terminated when end stmt", K(ret), K(tx_id_before_rollback));
+    } else {
+      int save_ret = OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("pre step failed, will do rollback stmt", K(ret));
+        need_rollback = true;
+        save_ret = ret;
+        ret = OB_SUCCESS;
       }
+      if (need_rollback) {
+        const int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
+        const share::ObLSArray &touched_ls = tx_result.get_touched_ls();
+        OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls, exec_errcode),
+            savepoint, stmt_expire_ts, touched_ls);
+        // prioritize returning session error code
+        if (session->is_terminate(ret)) {
+          LOG_INFO("trans has terminated when end stmt", K(ret), K(tx_id_before_rollback));
+        }
+      }
+      // use first occurred error
+      ret = save_ret != OB_SUCCESS ? save_ret : ret;
     }
     // this may happend cause tx may implicit aborted
     // (for example: first write sql of implicit started trans meet lock conflict)
@@ -1124,7 +1153,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
 #ifndef NDEBUG
   print_log = true;
 #else
-  if (OB_FAIL(ret) || rollback) { print_log = true; }
+  if (OB_FAIL(ret) || need_rollback) { print_log = true; }
 #endif
   if (print_log
       && OB_NOT_NULL(session)
@@ -1136,6 +1165,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
              "tx_desc", PC(session->get_tx_desc()),
              "trans_result", session->get_trans_result(),
              K(rollback),
+             K(need_rollback),
              KPC(session),
              K(exec_ctx.get_errcode()));
   }

@@ -3656,11 +3656,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
             OX (for_update ? cursor->set_for_update() : (void)NULL);
             OX (for_update ? cursor->set_trans_id(session_info->get_tx_id()) : (void)NULL);
             OX (has_hidden_rowid ? cursor->set_hidden_rowid() : (void)NULL);
-            if (OB_SUCC(ret)) {
-              transaction::ObTxReadSnapshot &snapshot =
-                  spi_result->get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
-              OZ (cursor->set_and_register_snapshot(snapshot));
-            }
+            OZ (setup_cursor_snapshot_verify_(cursor, spi_result));
             if (OB_FAIL(ret) && OB_NOT_NULL(spi_result)) {
               int tmp_ret = ret;
               ret = OB_SUCCESS;
@@ -3827,9 +3823,7 @@ int ObSPIService::spi_cursor_open(ObPLExecCtx *ctx,
 
               CK (OB_NOT_NULL(spi_result.get_result_set()));
               if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-                transaction::ObTxReadSnapshot &snapshot =
-                  spi_result.get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
-                OZ (cursor->set_and_register_snapshot(snapshot));
+                OZ (setup_cursor_snapshot_verify_(cursor, &spi_result));
               }
               LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql), K(type), K(enable_sql_audit));
               //监控项统计结束
@@ -4041,11 +4035,7 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         // no OX
         spi_result->end_cursor_stmt(ctx, ret);
       }
-      if (OB_SUCC(ret)) {
-        transaction::ObTxReadSnapshot &snapshot =
-            spi_result->get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
-        OZ (cursor.set_and_register_snapshot(snapshot));
-      }
+      OZ (setup_cursor_snapshot_verify_(&cursor, spi_result));
       LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql_str), K(enable_sql_audit));
       //监控项统计结束
       time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
@@ -4153,11 +4143,6 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
             }
           }
           OX (spi_cursor->row_store_.finish_add_row());
-          if (OB_SUCC(ret) && lib::is_oracle_mode()) {
-            transaction::ObTxReadSnapshot &snapshot =
-              spi_result.get_result_set()->get_exec_context().get_das_ctx().get_snapshot();
-            OZ (cursor.set_and_register_snapshot(snapshot));
-          }
           LOG_DEBUG("start process record", K(ret), K(ps_sql), K(sql_str), K(enable_sql_audit));
           //监控项统计结束
           time_record.set_exec_end_timestamp(ObTimeUtility::current_time());
@@ -4216,6 +4201,9 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
         if (hidden_rowid) {
           OX (cursor.set_hidden_rowid());
         }
+        if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+          OZ (setup_cursor_snapshot_verify_(&cursor, &spi_result));
+        }
       }
       spi_result.end_nested_stmt_if_need(ctx, ret);
     }
@@ -4256,40 +4244,34 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(cursor));
 
-  if (OB_FAIL(ret)) {
-  } else if (cursor->is_need_check_snapshot()) { /* case: select * from dual, snapshot do not initilize, so it's invalid */
-    /* 流式场景:
-        非for update skip lock:isvalid=false，或者commited=true，则报错
-        for update skip lock检查逻辑和for update一致
-       非流式场景：
-        forupdate：isvalid=false，或者commited=true，则报错，否则继续检查事务状态
-        非forupdate，直接看isvalid是否为true */
-    if (lib::is_oracle_mode()) {
-      if (cursor->is_for_update()) {
-        if (!cursor->get_snapshot().is_valid() || cursor->get_snapshot().is_committed()) {
-          ret = OB_ERR_FETCH_OUT_SEQUENCE;
-          LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
-        } else {
-          transaction::ObTransID tx_id = cursor->get_trans_id();
-          transaction::ObTransService* txs = MTL(transaction::ObTransService*);
-          bool tx_active = false;
-          CK (OB_NOT_NULL(txs));
-          CK (tx_id.is_valid());
-          OZ (txs->is_tx_active(tx_id, tx_active), tx_id);
-          if (OB_SUCC(ret) && !tx_active) {
-            ret = OB_ERR_FETCH_OUT_SEQUENCE;
-            LOG_WARN("cursor has been closed because of txn was terminated",
-                    K(ret), K(tx_id), K(cursor->get_snapshot()));
-          }
-        }
-      } else if (cursor->is_streaming()) {
-        if (!cursor->get_snapshot().is_valid() || cursor->get_snapshot().is_committed()) {
-          ret = OB_ERR_FETCH_OUT_SEQUENCE;
-          LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
-        }
-      } else if (!cursor->get_snapshot().is_valid()) {
+  // check cursor is valid for fetch
+  if (OB_SUCC(ret)
+      // not fetched or has fetched rows
+      && (!cursor->get_fetched() || cursor->get_fetched_with_row())
+      && cursor->is_need_check_snapshot()
+      && lib::is_oracle_mode()) {
+    /* case: select * from dual, snapshot do not initilize, so it's invalid */
+    /*
+      a) if snapshot has been invalidated, can not fetch
+      b) for update cursor:
+      can't fetch if transaction committed, because can not cross transaction boundary
+      c) streaming cursor:
+      can't fetch if transaction committed, because snapshot data has been removed
+    */
+    if (!cursor->get_snapshot().is_valid()) {
+      ret = OB_ERR_FETCH_OUT_SEQUENCE;
+      LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
+    } else if (cursor->is_for_update()) {
+      if (cursor->get_snapshot().is_committed()) {
         ret = OB_ERR_FETCH_OUT_SEQUENCE;
-        LOG_WARN("snapshot is invalid", K(cursor->get_snapshot()), K(ret));
+        LOG_WARN("transaction has been committed, for update cursor can not fetch",
+                 K(cursor->get_snapshot()), K(ret));
+      }
+    } else if (cursor->is_streaming()) {
+      if(cursor->get_snapshot().is_committed()) {
+        ret = OB_ERR_FETCH_OUT_SEQUENCE;
+        LOG_WARN("transaction has been committed, streaming cursor can not fetch",
+                 K(cursor->get_snapshot()), K(ret));
       }
     }
   }
@@ -8959,6 +8941,55 @@ int ObSPIService::spi_after_execute_dblink(ObSQLSessionInfo *session,
 }
 
 #endif
+
+int ObSPIService::setup_cursor_snapshot_verify_(ObPLCursorInfo *cursor, ObSPIResultSet *spi_result)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext &exec_ctx = spi_result->get_result_set()->get_exec_context();
+  transaction::ObTxReadSnapshot &snapshot = exec_ctx.get_das_ctx().get_snapshot();
+  transaction::ObTxDesc *tx = exec_ctx.get_my_session()->get_tx_desc();
+  bool need_register_snapshot = false;
+  if (!snapshot.is_valid()) {
+    need_register_snapshot = false;
+  } else if (cursor->is_for_update()) {
+    if (!tx || !tx->get_tx_id().is_valid() || !snapshot.tx_id().is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("for update cursor opened but not trans id invalid", K(ret), KPC(tx), K(snapshot));
+    }
+    need_register_snapshot = true;
+  } else if (cursor->is_streaming() && tx && tx->is_in_tx()) {
+    const int64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid() && tenant_config->_enable_enhanced_cursor_validation) {
+      need_register_snapshot = false;
+      LOG_TRACE("enable cursor open check read uncommitted");
+      const DependenyTableStore &tables = spi_result->get_result_set()->get_physical_plan()->get_dependency_table();
+      ARRAY_FOREACH(tables, i) {
+        if (tables.at(i).is_base_table()) {
+          if (tx->has_modify_table((uint64_t)tables.at(i).get_object_id())) {
+            LOG_TRACE("streaming cursor read uncommitted, need register snapshot",
+                      K(tables.at(i).get_object_id()));
+            need_register_snapshot = true;
+            break;
+          }
+        }
+      }
+    } else {
+      need_register_snapshot = true;
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (need_register_snapshot) {
+    OZ (cursor->set_and_register_snapshot(snapshot));
+  } else {
+    LOG_TRACE("convert to out of transaction snapshot", K(snapshot));
+    snapshot.convert_to_out_tx();
+    cursor->set_snapshot(snapshot);
+  }
+  LOG_TRACE("cursor setup snapshot", K(cursor->is_for_update()), K(cursor->is_streaming()),
+            K(snapshot), KPC(cursor), K(need_register_snapshot));
+  return ret;
+}
 
 }
 }

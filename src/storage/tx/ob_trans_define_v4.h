@@ -241,6 +241,11 @@ struct ObTxSnapshot
   void reset();
   ObTxSnapshot &operator=(const ObTxSnapshot &r);
   bool is_valid() const { return version_.is_valid(); }
+  const share::SCN &version() const { return version_; }
+  const ObTransID &tx_id() const { return tx_id_; }
+  void set_tx_id(const ObTransID &tx_id) { tx_id_ = tx_id; }
+  const ObTxSEQ &tx_seq() const { return scn_; }
+  bool is_elr() const { return elr_; }
   OB_UNIS_VERSION(1);
 };
 
@@ -271,6 +276,11 @@ struct ObTxReadSnapshot
   void specify_snapshot_scn(const share::SCN snapshot);
   void wait_consistency();
   ObString get_source_name() const;
+  const ObTxSnapshot &snapshot() const { return core_; }
+  const share::SCN &version() const { return core_.version(); }
+  const ObTransID &tx_id() const { return core_.tx_id(); }
+  void set_tx_id(const ObTransID &tx_id) { core_.set_tx_id(tx_id); }
+  const ObTxSEQ &tx_seq() const { return core_.tx_seq(); }
   bool is_weak_read() const { return SRC::WEAK_READ_SERVICE == source_; };
   bool is_none_read() const { return SRC::NONE == source_; }
   bool is_special() const { return SRC::SPECIAL == source_; }
@@ -280,6 +290,8 @@ struct ObTxReadSnapshot
   int format_source_for_display(char *buf, const int64_t buf_len) const;
   void reset();
   int assign(const ObTxReadSnapshot &);
+  void convert_to_out_tx();
+
   ObTxReadSnapshot();
   ~ObTxReadSnapshot();
   TO_STRING_KV(KP(this),
@@ -509,7 +521,8 @@ protected:
   /* internal abort cause */
   int16_t abort_cause_;              // Tx Aborted cause
   bool can_elr_;                     // can early lock release
-
+private:
+  ObSEArray<uint64_t, 1> modified_tables_; // used in cursor test read uncommitted
 private:
   // FOLLOWING are runtime auxiliary fields
   mutable ObSpinLock lock_;
@@ -610,6 +623,7 @@ public:
                K_(abort_cause),
                K_(commit_expire_ts),
                K(commit_task_.is_registered()),
+               K_(modified_tables),
                K_(ref));
 
   int fetch_conflict_txs(ObIArray<ObTransIDAndAddr> &array);
@@ -743,6 +757,8 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   ObTxSEQ get_and_inc_tx_seq(int16_t branch, int N) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
+  int add_modified_tables(const ObIArray<uint64_t> &tables);
+  bool has_modify_table(const uint64_t table_id) const;
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;

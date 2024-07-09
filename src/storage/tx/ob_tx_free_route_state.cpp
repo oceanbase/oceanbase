@@ -131,7 +131,8 @@ TXN_FREE_ROUTE_MEMBERS(dynamic, PRE_ENCODE_DYNAMIC_FOR_VERIFY, PRE_DYNAMIC_DECOD
                        can_elr_,
                        flags_.for_serialize_v_);
 TXN_FREE_ROUTE_MEMBERS(parts,,,,
-                       parts_);
+                       parts_,
+                       modified_tables_);
 // the fields 'dup with static' are required when preceding of txn is of query like
 // savepoint or read only stmt with isolation of SERIALIZABLE / REPEATABLE READ
 // because such type of query caused the txn into 'start' in perspective of proxy
