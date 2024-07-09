@@ -378,6 +378,7 @@ GLOBAL_ERRSIM_POINT_DEF(615, EN_PX_MAX_IN_FILTER_QR_COUNT, "Switch: control the 
 GLOBAL_ERRSIM_POINT_DEF(616, EN_PX_DISABLE_WHITE_RUNTIME_FILTER, "Switch: used to disable runtime filter pushdown as white filter.");
 GLOBAL_ERRSIM_POINT_DEF(617, EN_PX_DISABLE_PD_TOPN_FILTER, "Switch: used to disable runtime topn filter pushdown.");
 GLOBAL_ERRSIM_POINT_DEF(618, EN_PX_PD_TOPN_FILTER_IGNORE_TABLE_CARD, "Switch: allocate topn filter expr even if less table card");
+GLOBAL_ERRSIM_POINT_DEF(619, EN_PX_SQC_HANDLER_INIT_FAILED, "Inject error: let sqc handler init failed");
 // please add new trace point after 700 or before 600
 
 // Compaction Related 700-750
