@@ -818,7 +818,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   void set_explicit() { flags_.EXPLICIT_ = true; }
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }
   void mark_part_abort(const ObTransID tx_id, const int abort_cause);
-  ObTxSEQ get_and_inc_tx_seq(int16_t branch, int N) const;
+  int get_and_inc_tx_seq(const int16_t branch, const int N, ObTxSEQ &tx_seq) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
   ObTxSEQ get_min_tx_seq() const;
@@ -1069,14 +1069,20 @@ inline ObTxSEQ ObTxDesc::get_min_tx_seq() const
   }
 }
 
-inline ObTxSEQ ObTxDesc::get_and_inc_tx_seq(int16_t branch, int N) const
+inline int ObTxDesc::get_and_inc_tx_seq(const int16_t branch,
+                                        const int N,
+                                        ObTxSEQ &tx_seq) const
 {
-  int64_t seq = ObSequence::get_and_inc_max_seq_no(N);
-  if (OB_LIKELY(support_branch())) {
-    return ObTxSEQ(seq - seq_base_, branch);
+  int ret = OB_SUCCESS;
+  int64_t seq = 0;
+  if (OB_FAIL(ObSequence::get_and_inc_max_seq_no(N, seq))) {
+    TRANS_LOG(ERROR, "inc max seq no failed", K(ret), K(N));
+  } else if (OB_LIKELY(support_branch())) {
+    tx_seq = ObTxSEQ(seq - seq_base_, branch);
   } else {
-    return ObTxSEQ::mk_v0(seq);
+    tx_seq = ObTxSEQ::mk_v0(seq);
   }
+  return ret;
 }
 
 inline ObTxSEQ ObTxDesc::inc_and_get_tx_seq(int16_t branch) const

@@ -302,10 +302,15 @@ int ObLobAccessParam::init_seq_no(const uint64_t modified_len)
   }
 
   if (OB_SUCC(ret)) {
-    seq_no_st_ = this->tx_desc_->get_and_inc_tx_seq(this->parent_seq_no_.get_branch(), need_seq_cnt);
-    used_seq_cnt_ = 0;
-    total_seq_cnt_ = need_seq_cnt;
-    LOG_DEBUG("init lob seq no success", K_(op_type), K(modified_len), K_(update_len),  K(store_chunk_size), K_(schema_chunk_size), K_(seq_no_st), K_(total_seq_cnt));
+    if (OB_FAIL(this->tx_desc_->get_and_inc_tx_seq(this->parent_seq_no_.get_branch(),
+                                                   need_seq_cnt,
+                                                   seq_no_st_))) {
+      LOG_WARN("get and inc tx seq failed", K(ret), K(need_seq_cnt));
+    } else {
+      used_seq_cnt_ = 0;
+      total_seq_cnt_ = need_seq_cnt;
+      LOG_DEBUG("init lob seq no success", K_(op_type), K(modified_len), K_(update_len),  K(store_chunk_size), K_(schema_chunk_size), K_(seq_no_st), K_(total_seq_cnt));
+    }
   }
 
   return ret;

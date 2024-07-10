@@ -910,11 +910,14 @@ int ObLobDiffUpdateHandler::execute(ObLobLocatorV2& delta_locator, ObLobDiffHead
     LOG_WARN("chunk size not match", K(ret), K(iter.get_chunk_size()), K(store_chunk_size_), KPC(param_.lob_common_), K(param_));
   } else {
     int64_t seq_cnt = iter.get_modified_chunk_cnt();
-    param_.seq_no_st_ = param_.tx_desc_->get_and_inc_tx_seq(param_.parent_seq_no_.get_branch(), seq_cnt);
     param_.used_seq_cnt_ = 0;
     param_.total_seq_cnt_ = seq_cnt;
     param_.op_type_ = ObLobDataOutRowCtx::OpType::DIFF;
-    if (OB_FAIL(param_.init_out_row_ctx(0))) {
+    if (OB_FAIL(param_.tx_desc_->get_and_inc_tx_seq(param_.parent_seq_no_.get_branch(),
+                                                    seq_cnt,
+                                                    param_.seq_no_st_))) {
+      LOG_WARN("get and inc tx seq failed", K(ret), K(seq_cnt));
+    } else if (OB_FAIL(param_.init_out_row_ctx(0))) {
       LOG_WARN("init lob data out row ctx failed", K(ret));
     }
 
