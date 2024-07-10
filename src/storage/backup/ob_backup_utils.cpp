@@ -1102,7 +1102,7 @@ int ObBackupTabletHolder::init(const uint64_t tenant_id, const share::ObLSID &ls
   return ret;
 }
 
-int ObBackupTabletHolder::alloc_tablet_ref(ObBackupTabletHandleRef *&tablet_handle)
+int ObBackupTabletHolder::alloc_tablet_ref(const uint64_t tenant_id, ObBackupTabletHandleRef *&tablet_handle)
 {
   int ret = OB_SUCCESS;
   tablet_handle = NULL;
@@ -1110,11 +1110,16 @@ int ObBackupTabletHolder::alloc_tablet_ref(ObBackupTabletHandleRef *&tablet_hand
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet holder not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id));
   } else if (OB_ISNULL(buf = fifo_allocator_.alloc(sizeof(ObBackupTabletHandleRef)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
   } else {
+    ObMemAttr attr(tenant_id, "BackupTbtHldr");
     tablet_handle = new (buf) ObBackupTabletHandleRef;
+    tablet_handle->allocator_.set_attr(attr);
   }
   return ret;
 }
@@ -2006,8 +2011,8 @@ int ObBackupTabletProvider::inner_get_tablet_handle_without_memtables_(const uin
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
-  } else if (OB_FAIL(ls_backup_ctx_->tablet_holder_.alloc_tablet_ref(tablet_ref))) {
-    LOG_WARN("failed to alloc tablet ref", K(ret));
+  } else if (OB_FAIL(ls_backup_ctx_->tablet_holder_.alloc_tablet_ref(tenant_id, tablet_ref))) {
+    LOG_WARN("failed to alloc tablet ref", K(ret), K(tenant_id));
   } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
