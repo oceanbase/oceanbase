@@ -89,11 +89,15 @@ typename ObWkbConstIterator<T, O>::self ObWkbConstIterator<T, O>::operator--(int
 template<typename T, typename O>
 const typename ObWkbConstIterator<T, O>::self& ObWkbConstIterator<T, O>::operator=(const self& iter)
 {
+  int ret = OB_SUCCESS;
   idx_ = iter.idx_;
   owner_ = iter.owner_;
   diff_info_ = iter.diff_info_;
-  // TODO: do vector copy?
-  offsets_ = iter.offsets_;
+  // if fail to allocate memory, return the original iterator.
+  // offsets_ is used for cache iter, won't affect correctness.
+  if (OB_FAIL(offsets_.assign(iter.offsets_))) {
+    COMMON_LOG(WARN, "fail to allocate memory",  K(ret), K(iter.offsets_.count()));
+  }
   return iter;
 }
 
