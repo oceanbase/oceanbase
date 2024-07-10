@@ -529,7 +529,7 @@ public:
   bool need_column_store() const { return need_column_store_; }
   ObTabletSliceStore *get_slice_store() const { return slice_store_; }
   void cancel() { ATOMIC_SET(&is_canceled_, true); }
-  int64_t get_next_block_start_seq() const { return nullptr == slice_store_ ? 0 /*slice empty*/ : slice_store_->get_next_block_start_seq(); }
+  int64_t get_next_block_start_seq() const { return nullptr == slice_store_ ? start_seq_.get_data_seq() /*slice empty*/ : slice_store_->get_next_block_start_seq(); }
   TO_STRING_KV(K(is_inited_), K(need_column_store_), K(is_canceled_), K(start_seq_), KPC(slice_store_), K(row_offset_));
 private:
   int fill_lob_into_memtable( // for version < 4.3.0.0

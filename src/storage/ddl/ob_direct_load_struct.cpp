@@ -298,15 +298,23 @@ int ObDDLInsertRowIterator::switch_to_new_lob_slice()
     direct_load_mgr_handle.get_obj()->get_lob_meta_tablet_id())) {
     // fetch cache via lob meta tablet id.
   } else if (OB_FALSE_IT(lob_id_cache_.cache_size_ = CACHE_SIZE_REQUESTED)) {
-  } else if (lob_slice_id_ > 0
-      && OB_FAIL(tenant_direct_load_mgr->close_sstable_slice(slice_info, nullptr/*insert_monitor*/, macro_seq_))) {
-    LOG_WARN("close old lob slice failed", K(ret), K(slice_info));
   } else if (OB_FAIL(auto_inc.get_tablet_cache_interval(MTL_ID(), lob_id_cache_))) {
     LOG_WARN("get_autoinc_seq fail", K(ret), K(MTL_ID()), K(slice_info));
   } else if (OB_UNLIKELY(CACHE_SIZE_REQUESTED > lob_id_cache_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected autoincrement value count", K(ret), K(lob_id_cache_));
-  } else {
+  } else if (lob_slice_id_ > 0) {
+    blocksstable::ObMacroDataSeq next_block_start_seq;
+    if (OB_FAIL(tenant_direct_load_mgr->close_sstable_slice(slice_info, nullptr/*insert_monitor*/, next_block_start_seq))) {
+      LOG_WARN("close old lob slice failed", K(ret), K(slice_info));
+    } else if (OB_UNLIKELY(next_block_start_seq.get_data_seq() < macro_seq_.get_data_seq())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected start sequence", K(ret), K(next_block_start_seq), K(macro_seq_));
+    } else {
+      macro_seq_ = next_block_start_seq;
+    }
+  }
+  if (OB_SUCC(ret)) {
     // new slice info to open.
     slice_info.slice_id_ = 0;
     if (OB_FAIL(tenant_direct_load_mgr->open_sstable_slice(macro_seq_, slice_info))) {
