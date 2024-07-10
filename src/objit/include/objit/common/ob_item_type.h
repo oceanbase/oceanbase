@@ -2543,6 +2543,8 @@ typedef enum ObItemType
   // select into outfile
   T_BUFFER_SIZE,
   T_PARTITION_EXPR,
+  T_CACHE_INDEX,
+  T_LOAD_INDEX_INTO_CACHE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
