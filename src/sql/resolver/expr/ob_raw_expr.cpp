@@ -3592,6 +3592,18 @@ ObRawExpr *&ObAggFunRawExpr::get_param_expr(int64_t index)
   }
 }
 
+int ObAggFunRawExpr::get_param_exprs(common::ObIArray<ObRawExpr*> &param_exprs)
+{
+  int ret = OB_SUCCESS;
+  int64_t param_count = get_param_count();
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_count; ++i) {
+    if (OB_FAIL(param_exprs.push_back(get_param_expr(i)))) {
+      LOG_WARN("fail to push back param expr", K(ret));
+    }
+  }
+  return ret;
+}
+
 
 int ObAggFunRawExpr::do_visit(ObRawExprVisitor &visitor)
 {

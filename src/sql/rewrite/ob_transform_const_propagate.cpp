@@ -1375,8 +1375,12 @@ int ObTransformConstPropagate::check_need_cast_when_replace(ObRawExpr *expr,
     need_cast = true;
   } else if (parent_expr->is_win_func_expr()) {
     ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(parent_expr);
-    if (OB_NOT_NULL(win_expr->get_agg_expr()) &&
-        ObOptimizerUtil::find_item(win_expr->get_agg_expr()->get_real_param_exprs(), expr)) {
+    ObAggFunRawExpr *agg_expr = win_expr->get_agg_expr();
+    ObSEArray<ObRawExpr*,4> agg_params;
+    if (OB_NOT_NULL(agg_expr) && OB_FAIL(agg_expr->get_param_exprs(agg_params))) {
+      // Type deduction of some aggr funcs relies on not only real params, e.g. MEDIAN, GROUP_PERCENTILE_CONT
+      LOG_WARN("failed to get agg params", K(ret));
+    } else if (OB_NOT_NULL(agg_expr) && ObOptimizerUtil::find_item(agg_params, expr)) {
       need_cast = true;
     } else if (ObOptimizerUtil::find_item(win_expr->get_func_params(), expr)) {
       need_cast = true;

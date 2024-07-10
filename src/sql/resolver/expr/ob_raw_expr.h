@@ -3357,6 +3357,7 @@ public:
   virtual ObRawExpr *&get_param_expr(int64_t index);
   inline int64_t get_real_param_count() const { return real_param_exprs_.count(); }
   inline const common::ObIArray<ObRawExpr*> &get_real_param_exprs() const { return real_param_exprs_; }
+  int get_param_exprs(common::ObIArray<ObRawExpr*> &param_exprs);
   inline common::ObIArray<ObRawExpr*> &get_real_param_exprs_for_update() { return real_param_exprs_; }
   virtual int do_visit(ObRawExprVisitor &visitor) override;
   inline ObRawExpr *get_separator_param_expr() const { return separator_param_expr_; }
