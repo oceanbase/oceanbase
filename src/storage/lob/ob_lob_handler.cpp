@@ -251,11 +251,11 @@ int ObLobFullInsertHandler::do_insert(ObLobMetaWriteIter &iter)
 int ObLobFullInsertHandler::execute(ObString &data)
 {
   int ret = OB_SUCCESS;
-  ObLobMetaWriteIter iter(param_.allocator_, store_chunk_size_);
+  ObLobMetaWriteIter iter(param_.get_tmp_allocator(), store_chunk_size_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("handler not init", K(ret));
-  } else if (OB_ISNULL(param_.allocator_)) {
+  } else if (OB_ISNULL(param_.get_tmp_allocator())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param allocator is null", K(ret), K(param_));
   } else if (OB_FAIL(param_.init_out_row_ctx(data.length()))) {
@@ -277,7 +277,7 @@ int ObLobFullInsertHandler::execute(ObLobQueryIter *iter, int64_t append_lob_len
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("handler not init", K(ret));
-  } else if (OB_ISNULL(param_.allocator_)) {
+  } else if (OB_ISNULL(param_.get_tmp_allocator())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param tmp allocator is null", K(ret), K(param_));
   } else if (OB_FAIL(param_.init_out_row_ctx(append_lob_len))) {
@@ -288,7 +288,7 @@ int ObLobFullInsertHandler::execute(ObLobQueryIter *iter, int64_t append_lob_len
   //   ret = OB_INVALID_ARGUMENT;
   //   LOG_WARN("invlaid", K(ret), K(param_));
   } else {
-    ObLobMetaWriteIter write_iter(param_.allocator_, store_chunk_size_);
+    ObLobMetaWriteIter write_iter(param_.get_tmp_allocator(), store_chunk_size_);
     ObString remain_buf;
     ObString seq_id_st;
     ObString seq_id_ed;
@@ -319,7 +319,7 @@ int ObLobAppendHandler::execute(ObString &data, bool ori_is_inrow)
 {
   int ret = OB_SUCCESS;
   ObLobPersistInsertIter insert_iter;
-  ObLobMetaWriteIter iter(param_.allocator_, store_chunk_size_);
+  ObLobMetaWriteIter iter(param_.get_tmp_allocator(), store_chunk_size_);
   bool need_get_last_info = ! (ori_is_inrow || param_.byte_size_ == 0);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -350,7 +350,7 @@ int ObLobAppendHandler::execute(
   } else if(OB_FAIL(prepare_data_buffer(param_, read_buffer, store_chunk_size_))) {
     LOG_WARN("fail to prepare reaed buffer", K(ret), K(param_));
   } else {
-    ObLobMetaWriteIter write_iter(param_.allocator_, store_chunk_size_);
+    ObLobMetaWriteIter write_iter(param_.get_tmp_allocator(), store_chunk_size_);
     ObString remain_buf;
     ObString seq_id_st;
     ObString seq_id_ed;
