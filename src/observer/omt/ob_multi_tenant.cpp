@@ -140,6 +140,7 @@
 #include "observer/table/ob_table_session_pool.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "observer/mysql/ob_query_response_time.h" //ObTenantQueryRespTimeCollector
+#include "observer/table/ob_table_query_sync_processor.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -536,6 +537,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, ObTenantSrs::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, table::ObTableApiSessPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND(observer::ObTenantQueryRespTimeCollector::mtl_init, observer::ObTenantQueryRespTimeCollector::mtl_destroy);
+    MTL_BIND2(mtl_new_default, observer::ObTableQueryASyncMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
   }
 
   if (OB_SUCC(ret)) {

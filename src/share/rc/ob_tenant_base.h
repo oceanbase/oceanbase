@@ -168,6 +168,7 @@ namespace observer
   class QueueThread;
   class ObTableLoadService;
   class ObTenantQueryRespTimeCollector;
+  class ObTableQueryASyncMgr;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -319,7 +320,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObHTableLockMgr*,                      \
       table::ObTTLService*,                         \
       table::ObTableApiSessPoolMgr*,                \
-      observer::ObTenantQueryRespTimeCollector*     \
+      observer::ObTenantQueryRespTimeCollector*,    \
+      observer::ObTableQueryASyncMgr*              \
   )
 
 
