@@ -22816,6 +22816,24 @@ int ObDDLService::create_system_table_(
   return ret;
 }
 
+int ObDDLService::check_add_system_table_column_(const ObColumnSchemaV2 &column, bool &can_add)
+{
+  int ret = OB_SUCCESS;
+  can_add = false;
+  // the newly added column of system table should satisfy one of the following requirements
+  // 1. the column is nullable
+  // 2. the column is not nullable and the default value is not null
+  if (!column.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column is invalid", KR(ret), K(column));
+  } else if (column.is_nullable()) {
+    can_add = true;
+  } else if (!column.is_nullable() && !column.get_cur_default_value().is_null()) {
+    can_add = true;
+  }
+  return ret;
+}
+
 int ObDDLService::alter_system_table_column_(
     ObSchemaGetterGuard &schema_guard,
     const ObTableSchema &hard_code_schema)
@@ -22852,9 +22870,19 @@ int ObDDLService::alter_system_table_column_(
       const ObColumnSchemaV2 *hard_code_column = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < add_column_ids.count(); i++) {
         const uint64_t column_id = add_column_ids.at(i);
+        bool can_add = false;
         if (OB_ISNULL(hard_code_column = hard_code_schema.get_column_schema(column_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get column schema", KR(ret), K(tenant_id), K(table_id), K(column_id));
+        } else if (OB_FAIL(check_add_system_table_column_(*hard_code_column, can_add))) {
+          LOG_WARN("fail check add system table column", KR(ret), K(tenant_id), K(table_id), K(column_id));
+        } else if (!can_add) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("the column of system table is not allowed to add", KR(ret),
+              "table_name", hard_code_schema.get_table_name(),
+              "column_name", hard_code_column->get_column_name(),
+              KPC(hard_code_column));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Adding column not satisfied with requirements to inner table is");
         } else if (OB_FAIL(new_table_schema.add_column(*hard_code_column))) {
           LOG_WARN("fail to add column", KR(ret), KPC(hard_code_column));
         }
