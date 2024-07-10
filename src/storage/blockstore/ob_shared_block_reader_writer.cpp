@@ -543,6 +543,7 @@ int ObSharedBlockLinkIter::read_next_block(ObSharedBlockReadHandle &block_handle
   ObSharedBlockReadInfo read_info;
   read_info.addr_ = cur_;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
   if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, block_handle))) {
     LOG_WARN("Fail to read block", K(ret), K(read_info));
   } else if (OB_FAIL(block_handle.wait())) {
@@ -810,6 +811,7 @@ int ObSharedBlockReaderWriter::switch_block(ObMacroBlockHandle &macro_handle)
     macro_info.offset_ = align_offset_;
     macro_info.size_ = upper_align(offset_ - align_offset_, write_align_size_);
     macro_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
+    macro_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
     // io_callback
     // do not use macro_handle_ to write, since it will be reset if failed
     macro_handle = macro_handle_;
@@ -901,6 +903,7 @@ int ObSharedBlockReaderWriter::inner_write_block(
       macro_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
       macro_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
       macro_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
+      macro_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
       // io_callback
       if (OB_FAIL(addr.set_block_addr(macro_handle_.get_macro_id(),
                                       offset_,

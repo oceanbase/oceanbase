@@ -607,6 +607,7 @@ int ObTenantCheckpointSlogHandler::read_from_share_blk(
   ObSharedBlockReadHandle read_handle(allocator);
   ObSharedBlockReadInfo read_info;
   read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+  read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
   read_info.addr_ = addr;
   if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, read_handle))) {
     LOG_WARN("fail to read tablet from macro block", K(ret), K(read_info));
