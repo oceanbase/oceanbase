@@ -334,7 +334,8 @@ int ObSnapshotTableProxy::batch_remove_snapshots(
         }
       }
       if (FAILEDx(sql.append_fmt(
-          "DELETE /*+ use_plan_cache(none) */ FROM %s WHERE tenant_id = %lu AND snapshot_type = %i AND tablet_id IN (%.*s)",
+          "DELETE /*+ use_plan_cache(none) index(%s idx_snapshot_tablet) */ FROM %s WHERE tenant_id = %lu AND snapshot_type = %i AND tablet_id IN (%.*s)",
+          OB_ALL_ACQUIRED_SNAPSHOT_TNAME,
           OB_ALL_ACQUIRED_SNAPSHOT_TNAME,
           ext_tenant_id, snapshot_type, tablet_list.string().length(), tablet_list.string().ptr()))) {
         LOG_WARN("fail to assign sql", KR(ret), K(sql));
