@@ -102,6 +102,16 @@ class ObTenantFreezer
 {
 friend ObTenantTxDataFreezeGuard;
 friend class ObFreezer;
+struct PeriodicalUpdateValueCache {
+  PeriodicalUpdateValueCache() : value_(false), update_ts_(0) {}
+  void reset()
+  {
+    value_ = false;
+    update_ts_ = 0;
+  }
+  bool value_;
+  int64_t update_ts_;
+};
 
 public:
   const static int64_t TIME_WHEEL_PRECISION = 100_ms;
@@ -218,6 +228,8 @@ public:
   }
   static int64_t get_freeze_trigger_interval() { return FREEZE_TRIGGER_INTERVAL; }
   bool exist_ls_freezing();
+  bool exist_ls_throttle_is_skipping();
+  bool memstore_remain_memory_is_exhausting();
 
   // freezer stat collector and generator
   void add_merge_event(const compaction::ObMergeType type, const int64_t cost)
@@ -305,13 +317,13 @@ private:
   common::ObOccamTimerTaskRAIIHandle timer_handle_;
   common::ObOccamThreadPool freeze_thread_pool_;
   ObSpinLock freeze_thread_pool_lock_;
-  bool exist_ls_freezing_;
-  int64_t last_update_ts_;
 
   // diagnose only, we capture the freeze stats every 30 minutes
   ObTenantFreezerStat freezer_stat_;
   // diagnose only, we capture the freeze history in one monthes
   ObTenantFreezerStatHistory freezer_history_;
+  PeriodicalUpdateValueCache throttle_is_skipping_cache_;
+  PeriodicalUpdateValueCache memstore_remain_memory_is_exhausting_cache_;
 };
 
 class ObTenantTxDataFreezeGuard

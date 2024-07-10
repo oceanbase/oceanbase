@@ -1329,12 +1329,16 @@ int ObLSTxCtxMgr::traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id, const ui
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
   ObTxSubmitLogFunctor fn(ObTxSubmitLogFunctor::SUBMIT_REDO_LOG, freeze_clock);
-  if (!is_follower_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+  if (is_follower_()) {
+    // quit submit log because this is a follower
+  } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
     if (OB_SUCCESS != fn.get_result()) {
       // get real ret code
       ret = fn.get_result();
     }
     TRANS_LOG(WARN, "failed to submit log", K(ret));
+  } else {
+    TRANS_LOG(INFO, "traverse tx to submit redo log finish", K(ret), K(freeze_clock));
   }
 
   fail_tx_id = fn.get_fail_tx_id();

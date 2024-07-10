@@ -37,9 +37,7 @@ OB_SERIALIZE_MEMBER(ObTenantFreezeArg,
                     try_frozen_scn_);
 
 ObTenantFreezeCtx::ObTenantFreezeCtx()
-  : mem_lower_limit_(0),
-    mem_upper_limit_(0),
-    mem_memstore_limit_(0),
+  : mem_memstore_limit_(0),
     memstore_freeze_trigger_(0),
     max_mem_memstore_can_get_now_(0),
     active_memstore_used_(0),
@@ -52,8 +50,6 @@ ObTenantFreezeCtx::ObTenantFreezeCtx()
 
 void ObTenantFreezeCtx::reset()
 {
-  mem_lower_limit_ = 0;
-  mem_upper_limit_ = 0;
   mem_memstore_limit_ = 0;
   memstore_freeze_trigger_ = 0;
   max_mem_memstore_can_get_now_ = 0;
@@ -181,8 +177,6 @@ bool ObTenantInfo::is_memstore_limit_changed(const int64_t curr_memstore_limit_p
 void ObTenantInfo::get_freeze_ctx(ObTenantFreezeCtx &ctx) const
 {
   SpinRLockGuard guard(lock_);
-  ctx.mem_lower_limit_ = mem_lower_limit_;
-  ctx.mem_upper_limit_ = mem_upper_limit_;
   ctx.mem_memstore_limit_ = mem_memstore_limit_;
 }
 

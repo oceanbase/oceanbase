@@ -46,10 +46,10 @@ ObTenantFreezer::ObTenantFreezer()
     rs_mgr_(nullptr),
     freeze_thread_pool_(),
     freeze_thread_pool_lock_(common::ObLatchIds::FREEZE_THREAD_POOL_LOCK),
-    exist_ls_freezing_(false),
-    last_update_ts_(0),
     freezer_stat_(),
-    freezer_history_()
+    freezer_history_(),
+    throttle_is_skipping_cache_(),
+    memstore_remain_memory_is_exhausting_cache_()
 {
   freezer_stat_.reset();
 }
@@ -63,13 +63,14 @@ void ObTenantFreezer::destroy()
 {
   freeze_trigger_timer_.destroy();
   is_freezing_tx_data_ = false;
-  exist_ls_freezing_ = false;
   self_.reset();
   svr_rpc_proxy_ = nullptr;
   common_rpc_proxy_ = nullptr;
   rs_mgr_ = nullptr;
   freezer_stat_.reset();
   freezer_history_.reset();
+  throttle_is_skipping_cache_.reset();
+  memstore_remain_memory_is_exhausting_cache_.reset();
 
   is_inited_ = false;
 }
@@ -160,12 +161,46 @@ void ObTenantFreezer::wait()
 
 bool ObTenantFreezer::exist_ls_freezing()
 {
-  int64_t cur_ts = ObTimeUtility::fast_current_time();
-  int64_t old_ts = last_update_ts_;
+  int ret = OB_SUCCESS;
+  bool exist_ls_freezing = false;
+  common::ObSharedGuard<ObLSIterator> iter;
+  ObLSService *ls_srv = MTL(ObLSService *);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
+  } else if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::TXSTORAGE_MOD))) {
+    LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
+  } else {
+    ObLS *ls = nullptr;
+    while (OB_SUCC(iter->get_next(ls))) {
+      if (ls->get_freezer()->is_ls_freeze_running()) {
+        exist_ls_freezing = true;
+        break;
+      }
+    }
 
-  if ((cur_ts - last_update_ts_ > UPDATE_INTERVAL) &&
-      old_ts == ATOMIC_CAS(&last_update_ts_, old_ts, cur_ts)) {
-    int ret = OB_SUCCESS;
+    if (ret == OB_ITER_END) {
+      ret = OB_SUCCESS;
+    }
+
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[TenantFreezer] iter ls failed", K(ret));
+    }
+  }
+
+  return exist_ls_freezing;
+}
+
+bool ObTenantFreezer::exist_ls_throttle_is_skipping()
+{
+  int ret = OB_SUCCESS;
+  int64_t cur_ts = ObClockGenerator::getClock();
+  int64_t last_update_ts = throttle_is_skipping_cache_.update_ts_;
+
+  if ((cur_ts - last_update_ts > UPDATE_INTERVAL) &&
+      ATOMIC_BCAS(&throttle_is_skipping_cache_.update_ts_, last_update_ts, cur_ts)) {
+    bool exist_ls_throttle_is_skipping = false;
+
     common::ObSharedGuard<ObLSIterator> iter;
     ObLSService *ls_srv = MTL(ObLSService *);
     if (IS_NOT_INIT) {
@@ -175,31 +210,71 @@ bool ObTenantFreezer::exist_ls_freezing()
       LOG_WARN("[TenantFreezer] fail to get log stream iterator", KR(ret));
     } else {
       ObLS *ls = nullptr;
-      int ls_cnt = 0;
-      int exist_ls_freezing = false;
-      for (; OB_SUCC(iter->get_next(ls)); ++ls_cnt) {
-        int tmp_ret = OB_SUCCESS;
-        ObRole role;
-        int64_t proposal_id = 0;
-        if (OB_TMP_FAIL(ls->get_log_handler()->get_role(role, proposal_id))) {
-          LOG_WARN("get ls role failed", KR(tmp_ret), K(ls->get_ls_id()));
-        } else if (common::is_strong_leader(role)) {
-          // skip check leader logstream
-        } else if (ls->get_freezer()->is_freeze()) {
-          exist_ls_freezing = true;
+      while (OB_SUCC(iter->get_next(ls))) {
+        if (ls->get_freezer()->throttle_is_skipping()) {
+          exist_ls_throttle_is_skipping = true;
+          break;
         }
       }
-      exist_ls_freezing_ = exist_ls_freezing;
-
       if (ret == OB_ITER_END) {
         ret = OB_SUCCESS;
-      } else {
-         LOG_WARN("[TenantFreezer] iter ls failed", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+        LOG_WARN("[TenantFreezer] iter ls failed", K(ret));
       }
     }
+
+    // assign need_skip_throttle here because if some error happened, the value can be reset to false
+    throttle_is_skipping_cache_.value_ = exist_ls_throttle_is_skipping;
   }
 
-  return exist_ls_freezing_;
+  return throttle_is_skipping_cache_.value_;
+}
+
+bool ObTenantFreezer::memstore_remain_memory_is_exhausting()
+{
+  int ret = OB_SUCCESS;
+  int64_t cur_ts = ObClockGenerator::getClock();
+  int64_t last_update_ts = memstore_remain_memory_is_exhausting_cache_.update_ts_;
+
+  if ((cur_ts - last_update_ts > UPDATE_INTERVAL) &&
+      ATOMIC_BCAS(&memstore_remain_memory_is_exhausting_cache_.update_ts_, last_update_ts, cur_ts)) {
+    bool remain_mem_exhausting = false;
+    if (false == tenant_info_.is_loaded_) {
+      LOG_INFO("[TenantFreezer] This tenant not exist", KR(ret));
+    } else {
+      const int64_t MEMORY_IS_EXHAUSTING_PERCENTAGE = 10;
+
+      // tenant memory condition
+      const int64_t tenant_memory_limit = get_tenant_memory_limit(MTL_ID());
+      const int64_t tenant_memory_remain = get_tenant_memory_remain(MTL_ID());
+      const bool tenant_memory_exhausting =
+          tenant_memory_remain < (tenant_memory_limit * MEMORY_IS_EXHAUSTING_PERCENTAGE / 100);
+
+      // memstore memory condition
+      const int64_t memstore_limit = tenant_info_.get_memstore_limit();
+      const int64_t memstore_remain = (memstore_limit - get_tenant_memory_hold(MTL_ID(), ObCtxIds::MEMSTORE_CTX_ID));
+      const bool memstore_memory_exhausting = memstore_remain < (memstore_limit * MEMORY_IS_EXHAUSTING_PERCENTAGE / 100);
+
+      remain_mem_exhausting = tenant_memory_exhausting || memstore_memory_exhausting;
+
+      if (remain_mem_exhausting && REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL /* 1 second */)) {
+        STORAGE_LOG(INFO,
+                    "[TenantFreezer] memstore remain memory is exhausting",
+                    K(tenant_memory_limit),
+                    K(tenant_memory_remain),
+                    K(tenant_memory_exhausting),
+                    K(memstore_limit),
+                    K(memstore_remain),
+                    K(memstore_memory_exhausting));
+      }
+    }
+
+    memstore_remain_memory_is_exhausting_cache_.value_ = remain_mem_exhausting;
+  }
+
+  return memstore_remain_memory_is_exhausting_cache_.value_;
 }
 
 int ObTenantFreezer::ls_freeze_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts)
