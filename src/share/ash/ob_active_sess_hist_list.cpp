@@ -92,11 +92,6 @@ int ObActiveSessHistList::resize_ash_size()
           tmp->copy_from_ash_buffer(stat);
         }
       }
-      // set read_pos
-      int64_t slots_num = ash_buffer_->write_pos() - ash_buffer_->read_pos();
-      int64_t read_pos;
-      read_pos = (tmp->write_pos() < slots_num) ? 0 : (tmp->write_pos() - slots_num);
-      tmp->set_read_pos(read_pos);
       // swap old with new (with mutex protection)
       LOG_INFO("successfully resize ash buffer", K(ash_size), "prev_ash_buffer", ash_buffer_.get_ptr(), "prev_size", ash_size_);
       ash_buffer_ = tmp;
