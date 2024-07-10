@@ -93,3 +93,7 @@
       - 4.2.4.0
 
 - version: 4.2.4.0
+  can_be_upgraded_to:
+      - 4.2.5.0
+
+- version: 4.2.5.0
