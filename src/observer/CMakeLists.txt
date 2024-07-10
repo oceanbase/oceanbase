@@ -166,6 +166,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_connection_mgr.cpp
   table/ob_table_ls_execute_processor.cpp
   table/ob_table_query_and_mutate_helper.cpp
+  table/ob_table_mode_control.cpp
 )
 
 ob_set_subtarget(ob_server table_load

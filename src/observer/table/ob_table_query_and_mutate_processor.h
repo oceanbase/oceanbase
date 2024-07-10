@@ -44,6 +44,8 @@ protected:
   virtual table::ObTableAPITransCb *new_callback(rpc::ObRequest *req) override;
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum() override;
+  virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
+  virtual bool is_kv_processor() override { return true; }
 private:
   int32_t get_process_type(bool is_hkv, table::ObTableOperationType::Type type);
 private:

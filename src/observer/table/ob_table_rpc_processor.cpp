@@ -34,12 +34,14 @@
 #include "share/table/ob_table_util.h"
 #include "observer/mysql/obmp_base.h"
 #include "lib/stat/ob_session_stat.h"
+#include "ob_table_mode_control.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
 using namespace oceanbase::table;
 using namespace oceanbase::share;
 using namespace oceanbase::obrpc;
+using namespace oceanbase::sql;
 
 int ObTableLoginP::process()
 {
@@ -298,9 +300,31 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (sess_credetial->cluster_id_ != credential_.cluster_id_) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("invalid credential cluster id", K(ret), K_(credential), K(*sess_credetial));
+  } else if (OB_FAIL(check_mode(guard.get_sess_info()))) {
+    LOG_WARN("fail to check mode", K(ret));
   } else {
     LOG_DEBUG("user can access", K_(credential));
   }
+  return ret;
+}
+
+int ObTableApiProcessorBase::check_mode(const ObSQLSessionInfo &sess_info)
+{
+  int ret = OB_SUCCESS;
+  int64_t sess_mode_val = 0;
+
+  if (!is_kv_processor()) {
+    // do nothing
+  } else if (lib::is_oracle_mode()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBKV running in oracle mode");
+    LOG_WARN("OBKV running in oracle mode is not supported", K(ret));
+  } else if (OB_FAIL(sess_info.get_sys_variable(SYS_VAR_OB_KV_MODE, sess_mode_val))) {
+    LOG_WARN("fail to get ob_kv_mode variable", K(ret));
+  } else if (OB_FAIL(ObTableModeCtrl::check_mode(static_cast<ObKvModeType>(sess_mode_val), get_entity_type()))) {
+    LOG_WARN("fail to check mode", K(ret), K(sess_mode_val), K(get_entity_type()));
+  }
+
   return ret;
 }
 

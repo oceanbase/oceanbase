@@ -40,6 +40,8 @@ protected:
   virtual void audit_on_finish() override;
   virtual uint64_t get_request_checksum();
   int check_has_global_index(bool &exist_global_index);
+  virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
+  virtual bool is_kv_processor() override { return true; }
 
 private:
   int get_ls_id(ObLSID &ls_id);

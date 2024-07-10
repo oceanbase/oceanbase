@@ -3367,5 +3367,25 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "ob_kv_mode": {
+    "id": 10642,
+    "name": "ob_kv_mode",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "enum",
+    "enum_names": [
+      "ALL",
+      "TABLEAPI",
+      "HBASE",
+      "REDIS",
+      "NONE"
+    ],
+    "info": "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode.",
+    "flags": "GLOBAL | READONLY",
+    "publish_version": "421",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }
