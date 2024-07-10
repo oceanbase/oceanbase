@@ -275,6 +275,7 @@ public:
     return common::murmurhash(&slice_id, sizeof(slice_id), 0L);
   }
   void reset_slice_ctx_on_demand();
+  void cleanup_slice_writer(const int64_t context_id);
   TO_STRING_KV(K_(build_param), K_(is_task_end), K_(task_finish_count), K_(task_total_cnt), K_(sorted_slices_idx), K_(commit_scn), KPC(storage_schema_));
   struct AggregatedCGInfo final {
   public:
@@ -288,13 +289,27 @@ public:
     int64_t last_idx_;
   };
 public:
+  struct SliceKey
+  {
+  public:
+    SliceKey() : context_id_(0), slice_id_(0) {}
+    explicit SliceKey(const int64_t context_id, const int64_t slice_id): context_id_(context_id), slice_id_(slice_id) {}
+    ~SliceKey() {}
+    uint64_t hash() const { return murmurhash(&slice_id_, sizeof(slice_id_), 0); }
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS;}
+    bool operator == (const SliceKey &other) const { return context_id_ == other.context_id_ && slice_id_ == other.slice_id_; }
+    TO_STRING_KV(K_(context_id), K_(slice_id));
+  public:
+    int64_t context_id_;
+    int64_t slice_id_;
+  };
   typedef common::hash::ObHashMap<
-    int64_t,
+    SliceKey,
     ObDirectLoadSliceWriter *> SLICE_MGR_MAP;
   common::ObConcurrentFIFOAllocator allocator_;
   common::ObConcurrentFIFOAllocator slice_writer_allocator_;
   ObTabletDirectLoadInsertParam build_param_;
-  SLICE_MGR_MAP slice_mgr_map_; // key is slice_id, decided by upper caller.
+  SLICE_MGR_MAP slice_mgr_map_; // key is <context_id, slice_id>, decided by upper caller.
   blocksstable::ObWholeDataStoreDesc data_block_desc_;
   blocksstable::ObSSTableIndexBuilder *index_builder_;
   common::ObArray<ObOptColumnStat*> column_stat_array_; // online column stat result.
@@ -324,6 +339,7 @@ public:
   virtual int open_sstable_slice(
       const bool is_data_tablet_process_for_lob,
       const blocksstable::ObMacroDataSeq &start_seq,
+      const int64_t context_id,
       const int64_t slice_id);
   virtual int fill_sstable_slice(
       const ObDirectLoadSliceInfo &slice_info,
@@ -498,6 +514,7 @@ public:
       const ObTablet &tablet,
       ObDDLTableMergeDagParam &merge_param);
   int prepare_major_merge_param(ObTabletDDLParam &param);
+  void cleanup_slice_writer(const int64_t context_id);
   INHERIT_TO_STRING_KV("ObTabletDirectLoadMgr", ObTabletDirectLoadMgr, K_(start_scn), K_(commit_scn), K_(execution_id));
 private:
   bool is_started() { return start_scn_.is_valid_and_not_min(); }
