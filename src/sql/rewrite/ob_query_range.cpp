@@ -7807,19 +7807,11 @@ int ObQueryRange::serialize_cur_keypart(const ObKeyPart &cur, char *buf, int64_t
 {
   int ret = OB_SUCCESS;
   bool has_item_next = (cur.item_next_ != NULL);
-  bool is_stack_overflow = false;
-  if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
-    LOG_WARN("failed to do stack overflow check", K(ret));
-  } else if (is_stack_overflow) {
-    ret = OB_SIZE_OVERFLOW;
-    LOG_WARN("stack overflow", K(ret));
-  } else {
-    OB_UNIS_ENCODE(cur);
-    OB_UNIS_ENCODE(has_item_next);
-    if (OB_SUCC(ret) && has_item_next) {
-      if (OB_FAIL(SMART_CALL(serialize_cur_keypart(*cur.item_next_, buf, buf_len, pos)))) {
-        LOG_WARN("serialize cur keypart failed", K(ret));
-      }
+  OB_UNIS_ENCODE(cur);
+  OB_UNIS_ENCODE(has_item_next);
+  if (OB_SUCC(ret) && has_item_next) {
+    if (OB_FAIL(SMART_CALL(serialize_cur_keypart(*cur.item_next_, buf, buf_len, pos)))) {
+      LOG_WARN("serialize cur keypart failed", K(ret));
     }
   }
   return ret;

@@ -704,6 +704,7 @@ int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
     contain_always_false = node_head_->always_false_;
   } else {
     bool equals[column_count_];
+    MEMSET(equals, 0, sizeof(bool) * column_count_);
     if (OB_FAIL(get_prefix_info(node_head_, equals, equal_prefix_count))) {
       LOG_WARN("failed to get prefix info");
     } else {
