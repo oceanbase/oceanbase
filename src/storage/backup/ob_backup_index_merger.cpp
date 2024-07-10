@@ -600,10 +600,12 @@ int ObIBackupIndexMerger::open_file_writer_(const share::ObBackupPath &path, con
   return ret;
 }
 
-int ObIBackupIndexMerger::prepare_file_write_ctx_(ObBackupFileWriteCtx &write_ctx)
+int ObIBackupIndexMerger::prepare_file_write_ctx_(
+    common::ObInOutBandwidthThrottle &bandwidth_throttle,
+    ObBackupFileWriteCtx &write_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(write_ctx.open(OB_MAX_BACKUP_FILE_SIZE, io_fd_, *dev_handle_))) {
+  if (OB_FAIL(write_ctx.open(OB_MAX_BACKUP_FILE_SIZE, io_fd_, *dev_handle_, bandwidth_throttle))) {
     LOG_WARN("failed to open backup file write ctx", K(ret));
   }
   return ret;
@@ -727,7 +729,8 @@ ObBackupMacroBlockIndexMerger::~ObBackupMacroBlockIndexMerger()
   reset();
 }
 
-int ObBackupMacroBlockIndexMerger::init(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy)
+int ObBackupMacroBlockIndexMerger::init(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
+    common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   const ObBackupBlockType block_type = BACKUP_BLOCK_MACRO_DATA;
@@ -743,7 +746,7 @@ int ObBackupMacroBlockIndexMerger::init(const ObBackupIndexMergeParam &merge_par
     LOG_WARN("failed to ensure space", K(ret));
   } else if (OB_FAIL(buffer_node_.init(merge_param.tenant_id_, block_type, node_level))) {
     LOG_WARN("failed to init buffer node", K(ret), K(merge_param), K(block_type), K(node_level));
-  } else if (OB_FAIL(prepare_merge_ctx_(merge_param, sql_proxy))) {
+  } else if (OB_FAIL(prepare_merge_ctx_(merge_param, sql_proxy, bandwidth_throttle))) {
     LOG_WARN("failed to prepare merge ctx", K(ret), K(merge_param));
   } else if (OB_FAIL(write_backup_file_header_(file_type))) {
     LOG_WARN("failed to write backup file header", K(ret));
@@ -848,7 +851,8 @@ int ObBackupMacroBlockIndexMerger::merge_index()
 }
 
 int ObBackupMacroBlockIndexMerger::prepare_merge_ctx_(
-    const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy)
+    const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
+    common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupRetryDesc> retry_list;
@@ -869,7 +873,7 @@ int ObBackupMacroBlockIndexMerger::prepare_merge_ctx_(
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
   } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to prepare file writer", K(ret), K(backup_path), K(merge_param));
-  } else if (OB_FAIL(prepare_file_write_ctx_(write_ctx_))) {
+  } else if (OB_FAIL(prepare_file_write_ctx_(bandwidth_throttle, write_ctx_))) {
     LOG_WARN("failed to prepare file write ctx", K(ret));
   }
   return ret;
@@ -1257,7 +1261,7 @@ ObBackupMetaIndexMerger::~ObBackupMetaIndexMerger()
 }
 
 int ObBackupMetaIndexMerger::init(const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta,
-    common::ObISQLClient &sql_proxy)
+    common::ObISQLClient &sql_proxy, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   const ObBackupBlockType block_type = BACKUP_BLOCK_META_DATA;
@@ -1273,7 +1277,7 @@ int ObBackupMetaIndexMerger::init(const ObBackupIndexMergeParam &merge_param, co
     LOG_WARN("failed to ensure space", K(ret));
   } else if (OB_FAIL(buffer_node_.init(merge_param.tenant_id_, block_type, node_level))) {
     LOG_WARN("failed to init buffer node", K(ret), K(merge_param), K(block_type), K(node_level));
-  } else if (OB_FAIL(prepare_merge_ctx_(merge_param, is_sec_meta, sql_proxy))) {
+  } else if (OB_FAIL(prepare_merge_ctx_(merge_param, is_sec_meta, sql_proxy, bandwidth_throttle))) {
     LOG_WARN("failed to prepare merge ctx", K(ret), K(merge_param), K(is_sec_meta));
   } else if (OB_FAIL(write_backup_file_header_(file_type))) {
     LOG_WARN("failed to write backup file header", K(ret));
@@ -1369,7 +1373,8 @@ int ObBackupMetaIndexMerger::merge_index()
 }
 
 int ObBackupMetaIndexMerger::prepare_merge_ctx_(
-    const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta, common::ObISQLClient &sql_proxy)
+    const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta,
+    common::ObISQLClient &sql_proxy, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   ObArray<ObBackupRetryDesc> retry_list;
@@ -1390,7 +1395,7 @@ int ObBackupMetaIndexMerger::prepare_merge_ctx_(
     LOG_WARN("failed to get output file path", K(ret), K(merge_param));
   } else if (OB_FAIL(open_file_writer_(backup_path, merge_param.backup_dest_.get_storage_info()))) {
     LOG_WARN("failed to prepare file writer", K(ret), K(backup_path), K(merge_param));
-  } else if (OB_FAIL(prepare_file_write_ctx_(write_ctx_))) {
+  } else if (OB_FAIL(prepare_file_write_ctx_(bandwidth_throttle, write_ctx_))) {
     LOG_WARN("failed to prepare file write ctx", K(ret));
   }
   return ret;

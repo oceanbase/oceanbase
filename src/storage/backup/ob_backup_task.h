@@ -202,6 +202,7 @@ private:
   ObBackupReportCtx report_ctx_;
   share::SCN compl_start_scn_;
   share::SCN compl_end_scn_;
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDagNet);
 };
 
@@ -374,7 +375,8 @@ public:
   virtual ~ObLSBackupComplementLogDag();
   int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const int64_t dest_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id,
-      const int64_t retry_id, const share::SCN &start_scn, const share::SCN &end_scn, const ObBackupReportCtx &report_ctx);
+      const int64_t retry_id, const share::SCN &start_scn, const share::SCN &end_scn, const ObBackupReportCtx &report_ctx,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   virtual int create_first_task() override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
@@ -397,6 +399,7 @@ private:
   share::SCN compl_start_scn_;
   share::SCN compl_end_scn_;
   ObBackupReportCtx report_ctx_;
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogDag);
 };
@@ -687,7 +690,8 @@ public:
   virtual ~ObLSBackupComplementLogTask();
   int init(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest, const uint64_t tenant_id, const int64_t dest_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const share::SCN &start_scn,
-      const share::SCN &end_scn, const int64_t turn_id, const int64_t retry_id, const ObBackupReportCtx &report_ctx);
+      const share::SCN &end_scn, const int64_t turn_id, const int64_t retry_id, const ObBackupReportCtx &report_ctx,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   virtual int process() override;
 
 private:
@@ -756,6 +760,8 @@ private:
   share::ObBackupDest archive_dest_;
 
   ObBackupReportCtx report_ctx_;
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
+  int64_t last_active_time_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupComplementLogTask);
 };
 

@@ -339,7 +339,7 @@ int64_t ObTabletInfoTrailer::get_serialize_size_() const
 
 int ObExternTabletMetaWriter::init(
     const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
-    const int64_t turn_id, const int64_t retry_id)
+    const int64_t turn_id, const int64_t retry_id, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   const int64_t start_file_id = 1;
@@ -357,6 +357,7 @@ int ObExternTabletMetaWriter::init(
     ls_id_ = ls_id;
     turn_id_ = turn_id;
     retry_id_ = retry_id;
+    bandwidth_throttle_ = &bandwidth_throttle;
     if (OB_FAIL(prepare_backup_file_(start_file_id))) {
       LOG_WARN("failed to prepare backup file", K(ret), K(start_file_id));
     } else {
@@ -381,8 +382,8 @@ int ObExternTabletMetaWriter::prepare_backup_file_(const int64_t file_id)
   } else if (OB_FAIL(util.open_with_access_type(
       dev_handle_, io_fd_, backup_set_dest_.get_storage_info(), backup_path.get_obstr(), access_type))) {
     LOG_WARN("failed to open with access type", K(ret), K(backup_set_dest_), K(backup_path));
-  } else if (OB_FAIL(file_write_ctx_.open(data_file_size, io_fd_, *dev_handle_))) {
-    LOG_WARN("failed to open file write ctx", K(ret), K(backup_path), K(data_file_size), K(file_id));
+  } else if (OB_FAIL(file_write_ctx_.open(data_file_size, io_fd_, *dev_handle_, *bandwidth_throttle_))) {
+    LOG_WARN("failed to open file write ctx", K(ret), K(backup_path), K(data_file_size), K(file_id), KP_(bandwidth_throttle));
   } else {
     file_trailer_.reset();
     file_trailer_.file_id_ = file_id;

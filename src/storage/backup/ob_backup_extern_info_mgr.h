@@ -91,10 +91,11 @@ public:
   static const int64_t BUF_SIZE = 4 * 1024 * 1024;
   static const int64_t TRAILER_BUF = 1024;
   ObExternTabletMetaWriter(): is_inited_(false), backup_set_dest_(), ls_id_(), turn_id_(0), retry_id_(0),
-      io_fd_(0), dev_handle_(nullptr), file_write_ctx_(), file_trailer_(), tmp_buffer_("BackupExtInfo") {};
+      io_fd_(0), dev_handle_(nullptr), file_write_ctx_(), file_trailer_(), tmp_buffer_("BackupExtInfo"),
+      bandwidth_throttle_(NULL) {};
   ~ObExternTabletMetaWriter() {};
   int init(const share::ObBackupDest &backup_set_dest, const share::ObLSID &ls_id,
-           const int64_t turn_id, const int64_t retry_id);
+           const int64_t turn_id, const int64_t retry_id, common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int write_meta_data(const blocksstable::ObBufferReader &meta_data, const common::ObTabletID &tablet_id);
   int close();
 private:
@@ -124,6 +125,7 @@ private:
   ObBackupFileWriteCtx file_write_ctx_;
   ObTabletInfoTrailer file_trailer_;
   blocksstable::ObSelfBufferWriter tmp_buffer_;
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(ObExternTabletMetaWriter);
 };
 
