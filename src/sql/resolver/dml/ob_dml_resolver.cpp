@@ -11175,9 +11175,8 @@ int ObDMLResolver::resolve_const_exprs(const ParseNode &expr_node,
       if (OB_ISNULL(tmp_node)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tmp_node is unexpected", KP(tmp_node), K(ret));
-      } else if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_,
-          *tmp_node, const_expr, NULL))) {
-        LOG_WARN("fail to resolve_const_expr", K(ret));
+      } else if (OB_FAIL(resolve_sql_expr(*tmp_node, const_expr))) {
+        LOG_WARN("fail to resolve_sql_expr", K(ret));
       } else if (OB_UNLIKELY(!const_expr->is_const_expr())
                  || OB_UNLIKELY(const_expr->has_flag(ObExprInfoFlag::CNT_CUR_TIME))) {
         ret = OB_ERR_NON_CONST_EXPR_IS_NOT_ALLOWED_FOR_PIVOT_UNPIVOT_VALUES;
@@ -11188,9 +11187,8 @@ int ObDMLResolver::resolve_const_exprs(const ParseNode &expr_node,
       }
     }
   } else {
-    if (OB_FAIL(ObResolverUtils::resolve_const_expr(params_,
-        expr_node, const_expr, NULL))) {
-      LOG_WARN("fail to resolve_const_expr", K(ret));
+    if (OB_FAIL(resolve_sql_expr(expr_node, const_expr))) {
+      LOG_WARN("fail to resolve_sql_expr", K(ret));
     } else if (OB_UNLIKELY(!const_expr->is_const_expr())
                || OB_UNLIKELY(const_expr->has_flag(ObExprInfoFlag::CNT_CUR_TIME))) {
       ret = OB_ERR_NON_CONST_EXPR_IS_NOT_ALLOWED_FOR_PIVOT_UNPIVOT_VALUES;
