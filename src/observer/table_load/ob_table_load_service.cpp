@@ -764,6 +764,7 @@ void ObTableLoadService::release_all_ctx()
 int ObTableLoadService::get_memory_limit(int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
+  const int64_t LIMIT_SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE = 50;
   ObObj value;
   int64_t pctg = 0;
   int64_t tenant_id = MTL_ID();
@@ -784,7 +785,7 @@ int ObTableLoadService::get_memory_limit(int64_t &memory_limit)
   } else if (OB_FAIL(value.get_int(pctg))) {
     LOG_WARN("get int from value failed", K(ret), K(value));
   } else {
-    memory_limit = lib::get_tenant_memory_limit(tenant_id) * pctg / 100;
+    memory_limit = lib::get_tenant_memory_limit(tenant_id) * MIN(pctg, LIMIT_SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE) / 100;
   }
 
   return ret;
