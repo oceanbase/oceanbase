@@ -1090,7 +1090,7 @@ int ObBackupSetTaskMgr::get_backup_end_scn_(share::SCN &end_scn) const
     LOG_WARN("failed to get tenant info", K(ret), K(tenant_id));
   } else if (OB_FAIL(ObBackupDataScheduler::get_backup_scn(*sql_proxy_, tenant_id, false/*is backup start*/, end_scn))) {
     LOG_WARN("failed to get end scn", K(ret), K(tenant_id));
-  } else if (tenant_info.is_standby() && end_scn > tenant_info.get_standby_scn()) {
+  } else if (tenant_info.is_standby() && end_scn > tenant_info.get_readable_scn()) {
     // For standby tenant, make sure snapshot of end_scn is readable. Otherwise, we
     // can not backup table list.
     int64_t abs_timeout = ObTimeUtility::current_time() + 10 * 60 * 1000 * 1000;
@@ -1101,7 +1101,7 @@ int ObBackupSetTaskMgr::get_backup_end_scn_(share::SCN &end_scn) const
       } else if (!tenant_info.is_standby()) {
         ret = OB_STATE_NOT_MATCH;
         LOG_WARN("tenant is not standby", K(ret), K(tenant_info));
-      } else if (end_scn <= tenant_info.get_standby_scn()) {
+      } else if (end_scn <= tenant_info.get_readable_scn()) {
         break;
       } else if (ObTimeUtility::current_time() > abs_timeout) {
         ret = OB_TIMEOUT;

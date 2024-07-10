@@ -290,16 +290,34 @@ int ObEmptyServerChecker::check_server_emtpy_by_ls_(
       LOG_WARN("NULL replica pointer", K(ret));
     } else {
       // check whether has member on empty servers
-      FOREACH_CNT_X(m, replica->get_member_list(), OB_SUCC(ret)) {
+      FOREACH_CNT_X(m, replica->get_member_list(), OB_SUCC(ret) && empty_servers.count() > 0) {
         const ObAddr &addr = m->get_server();
         if (has_exist_in_array(empty_servers, addr, &idx)) {
           //has member in server
-          LOG_INFO("ls replica has member on sever", K(ls_info), K(addr), K(empty_servers));
+          LOG_INFO("ls replica has member on server", K(ls_info), K(addr), K(empty_servers));
           if (OB_FAIL(empty_servers.remove(idx))) {
             LOG_WARN("failed to remove addr from empty servers", KR(ret), K(idx), K(empty_servers));
           }
         }
       }  // end FORECAH member_list
+      ObMember learner;
+      for (int64_t index = 0;
+          OB_SUCC(ret) && index < replica->get_learner_list().get_member_number() && empty_servers.count() > 0;
+          ++index) {
+        learner.reset();
+        if (OB_FAIL(replica->get_learner_list().get_member_by_index(index, learner))) {
+          LOG_WARN("fail to get learner by index", KR(ret), K(index));
+        } else {
+          const ObAddr &addr = learner.get_server();
+          if (has_exist_in_array(empty_servers, addr, &idx)) {
+            //has learner in server
+            LOG_INFO("ls replica has learner on server", K(ls_info), K(addr), K(empty_servers));
+            if (OB_FAIL(empty_servers.remove(idx))) {
+              LOG_WARN("failed to remove addr from empty servers", KR(ret), K(idx), K(empty_servers));
+            }
+          }
+        }
+      }
     }
     // filter server of replicas
     for (int64_t i = 0; i < replica_array.count() && OB_SUCC(ret); ++i) {

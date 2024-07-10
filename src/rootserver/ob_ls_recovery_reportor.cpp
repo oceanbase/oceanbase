@@ -14,7 +14,7 @@
 
 #include "rootserver/ob_ls_recovery_reportor.h"
 #include "rootserver/ob_tenant_info_loader.h"
-#include "rootserver/ob_tenant_role_transition_service.h"//ObTenantRoleTransitionConstants
+#include "rootserver/standby/ob_tenant_role_transition_service.h"//ObTenantRoleTransitionConstants
 #include "rootserver/ob_rs_async_rpc_proxy.h" //ObGetLSReplayedScnProxy
 #include "rootserver/ob_ls_recovery_stat_handler.h" //ObLSRecoveryStatHandler
 #include "rootserver/ob_ls_service_helper.h"//update_ls_stat_in_trans

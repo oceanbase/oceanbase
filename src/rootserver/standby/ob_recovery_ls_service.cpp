@@ -40,7 +40,7 @@
 #include "share/ob_errno.h"
 #include "share/ob_share_util.h"                           //ObShareUtil
 #include "share/schema/ob_multi_version_schema_service.h"  //ObMultiSchemaService
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/ob_standby_upgrade.h"  // ObStandbyUpgrade
 #include "share/ob_upgrade_utils.h"  // ObUpgradeChecker
 #include "share/ob_global_stat_proxy.h" // ObGlobalStatProxy
@@ -1129,7 +1129,7 @@ int ObRecoveryLSService::do_ls_balance_task_()
   } else if (OB_FAIL(tenant_info_loader->get_tenant_info(tenant_info))) {
     LOG_WARN("get_tenant_info failed", K(ret));
   } else if (OB_FAIL(ObBalanceTaskHelperTableOperator::load_tasks_order_by_scn(
-          tenant_id_, *proxy_, tenant_info.get_standby_scn(),
+          tenant_id_, *proxy_, tenant_info.get_readable_scn(),
           ls_balance_tasks))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
@@ -1235,7 +1235,7 @@ int ObRecoveryLSService::check_transfer_begin_can_remove_(
         || tenant_info.is_prepare_flashback_for_failover_to_primary_status()) {
       //check tenant_info status and check wait readable_scn is equal to sync_scn
       ret = OB_SUCCESS;
-      if (tenant_info.get_sync_scn() != tenant_info.get_standby_scn()) {
+      if (tenant_info.get_sync_scn() != tenant_info.get_readable_scn()) {
         can_remove = false;
         LOG_WARN("There are transfer tasks in progress. Must wait for replay to newest",
             KR(ret), K(tenant_id_), K(tenant_info), K(ls_balance_task));

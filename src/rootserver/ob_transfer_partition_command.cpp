@@ -19,7 +19,7 @@
 #include "share/balance/ob_balance_job_table_operator.h"//ObBalanceJobTableOperator
 #include "share/transfer/ob_transfer_task_operator.h"//ObTransferTask
 #include "share/ob_tenant_info_proxy.h"
-#include "share/ob_primary_standby_service.h"
+#include "rootserver/standby/ob_standby_service.h"
 #include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
 #include "share/ls/ob_ls_i_life_manager.h"//START/END_TRANSACTION
 #include "storage/tablelock/ob_lock_utils.h"//table_lock
@@ -241,7 +241,7 @@ int ObTransferPartitionCommand::check_tenant_status_data_version_(
         || OB_INVALID_ID == data_version)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(data_version));
-  } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.get_tenant_status(tenant_id, tenant_status))) {
+  } else if (OB_FAIL(OB_STANDBY_SERVICE.get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("fail to get tenant status", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(!is_tenant_normal(tenant_status))) {
     ret = OB_OP_NOT_ALLOW;

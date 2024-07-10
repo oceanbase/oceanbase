@@ -7787,22 +7787,25 @@ OB_SERIALIZE_MEMBER(ObLSAccessModeInfo, tenant_id_, ls_id_, mode_version_, acces
 
 bool ObChangeLSAccessModeRes::is_valid() const
 {
-  return OB_INVALID_TENANT_ID != tenant_id_
-         && ls_id_.is_valid();
+  return OB_INVALID_TENANT_ID != tenant_id_ && ls_id_.is_valid() && wait_sync_scn_cost_ >= 0 && change_access_mode_cost_ >= 0;
 }
 int ObChangeLSAccessModeRes::init(
     uint64_t tenant_id, const ObLSID &ls_id,
-    int result)
+    const int result, const int64_t wait_sync_scn_cost, const int64_t change_access_mode_cost)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
-                  || !ls_id.is_valid())) {
+                  || !ls_id.is_valid()
+                  || wait_sync_scn_cost < 0
+                  || change_access_mode_cost < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(wait_sync_scn_cost), K(change_access_mode_cost));
   } else {
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
     ret_ = result;
+    wait_sync_scn_cost_ = wait_sync_scn_cost;
+    change_access_mode_cost_ = change_access_mode_cost;
   }
   return ret;
 }
@@ -7813,12 +7816,14 @@ int ObChangeLSAccessModeRes::assign(const ObChangeLSAccessModeRes &other)
   if (this != &other) {
     tenant_id_ = other.tenant_id_;
     ls_id_ = other.ls_id_;
-    ret = other.ret_;
+    ret_ = other.ret_;
+    wait_sync_scn_cost_ = other.wait_sync_scn_cost_;
+    change_access_mode_cost_ = other.change_access_mode_cost_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObChangeLSAccessModeRes, tenant_id_, ls_id_, ret_);
+OB_SERIALIZE_MEMBER(ObChangeLSAccessModeRes, tenant_id_, ls_id_, ret_, wait_sync_scn_cost_, change_access_mode_cost_);
 
 int ObNotifySwitchLeaderArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const common::ObAddr &leader, const SwitchLeaderComment &comment)

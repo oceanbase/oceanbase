@@ -74,7 +74,7 @@
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "share/ob_rpc_struct.h"
-#include "rootserver/ob_recovery_ls_service.h"
+#include "rootserver/standby/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
 
 namespace oceanbase
@@ -1655,6 +1655,9 @@ int ObRpcChangeLSAccessModeP::process()
   uint64_t tenant_id = arg_.get_tenant_id();
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObLSService *ls_svr = nullptr;
+  int64_t wait_sync_scn_cost = 0;
+  int64_t change_access_mode_cost = 0;
+  int64_t begin_time = ObTimeUtility::current_time();
   if (tenant_id != MTL_ID()) {
     ret = guard.switch_to(tenant_id);
   }
@@ -1683,13 +1686,15 @@ int ObRpcChangeLSAccessModeP::process()
       if (OB_UNLIKELY(!arg_.get_sys_ls_end_scn().is_valid_and_not_min())) {
         FLOG_WARN("invalid sys_ls_end_scn, no need to let user ls wait, "
             "the version might be smaller than V4.2.0", KR(ret), K(arg_.get_sys_ls_end_scn()));
-      } else if (OB_FAIL(ObRootUtils::wait_user_ls_sync_scn_locally(
+      } else if (OB_FAIL(rootserver::ObRootUtils::wait_user_ls_sync_scn_locally(
             arg_.get_sys_ls_end_scn(),
             log_ls_svr,
             *ls))) {
         LOG_WARN("fail to wait user ls sync scn locally", KR(ret), K(ls_id), K(arg_.get_sys_ls_end_scn()));
       }
+      wait_sync_scn_cost = ObTimeUtility::current_time() - begin_time;
     }
+    begin_time = ObTimeUtility::current_time();
     const int64_t timeout = THIS_WORKER.get_timeout_remain();
     if (FAILEDx(log_handler->change_access_mode(
         arg_.get_mode_version(),
@@ -1697,10 +1702,11 @@ int ObRpcChangeLSAccessModeP::process()
         arg_.get_ref_scn()))) {
       LOG_WARN("failed to change access mode", KR(ret), K(arg_), K(timeout));
     }
+    change_access_mode_cost = ObTimeUtility::current_time() - begin_time;
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = result_.init(tenant_id, ls_id, ret))) {
+    if (OB_SUCCESS != (tmp_ret = result_.init(tenant_id, ls_id, ret, wait_sync_scn_cost, change_access_mode_cost))) {
       ret = OB_SUCC(ret) ? tmp_ret : ret;
-      LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), KR(tmp_ret));
+      LOG_WARN("failed to init res", KR(ret), K(tenant_id), K(ls_id), KR(tmp_ret), K(wait_sync_scn_cost), K(change_access_mode_cost));
     } else {
       //if ret  not OB_SUCCESS, res can not return
       ret = OB_SUCCESS;

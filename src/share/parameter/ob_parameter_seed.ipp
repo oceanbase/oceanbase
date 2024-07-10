@@ -1754,6 +1754,12 @@ DEF_MODE_WITH_PARSER(_obkv_feature_mode, OB_CLUSTER_PARAMETER, "", common::ObKvF
     "_obkv_feature_mode is a option list to control specified OBKV features on/off.",
     ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_TIME(_standby_max_replay_gap_time, OB_TENANT_PARAMETER, "900s", "[10s,)",
+        "The difference in replayable_scn between log streams on standby tenants is not greater than "
+        "_standby_max_replay_gap_time, and the gap between sync_scn and replayable_scn of each log stream "
+        "is kept reasonably small. Range: [10s, )",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_preserve_order_for_pagination, OB_TENANT_PARAMETER, "False",
         "enable preserver order for limit",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -3409,12 +3409,12 @@ struct ObChangeLSAccessModeRes
   OB_UNIS_VERSION(1);
 public:
   ObChangeLSAccessModeRes(): tenant_id_(OB_INVALID_TENANT_ID),
-                              ls_id_(), ret_(common::OB_SUCCESS) {}
+                              ls_id_(), ret_(common::OB_SUCCESS), wait_sync_scn_cost_(0), change_access_mode_cost_(0) {}
   ~ObChangeLSAccessModeRes() {}
   bool is_valid() const;
-  int init(uint64_t tenant_id, const share::ObLSID& ls_id, int ret);
+  int init(uint64_t tenant_id, const share::ObLSID& ls_id, const int result, const int64_t wait_sync_scn_cost, const int64_t change_access_mode_cost);
   int assign(const ObChangeLSAccessModeRes &other);
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(ret));
+  TO_STRING_KV(K_(tenant_id), "ls_id", ls_id_.id(), K_(ret), K_(wait_sync_scn_cost), K_(change_access_mode_cost));
   int get_result() const
   {
     return ret_;
@@ -3427,12 +3427,16 @@ public:
   {
     return ls_id_;
   }
+  int64_t get_wait_sync_scn_cost() const { return wait_sync_scn_cost_; }
+  int64_t get_change_access_mode_cost() const { return change_access_mode_cost_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObChangeLSAccessModeRes);
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   int ret_;
+  int64_t wait_sync_scn_cost_;
+  int64_t change_access_mode_cost_;
 };
 
 struct ObNotifySwitchLeaderArg
@@ -7090,6 +7094,9 @@ public:
 
   bool is_valid() const;
   bool operator==(const obrpc::ObCheckpoint &r) const;
+  bool operator < (const ObCheckpoint &that) {
+    return this->cur_sync_scn_ < that.cur_sync_scn_;
+  }
   share::ObLSID get_ls_id() const
   {
     return ls_id_;
@@ -7109,7 +7116,8 @@ public:
             && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_next_scn_.is_valid_and_not_min());
   }
 
-  TO_STRING_KV(K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_next_scn));
+  TO_STRING_KV("ls_id", ls_id_.id(), "cur_sync_scn", cur_sync_scn_.get_val_for_inner_table_field(),
+      "cur_restore_source_next_scn", cur_restore_source_next_scn_.get_val_for_inner_table_field());
 
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;

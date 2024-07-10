@@ -29,9 +29,9 @@
 #include "share/ob_upgrade_utils.h"//ObUpgradeChecker
 #include "share/rc/ob_tenant_base.h"//MTL_SWITCH
 #include "observer/ob_server_struct.h"//GCTX
-#include "rootserver/ob_recovery_ls_service.h"//ObRecoveryLSHelper
+#include "rootserver/standby/ob_recovery_ls_service.h"//ObRecoveryLSHelper
 #include "rootserver/ob_tenant_thread_helper.h"//get_zone_priority
-#include "rootserver/ob_tenant_role_transition_service.h"//get_checkpoint_by_rpc
+#include "rootserver/standby/ob_tenant_role_transition_service.h"//get_checkpoint_by_rpc
 #include "storage/tx_storage/ob_ls_map.h"
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx_storage/ob_ls_handle.h"  //ObLSHandle

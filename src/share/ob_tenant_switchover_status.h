@@ -74,7 +74,7 @@ IS_TENANT_STATUS(SWITCHING_TO_STANDBY_STATUS, switching_to_standby)
 IS_TENANT_STATUS(PREPARE_FLASHBACK_FOR_SWITCH_TO_PRIMARY_STATUS, prepare_flashback_for_switch_to_primary)
 #undef IS_TENANT_STATUS 
 
-  TO_STRING_KV(K_(value));
+  TO_STRING_KV("switchover_status", to_str(), K_(value));
   DECLARE_TO_YSON_KV;
 private:
   ObTenantSwitchoverStatus::Status value_;

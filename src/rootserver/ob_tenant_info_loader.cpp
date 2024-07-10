@@ -322,27 +322,27 @@ void ObTenantInfoLoader::broadcast_tenant_info_content_()
   } else {
     ObUpdateTenantInfoCacheProxy proxy(
       *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::update_tenant_info_cache);
-
+    ObArray<ObServerInfoInTable> servers_info;
+    ObZone empty_zone;
+    obrpc::ObUpdateTenantInfoCacheArg arg;
     if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info, last_sql_update_time, ora_rowscn))) {
       LOG_WARN("failed to get tenant info", KR(ret));
-    } else if (OB_FAIL(share::ObAllServerTracer::get_instance().for_each_server_info(
-                  [&tenant_info, &proxy, ora_rowscn](const share::ObServerInfoInTable &server_info) -> int {
-                    int ret = OB_SUCCESS;
-                    obrpc::ObUpdateTenantInfoCacheArg arg;
-                    if (!server_info.is_valid()) {
-                      LOG_WARN("skip invalid server_info", KR(ret), K(server_info));
-                    } else if (!server_info.is_alive()) {
-                      //not send to alive
-                    } else if (OB_FAIL(arg.init(tenant_info.get_tenant_id(), tenant_info, ora_rowscn))) {
-                      LOG_WARN("failed to init arg", KR(ret), K(tenant_info), K(ora_rowscn));
-                    // use meta rpc process thread
-                    } else if (OB_FAIL(proxy.call(server_info.get_server(), DEFAULT_TIMEOUT_US, gen_meta_tenant_id(tenant_info.get_tenant_id()), arg))) {
-                      LOG_WARN("failed to send rpc", KR(ret), K(server_info), K(tenant_info), K(arg));
-                    }
-
-                    return ret;
-                  }))) {
-      LOG_WARN("for each server_info failed", KR(ret));
+    } else if (OB_FAIL(SVR_TRACER.get_servers_info(empty_zone, servers_info, false /* include_permanent_offline */))) {
+      LOG_WARN("fail to get active servers' info", KR(ret), K(empty_zone));
+    } else if (OB_FAIL(arg.init(tenant_info.get_tenant_id(), tenant_info, ora_rowscn))) {
+      LOG_WARN("failed to init arg", KR(ret), K(tenant_info), K(ora_rowscn));
+    } else {
+      ARRAY_FOREACH_X(servers_info, idx, cnt, OB_SUCC(ret)) {
+        const ObServerInfoInTable &server_info = servers_info.at(idx);
+        if (OB_UNLIKELY(!server_info.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("server_info is invalid", KR(ret), K(server_info));
+        } else if (!server_info.is_alive()) {
+          // no need to send
+        } else if (OB_FAIL(proxy.call(server_info.get_server(), DEFAULT_TIMEOUT_US, tenant_info.get_tenant_id(), arg))) {
+          LOG_WARN("failed to send rpc", KR(ret), K(server_info), K(tenant_info), K(arg));
+        }
+      }
     }
 
     int tmp_ret = OB_SUCCESS;
@@ -403,7 +403,7 @@ int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time_us, sha
     ret = OB_NEED_WAIT;
     LOG_TRACE("sts can not work for current tenant status", KR(ret), K(tenant_info));
   } else {
-    standby_scn = tenant_info.get_standby_scn();
+    standby_scn = tenant_info.get_readable_scn();
   }
 
   const int64_t PRINT_INTERVAL = 3 * 1000 * 1000L;
@@ -459,6 +459,25 @@ int ObTenantInfoLoader::check_is_primary_normal_status(bool &is_primary_normal_s
       LOG_WARN("failed to get tenant info", KR(ret));
     } else {
       is_primary_normal_status = tenant_info.is_primary() && tenant_info.is_normal_status();
+    }
+  }
+  return ret;
+}
+
+int ObTenantInfoLoader::check_is_prepare_flashback_for_switch_to_primary_status(bool &is_prepare)
+{
+  int ret = OB_SUCCESS;
+  is_prepare = false;
+
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    is_prepare = false;
+  } else {
+    // user tenant
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      is_prepare = tenant_info.is_prepare_flashback_for_switch_to_primary_status();
     }
   }
   return ret;
