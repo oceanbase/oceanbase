@@ -2962,7 +2962,7 @@ public:
   inline void set_is_signal_null() { is_signal_null_ = true; }
   inline bool is_signal_null() const { return is_signal_null_; }
   inline int create_item_to_expr_idx(int64_t capacity) { 
-    return item_to_expr_idx_.create(capacity, ObModIds::OB_PL_TEMP);
+    return item_to_expr_idx_.create(capacity, "PlStmtHashMap", ObModIds::OB_HASH_NODE, MTL_ID());
   }
   inline const int64_t *get_expr_idx(const int64_t item) const { return item_to_expr_idx_.get(item); }
   inline const hash::ObHashMap<int64_t, int64_t>& get_item_to_expr_idx() const 
