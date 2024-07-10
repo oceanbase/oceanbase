@@ -8270,7 +8270,7 @@ OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, sourc
   source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_,
   execution_id_, parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_, dest_ls_id_, dest_schema_version_,
   compaction_scn_, can_reuse_macro_block_, split_sstable_type_,
-  lob_col_idxs_, data_split_ranges_);
+  lob_col_idxs_, parallel_datum_rowkey_list_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
@@ -8280,7 +8280,7 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
     LOG_WARN("invalid arg", K(ret), K(other));
   } else if (OB_FAIL(lob_col_idxs_.assign(other.lob_col_idxs_))) {
     LOG_WARN("failed to assign to lob col idxs", K(ret));
-  } else if (OB_FAIL(data_split_ranges_.assign(other.data_split_ranges_))) {
+  } else if (OB_FAIL(parallel_datum_rowkey_list_.assign(other.parallel_datum_rowkey_list_))) {
     LOG_WARN("assign failed", K(ret));
   } else {
     tenant_id_ = other.tenant_id_;

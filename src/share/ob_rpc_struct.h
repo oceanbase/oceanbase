@@ -9830,7 +9830,7 @@ public:
                                         schema_version_(0), snapshot_version_(0), ddl_type_(0), task_id_(0), parallelism_(0), execution_id_(-1), tablet_task_id_(0),
                                         data_format_version_(0), consumer_group_id_(0), dest_tenant_id_(OB_INVALID_ID), dest_ls_id_(), dest_schema_version_(0),
                                         compaction_scn_(0), can_reuse_macro_block_(false), split_sstable_type_(share::ObSplitSSTableType::SPLIT_BOTH),
-                                        lob_col_idxs_(), data_split_ranges_()
+                                        lob_col_idxs_(), parallel_datum_rowkey_list_()
   {}
   bool is_valid() const {
     return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && source_tablet_id_.is_valid() && dest_tablet_id_.is_valid()
@@ -9844,7 +9844,7 @@ public:
     K_(snapshot_version), K_(task_id), K_(parallelism), K_(execution_id), K_(tablet_task_id), K_(data_format_version),
     K_(consumer_group_id),
     K_(compaction_scn), K_(can_reuse_macro_block), K_(split_sstable_type),
-    K_(lob_col_idxs), K_(data_split_ranges));
+    K_(lob_col_idxs), K_(parallel_datum_rowkey_list));
 public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -9868,7 +9868,7 @@ public:
   bool can_reuse_macro_block_;
   share::ObSplitSSTableType split_sstable_type_;
   ObSArray<uint64_t> lob_col_idxs_;
-  common::ObSEArray<common::ObNewRange, 16> data_split_ranges_;
+  common::ObSArray<blocksstable::ObDatumRowkey> parallel_datum_rowkey_list_;
 };
 
 struct ObDDLBuildSingleReplicaRequestResult final
