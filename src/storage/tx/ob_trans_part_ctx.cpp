@@ -1790,19 +1790,17 @@ int ObPartTransCtx::submit_redo_log_for_freeze(const uint32_t freeze_clock)
   bool submitted = false;
   bool need_submit = fast_check_need_submit_redo_for_freeze_();
   if (need_submit) {
-    do {
-      CtxLockGuard guard(lock_);
-      tg.click();
-      ret = submit_redo_log_for_freeze_(submitted, freeze_clock);
-      tg.click();
-      if (submitted) {
-        REC_TRANS_TRACE_EXT2(tlog_, submit_log_for_freeze, OB_Y(ret),
-                            OB_ID(used), tg.get_diff(), OB_ID(ctx_ref), get_ref());
-      }
-      if (OB_TRANS_HAS_DECIDED == ret || OB_BLOCK_FROZEN == ret) {
-        ret = OB_SUCCESS;
-      }
-    } while (OB_EAGAIN == ret); // log-service can not append
+    CtxLockGuard guard(lock_);
+    tg.click();
+    ret = submit_redo_log_for_freeze_(submitted, freeze_clock);
+    tg.click();
+    if (submitted) {
+      REC_TRANS_TRACE_EXT2(tlog_, submit_log_for_freeze, OB_Y(ret),
+                          OB_ID(used), tg.get_diff(), OB_ID(ctx_ref), get_ref());
+    }
+    if (OB_TRANS_HAS_DECIDED == ret || OB_BLOCK_FROZEN == ret) {
+      ret = OB_SUCCESS;
+    }
   }
 
   return ret;
