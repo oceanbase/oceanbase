@@ -384,7 +384,7 @@ int MutatorRow::parse_columns_(
         bool ignore_column = false;
         if (OB_NOT_NULL(tb_schema_info)) {
           // for normal column which is not belong to some udt, is_usr_column is true and is_udt_column is false
-          // for udt column
+          // for udt column that is not deleted
           // if is main column of group, is_usr_column is true , is_udt_column is also true.
           // if is hidden column of udt, is_usr_column is false, is_udt_column is true.
           if (! (column_schema_info->is_usr_column() || column_schema_info->is_udt_column())) {
@@ -393,6 +393,20 @@ int MutatorRow::parse_columns_(
                 K(tenant_id), K(table_id), K(column_stored_idx), K(column_schema_info));
 
             ignore_column = true;
+          // when udt is fast deleted, main column is marked as hidden and is_usr_column is false, but not real delete.
+          // so need ignore all column of udt when main column of udt is_usr_column is false
+          } else if (column_schema_info->is_udt_column()) {
+            ColumnSchemaInfo *udt_main_column_schema_info = nullptr;
+            if (OB_FAIL(tb_schema_info->get_main_column_of_udt(column_schema_info->get_udt_set_id(), udt_main_column_schema_info))) {
+              LOG_ERROR("get udt main column schema fail", KR(ret), K(tenant_id), K(table_id), K(column_stored_idx),
+                  KPC(column_schema_info), KPC(tb_schema_info));
+            } else if (! udt_main_column_schema_info->is_usr_column()) {
+              ignore_column = true;
+              LOG_DEBUG("ignore udt column", K(tenant_id), K(table_id), K(column_stored_idx), KPC(column_schema_info));
+            } else {
+              ignore_column = false;
+              LOG_DEBUG("not ignore udt column", K(tenant_id), K(table_id), K(column_stored_idx), KPC(column_schema_info));
+            }
           } else {
             ignore_column = false;
           }

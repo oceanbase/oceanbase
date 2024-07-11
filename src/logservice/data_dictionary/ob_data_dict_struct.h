@@ -303,7 +303,6 @@ public:
   OB_INLINE uint64_t get_udt_set_id() const { return udt_set_id_; }
   OB_INLINE uint64_t get_sub_data_type() const { return sub_type_; }
   OB_INLINE bool is_udt_column() const { return udt_set_id_ > 0 && OB_INVALID_ID != udt_set_id_; }
-  OB_INLINE bool is_udt_hidden_column() const { return is_udt_column() && is_hidden(); }
   OB_INLINE bool is_xmltype() const {
     return is_udt_column()
         && (((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
