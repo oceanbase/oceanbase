@@ -4054,12 +4054,13 @@ bool ObPLResolver::is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns)
   return ret;
 }
 
-int ObPLResolver::set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type)
+int ObPLResolver::set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type, bool need_check)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *const_expr = NULL;
   const ObPLVar *var = NULL;
   ObExprResType res_type;
+  bool need_set = true;
   CK (OB_NOT_NULL(into_expr));
   CK (OB_NOT_NULL(type));
   CK (OB_NOT_NULL(ns));
@@ -4068,19 +4069,51 @@ int ObPLResolver::set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, 
   CK (OB_NOT_NULL(ns->get_symbol_table()));
   CK (OB_NOT_NULL(var = ns->get_symbol_table()->get_symbol(const_expr->get_value().get_unknown())));
   CK (var->get_name().prefix_match(ANONYMOUS_ARG));
-  OX ((const_cast<ObPLVar*>(var))->set_type(*type));
-  OX ((const_cast<ObPLVar*>(var))->set_readonly(false));
-  if (OB_FAIL(ret)) {
-  } else if (type->is_obj_type()) {
-    CK (OB_NOT_NULL(type->get_data_type()));
-    OX (res_type.set_meta(type->get_data_type()->get_meta_type()));
-    OX (res_type.set_accuracy(type->get_data_type()->get_accuracy()));
-  } else {
-    OX (res_type.set_ext());
-    OX (res_type.set_extend_type(type->get_type()));
-    OX (res_type.set_udt_id(type->get_user_type_id()));
+  if (OB_SUCC(ret) && need_check) {
+    const ObPLDataType *left = type;
+    const ObPLDataType *right = &((const_cast<ObPLVar*>(var))->get_type());
+    if (left->is_obj_type() &&
+        right->is_obj_type() &&
+        NULL != right->get_data_type() &&
+        !right->get_data_type()->get_meta_type().is_ext()) {
+      if (right->get_data_type()->get_meta_type().is_null()) {
+        need_set = true;
+      } else {
+        CK (OB_NOT_NULL(left->get_data_type()));
+        OX (need_set = !cast_supported(left->get_data_type()->get_obj_type(),
+                                          left->get_data_type()->get_collation_type(),
+                                          right->get_data_type()->get_obj_type(),
+                                          right->get_data_type()->get_collation_type()));
+      }
+    } else if ((!left->is_obj_type() ||
+                (left->get_data_type() != NULL && left->get_data_type()->get_meta_type().is_ext()))
+                  &&
+                (!right->is_obj_type() ||
+                (right->get_data_type() != NULL && right->get_data_type()->get_meta_type().is_ext()))) {
+      uint64_t left_udt_id = (NULL == left->get_data_type()) ? left->get_user_type_id()
+                                                              : left->get_data_type()->get_udt_id();
+      uint64_t right_udt_id = (NULL == right->get_data_type()) ? right->get_user_type_id()
+                                                                : right->get_data_type()->get_udt_id();
+      if (left_udt_id == right_udt_id) {
+        need_set = false;
+      }
+    }
   }
-  OX (into_expr->set_result_type(res_type));
+  if (OB_SUCC(ret) && need_set) {
+    OX ((const_cast<ObPLVar*>(var))->set_type(*type));
+    OX ((const_cast<ObPLVar*>(var))->set_readonly(false));
+    if (OB_FAIL(ret)) {
+    } else if (type->is_obj_type()) {
+      CK (OB_NOT_NULL(type->get_data_type()));
+      OX (res_type.set_meta(type->get_data_type()->get_meta_type()));
+      OX (res_type.set_accuracy(type->get_data_type()->get_accuracy()));
+    } else {
+      OX (res_type.set_ext());
+      OX (res_type.set_extend_type(type->get_type()));
+      OX (res_type.set_udt_id(type->get_user_type_id()));
+    }
+    OX (into_expr->set_result_type(res_type));
+  }
   return ret;
 }
 
@@ -7585,7 +7618,7 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
               const ObPLRoutineParam* iparam = static_cast<const ObPLRoutineParam*>(param_info);
               OX (data_type = iparam->get_type());
             }
-            OZ (set_question_mark_type(params.at(i), &(current_block_->get_namespace()), &data_type));
+            OZ (set_question_mark_type(params.at(i), &(current_block_->get_namespace()), &data_type, true));
           }
         }
         if (OB_SUCC(ret)
