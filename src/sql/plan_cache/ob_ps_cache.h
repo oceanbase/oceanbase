@@ -38,10 +38,11 @@ public:
   explicit ObPsPrepareStatusGuard(ObSQLSessionInfo &session_info)
     : session_info_(session_info)
   {
+    old_value_ = session_info_.is_varparams_sql_prepare();
   }
   ~ObPsPrepareStatusGuard()
   {
-    session_info_.set_is_varparams_sql_prepare(false);
+    session_info_.set_is_varparams_sql_prepare(old_value_);
   }
   void is_varparams_sql_prepare(bool with_template)
   {
@@ -51,6 +52,7 @@ public:
   }
 private:
   ObSQLSessionInfo &session_info_;
+  bool old_value_;
 };
 class ObPsCacheEliminationTask : public common::ObTimerTask
 {
