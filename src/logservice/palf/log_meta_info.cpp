@@ -230,6 +230,11 @@ bool LogConfigVersion::is_valid() const
   return proposal_id_ != INVALID_PROPOSAL_ID && config_seq_ >= 0;
 }
 
+bool LogConfigVersion::is_initial_version() const
+{
+  return config_seq_ <= 0;
+}
+
 int LogConfigVersion::generate(const int64_t proposal_id, const int64_t config_seq)
 {
   int ret = OB_SUCCESS;

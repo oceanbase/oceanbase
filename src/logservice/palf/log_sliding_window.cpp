@@ -1500,10 +1500,18 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
       // follower need send ack to leader
       const ObAddr &leader = (state_mgr_->get_leader().is_valid())? \
           state_mgr_->get_leader(): state_mgr_->get_broadcast_leader();
+      LogConfigVersion config_version;
+      (void) mm_->get_config_version(config_version);
       // flush op for different role
+      // migrating replicas do not send responses for reducing its impact on the leader
       if (!leader.is_valid()) {
         PALF_LOG(TRACE, "current leader is invalid, cannot send ack", K(ret), K_(palf_id), K_(self),
             K(flush_cb_ctx), K(log_end_lsn), K(leader));
+      } else if (OB_UNLIKELY(config_version.is_initial_version())) {
+        if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+          PALF_LOG(INFO, "migrating replicas do not send responses", K(ret), K_(palf_id), K_(self),
+              K(log_end_lsn), K(leader));
+        }
       } else if (OB_FAIL(submit_push_log_resp_(leader, flush_cb_ctx.curr_proposal_id_, log_end_lsn))) {
         PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(leader), K(flush_cb_ctx));
       } else {}
