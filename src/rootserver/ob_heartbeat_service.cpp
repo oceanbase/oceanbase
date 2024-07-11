@@ -251,6 +251,7 @@ int ObHeartbeatService::send_heartbeat_()
             timeout,
             GCONF.cluster_id,
             OB_SYS_TENANT_ID,
+            share::OBCG_HB_SERVICE,
             hb_requests.at(i)))) {
           // error code will be ignored here.
           // send rpc to some offline servers will return error, however, it's acceptable
