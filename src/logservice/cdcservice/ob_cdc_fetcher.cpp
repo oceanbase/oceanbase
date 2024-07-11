@@ -389,7 +389,7 @@ int ObCdcFetcher::fetch_log_in_archive_(
   int ret = OB_SUCCESS;
   // always reserve 4K for archive header
   const int64_t SINGLE_READ_SIZE = 16 * 1024 * 1024L - 4 * 1024;
-  const int64_t MAX_RETRY_COUNT = 4;
+  const int64_t MAX_RETRY_COUNT = 5;
   if (OB_FAIL(host_->init_archive_source_if_needed(ls_id, ctx))) {
     LOG_WARN("init archive source failed", K(ctx), K(ls_id));
   } else {
@@ -400,6 +400,17 @@ int ObCdcFetcher::fetch_log_in_archive_(
       LOG_WARN("convert progress to scn failed", KR(ret), K(ctx));
     } else  {
       int64_t retry_count = 0;
+      // Retry when we encounter OB_ITER_END, here is the scenario:
+      // 1. Logs does not exist in palf, and it's the first time to read archive log;
+      // 2. The lastest archive log is read, and the lastest archive file is larger than SINGLE_READ_SIZE;
+      // 3. The start_lsn is larger than SINGLE_READ_SIZE;
+      // 4. remoter iter read the latest archive file from the start;
+      // 5. then the iter encountered a incomplete log entry, and find it's reading the latest archive file, then
+      // return OB_ITER_END instead of OB_NEED_RETRY;
+      // 6. So the PieceContext is maintained outside of the iter, if OB_ITER_END is encountered, just call
+      // update_source_cb to update PieceContext, and remote iter would continue to read from the position where
+      // it interrupted last time;
+      // 7. update_source_cb must be valid in this scenario;
       do {
         if (! remote_iter.is_init() && OB_FAIL(remote_iter.init(tenant_id_, ls_id, pre_scn,
             start_lsn, LSN(LOG_MAX_LSN_VAL), large_buffer_pool_, log_ext_handler_, SINGLE_READ_SIZE))) {
@@ -920,6 +931,7 @@ int ObCdcFetcher::do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req
     PalfHandleGuard palf_guard;
     int64_t version = 0;
     ObCdcGetSourceFunctor get_source_func(ctx, version);
+    ObCdcUpdateSourceFunctor update_source_func(ctx, version);
     bool ls_exist_in_palf = true;
     bool archive_is_on = true;
     bool need_init_iter = true;
@@ -938,7 +950,7 @@ int ObCdcFetcher::do_fetch_missing_log_(const obrpc::ObCdcLSFetchMissLogReq &req
       for (int64_t idx = 0; OB_SUCC(ret) && ! frt.is_stopped() && idx < miss_log_array.count(); idx++) {
         // need_init_iter should always be true, declared here to ensure need init iter be true in each loop
         PalfBufferIterator palf_iter;
-        ObRemoteLogpEntryIterator remote_iter(get_source_func);
+        ObRemoteLogpEntryIterator remote_iter(get_source_func, update_source_func);
         const obrpc::ObCdcLSFetchMissLogReq::MissLogParam &miss_log_info = miss_log_array[idx];
         const LSN &missing_lsn = miss_log_info.miss_lsn_;
         palf::PalfBufferIterator log_entry_iter;
