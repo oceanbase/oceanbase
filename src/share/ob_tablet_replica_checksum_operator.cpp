@@ -574,8 +574,8 @@ int ObTabletReplicaChecksumOperator::batch_get(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(pairs_cnt), K(group_id));
   }
   // Step 1: check repeatable ObTabletLSPair by hash map
-  if (FAILEDx(inner_init_tablet_pair_map_(pairs, pair_map))) {
-    LOG_WARN("fail to init tablet_ls_pair map", KR(ret));
+  if (FAILEDx(inner_init_tablet_pair_map_(tenant_id, pairs, pair_map))) {
+    LOG_WARN("fail to init tablet_ls_pair map", KR(ret), K(tenant_id));
   }
   // Step 2: cut tablet replica checksum items into small batches
   int64_t start_idx = 0;
@@ -619,14 +619,15 @@ int ObTabletReplicaChecksumOperator::batch_get(
 }
 
 int ObTabletReplicaChecksumOperator::inner_init_tablet_pair_map_(
+    const uint64_t tenant_id,
     const ObIArray<ObTabletLSPair> &pairs,
     hash::ObHashMap<ObTabletLSPair, bool> &pair_map)
 {
   int ret = OB_SUCCESS;
   const int64_t pairs_cnt = pairs.count();
   if (FAILEDx(pair_map.create(hash::cal_next_prime(pairs_cnt * 2),
-      ObModIds::OB_HASH_BUCKET))) {
-    LOG_WARN("fail to create pair_map", KR(ret), K(pairs_cnt));
+      ObMemAttr(tenant_id, ObModIds::OB_HASH_BUCKET)))) {
+    LOG_WARN("fail to create pair_map", KR(ret), K(tenant_id), K(pairs_cnt));
   } else {
     ARRAY_FOREACH_N(pairs, idx, cnt) {
       // if same talet_id exist, return error
@@ -938,6 +939,7 @@ int ObTabletReplicaChecksumOperator::check_tablet_replica_checksum(
     LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(pairs), K(compaction_scn));
   } else {
     SMART_VAR(ObArray<ObTabletReplicaChecksumItem>, items) {
+      items.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
       if (OB_FAIL(batch_get(tenant_id, pairs, compaction_scn, sql_proxy, items))) {
         LOG_WARN("fail to batch get tablet replica checksum items", KR(ret), K(tenant_id), K(compaction_scn));
       } else if (0 == items.count()) {
@@ -1087,12 +1089,16 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
 
   SMART_VARS_2((ObArray<ObTabletReplicaChecksumItem>, data_table_ckm_items),
                (ObArray<ObTabletReplicaChecksumItem>, index_table_ckm_items)) {
+    data_table_ckm_items.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
+    index_table_ckm_items.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
     SMART_VARS_2((ObArray<ObTabletLSPair>, data_table_tablets),
                  (ObArray<ObTabletLSPair>, index_table_tablets)) {
-      if (OB_FAIL(data_column_ckm_sum_map.create(default_column_cnt, ObModIds::OB_CHECKSUM_CHECKER))) {
-        LOG_WARN("fail to create data table column ckm_sum map", KR(ret), K(default_column_cnt));
-      } else if (OB_FAIL(index_column_ckm_sum_map.create(default_column_cnt, ObModIds::OB_CHECKSUM_CHECKER))) {
-        LOG_WARN("fail to create index table column ckm_sum map", KR(ret), K(default_column_cnt));
+      data_table_tablets.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
+      index_table_tablets.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
+      if (OB_FAIL(data_column_ckm_sum_map.create(default_column_cnt, ObMemAttr(tenant_id, ObModIds::OB_CHECKSUM_CHECKER)))) {
+        LOG_WARN("fail to create data table column ckm_sum map", KR(ret), K(tenant_id), K(default_column_cnt));
+      } else if (OB_FAIL(index_column_ckm_sum_map.create(default_column_cnt, ObMemAttr(tenant_id, ObModIds::OB_CHECKSUM_CHECKER)))) {
+        LOG_WARN("fail to create index table column ckm_sum map", KR(ret), K(tenant_id), K(default_column_cnt));
       } else {
         index_table_id = index_table_schema.get_table_id();
         data_table_id = data_table_schema.get_table_id();
@@ -1124,14 +1130,14 @@ int ObTabletReplicaChecksumOperator::check_global_index_column_checksum(
           } else if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
             LOG_WARN("fail to get data table tablet checksum items", KR(ret), K(data_table_schema));
           }
-        } else if (OB_FAIL(need_verify_checksum_(compaction_scn, index_table_schema, index_table_ckm_items,
+        } else if (OB_FAIL(need_verify_checksum_(tenant_id, compaction_scn, index_table_schema, index_table_ckm_items,
                                          need_verify, index_ckm_tablet_cnt))) {
-          LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
+          LOG_WARN("fail to check need verfy checksum", KR(ret), K(tenant_id), K(compaction_scn), K(index_table_id), K(data_table_id));
         } else if (!need_verify) {
           LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
-        } else if (OB_FAIL(need_verify_checksum_(compaction_scn, data_table_schema, data_table_ckm_items,
+        } else if (OB_FAIL(need_verify_checksum_(tenant_id, compaction_scn, data_table_schema, data_table_ckm_items,
                                          need_verify, data_ckm_tablet_cnt))) {
-          LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
+          LOG_WARN("fail to check need verfy checksum", KR(ret), K(tenant_id), K(compaction_scn), K(index_table_id), K(data_table_id));
         } else if (!need_verify) {
           LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
         } else if (OB_FAIL(compare_column_checksum_(data_table_schema, index_table_schema, data_column_ckm_sum_map,
@@ -1185,10 +1191,16 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
 
   SMART_VARS_2((ObArray<ObTabletReplicaChecksumItem>, data_table_ckm_items),
                (ObArray<ObTabletReplicaChecksumItem>, index_table_ckm_items)) {
+    data_table_ckm_items.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
+    index_table_ckm_items.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
     SMART_VARS_4((ObArray<ObTabletLSPair>, data_table_tablets),
                  (ObArray<ObTabletLSPair>, index_table_tablets),
                  (ObArray<ObTabletID>, index_table_tablet_ids),
                  (ObArray<ObTabletID>, data_table_tablet_ids)) {
+      data_table_tablets.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
+      index_table_tablets.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
+      index_table_tablet_ids.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
+      data_table_tablet_ids.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
       if (OB_FAIL(get_tablet_replica_checksum_items_(tenant_id, sql_proxy, index_table_schema, compaction_scn,
           index_table_tablets, index_table_ckm_items))) {
         LOG_WARN("fail to get index table tablet replica ckm_items", KR(ret), K(tenant_id), K(compaction_scn),
@@ -1201,14 +1213,14 @@ int ObTabletReplicaChecksumOperator::check_local_index_column_checksum(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tablet count of local index table is not same with data table", KR(ret), "data_table_tablet_cnt",
           data_table_tablets.count(), "index_table_tablet_cnt", index_table_tablets.count());
-      } else if (OB_FAIL(need_verify_checksum_(compaction_scn, index_table_schema, index_table_ckm_items,
+      } else if (OB_FAIL(need_verify_checksum_(tenant_id, compaction_scn, index_table_schema, index_table_ckm_items,
                                        need_verify, index_ckm_tablet_cnt))) {
-        LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
+        LOG_WARN("fail to check need verfy checksum", KR(ret), K(tenant_id), K(compaction_scn), K(index_table_id), K(data_table_id));
       } else if (!need_verify) {
         LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
-      } else if (OB_FAIL(need_verify_checksum_(compaction_scn, data_table_schema, data_table_ckm_items,
+      } else if (OB_FAIL(need_verify_checksum_(tenant_id, compaction_scn, data_table_schema, data_table_ckm_items,
                                        need_verify, data_ckm_tablet_cnt))) {
-        LOG_WARN("fail to check need verfy checksum", KR(ret), K(compaction_scn), K(index_table_id), K(data_table_id));
+        LOG_WARN("fail to check need verfy checksum", KR(ret), K(tenant_id), K(compaction_scn), K(index_table_id), K(data_table_id));
       } else if (!need_verify) {
         LOG_INFO("do not need verify checksum", K(index_table_id), K(data_table_id), K(compaction_scn));
       } else if (OB_FAIL(get_table_all_tablet_ids_(index_table_schema, index_table_tablet_ids))) {
@@ -1462,6 +1474,7 @@ int ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
     SMART_VAR(ObArray<ObTabletID>, tablet_ids) {
+      tablet_ids.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
       if (OB_FAIL(get_table_all_tablet_ids_(simple_schema, tablet_ids))) {
         LOG_WARN("fail to get table all tablet ids", KR(ret), K(simple_schema));
       } else if (tablet_ids.count() > 0) {
@@ -1488,6 +1501,7 @@ int ObTabletReplicaChecksumOperator::get_tablet_ls_pairs(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(tablet_ids.count()));
   } else {
     SMART_VAR(ObArray<ObLSID>, ls_ids) {
+      ls_ids.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
       // sys_table's tablet->ls relation won't be written into __all_tablet_to_ls
       if (is_sys_tenant(tenant_id) || is_sys_table(table_id)) {
         for (int64_t i = 0; (i < tablet_ids.count()) && OB_SUCC(ret); ++i) {
@@ -1598,6 +1612,7 @@ int ObTabletReplicaChecksumOperator::check_table_all_tablets_ckm_status_(
 }
 
 int ObTabletReplicaChecksumOperator::need_verify_checksum_(
+    const uint64_t tenant_id,
     const SCN &compaction_scn,
     const ObSimpleTableSchemaV2 &simple_schema,
     const ObIArray<ObTabletReplicaChecksumItem> &items,
@@ -1609,6 +1624,7 @@ int ObTabletReplicaChecksumOperator::need_verify_checksum_(
   hash::ObHashSet<uint64_t> tablet_id_set;  // record all tablet_ids in @items
   const int64_t item_cnt = items.count();
   SMART_VAR(ObArray<ObTabletID>, schema_tablet_ids) {
+    schema_tablet_ids.set_attr(ObMemAttr(tenant_id, "TabRepCkmOp"));
     if (item_cnt <= 0) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), K(item_cnt));

@@ -247,6 +247,7 @@ private:
       const bool include_larger_than = false);
 
   static int inner_init_tablet_pair_map_(
+      const uint64_t tenant_id,
       const ObIArray<ObTabletLSPair> &pairs,
       hash::ObHashMap<ObTabletLSPair, bool> &pair_map);
 
@@ -322,6 +323,7 @@ private:
       bool &exist_error_status);
 
   static int need_verify_checksum_(
+      const uint64_t tenant_id,
       const SCN &compaction_scn,
       const schema::ObSimpleTableSchemaV2 &simple_schema,
       const common::ObIArray<ObTabletReplicaChecksumItem> &items,
