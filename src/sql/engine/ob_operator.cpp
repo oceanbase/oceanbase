@@ -917,39 +917,35 @@ int ObOperator::close()
 {
   int ret = OB_SUCCESS;
   int child_ret = OB_SUCCESS;
-  if (OB_FAIL(check_stack_overflow())) {
-    LOG_WARN("failed to check stack overflow", K(ret));
-  } else {
-    OperatorOpenOrder open_order = get_operator_open_order();
-    if (OPEN_SELF_ONLY != open_order) {
-      //first call close of children
-      for (int64_t i = 0; i < child_cnt_; ++i) {
-        // children_ pointer is checked before operator open, no need check again.
-        int tmp_ret = children_[i]->close();
-        if (OB_SUCCESS != tmp_ret) {
-          ret = OB_SUCCESS == ret ? tmp_ret : ret;
-          LOG_WARN("Close child operator failed", K(child_ret), "op_type", op_name());
-        }
+  OperatorOpenOrder open_order = get_operator_open_order();
+  if (OPEN_SELF_ONLY != open_order) {
+    //first call close of children
+    for (int64_t i = 0; i < child_cnt_; ++i) {
+      // children_ pointer is checked before operator open, no need check again.
+      int tmp_ret = SMART_CALL(children_[i]->close());
+      if (OB_SUCCESS != tmp_ret) {
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+        LOG_WARN("Close child operator failed", K(child_ret), "op_type", op_name());
       }
     }
+  }
 
-    // no matter what, must call operator's close function
-    int tmp_ret = inner_close();
-    if (OB_SUCCESS != tmp_ret) {
-      ret = tmp_ret; // overwrite child's error code.
-      LOG_WARN("Close this operator failed", K(ret), "op_type", op_name());
-    }
-    IGNORE_RETURN submit_op_monitor_node();
-    IGNORE_RETURN setup_op_feedback_info();
-    #ifdef ENABLE_DEBUG_LOG
+  // no matter what, must call operator's close function
+  int tmp_ret = inner_close();
+  if (OB_SUCCESS != tmp_ret) {
+    ret = tmp_ret; // overwrite child's error code.
+    LOG_WARN("Close this operator failed", K(ret), "op_type", op_name());
+  }
+  IGNORE_RETURN submit_op_monitor_node();
+  IGNORE_RETURN setup_op_feedback_info();
+  #ifdef ENABLE_DEBUG_LOG
     if (nullptr != dummy_mem_context_) {
       if (nullptr != dummy_ptr_) {
         dummy_mem_context_->get_malloc_allocator().free(dummy_ptr_);
         dummy_ptr_ = nullptr;
       }
     }
-    #endif
-  }
+  #endif
   return ret;
 }
 
