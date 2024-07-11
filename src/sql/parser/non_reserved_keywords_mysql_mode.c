@@ -1106,7 +1106,6 @@ static const NonReservedKeyword Mysql_sql_keywords_in_pl[] =
   {"show", SHOW},
   {"slave", SLAVE},
   {"start", START},
-  {"status", STATUS},
   {"stop", STOP},
   {"table", TABLE},
   {"tables", TABLES},
