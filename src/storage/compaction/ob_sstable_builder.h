@@ -105,7 +105,7 @@ private:
                          ObIArray<blocksstable::MacroBlockId> &macro_id_array,
                          MetaIter &iter,
                          int64_t &multiplexed_macro_block_count);
-  int pre_check_rebuild(const ObStaticMergeParam &merge_param, bool &need_check_rebuild);
+  int pre_check_rebuild(const ObStaticMergeParam &merge_param, MetaIter &iter, bool &need_check_rebuild);
   bool check_macro_block_could_merge(const blocksstable::ObDataMacroBlockMeta &macro_meta) const
   {
     return data_store_desc_.get_desc().get_row_store_type() == macro_meta.val_.row_store_type_

@@ -256,7 +256,9 @@ int ObRbUtils::binary_format_convert(ObIAllocator &allocator, const ObString &rb
 {
   int ret = OB_SUCCESS;
   ObRbBinType bin_type;
-  if (OB_FAIL(check_get_bin_type(rb_bin, bin_type))) {
+  if (rb_bin.empty()) {
+    binary_str = rb_bin;
+  } else if (OB_FAIL(check_get_bin_type(rb_bin, bin_type))) {
     LOG_WARN("invalid roaringbitmap binary string", K(ret));
   } else if (bin_type == ObRbBinType::BITMAP_32 || bin_type == ObRbBinType::BITMAP_64) {
     binary_str.assign_ptr(rb_bin.ptr(),rb_bin.length());

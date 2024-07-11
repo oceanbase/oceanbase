@@ -350,7 +350,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
-      conn->set_check_priv(true);
+      if (OB_NOT_NULL(conn)) {
+        conn->set_check_priv(true);
+      }
       OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
       if (OB_NOT_NULL(conn)) {
         sql_proxy_->close(conn, ret);
