@@ -2507,6 +2507,11 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
       alter_algorithm_,
       alter_auto_partition_attr_);
 
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(rebuild_index_arg_list_.serialize(buf, buf_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to serialize rebuild_index_arg_list_", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -2599,6 +2604,12 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
       mview_refresh_info_,
       alter_algorithm_,
       alter_auto_partition_attr_);
+
+  if (OB_SUCC(ret) && pos < data_len) {
+    if (OB_FAIL(rebuild_index_arg_list_.deserialize(buf, data_len, pos))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to deserialize rebuild_index_arg_list_", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -2622,6 +2633,7 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
       len += nls_formats_[i].get_serialize_size();
     }
     len += foreign_key_arg_list_.get_serialize_size();
+    len += rebuild_index_arg_list_.get_serialize_size();
     len += sequence_ddl_arg_.get_serialize_size();
     len += serialization::encoded_length_i64(sql_mode_);
     LST_DO_CODE(OB_UNIS_ADD_LEN,
