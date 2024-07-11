@@ -51,6 +51,7 @@ private:
   int check_target_ls_tasks_completion_status(const share::ObLSID &ls_id);
   bool is_all_tasks_finished();
   bool is_running_tasks_before_finished();
+  int refresh_ls_location_map();
   void destroy();
 private:
   bool is_inited_;
@@ -72,6 +73,7 @@ private:
   common::hash::ObHashMap<share::ObLSID, int64_t> running_ls_to_execution_id_;
   common::hash::ObHashMap<int64_t, int64_t> tablet_id_to_data_size_;
   common::hash::ObHashMap<int64_t, int64_t> tablet_id_to_data_row_cnt_;
+  common::hash::ObHashMap<int64_t, int64_t> tablet_scheduled_times_statistic_;
 };
 
 class ObTabletIdUpdater final
