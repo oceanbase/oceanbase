@@ -637,6 +637,8 @@ OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const
     cnt = std::max(cnt, 8L);
   } else if (share::OBCG_WR == group_id_) {
     cnt = 2; // one for take snapshot, one for purge
+  } else if (share::OBCG_HB_SERVICE == group_id_) {
+    cnt = 1;
   }
   return cnt;
 }
@@ -649,6 +651,8 @@ OB_INLINE int64_t ObResourceGroup::max_worker_cnt() const
     cnt = std::max(worker_concurrency * (int64_t)ceil(tenant_->unit_max_cpu()), 8L);
   } else if (OB_UNLIKELY(share::OBCG_WR == group_id_)) {
     cnt = 2;
+  } else if (OB_UNLIKELY(share::OBCG_HB_SERVICE == group_id_)) {
+    cnt = 1;
   } else {
     cnt = tenant_->max_worker_cnt();
   }
