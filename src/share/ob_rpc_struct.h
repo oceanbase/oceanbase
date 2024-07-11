@@ -79,6 +79,8 @@
 #include "share/location_cache/ob_location_update_task.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
 #include "share/ob_heartbeat_handler.h"
+#include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
+
 namespace oceanbase
 {
 namespace rootserver
@@ -1610,13 +1612,19 @@ public:
   ObRenameTableArg():
       ObDDLArg(),
       tenant_id_(common::OB_INVALID_ID),
-      rename_table_items_()
+      rename_table_items_(),
+      client_session_id_(0),
+      client_session_create_ts_(0),
+      lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL)
   {}
   bool is_valid() const;
   DECLARE_TO_STRING;
 
   uint64_t tenant_id_;
   common::ObSArray<ObRenameTableItem> rename_table_items_;
+  uint32_t client_session_id_;
+  int64_t client_session_create_ts_;
+  transaction::tablelock::ObTableLockPriority lock_priority_;
 };
 struct ObStartRedefTableArg final
 {
@@ -2160,7 +2168,10 @@ public:
       mview_refresh_info_(),
       alter_algorithm_(INPLACE),
       alter_auto_partition_attr_(false),
-      rebuild_index_arg_list_()
+      rebuild_index_arg_list_(),
+      client_session_id_(0),
+      client_session_create_ts_(0),
+      lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2229,7 +2240,11 @@ public:
                K_(inner_sql_exec_addr),
                K_(local_session_var),
                K_(mview_refresh_info),
-               K_(alter_algorithm));
+               K_(alter_algorithm),
+               K_(alter_auto_partition_attr),
+               K_(client_session_id),
+               K_(client_session_create_ts),
+               K_(lock_priority));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2266,6 +2281,9 @@ public:
   AlterAlgorithm alter_algorithm_;
   bool alter_auto_partition_attr_;
   common::ObSArray<ObTableSchema> rebuild_index_arg_list_;  // pre split
+  uint32_t client_session_id_;
+  int64_t client_session_create_ts_;
+  transaction::tablelock::ObTableLockPriority lock_priority_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;
