@@ -268,7 +268,7 @@ int RawLogFileRpcRequest::handle_sub_rpc_response(RawLogDataRpcRequest &rpc_req,
 
   if (ATOMIC_AAF(&complete_count_, 1) == sub_rpc_req_count_) {
     if (OB_TMP_FAIL(host_.handle_rpc_response(*this, need_lock))) {
-      LOG_ERROR_RET(tmp_ret, "failed to handle rpc response", K(rpc_req), KPC(this));
+      LOG_ERROR_RET(tmp_ret, "failed to handle rpc response");
     }
   }
 
