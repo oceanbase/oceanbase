@@ -449,14 +449,13 @@ void ObTransCallbackMgr::before_append(ObITransCallback *node)
 {
   int64_t size = node->get_data_size();
   int64_t new_size = 0;
-  if (!for_replay_) {
+  if (for_replay_) {
+    inc_flushed_log_size(size);
+  } else {
     new_size = inc_pending_log_size(size);
   }
   if (OB_UNLIKELY(need_merge_)) {
     try_merge_multi_callback_lists(new_size, size, node->is_logging_blocked());
-  }
-  if (for_replay_) {
-    inc_flushed_log_size(size);
   }
 }
 
@@ -464,11 +463,10 @@ void ObTransCallbackMgr::after_append(ObITransCallback *node, const int ret_code
 {
   if (OB_SUCCESS != ret_code) {
     int64_t size = node->get_data_size();
-    if (!for_replay_) {
-      inc_pending_log_size(-1 * size);
-    }
     if (for_replay_) {
       inc_flushed_log_size(-1 * size);
+    } else {
+      inc_pending_log_size(-1 * size);
     }
   }
 }
@@ -1362,6 +1360,12 @@ void ObTransCallbackMgr::try_merge_multi_callback_lists(const int64_t new_size, 
       // merge the multi callback lists once the immediate logging is satisfied.
       merge_multi_callback_lists();
     }
+  }
+}
+
+void ObTransCallbackMgr::inc_flushed_log_size(const int64_t size) {
+  if (!is_parallel_logging_()) {
+    ATOMIC_FAA(&flushed_log_size_, size);
   }
 }
 
@@ -2405,6 +2409,34 @@ void ObTransCallbackMgr::check_all_redo_flushed()
 #ifdef ENABLE_DEBUG_LOG
     ob_abort();
 #endif
+  }
+}
+
+int64_t ObTransCallbackMgr::get_pending_log_size() const
+{
+  if (!is_parallel_logging_()) {
+    return ATOMIC_LOAD(&pending_log_size_);
+  } else {
+    int64_t size = 0;
+    int ret = OB_SUCCESS;
+    CALLBACK_LISTS_FOREACH_CONST(idx, list) {
+      size += list->get_pending_log_size();
+    }
+    return size;
+  }
+}
+
+int64_t ObTransCallbackMgr::get_flushed_log_size() const
+{
+  if (!is_parallel_logging_()) {
+    return ATOMIC_LOAD(&flushed_log_size_);
+  } else {
+    int64_t size = 0;
+    int ret = OB_SUCCESS;
+    CALLBACK_LISTS_FOREACH_CONST(idx, list) {
+      size += list->get_logged_data_size();
+    }
+    return size;
   }
 }
 

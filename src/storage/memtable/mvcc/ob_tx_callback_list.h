@@ -199,6 +199,12 @@ public:
   bool has_pending_log() const {
     return ATOMIC_LOAD(&data_size_) - ATOMIC_LOAD(&logged_data_size_) > 0;
   }
+  int64_t get_pending_log_size() const {
+    return data_size_ - logged_data_size_;
+  }
+  int64_t get_logged_data_size() const {
+    return logged_data_size_;
+  }
   DECLARE_TO_STRING;
 private:
   const int16_t id_;
