@@ -41,20 +41,35 @@ namespace share
 
 WorkloadRepositoryTask::WorkloadRepositoryTask()
     : wr_proxy_(),
-      snapshot_interval_(DEFAULT_SNAPSHOT_INTERVAL),
       tg_id_(-1),
       timeout_ts_(0),
       is_running_task_(false),
       is_inited_(false)
 {}
 
-int WorkloadRepositoryTask::schedule_one_task(int64_t interval)
-{
-  if (interval == 0) {
-    // default interval is configed by snapshot_interval_
-    interval = snapshot_interval_ * 60 * 1000L * 1000L;
+
+int64_t WorkloadRepositoryTask::get_snapshot_interval() const {
+  int tmp_ret = OB_SUCCESS;
+  int64_t interval = 0;
+  int64_t tmp_interval_s = 0;
+  if (OB_TMP_FAIL(fetch_interval_num_from_wr_control(tmp_interval_s))) {
+    interval = DEFAULT_SNAPSHOT_INTERVAL;
+    LOG_INFO("failed to fetch interval num from wr control", K(tmp_ret));
+  } else if (tmp_interval_s == 0) {
+    interval = DEFAULT_SNAPSHOT_INTERVAL;
+  } else {
+    interval = tmp_interval_s / 60;
   }
-  return TG_SCHEDULE(tg_id_, *this, interval, false /*not repeat*/);
+  return interval;
+}
+
+int WorkloadRepositoryTask::schedule_one_task(int64_t interval_us)
+{
+  if (interval_us == 0) {
+    // default interval is configed by get_snapshot_interval()
+    interval_us = get_snapshot_interval() * 60 * 1000L * 1000L;
+  }
+  return TG_SCHEDULE(tg_id_, *this, interval_us, false /*not repeat*/);
 }
 
 int WorkloadRepositoryTask::modify_snapshot_interval(int64_t minutes)
@@ -64,7 +79,6 @@ int WorkloadRepositoryTask::modify_snapshot_interval(int64_t minutes)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sanpshot interval below 10 minutes is not allowed.", KR(ret), K(minutes));
   } else if (FALSE_IT(cancel_current_task())) {
-  } else if (FALSE_IT(snapshot_interval_ = minutes)) {
   } else if (OB_FAIL(schedule_one_task())) {
     LOG_WARN("failed to schedule wr snapshot task after modify snapshot interval", K(ret));
   }
@@ -147,7 +161,7 @@ void WorkloadRepositoryTask::runTimerTask()
   is_running_task_ = true;
 
   // current snapshot task must stop when next task is time to schedule.
-  timeout_ts_ = common::ObTimeUtility::current_time() + snapshot_interval_ * 60 * 1000L * 1000L;
+  timeout_ts_ = common::ObTimeUtility::current_time() +  get_snapshot_interval() * 60 * 1000L * 1000L;
   int64_t snap_id = 0;
   LOG_INFO("start to take wr snapshot", KPC(this));
 
@@ -162,14 +176,14 @@ void WorkloadRepositoryTask::runTimerTask()
     }
   }
   // dispatch next wr snapshot task(not repeat).
-  int64_t interval = timeout_ts_ - common::ObTimeUtility::current_time();
-  if (OB_UNLIKELY(interval < 0)) {
+  int64_t interval_us = timeout_ts_ - common::ObTimeUtility::current_time();
+  if (OB_UNLIKELY(interval_us < 0)) {
     LOG_INFO(
-        "already timeout wr snapshot interval", K(timeout_ts_), K(interval), K_(snapshot_interval));
-    interval = 0;
+        "already timeout wr snapshot interval", K(timeout_ts_), K(interval_us));
+    interval_us = 0;
   }
   // should dispatch next wr snapshot task regardless of errors.
-  if (OB_FAIL(schedule_one_task(interval))) {
+  if (OB_FAIL(schedule_one_task(interval_us))) {
     LOG_WARN("failed to schedule wr snapshot task after modify snapshot interval", K(ret));
   }
 
