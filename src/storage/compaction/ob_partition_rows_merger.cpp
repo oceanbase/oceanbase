@@ -506,7 +506,7 @@ int ObPartitionMajorRowsMerger::compare_base_iter()
         } else if (is_purged) {
           merger_state_ = NEED_SKIP;
           break;
-        } else if (OB_FAIL(base_item_.iter_->open_curr_range(false))) {
+        } else if (OB_FAIL(base_item_.iter_->open_curr_range(false/*for_rewrite*/))) {
           STORAGE_LOG(WARN, "Failed to base iter open_curr_range", K(ret), KPC(base_item_.iter_));
         }
       }
@@ -543,10 +543,10 @@ int ObPartitionMajorRowsMerger::check_row_iters_purge(
     //can_purged = true;
     //LOG_DEBUG("merge check_row_iters_purge", K(can_purged), "flag", tmp_row->row_flag_);
     //} else {
-    bool is_exist = false;
-    if (OB_FAIL(base_item_.iter_->exist(curr_row, is_exist))) {
+    bool need_open = false;
+    if (OB_FAIL(base_item_.iter_->need_open_curr_range(*curr_row, need_open))) {
       STORAGE_LOG(WARN, "Failed to check if rowkey exist in base iter", K(ret));
-    } else if (!is_exist) {
+    } else if (!need_open) {
       can_purged = true;
       LOG_DEBUG("merge check_row_iters_purge", K(can_purged), K(*curr_row));
     }

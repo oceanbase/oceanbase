@@ -68,6 +68,7 @@ public:
 
   virtual ~ObSSTableRowWholeScanner();
   virtual void reset() override;
+  virtual void reuse() override;
   int open(
       const ObTableIterParam &iter_param,
       ObTableAccessContext &access_ctx,
@@ -75,6 +76,8 @@ public:
       const blocksstable::ObMacroBlockDesc &macro_desc,
       blocksstable::ObSSTable &sstable,
       const bool last_mvcc_row_already_output = false);
+  int switch_query_range(const blocksstable::ObDatumRange &query_range);
+  void reset_query_range();
   int get_first_row_mvcc_info(bool &is_first_row, bool &is_shadow_row) const;
   INHERIT_TO_STRING_KV("ObStoreRowIterator", ObStoreRowIterator, K_(query_range),
                        K_(prefetch_macro_cursor), K_(cur_macro_cursor), K_(is_macro_prefetch_end),
@@ -88,7 +91,6 @@ protected:
       ObITable *table,
       const void *query_range) override;
   virtual int inner_get_next_row(const blocksstable::ObDatumRow *&row) override;
-  virtual void reuse() override;
 private:
   int init_micro_scanner(const blocksstable::ObDatumRange *range);
   int open_macro_block();
