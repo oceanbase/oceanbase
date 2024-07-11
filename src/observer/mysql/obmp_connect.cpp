@@ -2386,9 +2386,9 @@ int ObMPConnect::extract_service_name(ObSMConnection &conn, ObString &service_na
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("service_name should not be empty", KR(ret), K(kv));
       } else {
+        conn.has_service_name_ = true;
         (void) service_name.assign_ptr(kv.value_.ptr(), kv.value_.length());
       }
-      conn.has_service_name_ = true;
       is_found_service_name = true;
     }
   }
@@ -2401,6 +2401,7 @@ int ObMPConnect::extract_service_name(ObSMConnection &conn, ObString &service_na
   }
   if (OB_SUCC(ret) && ERRSIM_MOCK_SERVICE_NAME && !tenant_name_.empty() && 0 != tenant_name_.compare(OB_SYS_TENANT_NAME)) {
     service_name = ObString::make_string("test_service");
+    conn.has_service_name_ = true;
     failover_mode = true;
     LOG_INFO("ERRSIM_MOCK_SERVICE_NAME opened", KR(ret), K(service_name), K(tenant_name_));
   }
