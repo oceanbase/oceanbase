@@ -1,5 +1,5 @@
 #package_name:dbms_application_info
-#author: guoyun.lgy
+#author: xiaoyi.xy
 CREATE OR REPLACE PACKAGE BODY DBMS_APPLICATION_INFO
   PROCEDURE READ_CLIENT_INFO(OUT CLIENT_INFO VARCHAR(65535));
   PRAGMA INTERFACE(c, READ_CLIENT_INFO);
