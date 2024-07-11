@@ -22,6 +22,7 @@
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -627,8 +628,21 @@ int ObTableLoadClientTask::init_instance()
     } else if (OB_FAIL(ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(
                  tenant_id, online_opt_stat_gather))) {
       LOG_WARN("fail to get tenant optimizer gather stats on load", KR(ret), K(tenant_id));
-    } else {
-      ObTableLoadParam load_param;
+    }
+
+    ObTableLoadParam load_param;
+    double online_sample_percent = 100.;
+    if (OB_SUCC(ret)) {
+      if (online_opt_stat_gather &&
+                 OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(exec_ctx_,
+                                                                           online_sample_percent))) {
+        LOG_WARN("failed to get sys online sample percent", K(ret));
+      } else {
+        load_param.online_sample_percent_ = online_sample_percent;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       load_param.tenant_id_ = tenant_id;
       load_param.table_id_ = table_id;
       load_param.parallel_ = param_.get_parallel();
