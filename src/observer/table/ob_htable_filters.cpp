@@ -842,6 +842,26 @@ bool PageFilter::filter_all_remaining()
 }
 
 ////////////////////////////////////////////////////////////////
+int ColumnPaginationFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cell);
+  if (count_ >= offset_ + limit_) {
+    ret_code = ReturnCode::NEXT_ROW;
+  } else{
+    ret_code = count_ < offset_ ? ReturnCode::NEXT_COL : ReturnCode::INCLUDE_AND_NEXT_COL;
+    count_++;
+  }
+  return ret;
+}
+
+void ColumnPaginationFilter::reset()
+{
+  count_ = 0;
+  return;
+}
+
+////////////////////////////////////////////////////////////////
 void ColumnCountGetFilter::reset()
 {
   count_ = 0;

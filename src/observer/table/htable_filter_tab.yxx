@@ -29,7 +29,7 @@ using namespace oceanbase::common;
     oceanbase::table::hfilter::Filter *fval;
 };
 
-%token RowFilter ValueFilter QualifierFilter SingleColumnValueFilter PageFilter ColumnCountGetFilter
+%token RowFilter ValueFilter QualifierFilter SingleColumnValueFilter PageFilter ColumnPaginationFilter ColumnCountGetFilter
 %token CheckAndMutateFilter PrefixFilter
 %token TableCompareFilter
 %token LESS LESS_OR_EQUAL EQUAL NOT_EQUAL GREATER GREATER_OR_EQUAL NO_OP IS IS_NOT
@@ -338,6 +338,24 @@ simple_filter:
                     }
                     if (OB_SUCCESS != ret) {
                         ob_hfilter_error(&(@$), parse_ctx, "failed to parse PageFilter");
+                        YYABORT;
+                    }
+                }
+        |       ColumnPaginationFilter '(' INT_VALUE ',' INT_VALUE ')'
+                {
+                    int &ret = parse_ctx->error_code_ = OB_SUCCESS;
+                    $$ = OB_NEWx(hfilter::ColumnPaginationFilter, parse_ctx->allocator(), $3, $5);
+                    if (nullptr == $$) {
+                        ret = OB_ALLOCATE_MEMORY_FAILED;
+                        LOG_WARN("no memory", K(ret));
+                    } else if (OB_FAIL(parse_ctx->store_filter($$))) {
+                        LOG_WARN("failed to store filter", K(ret));
+                    } else if ($3 < 0 || $5 < 0) {
+                        ret = OB_INVALID_ARGUMENT;
+                        LOG_WARN("arguments must be positive", K(ret));
+                    }
+                    if (OB_SUCCESS != ret) {
+                        ob_hfilter_error(&(@$), parse_ctx, "failed to parse ColumnPaginationFilter");
                         YYABORT;
                     }
                 }
