@@ -1667,6 +1667,7 @@ int ObMySQLProcStatement::init(ObMySQLConnection &conn,
 #else
   conn_ = &conn;
   stmt_param_count_ = param_count;
+  in_out_map_.reset();
   if (OB_ISNULL(proc_ = sql)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql", KCSTRING(sql), K(ret));
@@ -1726,8 +1727,12 @@ int ObMySQLProcStatement::execute_proc()
   if (OB_FAIL(execute_stmt_v2_interface())) {
     LOG_WARN("failed to execute PL", K(ret));
   } else if (OB_ISNULL(res = mysql_stmt_result_metadata(stmt_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("execute result is NULL", K(ret));
+    ret = -mysql_stmt_errno(stmt_);
+    char errmsg[256] = {0};
+    const char *srcmsg = mysql_stmt_error(stmt_);
+    MEMCPY(errmsg, srcmsg, MIN(255, STRLEN(srcmsg)));
+    TRANSLATE_CLIENT_ERR(ret, errmsg);
+    LOG_WARN("failed to execute proc", K(ret), "info", mysql_stmt_error(stmt_));
   } else if (OB_FAIL(result_.init())) {
     LOG_WARN("fail to init prepared result", K(ret));
   } else if (FALSE_IT(result_column_count_ = res->field_count)) {
