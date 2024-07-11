@@ -103,7 +103,10 @@ public:
   void set_not_need_last_info(bool not_need_last_info) { not_need_last_info_ = not_need_last_info;}
   bool not_need_last_info() const { return not_need_last_info_; }
   bool is_remote() const { return is_remote_; }
-  TO_STRING_KV(K_(cur_pos), K_(cur_byte_pos), K_(not_calc_char_len), K_(not_need_last_info));
+
+  // the memory of cur_info may be relased by storage
+  // so can not print cur_info directly
+  TO_STRING_KV(K_(cur_pos), K_(cur_byte_pos), K(cur_info_.lob_id_), K_(not_calc_char_len), K_(not_need_last_info));
 private:
   bool is_in_range(const ObLobMetaInfo& info);
   int get_next_row_remote(ObString &data);

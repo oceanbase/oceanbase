@@ -51,7 +51,13 @@ int ObLobQueryBaseHandler::execute()
     if (OB_FAIL(do_execute())) {
       LOG_WARN("do_execute fail, check need rerty", KR(ret), K(retry_cnt), K(param_));
       is_continue = false;
-      if (OB_TMP_FAIL(ObLobRetryUtil::check_need_retry(param_, ret, retry_cnt, is_continue))) {
+      if (param_.no_need_retry_) {
+        LOG_INFO("no need retry", K(ret), K(is_continue), K(retry_cnt), K(param_));
+        is_continue = false;
+      } else if (OB_ISNULL(param_.lob_locator_)) {
+        LOG_WARN("lob locator is null, so can not retry", K(ret), K(is_continue), K(retry_cnt), K(param_));
+        is_continue = false;
+      } else if (OB_TMP_FAIL(ObLobRetryUtil::check_need_retry(param_, ret, retry_cnt, is_continue))) {
         LOG_WARN("check_need_retry fail", K(tmp_ret), K(ret), K(is_continue), K(retry_cnt), K(param_));
         // check fail, do not retry
         is_continue = false;
