@@ -113,6 +113,7 @@ ob_set_subtarget(oblib_lib geo
   geo/ob_geo_topology_calculate.cpp
   geo/ob_point_location_analyzer.cpp
   geo/ob_geo_point_location_visitor.cpp
+  geo/ob_geo_func_simplify.cpp
 )
 
 ob_set_subtarget(oblib_lib roaringbitmap
