@@ -318,6 +318,11 @@ set session transaction isolation level read committed;
 #    select 110;
 #                      select 1000010 // replace old tx desc
 #    commit;
+#Case 9: savepoint start trx
+#    savepoint sp6;
+#                      insert 1000011
+#    sleep 10s
+#    commit;
 #--------------------------------------------------------------------------
 set autocommit=0;
 --echo "CASE 4.1"
@@ -396,6 +401,50 @@ select * from t where id = 1000010;
 let $session_2=`select connection_id()`;
 commit;
 if ($session_1 == $session_2) { --echo "txn is not freely routed !! session: 1=$session_1, 2=$session_2";
+}
+--echo "CASE 4.9"
+savepoint sp6;
+let $session_0=`select connection_id()`;
+select * from t where id = 110;
+let $session_1=`select connection_id()`;
+select * from t where id = 1000010;
+let $session_2=`select connection_id()`;
+if ($session_0 != $session_1) {
+if ($session_0 != $session_2) {
+  --echo "unexpected error happen!!!";
+}
+} 
+--disable_query_log
+--disable_result_log
+if ($session_0 == $session_1) {
+  insert into t values(1000011);
+  let $session_3=`select connection_id()`;
+}
+if ($session_0 == $session_2) {
+  insert into t values(888);
+  let $session_3=`select connection_id()`;
+}
+sleep 10;
+if ($session_0 == $session_1) {
+  select * from t where id = 1000011;
+  let $session_4=`select connection_id()`;
+  let $txid =`select ob_transaction_id()`;
+}
+if ($session_0 == $session_2) {
+  select * from t where id = 888;
+  let $session_4=`select connection_id()`;
+  let $txid =`select ob_transaction_id()`;
+}
+--enable_result_log
+--enable_query_log
+if ($txid == 0) {
+  --echo "unexpected error happen!!!";
+}
+if ($session_4 != $session_3) {
+  --echo "unexpected error happen!!! session: 0:$session_0, 1:$session_1, 2:$session_2, 3:$session_3, 4:$session_4";
+}
+commit;
+if ($sp_sess == $session_3) { --echo "txn is not freely routed !! session: 1=$session_1, 2=$session_2, 3=$session_3";
 }
 
 --echo "------------- 5 - change session auto_commit ----------------------"
