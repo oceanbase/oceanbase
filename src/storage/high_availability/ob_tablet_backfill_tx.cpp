@@ -26,6 +26,9 @@ namespace oceanbase
 using namespace share;
 namespace storage
 {
+//errsim def
+ERRSIM_POINT_DEF(EN_UPDATE_TRANSFER_TABLET_TABLE_ERROR);
+
 /******************ObBackfillTXCtx*********************/
 ObBackfillTXCtx::ObBackfillTXCtx()
   : task_id_(),
@@ -392,6 +395,58 @@ int ObTabletBackfillTXDag::get_tablet_handle(ObTabletHandle &tablet_handle)
     LOG_WARN("tablet backfill tx dag do not init", K(ret));
   } else {
     tablet_handle = tablet_handle_;
+  }
+  return ret;
+}
+
+int ObTabletBackfillTXDag::inner_reset_status_for_retry()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  int32_t result = OB_SUCCESS;
+  int32_t retry_count = 0;
+  ObLS *ls = nullptr;
+  ObLSService *ls_service = nullptr;
+  ObLSHandle ls_handle;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet backfill tx dag do not init", K(ret), KP(ha_dag_net_ctx_));
+  } else if (ha_dag_net_ctx_->is_failed()) {
+    if (OB_SUCCESS != (tmp_ret = ha_dag_net_ctx_->get_result(ret))) {
+      LOG_WARN("failed to get result", K(tmp_ret), KPC(ha_dag_net_ctx_));
+      ret = tmp_ret;
+    } else {
+      LOG_INFO("set inner set status for retry failed", K(ret), KPC(ha_dag_net_ctx_));
+    }
+  } else if (OB_FAIL(result_mgr_.get_result(result))) {
+    LOG_WARN("failed to get result", K(ret), KPC(this));
+  } else if (OB_FAIL(result_mgr_.get_retry_count(retry_count))) {
+    LOG_WARN("failed to get retry count", K(ret));
+  } else {
+    LOG_INFO("start retry", KPC(this));
+    SERVER_EVENT_ADD("storage_ha", "tablet_backfill_retry",
+        "tenant_id", MTL_ID(),
+        "ls_id", ls_id_,
+        "tablet_id", tablet_info_.tablet_id_,
+        "result", result, "retry_count", retry_count);
+
+    result_mgr_.reuse();
+    tablet_handle_.reset();
+
+    if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(ls_id_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id_));
+    } else if (OB_FAIL(ls->ha_get_tablet(tablet_info_.tablet_id_, tablet_handle_))) {
+      LOG_WARN("failed to get tablet", K(ret), K(tablet_info_));
+    } else if (OB_FAIL(create_first_task())) {
+      LOG_WARN("failed to create first task", K(ret), KPC(this));
+    }
   }
   return ret;
 }
@@ -1057,7 +1112,24 @@ int ObTabletTableBackfillTXTask::update_merge_sstable_()
                                   is_major_merge_type(tablet_merge_ctx_.param_.merge_type_),
                                   tablet_merge_ctx_.merged_sstable_.get_end_scn());
 
-    if (OB_FAIL(ls->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_UPDATE_TRANSFER_TABLET_TABLE_ERROR ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      STORAGE_LOG(WARN, "fake EN_UPDATE_TRANSFER_TABLET_TABLE_ERROR", K(ret));
+      SERVER_EVENT_ADD("TRANSFER", "UPDATE_TRANSFER_TABLET_TABLE",
+                       "task_id", backfill_tx_ctx_->task_id_,
+                       "tenant_id", MTL_ID(),
+                       "src_ls_id", backfill_tx_ctx_->ls_id_,
+                       "dest_ls_id", "",
+                       "tablet_id", tablet_id_,
+                       "result", ret);
+    }
+  }
+#endif
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ls->update_tablet_table_store(tablet_id_, param, new_tablet_handle))) {
       LOG_WARN("failed to update tablet table store", K(ret), K(param));
     } else if (is_mini_merge(tablet_merge_ctx_.param_.merge_type_)) {
       if (OB_FAIL(new_tablet_handle.get_obj()->release_memtables(tablet_merge_ctx_.scn_range_.end_scn_))) {

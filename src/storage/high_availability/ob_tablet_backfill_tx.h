@@ -83,6 +83,7 @@ public:
       ObBackfillTXCtx *backfill_tx_ctx);
   virtual int generate_next_dag(share::ObIDag *&dag);
   int get_tablet_handle(ObTabletHandle &tablet_handle);
+  virtual int inner_reset_status_for_retry() override;
 
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
 protected:
