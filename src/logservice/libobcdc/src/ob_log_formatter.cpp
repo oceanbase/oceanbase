@@ -1321,7 +1321,7 @@ int ObLogFormatter::fill_normal_cols_(
             } else if (OB_ENTRY_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
               rv->new_columns_[usr_column_idx] = nullptr;
-              LOG_INFO("fill_normal_cols_ nullptr", K(is_new_value), KPC(cv), K(lob_ctx_cols));
+              LOG_DEBUG("fill_normal_cols_ nullptr", K(is_new_value), KPC(cv), K(lob_ctx_cols));
             }
           }
           rv->is_changed_[usr_column_idx] = true;
@@ -1358,7 +1358,7 @@ int ObLogFormatter::fill_normal_cols_(
               ret = OB_SUCCESS;
               rv->old_columns_[usr_column_idx] = nullptr;
               rv->is_null_lob_old_columns_[usr_column_idx] = true;
-              LOG_INFO("fill_normal_cols_ nullptr", K(usr_column_idx), K(is_new_value), KPC(cv), K(lob_ctx_cols));
+              LOG_DEBUG("fill_normal_cols_ nullptr", K(usr_column_idx), K(is_new_value), KPC(cv), K(lob_ctx_cols));
             }
           }
         }
