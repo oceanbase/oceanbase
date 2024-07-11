@@ -1848,6 +1848,10 @@ int ObTransferReplaceTableTask::build_migration_param_(
   } else if (OB_ISNULL(src_tablet = src_tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src tablet should not be NULL", K(ret), KP(src_tablet));
+  } else if (src_tablet->get_tablet_meta().snapshot_version_ > ctx_->backfill_scn_.get_val_for_tx()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transfer src tablet snapshot version is bigger than backfill scn, unexpected",
+             K(ret), KPC(ctx_), KPC(src_tablet));
   } else {
     param.mds_data_.reset();
     param.storage_schema_.reset();

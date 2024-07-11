@@ -817,6 +817,12 @@ int ObFreezer::force_tablet_freeze(const ObTabletID &tablet_id)
       TRANS_LOG(WARN, "[Freezer] fail to get tablet for freeze", K(ret), K(ls_id), K(tablet_id));
       stat_.add_diagnose_info("fail to get tablet");
     } else if (FALSE_IT(tablet = handle.get_obj())) {
+    } else if (OB_FAIL(decide_real_snapshot_version_(tablet_id,
+                                                     tablet,
+                                                     freeze_snapshot_version_,
+                                                     freeze_snapshot_version_))) {
+      TRANS_LOG(WARN, "[Freezer] fail to decide real snapshot", K(ret), K(ls_id), K(tablet_id));
+      stat_.add_diagnose_info("fail to decide real snapshot");
     } else if (OB_FAIL(create_memtable_if_no_active_memtable(tablet))) {
       if (OB_NO_NEED_UPDATE == ret) {
         ret = OB_SUCCESS;
@@ -935,6 +941,43 @@ int ObFreezer::try_wait_memtable_ready_for_flush_with_ls_lock(memtable::ObMemtab
     }
 
     ob_usleep(100);
+  }
+
+  return ret;
+}
+
+int ObFreezer::decide_real_snapshot_version_(const ObTabletID &tablet_id,
+                                             const ObTablet *tablet,
+                                             const SCN freeze_snapshot_version,
+                                             SCN &real_snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  ObTabletCreateDeleteMdsUserData user_data;
+  mds::MdsWriter unused_writer;// will be removed later
+  mds::TwoPhaseCommitState unused_trans_stat;// will be removed later
+  share::SCN unused_trans_version;// will be removed later
+  share::SCN transfer_scn = share::SCN::max_scn();
+
+  if (tablet_id.is_ls_inner_tablet()) {
+    //do nothing
+  } else if (OB_FAIL(tablet->get_latest(user_data,
+                                        unused_writer,
+                                        unused_trans_stat,
+                                        unused_trans_version))) {
+    LOG_WARN("fail to get latest tablet status", K(ret), KPC(tablet));
+  } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
+             && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
+    //do nothing
+  } else if (user_data.transfer_scn_.is_valid()) {
+    transfer_scn = user_data.transfer_scn_;
+  }
+
+  if (OB_SUCC(ret)) {
+    real_snapshot_version = MIN(freeze_snapshot_version, transfer_scn);
+    if (real_snapshot_version != freeze_snapshot_version) {
+      FLOG_INFO("update tablet snapshot version changed snapshot version for transfer",
+                K(real_snapshot_version), K(freeze_snapshot_version), K(transfer_scn), K(user_data));
+    }
   }
 
   return ret;
