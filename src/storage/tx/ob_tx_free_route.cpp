@@ -714,6 +714,7 @@ int ObTransService::txn_free_route__update_extra_state(const uint32_t session_id
       } else if ((add_tx || replace_tx) && OB_FAIL(tx_desc_mgr_.add_with_txid(tx->tx_id_, *tx))) {
         TRANS_LOG(WARN, "add tx to mgr fail", K(ret));
       } else if (FALSE_IT(tx->flags_.REPLICA_ = tx->addr_ != self_)) {
+      } else if (FALSE_IT(ctx.set_start_sessid(tx->sess_id_))) {
       }
       int64_t elapsed_us = ObTimeUtility::current_time() - start_ts;
       ObTransTraceLog &tlog = tx->get_tlog();
