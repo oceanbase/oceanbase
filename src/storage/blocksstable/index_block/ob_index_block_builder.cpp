@@ -519,7 +519,7 @@ int ObSSTableIndexBuilder::init(const ObDataStoreDesc &data_desc,
   } else {
     index_store_desc_.get_desc().sstable_index_builder_ = this;
     callback_ = callback;
-    optimization_mode_ = mode;
+    optimization_mode_ = data_desc.is_cg() && data_desc.get_major_working_cluster_version() >= DATA_VERSION_4_3_2_0 ? DISABLE : mode;
     if (OB_FAIL(leaf_store_desc_.shallow_copy(index_store_desc_.get_desc()))) {
       STORAGE_LOG(WARN, "fail to assign leaf store desc", K(ret));
     } else {
