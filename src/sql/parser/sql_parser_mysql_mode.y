@@ -508,7 +508,7 @@ END_P SET_VAR DELIMITER
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list
-%type <node> load_data_stmt opt_load_local opt_duplicate opt_load_charset opt_load_ignore_rows
+%type <node> load_data_stmt opt_load_local opt_duplicate opt_load_charset opt_load_ignore_rows infile_string
 %type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option
 %type <node> load_set_list load_set_element load_data_with_opt_hint
 %type <node> ret_type opt_agg
@@ -4676,7 +4676,7 @@ NAME_OB
  *
  *****************************************************************************/
 load_data_stmt:
-load_data_with_opt_hint opt_load_local INFILE STRING_VALUE opt_duplicate INTO TABLE
+load_data_with_opt_hint opt_load_local INFILE infile_string opt_duplicate INTO TABLE
 relation_factor opt_use_partition opt_load_charset field_opt line_opt opt_load_ignore_rows
 opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
 {
@@ -4697,6 +4697,32 @@ opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
                            );
 }
 ;
+
+
+infile_string:
+STRING_VALUE
+{
+  if ($1->str_len_ > 0) {
+    char *buf = (char *)parser_alloc(result->malloc_pool_, $1->str_len_ + 1);
+    if (buf != NULL) {
+      memcpy(buf, $1->str_value_, $1->str_len_);
+      buf[$1->str_len_] = '\0';
+      for(int64_t i = 0; i < $1->str_len_; i ++) { //lower string
+        if (buf[i] >= 'A' && buf[i] <= 'Z') {
+          buf[i] = buf[i] - 'A' + 'a';
+        }
+      }
+      if (strstr(buf, "access_id")) { //If infile string contains access_id, then set true
+        result->contain_sensitive_data_ = true;
+      }
+    } else { //it cannot alloc mem, then set true directly.
+      result->contain_sensitive_data_ = true;
+    }
+  }
+  $$ = $1;
+  $$->stmt_loc_.first_column_ = @1.first_column - 1;
+  $$->stmt_loc_.last_column_ = @1.last_column - 1;
+};
 
 load_data_with_opt_hint:
 LOAD DATA {$$ = NULL;}
