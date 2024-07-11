@@ -144,7 +144,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     insert_overwrite_(false),
     online_sample_percent_(1.),
     can_set_feedback_info_(true),
-    need_switch_to_table_lock_worker_(false)
+    need_switch_to_table_lock_worker_(false),
+    data_complement_gen_doc_id_(false)
 {
 }
 
@@ -248,6 +249,7 @@ void ObPhysicalPlan::reset()
   online_sample_percent_ = 1.;
   can_set_feedback_info_.store(true);
   need_switch_to_table_lock_worker_ = false;
+  data_complement_gen_doc_id_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -823,7 +825,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     immediate_refresh_external_table_ids_,
                     insert_overwrite_,
                     online_sample_percent_,
-                    need_switch_to_table_lock_worker_);
+                    need_switch_to_table_lock_worker_,
+                    data_complement_gen_doc_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
