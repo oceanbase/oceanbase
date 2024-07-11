@@ -184,6 +184,26 @@ TEST(TestCancelTask, reschedule_self_and_cancel)
   timer.destroy();
 }
 
+// case6: cancel-->wait_task
+TEST(TestCancelTask, cancel_and_wait_task)
+{
+  ObTimer timer;
+  ASSERT_EQ(OB_SUCCESS, timer.init());
+  ASSERT_TRUE(timer.inited());
+  ASSERT_EQ(OB_SUCCESS, timer.start());
+
+  TaskCommon task;
+  task.exec_time_ = 10000; // 10ms
+  ASSERT_EQ(OB_SUCCESS, timer.schedule(task, 500000, true)); // 500ms true
+  ::usleep(800000); // 800ms
+  ASSERT_EQ(1, task.task_run_count_);
+  timer.cancel_task(task);
+  timer.wait_task(task);
+  ::usleep(1000000); // 1s
+  ASSERT_EQ(1, task.task_run_count_);
+  timer.destroy();
+}
+
 } // end namespace common
 } // end namespace oceanbase
 
