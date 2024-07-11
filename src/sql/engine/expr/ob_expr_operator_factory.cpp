@@ -450,6 +450,7 @@
 #include "sql/engine/expr/ob_expr_rb_calc.h"
 #include "sql/engine/expr/ob_expr_rb_to_string.h"
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
+#include "sql/engine/expr/ob_expr_st_disjoint.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
@@ -1116,6 +1117,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbToString);
     REG_OP(ObExprRbFromString);
     REG_OP(ObExprGetPath);
+    REG_OP(ObExprSTDisjoint);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);

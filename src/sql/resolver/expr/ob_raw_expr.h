@@ -164,7 +164,8 @@ extern ObRawExpr *USELESS_POINTER;
     || ((op) == T_FUN_SYS_ST_DIFFERENCE) \
     || ((op) == T_FUN_SYS_ST_ASGEOJSON) \
     || ((op) == T_FUN_SYS_ST_CENTROID) \
-    || ((op) == T_FUN_SYS_ST_SYMDIFFERENCE)) \
+    || ((op) == T_FUN_SYS_ST_SYMDIFFERENCE) \
+    || ((op) == T_FUN_SYS_ST_DISJOINT)) \
 
 #define IS_PRIV_GEO_OP(op) \
   (((op) == T_FUN_SYS_PRIV_ST_BUFFER) \
