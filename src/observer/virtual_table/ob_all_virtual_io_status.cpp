@@ -448,7 +448,7 @@ int ObAllVirtualIOQuota::record_sys_group(const uint64_t tenant_id, ObSysIOUsage
             QuotaInfo item;
             item.tenant_id_ = tenant_id;
             item.mode_ = static_cast<ObIOMode>(j);
-            item.group_id_ = SYS_RESOURCE_GROUP_START_ID + i;
+            item.group_id_ = SYS_MODULE_START_ID + i;
             item.size_ = sys_avg_size.at(i).at(j);
             item.real_iops_ = sys_avg_iops.at(i).at(j);
             item.min_iops_ = 0;

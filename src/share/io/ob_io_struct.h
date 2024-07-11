@@ -172,14 +172,14 @@ public:
   int init();
   void accumulate(ObIORequest &req);
   void calculate_io_usage();
-  typedef ObSEArray<ObSEArray<double, SYS_RESOURCE_GROUP_CNT>, 2> SysAvgItems;
+  typedef ObSEArray<ObSEArray<double, SYS_MODULE_CNT>, 2> SysAvgItems;
   void get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us);
   void record_request_start(ObIORequest &req);
   void record_request_finish(ObIORequest &req);
   TO_STRING_KV(K(io_stats_), K(io_estimators_), K(group_avg_iops_), K(group_avg_byte_), K(group_avg_rt_us_));
 private:
-  ObSEArray<ObSEArray<ObIOStat, SYS_RESOURCE_GROUP_CNT>, 2> io_stats_;
-  ObSEArray<ObSEArray<ObIOStatDiff, SYS_RESOURCE_GROUP_CNT>, 2> io_estimators_;
+  ObSEArray<ObSEArray<ObIOStat, SYS_MODULE_CNT>, 2> io_stats_;
+  ObSEArray<ObSEArray<ObIOStatDiff, SYS_MODULE_CNT>, 2> io_estimators_;
   SysAvgItems group_avg_iops_;
   SysAvgItems group_avg_byte_;
   SysAvgItems group_avg_rt_us_;

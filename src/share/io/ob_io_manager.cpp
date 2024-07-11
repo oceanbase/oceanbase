@@ -629,7 +629,7 @@ int ObTenantIOManager::init(const uint64_t tenant_id,
   } else if (OB_FAIL(io_usage_.init(io_config.group_num_))) {
      LOG_WARN("init io usage failed", K(ret), K(io_usage_), K(io_config.group_num_));
   } else if (OB_FAIL(io_backup_usage_.init())) {
-     LOG_WARN("init io usage failed", K(ret), K(io_backup_usage_), K(SYS_RESOURCE_GROUP_CNT));
+     LOG_WARN("init io usage failed", K(ret), K(io_backup_usage_), K(SYS_MODULE_CNT));
   } else if (OB_FAIL(io_clock_->init(io_config, &io_usage_))) {
     LOG_WARN("init io clock failed", K(ret), K(io_config));
   } else if (OB_FAIL(io_scheduler->init_group_queues(tenant_id, io_config.group_num_, &io_allocator_))) {
@@ -1354,7 +1354,7 @@ void ObTenantIOManager::print_io_status()
           if (j >= sys_avg_size_->count() || j >= sys_avg_iops_->count() || j >= sys_avg_rt_->count()) {
             // ignore
           } else {
-            ObIOModule module = static_cast<ObIOModule>(SYS_RESOURCE_GROUP_START_ID + j);
+            ObIOModule module = static_cast<ObIOModule>(SYS_MODULE_START_ID + j);
             if (sys_avg_size_->at(j).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon()) {
               databuff_printf(buf,
                   len,
