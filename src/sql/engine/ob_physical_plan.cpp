@@ -138,7 +138,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     disable_auto_memory_mgr_(false),
     insertup_can_do_gts_opt_(false),
     all_local_session_vars_(&allocator_),
-    udf_has_dml_stmt_(false)
+    udf_has_dml_stmt_(false),
+    can_set_feedback_info_(true)
 {
 }
 
@@ -238,6 +239,7 @@ void ObPhysicalPlan::reset()
   udf_has_dml_stmt_ = false;
   insertup_can_do_gts_opt_ = false;
   disable_auto_memory_mgr_ = false;
+  can_set_feedback_info_.store(true);
 }
 void ObPhysicalPlan::destroy()
 {
@@ -1389,6 +1391,13 @@ int ObPhysicalPlan::set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_
     }
   }
   return ret;
+}
+
+bool ObPhysicalPlan::try_record_plan_info()
+{
+  bool expected = true;
+  bool b_ret = can_set_feedback_info_.compare_exchange_strong(expected, false);
+  return b_ret;
 }
 
 } //namespace sql

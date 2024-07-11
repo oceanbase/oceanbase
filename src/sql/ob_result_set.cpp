@@ -878,7 +878,7 @@ OB_INLINE int ObResultSet::do_close_plan(int errcode, ObExecContext &ctx)
       ret = sret;
     }
     if (OB_SUCC(ret)) {
-      if (physical_plan_->need_record_plan_info()) {
+      if (physical_plan_->try_record_plan_info()) {
         if (ctx.get_feedback_info().is_valid() &&
             physical_plan_->get_logical_plan().is_valid() &&
             OB_FAIL(physical_plan_->set_feedback_info(ctx))) {
