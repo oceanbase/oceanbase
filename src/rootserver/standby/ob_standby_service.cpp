@@ -168,8 +168,11 @@ int ObStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Tenant COMPATIBLE is below 4.1.0.0, switch tenant is not supported", KR(ret));
     TENANT_ROLE_TRANS_USER_ERR_WITH_SUFFIX(OB_NOT_SUPPORTED, "Tenant COMPATIBLE is below 4.1.0.0", arg.get_op_type());
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_2_2_0 && is_verify)) {
-    LOG_INFO("version < 4_2_2_0 does not support this operation");
+  } else if (OB_UNLIKELY(is_verify && !(compat_version >= DATA_VERSION_4_2_2_0
+      || (compat_version >= MOCK_DATA_VERSION_4_2_1_8 && compat_version < DATA_VERSION_4_2_2_0)))) {
+    ret = common::OB_NOT_SUPPORTED;
+    LOG_WARN("only (version >= 4_2_1_8 and version < 4_2_2_0) "
+    "or version >= 4_2_2_0 support this operation", KR(ret), K(compat_version));
   } else if (OB_FAIL(check_if_tenant_status_is_normal_(switch_tenant_id, arg.get_op_type()))) {
     LOG_WARN("fail to check if tenant status is normal", KR(ret), K(switch_tenant_id), K(arg));
   } else if (OB_FAIL(all_ls.init())) {

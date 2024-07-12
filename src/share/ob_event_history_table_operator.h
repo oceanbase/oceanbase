@@ -341,9 +341,11 @@ int ObEventHistoryTableOperator::async_add_tenant_event(
   uint64_t compat_version = 0;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     SHARE_LOG(WARN, "fail to get data version", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(compat_version < DATA_VERSION_4_2_2_0)) {
+  } else if (OB_UNLIKELY(!(compat_version >= DATA_VERSION_4_2_2_0
+      || (compat_version >= MOCK_DATA_VERSION_4_2_1_8 && compat_version < DATA_VERSION_4_2_2_0)))) {
     ret = common::OB_NOT_SUPPORTED;
-    SHARE_LOG(WARN, "version < 4_2_2_0 does not support this operation", KR(ret));
+    SHARE_LOG(WARN, "only (version >= 4_2_1_8 and version < 4_2_2_0) "
+    "or version >= 4_2_2_0 support this operation", KR(ret), K(compat_version));
   } else if (OB_UNLIKELY(!inited_)) {
     ret = common::OB_NOT_INIT;
     SHARE_LOG(WARN, "not init", KR(ret));
