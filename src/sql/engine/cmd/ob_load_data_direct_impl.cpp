@@ -2478,6 +2478,8 @@ int ObLoadDataDirectImpl::init_execute_context()
   if (OB_SUCC(ret)) {
     if (execute_param_.online_opt_stat_gather_ &&
                OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*ctx_,
+                                                                         execute_param_.tenant_id_,
+                                                                         execute_param_.table_id_,
                                                                          online_sample_percent))) {
       LOG_WARN("failed to get sys online sample percent", K(ret));
     } else {
@@ -2492,9 +2494,6 @@ int ObLoadDataDirectImpl::init_execute_context()
     } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
                  table_compressor_type, execute_param_.parallel_, load_param.compressor_type_))) {
       LOG_WARN("fail to get tmp store compressor type", KR(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*ctx_,
-                                                                         load_param.online_sample_percent_))) {
-      LOG_WARN("fail to get sys online estimate percent", KR(ret));
     } else if (OB_FAIL(direct_loader_.init(load_param, execute_param_.column_ids_,
                                            &execute_ctx_.exec_ctx_))) {
       LOG_WARN("fail to init direct loader", KR(ret));

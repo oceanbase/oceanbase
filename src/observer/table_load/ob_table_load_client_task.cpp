@@ -635,6 +635,8 @@ int ObTableLoadClientTask::init_instance()
     if (OB_SUCC(ret)) {
       if (online_opt_stat_gather &&
                  OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(exec_ctx_,
+                                                                           tenant_id,
+                                                                           table_id,
                                                                            online_sample_percent))) {
         LOG_WARN("failed to get sys online sample percent", K(ret));
       } else {

@@ -1316,6 +1316,8 @@ int ObUpgradeFor4320Processor::post_upgrade()
     LOG_WARN("fail to reset compat version", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_spm())) {
     LOG_WARN("failed to post upgrade for spm", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_online_estimate_percent())) {
+    LOG_WARN("failed to post upgrade for online estimate percent", KR(ret));
   }
   return ret;
 }
@@ -1420,6 +1422,33 @@ int ObUpgradeFor4320Processor::post_upgrade_for_spm()
 
   return ret;
 }
+
+int ObUpgradeFor4320Processor::post_upgrade_for_online_estimate_percent()
+{
+  int ret = OB_SUCCESS;
+  int64_t start = ObTimeUtility::current_time();
+  ObSqlString raw_sql;
+  int64_t affected_rows = 0;
+  bool is_primary_tenant = false;
+  if (sql_proxy_ == NULL) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("tenant isn't primary standby, no refer to gather stats, skip", K(tenant_id_));
+  } else if (OB_FAIL(ObDbmsStatsPreferences::get_online_estimate_percent_for_upgrade(raw_sql))) {
+    LOG_WARN("failed to get extra stats perfs for upgrade", K(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, raw_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] post upgrade for online estimate failed", KR(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("[UPGRADE] post upgrade for online estimate succeed", K_(tenant_id));
+  }  return ret;
+}
+
 /* =========== 4310 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */
