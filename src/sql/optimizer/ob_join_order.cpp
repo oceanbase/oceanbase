@@ -6047,15 +6047,15 @@ int JoinPath::compute_join_path_ordering()
   } else if (JoinAlgo::MERGE_JOIN == join_algo_) {
     if (FULL_OUTER_JOIN != join_type_ && RIGHT_OUTER_JOIN != join_type_) {
       // 目前 ObMergeJoin 的实现只能继承左支的序
-      if (!is_left_need_sort()) {
+      if (!is_left_need_sort() && !is_left_need_exchange()) {
         set_interesting_order_info(left_path_->get_interesting_order_info());
         if(OB_FAIL(append(ordering_, left_path_->ordering_))) {
           LOG_WARN("failed to append join ordering", K(ret));
         } else if (OB_FAIL(parent_->check_join_interesting_order(this))) {
           LOG_WARN("failed to update join interesting order info", K(ret));
         } else {
-          is_range_order_ = is_fully_partition_wise() && left_path_->is_range_order_;
-          is_local_order_ = is_fully_partition_wise() && !left_path_->is_range_order_;
+          is_range_order_ = left_path_->is_range_order_;
+          is_local_order_ = left_path_->is_local_order_;
         }
       } else {
         int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
@@ -6067,7 +6067,7 @@ int JoinPath::compute_join_path_ordering()
           LOG_WARN("failed to check all interesting order", K(ret));
         } else {
           add_interesting_order_flag(interesting_order_info);
-          is_local_order_ = is_fully_partition_wise();
+          is_local_order_ = is_fully_partition_wise() || join_dist_algo_ == DIST_NONE_ALL;
         }
       }
     } else { /*do nothing*/ }
@@ -8282,6 +8282,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
     } else {
       path->set_interesting_order_info(interesting_order_info);
       path->is_local_order_ = root->get_is_local_order();
+      path->is_range_order_ = root->get_is_range_order();
       path->exchange_allocated_ = root->is_exchange_allocated();
       path->phy_plan_type_ = root->get_phy_plan_type();
       path->location_type_ = root->get_location_type();

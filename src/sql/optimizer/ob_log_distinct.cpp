@@ -76,7 +76,7 @@ int ObLogDistinct::compute_op_ordering()
   } else if (OB_FAIL(ObLogicalOperator::compute_op_ordering())) {
     LOG_WARN("failed to compute op ordering", K(ret));
   } else {
-    is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty();
+    is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty() && !is_range_order_;
   }
   return ret;
 }
