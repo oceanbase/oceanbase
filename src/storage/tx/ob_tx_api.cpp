@@ -1415,7 +1415,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
     }
     if (!sp_scn.is_valid()) {
       ret = OB_SAVEPOINT_NOT_EXIST;
-      TRANS_LOG(WARN, "savepoint not exist", K(ret), K(savepoint), K_(tx.savepoints));
+      TRANS_LOG(WARN, "savepoint not exist", K(ret), K(session_id), K(savepoint), K_(tx.savepoints));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1438,7 +1438,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
     // rollback savepoints > sp (note, current savepoint with sp won't be released)
     ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
       ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
-      if (it.scn_ > sp_scn) {
+      if (it.scn_ > sp_scn && it.session_id_ == session_id) {
         it.rollback();
       }
     }
@@ -2029,6 +2029,11 @@ int ObTransService::start_epoch_(ObTxDesc &tx)
 int ObTransService::release_tx_ref(ObTxDesc &tx)
 {
   return tx_desc_mgr_.release_tx_ref(&tx);
+}
+
+int ObTransService::tx_sanity_check(ObTxDesc &tx)
+{
+  return tx_sanity_check_(tx);
 }
 
 OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)
