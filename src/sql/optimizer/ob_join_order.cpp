@@ -1941,7 +1941,6 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
     FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
     lib::ob_sort(est_cost_info.table_filters_.begin(), est_cost_info.table_filters_.end(), filter_compare);
     ObSqlBitSet<> used_column_ids;
-    est_cost_info.use_column_store_ = true;
     est_cost_info.index_back_with_column_store_ = !index_back_will_use_row_store;
     const OptTableMetas& table_opt_meta = get_plan()->get_basic_table_metas();
     ObIArray<ObCostColumnGroupInfo> &index_scan_column_group_infos = est_cost_info.index_scan_column_group_infos_;
@@ -1997,6 +1996,12 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
                                                                   table_opt_meta,
                                                                   used_column_ids))) {
       LOG_WARN("failed to init column store est info with other column", K(ret));
+    } else if (index_scan_column_group_infos.empty()) {
+      //add dummy column group cost info for nil access exprs
+      ObCostColumnGroupInfo cg_info;
+      if (OB_FAIL(index_scan_column_group_infos.push_back(cg_info))) {
+        LOG_WARN("failed to push back column group info", K(ret));
+      }
     }
   }
   return ret;
