@@ -5889,6 +5889,9 @@ int ObStaticEngineCG::generate_spec(ObLogJoin &op, ObHashJoinVecSpec &spec, cons
           }
         }
       }
+      if (OB_SUCC(ret) && OB_FAIL(hj_spec.right_popular_values_.assign(op.get_popular_values()))) {
+        LOG_WARN("failed to init popular_values");
+      }
     }
   }
 

@@ -3214,6 +3214,22 @@ int ObLogPlan::allocate_join_path(JoinPath *join_path,
           out_join_path_op = join_op;
         }
       }
+
+      // get MCV from histogram
+      if (1 == join_path->equal_join_conditions_.count()) {
+        ObOptColumnStatHandle handle;
+        common::ObIArray<ObObj> &popular_values = join_op->get_popular_values();
+        ObRawExpr *right_expr = join_path->equal_join_conditions_.at(0)->get_param_expr(1);
+        if (OB_FAIL(get_histogram_by_join_exprs(optimizer_context_,
+                                                get_stmt(),
+                                                *right_expr,
+                                                handle
+                                                ))) {
+          LOG_WARN("fail get histogram by join exprs", K(ret));
+        } else if (OB_FAIL(get_most_common_values(get_allocator(), handle, popular_values))) {
+          LOG_WARN("fail get most common values", K(ret));
+        }
+      }
     }
   }
   return ret;
@@ -3627,6 +3643,68 @@ int ObLogPlan::get_popular_values_hash(ObIAllocator &allocator,
       LOG_DEBUG("add a popular value to array",
                 K(freq), K(bucket.endpoint_repeat_count_), K(total_cnt), K(min_freq));
     }
+  }
+  return ret;
+}
+
+int ObLogPlan::get_most_common_values(common::ObIAllocator &allocator,
+                                      ObOptColumnStatHandle &handle,
+                                      common::ObIArray<ObObj> &popular_values) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(handle.stat_)
+      || 0 >= handle.stat_->get_last_analyzed()
+      || handle.stat_->get_histogram().get_bucket_size() <= 0) {
+    // no histogram info, don't use hybrid hash
+    LOG_DEBUG("table not analyzed. disable mcv", K(ret));
+  } else {
+    const ObHistogram &histogram = handle.stat_->get_histogram();
+    // get total value count via last bucket by it's cumulative endpoint num
+    const ObHistBucket &last_bucket = histogram.get(histogram.get_bucket_size() - 1);
+    int64_t total_cnt = std::max(1L, last_bucket.endpoint_num_); // avoid zero div
+
+    const int64_t MAX_MCV_VALUES = 100;
+    const int64_t MIN_SINGLE_VALUE_FREQ_CNT = total_cnt / histogram.get_bucket_size();
+    const int64_t MIN_ALL_VALUES_FREQ = 30;  // 30%
+    
+    // keep the MAX_MCV_VALUES values with the highest frequency use heap
+    struct ObHistBucketCompareFunctor {
+      bool operator()(const ObHistBucket *l, const ObHistBucket *r) {
+        return l->endpoint_repeat_count_ > r->endpoint_repeat_count_;
+      }
+      int get_error_code() { return OB_SUCCESS; }
+    } cmp;
+    ObBinaryHeap<const ObHistBucket *, 
+                 ObHistBucketCompareFunctor, 
+                 MAX_MCV_VALUES + 1> top_freq_heap(cmp, &allocator);
+    for (int64_t i = 0; i < histogram.get_bucket_size(); ++i) {
+      const ObHistBucket &bucket = histogram.get(i);
+      if (bucket.endpoint_repeat_count_ >= MIN_SINGLE_VALUE_FREQ_CNT) {
+        top_freq_heap.push(&bucket);
+        if (top_freq_heap.count() > MAX_MCV_VALUES) {
+          top_freq_heap.pop();
+        }
+      }
+    }
+
+    int64_t freq_cnt = 0;
+    for (int64_t i = 0; i < top_freq_heap.count(); ++i) {
+      freq_cnt += top_freq_heap.at(i)->endpoint_repeat_count_;
+    }
+
+    if (OB_SUCC(ret) && MIN_ALL_VALUES_FREQ <= (freq_cnt * 100 / total_cnt)) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < top_freq_heap.count(); ++i) {
+        const ObHistBucket *bucket = top_freq_heap.at(i);
+        ObObj value;
+        if (OB_FAIL(ob_write_obj(allocator, bucket->endpoint_value_, value))) {
+          LOG_WARN("fail write object", K(ret));
+        } else if (OB_FAIL(popular_values.push_back(value))) {
+          LOG_WARN("fail add value to exchange info", K(ret));
+        }
+      }
+    }
+
+    top_freq_heap.reset();
   }
   return ret;
 }

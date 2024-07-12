@@ -148,6 +148,7 @@ public:
 template<typename T>
 struct NormalizedBucket {
   using Item = NormalizedItem<T>;
+  bool is_init() { return item_.v_ != 0; }
   uint64_t hash_value() const { return hash_value_; }
   Item *get_item() { return &item_; }
   const Item *get_item() const { return &item_; }
@@ -194,6 +195,7 @@ struct GenericBucket {
   GenericBucket() : val_(0), item_(NULL) {}
 
   // this interface is unused in Generic Mode
+  bool is_init() { return item_ != NULL; }
   uint64_t hash_value() const { return hash_value_; }
   const Item *get_item() const { return item_; }
   Item *&get_item() { return item_; }
@@ -267,18 +269,35 @@ struct GenericProber final: public ProberBase<GenericItem> {
 };
 
 struct IHashTable {
-
   virtual int init(ObIAllocator &alloc, const int64_t max_batch_size) = 0;
-  virtual int build_prepare(int64_t row_count, int64_t bucket_count) = 0;
+  virtual int build_prepare(int64_t row_count, int64_t bucket_count) = 0;                                 
   virtual int insert_batch(JoinTableCtx &ctx,
                            ObHJStoredRow **stored_rows,
                            const int64_t size,
                            int64_t &used_buckets,
                            int64_t &collisions) = 0;
-  virtual int probe_prepare(JoinTableCtx &ctx, OutputInfo &output_info) = 0;
-  virtual int probe_batch(JoinTableCtx &ctx, OutputInfo &output_info) = 0;
-  virtual int project_matched_rows(JoinTableCtx &ctx, OutputInfo &output_info) = 0;
-  virtual int get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info) = 0;
+  virtual int get_hash_exist(JoinTableCtx &ctx, uint64_t hash_val, bool &exist) = 0;
+  virtual int get_hash_exist_batch(JoinTableCtx &ctx, 
+                                   uint64_t *hash_vals, uint16_t size, 
+                                   uint16_t *selector, uint16_t &selector_cnt) = 0;
+  virtual int probe_prepare(JoinTableCtx &ctx, uint16_t *selector, uint16_t selector_cnt) = 0;
+  virtual int probe_batch(JoinTableCtx &ctx, OutputInfo &output_info, 
+                          uint16_t *selector, uint16_t &selector_cnt, void **cur_items, 
+                          uint16_t offset) = 0;
+  virtual int project_matched_rows(JoinTableCtx &ctx, 
+                                   const ObHJStoredRow **left_result_rows, 
+                                   uint16_t *selector, uint16_t selector_cnt) = 0;
+  virtual int get_unmatched_rows(JoinTableCtx &ctx, 
+                                 const ObHJStoredRow **left_result_rows, 
+                                 int64_t &cur_bkid, 
+                                 void *&cur_tuple, 
+                                 uint16_t &selector_cnt) = 0;
+  virtual int init_mcv_bucket_hash(JoinTableCtx &ctx, 
+                                   const uint64_t *mcv_hash_vals, 
+                                   const int64_t n_mcv,
+                                   int64_t &used_buckets,
+                                   int64_t &collisions) = 0;
+  virtual int finish_build_mcv(JoinTableCtx &ctx) = 0;
   virtual void reset() = 0;
   virtual void free(ObIAllocator *alloc) = 0;
 
@@ -328,20 +347,40 @@ struct HashTable : public IHashTable
   {
   }
   int init(ObIAllocator &alloc, const int64_t max_batch_size) override;
-  int build_prepare(int64_t row_count, int64_t bucket_count) override;
+  int build_prepare(int64_t row_count, int64_t bucket_count) override;                         
+  int get_hash_exist(JoinTableCtx &ctx, uint64_t hash_val, bool &exist);
+  int get_hash_exist_batch(JoinTableCtx &ctx, 
+                           uint64_t *hash_vals, uint16_t size, 
+                           uint16_t *selector, uint16_t &selector_cnt) override;
   virtual int insert_batch(JoinTableCtx &ctx,
                            ObHJStoredRow **stored_rows,
                            const int64_t size,
                            int64_t &used_buckets,
                            int64_t &collisions) override;
-  int probe_prepare(JoinTableCtx &ctx, OutputInfo &output_info) override;
-  int probe_batch(JoinTableCtx &ctx, OutputInfo &output_info) override {
-    return ctx.probe_opt_  ? probe_batch_opt(ctx, output_info)
-           : !ctx.need_probe_del_match() ? probe_batch_normal(ctx, output_info)
-                                         : probe_batch_del_match(ctx, output_info);
+  int probe_prepare(JoinTableCtx &ctx, uint16_t *selector, uint16_t selector_cnt) override;
+  
+  // probe key in hash_table, and store query rows in output_info.left_result_rows_[offset...]
+  int probe_batch(JoinTableCtx &ctx, OutputInfo &output_info, 
+                  uint16_t *selector, uint16_t &selector_cnt, void **cur_items, 
+                  uint16_t offset) override {
+    return ctx.probe_opt_  ? probe_batch_opt(ctx, output_info, selector, selector_cnt, cur_items, offset)
+           : !ctx.need_probe_del_match() ? probe_batch_normal(ctx, output_info, selector, selector_cnt, cur_items, offset)
+                                         : probe_batch_del_match(ctx, output_info, selector, selector_cnt, cur_items, offset);
   }
-  int get_unmatched_rows(JoinTableCtx &ctx, OutputInfo &output_info) override;
-  int project_matched_rows(JoinTableCtx &ctx, OutputInfo &output_info) override;
+  int get_unmatched_rows(JoinTableCtx &ctx, 
+                         const ObHJStoredRow **left_result_rows, 
+                         int64_t &cur_bkid, 
+                         void *&cur_tuple, 
+                         uint16_t &selector_cnt) override;
+  int project_matched_rows(JoinTableCtx &ctx, 
+                           const ObHJStoredRow **left_result_rows, 
+                           uint16_t *selector, uint16_t selector_cnt) override;
+  virtual int init_mcv_bucket_hash(JoinTableCtx &ctx, 
+                                   const uint64_t *mcv_hash_vals, 
+                                   const int64_t n_mcv,
+                                   int64_t &used_buckets,
+                                   int64_t &collisions) override;
+  virtual int finish_build_mcv(JoinTableCtx &ctx) override;
   void reset() override;
   void free(ObIAllocator *alloc);
 
@@ -377,12 +416,19 @@ protected:
     int64_t idx = __sync_fetch_and_add(&item_pos_, 1);
     return &items_->at(idx);
   }
+  Item *new_item() { return &items_->at(item_pos_++); }
+
 private:
   int init_probe_key_data(JoinTableCtx &ctx, OutputInfo &output_info);
-  Item *new_item() { return &items_->at(item_pos_++); }
-  int probe_batch_opt(JoinTableCtx &ctx, OutputInfo &output_info);
-  int probe_batch_normal(JoinTableCtx &ctx, OutputInfo &output_info);
-  int probe_batch_del_match(JoinTableCtx &ctx, OutputInfo &output_info);
+  int probe_batch_opt(JoinTableCtx &ctx, OutputInfo &output_info, 
+                      uint16_t *selector, uint16_t &selector_cnt, void **cur_items, 
+                      uint16_t offset);
+  int probe_batch_normal(JoinTableCtx &ctx, OutputInfo &output_info,
+                         uint16_t *selector, uint16_t &selector_cnt, void **cur_items, 
+                         uint16_t offset);
+  int probe_batch_del_match(JoinTableCtx &ctx, OutputInfo &output_info,
+                            uint16_t *selector, uint16_t &selector_cnt, void **cur_items, 
+                            uint16_t offset);
   // Get stored row list which has the same hash value.
   // return NULL if not found.
   inline Item *get(const uint64_t hash_val);
@@ -416,6 +462,35 @@ protected:
   Prober prober_;
 };
 
+template <typename Bucket, typename Prober>
+struct McvHashTable : public HashTable<Bucket, Prober>
+{
+  using Item = typename Bucket::Item;
+public:
+  int init_mcv_bucket_hash(JoinTableCtx &ctx, 
+                           const uint64_t *mcv_hash_vals, 
+                           const int64_t n_mcv,
+                           int64_t &used_buckets,
+                           int64_t &collisions) override;
+  int insert_batch(JoinTableCtx &ctx,
+                   ObHJStoredRow **stored_rows,
+                   const int64_t size,
+                   int64_t &used_buckets,
+                   int64_t &collisions) override;
+  int finish_build_mcv(JoinTableCtx &ctx);
+
+private:
+  void set_hash(JoinTableCtx &ctx,
+                const uint64_t hash_val,
+                int64_t &used_buckets,
+                int64_t &collisions);
+  void set_mcv_row(JoinTableCtx &ctx,
+                   const uint64_t hash_val,
+                   ObHJStoredRow *row,
+                   int64_t &used_buckets,
+                   int64_t &collisions);
+};
+
 struct GenericSharedHashTable final : public HashTable<GenericBucket, GenericProber>
 {
 public:
@@ -434,6 +509,28 @@ private:
                         GenericItem *sr,
                         int64_t &used_buckets,
                         int64_t &collisions);
+};
+
+struct GenericSharedMcvHashTable final : public McvHashTable<GenericBucket, GenericProber>
+{
+public:
+  inline int insert_batch(JoinTableCtx &ctx,
+                          ObHJStoredRow **stored_rows,
+                          const int64_t size,
+                          int64_t &used_buckets,
+                          int64_t &collisions) override;
+  inline virtual void set_diag_info(int64_t used_buckets, int64_t collisions) override {
+    ATOMIC_AAF(&used_buckets_, used_buckets);
+    ATOMIC_AAF(&collisions_, collisions);
+  }
+private:
+  // 保证要set的row之前一定被set_hash()过才行
+  inline int atomic_set_mcv_row(JoinTableCtx &ctx,
+                                const RowMeta &row_meta,
+                                const uint64_t hash_val,
+                                GenericItem *row,
+                                int64_t &used_buckets,
+                                int64_t &collisions);
 };
 
 template <typename Bucket, typename Prober>
@@ -462,9 +559,12 @@ using NormalizedInt64Table = HashTable<NormalizedBucket<Int64Key>, NormalizedPro
 using NormalizedInt128Table = HashTable<NormalizedBucket<Int128Key>, NormalizedProber<Int128Key>>;
 //using NormalizedFloatTable = HashTable<NormalizedBucket<float>, NormalizedProber<float>>;
 //using NormalizedDoubleTable =  HashTable<NormalizedBucket<double>, NormalizedProber<double>>;
+using NormalizedInt64McvTable = McvHashTable<NormalizedBucket<Int64Key>, NormalizedProber<Int64Key>>;
+using NormalizedInt128McvTable = McvHashTable<NormalizedBucket<Int128Key>, NormalizedProber<Int128Key>>;
 using GenericTable = HashTable<GenericBucket, GenericProber>;
-using NormalizedSharedInt64Table = NormalizedSharedHashTable<NormalizedBucket<Int64Key>, NormalizedProber<Int64Key>>;
-using NormalizedSharedInt128Table = NormalizedSharedHashTable<NormalizedBucket<Int128Key>, NormalizedProber<Int128Key>>;
+using GenericMcvTable = McvHashTable<GenericBucket, GenericProber>;
+// using NormalizedSharedInt64Table = NormalizedSharedHashTable<NormalizedBucket<Int64Key>, NormalizedProber<Int64Key>>;
+// using NormalizedSharedInt128Table = NormalizedSharedHashTable<NormalizedBucket<Int128Key>, NormalizedProber<Int128Key>>;
 
 } // end namespace sql
 } // end namespace oceanbase

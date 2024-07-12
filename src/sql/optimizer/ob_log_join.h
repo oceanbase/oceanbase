@@ -43,7 +43,8 @@ namespace sql
         connect_by_extra_exprs_(),
         enable_px_batch_rescan_(false),
         can_use_batch_nlj_(false),
-        join_path_(nullptr)
+        join_path_(nullptr),
+        popular_values_()
     { }
     virtual ~ObLogJoin() {}
 
@@ -165,7 +166,7 @@ namespace sql
     common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_left_params() { return above_pushdown_left_params_; }
     common::ObIArray<ObExecParamRawExpr *> &get_above_pushdown_right_params() { return above_pushdown_right_params_; }
     virtual int get_card_without_filter(double &card) override;
-
+    common::ObIArray<ObObj> &get_popular_values() { return popular_values_; }
   private:
     int set_use_batch(ObLogicalOperator* root);
     inline bool can_enable_gi_partition_pruning()
@@ -251,6 +252,7 @@ namespace sql
     JoinPath *join_path_;
     common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_left_params_;
     common::ObSEArray<ObExecParamRawExpr *, 4, common::ModulePageAllocator, true> above_pushdown_right_params_;
+    common::ObSEArray<ObObj, 100> popular_values_;
 
     DISALLOW_COPY_AND_ASSIGN(ObLogJoin);
   };

@@ -1704,6 +1704,9 @@ private: // member functions
   int get_popular_values_hash(common::ObIAllocator &allocator,
                               ObOptColumnStatHandle &handle,
                               common::ObIArray<ObObj> &popular_values) const;
+  int get_most_common_values(common::ObIAllocator &allocator,
+                             ObOptColumnStatHandle &handle,
+                             common::ObIArray<ObObj> &popular_values) const;
   int adjust_expr_properties_for_external_table(ObRawExpr *col_expr, ObRawExpr *&expr) const;
 
   int compute_duplicate_table_replicas(ObLogicalOperator *op);

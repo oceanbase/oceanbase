@@ -120,16 +120,23 @@ struct ObHJStoredRow : public ObCompactRow
 struct OutputInfo {
 public:
   OutputInfo() : left_result_rows_(NULL),
-                 selector_(NULL), selector_cnt_(0), first_probe_(true)
+                 selector_(NULL), selector_cnt_(0), mcv_selector_(NULL), mcv_selector_cnt_(0), first_probe_(true)
   {}
   void reuse() {
     first_probe_ = true;
     selector_cnt_ = 0;
+    mcv_selector_cnt_ = 0;
   }
 public:
   const ObHJStoredRow **left_result_rows_;
+
+  // for hash_table_
   uint16_t *selector_;
   uint16_t selector_cnt_;
+  // for mcv_hash_table_
+  uint16_t *mcv_selector_;
+  uint16_t mcv_selector_cnt_;
+  
   //indicates the batch data on the current probe side, whether it is the first time to probe
   bool first_probe_;
   int64_t max_output_ctx_;
@@ -138,17 +145,19 @@ public:
 struct ProbeBatchRows {
 public:
   ProbeBatchRows() : from_stored_(false), stored_rows_(NULL),
-                     brs_(), hash_vals_(NULL), key_data_(NULL)
+                     brs_(), hash_vals_(NULL), key_data_(NULL), mcv_key_data_(NULL)
   {}
 
   // support int64_t & int128_t
   int set_key_data(const ExprFixedArray *probe_keys,
                    ObEvalCtx *eval_ctx,
-                   OutputInfo &output_info)
+                   uint16_t *selector,
+                   uint16_t selector_cnt,
+                   char *dst_key_data)
   {
     int ret = OB_SUCCESS;
     OB_ASSERT(1 == probe_keys->count() || 2 == probe_keys->count());
-    int64_t *dst = reinterpret_cast<int64_t *>(key_data_);
+    int64_t *dst = reinterpret_cast<int64_t *>(dst_key_data);
     int64_t key_cnt = probe_keys->count();
     for (int64_t key_idx  = 0; key_idx < key_cnt; key_idx++) {
       ObIVector *key_vec = probe_keys->at(key_idx)->get_vector(*eval_ctx);
@@ -159,21 +168,21 @@ public:
       if (VEC_FIXED == format) {
         if (1 == probe_keys->count()) {
           ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(key_vec);
-          MEMCPY(key_data_, vec->get_data(),
-                 8 * (output_info.selector_[output_info.selector_cnt_ - 1] + 1));
+          MEMCPY(dst_key_data, vec->get_data(),
+                 8 * (selector[selector_cnt - 1] + 1));
         } else {
           ObFixedLengthBase *vec = static_cast<ObFixedLengthBase *>(key_vec);
           int64_t *src = reinterpret_cast<int64_t *>(vec->get_data());
-          for (int64_t i = 0; i < output_info.selector_cnt_; i++) {
-            int64_t idx = output_info.selector_[i];
+          for (int64_t i = 0; i < selector_cnt; i++) {
+            int64_t idx = selector[i];
             dst[2 * idx + key_idx] = src[idx];
             LOG_DEBUG("key data", K(i), K(idx), K(key_idx), K(src[idx]));
           }
         }
       } else if (VEC_UNIFORM == format) {
         ObUniformBase *vec = static_cast<ObUniformBase *>(key_vec);
-        for (int64_t i = 0; i < output_info.selector_cnt_; i++) {
-          int64_t idx = output_info.selector_[i];
+        for (int64_t i = 0; i < selector_cnt; i++) {
+          int64_t idx = selector[i];
           ObDatum &datum = vec->get_datums()[idx];
           OB_ASSERT(!datum.is_null());
           //MEMCPY(key_data_ + idx * len, datum.ptr_, len);
@@ -184,8 +193,8 @@ public:
         ObUniformBase *vec = static_cast<ObUniformBase *>(key_vec);
         ObDatum &datum = vec->get_datums()[0];
         OB_ASSERT(!datum.is_null());
-        for (int64_t i = 0; i < output_info.selector_cnt_; i++) {
-          int64_t idx = output_info.selector_[i];
+        for (int64_t i = 0; i < selector_cnt; i++) {
+          int64_t idx = selector[i];
           dst[key_cnt * idx + key_idx] = datum.get_int();
         }
       } else {
@@ -203,22 +212,26 @@ public:
   ObBatchRows brs_; // replace right_brs_
   uint64_t *hash_vals_;
   // just used for normalized hash table
-  char *key_data_;
+  char *key_data_;     // for hash_table_
+  char *mcv_key_data_; // for mcv_hash_table_
 };
 
 struct JoinTableCtx {
 public:
-  JoinTableCtx() : eval_ctx_(NULL), join_type_(UNKNOWN_JOIN), is_shared_(false),
+  JoinTableCtx() : eval_ctx_(NULL), join_type_(UNKNOWN_JOIN), is_shared_(false), is_probe_skew_(false),
                    contain_ns_equal_(false), join_conds_(NULL), build_output_(NULL), probe_output_(NULL),
                    calc_exprs_(NULL), probe_opt_(false), build_keys_(NULL), probe_keys_(NULL),
                    build_key_proj_(NULL), probe_key_proj_(NULL), cur_bkid_(-1),
-                   cur_tuple_(reinterpret_cast<void *>(END_ITEM)), max_output_cnt_(NULL),
-                   cur_items_(NULL), stored_rows_(NULL), max_batch_size_(0),
+                   cur_tuple_(reinterpret_cast<void *>(END_ITEM)), mcv_cur_bkid_(-1),
+                   mcv_cur_tuple_(reinterpret_cast<void *>(END_ITEM)), max_output_cnt_(NULL),
+                   cur_items_(NULL), mcv_cur_items_(NULL), stored_rows_(NULL), max_batch_size_(0),
                    output_info_(NULL), probe_batch_rows_(NULL)
   {}
   void reuse() {
     cur_bkid_ = -1;
     cur_tuple_ = reinterpret_cast<void *>(END_ITEM);
+    mcv_cur_bkid_ = -1;
+    mcv_cur_tuple_ = reinterpret_cast<void *>(END_ITEM);
   }
   void reset()
   {
@@ -247,6 +260,9 @@ public:
   ObEvalCtx *eval_ctx_;
   ObJoinType join_type_;
   bool is_shared_;
+  // Indicates whether to enable MCV optimization
+  // After the first round of process_partition(), it will be set to false.
+  bool is_probe_skew_;
   bool contain_ns_equal_;
 
   const ExprFixedArray *join_conds_;
@@ -266,9 +282,12 @@ public:
   // used for output remain unmatch rows
   int64_t cur_bkid_;
   void *cur_tuple_;
+  int64_t mcv_cur_bkid_;
+  void *mcv_cur_tuple_;
   int64_t *max_output_cnt_;
 
   void **cur_items_;
+  void **mcv_cur_items_;
   //template buffer for build table
   const ObHJStoredRow **stored_rows_;
   int64_t max_batch_size_;
