@@ -61,6 +61,8 @@ public:
   virtual ~ObHTableCellEntity();
 
   void set_ob_row(common::ObNewRow *ob_row) { ob_row_ = ob_row; }
+  int deep_copy_ob_row(const common::ObNewRow *ob_row, common::ObArenaAllocator &allocator);
+  virtual void reset(common::ObArenaAllocator &allocator);
   const common::ObNewRow* get_ob_row() const { return ob_row_; }
 
   virtual common::ObString get_rowkey() const override;

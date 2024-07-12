@@ -378,6 +378,7 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = credential.tenant_id_;
   const uint64_t database_id = credential.database_id_;
+  set_credential(credential);
 
   if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard_))) {
     LOG_WARN("fail to get schema guard", K(ret), K(tenant_id), K(arg_table_name));

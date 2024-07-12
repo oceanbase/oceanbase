@@ -36,10 +36,10 @@ using namespace oceanbase::sql;
  */
 void ObTableQuerySyncSession::set_result_iterator(ObTableQueryResultIterator *query_result)
 {
-  result_iterator_ = query_result;
-  if (OB_NOT_NULL(result_iterator_)) {
-    result_iterator_->set_query(&query_);
-    result_iterator_->set_query_sync();
+  if (OB_NOT_NULL(query_result)) {
+    query_result->set_query(&query_);
+    query_result->set_query_async();
+    result_iterator_ = query_result;
   }
 }
 

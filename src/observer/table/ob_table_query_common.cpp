@@ -82,8 +82,8 @@ int ObTableQueryUtils::generate_query_result_iterator(ObIAllocator &allocator,
                                                         one_result))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc htable query result iterator", K(ret));
-      } else if (OB_FAIL(htable_result_iter->parse_filter_string(&allocator))) {
-        LOG_WARN("fail to parse htable filter string", K(ret));
+      } else if (OB_FAIL(htable_result_iter->init(&allocator))) {
+        LOG_WARN("fail to init row htable_result_iter", K(ret));
       } else {
         tmp_result_iter = htable_result_iter;
         ObHColumnDescriptor desc;

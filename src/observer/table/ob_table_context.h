@@ -330,6 +330,7 @@ public:
   OB_INLINE const ObIArray<sql::ObColumnRefRawExpr *>& get_select_exprs() const { return select_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_rowkey_exprs() const { return rowkey_exprs_; }
   OB_INLINE const ObIArray<sql::ObRawExpr *>& get_index_exprs() const { return index_exprs_; }
+  OB_INLINE table::ObTableApiCredential& get_credential() { return credential_; }
   OB_INLINE const share::schema::ObTableSchema* get_index_schema() const { return index_schema_; }
   OB_INLINE int64_t get_limit() const { return limit_; }
   OB_INLINE int64_t get_offset() const { return offset_; }
@@ -396,8 +397,10 @@ public:
   // for common
   OB_INLINE void set_init_flag(bool is_init) { is_init_ = is_init; }
   OB_INLINE void set_expr_info(ObExprFrameInfo *expr_info) { expr_info_ = expr_info; }
+  OB_INLINE void set_credential(table::ObTableApiCredential &credential) { credential_ = credential; }
   // for scan
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
+  OB_INLINE void set_scan_order(const common::ObQueryFlag::ScanOrder scan_order) {  scan_order_ = scan_order; }
   OB_INLINE void set_limit(const int64_t &limit) { limit_ = limit; }
   OB_INLINE void set_read_latest(bool read_latest) { read_latest_ = read_latest; }
   // for dml
@@ -576,6 +579,7 @@ private:
   sql::ObExecContext exec_ctx_;
   sql::ObRawExprFactory expr_factory_;
   sql::ObRawExprUniqueSet all_exprs_;
+  table::ObTableApiCredential credential_;
   ObTableApiSessGuard sess_guard_;
   int64_t tenant_schema_version_;
   common::ObSEArray<ObTableColumnItem, 8> column_items_;

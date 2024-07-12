@@ -33,7 +33,49 @@ ObHTableCellEntity::~ObHTableCellEntity()
 
 ObString ObHTableCellEntity::get_rowkey() const
 {
-  return ob_row_->get_cell(ObHTableConstants::COL_IDX_K).get_varchar();
+  ObString rowkey_str;
+  if (OB_ISNULL(ob_row_)) {
+    LOG_INFO("get_rowkey but ob_row is null", K(ob_row_));
+    rowkey_str = NULL;
+  } else {
+    rowkey_str = ob_row_->get_cell(ObHTableConstants::COL_IDX_K).get_varchar();
+  }
+  return rowkey_str;
+}
+
+int ObHTableCellEntity::deep_copy_ob_row(const common::ObNewRow *ob_row, common::ObArenaAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ob_row_)) {
+    allocator.free(ob_row_);
+  }
+  if (OB_ISNULL(ob_row)) {
+    LOG_INFO("param ob_row is null", K(ret));
+    ob_row_ = NULL;
+  } else {
+    int64_t buf_size = ob_row->get_deep_copy_size() + sizeof(ObNewRow);
+    char *tmp_row_buf = static_cast<char *>(allocator.alloc(buf_size));
+    if (OB_ISNULL(tmp_row_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc new row", KR(ret));
+    } else {
+      int64_t pos = sizeof(ObNewRow);
+      ob_row_ = new (tmp_row_buf) ObNewRow();
+      if (OB_FAIL(ob_row_->deep_copy(*ob_row, tmp_row_buf, buf_size, pos))) {
+        allocator.free(tmp_row_buf);
+        LOG_WARN("fail to deep copy ob_row", KR(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+void ObHTableCellEntity::reset(common::ObArenaAllocator &allocator)
+{
+  if (OB_NOT_NULL(ob_row_)) {
+    allocator.free(ob_row_);
+    ob_row_ = NULL;
+  }
 }
 
 ObString ObHTableCellEntity::get_qualifier() const

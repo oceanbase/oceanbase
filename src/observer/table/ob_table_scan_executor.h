@@ -46,6 +46,7 @@ public:
         scan_spec_(spec),
         tsc_rtdef_(allocator_),
         das_ref_(eval_ctx_, ctx.get_exec_ctx()),
+        scan_op_(nullptr),
         global_index_lookup_executor_(nullptr)
   {
     reset();
@@ -54,6 +55,7 @@ public:
   int open() override;
   int get_next_row() override;
   int close() override;
+  virtual int rescan();
   void destroy() override;
   virtual void clear_evaluated_flag() override;
 public:
@@ -70,6 +72,7 @@ protected:
   ObTableApiScanRtDef tsc_rtdef_;
   sql::DASOpResultIter scan_result_;
   sql::ObDASRef das_ref_;
+  ObDASScanOp *scan_op_;
   int64_t input_row_cnt_;
   int64_t output_row_cnt_;
   bool need_do_init_;
@@ -103,6 +106,7 @@ public:
   virtual int open(ObTableApiScanExecutor *executor);
   virtual int get_next_row(ObNewRow *&row);
   virtual int get_next_row(ObNewRow *&row, common::ObIAllocator &allocator);
+  virtual ObTableApiScanExecutor *get_scan_executor() { return scan_executor_; };
   virtual int close();
 private:
   ObTableApiScanExecutor *scan_executor_;

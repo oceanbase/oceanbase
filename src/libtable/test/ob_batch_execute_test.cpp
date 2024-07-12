@@ -2671,14 +2671,14 @@ TEST_F(TestBatchExecute, htable_scan_reverse)
     const ObITableEntity *result_entity = NULL;
     int cqids_sorted[] = {0, 1, 3, 4, 7, 9};
     int64_t timestamps[] = {9};
-    for (int64_t i = 0, m = 59; i < 10; ++i, --m) {
+    for (int64_t i = 0, m = 59; i < 9; ++i, --m) {
       // 10 rowkeys
       sprintf(rows[i], "row%ld", m);
       key1.set_varbinary(ObString::make_string(rows[i]));
 
-      for (int64_t j = 0, n = 5; j < ARRAYSIZEOF(cqids_sorted); ++j,--n) {
+      for (int64_t j = 0; j < ARRAYSIZEOF(cqids_sorted); ++j) {
         // 4 qualifier
-        sprintf(qualifier2[j], "cq%d", cqids_sorted[n]);
+        sprintf(qualifier2[j], "cq%d", cqids_sorted[j]);
         key2.set_varbinary(ObString::make_string(qualifier2[j]));
 
         for (int64_t k = 0; k < ARRAYSIZEOF(timestamps); ++k)
@@ -2713,13 +2713,13 @@ fprintf(stderr, "Case 1: reverse scan set max version only\n");
     const ObITableEntity *result_entity = NULL;
     int cqids_sorted[] = {0, 1, 3, 4, 7, 9};
     int64_t timestamps[] = {9, 8, 7, 6, 5};
-    for (int64_t i = 0, m = 59; i < 10; ++i,--m) {
+    for (int64_t i = 0, m = 59; i < 9; ++i,--m) {
     // 10 rowkeys
     sprintf(rows[i], "row%ld", m);
     key1.set_varbinary(ObString::make_string(rows[i]));
-    for (int64_t j = 0, n = 5; j < ARRAYSIZEOF(cqids_sorted); ++j, --n) {
+    for (int64_t j = 0; j < ARRAYSIZEOF(cqids_sorted); ++j) {
       // 4 qualifier
-      sprintf(qualifier2[j], "cq%d", cqids_sorted[n]);
+      sprintf(qualifier2[j], "cq%d", cqids_sorted[j]);
       key2.set_varbinary(ObString::make_string(qualifier2[j]));
       for (int64_t k = 0; k < ARRAYSIZEOF(timestamps); ++k)
       {
@@ -2753,13 +2753,13 @@ fprintf(stderr, "Case 1: reverse scan set max version only\n");
     const ObITableEntity *result_entity = NULL;
     int cqids_sorted[] = {0, 1, 3, 4, 7, 9};
     int64_t timestamps[] = {9};
-    for (int64_t i = 0, m = 59; i < 10; ++i, --m) {
+    for (int64_t i = 0, m = 59; i < 9; ++i, --m) {
       // 10 rowkeys
       sprintf(rows[i], "row%ld", m);
       key1.set_varbinary(ObString::make_string(rows[i]));
-      for (int64_t j = 0, n = 5; j < ARRAYSIZEOF(cqids_sorted); ++j, --n) {
+      for (int64_t j = 0; j < ARRAYSIZEOF(cqids_sorted); ++j) {
         // 4 qualifier
-        sprintf(qualifier2[j], "cq%d", cqids_sorted[n]);
+        sprintf(qualifier2[j], "cq%d", cqids_sorted[j]);
         key2.set_varbinary(ObString::make_string(qualifier2[j]));
         for (int64_t k = 0; k < ARRAYSIZEOF(timestamps); ++k)
         {
@@ -2795,14 +2795,14 @@ fprintf(stderr, "Case 1: reverse scan set max version only\n");
     const ObITableEntity *result_entity = NULL;
     int cqids_sorted[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
     int64_t timestamps[] = {7, 6, 5, 4, 3};
-    for (int64_t i = 0 , m = 59; i < 10; ++i, --m) {
-      // 10 rowkeys
+    for (int64_t i = 0 , m = 59; i < 9; ++i, --m) {
+      // 9 rowkeys
       //fprintf(stderr, "i=%ld\n", i);
       sprintf(rows[i], "row%ld", m);
       key1.set_varbinary(ObString::make_string(rows[i]));
-      for (int64_t j = 0 , n = 9; j < ARRAYSIZEOF(cqids_sorted); ++j, --n) {
+      for (int64_t j = 0; j < ARRAYSIZEOF(cqids_sorted); ++j) {
         // 4 qualifier
-        sprintf(qualifier2[j], "cq%d", cqids_sorted[n]);
+        sprintf(qualifier2[j], "cq%d", cqids_sorted[j]);
         key2.set_varbinary(ObString::make_string(qualifier2[j]));
         for (int64_t k = 0; k < ARRAYSIZEOF(timestamps); ++k)
         {

@@ -21,6 +21,8 @@
 #include "ob_htable_filter_parser.h"
 #include "ob_htable_filters.h"
 #include "ob_table_scan_executor.h"
+#include "ob_table_cache.h"
+#include "ob_table_cg_service.h"
 #include <utility>
 #include "share/schema/ob_table_schema.h"
 
@@ -208,7 +210,7 @@ class ObHTableRowIterator: public ObTableQueryResultIterator
 {
 public:
   ObHTableRowIterator(const ObTableQuery &query);
-  virtual ~ObHTableRowIterator();
+  virtual ~ObHTableRowIterator() {};
   /// Fetch next row
   virtual int get_next_result(ObTableQueryResult *&one_row) override;
 
@@ -220,20 +222,35 @@ public:
   bool has_more_result() const { return has_more_cells_; }
   void set_hfilter(table::hfilter::Filter *hfilter);
   void set_ttl(int32_t ttl_value);
-  int add_same_kq_to_res(ObIArray<common::ObNewRow> &same_kq_cells,
-                         ObTableQueryResult *&out_result);
-  ObIArray<common::ObNewRow> &get_same_kq_cells() { return same_kq_cells_; }
+  virtual int init()
+  {
+    is_inited_ = true;
+    return OB_SUCCESS;
+  };
+  bool &is_inited()
+  {
+    return is_inited_;
+  }
   void set_max_version(int32_t max_version) { max_version_ = max_version; }
 private:
-  int next_cell();
-  int reverse_next_cell(ObIArray<common::ObNewRow> &same_kq_cells,
-                        ObTableQueryResult *&out_result);
-  int seek_or_skip_to_next_row(const ObHTableCell &cell);
-  int seek_or_skip_to_next_col(const ObHTableCell &cell);
-  bool reach_batch_limit() const;
-  bool reach_size_limit() const;
-private:
+  virtual int next_cell();
+  virtual int seek_or_skip_to_next_row(const ObHTableCell &cell);
+  virtual int seek_or_skip_to_next_col(const ObHTableCell &cell);
+  virtual bool reach_batch_limit() const;
+  virtual bool reach_size_limit() const;
+
+protected:
+  common::ObArenaAllocator allocator_;  // used for deep copy of curr_cell_
   table::ObTableApiScanRowIterator *child_op_;
+  ObHTableCellEntity curr_cell_;
+  common::ObQueryFlag::ScanOrder scan_order_;
+  ObHTableScanMatcher *matcher_;
+  bool has_more_cells_;
+  ObRowkey start_row_key_;
+  ObRowkey stop_row_key_;
+  bool is_inited_;
+
+private:
   const table::ObHTableFilter &htable_filter_;
   table::hfilter::Filter *hfilter_;
   int32_t limit_per_row_per_cf_;
@@ -244,19 +261,39 @@ private:
   int32_t max_version_; // Column family max_version
 
   table::ObTableQueryResult one_hbase_row_;
-  ObHTableCellEntity curr_cell_;
-  common::ObArenaAllocator allocator_;  // used for deep copy of curr_cell_
   ObHTableColumnTracker *column_tracker_;
-  ObHTableScanMatcher *matcher_;
   ObHTableWildcardColumnTracker column_tracker_wildcard_;
   ObHTableExplicitColumnTracker column_tracker_explicit_;
   ObHTableScanMatcher matcher_impl_;
-  common::ObQueryFlag::ScanOrder scan_order_;
   ObSEArray<common::ObNewRow, 16> same_kq_cells_;
   int32_t cell_count_;
   int32_t count_per_row_;
-  bool has_more_cells_;
   bool is_first_result_;
+};
+
+class ObHTableReversedRowIterator : public ObHTableRowIterator
+{
+public:
+  ObHTableReversedRowIterator(const ObTableQuery &query);
+  virtual ~ObHTableReversedRowIterator();
+  virtual int init() override;
+
+private:
+  virtual int next_cell() override;
+  virtual int seek_or_skip_to_next_row(const ObHTableCell &cell) override;
+  virtual int seek_or_skip_to_next_col(const ObHTableCell &cell) override;
+  int seek_first_cell_on_row(const ObNewRow *ob_row);
+  int init_forward_tb_ctx();
+  int init_async_forward_tb_ctx();
+  virtual int rescan_and_get_next_row(table::ObTableApiScanRowIterator *tb_op_, ObNewRow *&ob_next_row);
+  int create_forward_child_op();
+  int seek_to_max_row();
+private:
+  table::ObTableApiScanRowIterator forward_child_op_;
+  ObTableApiCacheGuard cache_guard_;
+  ObTableApiSpec *spec_;
+  table::ObTableCtx forward_tb_ctx_;
+  ObExprFrameInfo expr_frame_info_;
 };
 
 // entry class
@@ -264,29 +301,41 @@ class ObHTableFilterOperator: public ObTableQueryResultIterator
 {
 public:
   ObHTableFilterOperator(const ObTableQuery &query, table::ObTableQueryResult &one_result);
-  virtual ~ObHTableFilterOperator() {}
+  virtual ~ObHTableFilterOperator();
   /// Fetch next batch result
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
-  virtual bool has_more_result() const override { return row_iterator_.has_more_result(); }
+  int init(common::ObIAllocator* allocator);
+  virtual bool has_more_result() const override { return is_inited_ ? row_iterator_->has_more_result() : false; }
   virtual table::ObTableQueryResult *get_one_result() override { return one_result_; }
   virtual void set_one_result(ObTableQueryResult *result) override {one_result_ = result;}
+  virtual void set_query_async() override;
   virtual void set_scan_result(table::ObTableApiScanRowIterator *scan_result) override
   {
-    row_iterator_.set_scan_result(scan_result);
+    if (is_inited_) {
+      row_iterator_->set_scan_result(scan_result);
+    };
   }
-  void set_ttl(int32_t ttl_value) { row_iterator_.set_ttl(ttl_value); }
-  void set_max_version(int32_t max_version_value) { row_iterator_.set_max_version(max_version_value); }
+  void set_ttl(int32_t ttl_value) {
+    if (is_inited_) {
+      row_iterator_->set_ttl(ttl_value);
+    };
+  }
+  void set_max_version(int32_t max_version_value) {
+    if (is_inited_) {
+      row_iterator_->set_max_version(max_version_value);
+    };
+  }
   // parse the filter string
-  int parse_filter_string(common::ObIAllocator* allocator);
   OB_INLINE table::hfilter::Filter *get_hfiter() { return hfilter_; }
 private:
-  ObHTableRowIterator row_iterator_;
+  ObHTableRowIterator *row_iterator_;
   table::ObTableQueryResult *one_result_;
   table::ObHTableFilterParser filter_parser_;
   table::hfilter::Filter *hfilter_;
   int32_t batch_size_;
   int64_t max_result_size_;
   bool is_first_result_;
+  bool is_inited_;
 };
 
 } // end namespace table

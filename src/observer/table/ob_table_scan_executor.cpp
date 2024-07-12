@@ -108,17 +108,16 @@ int ObTableApiScanExecutor::prepare_das_task()
 {
   int ret = OB_SUCCESS;
   ObIDASTaskOp *task_op = nullptr;
-  ObDASScanOp *scan_op = nullptr;
   ObDASTabletLoc *tablet_loc = tsc_rtdef_.scan_rtdef_.table_loc_->get_first_tablet_loc();
   if (OB_FAIL(das_ref_.create_das_task(tablet_loc,
                                        DAS_OP_TABLE_SCAN,
                                        task_op))) {
     LOG_WARN("fail to prepare das task", K(ret));
   } else {
-    scan_op = static_cast<ObDASScanOp*>(task_op);
-    scan_op->set_scan_ctdef(&scan_spec_.get_ctdef().scan_ctdef_);
-    scan_op->set_scan_rtdef(&tsc_rtdef_.scan_rtdef_);
-    scan_op->set_can_part_retry(false);
+    scan_op_ = static_cast<ObDASScanOp *>(task_op);
+    scan_op_->set_scan_ctdef(&scan_spec_.get_ctdef().scan_ctdef_);
+    scan_op_->set_scan_rtdef(&tsc_rtdef_.scan_rtdef_);
+    scan_op_->set_can_part_retry(false);
     tsc_rtdef_.scan_rtdef_.table_loc_->is_reading_ = true;
     if (!tb_ctx_.is_global_index_back() && scan_spec_.get_ctdef().lookup_ctdef_ != nullptr) {
       //is local index lookup, need to set the lookup ctdef to the das scan op
@@ -129,11 +128,11 @@ int ObTableApiScanExecutor::prepare_das_task()
       if (OB_ISNULL(lookup_tablet_loc)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("lookup tablet loc is nullptr", K(ret), KPC(lookup_table_loc->loc_meta_));
-      } else if (OB_FAIL(scan_op->set_lookup_ctdef(scan_spec_.get_ctdef().lookup_ctdef_))) {
+      } else if (OB_FAIL(scan_op_->set_lookup_ctdef(scan_spec_.get_ctdef().lookup_ctdef_))) {
         LOG_WARN("set lookup ctdef failed", K(ret));
-      } else if (OB_FAIL(scan_op->set_lookup_rtdef(tsc_rtdef_.lookup_rtdef_))) {
+      } else if (OB_FAIL(scan_op_->set_lookup_rtdef(tsc_rtdef_.lookup_rtdef_))) {
         LOG_WARN("set lookup rtdef failed", K(ret));
-      } else if (OB_FAIL(scan_op->set_lookup_tablet_id(lookup_tablet_loc->tablet_id_))) {
+      } else if (OB_FAIL(scan_op_->set_lookup_tablet_id(lookup_tablet_loc->tablet_id_))) {
         LOG_WARN("set lookup tablet id failed", K(ret), KPC(lookup_tablet_loc));
       } else {
         lookup_table_loc->is_reading_ = true;
@@ -142,7 +141,7 @@ int ObTableApiScanExecutor::prepare_das_task()
 
     if (OB_SUCC(ret)) {
       // set scan range
-      ObIArray<ObNewRange> &scan_ranges = scan_op->get_scan_param().key_ranges_;
+      ObIArray<ObNewRange> &scan_ranges = scan_op_->get_scan_param().key_ranges_;
       if (OB_FAIL(scan_ranges.assign(get_table_ctx().get_key_ranges()))) {
         LOG_WARN("fail to assign scan ranges", K(ret));
       }
@@ -332,6 +331,36 @@ int ObTableApiScanExecutor::close()
     reset();
   }
 
+  return ret;
+}
+
+int ObTableApiScanExecutor::rescan()
+{
+  int ret = OB_SUCCESS;
+  ObTableCtx &tb_ctx = get_table_ctx();
+  if (need_do_init_ && OB_FAIL(do_init_before_get_row())) {
+    LOG_WARN("fail to do init before get row", K(ret));
+  } else if (OB_ISNULL(scan_op_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scan_op_ is NULL", K(ret));
+  } else {
+    // set scan range
+    scan_op_->reuse_iter();
+    ObIArray<ObNewRange> &scan_ranges = scan_op_->get_scan_param().key_ranges_;
+    scan_ranges.reset();
+    if (OB_FAIL(scan_ranges.assign(tb_ctx.get_key_ranges()))) {
+      LOG_WARN("fail to assign scan ranges", K(ret));
+    } else {
+      scan_op_->get_scan_param().limit_param_.limit_ = tb_ctx.get_limit();
+      if (OB_FAIL(scan_op_->rescan())) {
+        LOG_WARN("rescan error", K(ret));
+      }
+      if (OB_SUCC(ret) && das_ref_.has_task()) {
+        // prepare to output row
+        scan_result_ = das_ref_.begin_result_iter();
+      }
+    }
+  }
   return ret;
 }
 
