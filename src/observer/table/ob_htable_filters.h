@@ -327,7 +327,6 @@ public:
   virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
   virtual bool filter_row() override;
 private:
-  static ReturnCode merge_return_code(ReturnCode rc, ReturnCode local_rc);
   ObSEArray<Filter*, 8> seek_hint_filters_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(FilterListAND);
