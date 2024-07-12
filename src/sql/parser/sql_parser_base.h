@@ -1282,4 +1282,35 @@ do {\
     } \
   } while(0); \
 
+#define adjust_inner_join(result, ret_node, inner_join, table_node) \
+  do { \
+    ret_node = NULL; \
+    if (OB_ISNULL(inner_join) || OB_ISNULL(table_node)) { \
+      result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
+      yyerror(NULL, result, "inner join or table_node is NULL ptr\n"); \
+      YYABORT; \
+    } else if (T_JOINED_TABLE != inner_join->type_ || \
+               OB_ISNULL(inner_join->children_[0]) || \
+               OB_ISNULL(inner_join->children_[1]) || \
+               OB_NOT_NULL(inner_join->children_[2]) || \
+               OB_NOT_NULL(inner_join->children_[3]) || \
+               OB_NOT_NULL(inner_join->children_[4]) || \
+               !(T_JOIN_INNER == inner_join->children_[0]->type_ || \
+                 T_STRAIGHT_JOIN == inner_join->children_[0]->type_)) { \
+      result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
+      yyerror(NULL, result, "inner join ptr is unexpected\n"); \
+      YYABORT; \
+    } else { \
+      ret_node = adjust_inner_join_inner(&result->extra_errno_, inner_join, table_node); \
+      if (OB_PARSER_SUCCESS != result->extra_errno_) { \
+        yyerror(NULL, result, "failde to adjust inner join inside\n"); \
+        YYABORT; \
+      } else if (OB_ISNULL(ret_node)) { \
+        result->extra_errno_ = OB_PARSER_ERR_UNEXPECTED; \
+        yyerror(NULL, result, "got null ret_node\n"); \
+        YYABORT; \
+      } \
+    } \
+  } while (0); \
+
 #endif /* OCEANBASE_SRC_SQL_PARSER_SQL_PARSER_BASE_H_ */
