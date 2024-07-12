@@ -154,7 +154,7 @@ int ObExprSTDisjoint::eval_st_disjoint(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else if (OB_FAIL(ObGeoExprUtils::zoom_in_geos_for_relation(*geo1, *geo2))) {
     LOG_WARN("zoom in geos failed", K(ret));
   } else {
-    ObGeoFuncResWithNull disjoint_result;
+    bool disjoint_result = false;
     ObGeoEvalCtx gis_context(&temp_allocator, srs);
     if (OB_FAIL(gis_context.append_geo_arg(geo1)) || OB_FAIL(gis_context.append_geo_arg(geo2))) {
       LOG_WARN("build gis context failed", K(ret), K(gis_context.get_geo_count()));
@@ -162,10 +162,8 @@ int ObExprSTDisjoint::eval_st_disjoint(const ObExpr &expr, ObEvalCtx &ctx, ObDat
                     gis_context, disjoint_result))) {
       LOG_WARN("eval st intersection failed", K(ret));
       ObGeoExprUtils::geo_func_error_handle(ret, N_ST_CROSSES);
-    } else if (disjoint_result.is_null) {
-      is_null_res = true;
     } else {
-      result = disjoint_result.bret;
+      result = disjoint_result;
     }
   }
 
@@ -179,7 +177,7 @@ int ObExprSTDisjoint::eval_st_disjoint(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   return ret;
 }
 
-int ObExprSTOverlaps::cg_expr(
+int ObExprSTDisjoint::cg_expr(
     ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObExpr &rt_expr) const
 {
   UNUSED(expr_cg_ctx);

@@ -36,6 +36,8 @@ public:
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
 private:
+  static int process_input_geometry(omt::ObSrsCacheGuard &srs_guard, const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator, ObGeometry *&geo1,
+      ObGeometry *&geo2, bool &is_null_res, const ObSrsItem *&srs);
   DISALLOW_COPY_AND_ASSIGN(ObExprSTDisjoint);
 };
 } // sql
