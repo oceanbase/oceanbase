@@ -67,6 +67,9 @@ private:
   int64_t get_database_id();
   int get_conn_id(uint32_t &conn_id) const;
   int get_proxy_conn_id(uint64_t &conn_id) const;
+  int get_client_addr_port(int32_t &client_addr_port) const;
+  int get_client_conn_id(uint32_t &conn_id) const;
+  int get_client_create_time(int64_t &client_create_time) const;
   int get_proxy_sess_create_time(int64_t &sess_create_time) const;
   int get_proxy_capability(uint64_t &cap) const;
   int get_proxy_scramble(ObString &proxy_scramble) const;
@@ -163,6 +166,7 @@ private:
   int deser_ret_;
   ObArenaAllocator allocator_;
   AuthSwitchResonseMemPool asr_mem_pool_;
+  int32_t client_port_;
 }; // end of class ObMPConnect
 
 } // end of namespace observer

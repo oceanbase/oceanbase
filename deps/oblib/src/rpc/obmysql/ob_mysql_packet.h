@@ -165,6 +165,7 @@ union ObProxyCapabilityFlags
   bool is_flt_show_trace_support() const { return 1 == cap_flags_.OB_CAP_PROXY_FULL_LINK_TRACING_EXT
                                                         && is_ob_protocol_v2_support(); }
   bool is_load_local_support() const { return 1 == cap_flags_.OB_CAP_LOCAL_FILES; }
+  bool is_client_sessid_support() const { return 1 == cap_flags_.OB_CAP_PROXY_CLIENT_SESSION_ID; }
 
   bool is_ob_protocol_v2_compress() const { return 1 == cap_flags_.OB_CAP_OB_PROTOCOL_V2_COMPRESS
                                                         && is_ob_protocol_v2_support(); }

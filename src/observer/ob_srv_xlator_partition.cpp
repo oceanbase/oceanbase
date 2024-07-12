@@ -330,4 +330,8 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObGAISBroadcastAutoIncCacheP);
   // limit calculator
   RPC_PROCESSOR(ObResourceLimitCalculatorP, gctx_);
+  // kill client session
+  RPC_PROCESSOR(ObKillClientSessionP, gctx_);
+  // client session create time
+  RPC_PROCESSOR(ObClientSessionConnectTimeP, gctx_);
 }

@@ -270,6 +270,8 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_AND_CANCEL_DDL_COMPLEMENT_DAG, ObRpcCheckand
 OB_DEFINE_PROCESSOR_S(Srv, OB_REFRESH_SERVICE_NAME, ObRefreshServiceNameP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CAL_UNIT_PHY_RESOURCE, ObResourceLimitCalculatorP);
 
+OB_DEFINE_PROCESSOR_S(Srv, OB_KILL_CLIENT_SESSION, ObKillClientSessionP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_CLIENT_SESSION_CONNECT_TIME, ObClientSessionConnectTimeP);
 } // end of namespace observer
 } // end of namespace oceanbase
 
