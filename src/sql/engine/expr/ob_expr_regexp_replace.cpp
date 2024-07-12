@@ -71,7 +71,7 @@ int ObExprRegexpReplace::calc_result_typeN(ObExprResType &type,
   } else {
     const ObExprResType &text = real_text->get_result_type();
     for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
-      if (!types[i].is_null() && !is_type_valid(types[i].get_type())) {
+      if (!types[i].is_null() && !is_type_valid_regexp(types[i].get_type())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("the parameter is not castable", K(ret), K(i));
       }
