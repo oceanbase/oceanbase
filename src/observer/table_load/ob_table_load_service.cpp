@@ -496,23 +496,24 @@ int ObTableLoadService::remove_ctx(ObTableLoadTableCtx *table_ctx)
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
   } else {
-    common::ObAddr leader;
+    int tmp_ret = OB_SUCCESS;
     ObDirectLoadResourceReleaseArg release_arg;
     release_arg.tenant_id_ = MTL_ID();
     release_arg.task_key_ = ObTableLoadUniqueKey(table_ctx->param_.table_id_, table_ctx->ddl_param_.task_id_);
-    bool is_sort = (table_ctx->param_.exe_mode_ == ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT ||
-                    table_ctx->param_.exe_mode_ == ObTableLoadExeMode::MEM_COMPACT);
     if (OB_FAIL(service->get_manager().remove_table_ctx(release_arg.task_key_, table_ctx))) {
       LOG_WARN("fail to remove_table_ctx", KR(ret), K(release_arg.task_key_));
-    } else if (table_ctx->is_assigned_memory() &&
-               OB_FAIL(service->assigned_memory_manager_.recycle_memory(is_sort, table_ctx->param_.avail_memory_))) {
-      LOG_WARN("fail to recycle_memory", KR(ret), K(release_arg.task_key_));
-    } else if (table_ctx->is_assigned_resource()) {
-      if (OB_FAIL(service->assigned_task_manager_.delete_assigned_task(release_arg.task_key_))) {
-        LOG_WARN("fail to delete_assigned_task", KR(ret), K(release_arg.task_key_));
-      } else if (OB_FAIL(ObTableLoadResourceService::release_resource(release_arg))) {
-        LOG_WARN("fail to release resource", KR(ret));
-        ret = OB_SUCCESS;   // 允许失败，资源管理模块可以回收
+    } else {
+      if (table_ctx->is_assigned_memory()) {
+        if (OB_TMP_FAIL(service->assigned_memory_manager_.recycle_memory(table_ctx->param_.need_sort_, table_ctx->param_.avail_memory_))) {
+          LOG_WARN("fail to recycle_memory", KR(tmp_ret), K(release_arg.task_key_));
+        }
+        table_ctx->reset_assigned_memory();
+      }
+      if (table_ctx->is_assigned_resource()) {
+        if (OB_TMP_FAIL(ObTableLoadService::delete_assigned_task(release_arg))) {
+          LOG_WARN("fail to delete assigned task", KR(tmp_ret), K(release_arg));
+        }
+        table_ctx->reset_assigned_resource();
       }
     }
   }
@@ -800,6 +801,25 @@ int ObTableLoadService::add_assigned_task(ObDirectLoadResourceApplyArg &arg)
     LOG_WARN("null table load service", KR(ret));
   } else {
     ret = service->assigned_task_manager_.add_assigned_task(arg);
+  }
+
+  return ret;
+}
+
+int ObTableLoadService::delete_assigned_task(ObDirectLoadResourceReleaseArg &arg)
+{
+  int ret = OB_SUCCESS;
+  ObTableLoadService *service = nullptr;
+  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("null table load service", KR(ret));
+  } else {
+    if (OB_FAIL(service->assigned_task_manager_.delete_assigned_task(arg.task_key_))) {
+      LOG_WARN("fail to delete_assigned_task", KR(ret), K(arg.task_key_));
+    } else if (OB_FAIL(ObTableLoadResourceService::release_resource(arg))) {
+      LOG_WARN("fail to release resource", KR(ret));
+      ret = OB_SUCCESS;   // 允许失败，资源管理模块可以回收
+    }
   }
 
   return ret;
