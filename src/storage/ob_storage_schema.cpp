@@ -434,7 +434,7 @@ int ObStorageSchema::init(
     const ObTableSchema &input_schema,
     const lib::Worker::CompatMode compat_mode,
     const bool skip_column_info/* = false*/,
-    const int64_t compat_version/* = STORAGE_SCHEMA_VERSION_V3*/)
+    const int64_t compat_version/* = STORAGE_SCHEMA_VERSION_LATEST*/)
 {
   int ret = OB_SUCCESS;
 

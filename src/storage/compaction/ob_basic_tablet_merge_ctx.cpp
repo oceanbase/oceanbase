@@ -760,12 +760,11 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   }
 
   ObScheduleSuspectInfo ret_info;
-  int64_t suspect_info_hash = ObScheduleSuspectInfo::gen_hash(MTL_ID(), hash);
   info_allocator.reuse();
-  if (OB_SUCCESS == MTL(compaction::ObScheduleSuspectInfoMgr *)->get_with_param(suspect_info_hash, &ret_info, info_allocator)) {
+  if (OB_SUCCESS == MTL(compaction::ObScheduleSuspectInfoMgr *)->get_with_param(hash, &ret_info, info_allocator)) {
     sstable_merge_info.suspect_add_time_ = ret_info.add_time_;
     sstable_merge_info.info_param_ = ret_info.info_param_;
-    if (OB_TMP_FAIL(MTL(compaction::ObScheduleSuspectInfoMgr *)->delete_info(suspect_info_hash))) {
+    if (OB_TMP_FAIL(MTL(compaction::ObScheduleSuspectInfoMgr *)->delete_info(hash))) {
       LOG_WARN_RET(tmp_ret, "failed to delete old suspect info", K(sstable_merge_info));
     }
   }

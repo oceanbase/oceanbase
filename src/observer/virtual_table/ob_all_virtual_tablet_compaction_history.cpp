@@ -97,7 +97,7 @@ int ObAllVirtualTabletCompactionHistory::process_curr_tenant(ObNewRow *&row)
       cells[i].set_int(ObServerConfig::get_instance().self_addr_.get_port());
       break;
     case TENANT_ID:
-      cells[i].set_int(merge_info_.tenant_id_);
+      cells[i].set_int(MTL_ID());
       break;
     case LS_ID:
       // index_id

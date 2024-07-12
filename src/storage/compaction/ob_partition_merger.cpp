@@ -62,7 +62,6 @@ int ObDataDescHelper::build(
     // init merge info
     const ObStaticMergeParam &static_param = merge_param.static_param_;
     output_merge_info.reset();
-    output_merge_info.tenant_id_ = MTL_ID();
     output_merge_info.ls_id_ = static_param.get_ls_id();
     output_merge_info.tablet_id_ = static_param.get_tablet_id();
     output_merge_info.merge_type_ = static_param.get_merge_type();
@@ -654,6 +653,21 @@ int ObPartitionMajorMerger::inner_init()
   return ret;
 }
 
+#ifdef ERRSIM
+void write_wrong_row(const ObTabletID &tablet_id, const ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  ret = OB_E(EventTable::EN_MAKE_DATA_CKM_ERROR_BY_WRITE_WRONG_ROW) ret;
+  if (OB_FAIL(ret)
+      && tablet_id.id() > ObTabletID::MIN_USER_TABLET_ID
+      && (OB_CHECKSUM_ERROR == ret || GCTX.server_id_ == -ret)) {
+    ObDatumRow &tmp_row = const_cast<ObDatumRow &>(row);
+    tmp_row.storage_datums_[tmp_row.get_column_count() - 1].set_int(999);
+    LOG_ERROR("ERRSIM EN_MAKE_DATA_CKM_ERROR_BY_WRITE_WRONG_ROW", K(ret), K(tablet_id), K(row));
+  }
+}
+#endif
+
 int ObPartitionMajorMerger::inner_process(const ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
@@ -661,6 +675,11 @@ int ObPartitionMajorMerger::inner_process(const ObDatumRow &row)
   if (is_delete) {
       // drop del row
   } else {
+#ifdef ERRSIM
+    if (data_store_desc_.get_row_column_count() > data_store_desc_.get_rowkey_column_count()) {
+      write_wrong_row(data_store_desc_.get_tablet_id(), row);
+    }
+#endif
     const blocksstable::ObMacroBlockDesc *macro_desc;
     if (OB_FAIL(get_base_iter_curr_macro_block(macro_desc))) {
       STORAGE_LOG(WARN, "Failed to get base iter macro", K(ret));

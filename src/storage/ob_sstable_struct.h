@@ -111,14 +111,14 @@ struct PartTableInfo {
 struct ObSSTableMergeInfo final : public compaction::ObIDiagnoseInfo
 {
 public:
-  ObSSTableMergeInfo();
+  ObSSTableMergeInfo(const bool need_free_param = true);
   ~ObSSTableMergeInfo() = default;
   bool is_valid() const;
   int add(const ObSSTableMergeInfo &other);
   OB_INLINE bool is_major_merge_type() const { return compaction::is_major_merge_type(merge_type_); }
   void dump_info(const char *msg);
   void reset();
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(compaction_scn),
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(compaction_scn),
               "merge_type", merge_type_to_str(merge_type_), "merge_cost_time", merge_finish_time_ - merge_start_time_,
                K_(merge_start_time), K_(merge_finish_time), K_(dag_id), K_(occupy_size), K_(new_flush_occupy_size), K_(original_size),
                K_(compressed_size), K_(macro_block_count), K_(multiplexed_macro_block_count),

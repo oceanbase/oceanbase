@@ -688,6 +688,7 @@ public:
     ls_meta_.tenant_id_ = 1001;
     ls_meta_.ls_id_ = ObLSID(100);
   }
+  ~FakeLS() {}
   int64_t get_min_reserved_snapshot() { return 10; }
 };
 

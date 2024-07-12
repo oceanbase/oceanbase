@@ -556,7 +556,6 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
 
     if (strlen(buf) > 0) {
       suggestion.merge_type_ = merge_info.merge_type_;
-      suggestion.tenant_id_ = merge_info.tenant_id_;
       suggestion.ls_id_ = merge_info.ls_id_.id();
       suggestion.tablet_id_ = merge_info.tablet_id_.id();
       suggestion.merge_start_time_ = merge_info.merge_start_time_;
