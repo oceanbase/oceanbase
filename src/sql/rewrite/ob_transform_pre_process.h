@@ -32,9 +32,12 @@ struct DistinctObjMeta
   ObObjType obj_type_;
   ObCollationType coll_type_;
   ObCollationLevel coll_level_;
+  ObScale scale_;
 
-  DistinctObjMeta(ObObjType obj_type, ObCollationType coll_type, ObCollationLevel coll_level)
-    : obj_type_(obj_type), coll_type_(coll_type), coll_level_(coll_level)
+  DistinctObjMeta(ObObjType obj_type, ObCollationType coll_type,
+                  ObCollationLevel coll_level, ObScale scale)
+    : obj_type_(obj_type), coll_type_(coll_type),
+      coll_level_(coll_level), scale_(scale)
   {
     if (!ObDatumFuncs::is_string_type(obj_type_)) {
       coll_type_ = CS_TYPE_MAX;
@@ -42,14 +45,21 @@ struct DistinctObjMeta
     }
   }
   DistinctObjMeta()
-    : obj_type_(common::ObMaxType), coll_type_(common::CS_TYPE_MAX) , coll_level_(CS_LEVEL_INVALID){}
+    : obj_type_(common::ObMaxType), coll_type_(common::CS_TYPE_MAX) ,
+      coll_level_(CS_LEVEL_INVALID), scale_(-1) {}
 
   bool operator==(const DistinctObjMeta &other) const
   {
     bool cs_level_equal = lib::is_oracle_mode() ? true : (coll_level_ == other.coll_level_);
-    return obj_type_ == other.obj_type_ && coll_type_ == other.coll_type_ && cs_level_equal;
+    bool res = obj_type_ == other.obj_type_ && coll_type_ == other.coll_type_ && cs_level_equal;
+    if (res && ob_is_double_type(obj_type_)) {
+      bool is_fixed_double_1 = SCALE_UNKNOWN_YET < scale_ && OB_MAX_DOUBLE_FLOAT_SCALE >= scale_;
+      bool is_fixed_double_2 = SCALE_UNKNOWN_YET < other.scale_ && OB_MAX_DOUBLE_FLOAT_SCALE >= other.scale_;
+      res = is_fixed_double_1 == is_fixed_double_2;
+    }
+    return res;
   }
-  TO_STRING_KV(K_(obj_type), K_(coll_type), K_(coll_level));
+  TO_STRING_KV(K_(obj_type), K_(coll_type), K_(coll_level), K_(scale));
 };
 
 class ObTransformPreProcess: public ObTransformRule
