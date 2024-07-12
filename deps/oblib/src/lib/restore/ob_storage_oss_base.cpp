@@ -144,7 +144,10 @@ int get_bucket_object_name(const ObString &uri, ObString &bucket, ObString &obje
       for (bucket_end = bucket_start; OB_SUCC(ret) && bucket_end < uri.length(); ++bucket_end) {
         if ('/' == *(uri.ptr() + bucket_end)) {
           ObString::obstr_size_t bucket_length = bucket_end - bucket_start;
-          if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(OB_MAX_URI_LENGTH)))) {
+          if (OB_UNLIKELY(bucket_length <= 0)) {
+            ret = OB_INVALID_ARGUMENT;
+            OB_LOG(WARN,"bucket is empty", K(ret), K(bucket_end), K(bucket_start), K(uri));
+          } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(OB_MAX_URI_LENGTH)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             OB_LOG(WARN,"allocate memory error", K(OB_MAX_URI_LENGTH), K(ret));
           } else {
