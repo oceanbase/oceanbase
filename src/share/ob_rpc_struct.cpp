@@ -3390,6 +3390,299 @@ void ObCalcColumnChecksumResponseArg::reset()
   tenant_id_ = OB_INVALID_TENANT_ID;
 }
 
+OB_SERIALIZE_MEMBER(
+    ObAlterLSReplicaTaskType,
+    type_);
+
+static const char* alter_ls_replica_task_type_strs[] = {
+  "ADD_LS_REPLICA",
+  "REMOVE_LS_REPLICA",
+  "MIGRATE_LS_REPLICA",
+  "MODIFY_LS_REPLICA_TYPE",
+  "MODIFY_LS_PAXOS_REPLICA_NUM",
+  "CANCEL_LS_REPLICA_TASK",
+};
+
+const char* ObAlterLSReplicaTaskType::get_type_str() const {
+  STATIC_ASSERT(ARRAYSIZEOF(alter_ls_replica_task_type_strs) == (int64_t)LSReplicaTaskMax,
+                "alter_ls_replica_task_type string array size mismatch enum AlterLSReplicaTaskType count");
+  const char *str = NULL;
+  if (type_ != LSReplicaTaskMax) {
+    str = alter_ls_replica_task_type_strs[static_cast<int64_t>(type_)];
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid AlterLSReplicaTaskType", K_(type));
+  }
+  return str;
+}
+
+int64_t ObAlterLSReplicaTaskType::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), "type", get_type_str());
+  J_OBJ_END();
+  return pos;
+}
+
+int ObAlterLSReplicaTaskType::parse_from_string(const ObString &type)
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  STATIC_ASSERT(ARRAYSIZEOF(alter_ls_replica_task_type_strs) == (int64_t)LSReplicaTaskMax,
+                "alter_ls_replica_task_type string array size mismatch enum AlterLSReplicaTaskType count");
+  for (int64_t i = 0; i < ARRAYSIZEOF(alter_ls_replica_task_type_strs) && !found; i++) {
+    if (0 == type.case_compare(alter_ls_replica_task_type_strs[i])) {
+      type_ = static_cast<AlterLSReplicaTaskType>(i);
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to parse type from string", KR(ret), K(type), K_(type));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObAdminAlterLSReplicaArg,
+                    ls_id_,
+                    server_addr_,
+                    destination_addr_,
+                    replica_type_,
+                    tenant_id_,
+                    task_id_,
+                    data_source_,
+                    paxos_replica_num_,
+                    alter_task_type_);
+
+int ObAdminAlterLSReplicaArg::assign(const ObAdminAlterLSReplicaArg &that)
+{
+  int ret = OB_SUCCESS;
+  if (this == &that) {
+    //pass
+  } else if (OB_FAIL(task_id_.assign(that.task_id_))) {
+    LOG_WARN("task_id_ assign failed", KR(ret), K(that.task_id_));
+  } else {
+    ls_id_ = that.ls_id_;
+    server_addr_ = that.server_addr_;
+    destination_addr_ = that.destination_addr_;
+    replica_type_ = that.replica_type_;
+    data_source_ = that.data_source_;
+    paxos_replica_num_ = that.paxos_replica_num_;
+    tenant_id_ = that.tenant_id_;
+    alter_task_type_ = that.alter_task_type_;
+  }
+  return ret;
+}
+
+int ObAdminAlterLSReplicaArg::init_add(
+    const share::ObLSID& ls_id,
+    const common::ObAddr& server_addr,
+    const common::ObReplicaType& replica_type,
+    const common::ObAddr& data_source,
+    const int64_t paxos_replica_num,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid())
+   || OB_UNLIKELY(!server_addr.is_valid())
+   || OB_UNLIKELY(replica_type != REPLICA_TYPE_FULL && replica_type != REPLICA_TYPE_READONLY)
+   || OB_UNLIKELY(paxos_replica_num < 0)
+   || OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    //data_source and paxos_replica_num is optional parameter
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(server_addr), K(replica_type),
+              K(paxos_replica_num), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    server_addr_ = server_addr;
+    replica_type_ = replica_type;
+    data_source_ = data_source;
+    paxos_replica_num_ = paxos_replica_num;
+    tenant_id_ = tenant_id;
+    alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::AddLSReplicaTask);
+  }
+  return ret;
+}
+
+int ObAdminAlterLSReplicaArg::init_remove(
+    const share::ObLSID& ls_id,
+    const common::ObAddr& server_addr,
+    const int64_t paxos_replica_num,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid())
+   || OB_UNLIKELY(!server_addr.is_valid())
+   || OB_UNLIKELY(paxos_replica_num < 0)
+   || OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(server_addr),
+      K(paxos_replica_num), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    server_addr_ = server_addr;
+    paxos_replica_num_ = paxos_replica_num;
+    tenant_id_ = tenant_id;
+    alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::RemoveLSReplicaTask);
+  }
+  return ret;
+}
+
+int ObAdminAlterLSReplicaArg::init_migrate(
+    const share::ObLSID& ls_id,
+    const common::ObAddr& server_addr,
+    const common::ObAddr& destination_addr,
+    const common::ObAddr& data_source,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid())
+   || OB_UNLIKELY(!server_addr.is_valid())
+   || OB_UNLIKELY(!destination_addr.is_valid())
+   || OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;     //data_surce is optional parameter
+    LOG_WARN("invalid argument", KR(ret), K(ls_id),
+              K(server_addr), K(destination_addr), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    server_addr_ = server_addr;
+    destination_addr_ = destination_addr;
+    data_source_ = data_source;
+    tenant_id_ = tenant_id;
+    alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::MigrateLSReplicaTask);
+  }
+  return ret;
+}
+
+int ObAdminAlterLSReplicaArg::init_modify_replica(
+    const share::ObLSID& ls_id,
+    const common::ObAddr& server_addr,
+    const common::ObReplicaType& replica_type,
+    const int64_t paxos_replica_num,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid())
+   || OB_UNLIKELY(!server_addr.is_valid())
+   || OB_UNLIKELY(replica_type != REPLICA_TYPE_FULL && replica_type != REPLICA_TYPE_READONLY)
+   || OB_UNLIKELY(paxos_replica_num < 0)
+   || OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(server_addr), K(replica_type),
+              K(paxos_replica_num), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    server_addr_ = server_addr;
+    replica_type_ = replica_type;
+    paxos_replica_num_ = paxos_replica_num;
+    tenant_id_ = tenant_id;
+    alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::ModifyLSReplicaTypeTask);
+  }
+  return ret;
+}
+
+int ObAdminAlterLSReplicaArg::init_modify_paxos_replica_num(
+    const share::ObLSID& ls_id,
+    const int64_t paxos_replica_num,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid())
+   || OB_UNLIKELY(paxos_replica_num <= 0)
+   || OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id),
+              K(paxos_replica_num), K(tenant_id));
+  } else {
+    ls_id_ = ls_id;
+    paxos_replica_num_ = paxos_replica_num;
+    tenant_id_ = tenant_id;
+    alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::ModifyLSPaxosReplicaNumTask);
+  }
+  return ret;
+}
+
+int ObAdminAlterLSReplicaArg::init_cancel(
+    const common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1>& task_id,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))
+   || OB_UNLIKELY(task_id.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(task_id));
+  } else if (OB_FAIL(task_id_.assign(task_id))) {
+    LOG_WARN("task_id_ assign failed", KR(ret), K(task_id));
+  } else {
+    tenant_id_ = tenant_id;
+    alter_task_type_ = ObAlterLSReplicaTaskType(ObAlterLSReplicaTaskType::CancelLSReplicaTask);
+  }
+  return ret;
+}
+
+void ObAdminAlterLSReplicaArg::reset()
+{
+  ls_id_.reset();
+  server_addr_.reset();
+  destination_addr_.reset();
+  replica_type_ = common::REPLICA_TYPE_MAX;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  task_id_.reset();
+  data_source_.reset();
+  paxos_replica_num_ = 0;
+  alter_task_type_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObLSCancelReplicaTaskArg,
+                    task_id_,
+                    ls_id_,
+                    tenant_id_);
+
+int ObLSCancelReplicaTaskArg::assign(const ObLSCancelReplicaTaskArg &that)
+{
+  int ret = OB_SUCCESS;
+  if (this != &that) {
+    task_id_ = that.task_id_;
+    ls_id_ = that.ls_id_;
+    tenant_id_ = that.tenant_id_;
+  }
+  return ret;
+}
+
+int ObLSCancelReplicaTaskArg::init(
+    const share::ObTaskId &task_id,
+    const share::ObLSID &ls_id,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!task_id.is_valid()
+               || !ls_id.is_valid()
+               || OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task_id), K(ls_id), K(tenant_id));
+  } else {
+    task_id_ = task_id;
+    ls_id_ = ls_id;
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+void ObLSCancelReplicaTaskArg::reset()
+{
+  task_id_.reset();
+  ls_id_.reset();
+  tenant_id_ = OB_INVALID_TENANT_ID;
+}
+
+bool ObLSCancelReplicaTaskArg::is_valid() const
+{
+  return task_id_.is_valid()
+      && ls_id_.is_valid()
+      && OB_INVALID_TENANT_ID != tenant_id_;
+}
+
 OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     task_id_,
                     tenant_id_,
@@ -3716,6 +4009,84 @@ int ObDRTaskExistArg::init(
     task_id_ = task_id;
     tenant_id_ = tenant_id;
     ls_id_ = ls_id;
+  }
+  return ret;
+}
+
+static const char* ob_admin_drtask_type_strs[] = {
+  "ADD REPLICA",
+  "REMOVE REPLICA"
+};
+
+static const char* ob_admin_drtask_comment_strs[] = {
+  "add ls replica trigger by ob_admin",
+  "remove ls replica trigger by ob_admin"
+};
+
+OB_SERIALIZE_MEMBER(ObAdminDRTaskType, type_);
+const char* ObAdminDRTaskType::get_type_str() const
+{
+  STATIC_ASSERT(ARRAYSIZEOF(ob_admin_drtask_type_strs) == (int64_t)MAX_TYPE,
+                "ob_admin_drtask_type_strs string array size mismatch enum AdminDRTaskType count");
+  const char *str = NULL;
+  if (type_ > INVALID_TYPE && type_ < MAX_TYPE) {
+    str = ob_admin_drtask_type_strs[static_cast<int64_t>(type_)];
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid AdminDRTaskType", K_(type));
+  }
+  return str;
+}
+
+const char* ObAdminDRTaskType::get_comment() const
+{
+  STATIC_ASSERT(ARRAYSIZEOF(ob_admin_drtask_comment_strs) == (int64_t)MAX_TYPE,
+                "ob_admin_drtask_comment_strs string array size mismatch enum AdminDRTaskType count");
+  const char *str = NULL;
+  if (type_ > INVALID_TYPE && type_ < MAX_TYPE) {
+    str = ob_admin_drtask_comment_strs[static_cast<int64_t>(type_)];
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid AdminDRTaskType", K_(type));
+  }
+  return str;
+}
+
+int64_t ObAdminDRTaskType::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV(K_(type), "type", get_type_str());
+  J_OBJ_END();
+  return pos;
+}
+
+OB_SERIALIZE_MEMBER(ObAdminCommandArg, admin_command_, task_type_);
+int ObAdminCommandArg::assign(const ObAdminCommandArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this == &other) {
+    //pass
+  } else if (OB_FAIL(admin_command_.assign(other.get_admin_command_str()))) {
+    LOG_WARN("fail to assign obadmin command string", KR(ret), K(other));
+  } else {
+    task_type_ = other.get_task_type();
+  }
+  return ret;
+}
+
+int ObAdminCommandArg::init(const ObString &admin_command, const ObAdminDRTaskType &task_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(admin_command.length() > OB_MAX_ADMIN_COMMAND_LENGTH)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(admin_command));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "admin command, length oversize");
+  } else if (OB_UNLIKELY(admin_command.empty()) || OB_UNLIKELY(!task_type.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(admin_command), K(task_type));
+  } else if (OB_FAIL(admin_command_.assign(admin_command))) {
+    LOG_WARN("fali to assign admin command", KR(ret), K(admin_command));
+  } else {
+    task_type_ = task_type;
   }
   return ret;
 }

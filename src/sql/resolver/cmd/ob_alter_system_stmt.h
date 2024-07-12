@@ -396,6 +396,18 @@ private:
   obrpc::ObAdminMigrateUnitArg rpc_arg_;
 };
 
+class ObAlterLSReplicaStmt : public ObSystemCmdStmt
+{
+public:
+  ObAlterLSReplicaStmt() : ObSystemCmdStmt(stmt::T_ALTER_LS_REPLICA) {}
+  virtual ~ObAlterLSReplicaStmt() {}
+
+  obrpc::ObAdminAlterLSReplicaArg &get_rpc_arg() { return rpc_arg_; }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+private:
+  obrpc::ObAdminAlterLSReplicaArg rpc_arg_;
+};
+
 class ObAddArbitrationServiceStmt : public ObSystemCmdStmt
 {
 public:

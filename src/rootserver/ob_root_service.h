@@ -691,6 +691,7 @@ public:
   int admin_switch_replica_role(const obrpc::ObAdminSwitchReplicaRoleArg &arg);
   int admin_switch_rs_role(const obrpc::ObAdminSwitchRSRoleArg &arg);
   int admin_drop_replica(const obrpc::ObAdminDropReplicaArg &arg);
+  int admin_alter_ls_replica(const obrpc::ObAdminAlterLSReplicaArg &arg);
   int admin_change_replica(const obrpc::ObAdminChangeReplicaArg &arg);
   int admin_migrate_replica(const obrpc::ObAdminMigrateReplicaArg &arg);
   int admin_report_replica(const obrpc::ObAdminReportReplicaArg &arg);
@@ -895,6 +896,7 @@ private:
   int old_cancel_delete_server(const obrpc::ObAdminServerArg &arg);
 
   int parallel_ddl_pre_check_(const uint64_t tenant_id);
+  int add_rs_event_for_alter_ls_replica_(const obrpc::ObAdminAlterLSReplicaArg &arg, const int ret_val);
 private:
   static const int64_t OB_MAX_CLUSTER_REPLICA_COUNT = 10000000;
   static const int64_t OB_ROOT_SERVICE_START_FAIL_COUNT_UPPER_LIMIT = 5;

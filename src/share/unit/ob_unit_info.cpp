@@ -13,6 +13,7 @@
 #include <cmath>
 
 #include "ob_unit_info.h"
+#include "share/ob_errno.h"
 
 namespace oceanbase
 {
@@ -56,6 +57,26 @@ void ObUnit::reset()
   is_manual_migrate_ = false;
   status_ = UNIT_STATUS_MAX;
   replica_type_ = REPLICA_TYPE_FULL;
+}
+
+int ObUnit::assign(const ObUnit& that)
+{
+  int ret = OB_SUCCESS;
+  if (this == &that) {
+    //skip
+  } else if (OB_FAIL(zone_.assign(that.zone_))) {
+    LOG_WARN("zone_ assign failed", KR(ret), K(that.zone_));
+  } else {
+    unit_id_ = that.unit_id_;
+    resource_pool_id_ = that.resource_pool_id_;
+    unit_group_id_ = that.unit_group_id_;
+    server_ = that.server_;
+    migrate_from_server_ = that.migrate_from_server_;
+    is_manual_migrate_ = that.is_manual_migrate_;
+    status_ = that.status_;
+    replica_type_ = that.replica_type_;
+  }
+  return ret;
 }
 
 bool ObUnit::is_valid() const

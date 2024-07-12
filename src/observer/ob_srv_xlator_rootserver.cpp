@@ -217,6 +217,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcAdminReloadZoneP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminClearMergeErrorP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminMigrateUnitP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcAdminAlterLSReplicaP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminUpgradeVirtualSchemaP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcRunJobP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcAdminRefreshIOCalibrationP, *gctx_.root_service_);

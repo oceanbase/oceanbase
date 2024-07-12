@@ -70,10 +70,11 @@ public:
   virtual ~ObStorageHATabletsBuilder();
   int init(const ObStorageHATabletsBuilderParam &param);
   // Create all tablets with remote tablet meta.
-  int create_or_update_tablets();
+  int create_or_update_tablets(ObIDagNet *dag_net);
   int create_all_tablets(
       const bool need_check_tablet_limit,
       ObICopyLSViewInfoReader *reader,
+      ObIDagNet *dag_net,
       common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
       common::ObIArray<common::ObTabletID> &data_tablet_id_list,
       CopyTabletSimpleInfoMap &simple_info_map);
@@ -82,8 +83,9 @@ public:
   // If that tablet meta identified uniquely by transfer sequence exists, replace and update the restore status to EMPTY.
   // Otherwise, just update it to UNDEFINED.
   int update_pending_tablets_with_remote();
-  int build_tablets_sstable_info();
+  int build_tablets_sstable_info(ObIDagNet *dag_net);
   int create_all_tablets_with_4_1_rpc(
+      ObIDagNet *dag_net,
       CopyTabletSimpleInfoMap &simple_info_map);
 private:
   int get_tablet_info_reader_(

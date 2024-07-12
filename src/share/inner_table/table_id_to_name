@@ -316,6 +316,7 @@
 # 498: __all_transfer_partition_task
 # 499: __all_transfer_partition_task_history
 # 499: __all_transfer_partition_task  # BASE_TABLE_NAME
+# 508: __all_ls_replica_task_history
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -995,6 +996,8 @@
 # 12452: __all_virtual_transfer_partition_task_history
 # 12452: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 12452: __all_transfer_partition_task_history  # BASE_TABLE_NAME1
+# 12467: __all_virtual_ls_replica_task_history
+# 12467: __all_ls_replica_task_history  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1557,6 +1560,9 @@
 # 15431: ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_REAL_AGENT
 # 15431: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 15431: __all_transfer_partition_task_history  # BASE_TABLE_NAME1
+# 15443: ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
+# 15443: __all_ls_replica_task_history  # BASE_TABLE_NAME
+# 15443: __all_virtual_ls_replica_task_history  # BASE_TABLE_NAME1
 # 15457: ALL_VIRTUAL_QUERY_RESPONSE_TIME
 # 15457: __all_virtual_query_response_time  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
@@ -1932,6 +1938,8 @@
 # 21502: CDB_OB_TRANSFER_PARTITION_TASKS
 # 21503: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 21504: CDB_OB_TRANSFER_PARTITION_TASK_HISTORY
+# 21523: DBA_OB_LS_REPLICA_TASK_HISTORY
+# 21524: CDB_OB_LS_REPLICA_TASK_HISTORY
 # 21580: EVENTS
 # 21587: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 # 21588: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
@@ -2192,6 +2200,7 @@
 # 25275: DBA_OB_TRANSFER_PARTITION_TASKS
 # 25276: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 25278: USER_USERS
+# 25279: DBA_OB_LS_REPLICA_TASK_HISTORY
 # 28002: GV$OB_SQL_AUDIT
 # 28003: V$OB_SQL_AUDIT
 # 28004: GV$INSTANCE

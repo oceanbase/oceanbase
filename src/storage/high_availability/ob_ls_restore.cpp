@@ -1348,10 +1348,17 @@ int ObSysTabletsRestoreTask::process()
 int ObSysTabletsRestoreTask::create_or_update_tablets_()
 {
   int ret = OB_SUCCESS;
+  ObIDagNet *dag_net = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sys tablets restore task do not init", K(ret));
-  } else if (OB_FAIL(ha_tablets_builder_.create_or_update_tablets())) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (OB_FAIL(ha_tablets_builder_.create_or_update_tablets(dag_net))) {
     LOG_WARN("failed to create or update tablets", K(ret), KPC(ctx_));
   }
   return ret;
@@ -1360,11 +1367,17 @@ int ObSysTabletsRestoreTask::create_or_update_tablets_()
 int ObSysTabletsRestoreTask::build_tablets_sstable_info_()
 {
   int ret = OB_SUCCESS;
-
+  ObIDagNet *dag_net = nullptr;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("sys tablets restore task do not init", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info())) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (OB_FAIL(ha_tablets_builder_.build_tablets_sstable_info(dag_net))) {
     LOG_WARN("failed to build tablets sstable info", K(ret), KPC(ctx_));
   }
   return ret;

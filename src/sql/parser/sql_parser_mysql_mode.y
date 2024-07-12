@@ -270,7 +270,7 @@ END_P SET_VAR DELIMITER
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COUNT CPU CREATE_TIMESTAMP
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
-        DAG DATA DATAFILE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPTION
+        DAG DATA DATAFILE DATA_TABLE_ID DATA_SOURCE DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPTION
         DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS
         DIRECTORY DISABLE DISCARD DISK DISKGROUP DO DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT
@@ -318,7 +318,7 @@ END_P SET_VAR DELIMITER
         OBSOLETE OCCUR OF OFF OFFSET OLD OLD_PASSWORD ONE ONE_SHOT ONLY OPEN OPTIONS ORDINALITY ORIG_DEFAULT OWNER OLD_KEY OVER
         OBCONFIG_URL OJ
 
-        PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PERCENTAGE
+        PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PAXOS_REPLICA_NUM PERCENTAGE
         PERCENT_RANK PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
         PROTECTION PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
         PROCESSLIST PROFILE PROFILES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
@@ -346,7 +346,7 @@ END_P SET_VAR DELIMITER
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
         SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES
 
-        TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE
+        TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE TASK_ID
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
         TP_NAME TRACE TRADITIONAL TRANSACTION TRIGGERS TRIM TRUNCATE TYPE TYPES TASK TABLET_SIZE
         TABLEGROUP_ID TENANT_ID THROTTLE TIME_ZONE_INFO TOP_K_FRE_HIST TIMES TRIM_SPACE TTL
@@ -469,7 +469,7 @@ END_P SET_VAR DELIMITER
 %type <node> partition_role ls_role zone_desc opt_zone_desc server_or_zone opt_server_or_zone opt_partitions opt_subpartitions add_or_alter_zone_options alter_or_change_or_modify
 %type <node> ls opt_tenant_list_or_ls_or_tablet_id ls_server_or_server_or_zone_or_tenant add_or_alter_zone_option
 %type <node> opt_tenant_list_v2
-%type <node> suspend_or_resume tenant_name opt_tenant_name cache_name opt_cache_name file_id opt_file_id cancel_task_type
+%type <node> suspend_or_resume tenant_name opt_tenant_name cache_name opt_cache_name file_id opt_file_id cancel_task_type opt_data_source opt_paxos_replica_num
 %type <node> sql_id_expr opt_sql_id
 %type <node> namespace_expr opt_namespace
 %type <node> server_action server_list opt_server_list
@@ -15730,6 +15730,45 @@ ALTER SYSTEM CANCEL MIGRATE UNIT INTNUM
    malloc_non_terminal_node($$, result->malloc_pool_, T_MIGRATE_UNIT, 2, $6, NULL);
 }
 |
+ALTER SYSTEM ADD REPLICA ls SERVER opt_equal_mark STRING_VALUE REPLICA_TYPE opt_equal_mark STRING_VALUE opt_data_source opt_paxos_replica_num opt_tenant_name
+{
+  (void)($7);
+  (void)($10);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ADD_LS_REPLICA, 6, $5, $8, $11, $12, $13, $14);
+}
+|
+ALTER SYSTEM REMOVE REPLICA ls SERVER opt_equal_mark STRING_VALUE opt_paxos_replica_num opt_tenant_name
+{
+  (void)($7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REMOVE_LS_REPLICA, 4, $5, $8, $9, $10);
+}
+|
+ALTER SYSTEM MIGRATE REPLICA ls SOURCE opt_equal_mark STRING_VALUE DESTINATION opt_equal_mark STRING_VALUE opt_data_source opt_tenant_name
+{
+  (void)($7);
+  (void)($10);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MIGRATE_LS_REPLICA, 5, $5, $8, $11, $12, $13);
+}
+|
+ALTER SYSTEM MODIFY REPLICA ls SERVER opt_equal_mark STRING_VALUE REPLICA_TYPE opt_equal_mark STRING_VALUE opt_paxos_replica_num opt_tenant_name
+{
+  (void)($7);
+  (void)($10);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_LS_REPLICA_TYPE, 5, $5, $8, $11, $12, $13);
+}
+|
+ALTER SYSTEM MODIFY ls PAXOS_REPLICA_NUM opt_equal_mark INTNUM opt_tenant_name
+{
+  (void)($6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MODIFY_LS_PAXOS_REPLICA_NUM, 3, $4, $7, $8);
+}
+|
+ALTER SYSTEM CANCEL REPLICA TASK TASK_ID opt_equal_mark STRING_VALUE opt_tenant_name
+{
+  (void)($7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CANCEL_LS_REPLICA_TASK, 2, $8, $9);
+}
+|
 ALTER SYSTEM UPGRADE VIRTUAL SCHEMA
 {
   malloc_terminal_node($$, result->malloc_pool_, T_UPGRADE_VIRTUAL_SCHEMA);
@@ -16395,6 +16434,30 @@ RT COMP_EQ int_or_decimal
 | QUEUE_TIME COMP_EQ int_or_decimal
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_QUEUE_TIME, 1, $3);
+}
+;
+
+opt_data_source:
+DATA_SOURCE opt_equal_mark STRING_VALUE
+{
+  (void)($2);
+  $$ = $3;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
+}
+;
+
+opt_paxos_replica_num:
+PAXOS_REPLICA_NUM opt_equal_mark INTNUM
+{
+  (void)($2);
+  $$ = $3;
+}
+| /*EMPTY*/
+{
+  $$ = NULL;
 }
 ;
 
@@ -18896,6 +18959,7 @@ ACCOUNT
 |       DATABASE_ID
 |       DATAFILE
 |       DATA_TABLE_ID
+|       DATA_SOURCE
 |       DATE
 |       DATE_ADD
 |       DATE_SUB
@@ -19194,6 +19258,7 @@ ACCOUNT
 |       PARTITIONING
 |       PARTITIONS
 |       PATTERN
+|       PAXOS_REPLICA_NUM
 |       PERCENT_RANK
 |       PAUSE
 |       PERCENTAGE
@@ -19402,7 +19467,8 @@ ACCOUNT
 |       TABLET_ID
 |       TABLET_SIZE
 |       TABLET_MAX_SIZE
-|		    TASK
+|       TASK
+|       TASK_ID
 |       TEMPLATE
 |       TEMPORARY
 |       TEMPTABLE

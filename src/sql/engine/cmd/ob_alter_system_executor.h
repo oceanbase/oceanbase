@@ -84,6 +84,8 @@ DEF_SIMPLE_EXECUTOR(ObClearMergeError);
 
 DEF_SIMPLE_EXECUTOR(ObMigrateUnit);
 
+DEF_SIMPLE_EXECUTOR(ObAlterLSReplica);
+
 DEF_SIMPLE_EXECUTOR(ObAddArbitrationService);
 
 DEF_SIMPLE_EXECUTOR(ObRemoveArbitrationService);

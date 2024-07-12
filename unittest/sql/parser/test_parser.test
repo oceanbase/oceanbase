@@ -313,3 +313,28 @@ alter system cancel transfer partition ALL;
 alter system cancel transfer partition ALL tenant 'mysql';
 alter system cancel balance job;
 alter system cancel balance job tenant 'mysql';
+
+
+
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3 tenant='mysql_tenant';
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001' paxos_replica_num=3;
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F' data_source='100.88.107.212:5001';
+alter system add replica ls=100 server='100.88.107.212:5000' replica_type='F';
+
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3 tenant='mysql_tenant';
+alter system remove replica ls=100 server='100.88.107.212:5000' paxos_replica_num=3;
+alter system remove replica ls=100 server='100.88.107.212:5000';
+
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3 tenant='mysql_tenant';
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F' paxos_replica_num=3;
+alter system modify replica ls=100 server='100.88.107.212:5000' replica_type='F';
+
+alter system modify ls=100 paxos_replica_num=3 tenant='mysql_tenant';
+alter system modify ls=100 paxos_replica_num=3;
+
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001' tenant='mysql_tenant';
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000' data_source='100.88.107.212:5001';
+alter system migrate replica ls=100 source='100.88.107.212:5000' destination='100.88.107.212:5000';
+
+alter system cancel replica task task_id = 'xxx' tenant='mysql_tenant';
+alter system cancel replica task task_id = 'xxx';

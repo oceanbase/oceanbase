@@ -8416,6 +8416,95 @@ int ObRootService::admin_migrate_unit(const obrpc::ObAdminMigrateUnitArg &arg)
   return ret;
 }
 
+#define ADD_EVENT_FOR_ALTER_LS_REPLICA                                               \
+              "admin_alter_ls_replica", arg.get_alter_task_type().get_type_str(),    \
+              "ret_code", ret_val,                                                   \
+              "tenant_id", arg.get_tenant_id()                                       \
+
+int ObRootService::add_rs_event_for_alter_ls_replica_(
+    const obrpc::ObAdminAlterLSReplicaArg &arg,
+    const int ret_val)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    char extra_info[MSG_SIZE] = {0};
+    char addr_str_buf[OB_SERVER_ADDR_STR_LEN];
+    if (OB_FAIL(arg.get_data_source().ip_port_to_string(addr_str_buf, OB_SERVER_ADDR_STR_LEN))) {
+      LOG_WARN("data source to string failed", KR(ret), K(arg));
+    } else {
+      snprintf(extra_info, sizeof(extra_info),
+      "data_source: %s, paxos_replica_num: %ld", addr_str_buf, arg.get_paxos_replica_num());
+    }
+    if (OB_FAIL(ret)) {
+    } else if (arg.get_alter_task_type().is_add_task()
+            || arg.get_alter_task_type().is_modify_replica_task()
+            || arg.get_alter_task_type().is_remove_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "target_replica", arg.get_server_addr(),
+                            "replica_type", replica_type_to_str(arg.get_replica_type()),
+                            "", NULL,
+                            extra_info);
+    } else if (arg.get_alter_task_type().is_migrate_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "source_replica", arg.get_server_addr(),
+                            "target_replica", arg.get_destination_addr(),
+                            "", NULL,
+                            extra_info);
+    } else if (arg.get_alter_task_type().is_modify_paxos_replica_num_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "ls_id", arg.get_ls_id().id(),
+                            "paxos_replica_num", arg.get_paxos_replica_num());
+    } else if (arg.get_alter_task_type().is_cancel_task()) {
+      ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
+                            "task_id", arg.get_task_id());
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObRootService::admin_alter_ls_replica(const obrpc::ObAdminAlterLSReplicaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("receive alter ls replica request", K(arg));
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(arg));
+  } else {
+    ObSystemAdminCtx ctx;
+    if (OB_FAIL(init_sys_admin_ctx(ctx))) {
+      LOG_WARN("init_sys_admin_ctx failed", KR(ret));
+    } else {
+      ObAdminAlterLSReplica admin_util(ctx);
+      if (OB_FAIL(admin_util.execute(arg))) {
+        LOG_WARN("execute alter ls replica failed", KR(ret), K(arg));
+      }
+    }
+  }
+  int64_t cost_time = ObTimeUtility::current_time() - start_time;
+  FLOG_INFO("alter ls replica over", KR(ret), K(arg), K(cost_time));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCCESS != (tmp_ret = add_rs_event_for_alter_ls_replica_(arg, ret))) {
+    // ignore
+    LOG_WARN("add rs event for alter ls replica failed", KR(ret), KR(tmp_ret), K(arg));
+  }
+  return ret;
+}
+
 int ObRootService::admin_upgrade_virtual_schema()
 {
   int ret = OB_SUCCESS;

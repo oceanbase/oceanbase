@@ -65,7 +65,23 @@ public:
                             bool &affect_all,
                             bool &affect_all_user,
                             bool &affect_all_meta);
+  static int get_and_verify_tenant_name(const ParseNode* tenant_name_node,
+                                        const uint64_t exec_tenant_id,
+                                        uint64_t &target_tenant_id);
+  static int check_and_get_data_source(const ParseNode* data_source_node,
+                                       common::ObAddr& data_source);
+  static int check_and_get_server_addr(const ParseNode* server_addr_node,
+                                       common::ObAddr& server_addr);
+  static int check_and_get_paxos_replica_num(const ParseNode* paxos_replica_num_node,
+                                             int64_t& paxos_replica_num);
+  static int check_compatibility_for_alter_ls_replica(const uint64_t cur_tenant_id);
+  static int do_check_for_alter_ls_replica(const ParseNode *tenant_name_node,
+                                           ObSchemaChecker *schema_checker,
+                                           ObSQLSessionInfo *session_info,
+                                           uint64_t &target_tenant_id);
 };
+
+typedef common::ObFixedLengthString<common::OB_MAX_TRACE_ID_BUFFER_SIZE + 1> Task_Id;
 
 #define DEF_SIMPLE_CMD_RESOLVER(name)                                   \
   class name : public ObSystemCmdResolver                               \
@@ -127,6 +143,13 @@ DEF_SIMPLE_CMD_RESOLVER(ObRemoveArbitrationServiceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObReplaceArbitrationServiceResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObMigrateUnitResolver);
+
+DEF_SIMPLE_CMD_RESOLVER(ObAddLSReplicaResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObRemoveLSReplicaResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObMigrateLSReplicaResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObModifyLSReplicaResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObModifyLSPaxosReplicaNumResolver);
+DEF_SIMPLE_CMD_RESOLVER(ObCancelLSReplicaTaskResolver);
 
 DEF_SIMPLE_CMD_RESOLVER(ObUpgradeVirtualSchemaResolver);
 

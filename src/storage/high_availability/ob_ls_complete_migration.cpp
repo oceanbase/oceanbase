@@ -1705,6 +1705,7 @@ int ObStartCompleteMigrationTask::check_tablet_ready_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check tablet ready get invalid argument", K(ret), K(tablet_id), KP(ls));
   } else {
+    DEBUG_SYNC(BEFORE_CHECK_TABLET_READY);
     const int64_t wait_tablet_start_ts = ObTimeUtility::current_time();
 
     while (OB_SUCC(ret)) {
@@ -1790,6 +1791,7 @@ int ObStartCompleteMigrationTask::check_tablet_transfer_table_ready_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transfer service should not be NULL", K(ret), KP(transfer_service));
   } else {
+    DEBUG_SYNC(BEFORE_CHECK_TABLET_TRANSFER_TABLE_READY);
     const int64_t wait_tablet_start_ts = ObTimeUtility::current_time();
     bool need_check_again = false;
 
@@ -1938,6 +1940,7 @@ int ObStartCompleteMigrationTask::wait_log_replay_to_max_minor_end_scn_()
   } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
     LOG_WARN("failed to init timeout ctx", K(ret));
   } else {
+    DEBUG_SYNC(BEFORE_LOG_REPLAY_TO_MAX_MINOR_END_SCN);
     const int64_t wait_replay_start_ts = ObTimeUtility::current_time();
     while (OB_SUCC(ret)) {
       if (timeout_ctx.is_timeouted()) {
@@ -1990,6 +1993,7 @@ int ObStartCompleteMigrationTask::check_ls_and_task_status_(
   int ret = OB_SUCCESS;
   bool is_cancel = false;
   bool is_ls_deleted = true;
+  ObIDagNet *dag_net = nullptr;
 
   if (OB_ISNULL(ls)) {
     ret = OB_INVALID_ARGUMENT;
@@ -2000,11 +2004,15 @@ int ObStartCompleteMigrationTask::check_ls_and_task_status_(
   } else if (ls->is_stopped()) {
     ret = OB_NOT_RUNNING;
     LOG_WARN("ls is not running, stop migration dag net", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(get_dag()->get_dag_id(), is_cancel))) {
-    STORAGE_LOG(ERROR, "failed to check is task canceled", K(ret), K(*this));
-  } else if (is_cancel) {
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag should not be nullptr", K(ret), KP(this->get_dag()));
+  } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+  } else if (dag_net->is_cancel()) {
     ret = OB_CANCELED;
-    STORAGE_LOG(WARN, "task is cancelled", K(ret), K(*this));
+    LOG_WARN("task is cancelled", K(ret), K(*this));
   } else if (OB_FAIL(ObStorageHAUtils::check_ls_deleted(ls->get_ls_id(), is_ls_deleted))) {
     LOG_WARN("failed to get ls status from inner table", K(ret));
   } else if (is_ls_deleted) {

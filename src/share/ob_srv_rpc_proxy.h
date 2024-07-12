@@ -73,6 +73,7 @@ public:
   RPC_S(PR5 notify_archive, OB_NOTIFY_ARCHIVE, (ObNotifyArchiveArg));
 
   // ls disaster recovery rpc
+  RPC_S(PR5 ls_cancel_replica_task, OB_LS_CANCEL_REPLICA_TASK, (ObLSCancelReplicaTaskArg));
   RPC_S(PR5 ls_migrate_replica, OB_LS_MIGRATE_REPLICA, (ObLSMigrateReplicaArg));
   RPC_S(PR5 ls_add_replica, OB_LS_ADD_REPLICA, (ObLSAddReplicaArg));
   RPC_S(PR5 ls_type_transform, OB_LS_TYPE_TRANSFORM, (ObLSChangeReplicaArg));
@@ -80,6 +81,7 @@ public:
   RPC_S(PR5 ls_remove_nonpaxos_replica, OB_LS_REMOVE_NONPAXOS_REPLICA, (ObLSDropNonPaxosReplicaArg));
   RPC_S(PR5 ls_modify_paxos_replica_number, OB_LS_MODIFY_PAXOS_REPLICA_NUMBER, (ObLSModifyPaxosReplicaNumberArg));
   RPC_S(PR5 ls_check_dr_task_exist, OB_LS_CHECK_DR_TASK_EXIST, (ObDRTaskExistArg), obrpc::Bool);
+  RPC_S(PR5 ob_exec_drtask_obadmin_command, OB_EXEC_DRTASK_OBADMIN_COMMAND, (ObAdminCommandArg));
 #ifdef OB_BUILD_ARBITRATION
   RPC_S(PR5 add_arb, OB_ADD_ARB, (ObAddArbArg), obrpc::ObAddArbResult);
   RPC_S(PR5 remove_arb, OB_REMOVE_ARB, (ObRemoveArbArg), obrpc::ObRemoveArbResult);
