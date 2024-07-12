@@ -1058,32 +1058,6 @@ int ObTabletTableStore::get_read_major_sstable(
   return ret;
 }
 
-int ObTabletTableStore::get_mds_tables(
-    const int64_t snapshot_version,
-    ObTableStoreIterator &iter) const
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(snapshot_version < 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(snapshot_version));
-  } else {
-    // TODO(@bowen.gbw): currently we add all sstable to iter,
-    // maybe later we'll use upper trans version to filter sstable.
-    for (int64_t i = 0; OB_SUCC(ret) && i < mds_sstables_.count(); ++i) {
-      ObSSTable *mds_sstable = mds_sstables_.at(i);
-      if (OB_ISNULL(mds_sstable)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("mds sstable is null", K(ret), K(i), KP(mds_sstable));
-      } else if (OB_FAIL(iter.add_table(mds_sstable))) {
-        LOG_WARN("fail to add table to iter", K(ret));
-      }
-    }
-  }
-
-  return ret;
-}
-
 int ObTabletTableStore::get_all_sstable(
     ObTableStoreIterator &iter,
     const bool unpack_co_table) const

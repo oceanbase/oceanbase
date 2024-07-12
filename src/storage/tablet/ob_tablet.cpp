@@ -3771,38 +3771,6 @@ int ObTablet::get_read_tables_(
   return ret;
 }
 
-int ObTablet::get_mds_tables(
-    const int64_t snapshot_version,
-    ObTableStoreIterator &iter) const
-{
-  int ret = OB_SUCCESS;
-  const ObTabletTableStore *table_store = nullptr;
-
-  if (OB_UNLIKELY(!table_store_addr_.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table store addr", K(ret), K_(table_store_addr));
-  } else if (table_store_addr_.is_memory_object()) {
-    table_store = table_store_addr_.get_ptr();
-  } else {
-    ObStorageMetaHandle &table_store_handle = iter.table_store_handle_;
-    ObStorageMetaKey meta_key(MTL_ID(), table_store_addr_.addr_);
-    const ObStorageMetaValue *value = nullptr;
-    if (OB_FAIL(OB_STORE_CACHE.get_storage_meta_cache().get_meta(
-                ObStorageMetaValue::MetaType::TABLE_STORE, meta_key, table_store_handle, this))) {
-      LOG_WARN("get meta failed", K(ret), K(meta_key));
-    } else if (OB_FAIL(table_store_handle.get_value(value))) {
-      LOG_WARN("fail to get cache value", K(ret), K(table_store_handle));
-    } else if (OB_FAIL(value->get_table_store(table_store))) {
-      LOG_WARN("fail to get tablet store", K(ret), KPC(value));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(table_store->get_mds_tables(snapshot_version, iter))) {
-    LOG_WARN("fail to get mds tables", K(ret), K(snapshot_version));
-  }
-  return ret;
-}
-
 int ObTablet::get_read_major_sstable(
     const int64_t &major_snapshot_version,
     ObTabletTableIterator &iter)
@@ -5708,12 +5676,22 @@ int ObTablet::get_ddl_sstables(ObTableStoreIterator &table_store_iter) const
 int ObTablet::get_mds_sstables(ObTableStoreIterator &table_store_iter) const
 {
   int ret = OB_SUCCESS;
-  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
-  const ObTabletTableStore *table_store = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
+  } else if (OB_FAIL(inner_get_mds_sstables(table_store_iter))) {
+    LOG_WARN("fail to do inner get mds sstables", K(ret));
+  }
+  return ret;
+}
+
+int ObTablet::inner_get_mds_sstables(ObTableStoreIterator &table_store_iter) const
+{
+  int ret = OB_SUCCESS;
+  ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  const ObTabletTableStore *table_store = nullptr;
+
+  if (OB_FAIL(fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(table_store_wrapper.get_member(table_store))) {
     LOG_WARN("fail to get table store", K(ret), K(table_store_wrapper));
@@ -5723,6 +5701,7 @@ int ObTablet::get_mds_sstables(ObTableStoreIterator &table_store_iter) const
       && OB_FAIL(table_store_iter.set_handle(table_store_wrapper.get_meta_handle()))) {
     LOG_WARN("fail to set storage meta handle", K(ret), K_(table_store_addr), K(table_store_wrapper));
   }
+
   return ret;
 }
 

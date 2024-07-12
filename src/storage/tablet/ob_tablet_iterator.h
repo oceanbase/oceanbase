@@ -42,7 +42,7 @@ public:
   int get_next_tablet(ObTabletHandle &handle);
   int get_next_tablet_addr(ObTabletMapKey &key, ObMetaDiskAddr &addr);
   int get_next_ddl_kv_mgr(ObDDLKvMgrHandle &handle);
-  int get_tablet_ids(ObIArray<common::ObTabletID> &ids);
+  int get_tablet_ids(ObIArray<common::ObTabletID> &ids) const;
 
   void reset();
   bool is_valid() const;
