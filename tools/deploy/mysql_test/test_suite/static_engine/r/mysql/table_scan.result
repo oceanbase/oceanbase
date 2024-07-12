@@ -2,6 +2,7 @@ result_format: 4
 explain_protocol: 0
 
 drop table if exists t1;
+drop table if exists t2;
 create table t1 (c1 number, c2 number, c3 char(20), c4 varchar(20), primary key(c1, c2), index i1 (c2));
 
 insert into t1 (c1, c2, c3, c4) values (1, 2, 'a', 'b');
@@ -313,3 +314,44 @@ select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c3 != 1 limit 2;
 +----+------+------+
 
 drop table t1;
+CREATE TABLE t1 (c1 bigint, c2 bigint);
+CREATE TABLE t2 (c1 NUMERIC(64,19), c2 DECIMAL(64,16), c3 INTEGER(127), c4 NUMERIC(64,18), c5 DECIMAL(64,0) GENERATED always AS (c3 + c4), c6 int);
+CREATE UNIQUE INDEX idx1 ON t2(c2, c1, c5) GLOBAL ;
+EXPLAIN select /*+use_nl(t1 t2) parallel(2) */t1.c1, t2.c6 FROM t1 LEFT JOIN t2 ON t1.c1 = t2.c2 AND t1.c2 <= t2.c5;
+Query Plan
+======================================================================
+|ID|OPERATOR                          |NAME    |EST.ROWS|EST.TIME(us)|
+----------------------------------------------------------------------
+|0 |PX COORDINATOR                    |        |1       |22          |
+|1 |└─EXCHANGE OUT DISTR              |:EX10000|1       |22          |
+|2 |  └─NESTED-LOOP OUTER JOIN        |        |1       |22          |
+|3 |    ├─PX BLOCK ITERATOR           |        |1       |2           |
+|4 |    │ └─TABLE FULL SCAN           |t1      |1       |2           |
+|5 |    └─DISTRIBUTED TABLE RANGE SCAN|t2(idx1)|1       |19          |
+======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([INTERNAL_FUNCTION(t1.c1, t2.c6)]), filter(nil), rowset=16
+  1 - output([INTERNAL_FUNCTION(t1.c1, t2.c6)]), filter(nil), rowset=16
+      dop=2
+  2 - output([t1.c1], [t2.c6]), filter(nil), rowset=16
+      conds(nil), nl_params_([t1.c1(:0)], [t1.c2(:1)]), use_batch=true
+  3 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+  4 - output([t1.c1], [t1.c2]), filter(nil), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+  5 - output([t2.c6]), filter([cast(:1, DECIMAL(20, 0)) <= column_conv(DECIMAL,PS:(64,0),NULL,cast(t2.c3, DECIMAL(127, 0)) + t2.c4)]), rowset=16
+      access([GROUP_ID], [t2.__pk_increment], [t2.c3], [t2.c4], [t2.c6]), partitions(p0)
+      is_index_back=true, is_global_index=false, filter_before_indexback[true], 
+      range_key([t2.c2], [t2.c1], [t2.c5], [t2.shadow_pk_0]), range(MIN ; MAX), 
+      range_cond([cast(:0, DECIMAL(20, 0)) = t2.c2])
+select /*+use_nl(t1 t2) parallel(2) */t1.c1, t2.c6 FROM t1 LEFT JOIN t2 ON t1.c1 = t2.c2 AND t1.c2 <= t2.c5;
++------+------+
+| c1   | c6   |
++------+------+
++------+------+
+
+drop table t1;
+drop table t2;
+

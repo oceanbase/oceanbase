@@ -470,39 +470,21 @@ int ObLogTableScan::replace_gen_col_op_exprs(ObRawExprReplacer &replacer)
 int ObLogTableScan::replace_index_back_pushdown_filters(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  ObIArray<ObRawExpr*> &filters = get_filter_exprs();
-  const auto &flags = get_filter_before_index_flags();
-  if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id())) {
-    // nonpushdown need replace.
-    if (OB_FAIL(replace_exprs_action(replacer, filters))) {
-      LOG_WARN("failed to replace agg expr", K(ret));
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
-      if (filters.at(i)->has_flag(CNT_PL_UDF)) {
-        // nonpushdown need replace.
-        if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
-          LOG_WARN("failed to replace agg expr", K(ret));
-        }
-      } else if (!get_index_back()) {
-        // scan_pushdown no need replace.
-      } else if (flags.empty() || i >= flags.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("filter before index flag is invalid", K(ret), K(i), K(flags), K(filters));
-      } else if (flags.at(i)) {
-        if (get_index_back() && get_is_index_global() && filters.at(i)->has_flag(CNT_SUB_QUERY)) {
-          // lookup_pushdown need replace.
-          if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
-            LOG_WARN("failed to replace agg expr", K(ret));
-          }
-        } else {
-          // scan_pushdown no need replace.
-        }
-      } else if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
-        LOG_WARN("failed to replace agg expr", K(ret));
-      }
-    }
-  }
+  ObArray<ObRawExpr*> non_pushdown_expr;
+  ObArray<ObRawExpr*> scan_pushdown_filters;
+  ObArray<ObRawExpr*> lookup_pushdown_filters;
+  if (OB_UNLIKELY(!get_index_back())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("go wrong way", K(ret));
+  } else if (OB_FAIL(extract_pushdown_filters(non_pushdown_expr,
+                                       scan_pushdown_filters,
+                                       lookup_pushdown_filters))) {
+    LOG_WARN("extract pushdown filters failed", K(ret));
+  } else if (OB_FAIL(replace_exprs_action(replacer, non_pushdown_expr))) {
+    LOG_WARN("failed to replace non pushdown expr", K(ret));
+  } else if (OB_FAIL(replace_exprs_action(replacer, lookup_pushdown_filters))) {
+    LOG_WARN("failed to replace lookup pushdown expr", K(ret));
+  } else { /* do nothing */ }
   return ret;
 }
 
