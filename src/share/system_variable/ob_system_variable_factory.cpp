@@ -401,6 +401,10 @@ const char *ObSysVarBinlogTransactionDependencyTracking::BINLOG_TRANSACTION_DEPE
   "WRITESET_SESSION",
   0
 };
+const char *ObSysVarDefaultTmpStorageEngine::DEFAULT_TMP_STORAGE_ENGINE_NAMES[] = {
+  "InnoDB",
+  0
+};
 const char *ObSysVarSlaveRowsSearchAlgorithms::SLAVE_ROWS_SEARCH_ALGORITHMS_NAMES[] = {
   "TABLE_SCAN,INDEX_SCAN",
   "INDEX_SCAN,HASH_SCAN",
@@ -476,6 +480,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "auto_increment_offset",
   "autocommit",
   "automatic_sp_privileges",
+  "avoid_temporal_upgrade",
   "binlog_cache_size",
   "binlog_checksum",
   "binlog_direct_non_transactional_updates",
@@ -514,6 +519,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "default_collation_for_utf8mb4",
   "default_password_lifetime",
   "default_storage_engine",
+  "default_tmp_storage_engine",
   "delay_key_write",
   "disabled_storage_engines",
   "div_precision_increment",
@@ -527,6 +533,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "flush",
   "flush_time",
   "foreign_key_checks",
+  "ft_stopword_file",
   "general_log",
   "group_concat_max_len",
   "group_replication_allow_local_disjoint_gtids_join",
@@ -614,6 +621,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_compression_level",
   "innodb_compression_pad_pct_max",
   "innodb_concurrency_tickets",
+  "innodb_data_file_path",
+  "innodb_data_home_dir",
   "innodb_deadlock_detect",
   "innodb_default_row_format",
   "innodb_disable_resize_buffer_pool_debug",
@@ -633,6 +642,13 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_flushing_avg_loops",
   "innodb_force_load_corrupted",
   "innodb_force_recovery",
+  "innodb_ft_cache_size",
+  "innodb_ft_enable_diag_print",
+  "innodb_ft_num_word_optimize",
+  "innodb_ft_result_cache_limit",
+  "innodb_ft_server_stopword_table",
+  "innodb_ft_sort_pll_degree",
+  "innodb_ft_total_cache_size",
   "innodb_large_prefix",
   "innodb_limit_optimistic_insert_debug",
   "innodb_lock_wait_timeout",
@@ -648,6 +664,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_max_undo_log_size",
   "innodb_merge_threshold_set_all_debug",
   "innodb_online_alter_log_max_size",
+  "innodb_optimize_fulltext_only",
   "innodb_page_size",
   "innodb_print_all_deadlocks",
   "innodb_read_only",
@@ -660,6 +677,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "innodb_support_xa",
   "innodb_sync_debug",
   "innodb_table_locks",
+  "innodb_temp_data_file_path",
+  "innodb_tmpdir",
   "innodb_trx_purge_view_update_only_debug",
   "innodb_trx_rseg_n_slots_debug",
   "innodb_undo_log_truncate",
@@ -704,8 +723,12 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "max_seeks_for_key",
   "max_sort_length",
   "max_sp_recursion_depth",
+  "max_tmp_tables",
   "max_user_connections",
   "max_write_lock_count",
+  "mecab_rc_file",
+  "metadata_locks_cache_size",
+  "metadata_locks_hash_instances",
   "min_examined_row_limit",
   "multi_range_count",
   "myisam_mmap_size",
@@ -969,6 +992,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_AUTO_INCREMENT_OFFSET,
   SYS_VAR_AUTOCOMMIT,
   SYS_VAR_AUTOMATIC_SP_PRIVILEGES,
+  SYS_VAR_AVOID_TEMPORAL_UPGRADE,
   SYS_VAR_BINLOG_CACHE_SIZE,
   SYS_VAR_BINLOG_CHECKSUM,
   SYS_VAR_BINLOG_DIRECT_NON_TRANSACTIONAL_UPDATES,
@@ -1007,6 +1031,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_DEFAULT_COLLATION_FOR_UTF8MB4,
   SYS_VAR_DEFAULT_PASSWORD_LIFETIME,
   SYS_VAR_DEFAULT_STORAGE_ENGINE,
+  SYS_VAR_DEFAULT_TMP_STORAGE_ENGINE,
   SYS_VAR_DELAY_KEY_WRITE,
   SYS_VAR_DISABLED_STORAGE_ENGINES,
   SYS_VAR_DIV_PRECISION_INCREMENT,
@@ -1020,6 +1045,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_FLUSH,
   SYS_VAR_FLUSH_TIME,
   SYS_VAR_FOREIGN_KEY_CHECKS,
+  SYS_VAR_FT_STOPWORD_FILE,
   SYS_VAR_GENERAL_LOG,
   SYS_VAR_GROUP_CONCAT_MAX_LEN,
   SYS_VAR_GROUP_REPLICATION_ALLOW_LOCAL_DISJOINT_GTIDS_JOIN,
@@ -1107,6 +1133,8 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_COMPRESSION_LEVEL,
   SYS_VAR_INNODB_COMPRESSION_PAD_PCT_MAX,
   SYS_VAR_INNODB_CONCURRENCY_TICKETS,
+  SYS_VAR_INNODB_DATA_FILE_PATH,
+  SYS_VAR_INNODB_DATA_HOME_DIR,
   SYS_VAR_INNODB_DEADLOCK_DETECT,
   SYS_VAR_INNODB_DEFAULT_ROW_FORMAT,
   SYS_VAR_INNODB_DISABLE_RESIZE_BUFFER_POOL_DEBUG,
@@ -1126,6 +1154,13 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_FLUSHING_AVG_LOOPS,
   SYS_VAR_INNODB_FORCE_LOAD_CORRUPTED,
   SYS_VAR_INNODB_FORCE_RECOVERY,
+  SYS_VAR_INNODB_FT_CACHE_SIZE,
+  SYS_VAR_INNODB_FT_ENABLE_DIAG_PRINT,
+  SYS_VAR_INNODB_FT_NUM_WORD_OPTIMIZE,
+  SYS_VAR_INNODB_FT_RESULT_CACHE_LIMIT,
+  SYS_VAR_INNODB_FT_SERVER_STOPWORD_TABLE,
+  SYS_VAR_INNODB_FT_SORT_PLL_DEGREE,
+  SYS_VAR_INNODB_FT_TOTAL_CACHE_SIZE,
   SYS_VAR_INNODB_LARGE_PREFIX,
   SYS_VAR_INNODB_LIMIT_OPTIMISTIC_INSERT_DEBUG,
   SYS_VAR_INNODB_LOCK_WAIT_TIMEOUT,
@@ -1141,6 +1176,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_MAX_UNDO_LOG_SIZE,
   SYS_VAR_INNODB_MERGE_THRESHOLD_SET_ALL_DEBUG,
   SYS_VAR_INNODB_ONLINE_ALTER_LOG_MAX_SIZE,
+  SYS_VAR_INNODB_OPTIMIZE_FULLTEXT_ONLY,
   SYS_VAR_INNODB_PAGE_SIZE,
   SYS_VAR_INNODB_PRINT_ALL_DEADLOCKS,
   SYS_VAR_INNODB_READ_ONLY,
@@ -1153,6 +1189,8 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INNODB_SUPPORT_XA,
   SYS_VAR_INNODB_SYNC_DEBUG,
   SYS_VAR_INNODB_TABLE_LOCKS,
+  SYS_VAR_INNODB_TEMP_DATA_FILE_PATH,
+  SYS_VAR_INNODB_TMPDIR,
   SYS_VAR_INNODB_TRX_PURGE_VIEW_UPDATE_ONLY_DEBUG,
   SYS_VAR_INNODB_TRX_RSEG_N_SLOTS_DEBUG,
   SYS_VAR_INNODB_UNDO_LOG_TRUNCATE,
@@ -1197,8 +1235,12 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_MAX_SEEKS_FOR_KEY,
   SYS_VAR_MAX_SORT_LENGTH,
   SYS_VAR_MAX_SP_RECURSION_DEPTH,
+  SYS_VAR_MAX_TMP_TABLES,
   SYS_VAR_MAX_USER_CONNECTIONS,
   SYS_VAR_MAX_WRITE_LOCK_COUNT,
+  SYS_VAR_MECAB_RC_FILE,
+  SYS_VAR_METADATA_LOCKS_CACHE_SIZE,
+  SYS_VAR_METADATA_LOCKS_HASH_INSTANCES,
   SYS_VAR_MIN_EXAMINED_ROW_LIMIT,
   SYS_VAR_MULTI_RANGE_COUNT,
   SYS_VAR_MYISAM_MMAP_SIZE,
@@ -1896,6 +1938,25 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "low_priority_updates",
   "max_error_count",
   "max_insert_delayed_threads",
+  "ft_stopword_file",
+  "innodb_ft_cache_size",
+  "innodb_ft_sort_pll_degree",
+  "innodb_ft_total_cache_size",
+  "mecab_rc_file",
+  "metadata_locks_cache_size",
+  "metadata_locks_hash_instances",
+  "innodb_temp_data_file_path",
+  "innodb_data_file_path",
+  "innodb_data_home_dir",
+  "avoid_temporal_upgrade",
+  "default_tmp_storage_engine",
+  "innodb_ft_enable_diag_print",
+  "innodb_ft_num_word_optimize",
+  "innodb_ft_result_cache_limit",
+  "innodb_ft_server_stopword_table",
+  "innodb_optimize_fulltext_only",
+  "max_tmp_tables",
+  "innodb_tmpdir",
   "group_replication_group_seeds",
   "slave_rows_search_algorithms",
   "slave_type_conversions",
@@ -2554,6 +2615,25 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarLowPriorityUpdates)
         + sizeof(ObSysVarMaxErrorCount)
         + sizeof(ObSysVarMaxInsertDelayedThreads)
+        + sizeof(ObSysVarFtStopwordFile)
+        + sizeof(ObSysVarInnodbFtCacheSize)
+        + sizeof(ObSysVarInnodbFtSortPllDegree)
+        + sizeof(ObSysVarInnodbFtTotalCacheSize)
+        + sizeof(ObSysVarMecabRcFile)
+        + sizeof(ObSysVarMetadataLocksCacheSize)
+        + sizeof(ObSysVarMetadataLocksHashInstances)
+        + sizeof(ObSysVarInnodbTempDataFilePath)
+        + sizeof(ObSysVarInnodbDataFilePath)
+        + sizeof(ObSysVarInnodbDataHomeDir)
+        + sizeof(ObSysVarAvoidTemporalUpgrade)
+        + sizeof(ObSysVarDefaultTmpStorageEngine)
+        + sizeof(ObSysVarInnodbFtEnableDiagPrint)
+        + sizeof(ObSysVarInnodbFtNumWordOptimize)
+        + sizeof(ObSysVarInnodbFtResultCacheLimit)
+        + sizeof(ObSysVarInnodbFtServerStopwordTable)
+        + sizeof(ObSysVarInnodbOptimizeFulltextOnly)
+        + sizeof(ObSysVarMaxTmpTables)
+        + sizeof(ObSysVarInnodbTmpdir)
         + sizeof(ObSysVarGroupReplicationGroupSeeds)
         + sizeof(ObSysVarSlaveRowsSearchAlgorithms)
         + sizeof(ObSysVarSlaveTypeConversions)
@@ -6866,6 +6946,177 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_INSERT_DELAYED_THREADS))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxInsertDelayedThreads));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarFtStopwordFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarFtStopwordFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_FT_STOPWORD_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarFtStopwordFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtSortPllDegree())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtSortPllDegree", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_SORT_PLL_DEGREE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtSortPllDegree));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtTotalCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtTotalCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_TOTAL_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtTotalCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMecabRcFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMecabRcFile", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MECAB_RC_FILE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMecabRcFile));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMetadataLocksCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMetadataLocksCacheSize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_METADATA_LOCKS_CACHE_SIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMetadataLocksCacheSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMetadataLocksHashInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMetadataLocksHashInstances", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_METADATA_LOCKS_HASH_INSTANCES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMetadataLocksHashInstances));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTempDataFilePath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTempDataFilePath", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_TEMP_DATA_FILE_PATH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbTempDataFilePath));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDataFilePath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDataFilePath", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_DATA_FILE_PATH))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbDataFilePath));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDataHomeDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDataHomeDir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_DATA_HOME_DIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbDataHomeDir));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAvoidTemporalUpgrade())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarAvoidTemporalUpgrade", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_AVOID_TEMPORAL_UPGRADE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarAvoidTemporalUpgrade));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultTmpStorageEngine())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultTmpStorageEngine", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_DEFAULT_TMP_STORAGE_ENGINE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarDefaultTmpStorageEngine));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtEnableDiagPrint())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtEnableDiagPrint", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_ENABLE_DIAG_PRINT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtEnableDiagPrint));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtNumWordOptimize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtNumWordOptimize", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_NUM_WORD_OPTIMIZE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtNumWordOptimize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtResultCacheLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtResultCacheLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_RESULT_CACHE_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtResultCacheLimit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtServerStopwordTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtServerStopwordTable", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_FT_SERVER_STOPWORD_TABLE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbFtServerStopwordTable));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOptimizeFulltextOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOptimizeFulltextOnly", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_OPTIMIZE_FULLTEXT_ONLY))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbOptimizeFulltextOnly));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxTmpTables())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxTmpTables", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_MAX_TMP_TABLES))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarMaxTmpTables));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTmpdir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTmpdir", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_INNODB_TMPDIR))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarInnodbTmpdir));
       }
     }
     if (OB_SUCC(ret)) {
@@ -12239,6 +12490,215 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxInsertDelayedThreads())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarMaxInsertDelayedThreads", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_FT_STOPWORD_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarFtStopwordFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarFtStopwordFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarFtStopwordFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarFtStopwordFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_SORT_PLL_DEGREE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtSortPllDegree)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtSortPllDegree)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtSortPllDegree())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtSortPllDegree", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_TOTAL_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtTotalCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtTotalCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtTotalCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtTotalCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MECAB_RC_FILE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMecabRcFile)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMecabRcFile)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMecabRcFile())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMecabRcFile", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_METADATA_LOCKS_CACHE_SIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMetadataLocksCacheSize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMetadataLocksCacheSize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMetadataLocksCacheSize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMetadataLocksCacheSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_METADATA_LOCKS_HASH_INSTANCES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMetadataLocksHashInstances)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMetadataLocksHashInstances)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMetadataLocksHashInstances())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMetadataLocksHashInstances", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_TEMP_DATA_FILE_PATH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbTempDataFilePath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbTempDataFilePath)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTempDataFilePath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTempDataFilePath", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_DATA_FILE_PATH: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbDataFilePath)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbDataFilePath)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDataFilePath())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDataFilePath", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_DATA_HOME_DIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbDataHomeDir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbDataHomeDir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbDataHomeDir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbDataHomeDir", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_AVOID_TEMPORAL_UPGRADE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarAvoidTemporalUpgrade)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarAvoidTemporalUpgrade)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarAvoidTemporalUpgrade())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarAvoidTemporalUpgrade", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_DEFAULT_TMP_STORAGE_ENGINE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarDefaultTmpStorageEngine)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarDefaultTmpStorageEngine)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarDefaultTmpStorageEngine())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarDefaultTmpStorageEngine", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_ENABLE_DIAG_PRINT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtEnableDiagPrint)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtEnableDiagPrint)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtEnableDiagPrint())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtEnableDiagPrint", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_NUM_WORD_OPTIMIZE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtNumWordOptimize)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtNumWordOptimize)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtNumWordOptimize())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtNumWordOptimize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_RESULT_CACHE_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtResultCacheLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtResultCacheLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtResultCacheLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtResultCacheLimit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_FT_SERVER_STOPWORD_TABLE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbFtServerStopwordTable)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbFtServerStopwordTable)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbFtServerStopwordTable())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbFtServerStopwordTable", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_OPTIMIZE_FULLTEXT_ONLY: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbOptimizeFulltextOnly)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbOptimizeFulltextOnly)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbOptimizeFulltextOnly())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbOptimizeFulltextOnly", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_MAX_TMP_TABLES: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarMaxTmpTables)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarMaxTmpTables)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarMaxTmpTables())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarMaxTmpTables", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_INNODB_TMPDIR: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarInnodbTmpdir)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarInnodbTmpdir)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarInnodbTmpdir())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarInnodbTmpdir", K(ret));
       }
       break;
     }

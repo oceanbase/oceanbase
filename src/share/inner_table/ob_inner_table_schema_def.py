@@ -15554,6 +15554,79 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
+def_table_schema(
+  owner           = 'sanquan.qz',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_FT_BEING_DELETED',
+  table_id        = '20020',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(000000000000000000000 as UNSIGNED) AS DOC_ID
+    FROM DUAL limit 0;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'sanquan.qz',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_FT_CONFIG',
+  table_id        = '20021',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST('key'               as CHAR(100)) AS FT_CONFIG_KEY,
+           CAST('value'             as CHAR(100)) AS VALUE
+    FROM DUAL limit 0;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'sanquan.qz',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_FT_DELETED',
+  table_id        = '20022',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(000000000000000000000 as UNSIGNED) AS DOC_ID
+    FROM DUAL limit 0;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'sanquan.qz',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_FT_INDEX_CACHE',
+  table_id        = '20023',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST('word'               as CHAR(193)) AS WORD,
+           CAST(000000000000000000000 as UNSIGNED) AS FIRST_DOC_ID,
+           CAST(000000000000000000000 as UNSIGNED) AS LAST_DOC_ID,
+           CAST(000000000000000000000 as UNSIGNED) AS DOC_COUNT,
+           CAST(000000000000000000000 as UNSIGNED) AS DOC_ID,
+           CAST(000000000000000000000 as UNSIGNED) AS POSITION
+    FROM DUAL limit 0;
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'yuzhong.zhao',

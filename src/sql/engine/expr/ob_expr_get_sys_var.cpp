@@ -236,23 +236,24 @@ int ObExprGetSysVar::get_sys_var_disp_obj(common::ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   ObBasicSysVar *sys_var = NULL;
-  ObSysVarFactory sysvar_fac;
   ObObj value;
   ObSysVarClassType sys_var_id = SYS_VAR_INVALID;
-  if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(&session, allocator, var_name, value))) {
-    LOG_WARN("get sys var disp obj failed", K(ret));
-  } else if (SYS_VAR_INVALID == (sys_var_id = ObSysVarFactory::find_sys_var_id_by_name(var_name, false))) {
-    ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
-    LOG_WARN("unknown system variable", K(var_name));
-  } else if (OB_FAIL(sysvar_fac.create_sys_var(sys_var_id, sys_var))) {
-    LOG_WARN("create system variable obj failed", K(ret));
-  } else if (OB_ISNULL(sys_var)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("system variable is null");
-  } else {
-    sys_var->set_value(value);
-    if (OB_FAIL(sys_var->to_select_obj(allocator, session, disp_obj))) {
-      LOG_WARN("to select obj in sys_var failed", K(ret), K(var_name));
+  SMART_VAR(ObSysVarFactory, sysvar_fac) {
+    if (OB_FAIL(ObBasicSessionInfo::get_global_sys_variable(&session, allocator, var_name, value))) {
+      LOG_WARN("get sys var disp obj failed", K(ret));
+    } else if (SYS_VAR_INVALID == (sys_var_id = ObSysVarFactory::find_sys_var_id_by_name(var_name, false))) {
+      ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
+      LOG_WARN("unknown system variable", K(var_name));
+    } else if (OB_FAIL(sysvar_fac.create_sys_var(sys_var_id, sys_var))) {
+      LOG_WARN("create system variable obj failed", K(ret));
+    } else if (OB_ISNULL(sys_var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("system variable is null");
+    } else {
+      sys_var->set_value(value);
+      if (OB_FAIL(sys_var->to_select_obj(allocator, session, disp_obj))) {
+        LOG_WARN("to select obj in sys_var failed", K(ret), K(var_name));
+      }
     }
   }
   if (OB_SUCC(ret) && lib::is_oracle_mode() && disp_obj.is_null_oracle()) {
