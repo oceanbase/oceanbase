@@ -606,7 +606,11 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       break;
     }
     default: {
-      ob_errcode = OB_S3_ERROR;
+      if (err_msg.find("curlCode: 28") != std::string::npos) {
+        ob_errcode = OB_TIMEOUT;
+      } else {
+        ob_errcode = OB_S3_ERROR;
+      }
       break;
     }
   }
