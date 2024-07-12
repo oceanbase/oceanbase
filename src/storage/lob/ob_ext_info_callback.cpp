@@ -116,13 +116,10 @@ int ObJsonDiffLog::deserialize(const char* buf, const int64_t data_len, int64_t&
 
 ObExtInfoCallback::~ObExtInfoCallback()
 {
-  if (! data_.empty()) {
-    allocator_->free(data_.ptr());
-    data_.assign_ptr(nullptr, 0);
-  }
   if (OB_NOT_NULL(mutator_row_buf_)) {
     allocator_->free(mutator_row_buf_);
     mutator_row_buf_ = nullptr;
+    mutator_row_len_ = 0;
   }
 }
 
@@ -131,59 +128,53 @@ memtable::MutatorType ObExtInfoCallback::get_mutator_type() const
   return memtable::MutatorType::MUTATOR_ROW_EXT_INFO;
 }
 
+
+int ObExtInfoCallback::log_submitted()
+{
+  return release_resource();
+}
+
+int ObExtInfoCallback::release_resource()
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == mutator_row_buf_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mutator_row_buf is null", K(ret), KPC(this));
+  } else if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is null", K(ret), KPC(this));
+  } else {
+    allocator_->free(mutator_row_buf_);
+    mutator_row_buf_ = nullptr;
+    mutator_row_len_ = 0;
+  }
+  return ret;
+}
+
 int ObExtInfoCallback::get_redo(memtable::RedoDataNode &redo_node)
 {
   int ret = OB_SUCCESS;
   memtable::ObRowData old_row;
   memtable::ObRowData new_row;
-  ObDatumRow datum_row;
   ObTabletID tablet_id;
-  char *buf = nullptr;
-  int64_t len = 0;
-  key_obj_.reset();
-  rowkey_.reset();
-  key_.reset();
-  key_obj_.set_uint64(seq_no_cur_.cast_to_int());
-  rowkey_.assign(&key_obj_, OB_EXT_INFO_MUTATOR_ROW_KEY_CNT);
-  SMART_VAR(blocksstable::ObRowWriter, row_writer) {
-    if (data_.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("data is empty", K(ret));
-    } else if (OB_FAIL(key_.encode(&rowkey_))) {
-      LOG_WARN("encode memtable key failed", K(ret), K(rowkey_));
-    } else if (OB_NOT_NULL(mutator_row_buf_)) {
-      // already alloced, so no need alloc again
-    } else if (OB_FAIL(datum_row.init(*allocator_, OB_EXT_INFO_MUTATOR_ROW_COUNT))) {
-      LOG_WARN("init datum row fail", K(ret));
-    } else if (OB_FAIL(datum_row.storage_datums_[OB_EXT_INFO_MUTATOR_ROW_KEY_IDX].from_obj_enhance(key_obj_))) {
-      LOG_WARN("set datum fail", K(ret), K(data_));
-    } else if (OB_FAIL(datum_row.storage_datums_[OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX].from_buf_enhance(data_.ptr(), data_.length()))) {
-      LOG_WARN("set datum fail", K(ret), K(data_));
-    } else if (OB_FAIL(row_writer.write(OB_EXT_INFO_MUTATOR_ROW_KEY_CNT, datum_row, buf, len))) {
-      LOG_WARN("write row data fail", K(ret));
-    } else if (OB_ISNULL(mutator_row_buf_ = static_cast<char*>(allocator_->alloc(len)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc mutator_row_buf fail", K(ret), K(len));
-    } else {
-      MEMCPY(mutator_row_buf_, buf, len);
-      mutator_row_len_ = len;
-    }
-    if (OB_SUCC(ret)) {
-      new_row.set(mutator_row_buf_, mutator_row_len_);
-      redo_node.set(&key_,
-                    old_row,
-                    new_row,
-                    dml_flag_,
-                    1, /* modify_count */
-                    0, /* acc_checksum */
-                    0, /* version */
-                    0, /* flag */
-                    seq_no_cur_,
-                    tablet_id,
-                    OB_EXT_INFO_MUTATOR_ROW_COUNT);
-      redo_node.set_callback(this);
-    }
-  } // end row_writer
+  if (OB_ISNULL(mutator_row_buf_) || mutator_row_len_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mutator_row_buf is empty", K(ret), KP(mutator_row_buf_), K(mutator_row_len_));
+  } else {
+    new_row.set(mutator_row_buf_, mutator_row_len_);
+    redo_node.set(&key_,
+                  old_row,
+                  new_row,
+                  dml_flag_,
+                  1, /* modify_count */
+                  0, /* acc_checksum */
+                  0, /* version */
+                  0, /* flag */
+                  seq_no_cur_,
+                  tablet_id,
+                  OB_EXT_INFO_MUTATOR_ROW_COUNT);
+    redo_node.set_callback(this);
+  }
   return ret;
 }
 
@@ -194,12 +185,45 @@ int ObExtInfoCallback::set(
     ObString &data)
 {
   int ret = OB_SUCCESS;
+  ObLobManager *lob_mngr = MTL(ObLobManager*);
+  ObDatumRow datum_row;
+  char *buf = nullptr;
+  int64_t len = 0;
+
   dml_flag_ = dml_flag;
   seq_no_cur_ = seq_no_cur;
-  allocator_ = &allocator;
-  if (OB_FAIL(ob_write_string(allocator, data, data_))) {
-    LOG_WARN("ob_write_string fail", K(ret), K(data));
-  }
+  allocator_ = &(lob_mngr->get_ext_info_log_allocator());
+
+  key_obj_.reset();
+  rowkey_.reset();
+  key_.reset();
+  key_obj_.set_uint64(seq_no_cur_.cast_to_int());
+  rowkey_.assign(&key_obj_, OB_EXT_INFO_MUTATOR_ROW_KEY_CNT);
+  SMART_VAR(blocksstable::ObRowWriter, row_writer) {
+    if (data.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("data is empty", K(ret));
+    } else if (OB_FAIL(key_.encode(&rowkey_))) {
+      LOG_WARN("encode memtable key failed", K(ret), K(rowkey_));
+    } else if (OB_NOT_NULL(mutator_row_buf_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mutator_row_buf is not null", K(ret), KP(mutator_row_buf_));
+    } else if (OB_FAIL(datum_row.init(allocator, OB_EXT_INFO_MUTATOR_ROW_COUNT))) {
+      LOG_WARN("init datum row fail", K(ret));
+    } else if (OB_FAIL(datum_row.storage_datums_[OB_EXT_INFO_MUTATOR_ROW_KEY_IDX].from_obj_enhance(key_obj_))) {
+      LOG_WARN("set datum fail", K(ret), K(data));
+    } else if (OB_FAIL(datum_row.storage_datums_[OB_EXT_INFO_MUTATOR_ROW_VALUE_IDX].from_buf_enhance(data.ptr(), data.length()))) {
+      LOG_WARN("set datum fail", K(ret), K(data));
+    } else if (OB_FAIL(row_writer.write(OB_EXT_INFO_MUTATOR_ROW_KEY_CNT, datum_row, buf, len))) {
+      LOG_WARN("write row data fail", K(ret));
+    } else if (OB_ISNULL(mutator_row_buf_ = static_cast<char*>(allocator_->alloc(len)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc mutator_row_buf fail", K(ret), K(len));
+    } else {
+      MEMCPY(mutator_row_buf_, buf, len);
+      mutator_row_len_ = len;
+    }
+  } // end row_writer
   return ret;
 }
 
@@ -256,7 +280,6 @@ int ObExtInfoCbRegister::register_cb(
   } else {
     transaction::ObTxSEQ seq_no_cur = seq_no_st_;
     ObString data;
-    ObIAllocator &allocator = lob_mngr->get_ext_info_log_allocator();
     ObSEArray<ObExtInfoCallback*, 1> cb_array;
     int cb_cnt = 0;
     while (OB_SUCC(ret) && OB_SUCC(get_data(data))) {
@@ -267,7 +290,7 @@ int ObExtInfoCbRegister::register_cb(
       } else if (OB_FAIL(cb_array.push_back(cb))) {
         LOG_WARN("push back cb fail", K(ret), K(cb_array));
       } else {
-        cb->set(allocator, dml_flag, seq_no_cur, data);
+        cb->set(tmp_allocator_, dml_flag, seq_no_cur, data);
         seq_no_cur = seq_no_cur + 1;
         if (OB_FAIL(mvcc_ctx_->append_callback(cb))) {
           LOG_ERROR("register ext info callback failed", K(ret), K(*this),K(*cb));

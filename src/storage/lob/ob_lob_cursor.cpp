@@ -541,7 +541,7 @@ int ObLobCursor::set_old_data(ObLobChunkIndex &chunk_index)
 int ObLobCursor::get(int64_t offset, int64_t len, ObString &data) const
 {
   INIT_SUCC(ret);
-  const char *ptr = nullptr;;
+  const char *ptr = nullptr;
   if (OB_FAIL(get_ptr(offset, len, ptr))) {
     LOG_WARN("get_ptr fail", KR(ret), K(offset), K(len), K(data.length()));
   } else if (OB_ISNULL(ptr)) {

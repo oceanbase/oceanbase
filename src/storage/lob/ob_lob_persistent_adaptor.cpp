@@ -658,7 +658,8 @@ int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObNewRowItera
         LOG_WARN("push column ids failed.", K(ret), K(i));
       }
     }
-    if (OB_FAIL(oas->delete_rows(
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(oas->delete_rows(
         param.ls_id_,
         param.lob_meta_tablet_id_,
         *param.tx_desc_,

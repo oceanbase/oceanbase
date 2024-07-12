@@ -171,7 +171,7 @@ int ObLobMetaManager::getlength(ObLobAccessParam &param, uint64_t &char_len)
   } else if (OB_FAIL(getlength_local(param, char_len))) {
     LOG_WARN("get length local fail", K(ret), K(param));
   }
-  return ret;;
+  return ret;
 }
 
 int ObLobMetaManager::getlength_local(ObLobAccessParam &param, uint64_t &char_len)
@@ -196,7 +196,7 @@ int ObLobMetaManager::getlength_local(ObLobAccessParam &param, uint64_t &char_le
   if (ret == OB_ITER_END) {
     ret = OB_SUCCESS;
   }
-  return ret;;
+  return ret;
 }
 
 int ObLobMetaManager::getlength_remote(ObLobAccessParam &param, uint64_t &char_len)
@@ -248,7 +248,7 @@ int ObLobMetaManager::getlength_remote(ObLobAccessParam &param, uint64_t &char_l
     remote_ctx->~ObLobRemoteQueryCtx();
     remote_ctx = nullptr;
   }
-  return ret;;
+  return ret;
 }
 
 
