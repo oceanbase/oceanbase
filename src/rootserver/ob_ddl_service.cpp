@@ -15073,7 +15073,9 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
   }
   bool has_fts_or_multivalue_index = false;
   const int64_t table_id = orig_table_schema.get_table_id();
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) ||
+    alter_part_type == obrpc::ObAlterTableArg::DROP_PARTITION ||
+    alter_part_type == obrpc::ObAlterTableArg::TRUNCATE_PARTITION ) {
   } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                          tenant_id,
                                          table_id,
