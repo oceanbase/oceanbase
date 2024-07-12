@@ -97,7 +97,8 @@ void ObConnectByOpPump::reset()
   if (true) {
     datum_store_.reset();
     datum_store_constructed_ = false;
-    hash_table_.reset();
+    hash_table_.reuse();
+    use_hash_ = false;
   }
 }
 
