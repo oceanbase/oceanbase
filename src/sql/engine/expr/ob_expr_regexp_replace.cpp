@@ -674,7 +674,9 @@ int ObExprRegexpReplace::vector_regexp_replace(VECTOR_EVAL_FUNC_ARG_DECL) {
 int ObExprRegexpReplace::eval_regexp_replace_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(expr.eval_vector_param_value(ctx, skip, bound))) {
+  if (skip.accumulate_bit_cnt(bound) == bound.range_size()) {
+    // do nothing
+  } else if (OB_FAIL(expr.eval_vector_param_value(ctx, skip, bound))) {
     if (lib::is_mysql_mode() && ret == OB_ERR_INCORRECT_STRING_VALUE) {//compatible mysql
       ret = OB_SUCCESS;
       ObVectorBase* res_vec = static_cast<ObVectorBase *>(expr.get_vector(ctx));
