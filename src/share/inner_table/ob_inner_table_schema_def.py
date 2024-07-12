@@ -14548,6 +14548,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12492: __all_virtual_ss_local_cache_info
 
 # 12493: __all_virtual_kv_group_commit_status
+# 12494: __all_virtual_session_sys_variable
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15036,7 +15037,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15462: __all_virtual_ss_local_cache_info
 # 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent
 # 15464: __all_virtual_kv_group_commit_status
-#
+# 15465: __all_virtual_session_sys_variable
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
