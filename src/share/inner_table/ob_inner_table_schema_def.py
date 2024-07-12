@@ -63089,8 +63089,8 @@ from
          CAST(srs.srs_name AS VARCHAR2(128)) as SRS_NAME,
          CAST(
               CASE
-                WHEN TRUNC(col.srs_id / POWER(2, 32)) = 4294967295 THEN NULL
-                ELSE TRUNC(col.srs_id / POWER(2, 32))
+                WHEN TRUNC(col.new_srs_id / POWER(2, 32)) = 4294967295 THEN NULL
+                ELSE TRUNC(col.new_srs_id / POWER(2, 32))
               END
          AS NUMBER(10)) AS SRS_ID,
         CAST(
@@ -63103,7 +63103,13 @@ from
          tbl.table_id AS TABLE_ID,
          tbl.database_id AS DATABASE_ID
     from
-      SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT col left join SYS.ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT srs on TRUNC(col.srs_id / POWER(2, 32)) = srs.srs_id
+      (select col1.*,
+      CASE
+         WHEN col1.srs_id < 0 THEN
+           col1.srs_id + POWER(2, 64)
+         ELSE
+           col1.srs_id
+       END AS new_srs_id from SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT col1) col left join SYS.ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT srs on TRUNC(col.new_srs_id / POWER(2, 32)) = srs.srs_id
       join SYS.ALL_VIRTUAL_TABLE_REAL_AGENT tbl on (tbl.table_id = col.table_id and tbl.tenant_id = col.tenant_id)
       join SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db on (db.database_id = tbl.database_id and db.tenant_id = tbl.tenant_id)
       and db.database_name != '__recyclebin'
