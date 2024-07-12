@@ -4165,18 +4165,18 @@ CAST_FUNC_NAME(string, roaringbitmap)
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
       ObString in_str = child_res->get_string();
-      ObRbBinType bin_type;
+      ObString out_str = nullptr;
       if (OB_FAIL(ObTextStringHelper::read_real_string_data(temp_allocator, *child_res,
                     expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), in_str))) {
         LOG_WARN("failed to get real data.", K(ret), K(in_str));
-      } else if (OB_FAIL(ObRbUtils::check_get_bin_type(in_str, bin_type))) {
-        LOG_WARN("invalid roaringbitmap binary string", K(ret));
+      } else if (OB_FAIL(ObRbUtils::build_binary(temp_allocator, in_str, out_str))) {
+        LOG_WARN("failed to build rb binary", K(ret));
       } else {
         ObTextStringDatumResult text_result(ObRoaringBitmapType, &expr, &ctx, &res_datum);
-        if (OB_FAIL(text_result.init(in_str.length()))) {
+        if (OB_FAIL(text_result.init(out_str.length()))) {
           LOG_WARN("Lob: init lob result failed");
-        } else if (OB_FAIL(text_result.append(in_str.ptr(), in_str.length()))) {
-          LOG_WARN("failed to append realdata", K(ret), K(in_str), K(text_result));
+        } else if (OB_FAIL(text_result.append(out_str.ptr(), out_str.length()))) {
+          LOG_WARN("failed to append realdata", K(ret), K(out_str), K(text_result));
         } else {
           text_result.set_result();
         }
@@ -11337,7 +11337,10 @@ int number_range_check_v2(const ObCastMode &cast_mode,
   number::ObNumber out_val;
   bool is_finish = false;
 
-  if (ObNumberFloatType == type) {
+  if (ObUNumberType == type && in_val.is_negative()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unsiged type with negative value", K(ret), K(in_val));
+  } else if (ObNumberFloatType == type) {
     if (OB_MIN_NUMBER_FLOAT_PRECISION <= precision
         && precision <= OB_MAX_NUMBER_FLOAT_PRECISION) {
       const int64_t number_precision = static_cast<int64_t>(floor(precision *
@@ -11476,7 +11479,10 @@ static int float_range_check(const ObCastMode &cast_mode,
   } else {
     IN_TYPE in_val = *(reinterpret_cast<const IN_TYPE*>(in_datum.ptr_));
     IN_TYPE out_val = in_val;
-    if (lib::is_oracle_mode() && 0.0 == in_val) {
+    if (ob_is_unsigned_type(type) && in_val < 0.0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unsiged type with negative value", K(ret), K(type), K(in_val));
+    } else if (lib::is_oracle_mode() && 0.0 == in_val) {
       if (ObFloatTC == type_class) {
         res_datum.set_float(0.0);
       } else {

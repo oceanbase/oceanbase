@@ -166,6 +166,8 @@ public:
   void *alloc_replay_task(const int64_t size);
   void free_replay_task(ObLogReplayTask *task);
   void free_replay_task_log_buf(ObLogReplayTask *task);
+  int has_fatal_error(const share::ObLSID &ls_id,
+                      bool &bool_ret);
 private:
   int get_replay_status_(const share::ObLSID &id,
                          ObReplayStatusGuard &guard);

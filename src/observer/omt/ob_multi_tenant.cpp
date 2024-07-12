@@ -1104,6 +1104,10 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     }
   }
   if (OB_FAIL(ret) && tenant_allocator_created) {
+    auto& cache_washer = ObKVGlobalCache::get_instance();
+    if (OB_TMP_FAIL(cache_washer.sync_flush_tenant(tenant_id))) {
+      LOG_WARN("Fail to sync flush tenant cache", K(tmp_ret));
+    }
     malloc_allocator->recycle_tenant_allocator(tenant_id);
   }
   if (lock_succ) {
@@ -1184,6 +1188,8 @@ int ObMultiTenant::update_tenant_memory(const ObUnitInfoGetter::ObTenantConfig &
     LOG_WARN("fail to update tenant memory", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_tenant_freezer_mem_limit(tenant_id, memory_size, allowed_mem_limit))) {
     LOG_WARN("fail to update_tenant_freezer_mem_limit", K(ret), K(tenant_id));
+  } else if (OB_FAIL(update_tenant_decode_resource(tenant_id))) {
+    LOG_WARN("fail to update_tenant_decode_resource", K(ret), K(tenant_id));
   } else if (OB_FAIL(update_throttle_config_(tenant_id))) {
     LOG_WARN("update throttle config failed", K(ret), K(tenant_id));
   } else if (FALSE_IT(tenant->set_unit_memory_size(allowed_mem_limit))) {
@@ -1447,6 +1453,21 @@ int ObMultiTenant::update_tenant_freezer_mem_limit(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMultiTenant::update_tenant_decode_resource(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObDecodeResourcePool * decode_resource_pool = nullptr;
+  if (tenant_id != MTL_ID() && OB_FAIL(guard.switch_to(tenant_id))) {
+    LOG_WARN("switch tenant failed", K(ret), K(tenant_id));
+  } else if (FALSE_IT(decode_resource_pool = MTL(ObDecodeResourcePool *))) {
+  } else if (OB_ISNULL(decode_resource_pool)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(decode_resource_pool->reload_config())) {
+    LOG_WARN("fail to update tenant decode resource", K(ret), K(tenant_id));
+  }
+  return ret;
+}
 
 int ObMultiTenant::get_tenant_unit(const uint64_t tenant_id, ObUnitInfoGetter::ObTenantConfig &unit)
 {

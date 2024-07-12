@@ -31,6 +31,7 @@ public:
   transaction::ObTransID tx_id_;
   int64_t epoch_;
   uint32_t session_id_;
+  uint32_t associated_session_id_;
   transaction::ObTxState tx_state_;
   share::SCN trans_version_;
   share::SCN prepare_version_;
@@ -197,16 +198,17 @@ private:
   ObSEArray<transaction::ObTransID, 1> move_tx_ids_;
 };
 
-OB_SERIALIZE_MEMBER_TEMP(inline, ObTransferOutTxCtx,
-                                 writer_,
-                                 do_transfer_block_,
-                                 src_ls_id_,
-                                 dest_ls_id_,
-                                 data_end_scn_,
-                                 transfer_scn_,
-                                 transfer_epoch_,
-                                 filter_tx_need_transfer_,
-                                 move_tx_ids_)
+OB_SERIALIZE_MEMBER_TEMP(inline,
+                         ObTransferOutTxCtx,
+                         writer_,
+                         do_transfer_block_,
+                         src_ls_id_,
+                         dest_ls_id_,
+                         data_end_scn_,
+                         transfer_scn_,
+                         transfer_epoch_,
+                         filter_tx_need_transfer_,
+                         move_tx_ids_);
 
 class ObTransferMoveTxCtx : public mds::BufferCtx
 {
@@ -231,10 +233,11 @@ private:
   CollectTxCtxInfo collect_tx_info_;
 };
 
-OB_SERIALIZE_MEMBER_TEMP(inline, ObTransferMoveTxCtx,
-                                 writer_,
-                                 op_scn_,
-                                 collect_tx_info_)
+OB_SERIALIZE_MEMBER_TEMP(inline,
+                         ObTransferMoveTxCtx,
+                         writer_,
+                         op_scn_,
+                         collect_tx_info_);
 
 class ObStartTransferMoveTxHelper
 {
@@ -278,10 +281,11 @@ private:
   ObTransferDestPrepareInfo transfer_dest_prepare_info_;
 };
 
-OB_SERIALIZE_MEMBER_TEMP(inline, ObTransferDestPrepareTxCtx,
-                                 writer_,
-                                 op_scn_,
-                                 transfer_dest_prepare_info_)
+OB_SERIALIZE_MEMBER_TEMP(inline,
+                         ObTransferDestPrepareTxCtx,
+                         writer_,
+                         op_scn_,
+                         transfer_dest_prepare_info_);
 
 class ObStartTransferDestPrepareHelper
 {

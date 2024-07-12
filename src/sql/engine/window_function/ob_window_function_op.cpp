@@ -72,7 +72,8 @@ OB_SERIALIZE_MEMBER((ObWindowFunctionSpec, ObOpSpec),
                     role_type_,
                     wf_aggr_status_expr_,
                     input_rows_mem_bound_ratio_,
-                    estimated_part_cnt_);
+                    estimated_part_cnt_,
+                    enable_hash_base_distinct_);
 
 OB_SERIALIZE_MEMBER(ObWindowFunctionOpInput, local_task_count_, total_task_count_, wf_participator_shared_info_);
 

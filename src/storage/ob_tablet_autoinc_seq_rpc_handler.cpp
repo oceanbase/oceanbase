@@ -67,11 +67,18 @@ int ObSyncTabletSeqReplayExecutor::do_replay_(ObTabletHandle &handle)
     ObArenaAllocator allocator;
     ObTabletAutoincSeq curr_autoinc_seq;
     uint64_t curr_autoinc_seq_value;
-    if (OB_FAIL(tablet->get_autoinc_seq(allocator, share::SCN::max_scn(), curr_autoinc_seq))) {
+    bool need_replay = true;
+    if (CLUSTER_CURRENT_VERSION >= CLUSTER_VERSION_4_3_2_0) {
+      // just replay for multi-vesion mds
+    } else if (OB_FAIL(tablet->get_autoinc_seq(allocator, share::SCN::max_scn(), curr_autoinc_seq))) {
       LOG_WARN("fail to get latest autoinc seq", K(ret), KPC(tablet));
     } else if (OB_FAIL(curr_autoinc_seq.get_autoinc_seq_value(curr_autoinc_seq_value))) {
       LOG_WARN("failed to get autoinc seq value", K(ret), KPC(tablet), K(curr_autoinc_seq));
-    } else if (seq_ > curr_autoinc_seq_value) {
+    } else if (seq_ <= curr_autoinc_seq_value) {
+      need_replay = false;
+    }
+
+    if (OB_SUCC(ret) && need_replay) {
       if (OB_FAIL(curr_autoinc_seq.set_autoinc_seq_value(allocator, seq_))) {
         LOG_WARN("failed to set autoinc seq value", K(ret), K(seq_), K(curr_autoinc_seq));
       } else {

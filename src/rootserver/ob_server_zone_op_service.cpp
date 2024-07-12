@@ -289,16 +289,61 @@ int ObServerZoneOpService::start_servers(
     const ObZone &zone)
 {
   int ret = OB_SUCCESS;
+  ObCheckServerMachineStatusArg rpc_arg;
+  ObCheckServerMachineStatusResult rpc_result;
+  ObServerInfoInTable server_info;
+  ObTimeoutCtx ctx;
+  uint64_t sys_tenant_data_version = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(is_inited_));
+  } else if (OB_ISNULL(rpc_proxy_) || OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy_ or GCTX.sql_proxy_ is null", KR(ret), KP(rpc_proxy_), KP(GCTX.sql_proxy_));
   } else if (OB_UNLIKELY(servers.count() <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("servers' count is zero", KR(ret), K(servers));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, sys_tenant_data_version))) {
+    LOG_WARN("fail to get sys tenant's min data version", KR(ret));
+  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < servers.count(); ++i) {
       const ObAddr &server = servers.at(i);
-      if (OB_FAIL(start_or_stop_server_(server, zone, ObAdminServerArg::START))) {
+      if (OB_FAIL(ObServerTableOperator::get(*GCTX.sql_proxy_, server, server_info))) {
+        // make sure the server is in whitelist, then send rpc
+        LOG_WARN("fail to get server_info", KR(ret), K(server));
+      } else if (sys_tenant_data_version >= DATA_VERSION_4_3_2_0) {
+        int64_t timeout = ctx.get_timeout();
+        const int64_t ERR_MSG_BUF_LEN = OB_MAX_SERVER_ADDR_SIZE + 150;
+        char disk_error_server_err_msg[ERR_MSG_BUF_LEN] = "";
+        int64_t pos = 0;
+        if (OB_UNLIKELY(timeout <= 0)) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("ctx time out", KR(ret), K(timeout));
+        } else if (OB_FAIL(databuff_printf(
+            disk_error_server_err_msg,
+            ERR_MSG_BUF_LEN,
+            pos,
+            "The target server %s may encounter device failures. Please check GV$OB_SERVERS for more information. START SERVER is",
+            to_cstring(server)))) {
+          LOG_WARN("fail to execute databuff_printf", KR(ret), K(server));
+        } else if (OB_FAIL(rpc_arg.init(GCONF.self_addr_, server))) {
+          LOG_WARN("fail to init rpc arg", KR(ret), K(GCONF.self_addr_), K(server));
+        } else if (OB_FAIL(rpc_proxy_->to(server)
+            .timeout(timeout)
+            .check_server_machine_status(rpc_arg, rpc_result))) {
+          LOG_WARN("fail to check server machine status", KR(ret), K(rpc_arg));
+        } else if (OB_UNLIKELY(!rpc_result.is_valid())) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("rpc result is invalid", KR(ret), K(rpc_arg), K(rpc_result));
+        } else if (!rpc_result.get_server_health_status().is_healthy()) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("server is not healthy, cannot start it", KR(ret), K(rpc_arg), K(rpc_result));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, disk_error_server_err_msg);
+        }
+      }
+      if (FAILEDx(start_or_stop_server_(server, zone, ObAdminServerArg::START))) {
         LOG_WARN("fail to start server", KR(ret), K(server), K(zone));
       }
     }

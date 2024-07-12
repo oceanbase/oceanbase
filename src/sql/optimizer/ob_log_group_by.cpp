@@ -285,7 +285,7 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
         need_ndv /= selectivity;
       }
       if (child_card > 0) {
-        param.need_row_count_ = child_card * (1 - std::pow((1 - need_ndv / child_ndv), child_ndv / child_card));
+        param.need_row_count_ = child_card * need_ndv / child_ndv;
         param.need_row_count_ /= number_of_copies;
       } else {
         param.need_row_count_ = 0;
@@ -703,13 +703,13 @@ int ObLogGroupBy::compute_op_ordering()
       LOG_WARN("failed to set op ordering.", K(ret));
     } else {
       is_range_order_ = child->get_is_range_order();
-      is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty();
+      is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty() && !is_range_order_;
     }
   } else if (OB_FAIL(set_op_ordering(child->get_op_ordering()))) {
     LOG_WARN("failed to set op ordering", K(ret));
   } else {
     is_range_order_ = child->get_is_range_order();
-    is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty();
+    is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty() && !is_range_order_;
   }
   return ret;
 }

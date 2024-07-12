@@ -47,6 +47,7 @@ public:
     virtual ObVertexes& get_vertexes() = 0;
     virtual ObLineSegments* get_line_segments() = 0;
     virtual ObSegments* get_segments() = 0;
+    virtual void destroy_cache() = 0;
 };
 
 class ObCachedGeomBase : public ObCachedGeom {
@@ -67,6 +68,7 @@ public:
   virtual int contains(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
   virtual int cover(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
   virtual int within(ObGeometry& geo, ObGeoEvalCtx& gis_context, bool &res) override;
+  virtual void destroy_cache() {this->~ObCachedGeomBase();}
   virtual ObGeometry* get_cached_geom() { return origin_geo_;}
   virtual ObGeoCacheType get_cache_type() { return ObGeoCacheType::GEO_BASE_CACHE;}
   virtual void set_cached_geom(ObGeometry* geo) { origin_geo_ =  geo; }

@@ -2332,6 +2332,8 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_SHOW_OPEN_TABLES);
       SET_STMT_TYPE(T_REPAIR_TABLE);
       SET_STMT_TYPE(T_CHECKSUM_TABLE);
+      SET_STMT_TYPE(T_CACHE_INDEX);
+      SET_STMT_TYPE(T_LOAD_INDEX_INTO_CACHE);
 #undef SET_STMT_TYPE
       case T_ROLLBACK:
       case T_COMMIT: {
@@ -4820,9 +4822,12 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
                    scope_name.length(), scope_name.ptr());
   } else {
     if (0 == q_name.col_name_.case_compare(N_EXTERNAL_FILE_URL)) {
-      if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_file_url(expr_factory, session_info,
-                                  OB_INVALID_ID, ObString(), q_name.col_name_, file_column_expr))) {
-        LOG_WARN("fail to build external table file column expr", K(ret));
+      if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
+                               real_exprs, OB_INVALID_ID, UINT64_MAX, q_name.col_name_))) {
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_file_url(expr_factory, session_info,
+                                    OB_INVALID_ID, ObString(), q_name.col_name_, file_column_expr))) {
+          LOG_WARN("fail to build external table file column expr", K(ret));
+        }
       }
     } else if (q_name.col_name_.prefix_match_ci(N_PARTITION_LIST_COL)) {
       if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
@@ -4866,7 +4871,7 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
       LOG_WARN("fail replace expr", K(ret));
     }
   }
-  LOG_TRACE("resolve external table column ref", K(q_name.col_name_), KPC(expr));
+  LOG_TRACE("resolve external table column ref", K(q_name.col_name_), KP(expr), KPC(expr));
   return ret;
 }
 
@@ -6187,6 +6192,7 @@ int ObResolverUtils::unique_idx_covered_partition_columns(
   int ret = OB_SUCCESS;
   const ObColumnSchemaV2 *column_schema = NULL;
   const ObPartitionKeyColumn *column = NULL;
+  bool is_oracle_mode = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < partition_info.get_size(); i++) {
     column = partition_info.get_column(i);
     if (OB_ISNULL(column)) {
@@ -6196,7 +6202,9 @@ int ObResolverUtils::unique_idx_covered_partition_columns(
       if (OB_ISNULL(column_schema = table_schema.get_column_schema(column->column_id_))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Column schema is NULL", K(ret));
-      } else if (column_schema->is_generated_column()) {
+      } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+        LOG_WARN("failed to check if oralce compat mode", K(ret));
+      } else if (is_oracle_mode && column_schema->is_generated_column()) {
         ObSEArray<uint64_t, 5> cascaded_columns;
         if (OB_FAIL(column_schema->get_cascaded_column_ids(cascaded_columns))) {
           LOG_WARN("Failed to get cascaded column ids", K(ret));

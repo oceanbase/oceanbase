@@ -2030,7 +2030,7 @@ all_dblink_def = dict(
     ('passwordx', 'varbinary:OB_MAX_PASSWORD_LENGTH', 'true', ''),
     ('authpwdx', 'varbinary:OB_MAX_PASSWORD_LENGTH', 'true', ''),
     ('encrypted_password', 'varchar:OB_MAX_ENCRYPTED_PASSWORD_LENGTH', 'true'),
-    ('reverse_host_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('reverse_host_ip', 'varchar:OB_MAX_DOMIN_NAME_LENGTH', 'true'),
     ('reverse_host_port', 'int', 'true'),
     ('reverse_cluster_name', 'varchar:OB_MAX_CLUSTER_NAME_LENGTH', 'true'),
     ('reverse_tenant_name', 'varchar:OB_MAX_TENANT_NAME_LENGTH_STORE', 'true'),
@@ -14545,6 +14545,10 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12491: __all_virtual_log_transport_dest_stat
 
+# 12492: __all_virtual_ss_local_cache_info
+
+# 12493: __all_virtual_kv_group_commit_status
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15029,6 +15033,9 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15458', all_def_ke
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15459', all_def_keywords['__all_spatial_reference_systems'])))
 # 15460: idx_scheduler_job_run_detail_v2_time_real_agent
 # 15461: __all_virtual_log_transport_dest_stat
+# 15462: __all_virtual_ss_local_cache_info
+# 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent
+# 15464: __all_virtual_kv_group_commit_status
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -15647,7 +15654,7 @@ def_table_schema(
                     t.table_name collate utf8mb4_name_case as TABLE_NAME,
                     c.column_name as COLUMN_NAME,
                     fc.position as ORDINAL_POSITION,
-                    CAST(NULL as UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
+                    CAST(fc.position AS UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT,
                     d2.database_name as REFERENCED_TABLE_SCHEMA,
                     t2.table_name as REFERENCED_TABLE_NAME,
                     c2.column_name as REFERENCED_COLUMN_NAME
@@ -15678,7 +15685,7 @@ def_table_schema(
                     t.table_name collate utf8mb4_name_case as TABLE_NAME,
                     c.column_name as COLUMN_NAME,
                     fc.position as ORDINAL_POSITION,
-                    CAST(NULL as UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT, /* POSITION_IN_UNIQUE_CONSTRAINT is not supported now */
+                    CAST(fc.position AS UNSIGNED) as POSITION_IN_UNIQUE_CONSTRAINT,
                     d.database_name as REFERENCED_TABLE_SCHEMA,
                     t2.mock_fk_parent_table_name as REFERENCED_TABLE_NAME,
                     c2.parent_column_name as REFERENCED_COLUMN_NAME
@@ -24692,7 +24699,7 @@ def_table_schema(
     CAST(NULL AS    NUMBER) AS IM_BLOCK_COUNT,
     CAST(NULL AS    DATETIME) AS IM_STAT_UPDATE_TIME,
     CAST(NULL AS    NUMBER) AS SCAN_RATE,
-    CAST(NULL AS    NUMBER) AS SAMPLE_SIZE,
+    CAST(STAT.SPARE1 AS    NUMBER) AS SAMPLE_SIZE,
     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,
     CAST((CASE STAT.GLOBAL_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS GLOBAL_STATS,
     CAST((CASE STAT.USER_STATS WHEN 0 THEN 'NO' WHEN 1 THEN 'YES' ELSE NULL END) AS CHAR(3)) AS USER_STATS,
@@ -26026,7 +26033,7 @@ def_table_schema(
     CAST(NULL AS CHAR(261)) AS DESTINATION,
     CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,
     CAST(NULL AS CHAR(128)) AS CREDENTIAL_NAME,
-    CAST(T.FIELD1 AS SIGNED) AS INSTANCE_ID,
+    CAST(T.FIELD1 AS CHAR(128)) AS INSTANCE_ID,
     CAST(NULL AS CHAR(5)) AS DEFERRED_DROP,
     CAST(NULL AS CHAR(5)) AS ALLOW_RUNS_IN_RESTRICTED_MODE,
     CAST(T.COMMENTS AS CHAR(4000)) AS COMMENTS,
@@ -35329,6 +35336,10 @@ SELECT
 # 21596: CDB_OB_TABLE_SPACE_USAGE
 # 21597: GV$OB_LOG_TRANSPORT_DEST_STAT
 # 21598: V$OB_LOG_TRANSPORT_DEST_STAT
+# 21599: GV$OB_SS_LOCAL_CACHE
+# 21600: V$OB_SS_LOCAL_CACHE
+# 21601: GV$OB_KV_GROUP_COMMIT_STATUS
+# 21602: V$OB_KV_GROUP_COMMIT_STATUS
 
 
 # 余留位置（此行之前占位）
@@ -58838,7 +58849,7 @@ def_table_schema(
     CAST(NULL AS    NUMBER) AS IM_BLOCK_COUNT,
     CAST(NULL AS    TIMESTAMP(9)) AS IM_STAT_UPDATE_TIME,
     CAST(NULL AS    NUMBER) AS SCAN_RATE,
-    CAST(NULL AS    NUMBER) AS SAMPLE_SIZE,
+    CAST(STAT.SPARE1 AS    NUMBER) AS SAMPLE_SIZE,
     CAST(STAT.LAST_ANALYZED AS  DATE) AS LAST_ANALYZED,
     CAST(decode(STAT.GLOBAL_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS GLOBAL_STATS,
     CAST(decode(STAT.USER_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS USER_STATS,
@@ -58968,7 +58979,7 @@ def_table_schema(
     CAST(NULL AS    NUMBER) AS IM_BLOCK_COUNT,
     CAST(NULL AS    TIMESTAMP(9)) AS IM_STAT_UPDATE_TIME,
     CAST(NULL AS    NUMBER) AS SCAN_RATE,
-    CAST(NULL AS    NUMBER) AS SAMPLE_SIZE,
+    CAST(STAT.SPARE1 AS    NUMBER) AS SAMPLE_SIZE,
     CAST(STAT.LAST_ANALYZED AS  DATE) AS LAST_ANALYZED,
     CAST(decode(STAT.GLOBAL_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS GLOBAL_STATS,
     CAST(decode(STAT.USER_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS USER_STATS,
@@ -59095,7 +59106,7 @@ def_table_schema(
     CAST(NULL AS    NUMBER) AS IM_BLOCK_COUNT,
     CAST(NULL AS    TIMESTAMP(9)) AS IM_STAT_UPDATE_TIME,
     CAST(NULL AS    NUMBER) AS SCAN_RATE,
-    CAST(NULL AS    NUMBER) AS SAMPLE_SIZE,
+    CAST(STAT.SPARE1 AS    NUMBER) AS SAMPLE_SIZE,
     CAST(STAT.LAST_ANALYZED AS  DATE) AS LAST_ANALYZED,
     CAST(decode(STAT.GLOBAL_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS GLOBAL_STATS,
     CAST(decode(STAT.USER_STATS, 0, 'NO', 1, 'YES', NULL) AS    VARCHAR2(3)) AS USER_STATS,
@@ -59845,7 +59856,7 @@ def_table_schema(
     CAST(NULL AS VARCHAR2(261)) AS DESTINATION,
     CAST(NULL AS VARCHAR2(128)) AS CREDENTIAL_OWNER,
     CAST(NULL AS VARCHAR2(128)) AS CREDENTIAL_NAME,
-    CAST(T.FIELD1 AS NUMBER) AS INSTANCE_ID,
+    CAST(T.FIELD1 AS VARCHAR2(128)) AS INSTANCE_ID,
     CAST(NULL AS VARCHAR2(5)) AS DEFERRED_DROP,
     CAST(NULL AS VARCHAR2(5)) AS ALLOW_RUNS_IN_RESTRICTED_MODE,
     CAST(T.COMMENTS AS VARCHAR2(4000)) AS COMMENTS,
@@ -63078,8 +63089,8 @@ from
          CAST(srs.srs_name AS VARCHAR2(128)) as SRS_NAME,
          CAST(
               CASE
-                WHEN TRUNC(col.srs_id / POWER(2, 32)) = 4294967295 THEN NULL
-                ELSE TRUNC(col.srs_id / POWER(2, 32))
+                WHEN TRUNC(col.new_srs_id / POWER(2, 32)) = 4294967295 THEN NULL
+                ELSE TRUNC(col.new_srs_id / POWER(2, 32))
               END
          AS NUMBER(10)) AS SRS_ID,
         CAST(
@@ -63092,7 +63103,13 @@ from
          tbl.table_id AS TABLE_ID,
          tbl.database_id AS DATABASE_ID
     from
-      SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT col left join SYS.ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT srs on TRUNC(col.srs_id / POWER(2, 32)) = srs.srs_id
+      (select col1.*,
+      CASE
+         WHEN col1.srs_id < 0 THEN
+           col1.srs_id + POWER(2, 64)
+         ELSE
+           col1.srs_id
+       END AS new_srs_id from SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT col1) col left join SYS.ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT srs on TRUNC(col.new_srs_id / POWER(2, 32)) = srs.srs_id
       join SYS.ALL_VIRTUAL_TABLE_REAL_AGENT tbl on (tbl.table_id = col.table_id and tbl.tenant_id = col.tenant_id)
       join SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db on (db.database_id = tbl.database_id and db.tenant_id = tbl.tenant_id)
       and db.database_name != '__recyclebin'
@@ -63135,6 +63152,10 @@ left join
 # 28237: DBA_OB_TABLE_SPACE_USAGE_ORA
 # 28238: GV$OB_LOG_TRANSPORT_DEST_STAT
 # 28239: V$OB_LOG_TRANSPORT_DEST_STAT
+# 28240: GV$OB_SS_LOCAL_CACHE
+# 28241: V$OB_SS_LOCAL_CACHE
+# 28242: GV$OB_KV_GROUP_COMMIT_STATUS
+# 28243: V$OB_KV_GROUP_COMMIT_STATUS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -64030,6 +64051,7 @@ def_sys_index_table(
 # 101103: __all_user_proxy_role_info_history
 # 101104: __all_tablet_reorganize_history
 # 101105: __all_scheduler_job_run_detail_v2
+# 101106: __all_scheduler_job_run_detail_v2
 #
 def_sys_index_table(
   index_name = 'idx_user_proxy_info_proxy_user_id',
@@ -64059,6 +64081,14 @@ def_sys_index_table(
   index_name = 'idx_scheduler_job_run_detail_v2_time',
   index_table_id = 101105,
   index_columns = ['time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
+
+def_sys_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_job_class_time',
+  index_table_id = 101106,
+  index_columns = ['job_class', 'time'],
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
@@ -64848,6 +64878,16 @@ def_agent_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   real_table_name = '__all_scheduler_job_run_detail_v2' ,
   real_index_name = 'idx_scheduler_job_run_detail_v2_time',
+  keywords = all_def_keywords['ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_job_class_time_real_agent',
+  index_table_id = 15463,
+  index_columns = ['job_class', 'time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_scheduler_job_run_detail_v2' ,
+  real_index_name = 'idx_scheduler_job_run_detail_v2_job_class_time',
   keywords = all_def_keywords['ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA'])
 
 # End Oracle Agent table Index

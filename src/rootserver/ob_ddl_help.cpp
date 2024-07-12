@@ -101,6 +101,9 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("alter tablegroup of materialized view log is not supported", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of materialized view log is");
+      } else if (table_schema->is_external_table()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tablegroup of external table is");
       } else {
         if (is_contain(table_ids, table_schema->get_table_id())) {
           duplicate_table = true;

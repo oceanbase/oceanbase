@@ -23,7 +23,7 @@ class ObLineIntersectionAnalyzer {
 public:
   typedef std::pair<ObCartesianBox, ObLineSegment *> RtreeNodeValue;
 public:
-  ObLineIntersectionAnalyzer(ObCachedGeomBase *cache_geo, ObRstarTree<ObLineSegment> *rtree_index)
+  ObLineIntersectionAnalyzer(ObCachedGeomBase *cache_geo, ObRstarTree<ObLineSegment> &rtree_index)
     : cache_geo_(cache_geo),
       rtree_index_(rtree_index),
       flags_(0) {}
@@ -39,7 +39,7 @@ public:
   bool set_after_visitor() { return false; }
 private:
   ObCachedGeomBase *cache_geo_;
-  ObRstarTree<ObLineSegment> *rtree_index_;
+  ObRstarTree<ObLineSegment> &rtree_index_;
   union {
     struct {
       uint8_t is_intersect_ : 1;

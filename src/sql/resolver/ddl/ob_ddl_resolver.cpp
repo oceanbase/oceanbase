@@ -119,7 +119,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     is_set_lob_inrow_threshold_(false),
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
     auto_increment_cache_size_(0),
-    external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT)
+    external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT),
+    mocked_external_table_column_ids_()
 {
   table_mode_.reset();
 }
@@ -2615,15 +2616,17 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
             LOG_WARN("using PARTITION_TYPE as a table option is support in external table only", K(ret));
           } else {
             arg.schema_.set_user_specified_partition_for_external_table();
+            if (arg.schema_.get_external_table_auto_refresh() != 0) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("user specified partition without auto refresh off not supported", K(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition without auto refresh off");
+            }
           }
         }
         break;
       }
       case T_EXTERNAL_TABLE_AUTO_REFRESH: {
-         if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
-           ret = OB_ERR_UNEXPECTED; //TODO-EXTERNAL-TABLE add new error code
-           LOG_WARN("invalid file format option", K(ret));
-         } else {
+         if (stmt_->get_stmt_type() == stmt::T_CREATE_TABLE) {
            ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
            if (!arg.schema_.is_external_table()) {
              ret = OB_NOT_SUPPORTED;
@@ -2636,7 +2639,35 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
              LOG_WARN("unexpected child num", K(option_node->num_child_));
            } else {
              arg.schema_.set_external_table_auto_refresh(option_node->children_[0]->value_);
+             if (arg.schema_.get_external_table_auto_refresh() != 0
+                && arg.schema_.is_user_specified_partition_for_external_table()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("user specified partition without auto refresh off not supported", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition without auto refresh off");
+             }
            }
+         } else if (stmt_->get_stmt_type() == stmt::T_ALTER_TABLE) {
+           ObAlterTableArg &arg = static_cast<ObAlterTableStmt*>(stmt_)->get_alter_table_arg();
+           if (!arg.alter_table_schema_.is_external_table()) {
+             ret = OB_NOT_SUPPORTED;
+             ObSqlString err_msg;
+             err_msg.append_fmt("Using ALTER AUTO REFRESH as a ALTER TABLE option");
+             LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
+             LOG_WARN("using ALTER AUTO REFRESH as a table option is support in external table only", K(ret));
+           } else if (option_node->num_child_ != 1 || OB_ISNULL(option_node->children_[0])) {
+             ret = OB_ERR_UNEXPECTED;
+             LOG_WARN("unexpected child num", K(option_node->num_child_));
+           } else {
+             arg.alter_table_schema_.set_external_table_auto_refresh(option_node->children_[0]->value_);
+             if (arg.alter_table_schema_.get_external_table_auto_refresh() != 0
+                && arg.alter_table_schema_.is_user_specified_partition_for_external_table()) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("user specified partition without auto refresh off not supported", K(ret));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "user specified partition without auto refresh off");
+             }
+           }
+         } else {
+           ret = OB_ERR_UNEXPECTED;
          }
          break;
        }
@@ -3354,6 +3385,11 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
           if (is_pad_char_to_full_length(session_info_->get_sql_mode())) {
             column.add_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG);
           }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(mocked_external_table_column_ids_.add_member(column.get_column_id()))) {
+          LOG_WARN("fail to add bitset", K(ret));
         }
       }
     }
@@ -4946,12 +4982,17 @@ int ObDDLResolver::cast_default_value(ObObj &default_value,
   return ret;
 }
 
-int ObDDLResolver::trim_space_for_default_value(const bool is_mysql_mode, const ObCollationType &collation_type, ObObj &default_value, ObString &out_str)
+int ObDDLResolver::trim_space_for_default_value(
+    const bool is_mysql_mode,
+    const bool is_char_type,
+    const ObCollationType &collation_type,
+    ObObj &default_value,
+    ObString &out_str)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(default_value.get_varchar(out_str))) {
     LOG_WARN("invalid default data", K(ret), K(default_value));
-  } else if (is_mysql_mode) {
+  } else if (is_mysql_mode && is_char_type) {
     const char *str = out_str.ptr();
     int32_t len = out_str.length();
     ObString space_pattern = ObCharsetUtils::get_const_str(collation_type, ' ');
@@ -4982,7 +5023,7 @@ int ObDDLResolver::check_default_value_length(const bool is_mysql_mode,
       const bool is_byte_length = is_oracle_byte_length(!is_mysql_mode, column.get_length_semantics());
       if (default_value.is_null()) {
         strlen = 0;
-      } else if (OB_FAIL(trim_space_for_default_value(is_mysql_mode, column.get_collation_type(), default_value, str))) {
+      } else if (OB_FAIL(trim_space_for_default_value(is_mysql_mode, column.get_meta_type().is_char(), column.get_collation_type(), default_value, str))) {
         SQL_RESV_LOG(WARN, "trim space for default value failed", K(ret));
       } else if (is_mysql_mode && str.empty()) {
         strlen = 0;

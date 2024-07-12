@@ -109,7 +109,8 @@ public:
   int update_local_cache(ObOptDmlStat &dml_stat);
   int update_column_usage_info(const bool with_check);
   int update_dml_stat_info();
-  int update_dml_stat_info(const ObIArray<ObOptDmlStat *> &dml_stats);
+  int update_dml_stat_info(const ObIArray<ObOptDmlStat *> &dml_stats,
+                           common::sqlclient::ObISQLConnection *conn = nullptr);
   int get_column_usage_sql(const StatKey &col_key,
                            const int64_t flags,
                            const bool need_add_comma,
@@ -118,7 +119,8 @@ public:
                        const bool need_add_comma,
                        ObSqlString &sql_string);
   int exec_insert_column_usage_sql(ObSqlString &values_sql);
-  int exec_insert_monitor_modified_sql(ObSqlString &values_sql);
+  int exec_insert_monitor_modified_sql(ObSqlString &values_sql,
+                                       common::sqlclient::ObISQLConnection *conn = nullptr);
   static int get_column_usage_from_table(sql::ObExecContext &ctx,
                                          ObIArray<ObColumnStatParam *> &column_params,
                                          uint64_t tenant_id,
@@ -131,7 +133,8 @@ public:
   int check_table_writeable(bool &is_writeable);
   int generate_opt_stat_monitoring_info_rows(observer::ObOptDmlStatMapGetter &getter);
   int clean_useless_dml_stat_info();
-  static int update_dml_stat_info_from_direct_load(const ObIArray<ObOptDmlStat *> &dml_stats);
+  static int update_dml_stat_info_from_direct_load(const ObIArray<ObOptDmlStat *> &dml_stats,
+                                                   common::sqlclient::ObISQLConnection *conn = nullptr);
   int get_col_usage_info(const bool with_check,
                          ObIArray<StatKey> &col_stat_keys,
                          ObIArray<int64_t> &col_flags);

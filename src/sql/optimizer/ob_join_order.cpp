@@ -4700,7 +4700,8 @@ int ObJoinOrder::generate_const_predicates_from_view(const ObDMLStmt *stmt,
       LOG_WARN("get unexpected expr", K(ret), K(idx), K(sel_expr));
     } else if (!sel_expr->is_const_expr() || sel_expr->get_result_type().is_lob()
                 || ob_is_xml_sql_type(sel_expr->get_result_type().get_type(), sel_expr->get_result_type().get_subschema_id())
-                || ob_is_geometry(sel_expr->get_result_type().get_type())) {
+                || ob_is_geometry(sel_expr->get_result_type().get_type())
+                || ob_is_roaringbitmap(sel_expr->get_result_type().get_type())) {
       //do nothing
     } else if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
                                                           sel_expr,
@@ -5071,6 +5072,18 @@ int ObJoinOrder::compute_path_relationship(const Path &first_path,
              static_cast<const JoinPath&>(second_path).contain_normal_nl()) {
     relation = DominateRelation::OBJ_LEFT_DOMINATE;
     OPT_TRACE("left path dominate right path because of normal nl");
+  } else if (first_path.is_join_path() &&
+             second_path.is_join_path() &&
+             static_cast<const JoinPath&>(first_path).has_none_equal_join() &&
+             !static_cast<const JoinPath&>(second_path).has_none_equal_join()) {
+    relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+    OPT_TRACE("right path dominate left path because of none equal join");
+  } else if (first_path.is_join_path() &&
+             second_path.is_join_path() &&
+             !static_cast<const JoinPath&>(first_path).has_none_equal_join() &&
+             static_cast<const JoinPath&>(second_path).has_none_equal_join()) {
+    relation = DominateRelation::OBJ_LEFT_DOMINATE;
+    OPT_TRACE("left path dominate right path because of none equal join");
   } else if (first_path.is_access_path() && second_path.is_access_path() &&
              !static_cast<const AccessPath&>(first_path).is_valid_inner_path_
              && static_cast<const AccessPath&>(second_path).is_valid_inner_path_) {
@@ -5808,6 +5821,8 @@ int AccessPath::estimate_cost()
                                                 adj_cost_is_valid))) {
     LOG_WARN("failed to check adj index cost valid", K(ret));
   } else {
+    ENABLE_OPT_TRACE_COST_MODEL;
+    OPT_TRACE_COST_MODEL("calc cost for index:", index_id_);
     ObOptimizerContext &opt_ctx = parent_->get_plan()->get_optimizer_context();
     if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info_,
                                         parallel_,
@@ -5816,6 +5831,7 @@ int AccessPath::estimate_cost()
       LOG_WARN("failed to get index access info", K(ret));
     } else if (!adj_cost_is_valid) {
       cost_ = storage_est_cost;
+      OPT_TRACE_COST_MODEL(KV_(cost), "=", KV(storage_est_cost));
     } else if (OB_FALSE_IT(est_cost_info_.phy_query_range_row_count_ = stats_phy_query_range_row_count)) {
     } else if (OB_FALSE_IT(est_cost_info_.logical_query_range_row_count_ = stats_logical_query_range_row_count)) {
     } else if (OB_FAIL(ObOptEstCost::cost_table(est_cost_info_,
@@ -5826,9 +5842,11 @@ int AccessPath::estimate_cost()
     } else {
       double rate = opt_stats_cost_percent * 1.0 / 100.0;
       cost_ = storage_est_cost * (1-rate) + stats_est_cost * rate;
+      OPT_TRACE_COST_MODEL(KV_(cost), "=", KV(storage_est_cost), "* (1-", KV(rate), ") +", KV(stats_est_cost), "*", KV(rate));
       est_cost_info_.phy_query_range_row_count_ = opt_phy_query_range_row_count;
       est_cost_info_.logical_query_range_row_count_ = opt_logical_query_range_row_count;
     }
+    DISABLE_OPT_TRACE_COST_MODEL;
   }
   return ret;
 }
@@ -6215,6 +6233,7 @@ int JoinPath::assign(const JoinPath &other, common::ObIAllocator *allocator)
   equal_cond_sel_ = other.equal_cond_sel_;
   other_cond_sel_ = other.other_cond_sel_;
   contain_normal_nl_ = other.contain_normal_nl_;
+  has_none_equal_join_ = other.has_none_equal_join_;
   can_use_batch_nlj_ = other.can_use_batch_nlj_;
   is_naaj_ = other.is_naaj_;
   is_sna_ = other.is_sna_;
@@ -6448,15 +6467,15 @@ int JoinPath::compute_join_path_ordering()
   } else if (JoinAlgo::MERGE_JOIN == join_algo_) {
     if (FULL_OUTER_JOIN != join_type_ && RIGHT_OUTER_JOIN != join_type_) {
       // 目前 ObMergeJoin 的实现只能继承左支的序
-      if (!is_left_need_sort()) {
+      if (!is_left_need_sort() && !is_left_need_exchange()) {
         set_interesting_order_info(left_path_->get_interesting_order_info());
         if(OB_FAIL(append(ordering_, left_path_->ordering_))) {
           LOG_WARN("failed to append join ordering", K(ret));
         } else if (OB_FAIL(parent_->check_join_interesting_order(this))) {
           LOG_WARN("failed to update join interesting order info", K(ret));
         } else {
-          is_range_order_ = is_fully_partition_wise() && left_path_->is_range_order_;
-          is_local_order_ = is_fully_partition_wise() && !left_path_->is_range_order_;
+          is_range_order_ = left_path_->is_range_order_;
+          is_local_order_ = left_path_->is_local_order_;
         }
       } else {
         int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
@@ -6468,7 +6487,7 @@ int JoinPath::compute_join_path_ordering()
           LOG_WARN("failed to check all interesting order", K(ret));
         } else {
           add_interesting_order_flag(interesting_order_info);
-          is_local_order_ = is_fully_partition_wise();
+          is_local_order_ = is_fully_partition_wise() || join_dist_algo_ == DIST_NONE_ALL;
         }
       }
     } else { /*do nothing*/ }
@@ -7575,22 +7594,22 @@ int JoinPath::cost_hash_join(int64_t join_parallel,
 int JoinPath::check_is_contain_normal_nl()
 {
   int ret = OB_SUCCESS;
-  const ObJoinOrder *left_tree = NULL;
-  const ObJoinOrder *right_tree = NULL;
-  if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_) ||
-      OB_ISNULL(left_tree=left_path_->parent_) ||
-      OB_ISNULL(right_tree=right_path_->parent_)) {
+  if (OB_ISNULL(left_path_) || OB_ISNULL(right_path_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(left_path_), K(right_path_), K(ret));
   } else {
-    bool contain_normal_nl = false;
+    bool contain_normal_nl = contain_normal_nl_;
+    bool has_none_equal_join = has_none_equal_join_;
     if (left_path_->is_join_path()) {
       contain_normal_nl |= static_cast<const JoinPath*>(left_path_)->contain_normal_nl();
+      has_none_equal_join |= static_cast<const JoinPath*>(left_path_)->has_none_equal_join();
     }
     if (right_path_->is_join_path()) {
       contain_normal_nl |= static_cast<const JoinPath*>(right_path_)->contain_normal_nl();
+      has_none_equal_join |= static_cast<const JoinPath*>(right_path_)->has_none_equal_join();
     }
     set_contain_normal_nl(contain_normal_nl);
+    set_has_none_equal_join(has_none_equal_join);
   }
   return ret;
 }
@@ -7646,6 +7665,7 @@ void JoinPath::reuse()
   equal_cond_sel_ = -1.0;
   other_cond_sel_ = -1.0;
   contain_normal_nl_ = false;
+  has_none_equal_join_ = false;
   is_naaj_ = false;
   is_sna_ = false;
   inherit_sharding_index_ = -1;
@@ -8636,6 +8656,7 @@ int ObJoinOrder::compute_subquery_path_property(const uint64_t table_id,
     } else {
       path->set_interesting_order_info(interesting_order_info);
       path->is_local_order_ = root->get_is_local_order();
+      path->is_range_order_ = root->get_is_range_order();
       path->exchange_allocated_ = root->is_exchange_allocated();
       path->phy_plan_type_ = root->get_phy_plan_type();
       path->location_type_ = root->get_location_type();
@@ -9541,6 +9562,7 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
                                               on_conditions,
                                               where_conditions,
                                               has_equal_cond,
+                                              false,
                                               false))) {
             LOG_WARN("failed to create and add hash path", K(ret));
           } else { /*do nothing*/ }
@@ -9594,9 +9616,12 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
     LOG_TRACE("succeed to get distributed normal nested loop join method", K(need_mat),
         K(need_no_mat), K(dist_method));
     for (int64_t i = 0; OB_SUCC(ret) && i < left_paths.count(); i++) {
-      if (OB_ISNULL(left_paths.at(i))) {
+      bool left_is_at_most_one_row = false;
+      if (OB_ISNULL(left_paths.at(i)) || OB_ISNULL(left_paths.at(i)->parent_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
+      } else {
+        left_is_at_most_one_row = left_paths.at(i)->parent_->get_is_at_most_one_row();
       }
       for (int64_t j = DistAlgo::DIST_BASIC_METHOD;
            OB_SUCC(ret) && j < DistAlgo::DIST_MAX_JOIN_METHOD; j = (j << 1)) {
@@ -9620,6 +9645,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                               on_conditions,
                                               where_conditions,
                                               has_equal_cond,
+                                              !left_is_at_most_one_row,
                                               true))) {
             LOG_WARN("failed to create and  add nl path with materialization", K(ret));
           } else if (need_no_mat && !right_need_exchange &&
@@ -9631,6 +9657,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                                     on_conditions,
                                                     where_conditions,
                                                     has_equal_cond,
+                                                    !left_is_at_most_one_row,
                                                     false))) {
             LOG_WARN("failed to create and add nl path without materialization", K(ret));
           } else { /*do nothing*/ }
@@ -12655,6 +12682,7 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
                                         const common::ObIArray<ObRawExpr*> &on_conditions,
                                         const common::ObIArray<ObRawExpr*> &where_conditions,
                                         const bool has_equal_cond,
+                                        const bool is_normal_nl,
                                         bool need_mat)
 {
   int ret = OB_SUCCESS;
@@ -12685,7 +12713,8 @@ int ObJoinOrder::create_and_add_nl_path(const Path *left_path,
                                          is_slave_mapping,
                                          join_type,
                                          need_mat);
-    join_path->contain_normal_nl_ = !has_equal_cond;
+    join_path->contain_normal_nl_ = is_normal_nl;
+    join_path->has_none_equal_join_ = !has_equal_cond;
     OPT_TRACE("create new NL Join path:", join_path);
     if (OB_FAIL(set_nl_filters(join_path,
                                right_path,

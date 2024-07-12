@@ -68,6 +68,7 @@ protected:
   common::ObInOutBandwidthThrottle throttle_;
   char test_dir_[OB_MAX_URI_LENGTH];
   char test_dir_uri_[OB_MAX_URI_LENGTH];
+  ObInOutBandwidthThrottle bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(TestBackupIndexIterator);
 };
 
@@ -125,6 +126,7 @@ void TestBackupIndexIterator::SetUp()
   tenant_ctx.set(io_service);
   ObTenantEnv::set_tenant(&tenant_ctx);
   inner_init_();
+  ASSERT_EQ(OB_SUCCESS, bandwidth_throttle_.init(1024 * 1024 * 60));
 }
 
 void TestBackupIndexIterator::TearDown()
@@ -175,7 +177,7 @@ void TestBackupIndexIterator::fake_init_macro_index_merger_(const int64_t file_c
   ObBackupIndexMergeParam merge_param;
   build_backup_index_merge_param_(merge_param);
   merger.set_count(file_count, per_file_item_count);
-  ret = merger.init(merge_param, sql_proxy);
+  ret = merger.init(merge_param, sql_proxy, bandwidth_throttle_);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 

@@ -769,7 +769,19 @@ int ObFlushCacheResolver::resolve(const ParseNode &parse_tree)
     ObSchemaGetterGuard schema_guard;
 
     // first child: resolve cache type
-    stmt->flush_cache_arg_.cache_type_ = (ObCacheType)parse_tree.children_[0]->value_;
+    ParseNode *cache_type_node = parse_tree.children_[0];
+    if(T_IDENT == cache_type_node->type_) {
+      common::ObString pltmp,plself("pl");
+      pltmp.assign_ptr(cache_type_node->str_value_, static_cast<ObString::obstr_size_t>(cache_type_node->str_len_));
+      if (0 == pltmp.case_compare(plself)) {
+        stmt->flush_cache_arg_.cache_type_ = CACHE_TYPE_PL_OBJ;
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("only support pl cache's cache evict by identify as T_IDENT", K(ret));
+      }
+    } else {
+      stmt->flush_cache_arg_.cache_type_ = (ObCacheType)cache_type_node->value_;
+    }
     // second child: resolve namespace
     ParseNode *namespace_node = parse_tree.children_[1];
     // third child: resolve sql_id

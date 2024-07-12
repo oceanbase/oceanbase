@@ -171,11 +171,6 @@ public:
 
 private:
   int deal_with_local_ls_();
-  int wait_log_replay_sync_();
-  int wait_ls_checkpoint_scn_push_();
-  int generate_prepare_migration_dags_();
-  int remove_local_incomplete_tablets_();
-  int prepare_backfill_tx_tablets_();
   int wait_transfer_tablets_ready_();
   int wait_transfer_out_tablet_ready_(
       ObLS *ls, ObTablet *tablet);

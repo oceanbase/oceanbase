@@ -790,7 +790,7 @@ sql::ObCommonFilterTreeStatus ObCOSSTableRowsFilter::merge_common_filter_tree_st
  *   filter1        filter2       is_common  status
  *     NOP            NOP            O       NONE_FILTER
  *    WHITE          WHITE           X       WHITE
- *    WHITE        SINGLE_BLACK      X      SINGLE_BLACK
+ *    WHITE        SINGLE_BLACK      O       NONE_FILTER
  *    WHITE        MULTI_BLACK       O      NONE_FILTER
  *  SINGLE_BLACK   SINGLE_BLACK      X      SINGLE_BLACK
  *  SINGLE_BLACK   MULTI_BLACK       X      MULTI_BLACK
@@ -802,15 +802,7 @@ bool ObCOSSTableRowsFilter::is_common_filter_tree_status(
     const sql::ObCommonFilterTreeStatus status_one,
     const sql::ObCommonFilterTreeStatus status_two)
 {
-  bool ret = true;
-  if (sql::ObCommonFilterTreeStatus::NONE_FILTER == status_one
-       || sql::ObCommonFilterTreeStatus::NONE_FILTER == status_two
-       || (sql::ObCommonFilterTreeStatus::SINGLE_BLACK != status_one
-            && sql::ObCommonFilterTreeStatus::SINGLE_BLACK != status_two
-            && status_one != status_two)) {
-    ret = false;
-  }
-  return ret;
+  return (sql::ObCommonFilterTreeStatus)(filter_tree_merge_status[status_one][status_two]) > 0;
 }
 
 void ObCOSSTableRowsFilter::set_status_of_filter_tree(

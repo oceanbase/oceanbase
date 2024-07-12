@@ -251,6 +251,8 @@ int ObDatumRow::init(ObIAllocator &allocator, const int64_t capacity, char *tran
     // trans_info_ptr maybe is nullptr,
     // ObDatumRow does not care about the free of trans_info_ptr's memory
     trans_info_ = trans_info_ptr;
+
+    STORAGE_LOG(DEBUG, "succeed to init datum row", K(ret), K_(count));
   }
 
   return ret;
@@ -299,8 +301,10 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
   void *buf = nullptr;
 
   if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDatumRow is not inited", K(ret), K(*this));
   } else if (OB_UNLIKELY(capacity <= 0 || capacity > 2 * OB_USER_ROW_MAX_COLUMNS_COUNT)) {
+    ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to reserve datum row", K(ret), K(capacity));
   } else if (capacity <= get_capacity()) {
     // skip
@@ -504,9 +508,12 @@ DEF_TO_STRING(ObDatumRow)
       J_COLON();
       J_ARRAY_START();
       for (int64_t i = 0; i < count_; ++i) {
-        databuff_printf(buf, buf_len, pos, "col_id=%ld:", i);
+        if (0 == i) {
+          databuff_printf(buf, buf_len, pos, "col_id=%ld:", i);
+        } else {
+          databuff_printf(buf, buf_len, pos, ", col_id=%ld:", i);
+        }
         pos += storage_datums_[i].storage_to_string(buf + pos, buf_len - pos);
-        databuff_printf(buf, buf_len, pos, ",");
       }
       J_ARRAY_END();
     }

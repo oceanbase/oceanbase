@@ -57,7 +57,7 @@ public:
   // Iterate row interface for sql static typing engine.
   virtual int get_next_row()
   {
-    int ret = common::OB_NOT_IMPLEMENT;;
+    int ret = common::OB_NOT_IMPLEMENT;
     COMMON_LOG(WARN, "interface not implement", K(ret));
     return ret;
   }
@@ -66,7 +66,7 @@ public:
   virtual int get_next_rows(int64_t &count, int64_t capacity)
   {
     UNUSEDx(count, capacity);
-    int ret = common::OB_NOT_IMPLEMENT;;
+    int ret = common::OB_NOT_IMPLEMENT;
     COMMON_LOG(WARN, "interface not implement", K(ret));
     return ret;
   }

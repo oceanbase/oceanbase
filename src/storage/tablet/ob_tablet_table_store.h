@@ -104,6 +104,7 @@ public:
       const ObTablet &tablet,
       const ObTabletTableStore &old_store);
   virtual int64_t get_deep_copy_size() const override;
+  virtual int64_t get_try_cache_size() const;
   virtual int deep_copy(char *buf, const int64_t buf_len, ObIStorageMetaObj *&value) const override;
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(
@@ -128,10 +129,15 @@ public:
   OB_INLINE const storage::ObSSTableArray &get_major_sstables() const { return major_tables_; }
   OB_INLINE const storage::ObSSTableArray &get_minor_sstables() const { return minor_tables_; }
   OB_INLINE const storage::ObSSTableArray &get_ddl_sstables() const { return ddl_sstables_; }
+  OB_INLINE const storage::ObSSTableArray &get_mds_sstables() const { return mds_sstables_; }
   OB_INLINE const storage::ObSSTableArray &get_meta_major_sstables() const { return meta_major_tables_; }
   OB_INLINE blocksstable::ObSSTable *get_meta_major_sstable() const
   {
     return meta_major_tables_.empty() ? nullptr : meta_major_tables_.at(0);
+  }
+  OB_INLINE bool is_table_valid_mds_or_minor_sstable(const ObITable &table, const bool is_mds)
+  {
+    return (is_mds && table.is_mds_sstable()) || (!is_mds && table.is_minor_sstable());
   }
 
   int inc_macro_ref() const;
@@ -154,6 +160,9 @@ public:
       const ObTablet &tablet,
       ObTableStoreIterator &iter,
       const bool allow_no_ready_read = false) const;
+  int get_mds_tables(
+      const int64_t snapshot_version,
+      ObTableStoreIterator &iter) const;
   int get_all_sstable(ObTableStoreIterator &iter, const bool unpack_co_table = false) const;
   int get_read_major_sstable(const int64_t snapshot_version, ObTableStoreIterator &iter) const;
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;
@@ -161,6 +170,7 @@ public:
   int clear_memtables();
   int get_first_frozen_memtable(ObITable *&table) const;
   int get_ddl_sstables(ObTableStoreIterator &iter) const;
+  int get_mds_sstables(ObTableStoreIterator &iter) const;
   int get_mini_minor_sstables(
       ObTableStoreIterator &iter) const;
   int get_recycle_version(const int64_t multi_version_start, int64_t &recycle_version) const;
@@ -250,7 +260,8 @@ private:
       const bool need_check_sstable,
       const int64_t inc_base_snapshot_version,
       const ObTabletHAStatus &ha_status,
-      const UpdateUpperTransParam &upper_trans_param);
+      const UpdateUpperTransParam &upper_trans_param,
+      const bool is_mds);
   int build_meta_major_table(
       common::ObArenaAllocator &allocator,
       const blocksstable::ObSSTable *new_sstable,
@@ -262,7 +273,6 @@ private:
       const int64_t multi_version_start,
       const bool allow_duplicate_sstable,
       int64_t &inc_base_snapshot_version);
-
   int check_ready_for_read(const ObTablet &tablet);
   int check_continuous() const;
   template <class T>
@@ -301,6 +311,11 @@ private:
       const ObTablet &tablet,
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
+  int build_ha_mds_tables_(
+      common::ObArenaAllocator &allocator,
+      const ObTablet &tablet,
+      const ObBatchUpdateTableStoreParam &param,
+      const ObTabletTableStore &old_store);
   int cut_ha_sstable_scn_range_(
       common::ObArenaAllocator &allocator,
       common::ObIArray<ObITable *> &orig_minor_sstables,
@@ -311,11 +326,11 @@ private:
   int check_minor_table_continue_(
       ObITable *table,
       ObITable *&prev_table) const;
-  int combine_ha_minor_sstables_(
-      const ObTablet &tablet,
-      common::ObIArray<ObITable *> &old_store_minor_sstables,
-      common::ObIArray<ObITable *> &need_add_minor_sstables,
-      common::ObIArray<ObITable *> &new_minor_sstables);
+  int combine_ha_multi_version_sstables_(
+      const share::SCN &scn,
+      common::ObIArray<ObITable *> &old_store_sstables,
+      common::ObIArray<ObITable *> &need_add_sstables,
+      common::ObIArray<ObITable *> &new_sstables);
   int combine_transfer_minor_sstables_(
       common::ObArenaAllocator &allocator,
       const ObTablet &tablet,
@@ -336,6 +351,7 @@ private:
       const ObTablet &tablet,
       const ObBatchUpdateTableStoreParam &param,
       const ObTabletTableStore &old_store);
+
   // ddl
   int pull_ddl_memtables(common::ObArenaAllocator &allocator, const ObTablet &tablet);
   int build_ddl_sstables(
@@ -358,12 +374,13 @@ private:
       ObSSTableArray &new_tables) const;
   int get_mini_minor_sstables_(ObTableStoreIterator &iter) const;
   template<typename ...Args>
-  int init_minor_sstables_with_check(Args&& ...args);
+  int init_minor_sstable_array_with_check(ObSSTableArray &minor_sstable_array, Args&& ...args);
 
 public:
   static const int64_t TABLE_STORE_VERSION_V1 = 0x0100;
   static const int64_t TABLE_STORE_VERSION_V2 = 0x0101;
   static const int64_t TABLE_STORE_VERSION_V3 = 0x0102;
+  static const int64_t TABLE_STORE_VERSION_V4 = 0x0103;
   static const int64_t MAX_SSTABLE_CNT = 128;
   // limit table store memory size to one ACHUNK
   static const int64_t MAX_TABLE_STORE_MEMORY_SIZE= lib::ACHUNK_SIZE - lib::AOBJECT_META_SIZE;
@@ -374,6 +391,7 @@ private:
   ObSSTableArray minor_tables_;
   ObSSTableArray ddl_sstables_;
   ObSSTableArray meta_major_tables_;
+  ObSSTableArray mds_sstables_;
   ObMemtableArray memtables_;
   ObDDLKVArray ddl_mem_sstables_;
   mutable common::SpinRWLock memtables_lock_; // protect memtable read and update after inited
@@ -437,6 +455,7 @@ private:
   const ObDDLKVArray &ddl_mem_sstables_;
   const ObSSTableArray &ddl_sstables_;
   const ObSSTableArray &meta_major_tables_;
+  const ObSSTableArray &mds_sstables_;
   const bool is_ready_for_read_;
 };
 

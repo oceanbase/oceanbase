@@ -50,7 +50,9 @@ public:
       trans_info_expr_(nullptr),
       ir_scan_type_(ObTSCIRScanType::OB_NOT_A_SPEC_SCAN),
       rowkey_exprs_(alloc),
-      table_scan_opt_()
+      table_scan_opt_(),
+      doc_id_idx_(-1),
+      vec_vid_idx_(-1)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -109,6 +111,8 @@ public:
   ObTSCIRScanType ir_scan_type_; // specify retrieval scan type
   sql::ExprFixedArray rowkey_exprs_; // store rowkey exprs for index lookup
   ObTableScanOption table_scan_opt_;
+  int64_t doc_id_idx_;
+  int64_t vec_vid_idx_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
@@ -279,7 +283,7 @@ protected:
   union {
     common::ObArenaAllocator retry_alloc_buf_;
   };
-  ObDASObsoletedObj ir_param_; // obsoleted attribute, please gc me at next barrier version
+  ObDASObsoletedObj ir_param_;   // FARM COMPAT WHITELIST: obsoleted attribute, please gc me at next barrier version
 };
 
 class ObDASScanResult : public ObIDASTaskResult, public common::ObNewRowIterator

@@ -880,7 +880,7 @@ struct ObNonFrozenBackupPieceInfo final
   DECLARE_TO_STRING;
 };
 
-class ObBackupStorageInfo final : public common::ObObjectStorageInfo
+class ObBackupStorageInfo : public common::ObObjectStorageInfo
 {
 public:
   using common::ObObjectStorageInfo::set;
@@ -1093,6 +1093,10 @@ struct ObBackupDataType final
 {
   OB_UNIS_VERSION(1);
 public:
+  // TODO(yanfeng): change this comment when quick_restore branch merge
+  // backup sys: ls inner tablet, the granularity of success is log stream level
+  // backup minor: mini/minor/ddl/mds sstable, the granularity of success is tablet level
+  // backup major: major sstable, the granularity of success is macro block level
   enum BackupDataType
   {
     BACKUP_SYS = 0,

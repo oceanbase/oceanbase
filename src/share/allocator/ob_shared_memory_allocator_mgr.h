@@ -112,7 +112,7 @@ public:
     while (throttle_tool.still_throttling<ALLOCATOR>(share_ti_guard, module_ti_guard) &&
            (left_interval > 0)) {
       int64_t expected_wait_time = 0;
-      if (for_replay && MTL(ObTenantFreezer *)->exist_ls_freezing()) {
+      if (for_replay && MTL(ObTenantFreezer *)->exist_ls_throttle_is_skipping()) {
         // skip throttle if ls freeze exists
         break;
       } else if ((expected_wait_time =

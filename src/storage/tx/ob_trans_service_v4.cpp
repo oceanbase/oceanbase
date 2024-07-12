@@ -1318,6 +1318,7 @@ int ObTransService::create_tx_ctx_(const share::ObLSID &ls_id,
                     tx.cluster_id_,
                     tx.cluster_version_,
                     tx.sess_id_, /*session_id*/
+                    tx.assoc_sess_id_, /*associated_session_id*/
                     tx.addr_,
                     tx.get_expire_ts(),
                     this,

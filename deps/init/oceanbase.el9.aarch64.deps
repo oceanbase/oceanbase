@@ -36,6 +36,7 @@ devdeps-cos-c-sdk-5.0.16-52023070517.el8.aarch64.rpm
 devdeps-s3-cpp-sdk-1.11.156-102023122011.el8.aarch64.rpm
 devdeps-protobuf-c-1.4.1-100000072023102410.el8.aarch64.rpm
 devdeps-roaringbitmap-croaring-3.0.0-42024042816.el8.aarch64.rpm
+devdeps-apache-arrow-9.0.0-322024052923.el8.aarch64.rpm
 
 [deps-el9]
 devdeps-apr-1.6.5-232023090616.el9.aarch64.rpm target=el9
@@ -52,6 +53,7 @@ obdevtools-llvm-11.0.1-312022092921.el8.aarch64.rpm
 [tools-deps]
 devdeps-oblogmsg-1.1-52024052811.el8.aarch64.rpm
 devdeps-rocksdb-6.22.1.1-52022100420.el8.aarch64.rpm
+obstack-2.0.4-172024070513.el8.aarch64.rpm
 obshell-4.2.3.1-52024053020.el8.aarch64.rpm target=community
 
 [test-utils]

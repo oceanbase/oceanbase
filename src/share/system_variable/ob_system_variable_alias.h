@@ -437,6 +437,17 @@ namespace share
   static const char* const OB_SV_GROUP_REPLICATION_GROUP_SEEDS = "group_replication_group_seeds";
   static const char* const OB_SV_SLAVE_ROWS_SEARCH_ALGORITHMS = "slave_rows_search_algorithms";
   static const char* const OB_SV_SLAVE_TYPE_CONVERSIONS = "slave_type_conversions";
+  static const char* const OB_SV_DELAY_KEY_WRITE = "delay_key_write";
+  static const char* const OB_SV_INNODB_LARGE_PREFIX = "innodb_large_prefix";
+  static const char* const OB_SV_KEY_BUFFER_SIZE = "key_buffer_size";
+  static const char* const OB_SV_KEY_CACHE_AGE_THRESHOLD = "key_cache_age_threshold";
+  static const char* const OB_SV_KEY_CACHE_DIVISION_LIMIT = "key_cache_division_limit";
+  static const char* const OB_SV_MAX_SEEKS_FOR_KEY = "max_seeks_for_key";
+  static const char* const OB_SV_OLD_ALTER_TABLE = "old_alter_table";
+  static const char* const OB_SV_TABLE_DEFINITION_CACHE = "table_definition_cache";
+  static const char* const OB_SV_INNODB_SORT_BUFFER_SIZE = "innodb_sort_buffer_size";
+  static const char* const OB_SV_KEY_CACHE_BLOCK_SIZE = "key_cache_block_size";
+  static const char* const OB_SV_KV_MODE = "ob_kv_mode";
 
 }
 }

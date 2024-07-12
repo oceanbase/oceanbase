@@ -34,6 +34,7 @@ OB_SERIALIZE_MEMBER((ObGroupBySpec, ObOpSpec),
                     aggr_code_expr_,
                     by_pass_enabled_,
                     support_fast_single_row_agg_,
+                    skew_detection_enabled_,   // FARM COMPAT WHITELIST
                     llc_ndv_est_enabled_);
 
 DEF_TO_STRING(ObGroupBySpec)

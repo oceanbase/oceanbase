@@ -114,6 +114,7 @@ int ObOptimizer::get_optimization_cost(ObDMLStmt &stmt,
     LOG_WARN("failed to perform optimization", K(ret));
   } else {
     cost = plan->get_optimization_cost();
+    OPT_TRACE(plan);
   }
   return ret;
 }

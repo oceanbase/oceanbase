@@ -32,57 +32,30 @@ namespace observer
 class ObTableLoadExecCtx
 {
 public:
-  ObTableLoadExecCtx() : tx_desc_(nullptr) {}
+  ObTableLoadExecCtx() : exec_ctx_(nullptr), tx_desc_(nullptr) {}
   virtual ~ObTableLoadExecCtx() = default;
-  virtual common::ObIAllocator *get_allocator() = 0;
-  virtual sql::ObSQLSessionInfo *get_session_info() = 0;
-  virtual sql::ObExecContext *get_exec_ctx() = 0; // for sql statistics
-  virtual bool is_valid() const = 0;
+  common::ObIAllocator *get_allocator();
+  sql::ObSQLSessionInfo *get_session_info();
   virtual int check_status();
-  void set_tx_desc(transaction::ObTxDesc *tx_desc) { tx_desc_ = tx_desc; }
-  transaction::ObTxDesc *get_tx_desc() const { return tx_desc_; }
-  DECLARE_PURE_VIRTUAL_TO_STRING;
-protected:
-  transaction::ObTxDesc *tx_desc_;
-};
-
-class ObTableLoadSqlExecCtx : public ObTableLoadExecCtx
-{
-public:
-  ObTableLoadSqlExecCtx() : exec_ctx_(nullptr) {}
-  virtual ~ObTableLoadSqlExecCtx() = default;
-  common::ObIAllocator *get_allocator() override;
-  sql::ObSQLSessionInfo *get_session_info() override;
-  sql::ObExecContext *get_exec_ctx() override { return exec_ctx_; }
-  int check_status() override;
-  bool is_valid() const override { return nullptr != exec_ctx_; }
-  TO_STRING_KV(KP_(exec_ctx));
+  bool is_valid() const { return nullptr != exec_ctx_; }
+  TO_STRING_KV(KP_(exec_ctx), KP_(tx_desc));
 public:
   sql::ObExecContext *exec_ctx_;
+  transaction::ObTxDesc *tx_desc_;
 };
 
 class ObTableLoadClientExecCtx : public ObTableLoadExecCtx
 {
 public:
   ObTableLoadClientExecCtx()
-    : allocator_(nullptr),
-      session_info_(nullptr),
-      timeout_ts_(0),
-      heartbeat_timeout_us_(0),
+    : heartbeat_timeout_us_(0),
       last_heartbeat_time_(0)
   {
   }
   virtual ~ObTableLoadClientExecCtx() = default;
-  common::ObIAllocator *get_allocator() override { return allocator_; }
-  sql::ObSQLSessionInfo *get_session_info() override { return session_info_; }
-  sql::ObExecContext *get_exec_ctx() override { return nullptr; } // not support sql statistics
-  int check_status() override;
-  bool is_valid() const override { return nullptr != allocator_ && nullptr != session_info_; }
-  TO_STRING_KV(KP_(allocator), KP_(session_info), K_(timeout_ts));
+  virtual int check_status();
+  TO_STRING_KV(KP_(exec_ctx), KP_(tx_desc), K_(heartbeat_timeout_us), K_(last_heartbeat_time));
 public:
-  common::ObIAllocator *allocator_;
-  sql::ObSQLSessionInfo *session_info_;
-  int64_t timeout_ts_;
   int64_t heartbeat_timeout_us_;
   int64_t last_heartbeat_time_;
 };

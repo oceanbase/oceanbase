@@ -17,7 +17,10 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "common_define.h"
 #include "lib/utility/utility.h"
+#include "share/ob_errno.h"
 #include "src/share/ob_delegate.h"
+#include "deps/oblib/src/common/meta_programming/ob_type_traits.h"
+#include "common_define.h"
 
 namespace oceanbase
 {
@@ -48,8 +51,8 @@ struct ListNode : public ListNodeBase
 {
   ListNode() : ListNodeBase() {}
   virtual ~ListNode() { reset(); }
-  ListNode<T> *prev() { return dynamic_cast<ListNode<T> *>(prev_); }
-  ListNode<T> *next() { return dynamic_cast<ListNode<T> *>(next_); }
+  ListNode<T> *prev() { return static_cast<ListNode<T> *>(prev_); }
+  ListNode<T> *next() { return static_cast<ListNode<T> *>(next_); }
 };
 
 template <typename T>
@@ -184,37 +187,91 @@ public:
   virtual ~List() override { clear(); }
   template <typename FUNC>
   void for_each_node_from_head_to_tail_until_true(FUNC &&func) const {
-    const ListNode<T> *iter = dynamic_cast<const ListNode<T> *>(list_head_);
+    int ret = OB_SUCCESS;
+    const ListNode<T> *iter = static_cast<const ListNode<T> *>(list_head_);
     while (OB_NOT_NULL(iter)) {
-      const T *data = dynamic_cast<const T *>(iter);
+      const T *data = static_cast<const T *>(iter);
       if (OB_ISNULL(data)) {
-        int ret = OB_ERR_UNEXPECTED;
-        OCCAM_LOG(ERROR, "downcast failed", KP(iter), KP(data), KP(this), KP(list_head_), KP(list_tail_));
+        ret = OB_ERR_UNEXPECTED;
+        MDS_LOG(ERROR, "downcast failed", KP(iter), KP(data), KP(this), KP(list_head_), KP(list_tail_));
+      } else {
+        const ListNode<T> *temp_iter_next = static_cast<const ListNode<T> *>(iter->next_);
+        if (func(*data)) {
+          break;
+        } else {
+          iter = temp_iter_next;
+        }
       }
-      const ListNode<T> *temp_iter_next = dynamic_cast<const ListNode<T> *>(iter->next_);
-      if (func(*data)) {
-        break;
-      }
-      iter = temp_iter_next;
     }
     check_invariance_();
   }
   template <typename FUNC>
   void for_each_node_from_tail_to_head_until_true(FUNC &&func) const {
-    const ListNode<T> *iter = dynamic_cast<const ListNode<T> *>(list_tail_);
+    int ret = OB_SUCCESS;
+    const ListNode<T> *iter = static_cast<const ListNode<T> *>(list_tail_);
     while (OB_NOT_NULL(iter)) {
-      const T *data = dynamic_cast<const T *>(iter);
+      const T *data = static_cast<const T *>(iter);
       if (OB_ISNULL(data)) {
-        int ret = OB_ERR_UNEXPECTED;
-        OCCAM_LOG(ERROR, "downcast failed", KP(iter), KP(data), KP(this), KP(list_head_), KP(list_tail_));
+        ret = OB_ERR_UNEXPECTED;
+        MDS_LOG(ERROR, "downcast failed", KP(iter), KP(data), KP(this), KP(list_head_), KP(list_tail_));
+      } else {
+        const ListNode<T> *temp_iter_prev = static_cast<const ListNode<T> *>(iter->prev_);
+        if (func(*data)) {
+          break;
+        } else {
+          iter = temp_iter_prev;
+        }
       }
-      const ListNode<T> *temp_iter_prev = dynamic_cast<const ListNode<T> *>(iter->prev_);
-      if (func(*data)) {
-        break;
-      }
-      iter = temp_iter_prev;
     }
     check_invariance_();
+  }
+  template <typename FUNC>
+  int for_each_node(FUNC &&func) const {
+    int ret = OB_SUCCESS;
+    const ListNode<T> *iter = static_cast<const ListNode<T> *>(list_head_);
+    while (OB_SUCC(ret) && OB_NOT_NULL(iter)) {
+      const T *data = static_cast<const T *>(iter);
+      if (OB_ISNULL(data)) {
+        ret = OB_ERR_UNEXPECTED;
+        MDS_LOG(ERROR, "downcast failed", KP(iter), KP(data), KP(this), KP(list_head_), KP(list_tail_));
+      } else {
+        const ListNode<T> *temp_iter_next = static_cast<const ListNode<T> *>(iter->next_);
+        if (OB_FAIL(func(*data))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          }
+          break;
+        } else {
+          iter = temp_iter_next;
+        }
+      }
+    }
+    check_invariance_();
+    return ret;
+  }
+  template <typename FUNC>
+  int reverse_for_each_node(FUNC &&func) const {
+    int ret = OB_SUCCESS;
+    const ListNode<T> *iter = static_cast<const ListNode<T> *>(list_tail_);
+    while (OB_SUCC(ret) && OB_NOT_NULL(iter)) {
+      const T *data = static_cast<const T *>(iter);
+      if (OB_ISNULL(data)) {
+        ret = OB_ERR_UNEXPECTED;
+        MDS_LOG(ERROR, "downcast failed", KP(iter), KP(data), KP(this), KP(list_head_), KP(list_tail_));
+      } else {
+        const ListNode<T> *temp_iter_prev = static_cast<const ListNode<T> *>(iter->prev_);
+        if (OB_FAIL(func(*data))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          }
+          break;
+        } else {
+          iter = temp_iter_prev;
+        }
+      }
+    }
+    check_invariance_();
+    return ret;
   }
   ListNode<T> *fetch_from_head() {
     ListNode<T> *head = static_cast<ListNode<T> *>(list_head_);
@@ -261,6 +318,44 @@ static inline bool XNOR(bool a, bool b) {
 template <typename T, int SORT_TYPE>
 class SortedList : public List<T>
 {
+  struct BinaryCompareOp {
+    BinaryCompareOp(ListNode<T> *new_node, ListNode<T> *&next_node)
+    : ret_(OB_SUCCESS),
+    new_node_(new_node),
+    next_node_(next_node) {}
+    template <typename T2 = T, ENABLE_IF_MDS_SERIALIZEABLE(T2)>// binary comparable
+    bool operator()(const T &node) {
+      bool ret = false;
+      const ListNode<T> &list_node = dynamic_cast<const ListNode<T>&>(node);
+      T &rhs_data = dynamic_cast<T&>(*new_node_);
+      int compare_result = 0;
+      if (OB_SUCCESS != (ret_ = compare_binary_key<T>(node, rhs_data, compare_result))) {
+        MDS_LOG(WARN, "fail to compare binary key buffer", K(node), K(rhs_data));
+      } else if (XNOR(compare_result > 0, SORT_TYPE)) {
+        next_node_ = &const_cast<ListNode<T> &>(list_node);
+        ret = true;
+      } else {
+        ret = false;
+      }
+      return ret;
+    }
+    template <typename T2 = T, ENABLE_IF_NOT_MDS_SERIALIZEABLE(T2)>// origin comparable
+    bool operator()(const T &node) {
+      bool ret = false;
+      const ListNode<T> &list_node = dynamic_cast<const ListNode<T>&>(node);
+      T &rhs_data = dynamic_cast<T&>(*new_node_);
+      if (XNOR(CompareOperationWrapper<const T>(node) > CompareOperationWrapper<const T>(rhs_data), SORT_TYPE)) {
+        next_node_ = &const_cast<ListNode<T> &>(list_node);
+        ret = true;
+      } else {
+        ret = false;
+      }
+      return ret;
+    }
+    int ret_;
+    ListNode<T> *new_node_;
+    ListNode<T> *&next_node_;
+  };
 public:
   SortedList() = default;
   virtual ~SortedList() override { ListBase::clear(); }
@@ -268,7 +363,8 @@ public:
   SortedList(SortedList<T, SORT_TYPE> &&) = delete;
   SortedList<T, SORT_TYPE> &operator=(const SortedList<T, SORT_TYPE> &) = delete;
   SortedList<T, SORT_TYPE> &operator=(SortedList<T, SORT_TYPE> &&) = delete;
-  void insert(ListNode<T> *new_node) {
+  int insert(ListNode<T> *new_node) {
+    int ret = OB_SUCCESS;
     MDS_ASSERT(OB_NOT_NULL(new_node));
     MDS_ASSERT(OB_ISNULL(new_node->next_));
     MDS_ASSERT(OB_ISNULL(new_node->prev_));
@@ -277,19 +373,10 @@ public:
       ListBase::list_tail_ = new_node;
     } else {
       ListNode<T> *next_node = nullptr;
-      List<T>::for_each_node_from_head_to_tail_until_true(
-        [new_node, &next_node](const T &node) {
-          const ListNode<T> &list_node = dynamic_cast<const ListNode<T>&>(node);
-          T &rhs_data = dynamic_cast<T&>(*new_node);
-          if (XNOR(CompareOperationWrapper<const T>(node) > CompareOperationWrapper<const T>(rhs_data), SORT_TYPE)) {
-            next_node = &const_cast<ListNode<T> &>(list_node);
-            return true;
-          } else {
-            return false;
-          }
-        }
-      );
-      if (OB_ISNULL(next_node)) {// insert to tail
+      BinaryCompareOp op(new_node, next_node);
+      List<T>::for_each_node_from_head_to_tail_until_true(op);
+      if (OB_FAIL(op.ret_)) {
+      } else if (OB_ISNULL(next_node)) {// insert to tail
         ListBase::list_tail_->next_ = new_node;
         new_node->prev_ = ListBase::list_tail_;
         ListBase::list_tail_ = new_node;
@@ -306,15 +393,16 @@ public:
       }
     }
     List<T>::check_invariance_();
+    return ret;
   }
   T &get_head() {
     T *data = nullptr;
-    MDS_ASSERT(OB_NOT_NULL(data = dynamic_cast<T*>(ListBase::list_head_)));
+    MDS_ASSERT(OB_NOT_NULL(data = (T*)(ListNode<T> *)(ListBase::list_head_)));
     return *data;
   }
   T &get_tail() {
     T *data = nullptr;
-    MDS_ASSERT(OB_NOT_NULL(data = dynamic_cast<T*>(ListBase::list_tail_)));
+    MDS_ASSERT(OB_NOT_NULL(data = (T*)(ListNode<T> *)(ListBase::list_tail_)));
     return *data;
   }
 };

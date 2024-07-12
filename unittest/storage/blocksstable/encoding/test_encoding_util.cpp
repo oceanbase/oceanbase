@@ -103,6 +103,34 @@ TEST(ObMultiDimArray_T, timestamp_with_time_zone)
   ASSERT_EQ(2, hash_builder.list_cnt_);
 }
 
+TEST(ObMultiDimArray_T, dict_int)
+{
+  // for timestamp with time zone, we need use binary_equal to build encoding hash table.
+  ObEncodingHashTableBuilder hash_builder;
+  ObArenaAllocator local_arena;
+  ASSERT_EQ(OB_SUCCESS, hash_builder.create(256, 256));
+  ObColDatums int_arr(local_arena);
+  ObStorageDatum datums[10];
+
+  datums[0].set_null();
+  ASSERT_EQ(OB_SUCCESS, int_arr.push_back(datums[0]));
+  for (int64_t i = 1; i < 10; i++) {
+    datums[i].set_int(i % 3);
+    ASSERT_EQ(OB_SUCCESS, int_arr.push_back(datums[i]));
+  }
+
+  ObColDesc col_desc;
+  col_desc.col_id_ = OB_APP_MIN_COLUMN_ID + 1;
+  col_desc.col_type_.set_int32();
+
+  ASSERT_EQ(OB_SUCCESS, hash_builder.build(int_arr, col_desc));
+  ASSERT_EQ(3, hash_builder.list_cnt_);
+  ASSERT_EQ(10, hash_builder.node_cnt_);
+  ASSERT_EQ(3, hash_builder.nodes_[0].dict_ref_);
+  for (int64_t i = 1; i < 10; i++) {
+    ASSERT_EQ((i + 2) % 3, hash_builder.nodes_[i].dict_ref_);
+  }
+}
 
 }
 }

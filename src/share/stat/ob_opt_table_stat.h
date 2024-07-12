@@ -241,6 +241,8 @@ public:
 
   void add_row_count(int64_t rc) { row_count_ += rc; }
 
+  void add_sample_size(int64_t rc) { sample_size_ += rc; }
+
   // for multi rows
   void add_avg_row_size(double avg_row_size, int64_t rc) {
     SQL_LOG(DEBUG, "INFO", K(partition_id_));

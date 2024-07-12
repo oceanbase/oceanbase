@@ -332,6 +332,7 @@ int ObTableLoadMerger::handle_table_compact_success()
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_stop_)) {
   } else {
+    LOG_INFO("table compact success");
     if (OB_FAIL(build_merge_ctx())) {
       LOG_WARN("fail to build merge ctx", KR(ret));
     } else if (OB_FAIL(start_merge())) {
@@ -381,6 +382,7 @@ int ObTableLoadMerger::build_merge_ctx()
   merge_param.insert_table_ctx_ = store_ctx_->insert_table_ctx_;
   merge_param.dml_row_handler_ = store_ctx_->error_row_handler_;
   merge_param.file_mgr_ = store_ctx_->tmp_file_mgr_;
+  merge_param.trans_param_ = store_ctx_->trans_param_;
   if (OB_FAIL(merge_ctx_.init(store_ctx_->ctx_, merge_param, store_ctx_->ls_partition_ids_))) {
     LOG_WARN("fail to init merge ctx", KR(ret));
   } else if (store_ctx_->is_multiple_mode_) {

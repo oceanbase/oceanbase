@@ -2141,6 +2141,8 @@ int ObTabletRestoreTask::generate_restore_tasks_()
     LOG_WARN("failed to check src sstable exist", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_tablet_copy_finish_task_(tablet_copy_finish_task))) {
     LOG_WARN("failed to generate tablet copy finish task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(generate_mds_restore_tasks_(tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate restore mds tasks", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_minor_restore_tasks_(tablet_copy_finish_task, parent_task))) {
     LOG_WARN("failed to generate restore minor tasks", K(ret), KPC(tablet_restore_ctx_));
   } else if (OB_FAIL(generate_major_restore_tasks_(tablet_copy_finish_task, parent_task))) {
@@ -2628,6 +2630,33 @@ int ObTabletRestoreTask::check_src_sstable_exist_()
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObTabletRestoreTask::generate_mds_restore_tasks_(
+    ObTabletCopyFinishTask *tablet_copy_finish_task,
+    share::ObITask *&parent_task)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  bool is_remote_sstable_exist = true;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet restore task do not init", K(ret));
+  } else if (OB_ISNULL(tablet_copy_finish_task) || OB_ISNULL(parent_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("generate minor task get invalid argument", K(ret), KP(tablet_copy_finish_task), KP(parent_task));
+  } else if (OB_ISNULL(tablet = tablet_restore_ctx_->tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is null", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+  } else if (!ObTabletRestoreAction::is_restore_minor(tablet_restore_ctx_->action_)
+      && !ObTabletRestoreAction::is_restore_all(tablet_restore_ctx_->action_)) {
+    LOG_INFO("tablet not restore minor or restore all, skip minor restore tasks",
+        KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
+  } else if (OB_FAIL(generate_restore_task_(ObITable::is_mds_sstable, tablet_copy_finish_task, parent_task))) {
+    LOG_WARN("failed to generate mds restore task", K(ret), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
   }
   return ret;
 }

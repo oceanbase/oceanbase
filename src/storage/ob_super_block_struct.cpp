@@ -483,7 +483,7 @@ int ObTenantSuperBlock::deserialize(const char *buf, const int64_t data_len, int
       int64_t pos_orig = pos;
       pos = 0;
       if (OB_FAIL(deserialize_(buf + pos_orig, len, pos))) {
-        LOG_WARN("fail to de-serialize", K(ret), "len", len, K(pos));
+        LOG_WARN("fail to deserialize", K(ret), K(len), K(pos));
       }
       pos = pos_orig + len;
     }

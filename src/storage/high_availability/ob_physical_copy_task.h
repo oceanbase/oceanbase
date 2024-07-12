@@ -172,19 +172,14 @@ public:
   VIRTUAL_TO_STRING_KV(K("ObSSTableCopyFinishTask"), KP(this), K(copy_ctx_));
 
 private:
-  int get_cluster_version_(
-      const ObPhysicalCopyTaskInitParam &init_param,
-      int64_t &cluster_version);
   int prepare_sstable_index_builder_(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
-      const ObMigrationSSTableParam *sstable_param,
-      const int64_t cluster_version);
+      const ObMigrationSSTableParam *sstable_param);
   int prepare_data_store_desc_(
       const share::ObLSID &ls_id,
       const common::ObTabletID &tablet_id,
       const ObMigrationSSTableParam *sstable_param,
-      const int64_t cluster_version,
       ObWholeDataStoreDesc &desc);
   int get_merge_type_(
       const ObMigrationSSTableParam *sstable_param,
@@ -246,7 +241,6 @@ public:
   const ObMigrationTabletParam *get_src_tablet_meta() const { return src_tablet_meta_; }
 private:
   int create_new_table_store_with_major_();
-  int create_new_table_store_with_ddl_();
   int create_new_table_store_with_minor_();
   int trim_tablet_();
 
@@ -255,6 +249,7 @@ private:
       const ObITable::TableKey &table_key,
       ObTablesHandleArray *&table_handle_ptr);
   int check_tablet_valid_();
+  int check_log_replay_to_mds_sstable_end_scn_();
 
 private:
   bool is_inited_;
@@ -267,6 +262,7 @@ private:
   ObTablesHandleArray minor_tables_handle_;
   ObTablesHandleArray ddl_tables_handle_;
   ObTablesHandleArray major_tables_handle_;
+  ObTablesHandleArray mds_tables_handle_;
   ObTabletRestoreAction::ACTION restore_action_;
   const ObMigrationTabletParam *src_tablet_meta_;
   ObICopyTabletCtx *copy_tablet_ctx_;

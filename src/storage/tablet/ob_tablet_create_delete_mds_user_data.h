@@ -59,9 +59,9 @@ public:
   void reset();
   bool is_valid() const;
   int assign(const ObTabletCreateDeleteMdsUserData &other);
-
   ObTabletStatus get_tablet_status() const;
   share::SCN get_create_scn() const;
+  void on_init();
   void on_redo(const share::SCN &redo_scn);
   void on_commit(const share::SCN &commit_version, const share::SCN &commit_scn);
   // todo(zk250686): tablet shell

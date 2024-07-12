@@ -1236,7 +1236,7 @@ ObExprBasicFuncs* ObDatumFuncs::get_basic_func(const ObObjType type,
         // string is always without lob locator
         res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][false];
       }
-    } else if (ob_is_lob_locator(type)) {
+    } else if (ob_is_lob_locator(type) || ob_is_roaringbitmap(type)) {
       OB_ASSERT(cs_type > CS_TYPE_INVALID && cs_type < CS_TYPE_MAX);
       bool calc_end_space = false;
       res = &EXPR_BASIC_STR_FUNCS[cs_type][calc_end_space][has_lob_locator];

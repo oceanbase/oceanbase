@@ -97,6 +97,12 @@ private:
     Token(): scheduled_time(0), delay(0), task(NULL) {}
     Token(const int64_t st, const int64_t dt, ObTimerTask *task)
         : scheduled_time(st), delay(dt), task(task) {}
+    void reset()
+    {
+      scheduled_time = 0;
+      delay = 0;
+      task = NULL;
+    }
     TO_STRING_KV(K(scheduled_time), K(delay), KP(task), KPC(task));
     int64_t scheduled_time;
     int64_t delay;

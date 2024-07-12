@@ -852,8 +852,8 @@ int ObGeoExprUtils::length_unit_conversion(const ObString &unit_str, const ObSrs
     LOG_USER_ERROR(OB_ERR_GEOMETRY_IN_UNKNOWN_LENGTH_UNIT, N_ST_DISTANCE, name_str);
   } else if (OB_FAIL(ob_geo_find_unit(OB_GEO_UNITS, unit_str, factor))) {
     if (lib::is_oracle_mode() && ret == OB_ERR_UNIT_NOT_FOUND) {
-      ret = OB_SUCCESS;
-      out_num = in_num * (srs->linear_uint());
+      ret =OB_ERR_CONVERSION_OF_UNIT;
+      LOG_WARN("conversion error between the specified unit and standard unit", K(ret), K(unit_str));
     } else {
       LOG_WARN("invalid geo unit name", K(ret), K(unit_str));
     }
@@ -1081,7 +1081,9 @@ ObGeoConstParamCache* ObGeoExprUtils::get_geo_constParam_cache(const uint64_t& i
   INIT_SUCC(ret);
   ObGeoConstParamCache* cache_ctx = NULL;
   uint64_t data_version = 0;
-  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2 || (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_3_0_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0)) {
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_2
+  || (GET_MIN_CLUSTER_VERSION() >=  CLUSTER_VERSION_4_2_2_0 && GET_MIN_CLUSTER_VERSION() < MOCK_CLUSTER_VERSION_4_2_3_0)
+  || (GET_MIN_CLUSTER_VERSION() > CLUSTER_VERSION_4_3_0_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_0)) {
     // geo para cache not available, return null
   } else if (ObExpr::INVALID_EXP_CTX_ID != id) {
     cache_ctx = static_cast<ObGeoConstParamCache*>(exec_ctx->get_expr_op_ctx(id));
@@ -1190,6 +1192,18 @@ int ObGeoExprUtils::check_box_intersects(ObGeometry &geo1, ObGeometry &geo2, ObI
   }
   return ret;
 }
+
+ObGeoConstParamCache::~ObGeoConstParamCache()
+{
+    if (OB_NOT_NULL(cached_param1_)) {
+      cached_param1_->destroy_cache();
+      cached_param1_ = nullptr;
+    }
+    if (OB_NOT_NULL(cached_param2_)) {
+      cached_param2_->destroy_cache();
+      cached_param1_ = nullptr;
+    }
+  }
 
 ObGeometry * ObGeoConstParamCache::get_const_param_cache(int arg_idx)
 {

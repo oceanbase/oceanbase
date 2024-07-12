@@ -291,7 +291,7 @@ ObBackupDataCtx::~ObBackupDataCtx()
 }
 
 int ObBackupDataCtx::open(const ObLSBackupDataParam &param, const share::ObBackupDataType &backup_data_type,
-    const int64_t file_id)
+    const int64_t file_id, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   static const int64_t BUF_SIZE = 4 * 1024 * 1024;
@@ -315,7 +315,7 @@ int ObBackupDataCtx::open(const ObLSBackupDataParam &param, const share::ObBacku
     file_id_ = file_id;
     file_offset_ = 0;
     backup_data_type_ = backup_data_type;
-    if (OB_FAIL(prepare_file_write_ctx_(param, backup_data_type, file_id))) {
+    if (OB_FAIL(prepare_file_write_ctx_(param, backup_data_type, file_id, bandwidth_throttle))) {
       LOG_WARN("failed to prepare file write ctx", K(ret), K(param), K(backup_data_type), K(file_id));
     } else {
       is_inited_ = true;
@@ -442,7 +442,8 @@ int ObBackupDataCtx::open_file_writer_(const share::ObBackupPath &backup_path)
 }
 
 int ObBackupDataCtx::prepare_file_write_ctx_(
-    const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id)
+    const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id,
+    common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   share::ObBackupPath backup_path;
@@ -451,7 +452,7 @@ int ObBackupDataCtx::prepare_file_write_ctx_(
     LOG_WARN("failed to get macro block backup path", K(ret), K(file_id));
   } else if (OB_FAIL(open_file_writer_(backup_path))) {
     LOG_WARN("failed to open file writer", K(ret), K(backup_path));
-  } else if (OB_FAIL(file_write_ctx_.open(data_file_size, io_fd_, *dev_handle_))) {
+  } else if (OB_FAIL(file_write_ctx_.open(data_file_size, io_fd_, *dev_handle_, bandwidth_throttle))) {
     LOG_WARN("failed to open file write ctx", K(ret), K(param), K(type), K(backup_path), K(data_file_size), K(file_id));
   }
   return ret;
@@ -855,7 +856,8 @@ ObLSBackupCtx::ObLSBackupCtx()
       rebuild_seq_(),
       check_tablet_info_cost_time_(),
       backup_tx_table_filled_tx_scn_(share::SCN::min_scn()),
-      tablet_checker_()
+      tablet_checker_(),
+      bandwidth_throttle_(NULL)
 {}
 
 ObLSBackupCtx::~ObLSBackupCtx()
@@ -865,7 +867,7 @@ ObLSBackupCtx::~ObLSBackupCtx()
 
 int ObLSBackupCtx::open(
     const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
-    common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache)
+    common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache, common::ObInOutBandwidthThrottle &bandwidth_throttle)
 {
   int ret = OB_SUCCESS;
   ObArray<common::ObTabletID> tablet_list;
@@ -898,6 +900,7 @@ int ObLSBackupCtx::open(
     sql_proxy_ = &sql_proxy;
     rebuild_seq_ = 0;
     check_tablet_info_cost_time_ = 0;
+    bandwidth_throttle_ = &bandwidth_throttle;
     is_inited_ = true;
     if (OB_FAIL(prepare_tablet_id_reader_(reader))) {
       LOG_WARN("failed to prepare tablet id reader", K(ret), K(param));

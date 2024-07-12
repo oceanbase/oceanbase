@@ -117,6 +117,7 @@ ob_set_subtarget(ob_share common
   ob_label_security_os.cpp
   ob_leader_election_waiter.cpp
   ob_lease_struct.cpp
+  ob_heartbeat_handler.cpp
   ob_heartbeat_struct.cpp
   ob_list_parser.cpp
   ob_local_device.cpp
@@ -259,6 +260,7 @@ ob_set_subtarget(ob_share common_mixed
   table/ob_table.cpp
   table/ob_table_rpc_struct.cpp
   table/ob_table_load_define.cpp
+  table/ob_table_load_dml_stat.cpp
   table/ob_table_load_row.cpp
   transfer/ob_transfer_info.cpp
   transfer/ob_transfer_task_operator.cpp

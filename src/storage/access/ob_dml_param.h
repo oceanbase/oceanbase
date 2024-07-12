@@ -136,6 +136,7 @@ public:
         allocator_(&CURRENT_CONTEXT->get_arena_allocator()),
         need_scn_(false),
         need_switch_param_(false),
+        is_mds_query_(false),
         is_thread_scope_(true)
   {}
   virtual ~ObTableScanParam() {}
@@ -150,6 +151,7 @@ public:
   common::SampleInfo sample_info_;
   bool need_scn_;
   bool need_switch_param_;
+  bool is_mds_query_;
   OB_INLINE virtual bool is_valid() const {
     return  snapshot_.valid_ && ObVTableScanParam::is_valid();
   }
@@ -187,7 +189,8 @@ struct ObDMLBaseParam
         direct_insert_task_id_(0),
         write_flag_(),
         check_schema_version_(true),
-        ddl_task_id_(0)
+        ddl_task_id_(0),
+        lob_allocator_(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
   {
   }
 
@@ -222,6 +225,7 @@ struct ObDMLBaseParam
   concurrent_control::ObWriteFlag write_flag_;
   bool check_schema_version_;
   int64_t ddl_task_id_;
+  mutable ObArenaAllocator lob_allocator_;
   bool is_valid() const { return (timeout_ > 0 && schema_version_ >= 0) && nullptr != store_ctx_guard_; }
   bool is_direct_insert() const { return (direct_insert_task_id_ > 0); }
   DECLARE_TO_STRING;

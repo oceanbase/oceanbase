@@ -16,6 +16,8 @@
 #include <gmock/gmock.h>
 #include "env/ob_simple_cluster_test_base.h"
 #include "lib/ob_errno.h"
+
+#define private public
 #include "share/transfer/ob_transfer_task_operator.h"
 
 namespace oceanbase
@@ -47,6 +49,7 @@ public:
   ObCurTraceId::TraceId trace_id_;
   ObTransferTask task_;
   transaction::tablelock::ObTableLockOwnerID lock_owner_id_;
+  uint64_t data_version_;
 };
 
 void TestTransferTaskOperator::SetUp()
@@ -61,6 +64,7 @@ void TestTransferTaskOperator::SetUp()
   ObString trace_id_str = "YCDC56458724D-0005EBECD3F9DB9D-0-0";
   trace_id_.parse_from_buf(trace_id_str.ptr());
   lock_owner_id_.convert_from_value(999);
+  data_version_ = 0;
   for(int64_t i = 0; i < 100; ++i) {
     ObTransferPartInfo part;
     ObTransferTabletInfo tablet;
@@ -76,7 +80,7 @@ void TestTransferTaskOperator::SetUp()
     }
   }
   ASSERT_EQ(OB_SUCCESS, task_.init(task_id_, src_ls_, dest_ls_, part_list_, status_, trace_id_,
-      ObBalanceTaskID(12)));
+      ObBalanceTaskID(12), data_version_));
   LOG_INFO("tranfer task init", K(task_));
 }
 
@@ -182,7 +186,7 @@ TEST_F(TestTransferTaskOperator, test_basic_func)
   ASSERT_TRUE(!task.is_valid());
   ASSERT_EQ(OB_SUCCESS, task.init(task_id_, src_ls_, dest_ls_, part_list_str, empty_str, empty_str, table_lock_tablet_list_str, tablet_list_str,
       start_scn_, finish_scn_, status_, trace_id_, OB_SUCCESS, ObTransferTaskComment::EMPTY_COMMENT,
-      ObBalanceTaskID(2), lock_owner_id_));
+      ObBalanceTaskID(2), lock_owner_id_, data_version_));
   LOG_INFO("tranfer task other init", K(task));
   ASSERT_TRUE(task.is_valid());
   task.reset();
@@ -232,7 +236,7 @@ TEST_F(TestTransferTaskOperator, test_operator)
   ObTransferTask other_task;
   ObTransferTaskID other_task_id(222);
   ASSERT_EQ(OB_SUCCESS, other_task.init(other_task_id, ObLSID(1003), ObLSID(1004), part_list_,
-      ObTransferStatus(ObTransferStatus::INIT), trace_id_, ObBalanceTaskID(2)));
+      ObTransferStatus(ObTransferStatus::INIT), trace_id_, ObBalanceTaskID(2), data_version_));
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::insert(sql_proxy, tenant_id_, other_task));
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::insert(sql_proxy, tenant_id_, task_));
   ASSERT_EQ(OB_ENTRY_EXIST, ObTransferTaskOperator::insert(sql_proxy, tenant_id_, task_));
@@ -276,7 +280,7 @@ TEST_F(TestTransferTaskOperator, test_operator)
   ASSERT_EQ(OB_ENTRY_NOT_EXIST, ObTransferTaskOperator::get_by_dest_ls(sql_proxy, tenant_id_, ObLSID(555), task, 0/*group_id*/));
   ObTransferTask dup_dest_ls_task;
   ASSERT_EQ(OB_SUCCESS, dup_dest_ls_task.init(ObTransferTaskID(2223), ObLSID(1003), ObLSID(1004),
-      part_list_, ObTransferStatus(ObTransferStatus::INIT), trace_id_, ObBalanceTaskID(2)));
+      part_list_, ObTransferStatus(ObTransferStatus::INIT), trace_id_, ObBalanceTaskID(2), data_version_));
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::insert(sql_proxy, tenant_id_, dup_dest_ls_task));
   task.reset();
   ASSERT_EQ(OB_ERR_UNEXPECTED, ObTransferTaskOperator::get_by_dest_ls(sql_proxy, tenant_id_, ObLSID(1004), task, 0/*group_id*/));
@@ -395,6 +399,49 @@ TEST_F(TestTransferTaskOperator, test_operator)
   ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::get_last_task_by_balance_task_id(sql_proxy, tenant_id_, task_.get_balance_task_id(), last_task, finish_time));
   ASSERT_TRUE(last_task.is_valid() && last_task.get_task_id() == task_id_);
   ASSERT_TRUE(finish_time > 0);
+
+  // test convert data version
+  ObString empty_string("");
+  ASSERT_TRUE(empty_string.empty() && empty_string == ObString());
+  uint64_t data_version = 0;
+  bool data_version_not_exist = false;
+  bool is_history = true;
+  bool not_history = false;
+  // a. empty str
+  ObString data_version_str;
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::convert_data_version_(tenant_id_, is_history, data_version_not_exist, data_version_str, data_version));
+  ASSERT_TRUE(DEFAULT_MIN_DATA_VERSION == data_version);
+  data_version = 0;
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::convert_data_version_(tenant_id_, not_history, data_version_not_exist, data_version_str, data_version));
+  ASSERT_TRUE(DEFAULT_MIN_DATA_VERSION == data_version);
+  // b. valid str
+  char version[common::OB_CLUSTER_VERSION_LENGTH] = {'\0'};
+  int64_t len = ObClusterVersion::print_version_str(
+                version, common::OB_CLUSTER_VERSION_LENGTH, DATA_VERSION_4_3_2_0);
+  data_version_str = ObString::make_string(version);
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::convert_data_version_(tenant_id_, is_history, data_version_not_exist, data_version_str, data_version));
+  ASSERT_TRUE(DATA_VERSION_4_3_2_0 == data_version);
+  data_version = 0;
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::convert_data_version_(tenant_id_, not_history, data_version_not_exist, data_version_str, data_version));
+  ASSERT_TRUE(DATA_VERSION_4_3_2_0 == data_version);
+  // c. default str (with and without column)
+  data_version_str = ObString::make_string("");
+  data_version_not_exist = true;
+  ASSERT_EQ(OB_NEED_RETRY, ObTransferTaskOperator::convert_data_version_(tenant_id_, is_history, data_version_not_exist, data_version_str, data_version));
+  ASSERT_EQ(OB_NEED_RETRY, ObTransferTaskOperator::convert_data_version_(tenant_id_, not_history, data_version_not_exist, data_version_str, data_version));
+  ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("delete from oceanbase.__all_column where tenant_id=0 and table_id=%lu and column_name='data_version'", OB_ALL_TRANSFER_TASK_HISTORY_TID));
+  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(tenant_id_, sql.ptr(), affected_rows));
+  data_version = 0;
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::convert_data_version_(tenant_id_, is_history, data_version_not_exist, data_version_str, data_version));
+  ASSERT_TRUE(DEFAULT_MIN_DATA_VERSION == data_version);
+  ASSERT_EQ(OB_SUCCESS, sql.assign_fmt("delete from oceanbase.__all_column where tenant_id=0 and table_id=%lu and column_name='data_version'", OB_ALL_TRANSFER_TASK_TID));
+  ASSERT_EQ(OB_SUCCESS, inner_sql_proxy.write(tenant_id_, sql.ptr(), affected_rows));
+  data_version = 0;
+  ASSERT_EQ(OB_SUCCESS, ObTransferTaskOperator::convert_data_version_(tenant_id_, not_history, data_version_not_exist, data_version_str, data_version));
+  ASSERT_TRUE(DEFAULT_MIN_DATA_VERSION == data_version);
 }
 
 } // namespace share

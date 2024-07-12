@@ -924,7 +924,12 @@ int ObMVPrinter::get_dependent_aggr_of_fun_sum(const ObRawExpr *expr,
   int ret = OB_SUCCESS;
   idx = OB_INVALID_INDEX;
   const ObAggFunRawExpr *dep_aggr = NULL;
-  if (OB_FAIL(ObMVChecker::get_dependent_aggr_of_fun_sum(mv_checker_.get_stmt(), static_cast<const ObAggFunRawExpr*>(expr), dep_aggr))) {
+  if (OB_ISNULL(expr) || OB_UNLIKELY(T_FUN_SUM != expr->get_expr_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected expr", K(ret), KPC(expr));
+  } else if (OB_FAIL(ObMVChecker::get_dependent_aggr_of_fun_sum(mv_checker_.get_stmt(),
+                                        static_cast<const ObAggFunRawExpr*>(expr)->get_param_expr(0),
+                                        dep_aggr))) {
     LOG_WARN("failed to get dependent aggr of fun sum", K(ret));
   }
   for (int64_t i = 0; OB_INVALID_INDEX == idx && OB_SUCC(ret) && i < select_items.count(); ++i) {

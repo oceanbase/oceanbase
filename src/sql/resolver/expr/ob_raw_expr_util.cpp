@@ -3853,6 +3853,35 @@ int ObRawExprUtils::contain_virtual_generated_column(ObRawExpr *&expr, bool &is_
   return ret;
 }
 
+// Extract the parent node of the generated column for
+// deep copying to avoid bugs in shared expression scenarios
+int ObRawExprUtils::extract_virtual_generated_column_parents(
+  ObRawExpr *&par_expr, ObRawExpr *&child_expr, ObIArray<ObRawExpr*> &vir_gen_par_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(par_expr) || OB_ISNULL(child_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (child_expr->is_column_ref_expr() &&
+      static_cast<ObColumnRefRawExpr *>(child_expr)->is_virtual_generated_column() &&
+      !static_cast<ObColumnRefRawExpr *>(child_expr)->is_xml_column()) {
+    if (OB_FAIL(add_var_to_array_no_dup(vir_gen_par_exprs, par_expr))) {
+      LOG_WARN("failed to add winfunc exprs", K(ret));
+    }
+  }
+  for (int64_t j = 0; OB_SUCC(ret) && j < child_expr->get_param_count(); j++) {
+    if (OB_ISNULL(child_expr->get_param_expr(j))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("param_expr is NULL", K(j), K(ret));
+    } else if (OB_FAIL(SMART_CALL(extract_virtual_generated_column_parents(
+        child_expr, child_expr->get_param_expr(j), vir_gen_par_exprs)))) {
+      LOG_WARN("fail to extract virtual gen column", K(j), K(ret));
+    } else {
+    }
+  }
+  return ret;
+}
+
 int ObRawExprUtils::extract_column_exprs(const ObIArray<ObRawExpr*> &exprs,
                                          ObIArray<ObRawExpr*> &column_exprs,
                                          bool need_pseudo_column)
@@ -5162,6 +5191,18 @@ bool ObRawExprUtils::need_column_conv(const ColumnItem &column, ObRawExpr &expr)
   } else { /*do nothing*/ }
   return bret;
 }
+
+bool ObRawExprUtils::check_exprs_type_collation_accuracy_equal(const ObRawExpr *expr1, const ObRawExpr *expr2)
+{
+  int equal = false;
+  if (expr1->get_data_type() == expr2->get_data_type()
+      && expr1->get_collation_type() == expr2->get_collation_type()
+      && expr1->get_accuracy() == expr2->get_accuracy()) {
+    equal = true;
+  }
+  return equal;
+}
+
 // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
 int ObRawExprUtils::build_column_conv_expr(ObRawExprFactory &expr_factory,
                                            const share::schema::ObColumnSchemaV2 *column_schema,
@@ -8948,6 +8989,7 @@ int ObRawExprUtils::build_inner_row_cmp_expr(ObRawExprFactory &expr_factory,
                                              ObSysFunRawExpr *&new_expr)
 {
   int ret = OB_SUCCESS;
+  bool is_implicit_cast_input = false;
   if (OB_ISNULL(session_info) || OB_ISNULL(cast_expr) ||
         OB_ISNULL(input_expr) || OB_ISNULL(next_expr)) {
     ret = OB_INVALID_ARGUMENT;
@@ -8964,11 +9006,24 @@ int ObRawExprUtils::build_inner_row_cmp_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("fail to add param expr", K(ret));
   } else if (OB_FAIL(new_expr->add_param_expr(next_expr))) {
     LOG_WARN("fail to add param expr", K(ret));
+  } else if (T_FUN_SYS_CAST == input_expr->get_expr_type()
+      && input_expr->has_flag(IS_OP_OPERAND_IMPLICIT_CAST)) {
+    // The inner_row_cmp_expr will add one-sided cast to the second parameter. If the second
+    // parameter itself is already a cast expr, the following formalize will report duplicate cast
+    // error, so temporarily clear the flag here and restore it after formalize is completed.
+    is_implicit_cast_input = true;
+    input_expr->clear_flag(IS_OP_OPERAND_IMPLICIT_CAST);
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(new_expr->formalize(session_info))) {
     LOG_WARN("fail to formalize expr", K(*new_expr), K(ret));
   } else {
     new_expr->set_func_name("INTERNAL_FUNCTION");
     new_expr->set_extra(ret_code);
+    if (is_implicit_cast_input) {
+      // restore input expr flag after formalize is finished.
+      input_expr->add_flag(IS_OP_OPERAND_IMPLICIT_CAST);
+    }
   }
   return ret;
 }

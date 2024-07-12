@@ -227,6 +227,19 @@ class ObBlockSamplePrefs : public ObStatPrefs
     virtual const char* get_stat_pref_default_value() const { return "FALSE"; }
 };
 
+class ObOnlineEstimatePercentPrefs : public ObStatPrefs
+{
+  public:
+    ObOnlineEstimatePercentPrefs() : ObStatPrefs() {}
+    ObOnlineEstimatePercentPrefs(ObIAllocator *alloc,
+                                 ObSQLSessionInfo *session_info,
+                                 const ObString &pvalue) :
+      ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "ONLINE_ESTIMATE_PERCENT"; }
+    virtual const char* get_stat_pref_default_value() const { return "1";}
+};
+
 template <class T>
 static int new_stat_prefs(ObIAllocator &allocator, ObSQLSessionInfo *session_info,
                           const ObString &opt_value, T *&src)

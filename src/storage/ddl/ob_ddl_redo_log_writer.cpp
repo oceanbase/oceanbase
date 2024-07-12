@@ -29,8 +29,8 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/tablet/ob_tablet.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "share/ob_ddl_sim_point.h"
+#include "share/ob_ddl_common.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -91,7 +91,7 @@ int ObDDLCtrlSpeedItem::refresh()
   if (OB_ISNULL(log_service) || OB_ISNULL(archive_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("error unexpected, nullptr found", K(ret), KP(log_service), KP(archive_service));
-  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     if (OB_LS_NOT_EXIST == ret) {
       // log stream may be removed during timer refresh task.
       ret = OB_SUCCESS;
@@ -168,7 +168,7 @@ int ObDDLCtrlSpeedItem::check_cur_node_is_leader(bool &is_leader)
   if (OB_ISNULL(ls_svr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls_svr is nullptr", K(ret));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id_, handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id_, handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("fail to get ls handle", K(ret), K_(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -191,7 +191,6 @@ int ObDDLCtrlSpeedItem::do_sleep(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   real_sleep_us = 0;
-  bool is_exist = true;
 
   bool is_need_stop_write = false;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -208,19 +207,28 @@ int ObDDLCtrlSpeedItem::do_sleep(
   if (OB_FAIL(ret)) {
   } else if (is_need_stop_write) /*clog disk used exceeds threshold*/ {
     int64_t loop_cnt = 0;
-    ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
     while (OB_SUCC(ret) && is_need_stop_write) {
-      // TODO YIREN (FIXME-20221017), exit when task is canceled, etc.
       ob_usleep(SLEEP_INTERVAL);
       if (0 == loop_cnt % 100) {
-        if (OB_TMP_FAIL(rootserver::ObDDLTaskRecordOperator::check_task_id_exist(*sql_proxy, tenant_id, task_id, is_exist))) {
-          is_exist = true;
-          LOG_WARN("check task id exist failed", K(tmp_ret), K(task_id));
-        } else {
-          if (!is_exist) {
-            LOG_INFO("task is not exist", K(task_id));
-            break;
+        uint64_t unused_data_format_version = 0;
+        int64_t unused_snapshot_version = 0;
+        share::ObDDLTaskStatus task_status = share::ObDDLTaskStatus::PREPARE;
+        if (OB_TMP_FAIL(ObDDLUtil::get_data_information(tenant_id, task_id, unused_data_format_version,
+            unused_snapshot_version, task_status))) {
+          if (OB_ITER_END == tmp_ret) {
+            is_need_stop_write = false;
+            LOG_INFO("exit due to ddl task exit", K(tenant_id), K(task_id));
+          } else if (loop_cnt >= 100 * 1000) { // wait_time = 100 * 1000 * SLEEP_INTERVAL = 100s.
+            is_need_stop_write = false;
+            LOG_INFO("exit due to sql exceeds time limit", K(tmp_ret), K(tenant_id), K(task_id));
+          } else {
+            if (REACH_COUNT_INTERVAL(1000L)) {
+              LOG_WARN("get ddl task info failed", K(tmp_ret), K(tenant_id), K(task_id));
+            }
           }
+        } else if (!is_replica_build_ddl_task_status(task_status)) {
+          is_need_stop_write = false;
+          LOG_INFO("exit due to mismatched status", K(tenant_id), K(task_id));
         }
       }
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
@@ -229,13 +237,13 @@ int ObDDLCtrlSpeedItem::do_sleep(
           K(write_speed_), K(need_stop_write_), K(ref_cnt_),
           K(disk_used_stop_write_threshold_));
       }
-      if (OB_TMP_FAIL(check_need_stop_write(checker, is_need_stop_write))) {
+      if (is_need_stop_write && OB_TMP_FAIL(check_need_stop_write(checker, is_need_stop_write))) {
         LOG_WARN("fail to check need stop write", K(tmp_ret));
       }
       loop_cnt++;
     }
   }
-  if (OB_SUCC(ret) && is_exist) {
+  if (OB_SUCC(ret)) {
     real_sleep_us = std::max(0L, next_available_ts - ObTimeUtility::current_time());
     ob_usleep(real_sleep_us);
   }
@@ -586,7 +594,7 @@ int ObDDLCtrlSpeedHandle::GetNeedRemoveItemsFn::operator() (
   } else {
     MTL_SWITCH(speed_handle_key.tenant_id_) {
       ObLSHandle ls_handle;
-      if (OB_FAIL(MTL(ObLSService *)->get_ls(speed_handle_key.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      if (OB_FAIL(MTL(ObLSService *)->get_ls(speed_handle_key.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
         if (OB_LS_NOT_EXIST == ret) {
           erase = true;
           ret = OB_SUCCESS;

@@ -385,7 +385,7 @@ void TestBackupIndexMerger::fake_init_meta_index_merger_(ObFakeBackupMetaIndexMe
   ObBackupIndexMergeParam merge_param;
   build_backup_index_merge_param_(merge_param);
   const bool is_sec_meta = false;
-  ret = merger.init(merge_param, is_sec_meta, sql_proxy);
+  ret = merger.init(merge_param, is_sec_meta, sql_proxy, throttle_);
   EXPECT_EQ(OB_SUCCESS, ret);
 }
 
@@ -398,7 +398,7 @@ void TestBackupIndexMerger::fake_init_macro_index_merger_(ObFakeBackupMacroIndex
   const int64_t file_count = 80;
   const int64_t per_file_item_count = 1024;
   merger.set_count(file_count, per_file_item_count);
-  ret = merger.init(merge_param, sql_proxy);
+  ret = merger.init(merge_param, sql_proxy, throttle_);
   EXPECT_EQ(OB_SUCCESS, ret);
 }
 

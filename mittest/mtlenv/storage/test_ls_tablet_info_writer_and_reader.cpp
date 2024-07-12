@@ -38,6 +38,11 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase
 {
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
+{
+  data_version = DATA_VERSION_4_3_2_0;
+  return OB_SUCCESS;
+}
 namespace storage
 {
 class TestLSTabletInfoWR : public ::testing::Test
@@ -168,6 +173,21 @@ void TestLSTabletInfoWR::fill_tablet_meta()
       scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
+  share::SCN create_commit_scn;
+  create_commit_scn = share::SCN::plus(share::SCN::min_scn(), 50);
+  // write data to mds table no.1 row
+  {
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::NORMAL;
+    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(123)));
+    ret = src_handle.get_obj()->set_tablet_status(user_data, ctx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ctx.single_log_commit(create_commit_scn, create_commit_scn);
+  }
+
   ObMigrationTabletParam tablet_param;
   ret = src_handle.get_obj()->build_migration_tablet_param(tablet_param);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -182,10 +202,12 @@ void TestLSTabletInfoWR::fill_tablet_meta()
 TEST_F(TestLSTabletInfoWR, testTabletInfoWriterAndReader)
 {
   int ret = OB_SUCCESS;
+  ObInOutBandwidthThrottle bandwidth_throttle;
+  ASSERT_EQ(OB_SUCCESS, bandwidth_throttle.init(1024 * 1024 * 60));
   LOG_INFO("test tablet info", K(tablet_metas.count()), K(backup_set_dest_));
   backup::ObExternTabletMetaWriter writer;
   backup::ObExternTabletMetaReader reader;
-  ASSERT_EQ(OB_SUCCESS, writer.init(backup_set_dest_, ObLSID(TEST_LS_ID), 1, 0));
+  ASSERT_EQ(OB_SUCCESS, writer.init(backup_set_dest_, ObLSID(TEST_LS_ID), 1, 0, bandwidth_throttle));
   for (int i = 0; i < tablet_metas.count(); i++) {
     blocksstable::ObSelfBufferWriter buffer_writer("TestBuff");
     blocksstable::ObBufferReader buffer_reader;

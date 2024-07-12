@@ -34,7 +34,7 @@ public:
   };
   ObIStorageHAMacroBlockWriter() {}
   virtual ~ObIStorageHAMacroBlockWriter() {}
-  virtual int process(blocksstable::ObMacroBlocksWriteCtx &copied_ctx) = 0;
+  virtual int process(blocksstable::ObMacroBlocksWriteCtx &copied_ctx, ObIHADagNetCtx &ha_dag_net_ctx) = 0;
   virtual Type get_type() const = 0;
 };
 
@@ -46,17 +46,21 @@ public:
   virtual ~ObStorageHAMacroBlockWriter() {}
   int init(
       const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
       const ObDagId &dag_id,
       ObICopyMacroBlockReader *reader,
       ObIndexBlockRebuilder *index_block_rebuilder);
 
-  virtual int process(blocksstable::ObMacroBlocksWriteCtx &copied_ctx);
+  virtual int process(
+      blocksstable::ObMacroBlocksWriteCtx &copied_ctx,
+      ObIHADagNetCtx &ha_dag_net_ctx);
   virtual Type get_type() const { return MACRO_BLOCK_OB_WRITER; }
 private:
   int check_macro_block_(
       const blocksstable::ObBufferReader &data);
   bool is_inited_;
   uint64_t tenant_id_;
+  share::ObLSID ls_id_;
   ObDagId dag_id_;
   ObICopyMacroBlockReader *reader_;
   blocksstable::ObSSTableMacroBlockChecker macro_checker_;

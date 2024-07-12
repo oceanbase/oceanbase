@@ -160,7 +160,7 @@ int ObSingleMerge::get_table_row(const int64_t table_idx,
       if (prow->row_flag_.is_exist() && !has_uncommited_row) {
         has_uncommited_row = prow->is_have_uncommited_row() || fuse_row.snapshot_version_ == INT64_MAX;
       }
-      STORAGE_LOG(DEBUG, "process row fuse", KPC(prow), K(fuse_row), KPC(access_ctx_->store_ctx_));
+      STORAGE_LOG(DEBUG, "process row fuse", K(ret), KPC(prow), K(fuse_row), KPC(access_ctx_->store_ctx_));
     }
   }
   return ret;

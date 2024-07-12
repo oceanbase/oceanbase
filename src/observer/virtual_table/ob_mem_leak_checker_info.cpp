@@ -94,9 +94,6 @@ int ObMemLeakCheckerInfo::fill_row(common::ObNewRow *&row)
   ObObj *cells = NULL;
   if (OB_FAIL(sanity_check())) {
     // error
-  } else if (0 == col_count) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "col count could not be zero");
   } else if (OB_ISNULL(cells = cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));

@@ -18,6 +18,7 @@
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "sql/engine/px/ob_px_sqc_proxy.h"
 #include "sql/engine/ob_exec_context.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -167,9 +168,17 @@ int ObPDMLOpDataDriver::get_next_row(ObExecContext &ctx, const ObExprPtrIArray &
 int ObPDMLOpDataDriver::fill_cache_unitl_cache_full_or_child_iter_end(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
+  bool is_direct_load = false;
+  const ObPhysicalPlanCtx *plan_ctx = nullptr;
+  const ObPhysicalPlan *plan = nullptr;
   if (OB_ISNULL(reader_) || OB_ISNULL(eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("the reader is null", K(ret));
+  } else if (OB_ISNULL(plan_ctx = ctx.get_physical_plan_ctx())
+      || OB_ISNULL(plan = plan_ctx->get_phy_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null physical plan (ctx)", KR(ret), KP(plan_ctx), KP(plan));
+  } else if (OB_FALSE_IT(is_direct_load = ObTableDirectInsertService::is_direct_insert(*plan))) {
     // 尝试追加上一次从child中读取出来，但是没有添加到cache中的row数据
   } else if (OB_FAIL(try_write_last_pending_row())) {
     LOG_WARN("fail write last pending row into cache", K(ret));
@@ -187,8 +196,9 @@ int ObPDMLOpDataDriver::fill_cache_unitl_cache_full_or_child_iter_end(ObExecCont
         }
       } else if (is_skipped) {
         //need to skip this row
-      } else if (is_heap_table_insert_ && OB_FAIL(set_heap_table_hidden_pk(row, tablet_id))) {
-        LOG_WARN("fail to set heap table hidden pk", K(ret), K(*row), K(tablet_id));
+      } else if (is_heap_table_insert_
+          && OB_FAIL(set_heap_table_hidden_pk(row, tablet_id, is_direct_load))) {
+        LOG_WARN("fail to set heap table hidden pk", K(ret), K(*row), K(tablet_id), K(is_direct_load));
       } else if (OB_FAIL(cache_.add_row(*row, tablet_id))) {
         if (!with_barrier_ && OB_EXCEED_MEM_LIMIT == ret) {
           // 目前暂时不支持缓存最后一行数据
@@ -396,33 +406,57 @@ int ObPDMLOpDataDriver::switch_row_iter_to_next_partition()
   return ret;
 }
 
-int ObPDMLOpDataDriver::set_heap_table_hidden_pk(const ObExprPtrIArray *&row, ObTabletID &tablet_id)
+int ObPDMLOpDataDriver::set_heap_table_hidden_pk(
+    const ObExprPtrIArray *&row,
+    ObTabletID &tablet_id,
+    const bool is_direct_load)
 {
   int ret = OB_SUCCESS;
-  uint64_t autoinc_seq = 0;
-  ObSQLSessionInfo *my_session = eval_ctx_->exec_ctx_.get_my_session();
-  uint64_t tenant_id = my_session->get_effective_tenant_id();
-  if (OB_FAIL(ObDMLService::get_heap_table_hidden_pk(tenant_id,
-                                                    tablet_id,
-                                                    autoinc_seq))) {
-    LOG_WARN("fail to het hidden pk", K(ret), K(tablet_id), K(tenant_id));
-  } else {
-    ObExpr *auto_inc_expr = nullptr;
-    uint64_t next_autoinc_val = 0;
-    for (int64_t i = 0; OB_SUCC(ret) && i < row->count(); ++i) {
-      if (row->at(i)->type_ == T_TABLET_AUTOINC_NEXTVAL) {
-        auto_inc_expr = row->at(i);
-        break;
-      }
-    }
-    if (OB_ISNULL(auto_inc_expr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("cannot find tablet autoinc expr", KPC(row));
+  uint64_t pk_value = 0;
+  if (!is_direct_load) {
+    uint64_t autoinc_seq = 0;
+    ObSQLSessionInfo *my_session = eval_ctx_->exec_ctx_.get_my_session();
+    uint64_t tenant_id = my_session->get_effective_tenant_id();
+    if (OB_FAIL(ObDMLService::get_heap_table_hidden_pk(tenant_id,
+                                                       tablet_id,
+                                                       autoinc_seq))) {
+      LOG_WARN("fail to get hidden pk", KR(ret), K(tablet_id), K(tenant_id));
     } else {
-      ObDatum &datum = auto_inc_expr->locate_datum_for_write(*eval_ctx_);
-      datum.set_uint(autoinc_seq);
-      auto_inc_expr->set_evaluated_projected(*eval_ctx_);
+      pk_value = autoinc_seq;
     }
+  } else {
+    // init the datum with a simple value to avoid core in project_storage_row(),
+    // direct-load will generate the real hidden pk later by itself
+    pk_value = 0;
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(set_heap_table_hidden_pk_value(row, tablet_id, pk_value))) {
+      LOG_WARN("fail to set heap table hidden pk value", KR(ret), K(tablet_id), K(pk_value));
+    }
+  }
+  return ret;
+}
+
+int ObPDMLOpDataDriver::set_heap_table_hidden_pk_value(
+    const ObExprPtrIArray *&row,
+    ObTabletID &tablet_id,
+    const uint64_t pk_value)
+{
+  int ret = OB_SUCCESS;
+  ObExpr *auto_inc_expr = nullptr;
+  for (int64_t i = 0; OB_SUCC(ret) && i < row->count(); ++i) {
+    if (T_TABLET_AUTOINC_NEXTVAL == row->at(i)->type_) {
+      auto_inc_expr = row->at(i);
+      break;
+    }
+  }
+  if (OB_ISNULL(auto_inc_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot find tablet autoinc expr", KR(ret), KPC(row));
+  } else {
+    ObDatum &datum = auto_inc_expr->locate_datum_for_write(*eval_ctx_);
+    datum.set_uint(pk_value);
+    auto_inc_expr->set_evaluated_projected(*eval_ctx_);
   }
   return ret;
 }

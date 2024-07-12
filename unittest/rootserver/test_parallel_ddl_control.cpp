@@ -49,6 +49,33 @@ TEST_F(TestObParallelDDLControl, test_parse)
   ASSERT_EQ(true, parser.parse("truncate_table:off", arr, 32));
   ASSERT_EQ(arr[0], 0b00000001);
 
+  MEMSET(arr, 0, 32);
+  ASSERT_EQ(true, parser.parse("set_comment:off", arr, 32));
+  ASSERT_EQ(arr[0], 0b00000100);
+
+  MEMSET(arr, 0, 32);
+  ASSERT_EQ(true, parser.parse("create_index:off", arr, 32));
+  ASSERT_EQ(arr[0], 0b00010000);
+
+  MEMSET(arr, 0,32);
+  ASSERT_EQ(true, parser.parse("set_comment:on, set_comment:off, create_index:off", arr, 32));
+  ASSERT_EQ(arr[0], 0b00010100);
+
+  MEMSET(arr, 0,32);
+  ASSERT_EQ(true, parser.parse("set_comment:off, set_comment:on, create_index: off", arr, 32));
+  ASSERT_EQ(arr[0], 0b00011000);
+
+  MEMSET(arr, 0,32);
+  ASSERT_EQ(false, parser.parse("set_comment=on", arr,32));
+
+  MEMSET(arr, 0,32);
+  ASSERT_EQ(false, parser.parse("set_commentt:on", arr,32));
+
+  MEMSET(arr, 0,32);
+  ASSERT_EQ(false, parser.parse("set_comment:oon", arr,32));
+
+  MEMSET(arr, 0,32);
+  ASSERT_EQ(false, parser.parse("set_comment:on, create_index:oof", arr,32));
 }
 
 TEST_F(TestObParallelDDLControl, testObParallelDDLControlMode)
@@ -58,13 +85,39 @@ TEST_F(TestObParallelDDLControl, testObParallelDDLControlMode)
   bool is_parallel = false;
   ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::TRUNCATE_TABLE, is_parallel));
   ASSERT_EQ(true, is_parallel);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::SET_COMMENT, is_parallel));
+  ASSERT_EQ(false, is_parallel);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
+  ASSERT_EQ(false, is_parallel);
 
   ASSERT_EQ(OB_INVALID_ARGUMENT, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::MAX_TYPE, is_parallel));
 
-  ASSERT_EQ(true, _parallel_ddl_control.set_value("truncate_table:off"));
+  ASSERT_EQ(true, _parallel_ddl_control.set_value("truncate_table:on"));
   _parallel_ddl_control.init_mode(ddl_mode);
   ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::TRUNCATE_TABLE, is_parallel));
+  ASSERT_EQ(true, is_parallel);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::SET_COMMENT, is_parallel));
   ASSERT_EQ(false, is_parallel);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
+  ASSERT_EQ(false, is_parallel);
+
+  ASSERT_EQ(true, _parallel_ddl_control.set_value("set_comment:on"));
+  _parallel_ddl_control.init_mode(ddl_mode);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::TRUNCATE_TABLE, is_parallel));
+  ASSERT_EQ(true, is_parallel);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::SET_COMMENT, is_parallel));
+  ASSERT_EQ(true, is_parallel);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
+  ASSERT_EQ(false, is_parallel);
+
+  ASSERT_EQ(true, _parallel_ddl_control.set_value("create_index:on, set_comment:on"));
+  _parallel_ddl_control.init_mode(ddl_mode);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::TRUNCATE_TABLE, is_parallel));
+  ASSERT_EQ(true, is_parallel);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::SET_COMMENT, is_parallel));
+  ASSERT_EQ(true, is_parallel);
+  ASSERT_EQ(OB_SUCCESS, ddl_mode.is_parallel_ddl(ObParallelDDLControlMode::CREATE_INDEX, is_parallel));
+  ASSERT_EQ(true, is_parallel);
 }
 
 } // common

@@ -1211,6 +1211,9 @@ int ObExprOperator::aggregate_result_type_for_merge(
       } else if (ob_is_geometry(res_type)) {
         type.set_geometry();
         type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
+      } else if (ob_is_roaringbitmap(res_type)) {
+        type.set_roaringbitmap();
+        type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObRoaringBitmapType]).get_length());
       } else if (ob_is_user_defined_sql_type(res_type)) {
         if (OB_FAIL(aggregate_user_defined_sql_type(type, types, param_num))) {
           LOG_WARN("aggregate_user_defined_sql_type fail", K(ret));
@@ -2131,14 +2134,9 @@ int ObExprOperator::calc_cmp_type2(ObExprResType &type,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
   } else if ((type1.is_roaringbitmap() || type2.is_roaringbitmap())
-             && !(type_ == T_OP_EQ
-                  || type_ == T_OP_NE
-                  || type_ == T_OP_NSEQ
-                  || type_ == T_OP_SQ_EQ
-                  || type_ == T_OP_SQ_NE
-                  || type_ == T_OP_SQ_NSEQ)) {
+             && !(type_ == T_FUN_SYS_NULLIF)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Incorrect cmp type with geometry arguments", K(type1), K(type2), K(type_), K(ret));
+    LOG_WARN("Incorrect cmp type with roaringbitmap arguments", K(type1), K(type2), K(type_), K(ret));
   } else if (is_oracle_mode()
              && (type1.is_json() || type2.is_json())
              && (type_ >= T_OP_EQ && type_ <= T_OP_NE)) {
@@ -6472,6 +6470,9 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(const ObRawExpr &raw_expr,
     const ObCollationType cs_type = rt_expr.args_[0]->datum_meta_.cs_type_;
     if (ObDatumFuncs::is_string_type(input_type1) && ObDatumFuncs::is_string_type(input_type2)) {
       CK(rt_expr.args_[0]->datum_meta_.cs_type_ == rt_expr.args_[1]->datum_meta_.cs_type_);
+    } else if (lib::is_mysql_mode() &&
+        ob_is_double_tc(input_type1) && ob_is_double_tc(input_type2)) {
+      CK(rt_expr.args_[0]->datum_meta_.scale_ == rt_expr.args_[1]->datum_meta_.scale_);
     }
     if (OB_SUCC(ret)) {
       rt_expr.eval_func_ = ObExprCmpFuncsHelper::get_eval_expr_cmp_func(

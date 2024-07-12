@@ -23,6 +23,7 @@
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 
 using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
@@ -124,17 +125,8 @@ int ObTabletLogicMacroIdReader::init(const common::ObTabletID &tablet_id, const 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(tablet_id), K(table_key), K(batch_size));
   } else if (FALSE_IT(datum_range_.set_whole_range())) {
-  } else {
-    if (sstable.is_normal_cg_sstable()) {
-      if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
-        LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret), K(sstable));
-      }
-    } else {
-      index_read_info = &tablet_handle.get_obj()->get_rowkey_read_info();
-    }
-  }
-
-  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tablet_handle.get_obj()->get_sstable_read_info(&sstable, index_read_info))) {
+    LOG_WARN("failed to get index read info ", KR(ret), K(sstable));
   } else if (OB_FAIL(meta_iter_.open(datum_range_,
                  ObMacroBlockMetaType::DATA_BLOCK_META,
                  sstable,
@@ -633,7 +625,7 @@ int ObSSTableMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffe
         ObBackupSSTableMeta backup_sstable_meta;
         backup_sstable_meta.tablet_id_ = tablet_id_;
         if ((backup_data_type_.is_major_backup() && !sstable_ptr->is_major_sstable())
-            || (backup_data_type_.is_minor_backup() && !sstable_ptr->is_minor_sstable() && !sstable_ptr->is_ddl_dump_sstable())) {
+            || (backup_data_type_.is_minor_backup() && !sstable_ptr->is_minor_sstable() && !sstable_ptr->is_ddl_dump_sstable() && !sstable_ptr->is_mds_sstable())) {
           ret = OB_ERR_SYS;
           LOG_WARN("get incorrect table type", K(ret), K(i), K_(backup_data_type), KP(sstable_ptr));
         } else if (OB_FAIL(tablet->build_migration_sstable_param(table_key, backup_sstable_meta.sstable_meta_))) {

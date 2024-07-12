@@ -41,11 +41,11 @@ public:
   int init(ObTableLoadParam &param,
            const common::ObIArray<uint64_t> &column_ids,
            ObTableLoadExecCtx *execute_ctx);
-  int write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
   int commit();
   int px_commit_data();
   int px_commit_ddl();
-  const ObTableLoadTableCtx* get_table_ctx() { return table_ctx_; }
+  int check_status();
+  ObTableLoadTableCtx *get_table_ctx() { return table_ctx_; }
   sql::ObLoadDataStat *get_job_stat() const { return job_stat_; }
   const table::ObTableLoadResultInfo &get_result_info() const { return result_info_; }
 private:
@@ -68,9 +68,27 @@ private:
   int wait_begin_finish();
   int end_direct_load(const bool commit);
   int add_tx_result_to_user_session();
-  int start_trans();
-  int write_trans(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows);
-  int commit_trans();
+public:
+  static const int64_t DEFAULT_SEGMENT_ID = 1;
+  struct TransCtx
+  {
+  public:
+    void reset()
+    {
+      trans_id_.reset();
+      next_sequence_no_array_.reset();
+    }
+  public:
+    table::ObTableLoadTransId trans_id_;
+    table::ObTableLoadArray<uint64_t> next_sequence_no_array_;
+  };
+  int start_trans(TransCtx &trans_ctx, int64_t segment_id, ObIAllocator &allocator);
+  int commit_trans(TransCtx &trans_ctx);
+  int write_trans(TransCtx &trans_ctx, int32_t session_id,
+                  const table::ObTableLoadObjRowArray &obj_rows);
+private:
+  int check_trans_committed(TransCtx &trans_ctx);
+
 private:
   struct StmtCtx
   {
@@ -106,10 +124,10 @@ private:
                  KP_(session_info),
                  KPC_(tx_desc),
                  K_(tx_param),
-                 KP_(is_incremental),
-                 KP_(use_insert_into_select_tx),
-                 KP_(is_started),
-                 KP_(has_added_tx_result));
+                 K_(is_incremental),
+                 K_(use_insert_into_select_tx),
+                 K_(is_started),
+                 K_(has_added_tx_result));
   public:
     uint64_t tenant_id_;
     uint64_t table_id_;
@@ -122,26 +140,13 @@ private:
     bool is_started_;
     bool has_added_tx_result_;
   };
-  struct TransCtx
-  {
-  public:
-    void reset()
-    {
-      trans_id_.reset();
-      next_sequence_no_array_.reset();
-    }
-  public:
-    table::ObTableLoadTransId trans_id_;
-    table::ObTableLoadArray<uint64_t> next_sequence_no_array_;
-  };
+
 private:
-  static const int64_t DEFAULT_SEGMENT_ID = 1;
   ObTableLoadExecCtx *execute_ctx_;
   common::ObIAllocator *allocator_;
   ObTableLoadTableCtx *table_ctx_;
   sql::ObLoadDataStat *job_stat_;
   StmtCtx stmt_ctx_;
-  TransCtx trans_ctx_;
   table::ObTableLoadResultInfo result_info_;
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObTableLoadInstance);

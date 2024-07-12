@@ -20,6 +20,8 @@
 #include "lib/utility/ob_unify_serialize.h"
 #include "deps/oblib/src/common/meta_programming/ob_mover.h"
 #include <utility>
+#include "storage/tx/deadlock_adapter/ob_session_id_pair.h"
+
 namespace oceanbase {
 namespace storage {
 struct ObRowConflictInfo
@@ -31,35 +33,64 @@ public:
   conflict_ls_(),
   conflict_tablet_(),
   conflict_row_key_str_(),
-  conflict_sess_id_(0),
+  conflict_sess_id_pair_(),
   conflict_tx_scheduler_(),
   conflict_tx_id_(),
   conflict_tx_hold_seq_() {}
   ~ObRowConflictInfo() = default;
   ObRowConflictInfo(const ObRowConflictInfo &) = delete;// disallow default copy
   ObRowConflictInfo &operator=(const ObRowConflictInfo &) = delete;// disallow default assign operator
-  ObRowConflictInfo &operator=(meta::ObMover<ObRowConflictInfo>) { return *this; }
+  ObRowConflictInfo &operator=(meta::ObMover<ObRowConflictInfo> rhs_mover) {// support move assignment
+    ObRowConflictInfo &rhs = rhs_mover.get_object();
+    init(rhs.conflict_happened_addr_,
+         rhs.conflict_ls_,
+         rhs.conflict_tablet_,
+         meta::ObMover<ObStringHolder>(rhs.conflict_row_key_str_),
+         rhs.conflict_sess_id_pair_,
+         rhs.conflict_tx_scheduler_,
+         rhs.conflict_tx_id_,
+         rhs.conflict_tx_hold_seq_);
+    return *this;
+  }
   int init(const common::ObAddr &, const share::ObLSID &,
            const common::ObTabletID &, meta::ObMover<ObStringHolder>,
-           const uint32_t, const common::ObAddr &,
-           const transaction::ObTransID &, const transaction::ObTxSEQ &) { return OB_SUCCESS; }
-  int assign(const ObRowConflictInfo &) { return OB_SUCCESS; }
-  int assign(meta::ObMover<ObRowConflictInfo>) { return OB_SUCCESS; }
-  bool is_valid() const { return true; }
+           const transaction::SessionIDPair, const common::ObAddr &,
+           const transaction::ObTransID &, const transaction::ObTxSEQ &) {
+    int ret = OB_SUCCESS;
+    return ret;
+  }
+  int assign(const ObRowConflictInfo &rhs) {
+    int ret = OB_SUCCESS;
+    return ret;
+  }
+  int assign(meta::ObMover<ObRowConflictInfo> rhs_rvalue) {// support move assign
+    ObRowConflictInfo &rhs = rhs_rvalue.get_object();
+    return init(rhs.conflict_happened_addr_,
+                rhs.conflict_ls_,
+                rhs.conflict_tablet_,
+                meta::ObMover<ObStringHolder>(rhs.conflict_row_key_str_),
+                rhs.conflict_sess_id_pair_,
+                rhs.conflict_tx_scheduler_,
+                rhs.conflict_tx_id_,
+                rhs.conflict_tx_hold_seq_);
+  }
+  bool is_valid() const {
+    return conflict_tx_scheduler_.is_valid() && conflict_tx_id_.is_valid();
+  }
   TO_STRING_KV(K_(conflict_happened_addr), K_(conflict_ls), K_(conflict_tablet),
-               K_(conflict_row_key_str), K_(conflict_sess_id), K_(conflict_tx_scheduler),
+               K_(conflict_row_key_str), K_(conflict_sess_id_pair), K_(conflict_tx_scheduler),
                K_(conflict_tx_id), K_(conflict_tx_hold_seq));
   common::ObAddr conflict_happened_addr_;// distributed info
   share::ObLSID conflict_ls_;// resource related
   common::ObTabletID conflict_tablet_;// resource related
   common::ObStringHolder conflict_row_key_str_;// resource related
-  uint32_t conflict_sess_id_;// holder related
+  transaction::SessionIDPair conflict_sess_id_pair_;// holder related
   common::ObAddr conflict_tx_scheduler_;// holder related
   transaction::ObTransID conflict_tx_id_;// holder related
   transaction::ObTxSEQ conflict_tx_hold_seq_;// holder use sql identified by this seq to add row lock
 };
 OB_SERIALIZE_MEMBER_TEMP(inline, ObRowConflictInfo, conflict_happened_addr_, conflict_ls_,
-                         conflict_tablet_, conflict_row_key_str_, conflict_sess_id_,
+                         conflict_tablet_, conflict_row_key_str_, conflict_sess_id_pair_,
                          conflict_tx_scheduler_, conflict_tx_id_, conflict_tx_hold_seq_);
 }
 }

@@ -1494,7 +1494,7 @@ int ObTenantMetaMemMgr::acquire_tmp_tablet(
       }
     } else {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("The tablet pointer isn't exist, don't support to acquire", K(ret), K(key));
+      LOG_WARN("The tablet pointer doesn't exist, not supported to acquire", K(ret), K(key));
     }
   }
   if (CLICK_FAIL(ret)) {
@@ -1533,51 +1533,6 @@ int ObTenantMetaMemMgr::create_msd_tablet(
       LOG_WARN("This tablet pointer has exist, and don't create again", K(ret), K(key), K(is_exist));
     } else if (OB_FAIL(create_tablet(key, ls_handle, tablet_handle))) {
       LOG_WARN("fail to create tablet in map", K(ret), K(key), K(tablet_handle));
-    }
-  }
-  if (OB_FAIL(ret)) {
-    tablet_handle.reset();
-  }
-  return ret;
-}
-
-int ObTenantMetaMemMgr::acquire_msd_tablet(
-    const WashTabletPriority &priority,
-    const ObTabletMapKey &key,
-    ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  void *buf = nullptr;
-  tablet_handle.reset();
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
-  } else if (OB_UNLIKELY(!key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(key));
-  } else if (OB_FAIL(full_tablet_creator_.create_tablet(tablet_handle))) {
-    LOG_WARN("fail to create tablet", K(ret), K(key), K(tablet_handle));
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, tablet handle isn't valid", K(ret), K(tablet_handle));
-  } else {
-    tablet_handle.set_wash_priority(priority);
-    bool is_exist = false;
-    ObBucketHashWLockGuard lock_guard(bucket_lock_, key.hash());
-    if (OB_FAIL(has_tablet(key, is_exist))) {
-      LOG_WARN("fail to check tablet existence", K(ret), K(key));
-    } else if (is_exist) {
-      ObTabletPointerHandle ptr_handle(tablet_map_);
-      if (OB_FAIL(tablet_map_.get_attr_for_obj(key, tablet_handle))) {
-        LOG_WARN("fail to set attribute for tablet", K(ret), K(key), K(tablet_handle));
-      } else if (OB_FAIL(tablet_map_.get(key, ptr_handle))) {
-        LOG_WARN("fail to get tablet pointer handle", K(ret), K(key), K(tablet_handle));
-      } else if (OB_FAIL(tablet_handle.get_obj()->assign_pointer_handle(ptr_handle))) {
-        LOG_WARN("fail to set tablet pointer handle for tablet", K(ret), K(key));
-      }
-    } else {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("The tablet pointer isn't exist, don't support to acquire", K(ret), K(key));
     }
   }
   if (OB_FAIL(ret)) {
@@ -1727,6 +1682,41 @@ int ObTenantMetaMemMgr::get_tablet_with_allocator(
   }
   return ret;
 }
+
+int ObTenantMetaMemMgr::build_tablet_handle_for_mds_scan(
+    ObTablet *tablet,
+    ObTabletHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  ObMetaObj<ObTablet> meta_obj;
+  handle.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantMetaMemMgr hasn't been initialized", K(ret));
+  } else if (OB_ISNULL(tablet)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument, tablet is nullptr", K(ret), KP(tablet));
+  } else if (nullptr == tablet->get_allocator()) {
+    ObTabletPoolType type;
+    ObMetaObjBufferHeader &buf_header = ObMetaObjBufferHelper::get_buffer_header(reinterpret_cast<char *>(tablet));
+    if (OB_FAIL(get_tablet_pool_type(buf_header.buf_len_, type))) {
+      LOG_WARN("fail to get tablet pool type", K(ret), K(buf_header.buf_len_));
+    } else if (ObTabletPoolType::TP_NORMAL == type) {
+      meta_obj.pool_ = static_cast<ObITenantMetaObjPool *>(&tablet_buffer_pool_);
+    } else if (ObTabletPoolType::TP_LARGE == type) {
+      meta_obj.pool_ = static_cast<ObITenantMetaObjPool *>(&large_tablet_buffer_pool_);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    meta_obj.t3m_ = this;
+    meta_obj.allocator_ = tablet->get_allocator();
+    meta_obj.ptr_ = tablet;
+    handle.set_obj(meta_obj);
+    handle.set_wash_priority(WashTabletPriority::WTP_HIGH);
+  }
+  return ret;
+}
+
 
 int ObTenantMetaMemMgr::get_tablet_buffer_infos(ObIArray<ObTabletBufferInfo> &buffer_infos)
 {

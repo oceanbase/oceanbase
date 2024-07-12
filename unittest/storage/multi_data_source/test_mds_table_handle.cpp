@@ -20,31 +20,43 @@
 #include "lib/guard/ob_light_shared_gaurd.h"
 #include "storage/multi_data_source/mds_table_impl.h"
 #include "storage/tablet/ob_tablet_meta.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
+namespace oceanbase {
+namespace storage {
+namespace mds {
+void *DefaultAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void DefaultAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+void *MdsAllocator::alloc(const int64_t size) {
+  void *ptr = std::malloc(size);// ob_malloc(size, "MDS");
+  ATOMIC_INC(&alloc_times_);
+  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(size), K(lbt()));
+  return ptr;
+}
+void MdsAllocator::free(void *ptr) {
+  ATOMIC_INC(&free_times_);
+  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
+  std::free(ptr);// ob_free(ptr);
+}
+}}}
 
 namespace oceanbase
 {
 //using namespace share;
 namespace storage
 {
-namespace mds
-{
-void *MdsAllocator::alloc(const int64_t size)
-{
-  void *ptr = ob_malloc(size, "MDS");
-  ATOMIC_INC(&alloc_times_);
-  MDS_LOG(DEBUG, "alloc obj", KP(ptr), K(lbt()));
-  return ptr;
-}
-void MdsAllocator::free(void *ptr) {
-  ATOMIC_INC(&free_times_);
-  MDS_LOG(DEBUG, "free obj", KP(ptr), K(lbt()));
-  ob_free(ptr);
-}
-}
 class TestMdsTableHandle : public ::testing::Test
 {
 public:
-  TestMdsTableHandle() {}
+  TestMdsTableHandle() { ObMdsSchemaHelper::get_instance().init(); }
   virtual ~TestMdsTableHandle() = default;
   virtual void SetUp() override {}
   virtual void TearDown() override {}

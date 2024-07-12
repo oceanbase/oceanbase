@@ -441,7 +441,7 @@ private:
   bool is_first_child_;
   bool is_last_child_;
   ObObjMeta val_meta_;
-  DynamicFilterType dynamic_filter_type_;
+  DynamicFilterType dynamic_filter_type_; // FARM COMPAT WHITELIST for prepare_data_func_type_
 };
 
 class ObPushdownFilterExecutor;
@@ -1163,6 +1163,9 @@ public:
   ExprFixedArray ext_file_column_exprs_;
   ExprFixedArray ext_column_convert_exprs_;
   ObExpr *trans_info_expr_;
+  uint64_t auto_split_filter_type_;
+  ObExpr *auto_split_expr_;
+  ExprFixedArray auto_split_params_;
 };
 
 //下压到存储层的表达式执行依赖的op ctx

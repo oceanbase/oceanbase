@@ -88,6 +88,7 @@
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_tenant_mem_limit_getter.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_tenant_memory_printer.h"
 #include "storage/compaction/ob_compaction_diagnose.h"
@@ -914,6 +915,12 @@ int ObServer::start()
       LOG_ERROR("start block manager fail", KR(ret));
     } else {
       FLOG_INFO("success to start block manager");
+    }
+
+    if (FAILEDx(ObMdsSchemaHelper::get_instance().init())) {
+      LOG_ERROR("fail to init mds schema helper", K(ret));
+    } else {
+      FLOG_INFO("success to init mds schema helper");
     }
 
     if (FAILEDx(ObIOManager::get_instance().start())) {
@@ -3174,7 +3181,6 @@ int ObServer::reload_bandwidth_throttle_limit(int64_t network_speed)
 
 void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tenant_ids, const int64_t expire_time)
 {
-  bool is_dropped = false;
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   LOG_DBA_INFO_V2(OB_SERVER_CHECK_USER_TENANT_SCHEMA_REFRESHED_BEGIN,
@@ -3187,19 +3193,21 @@ void ObServer::check_user_tenant_schema_refreshed(const ObIArray<uint64_t> &tena
     if (OB_ISNULL(gctx_.schema_service_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("schema service is NULL", KR(ret));
-    } else if (OB_FAIL(gctx_.schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
-      LOG_WARN("fail to check tenant has been dropped at observer startup", KR(ret), K(tenant_id));
-    } else if (is_dropped) {
-      // ignore
     } else {
+      bool is_dropped = false;
       bool tenant_schema_refreshed = false;
       while (!tenant_schema_refreshed
           && !stop_
+          && !is_dropped
           && ObTimeUtility::current_time() < expire_time) {
 
         tenant_schema_refreshed = is_user_tenant(tenant_id) ?
                                   gctx_.schema_service_->is_tenant_refreshed(tenant_id) : true;
-        if (!tenant_schema_refreshed) {
+        if (OB_FAIL(gctx_.schema_service_->check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
+          LOG_WARN("fail to check tenant has been dropped at observer startup", KR(ret), K(tenant_id));
+        } else if (is_dropped) {
+          // ignore
+        } else if (!tenant_schema_refreshed) {
           // check wait and retry
           usleep(1000 * 1000);
           if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {

@@ -15,6 +15,7 @@
 #include "lib/ob_errno.h"
 #include "mds_table_impl.h"
 #include "lib/guard/ob_light_shared_gaurd.h"
+#include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
 #include "storage/tablet/ob_tablet_create_delete_mds_user_data.h"
 
@@ -55,19 +56,18 @@ public:
   template <typename T>
   int replay(T &&data, MdsCtx &ctx, const share::SCN &scn);
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
-  int get_latest(OP &&read_op, bool &is_committed, const int64_t read_seq = 0) const;
+  int get_latest(OP &&read_op, bool &is_committed) const;
   template <typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData>&))>
   int get_tablet_status_node(OP &&read_op, const int64_t read_seq = 0) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_snapshot(OP &&read_op,
                    const share::SCN snapshot = share::SCN::max_scn(),
-                   const int64_t read_seq = 0,
                    const int64_t timeout_us = 0) const;
   template <typename T, typename OP, ENABLE_IF_LIKE_FUNCTION(OP, int(const T&))>
   int get_by_writer(OP &&read_op,
                     const MdsWriter &writer,
                     const share::SCN snapshot = share::SCN::max_scn(),
-                    const int64_t read_seq = 0,
+                    const transaction::ObTxSEQ read_seq = transaction::ObTxSEQ::MAX_VAL(),
                     const int64_t timeout_us = 0) const;
   template <typename T>
   int is_locked_by_others(bool &is_locked, const MdsWriter &self = MdsWriter()) const;
@@ -83,29 +83,31 @@ public:
   template <typename Key, typename Value>
   int replay_remove(const Key &key, MdsCtx &ctx, share::SCN &scn);
   template <typename Key, typename Value, typename OP>
-  int get_latest(const Key &key, OP &&read_op, bool &is_committed, const int64_t read_seq = 0) const;
+  int get_latest(const Key &key, OP &&read_op, bool &is_committed) const;
   template <typename Key, typename Value, typename OP>
   int get_snapshot(const Key &key,
                    OP &&read_op,
                    const share::SCN snapshot = share::SCN::max_scn(),
-                   const int64_t read_seq = 0,
                    const int64_t timeout_us = 0) const;
   template <typename Key, typename Value, typename OP>
   int get_by_writer(const Key &key,
                     OP &&read_op,
                     const MdsWriter &writer,
-                    const share::SCN snapshot = share::SCN::max_scn(),
-                    const int64_t read_seq = 0,
+                    const share::SCN snapshot,// if readed node's writer is not input writer, compared with snapshot
+                    const transaction::ObTxSEQ read_seq = transaction::ObTxSEQ::MAX_VAL(),// if readed node's writer is input writer, compared with read_seq
                     const int64_t timeout_us = 0) const;
   template <typename Key, typename Value>
   int is_locked_by_others(const Key &key,
                           bool &is_locked,
                           const MdsWriter &self = MdsWriter()) const;
   /************************************************************************************************/
-  template <typename DUMP_OP, ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
-  int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
-                                                                       const int64_t mds_construct_sequence,
-                                                                       const bool for_flush) const;
+  template <ScanRowOrder SCAN_ROW_ORDER,
+            ScanNodeOrder SCAN_NODE_ORDER,
+            typename DUMP_OP,
+            ENABLE_IF_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
+  int scan_all_nodes_to_dump(DUMP_OP &&for_each_op,
+                             const int64_t mds_construct_sequence,
+                             const bool for_flush) const;
   int flush(share::SCN need_advanced_rec_scn_lower_limit, share::SCN max_decided_scn);
   int is_flushing(bool &is_flushing) const;
   void on_flush(const share::SCN &flush_scn, const int flush_ret);
@@ -119,10 +121,13 @@ public:
   MdsTableBase *get_mds_table_ptr() { return p_mds_table_base_.ptr(); }
   TO_STRING_KV(K_(p_mds_table_base), K_(mds_table_id));
 public:// compile error message
-  template <typename DUMP_OP, ENABLE_IF_NOT_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
-  int for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
-                                                                       const int64_t mds_construct_sequence,
-                                                                       const bool for_flush) const {
+  template <ScanRowOrder SCAN_ROW_ORDER,
+            ScanNodeOrder SCAN_NODE_ORDER,
+            typename DUMP_OP,
+            ENABLE_IF_NOT_LIKE_FUNCTION(DUMP_OP, int(const MdsDumpKV &))>
+  int scan_all_nodes_to_dump(DUMP_OP &&for_each_op,
+                             const int64_t mds_construct_sequence,
+                             const bool for_flush) const {
     static_assert(OB_TRAIT_IS_FUNCTION_LIKE(DUMP_OP, int(const MdsDumpKV &)),
                   "for_each_op required to be used like: int for_each_op(const MdsDumpKV &)");
     return OB_NOT_SUPPORTED;

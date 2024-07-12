@@ -362,6 +362,7 @@ int ObLSTxCtxMgr::create_tx_ctx_(const ObTxCreateArg &arg,
     if (OB_FAIL(tmp->init(arg.tenant_id_,
                           arg.scheduler_,
                           arg.session_id_,
+                          arg.associated_session_id_,
                           arg.tx_id_,
                           arg.trans_expired_time_,
                           arg.ls_id_,
@@ -1328,12 +1329,16 @@ int ObLSTxCtxMgr::traverse_tx_to_submit_redo_log(ObTransID &fail_tx_id, const ui
   int ret = OB_SUCCESS;
   RLockGuard guard(rwlock_);
   ObTxSubmitLogFunctor fn(ObTxSubmitLogFunctor::SUBMIT_REDO_LOG, freeze_clock);
-  if (!is_follower_() && OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+  if (is_follower_()) {
+    // quit submit log because this is a follower
+  } else if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
     if (OB_SUCCESS != fn.get_result()) {
       // get real ret code
       ret = fn.get_result();
     }
     TRANS_LOG(WARN, "failed to submit log", K(ret));
+  } else {
+    TRANS_LOG(INFO, "traverse tx to submit redo log finish", K(ret), K(freeze_clock));
   }
 
   fail_tx_id = fn.get_fail_tx_id();
@@ -2682,7 +2687,7 @@ int ObLSTxCtxMgr::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
   //only check wrs for register and redo phase
   if (move_tx_param.op_type_ != NotifyType::REGISTER_SUCC && move_tx_param.op_type_ != NotifyType::ON_REDO) {
     need_check_wrs = false;
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id_, ls_handle, ObLSGetMod::TRANS_MOD))) {
     TRANS_LOG(WARN, "get_ls failed", KR(ret), K(ls_id_));
   } else {
     weak_read_ts = ls_handle.get_ls()->get_ls_wrs_handler()->get_ls_weak_read_ts();
@@ -2739,6 +2744,7 @@ int ObLSTxCtxMgr::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
                                arg.cluster_id_,
                                arg.cluster_version_,
                                arg.session_id_,
+                               arg.associated_session_id_,
                                arg.scheduler_,
                                INT64_MAX, // tx expired time
                                txs_,

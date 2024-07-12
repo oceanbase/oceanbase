@@ -61,8 +61,6 @@ public:
   void reset();
 public:
   // snapshot of tenant_info
-  int64_t mem_lower_limit_;
-  int64_t mem_upper_limit_;
   int64_t mem_memstore_limit_;
 
   // running data

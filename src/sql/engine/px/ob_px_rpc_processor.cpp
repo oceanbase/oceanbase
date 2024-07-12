@@ -39,6 +39,8 @@ int ObInitSqcP::init()
     LOG_WARN("unexpected sqc handler", K(ret));
   } else if (OB_FAIL(sqc_handler->init())) {
     LOG_WARN("Failed to init sqc handler", K(ret));
+    sqc_handler->reset();
+    op_reclaim_free(sqc_handler);
   } else {
     arg_.sqc_handler_ = sqc_handler;
     arg_.sqc_handler_->reset_reference_count(); //设置sqc_handler的引用计数为1.
@@ -363,6 +365,8 @@ int ObInitFastSqcP::init()
     LOG_WARN("unexpected sqc handler", K(ret));
   } else if (OB_FAIL(sqc_handler->init())) {
     LOG_WARN("Failed to init sqc handler", K(ret));
+    sqc_handler->reset();
+    op_reclaim_free(sqc_handler);
   } else {
     arg_.sqc_handler_ = sqc_handler;
     arg_.sqc_handler_->reset_reference_count(); //设置sqc_handler的引用计数为1.

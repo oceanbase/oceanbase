@@ -23,6 +23,18 @@ namespace oceanbase
 {
 namespace sql
 {
+class ObMergeJoinMemChecker
+{
+public:
+  ObMergeJoinMemChecker(int64_t row_cnt): cur_row_cnt_(row_cnt)
+  {}
+  bool operator()(int64_t max_row_count)
+  {
+    return cur_row_cnt_ > max_row_count;
+  }
+  int64_t cur_row_cnt_;
+};
+
 class ObMergeJoinSpec: public ObJoinSpec
 {
   OB_UNIS_VERSION_V(1);
@@ -490,6 +502,7 @@ private:
   inline bool is_match(const int64_t idx) { return rj_match_vec_->at(idx); }
   // this function only used for non-vectorized code patch
   int process_dump();
+  int update_store_mem_bound(ObRADatumStore *left, ObRADatumStore *right);
   typedef int (ObMergeJoinOp::*state_operation_func_type)();
   typedef int (ObMergeJoinOp::*state_function_func_type)();
 private:

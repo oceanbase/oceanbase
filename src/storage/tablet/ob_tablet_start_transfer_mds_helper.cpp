@@ -300,7 +300,7 @@ int ObTabletStartTransferOutHelper::on_register_success_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (CLICK_FAIL(ls_service->get_ls(tx_start_transfer_out_info.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_service->get_ls(tx_start_transfer_out_info.src_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("fail to get ls", KR(ret), K(tx_start_transfer_out_info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -591,7 +591,7 @@ int ObTabletStartTransferOutCommonHelper::try_enable_dest_ls_clog_replay(
   } else if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls srv should not be NULL", K(ret), KP(ls_srv));
-  } else if (CLICK_FAIL(ls_srv->get_ls(dest_ls_id, dest_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_srv->get_ls(dest_ls_id, dest_ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     if (OB_LS_NOT_EXIST == ret) {
       LOG_INFO("ls not exist", KR(ret), K(dest_ls_id));
       ret = OB_SUCCESS;
@@ -749,7 +749,7 @@ int ObTabletStartTransferOutPrepareHelper::on_register(
   } else if (!tx_start_transfer_out_info.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx start transfer out info is unexpected", K(ret), K(tx_start_transfer_out_info));
-  } else if (CLICK_FAIL(MTL(ObLSService *)->get_ls(tx_start_transfer_out_info.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(MTL(ObLSService *)->get_ls(tx_start_transfer_out_info.src_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("fail to get ls", KR(ret), K(tx_start_transfer_out_info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -820,7 +820,7 @@ int ObTabletStartTransferOutV2Helper::on_register(
   } else if (!info.is_valid() || !info.data_end_scn_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx start transfer out tx info is unexpected", KR(ret), K(info));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(info.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(info.src_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("fail to get ls", KR(ret), K(info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -893,7 +893,7 @@ int ObTabletStartTransferOutV2Helper::on_replay(const char *buf,
   } else if (!info.is_valid() || !info.data_end_scn_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx start transfer out tx info is unexpected", KR(ret), K(info));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(info.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(info.src_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("fail to get ls", KR(ret), K(info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1128,7 +1128,7 @@ int ObTabletStartTransferInHelper::check_transfer_dest_tablets_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (CLICK_FAIL(ls_service->get_ls(tx_start_transfer_in_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_service->get_ls(tx_start_transfer_in_info.dest_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("fail to get ls", KR(ret), K(tx_start_transfer_in_info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1239,7 +1239,7 @@ int ObTabletStartTransferInHelper::check_can_skip_replay_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(tx_start_transfer_in_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(tx_start_transfer_in_info.dest_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("fail to get ls", KR(ret), K(tx_start_transfer_in_info));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1293,7 +1293,7 @@ int ObTabletStartTransferInHelper::check_transfer_src_tablets_(
   } else if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls srv should not be NULL", K(ret), KP(ls_srv));
-  } else if (CLICK_FAIL(ls_srv->get_ls(tx_start_transfer_in_info.src_ls_id_, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_srv->get_ls(tx_start_transfer_in_info.src_ls_id_, src_ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("ls_srv->get_ls() fail", KR(ret), "src ls id", tx_start_transfer_in_info.src_ls_id_);
     if (OB_LS_NOT_EXIST == ret) {
       if (OB_SUCCESS != (tmp_ret = set_dest_ls_rebuild_(tx_start_transfer_in_info.dest_ls_id_, scn, for_replay))) {
@@ -1411,7 +1411,7 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
   } else if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls srv should not be NULL", K(ret), KP(ls_srv));
-  } else if (CLICK_FAIL(ls_srv->get_ls(tx_start_transfer_in_info.dest_ls_id_, dest_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_srv->get_ls(tx_start_transfer_in_info.dest_ls_id_, dest_ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_ERROR("ls_srv->get_ls() fail", KR(ret));
   } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1425,7 +1425,8 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
     for (int64_t i = 0; OB_SUCC(ret) && i < tx_start_transfer_in_info.tablet_meta_list_.count(); ++i) {
       MDS_TG(10_ms);
       const ObMigrationTabletParam &tablet_meta = tx_start_transfer_in_info.tablet_meta_list_.at(i);
-      if (CLICK_FAIL(create_transfer_in_tablet_(scn, for_replay, tablet_meta, dest_ls, ctx, tablet_id_array))) {
+      if (CLICK_FAIL(create_transfer_in_tablet_(scn, for_replay, tablet_meta,
+          tx_start_transfer_in_info.src_ls_id_, dest_ls, ctx, tablet_id_array))) {
         LOG_WARN("failed to create transfer in tablet", K(ret), K(tablet_meta));
       }
     }
@@ -1444,11 +1445,11 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablets_(
   return ret;
 }
 
-
 int ObTabletStartTransferInHelper::create_transfer_in_tablet_(
     const share::SCN &scn,
     const bool for_replay,
     const ObMigrationTabletParam &tablet_meta,
+    const share::ObLSID &src_ls_id,
     ObLS *dest_ls,
     mds::BufferCtx &ctx,
     common::ObIArray<common::ObTabletID> &tablet_id_array)
@@ -1493,33 +1494,22 @@ int ObTabletStartTransferInHelper::create_transfer_in_tablet_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
   } else {
-    const mds::MdsDumpKV &kv = tablet_meta.mds_data_.tablet_status_uncommitted_kv_;
-    const common::ObString &str = kv.v_.user_data_;
     ObTabletCreateDeleteMdsUserData user_data;
-    int64_t pos = 0;
-    if (OB_FAIL(user_data.deserialize(str.ptr(), str.length(), pos))) {
-      LOG_WARN("failed to deserialize user data", K(ret));
-    } else if (OB_UNLIKELY(ObTabletStatus::TRANSFER_IN != user_data.tablet_status_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet status is not TRANSFER_IN", K(ret), K(key), K(user_data));
-    } else {
-      user_data.transfer_scn_ = tablet_meta.transfer_info_.transfer_start_scn_;
-    }
-
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(tablet_meta.get_tablet_status_for_transfer(user_data))) {
+      LOG_WARN("failed to get tablet status for transfer", K(ret), K(key));
     } else if (for_replay) {
       if (OB_FAIL(do_for_replay_(scn, user_data, dest_ls->get_ls_id(), tablet_meta.transfer_info_.transfer_start_scn_,
           tablet_handle, ctx))) {
-        LOG_WARN("failed to do for replay", K(ret), K(scn), K(user_data));
+        LOG_WARN("failed to do for replay", K(ret), K(key), K(scn), K(user_data));
       }
     } else {
       if (OB_FAIL(dest_ls->get_tablet_svr()->set_tablet_status(tablet_id, user_data, user_ctx))) {
-        LOG_WARN("failed to set mds data", K(ret), K(user_data));
+        LOG_WARN("failed to set mds data", K(ret), K(key), K(user_data));
       }
     }
 
     if (OB_SUCC(ret)) {
-      LOG_INFO("succeeded to create transfer in tablet", K(key), "ls_id", dest_ls->get_ls_id(), K(user_data));
+      LOG_INFO("succeeded to create transfer in tablet", K(key), "ls_id", dest_ls->get_ls_id(), K(tablet_meta), K(for_replay));
     }
 #ifdef ERRSIM
     ObTransferEventRecorder::record_tablet_transfer_event("tx_start_transfer_in",
@@ -1849,7 +1839,7 @@ int ObTabletStartTransferInHelper::check_transfer_dest_ls_status_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("fail to get ls", KR(ret), K(ls_id));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -1884,7 +1874,7 @@ int ObTabletStartTransferInHelper::check_transfer_dest_ls_restore_status_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("fail to get ls", KR(ret), K(ls_id));
   } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
     ret = OB_ERR_UNEXPECTED;

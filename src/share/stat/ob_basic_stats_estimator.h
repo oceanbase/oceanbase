@@ -138,7 +138,7 @@ public:
 
   static int get_need_stats_tables(ObExecContext &ctx,
                                    const int64_t tenant_id,
-                                   const int64_t offset,
+                                   const int64_t last_table_id,
                                    const int64_t slice_cnt,
                                    ObIArray<int64_t> &table_ids);
 

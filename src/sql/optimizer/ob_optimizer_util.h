@@ -430,6 +430,7 @@ public:
                                            const ObIArray<ObRawExpr*> &exprs,
                                            ObIArray<ObRawExpr*> &corr_exprs);
 
+  // check whether a no-joined-table is on joined-table's null side
   static int is_table_on_null_side(const ObDMLStmt *stmt,
                                    uint64_t table_id,
                                    bool &is_on_null_side);

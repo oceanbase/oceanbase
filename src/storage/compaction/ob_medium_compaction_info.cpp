@@ -315,16 +315,23 @@ int64_t ObParallelMergeInfo::to_string(char* buf, const int64_t buf_len) const
   } else {
     J_OBJ_START();
     J_KV(K_(list_size), K_(compat));
-    J_COMMA();
+    if (list_size_ > 0) {
+      J_COMMA();
+    }
+
     if (PARALLEL_INFO_VERSION_V0 == compat_) {
       for (int i = 0; i < list_size_; ++i) {
+        if (i > 0) {
+          J_COMMA();
+        }
         J_KV(K(i), "key", parallel_store_rowkey_list_[i]);
-        J_COMMA();
       }
     } else if (PARALLEL_INFO_VERSION_V1 == compat_) {
       for (int i = 0; i < list_size_; ++i) {
+        if (i > 0) {
+          J_COMMA();
+        }
         J_KV(K(i), "key", parallel_datum_rowkey_list_[i]);
-        J_COMMA();
       }
     }
     J_OBJ_END();

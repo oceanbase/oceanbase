@@ -354,7 +354,6 @@ void TestConcurrentT3M::run1()
     if (0 == count % N) { /* mock empty tablet to del successfully */
       tablet->table_store_addr_.addr_.set_none_addr();
       tablet->storage_schema_addr_.addr_.set_none_addr();
-      tablet->mds_data_.auto_inc_seq_.addr_.set_none_addr();
       tablet->rowkey_read_info_ = nullptr;
     }
 
@@ -647,7 +646,6 @@ TEST_F(TestTenantMetaMemMgr, test_tablet)
   /* mock empty tablet to del successfully */
   tablet->table_store_addr_.addr_.set_none_addr();
   tablet->storage_schema_addr_.addr_.set_none_addr();
-  tablet->mds_data_.auto_inc_seq_.addr_.set_none_addr();
   tablet->rowkey_read_info_ = nullptr;
 
   tablet->tablet_meta_.ls_id_ = key.ls_id_;

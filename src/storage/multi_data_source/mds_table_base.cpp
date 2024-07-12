@@ -18,7 +18,6 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #include "storage/multi_data_source/ob_mds_table_merge_dag_param.h"
-#include "storage/tx/ob_multi_data_source.h"
 
 namespace oceanbase
 {
@@ -27,7 +26,7 @@ namespace storage
 namespace mds
 {
 
-TLOCAL(transaction::NotifyType, TLOCAL_MDS_TRANS_NOTIFY_TYPE) = transaction::NotifyType::UNKNOWN;
+TLOCAL(MdsTLocalInfo, TLOCAL_MDS_INFO);
 
 int MdsTableBase::advance_state_to(State new_state) const
 {
@@ -73,7 +72,6 @@ int MdsTableBase::init(const ObTabletID tablet_id,
         MDS_LOG(WARN, "fail to register mds table", KR(ret), K(*this), K(ls_id), K(tablet_id));
       }
     }
-    MDS_LOG(INFO, "mds table inited", KR(ret), K(*this));
   }
   return ret;
 }
@@ -87,6 +85,8 @@ int MdsTableBase::register_to_mds_table_mgr()
     MDS_LOG(WARN, "mds_table_mgr ptr is null", KR(ret), K(*this));
   } else if (MDS_FAIL(mgr_handle_.get_mds_table_mgr()->register_to_mds_table_mgr(this))) {
     MDS_LOG(WARN, "fail to register mds table", KR(ret), K(*this));
+  } else {
+    report_construct_event_();
   }
   return ret;
 }
@@ -140,6 +140,8 @@ int MdsTableBase::unregister_from_mds_table_mgr()
     MDS_LOG(INFO, "no need unregister from mds_table_mgr cause invalid id", KR(ret), K(*this));
   } else if (MDS_FAIL(mgr_handle_.get_mds_table_mgr()->unregister_from_mds_table_mgr(this))) {
     MDS_LOG(ERROR, "fail to unregister mds table", K(*this));
+  } else {
+    report_destruct_event_();
   }
   return ret;
 }

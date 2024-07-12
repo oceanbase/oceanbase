@@ -133,7 +133,8 @@ struct ObBackupDataCtx {
 public:
   ObBackupDataCtx();
   virtual ~ObBackupDataCtx();
-  int open(const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id);
+  int open(const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int write_backup_file_header(const ObBackupFileHeader &file_header);
   int write_macro_block_data(const blocksstable::ObBufferReader &macro_data,
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
@@ -157,7 +158,8 @@ private:
   }
   int open_file_writer_(const share::ObBackupPath &backup_path);
   int prepare_file_write_ctx_(
-      const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id);
+      const ObLSBackupDataParam &param, const share::ObBackupDataType &type, const int64_t file_id,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int get_macro_block_backup_path_(const int64_t file_id, share::ObBackupPath &backup_path);
   int write_macro_block_data_(const blocksstable::ObBufferReader &buffer, const blocksstable::ObLogicMacroBlockId &logic_id,
       ObBackupMacroBlockIndex &macro_index);
@@ -229,8 +231,9 @@ struct ObLSBackupCtx {
 public:
   ObLSBackupCtx();
   virtual ~ObLSBackupCtx();
-  int open(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
-      common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache);
+  int open(
+      const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type, common::ObMySQLProxy &sql_proxy,
+      ObBackupIndexKVCache &index_kv_cache, common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int next(common::ObTabletID &tablet_id);
   void set_backup_data_type(const share::ObBackupDataType &backup_data_type);
   int set_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle);
@@ -316,6 +319,7 @@ public:
   int64_t check_tablet_info_cost_time_;
   share::SCN backup_tx_table_filled_tx_scn_;
   ObBackupTabletChecker tablet_checker_;
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupCtx);
 };
 

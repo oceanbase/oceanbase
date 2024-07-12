@@ -44,6 +44,11 @@ namespace oceanbase
 using namespace share::schema;
 using namespace share;
 using namespace common;
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
+{
+  data_version = DATA_VERSION_4_3_2_0;
+  return OB_SUCCESS;
+}
 namespace storage
 {
 
@@ -630,9 +635,7 @@ TEST_F(TestLSTabletService, test_get_ls_min_end_scn)
   ObTabletHandle tablet_handle;
   ret = t3m->get_tablet(WashTabletPriority::WTP_HIGH, key, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  share::SCN test_scn = share::SCN::min_scn();
   share::SCN expect_scn;
-  share::SCN orig_scn;
   expect_scn.val_ = 0;
 
   share::SCN min_end_scn_from_latest_tablets = SCN::max_scn();
@@ -640,17 +643,6 @@ TEST_F(TestLSTabletService, test_get_ls_min_end_scn)
   ret = ls_tablet_service_->get_ls_min_end_scn(min_end_scn_from_latest_tablets, min_end_scn_from_old_tablets);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(min_end_scn_from_latest_tablets, expect_scn);
-
-  orig_scn = tablet_handle.get_obj()->tablet_meta_.clog_checkpoint_scn_;
-  tablet_handle.get_obj()->tablet_meta_.clog_checkpoint_scn_ = test_scn; // modify scn of tablet
-
-  min_end_scn_from_latest_tablets.set_max();
-  min_end_scn_from_old_tablets.set_max();
-  ret = ls_tablet_service_->get_ls_min_end_scn(min_end_scn_from_latest_tablets, min_end_scn_from_old_tablets);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(min_end_scn_from_latest_tablets, expect_scn); // still get from major sstable
-
-  tablet_handle.get_obj()->tablet_meta_.clog_checkpoint_scn_ = orig_scn; // set orig_scn to del tablet
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -756,25 +748,17 @@ TEST_F(TestLSTabletService, test_cover_empty_shell)
   ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED);
+  share::SCN create_commit_scn = share::SCN::plus(share::SCN::base_scn(), 100);
+  ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED, create_commit_scn);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObTabletHandle old_tablet_handle;
   ret = ls_handle.get_ls()->get_tablet_svr()->get_tablet(tablet_id, old_tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ObMigrationTabletParam tablet_meta;
-  ret = old_tablet_handle.get_obj()->build_migration_tablet_param(tablet_meta);
+  ObMigrationTabletParam param;
+  ret = old_tablet_handle.get_obj()->build_migration_tablet_param(param);
   ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObTabletCreateDeleteMdsUserData data;
-  ObTabletStatus status(ObTabletStatus::NORMAL);
-  data.tablet_status_ = status;
-  const int64_t data_serialize_size = data.get_serialize_size();
-  int64_t pos = 0;
-  char *buf = static_cast<char *>(allocator_.alloc(data_serialize_size));
-  ASSERT_EQ(OB_SUCCESS, data.serialize(buf, data_serialize_size, pos));
-  tablet_meta.mds_data_.tablet_status_committed_kv_.v_.user_data_.assign_ptr(buf, data_serialize_size);
 
   ret = ls_tablet_service_->update_tablet_to_empty_shell(tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -786,10 +770,9 @@ TEST_F(TestLSTabletService, test_cover_empty_shell)
   ASSERT_EQ(ObTabletStatus::DELETED, user_data.tablet_status_);
 
   ObTabletHandle tablet_handle;
-  ret = ls_tablet_service_->create_transfer_in_tablet(ls_id_, tablet_meta, tablet_handle);
+  ret = ls_tablet_service_->create_transfer_in_tablet(ls_id_, param, tablet_handle);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(OB_SUCCESS, tablet_handle.get_obj()->get_tablet_status(share::SCN::max_scn(), user_data));
-  ASSERT_EQ(ObTabletStatus::NORMAL, user_data.tablet_status_);
+  ASSERT_EQ(OB_EMPTY_RESULT, tablet_handle.get_obj()->get_tablet_status(share::SCN::max_scn(), user_data));
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -990,10 +973,10 @@ TEST_F(TestLSTabletService, test_migrate_param_empty_shell)
 
   ObMigrationTabletParam other_tablet_meta;
   ASSERT_EQ(OB_SUCCESS, other_tablet_meta.assign(de_tablet_meta));
-  /*
-  ObMigrationTabletParam other_tablet_meta;
-  ASSERT_EQ(OB_SUCCESS, tablet_meta.build_deleted_tablet_info(ls_id_, tablet_id));
-  */
+
+  //ObMigrationTabletParam other_tablet_meta;
+  //ASSERT_EQ(OB_SUCCESS, tablet_meta.build_deleted_tablet_info(ls_id_, tablet_id));
+
 
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);

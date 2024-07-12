@@ -53,6 +53,13 @@ void ObTenantConfigGuard::set_config(ObTenantConfig *config)
   config_ = config;
 }
 
+void ObTenantConfigGuard::trace_all_config() const
+{
+  if (OB_NOT_NULL(config_)) {
+    config_->trace_all_config();
+  }
+}
+
 int TenantConfigInfo::assign(const TenantConfigInfo &rhs)
 {
   int ret = OB_SUCCESS;
@@ -206,16 +213,16 @@ int ObTenantConfigMgr::refresh_tenants(const ObIArray<uint64_t> &tenants)
         } else {
           // periodically(10s) check that ObTenantDataVersionMgr doesn't fall behind ObTenantConfigMgr
           bool value_updated = (*config)->compatible.value_updated();
+          int tmp_ret = OB_SUCCESS;
+          const uint64_t data_version = (*config)->compatible;
           if (value_updated) {
-            int tmp_ret = OB_SUCCESS;
-            const uint64_t data_version = (*config)->compatible;
             if (OB_TMP_FAIL(ODV_MGR.set(tenant_id, data_version))) {
               LOG_WARN("fail to set data_version in refresh_tenants", KR(tmp_ret), K(tenant_id),
-                       K(data_version));
+                       KDV(data_version));
             }
-            LOG_INFO("[DATA_VERSION] periodically update data_version", KR(tmp_ret), K(tenant_id),
-                     K(data_version));
           }
+          LOG_INFO("[DATA_VERSION] periodically update data_version", KR(tmp_ret), K(tenant_id),
+                   K(value_updated), KDV(data_version));
         }
       }
     }
@@ -556,7 +563,7 @@ int ObTenantConfigMgr::get_all_tenant_config_info(
                    VersionUtil::print_version_str(
                        dv_buf, OB_SERVER_VERSION_LENGTH, data_version)) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_ERROR("fail to print data_version", K(ret), K(tenant_id), K(data_version));
+          LOG_ERROR("fail to print data_version", K(ret), K(tenant_id), KDV(data_version));
         } else {
           if (OB_FAIL(config_info.set_value(dv_buf))) {
             LOG_WARN("set value fail", K(ret), K(tenant_id), K(data_version), K(dv_buf));

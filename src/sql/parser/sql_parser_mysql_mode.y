@@ -508,7 +508,7 @@ END_P SET_VAR DELIMITER
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list
-%type <node> load_data_stmt opt_load_local opt_duplicate opt_load_charset opt_load_ignore_rows
+%type <node> load_data_stmt opt_load_local opt_duplicate opt_load_charset opt_load_ignore_rows infile_string
 %type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option
 %type <node> load_set_list load_set_element load_data_with_opt_hint
 %type <node> ret_type opt_agg
@@ -554,6 +554,7 @@ END_P SET_VAR DELIMITER
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
 %type <node> opt_table_list opt_repair_mode opt_repair_option_list repair_option repair_option_list opt_checksum_option
+%type <node> cache_index_stmt load_index_into_cache_stmt tbl_index_list tbl_index tbl_partition_list opt_tbl_partition_list tbl_index_or_partition_list tbl_index_or_partition opt_ignore_leaves key_cache_name
 %start sql_stmt
 %%
 ////////////////////////////////////////////////////////////////
@@ -4675,7 +4676,7 @@ NAME_OB
  *
  *****************************************************************************/
 load_data_stmt:
-load_data_with_opt_hint opt_load_local INFILE STRING_VALUE opt_duplicate INTO TABLE
+load_data_with_opt_hint opt_load_local INFILE infile_string opt_duplicate INTO TABLE
 relation_factor opt_use_partition opt_load_charset field_opt line_opt opt_load_ignore_rows
 opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
 {
@@ -4696,6 +4697,32 @@ opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
                            );
 }
 ;
+
+
+infile_string:
+STRING_VALUE
+{
+  if ($1->str_len_ > 0) {
+    char *buf = (char *)parser_alloc(result->malloc_pool_, $1->str_len_ + 1);
+    if (buf != NULL) {
+      memcpy(buf, $1->str_value_, $1->str_len_);
+      buf[$1->str_len_] = '\0';
+      for(int64_t i = 0; i < $1->str_len_; i ++) { //lower string
+        if (buf[i] >= 'A' && buf[i] <= 'Z') {
+          buf[i] = buf[i] - 'A' + 'a';
+        }
+      }
+      if (strstr(buf, "access_id")) { //If infile string contains access_id, then set true
+        result->contain_sensitive_data_ = true;
+      }
+    } else { //it cannot alloc mem, then set true directly.
+      result->contain_sensitive_data_ = true;
+    }
+  }
+  $$ = $1;
+  $$->stmt_loc_.first_column_ = @1.first_column - 1;
+  $$->stmt_loc_.last_column_ = @1.last_column - 1;
+};
 
 load_data_with_opt_hint:
 LOAD DATA {$$ = NULL;}
@@ -5915,6 +5942,16 @@ BINARY opt_string_length_i_v2
   $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_GEOMETRY; /* data type */
   $$->int16_values_[OB_NODE_CAST_GEO_TYPE_IDX] = 7;      /* geometrycollection */
   $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;         /* length */
+  $$->param_num_ = 0;
+  $$->sql_str_off_ = @1.first_column;
+}
+| ROARINGBITMAP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_CAST_ARGUMENT);
+  $$->value_ = 0;
+  $$->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_ROARINGBITMAP;    /* data type */
+  $$->int16_values_[OB_NODE_CAST_COLL_IDX] = BINARY_COLLATION;   /* data collation */
+  $$->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 0;                 /* length */
   $$->param_num_ = 0;
   $$->sql_str_off_ = @1.first_column;
 }
@@ -10321,9 +10358,7 @@ file_option:
 SINGLE opt_equal_mark BOOL_VALUE
 {
   (void)($2);
-  malloc_terminal_node($$, result->malloc_pool_, T_SINGLE_OPT);
-  $$->value_ = $3->value_;
-  $$->is_hidden_const_ = 1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SINGLE_OPT, 1, $3);
 }
 | MAX_FILE_SIZE opt_equal_mark file_size_const
 {
@@ -18656,6 +18691,111 @@ CHECKSUM TABLE opt_table_list opt_checksum_option
   (void)$3;
   (void)$4;
   malloc_terminal_node($$, result->malloc_pool_, T_CHECKSUM_TABLE);
+}
+| cache_index_stmt
+{
+  $$ = $1;
+  malloc_terminal_node($$, result->malloc_pool_, T_CACHE_INDEX);
+}
+| load_index_into_cache_stmt
+{
+  $$ = $1;
+  malloc_terminal_node($$, result->malloc_pool_, T_LOAD_INDEX_INTO_CACHE);
+}
+;
+
+load_index_into_cache_stmt:
+LOAD INDEX INTO CACHE tbl_index_or_partition_list opt_ignore_leaves
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $5, $6);
+}
+;
+
+cache_index_stmt:
+CACHE INDEX tbl_index_list IN key_cache_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $3, $5);
+}
+| CACHE INDEX normal_relation_factor PARTITION '(' tbl_partition_list ')' IN key_cache_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 3, $3, $6, $9);
+}
+;
+
+key_cache_name:
+normal_relation_factor
+{
+  $$ = $1;
+};
+
+tbl_index_list:
+tbl_index
+{
+  $$ = $1;
+}
+| tbl_index_list ',' tbl_index
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+tbl_index:
+normal_relation_factor opt_key_or_index opt_index_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 3, $1, $2, $3);
+}
+;
+
+tbl_partition_list:
+ALL
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+| name_list
+{
+  $$ = $1;
+}
+;
+
+opt_tbl_partition_list:
+PARTITION '(' tbl_partition_list ')'
+{
+  $$ = $3;
+}
+| /*empty*/
+{ $$ = NULL; }
+;
+
+tbl_index_or_partition_list:
+tbl_index_or_partition
+{
+  $$ = $1;
+}
+| tbl_index_or_partition_list ',' tbl_index_or_partition
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+opt_ignore_leaves:
+IGNORE LEAVES
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+| /*empty*/
+{ $$ = NULL; }
+;
+
+tbl_index_or_partition:
+normal_relation_factor opt_key_or_index '(' name_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 3, $1, $2, $4);
+}
+| normal_relation_factor opt_tbl_partition_list
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $2);
 }
 ;
 

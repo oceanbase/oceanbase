@@ -649,14 +649,11 @@ int ObCopyMacroBlockObProducer::init(
     datum_range_.set_left_closed();
     datum_range_.set_right_open();
 
-    const storage::ObITableReadInfo *index_read_info = &tablet->get_rowkey_read_info();
-    if (!sstable_->is_normal_cg_sstable()) {
-      // do nothing
-    } else if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
-      LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret), K(table_key), K(ls_id));
-    }
+    const storage::ObITableReadInfo *index_read_info = NULL;
 
-    if (FAILEDx(second_meta_iterator_.open(datum_range_, blocksstable::DATA_BLOCK_META,
+    if (OB_FAIL(tablet->get_sstable_read_info(sstable_, index_read_info))) {
+      LOG_WARN("failed to get index read info ", KR(ret), K(sstable_));
+    } else if (OB_FAIL(second_meta_iterator_.open(datum_range_, blocksstable::DATA_BLOCK_META,
          *sstable_, *index_read_info, allocator_, is_reverse_scan))) {
       LOG_WARN("failed to open second meta iterator", K(ret), K(ls_id), K(table_key), K(copy_macro_range_info));
     } else {
@@ -1807,6 +1804,8 @@ int ObCopySSTableInfoObProducer::check_need_copy_sstable_(
                             "need_copy_scn_range", tablet_sstable_info_.ddl_sstable_scn_range_);
 
 #endif
+    } else if (sstable->is_mds_sstable()) {
+      need_copy_sstable = true;
     } else {
       need_copy_sstable = false;
       ret = OB_ERR_UNEXPECTED;
@@ -2341,10 +2340,8 @@ int ObCopySSTableMacroRangeObProducer::init(
   } else if (OB_FAIL(table_handle_.get_sstable(sstable))) {
     LOG_WARN("failed to get sstable", K(ret), K(header), K(tablet_id), K(ls_id));
   } else if (FALSE_IT(datum_range_.set_whole_range())) {
-  } else if (FALSE_IT(index_read_info = &tablet->get_rowkey_read_info())) {
-  } else if (sstable->is_normal_cg_sstable() &&
-      OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
-    LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret), K(tablet_id), K(ls_id));
+  } else if (OB_FAIL(tablet->get_sstable_read_info(sstable, index_read_info))) {
+    LOG_WARN("failed to get index read info ", KR(ret), K(sstable));
   } else if (OB_FAIL(second_meta_iterator_.open(datum_range_, blocksstable::DATA_BLOCK_META,
       *sstable, *index_read_info, allocator_, is_reverse_scan))) {
     LOG_WARN("failed to open second meta iterator", K(ret), K(header), K(tablet_id));

@@ -401,6 +401,8 @@ public:
                                 const ObIArray<ObRawExpr*> *except_exprs = NULL);
   static int contain_virtual_generated_column(ObRawExpr *&expr,
                                   bool &is_contain_vir_gen_column);
+  static int extract_virtual_generated_column_parents(
+  ObRawExpr *&par_expr, ObRawExpr *&child_expr, ObIArray<ObRawExpr*> &vir_gen_par_exprs);
 
   static bool is_all_column_exprs(const common::ObIArray<ObRawExpr*> &exprs);
   static int extract_set_op_exprs(const ObRawExpr *raw_expr,
@@ -609,6 +611,7 @@ public:
                             const ObLocalSessionVar *local_vars = NULL,
                             int64_t local_var_id = OB_INVALID_INDEX_INT64);
   static bool need_column_conv(const ObExprResType &expected_type, const ObRawExpr &expr);
+  static bool check_exprs_type_collation_accuracy_equal(const ObRawExpr *expr1, const ObRawExpr *expr2);
   // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
                                     const share::schema::ObColumnSchemaV2 *column_schema,

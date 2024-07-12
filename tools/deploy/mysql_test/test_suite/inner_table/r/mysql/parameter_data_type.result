@@ -351,7 +351,7 @@ zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edi
 zone1	observer	server_ip	server_port	major_freeze_duty_time	MOMENT	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	02:00	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible' tenant = sys;
 zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
-zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	4.3.2.0	1
+zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	4.3.3.0	1
 ==========================  case2: under mysql tenant  ==========================
 =====================  [1] prevent data_type UNKNOWN  ======================
 show parameters where data_type = 'UNKNOWN';
@@ -573,4 +573,4 @@ zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edi
 zone1	observer	server_ip	server_port	major_freeze_duty_time	MOMENT	value	info	DAILY_MERGE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	02:00	1
 show parameters where svr_ip = host_ip() and svr_port = rpc_port() and name = 'compatible';
 zone	svr_type	svr_ip	svr_port	name	data_type	value	info	section	scope	source	edit_level	default_value	isdefault
-zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	4.3.2.0	1
+zone1	observer	server_ip	server_port	compatible	VERSION	value	info	ROOT_SERVICE	TENANT	DEFAULT	DYNAMIC_EFFECTIVE	4.3.3.0	1

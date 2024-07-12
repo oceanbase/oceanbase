@@ -183,6 +183,16 @@ public:
 
   static int implicit_commit_before_gather_stats(sql::ObExecContext &ctx);
 
+  static int scale_col_stats(const uint64_t tenant_id,
+                             const common::ObIArray<ObOptTableStat*> &tab_stats,
+                             common::ObIArray<ObOptColumnStat*> &col_stats);
+
+  static int scale_col_stats(const uint64_t tenant_id,
+                             const TabStatIndMap &table_stats,
+                             common::ObIArray<ObOptColumnStat*> &col_stats);
+
+  static int get_sys_online_estimate_percent(sql::ObExecContext &ctx,
+                                           double &percent);
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

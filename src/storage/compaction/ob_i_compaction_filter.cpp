@@ -128,6 +128,5 @@ int ObTransStatusFilter::filter(
   return ret;
 }
 
-
 } // namespace compaction
 } // namespace oceanbase

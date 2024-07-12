@@ -32,15 +32,17 @@ template <typename K, typename V>
 UserMdsNode<K, V>::UserMdsNode()
 : MdsNode(MdsNodeType::UNKNOWN_NODE,
           WriterType::UNKNOWN_WRITER,
-          INVALID_VALUE),
+          INVALID_VALUE,
+          transaction::ObTxSEQ()),
 ListNode<UserMdsNode<K, V>>() { p_mds_row_ = nullptr; }
 
 template <typename K, typename V>
 UserMdsNode<K, V>::UserMdsNode(MdsRowBase<K, V> *p_mds_row,
                                MdsNodeType node_type,
                                WriterType writer_type,
-                               const int64_t writer_id)
-: MdsNode(node_type, writer_type, writer_id),
+                               const int64_t writer_id,
+                               const transaction::ObTxSEQ seq_no)
+: MdsNode(node_type, writer_type, writer_id, seq_no),
 ListNode<UserMdsNode<K, V>>()
 {
   static_assert(std::is_default_constructible<V>::value,
@@ -92,7 +94,7 @@ int64_t UserMdsNode<K, V>::to_string(char * buf, const int64_t buf_len) const
   databuff_printf(buf, buf_len, pos, "ls_id:%s, ", p_mds_table ? to_cstring(p_mds_table->ls_id_) : "NULL");
   databuff_printf(buf, buf_len, pos, "tablet_id:%s, ", p_mds_table ? to_cstring(p_mds_table->tablet_id_) : "NULL");
   databuff_printf(buf, buf_len, pos, "writer:%ld, ", writer_id_);
-  databuff_printf(buf, buf_len, pos, "seq_no:%ld, ", seq_no_);
+  databuff_printf(buf, buf_len, pos, "seq_no:%s, ", to_cstring(seq_no_));
   databuff_printf(buf, buf_len, pos, "redo_scn:%s, ", obj_to_string(redo_scn_));
   databuff_printf(buf, buf_len, pos, "end_scn:%s, ", obj_to_string(end_scn_));
   databuff_printf(buf, buf_len, pos, "trans_version:%s, ", obj_to_string(trans_version_));
@@ -347,7 +349,7 @@ void UserMdsNode<K, V>::report_event_(const char (&event_str)[N],
     observer::MdsEventKey key(MTL_ID(),
                               p_mds_row_->p_mds_unit_->p_mds_table_->ls_id_,
                               p_mds_row_->p_mds_unit_->p_mds_table_->tablet_id_);
-    observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+    observer::ObMdsEventBuffer::append(key, event, p_mds_row_->p_mds_unit_->p_mds_table_, file, line, function_name);
   }
 }
 

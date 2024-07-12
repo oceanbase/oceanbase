@@ -54,7 +54,8 @@ ObTxFinishTransfer::ObTxFinishTransfer()
       cond_(),
       sql_proxy_(NULL),
       round_(0),
-      diagnose_result_msg_(share::ObStorageHACostItemName::MAX_NAME)
+      diagnose_result_msg_(share::ObStorageHACostItemName::MAX_NAME),
+      data_version_(0)
 {}
 
 ObTxFinishTransfer::~ObTxFinishTransfer()
@@ -817,7 +818,7 @@ int ObTxFinishTransfer::get_ls_handle_(
   } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(tenant_id), K(ls_id));
   }
   return ret;
@@ -917,7 +918,7 @@ int ObTxFinishTransfer::build_tx_finish_transfer_in_info_(
     transfer_in_info.dest_ls_id_ = dest_ls_id;
     transfer_in_info.start_scn_ = start_scn;
     transfer_in_info.task_id_ = task_id;
-    transfer_in_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
+    transfer_in_info.data_version_ = data_version_;
     if (OB_FAIL(transfer_in_info.tablet_list_.assign(tablet_list))) {
       LOG_WARN("failed to assign tablet list", K(ret), K(tablet_list));
     }
@@ -940,7 +941,7 @@ int ObTxFinishTransfer::build_tx_finish_transfer_out_info_(
     transfer_out_info.dest_ls_id_ = dest_ls_id;
     transfer_out_info.finish_scn_ = finish_scn;
     transfer_out_info.task_id_ = task_id;
-    transfer_out_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
+    transfer_out_info.data_version_ = data_version_;
     if (OB_FAIL(transfer_out_info.tablet_list_.assign(tablet_list))) {
       LOG_WARN("failed to assign tablet list", K(ret), K(tablet_list));
     }
@@ -1116,6 +1117,7 @@ int ObTxFinishTransfer::select_transfer_task_for_update_(const ObTransferTaskID 
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("transfer task status is not doing", K(ret), K(task));
   } else {
+    data_version_ = task.get_data_version();
     LOG_INFO("select for update", K(task_id), K(task));
 #ifdef ERRSIM
     if (OB_SUCC(ret)) {

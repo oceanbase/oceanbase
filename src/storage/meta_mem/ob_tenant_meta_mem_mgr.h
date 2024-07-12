@@ -223,10 +223,6 @@ public:
       const ObTabletMapKey &key,
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);
-  int acquire_msd_tablet(
-      const WashTabletPriority &priority,
-      const ObTabletMapKey &key,
-      ObTabletHandle &tablet_handle);
   int create_tmp_tablet(
       const WashTabletPriority &priority,
       const ObTabletMapKey &key,
@@ -252,6 +248,9 @@ public:
     const ObTabletMapKey &key,
     ObITabletFilterOp &op,
     ObTabletHandle &handle);
+  int build_tablet_handle_for_mds_scan(
+      ObTablet *tablet,
+      ObTabletHandle &tablet_handle);
 
   // NOTE: This interface return tablet handle, which couldn't be used by compare_and_swap_tablet.
   int get_tablet_with_allocator(

@@ -461,7 +461,8 @@ struct ObTableStatParam {
     is_temp_table_(false),
     allocator_(NULL),
     ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE),
-    column_group_params_()
+    column_group_params_(),
+    online_sample_percent_(1.)
   {}
 
   int assign(const ObTableStatParam &other);
@@ -541,6 +542,7 @@ struct ObTableStatParam {
   common::ObIAllocator *allocator_;
   share::schema::ObTableType ref_table_type_;
   ObArray<ObColumnGroupStatParam> column_group_params_;
+  double online_sample_percent_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -584,7 +586,8 @@ struct ObTableStatParam {
                K(need_estimate_block_),
                K(is_temp_table_),
                K(ref_table_type_),
-               K(column_group_params_));
+               K(column_group_params_),
+               K(online_sample_percent_));
 };
 
 struct ObOptStatGatherParam {
@@ -827,6 +830,8 @@ enum ObOptDmlStatType {
 
 struct ObOptDmlStat
 {
+  OB_UNIS_VERSION(1);
+public:
   ObOptDmlStat ():
     tenant_id_(0),
     table_id_(common::OB_INVALID_ID),

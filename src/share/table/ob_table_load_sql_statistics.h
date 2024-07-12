@@ -45,6 +45,7 @@ public:
   int get_col_stat_array(ObIArray<ObOptColumnStat *> &col_stat_array) const;
   int get_table_stats(TabStatIndMap &table_stats) const;
   int get_col_stats(ColStatIndMap &col_stats) const;
+  ObOptOSGSampleHelper& get_sample_helper() { return sample_helper_; }
   TO_STRING_KV(K_(col_stat_array), K_(table_stat_array));
 private:
   int allocate_table_stat(ObOptTableStat *&table_stat);
@@ -53,6 +54,7 @@ public:
   common::ObArray<ObOptTableStat *> table_stat_array_;
   common::ObArray<ObOptOSGColumnStat *> col_stat_array_;
   common::ObArenaAllocator allocator_;
+  ObOptOSGSampleHelper sample_helper_;
 };
 
 } // namespace table

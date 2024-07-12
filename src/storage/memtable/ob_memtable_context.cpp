@@ -16,6 +16,7 @@
 #include "storage/memtable/ob_memtable_iterator.h"
 #include "storage/memtable/ob_memtable_data.h"
 #include "ob_memtable.h"
+#include "storage/ob_sequence.h"
 #include "storage/tx/ob_trans_part_ctx.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_multi_data_source.h"
@@ -1223,6 +1224,7 @@ int ObMemtableCtx::register_multi_source_data_if_need_(
                                                             buf,
                                                             serialize_size,
                                                             true /* try lock */,
+                                                            lock_op.lock_seq_no_,
                                                             mds_flag))) {
       TRANS_LOG(WARN, "register to multi source data failed", K(ret));
     } else {

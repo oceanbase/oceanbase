@@ -148,7 +148,19 @@ private:
   bool enable_compatible_monotonic_;
 };
 
+class ObDataVersionPrinter
+{
+public:
+  ObDataVersionPrinter(const uint64_t data_version);
+  TO_STRING_KV("version_str", version_str_, "version_val", version_val_);
+private:
+  uint64_t version_val_;
+  char version_str_[OB_SERVER_VERSION_LENGTH];
+};
+
 } // namespace common
 } // namespace oceanbase
 #define ODV_MGR (::oceanbase::common::ObTenantDataVersionMgr::get_instance())
+#define DVP(data_version) (::oceanbase::common::ObDataVersionPrinter(data_version))
+#define KDV(data_version) "data_version", DVP(data_version)
 #endif // OCEANBASE_OBSERVER_OB_TENANT_DATA_VERSION_H_

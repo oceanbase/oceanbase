@@ -1016,7 +1016,7 @@ int ObCompactionDiagnoseMgr::check_ls_status(
     need_merge = ls_check_status.need_merge_;
     weak_read_ts_ready = ls_check_status.weak_read_ts_ready_;
   }
-  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::COMPACT_MODE))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

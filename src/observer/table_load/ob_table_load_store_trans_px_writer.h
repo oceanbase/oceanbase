@@ -45,13 +45,16 @@ public:
                KP_(writer),
                K_(tablet_id),
                K_(column_count),
+               K_(row_count),
                K_(is_heap_table),
                K_(can_write),
                K_(is_inited));
 
 private:
+  const static int64_t CHECK_STATUS_CYCLE = 10000;
   int check_tablet(const common::ObTabletID &tablet_id);
   int check_columns(const common::ObIArray<uint64_t> &column_ids);
+  int check_status();
 
 private:
   ObTableLoadStoreCtx *store_ctx_;
@@ -59,6 +62,7 @@ private:
   ObTableLoadTransStoreWriter *writer_;
   ObTabletID tablet_id_;
   int64_t column_count_;
+  int64_t row_count_;
   bool is_heap_table_;
   bool can_write_;
   bool is_inited_;

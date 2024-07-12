@@ -2117,10 +2117,12 @@ private:
       common::ObIArray<share::schema::ObTableSchema> &new_aux_schemas);
   int build_single_table_rw_defensive_(
     const uint64_t tenant_id,
+    const uint64_t tenant_data_version,
     const ObArray<ObTabletID> &tablet_ids,
     const int64_t schema_version,
     ObDDLSQLTransaction &trans);
   int build_rw_defense_for_table_(
+      const uint64_t tenant_data_version,
       const ObTableSchema &table_schema,
       const int64_t new_data_table_schema_version,
       const ObIArray<std::pair<uint64_t, int64_t>> &aux_schema_versions,
@@ -2750,6 +2752,13 @@ private:
       const share::schema::ObTenantSchema &orig_tenant_schema,
       const share::schema::ObTenantSchema &new_tenant_schema);
 
+  // this function is used for add extra tenant config init during create excepet data version
+  // The addition of new configuration items requires the addition or modification of related test cases to ensure their effectiveness.
+  int add_extra_tenant_init_config_(
+      const uint64_t tenant_id,
+      common::ObIArray<common::ObConfigPairs> &init_configs);
+
+private:
   int check_locality_compatible_(ObTenantSchema &schema);
 
   int pre_rename_mysql_columns_online(const ObTableSchema &origin_table_schema,

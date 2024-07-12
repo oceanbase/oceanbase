@@ -364,6 +364,11 @@ static inline bool is_direct_load_retry_err(const int ret)
     ;
 }
 
+static inline bool is_replica_build_ddl_task_status(const ObDDLTaskStatus &task_status)
+{
+  return ObDDLTaskStatus::REPENDING == task_status || ObDDLTaskStatus::REDEFINITION == task_status;
+}
+
 enum ObCheckExistedDDLMode
 {
   INVALID_DDL_MODE          = 0,

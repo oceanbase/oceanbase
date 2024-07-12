@@ -1061,6 +1061,31 @@ bool ObConfigSQLTlsVersionChecker::check(const ObConfigItem &t) const
          0 == tmp_str.case_compare("TLSV1.3");
 }
 
+bool ObSqlPlanManagementModeChecker::check(const ObConfigItem &t) const
+{
+  const ObString tmp_str(t.str());
+  return  get_spm_mode_by_string(tmp_str) != -1;
+}
+
+/**
+ * return spm mode
+ * -1 represent invalid mode
+ * 0  represent disable spm
+ * 1  represent online evolve mode
+*/
+int64_t ObSqlPlanManagementModeChecker::get_spm_mode_by_string(const common::ObString &string)
+{
+  int64_t spm_mode = -1;
+  if (string.empty()) {
+    spm_mode = -1;
+  } else if (0 == string.case_compare("Disable")) {
+    spm_mode = 0;
+  } else if (0 == string.case_compare("OnlineEvolve")) {
+    spm_mode = 1;
+  }
+  return spm_mode;
+}
+
 int ObModeConfigParserUitl::parse_item_to_kv(char *item, ObString &key, ObString &value, const char* delim)
 {
   int ret = OB_SUCCESS;
@@ -1292,7 +1317,7 @@ bool ObParallelDDLControlParser::parse(const char *str, uint8_t *arr, int64_t le
       OB_LOG_RET(WARN, tmp_ret, "fail to get kv list", K(str));
     } else {
       for (int64_t i = 0; bret && i < kv_list.count(); ++i) {
-        uint8_t mode = MODE_ON;
+        uint8_t mode = MODE_DEFAULT;
         if (kv_list.at(i).second.case_compare("on") == 0) {
           mode = MODE_ON;
         } else if (kv_list.at(i).second.case_compare("off") == 0) {

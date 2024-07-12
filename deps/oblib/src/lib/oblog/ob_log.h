@@ -1233,7 +1233,9 @@ inline void ObLogger::do_log_message(const bool is_async,
   limited_left_log_size_ = 0;
   BASIC_TIME_GUARD(tg, "ObLog");
   int64_t start_ts = OB_TSC_TIMESTAMP.current_time();
-  if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size,
+  if (is_queue_full()) {
+    // do-nothing
+  } else if (FD_TRACE_FILE != fd_type && OB_FAIL(check_tl_log_limiter(location_hash_val, level, errcode, log_size,
           allow, limiter_info))) {
     LOG_STDERR("precheck_tl_log_limiter error, ret=%d\n", ret);
   } else if (OB_UNLIKELY(!allow) && !need_print_log_limit_msg()) {

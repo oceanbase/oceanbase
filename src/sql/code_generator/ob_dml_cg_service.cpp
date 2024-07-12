@@ -1798,8 +1798,7 @@ int ObDmlCgService::generate_das_projector(const ObIArray<uint64_t> &dml_column_
   int ret = OB_SUCCESS;
   IntFixedArray &old_row_projector = das_ctdef.old_row_projector_;
   IntFixedArray &new_row_projector = das_ctdef.new_row_projector_;
-  bool is_spatial_index = das_ctdef.table_param_.get_data_table().is_spatial_index()
-                          && das_ctdef.op_type_ == DAS_OP_TABLE_UPDATE;
+  bool is_spatial_index = das_ctdef.table_param_.get_data_table().is_spatial_index();
   uint8_t extra_geo = (is_spatial_index) ? 1 : 0;
   //generate old row projector
   if (!old_row.empty()) {

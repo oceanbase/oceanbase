@@ -12,18 +12,21 @@
 
 #ifndef SHARE_STORAGE_MULTI_DATA_SOURCE_MDSDUMPNODE_H
 #define SHARE_STORAGE_MULTI_DATA_SOURCE_MDSDUMPNODE_H
+#include <cstdint>
 #include "lib/allocator/ob_allocator.h"
 #include "lib/ob_errno.h"
 #include "lib/hash_func/murmur_hash.h"
 #include "lib/utility/ob_unify_serialize.h"
+#include "meta_programming/ob_type_traits.h"
 #include "share/ob_ls_id.h"
 #include "src/storage/multi_data_source/compile_utility/compile_mapper.h"
 #include "src/storage/multi_data_source/mds_node.h"
 #include "src/storage/multi_data_source/compile_utility/map_type_index_in_tuple.h"
 #include "src/storage/multi_data_source/runtime_utility/mds_factory.h"
 #include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
-#include <cstdint>
 #include "common/meta_programming/ob_meta_serialization.h"
+#include "mds_dump_kv_wrapper.h"
+#include "storage/tx/ob_tx_seq.h"
 
 
 namespace oceanbase
@@ -42,6 +45,13 @@ struct MdsDumpKey// RAII
 public:
   MdsDumpKey() : mds_table_id_(UINT8_MAX), mds_unit_id_(UINT8_MAX), allocator_(nullptr) {}
   ~MdsDumpKey() { reset(); }
+  // disallow copy, assign and move sematic
+  MdsDumpKey(const MdsDumpKey &) = delete;
+  MdsDumpKey(MdsDumpKey &&) = delete;
+  MdsDumpKey& operator=(const MdsDumpKey &) = delete;
+  MdsDumpKey& operator=(MdsDumpKey &&) = delete;
+  void swap(MdsDumpKey &other) noexcept;// for exception safty
+
   template <typename UnitKey>
   int init(const uint8_t mds_table_id,
            const uint8_t mds_unit_id,
@@ -67,19 +77,14 @@ OB_SERIALIZE_MEMBER_TEMP(inline, MdsDumpKey, mds_table_id_, mds_unit_id_, crc_ch
 struct MdsDumpNode// RAII
 {
 public:
-  MdsDumpNode() :
-  mds_table_id_(UINT8_MAX),
-  mds_unit_id_(UINT8_MAX),
-  crc_check_number_(UINT32_MAX),
-  allocator_(nullptr),
-  writer_id_(INVALID_VALUE),
-  seq_no_(INVALID_VALUE) {}// deserialize need default construction
+  MdsDumpNode();
   ~MdsDumpNode() { reset(); }
   // disallow copy, assign and move sematic
   MdsDumpNode(const MdsDumpNode &) = delete;
   MdsDumpNode(MdsDumpNode &&) = delete;
   MdsDumpNode& operator=(const MdsDumpNode &) = delete;
   MdsDumpNode& operator=(MdsDumpNode &&) = delete;
+  void swap(MdsDumpNode &other) noexcept;// for exception safty
 
   bool is_valid() const;
   // every dump node is converted from UserMdsNode from a multi-version row in a K-V unit in MdsTable
@@ -104,7 +109,8 @@ public:
   int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_serialize_size() const;
 
-  static const int64_t UNIS_VERSION = 1;
+  static constexpr int64_t UNIS_VERSION_V1 = 1;
+  static constexpr int64_t UNIS_VERSION = 2;
 
   // member state
   uint8_t mds_table_id_;
@@ -113,7 +119,7 @@ public:
   MdsNodeStatus status_;
   ObIAllocator *allocator_;// to release serialized buffer
   int64_t writer_id_; // mostly is tx id
-  int64_t seq_no_;// not used for now
+  transaction::ObTxSEQ seq_no_;// if one writer write multi nodes in one same row, seq_no is used to order those writes
   share::SCN redo_scn_; // log scn of redo
   share::SCN end_scn_; // log scn of commit/abort
   share::SCN trans_version_; // read as prepare version if phase is not COMMIT, or read as commit version
@@ -125,6 +131,9 @@ struct MdsDumpKV
 public:
   MdsDumpKV();
 public:
+  int convert_from_adapter(common::ObIAllocator &allocator, MdsDumpKVStorageAdapter &adapter);
+
+  void swap(MdsDumpKV &other);
   void reset();
   bool is_valid() const;
   int assign(const MdsDumpKV &rhs, ObIAllocator &alloc);
@@ -147,9 +156,11 @@ int MdsDumpKey::init(const uint8_t mds_table_id,
                      ObIAllocator &alloc)
 {
   #define PRINT_WRAPPER KR(ret), K(mds_table_id), K(mds_unit_id), K(key), K(key_size)
+  static_assert(OB_TRAIT_MDS_SERIALIZEABLE(UnitKey), "UnitKey must by binary level comparable");
+  static_assert(!OB_TRAIT_IS_COMPAREABLE(UnitKey), "UnitKey no need be origin comparable, but comparable after serialized, compare defination is probably by your misunderstanding");
   int ret = OB_SUCCESS;
   MDS_TG(1_ms);
-  int64_t key_size = key.get_serialize_size();
+  int64_t key_size = key.mds_get_serialize_size();
   int64_t pos = 0;
   char *key_buffer = nullptr;
   bool need_free_key_buffer = false;
@@ -157,14 +168,14 @@ int MdsDumpKey::init(const uint8_t mds_table_id,
   if (MDS_FAIL_FLAG(OB_ISNULL(key_buffer = (char*)alloc.alloc(key_size)), need_free_key_buffer)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     MDS_LOG_NONE(WARN, "fail to alloc key serlialize buffer");
-  } else if (OB_FAIL(key.serialize(key_buffer, key_size, pos))) {
+  } else if (OB_FAIL(key.mds_serialize(key_buffer, key_size, pos))) {
     MDS_LOG_NONE(WARN, "fail to serialize key");
   } else {
-    crc_check_number_ = generate_hash();
     mds_table_id_ = mds_table_id;
     mds_unit_id_ = mds_unit_id;
     allocator_ = &alloc;
     key_.assign(key_buffer, key_size);
+    crc_check_number_ = generate_hash();
   }
   if (MDS_FAIL(ret)) {
     if (need_free_key_buffer) {
@@ -244,7 +255,7 @@ int MdsDumpKey::convert_to_user_key(UnitKey &user_key) const
   if (UINT32_MAX != crc_check_number_ && generated_hash != crc_check_number_) {
     ret = OB_ERR_UNEXPECTED;
     MDS_LOG_NONE(ERROR, "CRC CHECK FAILED!");
-  } else if (MDS_FAIL(user_key.deserialize(key_.ptr(), key_.length(), pos))) {
+  } else if (MDS_FAIL(user_key.mds_deserialize(key_.ptr(), key_.length(), pos))) {
     MDS_LOG_NONE(ERROR, "deserialize user data failed");
   } else {
   }

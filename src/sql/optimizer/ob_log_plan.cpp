@@ -365,6 +365,7 @@ int ObLogPlan::generate_join_orders()
       OPT_TRACE("create base path for ", join_rels.at(0).at(i));
       OPT_TRACE_BEGIN_SECTION;
       ret = join_rels.at(0).at(i)->generate_base_paths();
+      OPT_TRACE_MEM_USED;
       OPT_TRACE_END_SECTION;
     }
   }
@@ -373,8 +374,6 @@ int ObLogPlan::generate_join_orders()
   //如果有leading hint就在这里按leading hint指定的join order枚举,
   //如果根据leading hint没有枚举到有效join order，就忽略hint重新枚举。
   if (OB_SUCC(ret)) {
-    OPT_TRACE("SYSTEM STATS:");
-    OPT_TRACE(get_optimizer_context().get_system_stat());
     OPT_TRACE_TITLE("BASIC TABLE STATISTICS");
     OPT_TRACE_STATIS(stmt, get_basic_table_metas());
     OPT_TRACE_TITLE("UPDATE TABLE STATISTICS");
@@ -9997,7 +9996,7 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
 #ifdef OB_BUILD_SPM
-  bool use_spm = false;
+  int64_t spm_mode = 0;
 #endif
   enable = false;
   if (OB_ISNULL(get_stmt()) ||
@@ -10007,9 +10006,9 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
 #ifdef OB_BUILD_SPM
-  } else if (OB_FAIL(session->get_use_plan_baseline(use_spm))) {
+  } else if (OB_FAIL(session->get_spm_mode(spm_mode))) {
     LOG_WARN("failed to check is spm enabled", K(ret));
-  } else if (use_spm) {
+  } else if (spm_mode > 0) {
     // do nothing
 #endif
   } else if (optimizer_context_.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&

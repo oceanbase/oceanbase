@@ -1126,8 +1126,13 @@ int ObInnerSQLConnection::register_multi_data_source(const uint64_t &tenant_id,
         } else {
           MTL_SWITCH(tenant_id)
           {
-            if (OB_FAIL(MTL(transaction::ObTransService *)
-                            ->register_mds_into_tx(*tx_desc, ls_id, type, buf, buf_len, 0, register_flag))) {
+            if (OB_FAIL(MTL(transaction::ObTransService *)->register_mds_into_tx(*tx_desc,
+                                                                                 ls_id,
+                                                                                 type,
+                                                                                 buf,
+                                                                                 buf_len,
+                                                                                 0,
+                                                                                 register_flag))) {
               LOG_WARN("regiser multi data source failed", K(ret), K(tenant_id), K(type));
             } else if (OB_FAIL(res.close())) {
               LOG_WARN("close result set failed", K(ret), K(tenant_id));

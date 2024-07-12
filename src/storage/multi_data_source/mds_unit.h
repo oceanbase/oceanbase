@@ -38,9 +38,16 @@ template <typename K, typename V>
 struct KvPair : public ListNode<KvPair<K, V>>
 {
   KvPair() = default;
-  bool operator<(const KvPair &rhs) const { return k_ < rhs.k_; }
-  bool operator==(const KvPair &rhs) const { return k_ == rhs.k_; }
   TO_STRING_KV(K_(k), K_(v));
+  int mds_serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
+    return k_.mds_serialize(buf, buf_len, pos);
+  }
+  int mds_deserialize(const char *buf, const int64_t buf_len, int64_t &pos) {
+    return k_.mds_deserialize(buf, buf_len, pos);
+  }
+  int64_t mds_get_serialize_size() const {
+    return k_.mds_get_serialize_size();
+  }
   K k_;
   V v_;
 };
@@ -87,20 +94,17 @@ class MdsUnit final : public MdsUnitBase<K, V>
                   const K &key,
                   OP &read_op,
                   share::SCN snapshot,
-                  int64_t read_seq,
                   RetryParam &retry_param)
     : this_(p_this),
     key_(key),
     read_op_(read_op),
     snapshot_(snapshot),
-    read_seq_(read_seq),
     retry_param_(retry_param) {}
     int operator()();
     const MdsUnit<K, V> *this_;
     const K &key_;
     OP &read_op_;
     share::SCN snapshot_;
-    int64_t read_seq_;
     RetryParam &retry_param_;
   };
   template <typename OP>
@@ -113,7 +117,7 @@ class MdsUnit final : public MdsUnitBase<K, V>
                   OP &read_op,
                   const MdsWriter &writer,
                   share::SCN snapshot,
-                  int64_t read_seq,
+                  transaction::ObTxSEQ read_seq,
                   RetryParam &retry_param)
     : this_(p_this),
     key_(key),
@@ -128,7 +132,7 @@ class MdsUnit final : public MdsUnitBase<K, V>
     OP &read_op_;
     const MdsWriter &writer_;
     share::SCN snapshot_;
-    int64_t read_seq_;
+    transaction::ObTxSEQ read_seq_;
     RetryParam &retry_param_;
   };
 public:
@@ -175,23 +179,24 @@ public:
   int get_snapshot(const K &key,
                    OP &&read_op,
                    const share::SCN snapshot,
-                   const int64_t read_seq,
                    const int64_t timeout_us) const;
   template <typename OP>
   int get_by_writer(const K &key,
                     OP &&op,
                     const MdsWriter &writer,
                     const share::SCN snapshot,
-                    const int64_t read_seq,
+                    const transaction::ObTxSEQ read_seq,
                     const int64_t timeout_us) const;
   template <typename OP>
-  int get_latest(const K &key, OP &&op, const int64_t read_seq) const;
+  int get_latest(const K &key, OP &&op) const;
   template <typename DUMP_OP>
   int scan_KV_row(DUMP_OP &&op,
-                  share::SCN &flush_scn,
+                  const share::SCN flush_scn,
                   const uint8_t mds_table_id,
                   const uint8_t mds_unit_id,
-                  const bool for_flush) const;
+                  const bool for_flush,
+                  const ScanRowOrder scan_row_order,
+                  const ScanNodeOrder scan_node_order) const;
   template <typename OP>
   int for_each_node_on_row(OP &&op) const;
   template <typename OP>
@@ -207,7 +212,7 @@ public:
                      const char *file = __builtin_FILE(),
                      const uint32_t line = __builtin_LINE(),
                      const char *function_name = __builtin_FUNCTION()) const;
-  KvPair<K, Row<K, V>> *get_row_from_list_(const K &key) const;
+  int get_row_from_list_(const K &key, KvPair<K, Row<K, V>> *&p_kv) const;
   int insert_empty_kv_to_list_(const K &key, KvPair<K, Row<K, V>> *&p_kv, MdsTableBase *p_mds_table);
   void erase_kv_from_list_if_empty_(KvPair<K, Row<K, V>> *p_kv);
   SortedList<KvPair<K, Row<K, V>>, SORT_TYPE::ASC> multi_row_list_;
@@ -247,18 +252,15 @@ class MdsUnit<DummyKey, V> final : public MdsUnitBase<DummyKey, V>
     GetSnapShotOp(const MdsUnit<DummyKey, V> *p_this,
                   OP &read_op,
                   share::SCN snapshot,
-                  int64_t read_seq,
                   RetryParam &retry_param)
     : this_(p_this),
     read_op_(read_op),
     snapshot_(snapshot),
-    read_seq_(read_seq),
     retry_param_(retry_param) {}
     int operator()();
     const MdsUnit<DummyKey, V> *this_;
     OP &read_op_;
     share::SCN snapshot_;
-    int64_t read_seq_;
     RetryParam &retry_param_;
   };
   template <typename OP>
@@ -270,7 +272,7 @@ class MdsUnit<DummyKey, V> final : public MdsUnitBase<DummyKey, V>
                   OP &read_op,
                   const MdsWriter &writer,
                   share::SCN snapshot,
-                  int64_t read_seq,
+                  transaction::ObTxSEQ read_seq,
                   RetryParam &retry_param)
     : this_(p_this),
     read_op_(read_op),
@@ -283,7 +285,7 @@ class MdsUnit<DummyKey, V> final : public MdsUnitBase<DummyKey, V>
     OP &read_op_;
     const MdsWriter &writer_;
     share::SCN snapshot_;
-    int64_t read_seq_;
+    transaction::ObTxSEQ read_seq_;
     RetryParam &retry_param_;
   };
 public:
@@ -317,22 +319,23 @@ public:
   template <typename OP>
   int get_snapshot(OP &&read_op,
                    const share::SCN snapshot,
-                   const int64_t read_seq,
                    const int64_t timeout_us) const;
   template <typename OP>
   int get_by_writer(OP &&op,
                     const MdsWriter &writer,
                     const share::SCN snapshot,
-                    const int64_t read_seq,
+                    const transaction::ObTxSEQ read_seq,
                     const int64_t timeout_us) const;
   template <typename OP>
-  int get_latest(OP &&op, const int64_t read_seqs) const;
+  int get_latest(OP &&op) const;
   template <typename DUMP_OP>
   int scan_KV_row(DUMP_OP &&op,
-                  share::SCN &flush_scn,
+                  const share::SCN flush_scn,
                   const uint8_t mds_table_id,
                   const uint8_t mds_unit_id,
-                  const bool for_flush) const;
+                  const bool for_flush,
+                  const ScanRowOrder scan_row_order,
+                  const ScanNodeOrder scan_node_order) const;
   template <typename OP>
   int for_each_node_on_row(OP &&op) const;
   template <typename OP>

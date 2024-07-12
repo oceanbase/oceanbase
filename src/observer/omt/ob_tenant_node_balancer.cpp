@@ -667,6 +667,8 @@ int ObTenantNodeBalancer::update_tenant_memory(const obrpc::ObTenantMemoryArg &t
     LOG_WARN("failed to update tenant memory", K(ret), K(tenant_id), K(memory_size));
   } else if (OB_FAIL(omt_->update_tenant_freezer_mem_limit(tenant_id, unit.config_.memory_size(), allowed_mem_limit))) {
     LOG_WARN("set_tenant_freezer_mem_limit failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(omt_->update_tenant_decode_resource(tenant_id))) {
+    LOG_WARN("update_tenant_decode_resource failed", K(ret), K(tenant_id));
   } else {
     refresh_interval_ = refresh_interval * 1000L * 1000L;
     LOG_INFO("succ to admin update tenant memory", K(tenant_id), K(memory_size));

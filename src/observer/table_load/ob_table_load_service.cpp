@@ -599,6 +599,10 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("incremental direct-load does not support table with foreign keys", KR(ret));
         FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with foreign keys");
+      } else if (table_schema->has_check_constraint() && (ObDirectLoadMode::LOAD_DATA == load_mode || ObDirectLoadMode::TABLE_LOAD == load_mode)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("incremental direct-load does not support table with check constraints", KR(ret));
+        FORWARD_USER_ERROR_MSG(ret, "incremental direct-load does not support table with check constraints");
       }
     } else if (ObDirectLoadMethod::is_full(method)) { // full direct-load
       if (OB_UNLIKELY(!ObDirectLoadInsertMode::is_valid_for_full_method(insert_mode))) {
@@ -915,6 +919,7 @@ void ObTableLoadService::release_all_ctx()
 int ObTableLoadService::get_memory_limit(int64_t &memory_limit)
 {
   int ret = OB_SUCCESS;
+  const int64_t LIMIT_SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE = 50;
   ObObj value;
   int64_t pctg = 0;
   int64_t tenant_id = MTL_ID();
@@ -935,7 +940,7 @@ int ObTableLoadService::get_memory_limit(int64_t &memory_limit)
   } else if (OB_FAIL(value.get_int(pctg))) {
     LOG_WARN("get int from value failed", K(ret), K(value));
   } else {
-    memory_limit = lib::get_tenant_memory_limit(tenant_id) * pctg / 100;
+    memory_limit = lib::get_tenant_memory_limit(tenant_id) * MIN(pctg, LIMIT_SYS_VAR_OB_SQL_WORK_AREA_PERCENTAGE) / 100;
   }
   return ret;
 }

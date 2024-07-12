@@ -12,15 +12,11 @@
 #ifndef OCEANBASE_OBSERVER_OB_HEARTBEAT_STRUCT_H_
 #define OCEANBASE_OBSERVER_OB_HEARTBEAT_STRUCT_H_
 #include "lib/net/ob_addr.h"
-#include "observer/ob_heartbeat_handler.h" // ObServerHealthStatus
+#include "share/ob_heartbeat_handler.h" // ObServerHealthStatus
 #include "ob_server_status.h"
 #include "ob_server_table_operator.h"
 namespace oceanbase
 {
-namespace observer
-{
-  struct ObServerHealthStatus;
-}
 namespace share
 {
 // volatile memory in heartbeat service
@@ -47,7 +43,7 @@ public:
   {
     return last_hb_time_;
   }
-  const observer::ObServerHealthStatus &get_server_health_status() const
+  const ObServerHealthStatus &get_server_health_status() const
   {
     return server_health_status_;
   }
@@ -56,7 +52,7 @@ public:
   {
     return hb_status_;
   }
-  int set_server_health_status(const observer::ObServerHealthStatus &server_health_status) {
+  int set_server_health_status(const ObServerHealthStatus &server_health_status) {
     return server_health_status_.assign(server_health_status);
   }
   void set_last_hb_time(const int64_t last_hb_time) {
@@ -74,7 +70,7 @@ public:
 private:
   common::ObAddr server_;
   int64_t last_hb_time_;
-  observer::ObServerHealthStatus server_health_status_;
+  ObServerHealthStatus server_health_status_;
   ObServerStatus::HeartBeatStatus hb_status_;
 };
 // heartbeat service send heartbeat requests to observers on the whitelist
@@ -140,7 +136,7 @@ public:
       const int64_t sql_port,
       const ObServerInfoInTable::ObBuildVersion &build_version,
       const int64_t start_service_time,
-      const observer::ObServerHealthStatus server_health_status);
+      const ObServerHealthStatus server_health_status);
   int assign(const ObHBResponse &other);
   bool is_valid() const;
   void reset();
@@ -164,7 +160,7 @@ public:
   {
     return start_service_time_;
   }
-  const observer::ObServerHealthStatus &get_server_health_status() const
+  const ObServerHealthStatus &get_server_health_status() const
   {
     return server_health_status_;
   }
@@ -182,7 +178,7 @@ private:
   int64_t sql_port_;  // mysql listen port
   share::ObServerInfoInTable::ObBuildVersion build_version_;
   int64_t start_service_time_;
-  observer::ObServerHealthStatus server_health_status_;
+  ObServerHealthStatus server_health_status_;
 };
 } // share
 } // oceanbase

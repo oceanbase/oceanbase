@@ -990,10 +990,6 @@ void ObBlockManager::mark_and_sweep()
     LOG_WARN("block manager not init", K(ret));
   } else if (!is_mark_sweep_enabled()) {
     LOG_INFO("mark and sweep is disabled, do not mark and sweep this round");
-  } else if (!ObServerCheckpointSlogHandler::get_instance().is_started()) {
-    if (REACH_TIME_INTERVAL(10 * 1000 * 1000 /* 10s */)) {
-      LOG_WARN("slog replay hasn't finished, this task can't start", K(ret));
-    }
   } else {
     if (OB_FAIL(mark_info.init(ObModIds::OB_STORAGE_FILE_BLOCK_REF, OB_SERVER_TENANT_ID))) {
       LOG_WARN("fail to init mark info, ", K(ret));
@@ -1164,7 +1160,7 @@ int ObBlockManager::mark_tenant_blocks(
         } else {
           LOG_WARN("fail to get next in-memory tablet", K(ret));
         }
-      } else if (handle.get_obj()->is_old_tablet()) {
+      } else if (handle.get_obj()->get_version() < ObTabletBlockHeader::TABLET_VERSION_V3) {
         if (OB_FAIL(mark_tablet_meta_blocks(mark_info, handle, macro_id_set, tmp_status))) {
           LOG_WARN("fail to mark tablet meta blocks", K(ret));
         } else if (OB_FAIL(mark_sstable_blocks(mark_info, handle, macro_id_set, tmp_status))) {

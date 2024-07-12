@@ -105,11 +105,12 @@ int64_t MdsNodeStatus::to_string(char *buf, const int64_t buf_len) const// ATOMI
 
 MdsNode::MdsNode(MdsNodeType node_type,
                  WriterType writer_type,
-                 const int64_t writer_id) :
+                 const int64_t writer_id,
+                 const transaction::ObTxSEQ seq_no) :
 ListNode<MdsNode>(),
 status_(node_type, writer_type),
 writer_id_(writer_id),
-seq_no_(0),
+seq_no_(seq_no),
 redo_scn_(share::SCN::max_scn()),
 end_scn_(share::SCN::max_scn()),
 trans_version_(share::SCN::max_scn()),

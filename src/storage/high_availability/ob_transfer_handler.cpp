@@ -909,11 +909,10 @@ int ObTransferHandler::get_ls_active_trans_count_(
 {
   int ret = OB_SUCCESS;
   active_trans_count = 0;
-  const uint64_t tenant_id = MTL_ID();
   if (OB_FAIL(ls_->get_active_tx_count(active_trans_count))) {
     LOG_WARN("failed to get active trans count", K(ret), KPC(ls_));
   } else {
-    LOG_INFO("get ls active trans count", K(tenant_id), K(src_ls_id), K(active_trans_count));
+    LOG_INFO("get ls active trans count", K(ret), K(src_ls_id), K(active_trans_count));
   }
   return ret;
 }
@@ -945,6 +944,7 @@ int ObTransferHandler::check_start_status_transfer_tablets_(
       arg.tenant_id_ = task_info.tenant_id_;
       arg.src_ls_id_ = task_info.src_ls_id_;
       arg.dest_ls_id_ = task_info.dest_ls_id_;
+      arg.data_version_ = task_info.data_version_;
       const int64_t timeout = GCONF.rpc_timeout;
       const int64_t cluster_id = GCONF.cluster_id;
       const uint64_t group_id = share::OBCG_STORAGE;
@@ -1105,7 +1105,7 @@ int ObTransferHandler::do_trans_transfer_start_prepare_(
     LOG_WARN("failed to do transfer dest prepare", K(ret), K(task_info));
   } else if (FALSE_IT(addr_info.src_addr_ = dest_ls_leader)) {
   // submit active tx redo log before block tablet write to optimise system interrupt time
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(task_info));
   } else if (OB_FAIL(src_ls_handle.get_ls()->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
     LOG_WARN("failed to submit tx log", K(ret), K(task_info));
@@ -1136,7 +1136,7 @@ int ObTransferHandler::wait_tablet_write_end_(
   if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls srv should not be NULL", K(ret), KP(ls_srv));
-  } else if (OB_FAIL(ls_srv->get_ls(src_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_srv->get_ls(src_ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("ls_srv->get_ls() fail", K(ret), K(src_ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1407,7 +1407,7 @@ int ObTransferHandler::do_tx_start_transfer_out_(
     // TODO lana optimise transfer_epoch value
     start_transfer_out_info.transfer_epoch_ = task_info.task_id_.id();
     start_transfer_out_info.task_id_ = task_info.task_id_;
-    start_transfer_out_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
+    start_transfer_out_info.data_version_ = task_info.data_version_;
     start_transfer_out_info.filter_tx_need_transfer_ = false;
     if (OB_FAIL(start_transfer_out_info.tablet_list_.assign(task_info.tablet_list_))) {
       LOG_WARN("failed to assign transfer tablet list", K(ret), K(task_info));
@@ -1705,7 +1705,7 @@ int ObTransferHandler::get_max_decided_scn_(
     if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
       LOG_WARN("fail to get log stream", KR(ret), K(ls_id));
     } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -1793,7 +1793,7 @@ int ObTransferHandler::get_transfer_tablets_meta_(
       tablet_info.reset();
       if (OB_FAIL(ls_->ha_get_tablet(transfer_tablet_info.tablet_id_, tablet_handle))) {
         LOG_WARN("failed to get tablet", K(ret), K(transfer_tablet_info), K(tablet_handle));
-      } else if (OB_FAIL(get_next_tablet_info_(task_info.dest_ls_id_, transfer_tablet_info, tablet_handle, tablet_info))) {
+      } else if (OB_FAIL(get_next_tablet_info_(task_info, transfer_tablet_info, tablet_handle, tablet_info))) {
         LOG_WARN("failed to get next tablet info ", K(ret), K(transfer_tablet_info), K(tablet_handle));
       } else if (OB_FAIL(tablet_meta_list.push_back(tablet_info.param_))) {
         LOG_WARN("failed to push tablet info into array", K(ret), K(tablet_info));
@@ -1823,7 +1823,7 @@ int ObTransferHandler::get_transfer_tablets_meta_(
 }
 
 int ObTransferHandler::get_next_tablet_info_(
-    const share::ObLSID &dest_ls_id,
+    const share::ObTransferTaskInfo &task_info,
     const ObTransferTabletInfo &transfer_tablet_info,
     ObTabletHandle &tablet_handle,
     obrpc::ObCopyTabletInfo &tablet_info)
@@ -1833,10 +1833,12 @@ int ObTransferHandler::get_next_tablet_info_(
   ObTabletCreateDeleteMdsUserData user_data;
   ObTablet *tablet = nullptr;
   bool committed_flag = false;
+  const ObLSID &dest_ls_id = task_info.dest_ls_id_;
+  const int64_t data_version = task_info.data_version_;
 
-  if (!dest_ls_id.is_valid() || !transfer_tablet_info.is_valid() || !tablet_handle.is_valid()) {
+  if (!task_info.is_valid() || !transfer_tablet_info.is_valid() || !tablet_handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get next tablet info get invalid argument", K(ret), K(dest_ls_id), K(transfer_tablet_info), K(tablet_handle));
+    LOG_WARN("get next tablet info get invalid argument", K(ret), K(task_info), K(transfer_tablet_info), K(tablet_handle));
   } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(transfer_tablet_info));
@@ -1852,11 +1854,10 @@ int ObTransferHandler::get_next_tablet_info_(
   } else if (transfer_tablet_info.transfer_seq_ != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
     ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
     LOG_WARN("tablet transfer seq is not match", K(ret), KPC(tablet), K(transfer_tablet_info));
-  } else if (OB_FAIL(tablet->build_transfer_tablet_param(dest_ls_id, tablet_info.param_))) {
+  } else if (OB_FAIL(tablet->build_transfer_tablet_param(data_version, dest_ls_id, tablet_info.param_))) {
     LOG_WARN("failed to build transfer tablet param", K(ret), K(transfer_tablet_info));
-  } else if (OB_FAIL(tablet->get_ha_sstable_size(tablet_info.data_size_))) {
-    LOG_WARN("failed to get sstable size", K(ret), K(transfer_tablet_info));
   } else {
+    tablet_info.data_size_ = 0; //transfer will not use data size
     tablet_info.tablet_id_ = transfer_tablet_info.tablet_id_;
     tablet_info.status_ = ObCopyTabletStatus::TABLET_EXIST;
   }
@@ -1891,7 +1892,7 @@ int ObTransferHandler::do_tx_start_transfer_in_(
       start_transfer_in_info.dest_ls_id_ = task_info.dest_ls_id_;
       start_transfer_in_info.start_scn_ = start_scn;
       start_transfer_in_info.task_id_ = task_info.task_id_;
-      start_transfer_in_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
+      start_transfer_in_info.data_version_ = task_info.data_version_;
 
       if (timeout_ctx.is_timeouted()) {
         ret = OB_TIMEOUT;
@@ -2691,7 +2692,7 @@ int ObTransferHandler::do_move_tx_to_dest_ls_(const share::ObTransferTaskInfo &t
   int64_t tx_count = 0;
   int64_t buf_len = 0;
   int64_t collect_count = 0;
-  if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_,src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_,src_ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("get ls failed", KR(ret), K(task_info));
   } else if (OB_FAIL(src_ls_handle.get_ls()->collect_tx_ctx(task_info.dest_ls_id_,
                                                             data_end_scn,

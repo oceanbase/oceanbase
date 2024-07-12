@@ -1024,6 +1024,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
     switch (type) {
     case T_FUN_COUNT:
       SET_SYMBOL_IF_EMPTY("count");
+    case T_FUN_COUNT_SUM:
+      SET_SYMBOL_IF_EMPTY("count_sum");
     case T_FUN_MAX:
       SET_SYMBOL_IF_EMPTY("max");
     case T_FUN_MIN:

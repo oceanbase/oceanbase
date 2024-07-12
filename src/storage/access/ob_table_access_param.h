@@ -149,6 +149,8 @@ public:
   { pd_storage_flag_.set_use_stmt_iter_pool(true);}
   OB_INLINE bool has_lob_column_out() const
   { return has_lob_column_out_; }
+  OB_INLINE bool is_tablet_spliting() const
+  { return is_tablet_spliting_; }
   bool need_trans_info() const;
   OB_INLINE bool is_use_column_store() const
   { return !(get_read_info()->has_all_column_group()) || pd_storage_flag_.is_use_column_store(); }
@@ -215,10 +217,15 @@ public:
   bool has_lob_column_out_;
   bool is_for_foreign_check_;
   bool limit_prefetch_;
+  bool is_mds_query_;
   bool is_non_unique_local_index_;
   int64_t ss_rowkey_prefix_cnt_;
   sql::ObStoragePushdownFlag pd_storage_flag_;
   ObTableScanOption table_scan_opt_;
+  uint64_t auto_split_filter_type_;
+  const sql::ObExpr *auto_split_filter_;
+  sql::ExprFixedArray *auto_split_params_;
+  bool is_tablet_spliting_;
 };
 
 struct ObTableAccessParam
@@ -229,8 +236,11 @@ public:
   void reset();
   OB_INLINE bool is_valid() const { return is_inited_ && iter_param_.is_valid(); }
   // used for query
-  int init(const ObTableScanParam &scan_param, const ObTabletHandle &tablet_handle);
-    // used for merge
+  int init(
+      const ObTableScanParam &scan_param,
+      const ObTabletHandle *tablet_handle,
+      const ObITableReadInfo *rowkey_read_info = nullptr);
+  // used for merge
   int init_merge_param(const uint64_t table_id,
                        const common::ObTabletID &tablet_id,
                        const ObITableReadInfo &read_info,

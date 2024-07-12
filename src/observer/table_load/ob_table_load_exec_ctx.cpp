@@ -27,6 +27,23 @@ using namespace transaction;
 /**
  * ObTableLoadExecCtx
  */
+ObIAllocator *ObTableLoadExecCtx::get_allocator()
+{
+  ObIAllocator *allocator = nullptr;
+  if (nullptr != exec_ctx_) {
+    allocator = &exec_ctx_->get_allocator();
+  }
+  return allocator;
+}
+
+ObSQLSessionInfo *ObTableLoadExecCtx::get_session_info()
+{
+  ObSQLSessionInfo *session_info = nullptr;
+  if (nullptr != exec_ctx_) {
+    session_info = exec_ctx_->get_my_session();
+  }
+  return session_info;
+}
 
 int ObTableLoadExecCtx::check_status()
 {
@@ -39,37 +56,9 @@ int ObTableLoadExecCtx::check_status()
   } else if (nullptr != tx_desc_ && OB_UNLIKELY(tx_desc_->is_tx_timeout())) {
     ret = OB_TRANS_TIMEOUT;
     LOG_WARN("trans timeout", KR(ret), KPC(tx_desc_));
-  }
-  return ret;
-}
-
-/**
- * ObTableLoadSqlExecCtx
- */
-
-ObIAllocator *ObTableLoadSqlExecCtx::get_allocator()
-{
-  ObIAllocator *allocator = nullptr;
-  if (nullptr != exec_ctx_) {
-    allocator = &exec_ctx_->get_allocator();
-  }
-  return allocator;
-}
-
-ObSQLSessionInfo *ObTableLoadSqlExecCtx::get_session_info()
-{
-  ObSQLSessionInfo *session_info = nullptr;
-  if (nullptr != exec_ctx_) {
-    session_info = exec_ctx_->get_my_session();
-  }
-  return session_info;
-}
-
-int ObTableLoadSqlExecCtx::check_status()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObTableLoadExecCtx::check_status())) {
-    LOG_WARN("fail to check status", KR(ret));
+  } else if (OB_ISNULL(exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec_ctx_ is null", KR(ret));
   } else if (OB_FAIL(exec_ctx_->check_status())) {
     LOG_WARN("fail to check exec ctx status", KR(ret));
   }
@@ -85,17 +74,9 @@ int ObTableLoadClientExecCtx::check_status()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTableLoadExecCtx::check_status())) {
     LOG_WARN("fail to check status", KR(ret));
-  } else if (OB_UNLIKELY(timeout_ts_ < ObTimeUtil::current_time())) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("table load is timeout", KR(ret), K_(timeout_ts));
   } else if (OB_UNLIKELY(ObTimeUtil::current_time() - last_heartbeat_time_ > heartbeat_timeout_us_)) {
     ret = OB_TIMEOUT;
     LOG_WARN("heartbeat is timeout", KR(ret), K(last_heartbeat_time_), K(heartbeat_timeout_us_));
-  } else if (OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", KR(ret));
-  } else if (OB_UNLIKELY(session_info_->is_terminate(ret))) {
-    LOG_WARN("execution was terminated", KR(ret));
   }
   return ret;
 }

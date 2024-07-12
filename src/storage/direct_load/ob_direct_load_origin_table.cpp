@@ -25,6 +25,7 @@ using namespace common;
 using namespace blocksstable;
 using namespace share;
 using namespace share::schema;
+using namespace transaction;
 
 /**
  * ObDirectLoadOriginTableCreateParam
@@ -102,6 +103,8 @@ int ObDirectLoadOriginTable::init(const ObDirectLoadOriginTableCreateParam &para
       meta_.ls_id_ = param.ls_id_;
       meta_.table_id_ = param.table_id_;
       meta_.tablet_id_ = param.tablet_id_;
+      meta_.tx_id_ = param.tx_id_;
+      meta_.tx_seq_ = param.tx_seq_;
       is_inited_ = true;
     }
   }
@@ -329,6 +332,8 @@ int ObDirectLoadOriginTableScanner::init_table_access_ctx(bool skip_read_lob)
   int ret = OB_SUCCESS;
   const uint64_t table_id = origin_table_->get_meta().table_id_;
   const ObTabletID &tablet_id = origin_table_->get_meta().tablet_id_;
+  const ObTransID &tx_id = origin_table_->get_meta().tx_id_;
+  const ObTxSEQ &tx_seq = origin_table_->get_meta().tx_seq_;
   const int64_t snapshot_version = ObTimeUtil::current_time_ns();
   ObQueryFlag query_flag(ObQueryFlag::Forward,
                          false /*daily_merge*/,
@@ -355,6 +360,8 @@ int ObDirectLoadOriginTableScanner::init_table_access_ctx(bool skip_read_lob)
                                             trans_version_range))) {
     LOG_WARN("fail to init table access context", KR(ret));
   } else {
+    store_ctx_.mvcc_acc_ctx_.snapshot_.tx_id_ = tx_id;
+    store_ctx_.mvcc_acc_ctx_.snapshot_.scn_ = tx_seq;
     table_access_ctx_.lob_locator_helper_->update_lob_locator_ctx(table_id, tablet_id.id(), 0);
   }
   return ret;

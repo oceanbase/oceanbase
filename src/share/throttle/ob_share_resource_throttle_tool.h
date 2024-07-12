@@ -84,6 +84,9 @@ public:
   void alloc_resource(const int64_t resource_size, const int64_t abs_expire_time, bool &is_throttled);
 
   template <typename ALLOCATOR>
+  bool has_triggered_throttle();
+
+  template <typename ALLOCATOR>
   bool is_throttling(ObThrottleInfoGuard &share_ti_guard, ObThrottleInfoGuard &module_ti_guard);
 
   template <typename ALLOCATOR>

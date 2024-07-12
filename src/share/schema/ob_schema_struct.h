@@ -6059,7 +6059,9 @@ public:
                        K_(reverse_cluster_name),
                        K_(reverse_tenant_name), K_(reverse_user_name),
                        K_(reverse_password), K_(plain_reverse_password),
-                       K_(reverse_host_addr));
+                       K_(reverse_host_addr),
+                       K_(host_name), K_(host_port),
+                       K_(reverse_host_name), K_(reverse_host_port));
 private:
   int dblink_encrypt(common::ObString &src, common::ObString &dst);
   int dblink_decrypt(common::ObString &src, common::ObString &dst);
@@ -6092,6 +6094,10 @@ protected:
   common::ObAddr reverse_host_addr_;  // used for reverse dblink
   common::ObString database_name_; // used for mysql dblink
   bool if_not_exist_; // used for mysql dblink
+  common::ObString host_name_; // ip string or domin name
+  int32_t host_port_;
+  common::ObString reverse_host_name_; // ip string or domin name
+  int32_t reverse_host_port_;
 };
 
 struct ObTenantDbLinkId
@@ -6193,7 +6199,9 @@ public:
          + reverse_user_name_.length() + 1
          + reverse_password_.length() + 1
          + plain_reverse_password_.length() + 1
-         + database_name_.length() + 1;
+         + database_name_.length() + 1
+         + host_name_.length() + 1
+         + reverse_host_name_.length() + 1;
   }
 };
 

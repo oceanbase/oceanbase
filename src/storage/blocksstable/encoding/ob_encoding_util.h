@@ -634,6 +634,20 @@ public:
   }
   ~ObPodFix2dArray() { destroy(); }
 
+  OB_INLINE int64_t get_dimension_size() const { return BLOCK_ITEM_CNT; }
+  OB_INLINE int64_t get_continuous_array_count() const
+  {
+    return (size_ + BLOCK_ITEM_CNT - 1) / BLOCK_ITEM_CNT;
+  }
+  OB_INLINE void get_continuous_array(const int64_t idx, T *&arr, int64_t &arr_cnt) const
+  {
+    arr = nullptr;
+    arr_cnt = 0;
+    if (idx * BLOCK_ITEM_CNT < size_) {
+      arr = block_list_[idx];
+      arr_cnt = MIN(BLOCK_ITEM_CNT, size_ - idx * BLOCK_ITEM_CNT);
+    }
+  }
   OB_INLINE int64_t count() const { return size_; }
   OB_INLINE bool empty() const { return size_ <= 0; }
   OB_INLINE T &at(int64_t idx)

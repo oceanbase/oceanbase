@@ -322,7 +322,9 @@ private:
   static const int32_t TM_MV_ON_QUERY_COMPUTATION_BITS = 1;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_OFFSET = 29;
   static const int32_t TM_DDL_IGNORE_SYNC_CDC_BITS = 1;
-  static const int32_t TM_RESERVED = 2;
+  static const int32_t TM_MV_MAJOR_REFRESH_OFFSET = 30;
+  static const int32_t TM_MV_MAJOR_REFRESH_BITS = 1;
+  static const int32_t TM_RESERVED = 1;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -1857,6 +1859,8 @@ private:
   int convert_column_ids_in_constraint(
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map);
   int convert_column_udt_set_ids(
+      const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map);
+  int convert_geo_generated_col_ids(
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map);
   static int convert_column_ids_in_info(
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map,

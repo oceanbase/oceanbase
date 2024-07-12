@@ -69,6 +69,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcBootstrapP, gctx_);
     RPC_PROCESSOR(ObRpcIsEmptyServerP, gctx_);
     RPC_PROCESSOR(ObRpcCheckServerForAddingServerP, gctx_);
+    RPC_PROCESSOR(ObRpcCheckServerMachineStatusP, gctx_);
     RPC_PROCESSOR(ObRpcCheckDeploymentModeP, gctx_);
 #ifdef OB_BUILD_TDE_SECURITY
     RPC_PROCESSOR(ObRpcWaitMasterKeyInSyncP, gctx_);
@@ -102,6 +103,7 @@ void oceanbase::observer::init_srv_xlator_for_storage(ObSrvRpcXlator *xlator) {
     RPC_PROCESSOR(ObRpcBatchGetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcBatchSetTabletAutoincSeqP, gctx_);
     RPC_PROCESSOR(ObRpcClearTabletAutoincSeqCacheP, gctx_);
+    RPC_PROCESSOR(ObRpcBatchGetTabletBindingP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLRedoLogP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLCommitLogP, gctx_);
     RPC_PROCESSOR(ObRpcRemoteWriteDDLIncCommitLogP, gctx_);

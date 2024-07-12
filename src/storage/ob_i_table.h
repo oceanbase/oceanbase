@@ -143,6 +143,9 @@ public:
     OB_INLINE bool is_ddl_mem_co_cg_sstable() const { return ObITable::is_ddl_mem_co_cg_sstable(table_type_); }
     OB_INLINE bool is_meta_major_sstable() const { return ObITable::is_meta_major_sstable(table_type_); }
     OB_INLINE bool is_multi_version_table() const { return ObITable::is_multi_version_table(table_type_); }
+    OB_INLINE bool is_mds_sstable() const { return ObITable::is_mds_sstable(table_type_); }
+    OB_INLINE bool is_mds_mini_sstable() const { return ObITable::is_mds_mini_sstable(table_type_); }
+    OB_INLINE bool is_mds_minor_sstable() const { return ObITable::is_mds_minor_sstable(table_type_); }
     OB_INLINE bool is_ddl_sstable() const { return ObITable::is_ddl_sstable(table_type_); }
     OB_INLINE bool is_ddl_dump_sstable() const { return ObITable::is_ddl_dump_sstable(table_type_); }
     OB_INLINE bool is_ddl_mem_sstable() const { return ObITable::is_ddl_mem_sstable(table_type_); }
@@ -264,6 +267,8 @@ public:
   virtual bool is_major_or_ddl_merge_sstable() const { return is_major_sstable() || is_ddl_merge_sstable(key_.table_type_); }
   virtual bool is_minor_sstable() const { return is_minor_sstable(key_.table_type_); }
   virtual bool is_mini_sstable() const { return is_mini_sstable(key_.table_type_); }
+  virtual bool is_mds_minor_sstable() const { return is_mds_minor_sstable(key_.table_type_); }
+  virtual bool is_mds_mini_sstable() const { return is_mds_mini_sstable(key_.table_type_); }
   virtual bool is_multi_version_minor_sstable() const { return is_multi_version_minor_sstable(key_.table_type_); }
   virtual bool is_multi_version_table() const { return is_multi_version_table(key_.table_type_); }
   virtual bool is_memtable() const { return is_memtable(key_.table_type_); }
@@ -278,6 +283,7 @@ public:
   virtual bool is_active_memtable() { return false; }
   OB_INLINE bool is_table_with_scn_range() const { return is_table_with_scn_range(key_.table_type_); }
   virtual OB_INLINE int64_t get_timestamp() const { return 0; }
+  virtual bool is_mds_sstable() const { return is_mds_sstable(key_.table_type_); }
   virtual bool is_ddl_sstable() const { return is_ddl_sstable(key_.table_type_); }
   virtual bool is_ddl_dump_sstable() const { return is_ddl_dump_sstable(key_.table_type_); }
   virtual bool is_ddl_mem_sstable() const { return is_ddl_mem_sstable(key_.table_type_); }
@@ -310,8 +316,10 @@ public:
   {
     return ObITable::TableType::MINOR_SSTABLE == table_type
         || ObITable::TableType::MINI_SSTABLE == table_type
-        || ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE == table_type
-        || ObITable::TableType::DDL_MEM_MINI_SSTABLE == table_type;
+        || ObITable::TableType::DDL_MEM_MINI_SSTABLE == table_type
+        || ObITable::TableType::MDS_MINOR_SSTABLE == table_type
+        || ObITable::TableType::MDS_MINI_SSTABLE == table_type
+        || ObITable::TableType::REMOTE_LOGICAL_MINOR_SSTABLE == table_type;
   }
 
   static bool is_multi_version_table(const TableType table_type)
@@ -326,7 +334,8 @@ public:
 
   static bool is_mini_sstable(const TableType table_type)
   {
-    return ObITable::TableType::MINI_SSTABLE == table_type;
+    return ObITable::TableType::MINI_SSTABLE == table_type
+        || ObITable::TableType::MDS_MINI_SSTABLE == table_type;
   }
 
   /*
@@ -441,6 +450,18 @@ public:
     return ObITable::TableType::DDL_MEM_CG_SSTABLE == table_type
       || ObITable::TableType::DDL_MEM_CO_SSTABLE == table_type;
   }
+  static bool is_mds_mini_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::MDS_MINI_SSTABLE == table_type;
+  }
+  static bool is_mds_minor_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::MDS_MINOR_SSTABLE == table_type;
+  }
+  static bool is_mds_sstable(const TableType table_type)
+  {
+    return is_mds_mini_sstable(table_type) || is_mds_minor_sstable(table_type);
+  }
   static bool is_table_with_scn_range(const TableType table_type)
   {
     return is_multi_version_table(table_type) || is_meta_major_sstable(table_type);
@@ -530,6 +551,7 @@ class ObTablesHandleArray final
 {
 public:
   typedef common::ObArray<storage::ObTableHandleV2> HandlesArray;
+  typedef bool (*IS_RIGH_SSTABLE_TYPE_FUNC)(const ObITable::TableType table_type);
   ObTablesHandleArray();
   ObTablesHandleArray(const uint64_t tenant_id);
   ~ObTablesHandleArray();
@@ -551,11 +573,16 @@ public:
   int get_tables(common::ObIArray<ObITable *> &tables) const;
   int get_first_memtable(ObIMemtable *&memtable) const;
   int get_all_minor_sstables(common::ObIArray<ObITable *> &tables) const;
+  int get_all_ddl_sstables(common::ObIArray<ObITable *> &tables) const;
+  int get_all_mds_sstables(common::ObIArray<ObITable *> &tables) const;
   int check_continues(const share::ObScnRange *scn_range) const;
   DECLARE_TO_STRING;
 
 private:
   int tablet_id_check(const common::ObTabletID &tablet_id);
+  int get_sstable_with_type_(
+      IS_RIGH_SSTABLE_TYPE_FUNC is_right_sstable_type,
+      common::ObIArray<ObITable *> &tables) const;
 
 private:
   common::ObTabletID tablet_id_;

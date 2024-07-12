@@ -875,7 +875,8 @@ inline constexpr bool is_var_len_agg_cell(VecValueTypeClass vec_tc)
          || vec_tc == VEC_TC_JSON
          || vec_tc == VEC_TC_GEO
          || vec_tc == VEC_TC_UDT
-         || vec_tc == VEC_TC_ROARINGBITMAP;
+         || vec_tc == VEC_TC_ROARINGBITMAP
+         || vec_tc == VEC_TC_EXTEND;
 }
 
 template <typename AggType>

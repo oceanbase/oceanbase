@@ -1,0 +1,160 @@
+#!/usr/bin/python
+# coding=utf8
+# author liangjinrong.ljr
+
+import os
+import sys
+import time
+import datetime
+import subprocess
+import getopt
+
+# 统计开始时间
+GLOBAL_START_TIME = datetime.datetime.now()
+
+def get_cost_time():
+    '''
+    获取当前运行时间
+    '''
+    cost_time_sec = (datetime.datetime.now() - GLOBAL_START_TIME).seconds
+    return "%dm%.2ds" % (cost_time_sec / 60, cost_time_sec % 60)
+
+def print_log(log_str):
+    '''
+    打印日志函数
+    '''
+    print("[%s %s] %s" % (time.strftime("%H:%M:%S", time.localtime()), get_cost_time(), log_str))
+    sys.stdout.flush()
+
+class GlobalConf():
+    '''
+    编译配置类
+    '''
+    def __init__(self):
+        # 输入编译目录
+        self.build_dir = ""
+
+GLOBAL_CONF = GlobalConf()
+
+def shell_run_command(command_str, need_print_all=True, need_print_output=True, no_time=False):
+    '''
+    运行shell命令
+    '''
+    if need_print_all:
+        print_log("[运行命令]: %s" % command_str)
+        if not need_print_output:
+            print_log("[运行输出]: 日志过多已经忽略输出")
+    result = dict()
+    result["return_code"] = 1
+    result["return_message"] = []
+    result["cmd"] = command_str
+    is_frist = False
+    ps = subprocess.Popen(command_str,
+                          stdin=subprocess.PIPE,
+                          stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT,
+                          shell=True,
+                          close_fds=True)
+    while True:
+        data = ps.stdout.readline()
+        if data == b'':
+            if ps.poll() is not None:
+                break
+        result["return_message"].append(data)
+
+        if not need_print_all:
+            continue
+
+        if need_print_output and len(data.strip()) > 1:
+            if not is_frist:
+                print_log("[运行输出]: %s" % data.replace("\n", ""))
+                is_frist = True
+            else:
+                data_str = "            %s" % data.replace("\n", "")
+                if no_time:
+                    print(data_str)
+                else:
+                    print_log("            %s" % data.replace("\n", ""))
+
+    result["return_code"] = ps.returncode
+    return result
+
+def print_help():
+    '''
+    打印帮助信息
+    '''
+    print("使用说明:")
+    print("./do_bolt_opt --build_dir=build_xxx")
+
+def parse_arg():
+    '''
+    解析命令行参数
+    '''
+    global GLOBAL_CONF
+
+    try:
+        # sys.argv[1:] 过滤掉第一个参数(它是脚本名称，不是参数的一部分)
+        opts, args = getopt.getopt(sys.argv[1:], "h", ["help", "build_dir="])
+
+        if args:
+            print_log("不符合预期输入，请重试\n")
+            print_help()
+            exit(ERROR_CODE.COMMON_ERROR)
+
+        for cmd, arg in opts:
+            if cmd in ("-h", "--help"):
+                print_help()
+                exit(ERROR_CODE.COMMON_SUCCESS)
+            elif cmd in ("--build_dir",):
+               if not arg.startswith("/") or not os.path.exists(arg):
+                    print("[ERROR] 输入路径[%s]不是绝对路径或者不存在" % arg)
+                    exit(ERROR_CODE.COMMON_ERROR)
+               GLOBAL_CONF.build_dir = arg
+
+    except getopt.GetoptError as ex:
+        print_log("[ERROR] getopt.GetoptError 解析参数失败，请合法输入, %s" % ex)
+        exit(ERROR_CODE.COMMON_ERROR)
+    except ValueError as ex:
+        print_log("[ERROR] ValueError 解析参数失败，请合法输入, %s" % ex)
+        exit(ERROR_CODE.COMMON_ERROR)
+
+    if not GLOBAL_CONF.build_dir:
+        print("[ERROR]输入参数不完整")
+        print_help()
+        exit(ERROR_CODE.COMMON_ERROR)
+
+def main():
+    '''
+    main函数入口
+    '''
+    # 解析参数
+    parse_arg()
+
+    result = shell_run_command("uname -m", False, False)
+    if len(result["return_message"]) == 0:
+        print_log("get architecture filed")
+    elif result["return_message"][0].strip() == "x86_64":
+        print_log("download alibaba-cloud-compiler")
+        result = shell_run_command("wget http://yum.tbsite.net/taobao/7/x86_64/current/alibaba-cloud-compiler/alibaba-cloud-compiler-17.0.6.1-2.alios7.x86_64.rpm",
+                                False, False)
+        print_log("rpm2cpio alibaba-cloud-compiler | cpio -div -u")
+        result = shell_run_command("rpm2cpio alibaba-cloud-compiler-17.0.6.1-2.alios7.x86_64.rpm | cpio -div -u", False, False)
+        print_log("check llvm-bolt version")
+        result = shell_run_command("./opt/alibaba-cloud-compiler/bin/llvm-bolt --version", False, True)
+        print_log("do bolt opt")
+        result = shell_run_command("./opt/alibaba-cloud-compiler/bin/llvm-bolt "  + GLOBAL_CONF.build_dir + "/src/observer/observer " +
+                                    "-o " + GLOBAL_CONF.build_dir + "/src/observer/observer_bolt " +
+                                    "-data=" + GLOBAL_CONF.build_dir + "/../perf.fdata " +
+                                    "-reorder-blocks=ext-tsp -reorder-functions=cdsort -split-functions -split-all-cold -dyno-stats --use-gnu-stack --update-debug-sections --bolt-info=false",
+                                    False, False)
+        result = shell_run_command("mv " + GLOBAL_CONF.build_dir + "/src/observer/observer_bolt " + GLOBAL_CONF.build_dir + "/src/observer/observer ", False, False)
+        result = shell_run_command(GLOBAL_CONF.build_dir + "/src/observer/observer " + "--version", False, True)
+        print_log("bolt opt finish")
+    else:
+        print_log("bolt opt is not supported on " + result["return_message"][0].strip() + " architecture.")
+
+if __name__ == '__main__':
+    '''
+    __main__入口
+    '''
+    main()

@@ -154,7 +154,6 @@ int ObAllVirtualTabletInfo::process_curr_tenant(ObNewRow *&row)
     SERVER_LOG(WARN, "tablet should not null", K(ret), K(tablet_handle));
   } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_latest_tablet_status(latest_user_data, is_committed))) {
     if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
-      is_committed = false;
       is_empty_result = true;
       ret = OB_SUCCESS;
     } else {

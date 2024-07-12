@@ -35,7 +35,7 @@ class ObCompactionScheduleIterator
 public:
   ObCompactionScheduleIterator(
     const bool is_major,
-    storage::ObLSGetMod mod = storage::ObLSGetMod::STORAGE_MOD);
+    storage::ObLSGetMod mod = storage::ObLSGetMod::COMPACT_MODE);
   ~ObCompactionScheduleIterator() { reset(); }
   int build_iter(const int64_t schedule_batch_size);
   int get_next_ls(ObLSHandle &ls_handle);

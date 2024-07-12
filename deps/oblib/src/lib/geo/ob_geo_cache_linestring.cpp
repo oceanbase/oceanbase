@@ -37,7 +37,7 @@ int ObCachedGeoLinestring::init()
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc point location analyzer failed", K(ret));
       } else {
-        lAnalyzer_ = new(buf) ObLineIntersectionAnalyzer(this, &rtree_);
+        lAnalyzer_ = new(buf) ObLineIntersectionAnalyzer(this, rtree_);
       }
     }
   }

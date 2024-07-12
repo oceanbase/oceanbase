@@ -340,7 +340,7 @@ void UpdateMergeInfoForMemtable::operator()(ObMemtableDiagnoseInfo &info) const
   info.merge_finish_time_ = merge_finish_time_;
   info.occupy_size_ = occupy_size_;
   info.concurrent_cnt_ = concurrent_cnt_;
-  TRANS_LOG(INFO, "update_merge_info", K(info), K(param_));
+  TRANS_LOG(DEBUG, "update_merge_info", K(info), K(param_));
 }
 int ObCheckpointDiagnoseMgr::update_merge_info_for_memtable(const ObCheckpointDiagnoseParam &param,
     int64_t merge_start_time,

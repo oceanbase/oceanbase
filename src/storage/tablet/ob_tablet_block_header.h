@@ -61,7 +61,9 @@ public:
   ObTabletBlockHeader()
     : is_inited_(false), pushed_inline_meta_cnt_(0),
       version_(TABLET_VERSION_V3), length_(0),
-      checksum_(0), inline_meta_count_(0) {}
+      checksum_(0), inline_meta_count_(0)
+  {
+  }
 
   int init(const int32_t secondary_meta_count);
   bool is_valid() const
@@ -77,9 +79,6 @@ public:
 
   int32_t get_version() const { return version_; }
   int32_t get_length() const { return length_; }
-
-  static int get_tablet_version(const char *buf, const int64_t len, int32_t &version);
-
 public:
   static const int32_t MAX_INLINE_META_COUNT = 8;
   bool is_inited_;

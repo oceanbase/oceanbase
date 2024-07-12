@@ -174,7 +174,7 @@ int ObAllVirtualMdsNodeStat::convert_node_info_to_row_(const storage::mds::MdsNo
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 10: {// seq_no
-        cur_row_.cells_[i].set_int(node_info.seq_no_);
+        cur_row_.cells_[i].set_int(node_info.seq_no_.cast_to_int());
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 11: {// redo_scn

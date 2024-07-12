@@ -511,6 +511,5 @@ int ObTabletMajorMergeCtx::prepare_schema()
   }
   return ret;
 }
-
 } // namespace compaction
 } // namespace oceanbase

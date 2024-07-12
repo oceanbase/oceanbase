@@ -97,7 +97,7 @@ int ObMdsTableMgr::register_to_mds_table_mgr(MdsTableBase *p_mds_table)
   } else if (OB_FAIL(mds_table_map_.insert(tablet_id, p_mds_table))) {
     MDS_LOG(ERROR, "fail to insert mds table to map", KR(ret), KPC(p_mds_table));
   } else {
-    MDS_LOG(INFO, "register success", KR(ret), KPC(p_mds_table));
+    MDS_LOG(INFO, "register to mds table mgr success", KR(ret), KPC(p_mds_table));
   }
   return ret;
 }

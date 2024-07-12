@@ -16,6 +16,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/dml/ob_table_modify_op.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -39,12 +40,18 @@ int ObExprDmlEvent::calc_result_typeN(ObExprResType &type,
                                       int64_t param_num,
                                       common::ObExprTypeCtx &type_ctx) const
 {
-  UNUSEDx(dml, type_ctx, param_num);
   int ret = OB_SUCCESS;
   type.set_tinyint();
   type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
   type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
   type.set_result_flag(NOT_NULL_FLAG);
+  if (2 == param_num && lib::is_oracle_mode()) { // updating(expr) in oracle mode
+    ObExprResType tmp_type;
+    ObSEArray<ObExprResType*, 1, ObNullAllocator> params;
+    OZ (params.push_back(&dml[1]));
+    OZ (aggregate_string_type_and_charset_oracle(*type_ctx.get_session(), params, tmp_type));
+    OZ (deduce_string_param_calc_type_and_charset(*type_ctx.get_session(), tmp_type, params));
+  }
   return ret;
 }
 
@@ -75,13 +82,29 @@ int ObExprDmlEvent::calc_dml_event(const ObExpr &expr,
   if (OB_SUCC(ret)) {
     if (dml->get_int() == static_cast<int64_t>(ctx.exec_ctx_.get_dml_event())) {
       if (static_cast<int64_t>(DE_UPDATING) == dml->get_int() && NULL != update_col) {
+        ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+        common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
+        ObString col;
         bool find = false;
-        const ObString &col = update_col->get_string();
-        const ColContentFixedArray *update_cols = ctx.exec_ctx_.get_update_columns();
-        for (int64_t i = 0; OB_SUCC(ret) && !find && i < update_cols->count(); i++) {
-          find = (!update_cols->at(i).is_implicit_ && 0 == col.case_compare(update_cols->at(i).column_name_));
+        if (!ob_is_text_tc(expr.args_[1]->datum_meta_.type_)) {
+          col = update_col->get_string();
+        } else {
+          col = update_col->get_string();
+          OZ (sql::ObTextStringHelper::read_prefix_string_data(ctx,
+                                                               *update_col,
+                                                               expr.args_[1]->datum_meta_,
+                                                               expr.args_[1]->obj_meta_.has_lob_header(),
+                                                               &temp_allocator,
+                                                               col));
         }
-        expr_datum.set_bool(find);
+        const ColContentFixedArray *update_cols = ctx.exec_ctx_.get_update_columns();
+        ObString converted_str;
+        OZ (ObExprUtil::convert_string_collation(
+          col, expr.args_[1]->obj_meta_.get_collation_type(), converted_str, CS_TYPE_UTF8MB4_BIN, temp_allocator));
+        for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(update_cols) && !find && i < update_cols->count(); i++) {
+          find = (!update_cols->at(i).is_implicit_ && 0 == converted_str.case_compare(update_cols->at(i).column_name_));
+        }
+        OX (expr_datum.set_bool(find));
       } else {
         expr_datum.set_bool(true); // success
       }

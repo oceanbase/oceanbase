@@ -15,12 +15,12 @@
 #ifndef OCEANBASE_LIBOBCDC_TABLET_TO_TABLE_INFO_H__
 #define OCEANBASE_LIBOBCDC_TABLET_TO_TABLE_INFO_H__
 
-#include "common/ob_tablet_id.h"                  // common::ObTabletID
-#include "lib/hash/ob_linear_hash_map.h"          // ObLinkHashMap
-#include "share/schema/ob_schema_struct.h"        // ObTableType
-#include "storage/tx/ob_multi_data_source.h"      // ObTxBufferNode
-#include "rootserver/ob_tablet_creator.h"         // ObBatchCreateTabletArg
-#include "rootserver/ob_tablet_drop.h"            // ObBatchRemoveTabletArg
+#include "common/ob_tablet_id.h"                                 // common::ObTabletID
+#include "lib/hash/ob_linear_hash_map.h"                         // ObLinkHashMap
+#include "share/schema/ob_schema_struct.h"                       // ObTableType
+#include "storage/tx/ob_multi_data_source_tx_buffer_node.h"      // ObTxBufferNode
+#include "rootserver/ob_tablet_creator.h"                        // ObBatchCreateTabletArg
+#include "rootserver/ob_tablet_drop.h"                           // ObBatchRemoveTabletArg
 #include "logservice/common_util/ob_log_ls_define.h"
 
 namespace oceanbase

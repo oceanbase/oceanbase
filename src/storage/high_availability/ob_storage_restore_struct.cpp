@@ -251,6 +251,8 @@ int ObRestoreUtils::get_backup_data_type(
     data_type.set_major_data_backup();
   } else if (table_key.is_ddl_dump_sstable()) {
     data_type.set_minor_data_backup();
+  } else if (table_key.is_mds_sstable()) {
+    data_type.set_minor_data_backup();
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid table key", K(ret), K(table_key));

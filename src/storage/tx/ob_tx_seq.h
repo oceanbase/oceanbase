@@ -13,10 +13,10 @@
 #ifndef OCEANBASE_TRANSACTION_OB_TX_SEQ_H
 #define OCEANBASE_TRANSACTION_OB_TX_SEQ_H
 
-#include "lib/ob_define.h"                             // for int64_t
-#include "deps/oblib/src/lib/hash_func/murmur_hash.h"  // for murmurhash()
-#include "deps/oblib/src/lib/utility/ob_macro_utils.h" // for OB_ASSERT
-#include "deps/oblib/src/lib/utility/ob_print_utils.h" // for DECLARE_TO_STRING
+#include "lib/ob_define.h"              // for int64_t
+#include "lib/hash_func/murmur_hash.h"  // for murmurhash()
+#include "lib/utility/ob_macro_utils.h" // for OB_ASSERT
+#include "lib/utility/ob_print_utils.h" // for DECLARE_TO_STRING
 
 namespace oceanbase
 {
@@ -51,11 +51,16 @@ public:
   static const ObTxSEQ &MAX_VAL() { static ObTxSEQ v(INT64_MAX); return v; }
   void reset() { raw_val_ = 0; }
   bool is_valid() const { return raw_val_ > 0; }
+  bool is_min() const { return *this == MIN_VAL(); }
   bool is_max() const { return *this == MAX_VAL(); }
   ObTxSEQ clone_with_seq(int64_t seq_abs, int64_t seq_base) const
   {
     ObTxSEQ n = *this;
-    if (n_format_) { n.seq_ = seq_abs - seq_base; } else { n.seq_v0_ = seq_abs; }
+    if (n_format_) {
+      n.seq_ = seq_abs - seq_base;
+    } else {
+      n.seq_v0_ = seq_abs;
+    }
     return n;
   }
   bool operator>(const ObTxSEQ &b) const

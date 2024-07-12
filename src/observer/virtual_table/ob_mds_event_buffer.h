@@ -23,6 +23,7 @@
 #include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "util/easy_time.h"
 #include "share/ob_task_define.h"
+#include "storage/tx/ob_tx_seq.h"
 
 namespace oceanbase
 {
@@ -85,7 +86,7 @@ struct MdsEvent {
   unit_id_(UINT8_MAX),
   writer_type_(storage::mds::WriterType::UNKNOWN_WRITER),
   writer_id_(0),
-  seq_no_(0),
+  seq_no_(),
   redo_scn_(),
   end_scn_(),
   trans_version_(),
@@ -131,7 +132,7 @@ private:
            uint8_t unit_id,
            storage::mds::WriterType writer_type,
            int64_t writer_id,
-           int64_t seq_no,
+           transaction::ObTxSEQ seq_no,
            share::SCN redo_scn,
            share::SCN end_scn,
            share::SCN trans_version,
@@ -213,7 +214,7 @@ private:
   uint8_t unit_id_;
   storage::mds::WriterType writer_type_;
   int64_t writer_id_;
-  int64_t seq_no_;
+  transaction::ObTxSEQ seq_no_;
   share::SCN redo_scn_;
   share::SCN end_scn_;
   share::SCN trans_version_;
@@ -253,11 +254,11 @@ struct ObMdsEventBuffer {
     void destroy() {
       mds_event_cache_.~ObVtableEventRecycleBuffer();
     }
-    void append(const MdsEventKey &key, const MdsEvent &event, const char *file, const uint32_t line, const char *func) {
+    void append(const MdsEventKey &key, const MdsEvent &event, const storage::mds::MdsTableBase *mds_table, const char *file, const uint32_t line, const char *func) {
       if (OB_NOT_NULL(file) && OB_UNLIKELY(line != 0) && OB_NOT_NULL(func) && OB_NOT_NULL(event.event_)) {
-        //share::ObTaskController::get().allow_next_syslog();
-        //::oceanbase::common::OB_PRINT("[MDS.EVENT]", OB_LOG_LEVEL_INFO, file, line, func, OB_LOG_LOCATION_HASH_VAL, OB_SUCCESS,
-                                      //event.event_, LOG_KVS(K(key), K(event)));
+        share::ObTaskController::get().allow_next_syslog();
+        ::oceanbase::common::OB_PRINT("[MDS.EVENT]", OB_LOG_LEVEL_INFO, file, line, func, OB_LOG_LOCATION_HASH_VAL, OB_SUCCESS,
+                                      event.event_, LOG_KVS(K(key), K(event), KPC(mds_table)));
       }
       if (is_inited_) {
         (void) mds_event_cache_.append(key, event, file, line, func);
@@ -294,8 +295,13 @@ struct ObMdsEventBuffer {
   };
   static int init() { return Singleton::get_instance().init(); }
   static void destroy() { return Singleton::get_instance().destroy(); }
-  static void append(const MdsEventKey &key, const MdsEvent &event, const char *file, const uint32_t line, const char *func) {
-    return Singleton::get_instance().append(key, event, file, line, func);
+  static void append(const MdsEventKey &key,
+                     const MdsEvent &event,
+                     const storage::mds::MdsTableBase *mds_table,
+                     const char *file,
+                     const uint32_t line,
+                     const char *func) {
+    return Singleton::get_instance().append(key, event, mds_table, file, line, func);
   }
   template <typename OP>
   static int for_each(const MdsEventKey &key, OP &&op) {

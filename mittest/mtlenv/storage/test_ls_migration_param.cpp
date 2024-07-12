@@ -38,6 +38,11 @@ using namespace oceanbase::share::schema;
 
 namespace oceanbase
 {
+int ObClusterVersion::get_tenant_data_version(const uint64_t tenant_id, uint64_t &data_version)
+{
+  data_version = DATA_VERSION_4_3_2_0;
+  return OB_SUCCESS;
+}
 namespace storage
 {
 class TestLSMigrationParam : public ::testing::Test
@@ -251,6 +256,21 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
       scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
+  share::SCN create_commit_scn;
+  create_commit_scn = share::SCN::plus(share::SCN::min_scn(), 50);
+  // write data to mds table no.1 row
+  {
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::NORMAL;
+    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(123)));
+    ret = src_handle.get_obj()->set_tablet_status(user_data, ctx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ctx.single_log_commit(create_commit_scn, create_commit_scn);
+  }
+
   ObMigrationTabletParam tablet_param;
   ret = src_handle.get_obj()->build_migration_tablet_param(tablet_param);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -264,8 +284,9 @@ TEST_F(TestLSMigrationParam, test_migrate_tablet_param)
   ret = t3m->create_tmp_tablet(WashTabletPriority::WTP_HIGH, dst_key, allocator_, ls_handle, dst_handle);
   ASSERT_EQ(common::OB_SUCCESS, ret);
 
-  ret = dst_handle.get_obj()->init_with_migrate_param(allocator_, tablet_param, false, ls_handle.get_ls()->get_freezer());
-  ASSERT_EQ(common::OB_SUCCESS, ret);
+  const bool is_transfer = false;
+  ret = dst_handle.get_obj()->init_with_migrate_param(allocator_, tablet_param, false, ls_handle.get_ls()->get_freezer(), is_transfer);
+  ASSERT_EQ(OB_SUCCESS, ret);
 
   const ObTabletMeta &src_meta = src_handle.get_obj()->get_tablet_meta();
   const ObTabletMeta &dst_meta = dst_handle.get_obj()->get_tablet_meta();
@@ -315,6 +336,21 @@ TEST_F(TestLSMigrationParam, test_migration_param_compat)
   ret = src_handle.get_obj()->init_for_first_time_creation(allocator_, src_key.ls_id_, src_key.tablet_id_, src_key.tablet_id_,
       scn, 2022, create_tablet_schema, true/*need_create_empty_major_sstable*/, ls_handle.get_ls()->get_freezer());
   ASSERT_EQ(common::OB_SUCCESS, ret);
+
+  share::SCN create_commit_scn;
+  create_commit_scn = share::SCN::plus(share::SCN::min_scn(), 50);
+  // write data to mds table no.1 row
+  {
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::NORMAL;
+    user_data.data_type_ = ObTabletMdsUserDataType::CREATE_TABLET;
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(123)));
+    ret = src_handle.get_obj()->set_tablet_status(user_data, ctx);
+    ASSERT_EQ(OB_SUCCESS, ret);
+
+    ctx.single_log_commit(create_commit_scn, create_commit_scn);
+  }
 
   ObMigrationTabletParam tablet_param;
   ret = src_handle.get_obj()->build_migration_tablet_param(tablet_param);

@@ -132,6 +132,7 @@ public:
   virtual int64_t get_ref() const override;
 
   virtual int init(const ObTabletCreateSSTableParam &param, common::ObArenaAllocator *allocator);
+  static int copy_from_old_sstable(const ObSSTable &old_sstable, common::ObArenaAllocator &allocator, ObSSTable *&sstable);
   void reset();
 
   // Query interfaces
@@ -360,6 +361,7 @@ protected:
   int deserialize_fixed_struct(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_sstable_fix_serialize_size() const;
   int64_t get_sstable_fix_serialize_payload_size() const;
+  int inner_deep_copy_and_inc_macro_ref(common::ObIAllocator &allocator, ObSSTable *&sstable) const;
 protected:
   static const int64_t SSTABLE_VERSION = 1;
   static const int64_t SSTABLE_VERSION_V2 = 2;

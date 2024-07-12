@@ -60,7 +60,8 @@ int ObRbExprHelper::get_input_roaringbitmap(ObEvalCtx &ctx, ObExpr *rb_arg, ObRo
   INIT_SUCC(ret);
   ObString rb_bin = nullptr;
   ObEvalCtx::TempAllocGuard ctx_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = ctx_alloc_g.get_allocator();  if (OB_FAIL(get_input_roaringbitmap_bin(ctx, rb_arg, rb_bin, is_rb_null))) {
+  common::ObArenaAllocator &allocator = ctx_alloc_g.get_allocator();
+  if (OB_FAIL(get_input_roaringbitmap_bin(ctx, rb_arg, rb_bin, is_rb_null))) {
     LOG_WARN("failed to get input roaringbitmap binary", K(ret));
   } else if (!is_rb_null && OB_FAIL(ObRbUtils::rb_deserialize(allocator, rb_bin, rb))) {
     LOG_WARN("failed to deserialize roaringbitmap", K(ret));

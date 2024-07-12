@@ -47,6 +47,7 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
     const bool is_inc_direct_load = phy_plan.get_enable_inc_direct_load();
     const bool is_inc_replace = phy_plan.get_enable_replace();
     const bool is_insert_overwrite = phy_plan.get_is_insert_overwrite();
+    const double online_sample_precent = phy_plan.get_online_sample_percent();
     ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
     bool auto_commit = false;
     CK (OB_NOT_NULL(session));
@@ -62,7 +63,7 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
       ObTableDirectInsertCtx &table_direct_insert_ctx = ctx.get_table_direct_insert_ctx();
       uint64_t table_id = phy_plan.get_append_table_id();
       int64_t parallel = phy_plan.get_px_dop();
-      if (OB_FAIL(table_direct_insert_ctx.init(&ctx, phy_plan, table_id, parallel, is_inc_direct_load, is_inc_replace, is_insert_overwrite))) {
+      if (OB_FAIL(table_direct_insert_ctx.init(&ctx, phy_plan, table_id, parallel, is_inc_direct_load, is_inc_replace, is_insert_overwrite, online_sample_precent))) {
         LOG_WARN("failed to init table direct insert ctx",
             KR(ret), K(table_id), K(parallel), K(is_inc_direct_load), K(is_inc_replace), K(is_insert_overwrite));
       }

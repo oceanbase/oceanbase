@@ -189,10 +189,16 @@ TEST_F(TestRoaringBitmap, optimize)
   }
   ASSERT_EQ(rb->get_type(), ObRbType::BITMAP);
   ASSERT_EQ(rb->get_cardinality(), 33);
+  // remove 32 value, remain 32 value
   ASSERT_EQ(rb->value_remove(300), OB_SUCCESS);
   ASSERT_EQ(rb->get_cardinality(), 32);
   ASSERT_FALSE(rb->is_contains(300));
   rb->optimize();
+  ASSERT_EQ(rb->get_type(), ObRbType::SET);
+  // remove 1 value, remain 33 value
+  ASSERT_EQ(rb->value_add(300), OB_SUCCESS);
+  ASSERT_EQ(rb->get_cardinality(), 33);
+  ASSERT_EQ(rb->get_type(), ObRbType::BITMAP);
   // remove 32 value, remain 1 value
   for (int i = 0; i < MAX_BITMAP_SET_VALUES; i++) {
     ASSERT_EQ(rb->value_remove(300 + i), OB_SUCCESS);

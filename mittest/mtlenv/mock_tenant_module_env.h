@@ -48,6 +48,7 @@
 #include "sql/ob_sql.h"
 #include "storage/blocksstable/ob_log_file_spec.h"
 #include "storage/blocksstable/ob_decode_resource_pool.h"
+#include "storage/compaction/ob_compaction_tablet_diagnose.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -63,6 +64,7 @@
 #include "storage/tx_storage/ob_tenant_freezer.h"
 #include "storage/tx_storage/ob_access_service.h"
 #include "storage/lob/ob_lob_manager.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "storage/tx/ob_xa_service.h"
 #include "storage/tx/ob_trans_service.h"
@@ -656,10 +658,12 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(oceanbase::palf::election::GLOBAL_INIT_ELECTION_MODULE())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
-  } else if (OB_SUCCESS != (ret = bandwidth_throttle_.init(1024 *1024 * 60))) {
+  } else if (OB_SUCCESS != (ret = bandwidth_throttle_.init(1024 * 1024 * 60))) {
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
     STORAGE_LOG(ERROR, "init timer fail", KR(ret));
+  } else if (OB_FAIL(ObMdsSchemaHelper::get_instance().init())) {
+    STORAGE_LOG(ERROR, "fail to init mds schema helper", K(ret));
   } else {
     obrpc::ObRpcNetHandler::CLUSTER_ID = 1;
     oceanbase::palf::election::INIT_TS = 1;
@@ -710,6 +714,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObTenantCheckpointSlogHandler::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, coordinator::ObLeaderCoordinator::mtl_init, coordinator::ObLeaderCoordinator::mtl_start, coordinator::ObLeaderCoordinator::mtl_stop, coordinator::ObLeaderCoordinator::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, coordinator::ObFailureDetector::mtl_init, coordinator::ObFailureDetector::mtl_start, coordinator::ObFailureDetector::mtl_stop, coordinator::ObFailureDetector::mtl_wait, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, compaction::ObDiagnoseTabletMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(ObLobManager::mtl_new, mtl_init_default, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, share::detector::ObDeadLockDetectorMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, storage::ObTenantTabletStatMgr::mtl_init, nullptr, mtl_stop_default, mtl_wait_default, mtl_destroy_default)

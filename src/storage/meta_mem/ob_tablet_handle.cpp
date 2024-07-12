@@ -297,6 +297,20 @@ int ObTabletTableIterator::refresh_read_tables_from_tablet(
   return ret;
 }
 
+int ObTabletTableIterator::get_mds_sstables_from_tablet(const int64_t snapshot_version)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("try to refresh tables in tablet table iter with invalid tablet handle", K(ret));
+  } else if (OB_FAIL(tablet_handle_.get_obj()->get_mds_tables(snapshot_version, table_store_iter_))) {
+    LOG_WARN("fail to get mds tables", K(ret), K(snapshot_version));
+  }
+
+  return ret;
+}
+
 int ObTabletTableIterator::get_read_tables_from_tablet(
     const int64_t snapshot_version,
     const bool allow_no_ready_read,

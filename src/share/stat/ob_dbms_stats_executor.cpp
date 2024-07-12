@@ -1321,7 +1321,8 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                             ObTableStatParam &param,
                                             share::schema::ObSchemaGetterGuard *schema_guard,
                                             const TabStatIndMap &online_table_stats,
-                                            const ColStatIndMap &online_column_stats)
+                                            const ColStatIndMap &online_column_stats,
+                                            const ObIArray<ObOptDmlStat *> *dml_stats)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("ObOnlineStat", OB_MALLOC_NORMAL_BLOCK_SIZE, param.tenant_id_);
@@ -1363,6 +1364,8 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                                                   need_reset_trx_lock_timeout,
                                                                   conn))) {
         LOG_WARN("failed to prepare conn and store session for online stats", K(ret));
+      } else if (nullptr != dml_stats && ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(*dml_stats, conn)) {
+        LOG_WARN("fail to update dml stat info", K(ret));
       } else if (OB_FAIL(ObDbmsStatsUtils::get_current_opt_stats(allocator,
                                                                  conn,
                                                                  param,
@@ -1379,6 +1382,11 @@ int ObDbmsStatsExecutor::update_online_stat(ObExecContext &ctx,
                                                            cur_column_stats,
                                                            column_stats))) {
         LOG_WARN("fail to merge col stats", K(ret), K(cur_column_stats));
+      } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0 &&
+                 OB_FAIL(ObDbmsStatsUtils::scale_col_stats(param.tenant_id_,
+                                                           table_stats,
+                                                           column_stats))) {
+        LOG_WARN("failed to scale col stats", K(ret));
       } else if (OB_FAIL(ObDbmsStatsUtils::split_batch_write(ctx, conn, table_stats, column_stats, false, true))) {
         LOG_WARN("fail to update stat", K(ret), K(table_stats), K(column_stats));
       } else if (OB_FAIL(ObBasicStatsEstimator::update_last_modified_count(conn, param))) {

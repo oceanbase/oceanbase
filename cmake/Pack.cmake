@@ -353,24 +353,25 @@ if (NOT OB_BUILD_OPENSOURCE)
 endif()
 
 if(OB_BUILD_OPENSOURCE)
-## oceanbase-libs
-list(APPEND CPACK_COMPONENTS_ALL libs)
-install(PROGRAMS
-  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
-  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1
-  deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so
-  deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so
-  deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so.3
-  DESTINATION lib
-  COMPONENT libs
-)
-if(OB_BUILD_OBADMIN)
+  ## oceanbase-libs
+  list(APPEND CPACK_COMPONENTS_ALL libs)
+  install(PROGRAMS
+    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1
+    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so.1.0.1
+    deps/3rd/usr/local/oceanbase/deps/devel/lib/libaio.so
+    deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so
+    deps/3rd/usr/local/oceanbase/deps/devel/lib/mariadb/libmariadb.so.3
+    DESTINATION lib
+    COMPONENT libs
+  )
+  if(OB_BUILD_OBADMIN)
     ## oceanbase-utils
     list(APPEND CPACK_COMPONENTS_ALL utils)
     install(PROGRAMS
       ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
       ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
       ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
+      ${DEVTOOLS_DIR}/bin/obstack
       DESTINATION /usr/bin
       COMPONENT utils
     )

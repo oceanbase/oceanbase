@@ -3351,21 +3351,22 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
                                                         table_exist))) {
         LOG_WARN("check table exist failed", K(ret), K(table_schema));
       } else if (table_exist) {
-        if (table_schema.is_view_table() && arg.if_not_exist_) {
+        const ObSimpleTableSchemaV2 *simple_table_schema = nullptr;
+        if (OB_FAIL(schema_guard.get_simple_table_schema(
+                    table_schema.get_tenant_id(),
+                    table_schema.get_database_id(),
+                    table_schema.get_table_name_str(),
+                    false, /*is index*/
+                    simple_table_schema))) {
+          LOG_WARN("failed to get table schema", KR(ret), K(table_schema.get_tenant_id()),
+                   K(table_schema.get_database_id()), K(table_schema.get_table_name_str()));
+        } else if (OB_ISNULL(simple_table_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("simple_table_schema is null", KR(ret));
+        } else if (table_schema.is_view_table() && arg.if_not_exist_) {
           //create or replace view ...
           //create user table will drop the old view and recreate it in trans
-          const ObSimpleTableSchemaV2 *simple_table_schema = nullptr;
-          if (OB_FAIL(schema_guard.get_simple_table_schema(
-                      table_schema.get_tenant_id(),
-                      table_schema.get_database_id(),
-                      table_schema.get_table_name_str(),
-                      false, /*is index*/
-                      simple_table_schema))) {
-            LOG_WARN("failed to get table schema", K(ret));
-          } else if (OB_ISNULL(simple_table_schema)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("simple_table_schema is null", K(ret));
-          } else if ((simple_table_schema->get_table_type() == SYSTEM_VIEW && GCONF.enable_sys_table_ddl)
+          if ((simple_table_schema->get_table_type() == SYSTEM_VIEW && GCONF.enable_sys_table_ddl)
                      || simple_table_schema->get_table_type() == USER_VIEW
                      || simple_table_schema->get_table_type() == MATERIALIZED_VIEW) {
             ret = OB_SUCCESS;
@@ -3398,6 +3399,15 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
             }
           }
         } else {
+          uint64_t compat_version = 0;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), compat_version))) {
+            LOG_WARN("fail to get data version", KR(ret), K(table_schema.get_tenant_id()));
+          } else if ((compat_version >= MOCK_DATA_VERSION_4_2_4_0 && compat_version < DATA_VERSION_4_3_0_0)
+                     ||(compat_version >= MOCK_DATA_VERSION_4_2_1_8 && compat_version < DATA_VERSION_4_2_2_0)
+                     ||(compat_version >= DATA_VERSION_4_3_2_0)) {
+            res.table_id_ = simple_table_schema->get_table_id();
+            res.schema_version_ = simple_table_schema->get_schema_version();
+          }
           ret = OB_ERR_TABLE_EXIST;
           LOG_WARN("table exist", K(ret), K(table_schema), K(arg.if_not_exist_));
         }
@@ -3798,6 +3808,7 @@ int ObRootService::create_table(const ObCreateTableArg &arg, ObCreateTableRes &r
       //create table xx if not exist (...)
       //create or replace view xx as ...
       if (arg.if_not_exist_) {
+        res.do_nothing_ = true;
         ret = OB_SUCCESS;
         LOG_INFO("table is exist, no need to create again, ",
                  "tenant_id", table_schema.get_tenant_id(),
@@ -4614,7 +4625,6 @@ int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, 
   int ret = OB_SUCCESS;
   uint64_t compat_version = 0;
   ObSchemaGetterGuard schema_guard;
-  ObPartitionExchange partition_exchange(ddl_service_);
   schema_guard.set_session_id(arg.session_id_);
   LOG_DEBUG("receive exchange partition arg", K(ret), K(arg));
   if (!inited_) {
@@ -4632,8 +4642,11 @@ int ObRootService::exchange_partition(const obrpc::ObExchangePartitionArg &arg, 
     LOG_WARN("get schema guard in inner table failed", K(ret));
   } else if (OB_FAIL(check_parallel_ddl_conflict(schema_guard, arg))) {
     LOG_WARN("check parallel ddl conflict failed", K(ret));
-  } else if (OB_FAIL(partition_exchange.check_and_exchange_partition(arg, res, schema_guard))) {
-    LOG_WARN("fail to check and exchange partition", K(ret), K(arg), K(res));
+  } else {
+    ObPartitionExchange partition_exchange(ddl_service_, compat_version);
+    if (OB_FAIL(partition_exchange.check_and_exchange_partition(arg, res, schema_guard))) {
+      LOG_WARN("fail to check and exchange partition", K(ret), K(arg), K(res));
+    }
   }
   char table_id_buffer[256];
   snprintf(table_id_buffer, sizeof(table_id_buffer), "table_id:%ld, exchange_table_id:%ld",

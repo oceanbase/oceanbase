@@ -50,7 +50,6 @@ ObTableLoadInstance::~ObTableLoadInstance() { destroy(); }
 void ObTableLoadInstance::destroy()
 {
   int ret = OB_SUCCESS;
-  trans_ctx_.reset();
   if (nullptr != table_ctx_) {
     if (OB_FAIL(end_direct_load(false /*commit*/))) {
       LOG_WARN("fail to end direct load", KR(ret));
@@ -100,29 +99,10 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
     else if (OB_FAIL(start_direct_load(param, column_ids))) {
       LOG_WARN("fail to start direct load", KR(ret));
     }
-    // start trans
-    else if (!param.px_mode_ && OB_FAIL(start_trans())) {
-      LOG_WARN("fail to start trans", KR(ret));
-    }
     // init succ
     else {
       job_stat_ = table_ctx_->job_stat_;
       is_inited_ = true;
-    }
-  }
-
-  return ret;
-}
-
-int ObTableLoadInstance::write(int32_t session_id, const table::ObTableLoadObjRowArray &obj_rows)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
-  } else {
-    if (OB_FAIL(write_trans(session_id, obj_rows))) {
-      LOG_WARN("fail to write trans", KR(ret));
     }
   }
   return ret;
@@ -137,11 +117,8 @@ int ObTableLoadInstance::commit()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
   } else {
-    if (OB_FAIL(commit_trans())) {
-      LOG_WARN("fail to commit trans", KR(ret));
-    }
     // end direct load
-    else if (OB_FAIL(end_direct_load(true /*commit*/))) {
+    if (OB_FAIL(end_direct_load(true /*commit*/))) {
       LOG_WARN("fail to end direct load", KR(ret));
     }
     // end stmt
@@ -291,7 +268,7 @@ int ObTableLoadInstance::start_sql_tx()
       LOG_WARN("tx_desc of insert into select should be valid", KR(ret), KPC(tx_desc));
     } else {
       stmt_ctx_.tx_desc_ = tx_desc;
-      execute_ctx_->set_tx_desc(tx_desc);
+      execute_ctx_->tx_desc_ = tx_desc;
       LOG_INFO("use insert into select tx", KPC(tx_desc));
     }
   } else { // other path, tx_desc could be null, tx_param needs to be set manually
@@ -313,7 +290,7 @@ int ObTableLoadInstance::start_sql_tx()
       }
     } else {
       stmt_ctx_.tx_desc_ = tx_desc;
-      execute_ctx_->set_tx_desc(tx_desc);
+      execute_ctx_->tx_desc_ = tx_desc;
       LOG_INFO("start tx succeed", KPC(tx_desc));
     }
   }
@@ -327,7 +304,7 @@ int ObTableLoadInstance::end_sql_tx(const bool commit)
   ObTransService *txs = MTL(ObTransService *);
   ObSQLSessionInfo *session_info = stmt_ctx_.session_info_;
   ObTxDesc *tx_desc = stmt_ctx_.tx_desc_;
-  execute_ctx_->set_tx_desc(nullptr);
+  execute_ctx_->tx_desc_ = nullptr;
   if (stmt_ctx_.use_insert_into_select_tx_) {
     // do nothing
   } else {
@@ -654,64 +631,87 @@ int ObTableLoadInstance::add_tx_result_to_user_session()
   return ret;
 }
 
-int ObTableLoadInstance::start_trans()
+int ObTableLoadInstance::check_status()
 {
   int ret = OB_SUCCESS;
-  ObTableLoadSegmentID segment_id(DEFAULT_SEGMENT_ID);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
+  } else {
+    ObTableLoadCoordinator coordinator(table_ctx_);
+    ObTableLoadStatusType status = ObTableLoadStatusType::NONE;
+    int error_code = OB_SUCCESS;
+    if (OB_FAIL(coordinator.init())) {
+      LOG_WARN("fail to init coordinator", KR(ret));
+    } else if (OB_FAIL(coordinator.get_status(status, error_code))) {
+      LOG_WARN("fail to coordinator get status", KR(ret));
+    } else if (OB_UNLIKELY(ObTableLoadStatusType::ERROR == status ||
+                           ObTableLoadStatusType::ABORT == status)) {
+      ret = (OB_SUCCESS != error_code ? error_code : OB_CANCELED);
+      LOG_WARN("coordinator status error", KR(ret), K(status), K(error_code));
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadInstance::start_trans(TransCtx &trans_ctx, int64_t segment_id,
+                                     ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
   ObTableLoadCoordinator coordinator(table_ctx_);
   if (OB_FAIL(coordinator.init())) {
     LOG_WARN("fail to init coordinator", KR(ret));
-  } else if (OB_FAIL(coordinator.start_trans(segment_id, trans_ctx_.trans_id_))) {
+  } else if (OB_FAIL(
+               coordinator.start_trans(ObTableLoadSegmentID(segment_id), trans_ctx.trans_id_))) {
     LOG_WARN("fail to coordinator start trans", KR(ret));
-  } else if (OB_FAIL(trans_ctx_.next_sequence_no_array_.create(table_ctx_->param_.write_session_count_,
-                                                               *allocator_))) {
+  } else if (OB_FAIL(trans_ctx.next_sequence_no_array_.create(table_ctx_->param_.session_count_,
+                                                              allocator))) {
     LOG_WARN("fail to create next sequence no array", KR(ret));
   } else {
-    for (int64_t i = 0; i < table_ctx_->param_.write_session_count_; ++i) {
-      trans_ctx_.next_sequence_no_array_[i] = 1;
+    for (int64_t i = 0; i < table_ctx_->param_.session_count_; ++i) {
+      trans_ctx.next_sequence_no_array_[i] = 1;
     }
   }
   return ret;
 }
 
-int ObTableLoadInstance::write_trans(int32_t session_id, const ObTableLoadObjRowArray &obj_rows)
+int ObTableLoadInstance::commit_trans(TransCtx &trans_ctx)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(session_id < 0 || session_id > table_ctx_->param_.write_session_count_ ||
-                  obj_rows.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(session_id), K(obj_rows.count()));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
   } else {
-    // TODO(suzhi.yt): java客户端调用的时候, 对于相同session_id可能会并发
-    uint64_t &next_sequence_no = trans_ctx_.next_sequence_no_array_[session_id - 1];
     ObTableLoadCoordinator coordinator(table_ctx_);
     if (OB_FAIL(coordinator.init())) {
       LOG_WARN("fail to init coordinator", KR(ret));
-    } else if (OB_FAIL(coordinator.write(trans_ctx_.trans_id_, session_id, next_sequence_no++,
-                                         obj_rows))) {
-      LOG_WARN("fail to write coordinator", KR(ret));
+    }
+    // finish trans
+    else if (OB_FAIL(coordinator.finish_trans(trans_ctx.trans_id_))) {
+      LOG_WARN("fail to finish trans", KR(ret));
+    }
+    // wait trans commit
+    else if (OB_FAIL(check_trans_committed(trans_ctx))) {
+      LOG_WARN("fail to check trans committed", KR(ret));
     }
   }
   return ret;
 }
 
-int ObTableLoadInstance::commit_trans()
+int ObTableLoadInstance::check_trans_committed(TransCtx &trans_ctx)
 {
   int ret = OB_SUCCESS;
+  const ObTableLoadTransId &trans_id = trans_ctx.trans_id_;
   ObTableLoadTransStatusType trans_status = ObTableLoadTransStatusType::NONE;
   int error_code = OB_SUCCESS;
   ObTableLoadCoordinator coordinator(table_ctx_);
   if (OB_FAIL(coordinator.init())) {
     LOG_WARN("fail to init coordinator", KR(ret));
   }
-  // finish trans
-  else if (OB_FAIL(coordinator.finish_trans(trans_ctx_.trans_id_))) {
-    LOG_WARN("fail to finish trans", KR(ret));
-  }
   ObTableLoadIndexLongWait wait_obj(10 * 1000, WAIT_INTERVAL_US);
   while (OB_SUCC(ret) && ObTableLoadTransStatusType::COMMIT != trans_status &&
          OB_SUCC(execute_ctx_->check_status())) {
-    if (OB_FAIL(coordinator.get_trans_status(trans_ctx_.trans_id_, trans_status, error_code))) {
+    if (OB_FAIL(coordinator.get_trans_status(trans_id, trans_status, error_code))) {
       LOG_WARN("fail to coordinator get trans status", KR(ret));
     } else {
       switch (trans_status) {
@@ -729,6 +729,31 @@ int ObTableLoadInstance::commit_trans()
           LOG_WARN("unexpected trans status", KR(ret), K(trans_status));
           break;
       }
+    }
+  }
+  return ret;
+}
+
+int ObTableLoadInstance::write_trans(TransCtx &trans_ctx, int32_t session_id,
+                                     const table::ObTableLoadObjRowArray &obj_rows)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableLoadInstance not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(session_id < 0 || session_id > table_ctx_->param_.session_count_ ||
+                         obj_rows.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(session_id), K(obj_rows.count()));
+  } else {
+    // TODO(suzhi.yt): java客户端调用的时候, 对于相同session_id可能会并发
+    uint64_t &next_sequence_no = trans_ctx.next_sequence_no_array_[session_id - 1];
+    ObTableLoadCoordinator coordinator(table_ctx_);
+    if (OB_FAIL(coordinator.init())) {
+      LOG_WARN("fail to init coordinator", KR(ret));
+    } else if (OB_FAIL(coordinator.write(trans_ctx.trans_id_, session_id, next_sequence_no++,
+                                         obj_rows))) {
+      LOG_WARN("fail to write coordinator", KR(ret));
     }
   }
   return ret;

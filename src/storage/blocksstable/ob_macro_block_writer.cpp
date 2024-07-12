@@ -1389,6 +1389,7 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
   cur_logic_id.column_group_idx_ = data_store_desc_->get_table_cg_idx();
   cur_logic_id.data_seq_.macro_data_seq_ = current_macro_seq_;
   cur_logic_id.tablet_id_ = data_store_desc_->get_tablet_id().id();
+  cur_logic_id.is_mds_ = is_mds_merge(data_store_desc_->get_merge_type());
 
   ObMacroBlockHandle &macro_handle = macro_handles_[current_index_];
   ObMacroBlockHandle &prev_handle = macro_handles_[(current_index_ + 1) % 2];

@@ -77,7 +77,7 @@ int ObLogDistinct::compute_op_ordering()
   } else if (OB_FAIL(ObLogicalOperator::compute_op_ordering())) {
     LOG_WARN("failed to compute op ordering", K(ret));
   } else {
-    is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty();
+    is_local_order_ = is_fully_partition_wise() && !get_op_ordering().empty() && !is_range_order_;
   }
   return ret;
 }
@@ -169,7 +169,15 @@ int ObLogDistinct::do_re_est_cost(EstimateCostInfo &param, double &card, double 
         param.need_row_count_ < child_card &&
         param.need_row_count_ < total_ndv_) {
       child_ndv = param.need_row_count_;
-      param.need_row_count_ = child_card * (1 - std::pow((1 - child_ndv / total_ndv_), total_ndv_ / child_card));
+      if (input_sorted_) {
+        if (param.need_row_count_ > 1.0) {
+          param.need_row_count_ = child_card * (param.need_row_count_ - 1.0) / total_ndv_ + 1.0;
+        } else {
+          // do nothing
+        }
+      } else {
+        param.need_row_count_ = child_card * (1 - std::pow((1 - child_ndv / total_ndv_), total_ndv_ / child_card));
+      }
     } else {
       param.need_row_count_ = -1;
       need_scale_ndv = true;
@@ -391,6 +399,38 @@ int ObLogDistinct::check_use_child_ordering(bool &used, int64_t &inherit_child_o
   if (HASH_AGGREGATE == get_algo()) {
     inherit_child_ordering_index = -1;
     used = false;
+  }
+  return ret;
+}
+
+int ObLogDistinct::compute_property()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *top = get_child(first_child);
+  bool need_sort = false;
+  int64_t prefix_pos = 0;
+  if (OB_ISNULL(top) || OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(ObLogicalOperator::compute_property())) {
+    LOG_WARN("failed to compute op property", K(ret));
+  } else if (MERGE_AGGREGATE == algo_) {
+    input_sorted_ = true;
+  } else if (OB_FAIL(ObOptimizerUtil::check_need_sort(distinct_exprs_,
+                                                      NULL/*directions*/,
+                                                      top->get_op_ordering(),
+                                                      top->get_fd_item_set(),
+                                                      top->get_output_equal_sets(),
+                                                      top->get_output_const_exprs(),
+                                                      get_plan()->get_onetime_query_refs(),
+                                                      top->get_is_at_most_one_row(),
+                                                      need_sort,
+                                                      prefix_pos))) {
+    LOG_WARN("failed to check need sort", K(ret));
+  } else if (!need_sort) {
+    input_sorted_ = true;
+  } else {
+    input_sorted_ = false;
   }
   return ret;
 }

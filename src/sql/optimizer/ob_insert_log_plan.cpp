@@ -89,6 +89,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
 
     bool need_osg = false;
     OSGShareInfo *osg_info = NULL;
+    double online_sample_percent = 100.;
     if (OB_SUCC(ret)) {
       // compute parallel before check allocate stats gather
       if (OB_FAIL(compute_dml_parallel())) {
@@ -100,10 +101,17 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         bool tmp_need_osg = false;
         if (OB_FAIL(check_need_online_stats_gather(tmp_need_osg))) {
           LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
+        } else if (tmp_need_osg &&
+                   get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_2 &&
+                   OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*get_optimizer_context().get_exec_ctx(),
+                                                                             online_sample_percent))) {
+          LOG_WARN("failed to get sys online sample percent", K(ret));
         } else {
           if (is_direct_insert()) {
             get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
               .set_is_online_gather_statistics(tmp_need_osg);
+            get_optimizer_context().get_exec_ctx()->get_table_direct_insert_ctx()
+              .set_online_sample_percent(online_sample_percent);
           } else {
             need_osg = tmp_need_osg;
           }
@@ -116,6 +124,8 @@ int ObInsertLogPlan::generate_normal_raw_plan()
       } else if (need_osg && OB_ISNULL(osg_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null");
+      } else if (need_osg) {
+        osg_info->online_sample_rate_ = online_sample_percent;
       }
     }
 
@@ -1337,23 +1347,37 @@ int ObInsertLogPlan::prepare_unique_constraint_info(const ObTableSchema &index_s
     // 如果是堆表，那么这里还需要在 constraint_info.constraint_columns_中追加分区建
     // 因为4.0版本堆表 分区建 + hidden_pk 才能保证唯一性
     const ColumnItem *col_item = NULL;
-    ObSEArray<uint64_t, 5> rowkey_partkey_ids;
-    if (OB_FAIL(index_schema.get_rowkey_partkey_column_ids(rowkey_partkey_ids))) {
-      LOG_WARN("fail to get rowkey partkey column_ids", K(ret), K(index_schema.get_table_id()));
+    const ObRowkeyColumn *key_column = NULL;
+    ObSEArray<uint64_t, 5> partkey_ids;
+    const ObPartitionKeyInfo &partition_info = index_schema.get_partition_key_info();
+    const ObPartitionKeyInfo &sub_partition_info = index_schema.get_subpartition_key_info();
+    for (int i = 0; OB_SUCC(ret) && i < partition_info.get_size(); ++i) {
+      if (NULL == (key_column = partition_info.get_column(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("The key column is NULL, ", K(i));
+      } else if (OB_FAIL(add_var_to_array_no_dup(partkey_ids, key_column->column_id_))) {
+        LOG_WARN("failed to push back part key column id", K(ret));
+      } else { /*do nothing*/ }
     }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_partkey_ids.count(); ++i) {
-      uint64_t column_id = rowkey_partkey_ids.at(i);
+    for (int i = 0; OB_SUCC(ret) && i < sub_partition_info.get_size(); ++i) {
+      if (NULL == (key_column = sub_partition_info.get_column(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("The key column is NULL, ", K(i));
+      } else if (OB_FAIL(add_var_to_array_no_dup(partkey_ids, key_column->column_id_))) {
+        LOG_WARN("failed to push back subpart key column id", K(ret));
+      } else { /*do nothing*/ }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < partkey_ids.count(); ++i) {
+      uint64_t partkey_cid = partkey_ids.at(i);
       if (OB_ISNULL(col_item = ObResolverUtils::find_col_by_base_col_id(*insert_stmt,
                                                                         constraint_info.table_id_,
-                                                                        column_id))) {
+                                                                        partkey_cid))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get column expr by id failed", K(ret), K(i), K(column_id), K(rowkey_partkey_ids));
-      } else if (OB_FAIL(add_var_to_array_no_dup(constraint_info.constraint_columns_, col_item->expr_))) {
+        LOG_WARN("get column expr by id failed", K(ret), K(partkey_cid), K(i), K(partkey_ids));
+      } else if (OB_FAIL(constraint_info.constraint_columns_.push_back(col_item->expr_))) {
         LOG_WARN("store column expr to column exprs failed", K(ret));
       }
     }
-
   }
   return ret;
 }

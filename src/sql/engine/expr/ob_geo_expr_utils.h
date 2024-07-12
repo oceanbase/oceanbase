@@ -229,7 +229,7 @@ public:
         cached_param1_(nullptr),
         param2_(nullptr),
         cached_param2_(nullptr) {}
-  ~ObGeoConstParamCache() {};
+  ~ObGeoConstParamCache();
 
   ObGeometry *get_const_param_cache(int arg_idx);
   ObCachedGeom *get_cached_geo(int arg_idx);

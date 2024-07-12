@@ -228,12 +228,13 @@ int ObMVProvider::check_mv_column_type(const ObColumnSchemaV2 &org_column,
   const ObIArray<ObString> &orig_strs = org_column.get_extended_type_info();
   const ObIArray<ObString> &cur_strs = cur_column.get_extended_type_info();
   bool is_valid_col = // org_column.get_meta_type() == cur_column.get_meta_type()
-                     org_column.get_meta_type().get_type() == cur_column.get_meta_type().get_type()
-                     && org_column.get_sub_data_type() == cur_column.get_sub_data_type()
+                     org_column.get_sub_data_type() == cur_column.get_sub_data_type()
                      // && org_column.get_charset_type() == cur_column.get_charset_type() todo: org_column charset_type is invalid now
-                     && org_column.get_accuracy() == cur_column.get_accuracy()
                      && org_column.is_zero_fill() == cur_column.is_zero_fill()
                      && orig_strs.count() == cur_strs.count();
+  if (is_valid_col && OB_FAIL(check_column_type_and_accuracy(org_column, cur_column, is_valid_col))) {
+    LOG_WARN("failed to check column type and accuracy", K(ret));
+  }
   for (int64_t i = 0; is_valid_col && OB_SUCC(ret) && i < orig_strs.count(); ++i) {
    if (orig_strs.at(i) == cur_strs.at(i)) {
      /* do nothing */
@@ -243,14 +244,35 @@ int ObMVProvider::check_mv_column_type(const ObColumnSchemaV2 &org_column,
    }
   }
 
-  if (OB_FAIL(ret) || is_valid_col) {
-  } else if (org_column.get_meta_type().is_number()
-             && cur_column.get_meta_type().is_decimal_int()
-             && lib::is_oracle_mode()) {
-    /* in oracle mode, const number is resolved as decimal int except ddl stmt */
-  } else {
+  if (OB_SUCC(ret) && !is_valid_col) {
    ret = OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH;
    LOG_WARN("mv column changed", K(ret), K(org_column), K(cur_column));
+  }
+  return ret;
+}
+
+int ObMVProvider::check_column_type_and_accuracy(const ObColumnSchemaV2 &org_column,
+                                                 const ObColumnSchemaV2 &cur_column,
+                                                 bool &is_match)
+{
+  int ret = OB_SUCCESS;
+  is_match = false;
+  if (org_column.get_meta_type().is_number()
+      && cur_column.get_meta_type().is_decimal_int()
+      && lib::is_oracle_mode()) {
+    /* in oracle mode, const number is resolved as decimal int except ddl stmt */
+    is_match = true;
+  } else if (org_column.get_meta_type().get_type() != cur_column.get_meta_type().get_type()) {
+    is_match = false;
+  } else if (!ob_is_numeric_type(org_column.get_meta_type().get_type())) {
+    is_match = org_column.get_accuracy() == cur_column.get_accuracy();
+  } else {
+    is_match = true;
+    const ObAccuracy &org = org_column.get_accuracy();
+    const ObAccuracy &cur = cur_column.get_accuracy();
+    is_match &= (-1 == org.get_length() || org.get_length() >= cur.get_length());
+    is_match &= (-1 == org.get_precision() || org.get_precision() >= cur.get_precision());
+    is_match &= (-1 == org.get_scale() || org.get_scale() >= cur.get_scale());
   }
   return ret;
 }

@@ -62,7 +62,9 @@ struct ObSharedBlocksWriteCtx final
 public:
   ObSharedBlocksWriteCtx()
     : addr_(), block_ids_()
-  {}
+  {
+    block_ids_.set_attr(ObMemAttr(MTL_ID(), "SharedBlkWCtx"));
+  }
   ~ObSharedBlocksWriteCtx();
   bool is_valid() const;
   int set_addr(const ObMetaDiskAddr &addr); // overwrite

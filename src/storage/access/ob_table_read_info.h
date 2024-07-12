@@ -388,7 +388,8 @@ class ObCGReadInfo : public ObITableReadInfo
 public:
   const static int64_t CG_COL_CNT = 1;
   const static int64_t CG_ROWKEY_COL_CNT = 0;
-  const static int64_t LOCAL_MAX_CG_READ_INFO_CNT = 16;
+  const static int64_t LOCAL_MAX_CG_READ_INFO_CNT = 256;
+  const static uint64_t CG_READ_INFO_MEMORY_BASE = 32_GB;
   const static int16_t MIX_READ_INFO_LOCAL_CACHE = 1;
 public:
   ObCGReadInfo();
@@ -403,6 +404,13 @@ public:
   OB_INLINE static bool is_cg_sstable(const int64_t schema_rowkey_cnt, const int64_t schema_column_count)
   {
     return ObCGReadInfo::CG_COL_CNT == schema_rowkey_cnt && ObCGReadInfo::CG_ROWKEY_COL_CNT == schema_column_count;
+  }
+  static uint64_t get_local_max_cg_cnt()
+  {
+    double local_max_cg_read_info_cnt = 0.0;
+    double tenant_memory_limit = static_cast<double>(lib::get_tenant_memory_limit(MTL_ID()));
+    local_max_cg_read_info_cnt = (tenant_memory_limit / CG_READ_INFO_MEMORY_BASE) * LOCAL_MAX_CG_READ_INFO_CNT;
+    return MAX(static_cast<uint64_t>(local_max_cg_read_info_cnt), LOCAL_MAX_CG_READ_INFO_CNT);
   }
   OB_INLINE virtual bool is_oracle_mode() const override { return cg_basic_info_->is_oracle_mode(); }
   OB_INLINE virtual int64_t get_schema_column_count() const override { return CG_COL_CNT; }
@@ -586,7 +594,7 @@ private:
   {
     return skip_type(type) || is_lob_storage(type) || ob_is_string_type(type) || ob_is_decimal_int(type);
   }
-  const static int64_t DEFAULT_CG_READ_INFO_ARRAY_SIZE = 50;
+  const static int64_t DEFAULT_CG_READ_INFO_ARRAY_SIZE = 256;
   const static int64_t PRINT_LOG_INVERVAL = 3 * 60 * 1000L * 1000L; // 3 mins
   void inner_print_log();
 private:

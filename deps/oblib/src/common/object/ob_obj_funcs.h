@@ -1597,9 +1597,6 @@ DEF_ENUMSET_INNER_FUNCS(ObSetInnerType, set_inner, ObString);
 // 2. CS_FUNCS: lob with same content and different lobids will have different crc & hash,
 //    but error occur in farm, not used?
 
-// Todo: @xiyu
-// Check CS_FUNCS of roaringbitmap may not be used?
-
 #define DEF_TEXT_FUNCS(OBJTYPE, TYPE, VTYPE) \
   DEF_TEXT_PRINT_FUNCS(OBJTYPE);             \
   DEF_STRING_CS_FUNCS(OBJTYPE);                 \
@@ -1609,7 +1606,6 @@ DEF_TEXT_FUNCS(ObTinyTextType, string, ObString);
 DEF_TEXT_FUNCS(ObTextType, string, ObString);
 DEF_TEXT_FUNCS(ObMediumTextType, string, ObString);
 DEF_TEXT_FUNCS(ObLongTextType, string, ObString);
-DEF_TEXT_FUNCS(ObRoaringBitmapType, string, ObString);
 
 
 #define DEF_GEO_CS_FUNCS(OBJTYPE)                                    \
@@ -1652,7 +1648,7 @@ DEF_TEXT_FUNCS(ObRoaringBitmapType, string, ObString);
       res = 0;                                                                       \
       common::ObString str = param.get_string();                                     \
       common::ObString wkb;                                                          \
-      ObLobLocatorV2 lob(str, false);                                                \
+      ObLobLocatorV2 lob(str, param.has_lob_header());                               \
       if (!lob.is_valid()) {                                                         \
         COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
       } else if (!lob.has_inrow_data()) {                                            \
@@ -1726,7 +1722,7 @@ DEF_GEO_FUNCS(ObGeometryType, string, ObString);
       res = 0;                                                                       \
       common::ObString str = param.get_string();                                     \
       common::ObString j_bin_str;                                                    \
-      ObLobLocatorV2 lob(str, false);                                                \
+      ObLobLocatorV2 lob(str, param.has_lob_header());                               \
       if (!lob.is_valid()) {                                                         \
         COMMON_LOG(WARN, "invalid lob", K(ret), K(str));                             \
       } else if (!lob.has_inrow_data()) {                                            \
@@ -3575,6 +3571,13 @@ inline int64_t obj_val_get_serialize_size<ObCollectionSQLType>(const ObObj &obj)
 }
 
 DEF_UDT_CS_FUNCS(ObCollectionSQLType);
+
+#define DEF_ROARINGBITMAP_FUNCS(OBJTYPE, TYPE, VTYPE) \
+  DEF_HEX_STRING_PRINT_FUNCS(OBJTYPE);               \
+  DEF_STRING_CS_FUNCS(OBJTYPE);                      \
+  DEF_TEXT_SERIALIZE_FUNCS(OBJTYPE, TYPE, VTYPE)
+
+DEF_ROARINGBITMAP_FUNCS(ObRoaringBitmapType, string, ObString);
 
 }
 }

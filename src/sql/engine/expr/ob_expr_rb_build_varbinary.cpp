@@ -66,31 +66,27 @@ int ObExprRbBuildVarbinary::eval_rb_build_varbinary(const ObExpr &expr,
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
   lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(ObRbExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session()), "ROARINGBITMAP"));
-  ObDatum *datum = NULL;
+  ObExpr *rb_arg = expr.args_[0];
   bool is_null_result = false;
-  ObString rb_bin;
+  bool is_rb_null = false;
+  ObString rb_bin = nullptr;
+  ObString res_rb_bin = nullptr;
 
-  // get roaring string
-  if (OB_FAIL(expr.args_[0]->eval(ctx, datum))) {
-    LOG_WARN("failed to eval argument", K(ret));
-  } else if (datum->is_null()) {
+  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, rb_arg, rb_bin, is_rb_null))) {
+    LOG_WARN("fail to get input roaringbitmap", K(ret));
+  } else if (is_rb_null || rb_bin == nullptr) {
     is_null_result = true;
-  } else {
-    rb_bin = datum->get_string();
-    ObRbBinType bin_type;
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_allocator, *datum,
-        expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), rb_bin))) {
-      LOG_WARN("fail to get real string data", K(ret), K(rb_bin));
-    } else if (OB_FAIL(ObRbUtils::check_get_bin_type(rb_bin, bin_type))) {
-      LOG_WARN("invalid roaringbitmap binary", K(ret), K(rb_bin));
-    }
+  } else if (OB_FAIL(ObRbUtils::build_binary(tmp_allocator, rb_bin, res_rb_bin))) {
+    LOG_WARN("failed to build rb binary", K(ret));
   }
+
   if (OB_FAIL(ret)) {
   } else if (is_null_result) {
     res.set_null();
-  } else if (OB_FAIL(ObRbExprHelper::pack_rb_res(expr, ctx, res, rb_bin))) {
+  } else if (OB_FAIL(ObRbExprHelper::pack_rb_res(expr, ctx, res, res_rb_bin))) {
     LOG_WARN("fail to pack roaringbitmap res", K(ret));
   }
+
   return ret;
 }
 

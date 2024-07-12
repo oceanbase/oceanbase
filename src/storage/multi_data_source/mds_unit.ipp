@@ -14,10 +14,12 @@
 
 #include "lib/list/ob_dlist.h"
 #include "lib/ob_errno.h"
+#include "lib/oblog/ob_log_module.h"
 #include "ob_clock_generator.h"
 #include "observer/virtual_table/ob_mds_event_buffer.h"
 #include "share/ob_errno.h"
 #include "runtime_utility/mds_retry_control.h"
+#include "storage/multi_data_source/runtime_utility/common_define.h"
 #include <type_traits>
 #ifndef STORAGE_MULTI_DATA_SOURCE_MDS_UNIT_H_IPP
 #define STORAGE_MULTI_DATA_SOURCE_MDS_UNIT_H_IPP
@@ -201,6 +203,7 @@ int MdsUnit<K, V>::for_each_row(FowEachRowAction action_type, OP &&op)// node ma
       // but destroy mds_row will add row's lock inner destruction, which will resulting deadlock in same thread.
       // so only operations logic behaves like gc should recycle empty row.
       if (FowEachRowAction::RECYCLE == action_type || FowEachRowAction::RESET == action_type) {
+        MDS_LOG_SCAN(DEBUG, "scan row to recycle or reset", K(action_type), KPC(p_k));
         erase_kv_from_list_if_empty_(&const_cast<KvPair<K, Row<K, V>> &>(kv_row));
       }
       return OB_SUCCESS != ret;// keep scanning until meet failure
@@ -210,18 +213,29 @@ int MdsUnit<K, V>::for_each_row(FowEachRowAction action_type, OP &&op)// node ma
 }
 
 template <typename K, typename V>
-KvPair<K, Row<K, V>> *MdsUnit<K, V>::get_row_from_list_(const K &key) const
-{
-  KvPair<K, Row<K, V>> *p_kv = nullptr;
-  multi_row_list_.for_each_node_from_head_to_tail_until_true(
-    [&p_kv, &key](const KvPair<K, Row<K, V>> &kv_pair) {
-      if (kv_pair.k_ == key) {
-        p_kv = &const_cast<KvPair<K, Row<K, V>> &>(kv_pair);
-      }
-      return nullptr != p_kv;
+struct FindKeyOp {
+  FindKeyOp(const K &key, KvPair<K, Row<K, V>> *&p_kv)
+  : ret_(OB_SUCCESS), key_(key), p_kv_(p_kv) {}
+  bool operator()(const KvPair<K, Row<K, V>> &kv_pair) {
+    int compare_result = 0;
+    if (OB_SUCCESS != (ret_ = compare_binary_key(kv_pair.k_, key_, compare_result))) {
+      MDS_LOG_RET(WARN, ret_, "fail to compare binary key", K(kv_pair), K(key_));
+    } else if (compare_result == 0) {
+      p_kv_ = &const_cast<KvPair<K, Row<K, V>> &>(kv_pair);
     }
-  );
-  return p_kv;
+    return (OB_SUCCESS != ret_) || (nullptr != p_kv_);
+  }
+  int ret_;
+  const K &key_;
+  KvPair<K, Row<K, V>> *&p_kv_;
+};
+template <typename K, typename V>
+int MdsUnit<K, V>::get_row_from_list_(const K &key, KvPair<K, Row<K, V>> *&p_kv) const
+{
+  FindKeyOp<K, V> op(key, p_kv);
+  multi_row_list_.for_each_node_from_head_to_tail_until_true(op);
+  MDS_LOG(DEBUG, "mds unit get p_kv", K(key), KPC(p_kv));
+  return op.ret_;
 }
 
 template <typename K, typename V>
@@ -268,8 +282,10 @@ int MdsUnit<K, V>::SetOP::operator()() {
   #define PRINT_WRAPPER KR(ret), K_(key), K_(value), K_(ctx), K_(retry_param), K_(is_for_remove)
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  KvPair<K, Row<K, V>> *p_kv = this_->get_row_from_list_(key_);
-  if (OB_ISNULL(p_kv)) {
+  KvPair<K, Row<K, V>> *p_kv = nullptr;
+  if (OB_FAIL(this_->get_row_from_list_(key_, p_kv))) {
+    MDS_LOG_SET(WARN, "get row from list failed");
+  } else if (OB_ISNULL(p_kv)) {
     if (MDS_FAIL(this_->insert_empty_kv_to_list_(key_, p_kv, p_mds_table_))) {
       MDS_LOG_SET(WARN, "insert new key to unit failed");
     } else {
@@ -328,8 +344,10 @@ int MdsUnit<K, V>::replay(MdsTableBase *p_mds_table,
   MDS_TG(10_ms);
   MdsWLockGuard lg(lock_);
   CLICK();
-  KvPair<K, Row<K, V>> *p_kv = get_row_from_list_(key);
-  if (OB_ISNULL(p_kv)) {
+  KvPair<K, Row<K, V>> *p_kv = nullptr;
+  if (OB_FAIL(get_row_from_list_(key, p_kv))) {
+    MDS_LOG_SET(WARN, "get row from list failed");
+  } else if (OB_ISNULL(p_kv)) {
     if (MDS_FAIL(insert_empty_kv_to_list_(key, p_kv, p_mds_table))) {
       MDS_LOG_SET(WARN, "insert new key to unit failed");
     } else {
@@ -354,16 +372,17 @@ int MdsUnit<K, V>::replay(MdsTableBase *p_mds_table,
 template <typename K, typename V>
 template <typename OP>
 int MdsUnit<K, V>::GetSnapShotOp<OP>::operator()() {
-  #define PRINT_WRAPPER KR(ret), K_(key), K(typeid(OP).name()), K_(snapshot), K_(read_seq), K_(retry_param)
+  #define PRINT_WRAPPER KR(ret), K_(key), K(typeid(OP).name()), K_(snapshot), K_(retry_param)
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  KvPair<K, Row<K, V>> *p_kv = this_->get_row_from_list_(key_);
-  if (OB_ISNULL(p_kv)) {
+  KvPair<K, Row<K, V>> *p_kv = nullptr;
+  if (OB_FAIL(this_->get_row_from_list_(key_, p_kv))) {
+    MDS_LOG_SET(WARN, "get row from list failed");
+  } else if (OB_ISNULL(p_kv)) {
     ret = OB_ENTRY_NOT_EXIST;
     MDS_LOG_GET(WARN, "row key not exist");
   } else if (MDS_FAIL(p_kv->v_.get_snapshot(read_op_,
                                             snapshot_,
-                                            read_seq_,
                                             retry_param_))) {
     if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret && OB_EAGAIN != ret)) {
       MDS_LOG_GET(WARN, "MdsUnit get_snapshot failed");
@@ -377,13 +396,12 @@ template <typename OP>
 int MdsUnit<K, V>::get_snapshot(const K &key,
                                 OP &&read_op,
                                 const share::SCN snapshot,
-                                const int64_t read_seq,
                                 const int64_t lock_timeout_us) const
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   RetryParam retry_param(MdsUnitBase<K, V>::p_mds_table_->ls_id_, lock_timeout_us);
-  GetSnapShotOp<typename std::remove_reference<OP>::type> op(this, key, read_op, snapshot, read_seq, retry_param);
+  GetSnapShotOp<typename std::remove_reference<OP>::type> op(this, key, read_op, snapshot, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
       ret = OB_ERR_SHARED_LOCK_CONFLICT;
@@ -398,8 +416,10 @@ int MdsUnit<K, V>::GetByWriterOp<OP>::operator()() {
   #define PRINT_WRAPPER KR(ret), K_(key), K(typeid(OP).name()), K_(writer), K_(snapshot), K_(read_seq), K_(retry_param)
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  KvPair<K, Row<K, V>> *p_kv = this_->get_row_from_list_(key_);
-  if (OB_ISNULL(p_kv)) {
+  KvPair<K, Row<K, V>> *p_kv = nullptr;
+  if (OB_FAIL(this_->get_row_from_list_(key_, p_kv))) {
+    MDS_LOG_SET(WARN, "get row from list failed");
+  } else if (OB_ISNULL(p_kv)) {
     ret = OB_ENTRY_NOT_EXIST;
     MDS_LOG_GET(WARN, "row key not exist");
   } else if (MDS_FAIL(p_kv->v_.get_by_writer(read_op_,
@@ -422,7 +442,7 @@ int MdsUnit<K, V>::get_by_writer(const K &key,
                                  OP &&read_op,
                                  const MdsWriter &writer,
                                  const share::SCN snapshot,
-                                 const int64_t read_seq,
+                                 const transaction::ObTxSEQ read_seq,
                                  const int64_t lock_timeout_us) const
 {
   int ret = OB_SUCCESS;
@@ -439,18 +459,20 @@ int MdsUnit<K, V>::get_by_writer(const K &key,
 
 template <typename K, typename V>
 template <typename OP>
-int MdsUnit<K, V>::get_latest(const K &key, OP &&read_op, const int64_t read_seq) const
+int MdsUnit<K, V>::get_latest(const K &key, OP &&read_op) const
 {
-  #define PRINT_WRAPPER KR(ret), K(key), K(typeid(OP).name()), K(read_seq)
+  #define PRINT_WRAPPER KR(ret), K(key), K(typeid(OP).name())
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   MdsRLockGuard lg(lock_);
   CLICK();
-  KvPair<K, Row<K, V>> *p_kv = get_row_from_list_(key);
-  if (OB_ISNULL(p_kv)) {
+  KvPair<K, Row<K, V>> *p_kv = nullptr;
+  if (OB_FAIL(get_row_from_list_(key, p_kv))) {
+    MDS_LOG_SET(WARN, "get row from list failed");
+  } else if (OB_ISNULL(p_kv)) {
     ret = OB_ENTRY_NOT_EXIST;
     MDS_LOG_GET(WARN, "row key not exist");
-  } else if (MDS_FAIL(p_kv->v_.get_latest(std::forward<OP>(read_op), read_seq))) {
+  } else if (MDS_FAIL(p_kv->v_.get_latest(std::forward<OP>(read_op)))) {
     if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
       MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
     }
@@ -461,39 +483,75 @@ int MdsUnit<K, V>::get_latest(const K &key, OP &&read_op, const int64_t read_seq
   #undef PRINT_WRAPPER
 }
 
+template <typename DUMP_OP>
+struct ScanKVRowOP {
+  ScanKVRowOP(DUMP_OP &op,
+              const share::SCN flush_scn,
+              const uint8_t mds_table_id,
+              const uint8_t mds_unit_id,
+              const bool for_flush,
+              const ScanNodeOrder scan_node_order)
+  : op_(op),
+  flush_scn_(flush_scn),
+  kv_(),
+  mds_table_id_(mds_table_id),
+  mds_unit_id_(mds_unit_id),
+  for_flush_(for_flush),
+  scan_node_order_(scan_node_order) {}
+  template <typename K, typename V>
+  int operator()(const KvPair<K, Row<K, V>> &kv_row) {
+    #define PRINT_WRAPPER KR(ret), K_(flush_scn), K_(for_flush)
+    int ret = OB_SUCCESS;
+    MDS_TG(10_ms);
+    if (MDS_FAIL(kv_.k_.init(mds_table_id_,
+                            mds_unit_id_,
+                            kv_row.k_,
+                            MdsAllocator::get_instance()))) {
+      MDS_LOG_SCAN(WARN, "fail to init MdsDumpKey");
+    } else if (MDS_FAIL(kv_row.v_.scan_nodes_to_dump(op_,
+                                                     mds_table_id_,
+                                                     mds_unit_id_,
+                                                     kv_,
+                                                     flush_scn_,
+                                                     for_flush_,
+                                                     scan_node_order_))) {
+      MDS_LOG_SCAN(WARN, "fail to scan dump node on row");
+    }
+    return ret;// keep scanning until meet failure
+    #undef PRINT_WRAPPER
+  }
+  DUMP_OP op_;
+  const share::SCN flush_scn_;
+  MdsDumpKV kv_;
+  const uint8_t mds_table_id_;
+  const uint8_t mds_unit_id_;
+  const bool for_flush_;
+  const ScanNodeOrder scan_node_order_;
+};
 template <typename K, typename V>
 template <typename DUMP_OP>
 int MdsUnit<K, V>::scan_KV_row(DUMP_OP &&op,
-                               share::SCN &flush_scn,
+                               const share::SCN flush_scn,
                                const uint8_t mds_table_id,
                                const uint8_t mds_unit_id,
-                               const bool for_flush) const
+                               const bool for_flush,
+                               const ScanRowOrder scan_row_order,
+                               const ScanNodeOrder scan_node_order) const
 {
   #define PRINT_WRAPPER KR(ret), K(flush_scn), K(for_flush)
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   MdsRLockGuard lg(lock_);
   CLICK();
-  MdsDumpKV kv;
-  multi_row_list_.for_each_node_from_head_to_tail_until_true(
-    [&op, flush_scn, &ret, &kv, mds_table_id, mds_unit_id, for_flush](const KvPair<K, Row<K, V>> &kv_row) {
-      MDS_TG(10_ms);
-      if (MDS_FAIL(kv.k_.init(mds_table_id,
-                              mds_unit_id,
-                              kv_row.k_,
-                              DefaultAllocator::get_instance()))) {
-        MDS_LOG_SCAN(WARN, "fail to init MdsDumpKey");
-      } else if (MDS_FAIL(kv_row.v_.scan_dump_node_from_tail_to_head(op,
-                                                                     mds_table_id,
-                                                                     mds_unit_id,
-                                                                     kv,
-                                                                     flush_scn,
-                                                                     for_flush))) {
-        MDS_LOG_SCAN(WARN, "fail to scan dump node on row");
-      }
-      return OB_SUCCESS != ret;// keep scanning until meet failure
-    }
-  );
+  ScanKVRowOP<DUMP_OP> scan_kv_row_op(op, flush_scn, mds_table_id, mds_unit_id, for_flush, scan_node_order);
+  if (ScanRowOrder::ASC == scan_row_order) {
+    ret = multi_row_list_.for_each_node(scan_kv_row_op);
+  } else if (ScanRowOrder::DESC == scan_row_order) {
+    ret = multi_row_list_.reverse_for_each_node(scan_kv_row_op);
+  } else {
+    MDS_ASSERT(false);
+    ret = OB_ERR_UNEXPECTED;
+  }
   return ret;
   #undef PRINT_WRAPPER
 }
@@ -539,7 +597,7 @@ void MdsUnit<K, V>::report_event_(const char (&event_str)[N],
     observer::MdsEventKey key(MTL_ID(),
                              MdsUnitBase<K, V>::p_mds_table_->ls_id_,
                              MdsUnitBase<K, V>::p_mds_table_->tablet_id_);
-    observer::ObMdsEventBuffer::append(key, event, file, line, function_name);
+    observer::ObMdsEventBuffer::append(key, event, MdsUnitBase<K, V>::p_mds_table_, file, line, function_name);
   }
 }
 
@@ -713,12 +771,11 @@ int  MdsUnit<DummyKey, V>::replay(MdsTableBase *p_mds_table,
 template <typename V>
 template <typename OP>
 int MdsUnit<DummyKey, V>::GetSnapShotOp<OP>::operator()() {
-  #define PRINT_WRAPPER KR(ret), K(typeid(OP).name()), K_(read_seq), K_(retry_param)
+  #define PRINT_WRAPPER KR(ret), K(typeid(OP).name()), K_(retry_param)
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   if (MDS_FAIL(this_->single_row_.v_.get_snapshot(read_op_,
                                                   snapshot_,
-                                                  read_seq_,
                                                   retry_param_))) {
     if (OB_SNAPSHOT_DISCARDED != ret) {
       MDS_LOG_GET(WARN, "MdsUnit get_snapshot failed");
@@ -733,13 +790,12 @@ template <typename V>
 template <typename OP>
 int MdsUnit<DummyKey, V>::get_snapshot(OP &&read_op,
                                        const share::SCN snapshot,
-                                       const int64_t read_seq,
                                        const int64_t lock_timeout_us) const
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   RetryParam retry_param(MdsUnitBase<DummyKey, V>::p_mds_table_->ls_id_, lock_timeout_us);
-  GetSnapShotOp<typename std::remove_reference<OP>::type> op(this, read_op, snapshot, read_seq, retry_param);
+  GetSnapShotOp<typename std::remove_reference<OP>::type> op(this, read_op, snapshot, retry_param);
   if (MDS_FAIL(retry_release_lock_with_op_until_timeout<LockMode::READ>(lock_, retry_param, op))) {
     if (OB_TIMEOUT == ret) {
       ret = OB_ERR_SHARED_LOCK_CONFLICT;
@@ -773,7 +829,7 @@ template <typename OP>
 int MdsUnit<DummyKey, V>::get_by_writer(OP &&read_op,
                                         const MdsWriter &writer,
                                         const share::SCN snapshot,
-                                        const int64_t read_seq,
+                                        const transaction::ObTxSEQ read_seq,
                                         const int64_t lock_timeout_us) const
 {
   int ret = OB_SUCCESS;
@@ -790,14 +846,14 @@ int MdsUnit<DummyKey, V>::get_by_writer(OP &&read_op,
 
 template <typename V>
 template <typename OP>
-int MdsUnit<DummyKey, V>::get_latest(OP &&read_op, const int64_t read_seq) const
+int MdsUnit<DummyKey, V>::get_latest(OP &&read_op) const
 {
-  #define PRINT_WRAPPER KR(ret), K(typeid(OP).name()), K(read_seq)
+  #define PRINT_WRAPPER KR(ret), K(typeid(OP).name())
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
   MdsRLockGuard lg(lock_);
   CLICK();
-  if (MDS_FAIL(single_row_.v_.get_latest(std::forward<OP>(read_op), read_seq))) {
+  if (MDS_FAIL(single_row_.v_.get_latest(std::forward<OP>(read_op)))) {
     if (OB_UNLIKELY(OB_SNAPSHOT_DISCARDED != ret)) {
       MDS_LOG_GET(WARN, "MdsUnit get_latest failed");
     }
@@ -811,29 +867,36 @@ int MdsUnit<DummyKey, V>::get_latest(OP &&read_op, const int64_t read_seq) const
 template <typename V>
 template <typename DUMP_OP>
 int MdsUnit<DummyKey, V>::scan_KV_row(DUMP_OP &&op,
-                                      share::SCN &flush_scn,
+                                      const share::SCN flush_scn,
                                       const uint8_t mds_table_id,
                                       const uint8_t mds_unit_id,
-                                      const bool for_flush) const
+                                      const bool for_flush,
+                                      const ScanRowOrder scan_row_order,
+                                      const ScanNodeOrder scan_node_order) const
 {
+  UNUSED(scan_row_order);
   #define PRINT_WRAPPER KR(ret), K(kv), K(typeid(op).name()), K(flush_scn), K(for_flush)
   MDS_TG(100_ms);
   int ret = OB_SUCCESS;
   MdsRLockGuard lg(lock_);
   CLICK();
   MdsDumpKV kv;
+  MDS_LOG_SCAN(DEBUG, "start scan row");
   if (MDS_FAIL(kv.k_.init(mds_table_id,
                           mds_unit_id,
                           DummyKey(),
-                          DefaultAllocator::get_instance()))) {
+                          MdsAllocator::get_instance()))) {
     MDS_LOG_SCAN(WARN, "init key failed");
-  } else if (MDS_FAIL(single_row_.v_.scan_dump_node_from_tail_to_head(std::forward<DUMP_OP>(op),
-                                                                      mds_table_id,
-                                                                      mds_unit_id,
-                                                                      kv,
-                                                                      flush_scn,
-                                                                      for_flush))) {
+  } else if (MDS_FAIL(single_row_.v_.scan_nodes_to_dump(op,
+                                                        mds_table_id,
+                                                        mds_unit_id,
+                                                        kv,
+                                                        flush_scn,
+                                                        for_flush,
+                                                        scan_node_order))) {
     MDS_LOG_SCAN(WARN, "scan single row to dump failed");
+  } else {
+    MDS_LOG_SCAN(DEBUG, "scan single row to dump success");
   }
   return ret;
   #undef PRINT_WRAPPER

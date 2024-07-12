@@ -436,7 +436,7 @@ int ObStorageHADagUtils::check_self_is_valid_member(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be NULL", K(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -678,6 +678,8 @@ int ObStorageHATaskUtils::check_need_copy_sstable(
     if (OB_FAIL(check_ddl_sstable_need_copy_(param, tablet_handle, need_copy))) {
       LOG_WARN("failed to check ddl sstable need copy", K(ret), K(param), K(tablet_handle));
     }
+  } else if (param.table_key_.is_mds_sstable()) {
+    need_copy = true;
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("copy sstable table type is unexpected", K(ret), K(param));

@@ -58,6 +58,7 @@ public:
       common::ObIArray<ObServerInfoInTable> &active_servers_info) const;
   virtual int get_alive_servers(const common::ObZone &zone, common::ObIArray<common::ObAddr> &server_list) const;
   virtual int get_alive_servers_count(const common::ObZone &zone, int64_t &count) const;
+  virtual int get_alive_and_not_stopped_servers(const common::ObZone &zone, common::ObIArray<common::ObAddr> &server_list) const;
   virtual int get_servers_by_status(
       const ObZone &zone,
       common::ObIArray<common::ObAddr> &alive_server_list,
@@ -136,6 +137,7 @@ public:
   virtual int refresh();
   virtual int check_server_can_migrate_in(const common::ObAddr &server, bool &can_migrate_in) const;
   virtual int get_alive_servers_count(const common::ObZone &zone, int64_t &count) const;
+  virtual int get_alive_and_not_stopped_servers(const common::ObZone &zone, common::ObIArray<common::ObAddr> &server_list) const;
   virtual int get_servers_by_status(
       const ObZone &zone,
       common::ObIArray<common::ObAddr> &alive_server_list,

@@ -413,6 +413,34 @@ int ObServerTraceMap::get_alive_servers(const ObZone &zone, ObIArray<ObAddr> &se
 
   return ret;
 }
+
+int ObServerTraceMap::get_alive_and_not_stopped_servers(const ObZone &zone, ObIArray<ObAddr> &server_list) const
+{
+  int ret = OB_SUCCESS;
+
+  server_list.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("server trace map has not inited", KR(ret));
+  } else {
+    SpinRLockGuard guard(lock_);
+    for (int64_t i = 0; OB_SUCC(ret) && i < server_info_arr_.count(); ++i) {
+      const ObServerInfoInTable &server_info = server_info_arr_.at(i);
+      const ObAddr &server = server_info.get_server();
+      if ((server_info.get_zone() == zone || zone.is_empty())
+           && !server_info.is_stopped()
+           && server_info.is_alive()
+           && server_info.in_service()) {
+        if (OB_FAIL(server_list.push_back(server))) {
+          LOG_WARN("fail to push an element into server_list", KR(ret), K(server));
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObServerTraceMap::check_server_active(const ObAddr &server, bool &is_active) const
 {
   int ret = OB_SUCCESS;
@@ -759,6 +787,11 @@ int ObAllServerTracer::check_server_can_migrate_in(const ObAddr &server, bool &c
 int ObAllServerTracer::get_alive_servers_count(const common::ObZone &zone, int64_t &count) const
 {
   return trace_map_.get_alive_servers_count(zone, count);
+}
+
+int ObAllServerTracer::get_alive_and_not_stopped_servers(const ObZone &zone, ObIArray<ObAddr> &server_list) const
+{
+  return trace_map_.get_alive_and_not_stopped_servers(zone, server_list);
 }
 
 int ObAllServerTracer::refresh()

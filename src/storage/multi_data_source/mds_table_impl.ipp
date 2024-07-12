@@ -18,7 +18,7 @@
 #include "ob_clock_generator.h"
 #include "share/ob_errno.h"
 #include "storage/multi_data_source/mds_table_base.h"
-#include "storage/multi_data_source/mds_table_impl.h"
+#include "storage/multi_data_source/runtime_utility/common_define.h"
 #ifndef STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_H_IPP
 #define STORAGE_MULTI_DATA_SOURCE_MDS_TABLE_IMPL_H_IPP
 #include "mds_table_impl.h"
@@ -77,7 +77,6 @@ MdsTableImpl<MdsTableType>::~MdsTableImpl() {
   if (OB_FAIL(unregister_from_removed_recorder())) {
     MDS_LOG(ERROR, "fail to unregister from removed_recorder", K(*this));
   }
-  MDS_LOG(INFO, "mds table destructed", K(*this));
 }
 
 template <typename MdsTableImpl>
@@ -463,15 +462,13 @@ struct GetLatestHelper {
                   int64_t unit_id,
                   void *key,
                   ObFunction<int(void *)> &op,
-                  bool &is_committed,
-                  const int64_t read_seq)
+                  bool &is_committed)
   : mds_table_impl_(mds_table_impl),
   current_idx_(0),
   unit_id_(unit_id),
   key_(key),
   function_(op),
-  is_committed_(is_committed),
-  read_seq_(read_seq) {}
+  is_committed_(is_committed) {}
   template <typename K, typename V>
   struct InnerHelper {
     InnerHelper(GetLatestHelper &helper) : helper_(helper) {}
@@ -481,8 +478,7 @@ struct GetLatestHelper {
         [this](const V &data) {
           return helper_.function_(reinterpret_cast<void *>(&const_cast<V&>(data)));
         },
-        helper_.is_committed_,
-        helper_.read_seq_
+        helper_.is_committed_
       );
     }
     GetLatestHelper &helper_;
@@ -495,8 +491,7 @@ struct GetLatestHelper {
         [this](const V &data) -> int {
           return helper_.function_(reinterpret_cast<void *>(&const_cast<V&>(data)));
         },
-        helper_.is_committed_,
-        helper_.read_seq_
+        helper_.is_committed_
       );
     }
     GetLatestHelper &helper_;
@@ -519,14 +514,12 @@ struct GetLatestHelper {
   void *key_;
   ObFunction<int(void *)> &function_;
   bool &is_committed_;
-  const int64_t read_seq_;
 };
 template <typename MdsTableType>
 int MdsTableImpl<MdsTableType>::get_latest(int64_t unit_id,
                                            void *key,
                                            ObFunction<int(void *)> &op,
-                                           bool &is_committed,
-                                           const int64_t read_seq) const {
+                                           bool &is_committed) const {
   int ret = OB_SUCCESS;
   MDS_TG(5_ms);// point select should be fast
   if (MDS_FAIL(advance_state_to(State::WRITTING))) {
@@ -536,8 +529,7 @@ int MdsTableImpl<MdsTableType>::get_latest(int64_t unit_id,
                                                        unit_id,
                                                        key,
                                                        op,
-                                                       is_committed,
-                                                       read_seq);
+                                                       is_committed);
     if (OB_ITER_END == (ret = unit_tuple_.for_each(helper))) {
       ret = OB_SUCCESS;
     } else if (OB_FAIL(ret)) {
@@ -569,7 +561,7 @@ template <>
 inline int MdsTableImpl<NormalMdsTable>::get_tablet_status_node(ObFunction<int(void *)> &op, const int64_t read_seq) const
 {
   return const_cast<NormalMdsTable &>(unit_tuple_).element<MdsUnit<DummyKey, ObTabletCreateDeleteMdsUserData>>().
-         get_latest(GetTabletSetusNodeOpWrapper(op), read_seq);
+         get_latest(GetTabletSetusNodeOpWrapper(op));
 }
 
 template <typename MdsTableImpl>
@@ -579,7 +571,6 @@ struct GetSnapshotHelper {
                     void *key,
                     ObFunction<int(void *)> &op,
                     const share::SCN &snapshot,
-                    const int64_t read_seq,
                     const int64_t timeout_us)
   : mds_table_impl_(mds_table_impl),
   current_idx_(0),
@@ -587,7 +578,6 @@ struct GetSnapshotHelper {
   key_(key),
   function_(op),
   snapshot_(snapshot),
-  read_seq_(read_seq),
   timeout_us_(timeout_us) {}
   template <typename K, typename V>
   struct InnerHelper {
@@ -599,7 +589,6 @@ struct GetSnapshotHelper {
           return helper_.function_(reinterpret_cast<void *>(&const_cast<V&>(data)));
         },
         helper_.snapshot_,
-        helper_.read_seq_,
         helper_.timeout_us_
       );
     }
@@ -614,7 +603,6 @@ struct GetSnapshotHelper {
           return helper_.function_(reinterpret_cast<void *>(&const_cast<V&>(data)));
         },
         helper_.snapshot_,
-        helper_.read_seq_,
         helper_.timeout_us_
       );
     }
@@ -638,7 +626,6 @@ struct GetSnapshotHelper {
   void *key_;
   ObFunction<int(void *)> &function_;
   const share::SCN &snapshot_;
-  const int64_t read_seq_;
   const int64_t timeout_us_;
 };
 template <typename MdsTableType>
@@ -646,7 +633,6 @@ int MdsTableImpl<MdsTableType>::get_snapshot(int64_t unit_id,
                                              void *key,
                                              ObFunction<int(void *)> &op,
                                              const share::SCN &snapshot,
-                                             const int64_t read_seq,
                                              const int64_t timeout_us) const {
   int ret = OB_SUCCESS;
   MDS_TG(5_ms);// point select should be fast
@@ -658,7 +644,6 @@ int MdsTableImpl<MdsTableType>::get_snapshot(int64_t unit_id,
                                                          key,
                                                          op,
                                                          snapshot,
-                                                         read_seq,
                                                          timeout_us);
     if (OB_ITER_END == (ret = unit_tuple_.for_each(helper))) {
       ret = OB_SUCCESS;
@@ -682,7 +667,7 @@ struct GetByWriterHelper {
                     ObFunction<int(void *)> &op,
                     const MdsWriter &writer,
                     const share::SCN &snapshot,
-                    const int64_t read_seq,
+                    const transaction::ObTxSEQ read_seq,
                     const int64_t timeout_us)
   : mds_table_impl_(mds_table_impl),
   current_idx_(0),
@@ -745,7 +730,7 @@ struct GetByWriterHelper {
   ObFunction<int(void *)> &function_;
   const MdsWriter &writer_;
   const share::SCN &snapshot_;
-  const int64_t read_seq_;
+  const transaction::ObTxSEQ read_seq_;
   const int64_t timeout_us_;
 };
 template <typename MdsTableType>
@@ -754,7 +739,7 @@ int MdsTableImpl<MdsTableType>::get_by_writer(int64_t unit_id,
                                               ObFunction<int(void *)> &op,
                                               const MdsWriter &writer,
                                               const share::SCN &snapshot,
-                                              const int64_t read_seq,
+                                              const transaction::ObTxSEQ read_seq,
                                               const int64_t timeout_us) const {
   int ret = OB_SUCCESS;
   MDS_TG(5_ms);// point select should be fast
@@ -866,20 +851,20 @@ int MdsTableImpl<MdsTableType>::is_locked_by_others(int64_t unit_id,
 }
 
 template <typename MdsTableType>
-int MdsTableImpl<MdsTableType>::for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
-                                ObFunction<int(const MdsDumpKV&)> &for_each_op,
-                                const int64_t mds_construct_sequence,
-                                const bool for_flush) const {
+int MdsTableImpl<MdsTableType>::scan_all_nodes_to_dump(ObFunction<int(const MdsDumpKV&)> &for_each_op,
+                                                       const int64_t mds_construct_sequence,
+                                                       const bool for_flush,
+                                                       const ScanRowOrder scan_row_order,
+                                                       const ScanNodeOrder scan_node_order) const {
   int ret = OB_SUCCESS;
   MDS_TG(100_ms);// scan could be slow
   if (MDS_FAIL(advance_state_to(State::WRITTING))) {
     MDS_LOG(WARN, "mds table switch state failed", KR(ret), K(*this));
-  } else if (MDS_FAIL(const_cast<MdsTableImpl<MdsTableType>*>(this)->
-                      for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(
-    [for_each_op](const MdsDumpKV& data) {
-      return for_each_op(data);
-    }, mds_construct_sequence, for_flush
-  ))) {
+  } else if (MDS_FAIL(const_cast<MdsTableImpl<MdsTableType>*>(this)->scan_all_nodes_to_dump(for_each_op,
+                                                                                            mds_construct_sequence,
+                                                                                            for_flush,
+                                                                                            scan_row_order,
+                                                                                            scan_node_order))) {
     MDS_LOG(WARN, "mds table switch state failed", KR(ret), K(*this));
   }
   return ret;
@@ -967,7 +952,7 @@ int MdsTableImpl<MdsTableType>::flush(share::SCN need_advanced_rec_scn_lower_lim
   share::SCN do_flush_scn = max_decided_scn;// this scn is defined for calculation
   int64_t undump_node_cnt = 0;
   MdsWLockGuard lg(lock_);
-  if (!need_advanced_rec_scn_lower_limit.is_valid() || !max_decided_scn.is_valid() || max_decided_scn.is_max()) {
+  if (OB_UNLIKELY(!need_advanced_rec_scn_lower_limit.is_valid() || !max_decided_scn.is_valid() || max_decided_scn.is_max())) {
     ret = OB_INVALID_ARGUMENT;
     MDS_LOG_FLUSH(WARN, "invalid recycle scn");
   } else if (get_rec_scn().is_max()) {
@@ -1116,10 +1101,12 @@ template <typename MdsTableType>
 template <typename DUMP_OP,
           typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(DUMP_OP,
                                                             int(const MdsDumpKV &)), bool>::type>
-int MdsTableImpl<MdsTableType>::
-    for_each_unit_from_small_key_to_big_from_old_node_to_new_to_dump(DUMP_OP &&for_each_op,
-      const int64_t mds_construct_sequence,
-      const bool for_flush/*false is for transfer to bring mds data from old tablet to new*/) {
+int MdsTableImpl<MdsTableType>::scan_all_nodes_to_dump(DUMP_OP &&for_each_op,
+                                                       const int64_t mds_construct_sequence,
+                                                       /*false is for transfer to bring mds data from old tablet to new*/
+                                                       const bool for_flush,
+                                                       const ScanRowOrder scan_row_order,
+                                                       const ScanNodeOrder scan_node_order) {
   #define PRINT_WRAPPER KR(ret), K(mds_construct_sequence), K(*this)
   MDS_TG(100_ms);
   int ret = OB_SUCCESS;
@@ -1144,7 +1131,11 @@ int MdsTableImpl<MdsTableType>::
       flushing_version = share::SCN::max_scn();
     }
     if (OB_SUCC(ret)) {
-      if (MDS_FAIL(for_each_to_dump_node_(std::forward<DUMP_OP>(for_each_op), flushing_version, for_flush))) {
+      if (MDS_FAIL(for_each_to_dump_node_(std::forward<DUMP_OP>(for_each_op),
+                                          flushing_version,
+                                          for_flush,
+                                          scan_row_order,
+                                          scan_node_order))) {
         MDS_LOG_FLUSH(WARN, "for each node to dump failed");
       } else {
         MDS_LOG_FLUSH(TRACE, "for each node to dump success");
@@ -1180,14 +1171,13 @@ template <typename T,
           typename OP,
           typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
 int MdsTableImpl<MdsTableType>::get_latest(OP &&read_op,
-                                           bool &is_committed,
-                                           const int64_t read_seq) const
+                                           bool &is_committed) const
 {
   auto read_op_wrapper = [&read_op, &is_committed](const UserMdsNode<DummyKey, T> &node) -> int {
     is_committed = node.is_committed_();
     return read_op(node.user_data_);
   };
-  return MDS_ELEMENT(DummyKey, T).get_latest(read_op_wrapper, read_seq);
+  return MDS_ELEMENT(DummyKey, T).get_latest(read_op_wrapper);
 }
 
 template <typename MdsTableType>
@@ -1196,14 +1186,13 @@ template <typename T,
           typename std::enable_if<OB_TRAIT_IS_FUNCTION_LIKE(OP, int(const T&)), bool>::type>
 int MdsTableImpl<MdsTableType>::get_snapshot(OP &&read_op,
                                              const share::SCN snapshot,
-                                             const int64_t read_seq, const int64_t timeout_us) const
+                                             const int64_t timeout_us) const
 {
   auto read_op_wrapper = [&read_op](const UserMdsNode<DummyKey, T> &node) -> int {
     return read_op(node.user_data_);
   };
   return MDS_ELEMENT(DummyKey, T).get_snapshot(read_op_wrapper,
                                                 snapshot,
-                                                read_seq,
                                                 timeout_us);
 }
 
@@ -1214,7 +1203,7 @@ template <typename T,
 int MdsTableImpl<MdsTableType>::get_by_writer(OP &&read_op,
                                               const MdsWriter &writer,
                                               const share::SCN snapshot,
-                                              const int64_t read_seq,
+                                              const transaction::ObTxSEQ read_seq,
                                               const int64_t timeout_us) const
 {
   auto read_op_wrapper = [&read_op](const UserMdsNode<DummyKey, T> &node) -> int {
@@ -1243,7 +1232,7 @@ int MdsTableImpl<MdsTableType>::is_locked_by_others(bool &is_locked, const MdsWr
     }
     return OB_SUCCESS;
   };
-  return MDS_ELEMENT(DummyKey, T).get_latest(read_op_wrapper, 0);
+  return MDS_ELEMENT(DummyKey, T).get_latest(read_op_wrapper);
 }
 
 template <typename MdsTableType>
@@ -1296,14 +1285,13 @@ template <typename MdsTableType>
 template <typename Key, typename Value, typename OP>
 int MdsTableImpl<MdsTableType>::get_latest(const Key &key,
                                            OP &&read_op,
-                                           bool &is_committed,
-                                           const int64_t read_seq) const
+                                           bool &is_committed) const
 {
   auto read_op_wrapper = [&read_op, &is_committed](const UserMdsNode<Key, Value> &node) -> int {
     is_committed = node.is_committed_();
     return read_op(node.user_data_);
   };
-  return MDS_ELEMENT(Key, Value).get_latest(key, read_op_wrapper, read_seq);
+  return MDS_ELEMENT(Key, Value).get_latest(key, read_op_wrapper);
 }
 
 template <typename MdsTableType>
@@ -1311,7 +1299,6 @@ template <typename Key, typename Value, typename OP>
 int MdsTableImpl<MdsTableType>::get_snapshot(const Key &key,
                                              OP &&read_op,
                                              const share::SCN snapshot,
-                                             const int64_t read_seq,
                                              const int64_t timeout_us) const
 {
   auto read_op_wrapper = [&read_op](const UserMdsNode<Key, Value> &node) -> int {
@@ -1320,7 +1307,6 @@ int MdsTableImpl<MdsTableType>::get_snapshot(const Key &key,
   return MDS_ELEMENT(Key, Value).get_snapshot(key,
                                               read_op_wrapper,
                                               snapshot,
-                                              read_seq,
                                               timeout_us);
 }
 
@@ -1330,7 +1316,7 @@ int MdsTableImpl<MdsTableType>::get_by_writer(const Key &key,
                                               OP &&read_op,
                                               const MdsWriter &writer,
                                               const share::SCN snapshot,
-                                              const int64_t read_seq,
+                                              const transaction::ObTxSEQ read_seq,
                                               const int64_t timeout_us) const
 {
   auto read_op_wrapper = [&read_op](const UserMdsNode<Key, Value> &node) -> int {
@@ -1362,7 +1348,7 @@ int MdsTableImpl<MdsTableType>::is_locked_by_others(const Key &key,
     }
     return OB_SUCCESS;
   };
-  return MDS_ELEMENT(Key, Value).get_latest(key, read_op_wrapper, 0);
+  return MDS_ELEMENT(Key, Value).get_latest(key, read_op_wrapper);
 }
 
 template <typename MdsTableType>
@@ -1405,6 +1391,7 @@ struct RecycleNodeOp
           }
         }
         if (need_delete) {
+          MDS_LOG(DEBUG, "begin to destroy node", K(ret), K(mds_node));
           UserMdsNode<K, V> &cast_node = const_cast<UserMdsNode<K, V> &>(mds_node);
           const_cast<MdsRow<K, V> &>(row).sorted_list_.del((ListNodeBase*)(ListNode<UserMdsNode<K, V>>*)(&cast_node));
           MdsFactory::destroy(&cast_node);
@@ -1437,6 +1424,8 @@ int MdsTableImpl<MdsTableType>::try_recycle(const share::SCN recycle_scn)
       } else {
         last_inner_recycled_scn_ = do_inner_recycle_scn;
         report_recycle_event_(do_inner_recycle_scn);
+
+        MDS_LOG_GC(DEBUG, "succeed to recycle mds node");
       }
     }
   }

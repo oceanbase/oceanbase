@@ -269,7 +269,11 @@ int ObTableLoadMemCompactor::inner_init()
   const uint64_t tenant_id = MTL_ID();
   store_ctx_ = compact_ctx_->store_ctx_;
   param_ = &(store_ctx_->ctx_->param_);
-  if (OB_FAIL(init_scheduler())) {
+  if (OB_UNLIKELY(param_->session_count_ < 2)) {
+    // 排序至少需要两个线程
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(param_->session_count_));
+  } else if (OB_FAIL(init_scheduler())) {
     LOG_WARN("fail to init_scheduler", KR(ret));
   } else {
     mem_ctx_.mem_dump_task_count_ = param_->session_count_ / 3; //暂时先写成1/3，后续再优化
@@ -294,6 +298,14 @@ int ObTableLoadMemCompactor::inner_init()
     mem_ctx_.file_mgr_ = store_ctx_->tmp_file_mgr_;
     mem_ctx_.dup_action_ = param_->dup_action_;
   }
+
+  if (OB_SUCC(ret)) {
+    if (param_->session_count_ - mem_ctx_.mem_dump_task_count_ <= 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("mem load thread cannot be zero", K(param_->session_count_), K(mem_ctx_.mem_dump_task_count_), KR(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (OB_FAIL(mem_ctx_.init())) {
       LOG_WARN("fail to init compactor ctx", KR(ret));

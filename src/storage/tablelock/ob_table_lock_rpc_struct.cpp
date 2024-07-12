@@ -31,7 +31,8 @@ OB_SERIALIZE_MEMBER(ObLockParam,
                     is_try_lock_,
                     expired_time_,
                     schema_version_,
-                    is_for_replace_);
+                    is_for_replace_,
+                    lock_priority_);
 
 OB_SERIALIZE_MEMBER(ObLockRequest,
                     type_,
@@ -39,7 +40,8 @@ OB_SERIALIZE_MEMBER(ObLockRequest,
                     lock_mode_,
                     op_type_,
                     timeout_us_,
-                    is_from_sql_);
+                    is_from_sql_,
+                    lock_priority_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockObjRequest, ObLockRequest,
                             obj_type_,
@@ -51,7 +53,9 @@ OB_SERIALIZE_MEMBER_INHERIT(ObLockObjsRequest, ObLockRequest,
                             detect_param_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockTableRequest, ObLockRequest,
-                            table_id_);
+                            table_id_,
+                            detect_func_no_,
+                            detect_param_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObLockPartitionRequest, ObLockTableRequest,
                             part_object_id_);
@@ -199,6 +203,8 @@ void ObLockParam::reset()
   is_try_lock_ = true;
   expired_time_ = 0;
   schema_version_ = -1;
+  is_for_replace_ = false;
+  lock_priority_ = ObTableLockPriority::NORMAL;
 }
 
 int ObLockParam::set(
@@ -257,6 +263,7 @@ void ObLockRequest::reset()
   op_type_ = UNKNOWN_TYPE;
   timeout_us_ = 0;
   is_from_sql_ = false;
+  lock_priority_ = ObTableLockPriority::NORMAL;
 }
 
 bool ObLockRequest::is_valid() const
@@ -354,6 +361,8 @@ void ObLockTableRequest::reset()
 {
   ObLockRequest::reset();
   table_id_ = 0;
+  detect_func_no_ = INVALID_DETECT_TYPE;
+  detect_param_.reset();
 }
 
 bool ObLockTableRequest::is_valid() const

@@ -42,6 +42,7 @@
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "share/ob_compatibility_control.h"
+#include "sql/ob_optimizer_trace_impl.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -2818,6 +2819,21 @@ int ObBasicSessionInfo::dump_all_sys_vars() const
   return ret;
 }
 
+void ObBasicSessionInfo::trace_all_sys_vars() const
+{
+  int ret = OB_SUCCESS;
+  int64_t store_idx = OB_INVALID_INDEX_INT64;
+  int64_t var_amount = ObSysVariables::get_amount();
+  for (int64_t i = 0; OB_SUCC(ret) && i < var_amount; ++i) {
+    store_idx = ObSysVarsToIdxMap::get_store_idx((int64_t)ObSysVariables::get_sys_var_id(i));
+    OV (0 <= store_idx && store_idx < ObSysVarFactory::ALL_SYS_VARS_COUNT);
+    OV (OB_NOT_NULL(sys_vars_[store_idx]));
+    if (OB_SUCC(ret) && (sys_vars_[store_idx]->get_value() != sys_vars_[store_idx]->get_global_default_value())) {
+      OPT_TRACE("  ", sys_vars_[store_idx]->get_name(), " = ", sys_vars_[store_idx]->get_value());
+    }
+  }
+}
+
 int ObBasicSessionInfo::init_sys_vars_cache_base_values()
 {
   int ret = OB_SUCCESS;
@@ -4372,7 +4388,8 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
-              enable_rich_vector_format_);
+              enable_rich_vector_format_,
+              enable_sql_plan_monitor_);
   return ret;
 }
 
@@ -4403,7 +4420,8 @@ OB_DEF_DESERIALIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
-              enable_rich_vector_format_);
+              enable_rich_vector_format_,
+              enable_sql_plan_monitor_);
   set_nls_date_format(nls_formats_[NLS_DATE]);
   set_nls_timestamp_format(nls_formats_[NLS_TIMESTAMP]);
   set_nls_timestamp_tz_format(nls_formats_[NLS_TIMESTAMP_TZ]);
@@ -4439,7 +4457,8 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo::SysVarsCacheData)
               runtime_filter_wait_time_ms_,
               runtime_filter_max_in_num_,
               runtime_bloom_filter_max_size_,
-              enable_rich_vector_format_);
+              enable_rich_vector_format_,
+              enable_sql_plan_monitor_);
   return len;
 }
 
@@ -4468,7 +4487,7 @@ OB_DEF_SERIALIZE(ObBasicSessionInfo)
               effective_tenant_id_,
               is_changed_to_temp_tenant_,
               user_id_,
-              is_master_session() ? sessid_ : master_sessid_,
+              is_master_session() ? get_compatibility_sessid() : master_sessid_,
               capability_.capability_,
               thread_data_.database_name_);
   // 序列化需要序列化的用户变量和系统变量
@@ -5073,7 +5092,7 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               effective_tenant_id_,
               is_changed_to_temp_tenant_,
               user_id_,
-              is_master_session() ? sessid_ : master_sessid_,
+              is_master_session() ? get_compatibility_sessid() : master_sessid_,
               capability_.capability_,
               thread_data_.database_name_);
 
@@ -6943,6 +6962,22 @@ intptr_t ObBasicSessionInfo::get_json_pl_mngr()
 #endif
 
   return json_pl_mngr_;
+}
+
+
+bool ObBasicSessionInfo::has_active_autocommit_trans(transaction::ObTransID & trans_id)
+{
+  bool ac = false;
+  bool ret = false;
+  get_autocommit(ac);
+  if (ac
+      && tx_desc_
+      && !tx_desc_->is_explicit()
+      && tx_desc_->in_tx_or_has_extra_state()) {
+    trans_id = tx_desc_->get_tx_id();
+    ret =  true;
+  }
+  return ret;
 }
 
 }//end of namespace sql

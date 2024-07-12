@@ -664,11 +664,11 @@ int ObTransformSimplifyExpr::recursively_convert_join_preds_vector_to_scalar(Tab
     LOG_WARN("NULL table item", K(ret));
   } else if (!table_item->is_joined_table()) {
   } else if (FALSE_IT(joined_table = reinterpret_cast<JoinedTable*>(table_item))){
-  } else if (OB_FAIL(recursively_convert_join_preds_vector_to_scalar(joined_table->left_table_,
-                                                                     trans_happened))) {
+  } else if (OB_FAIL(SMART_CALL(recursively_convert_join_preds_vector_to_scalar(joined_table->left_table_,
+                                                                     trans_happened)))) {
     LOG_WARN("failed to convert join preds_vector to scalar", K(ret));
-  } else if (OB_FAIL(recursively_convert_join_preds_vector_to_scalar(joined_table->right_table_,
-                                                                     trans_happened))) {
+  } else if (OB_FAIL(SMART_CALL(recursively_convert_join_preds_vector_to_scalar(joined_table->right_table_,
+                                                                     trans_happened)))) {
     LOG_WARN("failed to convert join preds_vector to scalar", K(ret));
   } else {
     ObSEArray<ObRawExpr*, 16> new_join_cond;

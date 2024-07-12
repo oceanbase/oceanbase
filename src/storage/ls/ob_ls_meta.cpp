@@ -64,7 +64,8 @@ ObLSMeta::ObLSMeta()
     saved_info_(),
     transfer_scn_(SCN::min_scn()),
     rebuild_info_(),
-    transfer_meta_info_()
+    transfer_meta_info_(),
+    major_mv_merge_info_()
 {
 }
 
@@ -87,7 +88,8 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     saved_info_(ls_meta.saved_info_),
     transfer_scn_(ls_meta.transfer_scn_),
     rebuild_info_(ls_meta.rebuild_info_),
-    transfer_meta_info_(ls_meta.transfer_meta_info_)
+    transfer_meta_info_(ls_meta.transfer_meta_info_),
+    major_mv_merge_info_(ls_meta.major_mv_merge_info_)
 {
   all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_);
 }
@@ -149,6 +151,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     transfer_scn_ = other.transfer_scn_;
     rebuild_info_ = other.rebuild_info_;
     transfer_meta_info_ = other.transfer_meta_info_;
+    major_mv_merge_info_ = other.major_mv_merge_info_;
   }
   return *this;
 }
@@ -173,6 +176,7 @@ void ObLSMeta::reset()
   transfer_scn_ = SCN::min_scn();
   rebuild_info_.reset();
   transfer_meta_info_.reset();
+  major_mv_merge_info_.reset();
 }
 
 LSN &ObLSMeta::get_clog_base_lsn()
@@ -544,6 +548,7 @@ int ObLSMeta::update_ls_meta(
         restore_status_ = ls_restore_status;
       }
       transfer_meta_info_ = src_ls_meta.transfer_meta_info_;
+      major_mv_merge_info_ = src_ls_meta.major_mv_merge_info_;
     }
     LOG_INFO("update ls meta", K(ret), K(tmp), K(src_ls_meta), K(*this));
   }
@@ -981,7 +986,8 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     saved_info_,
                     transfer_scn_,
                     rebuild_info_,
-                    transfer_meta_info_);
+                    transfer_meta_info_,
+                    major_mv_merge_info_);
 
 }
 }

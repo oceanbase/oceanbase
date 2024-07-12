@@ -14,6 +14,7 @@
 #include "sql/session/ob_sql_session_info.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 #include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
@@ -253,6 +254,13 @@ int ObAllVirtualTabletSSTableMacroInfo::get_macro_info(
     if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
       SERVER_LOG(WARN, "failed to get index read info from ObTenantCGReadInfoMgr", KR(ret));
     } else if (OB_FAIL(macro_desc.range_.to_store_range(index_read_info->get_columns_desc(),
+                                                 rowkey_allocator_,
+                                                 info.store_range_))) {
+      SERVER_LOG(WARN, "fail to get store range", K(ret), K(macro_desc.range_));
+    }
+  } else if (curr_sstable_->is_mds_sstable()) {
+    const storage::ObITableReadInfo *index_read_info = storage::ObMdsSchemaHelper::get_instance().get_rowkey_read_info();
+    if (OB_FAIL(macro_desc.range_.to_store_range(index_read_info->get_columns_desc(),
                                                  rowkey_allocator_,
                                                  info.store_range_))) {
       SERVER_LOG(WARN, "fail to get store range", K(ret), K(macro_desc.range_));
@@ -626,14 +634,9 @@ int ObAllVirtualTabletSSTableMacroInfo::get_next_sstable()
       SERVER_LOG(WARN, "fail to get curr sstable meta handle", K(ret));
     } else {
       const storage::ObITableReadInfo *index_read_info = nullptr;
-      if (curr_sstable_->is_normal_cg_sstable()) {
-        if (OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
-          SERVER_LOG(WARN, "failed to get index read info from ObTenantCGReadInfoMgr", KR(ret));
-        }
-      } else {
-        index_read_info = &tablet_handle_.get_obj()->get_rowkey_read_info();
-      }
-      if (FAILEDx(curr_sstable_->scan_macro_block(
+      if (OB_FAIL(tablet_handle_.get_obj()->get_sstable_read_info(curr_sstable_, index_read_info))) {
+        SERVER_LOG(WARN, "failed to get index read info ", KR(ret), KPC_(curr_sstable));
+      } else if (OB_FAIL(curr_sstable_->scan_macro_block(
           curr_range_,
           *index_read_info,
           iter_allocator_,

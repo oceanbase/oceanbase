@@ -30,6 +30,7 @@
 namespace oceanbase
 {
 using namespace observer;
+using namespace sqlclient;
 
 namespace common
 {
@@ -572,7 +573,8 @@ int ObOptStatMonitorManager::UpdateValueAtomicOp::operator() (common::hash::Hash
   return ret;
 }
 
-int ObOptStatMonitorManager::exec_insert_monitor_modified_sql(ObSqlString &values_sql)
+int ObOptStatMonitorManager::exec_insert_monitor_modified_sql(ObSqlString &values_sql,
+                                                              ObISQLConnection *conn)
 {
   int ret = OB_SUCCESS;
   ObSqlString insert_sql;
@@ -583,7 +585,11 @@ int ObOptStatMonitorManager::exec_insert_monitor_modified_sql(ObSqlString &value
     LOG_WARN("failed to append format", K(ret));
   } else if (OB_FAIL(insert_sql.append(ON_DUPLICATE_UPDATE_MONITOR_MODIFIED))) {
     LOG_WARN("failed to append string", K(ret));
-  } else if (OB_FAIL(mysql_proxy_->write(tenant_id_, insert_sql.ptr(), affected_rows))) {
+  } else if (nullptr != conn &&
+             OB_FAIL(conn->execute_write(tenant_id_, insert_sql.ptr(), affected_rows))) {
+    LOG_WARN("fail to exec sql", K(insert_sql), K(ret));
+  } else if (nullptr == conn &&
+             OB_FAIL(mysql_proxy_->write(tenant_id_, insert_sql.ptr(), affected_rows))) {
     LOG_WARN("fail to exec sql", K(insert_sql), K(ret));
   } else {
     LOG_TRACE("succeed to exec insert monitor modified sql", K(tenant_id_), K(values_sql));
@@ -667,7 +673,9 @@ int ObOptStatMonitorManager::clean_useless_dml_stat_info()
   return ret;
 }
 
-int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(const ObIArray<ObOptDmlStat *> &dml_stats)
+int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(
+    const ObIArray<ObOptDmlStat *> &dml_stats,
+    ObISQLConnection *conn)
 {
   int ret = OB_SUCCESS;
   ObOptStatMonitorManager *optstat_monitor_mgr = NULL;
@@ -680,13 +688,14 @@ int ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(const ObIArra
   } else if (OB_ISNULL(optstat_monitor_mgr = MTL(ObOptStatMonitorManager*))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(optstat_monitor_mgr));
-  } else if (OB_FAIL(optstat_monitor_mgr->update_dml_stat_info(dml_stats))) {
+  } else if (OB_FAIL(optstat_monitor_mgr->update_dml_stat_info(dml_stats, conn))) {
     LOG_WARN("failed to update dml stat info", K(ret));
   } else {/*do nothing*/}
   return ret;
 }
 
-int ObOptStatMonitorManager::update_dml_stat_info(const ObIArray<ObOptDmlStat *> &dml_stats)
+int ObOptStatMonitorManager::update_dml_stat_info(const ObIArray<ObOptDmlStat *> &dml_stats,
+                                                  ObISQLConnection *conn)
 {
   int ret = OB_SUCCESS;
   ObSqlString value_sql;
@@ -700,7 +709,7 @@ int ObOptStatMonitorManager::update_dml_stat_info(const ObIArray<ObOptDmlStat *>
       if (OB_FAIL(get_dml_stat_sql(*dml_stats.at(i), 0 != count, value_sql))) {
         LOG_WARN("failed to get dml stat sql", K(ret));
       } else if (UPDATE_OPT_STAT_BATCH_CNT == ++count) {
-        if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql))) {
+        if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql, conn))) {
           LOG_WARN("failed to exec insert sql", K(ret));
         } else {
           count = 0;
@@ -710,7 +719,7 @@ int ObOptStatMonitorManager::update_dml_stat_info(const ObIArray<ObOptDmlStat *>
     }
   }
   if (OB_SUCC(ret) && count != 0) {
-    if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql))) {
+    if (OB_FAIL(exec_insert_monitor_modified_sql(value_sql, conn))) {
       LOG_WARN("failed to exec insert sql", K(ret));
     }
   }

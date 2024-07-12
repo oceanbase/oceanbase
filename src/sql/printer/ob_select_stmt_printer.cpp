@@ -146,13 +146,12 @@ int ObSelectStmtPrinter::print_unpivot()
 
     if (OB_SUCC(ret)) {
       if (transpose_item.unpivot_columns_.count() == 1) {
-        DATA_PRINTF("%.*s", transpose_item.unpivot_columns_[0].length(),
-                            transpose_item.unpivot_columns_[0].ptr());
+        PRINT_IDENT_WITH_QUOT(transpose_item.unpivot_columns_[0]);
       } else {
         DATA_PRINTF("(");
         for (int64_t i = 0; i < transpose_item.unpivot_columns_.count() && OB_SUCC(ret); ++i) {
-          DATA_PRINTF("%.*s,", transpose_item.unpivot_columns_[i].length(),
-                              transpose_item.unpivot_columns_[i].ptr());
+          PRINT_IDENT_WITH_QUOT(transpose_item.unpivot_columns_[i]);
+          DATA_PRINTF(",");
         }
         if (OB_SUCC(ret)) {
           --(*pos_);
@@ -165,13 +164,12 @@ int ObSelectStmtPrinter::print_unpivot()
 
     if (OB_SUCC(ret)) {
       if (transpose_item.for_columns_.count() == 1) {
-        DATA_PRINTF("%.*s", transpose_item.for_columns_[0].length(),
-                            transpose_item.for_columns_[0].ptr());
+        PRINT_IDENT_WITH_QUOT(transpose_item.for_columns_[0]);
       } else {
         DATA_PRINTF("(");
         for (int64_t i = 0; i < transpose_item.for_columns_.count() && OB_SUCC(ret); ++i) {
-          DATA_PRINTF("%.*s,", transpose_item.for_columns_[i].length(),
-                               transpose_item.for_columns_[i].ptr());
+          PRINT_IDENT_WITH_QUOT(transpose_item.for_columns_[i]);
+          DATA_PRINTF(",");
         }
         if (OB_SUCC(ret)) {
           --(*pos_);
@@ -186,13 +184,12 @@ int ObSelectStmtPrinter::print_unpivot()
       for (int64_t i = 0; i < transpose_item.in_pairs_.count() && OB_SUCC(ret); ++i) {
         const TransposeItem::InPair &in_pair = transpose_item.in_pairs_[i];
         if (in_pair.column_names_.count() == 1) {
-          DATA_PRINTF("%.*s", in_pair.column_names_[0].length(),
-                               in_pair.column_names_[0].ptr());
+          PRINT_IDENT_WITH_QUOT(in_pair.column_names_[0]);
         } else {
           DATA_PRINTF("(");
           for (int64_t j = 0; j < in_pair.column_names_.count() && OB_SUCC(ret); ++j) {
-            DATA_PRINTF("%.*s,", in_pair.column_names_[j].length(),
-                                 in_pair.column_names_[j].ptr());
+            PRINT_IDENT_WITH_QUOT(in_pair.column_names_[j]);
+            DATA_PRINTF(",");
           }
           if (OB_SUCC(ret)) {
             --(*pos_);
@@ -240,10 +237,10 @@ int ObSelectStmtPrinter::print_unpivot()
           DATA_PRINTF(",");
         }
       }
-      DATA_PRINTF(" )");
+      DATA_PRINTF(")");
     }
 
-    DATA_PRINTF(" )");
+    DATA_PRINTF(")");
   }
 
   return ret;

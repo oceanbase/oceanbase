@@ -20,6 +20,7 @@
 #include "observer/table_load/ob_table_load_stat.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "sql/ob_sql_utils.h"
 
 namespace oceanbase
 {
@@ -32,6 +33,7 @@ using namespace table;
 
 ObTableLoadPartitionCalc::ObTableLoadPartitionCalc()
   : session_info_(nullptr),
+    cast_mode_(CM_NONE),
     is_partition_with_autoinc_(false),
     partition_with_autoinc_idx_(OB_INVALID_INDEX),
     param_(nullptr),
@@ -58,6 +60,8 @@ int ObTableLoadPartitionCalc::init(const ObTableLoadParam &param, sql::ObSQLSess
     ObDataTypeCastParams cast_params(session_info->get_timezone_info());
     if (OB_FAIL(time_cvrt_.init(cast_params.get_nls_format(ObDateTimeType)))) {
       LOG_WARN("fail to init time converter", KR(ret));
+    } else if (OB_FAIL(ObSQLUtils::get_default_cast_mode(session_info, cast_mode_))) {
+      LOG_WARN("fail to get_default_cast_mode", KR(ret));
     } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard_,
                                                           table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
@@ -172,7 +176,7 @@ int ObTableLoadPartitionCalc::cast_part_key(common::ObNewRow &part_key, common::
     LOG_WARN("invalid part key count", KR(ret), K(part_key.count_), K(part_key_obj_index_.count()));
   } else {
     ObDataTypeCastParams cast_params(session_info_->get_timezone_info());
-    ObCastCtx cast_ctx(&allocator, &cast_params, CM_NONE, ObCharset::get_system_collation());
+    ObCastCtx cast_ctx(&allocator, &cast_params, cast_mode_, ObCharset::get_system_collation());
     ObTableLoadCastObjCtx cast_obj_ctx(*param_, &time_cvrt_, &cast_ctx, true);
     ObObj obj;
     for (int64_t i = 0; OB_SUCC(ret) && i < part_key_obj_index_.count(); ++i) {

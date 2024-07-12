@@ -23,6 +23,7 @@
 #include "lib/trace/ob_trace_event.h"
 #include "logservice/palf/lsn.h"
 #include "logservice/ob_log_base_header.h"
+#include "share/scn.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_ls_id.h"
 #include "share/allocator/ob_reserve_arena.h"
@@ -32,9 +33,8 @@
 #include "storage/tx/ob_trans_result.h"
 #include "storage/tx/ob_xa_define.h"
 #include "storage/tx/ob_direct_load_tx_ctx_define.h"
-#include  "storage/tx/ob_tx_on_demand_print.h"
-#include "ob_multi_data_source.h"
-#include "share/scn.h"
+#include "storage/tx/ob_multi_data_source_tx_buffer_node.h"
+#include "storage/tx/ob_tx_on_demand_print.h"
 #include "storage/tx/ob_tx_seq.h"
 
 namespace oceanbase
@@ -91,6 +91,7 @@ class AggreLogTask;
 class ObXACtx;
 class ObITxCallback;
 class ObTxMultiDataSourceLog;
+enum class NotifyType : int64_t;
 typedef palf::LSN LogOffSet;
 enum { MAX_CALLBACK_LIST_COUNT = 64 };
 class ObTransErrsim
@@ -1824,31 +1825,17 @@ struct ObMulSourceDataNotifyArg
   share::SCN scn_; // the log ts of current notify type
   // in case of abort transaction, trans_version_ is invalid
   share::SCN trans_version_;
-  bool for_replay_;
   NotifyType notify_type_;
-
+  bool for_replay_;
   bool redo_submitted_;
   bool redo_synced_;
-
   // force kill trans without abort scn
   bool is_force_kill_;
-
   bool is_incomplete_replay_;
 
   ObMulSourceDataNotifyArg() { reset(); }
 
-  void reset()
-  {
-    tx_id_.reset();
-    scn_.reset();
-    trans_version_.reset();
-    for_replay_ = false;
-    notify_type_ = NotifyType::ON_ABORT;
-    redo_submitted_ = false;
-    redo_synced_ = false;
-    is_force_kill_ = false;
-    is_incomplete_replay_ = false;
-  }
+  void reset();
 
   TO_STRING_KV(K_(tx_id),
                K_(scn),

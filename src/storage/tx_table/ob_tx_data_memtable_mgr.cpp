@@ -75,7 +75,7 @@ int ObTxDataMemtableMgr::init(const common::ObTabletID &tablet_id,
   } else if (OB_UNLIKELY(!tablet_id.is_valid()) || OB_ISNULL(freezer) || OB_ISNULL(t3m)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid arguments", K(ret), K(tablet_id), KP(freezer), KP(t3m));
-  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))){
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::TRANS_MOD))){
     STORAGE_LOG(WARN, "Get ls from ls service failed.", KR(ret));
   } else if (OB_ISNULL(tx_table = ls_handle.get_ls()->get_tx_table())) {
     ret = OB_ERR_UNEXPECTED;

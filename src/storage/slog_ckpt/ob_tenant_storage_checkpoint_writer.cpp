@@ -18,6 +18,8 @@
 #include "storage/slog/ob_storage_log_reader.h"
 #include "storage/slog/ob_storage_logger.h"
 #include "storage/tablet/ob_tablet_iterator.h"
+#include "storage/tablet/ob_tablet_create_delete_helper.h"
+#include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 #include "storage/tx/ob_timestamp_service.h"
 #include "storage/tx/ob_trans_id_service.h"
 #include "storage/tx/ob_dup_table_base.h"
@@ -320,8 +322,12 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &
     } else if (addr.is_none()) {
       ret = OB_NEED_RETRY;  // tablet slog has been written, but the addr hasn't been updated
       LOG_WARN("addr is none", K(ret));
-    } else if ((ObTenantStorageMetaType::CKPT == meta_type_) && OB_FAIL(persist_and_copy_tablet(tablet_key, addr, slog_buf))) {
-      LOG_WARN("fail to persist_and_copy_tablet", K(ret), K(tablet_key), K(addr));
+    } else if (ObTenantStorageMetaType::CKPT == meta_type_) {
+      do {
+        if (OB_FAIL(persist_and_copy_tablet(tablet_key, addr, slog_buf))) {
+          LOG_WARN("fail to persist and copy tablet", K(ret), K(tablet_key), K(addr));
+        }
+      } while (OB_SERVER_OUTOF_DISK_SPACE == ret);
     } else if (ObTenantStorageMetaType::SNAPSHOT == meta_type_ && OB_FAIL(copy_tablet(tablet_key, slog_buf, clog_max_scn))) {
       LOG_WARN("fail to copy tablet", K(ret), K(tablet_key));
     }
@@ -342,7 +348,7 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &
 int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
     const ObTabletMapKey &tablet_key,
     const ObMetaDiskAddr &old_addr,
-    char *slog_buf)
+    char (&slog_buf)[sizeof(ObUpdateTabletLog)])
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("SlogCkptWriter");
@@ -350,6 +356,7 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
   ObLSService *ls_service = MTL(ObLSService*);
   ObLSHandle ls_handle;
   ObTabletHandle old_tablet_handle;
+  ObTabletHandle tmp_tablet_handle;
   ObTabletHandle new_tablet_handle;
   ObTablet *old_tablet = nullptr;
   ObTablet *new_tablet = nullptr;
@@ -372,39 +379,55 @@ int ObTenantStorageCheckpointWriter::persist_and_copy_tablet(
     } else {
       LOG_WARN("fail to get tablet with allocator", K(ret), K(tablet_key));
     }
-  } else if (FALSE_IT(old_tablet = old_tablet_handle.get_obj())) {
-  } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*old_tablet, new_tablet_handle))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      LOG_INFO("skip writing checkpoint for this tablet", K(tablet_key));
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_key), KPC(old_tablet));
-    }
-  } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
-  } else if (FALSE_IT(slog.disk_addr_ = new_tablet->get_tablet_addr())) {
-  } else if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
-    LOG_WARN("fail to serialize update tablet slog", K(ret), K(slog_buf_pos));
-  } else if (OB_FAIL(tablet_item_writer_.write_item(slog_buf, slog.get_serialize_size()))) {
-    LOG_WARN("fail to write update tablet slog into ckpt", K(ret));
-  } else if (OB_FAIL(new_tablet->inc_macro_ref_cnt())) {
-    LOG_WARN("fail to increase meta and data macro blocks' ref cnt", K(ret));
   } else {
-    TabletItemAddrInfo addr_info;
-    addr_info.tablet_key_ = tablet_key;
-    addr_info.old_addr_ = old_addr;
-    addr_info.new_addr_ = slog.disk_addr_;
-    addr_info.need_rollback_ = true;
-    if (OB_FAIL(ObTenantMetaMemMgr::get_tablet_pool_type(new_tablet_handle.get_buf_len(), addr_info.tablet_pool_type_))) {
-      LOG_WARN("fail to get tablet pool type", K(ret), K(addr_info));
-    } else if (OB_FAIL(tablet_item_addr_info_arr_.push_back(addr_info))) {
-      LOG_WARN("fail to push back addr info", K(ret), K(addr_info));
+    old_tablet = old_tablet_handle.get_obj();
+    ObTablet *src_tablet = nullptr;
+    const bool need_compat = old_tablet->get_version() < ObTablet::VERSION_V4;
+    if (!need_compat) {
+      src_tablet = old_tablet;
+    } else if (OB_FAIL(handle_old_version_tablet_for_compat(allocator, tablet_key, *old_tablet, tmp_tablet_handle))) {
+      LOG_WARN("fail to handle old version tablet for compat", K(ret), K(tablet_key), KPC(old_tablet));
+    } else {
+      src_tablet = tmp_tablet_handle.get_obj();
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*src_tablet, new_tablet_handle))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        LOG_INFO("skip writing checkpoint for this tablet", K(ret), K(tablet_key));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("fail to persist and transform tablet", K(ret), K(tablet_key), K(need_compat), KPC(src_tablet));
+      }
+    } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
+    } else if (FALSE_IT(slog.disk_addr_ = new_tablet->get_tablet_addr())) {
+    } else if (OB_FAIL(slog.serialize(slog_buf, sizeof(ObUpdateTabletLog), slog_buf_pos))) {
+      LOG_WARN("fail to serialize update tablet slog", K(ret), K(slog_buf_pos));
+    } else if (OB_FAIL(tablet_item_writer_.write_item(slog_buf, slog.get_serialize_size()))) {
+      LOG_WARN("fail to write update tablet slog into ckpt", K(ret));
+    } else if (OB_FAIL(new_tablet->inc_macro_ref_cnt())) {
+      LOG_WARN("fail to increase meta and data macro blocks' ref cnt", K(ret));
+    } else {
+      TabletItemAddrInfo addr_info;
+      addr_info.tablet_key_ = tablet_key;
+      addr_info.old_addr_ = old_addr;
+      addr_info.new_addr_ = slog.disk_addr_;
+      addr_info.need_rollback_ = true;
+      if (OB_FAIL(ObTenantMetaMemMgr::get_tablet_pool_type(new_tablet_handle.get_buf_len(), addr_info.tablet_pool_type_))) {
+        LOG_WARN("fail to get tablet pool type", K(ret), K(addr_info));
+      } else if (OB_FAIL(tablet_item_addr_info_arr_.push_back(addr_info))) {
+        LOG_WARN("fail to push back addr info", K(ret), K(addr_info));
+      }
     }
   }
 
   return ret;
 }
 
-int ObTenantStorageCheckpointWriter::copy_tablet(const ObTabletMapKey &tablet_key, char *slog_buf, share::SCN &clog_max_scn)
+int ObTenantStorageCheckpointWriter::copy_tablet(
+    const ObTabletMapKey &tablet_key,
+    char (&slog_buf)[sizeof(ObUpdateTabletLog)],
+    share::SCN &clog_max_scn)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator allocator("MetaSnapshot");
@@ -468,6 +491,40 @@ int ObTenantStorageCheckpointWriter::copy_tablet(const ObTabletMapKey &tablet_ke
       LOG_WARN("fail to push back addr info", K(ret), K(addr_info));
     }
   }
+  return ret;
+}
+
+int ObTenantStorageCheckpointWriter::handle_old_version_tablet_for_compat(
+    common::ObArenaAllocator &allocator,
+    const ObTabletMapKey &tablet_key,
+    const ObTablet &old_tablet,
+    ObTabletHandle &new_tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *new_tablet = nullptr;
+  ObTableHandleV2 mds_mini_sstable;
+
+  if (OB_FAIL(ObMdsDataCompatHelper::generate_mds_mini_sstable(old_tablet, allocator, mds_mini_sstable))) {
+    if (OB_NO_NEED_UPDATE == ret) {
+      ret = OB_SUCCESS;
+    } else if (OB_EMPTY_RESULT == ret) {
+      ret = OB_SUCCESS;
+      LOG_INFO("empty mds data in old tablet, no need to generate mds mini sstable", K(ret));
+    } else {
+      LOG_WARN("fail to generate mds mini sstable", K(ret), K(tablet_key));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(tablet_key, allocator, new_tablet_handle))) {
+    LOG_WARN("fail to create tmp tablet", K(ret), K(tablet_key));
+  } else if (FALSE_IT(new_tablet = new_tablet_handle.get_obj())) {
+  } else if (OB_FAIL(new_tablet->init_for_compat(allocator, old_tablet, mds_mini_sstable))) {
+    LOG_WARN("fail to init tablet", K(ret), K(tablet_key));
+  } else {
+    LOG_INFO("succeed to handle mds data for tablet", K(ret), K(tablet_key), K(mds_mini_sstable));
+  }
+
   return ret;
 }
 
@@ -641,6 +698,7 @@ int ObTenantStorageCheckpointWriter::get_tablet_with_addr(
   int64_t buf_len;
   char *buf = nullptr;
   read_info.addr_ = addr_info.new_addr_;
+  read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
   ObTabletPoolType tablet_pool_type = addr_info.tablet_pool_type_;
   // only need load first-level meta
   if (addr_info.new_addr_.is_raw_block()) {

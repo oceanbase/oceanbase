@@ -69,8 +69,7 @@ class ObMVChecker
   int check_mv_refresh_type();
   ObMVRefreshableType get_refersh_type() const { return refresh_type_; };
   static bool is_basic_aggr(const ObItemType aggr_type);
-  static int get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt, const ObAggFunRawExpr *aggr, const ObAggFunRawExpr *&dependent_aggr);
-  static int get_equivalent_count_aggr(const ObSelectStmt &stmt, const ObRawExpr *param_expr, const ObAggFunRawExpr *&count_aggr);
+  static int get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt, const ObRawExpr *sum_param, const ObAggFunRawExpr *&dep_aggr);
   const ObSelectStmt &get_stmt() const {  return stmt_; }
   const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &get_expand_aggrs() const {  return expand_aggrs_;  }
   int get_mlog_table_schema(const TableItem *table, const share::schema::ObTableSchema *&mlog_schema) const;
@@ -105,7 +104,8 @@ private:
                                         const int64_t orig_aggr_count,
                                         ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                         ObRawExpr *&replace_expr);
-  static int get_equivalent_null_check_param(const ObRawExpr *param_expr, const ObRawExpr *&inner_param_expr);
+  static int get_equivalent_null_check_param(const ObRawExpr *param_expr, const ObRawExpr *&check_param);
+  static int get_mav_default_count(const ObIArray<ObAggFunRawExpr*> &aggrs, const ObAggFunRawExpr *&count_aggr);
   static int get_target_aggr(const ObItemType target_aggr_type,
                              const ObRawExpr *param_expr,
                              const ObIArray<ObAggFunRawExpr*> &aggrs,

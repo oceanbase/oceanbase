@@ -78,6 +78,9 @@ public:
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_ha(const blocksstable::ObMigrationSSTableParam &migration_param);
+  int init_for_mds(const compaction::ObBasicTabletMergeCtx &ctx,
+                   const blocksstable::ObSSTableMergeRes &res,
+                   const ObStorageSchema &mds_schema);
 
   TO_STRING_KV(K_(table_key),
       K_(sstable_logic_seq),

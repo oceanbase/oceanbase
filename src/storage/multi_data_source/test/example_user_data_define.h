@@ -25,10 +25,37 @@ struct ExampleUserKey {
   OB_UNIS_VERSION(1);
 public:
   ExampleUserKey() : value_(0) {}
-  ExampleUserKey(const int val) : value_(val) {}
+  ExampleUserKey(const int64_t val) : value_(val) {}
   TO_STRING_KV(K_(value));
-  bool operator<(const ExampleUserKey &rhs) const { return value_ < rhs.value_; }
-  bool operator==(const ExampleUserKey &rhs) const { return value_ == rhs.value_; }
+  int mds_serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
+    int ret = OB_SUCCESS;
+    int64_t tmp = value_;
+    for (int64_t idx = 0; idx < 8 && OB_SUCC(ret); ++idx) {
+      if (pos >= buf_len) {
+        ret = OB_BUF_NOT_ENOUGH;
+      } else {
+        buf[pos++] = ((tmp >> (56 - 8 * idx)) & 0x00000000000000FF);
+      }
+    }
+    return ret;
+  }
+  int mds_deserialize(const char *buf, const int64_t buf_len, int64_t &pos) {
+    int ret = OB_SUCCESS;
+    int64_t tmp = 0;
+    for (int64_t idx = 0; idx < 8 && OB_SUCC(ret); ++idx) {
+      if (pos >= buf_len) {
+        ret = OB_BUF_NOT_ENOUGH;
+      } else {
+        tmp <<= 8;
+        tmp |= (0x00000000000000FF & buf[pos++]);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      value_ = tmp;
+    }
+    return ret;
+  }
+  int64_t mds_get_serialize_size() const { return sizeof(value_); }
   int64_t value_;
 };
 

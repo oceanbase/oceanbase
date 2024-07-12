@@ -48,6 +48,7 @@
 #include "share/ob_global_autoinc_service.h"
 #include "sql/das/ob_das_id_service.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/slog/ob_storage_log.h"
 #include "storage/slog/ob_storage_logger.h"
@@ -1646,14 +1647,16 @@ int ObLS::build_ha_tablet_new_table_store(
 }
 
 int ObLS::build_new_tablet_from_mds_table(
-    const int64_t ls_rebuild_seq,
+    compaction::ObTabletMergeCtx &ctx,
     const common::ObTabletID &tablet_id,
-    const int64_t mds_construct_sequence,
-    const share::SCN &flush_scn)
+    const ObTableHandleV2 &mds_mini_sstable_handle,
+    const share::SCN &flush_scn,
+    ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
   RDLockGuard guard(meta_rwlock_);
   const share::ObLSID &ls_id = ls_meta_.ls_id_;
+  const int64_t ls_rebuild_seq = ctx.get_ls_rebuild_seq();
   const int64_t rebuild_seq = ls_meta_.get_rebuild_seq();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1663,9 +1666,9 @@ int ObLS::build_new_tablet_from_mds_table(
     LOG_WARN("invalid args", K(ret), K(ls_id), K(tablet_id), K(flush_scn));
   } else if (OB_UNLIKELY(ls_rebuild_seq != rebuild_seq)) {
     ret = OB_EAGAIN;
-    LOG_WARN("rebuild seq is not the same with current ls, need retry",
+    LOG_WARN("rebuild seq from merge ctx is not the same with current ls, need retry",
         K(ret), K(ls_id), K(tablet_id), K(ls_rebuild_seq), K(rebuild_seq), K(flush_scn));
-  } else if (OB_FAIL(ls_tablet_svr_.build_new_tablet_from_mds_table(tablet_id, mds_construct_sequence, flush_scn))) {
+  } else if (OB_FAIL(ls_tablet_svr_.build_new_tablet_from_mds_table(ctx, tablet_id, mds_mini_sstable_handle, flush_scn, handle))) {
     LOG_WARN("failed to build new tablet from mds table", K(ret), K(ls_id), K(tablet_id), K(flush_scn));
   }
   return ret;

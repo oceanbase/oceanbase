@@ -84,7 +84,6 @@ class ObCompactionScheduleIterator;
 }
 namespace storage
 {
-class ObTabletCreateDeleteMdsUserData;
 
 struct ObLSVTInfo
 {
@@ -509,7 +508,6 @@ public:
       const HandleLSMetaFunc &handle_ls_meta_f,
       const ObLSTabletService::HandleTabletMetaFunc &handle_tablet_meta_f);
 
-  // ObLSTabletService interface:
   // ObLSTabletService interface:
   // update tablet by checkpoint
   // @param [in] key, key of tablet that will be updated
@@ -938,10 +936,11 @@ public:
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
   int build_new_tablet_from_mds_table(
-      const int64_t ls_rebuild_seq,
+      compaction::ObTabletMergeCtx &ctx,
       const common::ObTabletID &tablet_id,
-      const int64_t mds_construct_sequence,
-      const share::SCN &flush_scn);
+      const ObTableHandleV2 &mds_mini_sstable_handle,
+      const share::SCN &flush_scn,
+      ObTabletHandle &handle);
   int check_ls_migration_status(
       bool &ls_is_migration,
       int64_t &rebuild_seq);

@@ -2777,7 +2777,12 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     file_read_param.session_         = ctx.get_my_session();
     file_read_param.timeout_ts_      = THIS_WORKER.get_timeout_ts();
 
-    if (OB_FAIL(ObFileReader::open(file_read_param, ctx.get_allocator(), file_reader))) {
+    if (OB_UNLIKELY(ObLoadFileLocation::OSS == load_file_storage &&
+                    ObLoadDataFormat::CSV != load_args.access_info_.get_load_data_format())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("load data format not support", KR(ret), K(load_args.access_info_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-csv format in load data is");
+    } else if (OB_FAIL(ObFileReader::open(file_read_param, ctx.get_allocator(), file_reader))) {
       LOG_WARN("failed to open file.", KR(ret), K(file_read_param), K(load_args.file_name_));
 
     } else if (!file_reader->seekable()) {

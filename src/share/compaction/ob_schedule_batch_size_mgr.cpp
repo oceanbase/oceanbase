@@ -9,6 +9,7 @@
 // See the Mulan PubL v2 for more details.
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 #include "share/compaction/ob_schedule_batch_size_mgr.h"
+#include "lib/oblog/ob_log.h"
 #include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase

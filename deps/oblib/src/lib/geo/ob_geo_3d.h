@@ -55,7 +55,7 @@ public:
   ObGeoWkbByteOrder byteorder(uint64_t pos) const;
   ObGeoType type(uint64_t pos) const;
   void set_crs(ObGeoCRS crs) { crs_ = crs; }
-  int to_2d_geo(ObIAllocator &allocator, ObGeometry *&res);
+  int to_2d_geo(ObIAllocator &allocator, ObGeometry *&res, uint32_t srid = 0);
   int to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid = 0, int64_t maxdecimaldigits = -1);
   int reverse_coordinate();
   int check_wkb_valid();

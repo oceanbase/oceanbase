@@ -113,6 +113,7 @@ private:
   common::ObArenaAllocator allocator_;
   storage::ObDirectLoadTableDataDesc *table_data_desc_;
   common::ObCollationType collation_type_;
+  common::ObCastMode cast_mode_;
   ObTableLoadTimeConverter time_cvrt_;
   // does not contain hidden primary key columns
   // and does not contain virtual generated columns

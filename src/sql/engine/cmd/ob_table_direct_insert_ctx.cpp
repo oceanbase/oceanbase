@@ -43,7 +43,8 @@ int ObTableDirectInsertCtx::init(
     const int64_t parallel,
     const bool is_incremental,
     const bool enable_inc_replace,
-    const bool is_insert_overwrite)
+    const bool is_insert_overwrite,
+    const double online_sample_percent)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
@@ -69,9 +70,9 @@ int ObTableDirectInsertCtx::init(
     LOG_WARN("unexpected mview complete refresh enable inc replace", KR(ret));
   } else {
     is_direct_ = true;
-    if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadSqlExecCtx, &exec_ctx->get_allocator()))) {
+    if (OB_ISNULL(load_exec_ctx_ = OB_NEWx(ObTableLoadExecCtx, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to new ObTableLoadSqlExecCtx", KR(ret));
+      LOG_WARN("fail to new ObTableLoadExecCtx", KR(ret));
     } else if (OB_ISNULL(table_load_instance_ =
                            OB_NEWx(ObTableLoadInstance, &exec_ctx->get_allocator()))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -124,6 +125,7 @@ int ObTableDirectInsertCtx::init(
         param.insert_mode_ = insert_mode;
         param.load_mode_ = load_mode;
         param.compressor_type_ = compressor_type;
+        param.online_sample_percent_ = online_sample_percent;
         if (OB_FAIL(table_load_instance_->init(param, column_ids, load_exec_ctx_))) {
           LOG_WARN("failed to init direct loader", KR(ret));
         } else {
@@ -172,7 +174,7 @@ void ObTableDirectInsertCtx::destroy()
     table_load_instance_ = nullptr;
   }
   if (OB_NOT_NULL(load_exec_ctx_)) {
-    load_exec_ctx_->~ObTableLoadSqlExecCtx();
+    load_exec_ctx_->~ObTableLoadExecCtx();
     load_exec_ctx_ = nullptr;
   }
   is_inited_ = false;

@@ -20,6 +20,7 @@
 #include "storage/access/ob_store_row_iterator.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 #include "storage/ddl/ob_direct_insert_sstable_ctx_new.h"
+#include "storage/direct_load/ob_direct_load_trans_param.h"
 
 namespace oceanbase
 {
@@ -31,26 +32,6 @@ class ObTableLoadSqlStatistics;
 namespace storage
 {
 class ObDirectLoadInsertTableContext;
-
-struct ObDirectLoadTransParam
-{
-public:
-  ObDirectLoadTransParam() : tx_desc_(nullptr) {}
-  ~ObDirectLoadTransParam() {}
-  void reset()
-  {
-    tx_desc_ = nullptr;
-    tx_id_.reset();
-    tx_seq_.reset();
-  }
-  bool is_valid() const { return nullptr != tx_desc_ && tx_id_.is_valid() && tx_seq_.is_valid(); }
-  TO_STRING_KV(KPC_(tx_desc), K_(tx_id), K_(tx_seq));
-
-public:
-  transaction::ObTxDesc *tx_desc_;
-  transaction::ObTransID tx_id_;
-  transaction::ObTxSEQ tx_seq_;
-};
 
 struct ObDirectLoadInsertTableParam
 {
@@ -76,7 +57,8 @@ public:
                K_(trans_param),
                KP_(datum_utils),
                KP_(col_descs),
-               KP_(cmp_funcs));
+               KP_(cmp_funcs),
+               K_(online_sample_percent));
 
 public:
   uint64_t table_id_; // dest_table_id
@@ -98,6 +80,7 @@ public:
   const blocksstable::ObStorageDatumUtils *datum_utils_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
   const blocksstable::ObStoreCmpFuncs *cmp_funcs_;
+  double online_sample_percent_;
 };
 
 struct ObDirectLoadInsertTabletWriteCtx
@@ -193,6 +176,9 @@ public:
                K_(start_scn),
                K_(handle),
                K_(row_count),
+               K_(open_err),
+               K_(is_open),
+               K_(is_create),
                K_(is_cancel));
 private:
   int get_pk_interval(uint64_t count, share::ObTabletCacheInterval &pk_interval);
@@ -214,6 +200,8 @@ private:
   share::SCN start_scn_;
   ObTabletDirectLoadMgrHandle handle_;
   int64_t row_count_;
+  int open_err_;
+  volatile bool is_open_;
   bool is_create_;
   bool is_cancel_;
   bool is_inited_;

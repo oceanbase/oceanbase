@@ -309,6 +309,9 @@ struct ObGetMergeTablesResult
   share::ObScnRange scn_range_;
   share::ObDiagnoseLocation *error_location_;
   ObStorageSnapshotInfo snapshot_info_;
+  //for backfill
+  bool is_backfill_;
+  share::SCN backfill_scn_;
   ObGetMergeTablesResult();
   bool is_valid() const;
   void reset_handle_and_range();
@@ -316,8 +319,9 @@ struct ObGetMergeTablesResult
   void reset();
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
+  share::SCN get_merge_scn() const;
   TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version),
-      K_(handle), K_(update_tablet_directly), K_(schedule_major));
+      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)
@@ -427,7 +431,7 @@ struct ObBatchUpdateTableStoreParam final
   int get_max_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn) const;
 
   TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(is_transfer_replace),
-      K_(start_scn), KP_(tablet_meta), K_(update_ddl_sstable), K_(restore_status));
+      K_(start_scn), KP_(tablet_meta), K_(restore_status));
 
   ObTablesHandleArray tables_handle_;
 #ifdef ERRSIM
@@ -437,7 +441,6 @@ struct ObBatchUpdateTableStoreParam final
   bool is_transfer_replace_;
   share::SCN start_scn_;
   const ObMigrationTabletParam *tablet_meta_;
-  bool update_ddl_sstable_;
   ObTabletRestoreStatus::STATUS restore_status_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);

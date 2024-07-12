@@ -24,6 +24,10 @@ class ObTabletMergeCtx;
 
 namespace storage
 {
+class ObTabletHandle;
+class ObTablet;
+class ObTableHandleV2;
+
 namespace mds
 {
 class ObMdsTableMergeDag;
@@ -40,7 +44,12 @@ public:
 
   int init();
 private:
+  void try_schedule_compaction_after_mds_mini(compaction::ObTabletMergeCtx &ctx, ObTabletHandle &tablet_handle);
   void set_merge_finish_time(compaction::ObTabletMergeCtx &ctx);
+  static int build_mds_sstable(
+      compaction::ObTabletMergeCtx &ctx,
+      const int64_t mds_construct_sequence,
+      ObTableHandleV2 &table_handle);
 private:
   bool is_inited_;
   ObMdsTableMergeDag *mds_merge_dag_;

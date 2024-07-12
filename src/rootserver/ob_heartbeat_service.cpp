@@ -35,7 +35,6 @@ namespace oceanbase
 {
 using namespace common;
 using namespace share;
-using observer::ObServerHealthStatus;
 namespace rootserver
 {
 #define HBS_LOG_INFO(fmt, args...) FLOG_INFO("[HEARTBEAT_SERVICE] " fmt, ##args)
@@ -254,6 +253,7 @@ int ObHeartbeatService::send_heartbeat_()
             timeout,
             GCONF.cluster_id,
             OB_SYS_TENANT_ID,
+            share::OBCG_HB_SERVICE,
             hb_requests.at(i)))) {
           // error code will be ignored here.
           // send rpc to some offline servers will return error, however, it's acceptable

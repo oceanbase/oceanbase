@@ -1213,6 +1213,48 @@ int ObSchemaUtils::batch_get_table_schemas_from_inner_table_(
   return ret;
 }
 
+int ObSchemaUtils::check_whether_column_exist(
+    const uint64_t tenant_id,
+    const ObObjectID &table_id,
+    const ObString &column_name,
+    bool &exist)
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || OB_INVALID_ID == table_id
+      || column_name.empty()
+      || !is_sys_table(table_id)
+      || is_core_table(table_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(table_id), K(column_name));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, result) {
+      ObSqlString sql;
+      common::sqlclient::ObMySQLResult *res = NULL;
+      // in __all_column, tenant_id is primary key and it's value is 0
+      if (OB_FAIL(sql.append_fmt(
+          "SELECT count(*) = 1 AS exist FROM %s WHERE tenant_id = 0 and table_id = %lu and column_name = '%.*s'",
+          OB_ALL_COLUMN_TNAME, table_id, column_name.length(), column_name.ptr()))) {
+        LOG_WARN("fail to assign sql", KR(ret));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(result, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(res = result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get mysql result failed", KR(ret), K(tenant_id), K(sql));
+      } else if (OB_FAIL(res->next())) {
+        LOG_WARN("next failed", KR(ret), K(sql));
+      } else if (OB_FAIL(res->get_bool("exist", exist))) {
+        LOG_WARN("get max task id failed", KR(ret), K(sql));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSchemaUtils::is_drop_column_only(const AlterTableSchema &alter_table_schema, bool &is_drop_col_only)
 {
   int ret = OB_SUCCESS;
@@ -1306,6 +1348,12 @@ int ObParallelDDLControlMode::is_parallel_ddl(const ObParallelDDLType type, bool
       is_parallel = false;
     } else if (value == ObParallelDDLControlParser::MODE_ON) {
       is_parallel = true;
+    } else if (value == ObParallelDDLControlParser::MODE_DEFAULT) {
+      if (TRUNCATE_TABLE == type) {
+        is_parallel = true;
+      } else {
+        is_parallel = false;
+      }
     } else {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "invalid value unexpected", KR(ret), K(value));
@@ -1343,6 +1391,22 @@ bool ObSchemaUtils::can_add_column_group(const ObTableSchema &table_schema)
     can_add_cg = true;
   }
   return can_add_cg;
+}
+
+int ObParallelDDLControlMode::generate_parallel_ddl_control_config_for_create_tenant(ObSqlString &config_value)
+{
+  int ret = OB_SUCCESS;
+  int ddl_type_size = ARRAYSIZEOF(DDLType);
+  for (int i = 0; OB_SUCC(ret) && i < (ddl_type_size - 1); ++i) {
+    if (OB_FAIL(config_value.append_fmt("%s:ON, ", DDLType[i]))) {
+      LOG_WARN("fail to append fmt", KR(ret), K(i));
+    }
+  }
+  if ((ddl_type_size > 0)
+      && FAILEDx(config_value.append_fmt("%s:ON", DDLType[ddl_type_size - 1]))) {
+    LOG_WARN("fail to append fmt", KR(ret), K(ddl_type_size));
+  }
+  return ret;
 }
 
 } // end schema

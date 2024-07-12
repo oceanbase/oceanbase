@@ -15,6 +15,7 @@
 #include "logservice/ob_log_base_type.h"
 #include "storage/memtable/ob_memtable_mutator.h"
 #include "storage/blocksstable/ob_row_reader.h"
+#include "storage/tx/ob_multi_data_source_printer.h"
 #include "common/cell/ob_cell_reader.h"
 
 namespace oceanbase
@@ -40,7 +41,8 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT_PREPARE
         || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_OUT
-        || data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
+        || data_source_type == ObTxDataSourceType::START_TRANSFER_IN
+        || data_source_type == ObTxDataSourceType::TABLET_BINDING) {
 
       barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
 
@@ -297,7 +299,8 @@ OB_TX_SERIALIZE_MEMBER(ObTxActiveInfoLog,
                        /* 16 */ cluster_version_,
                        /* 17 */ max_submitted_seq_no_,
                        /* 18 */ xid_,
-                       /* 19 */ serial_final_seq_no_);
+                       /* 19 */ serial_final_seq_no_,
+                       /* 20 */ associated_session_id_);
 
 OB_TX_SERIALIZE_MEMBER(ObTxCommitInfoLog,
                        compat_bytes_,
@@ -1179,7 +1182,7 @@ int ObTxMultiDataSourceLog::ob_admin_dump(ObAdminMutatorStringArg &arg)
     arg.writer_ptr_->start_object();
     for (int64_t i = 0; i < data_.count(); i++) {
       arg.writer_ptr_->dump_key("type");
-        arg.writer_ptr_->dump_string(to_str_mds_type(data_[i].get_data_source_type()));
+        arg.writer_ptr_->dump_string(ObMultiDataSourcePrinter::to_str_mds_type(data_[i].get_data_source_type()));
         arg.writer_ptr_->dump_key("buf_len");
         arg.writer_ptr_->dump_string(to_cstring(data_[i].get_data_size()));
         arg.writer_ptr_->dump_key("content");

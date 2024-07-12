@@ -163,7 +163,7 @@ public:
   ObBackupTabletHolder();
   ~ObBackupTabletHolder();
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id);
-  int alloc_tablet_ref(ObBackupTabletHandleRef *&tablet_handle);
+  int alloc_tablet_ref(const uint64_t tenant_id, ObBackupTabletHandleRef *&tablet_handle);
   void free_tablet_ref(ObBackupTabletHandleRef *&tablet_handle);
   int set_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *tablet_handle);
   int get_tablet(const common::ObTabletID &tablet_id, ObBackupTabletHandleRef *&tablet_handle);

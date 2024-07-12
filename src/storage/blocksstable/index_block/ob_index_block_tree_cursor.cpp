@@ -356,7 +356,7 @@ int ObIndexBlockTreeCursor::init(
   } else if (OB_UNLIKELY(!sstable.is_normal_cg_sstable() && sstable_rowkey_col_cnt != read_info->get_rowkey_count())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Rowkey column count not match between read info and sstable",
-        K(ret), K(read_info), K(sstable_rowkey_col_cnt));
+        K(ret), KPC(read_info), K(sstable_rowkey_col_cnt));
   } else {
     tenant_id_ = MTL_ID();
     ObRowStoreType root_row_store_type

@@ -37,6 +37,12 @@ int ObMockResolver::resolve(const ParseNode& parse_tree)
       case T_CHECKSUM_TABLE:
         mock_stmt->set_stmt_type(stmt::T_CHECKSUM_TABLE);
         break;
+      case T_CACHE_INDEX:
+        mock_stmt->set_stmt_type(stmt::T_CACHE_INDEX);
+        break;
+      case T_LOAD_INDEX_INTO_CACHE:
+        mock_stmt->set_stmt_type(stmt::T_LOAD_INDEX_INTO_CACHE);
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));

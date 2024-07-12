@@ -33,6 +33,7 @@ void ObCdcFetchRawLogReq::reset()
   cur_round_rpc_count_ = 0;
   compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
   flag_ = 0;
+  client_type_ = ObCdcClientType::CLIENT_TYPE_UNKNOWN;
 }
 
 void ObCdcFetchRawLogReq::reset(const ObCdcRpcId &client_id,
@@ -53,7 +54,7 @@ void ObCdcFetchRawLogReq::reset(const ObCdcRpcId &client_id,
 
 OB_SERIALIZE_MEMBER(ObCdcFetchRawLogReq, rpc_ver_, client_id_,
     tenant_id_, ls_id_, start_lsn_, file_id_, size_, progress_,
-    seq_, cur_round_rpc_count_, compressor_type_, flag_);
+    seq_, cur_round_rpc_count_, compressor_type_, flag_, client_type_);
 
 //////////////////////////////////////// ObCdcFetchRawStatus //////////////////////////////////////
 

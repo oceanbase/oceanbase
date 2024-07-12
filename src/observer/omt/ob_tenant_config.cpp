@@ -24,6 +24,7 @@
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "share/errsim_module/ob_errsim_module_interface_imp.h"
+#include "src/sql/ob_optimizer_trace_impl.h"
 
 using namespace oceanbase::common;
 
@@ -67,6 +68,17 @@ void ObTenantConfig::print() const
     }
   }
   OB_LOG(INFO, "===================== * stop tenant config report * =======================", K(tenant_id_));
+}
+
+void ObTenantConfig::trace_all_config() const
+{
+  ObConfigContainer::const_iterator it = container_.begin();
+  for (; it != container_.end(); ++it) {
+    if (OB_ISNULL(it->second)) {
+    } else if (it->second->case_compare(it->second->default_str()) != 0) {
+      OPT_TRACE("  ", it->first.str(), " = ", it->second->str());
+    }
+  }
 }
 
 int ObTenantConfig::read_config()
@@ -335,7 +347,8 @@ int ObTenantConfig::publish_special_config_after_dump()
       SHARE_LOG(ERROR, "unexpected data_version", KR(ret), K(old_data_version));
     } else if (value_updated && new_data_version <= old_data_version) {
       LOG_INFO("[COMPATIBLE] [DATA_VERSION] no need to update", K(tenant_id_),
-               K(old_data_version), K(new_data_version));
+               "old_data_version", DVP(old_data_version),
+               "new_data_version", DVP(new_data_version));
       // do nothing
     } else {
       if (!(*pp_item)->set_value((*pp_item)->spfile_str())) {

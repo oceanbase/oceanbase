@@ -758,6 +758,18 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigSQLSpillCompressionCodecChecker);
 };
 
+class ObSqlPlanManagementModeChecker
+  : public ObConfigChecker
+{
+public:
+  ObSqlPlanManagementModeChecker() {}
+  virtual ~ObSqlPlanManagementModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+  static int64_t get_spm_mode_by_string(const common::ObString &string);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObSqlPlanManagementModeChecker);
+};
+
 class ObModeConfigParserUitl
 {
 public:
@@ -837,8 +849,9 @@ public:
   virtual ~ObParallelDDLControlParser() {}
   virtual bool parse(const char *str, uint8_t *arr, int64_t len) override;
 public:
-  static const uint8_t MODE_ON = 0b00;
+  static const uint8_t MODE_DEFAULT = 0b00;
   static const uint8_t MODE_OFF = 0b01;
+  static const uint8_t MODE_ON = 0b10;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObParallelDDLControlParser);
 };

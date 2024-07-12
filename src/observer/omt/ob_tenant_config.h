@@ -73,6 +73,7 @@ public:
   ObTenantConfig &operator=(const ObTenantConfig &)=delete;
 
   void print() const override;
+  void trace_all_config() const;
   int check_all() const override { return OB_SUCCESS; }
   common::ObServerRole get_server_type() const override { return common::OB_SERVER; }
   void ref() { ATOMIC_INC(&ref_); }

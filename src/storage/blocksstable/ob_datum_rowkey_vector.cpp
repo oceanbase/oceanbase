@@ -131,7 +131,6 @@ int ObColumnVector::inner_locate_key<ObStorageDatum>(
       end = begin;
     }
   }
-  LOG_TRACE("inner locate key", K(ret), K(need_upper_bound), K(begin), K(end), K(key), K(is_oracle_mode), KPC(this));
   return ret;
 }
 
@@ -161,7 +160,6 @@ int ObColumnVector::inner_locate_key<int64_t>(
     LOG_WARN("Failed to locate integer key", K(ret), K(need_upper_bound),
              K(begin), K(end), K(key));
   }
-  LOG_TRACE("inner locate key", K(ret), K(need_upper_bound), K(begin), K(end), K(key), K(is_oracle_mode), KPC(this));
   return ret;
 }
 
@@ -189,7 +187,6 @@ int ObColumnVector::inner_locate_key<uint64_t>(
   } else if (OB_FAIL(locate_integer_key(need_upper_bound, begin, end, unsigned_ints_, key.get_uint()))) {
     LOG_WARN("Failed to locate integer key", K(ret), K(need_upper_bound), K(begin), K(end), K(key));
   }
-  LOG_TRACE("inner locate key", K(ret), K(need_upper_bound), K(begin), K(end), K(key), K(is_oracle_mode), KPC(this));
   return ret;
 }
 
@@ -554,10 +551,6 @@ int ObRowkeyVector::locate_range(
     LOG_WARN("Failed to locate start key", K(ret));
   } else if (row_cnt_ == end_idx) {
     end_idx--;
-  }
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("Locate range in index block by rowkey vector", K(ret), K(range),
-              K(begin_idx), K(end_idx), K(is_left_border), K(is_right_border), KPC(this));
   }
   return ret;
 }

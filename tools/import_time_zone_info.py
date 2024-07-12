@@ -4,8 +4,8 @@ import re
 import os
 import getopt
 import mysql.connector
-import argparse
 from mysql.connector import errorcode
+import argparse
 
 class TimeZoneInfoImporter:
     def get_args(self):
@@ -66,22 +66,22 @@ class TimeZoneInfoImporter:
     def connect_server(self):
         self.conn = mysql.connector.connect(user='root', password=self.pwd, host=self.host, port=self.port, database='mysql')
         self.cur = self.conn.cursor(buffered=True)
-        print "INFO : sucess to connect server {0}:{1}".format(self.host, self.port)
+        print ("INFO : sucess to connect server {0}:{1}".format(self.host, self.port))
         try:
             sql = "select value from oceanbase.__all_sys_parameter where name = 'enable_upgrade_mode';"
             self.cur.execute(sql)
-            print "INFO : execute sql -- {0}".format(sql)
+            print ("INFO : execute sql -- {0}".format(sql))
             result = self.cur.fetchall()
             if 1 == len(result) and 1 == result[0][0]:
                 self.upgrade_mode = True
             else:
                 self.upgrade_mode = False
                 sql = "select tenant_id from oceanbase.__all_tenant where tenant_name = '{0}';".format(str(self.tenant))
-                print "INFO : execute sql -- {0}".format(sql)
+                print ("INFO : execute sql -- {0}".format(sql))
                 self.cur.execute(sql)
                 result = self.cur.fetchall()
                 if 1 == len(result):
-                    print "tenant_id = {0}".format(str(result[0][0]))
+                    print ("tenant_id = {0}".format(str(result[0][0])))
                     self.tenant_id = result[0][0]
                 else:
                     self.tenant_id = 0
@@ -93,18 +93,17 @@ class TimeZoneInfoImporter:
         except mysql.connector.Error as err:
             print("ERROR : " + sql)
             print(err)
-	    raise
-
+            raise
     def execute_sql(self):
         try:
             for sql in self.sql_list:
                 self.cur.execute(sql);
-                print "INFO : execute sql -- {0}".format(sql)
+                print ("INFO : execute sql -- {0}".format(sql))
         except mysql.connector.Error as err:
             print("ERROR : " + sql)
             print(err)
             print("ERROR : fail to import time zone info")
-	    raise
+            raise
         else:
             print("INFO : success to import time zone info")
 
@@ -112,7 +111,7 @@ class TimeZoneInfoImporter:
         self.cur.execute("select count(*) from {0}".format(table_name))
         result = self.cur.fetchone()
         self.result_count[idx] = result[0]
-        print "INFO : {0} record count -- {1}, expect count -- {2}".format(table_name, result[0], self.expect_count[idx])
+        print ("INFO : {0} record count -- {1}, expect count -- {2}".format(table_name, result[0], self.expect_count[idx]))
 
     def check_result(self):
         self.result_count = [0, 0, 0, 0]
@@ -127,12 +126,12 @@ class TimeZoneInfoImporter:
             try:
                 for sql in self.tz_version_sql_list:
                     self.cur.execute(sql)
-                    print "INFO : execute sql -- {0}".format(sql)
+                    print ("INFO : execute sql -- {0}".format(sql))
             except mysql.connector.Error as err:
                 print("ERROR : " + sql)
                 print(err)
                 print("ERROR : fail to insert time zone version")
-		raise
+                raise
             else:
                 print("INFO : success to insert time zone version")
 
@@ -140,13 +139,13 @@ def main():
     tz_info_importer = TimeZoneInfoImporter()
     tz_info_importer.get_args()
     try:
-	tz_info_importer.connect_server()
-	if False == tz_info_importer.upgrade_mode:
-	    tz_info_importer.generate_sql()
-	    tz_info_importer.execute_sql()
-	    tz_info_importer.check_result()
+        tz_info_importer.connect_server()
+        if False == tz_info_importer.upgrade_mode:
+            tz_info_importer.generate_sql()
+            tz_info_importer.execute_sql()
+            tz_info_importer.check_result()
     except:
-	print("except error in main")
+        print("except error in main")
 
 if __name__ == "__main__":
     main()

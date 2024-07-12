@@ -831,11 +831,44 @@ int ObTablesHandleArray::get_all_minor_sstables(common::ObIArray<ObITable *> &ta
 {
   int ret = OB_SUCCESS;
   tables.reset();
+  if (OB_FAIL(get_sstable_with_type_(ObITable::is_minor_sstable, tables))) {
+    STORAGE_LOG(WARN, "failed to get minor sstable", K(ret));
+  }
+  return ret;
+}
 
+int ObTablesHandleArray::get_all_ddl_sstables(common::ObIArray<ObITable *> &tables) const
+{
+  int ret = OB_SUCCESS;
+  tables.reset();
+  if (OB_FAIL(get_sstable_with_type_(ObITable::is_ddl_sstable, tables))) {
+    STORAGE_LOG(WARN, "failed to get ddl sstable", K(ret));
+  }
+  return ret;
+}
+
+int ObTablesHandleArray::get_all_mds_sstables(common::ObIArray<ObITable *> &tables) const
+{
+  int ret = OB_SUCCESS;
+  tables.reset();
+  if (OB_FAIL(get_sstable_with_type_(ObITable::is_mds_sstable, tables))) {
+    STORAGE_LOG(WARN, "failed to get mds sstable", K(ret));
+  }
+  return ret;
+}
+
+int ObTablesHandleArray::get_sstable_with_type_(
+    IS_RIGH_SSTABLE_TYPE_FUNC is_right_sstable_type,
+    common::ObIArray<ObITable *> &tables) const
+{
+  int ret = OB_SUCCESS;
+  tables.reset();
   for (int64_t i = 0; OB_SUCC(ret) && i < handles_array_.count(); ++i) {
     ObITable *table = handles_array_.at(i).table_;
-    if (table->is_minor_sstable() && OB_FAIL(tables.push_back(table))) {
-      STORAGE_LOG(WARN, "failed to add minor sstable", K(ret), K(i));
+    if (!is_right_sstable_type(table->get_key().table_type_)) {
+      //do nothing
+    } else if (OB_FAIL(tables.push_back(table))) {
+      STORAGE_LOG(WARN, "failed to add sstable", K(ret), K(i));
     }
   }
   return ret;

@@ -247,6 +247,11 @@ ob_set_subtarget(ob_storage backup
 ob_set_subtarget(ob_storage tablet
   tablet/ob_batch_create_tablet_pretty_arg.cpp
   tablet/ob_full_tablet_creator.cpp
+  tablet/ob_i_tablet_mds_interface.cpp
+  tablet/ob_mds_range_query_iterator.cpp
+  tablet/ob_mds_row_iterator.cpp
+  tablet/ob_mds_scan_param_helper.cpp
+  tablet/ob_mds_schema_helper.cpp
   tablet/ob_tablet_binding_helper.cpp
   tablet/ob_tablet_binding_replay_executor.cpp
   tablet/ob_tablet_complex_addr.cpp
@@ -278,6 +283,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet_binding_info.cpp
   tablet/ob_tablet_binding_mds_user_data.cpp
   tablet/ob_tablet_mds_node_dump_operator.cpp
+  tablet/ob_tablet_mds_table_mini_merger.cpp
   tablet/ob_tablet_start_transfer_mds_helper.cpp
   tablet/ob_tablet_finish_transfer_mds_helper.cpp
   tablet/ob_tablet_persister.cpp
@@ -397,6 +403,8 @@ ob_set_subtarget(ob_storage tx
   tx/ob_xa_trans_heartbeat_worker.cpp
   tx/ob_tx_ctx_mds.cpp
   tx/ob_multi_data_source.cpp
+  tx/ob_multi_data_source_printer.cpp
+  tx/ob_multi_data_source_tx_buffer_node.cpp
   tx/ob_tx_free_route.cpp
   tx/ob_tx_free_route_state.cpp
   tx/ob_tx_free_route_rpc.cpp
@@ -690,16 +698,20 @@ ob_set_subtarget(ob_storage multi_data_source
   multi_data_source/mds_table_base.cpp
   multi_data_source/mds_writer.cpp
   multi_data_source/mds_table_handler.cpp
+  multi_data_source/adapter_define/mds_dump_kv_wrapper.cpp
   multi_data_source/adapter_define/mds_dump_node.cpp
+  multi_data_source/runtime_utility/common_define.cpp
   multi_data_source/runtime_utility/mds_tenant_service.cpp
   multi_data_source/runtime_utility/mds_factory.cpp
   multi_data_source/runtime_utility/mds_retry_control.cpp
   multi_data_source/ob_mds_table_merge_dag.cpp
   multi_data_source/ob_mds_table_merge_dag_param.cpp
   multi_data_source/ob_mds_table_merge_task.cpp
+  multi_data_source/ob_mds_compaction_filter.cpp
   multi_data_source/ob_start_transfer_in_mds_ctx.cpp
   multi_data_source/ob_finish_transfer_in_mds_ctx.cpp
   multi_data_source/ob_tablet_create_mds_ctx.cpp
+  multi_data_source/ob_tablet_mds_merge_ctx.cpp
   multi_data_source/test/example_user_helper_define.cpp
 )
 
@@ -829,6 +841,7 @@ ob_set_subtarget(ob_storage mview
   mview/ob_mview_refresh.cpp
   mview/ob_mview_transaction.cpp
   mview/ob_mview_sched_job_utils.cpp
+  mview/ob_major_mv_merge_info.cpp
 )
 
 ob_set_subtarget(ob_storage tenant_snapshot

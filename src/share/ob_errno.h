@@ -1405,6 +1405,7 @@ constexpr int OB_TABLE_LOCK_SPLIT_FAIL = -6328;
 constexpr int OB_SEQ_NO_REORDER_UNDER_PDML = -6329;
 constexpr int OB_USER_OUTOF_DATA_DISK_SPACE = -6330;
 constexpr int OB_ARB_DEGRADE = -6331;
+constexpr int OB_OBJ_LOCK_WRONG_WORKER = -6332;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1497,6 +1498,8 @@ constexpr int OB_ERR_INVALID_XML_CHILD_NAME = -7429;
 constexpr int OB_ERR_XML_NOT_SUPPORT_OPERATION = -7430;
 constexpr int OB_ERR_COMPARE_VARRAY_LOB_ATTR = -7432;
 constexpr int OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD = -7433;
+constexpr int OB_ERR_CONVERSION_OF_UNIT = -7434;
+constexpr int OB_ERR_PARAM_OUT_OF_RANGE = -7435;
 constexpr int OB_ERR_BAD_VEC_INDEX_COLUMN = -7601;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
@@ -1896,6 +1899,10 @@ constexpr int OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT = -11015;
 constexpr int OB_ERR_PS_NO_RECURSION = -11016;
 constexpr int OB_ERR_PARTITION_EXCHANGE_PART_TABLE = -11017;
 constexpr int OB_INVALID_EXTERNAL_FILE = -11018;
+constexpr int OB_INVALID_EXTERNAL_FILE_COLUMN_PATH = -11046;
+constexpr int OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH = -11047;
+constexpr int OB_ERR_DDL_RESOURCE_NOT_ENOUGH = -11048;
+constexpr int OB_EXCEED_QUERY_MEM_LIMIT = -11049;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -3544,6 +3551,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEQ_NO_REORDER_UNDER_PDML__USER_ERROR_MSG "pdml sql need retry under sequence number reorder"
 #define OB_USER_OUTOF_DATA_DISK_SPACE__USER_ERROR_MSG "user data disk is almost full"
 #define OB_ARB_DEGRADE__USER_ERROR_MSG "logstream has been degraded due to error"
+#define OB_OBJ_LOCK_WRONG_WORKER__USER_ERROR_MSG "object lock worker thread wrong"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -3735,6 +3743,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DUP_DEF_NAMESPACE__USER_ERROR_MSG "XQST0066 - duplicate default namespace definition - %s."
 #define OB_ERR_COMPARE_VARRAY_LOB_ATTR__USER_ERROR_MSG "cannot compare VARRAY or LOB attributes of an object type"
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__USER_ERROR_MSG "Parent %.*s already contains child entry %s%.*s"
+#define OB_ERR_CONVERSION_OF_UNIT__USER_ERROR_MSG "conversion error between the specified unit and standard unit"
+#define OB_ERR_PARAM_OUT_OF_RANGE__USER_ERROR_MSG "value is out of range"
 #define OB_ERR_INVALID_VECTOR_DIM__USER_ERROR_MSG "inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__USER_ERROR_MSG "Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__USER_ERROR_MSG "array type mismatch found between definition(%.*s) and data(%.*s)"
@@ -4207,6 +4217,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_HDFS_INVALID_ARGUMENT__USER_ERROR_MSG "HDFS: invalid argument"
 #define OB_HDFS_NOT_IMPLEMENT__USER_ERROR_MSG "HDFS: not implementation"
 #define OB_HDFS_ERROR__USER_ERROR_MSG "HDFS error"
+#define OB_INVALID_EXTERNAL_FILE_COLUMN_PATH__USER_ERROR_MSG "Invalid path: %.*s"
+#define OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH__USER_ERROR_MSG "Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s"
+#define OB_ERR_DDL_RESOURCE_NOT_ENOUGH__USER_ERROR_MSG "The tenant ddl resource is not enough, please retry"
+#define OB_EXCEED_QUERY_MEM_LIMIT__USER_ERROR_MSG "Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
 #define OB_SP_RAISE_APPLICATION_ERROR__USER_ERROR_MSG "%.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__USER_ERROR_MSG "error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__USER_ERROR_MSG "CLOB or NCLOB in multibyte character set not supported"
@@ -5855,6 +5869,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SEQ_NO_REORDER_UNDER_PDML__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6329, pdml sql need retry under sequence number reorder"
 #define OB_USER_OUTOF_DATA_DISK_SPACE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6330, user data disk is almost full"
 #define OB_ARB_DEGRADE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6331, logstream has been degraded due to error"
+#define OB_OBJ_LOCK_WRONG_WORKER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6332, object lock worker thread wrong"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7002, The object is not running"
@@ -6046,6 +6061,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DUP_DEF_NAMESPACE__ORA_USER_ERROR_MSG "ORA-19118: XQST0066 - duplicate default namespace definition - %s."
 #define OB_ERR_COMPARE_VARRAY_LOB_ATTR__ORA_USER_ERROR_MSG "ORA-22901: cannot compare VARRAY or LOB attributes of an object type"
 #define OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD__ORA_USER_ERROR_MSG "ORA-31003: Parent %.*s already contains child entry %s%.*s"
+#define OB_ERR_CONVERSION_OF_UNIT__ORA_USER_ERROR_MSG "ORA-13291: conversion error between the specified unit and standard unit"
+#define OB_ERR_PARAM_OUT_OF_RANGE__ORA_USER_ERROR_MSG "ORA-13011: value is out of range"
 #define OB_ERR_INVALID_VECTOR_DIM__ORA_USER_ERROR_MSG "ORA-00932: inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7601, Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-00932: array type mismatch found between definition(%.*s) and data(%.*s)"
@@ -6518,6 +6535,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_HDFS_INVALID_ARGUMENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11043, HDFS: invalid argument"
 #define OB_HDFS_NOT_IMPLEMENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11044, HDFS: not implementation"
 #define OB_HDFS_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11045, HDFS error"
+#define OB_INVALID_EXTERNAL_FILE_COLUMN_PATH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11046, Invalid path: %.*s"
+#define OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11047, Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s"
+#define OB_ERR_DDL_RESOURCE_NOT_ENOUGH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11048, The tenant ddl resource is not enough, please retry"
+#define OB_EXCEED_QUERY_MEM_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11049, Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable."
 #define OB_SP_RAISE_APPLICATION_ERROR__ORA_USER_ERROR_MSG "ORA%06ld: %.*s"
 #define OB_SP_RAISE_APPLICATION_ERROR_NUM__ORA_USER_ERROR_MSG "ORA-21000: error number argument to raise_application_error of '%d' is out of range"
 #define OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN__ORA_USER_ERROR_MSG "ORA-22998: CLOB or NCLOB in multibyte character set not supported"
@@ -6528,7 +6549,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2307];
+extern int g_all_ob_errnos[2314];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

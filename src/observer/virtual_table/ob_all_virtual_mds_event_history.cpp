@@ -301,7 +301,7 @@ int ObAllVirtualMdsEventHistory::convert_event_info_to_row_(const MdsEventKey &k
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 15: {// seq_no
-        cur_row_.cells_[i].set_int(event.seq_no_);
+        cur_row_.cells_[i].set_int(event.seq_no_.get_seq());
         break;
       }
       case OB_APP_MIN_COLUMN_ID + 16: {// redo_scn

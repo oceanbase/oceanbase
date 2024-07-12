@@ -52,10 +52,15 @@ ObTableIterParam::ObTableIterParam()
       has_lob_column_out_(false),
       is_for_foreign_check_(false),
       limit_prefetch_(false),
+      is_mds_query_(false),
       is_non_unique_local_index_(false),
       ss_rowkey_prefix_cnt_(0),
       pd_storage_flag_(),
-      table_scan_opt_()
+      table_scan_opt_(),
+      auto_split_filter_type_(OB_INVALID_ID),
+      auto_split_filter_(nullptr),
+      auto_split_params_(nullptr),
+      is_tablet_spliting_(false)
 {
 }
 
@@ -100,8 +105,13 @@ void ObTableIterParam::reset()
   has_lob_column_out_ = false;
   is_for_foreign_check_ = false;
   limit_prefetch_ = false;
+  is_mds_query_ = false;
   is_non_unique_local_index_ = false;
   table_scan_opt_.reset();
+  auto_split_filter_type_ = OB_INVALID_ID;
+  auto_split_filter_ = nullptr;
+  auto_split_params_ = nullptr;
+  is_tablet_spliting_ = false;
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
@@ -185,9 +195,11 @@ DEF_TO_STRING(ObTableIterParam)
        K_(has_lob_column_out),
        K_(is_for_foreign_check),
        K_(limit_prefetch),
+       K_(is_mds_query),
        K_(is_non_unique_local_index),
        K_(ss_rowkey_prefix_cnt),
-       K_(table_scan_opt));
+       K_(table_scan_opt),
+       K_(is_tablet_spliting));
   J_OBJ_END();
   return pos;
 }
@@ -223,23 +235,35 @@ void ObTableAccessParam::reset()
 
 int ObTableAccessParam::init(
     const ObTableScanParam &scan_param,
-    const ObTabletHandle &tablet_handle)
+    const ObTabletHandle *tablet_handle,
+    const ObITableReadInfo *rowkey_read_info)
 {
   int ret = OB_SUCCESS;
-  const share::schema::ObTableParam &table_param = *scan_param.table_param_;
+
   if(IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableAccessParam init twice", K(ret), K(*this));
-  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+  } else if (OB_ISNULL(scan_param.table_param_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid tablet handle", K(ret), K(tablet_handle));
+    LOG_WARN("invalid args", K(ret), KP(scan_param.table_param_));
+  } else if (OB_UNLIKELY(nullptr == rowkey_read_info && nullptr == tablet_handle)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), KP(rowkey_read_info), KP(tablet_handle));
   } else {
+    const share::schema::ObTableParam &table_param = *scan_param.table_param_;
     iter_param_.table_id_ = table_param.get_table_id();
     iter_param_.tablet_id_ = scan_param.tablet_id_;
     iter_param_.read_info_ = &table_param.get_read_info();
+
+    if (nullptr == tablet_handle) {
+      iter_param_.rowkey_read_info_ = rowkey_read_info;
+      iter_param_.set_tablet_handle(nullptr);
+    } else {
+      iter_param_.rowkey_read_info_ = &tablet_handle->get_obj()->get_rowkey_read_info();
+      iter_param_.set_tablet_handle(tablet_handle);
+    }
+
     iter_param_.cg_read_infos_ = table_param.get_cg_read_infos();
-    iter_param_.rowkey_read_info_ = &tablet_handle.get_obj()->get_rowkey_read_info();
-    iter_param_.set_tablet_handle(&tablet_handle);
     iter_param_.out_cols_project_ = &table_param.get_output_projector();
     iter_param_.agg_cols_project_ = &table_param.get_aggregate_projector();
     iter_param_.group_by_cols_project_ = &table_param.get_group_by_projector();
@@ -283,10 +307,15 @@ int ObTableAccessParam::init(
                     !scan_param.scan_flag_.is_use_block_cache())) {
       iter_param_.disable_blockscan();
     }
+    iter_param_.auto_split_filter_type_ = scan_param.auto_split_filter_type_;
+    iter_param_.auto_split_filter_ = scan_param.auto_split_filter_;
+    iter_param_.auto_split_params_ = scan_param.auto_split_params_;
+    iter_param_.is_tablet_spliting_ = scan_param.is_tablet_spliting_;
     iter_param_.has_virtual_columns_ = table_param.has_virtual_column();
     // vectorize requires blockscan is enabled(_pushdown_storage_level > 0)
     iter_param_.vectorized_enabled_ = nullptr != get_op() && get_op()->is_vectorized();
     iter_param_.limit_prefetch_ = (nullptr == op_filters_ || op_filters_->empty());
+    iter_param_.is_mds_query_ = scan_param.is_mds_query_;
     if (iter_param_.is_use_column_store() &&
         nullptr != table_param.get_read_info().get_cg_idxs() &&
         !iter_param_.need_fill_group_idx()) { // not use column store in group rescan

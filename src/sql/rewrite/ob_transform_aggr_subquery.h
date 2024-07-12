@@ -60,13 +60,14 @@ private:
    */
   struct TransformParam {
     TransformParam() : ja_query_ref_(NULL), nested_conditions_(), pullup_flag_(0),
-                       not_null_expr_(NULL), parent_expr_of_query_ref(NULL)
+        not_null_expr_(NULL), parent_expr_of_query_ref(NULL), limit_for_exists_(false),
+        limit_value_(0), limit_to_aggr_(false), any_all_to_aggr_(false), exists_to_aggr_(false)
     {}
 
     TransformParam(int64_t trans_strategy) 
       : ja_query_ref_(NULL), nested_conditions_(), pullup_flag_(trans_strategy),
         not_null_expr_(NULL), parent_expr_of_query_ref(NULL), limit_for_exists_(false),
-        limit_value_(0)
+        limit_value_(0), limit_to_aggr_(false), any_all_to_aggr_(false), exists_to_aggr_(false)
     {}
 
     ObQueryRefRawExpr *ja_query_ref_;  // the ja query ref expr
@@ -79,6 +80,9 @@ private:
     ObRawExpr *parent_expr_of_query_ref;  // parent expr need to be modified for vector subquery comparison
     bool limit_for_exists_;
     int64_t limit_value_;
+    bool limit_to_aggr_;  // convert limit 1 single set as scala groupby
+    bool any_all_to_aggr_;  // convert any/all subquery as scala groupby
+    bool exists_to_aggr_; // convert exists subquery as scala groupby
     ObSEArray<ObPCParamEqualInfo, 1, common::ModulePageAllocator, true> equal_param_info_;
     ObSEArray<ObRawExpr *, 4> upper_filters_; // filters can be pulled up to upper stmt (aggr first)
     TO_STRING_KV(K_(ja_query_ref),
@@ -89,6 +93,9 @@ private:
                  K_(not_null_expr),
                  K_(limit_for_exists),
                  K_(limit_value),
+                 K_(limit_to_aggr),
+                 K_(any_all_to_aggr),
+                 K_(exists_to_aggr),
                  K_(equal_param_info),
                  K_(upper_filters));
   };
@@ -124,19 +131,25 @@ private:
                               const bool is_select_item_expr,
                               ObIArray<TransformParam> &params);
 
-  int check_aggr_first_validity(ObQueryRefRawExpr &query_ref,
+  int check_aggr_first_validity(ObDMLStmt &stmt,
+                                ObQueryRefRawExpr &query_ref,
                                 const bool is_vector_assign,
+                                ObRawExpr *root_expr,
+                                ObRawExpr &parent_expr,
                                 ObIArray<ObRawExpr*> &nested_conditions,
                                 ObIArray<ObRawExpr*> &upper_filters,
                                 const bool is_select_item_expr,
                                 bool &is_valid,
                                 int64_t &limit_value,
+                                bool &limit_to_aggr,
+                                bool &any_all_to_aggr,
+                                bool &exists_to_aggr,
                                 ObIArray<ObPCParamEqualInfo> &equal_param_info);
 
   int choose_pullup_method(ObIArray<ObRawExpr *> &conditions,
                            TransformParam &param);
 
-  int fill_query_refs(ObDMLStmt *stmt, ObRawExpr *expr, TransformParam &param);
+  int fill_query_refs(ObDMLStmt *stmt, bool cnt_alias, TransformParam &param);
 
   int transform_child_stmt(ObDMLStmt *stmt,
                            ObSelectStmt &subquery,
@@ -170,6 +183,7 @@ private:
   int check_join_first_validity(ObQueryRefRawExpr &query_ref,
                                 const bool is_vector_assign,
                                 const bool in_exists,
+                                const ObRawExpr &parent_expr,
                                 const bool is_vector_cmp,
                                 ObIArray<ObRawExpr *> &constraints,
                                 bool &add_limit_constraints,
@@ -206,8 +220,8 @@ private:
   int rebuild_conditon(ObSelectStmt &stmt, ObSelectStmt &subquery);
 
   int check_single_set_subquery(const ObSelectStmt &subquery,
-                                bool &is_valid,
-                                bool &limit_to_aggr,
+                                bool &group_single_set,
+                                bool &limit_single_set,
                                 int64_t &limit_value,
                                 bool check_limit = true);
 
@@ -226,7 +240,10 @@ private:
   int check_subquery_select(const ObQueryRefRawExpr &query_ref, bool &is_valid);
   int check_subquery_orderby(const ObQueryRefRawExpr &query_ref, bool &is_valid);
 
-  int check_subquery_select_for_limit_1(ObSelectStmt &subquery, bool &is_valid, ObIArray<ObPCParamEqualInfo>& equal_param_info);
+  int check_limit_single_set_validity(const ObSelectStmt &subquery,
+                                      const ObRawExpr &parent_expr,
+                                      bool &is_valid,
+                                      ObIArray<ObPCParamEqualInfo>& equal_param_info);
 
   int check_join_first_condition_for_limit_1(ObQueryRefRawExpr &query_ref,
                                              ObSelectStmt &subquery,
@@ -278,6 +295,32 @@ private:
   ObHint* get_sub_unnest_hint(ObSelectStmt &subquery, int64_t pullup_strategy);
   ObItemType get_unnest_strategy(int64_t pullup_strategy);
   int check_nested_subquery(ObQueryRefRawExpr &query_ref, bool &is_valid);
+  int check_can_trans_any_all_as_scalar_subquery(ObDMLStmt &stmt,
+                                                ObSelectStmt *subquery,
+                                                ObRawExpr *parent_expr,
+                                                ObRawExpr *root_expr,
+                                                bool &is_valid);
+  int check_can_trans_exists_as_scalar_subquery(ObQueryRefRawExpr &query_ref,
+                                               ObRawExpr &parent_expr,
+                                               int64_t limit_value,
+                                               bool &is_valid);
+  int convert_exists_as_scalar_subquery(ObDMLStmt *stmt,
+                                        ObQueryRefRawExpr *query_ref,
+                                        ObSelectStmt *subquery,
+                                        TransformParam &trans_param);
+  int eliminate_limit_if_need(ObSelectStmt &subquery,
+                              TransformParam &trans_param,
+                              bool in_exist);
+  int convert_any_all_as_scalar_subquery(ObDMLStmt *stmt,
+                                        ObQueryRefRawExpr *query_ref,
+                                        ObSelectStmt *&subquery,
+                                        TransformParam &trans_param);
+  int deduce_query_values_for_exists(ObTransformerCtx &ctx,
+                                     ObDMLStmt &stmt,
+                                     ObRawExpr *not_null_expr,
+                                     ObRawExpr *parent_expr_of_query_ref,
+                                     ObRawExpr *&real_parent_value);
+  int eliminate_redundant_aggregation_if_need(ObSelectStmt &stmt, TransformParam &trans_param);
 
 private:
   common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;

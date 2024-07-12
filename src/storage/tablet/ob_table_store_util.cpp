@@ -198,6 +198,36 @@ int ObSSTableArray::add_tables_for_cg(
   return ret;
 }
 
+int ObSSTableArray::add_tables_for_cg_without_deep_copy(
+    const ObIArray<ObITable *> &tables)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(0 == cnt_ || NULL == sstable_array_ || is_inited_)) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("this table array can't add tables", K(ret), KPC(this));
+  } else if (OB_UNLIKELY(cnt_ != tables.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arguments", K(ret), KPC(this), K(tables.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+      ObITable *table = tables.at(i);
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null table ptr", K(ret));
+      } else if (OB_UNLIKELY(!table->is_cg_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table type", K(ret), KPC(table));
+      } else {
+        sstable_array_[i] = static_cast<ObSSTable *>(table);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
 int ObSSTableArray::inner_init(
     ObArenaAllocator &allocator,
     const ObIArray<ObITable *> &tables,
@@ -1197,7 +1227,6 @@ int ObTableStoreUtil::compare_table_by_scn_range(const ObITable *ltable, const O
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("invalid rtable type", K(ret), KPC(rtable));
   } else if (ltable->get_end_scn() == rtable->get_end_scn()) {
-    bret = true;
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table end log ts shouldn't be equal", KPC(ltable), KPC(rtable));
   } else if (is_ascend) {

@@ -21,6 +21,7 @@
 #include "lib/allocator/ob_page_manager.h"
 #include "lib/rc/ob_rc.h"
 #include "lib/rc/context.h"
+#include "common/ob_smart_var.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -496,37 +497,31 @@ void ObMallocAllocator::print_tenant_memory_usage(uint64_t tenant_id) const
 {
   int ret = OB_SUCCESS;
   with_resource_handle_invoke(tenant_id, [&](ObTenantMemoryMgr *mgr) {
-    CREATE_WITH_TEMP_CONTEXT(ContextParam().set_label(ObModIds::OB_TEMP_VARIABLES)) {
-      static const int64_t BUFLEN = 1 << 17;
-      char *buf = (char *)ctxalp(BUFLEN);
-      if (OB_ISNULL(buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LIB_LOG(WARN, "no memory", K(ret));
-      } else {
-        int64_t ctx_pos = 0;
-        const volatile int64_t *ctx_hold_bytes = mgr->get_ctx_hold_bytes();
-        for (uint64_t i = 0; i < ObCtxIds::MAX_CTX_ID; i++) {
-          if (ctx_hold_bytes[i] > 0) {
-            int64_t limit = 0;
-            IGNORE_RETURN mgr->get_ctx_limit(i, limit);
-            ret = databuff_printf(buf, BUFLEN, ctx_pos,
-                "[MEMORY] ctx_id=%25s hold_bytes=%'15ld limit=%'26ld\n",
-                get_global_ctx_info().get_ctx_name(i), ctx_hold_bytes[i], limit);
-          }
+    static const int64_t BUFLEN = 1 << 16;
+    SMART_VAR(char[BUFLEN], buf) {
+      int64_t ctx_pos = 0;
+      const volatile int64_t *ctx_hold_bytes = mgr->get_ctx_hold_bytes();
+      for (uint64_t i = 0; OB_SUCC(ret) && i < ObCtxIds::MAX_CTX_ID; i++) {
+        if (ctx_hold_bytes[i] > 0) {
+          int64_t limit = 0;
+          IGNORE_RETURN mgr->get_ctx_limit(i, limit);
+          ret = databuff_printf(buf, BUFLEN, ctx_pos,
+              "[MEMORY] ctx_id=%25s hold_bytes=%'15ld limit=%'26ld\n",
+              get_global_ctx_info().get_ctx_name(i), ctx_hold_bytes[i], limit);
         }
-        buf[std::min(ctx_pos, BUFLEN - 1)] = '\0';
-        allow_next_syslog();
-        _LOG_INFO("[MEMORY] tenant: %lu, limit: %'lu hold: %'lu rpc_hold: %'lu cache_hold: %'lu "
-                  "cache_used: %'lu cache_item_count: %'lu \n%s",
-            tenant_id,
-            mgr->get_limit(),
-            mgr->get_sum_hold(),
-            mgr->get_rpc_hold(),
-            mgr->get_cache_hold(),
-            mgr->get_cache_hold(),
-            mgr->get_cache_item_count(),
-            buf);
       }
+      buf[std::min(ctx_pos, BUFLEN - 1)] = '\0';
+      allow_next_syslog();
+      _LOG_INFO("[MEMORY] tenant: %lu, limit: %'lu hold: %'lu rpc_hold: %'lu cache_hold: %'lu "
+                "cache_used: %'lu cache_item_count: %'lu \n%s",
+          tenant_id,
+          mgr->get_limit(),
+          mgr->get_sum_hold(),
+          mgr->get_rpc_hold(),
+          mgr->get_cache_hold(),
+          mgr->get_cache_hold(),
+          mgr->get_cache_item_count(),
+          buf);
     }
     return ret;
   });

@@ -144,6 +144,7 @@ private:
 	int32_t cur_round_rpc_count_;
 	ObCompressorType compressor_type_;
 	int8_t flag_;
+  ObCdcClientType client_type_;
 };
 
 enum class ObCdcFetchRawSource

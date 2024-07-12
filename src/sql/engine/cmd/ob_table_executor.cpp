@@ -415,7 +415,15 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_WARN("schema_guard reset failed", K(ret));
       } else if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, create_table_res))) { //2, 建表;
         LOG_WARN("rpc proxy create table failed", K(ret), "dst", common_rpc_proxy->get_server());
-      } else if (OB_INVALID_ID != create_table_res.table_id_) { //如果表已存在则后续的查询插入不进行
+      } else if (!(OB_INVALID_ID == create_table_res.table_id_
+                  || (OB_INVALID_ID != create_table_res.table_id_
+                      && true == create_table_res.do_nothing_)) ) { //如果表已存在则后续的查询插入不进行
+        // 1. for old rs
+        // when table_exist, table_id == invalid_id, and do_nothing will alway be false
+        // 2. for new rs
+        // do_nothing is true when table_exist
+        // --> when table_id == invalid, both old and new rs no table create
+        // --> when table_id != invalid, both old and new rs do_nothing_ correct
         if (OB_INVALID_VERSION == create_table_res.schema_version_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected schema version", K(ret), K(create_table_res));
@@ -497,10 +505,23 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
           obrpc::ObAlterTableRes res;
           alter_table_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
             lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
-          if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
-            LOG_WARN("failed to update table session", K(ret), K(alter_table_arg));
-            if (alter_table_arg.compat_mode_ == lib::Worker::CompatMode::ORACLE && OB_ERR_TABLE_EXIST == ret) {
-              ret = OB_ERR_EXIST_OBJECT;
+          bool finish = false;
+          while (OB_SUCC(ret) && !finish) {
+            if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
+              LOG_WARN("failed to update table session", K(ret), K(alter_table_arg));
+              if (alter_table_arg.compat_mode_ == lib::Worker::CompatMode::ORACLE && OB_ERR_TABLE_EXIST == ret) {
+                ret = OB_ERR_EXIST_OBJECT;
+              } else if (OB_EAGAIN == ret) {
+                ret = OB_SUCCESS; // maybe table lock conflict, retry
+                if (OB_UNLIKELY(THIS_WORKER.get_timeout_remain() <= 0)) {
+                  ret = OB_TIMEOUT;
+                  LOG_WARN("timeout", K(ret));
+                } else if (OB_FAIL(THIS_WORKER.check_status())) {
+                  LOG_WARN("failed to check status", K(ret));
+                }
+              }
+            } else {
+              finish = true;
             }
           }
         }
@@ -802,7 +823,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
   ObSArray<obrpc::ObIndexArg *> add_index_arg_list;
   ObSArray<obrpc::ObIndexArg *> drop_index_args;
   alter_table_arg.index_arg_list_.reset();
-
+  DEBUG_SYNC(BEFORE_SEND_ALTER_TABLE);
   if (OB_ISNULL(my_session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
@@ -846,7 +867,9 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
         || obrpc::ObAlterTableArg::INTERVAL_TO_RANGE == alter_table_arg.alter_part_type_) {
       alter_table_arg.is_alter_partitions_ = true;
     }
-    if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
+    if (OB_FAIL(populate_based_schema_obj_info_(alter_table_arg))) {
+      LOG_WARN("fail to populate based schema obj info", KR(ret));
+    } else if (OB_FAIL(common_rpc_proxy->alter_table(alter_table_arg, res))) {
       LOG_WARN("rpc proxy alter table failed", KR(ret), "dst", common_rpc_proxy->get_server(), K(alter_table_arg));
     } else {
       // 在回滚时不会重试，也不检查 schema version
@@ -858,7 +881,7 @@ int ObAlterTableExecutor::alter_table_rpc_v2(
     ObIArray<obrpc::ObDDLRes> &ddl_ress = res.ddl_res_array_;
     for (int64_t i = 0; OB_SUCC(ret) && i < ddl_ress.count(); ++i) {
       ObDDLRes &ddl_res = ddl_ress.at(i);
-      if (OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ddl_res.tenant_id_, ddl_res.task_id_, false/*do not retry at executor*/, my_session, common_rpc_proxy, is_support_cancel))) {
+      if (!alter_table_arg.is_update_global_indexes_ && OB_FAIL(ObDDLExecutorUtil::wait_ddl_finish(ddl_res.tenant_id_, ddl_res.task_id_, false/*do not retry at executor*/, my_session, common_rpc_proxy, is_support_cancel))) {
         LOG_WARN("wait drop index finish", K(ret));
       }
     }
@@ -1178,8 +1201,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                 LOG_WARN("unexpected error", K(ret));
               }
             } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unknown alter external table type", K(ret), K(alter_table_arg.alter_part_type_), K(stmt.get_alter_external_table_type()));
+              // ret = OB_ERR_UNEXPECTED;
+              // LOG_WARN("unknown alter external table type", K(ret), K(alter_table_arg.alter_part_type_), K(stmt.get_alter_external_table_type()));
             }
           }
         }
@@ -2521,6 +2544,51 @@ int ObOptimizeAllExecutor::execute(ObExecContext &ctx, ObOptimizeAllStmt &stmt)
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObAlterTableExecutor::populate_based_schema_obj_info_(obrpc::ObAlterTableArg &alter_table_arg) {
+  int ret = OB_SUCCESS;
+  const uint64_t table_id = alter_table_arg.alter_table_schema_.get_table_id();
+  if (OB_INVALID_ID != table_id) {
+    const uint64_t tenant_id = alter_table_arg.alter_table_schema_.get_tenant_id();
+    SMART_VAR(ObSchemaGetterGuard, guard) {
+    const ObTableSchema *orig_table = nullptr;
+    if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(
+                tenant_id, guard))) {
+      LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(guard.get_table_schema(tenant_id, table_id, orig_table))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_ISNULL(orig_table)) {
+      ret = OB_TABLE_NOT_EXIST;
+      LOG_WARN("table not exits", KR(ret), K(table_id));
+    } else {
+      bool find = false;
+      for (int i = 0; i < OB_SUCC(ret) && alter_table_arg.based_schema_object_infos_.count(); ++i) {
+        ObBasedSchemaObjectInfo &based_schema_object_info =
+                                alter_table_arg.based_schema_object_infos_.at(i);
+        if (based_schema_object_info.schema_id_ == alter_table_arg.table_id_) {
+          find = true;
+          if (based_schema_object_info.schema_version_ == orig_table->get_schema_version()) {
+            break;
+          } else {
+            ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+            LOG_WARN("schema version not consistent", KR(ret), K(based_schema_object_info.schema_version_),
+                                                      K(orig_table->get_schema_version()));
+          }
+        }
+      }
+      if (false == find) {
+        if (OB_FAIL(alter_table_arg.based_schema_object_infos_.push_back(
+                    ObBasedSchemaObjectInfo(table_id, TABLE_SCHEMA,
+                                            orig_table->get_schema_version())))) {
+          LOG_WARN("fail to push back based schema object info", KR(ret), K(alter_table_arg.table_id_),
+                   K(orig_table->get_schema_version()));
+        }
+      }
+    }
+    } // end smart var
   }
   return ret;
 }

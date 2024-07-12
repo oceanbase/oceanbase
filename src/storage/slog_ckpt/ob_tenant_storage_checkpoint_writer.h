@@ -17,6 +17,7 @@
 #include "storage/ob_super_block_struct.h"
 #include "storage/meta_mem/ob_tablet_map_key.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
+#include "storage/slog/ob_storage_log.h"
 
 namespace oceanbase
 {
@@ -103,8 +104,16 @@ private:
   int persist_and_copy_tablet(
       const ObTabletMapKey &tablet_key,
       const ObMetaDiskAddr &old_addr,
-      char *slog_buf);
-  int copy_tablet(const ObTabletMapKey &tablet_key, char *slog_buf, share::SCN &clog_max_scn);
+      char (&slog_buf)[sizeof(ObUpdateTabletLog)]);
+  int copy_tablet(
+      const ObTabletMapKey &tablet_key,
+      char (&slog_buf)[sizeof(ObUpdateTabletLog)],
+      share::SCN &clog_max_scn);
+  static int handle_old_version_tablet_for_compat(
+      common::ObArenaAllocator &allocator,
+      const ObTabletMapKey &tablet_key,
+      const ObTablet &old_tablet,
+      ObTabletHandle &new_tablet_handle);
 
 private:
   bool is_inited_;

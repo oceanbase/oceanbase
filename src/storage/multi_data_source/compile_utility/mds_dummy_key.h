@@ -27,16 +27,14 @@ namespace mds
 struct DummyKey
 {
   DummyKey() = default;
-  int serialize(char *, const int64_t, int64_t &) const { return  OB_SUCCESS; }
-  int deserialize(const char *, const int64_t, int64_t &) { return  OB_SUCCESS; }
-  int64_t get_serialize_size() const { return 0; }
+  int mds_serialize(char *, const int64_t, int64_t &) const { return  OB_SUCCESS; }
+  int mds_deserialize(const char *, const int64_t, int64_t &) { return  OB_SUCCESS; }
+  int64_t mds_get_serialize_size() const { return 0; }
   int64_t to_string(char *buf, const int64_t buf_len) const {
     int64_t pos = 0;
     databuff_printf(buf, buf_len, pos, "Dummy");
     return pos;
   }
-  bool operator<(const DummyKey& rhs) const { return false; }
-  bool operator==(const DummyKey& rhs) const { return true; }
 };
 
 }

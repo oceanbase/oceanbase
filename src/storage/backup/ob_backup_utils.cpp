@@ -39,6 +39,7 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/backup/ob_backup_data_store.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
+#include "storage/tablet/ob_mds_schema_helper.h"
 
 #include <algorithm>
 
@@ -106,14 +107,19 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
   } else if (backup_data_type.is_minor_backup()) {
     const storage::ObSSTableArray *minor_sstable_array_ptr = NULL;
     const storage::ObSSTableArray *ddl_sstable_array_ptr = NULL;
+    const storage::ObSSTableArray *mds_sstable_array_ptr = NULL;
     minor_sstable_array_ptr = &tablet_table_store.get_minor_sstables();
     ddl_sstable_array_ptr = &tablet_table_store.get_ddl_sstables();
+    mds_sstable_array_ptr = &tablet_table_store.get_mds_sstables();
     ObArray<storage::ObSSTableWrapper> minor_sstable_array;
     ObArray<storage::ObSSTableWrapper> ddl_sstable_array;
+    ObArray<storage::ObSSTableWrapper> mds_sstable_array;
     if (OB_FAIL(minor_sstable_array_ptr->get_all_table_wrappers(minor_sstable_array))) {
       LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
     } else if (OB_FAIL(ddl_sstable_array_ptr->get_all_table_wrappers(ddl_sstable_array, true/*unpack_table*/))) {
       LOG_WARN("failed to get all tables", K(ret), KPC(ddl_sstable_array_ptr));
+    } else if (OB_FAIL(mds_sstable_array_ptr->get_all_table_wrappers(mds_sstable_array, true/*unpack_table*/))) {
+      LOG_WARN("failed to get all tables", K(ret), KPC(mds_sstable_array_ptr));
     } else if (OB_FAIL(check_tablet_minor_sstable_validity_(tablet_handle, minor_sstable_array))) {
       LOG_WARN("failed to check tablet minor sstable validity", K(ret), K(tablet_handle), K(minor_sstable_array));
     } else if (OB_FAIL(check_tablet_ddl_sstable_validity_(tablet_handle, ddl_sstable_array))) {
@@ -122,6 +128,8 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
       LOG_WARN("failed to append", K(ret), K(minor_sstable_array));
     } else if (OB_FAIL(append(sstable_array, ddl_sstable_array))) {
       LOG_WARN("failed to append", K(ret), K(ddl_sstable_array));
+    } else if (OB_FAIL(append(sstable_array, mds_sstable_array))) {
+      LOG_WARN("failed to append", K(ret), K(mds_sstable_array));
     }
   } else if (backup_data_type.is_major_backup()) {
     const storage::ObSSTableArray *major_sstable_array_ptr = NULL;
@@ -129,7 +137,9 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
     ObITable *last_major_sstable_ptr = NULL;
     ObArenaAllocator tmp_allocator("backup_medium", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     bool with_major_sstable = true;
-    compaction::ObMediumCompactionInfoList medium_info_list;
+    const share::ObLSID &ls_id = tablet_handle.get_obj()->get_ls_id();
+    const common::ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
+    const int64_t last_compaction_scn = tablet_handle.get_obj()->get_last_compaction_scn();
     ObSSTableWrapper major_wrapper;
 
     if (OB_ISNULL(last_major_sstable_ptr = major_sstable_array_ptr->get_boundary_table(true /*last*/))) {
@@ -140,13 +150,11 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("last major sstable should not be null", K(ret), K(tablet_handle));
       }
-    } else if (OB_FAIL(tablet_handle.get_obj()->get_medium_info_list(tmp_allocator, medium_info_list))) {
-      LOG_WARN("failed to load medium info list", K(ret));
-    } else if (medium_info_list.get_last_compaction_scn() > 0
-        && medium_info_list.get_last_compaction_scn() != last_major_sstable_ptr->get_snapshot_version()) {
+    } else if (OB_UNLIKELY(last_compaction_scn > 0
+        && last_compaction_scn != last_major_sstable_ptr->get_snapshot_version())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("medium list is invalid for last major sstable", K(ret), K(medium_info_list),
-          KPC(last_major_sstable_ptr), K(tablet_handle));
+      LOG_WARN("extra medium info is invalid for last major sstable", K(ret), K(ls_id), K(tablet_id),
+          K(last_compaction_scn), KPC(last_major_sstable_ptr), K(tablet_handle));
     } else if (last_major_sstable_ptr->is_co_sstable()) {
       if (OB_FAIL(static_cast<ObCOSSTableV2 *>(last_major_sstable_ptr)->get_all_tables(sstable_array))) {
         LOG_WARN("failed to get all cg tables from co table", K(ret), KPC(last_major_sstable_ptr));
@@ -182,7 +190,7 @@ int ObBackupUtils::fetch_macro_block_logic_id_list(const storage::ObTabletHandle
   logic_id_list.reset();
   ObArenaAllocator allocator;
   ObDatumRange datum_range;
-  const storage::ObITableReadInfo *index_read_info = &tablet_handle.get_obj()->get_rowkey_read_info();
+  const storage::ObITableReadInfo *index_read_info = NULL;
 
   SMART_VAR(ObSSTableSecMetaIterator, meta_iter)
   {
@@ -190,9 +198,8 @@ int ObBackupUtils::fetch_macro_block_logic_id_list(const storage::ObTabletHandle
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("get invalid args", K(ret), K(sstable));
     } else if (FALSE_IT(datum_range.set_whole_range())) {
-    } else if (sstable.is_normal_cg_sstable() &&
-        OB_FAIL(MTL(ObTenantCGReadInfoMgr *)->get_index_read_info(index_read_info))) {
-      LOG_WARN("failed to get index read info from ObTenantCGReadInfoMgr", K(ret), K(sstable));
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_sstable_read_info(&sstable, index_read_info))) {
+      LOG_WARN("failed to get index read info ", KR(ret), K(sstable));
     } else if (OB_FAIL(meta_iter.open(datum_range,
                    ObMacroBlockMetaType::DATA_BLOCK_META,
                    sstable,
@@ -399,7 +406,7 @@ int ObBackupUtils::check_ls_valid_for_backup(const uint64_t tenant_id, const sha
   } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1095,7 +1102,7 @@ int ObBackupTabletHolder::init(const uint64_t tenant_id, const share::ObLSID &ls
   return ret;
 }
 
-int ObBackupTabletHolder::alloc_tablet_ref(ObBackupTabletHandleRef *&tablet_handle)
+int ObBackupTabletHolder::alloc_tablet_ref(const uint64_t tenant_id, ObBackupTabletHandleRef *&tablet_handle)
 {
   int ret = OB_SUCCESS;
   tablet_handle = NULL;
@@ -1103,11 +1110,16 @@ int ObBackupTabletHolder::alloc_tablet_ref(ObBackupTabletHandleRef *&tablet_hand
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet holder not init", K(ret));
+  } else if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tenant_id));
   } else if (OB_ISNULL(buf = fifo_allocator_.alloc(sizeof(ObBackupTabletHandleRef)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
   } else {
+    ObMemAttr attr(tenant_id, "BackupTbtHldr");
     tablet_handle = new (buf) ObBackupTabletHandleRef;
+    tablet_handle->allocator_.set_attr(attr);
   }
   return ret;
 }
@@ -1999,12 +2011,12 @@ int ObBackupTabletProvider::inner_get_tablet_handle_without_memtables_(const uin
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
-  } else if (OB_FAIL(ls_backup_ctx_->tablet_holder_.alloc_tablet_ref(tablet_ref))) {
-    LOG_WARN("failed to alloc tablet ref", K(ret));
+  } else if (OB_FAIL(ls_backup_ctx_->tablet_holder_.alloc_tablet_ref(tenant_id, tablet_ref))) {
+    LOG_WARN("failed to alloc tablet ref", K(ret), K(tenant_id));
   } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -2064,7 +2076,7 @@ int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, c
         if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("log stream service is NULL", K(ret), K(tenant_id));
-        } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
+        } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::HA_MOD))) {
           LOG_WARN("failed to get log stream", K(ret), K(ls_id));
         } else if (OB_ISNULL(ls = handle.get_ls())) {
           ret = OB_ERR_UNEXPECTED;

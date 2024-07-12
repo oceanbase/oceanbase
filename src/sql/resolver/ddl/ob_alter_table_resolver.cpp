@@ -178,6 +178,12 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
             SQL_RESV_LOG(WARN, "fail to set table name", K(ret), K(table_name));
           }
         }
+        if (OB_SUCC(ret)) {
+          if (OB_NOT_NULL(parse_tree.children_[SPECIAL_TABLE_TYPE])
+              && T_EXTERNAL == parse_tree.children_[SPECIAL_TABLE_TYPE]->type_) {
+            is_external_table_ = true;
+          }
+        }
         if (OB_FAIL(ret)) {
         } else if (OB_ISNULL(table_schema_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -185,9 +191,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         } else if (1 == parse_tree.value_ && OB_ISNULL(index_schema_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("table schema is NULL", K(ret));
-        } else if (table_schema_->is_external_table() !=
-                  (OB_NOT_NULL(parse_tree.children_[SPECIAL_TABLE_TYPE])
-                   && T_EXTERNAL == parse_tree.children_[SPECIAL_TABLE_TYPE]->type_)) {
+        } else if (table_schema_->is_external_table() != is_external_table_) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
           SQL_RESV_LOG(WARN, "assign external table failed", K(ret));
@@ -218,6 +222,9 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         OZ (alter_schema.set_external_file_location(table_schema_->get_external_file_location()));
         OZ (alter_schema.set_external_file_location_access_info(table_schema_->get_external_file_location_access_info()));
         OZ (alter_schema.set_external_file_pattern(table_schema_->get_external_file_pattern()));
+        if (OB_SUCC(ret) && table_schema_->is_user_specified_partition_for_external_table()) {
+          alter_schema.set_user_specified_partition_for_external_table();
+        }
       }
     }
     //resolve action list
@@ -865,6 +872,8 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
     bool has_alter_column_option = false;
     //in mysql mode, resolve add index after resolve column actions
     ObSEArray<int64_t, 4> add_index_action_idxs;
+    int64_t external_table_accept_options[] = {
+      T_ALTER_REFRESH_EXTERNAL_TABLE, T_ALTER_EXTERNAL_PARTITION_OPTION, T_TABLE_OPTION_LIST, T_ALTER_TABLE_OPTION};
     for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       ParseNode *action_node = node.children_[i];
       if (OB_ISNULL(action_node)) {
@@ -874,6 +883,11 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
         ret = OB_ERR_MODIFY_COL_VISIBILITY_COMBINED_WITH_OTHER_OPTION;
         SQL_RESV_LOG(WARN, "Column visibility modifications can not be combined with any other modified column DDL option.", K(ret));
       } else if (FALSE_IT(alter_table_stmt->inc_alter_table_action_count())) {
+      } else if (is_external_table_ && !has_exist_in_array(external_table_accept_options,
+                                                           array_elements(external_table_accept_options),
+                                                           static_cast<int64_t>(action_node->type_))) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter external table option is");
       } else {
         switch (action_node->type_) {
         //deal with alter table option

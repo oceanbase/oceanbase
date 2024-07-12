@@ -132,9 +132,12 @@ int ObTenantDirectLoadMgr::create_tablet_direct_load(
     const int64_t context_id,
     const int64_t execution_id,
     const ObTabletDirectLoadInsertParam &build_param,
-    const share::SCN checkpoint_scn)
+    const share::SCN checkpoint_scn,
+    const bool only_persisted_ddl_data)
 {
   int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = build_param.common_param_.ls_id_;
+  const common::ObTabletID &tablet_id = build_param.common_param_.tablet_id_;
   ObLSService *ls_service = nullptr;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
@@ -148,14 +151,26 @@ int ObTenantDirectLoadMgr::create_tablet_direct_load(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
-  } else if (OB_FAIL(ls_service->get_ls(build_param.common_param_.ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(build_param));
-  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, build_param.common_param_.tablet_id_,
-    tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+  } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
     LOG_WARN("get tablet handle failed", K(ret), K(build_param));
-  } else if (OB_FAIL(tablet_handle.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
-    LOG_WARN("failed to get ddl data from tablet", K(ret), K(tablet_handle));
-  } else {
+  } else if (!only_persisted_ddl_data && OB_FAIL(tablet_handle.get_obj()->get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+    LOG_WARN("failed to get ddl data from tablet", K(ret), K(ls_id), K(tablet_id));
+  } else if (only_persisted_ddl_data && OB_FAIL((tablet_handle.get_obj()->get_mds_data_from_tablet<mds::DummyKey, ObTabletBindingMdsUserData>(
+      mds::DummyKey(),
+      share::SCN::max_scn(),
+      ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
+      ReadBindingInfoOp(ddl_data))))) {
+    if (OB_SNAPSHOT_DISCARDED == ret) {
+      ddl_data.set_default_value();
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get ddl data from tablet", K(ret), K(ls_id), K(tablet_id));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ObTabletHandle lob_tablet_handle;
     ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
     ObTabletMemberWrapper<ObTabletTableStore> lob_store_wrapper;
@@ -167,11 +182,11 @@ int ObTenantDirectLoadMgr::create_tablet_direct_load(
     const ObTabletID &lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
     if (!lob_meta_tablet_id.is_valid() || checkpoint_scn.is_valid_and_not_min()) {
       // has no lob, or recover from checkpoint.
-      LOG_DEBUG("do not create lob mgr handle when create data tablet mgr", K(ret), K(lob_meta_tablet_id), K(checkpoint_scn),
-        K(build_param));
+      LOG_DEBUG("do not create lob mgr handle when create data tablet mgr", K(ret), K(ls_id), K(lob_meta_tablet_id),
+          K(checkpoint_scn), K(build_param));
     } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, lob_meta_tablet_id,
-      lob_tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-      LOG_WARN("get tablet handle failed", K(ret), K(lob_meta_tablet_id));
+        lob_tablet_handle, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+      LOG_WARN("get tablet handle failed", K(ret), K(ls_id), K(lob_meta_tablet_id));
     } else if (OB_FAIL(lob_tablet_handle.get_obj()->fetch_table_store(lob_store_wrapper))) {
       LOG_WARN("fail to fetch table store", K(ret));
     } else if (OB_FAIL(try_create_tablet_direct_load_mgr(context_id, execution_id,
@@ -431,7 +446,7 @@ int ObTenantDirectLoadMgr::open_sstable_slice(
     ret = OB_TASK_EXPIRED;
     LOG_WARN("tablet direct load context id not macth", K(ret), "context_id", slice_info.context_id_, "current_context_id", handle.get_obj()->get_context_id());
   } else if (OB_FAIL(handle.get_obj()->open_sstable_slice(
-    slice_info.is_lob_slice_/*is_data_tablet_process_for_lob*/, start_seq, new_slice_id))) {
+    slice_info.is_lob_slice_/*is_data_tablet_process_for_lob*/, start_seq, slice_info.context_id_, new_slice_id))) {
     LOG_WARN("open sstable slice failed", K(ret), K(slice_info));
   }
   if (OB_SUCC(ret)) {
@@ -713,6 +728,7 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load(
       LOG_WARN("close failed", K(ret));
     }
   }
+
   if (OB_SUCC(ret)) {
     if (is_full_direct_load) {
       // For full direct load, the ObTabletDirectLoadMgr will be removed from MTL when,
@@ -721,6 +737,10 @@ int ObTenantDirectLoadMgr::close_tablet_direct_load(
       // 2. the direct load task commit and all ddl kvs persist successfully.
 
       // But how to notify the follower to remove it, with write commit failed log or tablet gc task ??
+
+      if (nullptr != handle.get_full_obj()) {
+        IGNORE_RETURN handle.get_full_obj()->cleanup_slice_writer(context_id); // remove slice writer of current context
+      }
     } else {
       // For incremental direct load, the ObTabletDirectLoadMgr will be removed immediately
       ObTabletID lob_meta_tablet_id = handle.get_obj()->get_lob_meta_tablet_id();
@@ -1130,12 +1150,12 @@ int ObTenantDirectLoadMgr::remove_tablet_direct_load_nolock(const ObTabletDirect
 struct DestroySliceWriterMapFn
 {
 public:
-  DestroySliceWriterMapFn(ObIAllocator *allocator) :allocator_(allocator) {}
-  int operator () (hash::HashMapPair<int64_t, ObDirectLoadSliceWriter *> &entry) {
+  DestroySliceWriterMapFn(ObIAllocator *allocator, const int64_t context_id = -1) :allocator_(allocator), context_id_(context_id) {}
+  int operator () (hash::HashMapPair<ObTabletDirectLoadBuildCtx::SliceKey, ObDirectLoadSliceWriter *> &entry) {
     int ret = OB_SUCCESS;
     if (nullptr != allocator_) {
-      if (nullptr != entry.second) {
-        LOG_INFO("erase a slice writer", K(&entry.second), "slice_id", entry.first);
+      if (nullptr != entry.second && (-1 == context_id_ || entry.first.context_id_ == context_id_)) {
+        LOG_INFO("erase a slice writer", K(&entry.second), "slice_id", entry.first, K(context_id_));
         entry.second->~ObDirectLoadSliceWriter();
         allocator_->free(entry.second);
         entry.second = nullptr;
@@ -1146,6 +1166,7 @@ public:
 
 private:
   ObIAllocator *allocator_;
+  int64_t context_id_;
 };
 
 ObTabletDirectLoadBuildCtx::ObTabletDirectLoadBuildCtx()
@@ -1199,6 +1220,15 @@ void ObTabletDirectLoadBuildCtx::reset_slice_ctx_on_demand()
   ATOMIC_STORE(&task_finish_count_, 0);
   ATOMIC_STORE(&fill_column_group_finish_count_, 0);
   ATOMIC_STORE(&task_total_cnt_, build_param_.runtime_only_param_.task_cnt_);
+}
+
+void ObTabletDirectLoadBuildCtx::cleanup_slice_writer(const int64_t context_id)
+{
+  if (!slice_mgr_map_.empty()) {
+    DestroySliceWriterMapFn destroy_map_fn(&slice_writer_allocator_, context_id);
+    slice_mgr_map_.foreach_refactored(destroy_map_fn);
+  }
+  LOG_INFO("cleanup slice writer of current context", K(context_id), K(build_param_));
 }
 
 ObTabletDirectLoadMgr::ObTabletDirectLoadMgr()
@@ -1340,6 +1370,7 @@ int ObTabletDirectLoadMgr::update(
 int ObTabletDirectLoadMgr::open_sstable_slice(
     const bool is_data_tablet_process_for_lob,
     const blocksstable::ObMacroDataSeq &start_seq,
+    const int64_t context_id,
     const int64_t slice_id)
 {
   int ret = OB_SUCCESS;
@@ -1347,15 +1378,15 @@ int ObTabletDirectLoadMgr::open_sstable_slice(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), KPC(this));
-  } else if (OB_UNLIKELY(!start_seq.is_valid() || slice_id <= 0 || !sqc_build_ctx_.is_valid())) {
+  } else if (OB_UNLIKELY(!start_seq.is_valid() || context_id < 0 || slice_id <= 0 || !sqc_build_ctx_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arg", K(ret), K(tablet_id_), K(start_seq), K(slice_id), K(sqc_build_ctx_));
+    LOG_WARN("invalid arg", K(ret), K(tablet_id_), K(start_seq), K(slice_id), K(sqc_build_ctx_), K(context_id));
   } else if (is_data_tablet_process_for_lob) {
     if (OB_UNLIKELY(!lob_mgr_handle_.is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected err", K(ret), KPC(this));
     } else if (OB_FAIL(lob_mgr_handle_.get_obj()->open_sstable_slice(
-        false, start_seq, slice_id))) {
+        false, start_seq, context_id, slice_id))) {
       LOG_WARN("open sstable slice for lob failed", K(ret), KPC(this));
     }
   } else if (OB_UNLIKELY(!is_valid())) {
@@ -1371,10 +1402,10 @@ int ObTabletDirectLoadMgr::open_sstable_slice(
       LOG_WARN("fail to new ObDirectLoadSliceWriter", KR(ret));
     } else if (OB_FAIL(slice_writer->init(this, start_seq))) {
       LOG_WARN("init sstable slice writer failed", K(ret), KPC(this));
-    } else if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.set_refactored(slice_id, slice_writer))) {
+    } else if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.set_refactored(ObTabletDirectLoadBuildCtx::SliceKey(context_id, slice_id), slice_writer))) {
       LOG_WARN("set refactored failed", K(ret), K(slice_id), KPC(this));
     } else {
-      LOG_INFO("add a slice writer", KP(slice_writer), K(slice_id), K(sqc_build_ctx_.slice_mgr_map_.size()));
+      LOG_INFO("add a slice writer", KP(slice_writer), K(context_id), K(slice_id), K(sqc_build_ctx_.slice_mgr_map_.size()));
     }
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(slice_writer)) {
@@ -1494,7 +1525,8 @@ int ObTabletDirectLoadMgr::fill_sstable_slice(
   }
   if (OB_SUCC(ret)) {
     ObDirectLoadSliceWriter *slice_writer = nullptr;
-    if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.get_refactored(slice_info.slice_id_, slice_writer))) {
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+    if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.get_refactored(slice_key, slice_writer))) {
       LOG_WARN("get refactored failed", K(ret), K(slice_info));
     } else if (OB_ISNULL(slice_writer) || OB_UNLIKELY(!ATOMIC_LOAD(&is_schema_item_ready_))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1509,10 +1541,11 @@ int ObTabletDirectLoadMgr::fill_sstable_slice(
     // cleanup when failed.
     int tmp_ret = OB_SUCCESS;
     ObDirectLoadSliceWriter *slice_writer = nullptr;
-    if (OB_TMP_FAIL(sqc_build_ctx_.slice_mgr_map_.erase_refactored(slice_info.slice_id_, &slice_writer))) {
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+    if (OB_TMP_FAIL(sqc_build_ctx_.slice_mgr_map_.erase_refactored(slice_key, &slice_writer))) {
       LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
     } else {
-      LOG_INFO("erase a slice writer", KP(slice_writer), "slice_id", slice_info.slice_id_, K(sqc_build_ctx_.slice_mgr_map_.size()));
+      LOG_INFO("erase a slice writer", KP(slice_writer), K(slice_key), K(sqc_build_ctx_.slice_mgr_map_.size()));
       slice_writer->~ObDirectLoadSliceWriter();
       sqc_build_ctx_.slice_writer_allocator_.free(slice_writer);
       slice_writer = nullptr;
@@ -1549,12 +1582,13 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
 
   if (OB_SUCC(ret)) {
     ObDirectLoadSliceWriter *slice_writer = nullptr;
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
     const int64_t trans_version = is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : INT64_MAX;
     ObBatchSliceWriteInfo info(tablet_id_, ls_id_, trans_version, direct_load_type_, sqc_build_ctx_.build_param_.runtime_only_param_.trans_id_,
         sqc_build_ctx_.build_param_.runtime_only_param_.seq_no_, slice_info.src_tenant_id_,
         sqc_build_ctx_.build_param_.runtime_only_param_.tx_desc_);
 
-    if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_info.slice_id_, slice_writer))) {
+    if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_key, slice_writer))) {
       LOG_WARN("get refactored failed", K(ret), K(slice_info), K(sqc_build_ctx_.slice_mgr_map_.size()));
     } else if (OB_ISNULL(slice_writer) || OB_UNLIKELY(!ATOMIC_LOAD(&(lob_mgr_handle_.get_obj()->is_schema_item_ready_)))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1568,10 +1602,11 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
     // cleanup when failed.
     int tmp_ret = OB_SUCCESS;
     ObDirectLoadSliceWriter *slice_writer = nullptr;
-    if (OB_TMP_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.erase_refactored(slice_info.slice_id_, &slice_writer))) {
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+    if (OB_TMP_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.erase_refactored(slice_key, &slice_writer))) {
       LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
     } else {
-      LOG_INFO("erase a slice writer", KP(slice_writer), "slice_id", slice_info.slice_id_, K(sqc_build_ctx_.slice_mgr_map_.size()));
+      LOG_INFO("erase a slice writer", KP(slice_writer), K(slice_key), K(sqc_build_ctx_.slice_mgr_map_.size()));
       slice_writer->~ObDirectLoadSliceWriter();
       lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_writer_allocator_.free(slice_writer);
       slice_writer = nullptr;
@@ -1615,7 +1650,8 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
         sqc_build_ctx_.build_param_.runtime_only_param_.seq_no_, slice_info.src_tenant_id_,
         sqc_build_ctx_.build_param_.runtime_only_param_.tx_desc_);
 
-    if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_info.slice_id_, slice_writer))) {
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+    if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_key, slice_writer))) {
       LOG_WARN("get refactored failed", K(ret), K(slice_info), K(sqc_build_ctx_.slice_mgr_map_.size()));
     } else if (OB_ISNULL(slice_writer) || OB_UNLIKELY(!ATOMIC_LOAD(&(lob_mgr_handle_.get_obj()->is_schema_item_ready_)))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1630,10 +1666,11 @@ int ObTabletDirectLoadMgr::fill_lob_sstable_slice(
     // cleanup when failed.
     int tmp_ret = OB_SUCCESS;
     ObDirectLoadSliceWriter *slice_writer = nullptr;
-    if (OB_TMP_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.erase_refactored(slice_info.slice_id_, &slice_writer))) {
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+    if (OB_TMP_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.erase_refactored(slice_key, &slice_writer))) {
       LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
     } else {
-      LOG_INFO("erase a slice writer", KP(slice_writer), "slice_id", slice_info.slice_id_, K(sqc_build_ctx_.slice_mgr_map_.size()));
+      LOG_INFO("erase a slice writer", KP(slice_writer), K(slice_key), K(sqc_build_ctx_.slice_mgr_map_.size()));
       slice_writer->~ObDirectLoadSliceWriter();
       lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_writer_allocator_.free(slice_writer);
       slice_writer = nullptr;
@@ -1663,7 +1700,8 @@ int ObTabletDirectLoadMgr::fill_lob_meta_sstable_slice(
     LOG_WARN("unexpected direct load type", K(ret), K(direct_load_type_));
   } else {
     ObDirectLoadSliceWriter *slice_writer = nullptr;
-    if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_info.slice_id_, slice_writer))) {
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+    if (OB_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.get_refactored(slice_key, slice_writer))) {
       LOG_WARN("get refactored failed", K(ret), K(slice_info), K(sqc_build_ctx_.slice_mgr_map_.size()));
     } else if (OB_ISNULL(slice_writer) || OB_UNLIKELY(!ATOMIC_LOAD(&(lob_mgr_handle_.get_obj()->is_schema_item_ready_)))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1680,10 +1718,11 @@ int ObTabletDirectLoadMgr::fill_lob_meta_sstable_slice(
     // cleanup when failed.
     int tmp_ret = OB_SUCCESS;
     ObDirectLoadSliceWriter *slice_writer = nullptr;
-    if (OB_TMP_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.erase_refactored(slice_info.slice_id_, &slice_writer))) {
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+    if (OB_TMP_FAIL(lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_mgr_map_.erase_refactored(slice_key, &slice_writer))) {
       LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
     } else {
-      LOG_INFO("erase a slice writer", KP(slice_writer), "slice_id", slice_info.slice_id_, K(sqc_build_ctx_.slice_mgr_map_.size()));
+      LOG_INFO("erase a slice writer", KP(slice_writer), K(slice_key), K(sqc_build_ctx_.slice_mgr_map_.size()));
       slice_writer->~ObDirectLoadSliceWriter();
       lob_mgr_handle_.get_obj()->get_sqc_build_ctx().slice_writer_allocator_.free(slice_writer);
       slice_writer = nullptr;
@@ -1910,10 +1949,10 @@ struct CancelSliceWriterMapFn
 {
 public:
   CancelSliceWriterMapFn() {}
-  int operator () (hash::HashMapPair<int64_t, ObDirectLoadSliceWriter *> &entry) {
+  int operator () (hash::HashMapPair<ObTabletDirectLoadBuildCtx::SliceKey, ObDirectLoadSliceWriter *> &entry) {
     int ret = OB_SUCCESS;
     if (nullptr != entry.second) {
-      LOG_INFO("slice writer cancel", K(&entry.second), "slice_id", entry.first);
+      LOG_INFO("slice writer cancel", K(&entry.second), "slice_key", entry.first);
       entry.second->cancel();
     }
     return ret;
@@ -1956,7 +1995,8 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
     }
   } else {
     ObDirectLoadSliceWriter *slice_writer = nullptr;
-    if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.get_refactored(slice_info.slice_id_, slice_writer))) {
+    ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+    if (OB_FAIL(sqc_build_ctx_.slice_mgr_map_.get_refactored(slice_key, slice_writer))) {
       ret = OB_HASH_NOT_EXIST == ret ? OB_ENTRY_NOT_EXIST : ret;
       LOG_WARN("get refactored failed", K(ret), K(slice_info));
     } else if (OB_ISNULL(slice_writer)) {
@@ -2028,10 +2068,11 @@ int ObTabletDirectLoadMgr::close_sstable_slice(
       } else {
         // for ddl, delete slice_writer regardless of success or failure
         int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(sqc_build_ctx_.slice_mgr_map_.erase_refactored(slice_info.slice_id_))) {
+        ObTabletDirectLoadBuildCtx::SliceKey slice_key(slice_info.context_id_, slice_info.slice_id_);
+        if (OB_TMP_FAIL(sqc_build_ctx_.slice_mgr_map_.erase_refactored(slice_key))) {
           LOG_ERROR("erase failed", K(ret), K(tmp_ret), K(slice_info));
         } else {
-          LOG_INFO("erase a slice writer", K(ret), KP(slice_writer), K(sqc_build_ctx_.slice_mgr_map_.size()));
+          LOG_INFO("erase a slice writer", K(ret), K(slice_key), KP(slice_writer), K(sqc_build_ctx_.slice_mgr_map_.size()));
           slice_writer->~ObDirectLoadSliceWriter();
           sqc_build_ctx_.slice_writer_allocator_.free(slice_writer);
           slice_writer = nullptr;
@@ -3073,6 +3114,11 @@ int ObTabletFullDirectLoadMgr::prepare_major_merge_param(
     param.data_format_version_ = data_format_version_;
   }
   return ret;
+}
+
+void ObTabletFullDirectLoadMgr::cleanup_slice_writer(const int64_t context_id)
+{
+  sqc_build_ctx_.cleanup_slice_writer(context_id);
 }
 
 int ObTabletFullDirectLoadMgr::cleanup_unlock()

@@ -309,7 +309,7 @@ int ObTabletEmptyShellHandler::check_transfer_out_deleted_tablet_(
   } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls service should not be null", K(ret), KP(ls_service));
-  } else if (OB_FAIL(ls_service->get_ls(user_data.transfer_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(user_data.transfer_ls_id_, ls_handle, ObLSGetMod::TABLET_MOD))) {
     if (OB_LS_NOT_EXIST == ret) {
       can = true;
       STORAGE_LOG(INFO, "transfer dest ls not exist, src tablet can become empty shell", K(ret), "ls_id", ls_->get_ls_id(), K(user_data));

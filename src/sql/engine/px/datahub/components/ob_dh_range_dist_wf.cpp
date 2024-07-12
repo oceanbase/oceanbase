@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
+#include "lib/utility/ob_sort.h"
 #include "sql/engine/px/datahub/components/ob_dh_range_dist_wf.h"
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/window_function/ob_window_function_op.h"
@@ -566,7 +567,7 @@ int RDWinFuncPXPieceMsgCtx::send_whole_msg(common::ObIArray<ObPxSqcMeta *> &sqcs
     if (OB_FAIL(wf->rd_generate_patch(*this, eval_ctx))) {
       LOG_WARN("generate patch failed", K(ret));
     } else {
-      std::sort(infos_.begin(), infos_.end(), __part_info_cmp_op());
+      lib::ob_sort(infos_.begin(), infos_.end(), __part_info_cmp_op());
     }
     RDWinFuncPXWholeMsg *responses = nullptr;
     if (OB_SUCC(ret)) {

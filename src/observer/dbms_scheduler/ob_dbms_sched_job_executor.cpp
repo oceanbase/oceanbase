@@ -97,7 +97,7 @@ int ObDBMSSchedJobExecutor::init_session(
   OX (session.set_database_id(database_id));
   OZ (session.set_user(
     user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));
-  OX (session.set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT));
+  OX (session.set_user_priv_set(user_info->get_priv_set()));
   OX (session.set_shadow(true));
   if (OB_SUCC(ret) && job_info.is_date_expression_job_class()) {
     // set larger timeout for mview scheduler jobs
@@ -350,6 +350,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
       OZ (pool->acquire_spi_conn(session_info, conn));
+      if (OB_NOT_NULL(conn)) {
+        conn->set_check_priv(true);
+      }
       OZ (conn->execute_write(tenant_id, what.string().ptr(), affected_rows));
       if (OB_NOT_NULL(conn)) {
         sql_proxy_->close(conn, ret);

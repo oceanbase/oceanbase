@@ -80,18 +80,16 @@ public:
       const ObTabletMeta &old_tablet_meta,
       const share::SCN &flush_scn);
   int init(
-      const ObMigrationTabletParam &param);
+      const ObMigrationTabletParam &param,
+      const bool is_transfer);
   int init(
       const ObTabletMeta &old_tablet_meta,
       const ObMigrationTabletParam *tablet_meta);
-  int init(
-      common::ObIAllocator &allocator,
-      const ObTabletMeta &old_tablet_meta);
 
+  int assign(const ObTabletMeta &other);
   void reset();
   bool is_valid() const;
 
-  int assign(const ObTabletMeta &other);
   // serialize & deserialize
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(
@@ -106,6 +104,7 @@ public:
   // mds_checkpoint_scn and ddl_checkpoint_scn.
   // Note, if a new type of checkpoint scn is added, donot forget to modify the returned scn.
   share::SCN get_max_replayed_scn() const;
+
 public:
   static int deserialize_id(
       const char *buf,
@@ -117,6 +116,10 @@ public:
       const blocksstable::ObSSTable *sstable,
       const int64_t report_version,
       ObTabletReportStatus &report_status);
+  static int update_meta_last_persisted_committed_tablet_status(
+    const ObTabletTxMultiSourceDataUnit &tx_data,
+    const share::SCN &create_commit_scn,
+    ObTabletCreateDeleteMdsUserData &last_persisted_committed_tablet_status);
 public:
   TO_STRING_KV(K_(version),
                K_(ls_id),
@@ -143,6 +146,8 @@ public:
                K_(ddl_commit_scn),
                K_(mds_checkpoint_scn),
                K_(transfer_info),
+               K_(extra_medium_info),
+               K_(last_persisted_committed_tablet_status),
                K_(create_schema_version),
                K_(space_usage));
 
@@ -176,6 +181,8 @@ public:
   share::SCN ddl_commit_scn_;
   share::SCN mds_checkpoint_scn_;
   ObTabletTransferInfo transfer_info_; // alignment: 8B, size: 32B
+  compaction::ObExtraMediumInfo extra_medium_info_;
+  ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_; // redundant data for tablet status
   ObTabletSpaceUsage space_usage_; // calculated by tablet persist, ObMigrationTabletParam doesn't need it
   int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
@@ -185,6 +192,13 @@ public:
   bool has_next_tablet_;
 
 private:
+  void update_extra_medium_info(
+      const compaction::ObMergeType merge_type,
+      const int64_t finish_medium_scn);
+  void update_extra_medium_info(
+      const compaction::ObExtraMediumInfo &src_addr_extra_info,
+      const compaction::ObExtraMediumInfo &src_data_extra_info,
+      const int64_t finish_medium_scn);
   int inner_check_(
       const ObTabletMeta &old_tablet_meta,
       const ObMigrationTabletParam *tablet_meta);
@@ -212,6 +226,7 @@ public:
   void reset();
   int assign(const ObMigrationTabletParam &param);
   int build_deleted_tablet_info(const share::ObLSID &ls_id, const ObTabletID &tablet_id);
+  int get_tablet_status_for_transfer(ObTabletCreateDeleteMdsUserData &user_data) const;
 
   // Return the max tablet checkpoint scn which is the max scn among clog_checkpoint_scn,
   // mds_checkpoint_scn and ddl_checkpoint_scn.
@@ -245,6 +260,8 @@ public:
                K_(report_status),
                K_(storage_schema),
                K_(medium_info_list),
+               K_(extra_medium_info),
+               K_(last_persisted_committed_tablet_status),
                K_(table_store_flag),
                K_(max_sync_storage_schema_version),
                K_(ddl_execution_id),
@@ -256,16 +273,17 @@ public:
                K_(transfer_info),
                K_(create_schema_version));
 private:
-  int deserialize_v2(const char *buf, const int64_t len, int64_t &pos);
+  int deserialize_v2_v3(const char *buf, const int64_t len, int64_t &pos);
   int deserialize_v1(const char *buf, const int64_t len, int64_t &pos);
 
   // magic_number_ is added to support upgrade from old format(without version and length compatibility)
   // The old format first member is ls_id_(also 8 bytes long), which is not possible be a negative number.
   const static int64_t MAGIC_NUM = -20230111;
+public:
   const static int64_t PARAM_VERSION = 1;
   const static int64_t PARAM_VERSION_V2 = 2;
+  const static int64_t PARAM_VERSION_V3 = 3;
 
-public:
   int64_t magic_number_;
   int64_t version_;
   bool is_empty_shell_;
@@ -284,6 +302,8 @@ public:
   ObTabletReportStatus report_status_;
   ObStorageSchema storage_schema_; // not valid for empty shell
   compaction::ObMediumCompactionInfoList medium_info_list_; // not valid for empty shell
+  compaction::ObExtraMediumInfo extra_medium_info_;
+  ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_; // redundant data for tablet status
   ObTabletTableStoreFlag table_store_flag_;
   share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;

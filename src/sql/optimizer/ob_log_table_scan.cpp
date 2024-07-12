@@ -368,17 +368,6 @@ int ObLogTableScan::copy_filter_before_index_back()
   if (OB_FAIL(filter_before_index_back_set())) {
     LOG_WARN("Failed to filter_before_index_back_set", K(ret));
   } else if (get_index_back() && !flags.empty()) {
-    ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
-    const ObDMLStmt *stmt = NULL;
-    ObArray<ObRawExpr *> column_exprs;
-    if (OB_ISNULL(stmt = get_stmt())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
-    } else if (OB_FAIL(stmt->get_column_exprs(column_exprs))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
-      LOG_WARN("failed to add skipped exprs", K(ret));
-    }
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
       if (filters.at(i)->has_flag(CNT_PL_UDF)) {
         // do nothing.
@@ -393,8 +382,31 @@ int ObLogTableScan::copy_filter_before_index_back()
           if (OB_FAIL(ObRawExprUtils::contain_virtual_generated_column(filters.at(i), is_contain_vir_gen_column))) {
             LOG_WARN("fail to contain virtual gen column", K(ret));
           } else if (is_contain_vir_gen_column) {
-            if (OB_FAIL(copier.copy(filters.at(i), filters.at(i)))) {
-              LOG_WARN("failed to copy exprs", K(ret));
+            ObArray<ObRawExpr *> vir_gen_par_exprs;
+            if (OB_FAIL(ObRawExprUtils::extract_virtual_generated_column_parents(filters.at(i), filters.at(i), vir_gen_par_exprs))) {
+              LOG_WARN("failed to extract virtual generated column parents", K(ret), K(i));
+            } else {
+              ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+              for (int64_t j = 0; OB_SUCC(ret) && j < vir_gen_par_exprs.count(); ++j) {
+                ObRawExpr *copied_expr = NULL;
+                if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(
+                                                  vir_gen_par_exprs.at(j)->get_expr_class(),
+                                                  vir_gen_par_exprs.at(j)->get_expr_type(),
+                                                  copied_expr))) {
+                  LOG_WARN("failed to create raw expr", K(ret));
+                } else if (OB_FAIL(copied_expr->deep_copy(copier, *vir_gen_par_exprs.at(j)))) {
+                  LOG_WARN("failed to assign old expr", K(ret));
+                } else if (OB_FAIL(copier.add_replaced_expr(vir_gen_par_exprs.at(j), copied_expr))) {
+                  LOG_WARN("failed to add replaced expr", K(ret));
+                } else if (OB_FAIL(copier.copy_on_replace(filters.at(i), filters.at(i)))) {
+                  LOG_WARN("failed to copy exprs", K(ret));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(copier.copy_on_replace(filters.at(i), filters.at(i)))) {
+                  LOG_WARN("failed to copy exprs", K(ret));
+                }
+              }
             }
           }
         }
@@ -577,39 +589,21 @@ int ObLogTableScan::replace_gen_col_op_exprs(ObRawExprReplacer &replacer)
 int ObLogTableScan::replace_index_back_pushdown_filters(ObRawExprReplacer &replacer)
 {
   int ret = OB_SUCCESS;
-  ObIArray<ObRawExpr*> &filters = get_filter_exprs();
-  const auto &flags = get_filter_before_index_flags();
-  if (get_contains_fake_cte() || is_virtual_table(get_ref_table_id())) {
-    // nonpushdown need replace.
-    if (OB_FAIL(replace_exprs_action(replacer, filters))) {
-      LOG_WARN("failed to replace agg expr", K(ret));
-    }
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
-      if (filters.at(i)->has_flag(CNT_PL_UDF)) {
-        // nonpushdown need replace.
-        if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
-          LOG_WARN("failed to replace agg expr", K(ret));
-        }
-      } else if (!get_index_back()) {
-        // scan_pushdown no need replace.
-      } else if (flags.empty() || i >= flags.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("filter before index flag is invalid", K(ret), K(i), K(flags), K(filters));
-      } else if (flags.at(i)) {
-        if (get_index_back() && get_is_index_global() && filters.at(i)->has_flag(CNT_SUB_QUERY)) {
-          // lookup_pushdown need replace.
-          if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
-            LOG_WARN("failed to replace agg expr", K(ret));
-          }
-        } else {
-          // scan_pushdown no need replace.
-        }
-      } else if (OB_FAIL(replace_expr_action(replacer, filters.at(i)))) {
-        LOG_WARN("failed to replace agg expr", K(ret));
-      }
-    }
-  }
+  ObArray<ObRawExpr*> non_pushdown_expr;
+  ObArray<ObRawExpr*> scan_pushdown_filters;
+  ObArray<ObRawExpr*> lookup_pushdown_filters;
+  if (OB_UNLIKELY(!get_index_back())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("go wrong way", K(ret));
+  } else if (OB_FAIL(extract_pushdown_filters(non_pushdown_expr,
+                                       scan_pushdown_filters,
+                                       lookup_pushdown_filters))) {
+    LOG_WARN("extract pushdown filters failed", K(ret));
+  } else if (OB_FAIL(replace_exprs_action(replacer, non_pushdown_expr))) {
+    LOG_WARN("failed to replace non pushdown expr", K(ret));
+  } else if (OB_FAIL(replace_exprs_action(replacer, lookup_pushdown_filters))) {
+    LOG_WARN("failed to replace lookup pushdown expr", K(ret));
+  } else { /* do nothing */ }
   return ret;
 }
 
@@ -1319,7 +1313,9 @@ int ObLogTableScan::get_plan_item_info(PlanText &plan_text,
     // print access
     ObIArray<ObRawExpr*> &access = get_access_exprs();
     if (OB_FAIL(adjust_print_access_info(access))) {
-      LOG_WARN("failed to adjust print access info", K(ret));
+      ret = OB_SUCCESS;
+      //ignore error code for explain
+      EXPLAIN_PRINT_EXPRS(access, type);
     } else {
       EXPLAIN_PRINT_EXPRS(access, type);
     }
@@ -2104,6 +2100,7 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
       param.need_row_count_ = limit_count + offset_count;
       param.need_row_count_ = std::min(param.need_row_count_, get_card());
     }
+    ENABLE_OPT_TRACE_COST_MODEL;
     if (OB_FAIL(do_re_est_cost(param, card, op_cost, cost))) {
       LOG_WARN("failed to re est cost error", K(ret));
     } else {
@@ -2113,6 +2110,7 @@ int ObLogTableScan::set_limit_offset(ObRawExpr *limit, ObRawExpr *offset)
       set_card(card);
       LOG_TRACE("push limit into table scan", K(param), K(limit_count), K(part_count), K(card));
     }
+    DISABLE_OPT_TRACE_COST_MODEL;
   }
   return ret;
 }

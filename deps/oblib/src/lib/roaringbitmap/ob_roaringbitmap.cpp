@@ -131,7 +131,7 @@ int ObRoaringBitmap::value_remove(uint64_t value) {
       break;
     }
     case ObRbType::SET: {
-      if (OB_FAIL(set_.erase_refactored(value))) {
+      if (set_.exist_refactored(value) == OB_HASH_EXIST && OB_FAIL(set_.erase_refactored(value))) {
         LOG_WARN("failed to erase value from the set", K(ret), K(value));
       }
       break;
@@ -450,7 +450,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin)
         ret = OB_DESERIALIZE_ERROR;
         LOG_WARN("failed to deserialize the bitmap", K(ret));
       } else if (!roaring::api::roaring64_bitmap_internal_validate(bitmap_, NULL)) {
-        ret = OB_DESERIALIZE_ERROR;
+        ret = OB_INVALID_DATA;
         LOG_WARN("bitmap internal consistency checks failed", K(ret));
       } else {
         type_ = ObRbType::BITMAP;
@@ -464,7 +464,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin)
         ret = OB_DESERIALIZE_ERROR;
         LOG_WARN("failed to deserialize the bitmap", K(ret));
       } else if (!roaring::api::roaring64_bitmap_internal_validate(bitmap_, NULL)) {
-        ret = OB_DESERIALIZE_ERROR;
+        ret = OB_INVALID_DATA;
         LOG_WARN("bitmap internal consistency checks failed", K(ret));
       } else {
         type_ = ObRbType::BITMAP;
@@ -630,12 +630,32 @@ int ObRoaringBitmap::convert_bitmap_to_smaller_type() {
   int ret = OB_SUCCESS;
   if (is_bitmap_type()) {
     uint64_t cardinality = roaring::api::roaring64_bitmap_get_cardinality(bitmap_);
-    if (cardinality > 1) {
-      //do nothing
-    } else if (cardinality == 1) {
-      set_single(roaring64_bitmap_minimum(bitmap_));
-    } else if (cardinality == 0) {
+    if (cardinality == 0) {
       set_empty();
+    } else if (cardinality == 1) {
+      set_single(roaring::api::roaring64_bitmap_minimum(bitmap_));
+    } else if (cardinality <= MAX_BITMAP_SET_VALUES) {
+      roaring::api::roaring64_iterator_t* it = nullptr;
+      if (OB_ISNULL(it = roaring::api::roaring64_iterator_create(bitmap_))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to create bitmap iterator", K(ret));
+      } else if (OB_FAIL(set_.create(MAX_BITMAP_SET_VALUES))) {
+        LOG_WARN("failed to create set", K(ret));
+      } else if (OB_FALSE_IT(type_ = ObRbType::SET)) {
+      } else {
+        do {
+          if (OB_FAIL(set_.set_refactored(roaring::api::roaring64_iterator_value(it)))) {
+            LOG_WARN("failed to set value to the set", K(ret), K(roaring::api::roaring64_iterator_value(it)));
+          }
+        } while (roaring::api::roaring64_iterator_advance(it) && OB_SUCC(ret));
+      }
+      if (OB_NOT_NULL(it)) {
+        roaring::api::roaring64_iterator_free(it);
+      }
+      if (OB_NOT_NULL(bitmap_)) {
+        roaring::api::roaring64_bitmap_free(bitmap_);
+        bitmap_ = nullptr;
+      }
     }
   }
   return ret;

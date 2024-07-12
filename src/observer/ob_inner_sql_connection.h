@@ -28,6 +28,10 @@
 
 namespace oceanbase
 {
+namespace obrpc
+{
+class ObInnerSqlRpcP;
+}
 namespace common
 {
 class ObString;
@@ -92,6 +96,7 @@ class ObInnerSQLConnection
     : public common::sqlclient::ObISQLConnection,
       public common::ObDLinkBase<ObInnerSQLConnection>
 {
+  friend class obrpc::ObInnerSqlRpcP;
 public:
   static constexpr const char LABEL[] = "RPInnerSqlConn";
   class SavedValue
@@ -166,12 +171,6 @@ public:
                           const ObTimeZoneInfo *tz_info,
                           ObObj *result) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
-  virtual int register_multi_data_source(const uint64_t &tenant_id,
-                                         const share::ObLSID ls_id,
-                                         const transaction::ObTxDataSourceType type,
-                                         const char *buf,
-                                         const int64_t buf_len,
-                                         const transaction::ObRegisterMdsFlag &register_flag = transaction::ObRegisterMdsFlag());
   virtual sqlclient::ObCommonServerConnectionPool *get_common_server_pool() override;
   virtual int rollback() override;
   virtual int commit() override;
@@ -269,6 +268,14 @@ public:
   bool is_spi_conn() const { return is_spi_conn_; }
   // set timeout to session variable
   int set_session_timeout(int64_t query_timeout, int64_t trx_timeout);
+
+public:// for mds
+  int register_multi_data_source(const uint64_t &tenant_id,
+                                 const share::ObLSID ls_id,
+                                 const transaction::ObTxDataSourceType type,
+                                 const char *buf,
+                                 const int64_t buf_len,
+                                 const transaction::ObRegisterMdsFlag &register_flag = transaction::ObRegisterMdsFlag());
 
 public:
   static int process_record(sql::ObResultSet &result_set,

@@ -87,34 +87,29 @@ public:
   template <typename READ_OP>
   int get_snapshot(READ_OP &&read_operation,
                    const share::SCN snapshot,
-                   const int64_t read_seq,
                    const RetryParam &retry_param) const;
   template <typename READ_OP>
-  int get_latest(READ_OP &&read_operation, const int64_t read_seq) const;
+  int get_latest(READ_OP &&read_operation) const;
   template <typename READ_OP>
   int get_by_writer(READ_OP &&read_operation,
                     const MdsWriter &writer,
                     const share::SCN snapshot,
-                    const int64_t read_seq,
+                    const transaction::ObTxSEQ read_seq,
                     const RetryParam &retry_param) const;
   template <typename DUMP_OP>
-  int scan_dump_node_from_tail_to_head(DUMP_OP &&op,
-                                       const uint8_t mds_table_id,
-                                       const uint8_t mds_unit_id,
-                                       MdsDumpKV &dump_kv,
-                                       const share::SCN &flush_scn,
-                                       const bool for_flush) const;
-  // template <typename OP>
-  // int for_each_node_from_tail_to_head(OP &&op) const;
+  int scan_nodes_to_dump(DUMP_OP &&op,
+                         const uint8_t mds_table_id,
+                         const uint8_t mds_unit_id,
+                         MdsDumpKV &dump_kv,
+                         const share::SCN &flush_scn,
+                         const bool for_flush,
+                         const ScanNodeOrder order) const;
   template <typename Key>
   int fill_virtual_info(const Key &key, ObIArray<MdsNodeInfoForVirtualTable> &mds_node_info_array, const int64_t unit_id) const;
   // if a node aborted, delete it immediately.
   virtual void node_abort_callback_(ListNodeBase *node) override;
   int64_t to_string(char *buf, const int64_t buf_len) const;
-  // TO_STRING_KV(K_(sorted_list), KPC_(MdsRowBase<K, V>::p_mds_table), KPC_(MdsRowBase<K, V>::key));
 public:
-  template <typename OPERATION>
-  int for_each_node_(OPERATION &&op) const;
   template <typename READ_OP, typename SPECIFIED_GET_LOGIC>
   int get_with_read_wrapper_(READ_OP &&read_operation, SPECIFIED_GET_LOGIC &&specified_logic) const;
   template <typename DATA>
@@ -123,10 +118,6 @@ public:
                                              const MdsNodeType node_type,
                                              const share::SCN scn,
                                              MdsCtx &ctx);
-  int check_node_snapshot_(const UserMdsNode<K, V> &node,
-                           const share::SCN snapshot,
-                           const RetryParam &retry_param,
-                           bool &can_read) const;
   template <int N>
   void report_event_(const char (&event_str)[N],
                      const UserMdsNode<K, V> &node,

@@ -36,6 +36,7 @@ public:
       aggr_code_expr_(nullptr),
       by_pass_enabled_(false),
       support_fast_single_row_agg_(false),
+      skew_detection_enabled_(false),
       llc_ndv_est_enabled_(false)
   {
   }
@@ -59,6 +60,7 @@ public:
   bool by_pass_enabled_;
   // COUNT/SUM/MIN/MAX can use fast single row agg
   bool support_fast_single_row_agg_;
+  bool skew_detection_enabled_;
   bool llc_ndv_est_enabled_;
 };
 

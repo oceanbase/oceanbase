@@ -247,8 +247,7 @@ private:
   int generate_spec_basic(ObLogicalOperator &op,
                           ObOpSpec &spec,
                           const bool check_eval_once,
-                          const bool need_check_output_datum,
-                          const common::ObCompressorType compress_type);
+                          const bool need_check_output_datum);
 
   // Invoked after generate_spec() and generate_spec_basic(),
   // some operator need this phase to do some special generation.

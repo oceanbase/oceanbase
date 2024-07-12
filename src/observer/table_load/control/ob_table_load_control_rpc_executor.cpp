@@ -69,6 +69,7 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.insert_mode_ = arg_.insert_mode_;
     param.load_mode_ = arg_.load_mode_;
     param.compressor_type_ = arg_.compressor_type_;
+    param.online_sample_percent_ = arg_.online_sample_percent_;
     if (OB_FAIL(create_table_ctx(param, arg_.ddl_param_, table_ctx))) {
       LOG_WARN("fail to create table ctx", KR(ret));
     }
@@ -275,6 +276,7 @@ int ObDirectLoadControlCommitExecutor::process()
         LOG_WARN("fail to init store", KR(ret));
       } else if (OB_FAIL(store.commit(res_.result_info_,
                                       res_.sql_statistics_,
+                                      res_.dml_stats_,
                                       res_.trans_result_))) {
         LOG_WARN("fail to store commit", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::remove_ctx(table_ctx))) {

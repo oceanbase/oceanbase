@@ -303,6 +303,7 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL operator spec returned", K(ret));
   } else {
+    spec->compress_type_ = compress_type;
     for (int64_t i = 0; i < children.count() && OB_SUCC(ret); i++) {
       if (OB_FAIL(spec->set_child(i, children.at(i)))) {
         LOG_WARN("set child failed", K(ret));
@@ -332,8 +333,7 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
   } else if (OB_FAIL(ObOperatorFactory::generate_spec(*this, op, *spec, in_root_job))) {
     LOG_WARN("generate operator spec failed",
              K(ret), KP(phy_plan_), K(ob_phy_operator_type_str(type)));
-  } else if (OB_FAIL(generate_spec_basic(op, *spec, check_eval_once, need_check_output_datum,
-                                         compress_type))) {
+  } else if (OB_FAIL(generate_spec_basic(op, *spec, check_eval_once, need_check_output_datum))) {
     LOG_WARN("generate operator spec basic failed", K(ret));
   } else if (OB_FAIL(generate_spec_final(op, *spec))) {
     LOG_WARN("generate operator spec final failed", K(ret));
@@ -787,8 +787,7 @@ int ObStaticEngineCG::generate_rt_exprs(const ObIArray<ObRawExpr *> &src,
 int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
                                           ObOpSpec &spec,
                                           const bool check_eval_once,
-                                          const bool need_check_output_datum,
-                                          const common::ObCompressorType compress_type)
+                                          const bool need_check_output_datum)
 {
   int ret = OB_SUCCESS;
   if (0 == spec.rows_) {
@@ -798,7 +797,6 @@ int ObStaticEngineCG::generate_spec_basic(ObLogicalOperator &op,
   spec.width_ = op.get_width();
   spec.plan_depth_ = op.get_plan_depth();
   spec.px_est_size_factor_ = op.get_px_est_size_factor();
-  spec.compress_type_ = compress_type;
 
   OZ(generate_rt_exprs(op.get_startup_exprs(), spec.startup_filters_));
 
@@ -1214,6 +1212,9 @@ int ObStaticEngineCG::generate_spec(
       } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == raw_expr->get_data_type())) {
         ret = OB_ERR_INVALID_CMP_OP;
         LOG_WARN("select distinct json not allowed", K(ret));
+      } else if (OB_UNLIKELY(ObRoaringBitmapType == raw_expr->get_data_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("select distinct roaringbitmap not allowed", K(ret));
       } else if (raw_expr->is_const_expr()) {
           // distinct const value, 这里需要注意：distinct 1被跳过了，
           // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
@@ -1261,6 +1262,9 @@ int ObStaticEngineCG::generate_spec(
       } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == raw_expr->get_data_type())) {
         ret = OB_ERR_INVALID_CMP_OP;
         LOG_WARN("select distinct json not allowed", K(ret));
+      } else if (OB_UNLIKELY(ObRoaringBitmapType == raw_expr->get_data_type())) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("select distinct roaringbitmap not allowed", K(ret));
       } else if (raw_expr->is_const_expr()) {
           // distinct const value, 这里需要注意：distinct 1被跳过了，
           // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
@@ -1339,6 +1343,9 @@ int ObStaticEngineCG::generate_spec(
         } else if (is_oracle_mode() && OB_UNLIKELY(ObGeometryType == raw_expr->get_data_type())) {
           ret = OB_ERR_COMPARE_VARRAY_LOB_ATTR;
           LOG_WARN("select distinct geometry not allowed", K(ret));
+        } else if (OB_UNLIKELY(ObRoaringBitmapType == raw_expr->get_data_type())) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("select distinct roaringbitmap not allowed", K(ret));
         } else if (raw_expr->is_const_expr()) {
             // distinct const value, 这里需要注意：distinct 1被跳过了，
             // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
@@ -1454,6 +1461,9 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct &op, ObHashDistinctVecSpec &sp
         } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == raw_expr->get_data_type())) {
           ret = OB_ERR_INVALID_CMP_OP;
           LOG_WARN("select distinct json not allowed", K(ret));
+        } else if (OB_UNLIKELY(ObRoaringBitmapType == raw_expr->get_data_type())) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("select distinct roaringbitmap not allowed", K(ret));
         } else if (raw_expr->is_const_expr()) {
             // distinct const value, 这里需要注意：distinct 1被跳过了，
             // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
@@ -1601,6 +1611,7 @@ int ObStaticEngineCG::generate_spec(ObLogOptimizerStatsGathering &op, ObOptimize
     spec.table_id_ = op.get_table_id();
     spec.type_ = op.get_osg_type();
     spec.part_level_ = op.get_part_level();
+    spec.online_sample_rate_ = op.get_online_sample_percent();
     if (op.is_gather_osg()) {
       uint64_t target_id = 0;
       // default target is 0(root operator), here we traversal the tree to avoid no osg in the root.
@@ -6790,6 +6801,9 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
       spec.plan_->set_enable_append(global_hint.has_direct_load());
       spec.plan_->set_enable_inc_direct_load(global_hint.has_inc_direct_load());
       spec.plan_->set_enable_replace(global_hint.has_replace());
+      spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
+                                                           .get_exec_ctx()->get_table_direct_insert_ctx()
+                                                           .get_online_sample_percent());
       // check is insert overwrite
       bool is_insert_overwrite = false;
       if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
@@ -9044,10 +9058,23 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       int tmp_ret = OB_SUCCESS;
       tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_WINDOW_FUNCTION) OB_SUCCESS;
       bool use_vec2_winfunc = (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0);
-      if (use_rich_format && use_vec2_winfunc && tmp_ret == OB_SUCCESS
+      int batch_size = 0;
+      if (OB_ISNULL(log_op.get_plan())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null plan", K(ret));
+      } else {
+        batch_size = log_op.get_plan()->get_optimizer_context().get_batch_size();
+      }
+      if (OB_FAIL(ret)) {
+      } else if (use_rich_format && use_vec2_winfunc && tmp_ret == OB_SUCCESS
           && ObWindowFunctionVecOp::all_supported_winfuncs(
             static_cast<ObLogWindowFunction *>(&log_op)->get_window_exprs())) {
-        type = PHY_VEC_WINDOW_FUNCTION;
+        if (static_cast<ObLogWindowFunction *>(&log_op)->is_range_dist_parallel()
+            && batch_size < ObWindowFunctionVecSpec::RD_MIN_BATCH_SIZE) {
+          type = PHY_WINDOW_FUNCTION;
+        } else {
+          type = PHY_VEC_WINDOW_FUNCTION;
+        }
       } else {
         type = PHY_WINDOW_FUNCTION;
       }

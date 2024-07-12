@@ -106,6 +106,7 @@ public:
   RPC_S(PR5 bootstrap, OB_BOOTSTRAP, (ObBootstrapArg));
   RPC_S(PR5 is_empty_server, OB_IS_EMPTY_SERVER, (ObCheckServerEmptyArg), Bool);
   RPC_S(PR5 check_server_for_adding_server, OB_CHECK_SERVER_FOR_ADDING_SERVER, (ObCheckServerForAddingServerArg), ObCheckServerForAddingServerResult);
+  RPC_S(PR5 check_server_machine_status, OB_CHECK_SERVER_MACHINE_STATUS, (ObCheckServerMachineStatusArg), ObCheckServerMachineStatusResult);
   RPC_S(PR5 check_deployment_mode_match, OB_CHECK_DEPLOYMENT_MODE, (ObCheckDeploymentModeArg), Bool);
 #ifdef OB_BUILD_TDE_SECURITY
   RPC_S(PR5 wait_master_key_in_sync, OB_WAIT_MASTER_KEY_IN_SYNC, (ObWaitMasterKeyInSyncArg));
@@ -150,6 +151,7 @@ public:
   RPC_AP(PR5 batch_get_tablet_autoinc_seq, OB_BATCH_GET_TABLET_AUTOINC_SEQ, (obrpc::ObBatchGetTabletAutoincSeqArg), obrpc::ObBatchGetTabletAutoincSeqRes);
   RPC_AP(PR5 batch_set_tablet_autoinc_seq, OB_BATCH_SET_TABLET_AUTOINC_SEQ, (obrpc::ObBatchSetTabletAutoincSeqArg), obrpc::ObBatchSetTabletAutoincSeqRes);
   RPC_AP(PR5 clear_tablet_autoinc_seq_cache, OB_CLEAR_TABLET_AUTOINC_SEQ_CACHE, (obrpc::ObClearTabletAutoincSeqCacheArg), obrpc::Int64);
+  RPC_S(PR5 batch_get_tablet_binding, OB_BATCH_GET_TABLET_BINDING, (obrpc::ObBatchGetTabletBindingArg), obrpc::ObBatchGetTabletBindingRes);
   RPC_S(PRD force_create_sys_table, OB_FORCE_CREATE_SYS_TABLE, (ObForceCreateSysTableArg));
   RPC_S(PRD schema_revise, OB_SCHEMA_REVISE, (ObSchemaReviseArg));
   RPC_S(PRD force_set_locality, OB_FORCE_SET_LOCALITY, (ObForceSetLocalityArg));

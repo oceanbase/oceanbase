@@ -555,7 +555,7 @@ private:
   }
 
 public:
-  char sess_[3000] __attribute__((aligned(16)));
+  char sess_[sizeof(ObSqlSockSession)] __attribute__((aligned(16)));
 };
 
 static ObSqlSock *sess2sock(void *sess)

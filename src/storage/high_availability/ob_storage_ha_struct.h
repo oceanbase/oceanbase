@@ -434,6 +434,65 @@ public:
   bool is_committed_;
 };
 
+class ObBackfillTabletsTableMgr final
+{
+public:
+  ObBackfillTabletsTableMgr();
+  ~ObBackfillTabletsTableMgr();
+  int init(const int64_t rebuild_seq, const share::SCN &transfer_start_scn);
+  int init_tablet_table_mgr(const common::ObTabletID &tablet_id, const int64_t transfer_seq);
+  int add_sstable(
+      const common::ObTabletID &tablet_id,
+      const int64_t rebuild_seq,
+      const share::SCN &transfer_start_scn,
+      const int64_t transfer_seq,
+      ObTableHandleV2 &table_handle);
+  int get_tablet_all_sstables(
+      const common::ObTabletID &tablet_id, ObTablesHandleArray &table_handle_array);
+  void reuse();
+  int remove_tablet_table_mgr(const common::ObTabletID &tablet_id);
+  int set_max_major_end_scn(
+      const common::ObTabletID &tablet_id,
+      const share::SCN &max_major_end_scn);
+  int get_max_major_end_scn(
+      const common::ObTabletID &tablet_id,
+      share::SCN &max_major_end_scn);
+  int get_local_rebuild_seq(int64_t &local_rebuild_seq);
+private:
+  class ObTabletTableMgr final
+  {
+  public:
+    ObTabletTableMgr();
+    ~ObTabletTableMgr();
+    int init(
+        const common::ObTabletID &tablet_id,
+        const int64_t transfer_seq);
+    int add_sstable(
+        const int64_t transfer_seq,
+        const share::SCN &transfer_start_scn,
+        ObTableHandleV2 &table_handle);
+    int get_all_sstables(ObTablesHandleArray &table_handle_array);
+    int set_max_major_end_scn(const share::SCN &max_major_end_scn);
+    int get_max_major_end_scn(share::SCN &max_major_end_scn);
+  private:
+    bool is_inited_;
+    common::ObTabletID tablet_id_;
+    int64_t transfer_seq_;
+    share::SCN max_major_end_scn_;
+    common::ObArenaAllocator allocator_;
+    ObTablesHandleArray table_handle_array_;
+    DISALLOW_COPY_AND_ASSIGN(ObTabletTableMgr);
+  };
+private:
+  static const int64_t MAX_BUCKET_NUM = 128;
+  typedef hash::ObHashMap<common::ObTabletID, ObTabletTableMgr *> TransferTableMap;
+  bool is_inited_;
+  common::SpinRWLock lock_;
+  TransferTableMap map_;
+  int64_t local_rebuild_seq_;
+  share::SCN transfer_start_scn_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackfillTabletsTableMgr);
+};
 
 }
 }

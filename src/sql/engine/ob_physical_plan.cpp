@@ -142,7 +142,10 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     enable_inc_direct_load_(false),
     enable_replace_(false),
     insert_overwrite_(false),
-    online_sample_percent_(1.)
+    online_sample_percent_(1.),
+    can_set_feedback_info_(true),
+    need_switch_to_table_lock_worker_(false),
+    data_complement_gen_doc_id_(false)
 {
 }
 
@@ -244,6 +247,9 @@ void ObPhysicalPlan::reset()
   enable_replace_ = false;
   insert_overwrite_ = false;
   online_sample_percent_ = 1.;
+  can_set_feedback_info_.store(true);
+  need_switch_to_table_lock_worker_ = false;
+  data_complement_gen_doc_id_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -818,7 +824,9 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     enable_replace_,
                     immediate_refresh_external_table_ids_,
                     insert_overwrite_,
-                    online_sample_percent_);
+                    online_sample_percent_,
+                    need_switch_to_table_lock_worker_,
+                    data_complement_gen_doc_id_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)
@@ -1407,6 +1415,13 @@ int ObPhysicalPlan::set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_
     }
   }
   return ret;
+}
+
+bool ObPhysicalPlan::try_record_plan_info()
+{
+  bool expected = true;
+  bool b_ret = can_set_feedback_info_.compare_exchange_strong(expected, false);
+  return b_ret;
 }
 
 } //namespace sql

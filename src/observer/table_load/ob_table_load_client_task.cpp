@@ -22,6 +22,7 @@
 #include "observer/table_load/ob_table_load_task.h"
 #include "observer/table_load/ob_table_load_task_scheduler.h"
 #include "observer/table_load/ob_table_load_utils.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 
 namespace oceanbase
 {
@@ -212,7 +213,8 @@ ObTableLoadClientTask::ObTableLoadClientTask()
     allocator_("TLD_ClientTask"),
     task_scheduler_(nullptr),
     session_info_(nullptr),
-    exec_ctx_(nullptr),
+    plan_ctx_(allocator_),
+    exec_ctx_(allocator_),
     session_count_(0),
     next_batch_id_(0),
     client_status_(ObTableLoadClientStatus::MAX_STATUS),
@@ -233,15 +235,11 @@ ObTableLoadClientTask::~ObTableLoadClientTask()
     allocator_.free(task_scheduler_);
     task_scheduler_ = nullptr;
   }
-  if (nullptr != exec_ctx_) {
-    exec_ctx_->~ObTableLoadClientExecCtx();
-    allocator_.free(exec_ctx_);
-    exec_ctx_ = nullptr;
-  }
   if (nullptr != session_info_) {
     ObTableLoadUtils::free_session_info(session_info_, free_session_ctx_);
     session_info_ = nullptr;
   }
+  trans_ctx_.reset();
 }
 
 int ObTableLoadClientTask::init(const ObTableLoadClientTaskParam &param)
@@ -258,11 +256,7 @@ int ObTableLoadClientTask::init(const ObTableLoadClientTaskParam &param)
   } else {
     const int64_t origin_timeout_ts = THIS_WORKER.get_timeout_ts();
     THIS_WORKER.set_timeout_ts(ObTimeUtil::current_time() + param_.get_timeout_us());
-    if (OB_FAIL(create_session_info(param_.get_tenant_id(), param_.get_user_id(),
-                                    param_.get_database_id(), param_.get_table_id(), session_info_,
-                                    free_session_ctx_))) {
-      LOG_WARN("fail to create session info", KR(ret));
-    } else if (OB_FAIL(init_exec_ctx(param_.get_timeout_us(), param_.get_heartbeat_timeout_us()))) {
+    if (OB_FAIL(init_exec_ctx())) {
       LOG_WARN("fail to init client exec ctx", KR(ret));
     } else if (OB_ISNULL(task_scheduler_ =
                            OB_NEWx(ObTableLoadTaskThreadPoolScheduler, (&allocator_), 1,
@@ -287,32 +281,26 @@ int ObTableLoadClientTask::create_session_info(uint64_t tenant_id, uint64_t user
                                                ObFreeSessionCtx &free_session_ctx)
 {
   int ret = OB_SUCCESS;
-  schema::ObSchemaGetterGuard schema_guard;
   const schema::ObTenantSchema *tenant_info = nullptr;
   const ObUserInfo *user_info = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
   const ObTableSchema *table_schema = nullptr;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), K(GCTX.schema_service_));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("get_schema_guard failed", K(ret));
-  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+  if (OB_FAIL(schema_guard_.get_tenant_info(tenant_id, tenant_info))) {
     LOG_WARN("get tenant info failed", K(ret));
   } else if (OB_ISNULL(tenant_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid tenant schema", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+  } else if (OB_FAIL(schema_guard_.get_user_info(tenant_id, user_id, user_info))) {
     LOG_WARN("get user info failed", K(ret));
   } else if (OB_ISNULL(user_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid user_info", K(ret), K(tenant_id), K(user_id));
-  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_id, database_schema))) {
+  } else if (OB_FAIL(schema_guard_.get_database_schema(tenant_id, database_id, database_schema))) {
     LOG_WARN("get database schema failed", K(ret));
   } else if (OB_ISNULL(database_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid database schema", K(ret), K(tenant_id), K(database_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+  } else if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, table_id, table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret));
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
@@ -353,18 +341,26 @@ int ObTableLoadClientTask::create_session_info(uint64_t tenant_id, uint64_t user
   return ret;
 }
 
-int ObTableLoadClientTask::init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us)
+int ObTableLoadClientTask::init_exec_ctx()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(exec_ctx_ = OB_NEWx(ObTableLoadClientExecCtx, &allocator_))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to new client exec ctx", KR(ret));
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(param_.get_tenant_id(), schema_guard_))) {
+    LOG_WARN("get_schema_guard failed", K(ret));
+  } else if (OB_FAIL(create_session_info(param_.get_tenant_id(), param_.get_user_id(),
+      param_.get_database_id(), param_.get_table_id(), session_info_, free_session_ctx_))) {
+    LOG_WARN("fail to create session info", KR(ret));
   } else {
-    exec_ctx_->allocator_ = &allocator_;
-    exec_ctx_->session_info_ = session_info_;
-    exec_ctx_->timeout_ts_ = ObTimeUtil::current_time() + timeout_us;
-    exec_ctx_->last_heartbeat_time_ = ObTimeUtil::current_time();
-    exec_ctx_->heartbeat_timeout_us_ = heartbeat_timeout_us;
+    sql_ctx_.schema_guard_ = &schema_guard_;
+    plan_ctx_.set_timeout_timestamp(ObTimeUtil::current_time() + param_.get_timeout_us());
+    exec_ctx_.set_sql_ctx(&sql_ctx_);
+    exec_ctx_.set_physical_plan_ctx(&plan_ctx_);
+    exec_ctx_.set_my_session(session_info_);
+    client_exec_ctx_.exec_ctx_ = &exec_ctx_;
+    client_exec_ctx_.last_heartbeat_time_ = ObTimeUtil::current_time();
+    client_exec_ctx_.heartbeat_timeout_us_ = param_.get_heartbeat_timeout_us();
   }
   return ret;
 }
@@ -429,8 +425,8 @@ int ObTableLoadClientTask::write(ObTableLoadObjRowArray &obj_rows)
       row.seq_no_ = start_seq_no++;
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(instance_.write(session_id, obj_rows))) {
-        LOG_WARN("fail to write", KR(ret));
+      if (OB_FAIL(instance_.write_trans(trans_ctx_, session_id, obj_rows))) {
+        LOG_WARN("fail to write trans", KR(ret));
       }
     }
   }
@@ -632,8 +628,21 @@ int ObTableLoadClientTask::init_instance()
     } else if (OB_FAIL(ObTableLoadSchema::get_tenant_optimizer_gather_stats_on_load(
                  tenant_id, online_opt_stat_gather))) {
       LOG_WARN("fail to get tenant optimizer gather stats on load", KR(ret), K(tenant_id));
-    } else {
-      ObTableLoadParam load_param;
+    }
+
+    ObTableLoadParam load_param;
+    double online_sample_percent = 100.;
+    if (OB_SUCC(ret)) {
+      if (online_opt_stat_gather &&
+                 OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(exec_ctx_,
+                                                                           online_sample_percent))) {
+        LOG_WARN("failed to get sys online sample percent", K(ret));
+      } else {
+        load_param.online_sample_percent_ = online_sample_percent;
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       load_param.tenant_id_ = tenant_id;
       load_param.table_id_ = table_id;
       load_param.parallel_ = param_.get_parallel();
@@ -643,17 +652,17 @@ int ObTableLoadClientTask::init_instance()
       load_param.column_count_ = column_ids.count();
       load_param.need_sort_ = true;
       load_param.px_mode_ = false;
-      load_param.online_opt_stat_gather_ =
-        (online_opt_stat_gather &&
-         !ObDirectLoadMethod::is_incremental(method)); // 增量统计信息收集需要构造ObExecContext
+      load_param.online_opt_stat_gather_ = online_opt_stat_gather;
       load_param.dup_action_ = param_.get_dup_action();
       load_param.method_ = method;
       load_param.insert_mode_ = insert_mode;
       load_param.load_mode_ = ObDirectLoadMode::TABLE_LOAD;
       load_param.compressor_type_ = compressor_type;
       const ObTableLoadTableCtx *tmp_ctx = nullptr;
-      if (OB_FAIL(instance_.init(load_param, column_ids, exec_ctx_))) {
+      if (OB_FAIL(instance_.init(load_param, column_ids, &client_exec_ctx_))) {
         LOG_WARN("fail to init instance", KR(ret));
+      } else if (OB_FAIL(instance_.start_trans(trans_ctx_, ObTableLoadInstance::DEFAULT_SEGMENT_ID, allocator_))) {
+        LOG_WARN("fail to start trans", KR(ret));
       } else if (OB_ISNULL(tmp_ctx = instance_.get_table_ctx())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("fail to get table ctx", KR(ret));
@@ -673,7 +682,9 @@ int ObTableLoadClientTask::commit_instance()
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadClientTask not init", KR(ret));
   } else {
-    if (OB_FAIL(instance_.commit())) {
+    if (OB_FAIL(instance_.commit_trans(trans_ctx_))) {
+      LOG_WARN("fail to commit trans", KR(ret));
+    } else if (OB_FAIL(instance_.commit())) {
       LOG_WARN("fail to commit instance", KR(ret));
     } else {
       result_info_ = instance_.get_result_info();

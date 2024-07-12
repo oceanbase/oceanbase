@@ -145,7 +145,7 @@ static int32_t reserved_agg_col_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     RTSIZE(VEC_TC_DATE),                  // date
     RTSIZE(VEC_TC_TIME),                  // time
     RTSIZE(VEC_TC_YEAR),                  // year
-    0,                                    // extend
+    string_reserved_size,                 // extend
     0,                                    // unknown
     string_reserved_size,                 // string
     RTSIZE(VEC_TC_BIT),                   // bit

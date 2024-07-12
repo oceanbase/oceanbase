@@ -43,14 +43,18 @@ class MdsCtx : public BufferCtx
   OB_UNIS_VERSION(1);
 public:
   MdsCtx();
-  explicit MdsCtx(const MdsWriter &writer);
+  explicit MdsCtx(const MdsWriter &writer,
+                  const transaction::ObTxSEQ start_seq = transaction::ObTxSEQ::MIN_VAL());
   virtual ~MdsCtx();
   MdsCtx(const MdsCtx &) = delete;
   MdsCtx(MdsCtx &&) = delete;
   MdsCtx &operator=(const MdsCtx &) = delete;
   MdsCtx &operator=(MdsCtx &&) = delete;
   int assign(const MdsCtx &);
-  void set_writer(const MdsWriter &writer);
+  int set_writer(const MdsWriter &writer);
+  void set_seq_no(const transaction::ObTxSEQ seq_no);
+  int inc_seq_no();
+  transaction::ObTxSEQ get_seq_no() const;
   bool can_write() const;
   TO_STRING_KV(K_(writer), K_(write_list), K(obj_to_string(state_)));
   void record_written_node(ListNode<MdsNode> *node);
@@ -114,8 +118,9 @@ private:
   List<MdsNode> write_list_;
   TwoPhaseCommitState state_;
   MdsLock lock_;
-protected: // for serialize in derived class
+protected:
   MdsWriter writer_;
+  transaction::ObTxSEQ seq_no_;
 };
 OB_SERIALIZE_MEMBER_TEMP(inline, MdsCtx, writer_);
 }

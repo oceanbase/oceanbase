@@ -101,7 +101,7 @@ TEST_F(TestObDataStoreDesc, test_col_desc)
   TestSchemaPrepare::prepare_schema(table_schema, rowkey_cnt, col_cnt);
 
   ASSERT_FALSE(col_desc.is_valid());
-  ASSERT_EQ(OB_SUCCESS, col_desc.init(true/*is_major*/, table_schema, 0/*table_cg_idx*/));
+  ASSERT_EQ(OB_SUCCESS, col_desc.init(true/*is_major*/, table_schema, 0/*table_cg_idx*/, DATA_VERSION_4_3_2_0));
   ASSERT_TRUE(col_desc.is_valid());
 
   ASSERT_EQ(true, col_desc.is_row_store_);
@@ -185,7 +185,7 @@ TEST_F(TestObDataStoreDesc, test_cg)
   scn.convert_for_tx(100);
   ASSERT_EQ(OB_SUCCESS,
             static_desc.init(table_schema, mock_ls_id_, mock_tablet_id_,
-                             MAJOR_MERGE, snapshot, share::SCN::invalid_scn(), 1/*cluster_version*/));
+                             MAJOR_MERGE, snapshot, share::SCN::invalid_scn(), DATA_VERSION_4_3_2_0/*cluster_version*/));
   ASSERT_TRUE(static_desc.is_valid());
 
   const ObIArray<ObStorageColumnGroupSchema> &column_groups = storage_schema.get_column_groups();
@@ -196,6 +196,12 @@ TEST_F(TestObDataStoreDesc, test_cg)
       continue;
     }
     ASSERT_EQ(OB_SUCCESS, data_desc[i].init(static_desc, storage_schema, &column_group, i));
+
+    // check single cg default skip index
+    ASSERT_EQ(3, data_desc[i].col_desc_.agg_meta_array_.count());
+    ASSERT_EQ(ObSkipIndexColType::SK_IDX_MIN, data_desc[i].col_desc_.agg_meta_array_.at(0).col_type_);
+    ASSERT_EQ(ObSkipIndexColType::SK_IDX_MAX, data_desc[i].col_desc_.agg_meta_array_.at(1).col_type_);
+    ASSERT_EQ(ObSkipIndexColType::SK_IDX_NULL_COUNT, data_desc[i].col_desc_.agg_meta_array_.at(2).col_type_);
 
     ASSERT_EQ(data_store_desc.get_row_column_count(), column_group.column_cnt_);
     ASSERT_EQ(data_store_desc.get_full_stored_col_cnt(), column_group.column_cnt_);

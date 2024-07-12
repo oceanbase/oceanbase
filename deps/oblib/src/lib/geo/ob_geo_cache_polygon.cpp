@@ -79,7 +79,7 @@ int ObCachedGeoPolygon::init_point_analyzer()
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc point location analyzer failed", K(ret));
       } else {
-        pAnalyzer_ = new(buf) ObPointLocationAnalyzer(this, &seg_rtree_);
+        pAnalyzer_ = new(buf) ObPointLocationAnalyzer(this, seg_rtree_);
       }
     }
   }
@@ -228,7 +228,7 @@ int ObCachedGeoPolygon::init_line_analyzer()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc line segment intersection analyzer failed", K(ret));
     } else {
-      lAnalyzer_ = new(buf) ObLineIntersectionAnalyzer(this, &rtree_);
+      lAnalyzer_ = new(buf) ObLineIntersectionAnalyzer(this, rtree_);
       // collect line segments
       ObGeoSegmentCollectVisitor seg_visitor(&line_segments_);
       if (OB_FAIL(get_cached_geom()->do_visit(seg_visitor))) {
@@ -318,24 +318,29 @@ int ObCachedGeoPolygon::get_point_position_in_polygon(int p_idx, const ObPoint2d
   } else {
     pos = ObPointLocation::INVALID;
     for (int i = start; i < end && OB_SUCC(ret) && pos == ObPointLocation::INVALID; ++i) {
-      ObPointLocationAnalyzer tmp_pAnalyzer(this, rings_rtree_.rtrees_[i]);
-      if (i == start) {
-        // exterior ring
-        if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
+      if (OB_ISNULL(rings_rtree_.rtrees_[i])) {
+        ret = OB_BAD_NULL_ERROR;
+        LOG_WARN("rtree is null", K(ret), K(i));
+      } else {
+        ObPointLocationAnalyzer tmp_pAnalyzer(this, *rings_rtree_.rtrees_[i]);
+        if (i == start) {
+          // exterior ring
+          if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
+            LOG_WARN("calculate point position failed", K(ret), K(input_vertexes_[i]));
+          } else if (tmp_pAnalyzer.get_position() == ObPointLocation::EXTERIOR) {
+            // outside the exterior ring
+            pos = ObPointLocation::EXTERIOR;
+          } else if (tmp_pAnalyzer.get_position() == ObPointLocation::BOUNDARY) {
+            pos = ObPointLocation::BOUNDARY;
+          } // if is ObPointLocation::INTERIOR, need to check inner rings
+        } else if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
           LOG_WARN("calculate point position failed", K(ret), K(input_vertexes_[i]));
-        } else if (tmp_pAnalyzer.get_position() == ObPointLocation::EXTERIOR) {
-          // outside the exterior ring
+        } else if (tmp_pAnalyzer.get_position() == ObPointLocation::INTERIOR) {
+          // inside a hole => outside the polygon
           pos = ObPointLocation::EXTERIOR;
         } else if (tmp_pAnalyzer.get_position() == ObPointLocation::BOUNDARY) {
           pos = ObPointLocation::BOUNDARY;
-        } // if is ObPointLocation::INTERIOR, need to check inner rings
-      } else if (OB_FAIL(tmp_pAnalyzer.calculate_point_position(test_point))) {
-        LOG_WARN("calculate point position failed", K(ret), K(input_vertexes_[i]));
-      } else if (tmp_pAnalyzer.get_position() == ObPointLocation::INTERIOR) {
-        // inside a hole => outside the polygon
-        pos = ObPointLocation::EXTERIOR;
-      } else if (tmp_pAnalyzer.get_position() == ObPointLocation::BOUNDARY) {
-        pos = ObPointLocation::BOUNDARY;
+        }
       }
     }
 

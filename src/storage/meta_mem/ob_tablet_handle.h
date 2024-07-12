@@ -100,6 +100,7 @@ public:
       const int64_t snapshot_version,
       const bool allow_no_ready_read,
       const bool major_sstable_only = false);
+  int get_mds_sstables_from_tablet(const int64_t snapshot_version);
   int get_read_tables_from_tablet(
       const int64_t snapshot_version,
       const bool allow_no_ready_read,

@@ -1859,6 +1859,7 @@ DEFINE_ERROR(OB_TABLE_LOCK_SPLIT_FAIL, -6328, -1, "HY000", "table lock splitting
 DEFINE_ERROR(OB_SEQ_NO_REORDER_UNDER_PDML, -6329, -1, "HY000", "pdml sql need retry under sequence number reorder")
 DEFINE_ERROR(OB_USER_OUTOF_DATA_DISK_SPACE, -6330, -1, "HY000", "user data disk is almost full")
 DEFINE_ERROR(OB_ARB_DEGRADE, -6331, -1, "HY000", "logstream has been degraded due to error")
+DEFINE_ERROR(OB_OBJ_LOCK_WRONG_WORKER, -6332, -1, "HY000", "object lock worker thread wrong")
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -2122,6 +2123,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_XML_NOT_SUPPORT_OPERATION, -7430, -1, "42000", "XML n
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_DUP_DEF_NAMESPACE, -7431, -1, "42000", "XQST0066 - duplicate default namespace definition - string", "XQST0066 - duplicate default namespace definition - %s.", 19118, "XQST0066 - duplicate default namespace definition - string.", "XQST0066 - duplicate default namespace definition - %s.");
 DEFINE_ORACLE_ERROR(OB_ERR_COMPARE_VARRAY_LOB_ATTR, -7432, -1, "42000", "cannot compare VARRAY or LOB attributes of an object type", 22901, "cannot compare VARRAY or LOB attributes of an object type");
 DEFINE_ORACLE_ERROR(OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD, -7433, -1, "42000", "Parent %.*s already contains child entry %s%.*s", 31003, "Parent %.*s already contains child entry %s%.*s");
+DEFINE_ORACLE_ERROR(OB_ERR_CONVERSION_OF_UNIT, -7434, -1, "42000", "conversion error between the specified unit and standard unit", 13291, "conversion error between the specified unit and standard unit");
+DEFINE_ORACLE_ERROR(OB_ERR_PARAM_OUT_OF_RANGE, -7435, -1, "42000", "value is out of range", 13011, "value is out of range");
 
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2738,6 +2741,11 @@ DEFINE_ERROR_DEP(OB_HDFS_MALFORMED_URI, -11042, -1, "HY000", "HDFS: malformed ur
 DEFINE_ERROR_DEP(OB_HDFS_INVALID_ARGUMENT, -11043, -1, "HY000", "HDFS: invalid argument");
 DEFINE_ERROR_DEP(OB_HDFS_NOT_IMPLEMENT, -11044, -1, "HY000", "HDFS: not implementation");
 DEFINE_ERROR_DEP(OB_HDFS_ERROR, -11045, -1, "HY000", "HDFS error");
+DEFINE_ERROR_EXT(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH, -11046, -1, "HY000", "Invalid path", "Invalid path: %.*s");
+DEFINE_ERROR_EXT(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, -11047, -1, "HY000", "Column type mismatch between the file and the table", "Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s");
+DEFINE_ERROR(OB_ERR_DDL_RESOURCE_NOT_ENOUGH, -11048, -1, "HY000", "The tenant ddl resource is not enough, please retry");
+DEFINE_ERROR_EXT(OB_EXCEED_QUERY_MEM_LIMIT, -11049, -1, "HY000", "Exceed query memory limit", "Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable.");
+
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

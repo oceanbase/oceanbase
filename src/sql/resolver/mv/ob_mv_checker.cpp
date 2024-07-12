@@ -338,7 +338,7 @@ int ObMVChecker::check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is
   int ret = OB_SUCCESS;
   is_valid = true;
   const ObAggFunRawExpr *default_count = NULL;  // count(*) need for non scalar group by
-  if (OB_FAIL(get_target_aggr(T_FUN_COUNT, NULL, stmt.get_aggr_items(), default_count))) {
+  if (!stmt.is_scala_group_by() && OB_FAIL(get_mav_default_count(stmt.get_aggr_items(), default_count))) {
     LOG_WARN("failed to check target aggr exist", K(ret));
   } else if (!stmt.is_scala_group_by() && NULL == default_count) {
     append_fast_refreshable_note("need count(*) as select output", OB_MV_FAST_REFRESH_SIMPLE_MAV);
@@ -477,7 +477,7 @@ int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
         const ObAggFunRawExpr *dependent_aggr = NULL;
         if (!stmt.check_is_select_item_expr(aggr)) {
           append_fast_refreshable_note("sum aggr need add as select output", OB_MV_FAST_REFRESH_SIMPLE_MAV);
-        } else if (OB_FAIL(get_dependent_aggr_of_fun_sum(stmt, aggr, dependent_aggr))) {
+        } else if (OB_FAIL(get_dependent_aggr_of_fun_sum(stmt, aggr->get_param_expr(0), dependent_aggr))) {
           LOG_WARN("failed to check sum aggr fast refresh valid", K(ret));
         } else if (NULL == dependent_aggr) {
           append_fast_refreshable_note("dependent aggr of sum aggr need add as select output", OB_MV_FAST_REFRESH_SIMPLE_MAV);
@@ -539,7 +539,7 @@ int ObMVChecker::try_replace_equivalent_count_aggr(const ObSelectStmt &stmt,
       LOG_WARN("unexpected NULL", K(ret), K(i), K(aggr));
     } else if (T_FUN_COUNT != aggr->get_expr_type() || 1 != aggr->get_real_param_count()) {
       aggr_not_support = true;
-    } else if (OB_FAIL(get_equivalent_count_aggr(stmt, aggr->get_real_param_exprs().at(0), equal_aggr))) {
+    } else if (OB_FAIL(get_dependent_aggr_of_fun_sum(stmt, aggr->get_param_expr(0), equal_aggr))) {
       LOG_WARN("failed to get equivalent count aggr", K(ret));
     } else if (NULL == equal_aggr) {
       aggr_not_support = true;
@@ -566,44 +566,33 @@ bool ObMVChecker::is_basic_aggr(const ObItemType aggr_type)
 
 //  count(c1) is needed for refresh sum(c1)
 int ObMVChecker::get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt,
-                                               const ObAggFunRawExpr *aggr,
-                                               const ObAggFunRawExpr *&dependent_aggr)
+                                               const ObRawExpr *sum_param,
+                                               const ObAggFunRawExpr *&dep_aggr)
 {
   int ret = OB_SUCCESS;
-  dependent_aggr = NULL;
-  const ObRawExpr *param_expr = NULL;
-  const ObRawExpr *inner_param_expr = NULL;
-  if (OB_ISNULL(aggr)
-      || OB_UNLIKELY(T_FUN_SUM != aggr->get_expr_type() || 1 != aggr->get_real_param_count())
-      || OB_ISNULL(param_expr = aggr->get_real_param_exprs().at(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected sum aggr", K(ret), KPC(aggr));
-  } else if (OB_FAIL(get_equivalent_count_aggr(stmt, param_expr, dependent_aggr))) {
-    LOG_WARN("failed to get equivalent count aggr", K(ret));
-  }
-  return ret;
-}
-
-int ObMVChecker::get_equivalent_count_aggr(const ObSelectStmt &stmt,
-                                           const ObRawExpr *param_expr,
-                                           const ObAggFunRawExpr *&count_aggr)
-{
-  int ret = OB_SUCCESS;
-  count_aggr = NULL;
-  const ObRawExpr *inner_param_expr = NULL;
-  if (OB_FAIL(get_target_aggr(T_FUN_COUNT, param_expr, stmt.get_aggr_items(), count_aggr))) {
-    LOG_WARN("failed to check target aggr exist", K(ret));
-  } else if (NULL != count_aggr && stmt.check_is_select_item_expr(count_aggr)) {
-    /* do nothing */
-  } else if (OB_FAIL(get_equivalent_null_check_param(param_expr, inner_param_expr))) {
-    LOG_WARN("failed to get equivalent null check param", K(ret));
-  } else if (NULL == inner_param_expr) {
-    /* can not get valid dependent aggr */
-    count_aggr = NULL;
-  } else if (OB_FAIL(get_target_aggr(T_FUN_COUNT, inner_param_expr, stmt.get_aggr_items(), count_aggr))) {
-    LOG_WARN("failed to check target aggr exist", K(ret));
-  } else if (NULL != count_aggr && !stmt.check_is_select_item_expr(count_aggr)) {
-    count_aggr = NULL;
+  dep_aggr = NULL;
+  const ObRawExpr *check_param = NULL;
+  if (OB_FAIL(get_equivalent_null_check_param(sum_param, check_param))) {
+    LOG_WARN("failed to get null check param", K(ret));
+  } else {
+    const ObIArray<ObAggFunRawExpr*> &aggrs = stmt.get_aggr_items();
+    const ObAggFunRawExpr *cur_aggr = NULL;
+    const ObRawExpr *cur_check_param = NULL;
+    for (int64_t i = 0; NULL == dep_aggr && OB_SUCC(ret) && i < aggrs.count(); ++i) {
+      if (OB_ISNULL(cur_aggr = aggrs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (T_FUN_COUNT != cur_aggr->get_expr_type()
+                 || cur_aggr->is_param_distinct()
+                 || 1 != cur_aggr->get_real_param_count()) {
+        /* do nothing */
+      } else if (OB_FAIL(get_equivalent_null_check_param(cur_aggr->get_param_expr(0),
+                                                         cur_check_param))) {
+        LOG_WARN("failed to get null check param", K(ret));
+      } else if (cur_check_param->same_as(*check_param)) {
+        dep_aggr = cur_aggr;
+      }
+    }
   }
   return ret;
 }
@@ -612,52 +601,49 @@ int ObMVChecker::get_equivalent_count_aggr(const ObSelectStmt &stmt,
 //  To refrsh sum(c1*c1) and avoid calculate count(c1*c1), count(c1) can also used to refrsh sum(c1*c1).
 //  Here try to get c1 as equivalent aggr param of c1*c1 only.
 int ObMVChecker::get_equivalent_null_check_param(const ObRawExpr *param_expr,
-                                                 const ObRawExpr *&inner_param_expr)
+                                                 const ObRawExpr *&check_param)
 {
   int ret = OB_SUCCESS;
-  inner_param_expr = NULL;
+  check_param = NULL;
   if (OB_ISNULL(param_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(param_expr));
+  } else if (T_FUN_SYS_CAST == param_expr->get_expr_type()) {
+    //  sum(cast(c1_varchar as int)) can use count(c1_varchar)
+    if (OB_FAIL(SMART_CALL(get_equivalent_null_check_param(param_expr->get_param_expr(0), check_param)))) {
+      LOG_WARN("failed to smart call get null check param", K(ret));
+    }
   } else if (T_OP_MUL == param_expr->get_expr_type()) {
     //  sum(c1*c1) can use count(c1)
-    const ObOpRawExpr *op_expr = static_cast<const ObOpRawExpr*>(param_expr);
-    if (op_expr->get_param_expr(0) == op_expr->get_param_expr(1)) {
-      inner_param_expr = op_expr->get_param_expr(0);
+    const ObRawExpr *l_expr = NULL;
+    const ObRawExpr *r_expr = NULL;
+    if (OB_ISNULL(l_expr = param_expr->get_param_expr(0))
+        || OB_ISNULL(r_expr = param_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(l_expr), K(r_expr));
+    } else if (!l_expr->same_as(*r_expr)) {
+      check_param = param_expr;
+    } else if (OB_FAIL(SMART_CALL(get_equivalent_null_check_param(l_expr, check_param)))) {
+      LOG_WARN("failed to smart call get null check param", K(ret));
     }
   } else {
-    // zhanyuetodo: sum(1) / sum(not null column) need not count(*)
-    inner_param_expr = param_expr;
+    check_param = param_expr;
   }
   return ret;
 }
 
-// only used to check COUNT/SUM aggr without distinct
-int ObMVChecker::get_target_aggr(const ObItemType target_aggr_type,
-                                 const ObRawExpr *param_expr,
-                                 const ObIArray<ObAggFunRawExpr*> &aggrs,
-                                 const ObAggFunRawExpr *&target_aggr)
+int ObMVChecker::get_mav_default_count(const ObIArray<ObAggFunRawExpr*> &aggrs,
+                                       const ObAggFunRawExpr *&count_aggr)
 {
   int ret = OB_SUCCESS;
-  target_aggr = NULL;
+  count_aggr = NULL;
   const ObAggFunRawExpr *aggr = NULL;
-  const ObRawExpr *cur_param_expr = NULL;
-  if (OB_UNLIKELY(T_FUN_COUNT != target_aggr_type && T_FUN_SUM != target_aggr_type)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected aggr type for this function", K(ret), K(target_aggr_type));
-  }
-  for (int64_t i = 0; NULL == target_aggr && OB_SUCC(ret) && i < aggrs.count(); ++i) {
+  for (int64_t i = 0; NULL == count_aggr && OB_SUCC(ret) && i < aggrs.count(); ++i) {
     if (OB_ISNULL(aggr = aggrs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret));
-    } else if (aggr->get_expr_type() != target_aggr_type) {
-      /* do nothing */
-    } else if (0 == aggr->get_real_param_count()) {
-      target_aggr = NULL == param_expr ? aggr : NULL;
-    } else if (NULL == param_expr || NULL == (cur_param_expr = aggr->get_real_param_exprs().at(0))) {
-      /* do nothing */
-    } else if (cur_param_expr->same_as(*param_expr)) {
-      target_aggr = aggr;
+    } else if (T_FUN_COUNT == aggr->get_expr_type() && 0 == aggr->get_real_param_count()) {
+      count_aggr = aggr;
     }
   }
   return ret;

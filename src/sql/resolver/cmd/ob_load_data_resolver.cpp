@@ -667,49 +667,58 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
             ret = OB_INVALID_ARGUMENT;
             LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name or access key");
           } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), storage_info.ptr()))) {
-            LOG_WARN("failed to set access info", K(ret));
-          } else if (OB_ISNULL(file_ptr = temp_file_name.reverse_find('/'))) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name");
-          } else {
-            dir_path.assign_ptr(temp_file_name.ptr(), file_ptr - temp_file_name.ptr() + 1);
-            pattern.assign_ptr(file_ptr + 1, temp_file_name.length() - dir_path.length());
-            if (exist_wildcard(dir_path)) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("directory does not support wildcard matching", K(ret));
+            if (ret == OB_INVALID_BACKUP_DEST) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "access info");
             } else {
-              ObBackupIoAdapter adapter;
-              ObFileListArrayOp op(file_list, *allocator_);
-              if (OB_ISNULL(path = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
-                ret = OB_ALLOCATE_MEMORY_FAILED;
-                LOG_WARN("fail to allocate memory", K(ret));
-              } else if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, path_len, "%.*s",
-                                                dir_path.length(), dir_path.ptr()))) {
-                LOG_WARN("fail to fill path", K(ret), K(path_len));
-              } else if (OB_FAIL(adapter.list_files(ObString(path_len, path), &load_args.access_info_, op))) {
-                LOG_WARN("fail to list files", K(ret));
+              LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(storage_info));
+            }
+          } else if (load_args.access_info_.get_load_data_format() == ObLoadDataFormat::OB_BACKUP_1_4) {
+            load_args.file_name_ = temp_file_name;
+          } else {
+            if (OB_ISNULL(file_ptr = temp_file_name.reverse_find('/'))) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name");
+            } else {
+              dir_path.assign_ptr(temp_file_name.ptr(), file_ptr - temp_file_name.ptr() + 1);
+              pattern.assign_ptr(file_ptr + 1, temp_file_name.length() - dir_path.length());
+              if (exist_wildcard(dir_path)) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("directory does not support wildcard matching", K(ret));
+              } else {
+                ObBackupIoAdapter adapter;
+                ObFileListArrayOp op(file_list, *allocator_);
+                if (OB_ISNULL(path = static_cast<char *>(allocator_->alloc(MAX_PATH_SIZE)))) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("fail to allocate memory", K(ret));
+                } else if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, path_len, "%.*s",
+                                                   dir_path.length(), dir_path.ptr()))) {
+                  LOG_WARN("fail to fill path", K(ret), K(path_len));
+                } else if (OB_FAIL(adapter.list_files(ObString(path_len, path), &load_args.access_info_, op))) {
+                  LOG_WARN("fail to list files", K(ret));
+                }
               }
             }
-          }
-          for (int32_t i = 0; OB_SUCC(ret) && i < file_list.size(); i++) {
-            if (OB_FAIL(pattern_match(file_list[i], pattern, matched))) {
-              LOG_WARN("fail to pattern match", K(ret));
-            } else if (matched) {
-              ObString match_file;
-              int64_t pos = path_len;
-              if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, pos, "%.*s",
-                                          file_list[i].length(), file_list[i].ptr()))) {
-                LOG_WARN("fail to fill path", K(ret));
-              } else if (OB_FAIL(ob_write_string(*allocator_, ObString(pos, path), match_file, true))) {
-                LOG_WARN("fail to copy string", K(ret));
-              } else if (OB_FAIL(load_args.file_iter_.add_files(&match_file))) {
-                LOG_WARN("fail to add files", K(ret));
+            for (int32_t i = 0; OB_SUCC(ret) && i < file_list.size(); i++) {
+              if (OB_FAIL(pattern_match(file_list[i], pattern, matched))) {
+                LOG_WARN("fail to pattern match", K(ret));
+              } else if (matched) {
+                ObString match_file;
+                int64_t pos = path_len;
+                if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, pos, "%.*s",
+                                            file_list[i].length(), file_list[i].ptr()))) {
+                  LOG_WARN("fail to fill path", K(ret));
+                } else if (OB_FAIL(ob_write_string(*allocator_, ObString(pos, path), match_file, true))) {
+                  LOG_WARN("fail to copy string", K(ret));
+                } else if (OB_FAIL(load_args.file_iter_.add_files(&match_file))) {
+                  LOG_WARN("fail to add files", K(ret));
+                }
               }
             }
-          }
-          if (OB_SUCC(ret) && load_args.file_iter_.count() == 0) {
-            ret = OB_BACKUP_FILE_NOT_EXIST;
-            LOG_WARN("No matches found for pattern", K(ret), K(pattern));
+            if (OB_SUCC(ret) && load_args.file_iter_.count() == 0) {
+              ret = OB_FILE_NOT_EXIST;
+              LOG_WARN("files not exists", K(ret), K(pattern));
+            }
           }
         }
       } else {

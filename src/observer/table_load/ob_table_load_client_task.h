@@ -15,6 +15,7 @@
 #include "lib/hash/ob_link_hashmap.h"
 #include "observer/table_load/ob_table_load_instance.h"
 #include "observer/table_load/ob_table_load_struct.h"
+#include "observer/table_load/ob_table_load_exec_ctx.h"
 #include "share/table/ob_table_load_define.h"
 #include "share/table/ob_table_load_row_array.h"
 #include "sql/session/ob_sql_session_mgr.h"
@@ -24,7 +25,6 @@ namespace oceanbase
 {
 namespace observer
 {
-class ObTableLoadClientExecCtx;
 class ObTableLoadTableCtx;
 class ObTableLoadTask;
 class ObITableLoadTaskScheduler;
@@ -100,7 +100,7 @@ public:
   OB_INLINE int64_t inc_ref_count() { return ATOMIC_AAF(&ref_count_, 1); }
   OB_INLINE int64_t dec_ref_count() { return ATOMIC_SAF(&ref_count_, 1); }
   OB_INLINE sql::ObSQLSessionInfo *get_session_info() { return session_info_; }
-  OB_INLINE ObTableLoadClientExecCtx *get_exec_ctx() { return exec_ctx_; }
+  OB_INLINE ObTableLoadClientExecCtx *get_exec_ctx() { return &client_exec_ctx_; }
   int set_status_waitting();
   int set_status_running();
   int set_status_committing();
@@ -111,7 +111,7 @@ public:
   void get_status(table::ObTableLoadClientStatus &client_status, int &error_code) const;
   int check_status(table::ObTableLoadClientStatus client_status);
   TO_STRING_KV(K_(task_id), K_(param), K_(result_info), KP_(session_info), K_(free_session_ctx),
-               KP_(exec_ctx), KP_(task_scheduler), K_(client_status), K_(error_code),
+               K_(client_exec_ctx), KP_(task_scheduler), K_(client_status), K_(error_code),
                K_(ref_count));
 
 private:
@@ -119,7 +119,7 @@ private:
   int create_session_info(uint64_t tenant_id, uint64_t user_id, uint64_t database_id,
                           uint64_t table_id, sql::ObSQLSessionInfo *&session_info,
                           sql::ObFreeSessionCtx &free_session_ctx);
-  int init_exec_ctx(int64_t timeout_us, int64_t heartbeat_timeout_us);
+  int init_exec_ctx();
 
   int init_instance();
   int commit_instance();
@@ -143,9 +143,14 @@ private:
   ObITableLoadTaskScheduler *task_scheduler_;
   sql::ObSQLSessionInfo *session_info_;
   sql::ObFreeSessionCtx free_session_ctx_;
-  ObTableLoadClientExecCtx *exec_ctx_;
+  ObTableLoadClientExecCtx client_exec_ctx_;
+  ObSchemaGetterGuard schema_guard_;
+  sql::ObSqlCtx sql_ctx_;
+  sql::ObPhysicalPlanCtx plan_ctx_;
+  ObExecContext exec_ctx_;
   int64_t session_count_;
   ObTableLoadInstance instance_;
+  ObTableLoadInstance::TransCtx trans_ctx_;
   int64_t next_batch_id_ CACHE_ALIGNED;
   mutable obsys::ObRWLock rw_lock_;
   table::ObTableLoadClientStatus client_status_;

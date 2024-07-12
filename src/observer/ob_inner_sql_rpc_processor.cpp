@@ -64,9 +64,12 @@ int ObInnerSqlRpcP::process_register_mds(sqlclient::ObISQLConnection *conn,
   int64_t pos = 0;
   if (OB_FAIL(mds_str.deserialize(arg.get_inner_sql().ptr(), arg.get_inner_sql().length(), pos))) {
     LOG_WARN("deserialize multi data source str failed", K(ret), K(arg), K(pos));
-  } else if (OB_FAIL(inner_conn->register_multi_data_source(
-                 arg.get_tenant_id(), mds_str.get_ls_id(), mds_str.get_msd_type(),
-                 mds_str.get_msd_buf(), mds_str.get_msd_buf_len(), mds_str.get_register_flag()))) {
+  } else if (OB_FAIL(inner_conn->register_multi_data_source(arg.get_tenant_id(),
+                                                            mds_str.get_ls_id(),
+                                                            mds_str.get_msd_type(),
+                                                            mds_str.get_msd_buf(),
+                                                            mds_str.get_msd_buf_len(),
+                                                            mds_str.get_register_flag()))) {
     LOG_WARN("register multi data source failed", K(ret), K(arg.get_tenant_id()), K(mds_str));
   }
 

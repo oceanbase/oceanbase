@@ -11829,7 +11829,9 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
   CK (OB_NOT_NULL(udf_info.ref_expr_));
   for (int64_t i = 0; OB_SUCC(ret) && i < udf_info.ref_expr_->get_param_exprs().count(); ++i) {
     ObRawExpr *child = udf_info.ref_expr_->get_param_exprs().at(i);
-    if (coll_type->get_element_type().is_obj_type()) {
+    OZ (formalize_expr(*child));
+    if (OB_FAIL(ret)) {
+    } else if (coll_type->get_element_type().is_obj_type()) {
       const ObDataType *data_type = coll_type->get_element_type().get_data_type();
       CK (OB_NOT_NULL(data_type));
       OZ (ObRawExprUtils::build_column_conv_expr(&resolve_ctx_.session_info_,
@@ -14284,6 +14286,11 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
     OZ (get_udt_names(resolve_ctx_.schema_guard_, user_type_id, database_name, udt_name));
     OX (access_ident.udf_info_.udf_name_ = udt_name);
     OX (access_ident.udf_info_.udf_database_ = database_name);
+    if (OB_SUCC(ret) &&
+        !access_ident.udf_info_.udf_database_.empty() &&
+        access_ident.udf_info_.udf_database_.case_compare(OB_SYS_DATABASE_NAME) != 0) {
+      OZ (q_name.access_idents_.push_back(access_ident.udf_info_.udf_database_));
+    }
   } else if (access_idxs.count() > 0) {
     OZ (get_names_by_access_ident(access_ident,
                                   access_idxs,
@@ -17043,7 +17050,7 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
         OZ (exist->get_idx(idx));
         OZ (routine_table->get_routine_ast(idx, routine_ast));
         if (OB_SUCC(ret) && OB_NOT_NULL(routine_ast)) { // 已经定义过函数体,不可以重复定义
-          ret = OB_ERR_EXIST_OBJECT;
+          ret = OB_ERR_ATTR_FUNC_CONFLICT;
           LOG_WARN("already has same routine in package", K(ret));
         }
       } else { // 已经声明过函数,不可以重复声明

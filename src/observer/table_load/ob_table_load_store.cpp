@@ -83,7 +83,7 @@ void ObTableLoadStore::abort_ctx(ObTableLoadTableCtx *ctx, bool &is_stopped)
     ctx->store_ctx_->insert_table_ctx_->cancel();
     ctx->store_ctx_->merger_->stop();
     ctx->store_ctx_->task_scheduler_->stop();
-    is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped();
+    is_stopped = ctx->store_ctx_->task_scheduler_->is_stopped() && (0 == ATOMIC_LOAD(&ctx->store_ctx_->px_writer_count_));
   }
 }
 
@@ -158,8 +158,14 @@ int ObTableLoadStore::confirm_begin()
     LOG_INFO("store confirm begin");
     store_ctx_->heart_beat(); // init heart beat
     store_ctx_->set_enable_heart_beat_check(true);
-    if (OB_FAIL(open_insert_table_ctx())) {
-      LOG_WARN("fail to open insert_table_ctx", KR(ret));
+    if (ObDirectLoadMethod::is_incremental(param_.method_)) {
+      if (OB_FAIL(open_insert_table_ctx())) {
+        LOG_WARN("fail to open insert_table_ctx", KR(ret));
+      }
+    } else {
+      if (OB_FAIL(ctx_->store_ctx_->set_status_loading())) {
+        LOG_WARN("fail to set store status loading", KR(ret));
+      }
     }
   }
 
@@ -420,10 +426,12 @@ int ObTableLoadStore::start_merge()
 
 int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
                              ObTableLoadSqlStatistics &sql_statistics,
+                             ObTableLoadDmlStat &dml_stats,
                              ObTxExecResult &trans_result)
 {
   int ret = OB_SUCCESS;
   sql_statistics.reset();
+  dml_stats.reset();
   trans_result.reset();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -432,7 +440,6 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
     LOG_INFO("store commit");
     ObTransService *txs = nullptr;
     ObMutexGuard guard(store_ctx_->get_op_lock());
-    ObTableLoadDmlStat dml_stats;
     if (OB_ISNULL(MTL(ObTransService *))) {
       ret = OB_ERR_SYS;
       LOG_WARN("trans service is null", KR(ret));
@@ -442,11 +449,15 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
       LOG_WARN("fail to commit insert table", KR(ret));
     } else if (ctx_->schema_.has_autoinc_column_ && OB_FAIL(store_ctx_->commit_autoinc_value())) {
       LOG_WARN("fail to commit sync auto increment value", KR(ret));
-    } else if (OB_FAIL(ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
+    }
+    // 全量旁路导入的dml_stat在执行节点更新
+    // 增量旁路导入的dml_stat收集到协调节点在事务中更新
+    else if (ObDirectLoadMethod::is_full(param_.method_) &&
+               OB_FAIL(ObOptStatMonitorManager::update_dml_stat_info_from_direct_load(dml_stats.dml_stat_array_))) {
       LOG_WARN("fail to update dml stat info", KR(ret));
+    } else if (ObDirectLoadMethod::is_full(param_.method_) && FALSE_IT(dml_stats.reset())) {
     } else if (ObDirectLoadMethod::is_incremental(param_.method_) &&
-               txs->get_tx_exec_result(*ctx_->session_info_->get_tx_desc(), trans_result)) {
-      LOG_WARN("fail to get tx exec result", KR(ret));
+               OB_FAIL(txs->get_tx_exec_result(*ctx_->session_info_->get_tx_desc(), trans_result))) {
     } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {

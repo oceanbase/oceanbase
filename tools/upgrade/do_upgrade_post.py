@@ -106,9 +106,9 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
         actions.refresh_commit_sql_list()
         logging.info('================succeed to run post check action ===============')
 
-    except Exception, e:
+    except Exception as e:
       logging.exception('run error')
-      raise e
+      raise
     finally:
       # 打印统计信息
       print_stats()
@@ -116,12 +116,12 @@ def do_upgrade(my_host, my_port, my_user, my_passwd, timeout, my_module_set, upg
       # actions.dump_rollback_sql_to_file(upgrade_params.rollback_sql_filename)
       cur.close()
       conn.close()
-  except mysql.connector.Error, e:
+  except mysql.connector.Error as e:
     logging.exception('connection error')
-    raise e
-  except Exception, e:
+    raise
+  except Exception as e:
     logging.exception('normal error')
-    raise e
+    raise
 
 def do_upgrade_by_argv(argv):
   upgrade_params = UpgradeParams()
@@ -155,14 +155,14 @@ def do_upgrade_by_argv(argv):
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", module=\"%s\", log-file=\"%s\"',\
           host, port, user, password.replace('"', '\\"'), timeout, module_set, log_filename)
       do_upgrade(host, port, user, password, timeout, module_set, upgrade_params)
-    except mysql.connector.Error, e:
+    except mysql.connector.Error as e:
       logging.exception('mysql connctor error')
       logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-      raise e
-    except Exception, e:
+      raise
+    except Exception as e:
       logging.exception('normal error')
       logging.exception('run error, maybe you can reference ' + upgrade_params.rollback_sql_filename + ' to rollback it')
-      raise e
+      raise
 
 
 

@@ -122,7 +122,7 @@ int ObTableFdItem::check_expr_in_child(const ObRawExpr *expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null expr", K(ret));
-  } else if (expr->has_flag(CNT_AGG)) {
+  } else if (expr->has_flag(CNT_AGG) || expr->has_flag(CNT_WINDOW_FUNC)) {
     //do nothing
   } else if (expr->has_flag(CNT_COLUMN) || expr->has_flag(CNT_SET_OP)) {
     if (!expr->get_relation_ids().is_empty() &&

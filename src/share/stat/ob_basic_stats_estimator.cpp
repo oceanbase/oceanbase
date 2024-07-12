@@ -1131,7 +1131,7 @@ int ObBasicStatsEstimator::get_all_tablet_id_and_object_id(const ObTableStatPara
 
 int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
                                                  const int64_t tenant_id,
-                                                 const int64_t offset,
+                                                 const int64_t last_table_id,
                                                  const int64_t slice_cnt,
                                                  ObIArray<int64_t> &table_ids)
 {
@@ -1141,27 +1141,24 @@ int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
   if (OB_FAIL(get_gather_table_type_list(gather_table_type_list))) {
     LOG_WARN("failed to get gather table type list", K(ret));
   } else if (OB_FAIL(select_sql.append_fmt("SELECT /*+no_rewrite*/table_id "\
-                                           "FROM   (SELECT tenant_id,"\
-                                           "               table_id,"\
-                                           "               table_type"\
-                                           "       FROM   %s"\
-                                           "       WHERE  table_type IN %s"\
-                                           "       ORDER  BY tenant_id,"\
-                                           "                 table_id"\
-                                           "       LIMIT  %ld, %ld) t "\
-                                           "WHERE  table_type = %u "\
+                                           "FROM   %s t "\
+                                           "WHERE  table_id > %ld"
+                                           "  AND  table_type IN %s"\
+                                           "  AND  (table_type = %u "\
                                            "       OR EXISTS(SELECT 1 "\
                                            "                 FROM   %s m"\
                                            "                 WHERE  t.table_id = m.table_id"\
                                            "                        AND t.tenant_id = m.tenant_id"\
                                            "                        AND inserts + deletes + updates > 0"\
-                                           "                 limit 1); ",
+                                           "                 limit 1)) "
+                                           "ORDER  BY tenant_id, table_id "\
+                                           "LIMIT  %ld;",
                                            share::OB_ALL_TABLE_TNAME,
+                                           last_table_id,
                                            gather_table_type_list.ptr(),
-                                           offset,
-                                           slice_cnt,
                                            share::schema::ObTableType::VIRTUAL_TABLE,
-                                           share::OB_ALL_MONITOR_MODIFIED_TNAME))) {
+                                           share::OB_ALL_MONITOR_MODIFIED_TNAME,
+                                           slice_cnt))) {
     LOG_WARN("failed to append fmt", K(ret));
   } else {
     ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
@@ -1197,7 +1194,7 @@ int ObBasicStatsEstimator::get_need_stats_tables(ObExecContext &ctx,
       }
     }
     LOG_TRACE("succeed to get table ids that need gathering table stats",
-                                              K(select_sql), K(offset), K(slice_cnt), K(table_ids));
+                K(select_sql), K(last_table_id), K(slice_cnt), K(table_ids.count()), K(table_ids));
   }
   return ret;
 }

@@ -86,7 +86,7 @@ int ObTabletFinishTransferUtil::can_skip_check_transfer_tablets(
   if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -354,7 +354,7 @@ int ObTabletFinishTransferOutHelper::on_register_success_(
   if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
-  } else if (CLICK_FAIL(ls_svr->get_ls(src_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_svr->get_ls(src_ls_id, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(src_ls_id), K(tx_finish_transfer_out_info));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -563,7 +563,7 @@ int ObTabletFinishTransferOutHelper::on_replay_success_(
   if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
-  } else if (CLICK_FAIL(ls_svr->get_ls(tx_finish_transfer_out_info.src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_svr->get_ls(tx_finish_transfer_out_info.src_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(tx_finish_transfer_out_info), K(tx_finish_transfer_out_info));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -718,7 +718,7 @@ int ObTabletFinishTransferInReplayExecutor::do_replay_(ObTabletHandle &tablet_ha
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls_svr->get_ls(dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(dest_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(dest_ls_id_), K(tablet_info_));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -850,7 +850,7 @@ int ObTabletFinishTransferInReplayExecutor::try_make_dest_ls_rebuild_()
   } else if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
-  } else if (OB_FAIL(ls_svr->get_ls(src_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_svr->get_ls(src_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(src_ls_id_), K(tablet_info_));
     if (OB_LS_NOT_EXIST == ret) {
       //overwrite ret
@@ -989,7 +989,7 @@ int ObTabletFinishTransferInHelper::on_register_success_(
   if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
-  } else if (CLICK_FAIL(ls_svr->get_ls(dest_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_svr->get_ls(dest_ls_id, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(dest_ls_id), K(tx_finish_transfer_in_info));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1232,7 +1232,7 @@ int ObTabletFinishTransferInHelper::on_replay_success_(
   if (OB_ISNULL(ls_svr = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls svr should not be NULL", K(ret), KP(ls_svr));
-  } else if (CLICK_FAIL(ls_svr->get_ls(tx_finish_transfer_in_info.dest_ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (CLICK_FAIL(ls_svr->get_ls(tx_finish_transfer_in_info.dest_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
     LOG_WARN("failed to get ls", K(ret), K(tx_finish_transfer_in_info), K(tx_finish_transfer_in_info));
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;

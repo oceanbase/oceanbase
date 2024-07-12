@@ -51,9 +51,7 @@ int ObExprConnectionId::eval_connection_id(const ObExpr &expr, ObEvalCtx &ctx,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", K(ret));
   } else {
-    auto sid = session_info->is_master_session() ? session_info->get_sessid() : session_info->get_master_sessid();
-    sid = session_info->get_client_sessid() == INVALID_SESSID ?
-          sid : session_info->get_client_sessid();
+    uint32_t sid = session_info->is_master_session() ? session_info->get_compatibility_sessid() : session_info->get_master_sessid();
     expr_datum.set_uint32(sid);
   }
   return ret;

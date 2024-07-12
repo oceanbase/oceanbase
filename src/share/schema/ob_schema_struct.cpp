@@ -11196,6 +11196,10 @@ void ObDbLinkBaseInfo::reset()
   authpwd_.reset();
   passwordx_.reset();
   authpwdx_.reset();
+  host_name_.reset();
+  host_port_ = 0;
+  reverse_host_name_.reset();
+  reverse_host_port_ = 0;
   reverse_cluster_name_.reset();
   reverse_tenant_name_.reset();
   reverse_user_name_.reset();
@@ -11213,7 +11217,7 @@ bool ObDbLinkBaseInfo::is_valid() const
       && !dblink_name_.empty()
       && !tenant_name_.empty()
       && !user_name_.empty()
-      && host_addr_.is_valid()
+      && ((!host_name_.empty() && 0 != host_port_) || host_addr_.is_valid())
       && (!password_.empty() || !encrypted_password_.empty());
 }
 
@@ -11397,7 +11401,11 @@ OB_SERIALIZE_MEMBER(ObDbLinkInfo,
                     plain_reverse_password_,
                     reverse_host_addr_,
                     database_name_,
-                    if_not_exist_);
+                    if_not_exist_,
+                    host_name_,
+                    host_port_,
+                    reverse_host_name_,
+                    reverse_host_port_);
 
 ObDbLinkSchema::ObDbLinkSchema(const ObDbLinkSchema &other)
   : ObDbLinkBaseInfo()
@@ -11419,6 +11427,8 @@ ObDbLinkSchema &ObDbLinkSchema::operator=(const ObDbLinkSchema &other)
     driver_proto_ = other.driver_proto_;
     if_not_exist_ = other.if_not_exist_;
     flag_ = other.flag_;
+    host_port_ = other.host_port_;
+    reverse_host_port_ = other.reverse_host_port_;
     if (OB_FAIL(deep_copy_str(other.dblink_name_, dblink_name_))) {
       LOG_WARN("Fail to deep copy dblink name", K(ret));
     } else if (OB_FAIL(deep_copy_str(other.cluster_name_, cluster_name_))) {
@@ -11457,6 +11467,10 @@ ObDbLinkSchema &ObDbLinkSchema::operator=(const ObDbLinkSchema &other)
       LOG_WARN("Fail to deep copy plain_reverse_password", K(ret), K(other.plain_reverse_password_));
     } else if (OB_FAIL(deep_copy_str(other.database_name_, database_name_))) {
       LOG_WARN("Fail to deep copy database_name", K(ret), K(other.database_name_));
+    } else if (OB_FAIL(deep_copy_str(other.host_name_, host_name_))) {
+      LOG_WARN("Fail to deep copy host_name", K(ret), K(other.host_name_));
+    } else if (OB_FAIL(deep_copy_str(other.reverse_host_name_, reverse_host_name_))) {
+      LOG_WARN("Fail to deep copy host_name", K(ret), K(other.reverse_host_name_));
     }
     host_addr_ = other.host_addr_;
     reverse_host_addr_ = other.reverse_host_addr_;
@@ -11496,7 +11510,11 @@ bool ObDbLinkSchema::operator==(const ObDbLinkSchema &other) const
        && plain_reverse_password_ == other.plain_reverse_password_
        && reverse_host_addr_ == other.reverse_host_addr_
        && database_name_ == other.database_name_
-       && if_not_exist_ == other.if_not_exist_);
+       && if_not_exist_ == other.if_not_exist_
+       && host_name_ == other.host_name_
+       && host_port_ == other.host_port_
+       && reverse_host_name_ == other.host_name_
+       && reverse_host_port_ == other.host_port_);
 }
 
 ObSynonymInfo::ObSynonymInfo(common::ObIAllocator *allocator):

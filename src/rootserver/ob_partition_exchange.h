@@ -37,7 +37,7 @@ class ObPartitionExchange final
 {
 public:
   typedef std::pair<share::ObLSID, common::ObTabletID> LSTabletID;
-  explicit ObPartitionExchange(ObDDLService &ddl_service);
+  explicit ObPartitionExchange(ObDDLService &ddl_service, const uint64_t data_version);
   ~ObPartitionExchange();
   int check_and_exchange_partition(const obrpc::ObExchangePartitionArg &arg, obrpc::ObAlterTableRes &res, ObSchemaGetterGuard &schema_guard);
 private:
@@ -263,6 +263,7 @@ private:
   int get_object_id_from_partition_schema_(ObPartitionSchema &partition_schema, const bool get_subpart_only, int64_t &object_id);
 private:
   ObDDLService &ddl_service_;
+  uint64_t data_version_;
   common::hash::ObHashMap<uint64_t, uint64_t> used_pt_nt_id_map_;
   common::hash::ObHashMap<uint64_t, ObTabletID> used_table_to_tablet_id_map_;
   common::ObSArray<uint64_t> unused_pt_index_id_;

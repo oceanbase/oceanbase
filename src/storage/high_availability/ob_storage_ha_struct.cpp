@@ -1093,7 +1093,7 @@ int ObMigrationUtils::get_ls_rebuild_seq(const uint64_t tenant_id,
   } else if (OB_ISNULL(ls_service = MTL_WITH_CHECK_TENANT(ObLSService *, tenant_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream service is NULL", K(ret));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::STORAGE_MOD))) {
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, handle, ObLSGetMod::HA_MOD))) {
     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1473,6 +1473,395 @@ bool ObTabletBackfillInfo::operator == (const ObTabletBackfillInfo &other) const
   }
   return is_same;
 }
+
+/******************ObBackfillTabletsTableMgr*********************/
+ObBackfillTabletsTableMgr::ObTabletTableMgr::ObTabletTableMgr()
+  : is_inited_(false),
+    tablet_id_(),
+    transfer_seq_(0),
+    max_major_end_scn_(SCN::min_scn()),
+    allocator_("Backfill"),
+    table_handle_array_()
+{
+}
+
+ObBackfillTabletsTableMgr::ObTabletTableMgr::~ObTabletTableMgr()
+{
+}
+
+int ObBackfillTabletsTableMgr::ObTabletTableMgr::init(
+    const common::ObTabletID &tablet_id,
+    const int64_t transfer_seq)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("tablet table mgr init twice", K(ret));
+  } else if (!tablet_id.is_valid() || transfer_seq < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init tablet table mgr get invalid argument", K(ret), K(tablet_id), K(transfer_seq));
+  } else {
+    tablet_id_ = tablet_id;
+    transfer_seq_ = transfer_seq;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::ObTabletTableMgr::add_sstable(
+    const int64_t transfer_seq,
+    const share::SCN &transfer_start_scn,
+    ObTableHandleV2 &table_handle)
+{
+  int ret = OB_SUCCESS;
+  ObITable *table = nullptr;
+  ObTableHandleV2 new_sstable_handle;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet table mgr do not init", K(ret));
+  } else if (!table_handle.is_valid() || transfer_seq < 0 || !transfer_start_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table handle should not be invalid", K(ret), K(tablet_id_), K(table_handle), K(transfer_seq), K(transfer_start_scn));
+  } else if (transfer_seq != transfer_seq_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("tablet transfer seq not match, cannot add sstable", K(ret), K(transfer_seq_), K(transfer_seq));
+  } else if (OB_ISNULL(table = table_handle.get_table())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table should not be NULL", K(ret), KP(table), K(table_handle), K(tablet_id_), K(transfer_seq_));
+  } else if (!table->is_sstable()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table is not sstable, unexpected", K(ret), KPC(table));
+  } else {
+    ObSSTable *sstable = static_cast<ObSSTable *>(table);
+    ObSSTable *orig_sstable = nullptr;
+    ObSSTable *copied_sstable = nullptr;
+    ObMetaDiskAddr addr;
+    addr.set_mem_addr(0, sizeof(ObSSTable));
+    ObStorageMetaHandle sstable_handle;
+    if (sstable->is_loaded()) {
+      orig_sstable = sstable;
+    } else if (OB_FAIL(ObTabletTableStore::load_sstable(
+        sstable->get_addr(), sstable->is_co_sstable(), sstable_handle))) {
+      LOG_WARN("failed to load sstable", K(ret), KPC(sstable));
+    } else if (OB_FAIL(sstable_handle.get_sstable(orig_sstable))) {
+      LOG_WARN("failed to get sstable from sstable handle", K(ret), K(sstable_handle));
+    }
+
+    if (FAILEDx(orig_sstable->copy_from_old_sstable(*orig_sstable, allocator_, copied_sstable))) {
+      LOG_WARN("failed to copy from old sstable", K(ret), KPC(orig_sstable), KP(copied_sstable));
+    } else if (OB_FAIL(copied_sstable->set_addr(addr))) {
+      LOG_WARN("failed to set sstable addr", K(ret), K(addr), KPC(copied_sstable));
+    } else if (OB_FAIL(new_sstable_handle.set_sstable(copied_sstable, &allocator_))) {
+      LOG_WARN("failed to set sstable", K(ret), K(addr), KPC(copied_sstable));
+    } else if (OB_FAIL(table_handle_array_.add_table(new_sstable_handle))) {
+      LOG_WARN("failed to push table into array", K(ret), K(tablet_id_));
+    }
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::ObTabletTableMgr::get_all_sstables(
+    ObTablesHandleArray &table_handle_array)
+{
+  int ret = OB_SUCCESS;
+  table_handle_array.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet table mgr do not init", K(ret));
+  } else if (OB_FAIL(table_handle_array.assign(table_handle_array_))) {
+    LOG_WARN("failed to get table handle array", K(ret), K(tablet_id_));
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::ObTabletTableMgr::set_max_major_end_scn(
+    const share::SCN &max_major_end_scn)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet table mgr do not init", K(ret));
+  } else if (!max_major_end_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("set max major end scn get invalid argument", K(ret), K(max_major_end_scn));
+  } else {
+    max_major_end_scn_ = max_major_end_scn;
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::ObTabletTableMgr::get_max_major_end_scn(
+    share::SCN &max_major_end_scn)
+{
+  int ret = OB_SUCCESS;
+  max_major_end_scn.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet table mgr do not init", K(ret));
+  } else {
+    max_major_end_scn = max_major_end_scn_;
+  }
+  return ret;
+}
+
+ObBackfillTabletsTableMgr::ObBackfillTabletsTableMgr()
+  : is_inited_(false),
+    lock_(),
+    map_(),
+    local_rebuild_seq_(0),
+    transfer_start_scn_()
+{
+}
+
+ObBackfillTabletsTableMgr::~ObBackfillTabletsTableMgr()
+{
+  reuse();
+}
+
+void ObBackfillTabletsTableMgr::reuse()
+{
+  common::SpinWLockGuard guard(lock_);
+  if (!map_.created()) {
+  } else {
+    for (TransferTableMap::iterator iter = map_.begin(); iter != map_.end(); ++iter) {
+      ObTabletTableMgr *tablet_table_mgr = iter->second;
+      tablet_table_mgr->~ObTabletTableMgr();
+      mtl_free(tablet_table_mgr);
+      tablet_table_mgr = nullptr;
+    }
+    map_.reuse();
+  }
+}
+
+int ObBackfillTabletsTableMgr::init(const int64_t rebuild_seq, const share::SCN &transfer_start_scn)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backfill tablets table mgr init twice", K(ret));
+  } else if (rebuild_seq < 0 || !transfer_start_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("backfill tablets table mgr init get invalid argument", K(ret), K(rebuild_seq), K(transfer_start_scn));
+  } else if (OB_FAIL(map_.create(MAX_BUCKET_NUM, "BackfillMap"))) {
+    LOG_WARN("failed to create backfill table mgr map", K(ret));
+  } else {
+    local_rebuild_seq_ = rebuild_seq;
+    transfer_start_scn_ = transfer_start_scn;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::add_sstable(
+    const common::ObTabletID &tablet_id,
+    const int64_t rebuild_seq,
+    const share::SCN &transfer_start_scn,
+    const int64_t transfer_seq,
+    ObTableHandleV2 &table_handle)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backfill tablets table mgr do not init", K(ret));
+  } else if (!tablet_id.is_valid() || rebuild_seq < 0 || !transfer_start_scn.is_valid() || transfer_seq < 0 || !table_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("add sstable get invalid argument", K(ret), K(tablet_id), K(rebuild_seq), K(transfer_start_scn), K(transfer_seq), K(table_handle));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    if (rebuild_seq != local_rebuild_seq_ || transfer_start_scn != transfer_start_scn_) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("ls rebuild seq not match or transfer start scn is not match, cannot add sstable",
+          K(ret), K(tablet_id), K(rebuild_seq), K(local_rebuild_seq_), K(transfer_start_scn), K(transfer_start_scn_));
+    } else {
+      ObTabletTableMgr *tablet_table_mgr = nullptr;
+      int hash_ret = map_.get_refactored(tablet_id, tablet_table_mgr);
+      if (OB_SUCCESS == hash_ret) {
+        if (OB_FAIL(tablet_table_mgr->add_sstable(transfer_seq, transfer_start_scn, table_handle))) {
+          LOG_WARN("failed to add sstable into tablet table mgr", K(ret), K(tablet_id), K(transfer_seq), K(table_handle));
+        }
+      } else {
+        ret = hash_ret;
+        LOG_WARN("failed to add sstable", K(ret), K(tablet_id), K(rebuild_seq), K(transfer_start_scn), K(transfer_seq), K(table_handle));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::get_tablet_all_sstables(
+    const common::ObTabletID &tablet_id, ObTablesHandleArray &table_handle_array)
+{
+  int ret = OB_SUCCESS;
+  table_handle_array.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backfill tablets table mgr do not init", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get tablet all sstables get invalid argument", K(ret), K(tablet_id));
+  } else {
+    common::SpinRLockGuard guard(lock_);
+    ObTabletTableMgr *tablet_table_mgr = nullptr;
+    int hash_ret = map_.get_refactored(tablet_id, tablet_table_mgr);
+    if (OB_SUCCESS == hash_ret) {
+      if (OB_FAIL(tablet_table_mgr->get_all_sstables(table_handle_array))) {
+        LOG_WARN("failed to get all sstables", K(ret), K(tablet_id));
+      }
+    } else {
+      ret = hash_ret;
+      LOG_WARN("tablet sstable do not exist", K(ret), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::init_tablet_table_mgr(const common::ObTabletID &tablet_id, const int64_t transfer_seq)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backfill tablets table mgr do not init", K(ret));
+  } else if (!tablet_id.is_valid() || transfer_seq < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init tablet table mgr get invalid argument", K(ret), K(tablet_id), K(transfer_seq));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    ObTabletTableMgr *tablet_table_mgr = nullptr;
+    int hash_ret = map_.get_refactored(tablet_id, tablet_table_mgr);
+    if (OB_HASH_NOT_EXIST == hash_ret) {
+      void *buf = NULL;
+      tablet_table_mgr = nullptr;
+      if (OB_ISNULL(buf = mtl_malloc(sizeof(ObTabletTableMgr), "TabletTableMgr"))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc memory", K(ret), KP(buf));
+      } else if (FALSE_IT(tablet_table_mgr = new (buf) ObTabletTableMgr())) {
+      } else if (OB_FAIL(tablet_table_mgr->init(tablet_id, transfer_seq))) {
+        LOG_WARN("failed to init tablet table mgr", K(ret), K(tablet_id));
+      } else if (OB_FAIL(map_.set_refactored(tablet_id, tablet_table_mgr))) {
+        LOG_WARN("failed to set tablet table mgr into map", K(ret), K(tablet_id));
+      } else {
+        tablet_table_mgr = nullptr;
+      }
+      if (OB_NOT_NULL(tablet_table_mgr)) {
+        tablet_table_mgr->~ObTabletTableMgr();
+        mtl_free(tablet_table_mgr);
+        tablet_table_mgr = nullptr;
+      }
+    } else if (OB_SUCCESS == hash_ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet table mgr is already exist, unexpected", K(ret), K(tablet_id), KP(tablet_table_mgr));
+    } else {
+      ret = hash_ret;
+      LOG_WARN("failed to get tablet table mgr", K(ret), K(tablet_id));
+    }
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::remove_tablet_table_mgr(
+    const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObTabletTableMgr *tablet_table_mgr = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backfill tablets table mgr do not init", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("remove tablet table key mgr get invalid argument", K(ret), K(tablet_id));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    if (OB_FAIL(map_.erase_refactored(tablet_id, &tablet_table_mgr))) {
+      LOG_WARN("failed to erase tablet table mgr", K(ret), K(tablet_id));
+    } else if (nullptr == tablet_table_mgr) {
+      //do nothing
+    } else {
+      tablet_table_mgr->~ObTabletTableMgr();
+      mtl_free(tablet_table_mgr);
+      tablet_table_mgr = nullptr;
+    }
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::set_max_major_end_scn(
+    const common::ObTabletID &tablet_id,
+    const share::SCN &max_major_end_scn)
+{
+  int ret = OB_SUCCESS;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backfill tablets table mgr do not init", K(ret));
+  } else if (!tablet_id.is_valid() || !max_major_end_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("set max major end scn get invalid argument", K(ret), K(tablet_id));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    ObTabletTableMgr *tablet_table_mgr = nullptr;
+    int hash_ret = map_.get_refactored(tablet_id, tablet_table_mgr);
+    if (OB_SUCCESS == hash_ret) {
+      if (OB_FAIL(tablet_table_mgr->set_max_major_end_scn(max_major_end_scn))) {
+        LOG_WARN("failed to set max major end scn", K(ret), K(tablet_id), K(max_major_end_scn));
+      }
+    } else {
+      ret = hash_ret;
+      LOG_WARN("tablet table mgr do not exist", K(ret), K(tablet_id), K(max_major_end_scn));
+    }
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::get_max_major_end_scn(
+    const common::ObTabletID &tablet_id,
+    share::SCN &max_major_end_scn)
+{
+  int ret = OB_SUCCESS;
+  max_major_end_scn.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backfill tablets table mgr do not init", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get max major end scn get invalid argument", K(ret), K(tablet_id));
+  } else {
+    common::SpinRLockGuard guard(lock_);
+    ObTabletTableMgr *tablet_table_mgr = nullptr;
+    int hash_ret = map_.get_refactored(tablet_id, tablet_table_mgr);
+    if (OB_SUCCESS == hash_ret) {
+      if (OB_FAIL(tablet_table_mgr->get_max_major_end_scn(max_major_end_scn))) {
+        LOG_WARN("failed to set max major end scn", K(ret), K(tablet_id), K(max_major_end_scn));
+      }
+    } else {
+      ret = hash_ret;
+      LOG_WARN("tablet table mgr do not exist", K(ret), K(tablet_id), K(max_major_end_scn));
+    }
+  }
+  return ret;
+}
+
+int ObBackfillTabletsTableMgr::get_local_rebuild_seq(int64_t &local_rebuild_seq)
+{
+  int ret = OB_SUCCESS;
+  local_rebuild_seq = 0;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backfill tablets table mgr do not init", K(ret));
+  } else {
+    common::SpinRLockGuard guard(lock_);
+    local_rebuild_seq = local_rebuild_seq_;
+  }
+  return ret;
+}
+
+
 }
 }
 

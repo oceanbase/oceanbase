@@ -811,3 +811,15 @@ CREATE VIEW v1 AS (SELECT * FROM t1 ) UNION (SELECT * FROM t1 );
 
 drop table t1;
 drop view v1;
+
+--echo bugfix: 57363484
+--disable_warnings
+drop table if exists t1;
+create table t1 (c1 int primary key,j json, g GEOMETRY NOT NULL SRID 4326, SPATIAL INDEX(g));
+insert into t1 values (1,'{"b":2}', ST_GeomFromText('POINT(1 1)', 4326));
+insert into t1 values (2, '{"b":2}', ST_GeomFromText('POINT(-1 1)', 4326));
+insert into t1 values (3,'{"b":2}',  ST_GeomFromText('POINT(-1 -1)', 4326));
+delete from t1 where c1 = 3;
+alter table t1 drop column j;
+delete from t1 where c1 = 2;
+drop table t1;

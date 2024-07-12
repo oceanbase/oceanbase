@@ -1708,7 +1708,7 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
                                          ds_result_items, only_ds_basic_stat))) {
     LOG_WARN("failed to init ds result items", K(ret));
   } else {
-    OPT_TRACE("begin to process table dynamic sampling estimation");
+    OPT_TRACE_TITLE("BEGIN DYNAMIC SAMPLE ESTIMATION");
     ObArenaAllocator allocator("ObOpTableDS", OB_MALLOC_NORMAL_BLOCK_SIZE, ctx.get_session_info()->get_effective_tenant_id());
     ObDynamicSampling dynamic_sampling(ctx, allocator);
     int64_t start_time = ObTimeUtility::current_time();
@@ -1743,7 +1743,7 @@ int ObAccessPathEstimation::process_dynamic_sampling_estimation(ObOptimizerConte
       LOG_TRACE("finish dynamic sampling", K(only_ds_basic_stat), K(no_ds_data), K(is_success));
     }
     OPT_TRACE("end to process table dynamic sampling estimation");
-    OPT_TRACE_TITLE("DYNAMIC SAMPLE RESULT");
+    OPT_TRACE("dynamic sampling estimation result:");
     OPT_TRACE(ds_result_items);
   }
   return ret;

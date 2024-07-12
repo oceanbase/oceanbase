@@ -241,7 +241,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
   }
   LOG_DEBUG("Generated read info", K_(read_info));
   read_param_version_ = storage::ObCGReadInfo::MIX_READ_INFO_LOCAL_CACHE;
-  if (OB_SUCC(ret) && use_cs && tmp_cg_idxs.count() <= storage::ObCGReadInfo::LOCAL_MAX_CG_READ_INFO_CNT) {
+  if (OB_SUCC(ret) && use_cs && tmp_cg_idxs.count() <= storage::ObCGReadInfo::get_local_max_cg_cnt()) {
     // construct cg read infos
     void *tmp_ptr  = nullptr;
     int64_t cg_cnt = tmp_cg_idxs.count();

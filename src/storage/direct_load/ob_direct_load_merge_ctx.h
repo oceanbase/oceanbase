@@ -18,6 +18,7 @@
 #include "storage/direct_load/ob_direct_load_origin_table.h"
 #include "storage/direct_load/ob_direct_load_struct.h"
 #include "storage/direct_load/ob_direct_load_table_data_desc.h"
+#include "storage/direct_load/ob_direct_load_trans_param.h"
 #include "storage/direct_load/ob_direct_load_fast_heap_table.h"
 #include "observer/table_load/ob_table_load_table_ctx.h"
 
@@ -69,7 +70,8 @@ public:
                "insert_mode", ObDirectLoadInsertMode::get_type_string(insert_mode_),
                KP_(insert_table_ctx),
                KP_(dml_row_handler),
-               KP_(file_mgr));
+               KP_(file_mgr),
+               K_(trans_param));
 public:
   uint64_t table_id_;
   uint64_t lob_meta_table_id_;
@@ -91,6 +93,7 @@ public:
   ObDirectLoadInsertTableContext *insert_table_ctx_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
   ObDirectLoadTmpFileManager *file_mgr_;
+  ObDirectLoadTransParam trans_param_;
 };
 
 class ObDirectLoadMergeCtx

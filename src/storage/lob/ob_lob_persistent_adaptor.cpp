@@ -364,6 +364,7 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.store_ctx_guard_ = store_ctx_guard;
   dml_base_param.write_flag_.set_is_insert_up();
   dml_base_param.write_flag_.set_lob_aux();
+  dml_base_param.dml_allocator_ = param.allocator_;
   {
     for (int i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
       if (OB_FAIL(column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
@@ -745,11 +746,16 @@ int ObPersistentLobApator::get_lob_tablets(
 {
   int ret = OB_SUCCESS;
   ObTabletBindingMdsUserData ddl_data;
-  if (OB_FAIL(inner_get_tablet(param, param.tablet_id_, data_tablet))) {
+  const int64_t cur_time = ObClockGenerator::getClock();
+  const int64_t timeout = param.timeout_ - cur_time;
+  if (OB_UNLIKELY(timeout <= 0)) {
+    ret = OB_TIMEOUT;
+    LOG_WARN("timeout has reached", K(ret), "abs_timeout", param.timeout_, K(cur_time));
+  } else if (OB_FAIL(inner_get_tablet(param, param.tablet_id_, data_tablet))) {
     LOG_WARN("failed to get data tablet", K(ret), K(param.ls_id_), K(param.tablet_id_));
   } else {
     if (!param.lob_meta_tablet_id_.is_valid() || !param.lob_piece_tablet_id_.is_valid()) {
-      if (OB_FAIL(data_tablet.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
+      if (OB_FAIL(data_tablet.get_obj()->get_ddl_data(share::SCN::max_scn(), ddl_data, timeout))) {
         LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet));
       } else {
         param.lob_meta_tablet_id_ = ddl_data.lob_meta_tablet_id_;
