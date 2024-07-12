@@ -37,7 +37,8 @@ public:
     part_count_(0),
     tenant_id_(tenant_id),
     alloc_(alloc),
-    part_pair_list_(alloc)
+    part_pair_list_(alloc),
+    mcv_part_(NULL)
   {}
 
   virtual ~ObHJPartitionMgr();
@@ -56,6 +57,10 @@ public:
                          bool is_left,
                          ObHJPartition *&part,
                          bool only_get = false);
+  int create_mcv_part(int32_t level,
+                      int64_t part_shift,
+                      int64_t partno,
+                      ObHJPartition *&part);
 
   void free(ObHJPartition *&part) {
     if (NULL != part) {
@@ -67,6 +72,8 @@ public:
   }
 
 public:
+  static const int32_t MCV_PARTITION_LEVEL = -1;
+  static const int64_t MCV_PARTITION_NO = -1;
   int64_t total_dump_count_;
   int64_t total_dump_size_;
   int64_t part_count_;
@@ -76,6 +83,7 @@ private:
   uint64_t tenant_id_;
   common::ObIAllocator &alloc_;
   ObHJPartitionPairList part_pair_list_;
+  ObHJPartition *mcv_part_;
 };
 
 } // end namespace sql

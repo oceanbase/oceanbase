@@ -256,6 +256,8 @@ public:
   bool is_shared_ht_;
   // record which equal cond is null safe equal
   common::ObFixedArray<bool, common::ObIAllocator> is_ns_equal_cond_;
+  // most common values of right table
+  common::ObSEArray<ObObj, 100> right_popular_values_;
 };
 
 // hash join has no expression result overwrite problem:
@@ -327,6 +329,9 @@ public:
 private:
   int init_mem_context(uint64_t tenant_id);
   int init_join_table_ctx();
+  int init_mcv();
+  bool check_use_mcv();
+  int get_most_common_values_hash(uint64_t *mcv_hash_vals, int64_t &size);
   int process_partition();
   int process_left(bool &need_not_read_right);
   int fill_left_unmatched_result();
@@ -349,7 +354,7 @@ private:
   int get_processor_type();
   int build_hash_table_in_memory(int64_t &num_left_rows);
   int in_memory_process(int64_t &num_left_rows);
-  int create_partition(bool is_left, int64_t part_id, ObHJPartition *&part);
+  int create_partition(bool is_left, bool is_mcv, int64_t part_id, ObHJPartition *&part);
   int init_join_partition();
   int force_dump(bool for_left);
   void update_remain_data_memory_size(
@@ -377,6 +382,7 @@ private:
   int update_dumped_partition_statistics(bool is_left);
 
   int fill_partition_batch(int64_t &num_left_rows);
+  int add_batch_partition(int64_t &num_left_rows);
   int get_next_left_row_batch(bool is_from_row_store,
                               const ObBatchRows *&child_brs);
   int get_next_right_batch();
@@ -394,6 +400,12 @@ private:
   int outer_join_output();
   int fill_left_join_result();
   void set_output_eval_info();
+  int calc_hash_belong_to_mcv(uint64_t *hash_vals,
+                              int64_t size,
+                              ObBitVector *skip,
+                              bool &all_rows_active,
+                              uint16_t *selector,
+                              uint16_t &selector_cnt);
   int calc_part_selector(uint64_t *hash_vals, const ObBatchRows &child_brs);
   bool output_unmatch_left() {
     return LEFT_ANTI_JOIN == MY_SPEC.join_type_
@@ -526,6 +538,8 @@ private:
   static const int64_t PRICE_PER_ROW = 48;
   static const int64_t MAX_PART_COUNT_PER_LEVEL = INIT_LTB_SIZE<< 1;
 
+  static const int64_t MAX_MCV_VALUES = 100; // Max number of mcv
+
   int64_t max_output_cnt_;
   HJState hj_state_;
   HJProcessor hj_processor_;
@@ -556,6 +570,7 @@ private:
   ObHJPartition **right_part_array_;
   ObHJPartition *left_part_;
   ObHJPartition *right_part_;
+  ObHJPartition *left_mcv_part_; // always in mem
   ObHJPartitionMgr *part_mgr_;
   int32_t part_level_;
   int32_t part_shift_;
@@ -564,6 +579,8 @@ private:
   const ObHJStoredRow **part_stored_rows_;
   ObHJStoredRow **part_added_rows_;
   int64_t cur_dumped_partition_;
+  bool is_dumped_;
+  int64_t first_build_hash_table_;
   uint64_t *hash_vals_;
   ObBitVector *null_skip_bitmap_;
   ObBatchRows child_brs_;

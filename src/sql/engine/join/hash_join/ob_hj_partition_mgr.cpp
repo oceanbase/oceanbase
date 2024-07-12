@@ -36,6 +36,11 @@ void ObHJPartitionMgr::reset()
     }
   }
   part_pair_list_.clear();
+
+  if (NULL != mcv_part_) {
+    free(mcv_part_);
+    mcv_part_ = NULL;
+  }
 }
 
 int ObHJPartitionMgr::next_part_pair(ObHJPartitionPair &part_pair) {
@@ -190,6 +195,21 @@ int ObHJPartitionMgr::get_or_create_part(int32_t level,
     }
   }
 
+  return ret;
+}
+
+int ObHJPartitionMgr::create_mcv_part(int32_t level,
+                                      int64_t part_shift,
+                                      int64_t partno,
+                                      ObHJPartition *&part) {
+  int ret = OB_SUCCESS;
+  void *buf = alloc_.alloc(sizeof(ObHJPartition));
+  if (NULL == buf) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else {
+    part = new (buf) ObHJPartition(alloc_, tenant_id_, level, part_shift, partno);
+    mcv_part_ = part;
+  }
   return ret;
 }
 

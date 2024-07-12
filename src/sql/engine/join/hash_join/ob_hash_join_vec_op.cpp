@@ -110,7 +110,8 @@ ObHashJoinVecSpec::ObHashJoinVecSpec(common::ObIAllocator &alloc, const ObPhyOpe
   is_naaj_(false),
   is_sna_(false),
   is_shared_ht_(false),
-  is_ns_equal_cond_(alloc)
+  is_ns_equal_cond_(alloc),
+  right_popular_values_()
 {
 }
 
@@ -155,6 +156,7 @@ ObHashJoinVecOp::ObHashJoinVecOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOp
   right_part_array_(NULL),
   left_part_(NULL),
   right_part_(NULL),
+  left_mcv_part_(NULL),
   part_mgr_(NULL),
   part_level_(0),
   part_shift_(MAX_PART_LEVEL << 3),
@@ -163,6 +165,7 @@ ObHashJoinVecOp::ObHashJoinVecOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOp
   part_stored_rows_(NULL),
   part_added_rows_(NULL),
   cur_dumped_partition_(MAX_PART_COUNT_PER_LEVEL),
+  is_dumped_(false),
   hash_vals_(NULL),
   null_skip_bitmap_(NULL),
   child_brs_(),
@@ -233,6 +236,8 @@ int ObHashJoinVecOp::inner_open()
     LOG_WARN("fail to init join table ctx", K(ret));
   } else if (OB_FAIL(join_table_.init(jt_ctx_, *alloc_))) {
     LOG_WARN("fail to init hash table", K(ret));
+  } else if (OB_FAIL(init_mcv())) {
+    LOG_WARN("fail to init mcv optimization", K(ret));
   } else {
     tenant_id_ = session->get_effective_tenant_id();
     ObTenantConfigGuard tenant_config(TENANT_CONF(session->get_effective_tenant_id()));
@@ -323,6 +328,71 @@ int ObHashJoinVecOp::init_join_table_ctx()
     }
   }
 
+  return ret;
+}
+
+int ObHashJoinVecOp::init_mcv()
+{
+  int ret = OB_SUCCESS;
+  bool is_mcv = check_use_mcv();
+  if (is_mcv) {
+    int64_t n_mcvs = MAX_MCV_VALUES;
+    uint64_t *mcv_hash_vals = reinterpret_cast<uint64_t *>(alloc_->alloc(sizeof(uint64_t) * n_mcvs));
+    get_most_common_values_hash(mcv_hash_vals, n_mcvs);
+    if (OB_FAIL(join_table_.init_mcv(jt_ctx_, *alloc_, mcv_hash_vals, n_mcvs))) {
+      LOG_WARN("fail to init skew join hash table", K(ret));
+    } else {
+      alloc_->free(mcv_hash_vals);
+      mcv_hash_vals = NULL;
+      const int64_t batch_size = MY_SPEC.max_batch_size_;
+      OZ (vec_alloc_ptrs(&mem_context_->get_arena_allocator(),
+                    output_info_.mcv_selector_, sizeof(*output_info_.mcv_selector_) * batch_size,
+                    probe_batch_rows_.mcv_key_data_, join_table_.get_normalized_key_size() * batch_size,
+                    jt_ctx_.mcv_cur_items_, sizeof(*jt_ctx_.mcv_cur_items_) * batch_size));
+    }
+    LOG_TRACE("HashJoin use mcv optimization");
+  } else {
+    is_mcv = false;
+  }
+  output_info_.mcv_selector_cnt_ = 0;
+  jt_ctx_.is_probe_skew_ = is_mcv;
+  return ret;
+}
+
+bool ObHashJoinVecOp::check_use_mcv()
+{
+  bool probe_table_skew = false;
+  bool in_memory = true;
+  
+  probe_table_skew = MY_SPEC.right_popular_values_.count() > 0;
+
+  if (probe_table_skew) {
+    // estimated rows in left table can be accommodated by memory
+    int64_t n_rows = left_->get_spec().rows_;
+    int64_t max_row_width = left_->get_spec().width_;
+    int64_t available_mem = sql_mem_processor_.get_sql_mem_mgr()->get_global_bound_size();
+    // int64_t available_mem = sql_mem_processor_.get_sql_mem_mgr()->get_max_workarea_size();
+    in_memory = available_mem >= n_rows * max_row_width;
+  }
+  
+  LOG_TRACE("check whether use mcv optimization", K(probe_table_skew), K(in_memory));
+  return probe_table_skew && !in_memory; 
+}
+
+int ObHashJoinVecOp::get_most_common_values_hash(uint64_t *mcv_hash_vals, int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  const common::ObIArray<ObObj> &popular_values = MY_SPEC.right_popular_values_;
+  size = popular_values.count();
+  if (0 == size) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("right_popular_values empty");
+  } else {
+    size = min(MAX_MCV_VALUES, size);
+    for (int64_t i = 0; i < size; ++i) {
+      popular_values.at(i).hash_murmur(mcv_hash_vals[i], HASH_SEED);
+    }
+  }
   return ret;
 }
 
@@ -468,6 +538,8 @@ int ObHashJoinVecOp::inner_get_next_batch(const int64_t max_row_cnt)
         if (OB_ITER_END == ret) {
           hj_state_ = HJState::LOAD_NEXT_PARTITION;
           ret = OB_SUCCESS;
+          jt_ctx_.is_probe_skew_ = false;
+          output_info_.mcv_selector_cnt_ = 0;
         } else if (OB_SUCCESS == ret) {
           exit_while = true;
         } else {
@@ -572,7 +644,7 @@ int ObHashJoinVecOp::process_partition()
         // 右边获取行后, 创建hash表
         ret = read_right_operate();
         if (OB_SUCC(ret)) {
-          state_ = (0 == output_info_.selector_cnt_) ? JS_READ_RIGHT : JS_PROBE_RESULT;
+          state_ = (0 == output_info_.selector_cnt_ + output_info_.mcv_selector_cnt_) ? JS_READ_RIGHT : JS_PROBE_RESULT;
         } else if (OB_ITER_END == ret) {
           state_ = output_unmatch_left() && !read_null_in_naaj_ ? JS_LEFT_UNMATCH_RESULT : JS_JOIN_END;
           ret = OB_SUCCESS;
@@ -833,7 +905,7 @@ int ObHashJoinVecOp::build_hash_table_for_nest_loop(int64_t &num_left_rows)
     hj_part->set_iteration_age(iter_age_);
     iter_age_.inc();
     JoinPartitionRowIter left_iter(hj_part, row_bound, memory_bound);
-    ret = hash_table.build(left_iter, jt_ctx_);
+    ret = hash_table.build(false /*is_mcv*/, left_iter, jt_ctx_);
   }
   if (OB_SUCC(ret)) {
     num_left_rows = hash_table.get_row_count();
@@ -1218,7 +1290,7 @@ int ObHashJoinVecOp::build_hash_table_in_memory(int64_t &num_left_rows)
     hj_part->set_iteration_age(iter_age_);
     iter_age_.inc();
     JoinPartitionRowIter left_iter(hj_part);
-    ret = hash_table.build(left_iter, jt_ctx_);
+    ret = hash_table.build(false /*is_mcv*/, left_iter, jt_ctx_);
   }
 
   if (OB_SUCC(ret)) {
@@ -1259,25 +1331,39 @@ int ObHashJoinVecOp::in_memory_process(int64_t &num_left_rows)
   return ret;
 }
 
-int ObHashJoinVecOp::create_partition(bool is_left, int64_t part_id, ObHJPartition *&part)
+int ObHashJoinVecOp::create_partition(bool is_left, bool is_mcv, int64_t part_id, ObHJPartition *&part)
 {
   int ret = OB_SUCCESS;
   int64_t tmp_batch_round = part_round_;
+  int32_t part_level;
   int64_t part_shift = part_shift_;
-  part_shift += min(__builtin_ctz(part_count_), 8);
-  if (OB_FAIL(part_mgr_->get_or_create_part(part_level_, part_shift,
-                              (tmp_batch_round << 32) + part_id, is_left, part))) {
-    LOG_WARN("fail to get partition", K(ret), K(part_level_), K(part_id), K(is_left));
-  } else if (OB_FAIL(part->init(is_left ? left_->get_spec().output_ : right_->get_spec().output_,
-                                MY_SPEC.max_batch_size_, MY_SPEC.compress_type_))) {
-    LOG_WARN("fail to init batch", K(ret), K(part_level_), K(part_id), K(is_left));
+  int64_t part_no;
+
+  if (!is_mcv) {
+    part_level = part_level_;
+    part_shift += min(__builtin_ctz(part_count_), 8);
+    part_no = (tmp_batch_round << 32) + part_id;
+    if (OB_FAIL(part_mgr_->get_or_create_part(part_level, part_shift, part_no, is_left, part))) {
+      LOG_WARN("fail to get partition", K(ret), K(part_level), K(part_no), K(part_id), K(is_left), K(is_mcv));
+    }
+  } else {
+    part_level = ObHJPartitionMgr::MCV_PARTITION_LEVEL;
+    part_shift += 1;
+    part_no = ObHJPartitionMgr::MCV_PARTITION_NO;
+    if (OB_FAIL(part_mgr_->create_mcv_part(part_level, part_shift, part_no, part))) {
+      LOG_WARN("fail to create mcv partition", K(ret), K(part_level), K(part_no), K(part_id), K(is_mcv));
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(part->init(is_left ? left_->get_spec().output_ : right_->get_spec().output_,
+                              MY_SPEC.max_batch_size_, MY_SPEC.compress_type_))) {
+    LOG_WARN("fail to init batch", K(ret), K(part_level_), K(part_no), K(part_id), K(is_left), K(is_mcv));
   } else {
     part->get_row_store().set_dir_id(sql_mem_processor_.get_dir_id());
     part->get_row_store().set_io_event_observer(&io_event_observer_);
-    LOG_DEBUG("debug init batch", K(part_level_), K(part_id),
-      K((tmp_batch_round << 32) + part_id), K(tmp_batch_round));
+    LOG_DEBUG("debug init batch", K(part_level), K(part_id), K(part_no), K(tmp_batch_round));
   }
-
+  
   return ret;
 }
 
@@ -1288,6 +1374,11 @@ int ObHashJoinVecOp::init_join_partition()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("partition count is less then 0", K(part_count_), K(ret));
   } else {
+    if (jt_ctx_.is_probe_skew_) {
+      if (OB_FAIL(create_partition(true/*is_left*/, true /*is_mcv*/, 0, left_mcv_part_))) {
+        LOG_WARN("fail to create left mcv partition", K(ret));
+      }
+    }
     char *mem = static_cast<char *>(alloc_->alloc(sizeof(ObHJPartition *) * part_count_ * 2));
     if (NULL == mem) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1296,9 +1387,9 @@ int ObHashJoinVecOp::init_join_partition()
       left_part_array_ = reinterpret_cast<ObHJPartition **>(mem);
       right_part_array_ = reinterpret_cast<ObHJPartition **>(mem + sizeof(ObHJPartition *) * part_count_);
       for (int64_t i = 0; i < part_count_ && OB_SUCC(ret); i ++) {
-        if (OB_FAIL(create_partition(true/*is_left*/, i /*part_id*/, left_part_array_[i]))) {
+        if (OB_FAIL(create_partition(true/*is_left*/, false /*is_mcv*/, i /*part_id*/, left_part_array_[i]))) {
           LOG_WARN("fail to create partition", K(ret), K(i));
-        } else if (OB_FAIL(create_partition(false/*is_left*/, i/*part_id*/, right_part_array_[i]))) {
+        } else if (OB_FAIL(create_partition(false/*is_left*/, false /*is_mcv*/, i/*part_id*/, right_part_array_[i]))) {
           LOG_WARN("fail to create partition", K(ret), K(i));
         }
       } // for end
@@ -1394,6 +1485,7 @@ int ObHashJoinVecOp::asyn_dump_partition(
   PredFunc pred)
 {
   int ret = OB_SUCCESS;
+  is_dumped_ = true;
   bool tmp_need_dump = false;
   // firstly find all need dumped partition
   int64_t pre_total_dumped_size = 0;
@@ -1859,37 +1951,22 @@ int ObHashJoinVecOp::fill_partition_batch(int64_t &num_left_rows)
                        hash_vals_, part_stored_rows_, is_left))) {
       LOG_WARN("fail to calc hash value batch", K(ret));
     } else if (true /*child_brs->size_ > 16 * part_count_*/) {
-      // add partition by batch
-      if (OB_FAIL(calc_part_selector(hash_vals_, *child_brs))) {
-        LOG_WARN("Fail to calc batch idx", K(ret));
+      // mark rows selector that belong to mcv_hash_table
+      if (jt_ctx_.is_probe_skew_
+          && OB_FAIL(calc_hash_belong_to_mcv(
+                        hash_vals_,
+                        child_brs->size_,
+                        const_cast<ObBatchRows *>(child_brs)->skip_,
+                        const_cast<ObBatchRows *>(child_brs)->all_rows_active_,
+                        output_info_.mcv_selector_,
+                        output_info_.mcv_selector_cnt_))) {
+          LOG_WARN("fail to calc batch mcv idx", K(ret));
+      } else if (OB_FAIL(calc_part_selector(hash_vals_, *child_brs))) {
+        // add part selector by batch
+        LOG_WARN("fail to calc batch idx", K(ret));
+      } else if (OB_FAIL(add_batch_partition(num_left_rows))) {
+        LOG_WARN("fail to add batch to parts", K(ret));
       }
-      for (int64_t part_idx = 0; OB_SUCC(ret) && part_idx < part_count_; part_idx++) {
-        if (part_selector_sizes_[part_idx] <= 0) { continue; }
-        num_left_rows += part_selector_sizes_[part_idx];
-        if (OB_FAIL(left_part_array_[part_idx]->add_batch(
-                                     left_vectors_,
-                                     part_selectors_ + part_idx * MY_SPEC.max_batch_size_,
-                                     part_selector_sizes_[part_idx],
-                                     part_added_rows_))) {
-          LOG_WARN("fail to add rows", K(ret), K(part_idx));
-        } else {
-          for (int64_t i = 0; i < part_selector_sizes_[part_idx]; i++) {
-            part_added_rows_[i]->set_is_match(jt_ctx_.build_row_meta_, false);
-            part_added_rows_[i]->set_hash_value(jt_ctx_.build_row_meta_,
-                     hash_vals_[part_selectors_[part_idx * MY_SPEC.max_batch_size_ + i]]);
-            LOG_DEBUG("fill part hash vals", K(part_idx), K(MY_SPEC.max_batch_size_), K(i),
-                K(part_selectors_[part_idx * MY_SPEC.max_batch_size_ + i]),
-                K(hash_vals_[part_selectors_[part_idx * MY_SPEC.max_batch_size_ + i]]),
-                KP(part_added_rows_[i]),
-                K(ToStrCompactRow(jt_ctx_.build_row_meta_, *part_added_rows_[i], jt_ctx_.build_output_)));
-          }
-          if (GCONF.is_sql_operator_dump_enabled()) {
-            if (OB_FAIL(dump_build_table(num_left_rows))) {
-              LOG_WARN("fail to dump", K(ret));
-            }
-          }
-        }
-      } // for end
     } else {
      // // add row to partition
      // ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
@@ -1925,6 +2002,57 @@ int ObHashJoinVecOp::fill_partition_batch(int64_t &num_left_rows)
   return ret;
 }
 
+int ObHashJoinVecOp::add_batch_partition(int64_t &num_left_rows)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t part_idx = 0; OB_SUCC(ret) && part_idx < part_count_; part_idx++) {
+    if (part_selector_sizes_[part_idx] <= 0) { continue; }
+    num_left_rows += part_selector_sizes_[part_idx];
+    if (OB_FAIL(left_part_array_[part_idx]->add_batch(
+                                  left_vectors_,
+                                  part_selectors_ + part_idx * MY_SPEC.max_batch_size_,
+                                  part_selector_sizes_[part_idx],
+                                  part_added_rows_))) {
+      LOG_WARN("fail to add rows", K(ret), K(part_idx));
+    } else {
+      for (int64_t i = 0; i < part_selector_sizes_[part_idx]; i++) {
+        part_added_rows_[i]->set_is_match(jt_ctx_.build_row_meta_, false);
+        part_added_rows_[i]->set_hash_value(jt_ctx_.build_row_meta_,
+                  hash_vals_[part_selectors_[part_idx * MY_SPEC.max_batch_size_ + i]]);
+        LOG_DEBUG("fill part hash vals", K(part_idx), K(MY_SPEC.max_batch_size_), K(i),
+            K(part_selectors_[part_idx * MY_SPEC.max_batch_size_ + i]),
+            K(hash_vals_[part_selectors_[part_idx * MY_SPEC.max_batch_size_ + i]]),
+            KP(part_added_rows_[i]),
+            K(ToStrCompactRow(jt_ctx_.build_row_meta_, *part_added_rows_[i], jt_ctx_.build_output_)));
+      }
+      if (GCONF.is_sql_operator_dump_enabled()) {
+        if (OB_FAIL(dump_build_table(num_left_rows))) {
+          LOG_WARN("fail to dump", K(ret));
+        }
+      }
+    }
+  } // for end
+  if (0 < output_info_.mcv_selector_cnt_) {
+    num_left_rows += output_info_.mcv_selector_cnt_;
+    if (OB_FAIL(left_mcv_part_->add_batch(
+                  left_vectors_,
+                  output_info_.mcv_selector_,
+                  output_info_.mcv_selector_cnt_,
+                  part_added_rows_
+                ))) {
+      LOG_WARN("fail to add rows", K(ret));
+    } else {
+      for (int64_t i = 0; i < output_info_.mcv_selector_cnt_; i++) {
+        part_added_rows_[i]->set_is_match(jt_ctx_.build_row_meta_, false);
+        part_added_rows_[i]->set_hash_value(jt_ctx_.build_row_meta_,
+                hash_vals_[output_info_.mcv_selector_[i]]);
+      }
+    }
+  }
+
+  return ret;
+}
+
 int ObHashJoinVecOp::calc_part_selector(uint64_t *hash_vals, const ObBatchRows &child_brs)
 {
   int ret = OB_SUCCESS;
@@ -1938,6 +2066,47 @@ int ObHashJoinVecOp::calc_part_selector(uint64_t *hash_vals, const ObBatchRows &
   if (OB_FAIL(ObBitVector::flip_foreach(*child_brs.skip_, child_brs.size_, op))) {
     LOG_WARN("fail to convert skip to selector", K(ret));
   }
+
+  return ret;
+}
+
+int ObHashJoinVecOp::calc_hash_belong_to_mcv(uint64_t *hash_vals,
+                                             int64_t size,
+                                             ObBitVector *skip,
+                                             bool &all_rows_active,
+                                             uint16_t *selector,
+                                             uint16_t &selector_cnt)
+{
+  int ret = OB_SUCCESS;
+  selector_cnt = 0;
+  bool exist;
+  for (int64_t i = 0; OB_SUCC(ret) && i < size; i++) {
+    if (skip->exist(i)) {
+      continue;
+    }
+    exist = false;
+    if (OB_FAIL(cur_join_table_->get_mcv_hash_exist(jt_ctx_, hash_vals[i], exist))) {
+      LOG_WARN("fail to get mcv hash exist");
+    } else if (exist) {
+      selector[selector_cnt++] = i;
+      skip->set(i);
+      all_rows_active = false;
+    }
+  }
+
+  // if (OB_FAIL(cur_join_table_->get_mcv_hash_exist_batch(
+  //                                           jt_ctx_, 
+  //                                           size, 
+  //                                           hash_vals, 
+  //                                           selector, 
+  //                                           selector_cnt))) {
+  //   LOG_WARN("fail to get hash exist batch", K(ret));
+  // } else {
+  //   for (int64_t i = 0; i < selector_cnt; ++i) {
+  //     skip->set(selector[i]);
+  //   }
+  //   all_rows_active = selector_cnt == 0;
+  // }
 
   return ret;
 }
@@ -2095,12 +2264,40 @@ int ObHashJoinVecOp::build_hash_table_for_recursive()
         LOG_WARN("failed to init iterator", K(ret));
       } else {
         JoinPartitionRowIter left_iter(&hj_part);
-        ret = hash_table.build(left_iter, jt_ctx_);
+        ret = hash_table.build(false /*is_mcv*/, left_iter, jt_ctx_);
         ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
       }
     }
   } // for end
 
+  // process left mcv partition
+  // Since the amount of rows is small, single thread is forced
+  if (jt_ctx_.is_probe_skew_) {
+    bool process_mcv_part = false;
+    if (!is_shared_) {
+      process_mcv_part = true;
+    } else if (OB_LIKELY(ATOMIC_BCAS(&first_build_hash_table_, 0, 1))) {
+      process_mcv_part = true;
+    }
+    if (process_mcv_part) {
+      if (0 < left_mcv_part_->get_row_count_in_memory()) {
+        if (OB_FAIL(left_mcv_part_->begin_iterator())) {
+          LOG_WARN("failed to init mcv part iterator", K(ret));
+        } else {
+          JoinPartitionRowIter left_iter(left_mcv_part_);
+          if (!is_dumped_) {
+            jt_ctx_.is_probe_skew_ = false;
+            ret = hash_table.build(false/*is_mcv*/, left_iter, jt_ctx_);
+          } else {
+            ret = hash_table.build(true/*is_mcv*/, left_iter, jt_ctx_);
+          }
+          ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+        }
+      } else {
+        jt_ctx_.is_probe_skew_ = false;
+      }
+    }
+  }
 
   // In order to be consistent with the nest loop method, this flag indicates that
   // in recursive mode, if there is no dump, it must be in-memory.
@@ -2300,10 +2497,28 @@ int ObHashJoinVecOp::read_right_operate()
                                               probe_batch_rows_.stored_rows_,
                                               false /*is_left*/))) {
       LOG_WARN("fail to calc hash value batch", K(ret));
+    } else if (jt_ctx_.is_probe_skew_ && RECURSIVE == hj_processor_
+               && OB_FAIL(calc_hash_belong_to_mcv(
+                          probe_batch_rows_.hash_vals_,
+                          probe_batch_rows_.brs_.size_,
+                          probe_batch_rows_.brs_.skip_,
+                          probe_batch_rows_.brs_.all_rows_active_,
+                          output_info_.mcv_selector_,
+                          output_info_.mcv_selector_cnt_))) {
+      LOG_WARN("fail to skip rows in mcv part", K(ret));
     } else if (OB_FAIL(skip_rows_in_dumped_part())) {
       LOG_WARN("fail to skip rows in dumped part", K(ret));
     } else if (OB_FAIL(convert_skip_to_selector())) {
       LOG_WARN("fail to convert skip to selector", K(ret));
+    } else {
+      // calc_hash_belong_to_mcv() set skip for rows belong to mcv
+      // which avoid skip rows in dumped part,
+      // but probe_batch_rows need unset skiped rows belong to mcv,
+      // otherwise probe() will skip this rows
+      for (int64_t i = 0; i < output_info_.mcv_selector_cnt_; ++i) {
+        int64_t batch_idx = output_info_.mcv_selector_[i];
+        probe_batch_rows_.brs_.skip_->unset(batch_idx);
+      }
     }
   }
 
@@ -2538,7 +2753,8 @@ int ObHashJoinVecOp::probe()
   OZ (cur_join_table_->probe_batch(jt_ctx_, output_info_));
 
   if (OB_SUCC(ret)) {
-    if (output_info_.selector_cnt_ == 0 && !IS_RIGHT_STYLE_JOIN(MY_SPEC.join_type_)) {
+    if ((output_info_.selector_cnt_ == 0 && output_info_.mcv_selector_cnt_ == 0) 
+         && !IS_RIGHT_STYLE_JOIN(MY_SPEC.join_type_)) {
       ret = OB_ITER_END;
       LOG_DEBUG("probe batch end");
     } else {
@@ -2581,10 +2797,10 @@ int ObHashJoinVecOp::left_semi_output()
   if (OB_FAIL(ObTempRowStore::Iterator::attach_rows(
             *jt_ctx_.build_output_, eval_ctx_, jt_ctx_.build_row_meta_,
             reinterpret_cast<const ObCompactRow **>(output_info_.left_result_rows_),
-            output_info_.selector_cnt_))) {
+            output_info_.selector_cnt_ + output_info_.mcv_selector_cnt_))) {
     LOG_WARN("fail to attach rows", K(ret));
   } else {
-    brs_.size_ = output_info_.selector_cnt_;
+    brs_.size_ = output_info_.selector_cnt_ + output_info_.mcv_selector_cnt_;
     mark_return();
   }
 
@@ -2596,24 +2812,31 @@ int ObHashJoinVecOp::right_anti_semi_output()
 {
   int ret = OB_SUCCESS;
   bool need_mark_return = false;
+  uint16_t selector_cnt = output_info_.selector_cnt_ + output_info_.mcv_selector_cnt_;
   if (RIGHT_SEMI_JOIN == MY_SPEC.join_type_) {
-    if (output_info_.selector_cnt_ > 0) {
+    if (selector_cnt > 0) {
       brs_.size_ = probe_batch_rows_.brs_.size_;
       brs_.skip_->set_all(brs_.size_);
       need_mark_return = true;
-      brs_.all_rows_active_ = output_info_.selector_cnt_ == brs_.size_;
+      brs_.all_rows_active_ = selector_cnt == brs_.size_;
       for (int64_t i = 0; i < output_info_.selector_cnt_; i++) {
         brs_.skip_->unset(output_info_.selector_[i]);
       }
+      for (int64_t i = 0; i < output_info_.mcv_selector_cnt_; i++) {
+        brs_.skip_->unset(output_info_.mcv_selector_[i]);
+      }
     }
   } else if (RIGHT_ANTI_JOIN == MY_SPEC.join_type_) {
-    if (output_info_.selector_cnt_ != probe_batch_rows_.brs_.size_) {
+    if (selector_cnt != probe_batch_rows_.brs_.size_) {
       need_mark_return = true;
       brs_.copy(&probe_batch_rows_.brs_);
       for (int64_t i = 0; i < output_info_.selector_cnt_; i++) {
         brs_.skip_->set(output_info_.selector_[i]);
       }
-      brs_.all_rows_active_ = output_info_.selector_cnt_ > 0 ? false : brs_.all_rows_active_;
+      for (int64_t i = 0; i < output_info_.mcv_selector_cnt_; i++) {
+        brs_.skip_->set(output_info_.mcv_selector_[i]);
+      }
+      brs_.all_rows_active_ = selector_cnt > 0 ? false : brs_.all_rows_active_;
     }
     // skip null for right naaj
     if (OB_SUCC(ret) && need_mark_return && MY_SPEC.is_naaj_ && non_preserved_side_is_not_empty_) {
@@ -2659,10 +2882,13 @@ int ObHashJoinVecOp::outer_join_output()
   int ret = OB_SUCCESS;
   brs_.size_ = probe_batch_rows_.brs_.size_;
   brs_.skip_->set_all(brs_.size_);
-
-  bool need_mark_return = output_info_.selector_cnt_ > 0;
+  bool need_mark_return = output_info_.selector_cnt_ + output_info_.mcv_selector_cnt_ > 0;
   for (int64_t i = 0; i < output_info_.selector_cnt_; i++) {
     int64_t batch_idx = output_info_.selector_[i];
+    brs_.skip_->unset(batch_idx);
+  }
+  for (int64_t i = 0; i < output_info_.mcv_selector_cnt_; i++) {
+    int64_t batch_idx = output_info_.mcv_selector_[i];
     brs_.skip_->unset(batch_idx);
   }
 
@@ -2715,13 +2941,16 @@ int ObHashJoinVecOp::inner_join_output()
 {
   int ret = OB_SUCCESS;
   brs_.size_ = probe_batch_rows_.brs_.size_;
-  if (output_info_.selector_cnt_ == probe_batch_rows_.brs_.size_) {
+  if ((output_info_.selector_cnt_ + output_info_.mcv_selector_cnt_) == probe_batch_rows_.brs_.size_) {
     brs_.all_rows_active_ = true;
     brs_.skip_->reset(brs_.size_);
   } else {
     brs_.skip_->set_all(brs_.size_);
     for (int64_t i = 0; i < output_info_.selector_cnt_; i++) {
       brs_.skip_->unset(output_info_.selector_[i]);
+    }
+    for (int64_t i = 0; i < output_info_.mcv_selector_cnt_; i++) {
+      brs_.skip_->unset(output_info_.mcv_selector_[i]);
     }
   }
   if (jt_ctx_.probe_opt_) {
@@ -2747,24 +2976,27 @@ int ObHashJoinVecOp::fill_left_unmatched_result()
       LOG_WARN("fail to get unmatched batch", K(ret));
     }
   }
-  if (OB_ITER_END == ret && 0 != output_info_.selector_cnt_) {
+  // 因为不知道cur_join_table_->get_unmatched_rows()是从哪个哈希表拿到unmatched的数据
+  // 但确定肯定只从一个哈希表拿数据
+  uint16_t selector_cnt = output_info_.selector_cnt_ + output_info_.mcv_selector_cnt_;
+  if (OB_ITER_END == ret && 0 != selector_cnt) {
     ret = OB_SUCCESS;
   }
   if (OB_SUCCESS == ret) {
     ObTempRowStore::Iterator::attach_rows(
               *jt_ctx_.build_output_, eval_ctx_, jt_ctx_.build_row_meta_,
               reinterpret_cast<const ObCompactRow **>(output_info_.left_result_rows_),
-              output_info_.selector_cnt_);
+              selector_cnt);
     if (need_left_join()) {
-      OZ(blank_row_batch(right_->get_spec().output_, output_info_.selector_cnt_));
+      OZ(blank_row_batch(right_->get_spec().output_, selector_cnt));
     } else if (MY_SPEC.is_naaj_) {
-      if (OB_FAIL(check_join_key_for_naaj_batch_output(output_info_.selector_cnt_))) {
+      if (OB_FAIL(check_join_key_for_naaj_batch_output(selector_cnt))) {
         LOG_WARN("failed to check join key", K(ret));
       }
     }
   }
   if (OB_SUCC(ret)) {
-    brs_.size_ = output_info_.selector_cnt_;
+    brs_.size_ = selector_cnt;
     set_output_eval_info();
     mark_return();
   }
