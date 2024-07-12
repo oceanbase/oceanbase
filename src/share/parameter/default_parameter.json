@@ -18,6 +18,11 @@
           "name": "max_syslog_file_count",
           "value": 300,
           "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
+        },
+        {
+          "name": "_bloom_filter_ratio",
+          "value": 35,
+          "comment": "The false positive rate of runtime bloom filter, 35 is enough in tp scenarios"
         }
       ],
       "tenant": [
@@ -58,6 +63,11 @@
           "name": "max_syslog_file_count",
           "value": 300,
           "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
+        },
+        {
+          "name": "_bloom_filter_ratio",
+          "value": 35,
+          "comment": "The false positive rate of runtime bloom filter, 35 is enough in tp scenarios"
         }
       ],
       "tenant": [
@@ -93,6 +103,11 @@
           "name": "large_query_threshold",
           "value": "0ms",
           "comment": "disable large query detection for AP query"
+        },
+        {
+          "name": "_bloom_filter_ratio",
+          "value": 3,
+          "comment": "The false positive rate of runtime bloom filter, set lower for better performance"
         }
       ],
       "tenant": [
@@ -118,6 +133,11 @@
           "name": "large_query_threshold",
           "value": "0ms",
           "comment": "disable large query detection for KV mode"
+        },
+        {
+          "name": "_bloom_filter_ratio",
+          "value": 35,
+          "comment": "The false positive rate of runtime bloom filter, 35 is enough in kv scenarios"
         }
       ],
       "tenant": [
@@ -143,6 +163,11 @@
           "name": "max_syslog_file_count",
           "value": 300,
           "comment": "when enable_syslog_recycle is enabled, should set this value to a proper value. 300 is an empirical value."
+        },
+        {
+          "name": "_bloom_filter_ratio",
+          "value": 3,
+          "comment": "The false positive rate of runtime bloom filter, set lower for better performance"
         }
       ],
       "tenant": [
