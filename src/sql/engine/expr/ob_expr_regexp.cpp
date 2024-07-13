@@ -73,7 +73,7 @@ int ObExprRegexp::calc_result_type2(ObExprResType &type,
     type.set_int32();
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
     type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
-  } else if (OB_UNLIKELY(!is_type_valid(type1.get_type()) || !is_type_valid(type2.get_type()))) {
+  } else if (OB_UNLIKELY(!is_type_valid_regexp(type1.get_type()) || !is_type_valid_regexp(type2.get_type()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("the param is not castable", K(ret), K(type1), K(type2));
   } else if ((ObExprRegexContext::is_binary_string(type1) || ObExprRegexContext::is_binary_string(type2))
