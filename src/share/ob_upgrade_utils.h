@@ -256,6 +256,7 @@ private:
   int post_upgrade_for_reset_compat_version();
   int try_reset_version(const uint64_t tenant_id, const char *var_name);
   int post_upgrade_for_spm();
+  int post_upgrade_for_online_estimate_percent();
 };
 
 /* =========== special upgrade processor end   ============= */

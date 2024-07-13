@@ -2473,20 +2473,33 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.method_ = execute_param_.method_;
   load_param.insert_mode_ = execute_param_.insert_mode_;
   load_param.load_mode_ = ObDirectLoadMode::LOAD_DATA;
-  if (OB_FAIL(ObTableLoadSchema::get_table_compressor_type(
-        execute_param_.tenant_id_, execute_param_.table_id_, table_compressor_type))) {
-    LOG_WARN("fail to get table compressor type", KR(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
-               table_compressor_type, execute_param_.parallel_, load_param.compressor_type_))) {
-    LOG_WARN("fail to get tmp store compressor type", KR(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*ctx_,
-                                                                       load_param.online_sample_percent_))) {
-    LOG_WARN("fail to get sys online estimate percent", KR(ret));
-  } else if (OB_FAIL(direct_loader_.init(load_param, execute_param_.column_ids_,
-                                         &execute_ctx_.exec_ctx_))) {
-    LOG_WARN("fail to init direct loader", KR(ret));
-  } else if (OB_FAIL(init_logger())) {
-    LOG_WARN("fail to init logger", KR(ret));
+
+  double online_sample_percent = 100.;
+  if (OB_SUCC(ret)) {
+    if (execute_param_.online_opt_stat_gather_ &&
+               OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*ctx_,
+                                                                         execute_param_.tenant_id_,
+                                                                         execute_param_.table_id_,
+                                                                         online_sample_percent))) {
+      LOG_WARN("failed to get sys online sample percent", K(ret));
+    } else {
+      load_param.online_sample_percent_ = online_sample_percent;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLoadSchema::get_table_compressor_type(
+          execute_param_.tenant_id_, execute_param_.table_id_, table_compressor_type))) {
+      LOG_WARN("fail to get table compressor type", KR(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
+                 table_compressor_type, execute_param_.parallel_, load_param.compressor_type_))) {
+      LOG_WARN("fail to get tmp store compressor type", KR(ret));
+    } else if (OB_FAIL(direct_loader_.init(load_param, execute_param_.column_ids_,
+                                           &execute_ctx_.exec_ctx_))) {
+      LOG_WARN("fail to init direct loader", KR(ret));
+    } else if (OB_FAIL(init_logger())) {
+      LOG_WARN("fail to init logger", KR(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     execute_ctx_.direct_loader_ = &direct_loader_;
