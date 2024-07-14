@@ -582,6 +582,8 @@ STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_DDL_PREWARM_BYTES, "ss_micro_cache ddl prewarm
 STAT_EVENT_ADD_DEF(SS_TMPFILE_CACHE_HIT, "ss_tmpfile_cache hit count", ObStatClassIds::CACHE, 240017, true, true, true)
 STAT_EVENT_ADD_DEF(SS_TMPFILE_CACHE_MISS, "ss_tmpfile_cache miss count", ObStatClassIds::CACHE, 240018, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_USED_DISK_SIZE, "ss_micro_cache total used disk size", ObStatClassIds::CACHE, 240019, true, true, true)
+STAT_EVENT_ADD_DEF(SS_PREFETCH_MACRO_CACHE_HIT, "ss_prefetch_macro_cache hit count", ObStatClassIds::CACHE, 240020, true, true, true)
+STAT_EVENT_ADD_DEF(SS_PREFETCH_MACRO_CACHE_MISS, "ss_prefetch_macro_cache miss count", ObStatClassIds::CACHE, 240021, true, true, true)
 
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
