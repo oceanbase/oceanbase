@@ -92,7 +92,7 @@ TEST_F(TestTransferBarrier, test_transfer_barrier_redo)
 
   //START_TRANSFER_IN
   barrier_flag = ObTxLogTypeChecker::need_replay_barrier(log_type, ObTxDataSourceType::START_TRANSFER_IN);
-  ASSERT_EQ(barrier_flag, logservice::ObReplayBarrierType::PRE_BARRIER);
+  ASSERT_EQ(barrier_flag, logservice::ObReplayBarrierType::STRICT_BARRIER);
 
   //STRICT_BARRIER
   //FINISH_TRANSFER_IN

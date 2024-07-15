@@ -38,13 +38,12 @@ ObTxLogTypeChecker::need_replay_barrier(const ObTxLogType log_type,
         || data_source_type == ObTxDataSourceType::DELETE_TABLET_NEW_MDS
         || data_source_type == ObTxDataSourceType::UNBIND_TABLET_NEW_MDS
         || data_source_type == ObTxDataSourceType::START_TRANSFER_OUT
-        || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_OUT
-        || data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
+        || data_source_type == ObTxDataSourceType::FINISH_TRANSFER_OUT) {
 
       barrier_flag = logservice::ObReplayBarrierType::PRE_BARRIER;
 
-    } else if (data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN) {
-
+    } else if (data_source_type == ObTxDataSourceType::FINISH_TRANSFER_IN
+        || data_source_type == ObTxDataSourceType::START_TRANSFER_IN) {
       barrier_flag = logservice::ObReplayBarrierType::STRICT_BARRIER;
     }
   } else if (ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
