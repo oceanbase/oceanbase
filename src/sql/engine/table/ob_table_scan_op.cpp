@@ -2908,7 +2908,7 @@ int ObTableScanOp::inner_get_next_spatial_index_row()
         spat_index_.spat_rows_->reuse();
         spat_index_.spat_row_index_ = 0;
         const ObExprPtrIArray &exprs = MY_SPEC.output_;
-        ObExpr *expr = exprs.at(3);
+        ObExpr *expr = exprs.at(spat_index_.geo_idx_);
         ObDatum *in_datum = NULL;
         if (OB_FAIL(expr->eval(eval_ctx_, in_datum))) {
           LOG_WARN("expression evaluate failed", K(ret));
@@ -2994,6 +2994,25 @@ int ObTableScanOp::init_spatial_index_rows()
     spat_index_.spat_rows_ = new(buf) ObSpatIndexRow();
     spat_index_.mbr_buffer_ = mbr_buffer;
     spat_index_.obj_buffer_ = obj_buf;
+    const ObExprPtrIArray &exprs = MY_SPEC.output_;
+    const uint8_t spatial_expr_cnt = 3;
+    uint8_t cnt = 0;
+    for (uint32_t i = 0; i < exprs.count() && cnt < spatial_expr_cnt; i++) {
+      if (exprs.at(i)->type_ == T_FUN_SYS_SPATIAL_CELLID) {
+        spat_index_.cell_idx_ = i;
+        cnt++;
+      } else if (exprs.at(i)->type_ == T_FUN_SYS_SPATIAL_MBR) {
+        spat_index_.mbr_idx_ = i;
+        cnt++;
+      } else if (exprs.at(i)->datum_meta_.type_ == ObGeometryType) {
+        spat_index_.geo_idx_ = i;
+        cnt++;
+      }
+    }
+    if (cnt != spatial_expr_cnt) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid spatial index exprs", K(ret), K(cnt));
+    }
   }
   return ret;
 }
@@ -3009,7 +3028,8 @@ int ObTableScanOp::fill_generated_cellid_mbr(const ObObj &cellid, const ObObj &m
     for (uint8_t i = 0; i < 2 && OB_SUCC(ret); i++) {
       ObObjDatumMapType type = i == 0 ? OBJ_DATUM_8BYTE_DATA : OBJ_DATUM_STRING;
       const ObObj &value = i == 0 ? cellid : mbr;
-      ObExpr *expr = exprs.at(i);
+      uint32_t idx = i == 0 ? spat_index_.cell_idx_ : spat_index_.mbr_idx_;
+      ObExpr *expr = exprs.at(idx);
       ObDatum *datum = &expr->locate_datum_for_write(get_eval_ctx());
       ObEvalInfo *eval_info = &expr->get_eval_info(get_eval_ctx());
       if (OB_FAIL(datum->from_obj(value, type))) {
