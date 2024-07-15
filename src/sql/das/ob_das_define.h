@@ -99,7 +99,8 @@ public:
     : table_loc_id_(common::OB_INVALID_ID),
       ref_table_id_(common::OB_INVALID_ID),
       related_table_ids_(alloc),
-      flags_(0)
+      flags_(0),
+      route_policy_(0)
   { }
   ~ObDASTableLocMeta() = default;
   int assign(const ObDASTableLocMeta &other);
@@ -120,7 +121,8 @@ public:
                K_(is_dup_table),
                K_(is_weak_read),
                K_(unuse_related_pruning),
-               K_(is_external_table));
+               K_(is_external_table),
+               K_(route_policy));
 
   uint64_t table_loc_id_; //location object id
   uint64_t ref_table_id_; //table object id
@@ -138,6 +140,7 @@ public:
       uint64_t reserved_                        : 57;
     };
   };
+  int64_t route_policy_;
 
 private:
   void light_assign(const ObDASTableLocMeta &other); //without array
