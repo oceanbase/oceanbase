@@ -1433,6 +1433,7 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
   const int64_t log_id = flush_cb_ctx.log_id_;
   const LSN log_end_lsn = flush_cb_ctx.lsn_ + flush_cb_ctx.total_len_;
   const int64_t cb_begin_ts = ObTimeUtility::current_time();
+  bool is_fetch_log = false;
   PALF_LOG(TRACE, "after_flush_log begin", K_(palf_id), K_(self), K(flush_cb_ctx));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1468,6 +1469,7 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
         can_exec_cb = true;
         // update log_task's flushed_ts
         log_task->set_flushed_ts(cb_begin_ts);
+        is_fetch_log = log_task->is_fetch_log_type();
       }
       log_task->unlock();
     }
@@ -1480,6 +1482,7 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
       PALF_LOG(WARN, "get_log_task failed", K(ret), K(log_id), K_(palf_id), K_(self));
     } else {
       log_task->set_flushed_ts(cb_begin_ts);
+      is_fetch_log = log_task->is_fetch_log_type();
     }
   }
 
@@ -1512,7 +1515,7 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
           PALF_LOG(INFO, "migrating replicas do not send responses", K(ret), K_(palf_id), K_(self),
               K(log_end_lsn), K(leader));
         }
-      } else if (OB_FAIL(submit_push_log_resp_(leader, flush_cb_ctx.curr_proposal_id_, log_end_lsn))) {
+      } else if (OB_FAIL(submit_push_log_resp_(leader, flush_cb_ctx.curr_proposal_id_, log_end_lsn, is_fetch_log))) {
         PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(leader), K(flush_cb_ctx));
       } else {}
     } else {}
@@ -3296,7 +3299,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
         } else if (need_send_ack) {
           // This log matches with msg and it has been flushed, just sending ack directly.
           const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
-          if (OB_FAIL(submit_push_log_resp_(src_server, curr_proposal_id, log_end_lsn))) {
+          if (OB_FAIL(submit_push_log_resp_(src_server, curr_proposal_id, log_end_lsn, PushLogType::FETCH_LOG_RESP == push_log_type))) {
             PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(src_server));
           } else {
             PALF_LOG(INFO, "submit_push_log_resp succ", K(ret), K_(palf_id), K_(self), K(src_server), K(curr_proposal_id),
@@ -3352,6 +3355,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
             log_task->set_group_log_checksum(group_log_data_checksum);
             (void) log_task->set_freezed();
             log_task->set_freeze_ts(ObTimeUtility::current_time());
+            log_task->set_push_log_type(push_log_type);
           }
           log_task->unlock();
         }
@@ -3409,17 +3413,19 @@ int LogSlidingWindow::submit_push_log_resp(const common::ObAddr &server)
     const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
     LSN committed_end_lsn;
     get_committed_end_lsn_(committed_end_lsn);
-    ret = submit_push_log_resp_(server, curr_proposal_id, committed_end_lsn);
+    const bool is_fetch_log = false;
+    ret = submit_push_log_resp_(server, curr_proposal_id, committed_end_lsn, is_fetch_log);
   }
   return ret;
 }
 
 int LogSlidingWindow::submit_push_log_resp_(const common::ObAddr &server,
                                             const int64_t &msg_proposal_id,
-                                            const LSN &log_end_lsn)
+                                            const LSN &log_end_lsn,
+                                            const bool &is_fetch_log)
 {
   int ret = OB_SUCCESS;
-  const bool is_need_batch = need_use_batch_rpc_(0);
+  const bool is_need_batch = need_use_batch_rpc_(0) || is_fetch_log;
   if (state_mgr_->is_allow_vote() &&
       OB_FAIL(log_engine_->submit_push_log_resp(server, msg_proposal_id, log_end_lsn, is_need_batch))) {
     PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(server), K(log_end_lsn));
