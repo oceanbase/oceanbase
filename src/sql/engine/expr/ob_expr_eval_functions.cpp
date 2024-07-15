@@ -1240,7 +1240,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRegexpLike::eval_hs_regexp_like,                     /* 746 */
   NULL, // ObExprRegexpReplace::eval_hs_regexp_replace,               /* 747 */
   NULL, // ObExprRegexpSubstr::eval_hs_regexp_substr,                 /* 748 */
-  ObExprSTIntersection::eval_st_intersections,                        /* 749 */
+  ObExprSTIntersections::eval_st_intersections,                        /* 749 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
