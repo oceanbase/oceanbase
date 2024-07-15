@@ -1359,6 +1359,8 @@ int ObMemtableMutatorIterator::iterate_next_row(ObEncryptRowBuf &decrypt_buf,
               encrypt_info, unused_need_extract_encrypt_meta, encrypt_meta,
               unused_encrypt_stat_map, ObTransRowFlag::is_big_row(meta_.get_flags())))) {
         TRANS_LOG(WARN, "deserialize mutator row fail", K(ret));
+      } else {
+        row_seq_no_ = row_.seq_no_;
       }
       break;
     }
