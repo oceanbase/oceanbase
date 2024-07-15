@@ -1074,6 +1074,7 @@ public:
   {
     exchange_allocated_ = exchange_allocated;
   }
+  bool is_parallel_more_than_part_cnt() const;
   virtual bool is_gi_above() const { return false; }
   inline void set_phy_plan_type(ObPhyPlanType phy_plan_type)
   {

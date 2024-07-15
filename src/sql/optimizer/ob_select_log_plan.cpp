@@ -340,7 +340,10 @@ int ObSelectLogPlan::candi_allocate_three_stage_group_by(const ObIArray<ObRawExp
           OB_FAIL(candidate_plan.plan_tree_->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                   is_partition_wise))) {
         LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
-      } else if (!candidate_plan.plan_tree_->is_distributed() || is_partition_wise) {
+      } else if (!candidate_plan.plan_tree_->is_distributed() ||
+                 (is_partition_wise &&
+                  !(candidate_plan.plan_tree_->is_parallel_more_than_part_cnt() &&
+                    get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
         bool part_sort_valid = !groupby_helper.force_normal_sort_ && !group_by_exprs.empty();
         bool normal_sort_valid = !groupby_helper.force_part_sort_;
         if (OB_FAIL(update_part_sort_method(part_sort_valid, normal_sort_valid))) {
@@ -565,7 +568,9 @@ int ObSelectLogPlan::should_create_rollup_pushdown_plan(ObLogicalOperator *top,
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check is partition wise", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise ) {
+  } else if (!top->is_distributed() || (is_partition_wise &&
+              !(top->is_parallel_more_than_part_cnt() &&
+                get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
     // do nothing
   } else if (NULL == groupby_helper.rollup_id_expr_ &&
              OB_FAIL(ObRawExprUtils::build_pseudo_rollup_id(get_optimizer_context().get_expr_factory(),
@@ -727,7 +732,9 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() || (is_partition_wise &&
+              !(top->is_parallel_more_than_part_cnt() &&
+                get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
     if (OB_FAIL(allocate_group_by_as_top(top,
                                          AggregateAlgo::HASH_AGGREGATE,
                                          group_by_exprs,
@@ -1075,7 +1082,9 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible with reduce expr", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() || (is_partition_wise &&
+              !(top->is_parallel_more_than_part_cnt() &&
+                get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
     if (OB_FAIL(try_allocate_sort_as_top(top, sort_keys, need_sort, prefix_pos, part_cnt))) {
       LOG_WARN("failed to allocate sort as top", K(ret));
     } else if (OB_FAIL(allocate_group_by_as_top(top,
@@ -1558,7 +1567,10 @@ int ObSelectLogPlan::create_hash_distinct_plan(ObLogicalOperator *&top,
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check sharding compatible with reduce expr", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() ||
+             (is_partition_wise &&
+              !(top->is_parallel_more_than_part_cnt() &&
+                get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
     OPT_TRACE("is basic distinct:", !top->is_distributed());
     OPT_TRACE("is partition wise distinct", is_partition_wise);
     if (OB_FAIL(allocate_distinct_as_top(top,
@@ -1645,7 +1657,10 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check sharding compatible with reduce exprs", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() ||
+             (is_partition_wise &&
+              !(top->is_parallel_more_than_part_cnt() &&
+                get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
     OPT_TRACE("is basic distinct:", !top->is_distributed());
     OPT_TRACE("is partition wise distinct", is_partition_wise);
     if (OB_FAIL(try_allocate_sort_as_top(top, sort_keys, need_sort, prefix_pos))) {
@@ -6015,7 +6030,9 @@ int ObSelectLogPlan::create_none_dist_win_func(ObLogicalOperator *top,
       LOG_WARN("failed to check match window function parallel", K(ret));
     } else if (WinDistAlgo::WIN_DIST_NONE == win_func_helper.win_dist_method_
                || !top->is_distributed()
-               || is_partition_wise) {
+               || (is_partition_wise &&
+              !(top->is_parallel_more_than_part_cnt() &&
+                get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
       LOG_TRACE("begin to create none dist window function", K(top->is_distributed()),
                           K(single_part_parallel), K(is_partition_wise), K(need_sort), K(part_cnt),
                           K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_));
@@ -6267,7 +6284,9 @@ int ObSelectLogPlan::create_hash_dist_win_func(ObLogicalOperator *top,
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(win_func_helper.partition_exprs_,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() || (is_partition_wise &&
+              !(top->is_parallel_more_than_part_cnt() &&
+                get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
     LOG_TRACE("ignore allocate hash window function for local or partition wise",
                                             K(top->is_distributed()), K(is_partition_wise));
   } else {
