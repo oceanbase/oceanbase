@@ -2461,6 +2461,29 @@ typedef enum ObItemType
   T_DROP_LOGFILE_GROUP,
   T_SET_UNION_ALL,
   T_SHOW_CHECK_TABLE,
+  T_SHARED_STORAGE_INFO,
+  T_XA_RECOVER,
+  T_VEC_INDEX_PARAMS,
+  T_VEC_INDEX_COLUMN,
+  T_VEC_INDEX_COLUMN_EXPR,
+  T_BACKUP_CLUSTER_PARAMETERS,
+  // create mv build deferred
+  T_MV_REFRESH_OPT,
+  T_MV_BUILD_OPT,
+  T_PSEUDO_EXTERNAL_FILE_ROW,
+  T_EXTERNAL_TABLE_AUTO_REFRESH,
+
+  // for tablelock
+  T_MYSQL_LOCK_LIST,
+  T_MYSQL_LOCK_NODE,
+  // for vector index
+  T_APPROX,
+
+  // select into outfile
+  T_BUFFER_SIZE,
+  T_PARTITION_EXPR,
+  T_CACHE_INDEX,
+  T_LOAD_INDEX_INTO_CACHE,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

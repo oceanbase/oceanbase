@@ -2330,6 +2330,8 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
       SET_STMT_TYPE(T_REPAIR_TABLE);
       SET_STMT_TYPE(T_CHECKSUM_TABLE);
       SET_STMT_TYPE(T_SHOW_CREATE_USER);
+      SET_STMT_TYPE(T_CACHE_INDEX);
+      SET_STMT_TYPE(T_LOAD_INDEX_INTO_CACHE);
 #undef SET_STMT_TYPE
       case T_ROLLBACK:
       case T_COMMIT: {

@@ -78,6 +78,12 @@ private:
       case T_CHECKSUM_TABLE:
         ret = stmt::T_CHECKSUM_TABLE;
         break;
+      case T_CACHE_INDEX:
+        ret = stmt::T_CACHE_INDEX;
+        break;
+      case T_LOAD_INDEX_INTO_CACHE:
+        ret = stmt::T_LOAD_INDEX_INTO_CACHE;
+        break;
       default:
         ret = stmt::T_NONE;
     }

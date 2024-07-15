@@ -31,6 +31,8 @@ int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
       || stmt::T_DROP_SERVER == stmt.get_stmt_type()
       || stmt::T_CREATE_LOGFILE_GROUP == stmt.get_stmt_type()
       || stmt::T_ALTER_LOGFILE_GROUP == stmt.get_stmt_type()
+      || stmt::T_CACHE_INDEX == stmt.get_stmt_type()
+      || stmt::T_LOAD_INDEX_INTO_CACHE == stmt.get_stmt_type()
       || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "This statement ");
   } else if (stmt::T_REPAIR_TABLE == stmt.get_stmt_type()) {
