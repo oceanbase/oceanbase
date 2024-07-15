@@ -401,12 +401,14 @@ int ObDRTask::fill_dml_splicer_for_new_column(
     LOG_WARN("unexpected task type", KR(ret));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id_), tenant_data_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K(tenant_id_));
-  } else if (tenant_data_version < DATA_VERSION_4_2_3_0
-         && (false != is_manual_task() || force_data_src.is_valid())) {
+  } else if (!((tenant_data_version >= DATA_VERSION_4_2_3_0)
+            || (tenant_data_version >= MOCK_DATA_VERSION_4_2_1_8 && tenant_data_version < DATA_VERSION_4_2_2_0))
+         && (is_manual_task() || force_data_src.is_valid())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("manual operation is not suppported when tenant's data version is below 4.2.3.0",
+    LOG_WARN("manual operation is not suppported when tenant's data version is not match",
       KR(ret), K(tenant_data_version), K(is_manual_task()), K(force_data_src));
-  } else if (tenant_data_version >= DATA_VERSION_4_2_3_0) {
+  } else if ((tenant_data_version >= DATA_VERSION_4_2_3_0)
+          || (tenant_data_version >= MOCK_DATA_VERSION_4_2_1_8 && tenant_data_version < DATA_VERSION_4_2_2_0)) {
     if (!is_manual_task() && force_data_src.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("task invoke and data_source is not match", KR(ret), K(is_manual_task()), K(force_data_src));

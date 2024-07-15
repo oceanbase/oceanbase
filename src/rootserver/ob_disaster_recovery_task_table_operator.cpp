@@ -97,7 +97,8 @@ int ObLSReplicaTaskTableOperator::finish_task(
     LOG_WARN("invalid argument", KR(ret), K(task));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(task.get_tenant_id()), tenant_data_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K(task));
-  } else if (tenant_data_version >= DATA_VERSION_4_2_3_0) {
+  } else if ((tenant_data_version >= DATA_VERSION_4_2_3_0)
+          || (tenant_data_version >= MOCK_DATA_VERSION_4_2_1_8 && tenant_data_version < DATA_VERSION_4_2_2_0)) {
     char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
     int64_t schedule_time = 0;
     ObSqlString execute_result;

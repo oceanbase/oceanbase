@@ -2788,11 +2788,12 @@ int ObAlterSystemResolverUtil::check_compatibility_for_alter_ls_replica(
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(cur_tenant_id, tenant_data_version))) {
     //The internal tables involved are under the tenant (meta) and do not involve sys tenants.
     LOG_WARN("get tenant data version failed", KR(ret), K(cur_tenant_id));
-  } else if (tenant_data_version < DATA_VERSION_4_2_3_0) {
+  } else if (!((tenant_data_version >= DATA_VERSION_4_2_3_0)
+            || (tenant_data_version >= MOCK_DATA_VERSION_4_2_1_8 && tenant_data_version < DATA_VERSION_4_2_2_0))) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Tenant data version is less than 4.2.3, alter LS replica command is not allowed",
+    LOG_WARN("Tenant data version does not match, alter LS replica command is not allowed",
               KR(ret), K(cur_tenant_id), K(tenant_data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant data version is less than 4.2.3, alter LS replica command is");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Tenant data version does not match, alter LS replica command is");
   }
   return ret;
 }
