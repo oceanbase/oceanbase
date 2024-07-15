@@ -12341,6 +12341,7 @@ def_table_schema(
   ('tablet_change_checkpoint_scn', 'uint'),
   ('transfer_scn', 'uint'),
   ('tx_blocked', 'int'),
+  ('required_size', 'int', 'false', 0),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
