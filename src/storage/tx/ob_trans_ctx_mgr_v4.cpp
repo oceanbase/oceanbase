@@ -673,6 +673,12 @@ int ObLSTxCtxMgr::on_start_working_log_cb_succ(SCN start_working_ts)
       if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
         TRANS_LOG(WARN, "resume leader failed", KR(ret), K(ls_id_));
       }
+    } else if (is_f_pending_()) {
+      TRANS_LOG(INFO,
+                "retry to apply start working on a follower",
+                KR(ret),
+                K(ls_id_),
+                K(tx_ls_state_mgr_));
     } else {
       ret = OB_STATE_NOT_MATCH;
       TRANS_LOG(ERROR, "unexpected state", KR(ret), K(ls_id_), K(tx_ls_state_mgr_));
