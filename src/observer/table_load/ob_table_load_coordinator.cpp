@@ -425,7 +425,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
                                                                                 : ObTableLoadExeMode::FAST_HEAP_TABLE)
                                                                    : (last_sort ? ObTableLoadExeMode::MEM_COMPACT
                                                                                 : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
-
+            ctx_->job_stat_->parallel_ = coordinator_session_count;
             if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
               LOG_WARN("fail to add_assigned_task", KR(ret));
             } else {
