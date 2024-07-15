@@ -160,7 +160,8 @@ public:
   static int get_init_wr_control_sql_string(const int64_t tenant_id,
                                             ObSqlString &sql);
   bool is_running_task() const { return is_running_task_; };
-  int64_t get_snapshot_interval() const;
+  int64_t get_snapshot_interval(bool is_lazy_load = true);
+  // when is_lazy_load is false, the func will send inner SQL, avoid frequently calling
   static bool check_tenant_can_do_wr_task(uint64_t tenant_id);
   INHERIT_TO_STRING_KV("ObTimerTask", ObTimerTask,
                         K_(tg_id), K_(timeout_ts), K_(is_running_task));
@@ -191,6 +192,10 @@ private:
   int64_t timeout_ts_;
   bool is_running_task_;
   bool is_inited_;
+  int64_t lazy_snapshot_interval_min_;
+  // Since accessing the snapshot_interval requires sending inner SQL,
+  // after adding the feature of ASH early dump into disk, ASH thread will frequently send requests, blocking ASH execution.
+  // Therefore, lazy_snapshot_interval_min_ is added to utilize a lazy loading mode to avoid the issue.
 };
 
 }//end namespace share

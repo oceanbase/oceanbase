@@ -240,7 +240,7 @@ int ObWrSyncUserSubmitSnapshotTaskP::process()
     obrpc::ObWrRpcProxy wr_proxy;
     int64_t timeout_ts = user_submit_arg.get_timeout_ts();
     int64_t next_wr_task_ts = common::ObTimeUtility::current_time() +
-                              GCTX.wr_service_->get_snapshot_interval() * 60 * 1000L * 1000L;
+                              GCTX.wr_service_->get_snapshot_interval(false/*is_laze_load*/) * 60 * 1000L * 1000L;
     if (OB_FAIL(WorkloadRepositoryTask::check_all_tenant_last_snapshot_task_finished(
             is_all_finished))) {
       LOG_WARN("failed to check all tenants` last snapshot status", K(ret), K(is_all_finished));
@@ -276,7 +276,7 @@ int ObWrSyncUserSubmitSnapshotTaskP::schedule_next_wr_task(int64_t next_wr_task_
   int64_t interval_us = next_wr_task_ts - common::ObTimeUtility::current_time();
   if (OB_UNLIKELY(interval_us < 0)) {
     LOG_WARN("already timeout wr snapshot interval", K(next_wr_task_ts), K(interval_us),
-        K(GCTX.wr_service_->get_snapshot_interval()));
+        K(GCTX.wr_service_->get_snapshot_interval(false/*is_laze_load*/)));
     interval_us = 0;
   }
   if (OB_FAIL(GCTX.wr_service_->schedule_new_task(interval_us))) {

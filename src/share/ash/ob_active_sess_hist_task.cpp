@@ -342,7 +342,7 @@ bool ObActiveSessHistTask::do_snapshot_ahead()
 {
   int64_t write_pos = ObActiveSessHistList::get_instance().write_pos();
   int64_t free_slots_num = ObActiveSessHistList::get_instance().free_slots_num();
-  int64_t next_regular_snapshot_interval = GCTX.wr_service_->get_snapshot_interval() * 60 - (ObTimeUtility::current_time() - last_regular_snapshot_time_) / (1000L * 1000L);
+  int64_t next_regular_snapshot_interval = GCTX.wr_service_->get_snapshot_interval(true /*is_laze_load*/) * 60 - (ObTimeUtility::current_time() - last_regular_snapshot_time_) / (1000L * 1000L);
   int64_t cur_speed = (write_pos - prev_write_pos_) / snapshot_interval;
   int64_t expect_speed = free_slots_num / next_regular_snapshot_interval;
   return (cur_speed >= speed_threshold * expect_speed) && (next_regular_snapshot_interval > 60);

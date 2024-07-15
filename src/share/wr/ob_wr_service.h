@@ -45,7 +45,8 @@ public:
   int cancel_current_task();
   int schedule_new_task(const int64_t interval);
   bool is_running_task() const {return wr_timer_task_.is_running_task();};
-  int64_t get_snapshot_interval() const {return wr_timer_task_.get_snapshot_interval();};
+  int64_t get_snapshot_interval(bool is_laze_load = true) {return wr_timer_task_.get_snapshot_interval(is_laze_load);};
+  // when is_lazy_load is false, the func will send inner SQL, avoid frequently calling
   WorkloadRepositoryTask& get_wr_timer_task() {return wr_timer_task_;};
   INHERIT_TO_STRING_KV("ObIRoleChangeSubHandler", ObIRoleChangeSubHandler,
                         K_(is_inited),

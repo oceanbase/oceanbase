@@ -44,21 +44,27 @@ WorkloadRepositoryTask::WorkloadRepositoryTask()
       tg_id_(-1),
       timeout_ts_(0),
       is_running_task_(false),
-      is_inited_(false)
+      is_inited_(false),
+      lazy_snapshot_interval_min_(DEFAULT_SNAPSHOT_INTERVAL)
 {}
 
 
-int64_t WorkloadRepositoryTask::get_snapshot_interval() const {
-  int tmp_ret = OB_SUCCESS;
+int64_t WorkloadRepositoryTask::get_snapshot_interval(bool is_laze_load /* = true*/) {
   int64_t interval = 0;
-  int64_t tmp_interval_s = 0;
-  if (OB_TMP_FAIL(fetch_interval_num_from_wr_control(tmp_interval_s))) {
-    interval = DEFAULT_SNAPSHOT_INTERVAL;
-    LOG_INFO("failed to fetch interval num from wr control", K(tmp_ret));
-  } else if (tmp_interval_s == 0) {
-    interval = DEFAULT_SNAPSHOT_INTERVAL;
+  if (is_laze_load) {
+    interval = lazy_snapshot_interval_min_;
   } else {
-    interval = tmp_interval_s / 60;
+    int tmp_ret = OB_SUCCESS;
+    int64_t tmp_interval_s = 0;
+    if (OB_TMP_FAIL(fetch_interval_num_from_wr_control(tmp_interval_s))) {
+      interval = DEFAULT_SNAPSHOT_INTERVAL;
+      LOG_INFO("failed to fetch interval num from wr control", K(tmp_ret));
+    } else if (tmp_interval_s == 0) {
+      interval = DEFAULT_SNAPSHOT_INTERVAL;
+    } else {
+      interval = tmp_interval_s / 60;
+    }
+    lazy_snapshot_interval_min_ = interval;
   }
   return interval;
 }
@@ -67,7 +73,7 @@ int WorkloadRepositoryTask::schedule_one_task(int64_t interval_us)
 {
   if (interval_us == 0) {
     // default interval is configed by get_snapshot_interval()
-    interval_us = get_snapshot_interval() * 60 * 1000L * 1000L;
+    interval_us = get_snapshot_interval(false/*is_laze_load*/) * 60 * 1000L * 1000L;
   }
   return TG_SCHEDULE(tg_id_, *this, interval_us, false /*not repeat*/);
 }
@@ -161,7 +167,7 @@ void WorkloadRepositoryTask::runTimerTask()
   is_running_task_ = true;
 
   // current snapshot task must stop when next task is time to schedule.
-  timeout_ts_ = common::ObTimeUtility::current_time() +  get_snapshot_interval() * 60 * 1000L * 1000L;
+  timeout_ts_ = common::ObTimeUtility::current_time() +  get_snapshot_interval(false/*is_laze_load*/) * 60 * 1000L * 1000L;
   int64_t snap_id = 0;
   LOG_INFO("start to take wr snapshot", KPC(this));
 
@@ -1017,7 +1023,7 @@ int WorkloadRepositoryTask::fetch_retention_usec_from_wr_control(int64_t &retent
           LOG_WARN("failed to insert default value into wr_control", KR(ret), K(wr_control_sql_string));
         } else if (1 != affected_rows) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("unexpected affected_rows", K(affected_rows));
+          LOG_WARN("unexpected affected_rows", K(affected_rows));
         }
         LOG_INFO("no record in __wr_control table, set default value", K(retention));
       } else {
@@ -1068,7 +1074,7 @@ int WorkloadRepositoryTask::fetch_interval_num_from_wr_control(int64_t &interval
           LOG_WARN("failed to insert default value into wr_control", KR(ret), K(wr_control_sql_string));
         } else if (1 != affected_rows) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("unexpected affected_rows", K(affected_rows));
+          LOG_WARN("unexpected affected_rows", K(affected_rows));
         }
         LOG_INFO("no record in __wr_control table, set default value", K(interval));
       } else {
