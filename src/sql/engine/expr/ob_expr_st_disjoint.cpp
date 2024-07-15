@@ -78,7 +78,7 @@ int ObExprSTDisjoint::process_input_geometry(omt::ObSrsCacheGuard &srs_guard, co
   } else if (input_type1 == ObIntType || input_type2 == ObIntType) {
     // bugfix 53283098, should allow int type in calc_result_type2
     ret = OB_ERR_GIS_INVALID_DATA;
-    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CROSSES);
+    LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISJOINT);
     LOG_WARN("invalid type", K(ret), K(input_type1), K(input_type2));
   } else {
     ObGeoType type1;
@@ -103,26 +103,26 @@ int ObExprSTDisjoint::process_input_geometry(omt::ObSrsCacheGuard &srs_guard, co
       LOG_WARN("fail to get real string data", K(ret), K(wkb2));
     } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
       if (ret == OB_ERR_GIS_INVALID_DATA) {
-        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CROSSES);
+        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISJOINT);
       }
       LOG_WARN("get type and srid from wkb failed", K(wkb1), K(ret));
     } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb2, type2, srid2))) {
       if (ret == OB_ERR_GIS_INVALID_DATA) {
-        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_CROSSES);
+        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_DISJOINT);
       }
       LOG_WARN("get type and srid from wkb failed", K(wkb2), K(ret));
     } else if (srid1 != srid2) {
       ret = OB_ERR_GIS_DIFFERENT_SRIDS;
       LOG_WARN("srid not the same", K(ret), K(srid1), K(srid2));
-      LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS, N_ST_CROSSES, srid1, srid2);
+      LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS, N_ST_DISJOINT, srid1, srid2);
     } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(
-                   ctx, srs_guard, wkb1, srs, true, N_ST_CROSSES))) {
+                   ctx, srs_guard, wkb1, srs, true, N_ST_DISJOINT))) {
       LOG_WARN("fail to get srs item", K(ret), K(wkb1));
     } else if (OB_FAIL(
-                   ObGeoExprUtils::build_geometry(allocator, wkb1, geo1, srs, N_ST_CROSSES, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
+                   ObGeoExprUtils::build_geometry(allocator, wkb1, geo1, srs, N_ST_DISJOINT, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
       LOG_WARN("get first geo by wkb failed", K(ret));
     } else if (OB_FAIL(
-                   ObGeoExprUtils::build_geometry(allocator, wkb2, geo2, srs, N_ST_CROSSES, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
+                   ObGeoExprUtils::build_geometry(allocator, wkb2, geo2, srs, N_ST_DISJOINT, ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
       LOG_WARN("get second geo by wkb failed", K(ret));
     }
   }
@@ -161,7 +161,7 @@ int ObExprSTDisjoint::eval_st_disjoint(const ObExpr &expr, ObEvalCtx &ctx, ObDat
     } else if (OB_FAIL(ObGeoFunc<ObGeoFuncType::Disjoint>::geo_func::eval(
                     gis_context, disjoint_result))) {
       LOG_WARN("eval st intersection failed", K(ret));
-      ObGeoExprUtils::geo_func_error_handle(ret, N_ST_CROSSES);
+      ObGeoExprUtils::geo_func_error_handle(ret, N_ST_DISJOINT);
     } else {
       result = disjoint_result;
     }
