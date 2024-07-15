@@ -73,7 +73,6 @@ int ObTabletMergeInfo::init(const ObBasicTabletMergeCtx &ctx, bool need_check/*t
 void ObTabletMergeInfo::build_sstable_merge_info(const ObBasicTabletMergeCtx &ctx)
 {
   const ObStaticMergeParam &static_param = ctx.static_param_;
-  sstable_merge_info_.tenant_id_ = MTL_ID();
   sstable_merge_info_.ls_id_ = ctx.get_ls_id();
   sstable_merge_info_.tablet_id_ = ctx.get_tablet_id();
   sstable_merge_info_.compaction_scn_ = static_param.get_compaction_scn();

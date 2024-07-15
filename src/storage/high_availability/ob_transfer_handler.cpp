@@ -1618,7 +1618,7 @@ int ObTransferHandler::wait_src_ls_replay_to_start_scn_(
   } else if (OB_FAIL(wait_ls_replay_event_(task_info.src_ls_id_, task_info, member_addr_list, start_scn, group_id, timeout_ctx))) {
     LOG_WARN("failed to wait ls replay event", K(ret), K(task_info), K(member_list), K(start_scn));
   } else {
-    LOG_INFO("[TRANSFER_BLOCK_TX] wait src ls repaly to start scn", "cost", ObTimeUtil::current_time() - start_ts);
+    LOG_INFO("[TRANSFER_BLOCK_TX] wait src ls replay to start scn", "cost", ObTimeUtil::current_time() - start_ts);
   }
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("errsim_transfer", "DEBUG_SYNC_WAIT_REPLAY_TO_START_SCN");

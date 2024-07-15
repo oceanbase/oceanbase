@@ -65,7 +65,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     ir_scan_type_,
                     rowkey_exprs_,
                     table_scan_opt_,
-                    doc_id_idx_);
+                    doc_id_idx_,
+                    vec_vid_idx_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {

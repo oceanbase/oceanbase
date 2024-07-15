@@ -137,6 +137,8 @@ public:
   _XX(PARTICIPANT_SWITCH_LEADER_DATA_INCOMPLETE)        \
   _XX(END_STMT_FAIL)                                    \
   _XX(EXPLICIT_ROLLBACK)                                \
+  _XX(CREATE_SAVEPOINT_FAIL)                            \
+  // used for dblink create savepoint
 
 enum ObTxAbortCause
 {
@@ -337,6 +339,7 @@ public:
   bool is_snapshot() const { return type_ == T::SNAPSHOT; }
   bool is_stash() const { return type_ == T::STASH; }
   bool is_user_savepoint() const { return type_ == T::SAVEPOINT && user_create_; }
+  ObString get_savepoint_name() const { return name_.str(); }
   DECLARE_TO_STRING;
   OB_UNIS_VERSION(1);
 };

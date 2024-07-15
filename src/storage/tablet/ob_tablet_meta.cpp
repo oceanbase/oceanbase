@@ -1593,7 +1593,7 @@ int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
   storage_schema.rowkey_array_.set_allocator(&allocator);
   storage_schema.column_array_.set_allocator(&allocator);
 
-  storage_schema.storage_schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
+  storage_schema.storage_schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_LATEST;
   storage_schema.is_use_bloomfilter_ = false;
   storage_schema.table_type_ = ObTableType::USER_TABLE;
   //storage_schema.table_mode_

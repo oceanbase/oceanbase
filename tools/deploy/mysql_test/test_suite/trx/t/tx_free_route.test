@@ -5,19 +5,21 @@
 connect (sys,$OBMYSQL_MS0,root,"",oceanbase,$OBMYSQL_PORT);
 
 connection sys;
+
+# alter proxy config for this test
+--disable_abort_on_error
+--disable_query_log
+--disable_result_log
+eval alter proxyconfig set enable_single_leader_node_routing=0;
 let $client_session_id_version=query_get_value(show proxyconfigs like 'client_session_id_version', value, 1);
 if ($client_session_id_version == '2') {
---disable_query_log
   let proxy_id=query_get_value(show proxyconfigs like 'proxy_id', value, 1);
   alter proxyconfig set proxy_id = 1;
   alter proxyconfig set client_session_id_version = 1;
---enable_query_log
 }
-
-connect (conn0,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-connect (conn1,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-
-connection sys;
+--enable_abort_on_error
+--enable_query_log
+--enable_result_log
 
 # change tenant primary zone to RANDOM
 let $saved_primary_zone=`select primary_zone from oceanbase.__all_tenant where tenant_name = 'mysql'`;
@@ -27,6 +29,9 @@ alter tenant mysql set primary_zone = 'RANDOM';
 let $tenant_id=`select tenant_id from oceanbase.__all_tenant where tenant_name = 'mysql'`;
 
 let $tenant_name=mysql;
+
+connect (conn0,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (conn1,$OBMYSQL_MS0,admin@mysql,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 
 --source mysql_test/test_suite/trx/t/tx_free_route.inc
 
@@ -313,6 +318,11 @@ set session transaction isolation level read committed;
 #    select 110;
 #                      select 1000010 // replace old tx desc
 #    commit;
+#Case 9: savepoint start trx
+#    savepoint sp6;
+#                      insert 1000011
+#    sleep 10s
+#    commit;
 #--------------------------------------------------------------------------
 set autocommit=0;
 --echo "CASE 4.1"
@@ -391,6 +401,50 @@ select * from t where id = 1000010;
 let $session_2=`select connection_id()`;
 commit;
 if ($session_1 == $session_2) { --echo "txn is not freely routed !! session: 1=$session_1, 2=$session_2";
+}
+--echo "CASE 4.9"
+savepoint sp6;
+let $session_0=`select connection_id()`;
+select * from t where id = 110;
+let $session_1=`select connection_id()`;
+select * from t where id = 1000010;
+let $session_2=`select connection_id()`;
+if ($session_0 != $session_1) {
+if ($session_0 != $session_2) {
+  --echo "unexpected error happen!!!";
+}
+} 
+--disable_query_log
+--disable_result_log
+if ($session_0 == $session_1) {
+  insert into t values(1000011);
+  let $session_3=`select connection_id()`;
+}
+if ($session_0 == $session_2) {
+  insert into t values(888);
+  let $session_3=`select connection_id()`;
+}
+sleep 10;
+if ($session_0 == $session_1) {
+  select * from t where id = 1000011;
+  let $session_4=`select connection_id()`;
+  let $txid =`select ob_transaction_id()`;
+}
+if ($session_0 == $session_2) {
+  select * from t where id = 888;
+  let $session_4=`select connection_id()`;
+  let $txid =`select ob_transaction_id()`;
+}
+--enable_result_log
+--enable_query_log
+if ($txid == 0) {
+  --echo "unexpected error happen!!!";
+}
+if ($session_4 != $session_3) {
+  --echo "unexpected error happen!!! session: 0:$session_0, 1:$session_1, 2:$session_2, 3:$session_3, 4:$session_4";
+}
+commit;
+if ($sp_sess == $session_3) { --echo "txn is not freely routed !! session: 1=$session_1, 2=$session_2, 3=$session_3";
 }
 
 --echo "------------- 5 - change session auto_commit ----------------------"
@@ -862,8 +916,12 @@ connection sys;
 eval alter tenant mysql set primary_zone = "$saved_primary_zone";
 --enable_query_log
 
-if ($client_session_id_version == 2) {
+# recover proxy config
+--disable_abort_on_error
 --disable_query_log
+--disable_result_log
+eval alter proxyconfig set enable_single_leader_node_routing=1;
+if ($client_session_id_version == 2) {
 # **Note**
 # must recover client_session_id_version before recover proxy_id
 # otherwise, will report:
@@ -871,8 +929,10 @@ if ($client_session_id_version == 2) {
 #   When reset client_session_id_version to v1, proxy_id must be set to less than 255
   alter proxyconfig set client_session_id_version = 2;
   eval alter proxyconfig set proxy_id = $proxy_id;
---enable_query_log
 }
+--enable_abort_on_error
+--enable_query_log
+--enable_result_log
 
 --sleep 5
 

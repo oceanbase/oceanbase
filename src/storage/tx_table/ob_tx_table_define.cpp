@@ -441,6 +441,7 @@ bool ObCommitVersionsArray::is_valid()
   for (int i = 0; i < array_.count() - 1; i++) {
     if (!array_.at(i).start_scn_.is_valid() ||
         !array_.at(i).commit_version_.is_valid() ||
+        array_.at(i).commit_version_.is_max() ||
         array_.at(i).start_scn_ > array_.at(i + 1).start_scn_ ||
         array_.at(i).start_scn_ > array_.at(i).commit_version_) {
       bool_ret = false;
@@ -448,6 +449,13 @@ bool ObCommitVersionsArray::is_valid()
                   K(array_.at(i + 1)));
     }
   }
+
+  int64_t last_node_idx = array_.count() - 1;
+  if (!array_.at(last_node_idx).start_scn_.is_max() && array_.at(last_node_idx).commit_version_.is_max()) {
+    bool_ret = false;
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "this commit version array is invalid", K(array_.at(last_node_idx)));
+  }
+
   return bool_ret;
 }
 

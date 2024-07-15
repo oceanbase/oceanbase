@@ -13,9 +13,11 @@
 
 #include "storage/tx/ob_dblink_client.h"
 #include "sql/engine/ob_exec_context.h"
+#include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
 {
+using namespace transaction;
 namespace sql
 {
 class ObTMService
@@ -29,6 +31,10 @@ public:
                        transaction::ObTransID &tx_id);
   static int tm_rollback(ObExecContext &exec_ctx,
                          transaction::ObTransID &tx_id);
+  static int tm_create_savepoint(ObExecContext &exec_ctx,
+                                 const ObString &sp_name);
+  static int tm_rollback_to_savepoint(ObExecContext &exec_ctx,
+                                      const ObString &sp_name);
   // for callback link
   static int recover_tx_for_callback(const transaction::ObTransID &tx_id,
                                      ObExecContext &exec_ctx);

@@ -41,6 +41,8 @@ namespace common {
 
 #define INIT_GLOBAL_PREFS "REPLACE INTO %s(sname, sval1, sval2, spare4) VALUES %s;"
 
+#define UPGRADE_GLOBAL_PREFS "INSERT IGNORE INTO %s(sname, sval1, sval2, spare4) VALUES %s;"
+
 int ObDbmsStatsPreferences::reset_global_pref_defaults(ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -1184,6 +1186,30 @@ int ObOnlineEstimatePercentPrefs::check_pref_value_validity(ObTableStatParam *pa
   return ret;
 }
 
+int ObDbmsStatsPreferences::get_online_estimate_percent_for_upgrade(ObSqlString &raw_sql)
+{
+  int ret = OB_SUCCESS;
+  const char *null_str = "NULL";
+  const char *time_str = "CURRENT_TIMESTAMP";
+  ObSqlString value_str;
+  ObOnlineEstimatePercentPrefs prefs;
+  if (OB_ISNULL(prefs.get_stat_pref_name()) || OB_ISNULL(prefs.get_stat_pref_for_update())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()),
+                                      K(prefs.get_stat_pref_for_update()));
+  } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s')",
+                                          prefs.get_stat_pref_name(),
+                                          null_str,
+                                          time_str,
+                                          prefs.get_stat_pref_for_update()))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(raw_sql.append_fmt(UPGRADE_GLOBAL_PREFS,
+                                        share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
+                                        value_str.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  }
+  return ret;
+}
 
 } // namespace common
 } // namespace oceanbase

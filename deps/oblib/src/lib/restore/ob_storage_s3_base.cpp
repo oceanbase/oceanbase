@@ -576,6 +576,7 @@ void ObS3Env::stop()
 
 const int S3_BAD_REQUEST = 400;
 const int S3_ITEM_NOT_EXIST = 404;
+const int S3_SLOW_DOWN = 503;
 
 static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 {
@@ -605,8 +606,16 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       }
       break;
     }
+    case S3_SLOW_DOWN: {
+      ob_errcode = OB_IO_LIMIT;
+      break;
+    }
     default: {
-      ob_errcode = OB_S3_ERROR;
+      if (err_msg.find("curlCode: 28") != std::string::npos) {
+        ob_errcode = OB_TIMEOUT;
+      } else {
+        ob_errcode = OB_S3_ERROR;
+      }
       break;
     }
   }

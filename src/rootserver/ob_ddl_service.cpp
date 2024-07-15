@@ -4509,41 +4509,10 @@ int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table
   return ret;
 }
 
-int ObDDLService::update_spatial_generated_column_info(const share::schema::ObTableSchema &orig_table_schema,
-                                                      schema::ObTableSchema &hidden_table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObTableSchema::const_column_iterator hidden_iter = hidden_table_schema.column_begin();
-  ObTableSchema::const_column_iterator hidden_end = hidden_table_schema.column_end();
-  for (; OB_SUCC(ret) && hidden_iter != hidden_end; ++hidden_iter) {
-    ObColumnSchemaV2 *column = *hidden_iter;
-    if (OB_ISNULL(column)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid column schema", K(column));
-    } else if (column->is_spatial_generated_column()) {
-      uint64_t old_geo_column_id = column->get_geo_col_id();
-      const ObColumnSchemaV2 *old_geo_column = orig_table_schema.get_column_schema(old_geo_column_id);
-      if (OB_ISNULL(old_geo_column)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid column schema", K(old_geo_column_id), KPC(old_geo_column));
-      } else {
-        const ObColumnSchemaV2 *new_geo_column = hidden_table_schema.get_column_schema(old_geo_column->get_column_name());
-        if (OB_NOT_NULL(new_geo_column)) {
-          column->set_geo_col_id(new_geo_column->get_column_id());
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid column schema", KPC(new_geo_column));
-        }
-      }
-    }
-  }
-  return ret;
-}
 
-int ObDDLService::check_add_identity_and_spatial_generated_column(const share::schema::ObTableSchema &orig_table_schema,
-                                                                  const share::schema::ObTableSchema &hidden_table_schema,
-                                                                  bool &is_add_identity_column,
-                                                                  bool &have_spatial_generated_column)
+int ObDDLService::check_is_add_identity_column(const share::schema::ObTableSchema &orig_table_schema,
+                                               const share::schema::ObTableSchema &hidden_table_schema,
+                                               bool &is_add_identity_column)
 {
   int ret = OB_SUCCESS;
   ObTableSchema::const_column_iterator iter = orig_table_schema.column_begin();
@@ -4564,8 +4533,6 @@ int ObDDLService::check_add_identity_and_spatial_generated_column(const share::s
       } else {
         is_add_identity_column = true;
       }
-    } else if (!have_spatial_generated_column && column->is_spatial_generated_column()) {
-      have_spatial_generated_column = true;
     }
   }
   for (; OB_SUCC(ret) && iter != end; ++iter) {
@@ -15106,7 +15073,9 @@ int ObDDLService::check_alter_partitions(const ObTableSchema &orig_table_schema,
   }
   bool has_fts_or_multivalue_index = false;
   const int64_t table_id = orig_table_schema.get_table_id();
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) ||
+    alter_part_type == obrpc::ObAlterTableArg::DROP_PARTITION ||
+    alter_part_type == obrpc::ObAlterTableArg::TRUNCATE_PARTITION ) {
   } else if (OB_FAIL(check_has_domain_index(schema_guard,
                                          tenant_id,
                                          table_id,
@@ -17668,11 +17637,8 @@ int ObDDLService::create_user_hidden_table(const ObTableSchema &orig_table_schem
     LOG_WARN("invalid arg", K(ret), K(tenant_data_version));
   } else if (OB_FAIL(ObMajorFreezeHelper::get_frozen_scn(tenant_id, frozen_scn))) {
     LOG_WARN("failed to get frozen status for create tablet", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(check_add_identity_and_spatial_generated_column(orig_table_schema, hidden_table_schema, is_add_identity_column, have_spatial_generated_column))) {
+  } else if (OB_FAIL(check_is_add_identity_column(orig_table_schema, hidden_table_schema, is_add_identity_column))) {
     LOG_WARN("failed to check is add identity column", K(ret));
-  } else if (have_spatial_generated_column
-            && OB_FAIL(update_spatial_generated_column_info(orig_table_schema,hidden_table_schema))) {
-     LOG_WARN("failed to update spatial generated column info", K(ret));
   } else if (OB_FAIL(prepare_hidden_table_schema(orig_table_schema,
                                           allocator,
                                           hidden_table_schema,

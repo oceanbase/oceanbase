@@ -272,6 +272,9 @@ int ObPushDownTopNFilterMsg::filter_out_data(const ObExpr &expr, ObEvalCtx &ctx,
     for (int i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
       if (OB_FAIL(expr.args_[i]->eval(ctx, datum))) {
         LOG_WARN("failed to eval datum", K(ret));
+      } else if (datum->is_null()) {
+        cmp_res = -1;
+        break;
       } else {
         if (OB_FAIL(get_compare_result(i, *datum, cmp_res))) {
           LOG_WARN("fail to compare", K(ret));
@@ -630,7 +633,10 @@ int ObPushDownTopNFilterMsg::do_filter_out_data_batch(
       batch_info_guard.set_batch_idx(batch_i);
       for (int arg_i = 0; OB_SUCC(ret) && arg_i < expr.arg_cnt_; ++arg_i) {
         datum = &expr.args_[arg_i]->locate_expr_datum(ctx, batch_i);
-        if (OB_FAIL(get_compare_result(arg_i, *datum, cmp_res))) {
+        if (datum->is_null()) {
+          cmp_res = -1;
+          break;
+        } else if (OB_FAIL(get_compare_result(arg_i, *datum, cmp_res))) {
           LOG_WARN("fail to compare", K(ret));
         } else if (cmp_res > 0) {
           // the data bigger than head top data should be filterd out.
@@ -711,9 +717,12 @@ int ObPushDownTopNFilterMsg::process_multi_columns(int64_t arg_idx, const ObExpr
   new_row_selector_cnt = 0;
 
 #define FILL_MUL_COLUMN_RESULT                                                                     \
-  if (OB_FAIL(get_compare_result(arg_idx, datum, cmp_res))) {                                      \
+  if (datum.is_null()) {                                                                           \
+    cmp_res = -1;                                                                                   \
+  } else if (OB_FAIL(get_compare_result(arg_idx, datum, cmp_res))) {                               \
     LOG_WARN("fail to get_compare_result", K(ret));                                                \
-  } else {                                                                                         \
+  }                                                                                                \
+  if (OB_SUCC(ret)) {                                                                              \
     if (std::is_same<ResVec, IntegerFixedVec>::value) {                                            \
       if (cmp_res > 0) {                                                                           \
         filter_count += 1;                                                                         \

@@ -189,7 +189,6 @@ int ObCOTabletMergeCtx::collect_running_info()
 {
   int ret = OB_SUCCESS;
   ObSSTableMergeInfo fake_merge_info;
-  fake_merge_info.tenant_id_ = MTL_ID();
   fake_merge_info.ls_id_ = get_ls_id();
   fake_merge_info.is_fake_ = true;
   fake_merge_info.tablet_id_ = get_tablet_id();

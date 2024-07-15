@@ -7295,6 +7295,8 @@ def_table_schema(
   ],
 )
 
+# 520 : __all_spm_evo_result
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -14548,6 +14550,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12492: __all_virtual_ss_local_cache_info
 
 # 12493: __all_virtual_kv_group_commit_status
+# 12494: __all_virtual_session_sys_variable
+# 12495: __all_virtual_spm_evo_result
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15036,6 +15040,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15462: __all_virtual_ss_local_cache_info
 # 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent
 # 15464: __all_virtual_kv_group_commit_status
+# 15465: __all_virtual_session_sys_variable
+# 15466: __all_spm_evo_result
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -63089,8 +63095,8 @@ from
          CAST(srs.srs_name AS VARCHAR2(128)) as SRS_NAME,
          CAST(
               CASE
-                WHEN TRUNC(col.srs_id / POWER(2, 32)) = 4294967295 THEN NULL
-                ELSE TRUNC(col.srs_id / POWER(2, 32))
+                WHEN TRUNC(col.new_srs_id / POWER(2, 32)) = 4294967295 THEN NULL
+                ELSE TRUNC(col.new_srs_id / POWER(2, 32))
               END
          AS NUMBER(10)) AS SRS_ID,
         CAST(
@@ -63103,7 +63109,13 @@ from
          tbl.table_id AS TABLE_ID,
          tbl.database_id AS DATABASE_ID
     from
-      SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT col left join SYS.ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT srs on TRUNC(col.srs_id / POWER(2, 32)) = srs.srs_id
+      (select col1.*,
+      CASE
+         WHEN col1.srs_id < 0 THEN
+           col1.srs_id + POWER(2, 64)
+         ELSE
+           col1.srs_id
+       END AS new_srs_id from SYS.ALL_VIRTUAL_COLUMN_REAL_AGENT col1) col left join SYS.ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT srs on TRUNC(col.new_srs_id / POWER(2, 32)) = srs.srs_id
       join SYS.ALL_VIRTUAL_TABLE_REAL_AGENT tbl on (tbl.table_id = col.table_id and tbl.tenant_id = col.tenant_id)
       join SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db on (db.database_id = tbl.database_id and db.tenant_id = tbl.tenant_id)
       and db.database_name != '__recyclebin'

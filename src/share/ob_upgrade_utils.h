@@ -174,7 +174,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 18;
+  static const int64_t DATA_VERSION_NUM = 19;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -231,6 +231,7 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 2, 1)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 3, 1)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 4, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 5, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 0)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 0, 1)
 
@@ -256,6 +257,7 @@ private:
   int post_upgrade_for_reset_compat_version();
   int try_reset_version(const uint64_t tenant_id, const char *var_name);
   int post_upgrade_for_spm();
+  int post_upgrade_for_online_estimate_percent();
 };
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 3, 0)

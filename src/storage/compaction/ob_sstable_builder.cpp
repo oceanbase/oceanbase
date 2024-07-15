@@ -220,7 +220,7 @@ int ObSSTableBuilder::open_macro_writer()
   return ret;
 }
 
-int ObSSTableBuilder::pre_check_rebuild(const ObStaticMergeParam &merge_param, bool &need_check_rebuild)
+int ObSSTableBuilder::pre_check_rebuild(const ObStaticMergeParam &merge_param, MetaIter &iter, bool &need_check_rebuild)
 {
   int ret = OB_SUCCESS;
   need_check_rebuild = true;
@@ -228,7 +228,7 @@ int ObSSTableBuilder::pre_check_rebuild(const ObStaticMergeParam &merge_param, b
   if (data_version < DATA_VERSION_4_3_0_0) {
     need_check_rebuild = false;
   } else if (data_version >= DATA_VERSION_4_3_2_0) {
-    if (merge_param.concurrent_cnt_ <= 1) {
+    if (merge_param.concurrent_cnt_ <= 1 || iter.get_macro_block_count() <= 1) {
       need_check_rebuild = false;
     }
   }
@@ -251,7 +251,7 @@ int ObSSTableBuilder::check_need_rebuild(const ObStaticMergeParam &merge_param,
   bool last_macro_is_first = false;
   bool need_check_rebuild = true;
 
-  if (OB_FAIL(pre_check_rebuild(merge_param, need_check_rebuild))) {
+  if (OB_FAIL(pre_check_rebuild(merge_param, iter, need_check_rebuild))) {
     STORAGE_LOG(WARN, "Fail to pre check need rebuild", K(ret));
   } else if (need_check_rebuild) {
     while (OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_block(macro_meta))) {

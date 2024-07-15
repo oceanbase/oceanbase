@@ -433,6 +433,9 @@ int ObTxDataMemtable::periodical_get_next_commit_version_(ProcessCommitVersionDa
     // avoid rollback or abort transaction influencing commit versions array
     if (ObTxData::COMMIT != tmp_tx_data->state_) {
       continue;
+    } else if (!tmp_tx_data->commit_version_.is_valid() || tmp_tx_data->commit_version_.is_max()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected tx data commit version", KPC(tmp_tx_data));
     } else {
       tx_data = tmp_tx_data;
     }

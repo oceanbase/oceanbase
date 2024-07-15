@@ -167,7 +167,7 @@ public:
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
       const bool skip_column_info = false,
-      const int64_t compat_version = STORAGE_SCHEMA_VERSION_V3);
+      const int64_t compat_version = STORAGE_SCHEMA_VERSION_LATEST);
   int init(
       common::ObIAllocator &allocator,
       const ObStorageSchema &old_schema,
@@ -330,7 +330,7 @@ public:
   static const int64_t STORAGE_SCHEMA_VERSION = 1;
   static const int64_t STORAGE_SCHEMA_VERSION_V2 = 2; // add for store_column_cnt_
   static const int64_t STORAGE_SCHEMA_VERSION_V3 = 3; // add for cg_group
-
+  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V3;
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
 

@@ -32,6 +32,14 @@ namespace transaction
 {
 namespace tablelock
 {
+enum class ObTableLockPriority : int8_t
+{
+  INVALID = -1,
+  HIGH1 = 0,
+  HIGH2 = 10,
+  NORMAL = 20,
+  LOW = 30,
+};
 
 // Lock compatibility matrix:
 //

@@ -711,6 +711,7 @@ private:
   double online_sample_percent_; // for incremental direct load
   std::atomic<bool> can_set_feedback_info_;
   bool need_switch_to_table_lock_worker_; // for table lock switch worker thread
+  bool data_complement_gen_doc_id_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

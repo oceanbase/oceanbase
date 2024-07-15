@@ -489,6 +489,7 @@ public:
   inline bool is_param_lazy_eval() const { return param_lazy_eval_; }
 
   inline static bool is_type_valid(const common::ObObjType &type);
+  inline static bool is_type_valid_regexp(const common::ObObjType &type);
   virtual bool need_charset_convert() const { return need_charset_convert_; }
   virtual int64_t to_string(char *buf, const int64_t buf_len) const
   {
@@ -1023,6 +1024,11 @@ inline bool ObExprOperator::is_type_valid(const common::ObObjType &type)
 {
   common::ObObjTypeClass type_class = ob_obj_type_class(type);
   return (common::ob_is_castable_type_class(type_class) || common::ObUnknownTC == type_class);
+}
+
+inline bool ObExprOperator::is_type_valid_regexp(const common::ObObjType &type)
+{
+  return (is_type_valid(type) && type != ObRoaringBitmapType);
 }
 
 inline void ObExprOperator::calc_result_flag1(ObExprResType &type,

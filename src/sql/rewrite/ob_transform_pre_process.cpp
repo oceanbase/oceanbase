@@ -5834,11 +5834,12 @@ int ObTransformPreProcess::transform_in_or_notin_expr_without_row(ObRawExprFacto
                                               ->get_result_type().get_collation_type();
       ObCollationLevel coll_level = right_expr->get_param_expr(i)
                                               ->get_result_type().get_collation_level();
+      ObScale scale = right_expr->get_param_expr(i)->get_result_type().get_scale();
       if (OB_UNLIKELY(obj_type == ObMaxType)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected obj type", K(ret), K(obj_type), K(*in_expr));
       } else if (OB_FAIL(add_var_to_array_no_dup(distinct_types,
-                                               DistinctObjMeta(obj_type, coll_type, coll_level)))) {
+                                DistinctObjMeta(obj_type, coll_type, coll_level, scale)))) {
         LOG_WARN("failed to push back", K(ret));
       } else {
         LOG_DEBUG("add param expr type", K(i), K(obj_type));
@@ -5871,7 +5872,8 @@ int ObTransformPreProcess::transform_in_or_notin_expr_without_row(ObRawExprFacto
                                                 ->get_result_type().get_collation_type();
         ObCollationLevel coll_level = right_expr->get_param_expr(j)
                                                 ->get_result_type().get_collation_level();
-        DistinctObjMeta tmp_meta(obj_type, coll_type, coll_level);
+        ObScale scale = right_expr->get_param_expr(j)->get_result_type().get_scale();
+        DistinctObjMeta tmp_meta(obj_type, coll_type, coll_level, scale);
         if (obj_meta == tmp_meta
             && OB_FAIL(same_type_exprs.push_back(right_expr->get_param_expr(j)))) {
           LOG_WARN("failed to add param expr", K(ret));
@@ -5930,11 +5932,12 @@ int ObTransformPreProcess::transform_in_or_notin_expr_with_row(ObRawExprFactory 
           const ObObjType obj_type = param_expr->get_result_type().get_type();
           const ObCollationType coll_type = param_expr->get_result_type().get_collation_type();
           const ObCollationLevel coll_level = param_expr->get_result_type().get_collation_level();
+          const ObScale scale = param_expr->get_result_type().get_scale();
           if (OB_UNLIKELY(obj_type == ObMaxType)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected obj type", K(ret), K(obj_type), K(*in_expr));
           } else if (OB_FAIL(tmp_row_type.push_back(
-                                               DistinctObjMeta(obj_type, coll_type, coll_level)))) {
+                               DistinctObjMeta(obj_type, coll_type, coll_level, scale)))) {
             LOG_WARN("failed to push back element", K(ret));
           } else { /* do nothing */ }
         }

@@ -160,9 +160,6 @@ public:
       const ObTablet &tablet,
       ObTableStoreIterator &iter,
       const bool allow_no_ready_read = false) const;
-  int get_mds_tables(
-      const int64_t snapshot_version,
-      ObTableStoreIterator &iter) const;
   int get_all_sstable(ObTableStoreIterator &iter, const bool unpack_co_table = false) const;
   int get_read_major_sstable(const int64_t snapshot_version, ObTableStoreIterator &iter) const;
   int get_memtables(common::ObIArray<storage::ObITable *> &memtables, const bool need_active = false) const;

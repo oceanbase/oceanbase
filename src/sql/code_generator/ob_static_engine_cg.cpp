@@ -1814,6 +1814,9 @@ int ObStaticEngineCG::generate_hash_set_spec(ObLogSet &op, ObHashSetSpec &spec)
         // other udt types not supported, xmltype does not have order or map member function
         ret = OB_ERR_NO_ORDER_MAP_SQL;
         LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+      } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid operation for roaringbitmap", K(ret));
       } else if (OB_FAIL(spec.sort_collations_.push_back(field_collation))) {
         LOG_WARN("failed to push back sort collation", K(ret));
       } else {
@@ -1992,6 +1995,9 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
           // other udt types not supported, xmltype does not have order or map member function
           ret = OB_ERR_NO_ORDER_MAP_SQL;
           LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid operation for roaringbitmap", K(ret));
         } else {
           ObSortCmpFunc cmp_func;
           cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -2234,6 +2240,9 @@ int ObStaticEngineCG::check_not_support_cmp_type(
       // other udt types not supported, xmltype does not have order or map member function
       ret = OB_ERR_NO_ORDER_MAP_SQL;
       LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+    } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid operation for roaringbitmap", K(ret));
     }
   }
   return ret;
@@ -5599,6 +5608,9 @@ int ObStaticEngineCG::generate_pump_exprs(ObLogJoin &op, ObNLConnectBySpecBase &
           // other udt types not supported, xmltype does not have order or map member function
           ret = OB_ERR_NO_ORDER_MAP_SQL;
           LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid operation for roaringbitmap", K(ret));
         } else {
           cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
                                 expr->datum_meta_.type_,
@@ -7167,6 +7179,9 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
             // other udt types not supported, xmltype does not have order or map member function
             ret = OB_ERR_NO_ORDER_MAP_SQL;
             LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+          } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("invalid operation for roaringbitmap", K(ret));
           } else {
             ObSortFieldCollation field_collation(i, expr->datum_meta_.cs_type_, is_ascending, null_pos);
             ObSortCmpFunc cmp_func;
@@ -7846,6 +7861,9 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
         // other udt types not supported, xmltype does not have order or map member function
         ret = OB_ERR_NO_ORDER_MAP_SQL;
         LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+      } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid operation for roaringbitmap", K(ret));
       } else if (sort_exprs != NULL && OB_FAIL(sort_exprs->push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (has_exist_in_array(all_exprs, expr, &idx)) {
