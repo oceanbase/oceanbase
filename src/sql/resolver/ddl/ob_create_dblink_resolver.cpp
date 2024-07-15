@@ -25,7 +25,8 @@ namespace sql
 {
 
 ObCreateDbLinkResolver::ObCreateDbLinkResolver(ObResolverParams &params)
-    : ObDDLResolver(params)
+    : ObDDLResolver(params),
+      compat_version_(0)
 {
 }
 
@@ -38,6 +39,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
   int ret = OB_SUCCESS;
   ParseNode *node = const_cast<ParseNode*>(&parse_tree);
   ObCreateDbLinkStmt *create_dblink_stmt = NULL;
+  uint64_t tenant_id = OB_INVALID_ID;
   if (OB_ISNULL(node)
       || OB_UNLIKELY(node->type_ != T_CREATE_DBLINK)
       || OB_UNLIKELY(node->num_child_ != DBLINK_NODE_COUNT)) {
@@ -55,6 +57,9 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(create_dblink_stmt = create_stmt<ObCreateDbLinkStmt>())) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("failed to create create_dblink_stmt", K(ret));
+  } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version_))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else {
     stmt_ = create_dblink_stmt;
     create_dblink_stmt->set_tenant_id(session_info_->get_effective_tenant_id());
@@ -62,11 +67,7 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     LOG_TRACE("debug dblink create", K(session_info_->get_database_id()));
   }
   if (!lib::is_oracle_mode() && OB_SUCC(ret)) {
-    uint64_t compat_version = 0;
-    uint64_t tenant_id = session_info_->get_effective_tenant_id();
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
-      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+    if (compat_version_ < DATA_VERSION_4_2_0_0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
     } else if (NULL != node->children_[IF_NOT_EXIST]) {
@@ -179,6 +180,8 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     }
   }
   if (OB_SUCC(ret)) {
+    ObString hostname;
+    int32_t port = 0;
     ObAddr host;
     ObString host_str;
     ObString ip_port, conn_str;
@@ -190,10 +193,17 @@ int ObCreateDbLinkResolver::resolve(const ParseNode &parse_tree)
     } else if (FALSE_IT(host_str.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_)))) {
     } else if (OB_FAIL(cut_host_string(host_str, ip_port, conn_str))) {
       LOG_WARN("failed to cut host string", K(ret), K(host_str));
-    } else if (OB_FAIL(host.parse_from_string(ip_port))) {
+    } else if (DATA_VERSION_4_2_1_8 <= compat_version_ &&
+               OB_FAIL(resolve_hostname_port_str(ip_port, hostname, port))) {
+      LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
+    } else if (DATA_VERSION_4_2_1_8 > compat_version_ &&
+               OB_FAIL(host.parse_from_string(ip_port))) {
       LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
     } else if (OB_FAIL(resolve_conn_string(conn_str, ip_port, *create_dblink_stmt))) {
       LOG_WARN("failed to resolve conn string", K(ret), K(conn_str));
+    } else if (DATA_VERSION_4_2_1_8 <= compat_version_) {
+      create_dblink_stmt->set_host_name(hostname);
+      create_dblink_stmt->set_host_port(port);
     } else {
       create_dblink_stmt->set_host_addr(host);
     }
@@ -280,19 +290,29 @@ int ObCreateDbLinkResolver::resolve_opt_reverse_link(const ParseNode *node, sql:
     } else {
       link_stmt->set_reverse_cluster_name(reverse_link_cluster_name);
     }
-
+    ObString hostname;
+    int32_t port = 0;
     ObAddr host;
     ObString host_str;
     ObString ip_port, conn_str;
     ParseNode *host_node = NULL;
-    if (OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]) || OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_) || OB_ISNULL(host_node = reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_[0])) {
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]) || OB_ISNULL(reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_) || OB_ISNULL(host_node = reverse_link_node->children_[REVERSE_LINK_IP_PORT]->children_[0])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid parse tree", K(ret));
     } else if (FALSE_IT(host_str.assign_ptr(host_node->str_value_, static_cast<int32_t>(host_node->str_len_)))) {
     } else if (OB_FAIL(cut_host_string(host_str, ip_port, conn_str))) {
       LOG_WARN("failed to cut host string", K(ret), K(host_str));
-    } else if (OB_FAIL(host.parse_from_string(ip_port))) {
+    } else if (DATA_VERSION_4_2_1_8 <= compat_version_ &&
+               OB_FAIL(resolve_hostname_port_str(ip_port, hostname, port))) {
       LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
+    } else if (DATA_VERSION_4_2_1_8 > compat_version_ &&
+               OB_FAIL(host.parse_from_string(ip_port))) {
+      LOG_WARN("parse ip port failed", K(ret), K(host_str), K(ip_port));
+    } else if (DATA_VERSION_4_2_1_8 <= compat_version_) {
+      link_stmt->set_reverse_host_name(hostname);
+      link_stmt->set_reverse_host_port(port);
     } else {
       link_stmt->set_reverse_host_addr(host);
     }
@@ -315,6 +335,37 @@ int ObCreateDbLinkResolver::cut_host_string(const ObString &host_string,
       ip_port = tmp_str;
     } else {
       conn_string = tmp_str;
+    }
+  }
+  return ret;
+}
+
+int ObCreateDbLinkResolver::resolve_hostname_port_str(const ObString &ip_port_str, ObString &hostname, int32_t &port)
+{
+  // hostname maybe is ip or domin name
+  int ret = OB_SUCCESS;
+  char buf[OB_MAX_DOMIN_NAME_LENGTH + 1] = "";
+  if (ip_port_str.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty ip_port_str", K(ret));
+  } else {
+    int64_t data_len = MIN(ip_port_str.length(), sizeof (buf) - 1);
+    MEMCPY(buf, ip_port_str.ptr(), data_len);
+    buf[data_len] = '\0';
+    char *pport = strrchr(buf, ':');
+    if (NULL != pport) {
+      int host_name_len = pport - buf;
+      hostname.assign_ptr(ip_port_str.ptr(), host_name_len);
+      *(pport++) = '\0';
+      char *end = NULL;
+      port = static_cast<int>(strtol(pport, &end, 10));
+      if (NULL == end || end - pport != static_cast<int64_t>(strlen(pport))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argment", K(ret), KP(end), KP(pport));
+      }
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argment", K(ret), KP(pport));
     }
   }
   return ret;

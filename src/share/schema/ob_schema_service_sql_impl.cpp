@@ -8668,7 +8668,8 @@ int ObSchemaServiceSQLImpl::get_link_table_schema(const ObDbLinkSchema *dblink_s
     LOG_WARN("failed to get sql mode cstr", K(ret));
   } else if (sql::DblinkGetConnType::DBLINK_POOL == conn_type &&
       OB_FAIL(dblink_proxy_->create_dblink_pool(param_ctx,
-                                                dblink_schema->get_host_addr(),
+                                                dblink_schema->get_host_name(),
+                                                dblink_schema->get_host_port(),
                                                 dblink_schema->get_tenant_name(),
                                                 dblink_schema->get_user_name(),
                                                 dblink_schema->get_plain_password(),

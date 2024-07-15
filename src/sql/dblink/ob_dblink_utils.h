@@ -71,6 +71,8 @@ public:
   inline void set_passwd(ObString name) { passwd_ = name; }
   inline void set_addr(common::ObAddr addr) { addr_ = addr; }
   inline void set_self_addr(common::ObAddr addr) { self_addr_ = addr; }
+  inline void set_host_name(ObString host_name) { host_name_ = host_name; }
+  inline void set_port(int32_t port) { port_ = port; }
   inline void set_tx_id(int64_t tx_id) { tx_id_ = tx_id; }
   inline void set_tm_sessid(uint32_t tm_sessid) { tm_sessid_ = tm_sessid; }
   inline void set_session_info(sql::ObSQLSessionInfo *session_info) { session_info_ = session_info; }
@@ -80,6 +82,8 @@ public:
   const ObString &get_passwd() { return passwd_; }
   const common::ObAddr &get_addr() { return addr_; }
   const common::ObAddr &get_self_addr() { return self_addr_; }
+  const ObString &get_host_name() { return host_name_; }
+  int32_t get_port() { return port_; }
   int64_t get_tx_id() { return tx_id_; }
   uint32_t get_tm_sessid() { return tm_sessid_; }
 
@@ -95,7 +99,9 @@ public:
               K_(self_addr),
               K_(tx_id),
               K_(tm_sessid),
-              K_(is_close));
+              K_(is_close),
+              K_(host_name),
+              K_(port));
 public:
   static const char *SESSION_VARIABLE;
   static const int64_t VARI_LENGTH;
@@ -115,6 +121,9 @@ private:
   common::sqlclient::ObMySQLConnection reverse_conn_; // ailing.lcq to do, ObReverseLink can be used by serval connection, not just one
   char db_user_[OB_MAX_USER_NAME_LENGTH + OB_MAX_TENANT_NAME_LENGTH + OB_MAX_CLUSTER_NAME_LENGTH];
   char db_pass_[OB_MAX_PASSWORD_LENGTH];
+  char host_name_cstr_[OB_MAX_DOMIN_NAME_LENGTH + 1]; // used by dblink to connect, instead of using server_ to connect
+  ObString host_name_;
+  int32_t port_; // used by dblink to connect, instead of using server_ to connect
   sql::ObSQLSessionInfo *session_info_; // reverse link belongs to which session
 };
 

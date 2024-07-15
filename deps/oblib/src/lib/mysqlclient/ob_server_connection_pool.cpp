@@ -26,6 +26,7 @@ ObServerConnectionPool::ObServerConnectionPool() :
     connection_pool_ptr_(NULL),
     root_(NULL),
     dblink_id_(OB_INVALID_ID),
+    port_(0),
     server_(),
     pool_lock_(common::ObLatchIds::INNER_CONN_POOL_LOCK),
     last_renew_timestamp_(0),
@@ -201,7 +202,7 @@ void ObServerConnectionPool::dump()
            "max_allowed_conn_count_", max_allowed_conn_count_, "server_not_available_", server_not_available_);
 }
 
-int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, const ObAddr &server,
+int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, const ObString &host_name, int32_t port,
                                         const ObString &db_tenant, const ObString &db_user,
                                         const ObString &db_pass, const ObString &db_name,
                                         const common::ObString &conn_str,
@@ -210,22 +211,33 @@ int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, 
 {
   UNUSED(conn_str);
   int ret = OB_SUCCESS;
-  if (OB_FAIL(init(root, server, max_allowed_conn_count))) {
+  if (OB_ISNULL(root)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fail to init server connection pool. root=NULL", K(ret));
+  } else if (OB_FAIL(dblink_connection_pool_.init())) {
     LOG_WARN("fail to init", K(ret));
   } else if (OB_INVALID_ID == dblink_id
+             || 0 == port
              || db_tenant.empty() || db_user.empty() || db_pass.empty()
              || (!lib::is_oracle_mode() && db_name.empty())
              || OB_UNLIKELY(cluster_str.length() >= OB_MAX_CLUSTER_NAME_LENGTH)
              || OB_UNLIKELY(db_tenant.length() >= OB_MAX_TENANT_NAME_LENGTH)
              || OB_UNLIKELY(db_user.length() >= OB_MAX_USER_NAME_LENGTH)
              || OB_UNLIKELY(db_pass.length() >= OB_MAX_PASSWORD_LENGTH)
-             || OB_UNLIKELY(db_name.length() >= OB_MAX_DATABASE_NAME_LENGTH)) {
+             || OB_UNLIKELY(db_name.length() >= OB_MAX_DATABASE_NAME_LENGTH)
+             || OB_UNLIKELY(host_name.length() > OB_MAX_DOMIN_NAME_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("db param buffer is not enough", K(ret),
-             K(dblink_id), K(db_tenant), K(db_user), K(db_pass), K(db_name));
+             K(dblink_id), K(db_tenant), K(db_user), K(db_pass), K(db_name), K(port), K(host_name));
   } else {
     dblink_id_ = dblink_id;
     tenant_id_  = tenant_id;
+    port_ = port;
+    root_ = root;
+    last_renew_timestamp_ = ::oceanbase::common::ObTimeUtility::current_time();
+    server_not_available_ = false;
+    max_allowed_conn_count_ = max_allowed_conn_count;
+    connection_pool_ptr_ = &dblink_connection_pool_;
     if (cluster_str.empty()) {
       (void)snprintf(db_user_, sizeof(db_user_), "%.*s@%.*s", db_user.length(), db_user.ptr(),
                     db_tenant.length(), db_tenant.ptr());
@@ -235,11 +247,12 @@ int ObServerConnectionPool::init_dblink(uint64_t tenant_id, uint64_t dblink_id, 
                     cluster_str.length(), cluster_str.ptr());
     }
     (void)snprintf(db_pass_, sizeof(db_pass_), "%.*s", db_pass.length(), db_pass.ptr());
+    (void)snprintf(host_name_, sizeof(host_name_), "%.*s", host_name.length(), host_name.ptr());
     // if db is NULL, the default database is used.
     if (!db_name.empty()) {
       (void)snprintf(db_name_, sizeof(db_name_), "%.*s", db_name.length(), db_name.ptr());
     }
-    connection_pool_ptr_ = &dblink_connection_pool_;
+    server_.reset(); //server_ will be invlid, then mysqlconnnection will use host_name_
   }
   return ret;
 }

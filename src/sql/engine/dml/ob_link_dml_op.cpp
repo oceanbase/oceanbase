@@ -59,13 +59,16 @@ int ObLinkDmlOp::send_reverse_link_info(transaction::ObTransID &tx_id)
     const oceanbase::common::ObString &tenant_name = dblink_schema_->get_reverse_tenant_name();
     const oceanbase::common::ObString &cluster_name = dblink_schema_->get_reverse_cluster_name();
     const oceanbase::common::ObString &passwd = dblink_schema_->get_plain_reverse_password();
+    const oceanbase::common::ObString &host_name = dblink_schema_->get_reverse_host_name();
+    const int32_t port = dblink_schema_->get_reverse_host_port();
     const oceanbase::common::ObAddr &addr = dblink_schema_->get_reverse_host_addr();
     if (user_name.empty() ||
         tenant_name.empty() ||
         passwd.empty() ||
-        !addr.is_valid()) {
+        host_name.empty() ||
+        port == 0) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("reverse link has invalid credentials", K(ret), K(user_name), K(tenant_name), K(passwd.empty()), K(addr));
+      LOG_WARN("reverse link has invalid credentials", K(ret), K(user_name), K(tenant_name), K(passwd.empty()), K(host_name), K(port));
       LOG_USER_ERROR(OB_ERR_UNEXPECTED, "check if the database link was created with local credentials");
     } else {
       ObReverseLink reverse_link_info;
@@ -73,7 +76,9 @@ int ObLinkDmlOp::send_reverse_link_info(transaction::ObTransID &tx_id)
       reverse_link_info.set_tenant(tenant_name);
       reverse_link_info.set_cluster(cluster_name);
       reverse_link_info.set_passwd(passwd);
-      reverse_link_info.set_addr(addr);
+      reverse_link_info.set_addr(addr);// discard
+      reverse_link_info.set_host_name(host_name);
+      reverse_link_info.set_port(port);
       common::ObAddr local_addr = GCTX.self_addr();
       local_addr.set_port(ObServerConfig::get_instance().mysql_port);
       reverse_link_info.set_self_addr(local_addr);

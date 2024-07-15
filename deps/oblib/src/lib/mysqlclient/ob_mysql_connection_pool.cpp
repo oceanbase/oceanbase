@@ -766,7 +766,7 @@ int ObMySQLConnectionPool::escape(const char *from, const int64_t from_size,
   }
   return ret;
 }
-int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObString &host_name, int32_t port,
                                               const ObString &db_tenant, const ObString &db_user,
                                               const ObString &db_pass, const ObString &db_name,
                                               const common::ObString &conn_str,
@@ -793,14 +793,14 @@ int ObMySQLConnectionPool::create_dblink_pool(const dblink_param_ctx &param_ctx,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("out of memory", K(ret));
     } else if (OB_FAIL(dblink_pool->init_dblink(param_ctx.tenant_id_, param_ctx.dblink_id_,
-                                                server, db_tenant, db_user, db_pass,
+                                                host_name, port, db_tenant, db_user, db_pass,
                                                 db_name, conn_str, cluster_str,
                                                 this, config_.sqlclient_per_observer_conn_limit_))) {
       LOG_WARN("fail to init dblink connection pool", K(ret));
     } else if (OB_FAIL(server_list_.push_back(dblink_pool))) {
       LOG_WARN("fail to push pool to list", K(ret));
     } else {
-      LOG_DEBUG("new dblink pool created", K(server), K(config_.sqlclient_per_observer_conn_limit_));
+      LOG_DEBUG("new dblink pool created", K(host_name), K(port), K(config_.sqlclient_per_observer_conn_limit_));
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(dblink_pool)) {

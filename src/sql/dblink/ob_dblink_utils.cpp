@@ -268,7 +268,9 @@ ObReverseLink::ObReverseLink()
     self_addr_(),
     tx_id_(0),
     tm_sessid_(0),
-    is_close_(true)
+    is_close_(true),
+    host_name_(),
+    port_(0)
 {
 }
 
@@ -288,7 +290,9 @@ OB_DEF_SERIALIZE(ObReverseLink)
               addr_,
               self_addr_,
               tx_id_,
-              tm_sessid_);
+              tm_sessid_,
+              host_name_,
+              port_);
   return ret;
 }
 
@@ -305,7 +309,9 @@ OB_DEF_DESERIALIZE(ObReverseLink)
               addr_,
               self_addr_,
               tx_id_,
-              tm_sessid_);
+              tm_sessid_,
+              host_name_,
+              port_);
   if (OB_FAIL(ret)) {
   } else if (FALSE_IT(tmp_len = user_.length())) {
   } else if (OB_ISNULL(tmp_buf = static_cast<char *>(allocator_.alloc(tmp_len)))) {
@@ -342,6 +348,15 @@ OB_DEF_DESERIALIZE(ObReverseLink)
     MEMCPY(tmp_buf, passwd_.ptr(), tmp_len);
     passwd_.assign(tmp_buf, static_cast<int32_t>(tmp_len));
   }
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(tmp_len = host_name_.length())) {
+  } else if (OB_ISNULL(tmp_buf = static_cast<char *>(allocator_.alloc(tmp_len)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc tmp_buf", K(ret), K(tmp_len));
+  } else {
+    MEMCPY(tmp_buf, host_name_.ptr(), tmp_len);
+    host_name_.assign(tmp_buf, static_cast<int32_t>(tmp_len));
+  }
   return ret;
 }
 
@@ -356,7 +371,9 @@ OB_DEF_SERIALIZE_SIZE(ObReverseLink)
               addr_,
               self_addr_,
               tx_id_,
-              tm_sessid_);
+              tm_sessid_,
+              host_name_,
+              port_);
   return len;
 }
 
@@ -377,10 +394,11 @@ int ObReverseLink::open(int64_t session_sql_req_level)
       || OB_UNLIKELY(cluster_.length() >= OB_MAX_CLUSTER_NAME_LENGTH)
       || OB_UNLIKELY(tenant_.length() >= OB_MAX_TENANT_NAME_LENGTH)
       || OB_UNLIKELY(user_.length() >= OB_MAX_USER_NAME_LENGTH)
-      || OB_UNLIKELY(passwd_.length() >= OB_MAX_PASSWORD_LENGTH)) {
+      || OB_UNLIKELY(passwd_.length() >= OB_MAX_PASSWORD_LENGTH)
+      || OB_UNLIKELY(host_name_.length() >= OB_MAX_DOMIN_NAME_LENGTH)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret),
-             K(cluster_), K(tenant_), K(user_), K(passwd_));
+             K(cluster_), K(tenant_), K(user_), K(passwd_), K(host_name_));
   } else if (OB_FAIL(ObDblinkService::get_local_session_vars(session_info_, allocator_, param_ctx))) {
       LOG_WARN("failed to get local session vars", K(ret));
   } else {
@@ -393,9 +411,10 @@ int ObReverseLink::open(int64_t session_sql_req_level)
                     cluster_.length(), cluster_.ptr());
     }
     (void)snprintf(db_pass_, sizeof(db_pass_), "%.*s", passwd_.length(), passwd_.ptr());
+    (void)snprintf(host_name_cstr_, sizeof(host_name_), "%.*s", host_name_.length(), host_name_.ptr());
     LOG_DEBUG("open reverse link connection", K(ret), K(db_user_), K(db_pass_), K(addr_));
     param_ctx.link_type_ = common::sqlclient::DBLINK_DRV_OB;
-    if (OB_FAIL(reverse_conn_.connect(db_user_, db_pass_, "", addr_, 10, true, session_sql_req_level))) { //just set connect timeout to 10s, read and write have not timeout
+    if (OB_FAIL(reverse_conn_.connect(db_user_, db_pass_, "", host_name_cstr_, port_, 10, true, session_sql_req_level))) { //just set connect timeout to 10s, read and write have not timeout
       LOG_WARN("failed to open reverse link connection", K(ret), K(db_user_), K(db_pass_), K(addr_));
     } else if (OB_FAIL(reverse_conn_.set_timeout_variable(LONG_QUERY_TIMEOUT, common::sqlclient::ObMySQLConnectionPool::DEFAULT_TRANSACTION_TIMEOUT_US))) {
       LOG_WARN("failed to set reverse link connection's timeout", K(ret));

@@ -433,7 +433,7 @@ int ObDbLinkProxy::switch_dblink_conn_pool(DblinkDriverProto type, ObISQLConnect
   return ret;
 }
 
-int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const ObString &host_name, int32_t port,
                                       const ObString &db_tenant, const ObString &db_user,
                                       const ObString &db_pass, const ObString &db_name,
                                       const common::ObString &conn_str,
@@ -449,10 +449,10 @@ int ObDbLinkProxy::create_dblink_pool(const dblink_param_ctx &param_ctx, const O
     LOG_WARN("mysql proxy not inited");
   } else if (OB_FAIL(switch_dblink_conn_pool(param_ctx.link_type_, dblink_pool))) {
     LOG_WARN("failed to get dblink interface", K(ret));
-  } else if (OB_FAIL(dblink_pool->create_dblink_pool(param_ctx, server, db_tenant,
+  } else if (OB_FAIL(dblink_pool->create_dblink_pool(param_ctx, host_name, port, db_tenant,
                                                      db_user, db_pass, db_name,
                                                      conn_str, cluster_str))) {
-    LOG_WARN("create dblink pool failed", K(ret), K(param_ctx), K(server),
+    LOG_WARN("create dblink pool failed", K(ret), K(param_ctx), K(host_name), K(port),
              K(db_tenant), K(db_user), K(db_pass), K(db_name));
   }
   return ret;

@@ -125,7 +125,7 @@ public:
   virtual DblinkDriverProto get_pool_link_driver_proto() = 0;
 
   // for dblink
-  virtual int create_dblink_pool(const dblink_param_ctx &param_ctx, const ObAddr &server,
+  virtual int create_dblink_pool(const dblink_param_ctx &param_ctx, const ObString &host_name, int32_t port,
                                  const ObString &db_tenant, const ObString &db_user,
                                  const ObString &db_pass, const ObString &db_name,
                                  const common::ObString &conn_str,

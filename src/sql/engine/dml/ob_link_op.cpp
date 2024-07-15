@@ -139,7 +139,8 @@ int ObLinkOp::init_dblink(uint64_t dblink_id, ObDbLinkProxy *dblink_proxy, bool 
                                                      next_sql_req_level_))) {
     LOG_WARN("failed to init dblink param ctx", K(ret));
   } else if (OB_FAIL(dblink_proxy->create_dblink_pool(param_ctx,
-                                                      dblink_schema_->get_host_addr(),
+                                                      dblink_schema_->get_host_name(),
+                                                      dblink_schema_->get_host_port(),
                                                       dblink_schema_->get_tenant_name(),
                                                       dblink_schema_->get_user_name(),
                                                       dblink_schema_->get_plain_password(),

@@ -133,20 +133,45 @@ int ObDbLinkSqlService::add_normal_columns(const ObDbLinkBaseInfo &dblink_info,
   } else if (compat_version < DATA_VERSION_4_2_0_0 && !is_oracle_mode) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("mysql dblink is not supported when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret));
-  } else if (!dblink_info.get_host_addr().ip_to_string(ip_buf, sizeof(ip_buf))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to ip to string", K(ret), K(dblink_info.get_host_addr()));
-  } else if (FALSE_IT(host_ip.assign_ptr(ip_buf, static_cast<int32_t>(STRLEN(ip_buf))))) {
-    // nothing.
-  } else if (!dblink_info.get_reverse_host_addr().ip_to_string(reverse_ip_buf, sizeof(reverse_ip_buf))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to reverse_ip to string", K(ret), K(dblink_info.get_reverse_host_addr()));
-  } else if (FALSE_IT(reverse_host_ip.assign_ptr(reverse_ip_buf, static_cast<int32_t>(STRLEN(reverse_ip_buf))))) {
-    // nothing.
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (DATA_VERSION_4_2_1_8 > compat_version) {
+    if (!dblink_info.get_host_addr().ip_to_string(ip_buf, sizeof(ip_buf))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to ip to string", K(ret), K(dblink_info.get_host_addr()));
+    } else if (FALSE_IT(host_ip.assign_ptr(ip_buf, static_cast<int32_t>(STRLEN(ip_buf))))) {
+    } else if (OB_FAIL(dml.add_column("host_ip", host_ip))) {
+      LOG_WARN("failed to add host_ip columns", K(ret));
+    } else if (OB_FAIL(dml.add_column("host_port", dblink_info.get_host_addr().get_port()))) {
+      LOG_WARN("failed to add host_port columns", K(ret));
+    } else if (!dblink_info.get_reverse_host_addr().ip_to_string(reverse_ip_buf, sizeof(reverse_ip_buf))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to reverse_ip to string", K(ret), K(dblink_info.get_reverse_host_addr()));
+    } else if (FALSE_IT(reverse_host_ip.assign_ptr(reverse_ip_buf, static_cast<int32_t>(STRLEN(reverse_ip_buf))))) {
+      // nothing.
+    } else if (compat_version >= DATA_VERSION_4_1_0_0) {
+      if (OB_FAIL(dml.add_column("reverse_host_ip", reverse_host_ip))) {
+        LOG_WARN("failed to add reverse_host_ip columns", K(ret));
+      } else if (OB_FAIL(dml.add_column("reverse_host_port", dblink_info.get_reverse_host_addr().get_port()))) {
+        LOG_WARN("failed to add reverse_host_port columns", K(ret));
+      }
+    }
+  } else {
+    if (OB_FAIL(dml.add_column("host_ip", dblink_info.get_host_name()))) {
+      LOG_WARN("failed to add host_ip columns", K(ret));
+    } else if (OB_FAIL(dml.add_column("host_port", dblink_info.get_host_port()))) {
+      LOG_WARN("failed to add host_port columns", K(ret));
+    } else if (OB_FAIL(dml.add_column("reverse_host_ip", dblink_info.get_reverse_host_name()))) {
+      LOG_WARN("failed to add reverse_host_ip columns", K(ret));
+    } else if (OB_FAIL(dml.add_column("reverse_host_port", dblink_info.get_reverse_host_port()))) {
+      LOG_WARN("failed to add reverse_host_port columns", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (OB_FAIL(dml.add_column("dblink_name", ObHexEscapeSqlStr(dblink_info.get_dblink_name())))
           || OB_FAIL(dml.add_column("owner_id", extract_owner_id))
-          || OB_FAIL(dml.add_column("host_ip", host_ip))
-          || OB_FAIL(dml.add_column("host_port", dblink_info.get_host_port()))
           || OB_FAIL(dml.add_column("cluster_name", dblink_info.get_cluster_name()))
           || OB_FAIL(dml.add_column("tenant_name", dblink_info.get_tenant_name()))
           || OB_FAIL(dml.add_column("user_name", dblink_info.get_user_name()))
@@ -169,57 +194,48 @@ int ObDbLinkSqlService::add_normal_columns(const ObDbLinkBaseInfo &dblink_info,
     const ObString &reverse_user_name = dblink_info.get_reverse_user_name();
     const ObString &reverse_password = dblink_info.get_reverse_password();
     const ObString &password = dblink_info.get_password();
-    uint64_t compat_version = 0;
-    uint64_t tenant_id = dblink_info.get_tenant_id();
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) { //compat_version < DATA_VERSION_4_1_0_0
-      LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-    } else {
-      if (compat_version < DATA_VERSION_4_1_0_0) {
-        if (!encrypted_password.empty() ||
-            0 != reverse_host_port ||
-            !reverse_cluster_name.empty() ||
-            !reverse_tenant_name.empty() ||
-            !reverse_user_name.empty() ||
-            !reverse_password.empty()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("some column of dblink_info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_1_0_0", K(ret),
-                                                                                        K(encrypted_password),
-                                                                                        K(reverse_host_port),
-                                                                                        K(reverse_cluster_name),
-                                                                                        K(reverse_tenant_name),
-                                                                                        K(reverse_user_name),
-                                                                                        K(reverse_password));
-        } else if (password.empty()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("password can not be empty when MIN_DATA_VERSION is below DATA_VERSION_4_1_0_0", K(ret), K(password));
-        }
-      } else if (encrypted_password.empty()) {
+    if (compat_version < DATA_VERSION_4_1_0_0) {
+      if (!encrypted_password.empty() ||
+          0 != reverse_host_port ||
+          !reverse_cluster_name.empty() ||
+          !reverse_tenant_name.empty() ||
+          !reverse_user_name.empty() ||
+          !reverse_password.empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("some column of dblink_info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_1_0_0", K(ret),
+                                                                                      K(encrypted_password),
+                                                                                      K(reverse_host_port),
+                                                                                      K(reverse_cluster_name),
+                                                                                      K(reverse_tenant_name),
+                                                                                      K(reverse_user_name),
+                                                                                      K(reverse_password));
+      } else if (password.empty()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("encrypted_password is invalid when MIN_DATA_VERSION is DATA_VERSION_4_1_0_0 or above", K(ret), K(encrypted_password));
-      } else if (!password.empty()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("password need be empty when MIN_DATA_VERSION is DATA_VERSION_4_1_0_0 or above", K(ret), K(password));
-      } else if (OB_FAIL(dml.add_column("encrypted_password", encrypted_password))
-                || OB_FAIL(dml.add_column("reverse_host_ip", reverse_host_ip))
-                || OB_FAIL(dml.add_column("reverse_host_port", dblink_info.get_reverse_host_port()))
-                || OB_FAIL(dml.add_column("reverse_cluster_name", dblink_info.get_reverse_cluster_name()))
-                || OB_FAIL(dml.add_column("reverse_tenant_name", dblink_info.get_reverse_tenant_name()))
-                || OB_FAIL(dml.add_column("reverse_user_name", dblink_info.get_reverse_user_name()))
-                || OB_FAIL(dml.add_column("reverse_password", dblink_info.get_reverse_password()))) {
-        LOG_WARN("failed to add encrypted_password column", K(ret), K(encrypted_password));
+        LOG_WARN("password can not be empty when MIN_DATA_VERSION is below DATA_VERSION_4_1_0_0", K(ret), K(password));
       }
-      if (OB_FAIL(ret)) {
-        // do nothing
-      } else if (compat_version < DATA_VERSION_4_2_0_0) {
-        if (!dblink_info.get_database_name().empty()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("some column of dblink_info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret), K(dblink_info.get_database_name()));
-        }
-      } else if (OB_FAIL(dml.add_column("database_name", dblink_info.get_database_name()))) {
-        LOG_WARN("failed to add normal database_name", K(dblink_info.get_database_name()), K(ret));
-      }
+    } else if (encrypted_password.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("encrypted_password is invalid when MIN_DATA_VERSION is DATA_VERSION_4_1_0_0 or above", K(ret), K(encrypted_password));
+    } else if (!password.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("password need be empty when MIN_DATA_VERSION is DATA_VERSION_4_1_0_0 or above", K(ret), K(password));
+    } else if (OB_FAIL(dml.add_column("encrypted_password", encrypted_password))
+              || OB_FAIL(dml.add_column("reverse_cluster_name", dblink_info.get_reverse_cluster_name()))
+              || OB_FAIL(dml.add_column("reverse_tenant_name", dblink_info.get_reverse_tenant_name()))
+              || OB_FAIL(dml.add_column("reverse_user_name", dblink_info.get_reverse_user_name()))
+              || OB_FAIL(dml.add_column("reverse_password", dblink_info.get_reverse_password()))) {
+      LOG_WARN("failed to add encrypted_password column", K(ret), K(encrypted_password));
     }
-
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+      if (!dblink_info.get_database_name().empty()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("some column of dblink_info is not empty when MIN_DATA_VERSION is below DATA_VERSION_4_2_0_0", K(ret), K(dblink_info.get_database_name()));
+      }
+    } else if (OB_FAIL(dml.add_column("database_name", dblink_info.get_database_name()))) {
+      LOG_WARN("failed to add normal database_name", K(dblink_info.get_database_name()), K(ret));
+    }
   }
   return ret;
 }

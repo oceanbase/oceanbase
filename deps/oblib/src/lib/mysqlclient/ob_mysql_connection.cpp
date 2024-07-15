@@ -102,23 +102,18 @@ int ObMySQLConnection::prepare_statement(ObMySQLPreparedStatement &stmt, const O
 }
 
 int ObMySQLConnection::connect(const char *user, const char *pass, const char *db,
-                               oceanbase::common::ObAddr &addr, int64_t timeout,
+                               const char *host_name, int32_t port, int64_t timeout,
                                bool read_write_no_timeout /*false*/, int64_t sql_req_level /*0*/)
 {
   int ret = OB_SUCCESS;
   const static int MAX_IP_BUFFER_LEN = 32;
-  char host[MAX_IP_BUFFER_LEN];
-  host[0] = '\0';
   // if db is NULL, the default database is used.
-  if (OB_ISNULL(user) || OB_ISNULL(pass) /*|| OB_ISNULL(db)*/) {
+  if (OB_ISNULL(user) || OB_ISNULL(pass) || OB_ISNULL(host_name)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KP(user), KP(pass), KP(db), K(ret));
-  } else if (!addr.ip_to_string(host, MAX_IP_BUFFER_LEN)) {
-    ret = OB_BUF_NOT_ENOUGH;
-    LOG_WARN("fail to get host.", K(addr), K(ret));
+    LOG_WARN("invalid argument", KP(user), KP(pass), KP(host_name), K(ret));
   } else {
     close();
-    LOG_INFO("connecting to mysql server", "ip", host, "port", addr.get_port());
+    LOG_INFO("connecting to mysql server", "ip", host_name, "port", port);
     mysql_init(&mysql_);
     timeout_ = timeout;
 #ifdef OB_BUILD_TDE_SECURITY
@@ -150,11 +145,10 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
 #ifdef OB_BUILD_TDE_SECURITY
     mysql_options(&mysql_, MYSQL_OPT_SSL_ENFORCE, &ssl_enforce);
 #endif
-    int32_t port = addr.get_port();
-    MYSQL *mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
+    MYSQL *mysql = mysql = mysql_real_connect(&mysql_, host_name, user, pass, db, port, NULL, 0);
     if (OB_ISNULL(mysql)) {
       ret = -mysql_errno(&mysql_);
-      LOG_WARN("fail to connect to mysql server", K(get_sessid()), KCSTRING(host), KCSTRING(user), KCSTRING(db), K(port),
+      LOG_WARN("fail to connect to mysql server", K(get_sessid()), KCSTRING(host_name), KCSTRING(user), KCSTRING(db), K(port),
                "info", mysql_error(&mysql_), K(ret));
     } else {
       /*Note: mysql_real_connect() incorrectly reset the MYSQL_OPT_RECONNECT option
@@ -184,18 +178,21 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
   char host[MAX_IP_BUFFER_LEN];
   host[0] = '\0';
   // if db is NULL, the default database is used.
+  bool is_server_valid = false;
   if (OB_ISNULL(user) || OB_ISNULL(pass) /*|| OB_ISNULL(db)*/) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KP(user), KP(pass), KP(db), K(ret));
   } else if (OB_ISNULL(root_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("root_ is NULL", K(ret));
-  } else if (!root_->get_server().ip_to_string(host, MAX_IP_BUFFER_LEN)) {
+  } else if (FALSE_IT(is_server_valid = root_->get_server().is_valid())) {
+  } else if (is_server_valid && !root_->get_server().ip_to_string(host, MAX_IP_BUFFER_LEN)) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("fail to get host.", K(root_->get_server()), K(ret));
   } else {
     close();
-    LOG_INFO("connecting to mysql server", "ip", host, "port", root_->get_server().get_port());
+    LOG_INFO("connecting to mysql server", "ip", host, "port", root_->get_server().get_port(),
+    "host_name", root_->get_host_name(), "host port", root_->get_port());
     mysql_init(&mysql_);
 #ifdef OB_BUILD_TDE_SECURITY
     int64_t ssl_enforce = 1;
@@ -229,8 +226,14 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
 #ifdef OB_BUILD_TDE_SECURITY
     mysql_options(&mysql_, MYSQL_OPT_SSL_ENFORCE, &ssl_enforce);
 #endif
+    MYSQL *mysql = NULL;
     int32_t port = root_->get_server().get_port();
-    MYSQL *mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
+    if (is_server_valid) {
+      mysql = mysql_real_connect(&mysql_, host, user, pass, db, port, NULL, 0);
+    } else {
+      port = root_->get_port();
+      mysql = mysql_real_connect(&mysql_, root_->get_host_name(), user, pass, db, port, NULL, 0);
+    }
     if (OB_ISNULL(mysql)) {
       ret = -mysql_errno(&mysql_);
       char errmsg[256] = {0};
@@ -248,6 +251,7 @@ int ObMySQLConnection::connect(const char *user, const char *pass, const char *d
                                             K(db),
                                             K(host),
                                             K(port),
+                                            K(root_->get_host_name()),
                                             K(errmsg));
         TRANSLATE_CLIENT_ERR_2(ret, false, errmsg);
       }

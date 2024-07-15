@@ -5580,7 +5580,8 @@ bool ObCreateDbLinkArg::is_valid() const
           && !dblink_info_.get_dblink_name().empty()
           && !dblink_info_.get_tenant_name().empty()
           && !dblink_info_.get_user_name().empty()
-          && dblink_info_.get_host_addr().is_valid()
+          && ((!dblink_info_.get_host_name().empty() && 0 != dblink_info_.get_host_port()) ||
+              dblink_info_.get_host_addr().is_valid())
           && (!dblink_info_.get_password().empty() || !dblink_info_.get_encrypted_password().empty());
 
 }
