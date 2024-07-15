@@ -1170,5 +1170,11 @@ bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAd
   return is_valid;
 }
 
+bool ObConfigDegradationPolicyChecker::check(const ObConfigItem &t) const
+{
+  common::ObString tmp_str(t.str());
+  return 0 == tmp_str.case_compare("LS_POLICY") || 0 == tmp_str.case_compare("CLUSTER_POLICY");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase

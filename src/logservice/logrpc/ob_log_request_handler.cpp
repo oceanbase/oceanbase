@@ -415,5 +415,36 @@ int LogRequestHandler::handle_request<LogFlashbackMsg>(const LogFlashbackMsg &re
   }
   return ret;
 }
+
+#ifdef OB_BUILD_ARBITRATION
+template<>
+int LogRequestHandler::handle_sync_request<LogProbeRsReq, LogProbeRsResp>(const LogProbeRsReq &req, LogProbeRsResp &resp)
+{
+  int ret = OB_SUCCESS;
+  if (false == req.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(ERROR, "invalid argument!", K(ret), K(req));
+  } else {
+    const common::ObAddr &sender = req.src_;
+    const int64_t palf_id = ObLSID::SYS_LS_ID;
+    int64_t unused_pid = OB_INVALID_TIMESTAMP;
+    common::ObRole role = INVALID_ROLE;
+    palf::PalfHandleGuard palf_handle_guard;
+    if (OB_FAIL(get_palf_handle_guard_(palf_id, palf_handle_guard))) {
+      CLOG_LOG(WARN, "get_palf_handle_guard_ failed", K(ret), K(palf_id));
+    } else if (OB_FAIL(palf_handle_guard.get_role(role, unused_pid))) {
+      CLOG_LOG(WARN, "get_role failed when handling LogProbeRsReq", K(ret));
+    } else if (OB_UNLIKELY(ObRole::LEADER != role)) {
+      resp.ret_ = OB_NOT_MASTER;
+      CLOG_LOG(WARN, "send LogProbeRsReq to wrong addr, this log stream is not rs leader", K_(resp.ret), K(palf_id), K(role));
+    } else {
+      resp.ret_ = OB_SUCCESS;
+      CLOG_LOG(INFO, "the network between the sender and rs is normal",K(sender));
+    }
+  }
+  return ret;
+}
+#endif
+
 } // end namespace logservice
 } // end namespace oceanbase

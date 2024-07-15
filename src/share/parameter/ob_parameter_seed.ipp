@@ -649,6 +649,15 @@ DEF_INT(log_storage_warning_trigger_percentage, OB_CLUSTER_PARAMETER, "0", "[0,5
         "performance degradation has been ongoing for log_storage_warning_tolerance_time seconds. "
         "If the parameter needs to be set, it is recommended to set a value less than 10 to avoid misjudgment.",
         ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR_WITH_CHECKER(arbitration_degradation_policy, OB_CLUSTER_PARAMETER, "LS_POLICY",
+        common::ObConfigDegradationPolicyChecker,
+        "specifies the degradation policy, whether to check network connectivity with RS before arbitration degrades. "
+        "Value: LS_POLICY, CLUSTER_POLICY "
+        "LS_POLICY: default policy. "
+        "CLUSTER_POLICY: check network connectivity with RS before arbitration degrades. Do not degrade when not connected. "
+        "Then, switch log stream leaders to the replicas which are connected with RS.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // ========================= LogService Config End   =====================
 DEF_INT(resource_hard_limit, OB_CLUSTER_PARAMETER, "100", "[100, 10000]",
         "system utilization should not be large than resource_hard_limit",

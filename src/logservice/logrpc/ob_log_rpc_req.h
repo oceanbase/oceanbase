@@ -256,6 +256,36 @@ public:
   share::SCN flashback_scn_;
   bool is_flashback_req_;
 };
+
+struct LogProbeRsReq
+{
+  OB_UNIS_VERSION(1);
+public:
+  LogProbeRsReq();
+  LogProbeRsReq(const common::ObAddr src);
+  ~LogProbeRsReq() {
+    reset();
+  }
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(src));
+  common::ObAddr src_;
+};
+
+struct LogProbeRsResp
+{
+  OB_UNIS_VERSION(1);
+public:
+  LogProbeRsResp();
+  ~LogProbeRsResp() {
+    reset();
+  }
+  bool is_valid() const;
+  void reset();
+  TO_STRING_KV(K_(ret));
+  int ret_;
+};
+
 } // end namespace logservice
 }// end namespace oceanbase
 

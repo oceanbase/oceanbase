@@ -563,6 +563,8 @@ public:
   // - OB_NOT_MASTER: not leader
   virtual int upgrade_learner_to_acceptor(const LogMemberAckInfoList &upgrade_servers,
                                           const int64_t timeout_us) = 0;
+  virtual int set_election_silent_flag(const bool election_silent_flag) = 0;
+  virtual bool is_election_silent() const = 0;
 #endif
 
   // 设置日志文件的可回收位点，小于等于lsn的日志文件均可以安全回收
@@ -968,6 +970,8 @@ public:
   int get_remote_arb_member_info(ArbMemberInfo &arb_member_info) override final;
   int get_arb_member_info(ArbMemberInfo &arb_member_info) const override final;
   int get_arbitration_member(common::ObMember &arb_member) const override final;
+  int set_election_silent_flag(const bool election_silent_flag) override final;
+  bool is_election_silent() const override final;
 #endif
   int set_base_lsn(const LSN &lsn) override final;
   int enable_sync() override final;
@@ -1354,22 +1358,32 @@ private:
   void report_switch_acceptor_to_learner_(const common::ObMember &acceptor);
   void report_replace_learners_(const common::ObMemberList &added_learners,
                                 const common::ObMemberList &removed_learners);
+#ifdef OB_BUILD_ARBITRATION
+  void report_election_silent_event_(const char *event_name);
+#endif
   // ======================= report event end =======================================
   bool check_need_hook_fetch_log_(const FetchLogType fetch_type, const LSN &start_lsn);
 private:
   class ElectionMsgSender : public election::ElectionMsgSender
   {
   public:
-    ElectionMsgSender(LogNetService &net_service) : net_service_(net_service) {};
+    ElectionMsgSender(LogNetService &net_service) : net_service_(net_service), is_in_silent_(false), palf_id_(INVALID_PALF_ID) {};
+    ~ElectionMsgSender() {
+      is_in_silent_ = false;
+      palf_id_ = INVALID_PALF_ID;
+    }
     virtual int broadcast(const election::ElectionPrepareRequestMsg &msg,
                           const ObIArray<ObAddr> &list) const override final
     {
-      int tmp_ret = common::OB_SUCCESS;
-      for (int64_t idx = 0; idx < list.count(); ++idx) {
-        const_cast<election::ElectionPrepareRequestMsg *>(&msg)->set_receiver(list.at(idx));
-        if (OB_SUCCESS != (tmp_ret = net_service_.post_request_to_server_(list.at(idx), msg))) {
-          PALF_LOG(INFO, "post prepare request msg failed", K(tmp_ret), "server", list.at(idx),
-              K(msg));
+      if (false == is_allowed_broadcast_()) {
+      } else {
+        int tmp_ret = common::OB_SUCCESS;
+        for (int64_t idx = 0; idx < list.count(); ++idx) {
+          const_cast<election::ElectionPrepareRequestMsg *>(&msg)->set_receiver(list.at(idx));
+          if (OB_SUCCESS != (tmp_ret = net_service_.post_request_to_server_(list.at(idx), msg))) {
+            PALF_LOG(INFO, "post prepare request msg failed", K(tmp_ret), "server", list.at(idx),
+                K(msg));
+          }
         }
       }
       return common::OB_SUCCESS;
@@ -1377,12 +1391,15 @@ private:
     virtual int broadcast(const election::ElectionAcceptRequestMsg &msg,
                           const ObIArray<ObAddr> &list) const override final
     {
-      int tmp_ret = common::OB_SUCCESS;
-      for (int64_t idx = 0; idx < list.count(); ++idx) {
-        const_cast<election::ElectionAcceptRequestMsg *>(&msg)->set_receiver(list.at(idx));
-        if (OB_SUCCESS != (tmp_ret = net_service_.post_request_to_server_(list.at(idx), msg))) {
-          PALF_LOG(INFO, "post accept request msg failed", K(tmp_ret), "server", list.at(idx),
-              K(msg));
+      if (false == is_allowed_broadcast_()) {
+      } else {
+        int tmp_ret = common::OB_SUCCESS;
+        for (int64_t idx = 0; idx < list.count(); ++idx) {
+          const_cast<election::ElectionAcceptRequestMsg *>(&msg)->set_receiver(list.at(idx));
+          if (OB_SUCCESS != (tmp_ret = net_service_.post_request_to_server_(list.at(idx), msg))) {
+            PALF_LOG(INFO, "post accept request msg failed", K(tmp_ret), "server", list.at(idx),
+                K(msg));
+          }
         }
       }
       return common::OB_SUCCESS;
@@ -1399,8 +1416,31 @@ private:
     {
       return net_service_.post_request_to_server_(msg.get_receiver(), msg);
     }
+    void set_silent_flag(const bool &silent_flag)
+    {
+      is_in_silent_ = silent_flag;
+    }
+    bool get_silent_flag() const
+    {
+      return is_in_silent_;
+    }
+    void set_palf_id(const int64_t palf_id) {
+      palf_id_ = palf_id;
+    }
+  private:
+    bool is_allowed_broadcast_() const
+    {
+      bool bool_ret = (true == is_in_silent_) ? false : true;
+      if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+        PALF_LOG(INFO, "keep in silent because of disconnected with RS, do not solicit votes.",
+                 K_(is_in_silent), K_(palf_id), "is_allowed_broadcast", bool_ret);
+      }
+      return bool_ret;
+    }
   private:
     LogNetService &net_service_;
+    bool is_in_silent_;  // false by default. True means that this replica is not allowed to solicit votes
+    int64_t palf_id_;
   };
 private:
   typedef common::RWLock RWLock;

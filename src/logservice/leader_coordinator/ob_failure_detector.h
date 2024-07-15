@@ -18,6 +18,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/lock/ob_spin_lock.h"
 #include "share/ob_occam_timer.h"
+#include "logservice/palf/palf_handle.h"        // PalfHandle
 
 namespace oceanbase
 {
@@ -101,6 +102,7 @@ private:
   void detect_data_disk_io_failure_();
   void detect_palf_disk_full_();
   void detect_schema_not_refreshed_();
+  void detect_election_silent_();
 private:
   struct FailureEventWithRecoverOp {
     int init(const FailureEvent &event, const ObFunction<bool()> &recover_detect_operation);
@@ -142,6 +144,21 @@ private:
     // bandwidth error flag
     bool detect_error_flags_[MIN_RECOVERY_INTERVAL];
   };
+#ifdef OB_BUILD_ARBITRATION
+  class GetElectionSilentFunctor
+  {
+  public:
+    GetElectionSilentFunctor(bool &is_election_silent) : is_election_silent_(is_election_silent) {}
+    int operator()(const palf::PalfHandle &palf_handle) {
+      if (true == palf_handle.is_election_silent()) {
+        is_election_silent_ = true;
+      }
+      return OB_SUCCESS;
+    }
+  private:
+    bool &is_election_silent_;
+  };
+#endif
   bool is_running_;
   common::ObArray<FailureEventWithRecoverOp> events_with_ops_;
   common::ObArray<common::ObAddr> tenant_server_list_;
@@ -152,6 +169,7 @@ private:
   bool has_add_data_disk_hang_event_;
   bool has_add_clog_full_event_;
   bool has_schema_error_;
+  bool has_election_silent_event_;
   PalfDiskHangDetector palf_disk_hang_detector_;
   ObSpinLock lock_;
 };

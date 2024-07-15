@@ -747,6 +747,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigMigrationChooseSourceChecker);
 };
 
+class ObConfigDegradationPolicyChecker : public ObConfigChecker
+{
+public:
+  ObConfigDegradationPolicyChecker() {}
+  virtual ~ObConfigDegradationPolicyChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigDegradationPolicyChecker);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 } // namespace common

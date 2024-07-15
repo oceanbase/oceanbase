@@ -120,6 +120,14 @@ DEFINE_LOGSERVICE_RPC_PROCESSOR(LogFlashbackMsgP,
                                 obrpc::ObLogServiceRpcProxy,
                                 LogFlashbackMsg,
                                 obrpc::OB_LOG_FLASHBACK_CMD);
+
+#ifdef OB_BUILD_ARBITRATION
+DEFINE_LOGSERVICE_SYNC_RPC_PROCESSOR(LogProbeRsP,
+                                     obrpc::ObLogServiceRpcProxy,
+                                     LogProbeRsReq,
+                                     LogProbeRsResp,
+                                     obrpc::OB_LOG_PROBE_RS);
+#endif
 } // end namespace logservice
 } // end namespace oceanbase
 

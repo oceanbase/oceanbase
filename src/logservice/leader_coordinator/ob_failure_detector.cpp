@@ -48,6 +48,7 @@ ObFailureDetector::ObFailureDetector()
       has_add_data_disk_hang_event_(false),
       has_add_clog_full_event_(false),
       has_schema_error_(false),
+      has_election_silent_event_(false),
       palf_disk_hang_detector_(),
       lock_(common::ObLatchIds::ELECTION_LOCK)
 {
@@ -127,6 +128,7 @@ void ObFailureDetector::destroy()
   has_add_data_disk_hang_event_ = false;
   has_add_clog_full_event_ = false;
   has_schema_error_ = false;
+  has_election_silent_event_ = false;
   COORDINATOR_LOG(INFO, "ObFailureDetector mtl destroy");
 }
 
@@ -167,6 +169,10 @@ void ObFailureDetector::detect_failure()
   detect_palf_disk_full_();
   // schema refreshed check
   detect_schema_not_refreshed_();
+#ifdef OB_BUILD_ARBITRATION
+  // election silent check
+  detect_election_silent_();
+#endif
 }
 
 int ObFailureDetector::add_failure_event(const FailureEvent &event)
@@ -461,6 +467,52 @@ void ObFailureDetector::detect_schema_not_refreshed_()
     }
   }
 }
+#ifdef OB_BUILD_ARBITRATION
+void ObFailureDetector::detect_election_silent_()
+{
+  LC_TIME_GUARD(1_s);
+  int ret = OB_SUCCESS;
+
+  logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+  if (OB_ISNULL(log_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    COORDINATOR_LOG(ERROR, "ptr is null, unexpected error", K(ret));
+  } else {
+    bool is_election_silent = false;
+    FailureEvent election_silent_event(FailureType::ENTER_ELECTION_SILENT, FailureModule::LOG, FailureLevel::FATAL);
+    GetElectionSilentFunctor functor(is_election_silent);
+    PalfEnv *palf_env = log_service->get_palf_env();
+    if (OB_ISNULL(palf_env)) {
+      ret = OB_ERR_UNEXPECTED;
+      COORDINATOR_LOG(ERROR, "palf_env is null, unexpected error", K(ret));
+    } else if (OB_FAIL(palf_env->for_each(functor))){
+      COORDINATOR_LOG(WARN, "GetElectionSilentFunctor failed", K(ret));
+    } else {
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (false == ATOMIC_LOAD(&has_election_silent_event_)) {
+      if (false == is_election_silent) {
+        // no need to add failure event
+      } else if (OB_FAIL(add_failure_event(election_silent_event))) {
+        COORDINATOR_LOG(ERROR, "add_failure_event failed", K(ret), K(election_silent_event));
+      } else {
+        ATOMIC_SET(&has_election_silent_event_, true);
+        COORDINATOR_LOG(INFO, "add election silent failure event", K(ret), K(election_silent_event));
+      }
+    } else {
+      if (true == is_election_silent) {
+        // still in silent state, can't remove
+      } else if (OB_FAIL(remove_failure_event(election_silent_event))) {
+        COORDINATOR_LOG(ERROR, "remove_failure_event failed", K(ret), K(election_silent_event));
+      } else {
+        ATOMIC_SET(&has_election_silent_event_, false);
+        COORDINATOR_LOG(INFO, "remove election silent failure event", K(ret), K(election_silent_event));
+      }
+    }
+  }
+}
+#endif
 
 int ObFailureDetector::FailureEventWithRecoverOp::init(const FailureEvent &event,
                                                        const ObFunction<bool()> &recover_detect_operation)

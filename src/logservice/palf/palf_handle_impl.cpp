@@ -1147,6 +1147,29 @@ int PalfHandleImpl::get_arbitration_member(common::ObMember &arb_member) const
   }
   return ret;
 }
+
+int PalfHandleImpl::set_election_silent_flag(const bool election_silent_flag)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    election_msg_sender_.set_silent_flag(election_silent_flag);
+    PALF_LOG(INFO, "set election_silent_flag", K(election_silent_flag));
+  }
+  return ret;
+}
+
+bool PalfHandleImpl::is_election_silent() const
+{
+  bool bool_ret = false;
+  if (IS_NOT_INIT) {
+  } else {
+    bool_ret = election_msg_sender_.get_silent_flag();
+  }
+  return bool_ret;
+
+}
 #endif
 
 int PalfHandleImpl::change_access_mode(const int64_t proposal_id,
@@ -2940,6 +2963,7 @@ int PalfHandleImpl::do_init_mem_(
     has_set_deleted_ = false;
     palf_env_impl_ = palf_env_impl;
     is_inited_ = true;
+    election_msg_sender_.set_palf_id(palf_id);
     PALF_LOG(INFO, "PalfHandleImpl do_init_ success", K(ret), K(palf_id), K(self), K(log_dir), K(palf_base_info),
         K(log_meta), K(fetch_log_engine), K(alloc_mgr), K(log_rpc));
   }

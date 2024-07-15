@@ -22,6 +22,7 @@ edit_level	varchar(128)	NO		NULL
 select name from __all_virtual_sys_parameter_stat where name not like "module_test_%" group by name order by name;
 name
 all_server_list
+arbitration_degradation_policy
 arbitration_timeout
 archive_lag_target
 audit_sys_operations

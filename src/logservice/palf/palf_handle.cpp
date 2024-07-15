@@ -469,6 +469,18 @@ int PalfHandle::upgrade_learner_to_acceptor(const LogMemberAckInfoList &upgrade_
   CHECK_VALID;
   return palf_handle_impl_->upgrade_learner_to_acceptor(upgrade_servers, timeout_us);
 }
+
+int PalfHandle::set_election_silent_flag(const bool election_silent_flag)
+{
+  CHECK_VALID;
+  return palf_handle_impl_->set_election_silent_flag(election_silent_flag);
+}
+
+bool PalfHandle::is_election_silent() const
+{
+  CHECK_VALID;
+  return palf_handle_impl_->is_election_silent();
+}
 #endif
 
 int PalfHandle::change_leader_to(const common::ObAddr &dst_addr)

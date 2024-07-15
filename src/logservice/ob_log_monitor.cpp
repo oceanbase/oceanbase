@@ -325,6 +325,20 @@ int ObLogMonitor::record_upgrade_event(const int64_t palf_id, const char *upgrad
       "REASONS", reasons);
   return ret;
 }
+
+int ObLogMonitor::record_election_silent_event(const bool is_silent, const int64_t palf_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t mtl_id = MTL_ID();
+  EventType event = EventType::UNKNOWN;
+  if (is_silent) {
+    event = EventType::ENTER_ELECTION_SILENT;
+  } else {
+    event = EventType::EXIT_ELECTION_SILENT;
+  }
+  SERVER_EVENT_ADD_WITH_RETRY(ARBSRV_MONITOR_EVENT_FMT_PREFIX);
+  return ret;
+}
 #undef ARBSRV_MONITOR_EVENT_FMT_PREFIX
 // =========== Arbitration Event Reporting ===========
 #endif

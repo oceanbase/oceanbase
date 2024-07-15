@@ -23,6 +23,11 @@ namespace oceanbase
 using namespace logservice;
 
 int64_t ARB_TIMEOUT_ARG = 2 * 1000 * 1000L;
+bool fisrt_f_connected_with_rs = true;
+bool second_f_connected_with_rs = true;
+common::ObAddr first_f_addr;
+common::ObAddr second_f_addr;
+ArbDegradationPolicy degradation_policy = LS_POLICY;
 
 namespace logservice
 {
@@ -34,6 +39,22 @@ void ObArbitrationService::update_arb_timeout_()
     CLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "update_arb_timeout_", K_(self), K_(arb_timeout_us));
   }
 }
+
+bool ObArbitrationService::is_in_cluster_policy_() const
+{
+  return CLUSTER_POLICY == degradation_policy;
+}
+
+int ObArbitrationService::try_probe_rs_(bool &connected)
+{
+  if (self_ == first_f_addr) {
+    connected = fisrt_f_connected_with_rs;
+  } else if (self_ == second_f_addr) {
+    connected = second_f_connected_with_rs;
+  }
+  return OB_SUCCESS;
+}
+
 }
 
 namespace unittest
@@ -927,9 +948,123 @@ TEST_F(TestObSimpleLogClusterArbService, test_4f1a_force_set_member_list)
     EXPECT_EQ(OB_SUCCESS, submit_log(new_leader, 100, id));
     EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(new_leader, new_leader.palf_handle_impl_->get_max_lsn()));
   }
+
+  unblock_all_net(arb_replica_idx);
+  unblock_all_net(removed_follower_idx);
+  unblock_all_net(leader_idx);
+
   new_leader.reset();
   delete_paxos_group(id);
   PALF_LOG(INFO, "end 4f1a_force_set_member_list", K(id));
+}
+
+TEST_F(TestObSimpleLogClusterArbService, test_degradation_policy)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "test_degradation_policy");
+  OB_LOGGER.set_log_level("INFO");
+  MockLocCB loc_cb;
+  int ret = OB_SUCCESS;
+  PALF_LOG(INFO, "begin test_degradation_policy");
+  oceanbase::common::ObClusterVersion::get_instance().cluster_version_ = CLUSTER_VERSION_4_2_1_8;
+  int64_t leader_idx = 0;
+  int64_t arb_replica_idx = -1;
+  int64_t another_f_idx = 1;
+  PalfHandleImplGuard leader;
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  share::ObLSID ls_id(id);
+  std::vector<PalfHandleImplGuard*> palf_list;
+	EXPECT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id, arb_replica_idx, leader_idx, leader));
+  EXPECT_EQ(OB_SUCCESS, get_cluster_palf_handle_guard(id, palf_list));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 10, id));
+  palf_list[leader_idx]->get_palf_handle_impl()->set_location_cache_cb(&loc_cb);
+  palf_list[another_f_idx]->get_palf_handle_impl()->set_location_cache_cb(&loc_cb);
+  first_f_addr = palf_list[leader_idx]->get_palf_handle_impl()->self_;
+  second_f_addr = palf_list[another_f_idx]->get_palf_handle_impl()->self_;
+  degradation_policy = CLUSTER_POLICY;
+  GCONF.arbitration_degradation_policy = "CLUSTER_POLICY";
+  {
+    // case 1: test election silent
+    int64_t first_leader_idx = leader_idx;
+    PALF_LOG(INFO, "case 1: make election in current leader replica silent, the leader should change to another replica", K(first_leader_idx));
+    // test election silent
+    fisrt_f_connected_with_rs = false;
+    EXPECT_EQ(OB_SUCCESS, palf_list[leader_idx]->palf_handle_impl_->set_election_silent_flag(true));
+    // wait for leader revoke
+    while (leader.palf_handle_impl_->state_mgr_.role_ == common::ObRole::LEADER) {
+      sleep(1);
+    }
+    // wait for new leader
+    leader_idx = -1;
+    while (-1 == leader_idx) {
+      leader.reset();
+      EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+      sleep(1);
+    }
+    EXPECT_EQ(another_f_idx, leader_idx);
+    // disable another replica prepare/propose
+    second_f_connected_with_rs = false;
+    EXPECT_EQ(OB_SUCCESS, palf_list[another_f_idx]->palf_handle_impl_->set_election_silent_flag(true));
+    // wait for leader revoke
+    while (leader.palf_handle_impl_->state_mgr_.role_ == common::ObRole::LEADER) {
+      sleep(1);
+    }
+    // no leader for now
+    // enable prepare/propose
+    fisrt_f_connected_with_rs = true;
+    EXPECT_EQ(OB_SUCCESS, palf_list[first_leader_idx]->palf_handle_impl_->set_election_silent_flag(false));
+    // wait for new leader
+    EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+    EXPECT_EQ(first_leader_idx, leader_idx);
+    second_f_connected_with_rs = true;
+    EXPECT_EQ(OB_SUCCESS, palf_list[another_f_idx]->palf_handle_impl_->set_election_silent_flag(false));
+  }
+
+  {
+    // case 2: test network broken
+    sleep(5);
+    int64_t first_leader_idx = leader_idx;
+    PALF_LOG(INFO, "case 2: test degrade for 2F1A");
+    block_net(first_leader_idx, another_f_idx);
+    fisrt_f_connected_with_rs = false;
+    // should not be degraded
+    sleep(5);
+    common::GlobalLearnerList degraded_learner_list;
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list));
+    EXPECT_EQ(0, degraded_learner_list.get_member_number());
+    EXPECT_EQ(true, palf_list[first_leader_idx]->palf_handle_impl_->is_election_silent());
+
+    // wait for leader revoke
+    while (leader.palf_handle_impl_->state_mgr_.role_ == common::ObRole::LEADER) {
+      sleep(1);
+    }
+
+    // wait for new leader
+    leader_idx = -1;
+    while (-1 == leader_idx) {
+      leader.reset();
+      EXPECT_EQ(OB_SUCCESS, get_leader(id, leader, leader_idx));
+      sleep(1);
+    }
+    EXPECT_EQ(another_f_idx, leader_idx);
+    degraded_learner_list.reset();
+    // fisrt replica should be degraded
+    EXPECT_EQ(OB_SUCCESS, leader.palf_handle_impl_->config_mgr_.get_degraded_learner_list(degraded_learner_list));
+    EXPECT_EQ(1, degraded_learner_list.get_member_number());
+    common::ObAddr degraded_addr;
+    EXPECT_EQ(OB_SUCCESS, degraded_learner_list.get_server_by_index(0, degraded_addr));
+    EXPECT_EQ(first_f_addr, degraded_addr);
+    // network recover
+    unblock_net(first_leader_idx, another_f_idx);
+    fisrt_f_connected_with_rs = true;
+    // wait for upgrade
+    EXPECT_TRUE(is_upgraded(leader, id));
+    EXPECT_EQ(false, palf_list[first_leader_idx]->palf_handle_impl_->is_election_silent());
+  }
+
+  revert_cluster_palf_handle_guard(palf_list);
+  leader.reset();
+  delete_paxos_group(id);
+  PALF_LOG(INFO, "end test_degradation_policy", K(id));
 }
 
 } // end unittest

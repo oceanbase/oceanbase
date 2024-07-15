@@ -283,7 +283,7 @@ int ObLogService::init(const PalfOptions &options,
   } else if (OB_FAIL(restore_service_.init(transport, ls_service, this))) {
     CLOG_LOG(WARN, "failed to init restore_service_", K(ret));
 #ifdef OB_BUILD_ARBITRATION
-  } else if (OB_FAIL(arb_service_.init(self, palf_env_, &rpc_proxy_, net_keepalive_adapter, &monitor_))) {
+  } else if (OB_FAIL(arb_service_.init(self, palf_env_, &rpc_proxy_, net_keepalive_adapter, &monitor_, &location_adapter_))) {
     CLOG_LOG(WARN, "failed to init arb_service_", K(ret), K(self), KP(palf_env_));
 #endif
   } else if (OB_FAIL(flashback_service_.init(self, &location_adapter_, &rpc_proxy_, sql_proxy))) {

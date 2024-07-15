@@ -427,6 +427,8 @@ public:
   // - OB_SUCCESS
   // - OB_NOT_INIT
   int get_arbitration_member(common::ObMember &arb_member) const;
+  int set_election_silent_flag(const bool election_silent_flag);
+  bool is_election_silent() const;
 #endif
   int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
                                                     const int64_t downgrade_priority_time_us,
