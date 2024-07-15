@@ -219,7 +219,7 @@ public:
   int collect_tx_ctx(const share::ObLSID dest_ls_id,
                      const SCN log_scn,
                      const ObIArray<ObTabletID> &tablet_list,
-                     const ObIArray<ObTransID> &move_tx_ids,
+                     const ObIArray<ObTransID> *move_tx_ids,
                      int64_t &colllect_count,
                      ObIArray<ObTxCtxMoveArg> &res);
   int move_tx_op(const ObTransferMoveTxParam &move_tx_param,

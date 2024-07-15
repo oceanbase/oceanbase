@@ -1014,7 +1014,7 @@ int ObLSTxService::wait_tx_write_end(ObTimeoutCtx &timeout_ctx)
 int ObLSTxService::collect_tx_ctx(const ObLSID dest_ls_id,
                                   const SCN log_scn,
                                   const ObIArray<ObTabletID> &tablet_list,
-                                  const ObIArray<ObTransID> &move_tx_ids,
+                                  const ObIArray<ObTransID> *move_tx_ids,
                                   int64_t &collect_count,
                                   ObIArray<ObTxCtxMoveArg> &res)
 {
