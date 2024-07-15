@@ -491,6 +491,13 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
                  tablet, min_snapshot_version, max_snapshot_version,
                  true /*check_table_cnt*/, true /*is_multi_version_merge*/))) {
     LOG_WARN("fail to calculate boundary version", K(ret));
+  } else {
+#ifdef ERRSIM
+    ret = OB_E(EventTable::EN_DISABLE_TABLET_MINOR_MERGE) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      FLOG_INFO("Errsim: disable data tablet minor merge", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+    }
+#endif
   }
 
   if (OB_FAIL(ret)) {
