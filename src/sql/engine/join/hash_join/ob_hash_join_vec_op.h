@@ -22,6 +22,7 @@
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "sql/engine/aggregate/ob_exec_hash_struct.h"
 #include "sql/engine/aggregate/ob_adaptive_bypass_ctrl.h"
+#include "sql/engine/join/ob_join_filter_material_control_info.h"
 
 namespace oceanbase
 {
@@ -256,6 +257,7 @@ public:
   bool is_shared_ht_;
   // record which equal cond is null safe equal
   common::ObFixedArray<bool, common::ObIAllocator> is_ns_equal_cond_;
+  ObJoinFilterMaterialControlInfo jf_material_control_info_;
 };
 
 // hash join has no expression result overwrite problem:
