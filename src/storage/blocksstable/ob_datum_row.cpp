@@ -271,8 +271,10 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
   void *buf = nullptr;
 
   if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDatumRow is not inited", K(ret), K(*this));
   } else if (OB_UNLIKELY(capacity <= 0 || capacity > 2 * OB_USER_ROW_MAX_COLUMNS_COUNT)) {
+    ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to reserve datum row", K(ret), K(capacity));
   } else if (capacity <= get_capacity()) {
     // skip
