@@ -636,7 +636,8 @@ int ObTxReplayExecutor::replay_redo_in_memtable_(ObTxRedoLog &redo, const bool s
                     K(row_head.tablet_id_), KP(ls_), K(log_ts_ns_), K(tx_part_log_no_),
                     KPC(ctx_));
         }
-      } else if (OB_UNLIKELY(serial_final)) {
+      }
+      if (OB_SUCC(ret) && OB_UNLIKELY(serial_final)) {
         // because the seq no in one log-entry is not in order
         // must iterator all to pick the max value
         const ObTxSEQ seq_no = mmi_ptr_->get_row_seq_no();
