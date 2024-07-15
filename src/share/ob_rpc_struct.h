@@ -1870,7 +1870,8 @@ public:
                K_(ddl_stmt_str),
                K_(sql_mode),
                K_(tz_info_wrap),
-               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX));
+               "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
+               K_(tablet_ids));
   ObCreateHiddenTableArg() :
     ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
@@ -1882,7 +1883,8 @@ public:
     ddl_stmt_str_(),
     sql_mode_(0),
     tz_info_wrap_(),
-    nls_formats_{}
+    nls_formats_{},
+    tablet_ids_()
     {}
   ~ObCreateHiddenTableArg()
   {
@@ -1899,6 +1901,7 @@ public:
     ddl_type_ = share::DDL_INVALID;
     ddl_stmt_str_.reset();
     sql_mode_ = 0;
+    tablet_ids_.reset();
   }
   int assign(const ObCreateHiddenTableArg &arg);
 public:
@@ -1915,6 +1918,7 @@ public:
   common::ObTimeZoneInfo tz_info_;
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+  common::ObSArray<common::ObTabletID> tablet_ids_;
 };
 
 struct ObCreateHiddenTableRes final
@@ -2171,7 +2175,8 @@ public:
       rebuild_index_arg_list_(),
       client_session_id_(0),
       client_session_create_ts_(0),
-      lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL)
+      lock_priority_(transaction::tablelock::ObTableLockPriority::NORMAL),
+      is_direct_load_partition_(false)
   {
   }
   virtual ~ObAlterTableArg()
@@ -2244,7 +2249,8 @@ public:
                K_(alter_auto_partition_attr),
                K_(client_session_id),
                K_(client_session_create_ts),
-               K_(lock_priority));
+               K_(lock_priority),
+               K_(is_direct_load_partition));
 private:
   int alloc_index_arg(const ObIndexArg::IndexActionType index_action_type, ObIndexArg *&index_arg);
 public:
@@ -2284,6 +2290,7 @@ public:
   uint32_t client_session_id_;
   int64_t client_session_create_ts_;
   transaction::tablelock::ObTableLockPriority lock_priority_;
+  bool is_direct_load_partition_;
   int serialize_index_args(char *buf, const int64_t data_len, int64_t &pos) const;
   int deserialize_index_args(const char *buf, const int64_t data_len, int64_t &pos);
   int64_t get_index_args_serialize_size() const;

@@ -710,6 +710,7 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
     for (int64_t i = 0; OB_SUCC(ret) && i < common::ObNLSFormatEnum::NLS_MAX; i++) {
       nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
     }
+    OZ (tablet_ids_.assign(arg.tablet_ids_));
   }
   return ret;
 }
@@ -739,6 +740,9 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
           LOG_WARN("fail to serialize nls_formats_[i]", K(ret), K(nls_formats_[i]));
         }
       }
+    }
+    if (OB_SUCC(ret)) {
+      OB_UNIS_ENCODE(tablet_ids_);
     }
   }
   return ret;
@@ -779,6 +783,9 @@ OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
         allocator_.free(tmp_ptr[i]);
       }
     }
+    if (OB_SUCC(ret)) {
+      OB_UNIS_DECODE(tablet_ids_);
+    }
   }
   return ret;
 }
@@ -806,6 +813,9 @@ OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; i++) {
         len += nls_formats_[i].get_serialize_size();
       }
+    }
+    if (OB_SUCC(ret)) {
+      OB_UNIS_ADD_LEN(tablet_ids_);
     }
   }
   if (OB_FAIL(ret)) {
@@ -2509,7 +2519,8 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
               rebuild_index_arg_list_,
               client_session_id_,
               client_session_create_ts_,
-              lock_priority_);
+              lock_priority_,
+              is_direct_load_partition_);
 
   return ret;
 }
@@ -2606,7 +2617,8 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
               rebuild_index_arg_list_,
               client_session_id_,
               client_session_create_ts_,
-              lock_priority_);
+              lock_priority_,
+              is_direct_load_partition_);
   return ret;
 }
 
@@ -2656,7 +2668,8 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
                 rebuild_index_arg_list_,
                 client_session_id_,
                 client_session_create_ts_,
-                lock_priority_);
+                lock_priority_,
+                is_direct_load_partition_);
   }
 
   if (OB_FAIL(ret)) {
