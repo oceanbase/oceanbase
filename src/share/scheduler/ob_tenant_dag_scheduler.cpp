@@ -846,7 +846,6 @@ int ObIDag::gene_warning_info(ObDagWarningInfo &info, ObIAllocator &allocator)
   info.gmt_modified_ = ObTimeUtility::fast_current_time();
   info.location_ = error_location_;
   info.dag_type_ = type_;
-  info.tenant_id_ = MTL_ID();
   info.priority_ = static_cast<uint32_t>(ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH);
   info.gmt_create_ = info.gmt_modified_;
   info.dag_status_ = ObDagWarningInfo::ODS_WARNING;

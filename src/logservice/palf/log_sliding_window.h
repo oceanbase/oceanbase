@@ -461,7 +461,10 @@ private:
                                      int64_t &log_id,
                                      int64_t &log_proposal_id);
   int leader_broadcast_committed_info_(const LSN &committed_end_lsn);
-  int submit_push_log_resp_(const common::ObAddr &server, const int64_t &msg_proposal_id, const LSN &lsn);
+  int submit_push_log_resp_(const common::ObAddr &server,
+                            const int64_t &msg_proposal_id,
+                            const LSN &lsn,
+                            const bool &is_fetch_log);
   inline int try_push_log_to_paxos_follower_(const int64_t curr_proposal_id,
                                              const int64_t prev_log_pid,
                                              const LSN &prev_lsn,

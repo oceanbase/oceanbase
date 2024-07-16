@@ -3796,6 +3796,8 @@ int ObTableSchema::convert_column_ids_for_ddl(const ObHashMap<uint64_t, uint64_t
   int ret = OB_SUCCESS;
   if (OB_FAIL(convert_column_udt_set_ids(column_id_map))) {
     LOG_WARN("failed to convert column udt set id", K(ret));
+  } else if (OB_FAIL(convert_geo_generated_col_ids(column_id_map))) {
+    LOG_WARN("failed to convert column id in geo generated columns", K(ret));
   } else if (OB_FAIL(convert_basic_column_ids(column_id_map))) {
     LOG_WARN("failed to convert column id in column array and id hash array", K(ret));
   } else if (OB_FAIL(convert_column_ids_in_generated_columns(column_id_map))) {
@@ -9113,6 +9115,31 @@ int ObTableSchema::convert_column_udt_set_ids(const ObHashMap<uint64_t, uint64_t
             }
           }
         }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTableSchema::convert_geo_generated_col_ids(const ObHashMap<uint64_t, uint64_t> &column_id_map)
+{
+  int ret = OB_SUCCESS;
+  // generate new column udt id
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; i++) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid column schema", K(ret));
+    } else if (column->is_spatial_generated_column()) {
+      uint64_t new_column_id = 0;
+      uint64_t old_geo_column_id = column->get_geo_col_id();
+      if (OB_FAIL(column_id_map.get_refactored(old_geo_column_id, new_column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(new_column_id));
+      } else if (OB_UNLIKELY(new_column_id < OB_APP_MIN_COLUMN_ID)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new column id too small", K(ret), K(new_column_id));
+      } else {
+        column->set_geo_col_id(new_column_id);
       }
     }
   }

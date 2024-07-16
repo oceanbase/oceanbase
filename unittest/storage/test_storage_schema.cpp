@@ -20,6 +20,7 @@
 #include "share/ob_encryption_util.h"
 #include "storage/test_schema_prepare.h"
 #include "mittest/mtlenv/mock_tenant_module_env.h"
+#include "storage/ob_storage_schema_util.h"
 
 namespace oceanbase
 {
@@ -278,6 +279,38 @@ TEST_F(TestStorageSchema, compat_serialize_and_deserialize)
 
   COMMON_LOG(INFO, "test", K(storage_schema), K(des_storage_schema));
   ASSERT_EQ(true, judge_storage_schema_equal(storage_schema, des_storage_schema));
+}
+
+TEST_F(TestStorageSchema, test_update_tablet_store_schema)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObTableSchema table_schema;
+  ObStorageSchema storage_schema1;
+  ObStorageSchema storage_schema2;
+  TestSchemaPrepare::prepare_schema(table_schema);
+  ASSERT_EQ(OB_SUCCESS, storage_schema1.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  storage_schema2.store_column_cnt_ += 1;
+  storage_schema2.schema_version_ += 100;
+
+  // schema 2 have large store column cnt
+  ObStorageSchema *result_storage_schema = NULL;
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, storage_schema1, storage_schema2, result_storage_schema);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(result_storage_schema->schema_version_, storage_schema2.schema_version_);
+  ASSERT_EQ(result_storage_schema->store_column_cnt_, storage_schema2.store_column_cnt_);
+  ASSERT_EQ(result_storage_schema->is_column_info_simplified(), true);
+  ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
+
+  // schema_on_tablet and schema1 have same store column cnt, but storage_schema1 have full column info
+  ObStorageSchema schema_on_tablet;
+  ASSERT_EQ(OB_SUCCESS, schema_on_tablet.init(allocator_, storage_schema1, true/*skip_column_info*/));
+
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, schema_on_tablet, storage_schema1, result_storage_schema);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(true, judge_storage_schema_equal(storage_schema1, *result_storage_schema));
+  ASSERT_EQ(result_storage_schema->is_column_info_simplified(), false);
+  ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
 }
 
 } // namespace unittest

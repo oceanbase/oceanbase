@@ -219,7 +219,7 @@ public:
   int collect_tx_ctx(const share::ObLSID dest_ls_id,
                      const SCN log_scn,
                      const ObIArray<ObTabletID> &tablet_list,
-                     const ObIArray<ObTransID> &move_tx_ids,
+                     const ObIArray<ObTransID> *move_tx_ids,
                      int64_t &colllect_count,
                      ObIArray<ObTxCtxMoveArg> &res);
   int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
@@ -639,6 +639,9 @@ private:
 
   inline bool is_r_pending_() const
   { return tx_ls_state_mgr_.is_resume_leader_pending(); }
+
+  inline bool is_f_pending_() const
+  { return tx_ls_state_mgr_.is_follower_swl_pending(); }
 
   inline bool is_pending_() const
   { return tx_ls_state_mgr_.is_leader_takeover_pending(); }

@@ -139,7 +139,7 @@ int ObLSTabletIterator::get_next_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle)
 }
 
 
-int ObLSTabletIterator::get_tablet_ids(ObIArray<ObTabletID> &ids)
+int ObLSTabletIterator::get_tablet_ids(ObIArray<ObTabletID> &ids) const
 {
   int ret = OB_SUCCESS;
   ids.reset();

@@ -52,10 +52,13 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 2UL, 3UL, 0UL),  // 4.2.3.0
   CALC_VERSION(4UL, 2UL, 3UL, 1UL),  // 4.2.3.1
   CALC_VERSION(4UL, 2UL, 4UL, 0UL),  // 4.2.4.0
+  CALC_VERSION(4UL, 2UL, 5UL, 0UL),  // 4.2.5.0
   CALC_VERSION(4UL, 3UL, 0UL, 0UL),  // 4.3.0.0
   CALC_VERSION(4UL, 3UL, 0UL, 1UL),  // 4.3.0.1
   CALC_VERSION(4UL, 3UL, 1UL, 0UL),  // 4.3.1.0
   CALC_VERSION(4UL, 3UL, 2UL, 0UL),  // 4.3.2.0
+  CALC_VERSION(4UL, 3UL, 2UL, 1UL),  // 4.3.2.1
+  CALC_VERSION(4UL, 3UL, 3UL, 0UL),  // 4.3.3.0
 };
 
 int ObUpgradeChecker::get_data_version_by_cluster_version(
@@ -82,10 +85,13 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_3_0, MOCK_DATA_VERSION_4_2_3_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_3_1, MOCK_DATA_VERSION_4_2_3_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_4_0, MOCK_DATA_VERSION_4_2_4_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_0, MOCK_DATA_VERSION_4_2_5_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_0, DATA_VERSION_4_3_0_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_1, DATA_VERSION_4_3_0_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_1_0, DATA_VERSION_4_3_1_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_2_0, DATA_VERSION_4_3_2_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_2_1, DATA_VERSION_4_3_2_1)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_3_0, DATA_VERSION_4_3_3_0)
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
       ret = OB_INVALID_ARGUMENT;
@@ -659,10 +665,13 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 2, 3, 0);
     INIT_PROCESSOR_BY_VERSION(4, 2, 3, 1);
     INIT_PROCESSOR_BY_VERSION(4, 2, 4, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 1);
     INIT_PROCESSOR_BY_VERSION(4, 3, 1, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 2, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 2, 1);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 3, 0);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
   }
@@ -1310,6 +1319,8 @@ int ObUpgradeFor4320Processor::post_upgrade()
     LOG_WARN("fail to reset compat version", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_spm())) {
     LOG_WARN("failed to post upgrade for spm", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_online_estimate_percent())) {
+    LOG_WARN("failed to post upgrade for online estimate percent", KR(ret));
   }
   return ret;
 }
@@ -1414,6 +1425,33 @@ int ObUpgradeFor4320Processor::post_upgrade_for_spm()
 
   return ret;
 }
+
+int ObUpgradeFor4320Processor::post_upgrade_for_online_estimate_percent()
+{
+  int ret = OB_SUCCESS;
+  int64_t start = ObTimeUtility::current_time();
+  ObSqlString raw_sql;
+  int64_t affected_rows = 0;
+  bool is_primary_tenant = false;
+  if (sql_proxy_ == NULL) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("tenant isn't primary standby, no refer to gather stats, skip", K(tenant_id_));
+  } else if (OB_FAIL(ObDbmsStatsPreferences::get_online_estimate_percent_for_upgrade(raw_sql))) {
+    LOG_WARN("failed to get extra stats perfs for upgrade", K(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, raw_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] post upgrade for online estimate failed", KR(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("[UPGRADE] post upgrade for online estimate succeed", K_(tenant_id));
+  }  return ret;
+}
+
 /* =========== 4310 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */

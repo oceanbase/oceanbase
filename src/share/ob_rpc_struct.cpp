@@ -710,6 +710,7 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
     for (int64_t i = 0; OB_SUCC(ret) && i < common::ObNLSFormatEnum::NLS_MAX; i++) {
       nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
     }
+    OZ (tablet_ids_.assign(arg.tablet_ids_));
   }
   return ret;
 }
@@ -739,6 +740,9 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
           LOG_WARN("fail to serialize nls_formats_[i]", K(ret), K(nls_formats_[i]));
         }
       }
+    }
+    if (OB_SUCC(ret)) {
+      OB_UNIS_ENCODE(tablet_ids_);
     }
   }
   return ret;
@@ -779,6 +783,9 @@ OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
         allocator_.free(tmp_ptr[i]);
       }
     }
+    if (OB_SUCC(ret)) {
+      OB_UNIS_DECODE(tablet_ids_);
+    }
   }
   return ret;
 }
@@ -806,6 +813,9 @@ OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; i++) {
         len += nls_formats_[i].get_serialize_size();
       }
+    }
+    if (OB_SUCC(ret)) {
+      OB_UNIS_ADD_LEN(tablet_ids_);
     }
   }
   if (OB_FAIL(ret)) {
@@ -2486,26 +2496,31 @@ OB_DEF_SERIALIZE(ObAlterTableArg)
     }
   }
   LST_DO_CODE(OB_UNIS_ENCODE,
-      ddl_task_type_,
-      compat_mode_,
-      table_id_,
-      hidden_table_id_,
-      is_alter_columns_,
-      is_alter_indexs_,
-      is_alter_options_,
-      is_alter_partitions_,
-      is_inner_,
-      is_update_global_indexes_,
-      is_convert_to_character_,
-      skip_sys_table_check_,
-      need_rebuild_trigger_,
-      foreign_key_checks_,
-      is_add_to_scheduler_,
-      inner_sql_exec_addr_,
-      local_session_var_,
-      mview_refresh_info_,
-      alter_algorithm_,
-      alter_auto_partition_attr_);
+              ddl_task_type_,
+              compat_mode_,
+              table_id_,
+              hidden_table_id_,
+              is_alter_columns_,
+              is_alter_indexs_,
+              is_alter_options_,
+              is_alter_partitions_,
+              is_inner_,
+              is_update_global_indexes_,
+              is_convert_to_character_,
+              skip_sys_table_check_,
+              need_rebuild_trigger_,
+              foreign_key_checks_,
+              is_add_to_scheduler_,
+              inner_sql_exec_addr_,
+              local_session_var_,
+              mview_refresh_info_,
+              alter_algorithm_,
+              alter_auto_partition_attr_,
+              rebuild_index_arg_list_,
+              client_session_id_,
+              client_session_create_ts_,
+              lock_priority_,
+              is_direct_load_partition_);
 
   return ret;
 }
@@ -2579,26 +2594,31 @@ OB_DEF_DESERIALIZE(ObAlterTableArg)
     }
   }
   LST_DO_CODE(OB_UNIS_DECODE,
-      ddl_task_type_,
-      compat_mode_,
-      table_id_,
-      hidden_table_id_,
-      is_alter_columns_,
-      is_alter_indexs_,
-      is_alter_options_,
-      is_alter_partitions_,
-      is_inner_,
-      is_update_global_indexes_,
-      is_convert_to_character_,
-      skip_sys_table_check_,
-      need_rebuild_trigger_,
-      foreign_key_checks_,
-      is_add_to_scheduler_,
-      inner_sql_exec_addr_,
-      local_session_var_,
-      mview_refresh_info_,
-      alter_algorithm_,
-      alter_auto_partition_attr_);
+              ddl_task_type_,
+              compat_mode_,
+              table_id_,
+              hidden_table_id_,
+              is_alter_columns_,
+              is_alter_indexs_,
+              is_alter_options_,
+              is_alter_partitions_,
+              is_inner_,
+              is_update_global_indexes_,
+              is_convert_to_character_,
+              skip_sys_table_check_,
+              need_rebuild_trigger_,
+              foreign_key_checks_,
+              is_add_to_scheduler_,
+              inner_sql_exec_addr_,
+              local_session_var_,
+              mview_refresh_info_,
+              alter_algorithm_,
+              alter_auto_partition_attr_,
+              rebuild_index_arg_list_,
+              client_session_id_,
+              client_session_create_ts_,
+              lock_priority_,
+              is_direct_load_partition_);
   return ret;
 }
 
@@ -2625,26 +2645,31 @@ OB_DEF_SERIALIZE_SIZE(ObAlterTableArg)
     len += sequence_ddl_arg_.get_serialize_size();
     len += serialization::encoded_length_i64(sql_mode_);
     LST_DO_CODE(OB_UNIS_ADD_LEN,
-        ddl_task_type_,
-        compat_mode_,
-        table_id_,
-        hidden_table_id_,
-        is_alter_columns_,
-        is_alter_indexs_,
-        is_alter_options_,
-        is_alter_partitions_,
-        is_inner_,
-        is_update_global_indexes_,
-        is_convert_to_character_,
-        skip_sys_table_check_,
-        need_rebuild_trigger_,
-        foreign_key_checks_,
-        is_add_to_scheduler_,
-        inner_sql_exec_addr_,
-        local_session_var_,
-        mview_refresh_info_,
-        alter_algorithm_,
-        alter_auto_partition_attr_);
+                ddl_task_type_,
+                compat_mode_,
+                table_id_,
+                hidden_table_id_,
+                is_alter_columns_,
+                is_alter_indexs_,
+                is_alter_options_,
+                is_alter_partitions_,
+                is_inner_,
+                is_update_global_indexes_,
+                is_convert_to_character_,
+                skip_sys_table_check_,
+                need_rebuild_trigger_,
+                foreign_key_checks_,
+                is_add_to_scheduler_,
+                inner_sql_exec_addr_,
+                local_session_var_,
+                mview_refresh_info_,
+                alter_algorithm_,
+                alter_auto_partition_attr_,
+                rebuild_index_arg_list_,
+                client_session_id_,
+                client_session_create_ts_,
+                lock_priority_,
+                is_direct_load_partition_);
   }
 
   if (OB_FAIL(ret)) {
@@ -2812,14 +2837,20 @@ DEF_TO_STRING(ObRenameTableArg)
   int64_t pos = 0;
   J_OBJ_START();
   J_KV(K_(tenant_id),
-       K_(rename_table_items));
+       K_(rename_table_items),
+       K_(client_session_id),
+       K_(client_session_create_ts),
+       K_(lock_priority));
   J_OBJ_END();
   return pos;
 }
 
 OB_SERIALIZE_MEMBER((ObRenameTableArg, ObDDLArg),
                     tenant_id_,
-                    rename_table_items_);
+                    rename_table_items_,
+                    client_session_id_,
+                    client_session_create_ts_,
+                    lock_priority_);
 
 DEF_TO_STRING(ObTableItem)
 {
@@ -8270,7 +8301,7 @@ OB_SERIALIZE_MEMBER(ObDDLBuildSingleReplicaRequestArg, tenant_id_, ls_id_, sourc
   source_table_id_, dest_schema_id_, schema_version_, snapshot_version_, ddl_type_, task_id_,
   execution_id_, parallelism_, tablet_task_id_, data_format_version_, consumer_group_id_, dest_tenant_id_, dest_ls_id_, dest_schema_version_,
   compaction_scn_, can_reuse_macro_block_, split_sstable_type_,
-  lob_col_idxs_, data_split_ranges_);
+  lob_col_idxs_, parallel_datum_rowkey_list_);
 
 int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaRequestArg &other)
 {
@@ -8280,7 +8311,7 @@ int ObDDLBuildSingleReplicaRequestArg::assign(const ObDDLBuildSingleReplicaReque
     LOG_WARN("invalid arg", K(ret), K(other));
   } else if (OB_FAIL(lob_col_idxs_.assign(other.lob_col_idxs_))) {
     LOG_WARN("failed to assign to lob col idxs", K(ret));
-  } else if (OB_FAIL(data_split_ranges_.assign(other.data_split_ranges_))) {
+  } else if (OB_FAIL(parallel_datum_rowkey_list_.assign(other.parallel_datum_rowkey_list_))) {
     LOG_WARN("assign failed", K(ret));
   } else {
     tenant_id_ = other.tenant_id_;

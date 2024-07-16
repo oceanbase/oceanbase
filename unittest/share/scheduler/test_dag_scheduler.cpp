@@ -23,6 +23,7 @@
 #include "observer/omt/ob_tenant_node_balancer.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
+#include "storage/compaction/ob_tablet_merge_task.h"
 
 int64_t dag_cnt = 1;
 int64_t stress_time= 1; // 100ms
@@ -51,6 +52,7 @@ using namespace common;
 using namespace lib;
 using namespace share;
 using namespace omt;
+using namespace compaction;
 namespace unittest
 {
 
@@ -1664,15 +1666,19 @@ TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
   ASSERT_TRUE(nullptr != scheduler);
   ASSERT_EQ(OB_SUCCESS, scheduler->init(MTL_ID(), time_slice, 64));
   EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_MID, 1));
+  EXPECT_EQ(OB_SUCCESS, scheduler->set_thread_score(ObDagPrio::DAG_PRIO_COMPACTION_HIGH, 1));
   EXPECT_EQ(1, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_MID].limits_);
+  EXPECT_EQ(1, scheduler->prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_HIGH].limits_);
 
   LoopWaitTask *wait_task = nullptr;
+  LoopWaitTask *wait_task2 = nullptr;
   const int64_t dag_cnt = 6;
   // add 6 dag at prio = DAG_PRIO_COMPACTION_MID
-  ObLSID ls_ids[2] = {ObLSID(1), ObLSID(2)};
-  bool finish_flag[2] = {false, false};
+  const int64_t ls_cnt = 2;
+  ObLSID ls_ids[ls_cnt] = {ObLSID(1), ObLSID(2)};
+  bool finish_flag[ls_cnt] = {false, false};
   for (int64_t i = 0; i < dag_cnt; ++i) {
-    const int64_t idx = i % 2;
+    const int64_t idx = i % ls_cnt;
     TestCompMidCancelDag *dag = NULL;
     EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(dag));
     dag->ls_id_ = ls_ids[idx];
@@ -1682,10 +1688,21 @@ TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
     EXPECT_EQ(OB_SUCCESS, dag->add_task(*wait_task));
     EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(dag));
   }
+  // add 2 dag at prio = DAG_PRIO_COMPACTION_HIGH
+  for (int64_t i = 0; i < ls_cnt; ++i) {
+    ObBatchFreezeTabletsDag *batch_freeze_dag = NULL;
+    EXPECT_EQ(OB_SUCCESS, scheduler->alloc_dag(batch_freeze_dag));
+    batch_freeze_dag->param_.ls_id_ = ls_ids[i];
+    EXPECT_EQ(OB_SUCCESS, alloc_task(*batch_freeze_dag, wait_task2));
+    EXPECT_EQ(OB_SUCCESS, wait_task2->init(1, 2, finish_flag[i]));
+    EXPECT_EQ(OB_SUCCESS, batch_freeze_dag->add_task(*wait_task2));
+    EXPECT_EQ(OB_SUCCESS, scheduler->add_dag(batch_freeze_dag));
+  }
   EXPECT_EQ(dag_cnt, scheduler->dag_cnts_[ObDagType::DAG_TYPE_MERGE_EXECUTE]);
   CHECK_EQ_UTIL_TIMEOUT(1, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_MID));
+  CHECK_EQ_UTIL_TIMEOUT(1, scheduler->get_running_task_cnt(ObDagPrio::DAG_PRIO_COMPACTION_HIGH));
 
-  // cancel two waiting dag of ls_ids[0]
+  // cancel waiting dag of ls_ids[0], all dag of ls_ids[1] will be destroyed when check_cancel
   bool exist = false;
   EXPECT_EQ(OB_SUCCESS, scheduler->check_ls_compaction_dag_exist_with_cancel(ls_ids[0], exist));
   EXPECT_EQ(exist, true);
@@ -1693,11 +1710,12 @@ TEST_F(TestDagScheduler, test_check_ls_compaction_dag_exist_with_cancel)
 
   EXPECT_EQ(OB_SUCCESS, scheduler->check_ls_compaction_dag_exist_with_cancel(ls_ids[1], exist));
   EXPECT_EQ(exist, false);
-  EXPECT_EQ(1, scheduler->dag_cnts_[ObDagType::DAG_TYPE_MERGE_EXECUTE]);
 
   finish_flag[0] = true;
   wait_scheduler();
 
+  EXPECT_EQ(OB_SUCCESS, scheduler->check_ls_compaction_dag_exist_with_cancel(ls_ids[0], exist));
+  EXPECT_EQ(exist, false);
   EXPECT_EQ(OB_SUCCESS, scheduler->check_ls_compaction_dag_exist_with_cancel(ls_ids[0], exist));
   EXPECT_EQ(exist, false);
 }

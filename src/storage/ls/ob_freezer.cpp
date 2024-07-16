@@ -14,6 +14,7 @@
 #include "common/ob_tablet_id.h"
 #include "logservice/ob_log_service.h"
 #include "share/ob_force_print_log.h"
+#include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/ls/ob_freezer.h"
 #include "storage/ls/ob_ls_tx_service.h"
@@ -389,6 +390,8 @@ ObFreezer::ObFreezer()
     enable_(false),
     is_inited_(false),
     is_async_tablet_freeze_task_running_(false),
+    throttle_is_skipping_(false),
+    tenant_replay_is_pending_(false),
     async_freeze_tablets_() {}
 
 ObFreezer::ObFreezer(ObLS *ls)
@@ -406,6 +409,8 @@ ObFreezer::ObFreezer(ObLS *ls)
     enable_(false),
     is_inited_(false),
     is_async_tablet_freeze_task_running_(false),
+    throttle_is_skipping_(false),
+    tenant_replay_is_pending_(false),
     async_freeze_tablets_() {}
 
 ObFreezer::~ObFreezer()
@@ -429,6 +434,8 @@ void ObFreezer::reset()
   async_freeze_tablets_.reuse();
   is_inited_ = false;
   is_async_tablet_freeze_task_running_ = false;
+  throttle_is_skipping_ = false;
+  tenant_replay_is_pending_ = false;
 }
 
 int ObFreezer::init(ObLS *ls)
@@ -452,6 +459,8 @@ int ObFreezer::init(ObLS *ls)
     pend_replay_cnt_ = 0;
     need_resubmit_log_ = false;
     is_async_tablet_freeze_task_running_ = false;
+    throttle_is_skipping_ = false;
+    tenant_replay_is_pending_ = false;
 
     is_inited_ = true;
   }
@@ -569,48 +578,80 @@ void ObFreezer::submit_checkpoint_task()
 int ObFreezer::wait_ls_freeze_finish()
 {
   int ret = OB_SUCCESS;
-  share::ObLSID ls_id = get_ls_id();
-  const int64_t start = ObClockGenerator::getClock();
-  int64_t last_submit_log_time = start;
+  const share::ObLSID ls_id = get_ls_id();
+  const int64_t start_time = ObClockGenerator::getClock();
   uint32_t freeze_clock = get_freeze_clock();
-  PendTenantReplayGuard pend_replay_guard;
-  TRANS_LOG(INFO, "[Freezer] freeze_clock", K(ls_id), K(freeze_clock));
+  {
+    PendTenantReplayHelper pend_replay_helper(*this, ls_);
+    (void)pend_replay_helper.set_skip_throttle_flag();
 
-  // wait till all memtables are moved from frozen_list to prepare_list
-  // this means that all memtables can be dumped
-  while (!get_ls_data_checkpoint()->ls_freeze_finished()) {
-    if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      if (need_resubmit_log() ||
-          // In order to prevent the txn has already passed the try_submit test
-          // while failing to submit some logs due to an unexpected bug, we need
-          // retry to submit the log to go around the above case
-          (ObTimeUtility::current_time() - last_submit_log_time >= 1_min)) {
-        last_submit_log_time = ObTimeUtility::current_time();
+    TRANS_LOG(INFO,
+              "[Freezer] wait freeze : Logstream ",
+              K(ls_id),
+              K(freeze_clock),
+              K(throttle_is_skipping_),
+              K(tenant_replay_is_pending_));
 
-        (void)submit_log_for_freeze(false/*tablet freeze*/, false/*try*/);
-        TRANS_LOG(INFO, "[Freezer] resubmit log for ls_freeze", K(ls_id));
+    // wait till all memtables are moved from frozen_list to prepare_list
+    // this means that all memtables can be dumped
+    int64_t time_counter = 0;
+    while (!get_ls_data_checkpoint()->ls_freeze_finished()) {
+      if (TC_REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL /* 1 second */)) {
+        ++time_counter;
+
+        // check pend condition every second
+        (void)pend_replay_helper.check_pend_condition_once();
+
+        // check resubmit log condition and report some debug info every 5 seconds
+        if (time_counter >= 5 && time_counter % 5 == 0) {
+          (void)resubmit_log_if_needed_(start_time, false /* is_tablet_freeze */, false /* is_try */);
+        }
       }
-
-      const int64_t cost_time = ObClockGenerator::getClock() - start;
-
-      if (cost_time > 5 * 1000 * 1000) {
-        TRANS_LOG_RET(WARN, OB_ERR_TOO_MUCH_TIME, "[Freezer] finish ls_freeze costs too much time",
-                      K(ls_id), K(cost_time));
-        stat_.add_diagnose_info("finish ls_freeze costs too much time");
-      }
+      ob_usleep(100);
     }
 
-    ob_usleep(100);
+    stat_.add_diagnose_info("logstream_freeze success");
+    stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObClockGenerator::getClock(), ret);
+    unset_freeze_();
+    const int64_t wait_freeze_finish_spend_time = ObClockGenerator::getClock() - start_time;
+    FLOG_INFO("[Freezer] logstream_freeze success", K(ls_id), K(freeze_clock), K(wait_freeze_finish_spend_time));
   }
-  stat_.add_diagnose_info("logstream_freeze success");
-  stat_.end_set_freeze_stat(ObFreezeState::FINISH, ObClockGenerator::getClock(), ret);
-  unset_freeze_();
-  const int64_t wait_freeze_finish_spend_time = ObClockGenerator::getClock() - start;
-  FLOG_INFO("[Freezer] logstream_freeze success", K(ls_id), K(freeze_clock), K(wait_freeze_finish_spend_time));
 
+  // freeze tx data out of PendTenantReplayGuard
   (void)try_freeze_tx_data_();
-
   return ret;
+}
+
+void ObFreezer::resubmit_log_if_needed_(const int64_t start_time,
+                                        const bool is_tablet_freeze,
+                                        const bool is_try,
+                                        const ObITabletMemtable *memtable)
+{
+  const share::ObLSID ls_id = get_ls_id();
+  int64_t last_submit_log_time = start_time;
+  if (need_resubmit_log() ||
+      // In order to prevent the txn has already passed the try_submit test
+      // while failing to submit some logs due to an unexpected bug, we need
+      // retry to submit the log to go around the above case
+      (ObClockGenerator::getClock() - last_submit_log_time >= 1_min)) {
+    last_submit_log_time = ObClockGenerator::getClock();
+
+    (void)submit_log_for_freeze(is_tablet_freeze, is_try);
+  }
+
+  const int64_t cost_time = ObClockGenerator::getClock() - start_time;
+
+  TRANS_LOG_RET(WARN,
+                OB_ERR_TOO_MUCH_TIME,
+                "[Freezer] wait freeze finish costs too much time",
+                K(ls_id),
+                K(is_tablet_freeze),
+                K(is_try),
+                K(cost_time),
+                K(throttle_is_skipping_),
+                K(tenant_replay_is_pending_),
+                KPC(memtable));
+  stat_.add_diagnose_info("wait freeze finish costs too much time");
 }
 
 // Define a functor to avoid using lambda
@@ -1178,7 +1219,7 @@ int ObFreezer::wait_data_memtable_freeze_finish_(ObITabletMemtable *tablet_memta
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
   ObMemtable *memtable = static_cast<ObMemtable*>(tablet_memtable);
-  if (OB_FAIL(wait_memtable_ready_for_flush_with_ls_lock(memtable))) {
+  if (OB_FAIL(wait_memtable_ready_for_flush_(memtable))) {
     TRANS_LOG(WARN, "[Freezer] fail to wait memtable ready_for_flush", K(ret), K(ls_id));
   } else {
     int64_t read_lock = LSLOCKALL;
@@ -1219,64 +1260,47 @@ int ObFreezer::wait_direct_load_memtable_freeze_finish_(ObITabletMemtable *table
   return ret;
 }
 
-int ObFreezer::wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable)
+int ObFreezer::wait_memtable_ready_for_flush_(ObITabletMemtable *tablet_memtable)
 {
-  share::ObLSID ls_id = get_ls_id();
-  const int64_t start = ObClockGenerator::getClock();
-  int64_t last_submit_log_time = start;
   int ret = OB_SUCCESS;
+  share::ObLSID ls_id = get_ls_id();
+  const int64_t start_time = ObClockGenerator::getClock();
   bool ready_for_flush = false;
   bool is_force_released = false;
 
-  do {
-    if (OB_FAIL(try_wait_memtable_ready_for_flush_with_ls_lock(tablet_memtable,
-                                                               ready_for_flush,
-                                                               is_force_released,
-                                                               start,
-                                                               last_submit_log_time))) {
-      TRANS_LOG(WARN, "[Freezer] memtable is not ready_for_flush", K(ret));
-    }
-  } while (OB_SUCC(ret) && !ready_for_flush && !is_force_released);
+  {
+    PendTenantReplayHelper pend_replay_helper(*this, ls_);
+    (void)pend_replay_helper.set_skip_throttle_flag();
 
-  return ret;
-}
+    TRANS_LOG(INFO,
+              "[Freezer] wait freeze : Tablet",
+              K(ls_id),
+              KP(tablet_memtable),
+              K(throttle_is_skipping_),
+              K(tenant_replay_is_pending_));
 
-int ObFreezer::try_wait_memtable_ready_for_flush_with_ls_lock(ObITabletMemtable *tablet_memtable,
-                                                              bool &ready_for_flush,
-                                                              bool &is_force_released,
-                                                              const int64_t start,
-                                                              int64_t &last_submit_log_time)
-{
-  int ret = OB_SUCCESS;
-  int64_t read_lock = LSLOCKALL;
-  int64_t write_lock = 0;
+    int64_t time_counter = 0;
+    do {
+      if (OB_ISNULL(tablet_memtable)) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "[Freezer] memtable cannot be null", K(ret));
+      } else if (FALSE_IT(ready_for_flush = tablet_memtable->ready_for_flush())) {
+      } else if (FALSE_IT(is_force_released = tablet_memtable->is_force_released())) {
+      } else if (!ready_for_flush && !is_force_released) {
+        if (TC_REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL /* 1 second */)) {
+          ++time_counter;
 
-  if (OB_ISNULL(tablet_memtable)) {
-    ret = OB_ERR_UNEXPECTED;
-    TRANS_LOG(WARN, "[Freezer] memtable cannot be null", K(ret));
-  } else if (FALSE_IT(ready_for_flush = tablet_memtable->ready_for_flush())) {
-  } else if (FALSE_IT(is_force_released = tablet_memtable->is_force_released())) {
-  } else if (!ready_for_flush && !is_force_released) {
-    if (TC_REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
-      if (need_resubmit_log() ||
-          // In order to prevent the txn has already passed the try_submit test
-          // while failing to submit some logs due to an unexpected bug, we need
-          // retry to submit the log to go around the above case
-          (ObTimeUtility::current_time() - last_submit_log_time >= 1_min)) {
-        last_submit_log_time = ObTimeUtility::current_time();
-        (void)submit_log_for_freeze(true/*tablet freeze*/, false/*try*/);
-        TRANS_LOG(INFO, "[Freezer] resubmit log", K(ret));
+          // check pend condition every second
+          (void)pend_replay_helper.check_pend_condition_once();
+
+          // check resubmit log condition and report some debug info every 5 seconds
+          if (time_counter >= 5 && time_counter % 5 == 0) {
+            (void)resubmit_log_if_needed_(start_time, true /* is_tablet_freeze */, false /* is_try */, tablet_memtable);
+          }
+        }
+        ob_usleep(100);
       }
-      const int64_t cost_time = ObClockGenerator::getClock() - start;
-
-      if (cost_time > 5 * 1000 * 1000) {
-        TRANS_LOG(WARN, "[Freezer] ready_for_flush costs too much time",
-                  K(cost_time), KPC(tablet_memtable));
-        stat_.add_diagnose_info("ready_for_flush costs too much time");
-      }
-    }
-
-    ob_usleep(100);
+    } while (OB_SUCC(ret) && !ready_for_flush && !is_force_released);
   }
 
   return ret;
@@ -1455,9 +1479,6 @@ void ObFreezer::unset_freeze_()
 /* public function about freeze_flag */
 bool ObFreezer::is_freeze(uint32_t freeze_flag) const
 {
-  if (freeze_flag == UINT32_MAX) {
-    freeze_flag = (ATOMIC_LOAD(&freeze_flag_));
-  }
   return 1 == (freeze_flag >> 31);
 }
 
@@ -1626,11 +1647,6 @@ void ObFreezer::set_tablet_freeze_begin_()
   }
 }
 
-void ObFreezer::set_tablet_freeze_end_()
-{
-  ATOMIC_DEC(&low_priority_freeze_cnt_);
-}
-
 void ObFreezer::set_ls_freeze_begin_()
 {
   const int64_t SLEEP_INTERVAL = 100 * 1000; // 100 ms
@@ -1644,11 +1660,6 @@ void ObFreezer::set_ls_freeze_begin_()
                K(low_priority_freeze_cnt_), K(retry_times));
     }
   }
-}
-
-void ObFreezer::set_ls_freeze_end_()
-{
-  ATOMIC_DEC(&high_priority_freeze_cnt_);
 }
 
 int ObFreezer::pend_ls_replay()
@@ -1823,44 +1834,135 @@ int ObFreezer::ObTabletFreezeGuard::try_set_tablet_freeze_begin()
   return ret;
 }
 
-ObFreezer::PendTenantReplayGuard::PendTenantReplayGuard()
+
+void ObFreezer::PendTenantReplayHelper::set_skip_throttle_flag()
 {
   int ret = OB_SUCCESS;
-  common::ObSharedGuard<ObLSIterator> iter;
-  ObLSService *ls_srv = MTL(ObLSService *);
-  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD))) {
-    STORAGE_LOG(WARN, "[ObFreezer] fail to get ls iterator", KR(ret));
+  if (OB_ISNULL(current_freeze_ls_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "invalid ls pointer", KP(current_freeze_ls_));
+  } else if (current_ls_is_leader_()){
+    // leader do not need skip throttle
   } else {
-    ObLS *ls = nullptr;
-    ls_handle_array_.reuse();
-    while (OB_SUCC(iter->get_next(ls))) {
-      int tmp_ret = OB_SUCCESS;
-      ObLSHandle ls_handle;
-      if (OB_TMP_FAIL(ls_srv->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::STORAGE_MOD))) {
-        STORAGE_LOG(WARN, "[ObFreezer] get ls handle failed", KR(tmp_ret), KP(ls));
-      } else if (OB_TMP_FAIL(ls_handle_array_.push_back(ls_handle))) {
-        STORAGE_LOG(WARN, "[ObFreezer] push back ls handle failed", KR(tmp_ret), KP(ls));
-      } else if (OB_TMP_FAIL(ls->get_freezer()->pend_ls_replay())) {
-        STORAGE_LOG(WARN, "[ObFreezer] pend replay failed", KR(tmp_ret), KPC(ls));
-        (void)ls_handle_array_.pop_back();
+    // pend replay before set_throttle_is_skipping to avoid skipping too much replay
+    if (remain_memory_is_exhausting_()) {
+      (void)pend_tenant_replay_();
+    }
+    host_.set_throttle_is_skipping();
+  }
+}
+
+bool ObFreezer::PendTenantReplayHelper::current_ls_is_leader_()
+{
+  int ret = OB_SUCCESS;
+  // set default value as leader because leader do not skip throttle
+  bool is_leader = true;
+  ObRole role;
+  int64_t proposal_id = 0;
+  if (OB_FAIL(current_freeze_ls_->get_log_handler()->get_role(role, proposal_id))) {
+    LOG_WARN("get ls role failed", KR(ret), K(current_freeze_ls_->get_ls_id()));
+  } else if (common::is_strong_leader(role)) {
+    is_leader = true;
+  } else {
+    is_leader = false;
+  }
+  return is_leader;
+}
+
+void ObFreezer::PendTenantReplayHelper::check_pend_condition_once()
+{
+  // only check pend condition when throttle is skipping
+  if (host_.throttle_is_skipping()) {
+    if (host_.tenant_replay_is_pending()) {
+      if (!remain_memory_is_exhausting_()) {
+        (void)restore_tenant_replay_();
+      } else {
+        // keep pending replay
+      }
+    } else {
+      // tenant replay is not pending
+      if (remain_memory_is_exhausting_()) {
+        (void)pend_tenant_replay_();
+      } else {
+        // keep not pending replay
       }
     }
   }
 }
 
-ObFreezer::PendTenantReplayGuard::~PendTenantReplayGuard()
+bool ObFreezer::PendTenantReplayHelper::remain_memory_is_exhausting_() {
+  TxShareThrottleTool &throttle_tool = (MTL(ObSharedMemAllocMgr *)->share_resource_throttle_tool());
+  const bool has_triggered_throttle = throttle_tool.has_triggered_throttle<ObMemstoreAllocator>();
+  const bool remain_memory_is_exhausting =
+      has_triggered_throttle || MTL(ObTenantFreezer *)->memstore_remain_memory_is_exhausting();
+  STORAGE_LOG(INFO, "finish check remain memory", K(has_triggered_throttle), K(remain_memory_is_exhausting));
+
+  return remain_memory_is_exhausting;
+}
+
+void ObFreezer::PendTenantReplayHelper::pend_tenant_replay_()
 {
   int ret = OB_SUCCESS;
+  ObLSService *ls_srv = MTL(ObLSService *);
+  common::ObSharedGuard<ObLSIterator> iter;
+  if (OB_FAIL(ls_srv->get_ls_iter(iter, ObLSGetMod::STORAGE_MOD))) {
+    STORAGE_LOG(WARN, "[ObFreezer] fail to get ls iterator", KR(ret));
+  } else {
+    ObLS *ls = nullptr;
+    ls_handle_array_.reuse();
+    int64_t iterate_ls_count = 0;
+    int64_t pend_ls_replay_count = 0;
+
+    // Here we need to perform a pend_ls_replay on all ls, because if a switch_leader occurs for any ls during the
+    // freezing process, the absence of pend_ls_replay might result in an unthrottled memory usage
+    while (OB_SUCC(iter->get_next(ls))) {
+      ObLSHandle ls_handle;
+      iterate_ls_count++;
+      if (OB_FAIL(ls_srv->get_ls(ls->get_ls_id(), ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        STORAGE_LOG(WARN, "[ObFreezer] get ls handle failed", KR(ret), KP(ls));
+      } else if (OB_FAIL(ls_handle_array_.push_back(ls_handle))) {
+        STORAGE_LOG(WARN, "[ObFreezer] push back ls handle failed", KR(ret), KP(ls));
+      } else if (OB_FAIL(ls->get_freezer()->pend_ls_replay())) {
+        STORAGE_LOG(WARN, "[ObFreezer] pend replay failed", KR(ret), KPC(ls));
+        (void)ls_handle_array_.pop_back();
+      } else {
+        pend_ls_replay_count++;
+      }
+    }
+
+    // only skip throttle when pend all ls replay successfully, or reset this guard to restore replay
+    if (iterate_ls_count == pend_ls_replay_count) {
+      (void)host_.set_tenant_replay_is_pending();
+      STORAGE_LOG(INFO,
+                  "pend replay finish",
+                  K(pend_ls_replay_count),
+                  K(host_.throttle_is_skipping()),
+                  K(host_.tenant_replay_is_pending()));
+    } else {
+      (void)restore_tenant_replay_();
+    }
+  }
+}
+
+void ObFreezer::PendTenantReplayHelper::restore_tenant_replay_()
+{
   for (int64_t i = 0; i < ls_handle_array_.count(); i++) {
-    int tmp_ret = OB_SUCCESS;
+    int ret = OB_SUCCESS;
     ObLS *ls = nullptr;
     if (OB_ISNULL(ls = ls_handle_array_.at(i).get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "[ObFreezer] invalid ls handle", KR(ret), KPC(ls));
-    } else if (OB_TMP_FAIL(ls->get_freezer()->restore_ls_replay())) {
-      STORAGE_LOG(WARN, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
+    } else if (OB_FAIL(ls->get_freezer()->restore_ls_replay())) {
+      STORAGE_LOG(ERROR, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
     }
   }
+  host_.unset_tenant_replay_is_pending();
+  STORAGE_LOG(INFO,
+              "restore tenant replay",
+              K(ls_handle_array_.count()),
+              K(host_.tenant_replay_is_pending()),
+              K(host_.throttle_is_skipping()));
+  ls_handle_array_.reuse();
 }
 
 } // namespace storage

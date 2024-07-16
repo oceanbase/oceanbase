@@ -102,6 +102,27 @@ int ObThrottleUnit<ALLOCATOR>::alloc_resource(const int64_t holding_size,
 }
 
 template <typename ALLOCATOR>
+bool ObThrottleUnit<ALLOCATOR>::has_triggered_throttle(const int64_t holding_size)
+{
+  int ret = OB_SUCCESS;
+  bool triggered_throttle = false;
+  int64_t trigger_percentage = throttle_trigger_percentage_;
+
+  if (OB_LIKELY(trigger_percentage < 100)) {
+    int64_t throttle_trigger = resource_limit_ * trigger_percentage / 100;
+    if (OB_UNLIKELY(holding_size < 0 || trigger_percentage <= 0)) {
+      triggered_throttle = true;
+      SHARE_LOG(ERROR, "invalid arguments", K(holding_size), K(resource_limit_), K(trigger_percentage));
+    } else if (holding_size > throttle_trigger) {
+      triggered_throttle = true;
+    } else {
+      triggered_throttle = false;
+    }
+  }
+  return triggered_throttle;
+}
+
+template <typename ALLOCATOR>
 bool ObThrottleUnit<ALLOCATOR>::is_throttling(ObThrottleInfoGuard &ti_guard)
 {
   int ret = OB_SUCCESS;

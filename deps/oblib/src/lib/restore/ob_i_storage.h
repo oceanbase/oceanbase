@@ -53,6 +53,7 @@ int handle_listed_object(ObBaseDirEntryOperator &op,
     const char *obj_name, const int64_t obj_name_len, const int64_t obj_size);
 int handle_listed_directory(ObBaseDirEntryOperator &op,
     const char *dir_name, const int64_t dir_name_len);
+int get_storage_prefix_from_path(const common::ObString &uri, const char *&prefix);
 int build_bucket_and_object_name(ObIAllocator &allocator,
     const ObString &uri, ObString &bucket, ObString &object);
 int construct_fragment_full_name(const ObString &logical_appendable_object_name,

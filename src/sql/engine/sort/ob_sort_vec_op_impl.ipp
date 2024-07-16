@@ -65,10 +65,12 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
       addon_rows_ = nullptr;
     }
     if (nullptr != buckets_) {
+      buckets_->destroy();
       mem_context_->get_malloc_allocator().free(buckets_);
       buckets_ = nullptr;
     }
     if (nullptr != part_hash_nodes_) {
+      part_hash_nodes_->destroy();
       mem_context_->get_malloc_allocator().free(part_hash_nodes_);
       part_hash_nodes_ = nullptr;
     }
@@ -99,6 +101,7 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
     // can not destroy mem_entify here, the memory may hold by %iter_ or
     // %datum_store_
   }
+  page_allocator_.set_allocator(nullptr);
   sk_store_.reset();
   addon_store_.reset();
   inited_ = false;
@@ -278,6 +281,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
     use_heap_sort_ = is_topn_sort();
     is_fetch_with_ties_ = ctx.is_fetch_with_ties_;
     compress_type_ = ctx.compress_type_;
+    page_allocator_.set_allocator(&mem_context_->get_malloc_allocator());
     int64_t batch_size = eval_ctx_->max_batch_size_;
     if (OB_FAIL(merge_sk_addon_exprs(sk_exprs_, addon_exprs_))) {
       SQL_ENG_LOG(WARN, "failed to merge sort key and addon exprs", K(ret));
@@ -1300,45 +1304,16 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
     } else if (rows_begin < 0 || rows_end > rows.count()) {
       ret = OB_INVALID_ARGUMENT;
       SQL_ENG_LOG(WARN, "invalid argument", K(rows_begin), K(rows_end), K(rows.count()), K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (max_bucket_cnt_ < bucket_cnt) {
-      if (nullptr != buckets_) {
-        allocator_.free(buckets_);
-        buckets_ = nullptr;
-        max_bucket_cnt_ = 0;
-      }
-      buckets_ = (PartHashNode **)allocator_.alloc(sizeof(PartHashNode *) * bucket_cnt);
-      if (OB_ISNULL(buckets_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SQL_ENG_LOG(WARN, "failed to alloc memory", K(ret));
-      } else {
-        max_bucket_cnt_ = bucket_cnt;
-        MEMSET(buckets_, 0, sizeof(PartHashNode *) * bucket_cnt);
-      }
+    } else if (OB_FAIL(prepare_bucket_array<BucketArray>(buckets_, bucket_cnt))) {
+      LOG_WARN("failed to create bucket array", K(ret));
+    } else if (OB_FAIL(prepare_bucket_array<BucketNodeArray>(part_hash_nodes_, node_cnt))) {
+      LOG_WARN("failed to create bucket node array", K(ret));
     } else {
-      MEMSET(buckets_, 0, sizeof(PartHashNode *) * bucket_cnt);
+      max_bucket_cnt_ = bucket_cnt;
+      max_node_cnt_ = node_cnt;
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (max_node_cnt_ < node_cnt) {
-      if (nullptr != part_hash_nodes_) {
-        allocator_.free(part_hash_nodes_);
-        part_hash_nodes_ = nullptr;
-        max_node_cnt_ = 0;
-      }
-      part_hash_nodes_ = (PartHashNode *)allocator_.alloc(sizeof(PartHashNode) * node_cnt);
-      if (OB_ISNULL(part_hash_nodes_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SQL_ENG_LOG(WARN, "failed to alloc memory", K(ret));
-      } else {
-        max_node_cnt_ = node_cnt;
-      }
-    }
-  }
   for (int64_t i = rows_begin; OB_SUCC(ret) && i < rows_end; ++i) {
     if (OB_ISNULL(rows.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1348,8 +1323,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
       const uint64_t hash_value =
         *(reinterpret_cast<const uint64_t *>(rows.at(i)->get_cell_payload(row_meta, hash_idx)));
       uint64_t pos = hash_value >> shift_right; // high n bit
-      PartHashNode &insert_node = part_hash_nodes_[i - rows_begin];
-      PartHashNode *&bucket = buckets_[pos];
+      PartHashNode &insert_node = part_hash_nodes_->at(i - rows_begin);
+      PartHashNode *&bucket = buckets_->at(pos);
       insert_node.store_row_ = rows.at(i);
       PartHashNode *exist = bucket;
       bool equal = false;
@@ -1383,7 +1358,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
   }
   for (int64_t bucket_idx = 0; OB_SUCC(ret) && bucket_idx < bucket_cnt; ++bucket_idx) {
     int64_t bucket_part_cnt = 0;
-    PartHashNode *bucket_node = buckets_[bucket_idx];
+    PartHashNode *bucket_node = buckets_->at(bucket_idx);
     if (nullptr == bucket_node) {
       continue; // no rows add here
     }

@@ -26,8 +26,8 @@
 #    self.action_sql = action_sql
 #    self.rollback_sql = rollback_sql
 #
-#current_cluster_version = "4.3.2.0"
-#current_data_version = "4.3.2.0"
+#current_cluster_version = "4.3.3.0"
+#current_data_version = "4.3.3.0"
 #g_succ_sql_list = []
 #g_commit_sql_list = []
 #
@@ -2383,6 +2383,57 @@
 #     error_msg ="upgrade checker failed with " + str(len(fail_list)) + " reasons: " + ", ".join(['['+x+"] " for x in fail_list])
 #     raise MyError(error_msg)
 #
+## 检查升级到4.3.2或更高版本时，剩余的磁盘空间是否足够做多源数据格式转换
+#def check_disk_space_for_mds_sstable_compat(query_cur):
+#  need_check_disk_space = False
+#  sql = """select distinct value from GV$OB_PARAMETERS where name='min_observer_version'"""
+#  (desc, results) = query_cur.exec_query(sql)
+#  if len(results) != 1:
+#    fail_list.append('min_observer_version is not sync')
+#  elif len(results[0]) != 1:
+#    fail_list.append('column cnt not match')
+#  else:
+#    min_cluster_version = get_version(results[0][0])
+#    if min_cluster_version < get_version("4.3.2.0"):
+#      need_check_disk_space = True
+#      logging.info("need check disk space for mds sstable, min observer version: {0}".format(results[0][0]))
+#    else:
+#      logging.info("no need to check disk space, min observer version: {0}".format(results[0][0]))
+#
+#  if need_check_disk_space:
+#    do_check_disk_space_for_compat(query_cur)
+#
+#def do_check_disk_space_for_compat(query_cur):
+#  sql = """select svr_ip, svr_port from __all_server"""
+#  (desc, results) = query_cur.exec_query(sql)
+#
+#  success = True
+#  for idx in range(len(results)):
+#    svr_ip = results[idx][0]
+#    svr_port = results[idx][1]
+#
+#    tablet_cnt = get_tablet_cnt(query_cur, svr_ip, svr_port)
+#    disk_free_size = get_disk_free_size(query_cur, svr_ip, svr_port)
+#    needed_size = tablet_cnt * 4096 * 2
+#    if needed_size > disk_free_size:
+#      fail_list.append("svr_ip: {0}, svr_port: {1}, disk_free_size {2} is not enough for mds sstable, needed_size is {3}, cannot upgrade".format(svr_ip, svr_port, disk_free_size, needed_size))
+#      success = False
+#    else:
+#      logging.info("svr_ip: {0}, svr_port: {1}, disk_free_size: {2}, needed_size: {3}, can upgrade".format(svr_ip, svr_port, disk_free_size, needed_size))
+#
+#  if success:
+#    logging.info("check disk space for mds sstable success")
+#
+#def get_tablet_cnt(query_cur, svr_ip, svr_port):
+#  sql = """select /*+ query_timeout(1000000000) */ count(*) from __all_virtual_tablet_pointer_status where svr_ip = '{0}' and svr_port = {1}""".format(svr_ip, svr_port)
+#  (desc, results) = query_cur.exec_query(sql)
+#  return results[0][0]
+#
+#def get_disk_free_size(query_cur, svr_ip, svr_port):
+#  sql = """select free_size from __all_virtual_disk_stat where svr_ip = '{0}' and svr_port = {1}""".format(svr_ip, svr_port)
+#  (desc, results) = query_cur.exec_query(sql)
+#  return results[0][0]
+#
 #def set_query_timeout(query_cur, timeout):
 #  if timeout != 0:
 #    sql = """set @@session.ob_query_timeout = {0}""".format(timeout * 1000 * 1000)
@@ -2426,6 +2477,7 @@
 #      check_table_api_transport_compress_func(query_cur)
 #      check_variable_binlog_row_image(query_cur)
 #      check_oracle_standby_replication_exist(query_cur)
+#      check_disk_space_for_mds_sstable_compat(query_cur)
 #      # all check func should execute before check_fail_list
 #      check_fail_list()
 #      modify_server_permanent_offline_time(cur)

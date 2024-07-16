@@ -74,7 +74,8 @@ public:
       is_try_lock_(true),
       expired_time_(0),
       schema_version_(-1),
-      is_for_replace_(false)
+      is_for_replace_(false),
+      lock_priority_(ObTableLockPriority::NORMAL)
   {}
   virtual ~ObLockParam() { reset(); }
   void reset();
@@ -106,6 +107,7 @@ public:
   // current schema version
   int64_t schema_version_;
   bool is_for_replace_;
+  ObTableLockPriority lock_priority_;
 };
 
 struct ObLockRequest
@@ -134,7 +136,8 @@ public:
       lock_mode_(NO_LOCK),
       op_type_(UNKNOWN_TYPE),
       timeout_us_(0),
-      is_from_sql_(false)
+      is_from_sql_(false),
+      lock_priority_(ObTableLockPriority::NORMAL) // default priority should be normal
   { type_ = ObLockMsgType::UNKNOWN_MSG_TYPE; }
   virtual ~ObLockRequest() { reset(); }
   virtual void reset();
@@ -161,6 +164,7 @@ public:
   ObTableLockOpType op_type_;
   int64_t timeout_us_;
   bool is_from_sql_;
+  ObTableLockPriority lock_priority_;
 };
 
 struct ObLockObjRequest : public ObLockRequest
@@ -223,7 +227,11 @@ struct ObLockTableRequest : public ObLockRequest
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObLockTableRequest() : ObLockRequest(), table_id_(0)
+  ObLockTableRequest()
+    : ObLockRequest(),
+      table_id_(0),
+      detect_func_no_(INVALID_DETECT_TYPE),
+      detect_param_()
   { type_ = ObLockMsgType::LOCK_TABLE_REQ; }
   virtual ~ObLockTableRequest() { reset(); }
   virtual void reset();
@@ -232,6 +240,8 @@ public:
 public:
   // which table should we lock
   uint64_t table_id_;
+  ObTableLockDetectType detect_func_no_;
+  ObString detect_param_;
 };
 
 struct ObUnLockTableRequest : public ObLockTableRequest

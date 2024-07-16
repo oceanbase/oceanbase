@@ -1658,12 +1658,9 @@ private:
   int check_convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                                  const share::schema::ObTableSchema &orig_table_schema,
                                  share::ObDDLType &ddl_type);
-  int check_add_identity_and_spatial_generated_column(const share::schema::ObTableSchema &orig_table_schema,
-                                                      const share::schema::ObTableSchema &hidden_table_schema,
-                                                      bool &is_add_identity_column,
-                                                      bool &have_spatial_generated_column);
-  int update_spatial_generated_column_info(const share::schema::ObTableSchema &orig_table_schema,
-                                          share::schema::ObTableSchema &hidden_table_schema);
+  int check_is_add_identity_column(const share::schema::ObTableSchema &orig_table_schema,
+                                   const share::schema::ObTableSchema &hidden_table_schema,
+                                   bool &is_add_identity_column);
   int alter_table_primary_key(obrpc::ObAlterTableArg &alter_table_arg,
                               const share::schema::ObTableSchema &orgin_table_schema,
                               share::schema::ObTableSchema &new_table_schema,
@@ -2736,6 +2733,7 @@ private:
   int alter_system_table_column_(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &hard_code_schema);
+  int check_add_system_table_column_(const ObColumnSchemaV2 &column, bool &can_add);
   int get_obj_privs_ora(const uint64_t tenant_id,
                         const uint64_t obj_id,
                         const uint64_t obj_type,

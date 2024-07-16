@@ -491,6 +491,13 @@ int ObPartitionMergePolicy::get_minor_merge_tables(
                  tablet, min_snapshot_version, max_snapshot_version,
                  true /*check_table_cnt*/, true /*is_multi_version_merge*/))) {
     LOG_WARN("fail to calculate boundary version", K(ret));
+  } else {
+#ifdef ERRSIM
+    ret = OB_E(EventTable::EN_DISABLE_TABLET_MINOR_MERGE) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      FLOG_INFO("Errsim: disable data tablet minor merge", K(ret), "tablet_id", tablet.get_tablet_meta().tablet_id_);
+    }
+#endif
   }
 
   if (OB_FAIL(ret)) {
@@ -1006,7 +1013,7 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
         } else {
           mini_sstable_row_cnt += sstable->get_row_count();
         }
-        if (OB_FAIL(mini_tables.add_table(tmp_table_handle))) {
+        if (OB_FAIL(mini_tables.add_table(tmp_table_handle))) { // mini_tables hold continues small sstables
           LOG_WARN("Failed to push mini minor table into array", K(ret));
         }
       }
@@ -1015,15 +1022,17 @@ int ObPartitionMergePolicy::refine_minor_merge_result(
     int64_t size_amplification_factor = OB_DEFAULT_COMPACTION_AMPLIFICATION_FACTOR;
     {
       omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-      if (tenant_config.is_valid()) {
+      if (tenant_config.is_valid() && int64_t(tenant_config->_minor_compaction_amplification_factor) > 0) {
         size_amplification_factor = tenant_config->_minor_compaction_amplification_factor;
       }
     }
     if (OB_FAIL(ret)) {
     } else if (large_sstable_cnt > 1
-        || mini_tables.get_count() <= minor_compact_trigger
         || mini_sstable_row_cnt > (large_sstable_row_cnt * size_amplification_factor / 100)) {
       // no refine, use current result to compaction
+    } else if (mini_tables.get_count() <= minor_compact_trigger) {
+      ret = OB_NO_NEED_MERGE;
+      result.reset();
     } else if (mini_tables.get_count() != result.handle_.get_count()) {
       // reset the merge result, mini sstable merge into a new mini sstable
       result.reset_handle_and_range();

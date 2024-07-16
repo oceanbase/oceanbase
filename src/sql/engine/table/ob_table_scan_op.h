@@ -73,13 +73,19 @@ public:
       spat_rows_(nullptr),
       spat_row_index_(0),
       mbr_buffer_(nullptr),
-      obj_buffer_(nullptr)
+      obj_buffer_(nullptr),
+      geo_idx_(0),
+      cell_idx_(0),
+      mbr_idx_(0)
   {}
   ~ObSpatialIndexCache() {};
   ObDomainIndexRow *spat_rows_;
   uint8_t spat_row_index_;
   void *mbr_buffer_;
   void *obj_buffer_;
+  uint32_t geo_idx_;
+  uint32_t cell_idx_;
+  uint32_t mbr_idx_;
 };
 
 //for the oracle virtual agent table access the real table

@@ -6527,3 +6527,14 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
   }
   return ret;
 }
+
+bool ObLogicalOperator::is_parallel_more_than_part_cnt() const
+{
+  if (NULL == strong_sharding_) {
+    return false;
+  } else if (strong_sharding_->get_part_cnt() < 1) {
+    return false;
+  } else {
+    return get_parallel() > strong_sharding_->get_part_cnt();
+  }
+}

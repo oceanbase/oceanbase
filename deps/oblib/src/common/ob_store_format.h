@@ -173,6 +173,33 @@ public:
   static int find_table_store_type(const ObString &store_format, ObTableStoreType &table_store_type);
 };
 
+// store type of sstable of LS replica
+enum ObLSStoreType : uint8_t
+{
+  OB_LS_STORE_NORMAL = 1,
+  OB_LS_STORE_COLUMN_ONLY = 2,
+  OB_LS_STORE_MAX
+};
+
+// this class is used to describe the format of sstable of LS replica
+class ObLSStoreFormat
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObLSStoreFormat() { reset(); }
+  ObLSStoreFormat(const ObLSStoreType &store_type) : store_type_(store_type) {};
+  ObLSStoreFormat(const ObLSStoreFormat &other) { store_type_ = other.store_type_; }
+  ObLSStoreFormat &operator=(const ObLSStoreFormat &rhs);
+  void reset() { store_type_ = OB_LS_STORE_NORMAL; } // default type is NORMAL
+  void set(ObLSStoreType store_type) { store_type_ = store_type; }
+  bool is_valid() const;
+  OB_INLINE bool is_columnstore() const { return OB_LS_STORE_COLUMN_ONLY == store_type_; }
+  const char *to_str() const;
+  TO_STRING_KV(K_(store_type), "store_type_str", to_str());
+private:
+  ObLSStoreType store_type_;
+};
+
 }//end namespace common
 }//end namespace oceanbase
 

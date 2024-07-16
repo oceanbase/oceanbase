@@ -672,9 +672,6 @@ private:
       ObTableStoreIterator &iter,
       ObStorageMetaHandle &table_store_handle,
       const bool allow_no_ready_read);
-  int get_mds_tables(
-      const int64_t snapshot_version,
-      ObTableStoreIterator &iter) const;
   int get_read_major_sstable(
       const int64_t &major_snapshot_version,
       ObTableStoreIterator &iter) const;
@@ -684,6 +681,7 @@ private:
   int check_sstable_column_checksum() const;
   int get_finish_medium_scn(int64_t &finish_medium_scn) const;
 
+  int inner_get_mds_sstables(ObTableStoreIterator &table_store_iter) const;
   int inner_get_mds_table(
       mds::MdsTableHandle &mds_table,
       bool not_exist_create = false) const;

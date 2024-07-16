@@ -77,9 +77,6 @@ namespace storage
 bool ObFreezer::is_freeze(uint32_t freeze_flag) const
 {
   ob_usleep(rand() % SLEEP_TIME);
-  if (freeze_flag == UINT32_MAX) {
-    freeze_flag = (ATOMIC_LOAD(&freeze_flag_));
-  }
   return 1 == (freeze_flag >> 31);
 }
 namespace checkpoint

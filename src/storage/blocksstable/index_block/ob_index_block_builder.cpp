@@ -986,7 +986,12 @@ int ObSSTableIndexBuilder::close(
   } else if (check_version_for_small_sstable(index_store_desc_.get_desc()) && 0 == nested_offset) {
     const bool is_single_block = check_single_block();
     if (is_single_block) {
-      switch (optimization_mode_) {
+      ObSpaceOptimizationMode tmp_mode = optimization_mode_;
+      // tmp code, we should support reuse data for small sstable
+      if (index_store_desc_.get_desc().is_cg() && res.row_count_ > 50000) {
+        tmp_mode = DISABLE;
+      }
+      switch (tmp_mode) {
         case ENABLE:
           if (OB_FAIL(check_and_rewrite_sstable(res))) {
             STORAGE_LOG(WARN, "fail to check and rewrite small sstable", K(ret));

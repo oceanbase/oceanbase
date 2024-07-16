@@ -40,7 +40,8 @@ OB_SERIALIZE_MEMBER(ObJoinFilterShareInfo,
     ch_provider_ptr_,
     release_ref_ptr_,
     filter_ptr_,
-    shared_msgs_);
+    shared_msgs_,
+    ser_shared_jf_constructor_);
 
 OB_SERIALIZE_MEMBER(ObJoinFilterRuntimeConfig,
     bloom_filter_ratio_,
@@ -74,7 +75,11 @@ OB_SERIALIZE_MEMBER((ObJoinFilterSpec, ObOpSpec),
                     rf_probe_cmp_infos_,
                     px_query_range_info_,
                     bloom_filter_ratio_,
-                    send_bloom_filter_size_);
+                    send_bloom_filter_size_,
+                    jf_material_control_info_,
+                    join_type_,
+                    full_hash_join_keys_,
+                    hash_join_is_ns_equal_cond_);
 
 OB_SERIALIZE_MEMBER(ObJoinFilterOpInput,
     share_info_,

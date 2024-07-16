@@ -192,7 +192,9 @@ public:
                              common::ObIArray<ObOptColumnStat*> &col_stats);
 
   static int get_sys_online_estimate_percent(sql::ObExecContext &ctx,
-                                           double &percent);
+                                             const uint64_t tenant_id,
+                                             const uint64_t table_id,
+                                             double &percent);
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

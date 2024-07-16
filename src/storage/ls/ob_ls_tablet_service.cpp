@@ -275,7 +275,7 @@ int ObLSTabletService::prepare_for_safe_destroy()
     LOG_WARN("fail to delete all tablets", K(ret));
   }
 #ifdef ERRSIM
-  if (!ls_->get_ls_id().is_sys_ls()) {
+  if (OB_NOT_NULL(ls_) && !ls_->get_ls_id().is_sys_ls()) {
     SERVER_EVENT_SYNC_ADD("ls_tablet_service", "after_delete_all_tablets",
                           "tenant_id", MTL_ID(),
                           "ls_id", ls_->get_ls_id().id());

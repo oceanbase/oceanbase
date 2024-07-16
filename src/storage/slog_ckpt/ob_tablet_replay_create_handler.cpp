@@ -296,7 +296,7 @@ int ObTabletReplayCreateHandler::concurrent_replay(ObStartupAccelTaskHandler* st
   }
 
   int64_t cost_time_us = ObTimeUtility::current_time() - start_time;
-  FLOG_INFO("finish concurrently repaly tablets", K(ret), K(total_tablet_cnt_), K(cost_time_us));
+  FLOG_INFO("finish concurrently replay tablets", K(ret), K(total_tablet_cnt_), K(cost_time_us));
   return ret;
 }
 
