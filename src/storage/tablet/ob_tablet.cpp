@@ -1304,12 +1304,6 @@ int ObTablet::init_with_mds_sstable(
   } else if (OB_UNLIKELY(!is_mds_merge(param.merge_type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected merge type", K(ret), K(param));
-  } else if (OB_UNLIKELY(!is_mds_minor_merge(param.merge_type_) && flush_scn <= old_tablet.tablet_meta_.mds_checkpoint_scn_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected error, flush scn is smaller than old mds checkpoint scn", K(ret),
-        "merge_type", merge_type_to_str(param.merge_type_),
-        K(flush_scn),
-        "mds_checkpoint_scn", old_tablet.tablet_meta_.mds_checkpoint_scn_);
   } else if (param.need_check_transfer_seq_ && OB_FAIL(check_transfer_seq_equal(old_tablet, param.transfer_seq_))) {
     LOG_WARN("failed to check transfer seq eq", K(ret), K(old_tablet), K(param));
   } else if (CLICK_FAIL(old_tablet.fetch_table_store(old_table_store_wrapper))) {
@@ -1463,8 +1457,7 @@ int ObTablet::init_for_compat(
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
     }
     is_inited_ = true;
-    LOG_INFO("succeeded to init tablet for compat",
-        K(ret), K(old_tablet), K(mds_mini_sstable), KPC(this));
+    LOG_INFO("succeeded to init tablet for compat", K(ret), K(old_tablet), K(mds_mini_sstable), KPC(this));
   }
   ObTabletObjLoadHelper::free(tmp_arena_allocator, old_storage_schema);
 
