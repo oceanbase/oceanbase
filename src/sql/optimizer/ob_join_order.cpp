@@ -12508,7 +12508,6 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     LOG_WARN("null table schema", K(ret));
   } else {
     table_meta_info_.ref_table_id_ = ref_table_id;
-    table_meta_info_.table_type_ = table_schema->get_table_type();
     table_meta_info_.table_rowkey_count_ = table_schema->get_rowkey_info().get_size();
     table_meta_info_.table_column_count_ = table_schema->get_column_count();
     table_meta_info_.micro_block_size_ = table_schema->get_block_size();
