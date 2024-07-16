@@ -3898,7 +3898,8 @@ OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     paxos_replica_number_,
                     skip_change_member_list_,
                     force_use_data_source_,
-                    force_data_source_);
+                    force_data_source_,
+                    prioritize_same_zone_src_);
 
 int ObLSMigrateReplicaArg::assign(
     const ObLSMigrateReplicaArg &that)
@@ -3914,6 +3915,7 @@ int ObLSMigrateReplicaArg::assign(
   skip_change_member_list_ = that.skip_change_member_list_;
   force_use_data_source_ = that.force_use_data_source_;
   force_data_source_ = that.force_data_source_;
+  prioritize_same_zone_src_ = that.prioritize_same_zone_src_;
   return ret;
 }
 

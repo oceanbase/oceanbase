@@ -4255,7 +4255,8 @@ public:
       paxos_replica_number_(0),
       skip_change_member_list_(),
       force_use_data_source_(false),
-      force_data_source_() {}
+      force_data_source_(),
+      prioritize_same_zone_src_(false) {}
 public:
   int assign(const ObLSMigrateReplicaArg &that);
 
@@ -4279,7 +4280,8 @@ public:
                K_(paxos_replica_number),
                K_(skip_change_member_list),
                K_(force_use_data_source),
-               K_(force_data_source));
+               K_(force_data_source),
+               K_(prioritize_same_zone_src));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -4302,6 +4304,7 @@ public:
   bool force_use_data_source_;
   // deprecated field, in order to fix the upgrade compatibility issue from 430rc2 to master
   common::ObReplicaMember force_data_source_;
+  bool prioritize_same_zone_src_;
 };
 
 struct ObLSAddReplicaArg
