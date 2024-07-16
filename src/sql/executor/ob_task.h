@@ -227,7 +227,7 @@ public:
   const DependenyTableStore &get_dependency_tables() const {
     return dependency_tables_;
   }
-  void set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { snapshot_ = snapshot; }
+  int set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { return snapshot_.assign(snapshot); }
   const transaction::ObTxReadSnapshot &get_snapshot() const { return snapshot_; }
   int fill_buffer(char* buf, int64_t size, int64_t &filled_size) const
   {

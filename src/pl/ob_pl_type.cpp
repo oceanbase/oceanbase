@@ -2056,7 +2056,7 @@ int ObPLCursorInfo::set_and_register_snapshot(const transaction::ObTxReadSnapsho
 {
   int ret = OB_SUCCESS;
   set_need_check_snapshot(snapshot.valid_);
-  set_snapshot(snapshot);
+  OZ (set_snapshot(snapshot));
   OZ (MTL(transaction::ObTransService*)->register_tx_snapshot_verify(get_snapshot()));
 
   return ret;

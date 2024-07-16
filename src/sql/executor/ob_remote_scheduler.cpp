@@ -174,7 +174,9 @@ int ObRemoteScheduler::build_remote_task(ObExecContext &ctx,
     task_id.set_server(ctx.get_addr());
     task_id.set_task_id(0);
     remote_task.set_task_id(task_id);
-    remote_task.set_snapshot(ctx.get_das_ctx().get_snapshot());
+    if (OB_FAIL(remote_task.set_snapshot(ctx.get_das_ctx().get_snapshot()))) {
+      LOG_WARN("fail to set snapshot", K(ret));
+    }
   }
   return ret;
 }
