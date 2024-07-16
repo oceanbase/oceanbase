@@ -95,7 +95,7 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid cluster_version", KR(ret), K(cluster_version));
+      LOG_WARN("invalid cluster_version", KR(ret), KCV(cluster_version));
     }
   }
   return ret;
@@ -634,9 +634,9 @@ int ObUpgradeProcesserSet::init(
         LOG_WARN("fail to new upgrade processor", KR(ret)); \
       } else if (OB_FAIL(processor->init(version, mode, sql_proxy, oracle_sql_proxy, rpc_proxy, common_proxy, \
                                          schema_service, check_server_provider))) { \
-        LOG_WARN("fail to init processor", KR(ret), K(version)); \
+        LOG_WARN("fail to init processor", KR(ret), KDV(version)); \
       } else if (OB_FAIL(processor_list_.push_back(processor))) { \
-        LOG_WARN("fail to push back processor", KR(ret), K(version)); \
+        LOG_WARN("fail to push back processor", KR(ret), KDV(version)); \
       } \
       if (OB_FAIL(ret)) { \
         if (OB_NOT_NULL(processor)) { \
@@ -722,9 +722,9 @@ int ObUpgradeProcesserSet::get_processor_by_version(
   int ret = OB_SUCCESS;
   int64_t idx = OB_INVALID_INDEX;
   if (OB_FAIL(get_processor_idx_by_version(version, idx))) {
-    LOG_WARN("fail to get processor idx by version", KR(ret), K(version));
+    LOG_WARN("fail to get processor idx by version", KR(ret), KDV(version));
   } else if (OB_FAIL(get_processor_by_idx(idx, processor))) {
-    LOG_WARN("fail to get processor by idx", KR(ret), K(version));
+    LOG_WARN("fail to get processor by idx", KR(ret), KDV(version));
   }
   return ret;
 }
@@ -743,11 +743,11 @@ int ObUpgradeProcesserSet::get_processor_idx_by_range(
     LOG_WARN("check inner stat failed", KR(ret));
   } else if (start_version <= 0 || end_version <= 0 || start_version > end_version) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid version", KR(ret), K(start_version), K(end_version));
+    LOG_WARN("invalid version", KR(ret), KDV(start_version), KDV(end_version));
   } else if (OB_FAIL(get_processor_idx_by_version(start_version, start_idx))) {
-    LOG_WARN("fail to get processor idx by version", KR(ret), K(start_version));
+    LOG_WARN("fail to get processor idx by version", KR(ret), KDV(start_version));
   } else if (OB_FAIL(get_processor_idx_by_version(end_version, end_idx))) {
-    LOG_WARN("fail to get processor idx by version", KR(ret), K(end_version));
+    LOG_WARN("fail to get processor idx by version", KR(ret), KDV(end_version));
   }
   return ret;
 }
@@ -762,7 +762,7 @@ int ObUpgradeProcesserSet::get_processor_idx_by_version(
     LOG_WARN("check inner stat failed", KR(ret));
   } else if (version <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid version", KR(ret), K(version));
+    LOG_WARN("invalid version", KR(ret), KDV(version));
   } else if (processor_list_.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("processor_list cnt shoud greator than 0", KR(ret));
@@ -785,7 +785,7 @@ int ObUpgradeProcesserSet::get_processor_idx_by_version(
     }
     if (OB_SUCC(ret) && OB_INVALID_INDEX == idx) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("fail to find processor by version", KR(ret), K(version));
+      LOG_WARN("fail to find processor by version", KR(ret), KDV(version));
     }
   }
   return ret;

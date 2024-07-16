@@ -161,6 +161,4 @@ private:
 } // namespace common
 } // namespace oceanbase
 #define ODV_MGR (::oceanbase::common::ObTenantDataVersionMgr::get_instance())
-#define DVP(data_version) (::oceanbase::common::ObDataVersionPrinter(data_version))
-#define KDV(data_version) "data_version", DVP(data_version)
 #endif // OCEANBASE_OBSERVER_OB_TENANT_DATA_VERSION_H_
