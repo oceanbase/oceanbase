@@ -1279,8 +1279,6 @@ int ObTransformJoinElimination::check_vaild_non_sens_dul_vals(ObIArray<ObParentD
     if (select_stmt->has_group_by() ||
         select_stmt->is_set_stmt() ||
         select_stmt->has_rollup() ||
-        select_stmt->has_order_by() ||
-        select_stmt->has_limit() ||
         select_stmt->get_from_item_size() == 0 ||
         select_stmt->is_contains_assignment() ||
         select_stmt->has_window_function() ||
