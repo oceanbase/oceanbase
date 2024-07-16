@@ -525,9 +525,15 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
   // 3. if client does not support use_lob_locator ,,return full lob data without locator header
   bool is_use_lob_locator = my_session.is_client_use_lob_locator();
   bool is_support_outrow_locator_v2 = my_session.is_client_support_lob_locatorv2();
-  if (!(value.is_lob() || value.is_json() || value.is_lob_locator())) {
+
+  // same logical as ObQueryDriver::process_lob_locator_results
+  bool is_lob_type = value.is_lob() || value.is_json() || value.is_geometry() || value.is_lob_locator();
+  bool is_actual_return_lob_locator = is_use_lob_locator && !value.is_json();
+  if (!is_lob_type) {
     // not lob types, do nothing
-  } else if (is_use_lob_locator && value.is_lob() && lib::is_oracle_mode()) {
+  } else if (value.is_null() || value.is_nop_value()) {
+    // do nothing
+  } else if (is_lob_type && is_actual_return_lob_locator && lib::is_oracle_mode()) {
     // if does not have extern header, mock one
     ObLobLocatorV2 loc(value.get_string(), value.has_lob_header());
     if (loc.is_lob_locator_v1()) { // do nothing, lob locator version 1
@@ -571,7 +577,7 @@ int ObExprOutputPack::process_lob_locator_results(common::ObObj& value,
     } else {
       OB_ASSERT(0);
     }
-  } else if ((!is_use_lob_locator && lib::is_oracle_mode())
+  } else if ((!is_actual_return_lob_locator && lib::is_oracle_mode())
              || lib::is_mysql_mode()) {
     ObString raw_str = value.get_string();
     // remove locator header and read full lob data
