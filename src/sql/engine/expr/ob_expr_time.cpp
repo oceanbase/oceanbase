@@ -181,7 +181,7 @@ static int ob_expr_convert_to_time(const ObDatum &datum,
     ObTime ot2(DT_TYPE_TIME);
     if (OB_FAIL(ob_datum_to_ob_time_without_date(datum, type, scale, tz_info,
                                                  ot2, has_lob_header))) {
-      LOG_WARN("cast to ob time failed", K(ret));
+      LOG_WARN("cast to ob time failed", K(ret), K(type), K(datum));
     } else {
       ot = ot2;
     }
