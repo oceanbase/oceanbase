@@ -675,7 +675,12 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
             ret = OB_INVALID_ARGUMENT;
             LOG_USER_ERROR(OB_INVALID_ARGUMENT, "file name or access key");
           } else if (OB_FAIL(load_args.access_info_.set(load_args.file_name_.ptr(), storage_info.ptr()))) {
-            LOG_WARN("failed to set access info", K(ret));
+            if (ret == OB_INVALID_BACKUP_DEST) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "access info");
+            } else {
+              LOG_WARN("failed to set access info", K(ret), K(load_args.file_name_), K(storage_info));
+            }
           } else if (load_args.access_info_.get_load_data_format() == ObLoadDataFormat::OB_BACKUP_1_4) {
             load_args.file_name_ = temp_file_name;
           } else {
@@ -718,10 +723,10 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
                 }
               }
             }
-            if (OB_SUCC(ret) && load_args.file_iter_.count() == 0) {
-              ret = OB_BACKUP_FILE_NOT_EXIST;
-              LOG_WARN("No matches found for pattern", K(ret), K(pattern));
-            }
+          }
+          if (OB_SUCC(ret) && load_args.file_iter_.count() == 0) {
+            ret = OB_FILE_NOT_EXIST;
+            LOG_WARN("files not exists", K(ret), K(pattern));
           }
         }
       } else {
