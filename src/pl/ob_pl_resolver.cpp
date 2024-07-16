@@ -686,6 +686,10 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
           && lib::is_mysql_mode()) {
         ObPLSignalStmt *signal_stmt = NULL;
         int save_ret = ret;
+        if (NULL != stmt) {
+          stmt->~ObPLStmt();
+          stmt = NULL;
+        }
         if (OB_FAIL(stmt_factory_.allocate(PL_SIGNAL, current_block_, stmt))) {
           LOG_WARN("failed to alloc stmt", K(ret));
         } else if (OB_ISNULL(signal_stmt = static_cast<ObPLSignalStmt*>(stmt))) {
