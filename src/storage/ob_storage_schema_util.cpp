@@ -68,8 +68,11 @@ int ObStorageSchemaUtil::update_tablet_storage_schema(
       new_storage_schema_ptr->store_column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
       new_storage_schema_ptr->schema_version_ = MAX(tablet_schema_version, param_schema_version);
       new_storage_schema_ptr->column_info_simplified_ =
-        (new_storage_schema_ptr->store_column_cnt_ != new_storage_schema_ptr->get_store_column_schemas().count());
-      if (param_schema_version > tablet_schema_version
+        (new_storage_schema_ptr->column_cnt_ != new_storage_schema_ptr->get_store_column_schemas().count());
+      if (OB_UNLIKELY(!new_storage_schema_ptr->is_valid())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("generated schema is invalid", KR(ret), KPC(new_storage_schema_ptr), K(old_schema_on_tablet), K(param_schema));
+      } else if (param_schema_version > tablet_schema_version
           || param_schema_stored_col_cnt > tablet_schema_stored_col_cnt
           || param_schema_column_group_cnt > old_schema_column_group_cnt) {
         // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
