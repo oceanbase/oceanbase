@@ -32,7 +32,8 @@ OB_SERIALIZE_MEMBER(ObLockParam,
                     expired_time_,
                     schema_version_,
                     is_for_replace_,
-                    lock_priority_);
+                    lock_priority_,
+                    is_two_phase_lock_);
 
 OB_SERIALIZE_MEMBER(ObLockRequest,
                     type_,
@@ -205,6 +206,7 @@ void ObLockParam::reset()
   schema_version_ = -1;
   is_for_replace_ = false;
   lock_priority_ = ObTableLockPriority::NORMAL;
+  is_two_phase_lock_ = false;
 }
 
 int ObLockParam::set(
@@ -242,6 +244,7 @@ bool ObLockParam::is_valid() const
   return (lock_id_.is_valid() &&
           is_lock_mode_valid(lock_mode_) &&
           is_op_type_valid(op_type_) &&
+          !(ObTableLockPriority::NORMAL != lock_priority_ && !is_two_phase_lock_) &&
           (schema_version_ >= 0 ||
            (ObLockOBJType::OBJ_TYPE_COMMON_OBJ == lock_id_.obj_type_
             || ObLockOBJType::OBJ_TYPE_TENANT == lock_id_.obj_type_

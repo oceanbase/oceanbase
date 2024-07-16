@@ -2905,6 +2905,7 @@ extra_info	varchar(256)	NO		NULL
 time_after_create	bigint(20)	NO		NULL	
 obj_type	varchar(16)	NO		NULL	
 obj_id	bigint(20)	NO		NULL	
+owner_type	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_obj_lock;
 IF(count(*) >= 0, 1, 0)
 1

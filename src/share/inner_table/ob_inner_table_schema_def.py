@@ -7296,6 +7296,7 @@ def_table_schema(
 )
 
 # 520 : __all_spm_evo_result
+# 521 : __all_detect_lock_info_v2
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -12407,6 +12408,7 @@ def_table_schema(
   ('time_after_create', 'int'),
   ('obj_type', 'varchar:MAX_LOCK_OBJ_TYPE_BUF_LENGTH'),
   ('obj_id', 'int'),
+  ('owner_type', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
