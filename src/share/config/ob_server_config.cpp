@@ -309,10 +309,12 @@ int64_t ObServerMemoryConfig::get_adaptive_memory_config(const int64_t memory_si
   }
   return adap_memory_size;
 }
+
 int64_t ObServerMemoryConfig::get_extra_memory()
 {
   return memory_limit_ < lib::ObRunningModeConfig::MINI_MEM_UPPER ? 0 : hidden_sys_memory_;
 }
+
 int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
 {
   int ret = OB_SUCCESS;
@@ -354,11 +356,51 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
     }
     if (memory_limit - system_memory >= min_server_avail_memory &&
         system_memory >= hidden_sys_memory) {
-      memory_limit_ = memory_limit;
-      system_memory_ = system_memory;
-      hidden_sys_memory_ = hidden_sys_memory;
-      LOG_INFO("update observer memory config success",
-                K_(memory_limit), K_(system_memory), K_(hidden_sys_memory));
+      bool setted = false;
+      if (!is_mini_mode()) {
+        int64_t unit_assigned = 0;
+        if (OB_NOT_NULL(GCTX.omt_)) {
+          const int64_t system_memory_hold = lib::get_tenant_memory_hold(OB_SERVER_TENANT_ID);
+          common::ObArray<omt::ObTenantMeta> tenant_metas;
+          if (OB_FAIL(GCTX.omt_->get_tenant_metas(tenant_metas))) {
+            LOG_WARN("fail to get tenant metas", K(ret));
+            // ignore ret
+            ret = OB_SUCCESS;
+          } else {
+            for (int64_t i = 0; i < tenant_metas.count(); i++) {
+              unit_assigned += tenant_metas.at(i).unit_.config_.memory_size();
+            }
+            LOG_INFO("update observer memory config",
+                     K(memory_limit_), K(system_memory_), K(hidden_sys_memory_),
+                     K(memory_limit), K(system_memory), K(hidden_sys_memory),
+                     K(system_memory_hold), K(unit_assigned));
+            if ((system_memory - hidden_sys_memory) >= system_memory_hold
+                && memory_limit >= (unit_assigned + system_memory) ) {
+              system_memory_ = system_memory;
+              hidden_sys_memory_ = hidden_sys_memory;
+              memory_limit_ = memory_limit;
+            } else {
+              LOG_ERROR("Unreasonable memory parameters",
+                  "[config]memory_limit", server_config.memory_limit.get_value(),
+                  "[config]system_memory", server_config.system_memory.get_value(),
+                  "[config]hidden_sys", server_config._hidden_sys_tenant_memory.get_value(),
+                  "[expect]memory_limit", memory_limit,
+                  "[expect]system_memory", system_memory,
+                  "[expect]hidden_sys", hidden_sys_memory,
+                  K(system_memory_hold),
+                  K(unit_assigned));
+            }
+            setted = true;
+          }
+        }
+      }
+      if (!setted) {
+        memory_limit_ = memory_limit;
+        system_memory_ = system_memory;
+        hidden_sys_memory_ = hidden_sys_memory;
+      }
+      LOG_INFO("update observer memory config",
+               K_(memory_limit), K_(system_memory), K_(hidden_sys_memory));
     } else {
       ret = OB_INVALID_CONFIG;
       LOG_ERROR("update observer memory config failed",

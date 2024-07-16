@@ -22,6 +22,7 @@
 #include "lib/alloc/memory_dump.h"
 #include "lib/thread/thread_mgr.h"
 #include "lib/allocator/ob_mem_leak_checker.h"
+#include <csignal>
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -58,7 +59,6 @@ TEST_F(TestContext, Basic)
   ObPageManager g_pm;
   ObPageManager::set_thread_local_instance(g_pm);
   g_pm.set_tenant_ctx(tenant_id, ctx_id);
-  g_pm.set_max_chunk_cache_size(0);
   MemoryContext &root = MemoryContext::root();
   ContextParam param;
   param.set_mem_attr(tenant_id, "Context", ctx_id);
@@ -231,8 +231,48 @@ TEST_F(TestContext, Basic)
   ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(500, ObCtxIds::DEFAULT_CTX_ID)->print_memory_usage();
 }
 
+bool req_cache_empty(ObTenantCtxAllocator *ta)
+{
+  for (int i = 0; i < ta->req_chunk_mgr_.parallel_; i++) {
+    if (ta->req_chunk_mgr_.chunks_[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+TEST_F(TestContext, PM_Wash)
+{
+  uint64_t tenant_id = 1002;
+  uint64_t ctx_id = ObCtxIds::DEFAULT_CTX_ID;
+  ObMallocAllocator *ma = ObMallocAllocator::get_instance();
+  ASSERT_EQ(OB_SUCCESS, ma->create_and_add_tenant_allocator(tenant_id));
+  auto ta = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(tenant_id, ctx_id);
+  ObMemAttr attr(tenant_id, "test", ctx_id);
+  ObPageManager g_pm;
+  ObPageManager::set_thread_local_instance(g_pm);
+  g_pm.set_tenant_ctx(tenant_id, ctx_id);
+  ContextTLOptGuard guard(true);
+  ContextParam param;
+  param.set_mem_attr(attr);
+  param.properties_ = USE_TL_PAGE_OPTIONAL;
+  ASSERT_TRUE(req_cache_empty(ta.ref_allocator()));
+  int ret = OB_SUCCESS;
+  CREATE_WITH_TEMP_CONTEXT(param) {
+    void *ptr = ctxalf(100, attr);
+    ASSERT_NE(nullptr, ptr);
+    ctxfree(ptr);
+    ASSERT_FALSE(req_cache_empty(ta.ref_allocator()));
+    ta->set_limit(ta->get_hold());
+    ASSERT_NE(ob_malloc(OB_MALLOC_BIG_BLOCK_SIZE, attr), nullptr);
+    ASSERT_TRUE(req_cache_empty(ta.ref_allocator()));
+  }
+}
+
+void emptySignalHandler(int) {}
 int main(int argc, char **argv)
 {
+  std::signal(49, emptySignalHandler);
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);

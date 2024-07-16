@@ -34,38 +34,12 @@ using lib::ObTenantCtxAllocator;
 
 class ObPageManager : public lib::IBlockMgr
 {
-public:
-  constexpr static int DEFAULT_CHUNK_CACHE_SIZE = lib::INTACT_ACHUNK_SIZE * 2;
-  constexpr static int MINI_MODE_CHUNK_CACHE_SIZE = 0;
-  RBNODE(ObPageManager, rblink);
-  int compare(const ObPageManager *node) const
-  {
-    int ret = 0;
-    ret = (tenant_id_ > node->tenant_id_) - (tenant_id_ < node->tenant_id_);
-    if (ret == 0) {
-      ret = (id_ > node->id_) - (id_ < node->id_);
-    }
-    return ret;
-  }
-private:
-  friend class ObPageManagerCenter;
   friend class Thread;
 public:
   ObPageManager();
-  ~ObPageManager();
+  ~ObPageManager() {}
   static ObPageManager *thread_local_instance() { return tl_instance_; }
-  bool less_than(const ObPageManager &other) const
-  {
-    return less_than(other.tenant_id_, other.id_);
-  }
-  bool less_than(int64_t tenant_id, int64_t id) const
-  {
-    return tenant_id_ < tenant_id ||
-      (tenant_id_ == tenant_id && id_ < id);
-  }
   int set_tenant_ctx(const int64_t tenant_id, const int64_t ctx_id);
-  void set_max_chunk_cache_size(const int64_t max_cache_size)
-  { bs_.set_max_chunk_cache_size(max_cache_size); }
   void reset();
   int64_t get_hold() const;
   int64_t get_tid() const { return tid_; }
@@ -82,9 +56,7 @@ public:
 private:
   int init();
   RLOCAL_STATIC(ObPageManager *,tl_instance_);
-  static int64_t global_id_;
 private:
-  int64_t id_;
   lib::ObTenantCtxAllocatorGuard ta_;
   lib::BlockSet bs_;
   int64_t used_;
@@ -94,28 +66,8 @@ private:
   bool is_inited_;
 };
 
-class ObPageManagerCenter
-{
-public:
-  static ObPageManagerCenter &get_instance();
-  int register_pm(ObPageManager &pm);
-  void unregister_pm(ObPageManager &pm);
-  bool has_register(ObPageManager &pm) const;
-  int print_tenant_stat(int64_t tenant_id, char *buf, int64_t len, int64_t &pos);
-  AChunk *alloc_from_thread_local_cache(int64_t tenant_id, int64_t ctx_id);
-private:
-  ObPageManagerCenter();
-  int print_tenant_stat(int64_t tenant_id, int64_t &sum_used, int64_t &sum_hold,
-      char *buf, int64_t len, int64_t &pos);
-  AChunk *alloc_from_thread_local_cache_(int64_t tenant_id, int64_t ctx_id);
-private:
-  lib::ObMutex mutex_;
-  container::ObRbTree<ObPageManager, container::ObDummyCompHelper<ObPageManager>> rb_tree_;
-};
-
 inline ObPageManager::ObPageManager()
-  : id_(ATOMIC_FAA(&global_id_, 1)),
-    bs_(),
+  : bs_(),
     used_(0),
     tid_(GETTID()),
     itid_(get_itid()),
@@ -124,28 +76,14 @@ inline ObPageManager::ObPageManager()
 {
 }
 
-inline ObPageManager::~ObPageManager()
-{
-  auto &pmc = ObPageManagerCenter::get_instance();
-  if (pmc.has_register(*this)) {
-    pmc.unregister_pm(*this);
-  }
-}
-
 inline int ObPageManager::set_tenant_ctx(const int64_t tenant_id, const int64_t ctx_id)
 {
   int ret = OB_SUCCESS;
-  auto &pmc = ObPageManagerCenter::get_instance();
   if (tenant_id != tenant_id_ || ctx_id != ctx_id_) {
-    if (pmc.has_register(*this)) {
-      pmc.unregister_pm(*this);
-    }
     tenant_id_ = tenant_id;
     ctx_id_ = ctx_id;
     is_inited_ = false;
     if (OB_FAIL(init())) {
-    } else {
-      ret = pmc.register_pm(*this);
     }
   }
   return ret;
@@ -166,6 +104,7 @@ inline int ObPageManager::init()
     OB_LOG(ERROR, "null ptr", K(ret));
   } else {
     bs_.set_tenant_ctx_allocator(*ta_.ref_allocator());
+    bs_.set_chunk_mgr(&ta_->get_req_chunk_mgr());
     is_inited_ = true;
   }
   return ret;

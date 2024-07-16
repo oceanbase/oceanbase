@@ -366,6 +366,8 @@ TEST(utility, used_size)
 
 int main(int argc, char **argv)
 {
+  // This test has an unknown exit crash problem, which requires the existence of such a line of code
+  oceanbase::common::get_itid();
   ::testing::InitGoogleTest(&argc,argv);
   return RUN_ALL_TESTS();
 }
