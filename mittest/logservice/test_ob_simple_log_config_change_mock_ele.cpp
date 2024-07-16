@@ -291,8 +291,8 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
 
     // 1. leader can not commit logs
     block_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    block_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
-    sleep(1);
     EXPECT_GT(leader.palf_handle_impl_->sw_.last_submit_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
 
     // 2. remove D
@@ -303,6 +303,7 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
 
     // 3. leader can commit logs
     unblock_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    unblock_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
 
     // 4. check if the leader can commit logs after D has been removed from match_lsn_map
     EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.committed_end_lsn_, leader.palf_handle_impl_->sw_.last_submit_end_lsn_);
@@ -400,6 +401,7 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
 
     // 2. leader can not commit logs
     block_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    block_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
     EXPECT_EQ(OB_SUCCESS, submit_log(leader, 100, id));
     sleep(1);
     EXPECT_GT(leader.palf_handle_impl_->sw_.last_submit_lsn_, leader.palf_handle_impl_->sw_.committed_end_lsn_);
@@ -412,6 +414,7 @@ TEST_F(TestObSimpleLogClusterConfigChangeMockEle, test_committed_end_lsn_after_r
 
     // 3. leader can commit logs
     unblock_pcode(leader_idx, ObRpcPacketCode::OB_LOG_PUSH_RESP);
+    unblock_pcode(leader_idx, ObRpcPacketCode::OB_BATCH);
 
     // 4. check if the leader can commit logs after C has been removed from match_lsn_map
     EXPECT_UNTIL_EQ(leader.palf_handle_impl_->sw_.committed_end_lsn_, leader.palf_handle_impl_->sw_.last_submit_end_lsn_);

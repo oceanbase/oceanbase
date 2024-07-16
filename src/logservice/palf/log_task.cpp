@@ -142,6 +142,7 @@ LogTask::LogTask()
      freeze_ts_(OB_INVALID_TIMESTAMP),
      submit_ts_(OB_INVALID_TIMESTAMP),
      flushed_ts_(OB_INVALID_TIMESTAMP),
+     push_log_type_(PushLogType::PUSH_LOG),
      lock_()
 {
   reset();
@@ -434,6 +435,16 @@ void LogTask::set_submit_ts(const int64_t ts)
 void LogTask::set_flushed_ts(const int64_t ts)
 {
   ATOMIC_STORE(&flushed_ts_, ts);
+}
+
+void LogTask::set_push_log_type(const PushLogType &push_log_type)
+{
+  ATOMIC_STORE(&push_log_type_, push_log_type);
+}
+
+bool LogTask::is_fetch_log_type() const
+{
+  return PushLogType::FETCH_LOG_RESP == ATOMIC_LOAD(&push_log_type_);
 }
 
 }  // namespace palf
