@@ -384,13 +384,17 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
         LOG_WARN("fail to alloc obj array", K(ret), K(stmt.get_params()->count()));
       }
       CK (OB_NOT_NULL(ctx.get_field_columns()));
-      OV (ctx.get_field_columns()->count() == out_args.num_members()
-        || 0 == ctx.get_field_columns()->count(),
-        OB_ERR_UNEXPECTED, ctx.get_field_columns()->count(), out_args.num_members());
-      if (OB_SUCC(ret) && 0 == ctx.get_field_columns()->count()) {
+
+      // prepare of prexecue protocol fill "field_columns" with question mark count.
+      // prepare of ps protocol fill "field_columns" with out_args count.
+      // if count of "field_columns" not equal to out_args, that is legal, reset "field_columns", and refill it.
+      if (OB_SUCC(ret) && ctx.get_field_columns()->count() != out_args.num_members()) {
+        CK (ctx.get_field_columns()->count() == stmt.get_params()->count());
+        OX (ctx.get_field_columns()->reset());
         OZ (ctx.get_field_columns()->reserve(out_args.num_members()));
         OX (need_push = true);
       }
+
       int64_t out_idx = 0;
       for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_params()->count(); ++i) {
         if (out_args.has_member(i)) {
