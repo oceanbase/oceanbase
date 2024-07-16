@@ -3425,6 +3425,10 @@ int ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type(ObRawExpr &expr
         p += decimal_to_double_precision_inc(child_res_type.get_type(), s);
         cast_dst_type.set_scale(s);
         cast_dst_type.set_precision(p);
+      } else if (ObDoubleTC == child_res_type.get_type_class()) {
+        // child_res_type and cast_dst_type are the same, which is double type cast of the expr
+        // aligned to scale, accuracy need based on the cast_dst_type set by the expr
+        // calc_resul_type.
       } else if (s != SCALE_UNKNOWN_YET && PRECISION_UNKNOWN_YET != p &&
                 s <= OB_MAX_DOUBLE_FLOAT_SCALE && p >= s) {
         cast_dst_type.set_accuracy(child_res_type.get_calc_accuracy());
