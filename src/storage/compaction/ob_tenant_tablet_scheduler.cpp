@@ -1323,7 +1323,10 @@ int ObTenantTabletScheduler::schedule_tablet_ddl_major_merge(ObTabletHandle &tab
       if (OB_EAGAIN != ret) {
         LOG_WARN("failed to get ddl major merge param", K(ret));
       }
-    } else if (OB_FAIL(kv_mgr_handle.get_obj()->freeze_ddl_kv(*tablet_handle.get_obj()))) {
+    } else if (!param.is_commit_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ddl merge param not a committed one", K(ret), K(param));
+    } else if (OB_FAIL(kv_mgr_handle.get_obj()->freeze_ddl_kv(*tablet_handle.get_obj(), param.rec_scn_))) {
       LOG_WARN("failed to freeze ddl kv", K(ret));
     } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
       if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
