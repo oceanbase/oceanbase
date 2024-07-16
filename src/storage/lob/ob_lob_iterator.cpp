@@ -28,13 +28,15 @@ int ObLobQueryIter::fill_buffer(ObString& buffer, const ObString &data, ObString
       // buffer is not enough to write all data
       if (is_reverse_) {
         if (cs_type_ != CS_TYPE_BINARY) {
-          // calc left char_len
-          int64_t remain_size = ObCharset::max_bytes_charpos(cs_type_, data.ptr(), data.length(), data.length() - actual_write_size, write_char_len);
-          if (remain_size < data.length() - actual_write_size) {
+          // calc remain data size that is not writed to buffer
+          int64_t left_size = data.length() - buffer.remain();
+          int64_t remain_size = ObCharset::max_bytes_charpos(cs_type_, data.ptr(), data.length(), left_size, write_char_len);
+          // if remain_size is not equal left_size, means char is splited
+          if (remain_size < left_size) {
             // means char is splited, so add one char size
             remain_size += ObCharset::charpos(cs_type_, data.ptr() + remain_size, data.length() - remain_size, 1);
           }
-          actual_write_size = buffer.remain() - remain_size;
+          actual_write_size = data.length() - remain_size;
         } else {
           actual_write_size = buffer.remain();
         }
