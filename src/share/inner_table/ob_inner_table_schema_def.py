@@ -312,7 +312,8 @@ all_table_def = dict(
       ('lob_inrow_threshold', 'int', 'false', 'OB_DEFAULT_LOB_INROW_THRESHOLD'),
       ('max_used_column_group_id', 'int', 'false', '1000'),
       ('column_store', 'int', 'false', '0'),
-      ('auto_increment_cache_size', 'int', 'false', '0')
+      ('auto_increment_cache_size', 'int', 'false', '0'),
+      ('local_session_vars', 'longtext', 'true'),
     ],
 )
 
