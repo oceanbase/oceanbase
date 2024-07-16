@@ -129,6 +129,10 @@ int ObLogRestoreArchiveDriver::check_need_schedule_(ObLS &ls,
   } else if (! need_schedule) {
     LOG_TRACE("no need_schedule in check_need_schedule_", K(need_schedule));
     // do nothing
+  } else if (context.max_fetch_scn_ >= global_recovery_scn_) {
+    need_schedule = false;
+    LOG_WARN("max_fetch_scn reach global_recovery_scn, no need to schedule fetch task",
+     K_(context.max_fetch_scn), K_(global_recovery_scn));
   } else if (OB_FAIL(worker_->get_thread_count(fetch_log_worker_count))) {
     LOG_WARN("get_thread_count from worker_ failed", K(ret), K(ls));
   } else if (FALSE_IT(concurrency = std::min(fetch_log_worker_count, MAX_LS_FETCH_LOG_TASK_CONCURRENCY))) {
