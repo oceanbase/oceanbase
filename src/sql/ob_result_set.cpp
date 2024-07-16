@@ -1932,6 +1932,7 @@ int ObResultSet::switch_implicit_cursor(int64_t &affected_rows)
     }
   } else {
     affected_rows = plan_ctx->get_affected_rows();
+    set_last_insert_id_to_client(plan_ctx->get_last_insert_id_to_client());
     memset(message_, 0, sizeof(message_));
     if (OB_FAIL(set_mysql_info())) {
       LOG_WARN("set mysql info failed", K(ret));
