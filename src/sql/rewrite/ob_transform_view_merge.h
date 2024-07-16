@@ -67,7 +67,6 @@ private:
                           ObSelectStmt* child_stmt,
                           ViewMergeHelper &helper,
                           bool need_check_subquery,
-                          bool is_left_join_right_table,
                           bool &can_be);
 
   int check_left_join_right_view_need_merge(ObDMLStmt *parent_stmt,

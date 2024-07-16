@@ -407,7 +407,6 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
                                          child_stmt,
                                          helper,
                                          parent_stmt->is_hierarchical_query(),
-                                         false,
                                          can_be))) {
     LOG_WARN("failed to check can be unnested", K(ret));
   } else if (!can_be) {
@@ -440,7 +439,6 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
   helper.parent_table = parent_table;
   helper.trans_table = table_item;
   helper.can_push_where = can_push_where;
-  bool is_left_join_right_table = false;
   trans_happened = false;
   OPT_TRACE("try to merge view:", table_item);
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(parent_table) || OB_ISNULL(table_item)) {
@@ -451,32 +449,16 @@ int ObTransformViewMerge::transform_generated_table(ObDMLStmt *parent_stmt,
   } else if (OB_ISNULL(child_stmt = table_item->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (parent_table->joined_type_ == FULL_OUTER_JOIN) {
-    //如果是full outer join，如果视图有null reject输出表达式，需要视图有非空列
-    helper.need_check_null_propagate = true;
-  } else if (parent_table->joined_type_ == LEFT_OUTER_JOIN) {
-    if (table_item == parent_table->right_table_) {
-      //如果是left join的右表，如果视图有null reject输出表达式，需要视图有非空列
-      helper.need_check_null_propagate = true;
-      is_left_join_right_table = true;
-    }
-  } else if (parent_table->joined_type_ == RIGHT_OUTER_JOIN) {
-    if (table_item == parent_table->left_table_) {
-      //如果是right join的左表，如果视图有null reject输出表达式，需要视图有非空列
-      helper.need_check_null_propagate = true;
-      is_left_join_right_table = true;
-    }
-  } else {/*do nothing*/}
-  if (OB_FAIL(ret) || !table_item->is_generated_table()) {
-    /*do nothing*/
   } else if (need_check_where_condi && child_stmt->get_condition_size() > 0) {
-    /*do nothing*/
     OPT_TRACE("view has conditions, can not merge view");
+  } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(parent_stmt,
+                                                            table_item->table_id_,
+                                                            helper.need_check_null_propagate))) {
+    LOG_WARN("failed to check is table on null side", K(ret), K(table_item->table_id_));
   } else if (OB_FAIL(check_can_be_merged(parent_stmt,
                                          child_stmt,
                                          helper,
                                          !can_push_where,
-                                         is_left_join_right_table,
                                          can_be))) {
     LOG_WARN("failed to check can be unnested", K(ret));
   } else if (!can_be) {
@@ -608,19 +590,17 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
                                               ObSelectStmt *child_stmt,
                                               ViewMergeHelper &helper,
                                               bool need_check_subquery,
-                                              bool is_left_join_right_table,
                                               bool &can_be)
 {
   int ret = OB_SUCCESS;
-  can_be = true;
   bool has_rollup = false;
+  can_be = true;
   if (OB_ISNULL(parent_stmt) || OB_ISNULL(child_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
   } else if (OB_FAIL(check_basic_validity(parent_stmt, child_stmt, can_be))) {
     LOG_WARN("failed to check", K(ret));
-  } else if (!can_be) {
-  } else {
+  } else if (can_be) {
     has_rollup = parent_stmt->is_select_stmt() &&
                  static_cast<ObSelectStmt *>(parent_stmt)->has_rollup();
     //select expr不能包含subquery
@@ -637,21 +617,19 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
         OPT_TRACE("const expr can not be merged into rollup stmt");
       }
     }
-    //stmt不能包含rand函数
-    if (OB_SUCC(ret) && can_be) {
-      bool has_rand = false;
-      if (OB_FAIL(child_stmt->has_rand(has_rand))) {
-        LOG_WARN("failed to get rand flag", K(ret));
-      } else if (has_rand) {
-        can_be = false;
-        OPT_TRACE("view has random expr, can not merge");
-      }
+  }
+  //stmt不能包含rand函数
+  if (OB_SUCC(ret) && can_be) {
+    bool has_rand = false;
+    if (OB_FAIL(child_stmt->has_rand(has_rand))) {
+      LOG_WARN("failed to get rand flag", K(ret));
+    } else if (has_rand) {
+      can_be = false;
+      OPT_TRACE("view has random expr, can not merge");
     }
   }
   //检查where condition是否存在子查询
-  if (OB_FAIL(ret) || !can_be) {
-    /*do nothing*/
-  } else if (need_check_subquery){
+  if (OB_SUCC(ret) && can_be && need_check_subquery){
     if (child_stmt->get_semi_infos().count() > 0) {
       can_be =false;
       OPT_TRACE("view has semi info, can not merge");
@@ -667,24 +645,22 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
         } else { /*do nothing*/ }
       }
     }
-  } else {/*do nothing*/}
+  }
   //Check if the left join right view expansion will increase the plan space. 
-  if (OB_FAIL(ret) || !can_be || !is_left_join_right_table) {
-    /*do nothing*/
-  } else if (OB_ISNULL(helper.parent_table)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null table item", K(ret));
-  } else if (OB_FAIL(check_left_join_right_view_need_merge(parent_stmt,
-                                                           child_stmt, 
-                                                           helper.trans_table,
-                                                           helper.parent_table,
-                                                           can_be))) {
-    LOG_WARN("failed to check left join right view need merge", K(ret));
+  if (OB_SUCC(ret) && can_be && NULL != helper.parent_table) {
+    if ((LEFT_OUTER_JOIN == helper.parent_table->joined_type_ && helper.parent_table->right_table_ == helper.trans_table) ||
+        (RIGHT_OUTER_JOIN == helper.parent_table->joined_type_ && helper.parent_table->left_table_ == helper.trans_table)) {
+      if (OB_FAIL(check_left_join_right_view_need_merge(parent_stmt,
+                                                        child_stmt,
+                                                        helper.trans_table,
+                                                        helper.parent_table,
+                                                        can_be))) {
+        LOG_WARN("failed to check left join right view need merge", K(ret));
+      }
+    }
   }
   //检查视图是否有空值拒绝表达式
-  if (OB_FAIL(ret) || !can_be) {
-    /*do nothing*/
-  } else if (helper.need_check_null_propagate){
+  if (OB_SUCC(ret) && can_be && helper.need_check_null_propagate){
     ObSEArray<ObRawExpr *, 4> columns;
     ObSqlBitSet<> from_tables;
     ObSEArray<ObRawExpr*, 4> column_exprs;
@@ -719,7 +695,7 @@ int ObTransformViewMerge::check_can_be_merged(ObDMLStmt *parent_stmt,
         OPT_TRACE("view has null propagate expr, but not found not null column");
       }
     }
-  } else {/*do nothing*/}
+  }
   return ret;
 }
 
@@ -730,9 +706,9 @@ int ObTransformViewMerge::check_left_join_right_view_need_merge(ObDMLStmt *paren
                                                                 bool &need_merge)
 {
   int ret = OB_SUCCESS;
-  need_merge = false;
   bool force_merge = false;
   bool force_no_merge = false;
+  need_merge = false;
   if (OB_ISNULL(child_stmt) || OB_ISNULL(parent_stmt) || 
       OB_ISNULL(view_table)) {
     ret = OB_ERR_UNEXPECTED;
