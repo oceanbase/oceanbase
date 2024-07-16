@@ -367,6 +367,7 @@ GLOBAL_ERRSIM_POINT_DEF(610, EN_PX_JOIN_FILTER_NOT_MERGE_MSG, "Inject error: let
 GLOBAL_ERRSIM_POINT_DEF(611, EN_PX_P2P_MSG_REG_DM_FAILED, "Inject error: let runtime filter failed to register into DM.");
 GLOBAL_ERRSIM_POINT_DEF(612, EN_PX_JOIN_FILTER_HOLD_MSG, "Inject error: let runtime filter destroy later for a long time.");
 GLOBAL_ERRSIM_POINT_DEF(613, EN_PX_DTL_TRACE_LOG_ENABLE, "Deprecated variable");
+GLOBAL_ERRSIM_POINT_DEF(619, EN_PX_SQC_HANDLER_INIT_FAILED, "Inject error: let sqc handler init failed");
 // please add new trace point after 700 or before 600
 
 // Compaction Related 700-750

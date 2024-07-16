@@ -207,6 +207,15 @@ int ObPxSqcHandler::init()
   } else {
     exec_ctx_->set_sqc_handler(this);
   }
+
+#ifdef ERRSIM
+  int errsim_code = EventTable::EN_PX_SQC_HANDLER_INIT_FAILED;
+  if (OB_SUCC(ret) && errsim_code != OB_SUCCESS) {
+    ret = errsim_code;
+    LOG_TRACE("Force sqc hanler init failed", K(ret));
+  }
+#endif
+
   return ret;
 }
 
