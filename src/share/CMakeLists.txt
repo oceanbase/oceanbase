@@ -330,6 +330,9 @@ ob_set_subtarget(ob_share deadlock
   deadlock/ob_lcl_scheme/ob_lcl_message.cpp
   deadlock/ob_lcl_scheme/ob_lcl_node.cpp
   deadlock/ob_lcl_scheme/ob_lcl_utils.cpp
+  deadlock/ob_lcl_time_sync/ob_lcl_time_sync_thread.cpp
+  deadlock/ob_lcl_time_sync/ob_lcl_time_sync_rpc.cpp
+  deadlock/ob_lcl_time_sync/ob_lcl_time_sync_message.cpp
 )
 
 ob_set_subtarget(ob_share ls

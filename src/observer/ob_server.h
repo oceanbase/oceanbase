@@ -62,6 +62,7 @@
 #include "observer/ob_inner_sql_rpc_proxy.h"
 #include "observer/ob_startup_accel_task_handler.h"
 #include "share/ls/ob_ls_table_operator.h" // for ObLSTableOperator
+#include "share/deadlock/ob_lcl_time_sync/ob_lcl_time_sync_thread.h"
 #include "storage/ob_locality_manager.h"
 #include "storage/ddl/ob_ddl_heart_beat_task.h"
 
@@ -122,6 +123,8 @@ public:
   bool is_prepare_stopped();
   void set_stop();
   bool is_stopped();
+  
+  void try_update_local_time_from_rs_leader_now();
 
 public:
   //Refer to ObPurgeCompletedMonitorInfoTask
@@ -485,6 +488,7 @@ private:
   // If you have tasks that need to be processed in parallel, you can use this handler,
   // but please note that this handler will be destroyed after observer startup.
   ObStartupAccelTaskHandler startup_accel_handler_;
+  share::detector::ObLCLTimeSyncThread time_sync_thread_;
 }; // end of class ObServer
 
 inline ObServer &ObServer::get_instance()

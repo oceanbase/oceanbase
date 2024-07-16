@@ -24,7 +24,9 @@
 #include "share/deadlock/ob_deadlock_message.h"
 #include "share/deadlock/ob_deadlock_inner_table_service.h"
 #include "share/deadlock/ob_deadlock_detector_rpc.h"
+#include "share/deadlock/ob_lcl_time_sync/ob_lcl_time_sync_thread.h"
 #include "observer/omt/ob_multi_tenant.h"
+#include "observer/ob_server.h"
 
 namespace oceanbase
 {
@@ -510,7 +512,7 @@ int ObLCLNode::broadcast_(const BlockList &list,
                  self_key_,
                  lclv,
                  public_label,
-                 ObClockGenerator::getRealClock());
+                 ObLCLTimeSyncThread::get_lcl_local_time());
     MTL(ObDeadLockDetectorMgr*)->sender_thread_.cache_msg(list.at(idx), msg);
   }
   
@@ -529,10 +531,11 @@ int ObLCLNode::process_lcl_message(const ObLCLMessage &lcl_msg)
   DETECT_TIME_GUARD(100_ms);
   update_lcl_period_if_necessary_with_lock_();
   CLICK();
-  const int64_t current_ts = ObClockGenerator::getClock();
+  const int64_t current_ts = ObLCLTimeSyncThread::get_lcl_local_time();
   if (CLICK() && !if_phase_match_(current_ts, lcl_msg)) {
-    int64_t diff = current_ts - lcl_msg.get_send_ts();
+    int64_t diff = abs(current_ts - lcl_msg.get_send_ts());
     if (diff > PHASE_TIME / 3) {
+      observer::ObServer::get_instance().try_update_local_time_from_rs_leader_now();
       DETECT_LOG_(WARN, "phase not match", K(diff), K(current_ts), K(*this));
     }
   } else {
@@ -831,7 +834,7 @@ int ObLCLNode::push_state_to_downstreams_with_lock_()
     DETECT_LOG_(WARN, "boardcast failed",
                       K(blocklist_snapshot), K(lclv_snapshot), K(public_label_snapshot),
                       K(*this));
-  } else if (lcl_period_ > last_report_waiting_for_period_) {
+  } else if (lcl_period_ != last_report_waiting_for_period_) {
     LockGuard guard(lock_);
     last_report_waiting_for_period_ = lcl_period_;
     if (blocklist_snapshot.empty()) {
@@ -863,14 +866,14 @@ void ObLCLNode::update_lcl_period_if_necessary_with_lock_()
 {
   int ret = OB_SUCCESS;
   DETECT_TIME_GUARD(10_ms);
-  int64_t current_ts = ObClockGenerator::getRealClock();
+  int64_t current_ts = ObLCLTimeSyncThread::get_lcl_local_time();
   int64_t new_period_ = current_ts / PERIOD;
   int64_t timeout_ts = 0;
 
   {
     LockGuard guard(lock_);
     timeout_ts = timeout_ts_;
-    if (new_period_ > lcl_period_) {
+    if (new_period_ != lcl_period_) {
       lcl_period_ = new_period_;
       public_label_ = private_label_;
     }
