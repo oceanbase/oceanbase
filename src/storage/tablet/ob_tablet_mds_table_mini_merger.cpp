@@ -475,8 +475,9 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
     SMART_VARS_2((ObMdsTableMiniMerger, mds_mini_merger), (ObTabletDumpMds2MiniOperator, op)) {
       if (OB_FAIL(mds_mini_merger.init(*ctx, op))) {
         LOG_WARN("fail to init mds mini merger", K(ret), KPC(ctx), K(ls_id), K(tablet_id));
-      } else if (CLICK_FAIL((mig_param.mds_data_.scan_all_mds_data_with_op(op)))) {
-        LOG_WARN("failed to handle full memory mds data", K(ret), K(ls_id), K(tablet_id));
+      } else if (CLICK_FAIL((mig_param.mds_data_.scan_all_mds_data_with_op(mig_param.mds_checkpoint_scn_, op)))) {
+        LOG_WARN("failed to handle full memory mds data", K(ret),
+            K(ls_id), K(tablet_id), "mds_checkpoint_scn", mig_param.mds_checkpoint_scn_);
       } else if (OB_FAIL(mds_mini_merger.generate_mds_mini_sstable(allocator, table_handle))) {
         LOG_WARN("fail to generate mds mini sstable with mini merger", K(ret), K(mds_mini_merger));
       }
@@ -527,8 +528,9 @@ int ObMdsDataCompatHelper::generate_mds_mini_sstable(
       SMART_VARS_2((ObMdsTableMiniMerger, mds_mini_merger), (ObTabletDumpMds2MiniOperator, op)) {
         if (CLICK_FAIL(mds_mini_merger.init(*ctx, op))) {
           LOG_WARN("fail to init mds mini merger", K(ret), KPC(ctx), K(ls_id), K(tablet_id));
-        } else if (CLICK_FAIL((data.scan_all_mds_data_with_op(op)))) {
-          LOG_WARN("failed to handle full memory mds data", K(ret), K(ls_id), K(tablet_id));
+        } else if (CLICK_FAIL((data.scan_all_mds_data_with_op(tablet.get_mds_checkpoint_scn(), op)))) {
+          LOG_WARN("failed to handle full memory mds data", K(ret),
+              K(ls_id), K(tablet_id), "mds_checkpoint_scn", tablet.get_mds_checkpoint_scn());
         } else if (CLICK_FAIL(mds_mini_merger.generate_mds_mini_sstable(allocator, table_handle))) {
           LOG_WARN("fail to generate mds mini sstable with mini merger", K(ret), K(mds_mini_merger));
         } else {

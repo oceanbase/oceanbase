@@ -125,7 +125,7 @@ int ObMdsTableMergeTask::process()
       LOG_WARN("fail to get mds table", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_UNLIKELY(!mds_table.get_mds_table_ptr()->is_construct_sequence_matched(mds_construct_sequence))) {
       ret = OB_NO_NEED_MERGE;
-      LOG_WARN("construct sequence does not match with current mds table", K(ret), K(ls_id), K(tablet_id), K(mds_construct_sequence));
+      LOG_WARN("construct sequence does not match current mds table, no need to merge", K(ret), K(ls_id), K(tablet_id), K(mds_construct_sequence));
     } else if (ctx.get_tablet()->get_mds_checkpoint_scn() >= flush_scn) {
       need_schedule_mds_minor = false;
       FLOG_INFO("flush scn smaller than mds ckpt scn, only flush nodes of mds table and do not generate mds mini",

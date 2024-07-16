@@ -7597,7 +7597,6 @@ int ObTablet::build_mds_mini_sstable_for_migration(
   int ret = OB_SUCCESS;
   const share::ObLSID &ls_id = tablet_meta_.ls_id_;
   const common::ObTabletID &tablet_id = tablet_meta_.tablet_id_;
-  const bool for_compat = param.version_ < ObMigrationTabletParam::PARAM_VERSION_V3;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_ERR_UNEXPECTED;
