@@ -262,7 +262,7 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
   double selectivity = 1.0;
   ObLogicalOperator *child = get_child(ObLogicalOperator::first_child);
   const int64_t parallel = param.need_parallel_;
-  if (OB_ISNULL(child)) {
+  if (OB_ISNULL(child) || OB_ISNULL(get_stmt()) || OB_ISNULL(get_stmt()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(child));
   } else if (OB_FAIL(get_child_est_info(parallel, child_card, child_ndv, selectivity))) {
@@ -279,7 +279,9 @@ int ObLogGroupBy::do_re_est_cost(EstimateCostInfo &param, double &card, double &
         need_ndv /= selectivity;
       }
       if (child_card > 0) {
-        param.need_row_count_ = child_card * (1 - std::pow((1 - need_ndv / child_ndv), child_ndv / child_card));
+        param.need_row_count_ = get_stmt()->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_1_BP8 ?
+                                child_card * need_ndv / child_ndv :
+                                child_card * (1 - std::pow((1 - need_ndv / child_ndv), child_ndv / child_card));
       } else {
         param.need_row_count_ = 0;
       }

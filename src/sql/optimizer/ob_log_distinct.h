@@ -28,7 +28,8 @@ public:
         is_block_mode_(false),
         is_push_down_(false),
         total_ndv_(-1.0),
-        force_push_down_(false)
+        force_push_down_(false),
+        input_sorted_(false)
   { }
   virtual ~ObLogDistinct()
   { }
@@ -74,6 +75,7 @@ public:
   virtual int print_used_hint(PlanText &plan_text) override;
   inline bool is_partition_ig() const { return is_partition_gi_; }
   inline void set_is_partition_gi(bool v) { is_partition_gi_ = v; }
+  virtual int compute_property() override;
 
 private:
   common::ObSEArray<ObRawExpr*, 16, common::ModulePageAllocator, true> distinct_exprs_;
@@ -83,6 +85,7 @@ private:
   double total_ndv_;
   bool force_push_down_; // control by _aggregation_optimization_settings
   bool is_partition_gi_;
+  bool input_sorted_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogDistinct);
 };
