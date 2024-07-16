@@ -5211,7 +5211,11 @@ int ObDeletePolicyResolver::resolve(const ParseNode &parse_tree)
     common::ObSArray<uint64_t> clean_tenant_ids;
     ObDeletePolicyStmt *stmt = create_stmt<ObDeletePolicyStmt>();
     ParseNode *t_node = parse_tree.children_[1];
-    if (0 != STRCMP(policy_name.ptr(), "default")) {
+    if (OB_ISNULL(policy_name.ptr())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("no policy name is specified", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "delete policy name is not specified, which is");
+    } else if (0 != STRCMP(policy_name.ptr(), "default")) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("the policy name is not \'default\'", K(ret), K(policy_name));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "The policy name is not \'default\', it is");
