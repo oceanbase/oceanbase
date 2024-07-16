@@ -546,6 +546,15 @@ int ObRARowStore::switch_idx_block(bool finish_add /* = false */)
   if (!is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
+  } else if (finish_add && NULL == idx_blk_) {
+    if (OB_FAIL(build_idx_block())) {
+      LOG_WARN("build index block failed",
+               K(ret), K(finish_add), KPC(idx_blk_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
   } else if (NULL == idx_blk_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index block should not be null");
