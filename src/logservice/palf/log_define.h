@@ -412,7 +412,7 @@ enum PurgeThrottlingType
 
 inline const char *purge_throttling_type_2_str(const PurgeThrottlingType type)
 {
-#define EXTRACT_PURGE_TYPE(type_var) ({ case(type_var): return #type_var; })
+#define EXTRACT_PURGE_TYPE(type_var) case(type_var): return #type_var
   switch(type)
   {
     EXTRACT_PURGE_TYPE(INVALID_PURGE_TYPE);

@@ -936,7 +936,7 @@ int ObTabletChecksumValidator::validate_tablet_replica_checksum(
       } else if (OB_CHECKSUM_ERROR == ret) {
         LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "ERROR! ERROR! ERROR! checksum error in major "
           "tablet_replica_checksum", KR(ret), K_(tenant_id), K(frozen_scn), "pair_cnt", pairs.count());
-        if (TC_REACH_TIME_INTERVAL(6 * 3600 * 1000 * 1000)) {  // record every 6h
+        if (TC_REACH_TIME_INTERVAL(6 * 3600 * 1000 * 1000L)) {  // record every 6h
           ROOTSERVICE_EVENT_ADD("daily_merge", "checksum_error", K_(tenant_id), K(table_id));
         }
       } else {

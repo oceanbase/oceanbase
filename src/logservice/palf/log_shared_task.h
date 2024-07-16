@@ -28,7 +28,7 @@ enum class LogSharedTaskType
 
 inline const char *shared_type_2_str(const LogSharedTaskType type)
 {
-#define EXTRACT_SHARED_TYPE(type_var) ({ case(LogSharedTaskType::type_var): return #type_var; })
+#define EXTRACT_SHARED_TYPE(type_var) case(LogSharedTaskType::type_var): return #type_var
   switch(type)
   {
     EXTRACT_SHARED_TYPE(LogHandleSubmitType);

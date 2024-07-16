@@ -122,6 +122,9 @@ if (OB_USE_CLANG)
     -Wno-uninitialized-const-reference -Wno-unused-function -Wno-atomic-alignment
     -Wno-tautological-constant-out-of-range-compare -Wno-unused-parameter
     -Wno-string-plus-int -Wno-misleading-indentation -Wno-unused-private-field
+    -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
+    -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
+    -Wno-enum-constexpr-conversion
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-overloaded-virtual -Wno-reserved-user-defined-literal
     -Wno-self-assign -Wno-inconsistent-missing-override -Wno-mismatched-tags -Wno-unused-variable
     -Wno-invalid-offsetof -Wno-unevaluated-expression -Wno-constant-logical-operand>

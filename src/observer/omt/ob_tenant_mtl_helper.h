@@ -32,7 +32,7 @@ typename std::enable_if<std::is_pointer<T>::value, int>::type mtl_new_default(T 
 }
 
 template<class T>
-typename std::enable_if<!std::is_pointer<T>::value, int>::type mtl_new_default(T)
+typename std::enable_if<!std::is_pointer<T>::value, int>::type mtl_new_default(T &m)
 {
   return oceanbase::common::OB_SUCCESS;
 }
