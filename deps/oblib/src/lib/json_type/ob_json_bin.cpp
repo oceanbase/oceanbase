@@ -969,7 +969,7 @@ int ObJsonBinSerializer::serialize(ObJsonNode *json_tree, ObString &data)
   if (root_type == ObJsonNodeType::J_ARRAY || root_type == ObJsonNodeType::J_OBJECT) {
     if (OB_FAIL(ObJsonBin::add_doc_header_v0(result))) {
       LOG_WARN("add_doc_header_v0 fail", K(ret));
-    } else if (OB_FAIL(SMART_CALL(serialize_json_value(json_tree, result)))) {
+    } else if (OB_FAIL(serialize_json_value(json_tree, result))) {
       LOG_WARN("serialize json tree fail", K(ret), K(root_type));
     } else if (OB_FAIL(ObJsonBin::set_doc_header_v0(result, result.length()))) {
       LOG_WARN("set_doc_header_v0 fail", K(ret));
@@ -979,7 +979,7 @@ int ObJsonBinSerializer::serialize(ObJsonNode *json_tree, ObString &data)
     if (!ObJsonVerType::is_opaque_or_string(ver_type) &&
         OB_FAIL(result.append(reinterpret_cast<const char*>(&ver_type), sizeof(uint8_t)))) {
       LOG_WARN("failed to serialize json tree at append used size", K(ret), K(result.length()));
-    } else if (OB_FAIL(SMART_CALL(serialize_json_value(json_tree, result)))) { // do recursion
+    } else if (OB_FAIL(serialize_json_value(json_tree, result))) { // do recursion
       LOG_WARN("failed to serialize json tree at recursion", K(ret));
     }
   }
@@ -1473,7 +1473,7 @@ int ObJsonBin::deserialize_json_object_v0(ObJsonObject *object)
       LOG_WARN("ob_write_string fail", K(ret), K(i), K(ori_key));
     } else if (OB_FAIL(get_value(i, child_bin))) {
       LOG_WARN("get child value fail", K(ret));
-    } else if (OB_FAIL(SMART_CALL(child_bin.deserialize_json_value(node)))) {
+    } else if (OB_FAIL(child_bin.deserialize_json_value(node))) {
       LOG_WARN("deserialize child node fail", K(ret), K(i), K(child_bin));
     } else if (OB_FAIL(object->add(key, node, false, true, false, is_schema_))) {
       LOG_WARN("add node to obj fail", K(ret), K(i));

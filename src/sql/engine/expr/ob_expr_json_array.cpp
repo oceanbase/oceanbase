@@ -211,7 +211,7 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
     ObJsonBuffer string_buffer(&temp_allocator);
     ObString res_string;
 
-    if (ObJsonParser::is_json_doc_over_depth(j_arr.depth())) {
+    if (ObJsonExprHelper::is_json_depth_exceed_limit(j_arr.depth())) {
       ret = OB_ERR_JSON_OUT_OF_DEPTH;
       LOG_WARN("current json over depth", K(ret), K(j_arr.depth()));
     } else if (dst_type == ObJsonType) {
@@ -286,7 +286,7 @@ int ObExprJsonArray::eval_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
 
   if (OB_SUCC(ret)) {
     ObString raw_bin;
-    if (ObJsonParser::is_json_doc_over_depth(j_arr.depth())) {
+    if (ObJsonExprHelper::is_json_depth_exceed_limit(j_arr.depth())) {
       ret = OB_ERR_JSON_OUT_OF_DEPTH;
       LOG_WARN("current json over depth", K(ret), K(j_arr.depth()));
     } else if (OB_FAIL(ObJsonWrapper::get_raw_binary(j_base, raw_bin, &temp_allocator))) {

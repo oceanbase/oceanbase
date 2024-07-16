@@ -128,6 +128,7 @@ ignore_replay_checksum_error
 index_block_cache_priority
 internal_sql_execute_timeout
 job_queue_processes
+json_document_max_depth
 kv_transport_compress_func
 kv_transport_compress_threshold
 kv_ttl_duty_duration

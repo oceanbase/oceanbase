@@ -126,7 +126,9 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null_result))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (OB_FALSE_IT(allocator.set_baseline_size(j_str.length()))) {
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base))) {
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
+                                                        j_in_type, j_base, 0,
+                                                        ObJsonExprHelper::get_json_max_depth_config()))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT;
     }

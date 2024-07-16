@@ -387,7 +387,7 @@ int ObExprJsonQuery::append_binary_node_into_res(ObIJsonBase*& jb_res,
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(bin_agg.serialize())) {
     LOG_WARN("failed to serialize bin agg.", K(ret));
-  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, bin_agg.get_buffer()->string(), ObJsonInType::JSON_BIN, ObJsonInType::JSON_BIN, jb_res, ObJsonParser::JSN_RELAXED_FLAG))) {
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, bin_agg.get_buffer()->string(), ObJsonInType::JSON_BIN, ObJsonInType::JSON_BIN, jb_res, ObJsonParser::JSN_RELAXED_FLAG, ObJsonExprHelper::get_json_max_depth_config()))) {
     LOG_WARN("failed to get json base.", K(ret));
   }
   return ret;

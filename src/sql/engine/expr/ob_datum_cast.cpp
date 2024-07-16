@@ -3132,7 +3132,9 @@ static int common_string_json(const ObExpr &expr,
         }
       } else if (is_oracle && (OB_ISNULL(j_text.ptr()) || j_text.length() == 0)) {
         j_base = &j_null;
-      } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree, parse_flag))) {
+      } else if (OB_FAIL(ObJsonParser::get_tree(&temp_allocator, j_text, j_tree,
+                                                parse_flag,
+                                                ObJsonExprHelper::get_json_max_depth_config()))) {
         if (!is_oracle && CM_IS_IMPLICIT_CAST(expr.extra_) && !CM_IS_COLUMN_CONVERT(expr.extra_)) {
           ret = OB_SUCCESS;
           j_base = &j_string;

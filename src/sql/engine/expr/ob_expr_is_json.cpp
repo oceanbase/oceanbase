@@ -113,7 +113,8 @@ int ObExprIsJson::check_is_json(const ObExpr &expr, ObEvalCtx &ctx,
       ADD_FLAG_IF_NEED(strict_opt != OB_JSON_MODE_STRICT, parse_flag, ObJsonParser::JSN_RELAXED_FLAG);
       ADD_FLAG_IF_NEED(unique_opt == OB_JSON_MODE_UNIQUE_KEYS, parse_flag, ObJsonParser::JSN_UNIQUE_FLAG);
 
-      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, &allocator, parse_flag))) {
+      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, &allocator, parse_flag,
+                                                  ObJsonExprHelper::get_json_max_depth_config()))) {
         LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_str));
       }
     }

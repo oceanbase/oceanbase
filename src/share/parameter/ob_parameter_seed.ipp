@@ -1946,6 +1946,9 @@ DEF_INT(_checkpoint_diagnose_preservation_count, OB_TENANT_PARAMETER, "100", "[0
 DEF_INT(_multimodel_memory_trace_level, OB_TENANT_PARAMETER, "0", "[0,100)",
         "Multi-mode memory tracking mechanism",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(json_document_max_depth, OB_TENANT_PARAMETER, "100", "[100,1024]",
+        "maximum nesting depth allowed in a JSON document",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 ERRSIM_DEF_INT(errsim_backup_task_batch_size, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "the batch size backup task receive in errsim mode"
         "Range: [0,) in integer",

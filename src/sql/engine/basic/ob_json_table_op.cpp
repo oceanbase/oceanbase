@@ -2813,7 +2813,7 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
 
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, j_str, j_in_type, expect_type, in, parse_flag))
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&tmp_allocator, j_str, j_in_type, expect_type, in, parse_flag, ObJsonExprHelper::get_json_max_depth_config()))
                 || (in->json_type() != ObJsonNodeType::J_ARRAY && in->json_type() != ObJsonNodeType::J_OBJECT)) {
       if (OB_FAIL(ret) || (is_ensure_json)) {
         in= nullptr;

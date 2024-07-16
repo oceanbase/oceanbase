@@ -93,7 +93,8 @@ int ObExprJsonStorageSize::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (OB_FALSE_IT(allocator->add_baseline_size(j_str.length()))) {
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
-        j_in_type, j_base))) {
+                                                        j_in_type, j_base, 0,
+                                                        ObJsonExprHelper::get_json_max_depth_config()))) {
       if (ret == OB_ERR_INVALID_JSON_TEXT) {
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
       }
