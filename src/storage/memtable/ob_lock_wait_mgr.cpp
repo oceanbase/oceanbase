@@ -574,14 +574,16 @@ void ObLockWaitMgr::delay_header_node_run_ts(const uint64_t hash)
 
 int ObLockWaitMgr::post_lock(const int tmp_ret,
                              const ObTabletID &tablet_id,
-                             const ObStoreRowkey& row_key,
+                             const ObStoreRowkey &row_key,
                              const int64_t timeout,
                              const bool is_remote_sql,
                              const int64_t last_compact_cnt,
                              const int64_t total_trans_node_cnt,
+                             const uint32_t sess_id,
                              const ObTransID &tx_id,
                              const ObTransID &holder_tx_id,
-                             ObFunction<int(bool&, bool&)> &rechecker)
+                             const ObLSID &ls_id,
+                             ObFunction<int(bool &, bool &)> &rechecker)
 {
   int ret = OB_SUCCESS;
   Node *node = NULL;
@@ -604,17 +606,29 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
         if (is_remote_sql) {
           delay_header_node_run_ts(hash);
         }
-        node->set((void*)node,
-                hash,
-                wait_on_row ? row_lock_seq : tx_lock_seq,
-                timeout,
-                tablet_id.id(),
-                last_compact_cnt,
-                total_trans_node_cnt,
-                to_cstring(row_key),// just for virtual table display
-                tx_id,
-                holder_tx_id);
-        node->set_need_wait();
+        transaction::ObTransService *tx_service = nullptr;
+        uint32_t holder_session_id = sql::ObSQLSessionInfo::INVALID_SESSID;
+        if (OB_ISNULL(tx_service = MTL(transaction::ObTransService *))) {
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "ObTransService is null", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
+        } else if (OB_FAIL(tx_service->get_trans_start_session_id(ls_id, holder_tx_id, holder_session_id))) {
+          TRANS_LOG(WARN, "get transaction start session_id failed", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
+        } else {
+          node->set((void *)node,
+                    hash,
+                    wait_on_row ? row_lock_seq : tx_lock_seq,
+                    timeout,
+                    tablet_id.id(),
+                    last_compact_cnt,
+                    total_trans_node_cnt,
+                    to_cstring(row_key),  // just for virtual table display
+                    sess_id,
+                    holder_session_id,
+                    tx_id,
+                    holder_tx_id,
+                    ls_id);
+          node->set_need_wait();
+        }
       }
     }
   }
@@ -629,9 +643,11 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
                              const bool is_remote_sql,
                              const int64_t last_compact_cnt,
                              const int64_t total_trans_node_cnt,
+                             const uint32_t sess_id,
                              const transaction::ObTransID &tx_id,
                              const transaction::ObTransID &holder_tx_id,
                              const ObTableLockMode &lock_mode,
+                             const ObLSID &ls_id,
                              ObFunction<int(bool&)> &check_need_wait)
 {
   int ret = OB_SUCCESS;
@@ -659,18 +675,30 @@ int ObLockWaitMgr::post_lock(const int tmp_ret,
     if (OB_FAIL(check_need_wait(need_wait))) {
       TRANS_LOG(WARN, "check need wait failed", K(ret));
     } else if (need_wait) {
-      node->set((void*)node,
-                hash,
-                lock_seq,
-                timeout,
-                tablet_id.id(),
-                last_compact_cnt,
-                total_trans_node_cnt,
-                lock_id_buf, // just for virtual table display
-                tx_id,
-                holder_tx_id);
-      node->set_need_wait();
-      node->set_lock_mode(lock_mode);
+      transaction::ObTransService *tx_service = nullptr;
+      uint32_t holder_session_id = sql::ObSQLSessionInfo::INVALID_SESSID;
+      if (OB_ISNULL(tx_service = MTL(transaction::ObTransService *))) {
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(ERROR, "ObTransService is null", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
+      } else if (OB_FAIL(tx_service->get_trans_start_session_id(ls_id, holder_tx_id, holder_session_id))) {
+        TRANS_LOG(WARN, "get transaction start session_id failed", K(sess_id), K(tx_id), K(holder_tx_id), K(ls_id));
+      } else {
+        node->set((void*)node,
+                  hash,
+                  lock_seq,
+                  timeout,
+                  tablet_id.id(),
+                  last_compact_cnt,
+                  total_trans_node_cnt,
+                  lock_id_buf, // just for virtual table display
+                  sess_id,
+                  holder_session_id,
+                  tx_id,
+                  holder_tx_id,
+                  ls_id);
+        node->set_need_wait();
+        node->set_lock_mode(lock_mode);
+      }
     }
   }
   return ret;

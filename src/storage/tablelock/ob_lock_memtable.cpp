@@ -426,16 +426,18 @@ int ObLockMemtable::post_obj_lock_conflict_(ObMvccAccessCtx &acc_ctx,
     // TODO: one thread only can wait at one lock now.
     // this may be not enough.
     if (OB_TMP_FAIL(lock_wait_mgr->post_lock(OB_TRY_LOCK_ROW_CONFLICT,
-                                       LS_LOCK_TABLET,
-                                       lock_id,
-                                       lock_wait_expire_ts,
-                                       remote_tx,
-                                       -1,
-                                       -1, // total_trans_node_cnt
-                                       tx_id,
-                                       conflict_tx_id,
-                                       lock_mode,
-                                       recheck_f))) {
+                                             LS_LOCK_TABLET,
+                                             lock_id,
+                                             lock_wait_expire_ts,
+                                             remote_tx,
+                                             -1,
+                                             -1,  // total_trans_node_cnt
+                                             acc_ctx.tx_desc_->get_assoc_session_id(),
+                                             tx_id,
+                                             conflict_tx_id,
+                                             lock_mode,
+                                             ls_id_,
+                                             recheck_f))) {
       LOG_WARN("post_lock after tx conflict failed",
                K(tmp_ret), K(tx_id), K(conflict_tx_id));
     }

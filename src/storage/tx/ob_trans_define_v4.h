@@ -700,6 +700,7 @@ public:
   void set_cluster_id(uint64_t cluster_id) { cluster_id_ = cluster_id; }
   uint64_t get_cluster_id() const { return cluster_id_; }
   uint32_t get_session_id() const { return sess_id_; }
+  uint32_t get_assoc_session_id() const { return assoc_sess_id_; }
   ObAddr get_addr() const { return addr_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   ObTxConsistencyType get_tx_consistency_type() const { return tx_consistency_type_; }

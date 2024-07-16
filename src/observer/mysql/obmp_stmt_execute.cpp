@@ -1973,8 +1973,6 @@ int ObMPStmtExecute::process()
       retry_ctrl_.set_sys_global_schema_version(sys_version);
       session.partition_hit().reset();
       session.set_pl_can_retry(true);
-      ObLockWaitNode &lock_wait_node  = req_->get_lock_wait_node();
-      lock_wait_node.set_session_info(session.get_sessid());
 
       need_response_error = false;
       need_disconnect = false;

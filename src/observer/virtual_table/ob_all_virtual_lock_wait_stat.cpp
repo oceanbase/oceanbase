@@ -139,6 +139,9 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
         case SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->sessid_);
           break;
+        case HOLDER_SESSION_ID:
+          cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
+          break;
         case BLOCK_SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->block_sessid_);
           break;

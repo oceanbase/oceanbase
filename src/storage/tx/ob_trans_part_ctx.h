@@ -199,6 +199,7 @@ public:
   bool is_table_lock_killed() const;
 
   share::ObLSID get_ls_id() const { return ls_id_; }
+  uint32_t get_session_id() const { return session_id_; }
 
   // for elr
   bool is_can_elr() const { return can_elr_; }

@@ -19,6 +19,10 @@
 
 namespace oceanbase
 {
+namespace share
+{
+class ObLSID;
+}
 namespace rpc
 {
 
@@ -27,16 +31,19 @@ struct ObLockWaitNode: public common::SpHashNode
   ObLockWaitNode();
   ~ObLockWaitNode() {}
   void reset_need_wait() { need_wait_ = false; }
-  void set(void* addr,
+  void set(void *addr,
            int64_t hash,
            int64_t lock_seq,
            int64_t timeout,
            uint64_t tablet_id,
            const int64_t last_compact_cnt,
            const int64_t total_trans_node_cnt,
-           const char* key,
+           const char *key,
+           const uint32_t sess_id,
+           const uint32_t holder_sess_id,
            int64_t tx_id,
-           int64_t holder_tx_id);
+           int64_t holder_tx_id,
+           const share::ObLSID &ls_id);
   void change_hash(const int64_t hash, const int64_t lock_seq);
   void update_run_ts(const int64_t run_ts) { run_ts_ = run_ts; }
   int64_t get_run_ts() const { return run_ts_; }
@@ -70,6 +77,7 @@ struct ObLockWaitNode: public common::SpHashNode
                K_(try_lock_times),
                KCSTRING_(key),
                K_(sessid),
+               K_(holder_sessid),
                K_(block_sessid),
                K_(run_ts),
                K_(lock_mode),
@@ -91,6 +99,7 @@ struct ObLockWaitNode: public common::SpHashNode
   uint64_t tablet_id_;
   int64_t try_lock_times_;
   uint32_t sessid_;
+  uint32_t holder_sessid_;
   uint32_t block_sessid_;
   int64_t tx_id_;
   int64_t holder_tx_id_;
