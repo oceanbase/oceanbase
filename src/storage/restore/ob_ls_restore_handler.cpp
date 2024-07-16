@@ -1309,6 +1309,15 @@ int ObILSRestoreState::online_()
   return ret;
 }
 
+int ObILSRestoreState::offline_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_->offline())) {
+    LOG_WARN("offline ls failed", K(ret), KPC(ls_));
+  }
+  return ret;
+}
+
 int ObILSRestoreState::schedule_tablet_group_restore_(
     const ObTabletGroupRestoreArg &arg,
     const share::ObTaskId &task_id)
@@ -1577,6 +1586,10 @@ int ObLSRestoreStartState::do_with_no_ls_meta_()
   bool is_finish = false;
   if (OB_FAIL(online_())) {
     LOG_WARN("fail to online ls", K(ret), KPC_(ls));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(offline_())) {
+      LOG_WARN("fail to offline ls", K(tmp_ret), K(ret), KPC_(ls));
+    }
   } else if (OB_FAIL(check_replay_to_target_scn_(ls_restore_arg_->get_consistent_scn(), is_finish))) {
     LOG_WARN("failed to check clog replay to consistent scn", K(ret));
   } else if (!is_finish) {
@@ -1611,6 +1624,10 @@ int ObLSRestoreStartState::do_with_uncreated_ls_()
     // creating ls finished after sys ls restored. cur ls need to do restore.
   } else if (OB_FAIL(online_())) {
     LOG_WARN("fail to enable log", K(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(offline_())) {
+      LOG_WARN("fail to offline ls", K(tmp_ret), K(ret), KPC_(ls));
+    }
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
     LOG_WARN("fail to advance status", K(ret), KPC(ls_), K(next_status));
   } else {
@@ -1825,6 +1842,10 @@ int ObLSRestoreSysTabletState::leader_restore_sys_tablet_()
     // next term to retry
   } else if (OB_FAIL(online_())) {
     LOG_WARN("fail to load ls inner tablet", K(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(offline_())) {
+      LOG_WARN("fail to offline ls", K(tmp_ret), K(ret), KPC_(ls));
+    }
   } else if (OB_FAIL(ls_->get_ls_restore_handler()->update_rebuild_seq())) {
     LOG_WARN("failed to update rebuild seq", K(ret), KPC(ls_));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
@@ -1857,6 +1878,10 @@ int ObLSRestoreSysTabletState::follower_restore_sys_tablet_()
     // next term to retry
   } else if (OB_FAIL(online_())) {
     LOG_WARN("fail to load ls inner tablet", K(ret));
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(offline_())) {
+      LOG_WARN("fail to offline ls", K(tmp_ret), K(ret), KPC_(ls));
+    }
   } else if (OB_FAIL(ls_->get_ls_restore_handler()->update_rebuild_seq())) {
     LOG_WARN("failed to update rebuild seq", K(ret), KPC(ls_));
   } else if (OB_FAIL(advance_status_(*ls_, next_status))) {
