@@ -534,6 +534,8 @@ int ObTableApiProcessorBase::end_trans(bool is_rollback, rpc::ObRequest *req, in
       }
     }
     trans_state_ptr_->clear_start_trans_executed();
+  } else if (OB_NOT_NULL(lock_handle)) {
+    HTABLE_LOCK_MGR->release_handle(*lock_handle); // also release lock when start trans failed
   }
   trans_state_ptr_->reset();
   NG_TRACE(T_end_trans_end);
