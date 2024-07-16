@@ -961,19 +961,10 @@ ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, Parse
     *error_code = OB_PARSER_ERR_UNEXPECTED;
   } else if (table_node->type_ == T_JOINED_TABLE && table_node->value_ != 1) {
     // table_node is a join table and without a parenthese.
-    if (OB_ISNULL(table_node->children_[0])) {
-      *error_code = OB_PARSER_ERR_UNEXPECTED;
-    } else {
-      if (T_JOIN_RIGHT == table_node->children_[0]->type_) {
-        table_node->children_[2] = adjust_inner_join_inner(error_code, inner_join, table_node->children_[2]);
-      } else {
-        table_node->children_[1] = adjust_inner_join_inner(error_code, inner_join, table_node->children_[1]);
-      }
-    }
+    table_node->children_[1] = adjust_inner_join_inner(error_code, inner_join, table_node->children_[1]);
     if (OB_PARSER_SUCCESS != *error_code) {
       /* do nothing */
-    } else if (OB_ISNULL(table_node->children_[1]) ||
-               OB_ISNULL(table_node->children_[2])) {
+    } else if (OB_ISNULL(table_node->children_[1])) {
       *error_code = OB_PARSER_ERR_UNEXPECTED;
     } else {
       ret_node = table_node;
