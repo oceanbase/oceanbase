@@ -1396,9 +1396,6 @@ private:
                          common::ObIArray<common::ObZone> &zones_in_pool);
   int set_new_database_options(const obrpc::ObAlterDatabaseArg &arg,
                                share::schema::ObDatabaseSchema &new_database_schema);
-  int check_tablegroup_in_single_database(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const share::schema::ObTableSchema &table_schema);
   int set_new_table_options(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::AlterTableSchema &alter_table_schema,

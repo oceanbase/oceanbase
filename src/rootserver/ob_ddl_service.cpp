@@ -2336,39 +2336,6 @@ int ObDDLService::create_table_in_trans(
   return ret;
 }
 
-int ObDDLService::check_tablegroup_in_single_database(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const share::schema::ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
-  const ObSimpleTableSchemaV2 *sample_table = NULL;
-  if (OB_INVALID_ID == table_schema.get_tablegroup_id()) {
-    // skip
-  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(
-          table_schema.get_tenant_id(), table_schema.get_tablegroup_id(), table_schemas))) {
-    LOG_WARN("fail to get table schemas in tablegroup", K(ret),
-             "tenant_id", table_schema.get_tenant_id(),
-             "tablegroup_id", table_schema.get_tablegroup_id());
-  } else if (OB_FAIL(get_sample_table_schema(table_schemas, sample_table))) {
-    LOG_WARN("fail to get sample table schema", K(ret));
-  } else if (NULL == sample_table) {
-    // empty tablegroup, good
-  } else {
-    if (sample_table->get_database_id() != table_schema.get_database_id()) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("tables in one tablegroup across more than one schema", K(ret),
-               "sample_table_id", sample_table->get_table_id(),
-               "sample_database_id", sample_table->get_database_id(),
-               "tablegroup_id", table_schema.get_tablegroup_id(),
-               "table_id", table_schema.get_table_id(),
-               "table_database_id", table_schema.get_database_id());
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tables in one tablegroup across more than one schema");
-    } else {} // good
-  }
-  return ret;
-}
-
 int ObDDLService::set_new_table_options(
     const obrpc::ObAlterTableArg &alter_table_arg,
     const share::schema::AlterTableSchema &alter_table_schema,
@@ -2420,9 +2387,7 @@ int ObDDLService::set_new_table_options(
     if (OB_SUCC(ret)
         && alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TABLEGROUP_NAME)) {
       ObTableGroupHelp helper(*this, *schema_service_, *sql_proxy_);
-      if (OB_FAIL(check_tablegroup_in_single_database(schema_guard, new_table_schema))) {
-        LOG_WARN("fail to check tablegroup in single database", K(ret));
-      } else if (OB_FAIL(helper.check_table_alter_tablegroup(
+      if (OB_FAIL(helper.check_table_alter_tablegroup(
                          schema_guard, NULL, orig_table_schema, new_table_schema))) {
         LOG_WARN("fail to check table schema in tablegroup", K(ret));
       } else {} // good
@@ -34693,12 +34658,12 @@ int ObDDLService::try_check_and_set_table_schema_in_tablegroup(
         && !is_inner_table(schema.get_table_id())) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("user table cannot add to sys tablegroup", KR(ret), K(schema.get_table_id()));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user table cannot add to sys tablegroup");
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user table add to sys tablegroup");
     } else if (!is_sys_tablegroup_id(tablegroup_id)
                && is_inner_table(schema.get_table_id())) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("inner table cannot add to user tablegroup", KR(ret), K(schema.get_table_id()));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "inner table cannot add to user tablegroup");
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "inner table add to user tablegroup");
     } else if (!is_sys_tablegroup_id(tablegroup_id)) {
       ObTableGroupHelp helper(*this, *schema_service_, *sql_proxy_);
       if (OB_FAIL(helper.check_table_partition_in_tablegroup(NULL, schema, schema_guard))) {
