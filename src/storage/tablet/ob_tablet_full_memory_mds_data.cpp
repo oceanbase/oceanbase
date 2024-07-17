@@ -193,7 +193,9 @@ int ObTabletFullMemoryMdsData::read_auto_inc_seq(
   return ret;
 }
 
-int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(ObMdsMiniMergeOperator &op) const
+int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(
+    const share::SCN &mds_ckpt_scn,
+    ObMdsMiniMergeOperator &op) const
 {
   int ret = OB_SUCCESS;
   // key from small to big
@@ -204,7 +206,6 @@ int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(ObMdsMiniMergeOperator 
 
   TIMEGUARD_INIT(STORAGE, 10_ms);
   ObArenaAllocator allocator;
-  share::SCN tablet_status_create_commit_scn;
   mds::MdsDumpKV tmp_mds_kv;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -224,29 +225,13 @@ int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(ObMdsMiniMergeOperator 
   }
 
   if (OB_SUCC(ret)) {
-    int64_t pos = 0;
-    ObTabletCreateDeleteMdsUserData data;
-    const common::ObString &str = tablet_status_committed_kv_.v_.user_data_;
-    if (str.empty()) {
-      LOG_INFO("tablet status user data is empty", K(ret), K(tablet_status_committed_kv_));
-    } else if (CLICK_FAIL(data.deserialize(str.ptr(), str.length(), pos))) {
-      LOG_WARN("failed to deserialize user data", K(ret), K(str));
-    } else if (OB_UNLIKELY(!data.create_commit_scn_.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect invalid create commit scn", K(ret), K(data.create_commit_scn_));
-    } else {
-      tablet_status_create_commit_scn = data.create_commit_scn_;
-    }
-  }
-
-  if (OB_SUCC(ret)) {
     mds::MdsDumpKV tmp_mds_kv;
     if (!auto_inc_seq_.is_valid()) {
       LOG_INFO("auto inc seq is invalid", K(ret), K(auto_inc_seq_));
     } else if (CLICK_FAIL(mock_convert_auto_inc_seq_to_mds_dump_kv(allocator,
-        auto_inc_seq_, tablet_status_create_commit_scn, tmp_mds_kv))) {
+        auto_inc_seq_, mds_ckpt_scn, tmp_mds_kv))) {
       LOG_WARN("failed to convert auto_inc_seq to mds_dump_kv",
-          K(ret), K(auto_inc_seq_), K(tablet_status_create_commit_scn));
+          K(ret), K(auto_inc_seq_), K(mds_ckpt_scn));
     } else if (CLICK_FAIL(op(tmp_mds_kv))) {
       LOG_WARN("failed to dump auto_inc_seq", K(ret), K(tmp_mds_kv), K(auto_inc_seq_));
     }
@@ -261,9 +246,9 @@ int ObTabletFullMemoryMdsData::scan_all_mds_data_with_op(ObMdsMiniMergeOperator 
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, medium info is null", K(ret), K(i), KP(medium_info), K(array));
       } else if (CLICK_FAIL(mock_convert_medium_info_to_mds_dump_kv(allocator,
-          *medium_info, tablet_status_create_commit_scn, tmp_mds_kv))) {
+          *medium_info, mds_ckpt_scn, tmp_mds_kv))) {
         LOG_WARN("failed to convert medium_info to mds_dump_kv",
-            K(ret), K(i), KPC(medium_info), K(tablet_status_create_commit_scn));
+            K(ret), K(i), KPC(medium_info), K(mds_ckpt_scn));
       } else if (CLICK_FAIL(op(tmp_mds_kv))) {
         LOG_WARN("failed to dump medium_info", K(ret),
             K(i), K(tmp_mds_kv), K(aux_tablet_info_committed_kv_));
@@ -283,7 +268,7 @@ template <typename UnitKey>
 static int inner_mock_mds_node(
     common::ObArenaAllocator &allocator,
     const UnitKey &key,
-    const share::SCN tablet_status_create_commit_scn,
+    const share::SCN mds_ckpt_scn,
     mds::MdsDumpNode &node)
 {
   int ret = OB_SUCCESS;
@@ -293,9 +278,9 @@ static int inner_mock_mds_node(
   node.allocator_ = &allocator;
   node.writer_id_ = mds::MdsWriter::DEFAULT_WRITER_ID;
   node.seq_no_ = transaction::ObTxSEQ::MIN_VAL();
-  node.redo_scn_ = share::SCN::plus(tablet_status_create_commit_scn, 1);
-  node.end_scn_ = share::SCN::plus(tablet_status_create_commit_scn, 1);
-  node.trans_version_ = share::SCN::plus(tablet_status_create_commit_scn, 1);
+  node.redo_scn_ = mds_ckpt_scn;
+  node.end_scn_ = mds_ckpt_scn;
+  node.trans_version_ = mds_ckpt_scn;
 
   const int64_t user_data_size = key.get_serialize_size();
   char *user_data_buffer = nullptr;
@@ -321,7 +306,7 @@ static int inner_mock_mds_node(
 int ObTabletFullMemoryMdsData::mock_convert_auto_inc_seq_to_mds_dump_kv(
       common::ObArenaAllocator &allocator,
       const share::ObTabletAutoincSeq &auto_inc_seq,
-      const share::SCN tablet_status_create_commit_scn,
+      const share::SCN mds_ckpt_scn,
       mds::MdsDumpKV &dump_kv)
 {
   int ret = OB_SUCCESS;
@@ -338,9 +323,8 @@ int ObTabletFullMemoryMdsData::mock_convert_auto_inc_seq_to_mds_dump_kv(
     node.mds_table_id_ = table_id;
     node.mds_unit_id_ = unit_id;
     node.status_.union_.field_.writer_type_ = mds::WriterType::AUTO_INC_SEQ;
-    if (OB_FAIL(inner_mock_mds_node(allocator, auto_inc_seq, tablet_status_create_commit_scn, node))) {
-      LOG_WARN("failed to inner mock mds node", K(ret),
-          K(auto_inc_seq), K(tablet_status_create_commit_scn));
+    if (OB_FAIL(inner_mock_mds_node(allocator, auto_inc_seq, mds_ckpt_scn, node))) {
+      LOG_WARN("failed to inner mock mds node", K(ret), K(auto_inc_seq), K(mds_ckpt_scn));
     }
   }
   return ret;
@@ -350,7 +334,7 @@ int ObTabletFullMemoryMdsData::mock_convert_auto_inc_seq_to_mds_dump_kv(
 int ObTabletFullMemoryMdsData::mock_convert_medium_info_to_mds_dump_kv(
       common::ObArenaAllocator &allocator,
       const compaction::ObMediumCompactionInfo& medium_info,
-      const share::SCN tablet_status_create_commit_scn,
+      const share::SCN mds_ckpt_scn,
       mds::MdsDumpKV &dump_kv)
 {
   int ret = OB_SUCCESS;
@@ -367,9 +351,8 @@ int ObTabletFullMemoryMdsData::mock_convert_medium_info_to_mds_dump_kv(
     node.mds_table_id_ = table_id;
     node.mds_unit_id_ = unit_id;
     node.status_.union_.field_.writer_type_ = mds::WriterType::MEDIUM_INFO;
-    if (OB_FAIL(inner_mock_mds_node(allocator, medium_info, tablet_status_create_commit_scn, node))) {
-      LOG_WARN("failed to inner mock mds node", K(ret),
-          K(medium_info), K(tablet_status_create_commit_scn));
+    if (OB_FAIL(inner_mock_mds_node(allocator, medium_info, mds_ckpt_scn, node))) {
+      LOG_WARN("failed to inner mock mds node", K(ret), K(medium_info), K(mds_ckpt_scn));
     }
   }
   return ret;
