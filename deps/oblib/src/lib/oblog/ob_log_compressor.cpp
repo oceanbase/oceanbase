@@ -362,7 +362,7 @@ void ObLogCompressor::log_compress_loop_()
 
         // delete oldest syslog file if necessary
         enable_delete_file = enable_delete_file && (max_disk_size_ > 0 || OB_LOGGER.get_max_file_index() > 0);
-        if (OB_SUCC(ret) && !stopped_ && enable_delete_file && disk_remaining_size < OB_SYSLOG_DELETE_RESERVE_SIZE) {
+        if (!stopped_ && enable_delete_file && disk_remaining_size < OB_SYSLOG_DELETE_RESERVE_SIZE) {
           int array_size = oldest_files_.count();
           const char *delete_file = NULL;
           const ObSyslogFile *syslog_ptr = NULL;
