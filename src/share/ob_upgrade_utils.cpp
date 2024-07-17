@@ -1309,6 +1309,7 @@ int ObUpgradeFor4310Processor::post_upgrade_for_create_replication_role_in_oracl
   }
   return ret;
 }
+/* =========== 4310 upgrade processor end ============= */
 
 int ObUpgradeFor4320Processor::post_upgrade()
 {
@@ -1452,7 +1453,33 @@ int ObUpgradeFor4320Processor::post_upgrade_for_online_estimate_percent()
   }  return ret;
 }
 
-/* =========== 4310 upgrade processor end ============= */
+/* =========== 4320 upgrade processor end ============= */
+
+int ObUpgradeFor4330Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_external_table_flag())) {
+    LOG_WARN("fail to alter log external table flag", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4330Processor::post_upgrade_for_external_table_flag()
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id_ != OB_SYS_TENANT_ID) {
+    // do nothing
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice is null", KR(ret));
+  } else if (OB_FAIL(GCTX.root_service_->schedule_alter_log_external_table_task())) {
+    LOG_WARN("schedule alter log external table task failed", KR(ret));
+  }
+  return ret;
+}
+/* =========== 4330 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */
 } // end share

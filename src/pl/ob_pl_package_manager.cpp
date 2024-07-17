@@ -162,7 +162,7 @@ int ObPLPackageManager::read_and_exec_package_sql(
       // but we need to create system packages with oralce compatibility
       // here hack to oracle mode
       bool eof = false;
-      bool skip_affected_rows_check = false;
+      bool create_external_table = false;
       ObSessionParam param;
       ObSessionParam *param_ptr = nullptr;
       char *last_slash = strrchr(const_cast<char*>(package_full_path), '/');
@@ -170,7 +170,7 @@ int ObPLPackageManager::read_and_exec_package_sql(
       int64_t sql_mode = SMO_STRICT_ALL_TABLES | SMO_NO_ZERO_IN_DATE | SMO_NO_AUTO_CREATE_USER;
       // allow affected_rows > 0 when exec sql in external_table_alert_log.sql
       if (strcmp(pacakge_filename, "external_table_alert_log.sql") == 0) {
-        skip_affected_rows_check = true;
+        create_external_table = true;
         param.sql_mode_ = &sql_mode;
         param_ptr = &param;
       }
@@ -185,7 +185,7 @@ int ObPLPackageManager::read_and_exec_package_sql(
                                                 static_cast<int64_t>(compa_mode),
                                                 param_ptr))) {
             LOG_WARN("fail to exec package sql", K(sql_buf), K(ret));
-          } else if (affected_rows != 0 && !skip_affected_rows_check) {
+          } else if (affected_rows != 0 && !create_external_table) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("affected_rows expected to be zero", K(affected_rows), K(ret));
           } else {
@@ -194,6 +194,23 @@ int ObPLPackageManager::read_and_exec_package_sql(
         }
       }
       fclose(file);
+      if (create_external_table && OB_SUCC(ret)) {
+        uint64_t data_version = 0;
+        common::ObString alter_table_sql("alter external table sys_external_tbs.__all_external_alert_log_info auto_refresh immediate");
+        if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+          LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+        } else if (data_version >= DATA_VERSION_4_3_3_0) {
+          if (OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID,
+                                      alter_table_sql,
+                                      affected_rows,
+                                      static_cast<int64_t>(compa_mode),
+                                      param_ptr))) {
+            LOG_WARN("fail to alter auto_refresh flag of external table ", K(ret), K(alter_table_sql));
+          } else {
+            LOG_INFO("seccess to alter auto_refresh flag", KR(ret), K(alter_table_sql));
+          }
+        }
+      }
     }
   }
   return ret;

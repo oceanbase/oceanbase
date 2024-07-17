@@ -1205,6 +1205,7 @@ int ObUpgradeExecutor::run_upgrade_end_action_(
     const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
+  DEBUG_SYNC(BEFROE_UPDATE_DATA_VERSION);
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(check_stop())) {
