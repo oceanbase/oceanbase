@@ -889,6 +889,7 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
           TRANS_LOG(WARN, "switch state error", KR(ret), K(ls_id_), K(tx_ls_state_mgr_));
         } else if (OB_TMP_FAIL(submit_start_working_log_())) {
           TRANS_LOG(WARN, "submit start working log failed", KR(tmp_ret), K(*this));
+          tx_ls_state_mgr_.restore_tx_ls_state();
         }
         if (OB_SUCCESS != tmp_ret) {
           ret = OB_LS_NEED_REVOKE;
