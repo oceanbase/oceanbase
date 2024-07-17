@@ -551,7 +551,7 @@ int ObLSTxCtxMgr::get_tx_ctx_directly_from_hash_map(const ObTransID &tx_id, ObPa
         TRANS_LOG(ERROR, "get transaction context error", KR(ret), K(tx_id));
       }
     } else {
-      ctx = dynamic_cast<transaction::ObPartTransCtx*>(tmp_ctx);
+      ctx = static_cast<transaction::ObPartTransCtx*>(tmp_ctx);
     }
   }
   return ret;
