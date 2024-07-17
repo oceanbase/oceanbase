@@ -3461,7 +3461,7 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
       ObObjTypeClass expect_tc = ob_obj_type_class(input_type.get_calc_type());
       if (T_FUN_UDF == parent.get_expr_type()
           && ObNumberTC == ori_tc
-          && (ObTextTC == expect_tc || ObLobTC == expect_tc)) {
+          && ObLobTC == expect_tc) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("cast to lob type not allowed", K(ret));
       }
