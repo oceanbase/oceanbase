@@ -2061,7 +2061,6 @@ int JtColNode::process_default_value_pre_mysql(JtScanCtx* ctx)
   ctx->is_cover_error_ = false;
   ObExpr* expr = ctx->spec_ptr_->column_exprs_.at(info.output_column_idx_);
   ObObjType dst_type = expr->datum_meta_.type_;
-  char col_str[OB_MAX_COLUMN_NAME_LENGTH] = {0};
   if (is_emp_evaled_) {
   } else if (col_info_.on_empty_ == JSN_VALUE_DEFAULT) {
     ObExpr* default_expr = ctx->spec_ptr_->emp_default_exprs_.at(col_info_.empty_expr_id_);
@@ -2069,6 +2068,7 @@ int JtColNode::process_default_value_pre_mysql(JtScanCtx* ctx)
       LOG_WARN("fail to process empty default value", K(ret), K(dst_type));
     } else if (OB_FAIL(JtFuncHelpler::pre_default_value_check_mysql(ctx, emp_val_, *this))) {
       ret = OB_OPERATE_OVERFLOW;
+      char col_str[OB_MAX_COLUMN_NAME_LENGTH] = {0};
       databuff_printf(col_str, OB_MAX_COLUMN_NAME_LENGTH, 0, "%s", col_info_.col_name_.ptr());
       LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "JSON_TABLE", col_str);
     } else {
@@ -2082,7 +2082,8 @@ int JtColNode::process_default_value_pre_mysql(JtScanCtx* ctx)
     if (OB_FAIL(get_default_value_pre_mysql(default_expr, ctx, err_val_, dst_type))) {
       LOG_WARN("fail to process empty default value", K(ret), K(dst_type));
     } else if (OB_FAIL(JtFuncHelpler::pre_default_value_check_mysql(ctx, err_val_, *this))) {
-      databuff_printf(col_str, col_info_.col_name_.length(), 0, "%s", col_info_.col_name_.length(), col_info_.col_name_.ptr());
+      char col_str[OB_MAX_COLUMN_NAME_LENGTH] = {0};
+      databuff_printf(col_str, OB_MAX_COLUMN_NAME_LENGTH, 0, "%s",  col_info_.col_name_.ptr());
       LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "JSON_TABLE", col_str);
     } else {
       is_err_evaled_ = true;
