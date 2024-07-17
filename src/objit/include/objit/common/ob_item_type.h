@@ -2545,6 +2545,8 @@ typedef enum ObItemType
   T_PARTITION_EXPR,
   T_CACHE_INDEX,
   T_LOAD_INDEX_INTO_CACHE,
+
+  T_RESOURCE_GROUP,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
