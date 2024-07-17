@@ -14070,6 +14070,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
 
 int ObDDLService::add_not_null_column_to_table_schema(
     obrpc::ObAlterTableArg &alter_table_arg,
+    const uint64_t tenant_data_version,
     const ObTableSchema &origin_table_schema,
     ObTableSchema &new_table_schema,
     ObSchemaGetterGuard &schema_guard,
@@ -14154,7 +14155,7 @@ int ObDDLService::add_not_null_column_to_table_schema(
       ObArray<ObTabletID> new_tablet_ids;
       if (OB_FAIL(new_table_schema.get_tablet_ids(new_tablet_ids))) {
         LOG_WARN("failed to get tablet ids", K(ret));
-      } else if (OB_FAIL(build_single_table_rw_defensive(tenant_id, new_tablet_ids, new_table_schema.get_schema_version(), trans))) {
+      } else if (OB_FAIL(build_single_table_rw_defensive_(tenant_id, tenant_data_version, new_tablet_ids, new_table_schema.get_schema_version(), trans))) {
         LOG_WARN("failed to build rw defensive", K(ret));
       }
     }
@@ -14164,6 +14165,7 @@ int ObDDLService::add_not_null_column_to_table_schema(
 
 int ObDDLService::add_not_null_column_default_null_to_table_schema(
     obrpc::ObAlterTableArg &alter_table_arg,
+    const uint64_t tenant_data_version,
     const ObTableSchema &origin_table_schema,
     ObTableSchema &new_table_schema,
     ObSchemaGetterGuard &schema_guard,
@@ -14190,6 +14192,7 @@ int ObDDLService::add_not_null_column_default_null_to_table_schema(
     ret = OB_ERR_TABLE_ADD_NOT_NULL_COLUMN_NOT_EMPTY;
     LOG_WARN("table add not null column to is not empty", K(ret), K(tenant_id), K(origin_table_schema.get_table_id()));
   } else if (OB_FAIL(add_not_null_column_to_table_schema(alter_table_arg,
+                                                         tenant_data_version,
                                                          origin_table_schema,
                                                          new_table_schema,
                                                          schema_guard,
@@ -14202,6 +14205,7 @@ int ObDDLService::add_not_null_column_default_null_to_table_schema(
 
 int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                          ObSchemaGetterGuard &schema_guard,
+                                                         const uint64_t tenant_data_version,
                                                          const bool is_default_value_null)
 {
   int ret = OB_SUCCESS;
@@ -14246,6 +14250,7 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
           if (is_default_value_null) {
             if (OB_FAIL(add_not_null_column_default_null_to_table_schema(
                           alter_table_arg,
+                          tenant_data_version,
                           *origin_table_schema,
                           new_table_schema,
                           schema_guard,
@@ -14254,6 +14259,7 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
               LOG_WARN("failed to add default value null column to table schema", K(ret));
             }
           } else if (OB_FAIL(add_not_null_column_to_table_schema(alter_table_arg,
+                                                                tenant_data_version,
                                                                 *origin_table_schema,
                                                                 new_table_schema,
                                                                 schema_guard,
@@ -16005,6 +16011,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
       } else if (is_oracle_mode_add_column_not_null_ddl) {
         if (OB_FAIL(do_oracle_add_column_not_null_in_trans(alter_table_arg,
                                                            schema_guard,
+                                                           data_version,
                                                            is_default_value_null))) {
           LOG_WARN("add column not null failed", K(ret));
         } else {
@@ -19625,39 +19632,6 @@ int ObDDLService::write_ddl_barrier(
       } else if (OB_FAIL(trans.register_tx_data(tenant_id, logs[i].ls_id_, transaction::ObTxDataSourceType::DDL_BARRIER, buf, pos))) {
         LOG_WARN("failed to register tx data", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObDDLService::build_single_table_rw_defensive(
-    const uint64_t tenant_id,
-    const ObArray<ObTabletID> &tablet_ids,
-    const int64_t schema_version,
-    ObDDLSQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObBatchUnbindTabletArg> args;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || tablet_ids.empty() || schema_version <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tenant_id), K(tablet_ids), K(schema_version));
-  } else if (OB_FAIL(build_modify_tablet_binding_args(
-      tenant_id, tablet_ids, true/*is_hidden_tablets*/, schema_version, args, trans))) {
-    LOG_WARN("failed to build reuse index args", K(ret));
-  }
-  ObArenaAllocator allocator("DDLRWDefens");
-  for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
-    int64_t pos = 0;
-    int64_t size = args[i].get_serialize_size();
-    char *buf = nullptr;
-    allocator.reuse();
-    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate", K(ret));
-    } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
-      LOG_WARN("failed to serialize arg", K(ret));
-    } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
-      LOG_WARN("failed to register tx data", K(ret));
     }
   }
   return ret;
