@@ -762,10 +762,20 @@ int ObLSMigrationHandler::schedule_build_ls_dag_net_(
     LOG_WARN("schedule build ls dag net get invalid argument", K(ret), K(task));
   } else {
     const int32_t cancel_result = OB_CANCELED;
+#ifdef ERRSIM
+    SERVER_EVENT_ADD("storage_ha", "build_ls_migration_dag_net_before",
+        "tenant_id", ls_->get_tenant_id(),
+        "ls_id", ls_->get_ls_id().id(),
+        "src", task.arg_.src_.get_server(),
+        "dst", task.arg_.dst_.get_server(),
+        "task_id", task.task_id_);
+#endif
     DEBUG_SYNC(BEFORE_BUILD_LS_MIGRATION_DAG_NET);
     common::SpinWLockGuard guard(lock_);
-    if (is_cancel_ && OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
-      LOG_WARN("failed to swicth next stage cancel", K(ret));
+    if (is_cancel_) {
+      if (OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
+        LOG_WARN("failed to swicth next stage cancel", K(ret));
+      }
     } else {
       ObTenantDagScheduler *scheduler = nullptr;
       ObMigrationDagNetInitParam param;
@@ -821,8 +831,10 @@ int ObLSMigrationHandler::schedule_prepare_ls_dag_net_(
   } else {
     const int32_t cancel_result = OB_CANCELED;
     common::SpinWLockGuard guard(lock_);
-    if (is_cancel_ && OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
-      LOG_WARN("failed to swicth next stage cancel", K(ret));
+    if (is_cancel_) {
+      if (OB_FAIL(switch_next_stage_with_nolock_(cancel_result))) {
+        LOG_WARN("failed to swicth next stage cancel", K(ret));
+      }
     } else {
       ObTenantDagScheduler *scheduler = nullptr;
       ObLSPrepareMigrationParam param;
