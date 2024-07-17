@@ -498,109 +498,34 @@ int FilterListBase::get_format_filter_string(char *buf, int64_t buf_len, int64_t
 FilterListAND::~FilterListAND()
 {}
 
-// Maximal Step Rule
-Filter::ReturnCode FilterListAND::merge_return_code(ReturnCode rc, ReturnCode local_rc)
-{
-  ReturnCode ret_code = local_rc;
-  if (rc == ReturnCode::SEEK_NEXT_USING_HINT) {
-    ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
-  } else {
-    switch (local_rc) {
-      case ReturnCode::SEEK_NEXT_USING_HINT:
-        ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
-        break;
-      case ReturnCode::INCLUDE:
-        ret_code = rc;
-        break;
-      case ReturnCode::INCLUDE_AND_NEXT_COL:
-        if (rc == ReturnCode::INCLUDE
-            || rc == ReturnCode::INCLUDE_AND_NEXT_COL) {
-          ret_code = ReturnCode::INCLUDE_AND_NEXT_COL;
-        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW) {
-          ret_code = ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW;
-        } else if (rc == ReturnCode::SKIP
-                   || rc == ReturnCode::NEXT_COL) {
-          ret_code = ReturnCode::NEXT_COL;
-        } else if (rc == ReturnCode::NEXT_ROW) {
-          ret_code = ReturnCode::NEXT_ROW;
-        }
-        break;
-      case ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW:
-        if (rc == ReturnCode::INCLUDE
-            || rc == ReturnCode::INCLUDE_AND_NEXT_COL
-            || rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW) {
-          ret_code = ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW;
-        } else if (rc == ReturnCode::SKIP
-                   || rc == ReturnCode::NEXT_COL
-                   || rc == ReturnCode::NEXT_ROW) {
-          ret_code = ReturnCode::NEXT_ROW;
-        }
-        break;
-      case ReturnCode::SKIP:
-        if (rc == ReturnCode::INCLUDE
-            || rc == ReturnCode::SKIP) {
-          ret_code = ReturnCode::SKIP;
-        } else if (rc == ReturnCode::INCLUDE_AND_NEXT_COL
-                   || rc == ReturnCode::NEXT_COL) {
-          ret_code = ReturnCode::NEXT_COL;
-        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW
-                   || rc == ReturnCode::NEXT_ROW) {
-          ret_code = ReturnCode::NEXT_ROW;
-        }
-        break;
-      case ReturnCode::NEXT_COL:
-        if (rc == ReturnCode::INCLUDE
-            || rc == ReturnCode::INCLUDE_AND_NEXT_COL
-            || rc == ReturnCode::SKIP
-            || rc == ReturnCode::NEXT_COL) {
-          ret_code = ReturnCode::NEXT_COL;
-        } else if (rc == ReturnCode::INCLUDE_AND_SEEK_NEXT_ROW
-                   || rc == ReturnCode::NEXT_ROW) {
-          ret_code = ReturnCode::NEXT_ROW;
-        }
-        break;
-      case ReturnCode::NEXT_ROW:
-        ret_code = ReturnCode::NEXT_ROW;
-        break;
-      default:
-        break;
-    }  // end switch
-  }
-  return ret_code;
-}
-
 int FilterListAND::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
 {
   int ret = OB_SUCCESS;
-  if (filters_.empty()) {
-    ret_code = ReturnCode::INCLUDE;
-  } else {
-    ret_code = ReturnCode::INCLUDE;
-    seek_hint_filters_.reset();
-    const int64_t N = filters_.count();
-    for (int64_t i = 0; OB_SUCCESS == ret && i < N; ++i)
-    {
-      Filter *filter = filters_.at(i);
-      if (filter->filter_all_remaining()) {
-        ret_code = ReturnCode::NEXT_ROW;
-        break;
+  ret_code = ReturnCode::INCLUDE;
+  seek_hint_filters_.reset();
+  const int64_t N = filters_.count();
+  bool loop = true;
+  for (int64_t i = 0; OB_SUCCESS == ret && i < N && loop; ++i) {
+    Filter *filter = filters_.at(i);
+    if (filter->filter_all_remaining()) {
+      ret_code = ReturnCode::NEXT_ROW;
+      loop = false;
+    } else {
+      if (OB_FAIL(filter->filter_cell(cell, ret_code))) {
+        LOG_WARN("failed to filter cell", K(ret));
       } else {
-        ReturnCode local_rc;
-        if (OB_FAIL(filter->filter_cell(cell, local_rc))) {
-          LOG_WARN("failed to filter cell", K(ret));
-        } else {
-          ret_code = merge_return_code(ret_code, local_rc);
-          LOG_DEBUG("[yzfdebug] AND filter cell", K(i), K(local_rc), K(ret_code));
-          if (local_rc == ReturnCode::SEEK_NEXT_USING_HINT) {
+        switch (ret_code) {
+          case ReturnCode::INCLUDE_AND_NEXT_COL:
+          case ReturnCode::INCLUDE:
+            continue;
+          case ReturnCode::SEEK_NEXT_USING_HINT:
             if (OB_FAIL(seek_hint_filters_.push_back(filter))) {
               LOG_WARN("failed to push back", K(ret));
             }
-          }
+          default:
+            loop = false;
         }
       }
-    } // end for
-    if (!seek_hint_filters_.empty()) {
-      ret_code = ReturnCode::SEEK_NEXT_USING_HINT;
     }
   }
   return ret;

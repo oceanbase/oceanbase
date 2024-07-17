@@ -349,7 +349,6 @@ public:
   virtual bool filter_row() override;
   virtual const char *filter_name() const override { return "FilterListAND"; }
 private:
-  static ReturnCode merge_return_code(ReturnCode rc, ReturnCode local_rc);
   ObSEArray<Filter*, 8> seek_hint_filters_;
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(FilterListAND);
