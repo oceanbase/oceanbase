@@ -6972,7 +6972,7 @@ def_table_schema(
     ('owner', 'varchar:128', 'true'),
     ('job_subname', 'varchar:128', 'true'),
     ('job_class', 'varchar:128', 'true'),
-    ('operation', 'varchar:128', 'true'),
+    ('operation', 'varchar:OB_MAX_SQL_LENGTH', 'true'),
     ('status', 'varchar:128', 'true'),
     ('code', 'int', 'true', '0'),
     ('req_start_date', 'timestamp', 'true'),

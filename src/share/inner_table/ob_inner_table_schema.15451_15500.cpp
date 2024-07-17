@@ -535,7 +535,7 @@ int ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_s
       0, //part_key_pos
       ObVarcharType, //column_type
       CS_TYPE_UTF8MB4_BIN, //column_collation_type
-      128, //column_length
+      OB_MAX_SQL_LENGTH, //column_length
       2, //column_precision
       -1, //column_scale
       true, //is_nullable
