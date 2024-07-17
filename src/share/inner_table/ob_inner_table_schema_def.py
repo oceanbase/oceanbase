@@ -35353,6 +35353,77 @@ SELECT
 # 21601: GV$OB_KV_GROUP_COMMIT_STATUS
 # 21602: V$OB_KV_GROUP_COMMIT_STATUS
 
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_FIELDS',
+  table_id        = '21603',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as INDEX_ID,
+    CAST(NULL as CHAR) as NAME,
+    CAST(NULL as UNSIGNED) as POS
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_FOREIGN',
+  table_id        = '21604',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as CHAR) as ID,
+    CAST(NULL as CHAR) as FOR_NAME,
+    CAST(NULL as CHAR) as REF_NAME,
+    CAST(NULL as UNSIGNED) as N_COLS,
+    CAST(NULL as UNSIGNED) as TYPE
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_FOREIGN_COLS',
+  table_id        = '21605',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as CHAR) as ID,
+    CAST(NULL as CHAR) as FOR_COL_NAME,
+    CAST(NULL as CHAR) as REF_COL_NAME,
+    CAST(NULL as UNSIGNED) as POS
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
