@@ -631,9 +631,8 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     path->is_local_order_ = false;
   } else if (get_plan()->get_optimizer_context().is_online_ddl()) {
     path->is_local_order_ = true;
-  } else if (((stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
-              stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_0) ||
-              stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_2) &&
+  } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
+                                                             COMPAT_VERSION_4_3_2) &&
             path->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count() == 1 &&
             !is_virtual_table(path->ref_table_id_)) {
     path->is_range_order_ = true;
@@ -2506,7 +2505,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                                          *allocator_,
                                                          contain_always_false))) {
           LOG_WARN("add query range dimension failed", K(ret));
-        } else if (OPT_CTX.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3
+        } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3)
                   && OB_FAIL(index_dim.add_sharding_info_dim(index_info_entry->get_sharding_info(), *allocator_))) {
           LOG_WARN("add partition num dimension failed");
         }

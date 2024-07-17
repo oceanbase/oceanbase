@@ -4279,9 +4279,8 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
       ObLogGranuleIterator *gi_op = static_cast<ObLogGranuleIterator *>(log_op);
       if (NULL != get_parent()) {
         //check topN sort
-        if (((stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
-              stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_0) ||
-              stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_2) &&
+        if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
+                                                            COMPAT_VERSION_4_3_2) &&
             LOG_SORT == get_parent()->get_type()) {
           ObLogSort *parent = static_cast<ObLogSort*>(get_parent());
           if (parent->is_local_merge_sort() &&
