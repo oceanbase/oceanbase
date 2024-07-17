@@ -889,7 +889,7 @@ int ObRootInspection::check_sys_param_(const uint64_t tenant_id)
              "table_name", OB_ALL_SYS_VARIABLE_TNAME, K(sys_param_names), K(extra_cond));
   }
   if (OB_SCHEMA_ERROR != ret) {
-  } else if (GCONF.in_upgrade_mode()) {
+  } else if (need_ignore_error_message_(tenant_id)) {
     LOG_WARN("check sys_variable failed", KR(ret));
   } else {
     LOG_DBA_ERROR(OB_ERR_ROOT_INSPECTION, "msg", "system variables are unmatched", KR(ret));
@@ -1206,7 +1206,7 @@ int ObRootInspection::check_sys_table_schemas_(
     ret = OB_SUCC(ret) ? back_ret : ret;
   }
   if (OB_SCHEMA_ERROR != ret) {
-  } else if (GCONF.in_upgrade_mode()) {
+  } else if (need_ignore_error_message_(tenant_id)) {
     LOG_WARN("check sys table schema failed", KR(ret), K(tenant_id));
   } else {
     LOG_ERROR("check sys table schema failed", KR(ret), K(tenant_id));
@@ -1801,6 +1801,37 @@ int ObRootInspection::check_cancel()
     ret = OB_CANCELED;
   }
   return ret;
+}
+
+int ObRootInspection::check_in_compatibility_mode_(const int64_t &tenant_id, bool &in_compatibility_mode)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id));
+  } else {
+    in_compatibility_mode = (data_version < DATA_CURRENT_VERSION);
+  }
+  return ret;
+}
+
+bool ObRootInspection::need_ignore_error_message_(const int64_t &tenant_id)
+{
+  int ret = OB_SUCCESS;
+  bool ignore = false;
+  bool in_compatibility_mode = false;
+  if (GCONF.in_upgrade_mode()) {
+    LOG_INFO("in upgrade mode, ignore root inspection error message", KR(ret),
+        K(GCONF.in_upgrade_mode()));
+    ignore = true;
+  } else if (OB_FAIL(check_in_compatibility_mode_(tenant_id, in_compatibility_mode))) {
+    LOG_WARN("failed to check compatible", KR(ret), K(tenant_id));
+  } else if (in_compatibility_mode) {
+    LOG_INFO("compatible not change to DATA_CURRENT_VERSION, ignore root inspection error message",
+        KR(ret), K(tenant_id), K(in_compatibility_mode));
+    ignore = true;
+  }
+  return ignore;
 }
 
 int ObRootInspection::check_tenant_status_(const uint64_t tenant_id)

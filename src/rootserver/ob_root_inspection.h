@@ -221,6 +221,8 @@ private:
                       const share::schema::ObTableSchema &hard_code_table);
   int check_cancel();
   int check_tenant_status_(const uint64_t tenant_id);
+  int check_in_compatibility_mode_(const int64_t &tenant_id, bool &in_compatibility_mode);
+  bool need_ignore_error_message_(const int64_t &tenant_id);
 private:
   bool inited_;
   volatile bool stopped_;
