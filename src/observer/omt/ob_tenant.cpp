@@ -444,6 +444,10 @@ int ObResourceGroup::acquire_more_worker(int64_t num, int64_t &succ_num, bool fo
   return ret;
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(EN_ACQUIRE_MORE_WORKER_INTERVAL)
+#endif
+
 void ObResourceGroup::check_worker_count()
 {
   int ret = OB_SUCCESS;
@@ -499,8 +503,15 @@ void ObResourceGroup::check_worker_count()
     int64_t succ_num = 0L;
     int64_t shrink_ts =
         (!is_group_critical && workers_.get_size() == 1 && token == 0) ? SLEEP_INTERVAL : SHRINK_INTERVAL;
-    if (OB_UNLIKELY(workers_.get_size() < target_min)) {
-      const int64_t diff = target_min - workers_.get_size();
+    int64_t diff = target_min - workers_.get_size();
+#ifdef ERRSIM
+    const int64_t interval = (-EN_ACQUIRE_MORE_WORKER_INTERVAL) * 1000;
+    if (diff <= 0 && -diff <= target_min && interval > 0 && REACH_TIME_INTERVAL(interval)) {
+      LOG_INFO("ERRSIM: acquire more worker", K(interval));
+      diff = 1;
+    }
+#endif
+    if (OB_UNLIKELY(diff > 0)) {
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, false);
       acquire_more_worker(diff, succ_num, /* force */ true);
@@ -1735,8 +1746,15 @@ void ObTenant::check_worker_count()
     int64_t succ_num = 0L;
     token = std::max(token, min_worker_cnt());
     token = std::min(token, max_worker_cnt());
-    if (OB_UNLIKELY(workers_.get_size() < min_worker_cnt())) {
-      const auto diff = min_worker_cnt() - workers_.get_size();
+    int64_t diff = min_worker_cnt() - workers_.get_size();
+#ifdef ERRSIM
+    const int64_t interval = (-EN_ACQUIRE_MORE_WORKER_INTERVAL) * 1000;
+    if (diff <= 0 && -diff <= min_worker_cnt() && interval > 0 && REACH_TIME_INTERVAL(interval)) {
+      LOG_INFO("ERRSIM: acquire more worker", K(interval));
+      diff = 1;
+    }
+#endif
+    if (OB_UNLIKELY(diff > 0)) {
       token_change_ts_ = now;
       ATOMIC_STORE(&shrink_, false);
       acquire_more_worker(diff, succ_num, /* force */ true);
