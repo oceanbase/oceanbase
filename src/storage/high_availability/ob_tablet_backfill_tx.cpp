@@ -947,6 +947,14 @@ int ObTabletBackfillTXTask::add_ready_sstable_into_table_mgr_(
     LOG_WARN("failed to get latest tablet status", K(ret), KP(tablet));
   } else if (FALSE_IT(transfer_start_scn = user_data.transfer_scn_)) {
   } else if (FALSE_IT(transfer_seq = tablet->get_tablet_meta().transfer_info_.transfer_seq_)) {
+  } else if (!transfer_start_scn.is_valid()) {
+    if (tablet_info_.is_committed_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("transfer transaction is committed but transfer start scn is invalid, unexpected", K(ret), K(tablet_info_), K(user_data));
+    } else {
+      ret = OB_EAGAIN;
+      LOG_WARN("transfer start scn is invalid, may transfer transaction rollback, need retry", K(ret), K(tablet_info_), K(user_data));
+    }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < non_backfill_sstable.count(); ++i) {
       ObTableHandleV2 &table_handle = non_backfill_sstable.at(i);
