@@ -41,6 +41,7 @@
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
 #include "sql/resolver/dcl/ob_dcl_resolver.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/rewrite/ob_transform_pre_process.h"
 #include "pl/ob_pl_stmt.h"
 #include "share/table/ob_ttl_util.h"
 namespace oceanbase
@@ -5566,6 +5567,7 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
     }
     const ObDataTypeCastParams dtc_params = session_info->get_dtc_params();
     ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
+    bool transform_happened = false;
     if (OB_FAIL(input_default_value.get_string(expr_str))) {
       LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
     } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(allocator,
@@ -5573,6 +5575,9 @@ int ObDDLResolver::check_default_value(ObObj &default_value,
       LOG_WARN("fail to convert for resolve", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_default_expr_v2_column_expr(params, expr_str, column, expr, allow_sequence))) {
       LOG_WARN("resolve expr_default expr failed", K(expr_str), K(column), K(ret));
+    } else if (OB_FAIL(ObTransformPreProcess::transform_expr(*params.expr_factory_,
+        *params.session_info_, expr, transform_happened))) {
+      LOG_WARN("transform_arg_case_recursively failed", K(ret));
     } else if (OB_FAIL(ObSQLUtils::calc_simple_expr_without_row(
         params.session_info_, expr, tmp_default_value, params.param_list_, allocator))) {
       LOG_WARN("Failed to get simple expr value", K(ret));
