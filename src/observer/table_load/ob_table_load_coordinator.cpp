@@ -1477,6 +1477,7 @@ int ObTableLoadCoordinator::check_trans_commit(ObTableLoadCoordinatorTrans *tran
 {
   int ret = OB_SUCCESS;
   bool is_peers_commit = false;
+  ObTableLoadIndexLongWait wait_obj(10 * 1000, WAIT_INTERVAL_US);
   while (OB_SUCC(ret)) {
     // 确认trans状态为frozen
     if (OB_FAIL(trans->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
@@ -1486,7 +1487,7 @@ int ObTableLoadCoordinator::check_trans_commit(ObTableLoadCoordinatorTrans *tran
     else if (OB_FAIL(check_peers_trans_commit(trans, is_peers_commit))) {
       LOG_WARN("fail to check peers trans commit", KR(ret));
     } else if (!is_peers_commit) {
-      usleep(WAIT_INTERVAL_US);  // 等待1s后重试
+      wait_obj.wait();
     } else {
       break;
     }
@@ -1612,13 +1613,13 @@ int ObTableLoadCoordinator::get_trans_status(const ObTableLoadTransId &trans_id,
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
-    LOG_INFO("coordinator get trans status");
     ObTableLoadTransCtx *trans_ctx = nullptr;
     if (OB_FAIL(coordinator_ctx_->get_trans_ctx(trans_id, trans_ctx))) {
       LOG_WARN("fail to get trans ctx", KR(ret), K(trans_id));
     } else {
       trans_ctx->get_trans_status(trans_status, error_code);
     }
+    LOG_INFO("coordinator get trans status", K(trans_status), K(error_code));
   }
   return ret;
 }
