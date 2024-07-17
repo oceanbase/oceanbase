@@ -1239,6 +1239,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRegexpLike::eval_hs_regexp_like,                     /* 746 */
   NULL, // ObExprRegexpReplace::eval_hs_regexp_replace,               /* 747 */
   NULL, // ObExprRegexpSubstr::eval_hs_regexp_substr,                 /* 748 */
+  NULL, // ObExprColumnConv::column_convert_fast,                     /* 749 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1379,6 +1380,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL, // ObExprMinus::minus_vec_vec_batch,                          /* 134 */
   NULL, // ObExprMul::mul_vec_vec_batch,                              /* 135 */
   NULL, // ObExprDiv::div_vec_batch,                                  /* 136 */
+  NULL, // ObExprColumnConv::column_convert_batch,                    /* 137 */
+  NULL, // ObExprColumnConv::column_convert_batch_fast,               /* 138 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
