@@ -1819,15 +1819,31 @@ int ObTablet::load_deserialize(
     LOG_WARN("invalid args", K(ret), K(buf), K(len), K(pos));
   } else if (OB_FAIL(get_tablet_block_header_version(buf + pos, len - pos, bhv))) {
     LOG_WARN("fail to get tablet block header version", K(ret));
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V1 == bhv &&
-      OB_FAIL(load_deserialize_v1(allocator, buf, len, new_pos))) {
-    LOG_WARN("failed to load deserialize v1", K(ret), KPC(this));
-  } else if (ObTabletBlockHeader::TABLET_VERSION_V2 == bhv &&
-      OB_FAIL(load_deserialize_v2(allocator, buf, len, new_pos, true/*prepare_memtable*/))) {
-    LOG_WARN("failed to load deserialize v2", K(ret), K(pos), KPC(this));
-  } else if ((ObTabletBlockHeader::TABLET_VERSION_V3 == bhv)
-      && OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, true/*prepare_memtable*/))) {
-    LOG_WARN("failed to load deserialize v3", K(ret), K(pos), KPC(this));
+  } else {
+    switch (bhv) {
+      case ObTabletBlockHeader::TABLET_VERSION_V1:
+        if (OB_FAIL(load_deserialize_v1(allocator, buf, len, new_pos))) {
+          LOG_WARN("failed to load deserialize v1", K(ret), K(new_pos), KPC(this));
+        }
+        break;
+      case ObTabletBlockHeader::TABLET_VERSION_V2:
+        if (OB_FAIL(load_deserialize_v2(allocator, buf, len, new_pos, true/*prepare_memtable*/))) {
+          LOG_WARN("failed to load deserialize v2", K(ret), K(new_pos), KPC(this));
+        }
+        break;
+      case ObTabletBlockHeader::TABLET_VERSION_V3:
+        if (OB_FAIL(load_deserialize_v3(allocator, buf, len, new_pos, true/*prepare_memtable*/))) {
+          LOG_WARN("failed to load deserialize v3", K(ret), K(new_pos), KPC(this));
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected block header version", K(ret), K(bhv));
+        break;
+    }
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (tablet_meta_.has_next_tablet_) {
     const ObTabletMapKey key(tablet_meta_.ls_id_, tablet_meta_.tablet_id_);
     if (OB_FAIL(ObTabletCreateDeleteHelper::acquire_tmp_tablet(key, allocator, next_tablet_guard_))) {
