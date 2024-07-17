@@ -1423,11 +1423,10 @@ int ObSortOpImpl::prepare_bucket_array(ArrayType *&buckets, uint64_t bucket_num)
   } else {
     int64_t max_bucket_cnt  = buckets->get_capacity();
     if (max_bucket_cnt < bucket_num) {
-      if (OB_FAIL(buckets->reserve(bucket_num))) {
-        LOG_WARN("failed to reserve bucket array", K(ret), K(bucket_num));
-      }
-    } else {
       buckets->reuse();
+      if (OB_FAIL(buckets->init(bucket_num))) {
+        LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
+      }
     }
   }
   return ret;
@@ -1455,6 +1454,7 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
     } else if (OB_FAIL(prepare_bucket_array<BucketNodeArray>(part_hash_nodes_, node_cnt))) {
       LOG_WARN("failed to create bucket node array", K(ret));
     } else {
+      buckets_->set_all(nullptr);
       max_bucket_cnt_ = bucket_cnt;
       max_node_cnt_ = node_cnt;
     }

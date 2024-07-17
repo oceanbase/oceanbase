@@ -1309,6 +1309,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
     } else if (OB_FAIL(prepare_bucket_array<BucketNodeArray>(part_hash_nodes_, node_cnt))) {
       LOG_WARN("failed to create bucket node array", K(ret));
     } else {
+      buckets_->set_all(nullptr);
       max_bucket_cnt_ = bucket_cnt;
       max_node_cnt_ = node_cnt;
     }
