@@ -706,6 +706,7 @@ int ObTenantStorageCheckpointWriter::get_tablet_with_addr(
   int64_t buf_len;
   char *buf = nullptr;
   read_info.addr_ = addr_info.new_addr_;
+  read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
   ObTabletPoolType tablet_pool_type = addr_info.tablet_pool_type_;
   // only need load first-level meta
   if (addr_info.new_addr_.is_raw_block()) {

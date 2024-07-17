@@ -199,6 +199,7 @@ int ObSharedMacroBlockMgr::write_block(
     write_info.buffer_ = buf;
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     write_info.size_ = size;
+    write_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
     lib::ObMutexGuard guard(mutex_);
 
     if (size >= SMALL_SSTABLE_STHRESHOLD_SIZE) {

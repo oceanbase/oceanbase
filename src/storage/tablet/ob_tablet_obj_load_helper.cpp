@@ -41,6 +41,7 @@ int ObTabletObjLoadHelper::read_from_addr(
     read_info.addr_ = meta_addr;
     read_info.io_desc_.set_mode(ObIOMode::READ);
     read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_DATA_READ);
+    read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000;
 
     ObSharedBlockReadHandle io_handle(allocator);
     if (OB_FAIL(ObSharedBlockReaderWriter::async_read(read_info, io_handle))) {
