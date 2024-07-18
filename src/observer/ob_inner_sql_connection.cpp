@@ -230,6 +230,10 @@ int ObInnerSQLConnection::init(ObInnerSQLConnectionPool *pool,
     }
     if (OB_FAIL(init_session(extern_session, use_static_engine))) {
       LOG_WARN("init session failed", K(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = destroy_inner_session())) {
+        LOG_WARN("Failed to destroy inner session when the session initialization failed, which may result in a session leak.", K(tmp_ret), K(ret));
+      }
     } else {
       group_id_ = group_id;
       inited_ = true;
@@ -253,44 +257,9 @@ int ObInnerSQLConnection::destroy()
     ref_cnt_ = 0;
     pool_ = NULL;
     schema_service_ = NULL;
-    if (NULL != inner_session_) {
-      if (INNER_SQL_SESS_ID == free_session_ctx_.sessid_) {
-        inner_session_->~ObSQLSessionInfo();
-        ob_free(inner_session_);
-      } else {
-        bool is_create_session_mgr = (!is_resource_conn()) && OB_NOT_NULL(GCTX.session_mgr_) && OB_NOT_NULL(GCTX.omt_);
-        if (OB_NOT_NULL(GCTX.omt_)) {
-          ObTenantSQLSessionMgr *t_session_mgr =  nullptr;
-          t_session_mgr = MTL(ObTenantSQLSessionMgr*);
-          is_create_session_mgr = is_create_session_mgr && (nullptr != t_session_mgr);
-        }
-
-        if(is_create_session_mgr) {
-          if (oceanbase::lib::is_diagnose_info_enabled() &&
-              ObActiveSessionGuard::get_stat().session_id_ == inner_session_->get_sessid() &&
-              ObActiveSessionGuard::get_stat().event_no_ == ObWaitEventIds::INNER_SESSION_IDLE_WAIT) {
-            ObActiveSessionGuard::get_stat().finish_ash_waiting();
-          }
-          inner_session_->set_session_sleep();
-          if (OB_ISNULL(GCTX.session_mgr_)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_ERROR("session mgr is null", K(ret));
-          } else {
-            GCTX.session_mgr_->revert_session(inner_session_);
-            GCTX.session_mgr_->free_session(free_session_ctx_);
-            GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
-          }
-        } else {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("failed to free session by session mgr", K(ret), K(is_create_session_mgr));
-        }
-      }
-      inner_session_ = NULL;
+    if (OB_FAIL(destroy_inner_session())) {
+      LOG_WARN("failed to destroy inner session when inner sql connection destroy", K(ret));
     }
-    free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
-    free_session_ctx_.tenant_id_ = common::OB_INVALID_ID;
-    free_session_ctx_.proxy_sessid_ = ObSQLSessionInfo::INVALID_SESSID;
-    EVENT_DEC(ACTIVE_SESSIONS);
     extern_session_ = NULL;
     config_ = NULL;
     associated_client_ = NULL;
@@ -2283,6 +2252,52 @@ bool ObInnerSQLConnection::is_inner_session_mgr_enable()
     bret = tenant_config->_enable_inner_session_mgr;
   }
   return bret;
+}
+
+int ObInnerSQLConnection::destroy_inner_session()
+{
+  int ret = OB_SUCCESS;
+  LOG_DEBUG("begin destroying inner session", K(ret), KP(inner_session_), K(free_session_ctx_), K(lbt()));
+  if (NULL != inner_session_) {
+    if (INNER_SQL_SESS_ID == free_session_ctx_.sessid_) {
+      inner_session_->~ObSQLSessionInfo();
+      ob_free(inner_session_);
+    } else {
+      bool is_create_session_mgr = (!is_resource_conn()) && OB_NOT_NULL(GCTX.session_mgr_) && OB_NOT_NULL(GCTX.omt_);
+      if (OB_NOT_NULL(GCTX.omt_)) {
+        ObTenantSQLSessionMgr *t_session_mgr =  nullptr;
+        t_session_mgr = MTL(ObTenantSQLSessionMgr*);
+        is_create_session_mgr = is_create_session_mgr && (nullptr != t_session_mgr);
+      }
+
+      if(is_create_session_mgr) {
+        if (oceanbase::lib::is_diagnose_info_enabled() &&
+            ObActiveSessionGuard::get_stat().session_id_ == inner_session_->get_sessid() &&
+            ObActiveSessionGuard::get_stat().event_no_ == ObWaitEventIds::INNER_SESSION_IDLE_WAIT) {
+          ObActiveSessionGuard::get_stat().finish_ash_waiting();
+        }
+        inner_session_->set_session_sleep();
+        if (OB_ISNULL(GCTX.session_mgr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("session mgr is null", K(ret));
+        } else {
+          GCTX.session_mgr_->revert_session(inner_session_);
+          GCTX.session_mgr_->free_session(free_session_ctx_);
+          GCTX.session_mgr_->mark_sessid_unused(free_session_ctx_.sessid_);
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("failed to free session by session mgr", K(ret), K(is_create_session_mgr));
+      }
+    }
+    inner_session_ = NULL;
+  }
+  free_session_ctx_.sessid_ = ObSQLSessionInfo::INVALID_SESSID;
+  free_session_ctx_.tenant_id_ = common::OB_INVALID_ID;
+  free_session_ctx_.proxy_sessid_ = ObSQLSessionInfo::INVALID_SESSID;
+  EVENT_DEC(ACTIVE_SESSIONS);
+  LOG_DEBUG("end destroying inner session", K(ret), K(inner_session_), K(free_session_ctx_));
+  return ret;
 }
 
 ObInnerSqlWaitGuard::ObInnerSqlWaitGuard(

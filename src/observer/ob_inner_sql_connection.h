@@ -374,6 +374,7 @@ private:
   int create_session_by_mgr();
   int create_default_session();
   bool is_inner_session_mgr_enable();
+  int destroy_inner_session();
 private:
   bool inited_;
   observer::ObQueryRetryCtrl retry_ctrl_;
