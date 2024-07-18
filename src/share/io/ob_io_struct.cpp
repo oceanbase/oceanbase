@@ -2979,6 +2979,7 @@ void ObIOCallbackManager::destroy()
   }
   config_thread_count_ = 0;
   queue_depth_ = 0;
+  DRWLock::WRLockGuard guard(lock_);
   runners_.reset();
   io_allocator_ = nullptr;
   is_inited_ = false;
