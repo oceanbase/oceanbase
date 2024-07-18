@@ -266,7 +266,7 @@ typedef common::ObFastArray<uint64_t, FAST_ARRAY_COUNT> UIntFastArray;
 typedef common::ObFastArray<ObRawExpr *, FAST_ARRAY_COUNT> RawExprFastArray;
 
 struct ExternalParams{
-  ExternalParams() : by_name_(false), params_( ){}
+  ExternalParams() : by_name_(false), need_clear_(false), params_() {}
   ~ExternalParams() {}
 
 public:
@@ -275,6 +275,7 @@ public:
   int assign(ExternalParams &other)
   {
     by_name_ = other.by_name_;
+    need_clear_ = need_clear_;
     return params_.assign(other.params_);
   }
   std::pair<ObRawExpr*, ObConstRawExpr*> &at(int64_t i)
@@ -288,6 +289,7 @@ public:
 
 public:
   bool by_name_;
+  bool need_clear_ = false;
   common::ObSEArray<std::pair<ObRawExpr*, ObConstRawExpr*>, 8> params_;
 };
 
