@@ -207,7 +207,11 @@ int ObTableLoadResourceManager::apply_resource(ObDirectLoadResourceApplyArg &arg
         for (int64_t i = 0; OB_SUCC(ret) && i < arg.apply_array_.count(); i++) {
           ObDirectLoadResourceUnit &apply_unit = arg.apply_array_[i];
           if (OB_FAIL(resource_pool_.get_refactored(apply_unit.addr_, ctx))) {
-            LOG_WARN("fail to get refactored", K(apply_unit.addr_));
+            LOG_WARN("fail to get refactored", KR(ret), K(apply_unit.addr_));
+            if (ret == OB_HASH_NOT_EXIST) {
+              // 第一次切主需要初始化，通过内部sql查询ACTIVE状态的observer可能不完整，期间若有导入任务进来时需要重试
+              ret = OB_EAGAIN;
+            }
           } else if (apply_unit.thread_count_ > ctx.thread_remain_ || apply_unit.memory_size_ > ctx.memory_remain_) {
             ret = OB_EAGAIN;
           }
@@ -233,7 +237,7 @@ int ObTableLoadResourceManager::apply_resource(ObDirectLoadResourceApplyArg &arg
           }
         }
       } else {
-        LOG_WARN("fail to get refactored", K(arg.task_key_));
+        LOG_WARN("fail to get refactored", KR(ret), K(arg.task_key_));
       }
     } else {
       LOG_INFO("resource has been assigned", K(arg.task_key_));

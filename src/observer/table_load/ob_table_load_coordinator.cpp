@@ -261,153 +261,132 @@ int ObTableLoadCoordinator::init()
 int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_arg)
 {
   int ret = OB_SUCCESS;
-  int64_t memory_limit = 0;
+  const int64_t MIN_THREAD_COUNT = 2;
   ObTenant *tenant = nullptr;
   int64_t tenant_id = MTL_ID();
   ObDirectLoadResourceOpRes apply_res;
   table::ObTableLoadArray<ObTableLoadPartitionLocation::LeaderInfo> all_leader_info_array;
+  uint64_t cluster_version = ctx_->ddl_param_.cluster_version_;
+
   if (OB_FAIL(GCTX.omt_->get_tenant(tenant_id, tenant))) {
     LOG_INFO("fail to get tenant", KR(ret), K(tenant_id));
   } else if (ctx_->ddl_param_.cluster_version_ < CLUSTER_VERSION_4_2_2_0) {
-    ctx_->param_.session_count_ = MIN(ctx_->param_.parallel_, (int64_t)tenant->unit_max_cpu() * 2);
-    if (ctx_->param_.need_sort_) {
-      ctx_->param_.session_count_ = MAX(ctx_->param_.session_count_, 2);
-    }
-    ctx_->param_.write_session_count_ = ctx_->param_.session_count_;
-  } else if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader_info(all_leader_info_array))) {
-    LOG_WARN("fail to get all leader info", KR(ret));
-  } else if (OB_FAIL(ObTableLoadService::get_memory_limit(memory_limit))) {
-    LOG_WARN("fail to get memory_limit", K(ret));
-  } else {
-    int64_t retry_count = 0;
-    common::ObAddr leader;
-    common::ObAddr coordinator_addr = ObServer::get_instance().get_self();
-    bool include_cur_addr = false;
-    bool last_sort = ctx_->param_.need_sort_;
-    int64_t total_partitions = 0;
-    ObArray<int64_t> partitions;
-    ObArray<int64_t> min_unsort_memory;
-    int64_t store_server_count = all_leader_info_array.count();
-    int64_t total_server_count = store_server_count;
-    int64_t coordinator_session_count = 0;
-    int64_t min_session_count = ctx_->param_.parallel_;
-    int64_t max_session_count = (int64_t)tenant->unit_max_cpu() * 2;
-    int64_t total_session_count = MIN(ctx_->param_.parallel_, max_session_count * store_server_count);
-    int64_t remain_session_count = total_session_count;
-    partitions.set_tenant_id(MTL_ID());
-    min_unsort_memory.set_tenant_id(MTL_ID());
-    for (int64_t i = 0; i < store_server_count; i++) {
-      total_partitions += all_leader_info_array[i].partition_id_array_.count();
-      if (coordinator_addr == all_leader_info_array[i].addr_) {
-        include_cur_addr = true;
-      }
-    }
-    if (!include_cur_addr) {
-      total_server_count++;
-    }
-
-    if (OB_FAIL(apply_arg.apply_array_.reserve(total_server_count))) {
-      LOG_WARN("fail to reserve apply_arg.apply_array_", KR(ret));
-    } else if (OB_FAIL(partitions.reserve(total_server_count))) {
-      LOG_WARN("fail to reserve partitions", KR(ret));
-    } else if (OB_FAIL(min_unsort_memory.reserve(total_server_count))) {
-      LOG_WARN("fail to reserve min_unsort_memory", KR(ret));
+    // not support resource manage
+    if (OB_FAIL(coordinator_ctx_->init_partition_location())) {
+      LOG_WARN("fail to init partition location", KR(ret));
     } else {
-      apply_arg.tenant_id_ = tenant_id;
-      apply_arg.task_key_ = ObTableLoadUniqueKey(ctx_->param_.table_id_, ctx_->ddl_param_.task_id_);
-      // is_heap_table==true，we prioritize non multiple modes that do not require sorting
-      //     FAST_HEAP_TABLE: macroblock_buffer * partition_count * parallel
-	    // is_heap_table==false，we prioritize non multiple modes that do not require sorting
-	    // 		 GENERAL_TABLE_COMPACT：max(sstable_buffer * partition_count * parallel，macroblock_buffer * parallel)
-	    // param_.need_sort_==true，we apply for the minimum required memory(MIN_SORT_MEMORY_PER_TASK)
-      //     MULTIPLE_HEAP_TABLE_COMPACT
-	    // 		 MEM_COMPACT
-      for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
-        ObDirectLoadResourceUnit unit;
-        unit.addr_ = all_leader_info_array[i].addr_;
-        if (OB_FAIL(partitions.push_back(all_leader_info_array[i].partition_id_array_.count()))) {
-          LOG_WARN("fail to push back", KR(ret));
-        } else {
-          unit.thread_count_ = MAX((!ctx_->schema_.is_heap_table_ && ctx_->param_.need_sort_ ? 2 : 1),
-                                     MIN(max_session_count, total_session_count * partitions[i] / total_partitions));
+      ctx_->param_.session_count_ = MAX(MIN(ctx_->param_.parallel_, (int64_t)tenant->unit_max_cpu() * 2), MIN_THREAD_COUNT);
+      ctx_->param_.write_session_count_ = ctx_->param_.session_count_;
+    }
+  } else {
+    apply_arg.tenant_id_ = tenant_id;
+    apply_arg.task_key_ = ObTableLoadUniqueKey(ctx_->param_.table_id_, ctx_->ddl_param_.task_id_);
+    int64_t retry_count = 0;
+    common::ObAddr coordinator_addr = ObServer::get_instance().get_self();
+    while (OB_SUCC(ret)) {
+      apply_arg.apply_array_.reset();
+      int64_t memory_limit = 0;
+      table::ObTableLoadArray<ObTableLoadPartitionLocation::LeaderInfo> all_leader_info_array;
+      if (THIS_WORKER.is_timeout()) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("gen_apply_arg wait too long", KR(ret));
+      } else if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::INITED))) {
+        LOG_WARN("fail to check status", KR(ret));
+      } else if (OB_FAIL(coordinator_ctx_->exec_ctx_->check_status())) {
+        LOG_WARN("fail to check status", KR(ret));
+      } else if (OB_FAIL(coordinator_ctx_->init_partition_location())) {
+        LOG_WARN("fail to init partition location", KR(ret));
+      } else if (OB_FAIL(coordinator_ctx_->partition_location_.get_all_leader_info(all_leader_info_array))) {
+        LOG_WARN("fail to get all leader info", KR(ret));
+      } else if (OB_FAIL(ObTableLoadService::get_memory_limit(memory_limit))) {
+        LOG_WARN("fail to get memory_limit", K(ret));
+      } else {
+        bool include_cur_addr = false;
+        bool need_sort = ctx_->param_.need_sort_;
+        int64_t total_partitions = 0;
+        ObArray<int64_t> partitions;
+        int64_t store_server_count = all_leader_info_array.count();
+        int64_t coordinator_session_count = 0;
+        int64_t min_session_count = MAX(ctx_->param_.parallel_, 2);
+        int64_t max_session_count = (int64_t)tenant->unit_max_cpu() * 2;
+        int64_t total_session_count = MIN(ctx_->param_.parallel_, max_session_count * store_server_count);
+        int64_t remain_session_count = total_session_count;
+        partitions.set_tenant_id(MTL_ID());
+        for (int64_t i = 0; i < store_server_count; i++) {
+          total_partitions += all_leader_info_array[i].partition_id_array_.count();
+          if (coordinator_addr == all_leader_info_array[i].addr_) {
+            include_cur_addr = true;
+          }
+        }
+        // is_heap_table==true，we prioritize non multiple modes that do not require sorting
+        //     FAST_HEAP_TABLE: macroblock_buffer * partition_count * parallel
+	      // is_heap_table==false，we prioritize non multiple modes that do not require sorting
+	      // 		 GENERAL_TABLE_COMPACT：max(sstable_buffer * partition_count * parallel，macroblock_buffer * parallel)
+	      // param_.need_sort_==true，we apply for the minimum required memory(MIN_SORT_MEMORY_PER_TASK)
+        //     MULTIPLE_HEAP_TABLE_COMPACT
+	      // 		 MEM_COMPACT
+        for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
+          ObDirectLoadResourceUnit unit;
+          unit.addr_ = all_leader_info_array[i].addr_;
+          if (OB_FAIL(partitions.push_back(all_leader_info_array[i].partition_id_array_.count()))) {
+            LOG_WARN("fail to push back", KR(ret));
+          } else {
+            unit.thread_count_ = MAX(MIN(max_session_count, total_session_count * partitions[i] / total_partitions), MIN_THREAD_COUNT);
+            if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
+              LOG_WARN("fail to push back", KR(ret));
+            } else {
+              remain_session_count -= unit.thread_count_;
+            }
+          }
+        }
+        if (OB_SUCC(ret) && !include_cur_addr) {
+          ObDirectLoadResourceUnit unit;
+          unit.addr_ = coordinator_addr;
+          unit.thread_count_ = MAX(total_session_count / store_server_count, MIN_THREAD_COUNT);
+          unit.memory_size_ = 0;
+          coordinator_session_count = unit.thread_count_;
+          min_session_count = MIN(min_session_count, unit.thread_count_);
           if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
             LOG_WARN("fail to push back", KR(ret));
-          } else {
-            remain_session_count -= unit.thread_count_;
           }
         }
-      }
-      if (OB_SUCC(ret) && !include_cur_addr) {
-        ObDirectLoadResourceUnit unit;
-        unit.addr_ = coordinator_addr;
-        unit.thread_count_ = MAX(1, total_session_count / store_server_count);
-        unit.memory_size_ = 0;
-        coordinator_session_count = unit.thread_count_;
-        min_session_count = MIN(min_session_count, unit.thread_count_);
-        if (OB_FAIL(apply_arg.apply_array_.push_back(unit))) {
-          LOG_WARN("fail to push back", KR(ret));
-        }
-      }
-
-      if (OB_SUCC(ret)) {
-         while (remain_session_count > 0) {
-          for (int64_t i = 0; remain_session_count > 0 && i < store_server_count; i++) {
-            ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-            if (unit.thread_count_ < max_session_count) {
-              unit.thread_count_++;
-              remain_session_count--;
-            }
-          }
-        }
-      }
-
-      for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
-        ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-        if (all_leader_info_array[i].addr_ == coordinator_addr) {
-          coordinator_session_count = unit.thread_count_;
-        }
-        min_session_count = MIN(min_session_count, unit.thread_count_);
-        if (ctx_->schema_.is_heap_table_) {
-          if (OB_FAIL(min_unsort_memory.push_back(MACROBLOCK_BUFFER_SIZE * partitions[i] * unit.thread_count_))) {
-            LOG_WARN("fail to push back", KR(ret));
-          } else {
-            unit.memory_size_ = min_unsort_memory[i];
-          }
-        } else {
-          if (OB_FAIL(min_unsort_memory.push_back(MAX(SSTABLE_BUFFER_SIZE * partitions[i], MACROBLOCK_BUFFER_SIZE) * unit.thread_count_))) {
-            LOG_WARN("fail to push back", KR(ret));
-          } else {
-            unit.memory_size_ = (last_sort ? MIN(MAX(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK,
-                                                     MACROBLOCK_BUFFER_SIZE * unit.thread_count_), memory_limit)
-                                           : min_unsort_memory[i]);
-          }
-        }
-      }
-
-      while (OB_SUCC(ret)) {
-        if (THIS_WORKER.is_timeout()) {
-          ret = OB_TIMEOUT;
-          LOG_WARN("gen_apply_arg wait too long", KR(ret));
-        } else if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::INITED))) {
-          LOG_WARN("fail to check status", KR(ret));
-        } else if (OB_FAIL(coordinator_ctx_->exec_ctx_->check_status())) {
-          LOG_WARN("fail to check status", KR(ret));
-        } else {
-          if (ctx_->schema_.is_heap_table_ || !ctx_->param_.need_sort_) {
-            last_sort = false;
-            for (int64_t i = 0; !last_sort && i < store_server_count; i++) {
-              if (min_unsort_memory[i] > memory_limit) {
-                last_sort = true;
+        if (OB_SUCC(ret)) {
+          while (remain_session_count > 0) {
+            for (int64_t i = 0; remain_session_count > 0 && i < store_server_count; i++) {
+              ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+              if (unit.thread_count_ < max_session_count) {
+                unit.thread_count_++;
+                remain_session_count--;
               }
             }
-            for (int64_t i = 0; i < store_server_count; i++) {
-              ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
-              unit.thread_count_ = MAX((last_sort ? 2 : 1), unit.thread_count_);
-              unit.memory_size_ = (last_sort ? MIN(MAX(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK,
-                                                       MACROBLOCK_BUFFER_SIZE * unit.thread_count_), memory_limit)
-                                             : min_unsort_memory[i]);
+          }
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < store_server_count; i++) {
+          ObDirectLoadResourceUnit &unit = apply_arg.apply_array_[i];
+          if (all_leader_info_array[i].addr_ == coordinator_addr) {
+            coordinator_session_count = unit.thread_count_;
+          }
+          min_session_count = MIN(min_session_count, unit.thread_count_);
+          int64_t min_unsort_memory = MACROBLOCK_BUFFER_SIZE * partitions[i] * unit.thread_count_;
+          if (ctx_->schema_.is_heap_table_) {
+            if (min_unsort_memory <= memory_limit) {
+              need_sort = false;
+              unit.memory_size_ = min_unsort_memory;
+            } else {
+              need_sort = true;
+              unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+            }
+          } else {
+            if (need_sort) {
+              unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
+            } else {
+              unit.memory_size_ = MIN(min_unsort_memory, memory_limit);
             }
           }
+        }
+
+        if (OB_SUCC(ret)) {
+          ObDirectLoadResourceOpRes apply_res;
           if (OB_FAIL(ObTableLoadResourceService::apply_resource(apply_arg, apply_res))) {
             if (retry_count % 100 == 0) {
               LOG_WARN("fail to apply resource", KR(ret), K(apply_res.error_code_), K(retry_count));
@@ -415,26 +394,25 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
             if (ret == OB_EAGAIN) {
               retry_count++;
               ret = OB_SUCCESS;
+              usleep(RESOURCE_OP_WAIT_INTERVAL_US);
             }
           } else {
-            ctx_->param_.need_sort_ = last_sort;
+            ctx_->param_.need_sort_ = need_sort;
             ctx_->param_.session_count_ = coordinator_session_count;
-            ctx_->param_.write_session_count_ = (include_cur_addr ? MIN(min_session_count, (coordinator_session_count + 1) / 2)
-                                                                  : min_session_count);
-            ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ? (last_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT
-                                                                                : ObTableLoadExeMode::FAST_HEAP_TABLE)
-                                                                   : (last_sort ? ObTableLoadExeMode::MEM_COMPACT
-                                                                                : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
+            ctx_->param_.write_session_count_ =
+                (include_cur_addr ? MIN(min_session_count, (coordinator_session_count + 1) / 2) : min_session_count);
+            ctx_->param_.exe_mode_ = (ctx_->schema_.is_heap_table_ ?
+                (need_sort ? ObTableLoadExeMode::MULTIPLE_HEAP_TABLE_COMPACT : ObTableLoadExeMode::FAST_HEAP_TABLE) :
+                (need_sort ? ObTableLoadExeMode::MEM_COMPACT : ObTableLoadExeMode::GENERAL_TABLE_COMPACT));
             ctx_->job_stat_->parallel_ = coordinator_session_count;
             if (OB_FAIL(ObTableLoadService::add_assigned_task(apply_arg))) {
               LOG_WARN("fail to add_assigned_task", KR(ret));
             } else {
               ctx_->set_assigned_resource();
-              LOG_INFO("Coordinator::gen_apply_arg", K(retry_count), K(param_.exe_mode_), K(partitions), K(leader), K(coordinator_addr), K(apply_arg));
+              LOG_INFO("Coordinator::gen_apply_arg", K(retry_count), K(param_.exe_mode_), K(partitions), K(coordinator_addr), K(apply_arg));
               break;
             }
           }
-          ob_usleep(RESOURCE_OP_WAIT_INTERVAL_US);
         }
       }
     }

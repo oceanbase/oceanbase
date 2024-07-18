@@ -114,6 +114,7 @@ public:
                               common::ObIAllocator &allocator) const;
   int check_exist_trans(bool &is_exist) const;
   int check_exist_committed_trans(bool &is_exist) const;
+  int init_partition_location();
   int init_complete();
 private:
   int alloc_trans_ctx(const table::ObTableLoadTransId &trans_id, ObTableLoadTransCtx *&trans_ctx);
@@ -122,7 +123,6 @@ private:
   int init_session_ctx_array();
   int generate_autoinc_params(share::AutoincParam &autoinc_param);
   int init_sequence();
-  int init_partition_location();
 public:
   ObTableLoadTableCtx * const ctx_;
   common::ObArenaAllocator allocator_;
