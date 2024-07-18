@@ -492,11 +492,9 @@ int ObPxCoordOp::try_clear_p2p_dh_info()
   int ret = OB_SUCCESS;
 
 #ifdef ERRSIM
-  ObSQLSessionInfo *session = ctx_.get_my_session();
-  int64_t query_timeout = 0;
-  session->get_query_timeout(query_timeout);
-  if (OB_FAIL(OB_E(EventTable::EN_PX_NOT_ERASE_P2P_DH_MSG) OB_SUCCESS)) {
-    LOG_WARN("qc not clear p2p dh info by design", K(ret), K(query_timeout));
+  int ecode = EventTable::EN_PX_NOT_ERASE_P2P_DH_MSG;
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("qc not clear p2p dh info by design", K(ret));
     return OB_SUCCESS;
   }
 #endif
@@ -569,9 +567,11 @@ int ObPxCoordOp::inner_close()
   ObSQLSessionInfo *session = ctx_.get_my_session();
   int64_t query_timeout = 0;
   session->get_query_timeout(query_timeout);
-  if (OB_FAIL(OB_E(EventTable::EN_PX_QC_EARLY_TERMINATE, query_timeout) OB_SUCCESS)) {
-    LOG_WARN("qc not interrupt qc by design", K(ret), K(query_timeout));
+  int ecode = EVENT_CALL(EventTable::EN_PX_QC_EARLY_TERMINATE, query_timeout);
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("qc not interrupt qc by design", K(ecode), K(query_timeout));
     should_terminate_running_dfos = false;
+    ret = ecode;
   }
 #endif
 
@@ -1102,11 +1102,9 @@ int ObPxCoordOp::erase_dtl_interm_result()
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  ObSQLSessionInfo *session = ctx_.get_my_session();
-  int64_t query_timeout = 0;
-  session->get_query_timeout(query_timeout);
-  if (OB_FAIL(OB_E(EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT) OB_SUCCESS)) {
-    LOG_WARN("ObPxCoordOp not erase_dtl_interm_result by design", K(ret), K(query_timeout));
+int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("ObPxCoordOp not erase_dtl_interm_result by design", K(ret));
     return OB_SUCCESS;
   }
 #endif

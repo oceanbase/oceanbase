@@ -652,7 +652,8 @@ int ObJoinFilterOp::try_merge_join_filter()
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  if (OB_FAIL(OB_E(EventTable::EN_PX_JOIN_FILTER_NOT_MERGE_MSG) OB_SUCCESS))  {
+  int ecode = EventTable::EN_PX_JOIN_FILTER_NOT_MERGE_MSG;
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
     LOG_WARN("ERRSIM match, don't merge_join_filter by desigin", K(ret));
     return OB_SUCCESS;
   }
