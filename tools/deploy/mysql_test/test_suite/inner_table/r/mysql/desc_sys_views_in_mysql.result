@@ -295,6 +295,36 @@ SOURCE_LINE	bigint(20)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.PROFILING limit 1);
 cnt
 1
+desc information_schema.INNODB_FT_BEING_DELETED;
+Field	Type	Null	Key	Default	Extra
+DOC_ID	bigint(21) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_FT_BEING_DELETED limit 1);
+cnt
+1
+desc information_schema.INNODB_FT_CONFIG;
+Field	Type	Null	Key	Default	Extra
+FT_CONFIG_KEY	varchar(100)	NO			
+VALUE	varchar(100)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_FT_CONFIG limit 1);
+cnt
+1
+desc information_schema.INNODB_FT_DELETED;
+Field	Type	Null	Key	Default	Extra
+DOC_ID	bigint(21) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_FT_DELETED limit 1);
+cnt
+1
+desc information_schema.INNODB_FT_INDEX_CACHE;
+Field	Type	Null	Key	Default	Extra
+WORD	varchar(193)	NO			
+FIRST_DOC_ID	bigint(21) unsigned	NO			
+LAST_DOC_ID	bigint(21) unsigned	NO			
+DOC_COUNT	bigint(21) unsigned	NO			
+DOC_ID	bigint(21) unsigned	NO			
+POSITION	bigint(21) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_FT_INDEX_CACHE limit 1);
+cnt
+1
 desc oceanbase.GV$SESSION_EVENT;
 Field	Type	Null	Key	Default	Extra
 CON_ID	bigint(20)	NO		NULL	

@@ -1333,6 +1333,10 @@ public:
   static int engines_schema(share::schema::ObTableSchema &table_schema);
   static int routines_schema(share::schema::ObTableSchema &table_schema);
   static int profiling_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_ft_being_deleted_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_ft_config_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_ft_deleted_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_ft_index_cache_schema(share::schema::ObTableSchema &table_schema);
   static int gv_session_event_schema(share::schema::ObTableSchema &table_schema);
   static int gv_session_wait_schema(share::schema::ObTableSchema &table_schema);
   static int gv_session_wait_history_schema(share::schema::ObTableSchema &table_schema);
@@ -4180,6 +4184,10 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::engines_schema,
   ObInnerTableSchema::routines_schema,
   ObInnerTableSchema::profiling_schema,
+  ObInnerTableSchema::innodb_ft_being_deleted_schema,
+  ObInnerTableSchema::innodb_ft_config_schema,
+  ObInnerTableSchema::innodb_ft_deleted_schema,
+  ObInnerTableSchema::innodb_ft_index_cache_schema,
   ObInnerTableSchema::gv_session_event_schema,
   ObInnerTableSchema::gv_session_wait_schema,
   ObInnerTableSchema::gv_session_wait_history_schema,
@@ -5999,6 +6007,10 @@ const uint64_t tenant_space_tables [] = {
   OB_ENGINES_TID,
   OB_ROUTINES_TID,
   OB_PROFILING_TID,
+  OB_INNODB_FT_BEING_DELETED_TID,
+  OB_INNODB_FT_CONFIG_TID,
+  OB_INNODB_FT_DELETED_TID,
+  OB_INNODB_FT_INDEX_CACHE_TID,
   OB_GV_SESSION_EVENT_TID,
   OB_GV_SESSION_WAIT_TID,
   OB_GV_SESSION_WAIT_HISTORY_TID,
@@ -8609,6 +8621,10 @@ const char* const tenant_space_table_names [] = {
   OB_ENGINES_TNAME,
   OB_ROUTINES_TNAME,
   OB_PROFILING_TNAME,
+  OB_INNODB_FT_BEING_DELETED_TNAME,
+  OB_INNODB_FT_CONFIG_TNAME,
+  OB_INNODB_FT_DELETED_TNAME,
+  OB_INNODB_FT_INDEX_CACHE_TNAME,
   OB_GV_SESSION_EVENT_TNAME,
   OB_GV_SESSION_WAIT_TNAME,
   OB_GV_SESSION_WAIT_HISTORY_TNAME,
@@ -13046,10 +13062,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 296;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 821;
-const int64_t OB_SYS_VIEW_COUNT = 904;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2026;
+const int64_t OB_SYS_VIEW_COUNT = 908;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2030;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2029;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2033;
 
 } // end namespace share
 } // end namespace oceanbase
