@@ -174,7 +174,6 @@ private:
   bool is_unique_index_;
   bool is_global_index_;
   ObRootService *root_service_;
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
   bool snapshot_held_;
   bool is_sstable_complete_task_submitted_;
   int64_t sstable_complete_request_time_;
