@@ -33,8 +33,8 @@ class ObRbExprHelper final
 {
 public:
 
-  static int get_input_roaringbitmap_bin(ObEvalCtx &ctx, ObExpr *rb_arg, ObString &rb_bin, bool &is_rb_null);
-  static int get_input_roaringbitmap(ObEvalCtx &ctx, ObExpr *rb_arg, ObRoaringBitmap *&rb, bool &is_rb_null);
+  static int get_input_roaringbitmap_bin(ObEvalCtx &ctx, ObIAllocator &allocator, ObExpr *rb_arg, ObString &rb_bin, bool &is_rb_null);
+  static int get_input_roaringbitmap(ObEvalCtx &ctx, ObIAllocator &allocator, ObExpr *rb_arg, ObRoaringBitmap *&rb, bool &is_rb_null);
   static int pack_rb_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, const ObString &str);
   static uint64_t get_tenant_id(ObSQLSessionInfo *session);
 

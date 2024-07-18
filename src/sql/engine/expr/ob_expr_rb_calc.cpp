@@ -72,7 +72,7 @@ int ObExprRbCalc::eval_rb_calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res,
   ObRoaringBitmap *rb1 = nullptr;
   ObRoaringBitmap *rb2 = nullptr;
   ObString rb_res;
-  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, rb1_arg, rb1, is_rb1_null))) {
+  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb1_arg, rb1, is_rb1_null))) {
     LOG_WARN("failed to get left input roaringbitmap", K(ret));
   } else if (is_rb1_null && !is_null2empty) {
     is_res_null = true;
@@ -80,7 +80,7 @@ int ObExprRbCalc::eval_rb_calc(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res,
             && OB_ISNULL(rb1 = OB_NEWx(ObRoaringBitmap, &tmp_allocator, (&tmp_allocator)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
-  } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, rb2_arg, rb2, is_rb2_null))) {
+  } else if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb2_arg, rb2, is_rb2_null))) {
     LOG_WARN("failed to get right input roaringbitmap", K(ret));
   } else if (is_rb2_null  && !is_null2empty) {
     is_res_null = true;
