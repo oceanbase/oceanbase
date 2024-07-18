@@ -3715,7 +3715,8 @@ OB_SERIALIZE_MEMBER(ObImplicitCursorInfo,
                     found_rows_,
                     matched_rows_,
                     duplicated_rows_,
-                    deleted_rows_);
+                    deleted_rows_,
+                    last_insert_id_);
 
 int ObImplicitCursorInfo::merge_cursor(const ObImplicitCursorInfo &other)
 {
@@ -3732,6 +3733,7 @@ int ObImplicitCursorInfo::merge_cursor(const ObImplicitCursorInfo &other)
     matched_rows_ += other.matched_rows_;
     duplicated_rows_ += other.duplicated_rows_;
     deleted_rows_ += other.deleted_rows_;
+    last_insert_id_ = other.last_insert_id_;
   }
   return ret;
 }

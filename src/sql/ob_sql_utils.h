@@ -1008,7 +1008,8 @@ public:
     found_rows_(0),
     matched_rows_(0),
     duplicated_rows_(0),
-    deleted_rows_(0) {}
+    deleted_rows_(0),
+    last_insert_id_(0) {}
 
   int merge_cursor(const ObImplicitCursorInfo &other);
   TO_STRING_KV(K_(stmt_id),
@@ -1016,7 +1017,8 @@ public:
                K_(found_rows),
                K_(matched_rows),
                K_(duplicated_rows),
-               K_(deleted_rows));
+               K_(deleted_rows),
+               K_(last_insert_id));
 
   int64_t stmt_id_;
   int64_t affected_rows_;
@@ -1024,6 +1026,7 @@ public:
   int64_t matched_rows_;
   int64_t duplicated_rows_;
   int64_t deleted_rows_;
+  uint64_t last_insert_id_;
 };
 
 

@@ -816,6 +816,7 @@ int ObTableModifyOp::merge_implict_cursor(int64_t insert_rows,
       implicit_cursor.stmt_id_ = stmt_id;
       implicit_cursor.found_rows_ += found_rows;
       implicit_cursor.matched_rows_ += found_rows;
+      implicit_cursor.last_insert_id_ = plan_ctx->get_autoinc_col_value();
       if (insert_rows > 0) {
         implicit_cursor.affected_rows_ += insert_rows;
       }

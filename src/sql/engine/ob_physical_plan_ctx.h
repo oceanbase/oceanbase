@@ -343,6 +343,12 @@ public:
       last_insert_id_cur_stmt_ = autoinc_id_tmp_;
     }
   }
+  inline void record_last_insert_id_cur_stmt_for_batch()
+  {
+    if (autoinc_id_tmp_ > 0) {
+      last_insert_id_cur_stmt_ = autoinc_id_tmp_;
+    }
+  }
   inline void set_last_insert_id_cur_stmt(const uint64_t last_insert_id)
   {
     last_insert_id_cur_stmt_ = last_insert_id;
