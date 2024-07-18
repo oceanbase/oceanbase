@@ -368,7 +368,15 @@ int ObCreateTableExecutor::execute_ctas(ObExecContext &ctx,
         LOG_WARN("schema_guard reset failed", K(ret));
       } else if (OB_FAIL(common_rpc_proxy->create_table(create_table_arg, create_table_res))) { //2, 建表;
         LOG_WARN("rpc proxy create table failed", K(ret), "dst", common_rpc_proxy->get_server());
-      } else if (OB_INVALID_ID != create_table_res.table_id_) { //如果表已存在则后续的查询插入不进行
+      } else if (!(OB_INVALID_ID == create_table_res.table_id_
+                  || (OB_INVALID_ID != create_table_res.table_id_
+                      && true == create_table_res.do_nothing_)) ) { //如果表已存在则后续的查询插入不进行
+        // 1. for old rs
+        // when table_exist, table_id == invalid_id, and do_nothing will alway be false
+        // 2. for new rs
+        // do_nothing is true when table_exist
+        // --> when table_id == invalid, both old and new rs no table create
+        // --> when table_id != invalid, both old and new rs do_nothing_ correct
         if (OB_INVALID_VERSION == create_table_res.schema_version_) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected schema version", K(ret), K(create_table_res));
