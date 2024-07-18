@@ -626,7 +626,8 @@ ObTableParam::ObTableParam(ObIAllocator &allocator)
     enable_lob_locator_v2_(false),
     is_spatial_index_(false),
     is_fts_index_(false),
-    is_multivalue_index_(false)
+    is_multivalue_index_(false),
+    is_column_replica_table_(false)
 {
   reset();
 }
@@ -655,6 +656,7 @@ void ObTableParam::reset()
   is_spatial_index_ = false;
   is_fts_index_ = false;
   is_multivalue_index_ = false;
+  is_column_replica_table_ = false;
 }
 
 OB_DEF_SERIALIZE(ObTableParam)
@@ -692,6 +694,9 @@ OB_DEF_SERIALIZE(ObTableParam)
   }
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(is_multivalue_index_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(is_column_replica_table_);
   }
   return ret;
 }
@@ -777,6 +782,10 @@ OB_DEF_DESERIALIZE(ObTableParam)
     LST_DO_CODE(OB_UNIS_DECODE,
                 is_multivalue_index_);
   }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                is_column_replica_table_);
+  }
   return ret;
 }
 
@@ -800,7 +809,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               is_spatial_index_,
               group_by_projector_,
               is_fts_index_,
-              read_param_version_);
+              read_param_version_,
+              is_column_replica_table_);
   if (OB_SUCC(ret)) {
     len += serialization::encoded_length_vi64(cg_read_infos_.count());
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {

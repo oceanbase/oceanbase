@@ -502,6 +502,7 @@ int ObStorageSchema::init(
     storage_schema_version_ = old_schema.storage_schema_version_;
     copy_from(old_schema);
     compat_mode_ = old_schema.compat_mode_;
+    is_cs_replica_compat_ = old_schema.is_cs_replica_compat_;
     compressor_type_ = old_schema.compressor_type_;
     column_cnt_ = old_schema.column_cnt_;
     store_column_cnt_ = old_schema.store_column_cnt_;
