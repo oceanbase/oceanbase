@@ -260,6 +260,13 @@ int construct_fragment_full_name(const ObString &logical_appendable_object_name,
   return ret;
 }
 
+int ob_apr_abort_fn(int retcode)
+{
+  int ret = OB_ALLOCATE_MEMORY_FAILED;
+  OB_LOG(ERROR, "fail to alloc mem for OSS/COS", K(ret), K(retcode));
+  return ret;
+}
+
 /*--------------------------------ObAppendableFragmentMeta--------------------------------*/
 OB_SERIALIZE_MEMBER(ObAppendableFragmentMeta, start_, end_);
 
@@ -606,6 +613,46 @@ void ObStorageListFilesCtx::reset()
   open_dir_ = NULL;
   already_open_dir_ = false;
   ObStorageListCtxBase::reset();
+}
+
+/*--------------------------------ObObjectStorageMallocHookGuard--------------------------------*/
+static lib::ObMemAttr get_mem_attr_from_storage_info(const ObObjectStorageInfo *storage_info)
+{
+  static lib::ObMemAttr oss_attr;
+  static lib::ObMemAttr cos_attr;
+  static lib::ObMemAttr s3_attr;
+  static lib::ObMemAttr nfs_attr;
+  static lib::ObMemAttr default_attr;
+  oss_attr.label_ = "OSS_SDK";
+  cos_attr.label_ = "COS_SDK";
+  s3_attr.label_ = "S3_SDK";
+  nfs_attr.label_ = "NFS_SDK";
+  default_attr.label_ = "OBJECT_STORAGE";
+
+  lib::ObMemAttr ret_attr = default_attr;
+  if (OB_NOT_NULL(storage_info) && storage_info->is_valid()) {
+    const ObStorageType type = storage_info->get_type();
+    if (OB_STORAGE_OSS == type) {
+      ret_attr = oss_attr;
+    } else if (OB_STORAGE_COS == type) {
+      ret_attr = cos_attr;
+    } else if (OB_STORAGE_S3 == type) {
+      ret_attr = s3_attr;
+    } else if (OB_STORAGE_FILE == type) {
+      ret_attr = nfs_attr;
+    }
+  }
+  return ret_attr;
+}
+
+ObObjectStorageMallocHookGuard::ObObjectStorageMallocHookGuard(const ObObjectStorageInfo *storage_info)
+    : lib::ObMallocHookAttrGuard(get_mem_attr_from_storage_info(storage_info))
+{
+}
+
+ObObjectStorageMallocHookGuard::~ObObjectStorageMallocHookGuard()
+{
+  lib::ObMallocHookAttrGuard::~ObMallocHookAttrGuard();
 }
 
 }//common
