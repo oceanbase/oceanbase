@@ -270,6 +270,12 @@ int ObTxReadSnapshot::refresh_seq_no(const int64_t tx_seq_base)
   }
   return ret;
 }
+void ObTxReadSnapshot::convert_to_out_tx()
+{
+  parts_.reset();
+  core_.tx_id_.reset();
+  core_.scn_.reset();
+}
 
 OB_SERIALIZE_MEMBER(ObTxPart, id_, addr_, epoch_, first_scn_, last_scn_);
 
@@ -509,6 +515,7 @@ int ObTxDesc::switch_to_idle()
   cb_tid_ = -1;
   exec_info_reap_ts_ = 0;
   commit_task_.reset();
+  modified_tables_.reset();
   state_ = State::IDLE;
   return OB_SUCCESS;
 }
@@ -620,6 +627,7 @@ void ObTxDesc::reset()
   xa_ctx_ = NULL;
   tlog_.reset();
   xa_ctx_ = NULL;
+  modified_tables_.reset();
 }
 
 const ObString &ObTxDesc::get_tx_state_str() const {
@@ -1813,6 +1821,53 @@ void ObTxDesc::mark_part_abort(const ObTransID tx_id, const int abort_cause)
     abort_cause_ = abort_cause;
   }
 }
+
+int ObTxDesc::add_modified_tables(const ObIArray<uint64_t> &dml_table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+  if (modified_tables_.count() >= 8) {
+    // go dedup
+    ARRAY_FOREACH(dml_table_ids, i) {
+      if (!is_contain(modified_tables_, dml_table_ids.at(i))) {
+        ret = modified_tables_.push_back(dml_table_ids.at(i));
+      }
+    }
+  } else if (OB_FAIL(append(modified_tables_, dml_table_ids))) {
+    TRANS_LOG(WARN, "append modified_tables fail", K(dml_table_ids), KPC(this));
+  } else {
+    int cnt = modified_tables_.count();
+    if (cnt >= 8) {
+      // dedup itself
+      int last = 0;
+      for (int i = 1; i < cnt; i++) {
+        int j = 0;
+        for (;j <= last; j++) {
+          if (modified_tables_.at(j) == modified_tables_.at(i)) {
+            break;
+          }
+        }
+        if (j == last + 1) {
+          ++last;
+          if (last != i) {
+            modified_tables_.at(last) = modified_tables_.at(i);
+          }
+        }
+      }
+      for (; last < cnt; last++) {
+        modified_tables_.pop_back();
+      }
+    }
+  }
+  LOG_TRACE("record trans dml table_ids", K(modified_tables_), K(tx_id_));
+  return ret;
+}
+bool ObTxDesc::has_modify_table(const uint64_t table_id) const
+{
+  ObSpinLockGuard guard(lock_);
+  return is_contain(modified_tables_, table_id);
+}
+
 } // transaction
 } // oceanbase
 #undef USING_LOG_PREFIX

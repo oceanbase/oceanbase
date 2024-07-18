@@ -1285,6 +1285,8 @@ private:
                                      bool is_dbms_cursor = false,
                                      int64_t orc_max_ret_rows = INT64_MAX);
   static int store_params_string(pl::ObPLExecCtx *ctx, ObSPIResultSet &spi_result, ParamStore *exec_params);
+private:
+  static int setup_cursor_snapshot_verify_(pl::ObPLCursorInfo *cursor, ObSPIResultSet *spi_result);
 };
 
 struct ObPLSubPLSqlTimeGuard

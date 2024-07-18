@@ -437,6 +437,7 @@ public:
   inline bool is_plain_insert() const { return is_plain_insert_; }
   inline bool get_insertup_can_do_gts_opt() const {return insertup_can_do_gts_opt_; }
   inline void set_insertup_can_do_gts_opt(bool v) { insertup_can_do_gts_opt_ = v; }
+  inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
@@ -502,6 +503,8 @@ public:
   const ObSubSchemaCtx &get_subschema_ctx() const { return subschema_ctx_; }
   int set_all_local_session_vars(ObIArray<ObLocalSessionVar> *all_local_session_vars);
   ObIArray<ObLocalSessionVar> & get_all_local_session_vars() { return all_local_session_vars_; }
+  ObIArray<uint64_t> &get_dml_table_ids() { return dml_table_ids_; }
+  const ObIArray<uint64_t> &get_dml_table_ids() const { return dml_table_ids_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -689,6 +692,11 @@ private:
 public:
   bool udf_has_dml_stmt_;
   std::atomic<bool> can_set_feedback_info_;
+private:
+  // used to record transaction modified tables and
+  // further cursor stmt will check agains
+  // to decide whether it read uncommitted data
+  common::ObSEArray<uint64_t, 1> dml_table_ids_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

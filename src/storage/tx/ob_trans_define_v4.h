@@ -250,6 +250,7 @@ public:
   bool is_valid() const { return version_.is_valid(); }
   const share::SCN &version() const { return version_; }
   const ObTransID &tx_id() const { return tx_id_; }
+  void set_tx_id(const ObTransID &tx_id) { tx_id_ = tx_id; }
   const ObTxSEQ &tx_seq() const { return scn_; }
   bool is_elr() const { return elr_; }
   OB_UNIS_VERSION(1);
@@ -288,6 +289,7 @@ public:
   const ObTxSnapshot &snapshot() const { return core_; }
   const share::SCN &version() const { return core_.version(); }
   const ObTransID &tx_id() const { return core_.tx_id(); }
+  void set_tx_id(const ObTransID &tx_id) { core_.set_tx_id(tx_id); }
   const ObTxSEQ &tx_seq() const { return core_.tx_seq(); }
   bool is_weak_read() const { return SRC::WEAK_READ_SERVICE == source_; };
   bool is_none_read() const { return SRC::NONE == source_; }
@@ -349,6 +351,7 @@ public:
    */
   int refresh_seq_no(const int64_t tx_seq_base);
 
+  void convert_to_out_tx();
 
   ObTxReadSnapshot();
   ~ObTxReadSnapshot();
@@ -581,7 +584,8 @@ protected:
   /* internal abort cause */
   int16_t abort_cause_;              // Tx Aborted cause
   bool can_elr_;                     // can early lock release
-
+private:
+  ObSEArray<uint64_t, 1> modified_tables_; // used in cursor test read uncommitted
 private:
   // FOLLOWING are runtime auxiliary fields
   mutable ObSpinLock lock_;
@@ -684,6 +688,7 @@ public:
                K_(abort_cause),
                K_(commit_expire_ts),
                K(commit_task_.is_registered()),
+               K_(modified_tables),
                K_(ref));
   bool support_branch() const { return seq_base_ > 0; }
   // used by SQL alloc branch_id refer the min branch_id allowed
@@ -824,6 +829,8 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
   ObTxSEQ get_min_tx_seq() const;
   int64_t get_seq_base() const { return seq_base_; }
+  int add_modified_tables(const ObIArray<uint64_t> &tables);
+  bool has_modify_table(const uint64_t table_id) const;
 };
 
 // Is used to store and travserse all TxScheduler's Stat information;
