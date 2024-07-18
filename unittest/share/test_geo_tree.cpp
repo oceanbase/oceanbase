@@ -930,6 +930,23 @@ TEST_F(TestGeoTree, ewkt_with_null)
   ASSERT_EQ(wkt_cal == wkt_res, true);
 }
 
+TEST_F(TestGeoTree, ewkt_with_0)
+{
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObGeometry *geo_tree = nullptr;
+  wkt_to_tree_geo("POINT(1 1)", allocator, geo_tree);
+  geo_tree->set_srid(0);
+  ObGeometry *geo_bin = NULL;
+  ASSERT_EQ(ObGeoTypeUtil::tree_to_bin(allocator, geo_tree, geo_bin, nullptr), OB_SUCCESS);
+  ObWkbBuffer buffer(allocator);
+  ASSERT_EQ(buffer.append(static_cast<uint32_t>(0)), OB_SUCCESS);
+  ASSERT_EQ(buffer.append(geo_bin->val(), geo_bin->length()), OB_SUCCESS);
+  ObString wkt_cal;
+  ASSERT_EQ(ObGeoTypeUtil::geo_to_ewkt(buffer.string(), wkt_cal, allocator, 14, true), OB_SUCCESS);
+  ObString wkt_res = "SRID=0;POINT(1 1)";
+  ASSERT_EQ(wkt_cal == wkt_res, true);
+}
+
 } // namespace common
 } // namespace oceanbase
 

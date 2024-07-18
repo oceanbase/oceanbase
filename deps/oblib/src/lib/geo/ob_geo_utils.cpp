@@ -1616,7 +1616,8 @@ int ObGeoTypeUtil::tree_to_bin(ObIAllocator &allocator,
 int ObGeoTypeUtil::geo_to_ewkt(const ObString &swkb,
                                ObString &ewkt,
                                ObIAllocator &allocator,
-                               int64_t max_decimal_digits)
+                               int64_t max_decimal_digits,
+                               bool output_srid0)
 {
   int ret = OB_SUCCESS;
   ObGeometry *geo = NULL;
@@ -1648,7 +1649,7 @@ int ObGeoTypeUtil::geo_to_ewkt(const ObString &swkb,
       LOG_WARN("fail to transform ewkt from 3d-wkb", K(ret));
     }
   } else {
-    if (OB_FAIL(wkt_visitor.init(header.srid_, max_decimal_digits))) {
+    if (OB_FAIL(wkt_visitor.init(header.srid_, max_decimal_digits, output_srid0))) {
       LOG_WARN("failed to init wkt_visitor with srid_", K(ret), K(header.srid_));
     } else if (OB_FAIL(geo->do_visit(wkt_visitor))) {
       LOG_WARN("failed to transform geo to wkt", K(ret));

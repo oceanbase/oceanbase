@@ -74,7 +74,7 @@ public:
   virtual int finish(ObIWkbGeomCollection *geo) override;
 
   void get_wkt(ObString &wkt);
-  int init(uint32_t srid, int64_t maxdecimaldigits);
+  int init(uint32_t srid, int64_t maxdecimaldigits, bool output_srid0 = false);
 
 private:
   template<typename T_IBIN>

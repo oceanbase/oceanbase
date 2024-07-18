@@ -207,7 +207,8 @@ public:
   static int geo_to_ewkt(const ObString &geo_wkb,
                          ObString &ewkt,
                          ObIAllocator &allocator,
-                         int64_t max_decimal_digits);
+                         int64_t max_decimal_digits,
+                         bool output_srid0 = false);
   static int geo_close_ring(ObGeometry &geo, ObIAllocator &allocator);
   static int get_mbr_polygon(ObIAllocator &allocator,
                              const ObSrsBoundsItem *bounds,
