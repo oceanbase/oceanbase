@@ -693,6 +693,7 @@ STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_W, "ss_local_cache tmpf
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_R, "ss_local_cache tmpfile read cache used disk size", ObStatClassIds::CACHE, 245007, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_META_USED_DISK_SIZE, "ss_local_cache meta file used disk size", ObStatClassIds::CACHE, 245008, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_INCREMENTAL_DATA_USED_DISK_SIZE, "ss_local_cache incremental data used disk size", ObStatClassIds::CACHE, 245009, false, true, true)
+STAT_EVENT_SET_DEF(SS_PREFETCH_MACRO_CACHE_USED_DISK_SIZE, "ss_prefetch_macro_cache used disk size", ObStatClassIds::CACHE, 245010, false, true, true)
 
 
 // END
