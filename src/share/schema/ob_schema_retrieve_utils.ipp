@@ -2732,13 +2732,13 @@ int ObSchemaRetrieveUtils::fill_trigger_schema(
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, trigger_priv_user, trigger_info,
       true, false, default_value);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, order_type, trigger_info, int64_t,
-      false, true, order_type_defualt_value);
+      true, true, order_type_defualt_value);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, ref_trg_db_name, trigger_info,
       true, true, default_value);
     EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, ref_trg_name, trigger_info,
       true, true, default_value);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, action_order, trigger_info, int64_t,
-      false, true, action_order_default_value);
+      true, true, action_order_default_value);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, analyze_flag, trigger_info, uint64_t,
       true, true, analyze_flag_default_value);
   }

@@ -142,7 +142,11 @@ int ObTableLoadStore::pre_begin()
     LOG_WARN("ObTableLoadStore not init", KR(ret), KP(this));
   } else {
     LOG_INFO("store pre begin");
-    // do nothing
+    if (OB_FAIL(ObTableLoadService::assign_memory(ctx_->param_.need_sort_, ctx_->param_.avail_memory_))) {
+      LOG_WARN("fail to assign_memory", KR(ret));
+    } else {
+      ctx_->set_assigned_memory();
+    }
   }
 
   return ret;
@@ -461,6 +465,13 @@ int ObTableLoadStore::commit(ObTableLoadResultInfo &result_info,
     } else if (OB_FAIL(store_ctx_->set_status_commit())) {
       LOG_WARN("fail to set store status commit", KR(ret));
     } else {
+      int tmp_ret = OB_SUCCESS;
+      if (ctx_->is_assigned_memory()) {
+        if (OB_TMP_FAIL(ObTableLoadService::recycle_memory(ctx_->param_.need_sort_, ctx_->param_.avail_memory_))) {
+          LOG_WARN("fail to recycle memory", KR(tmp_ret));
+        }
+        ctx_->reset_assigned_memory();
+      }
       store_ctx_->set_enable_heart_beat_check(false);
       result_info = store_ctx_->result_info_;
     }

@@ -162,7 +162,7 @@ int ObPLPackageManager::read_and_exec_package_sql(
       // but we need to create system packages with oralce compatibility
       // here hack to oracle mode
       bool eof = false;
-      bool skip_affected_rows_check = false;
+      bool create_external_table = false;
       ObSessionParam param;
       ObSessionParam *param_ptr = nullptr;
       char *last_slash = strrchr(const_cast<char*>(package_full_path), '/');
@@ -170,7 +170,7 @@ int ObPLPackageManager::read_and_exec_package_sql(
       int64_t sql_mode = SMO_STRICT_ALL_TABLES | SMO_NO_ZERO_IN_DATE | SMO_NO_AUTO_CREATE_USER;
       // allow affected_rows > 0 when exec sql in external_table_alert_log.sql
       if (strcmp(pacakge_filename, "external_table_alert_log.sql") == 0) {
-        skip_affected_rows_check = true;
+        create_external_table = true;
         param.sql_mode_ = &sql_mode;
         param_ptr = &param;
       }
@@ -185,7 +185,7 @@ int ObPLPackageManager::read_and_exec_package_sql(
                                                 static_cast<int64_t>(compa_mode),
                                                 param_ptr))) {
             LOG_WARN("fail to exec package sql", K(sql_buf), K(ret));
-          } else if (affected_rows != 0 && !skip_affected_rows_check) {
+          } else if (affected_rows != 0 && !create_external_table) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("affected_rows expected to be zero", K(affected_rows), K(ret));
           } else {
@@ -194,6 +194,23 @@ int ObPLPackageManager::read_and_exec_package_sql(
         }
       }
       fclose(file);
+      if (create_external_table && OB_SUCC(ret)) {
+        uint64_t data_version = 0;
+        common::ObString alter_table_sql("alter external table sys_external_tbs.__all_external_alert_log_info auto_refresh immediate");
+        if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, data_version))) {
+          LOG_WARN("fail to get sys tenant data version", KR(ret), K(data_version));
+        } else if (data_version >= DATA_VERSION_4_3_3_0) {
+          if (OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID,
+                                      alter_table_sql,
+                                      affected_rows,
+                                      static_cast<int64_t>(compa_mode),
+                                      param_ptr))) {
+            LOG_WARN("fail to alter auto_refresh flag of external table ", K(ret), K(alter_table_sql));
+          } else {
+            LOG_INFO("seccess to alter auto_refresh flag", KR(ret), K(alter_table_sql));
+          }
+        }
+      }
     }
   }
   return ret;
@@ -807,8 +824,10 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
 {
   int ret = OB_SUCCESS;
   ObPLPackageState *package_state = NULL;
+  bool need_free_new = false;
+  bool need_free_old = false;
   ObObj old_var_val;
-  ObObj new_var_val = var_val;
+  ObObj new_var_val;
   const ObPLVar *var = NULL;
   CK (package_id != OB_INVALID_ID);
   CK (var_idx != OB_INVALID_INDEX);
@@ -826,6 +845,7 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                          NULL,
                                          false,
                                          new_var_val), K(package_id), K(var_idx), K(var_val));
+    OX (need_free_new = true);
     if (OB_FAIL(ret)) {
     } else if (var->get_type().is_cursor_type()) {
       OV (var_val.is_tinyint() || var_val.is_number() || var_val.is_decimal_int(), OB_ERR_UNEXPECTED, K(var_val));
@@ -860,21 +880,27 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                       new_var_val), K(package_id), K(var_idx), K(var_val));
     }
     LOG_DEBUG("deserialize package var", K(package_id), K(var_idx), K(var_val), K(new_var_val));
+  } else {
+    new_var_val = var_val;
   }
   if (OB_SUCC(ret) && var->is_not_null() && new_var_val.is_null()) {
     ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
     LOG_WARN("not null check violated", K(var->is_not_null()), K(var_val.is_null()), K(ret));
   }
   OZ (package_state->set_package_var_val(var_idx, new_var_val, !need_deserialize));
-
+  OX (need_free_old = true);
+  OX (need_free_new = false);
   OZ (update_special_package_status(resolve_ctx, package_id, *var, old_var_val, new_var_val));
 
   if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
     // package ref cursor variable, refrence outside, do not destruct it.
-  } else if (OB_FAIL(ret)) {
-    OZ (ObUserDefinedType::destruct_obj(new_var_val, &(resolve_ctx.session_info_)));
   } else {
-    OZ (ObUserDefinedType::destruct_obj(old_var_val, &(resolve_ctx.session_info_)));
+    if (OB_FAIL(ret) && need_free_new) {
+      ObUserDefinedType::destruct_obj(new_var_val, &(resolve_ctx.session_info_));
+    }
+    if (need_free_old) {
+      ObUserDefinedType::destruct_obj(old_var_val, &(resolve_ctx.session_info_));
+    }
   }
   if (!need_deserialize) {
     OZ (package_state->update_changed_vars(var_idx));

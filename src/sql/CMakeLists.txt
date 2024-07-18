@@ -782,6 +782,7 @@ ob_set_subtarget(ob_sql engine_join
   engine/join/ob_join_op.cpp
   engine/join/ob_merge_join_op.cpp
   engine/join/ob_nested_loop_join_op.cpp
+  engine/join/ob_join_filter_material_control_info.cpp
 )
 
 ob_set_subtarget(ob_sql engine_pdml

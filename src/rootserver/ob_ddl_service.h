@@ -544,13 +544,6 @@ public:
   int write_ddl_barrier(
       const share::schema::ObTableSchema &hidden_table_schema,
       ObDDLSQLTransaction &trans);
-  // Register MDS for read and write defense verification after single table ddl
-  // like add column not null default null.
-  int build_single_table_rw_defensive(
-      const uint64_t tenant_id,
-      const ObArray<common::ObTabletID> &tablet_ids,
-      const int64_t schema_version,
-      ObDDLSQLTransaction &trans);
   int check_hidden_table_constraint_exist(
       const ObTableSchema *hidden_table_schema,
       const ObTableSchema *orig_table_schema,
@@ -1454,9 +1447,6 @@ private:
                          common::ObIArray<common::ObZone> &zones_in_pool);
   int set_new_database_options(const obrpc::ObAlterDatabaseArg &arg,
                                share::schema::ObDatabaseSchema &new_database_schema);
-  int check_tablegroup_in_single_database(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const share::schema::ObTableSchema &table_schema);
   int set_new_table_options(
       const obrpc::ObAlterTableArg &alter_table_arg,
       const share::schema::AlterTableSchema &alter_table_schema,
@@ -1517,6 +1507,7 @@ private:
                               obrpc::ObAlterTableRes &res);
   int add_not_null_column_to_table_schema(
       obrpc::ObAlterTableArg &alter_table_arg,
+      const uint64_t tenant_data_version,
       const ObTableSchema &origin_table_schema,
       ObTableSchema &new_table_schema,
       ObSchemaGetterGuard &schema_guard,
@@ -1524,6 +1515,7 @@ private:
       ObDDLSQLTransaction &trans);
   int add_not_null_column_default_null_to_table_schema(
       obrpc::ObAlterTableArg &alter_table_arg,
+      const uint64_t tenant_data_version,
       const ObTableSchema &origin_table_schema,
       ObTableSchema &new_table_schema,
       ObSchemaGetterGuard &schema_guard,
@@ -1531,6 +1523,7 @@ private:
       ObDDLSQLTransaction &trans);
   int do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                              ObSchemaGetterGuard &schema_guard,
+                                             const uint64_t tenant_data_version,
                                              const bool is_default_value_null);
   int gen_new_index_table_name(
       const common::ObString &orig_index_table_name,
@@ -2733,6 +2726,7 @@ private:
   int alter_system_table_column_(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &hard_code_schema);
+  int check_add_system_table_column_(const ObColumnSchemaV2 &column, bool &can_add);
   int get_obj_privs_ora(const uint64_t tenant_id,
                         const uint64_t obj_id,
                         const uint64_t obj_type,

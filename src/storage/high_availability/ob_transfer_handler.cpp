@@ -1194,7 +1194,8 @@ int ObTransferHandler::do_trans_transfer_start_v2_(
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   SCN data_end_scn;
   ObArray<ObTabletID> tablet_list;
-  ObArray<ObTransID> move_tx_ids;
+  ObArray<ObTransID> move_tx_ids_obj;
+  ObArray<ObTransID> *move_tx_ids = (task_info.data_version_ >= DATA_VERSION_4_3_2_0 ? &move_tx_ids_obj : nullptr);
   int64_t move_tx_count = 0;
   int64_t start_time = ObTimeUtil::current_time();
   int64_t transfer_out_prepare_cost = 0;
@@ -1242,11 +1243,11 @@ int ObTransferHandler::do_trans_transfer_start_v2_(
   } else if (!data_end_scn.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("transfer data_end_scn is invalid", K(ret), K(task_info), K(data_end_scn));
-  } else if (OB_FAIL(ls_->filter_tx_need_transfer(tablet_list, data_end_scn, move_tx_ids))) {
+  } else if (OB_NOT_NULL(move_tx_ids) && OB_FAIL(ls_->filter_tx_need_transfer(tablet_list, data_end_scn, *move_tx_ids))) {
     LOG_WARN("filter tx need transfer", KR(ret), K(task_info));
   } else if (STEP_COST_AND_CHECK_TIMEOUT(filter_tx_cost)) {
   } else if (OB_FAIL(do_tx_start_transfer_out_(task_info, trans,
-          transaction::ObTxDataSourceType::START_TRANSFER_OUT_V2, data_end_scn, &move_tx_ids))) {
+          transaction::ObTxDataSourceType::START_TRANSFER_OUT_V2, data_end_scn, move_tx_ids))) {
     LOG_WARN("failed to do tx start transfer out", K(ret), K(task_info));
   } else if (STEP_COST_AND_CHECK_TIMEOUT(transfer_out_cost)) {
   } else if (OB_FAIL(get_start_transfer_out_scn_(task_info, timeout_ctx, start_scn))) {
@@ -1260,7 +1261,7 @@ int ObTransferHandler::do_trans_transfer_start_v2_(
     LOG_WARN("failed to get transfer tablets meta", K(ret), K(task_info));
   } else if (STEP_COST_AND_CHECK_TIMEOUT(get_tablets_meta_cost)) {
   // move tx
-  } else if (move_tx_ids.count() > 0 && OB_FAIL(do_move_tx_to_dest_ls_(task_info, timeout_ctx, trans,
+  } else if (OB_FAIL(do_move_tx_to_dest_ls_(task_info, timeout_ctx, trans,
           data_end_scn, start_scn, tablet_list, move_tx_ids, move_tx_count))) {
     LOG_WARN("failed to do move tx to dest_ls", K(ret), K(task_info));
   } else if (STEP_COST_AND_CHECK_TIMEOUT(move_tx_cost)) {
@@ -1388,7 +1389,6 @@ int ObTransferHandler::do_tx_start_transfer_out_(
   ObArenaAllocator allocator;
   SCN dest_base_scn;
   const int64_t start_ts = ObTimeUtil::current_time();
-  const int64_t ENABLE_FILTER_TX_LIST_LIMIT = 1000;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
@@ -1411,8 +1411,7 @@ int ObTransferHandler::do_tx_start_transfer_out_(
     start_transfer_out_info.filter_tx_need_transfer_ = false;
     if (OB_FAIL(start_transfer_out_info.tablet_list_.assign(task_info.tablet_list_))) {
       LOG_WARN("failed to assign transfer tablet list", K(ret), K(task_info));
-    } else if (OB_NOT_NULL(move_tx_ids) && move_tx_ids->count() <= ENABLE_FILTER_TX_LIST_LIMIT) {
-      // if has too many tx_ids, we just use data_end_scn to filter
+    } else if (OB_NOT_NULL(move_tx_ids)) {
       start_transfer_out_info.filter_tx_need_transfer_ = true;
       if (OB_FAIL(start_transfer_out_info.move_tx_ids_.assign(*move_tx_ids))) {
         LOG_WARN("assign failed", KR(ret), K(move_tx_ids));
@@ -2675,7 +2674,7 @@ int ObTransferHandler::do_move_tx_to_dest_ls_(const share::ObTransferTaskInfo &t
                                               const SCN data_end_scn,
                                               const SCN transfer_scn,
                                               ObIArray<ObTabletID> &tablet_list,
-                                              ObIArray<ObTransID> &move_tx_ids,
+                                              ObIArray<ObTransID> *move_tx_ids,
                                               int64_t &move_tx_count)
 {
   LOG_INFO("[TRANSFER] do_move_tx_to_dest_ls_", K(task_info), K(data_end_scn));

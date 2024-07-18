@@ -436,6 +436,7 @@ GLOBAL_ERRSIM_POINT_DEF(748, EN_COMPACTION_ITER_SET_BATCH_CNT, "");
 
 // please add new trace point after 750
 GLOBAL_ERRSIM_POINT_DEF(751, EN_SESSION_LEAK_COUNT_THRESHOLD, "used to control the threshold of report session leak ERROR");
+GLOBAL_ERRSIM_POINT_DEF(760, EN_DISABLE_TABLET_MINOR_MERGE, "used to stop scheduling minor merge");
 GLOBAL_ERRSIM_POINT_DEF(800, EN_END_PARTICIPANT, "");
 
 // compaction 801 - 899

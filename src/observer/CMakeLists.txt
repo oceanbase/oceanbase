@@ -510,6 +510,7 @@ target_link_libraries(observer
   -static-libgcc
   -static-libstdc++
   ${link_malloc_hook}
+  ${BOLT_OPT}
 )
 
 execute_process(
@@ -527,6 +528,7 @@ else()
 endif()
 
 if (OB_ENABLE_BOLT)
+  message(STATUS "Using bolt link opt: ${BOLT_OPT}")
   add_custom_command(
     OUTPUT observer_bolt
     COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/do_bolt_opt --build_dir=${CMAKE_BINARY_DIR}

@@ -680,7 +680,8 @@ ObRootService::ObRootService()
 #endif
     disaster_recovery_task_executor_(),
     disaster_recovery_task_mgr_(),
-    global_ctx_task_(*this)
+    global_ctx_task_(*this),
+    alter_log_external_table_task_(*this)
 {
 }
 
@@ -1653,6 +1654,30 @@ int ObRootService::schedule_refresh_io_calibration_task()
     LOG_WARN("fail to add timer task", K(ret));
   } else {
     LOG_INFO("succeed to add refresh io calibration task");
+  }
+  return ret;
+}
+
+int ObRootService::schedule_alter_log_external_table_task()
+{
+  int ret = OB_SUCCESS;
+  const bool did_repeat = false;
+  const int64_t delay = 1L * 1000L * 1000L; //1s
+  uint64_t current_data_version = 0;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (task_queue_.exist_timer_task(alter_log_external_table_task_)) {
+    // ignore error
+    LOG_WARN("already have one alter_log_external_table_task, ignore this");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, current_data_version))) {
+    LOG_WARN("fail to get current data version", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
+  } else if (OB_FAIL(alter_log_external_table_task_.init(current_data_version))) {
+    LOG_WARN("fail to init alter log external table task", KR(ret), K(current_data_version));
+  } else if (OB_FAIL(task_queue_.add_timer_task(alter_log_external_table_task_, delay, did_repeat))) {
+    LOG_WARN("fail to add timer task", KR(ret));
+  } else {
+    LOG_INFO("add alter_log_external_table_task task success", KR(ret), K(current_data_version));
   }
   return ret;
 }
@@ -11128,6 +11153,75 @@ void ObRootService::ObTenantGlobalContextCleanTimerTask::runTimerTask()
   }
 }
 
+/////////////////////////
+ObRootService::ObAlterLogExternalTableTask::ObAlterLogExternalTableTask(ObRootService &root_service)
+  : ObAsyncTimerTask(root_service.task_queue_),
+    root_service_(root_service)
+{
+  set_retry_times(INT64_MAX);
+}
+
+int ObRootService::ObAlterLogExternalTableTask::init(const uint64_t &data_version)
+{
+  int ret = OB_SUCCESS;
+  pre_data_version_ = data_version;
+  return ret;
+}
+
+ObAsyncTask *ObRootService::ObAlterLogExternalTableTask::deep_copy(char *buf,
+    const int64_t buf_size) const
+{
+  ObAlterLogExternalTableTask *task = NULL;
+  if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
+    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size), KP(buf));
+  } else {
+    task = new (buf) ObAlterLogExternalTableTask(root_service_);
+    task->init(pre_data_version_);
+  }
+  return task;
+}
+
+int ObRootService::ObAlterLogExternalTableTask::process()
+{
+  int ret = OB_SUCCESS;
+  uint64_t current_data_version = 0;
+	if (pre_data_version_ >= CLUSTER_VERSION_4_3_3_0) {
+    LOG_INFO("table has been altered, no need to alter log external table again", KR(ret), K(pre_data_version_));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(OB_SYS_TENANT_ID, current_data_version))) {
+    LOG_WARN("fail to get current data version", KR(ret), "tenant_id", OB_SYS_TENANT_ID);
+  } else if (current_data_version < CLUSTER_VERSION_4_3_3_0) {
+    ret = OB_NEED_WAIT;
+    LOG_INFO("upgrade is not finished, cannot run alter log external table task", KR(ret), K(current_data_version));
+  } else if (OB_FAIL(alter_log_external_table_())) {
+    // alter log external table failed, will retry
+    LOG_WARN("fail to alter log external table", KR(ret));
+  } else {
+    // alter log external table succeeded, change pre_data_version_
+    pre_data_version_ = current_data_version;
+  }
+  return ret;
+}
+
+int ObRootService::ObAlterLogExternalTableTask::alter_log_external_table_()
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  const char *alter_table_sql = "alter external table sys_external_tbs.__all_external_alert_log_info auto_refresh immediate";
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("sql_proxy_ expected not null", KR(ret), K(lbt()));
+  } else if (OB_FAIL(GCTX.sql_proxy_->write(OB_SYS_TENANT_ID, alter_table_sql, affected_rows))) {
+    LOG_WARN("fail to execute sql", KR(ret), K(alter_table_sql));
+  } else if (0 != affected_rows) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("affected_rows expected to be zero", KR(ret), K(affected_rows), K(alter_table_sql));
+  } else {
+    LOG_INFO("seccess to alter auto_refresh flag", KR(ret), K(alter_table_sql));
+  }
+  return ret;
+}
+
+/////////////////////////
 int ObRootService::handle_cancel_backup_backup(const obrpc::ObBackupManageArg &arg)
 {
   int ret = OB_NOT_SUPPORTED;

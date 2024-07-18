@@ -119,12 +119,12 @@ int ObHistogram::deep_copy(ObIAllocator &allocator, const ObHistogram &src)
     LOG_WARN("failed to alloc memory", K(src.buckets_.count()));
   } else {
     ObHistBucket *new_buckets = new (ptr) ObHistBucket[src.buckets_.count()];
-    buckets_ = ObArrayWrap<ObHistBucket>(new_buckets, src.buckets_.count());
-    for (int64_t i = 0; OB_SUCC(ret) && i < buckets_.count(); ++i) {
-      if (OB_FAIL(buckets_.at(i).deep_copy(allocator, src.buckets_.at(i)))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < src.buckets_.count(); ++i) {
+      if (OB_FAIL(new_buckets[i].deep_copy(allocator, src.buckets_.at(i)))) {
         LOG_WARN("deep copy bucket failed");
       }
     }
+    buckets_ = ObArrayWrap<ObHistBucket>(new_buckets, src.buckets_.count());
   }
   return ret;
 }
@@ -316,11 +316,13 @@ int ObOptColumnStat::deep_copy(const ObOptColumnStat &src)
   } else if (OB_FAIL(histogram_.deep_copy(allocator_, src.histogram_))) {
     LOG_WARN("failed to deep copy histogram", K(ret));
   } else if (src.llc_bitmap_size_ != 0 && src.llc_bitmap_ != NULL) {
-    if (OB_ISNULL(llc_bitmap_ = static_cast<char*>(allocator_.alloc(src.llc_bitmap_size_)))) {
+    char* ptr = static_cast<char*>(allocator_.alloc(src.llc_bitmap_size_));
+    if (OB_ISNULL(ptr)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate memory for llc_bitmap_");
     } else {
-      MEMCPY(llc_bitmap_, src.llc_bitmap_, src.llc_bitmap_size_);
+      MEMCPY(ptr, src.llc_bitmap_, src.llc_bitmap_size_);
+      llc_bitmap_ = ptr;
     }
   }
   return ret;

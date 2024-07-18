@@ -2623,7 +2623,6 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_TIME_EARLIER_THAN_SYSDATE, -9764, -1, "HY000", "t
 DEFINE_PLS_ERROR_EXT(OB_ERR_NOT_FUNC_NAME, -9765, -1, "HY000", "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way", 224, "object 'string' must be of type function or array to be used this way", "object '%.*s' must be of type function or array to be used this way");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_CURSOR_EXPR, -9766, -1, "HY000", "CURSOR expression not allowed", 22902, "CURSOR expression not allowed");
 DEFINE_ORACLE_ERROR_V2_EXT(OB_APPLICATION_ERROR_FROM_REMOTE, -9767, -1, "HY000", "application error from remote", "%.*s", 20000, "application error from remote", "%.*s");
-
 DEFINE_ERROR_EXT(OB_ERR_EVENT_EXIST, -9768, ER_EVENT_ALREADY_EXISTS, "HY000", "Event already exists", "Event '%.*s' already exists");
 DEFINE_ERROR_EXT(OB_ERR_EVENT_NOT_EXIST, -9769, ER_EVENT_DOES_NOT_EXIST, "HY000", "Unknown event", "Unknown '%.*s' event");
 DEFINE_ERROR_EXT(OB_ERR_EVENT_CANT_ALTER, -9770, ER_EVENT_CANT_ALTER, "HY000", "Failed to alter event", "Failed to alter event '%.*s'");
@@ -2637,6 +2636,7 @@ DEFINE_ERROR_EXT(OB_ERR_EVENT_DATA_TOO_LONG, -9777, ER_EVENT_DATA_TOO_LONG, "HY0
 DEFINE_ERROR(OB_ERR_EVENT_CANNOT_CREATE_IN_THE_PAST, -9778, ER_EVENT_CANNOT_CREATE_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was dropped immediately after creation.");
 DEFINE_ERROR(OB_ERR_EVENT_CANNOT_ALTER_IN_THE_PAST, -9779, ER_EVENT_CANNOT_ALTER_IN_THE_PAST, "HY000", "Event execution time is in the past and ON COMPLETION NOT PRESERVE is set. The event was not changed. Specify a time in the future.");
 DEFINE_ERROR(OB_ERR_EVENT_RECURSION_FORBIDDEN, -9780, ER_EVENT_RECURSION_FORBIDDEN, "HY000", "Recursion of EVENT DDL statements is forbidden when body is present");
+DEFINE_ORACLE_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR, -9781, ER_NO_PARTITION_FOR_GIVEN_VALUE, "HY000", "Table has no partition for value", 14400, "inserted partition key does not map to any partition");
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // PL/SQL错误码值域 [-9500, -10000)

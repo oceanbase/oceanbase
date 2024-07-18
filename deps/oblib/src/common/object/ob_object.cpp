@@ -270,7 +270,7 @@ DEF_TO_STRING(ObLobLocatorV2)
   int64_t pos = 0;
   uint32_t offset = 0;
   J_OBJ_START();
-  J_KV(K_(ptr), K_(size), K_(has_lob_header));
+  J_KV(KP_(ptr), K_(size), K_(has_lob_header));
   J_COMMA();
 
   if (OB_ISNULL(ptr_)) {

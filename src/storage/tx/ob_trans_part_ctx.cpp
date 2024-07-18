@@ -4071,7 +4071,7 @@ int ObPartTransCtx::submit_direct_load_inc_log_(
     if (ret == OB_TX_NOLOGCB) {
       if (REACH_COUNT_PER_SEC(10) && REACH_TIME_INTERVAL(100 * 1000)) {
         TRANS_LOG(INFO, "no log cb with dli log", KR(ret), K(dli_log_type), K(batch_key),
-                  KPC(busy_cbs_.get_first()));
+                  "busy_cbs.first", PC(busy_cbs_.is_empty() ? NULL : busy_cbs_.get_first()));
       }
     } else {
       TRANS_LOG(WARN, "try to submit direct load inc log failed", K(ret), KPC(this));
@@ -4532,7 +4532,7 @@ void ObPartTransCtx::handle_submit_log_err_(const ObTxLogType log_type, int &ret
   if (OB_TX_NOLOGCB == ret) {
     if (REACH_COUNT_PER_SEC(10) && REACH_TIME_INTERVAL(100 * 1000)) {
       TRANS_LOG(INFO, "can not get log_cb when submit_log", KR(ret), K(log_type),
-                KPC(busy_cbs_.get_first()));
+                "busy_cbs.first", PC(busy_cbs_.is_empty() ? NULL : busy_cbs_.get_first()));
     }
     if (ObTxLogType::TX_PREPARE_LOG == log_type || ObTxLogType::TX_COMMIT_LOG == log_type
         || ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {

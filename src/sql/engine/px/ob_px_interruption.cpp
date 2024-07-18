@@ -147,7 +147,7 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
       code = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
     }
 
-    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(tenant_id), K(local_schema_version),
+    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(ret), K(code), K(tenant_id), K(local_schema_version),
               K(exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version()), K(lbt()));
   } else {
     LOG_TRACE("update_schema_error_code, exec_ctx is null", K(lbt()));

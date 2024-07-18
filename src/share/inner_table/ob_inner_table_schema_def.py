@@ -312,7 +312,8 @@ all_table_def = dict(
       ('lob_inrow_threshold', 'int', 'false', 'OB_DEFAULT_LOB_INROW_THRESHOLD'),
       ('max_used_column_group_id', 'int', 'false', '1000'),
       ('column_store', 'int', 'false', '0'),
-      ('auto_increment_cache_size', 'int', 'false', '0')
+      ('auto_increment_cache_size', 'int', 'false', '0'),
+      ('local_session_vars', 'longtext', 'true'),
     ],
 )
 
@@ -7274,7 +7275,7 @@ def_table_schema(
     ('owner', 'varchar:128', 'true'),
     ('job_subname', 'varchar:128', 'true'),
     ('job_class', 'varchar:128', 'true'),
-    ('operation', 'varchar:128', 'true'),
+    ('operation', 'varchar:OB_MAX_SQL_LENGTH', 'true'),
     ('status', 'varchar:128', 'true'),
     ('code', 'int', 'true', '0'),
     ('req_start_date', 'timestamp', 'true'),
@@ -7296,6 +7297,7 @@ def_table_schema(
 )
 
 # 520 : __all_spm_evo_result
+# 521 : __all_detect_lock_info_v2
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -12341,6 +12343,7 @@ def_table_schema(
   ('tablet_change_checkpoint_scn', 'uint'),
   ('transfer_scn', 'uint'),
   ('tx_blocked', 'int'),
+  ('required_size', 'int', 'false', 0),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -12406,6 +12409,7 @@ def_table_schema(
   ('time_after_create', 'int'),
   ('obj_type', 'varchar:MAX_LOCK_OBJ_TYPE_BUF_LENGTH'),
   ('obj_id', 'int'),
+  ('owner_type', 'int'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -14552,6 +14556,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12493: __all_virtual_kv_group_commit_status
 # 12494: __all_virtual_session_sys_variable
 # 12495: __all_virtual_spm_evo_result
+# 12496: __all_virtual_vector_index_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15042,6 +15047,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15464: __all_virtual_kv_group_commit_status
 # 15465: __all_virtual_session_sys_variable
 # 15466: __all_spm_evo_result
+# 15467: __all_virtual_vector_index_info
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -35347,6 +35353,77 @@ SELECT
 # 21601: GV$OB_KV_GROUP_COMMIT_STATUS
 # 21602: V$OB_KV_GROUP_COMMIT_STATUS
 
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_FIELDS',
+  table_id        = '21603',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as UNSIGNED) as INDEX_ID,
+    CAST(NULL as CHAR) as NAME,
+    CAST(NULL as UNSIGNED) as POS
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_FOREIGN',
+  table_id        = '21604',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as CHAR) as ID,
+    CAST(NULL as CHAR) as FOR_NAME,
+    CAST(NULL as CHAR) as REF_NAME,
+    CAST(NULL as UNSIGNED) as N_COLS,
+    CAST(NULL as UNSIGNED) as TYPE
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'zhenjiang.xzj',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'INNODB_SYS_FOREIGN_COLS',
+  table_id        = '21605',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    CAST(NULL as CHAR) as ID,
+    CAST(NULL as CHAR) as FOR_COL_NAME,
+    CAST(NULL as CHAR) as REF_COL_NAME,
+    CAST(NULL as UNSIGNED) as POS
+  FROM
+    DUAL
+  WHERE
+    0 = 1
+""".replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

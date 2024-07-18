@@ -569,14 +569,5 @@ int ObTenantDataVersionMgr::write_to_file_(char *buf, int64_t buf_length, int64_
   return ret;
 }
 
-ObDataVersionPrinter::ObDataVersionPrinter(const uint64_t data_version)
-    : version_val_(data_version), version_str_{0}
-{
-  if (OB_INVALID_INDEX ==
-      VersionUtil::print_version_str(version_str_, OB_SERVER_VERSION_LENGTH, data_version)) {
-    MEMSET(version_str_, 0, OB_SERVER_VERSION_LENGTH);
-  }
-}
-
 } // namespace common
 } // namespace oceanbase

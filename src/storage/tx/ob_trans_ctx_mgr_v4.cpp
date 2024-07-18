@@ -551,7 +551,7 @@ int ObLSTxCtxMgr::get_tx_ctx_directly_from_hash_map(const ObTransID &tx_id, ObPa
         TRANS_LOG(ERROR, "get transaction context error", KR(ret), K(tx_id));
       }
     } else {
-      ctx = dynamic_cast<transaction::ObPartTransCtx*>(tmp_ctx);
+      ctx = static_cast<transaction::ObPartTransCtx*>(tmp_ctx);
     }
   }
   return ret;
@@ -673,6 +673,12 @@ int ObLSTxCtxMgr::on_start_working_log_cb_succ(SCN start_working_ts)
       if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
         TRANS_LOG(WARN, "resume leader failed", KR(ret), K(ls_id_));
       }
+    } else if (is_f_pending_()) {
+      TRANS_LOG(INFO,
+                "retry to apply start working on a follower",
+                KR(ret),
+                K(ls_id_),
+                K(tx_ls_state_mgr_));
     } else {
       ret = OB_STATE_NOT_MATCH;
       TRANS_LOG(ERROR, "unexpected state", KR(ret), K(ls_id_), K(tx_ls_state_mgr_));
@@ -883,6 +889,7 @@ int ObLSTxCtxMgr::switch_to_follower_gracefully()
           TRANS_LOG(WARN, "switch state error", KR(ret), K(ls_id_), K(tx_ls_state_mgr_));
         } else if (OB_TMP_FAIL(submit_start_working_log_())) {
           TRANS_LOG(WARN, "submit start working log failed", KR(tmp_ret), K(*this));
+          tx_ls_state_mgr_.restore_tx_ls_state();
         }
         if (OB_SUCCESS != tmp_ret) {
           ret = OB_LS_NEED_REVOKE;
@@ -2632,43 +2639,58 @@ int ObLSTxCtxMgr::wait_tx_write_end(ObTimeoutCtx &timeout_ctx)
 int ObLSTxCtxMgr::collect_tx_ctx(const ObLSID dest_ls_id,
                                  const SCN log_scn,
                                  const ObIArray<ObTabletID> &tablet_list,
-                                 const ObIArray<ObTransID> &move_tx_ids,
+                                 const ObIArray<ObTransID> *move_tx_ids,
                                  int64_t &collect_count,
                                  ObIArray<ObTxCtxMoveArg> &res)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObTransID, 1> final_move_tx_ids;
-  for (int64_t idx = 0; OB_SUCC(ret) && idx < move_tx_ids.count(); idx++) {
-    ObPartTransCtx *ctx = nullptr;
-    ObTransCtx *tmp_ctx = nullptr;
-    bool is_collected = false;
-    ObTxCtxMoveArg arg;
-    if (OB_FAIL(ls_tx_ctx_map_.get(move_tx_ids.at(idx), tmp_ctx))) {
-      if (OB_ENTRY_NOT_EXIST != ret) {
-        TRANS_LOG(WARN, "get tx ctx failed", KR(ret), K(move_tx_ids.at(idx)));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    } else if (FALSE_IT(ctx = static_cast<ObPartTransCtx*>(tmp_ctx))) {
-    } else if (OB_FAIL(ctx->collect_tx_ctx(dest_ls_id,
-                                           log_scn,
-                                           tablet_list,
-                                           arg,
-                                           is_collected))) {
-      TRANS_LOG(WARN, "collect tx ctx failed", KR(ret), K(move_tx_ids.at(idx)));
-    } else if (!is_collected) {
-    } else if (OB_FAIL(final_move_tx_ids.push_back(move_tx_ids.at(idx)))) {
-      TRANS_LOG(WARN, "collect tx ctx failed", KR(ret), K(move_tx_ids.at(idx)));
-    } else if (OB_FAIL(res.push_back(arg))) {
-      TRANS_LOG(WARN, "push to array failed", KR(ret), K(move_tx_ids.at(idx)));
-    } else {
-      collect_count++;
+  if (OB_ISNULL(move_tx_ids)) {
+    int64_t abs_expired_time = INT64_MAX;
+    int64_t tx_count = 0;
+    CollectTxCtxFunctor fn(abs_expired_time,
+                           dest_ls_id,
+                           log_scn,
+                           tablet_list,
+                           tx_count,
+                           collect_count,
+                           res);
+    if (OB_FAIL(ls_tx_ctx_map_.for_each(fn))) {
+      TRANS_LOG(WARN, "for each tx", KR(ret), "manager", *this);
+      ret = fn.get_ret();
     }
-    if (OB_NOT_NULL(ctx)) {
-      revert_tx_ctx(ctx);
+  } else {
+    ObSEArray<ObTransID, 1> final_move_tx_ids;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < move_tx_ids->count(); idx++) {
+      ObPartTransCtx *ctx = nullptr;
+      ObTransCtx *tmp_ctx = nullptr;
+      bool is_collected = false;
+      ObTxCtxMoveArg arg;
+      if (OB_FAIL(ls_tx_ctx_map_.get(move_tx_ids->at(idx), tmp_ctx))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          TRANS_LOG(WARN, "get tx ctx failed", KR(ret), K(move_tx_ids->at(idx)));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (FALSE_IT(ctx = static_cast<ObPartTransCtx*>(tmp_ctx))) {
+      } else if (OB_FAIL(ctx->collect_tx_ctx(dest_ls_id,
+                                             log_scn,
+                                             tablet_list,
+                                             arg,
+                                             is_collected))) {
+        TRANS_LOG(WARN, "collect tx ctx failed", KR(ret), K(move_tx_ids->at(idx)));
+      } else if (!is_collected) {
+      } else if (OB_FAIL(final_move_tx_ids.push_back(move_tx_ids->at(idx)))) {
+        TRANS_LOG(WARN, "collect tx ctx failed", KR(ret), K(move_tx_ids->at(idx)));
+      } else if (OB_FAIL(res.push_back(arg))) {
+        TRANS_LOG(WARN, "push to array failed", KR(ret), K(move_tx_ids->at(idx)));
+      } else {
+        collect_count++;
+      }
+      if (OB_NOT_NULL(ctx)) {
+        revert_tx_ctx(ctx);
+      }
     }
   }
-  TRANS_LOG(INFO, "collect_tx_ctx", KR(ret), K(final_move_tx_ids), K(collect_count), K(tenant_id_), K(ls_id_));
   return ret;
 }
 
