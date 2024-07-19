@@ -809,8 +809,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
               is_spatial_index_,
               group_by_projector_,
               is_fts_index_,
-              read_param_version_,
-              is_column_replica_table_);
+              read_param_version_);
   if (OB_SUCC(ret)) {
     len += serialization::encoded_length_vi64(cg_read_infos_.count());
     for (int64_t i = 0; OB_SUCC(ret) && i < cg_read_infos_.count(); ++i) {
@@ -826,6 +825,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableParam)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ADD_LEN,
               is_multivalue_index_);
+  }
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN,
+              is_column_replica_table_);
   }
   return len;
 }
