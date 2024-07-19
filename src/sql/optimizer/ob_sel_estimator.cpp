@@ -365,7 +365,7 @@ int ObCmpSelEstimator::get_range_cmp_sel(const OptTableMetas &table_metas,
     const ObRawExpr *col_expr = left_expr->is_column_ref_expr() ? left_expr : right_expr;
     if (OB_FAIL(ObOptSelectivity::get_column_range_sel(table_metas, ctx,
                                                        static_cast<const ObColumnRefRawExpr&>(*col_expr),
-                                                       qual, selectivity))) {
+                                                       qual, true, selectivity))) {
       LOG_WARN("Failed to get column range sel", K(qual), K(ret));
     }
   } else if (T_OP_ROW == left_expr->get_expr_type() && T_OP_ROW == right_expr->get_expr_type()) {
@@ -393,7 +393,7 @@ int ObCmpSelEstimator::get_range_cmp_sel(const OptTableMetas &table_metas,
       const ObRawExpr *col_expr = (left_expr->is_column_ref_expr()) ? (left_expr) : (right_expr);
       if (OB_FAIL(ObOptSelectivity::get_column_range_sel(table_metas, ctx,
                                                          static_cast<const ObColumnRefRawExpr&>(*col_expr),
-                                                         qual, selectivity))) {
+                                                         qual, true, selectivity))) {
         LOG_WARN("failed to get column range sel", K(ret));
       }
     } else { /* no dothing */ }
@@ -440,7 +440,7 @@ int ObBtwSelEstimator::get_btw_sel(const OptTableMetas &table_metas,
   if (NULL != col_expr) {
     if (OB_FAIL(ObOptSelectivity::get_column_range_sel(table_metas, ctx,
                                                        static_cast<const ObColumnRefRawExpr&>(*col_expr),
-                                                       qual, selectivity))) {
+                                                       qual, true, selectivity))) {
       LOG_WARN("failed to get column range sel", K(ret));
     }
   }
@@ -1612,7 +1612,7 @@ int ObLikeSelEstimator::get_sel(const OptTableMetas &table_metas,
       LOG_WARN("unexpected expr", KPC(variable_));
     } else if (OB_FAIL(ObOptSelectivity::get_column_range_sel(table_metas, ctx,
                                                               static_cast<const ObColumnRefRawExpr&>(*variable_),
-                                                              qual, selectivity))) {
+                                                              qual, false, selectivity))) {
       LOG_WARN("Failed to get column range selectivity", K(ret));
     }
   } else if (is_lob_storage(variable_->get_data_type())) {
@@ -1829,7 +1829,8 @@ int ObRangeSelEstimator::get_sel(const OptTableMetas &table_metas,
   if (OB_ISNULL(column_expr_) || OB_UNLIKELY(range_exprs_.empty())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr", KPC(this));
-  } else if (OB_FAIL(ObOptSelectivity::get_column_range_sel(table_metas, ctx, *column_expr_, range_exprs_, selectivity))) {
+  } else if (OB_FAIL(ObOptSelectivity::get_column_range_sel(
+      table_metas, ctx, *column_expr_, range_exprs_, true, selectivity))) {
     LOG_WARN("failed to calc qual selectivity", KPC(column_expr_), K(range_exprs_), K(ret));
   } else {
     selectivity = ObOptSelectivity::revise_between_0_1(selectivity);
