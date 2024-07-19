@@ -365,6 +365,14 @@ public:
   int64_t get_sqc_count() const { return sqc_count_;}
   void set_sqc_order_gi_tasks(bool v) { sqc_order_gi_tasks_ = v; }
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
+  inline void set_partition_random_affinitize(bool partition_random_affinitize)
+  {
+    partition_random_affinitize_ = partition_random_affinitize;
+  }
+  inline bool partition_random_affinitize() const
+  {
+    return partition_random_affinitize_;
+  }
   ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
   void set_branch_id_base(const int16_t branch_id_base) { branch_id_base_ = branch_id_base; }
@@ -447,6 +455,7 @@ private:
   ObP2PDhMapInfo p2p_dh_map_info_;
   int64_t sqc_count_;
   bool sqc_order_gi_tasks_;
+  bool partition_random_affinitize_{true}; // whether do partition random in gi task split
 };
 
 class ObDfo
@@ -684,6 +693,15 @@ public:
   ObP2PDhMapInfo &get_p2p_dh_map_info() { return p2p_dh_map_info_;};
   bool force_bushy() { return force_bushy_; }
   void set_force_bushy(bool flag) { force_bushy_ = flag; }
+  inline void set_partition_random_affinitize(bool partition_random_affinitize)
+  {
+    partition_random_affinitize_ = partition_random_affinitize;
+  }
+  inline bool partition_random_affinitize() const
+  {
+    return partition_random_affinitize_;
+  }
+
   TO_STRING_KV(K_(execution_id),
                K_(dfo_id),
                K_(is_active),
@@ -790,6 +808,7 @@ private:
   // ---------------
   ObPxCoordInfo *coord_info_ptr_;
   bool force_bushy_;
+  bool partition_random_affinitize_{true}; // whether do partition random in gi task split
 };
 
 

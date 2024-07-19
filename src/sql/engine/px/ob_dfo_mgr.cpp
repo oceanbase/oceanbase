@@ -465,10 +465,15 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
                        ObPxCoordInfo &px_coord_info) const
 {
   int ret = OB_SUCCESS;
+  bool partition_random_affinitize = true;
   bool top_px = (nullptr == parent_dfo);
   bool got_fulltree_dfo = false;
   ObDfo *dfo = NULL;
   bool is_stack_overflow = false;
+  if (OB_NOT_NULL(phy_op->get_phy_plan())
+      && phy_op->get_phy_plan()->get_min_cluster_version() >= CLUSTER_VERSION_4_3_3_0) {
+    partition_random_affinitize = false;
+  }
   if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
     LOG_WARN("failed to check stack overflow", K(ret));
   } else if (is_stack_overflow) {
@@ -609,6 +614,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       dfo->set_dop(1);
       dfo->set_execution_id(exec_ctx.get_my_session()->get_current_execution_id());
       dfo->set_px_sequence_id(dfo_int_gen.get_px_sequence_id());
+      dfo->set_partition_random_affinitize(partition_random_affinitize);
       if (OB_NOT_NULL(phy_op->get_phy_plan()) && phy_op->get_phy_plan()->is_enable_px_fast_reclaim()) {
         ObDetectableId sqc_detectable_id;
         // if generate_detectable_id failed, means that server id is not ready
