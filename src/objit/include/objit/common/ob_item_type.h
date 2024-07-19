@@ -873,7 +873,7 @@ typedef enum ObItemType
   T_FUN_SYS_GTID_SUBTRACT = 2013,
   T_FUN_SYS_WAIT_FOR_EXECUTED_GTID_SET = 2014,
   T_FUN_SYS_WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS = 2015,
-
+  T_OP_SPLIT_PART = 2016,
   T_MAX_OP = 3000,
 
   //pseudo column, to mark the group iterator id
@@ -2576,7 +2576,8 @@ typedef enum ObOutlineType
     || T_OP_CONV == (op) \
     || T_OP_CNN == (op) \
     || T_OP_SIGN == (op) \
-    || T_OP_CONNECT_BY_ROOT == (op))
+    || T_OP_CONNECT_BY_ROOT == (op) \
+    || T_OP_SPLIT_PART == (op))
 
 #define ITEM_TO_OBJ_TYPE(op) (static_cast<ObObjType>(op))
 

@@ -373,6 +373,7 @@
 #include "ob_expr_transaction_id.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
+#include "ob_expr_split_part.h"
 
 namespace oceanbase
 {
@@ -1163,6 +1164,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
   ObExprIsEnabledRole::eval_is_enabled_role,                          /* 693 */
   ObExprCanAccessTrigger::can_access_trigger,                         /* 694 */
+  ObExprSplitPart::calc_split_part_expr,                              /* 695 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
