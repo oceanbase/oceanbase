@@ -7216,25 +7216,32 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(param_info));
   CK (OB_NOT_NULL(param));
+
   if (OB_SUCC(ret)) {
+    // Step: get real parameter type
     ObPLDataType expected_type, actually_type;
+    bool is_anonymous_array_type = false;
     if (param->is_obj_access_expr()) {
       const ObObjAccessRawExpr *obj_access = NULL;
       CK (OB_NOT_NULL(obj_access = static_cast<const ObObjAccessRawExpr*>(param)));
       OZ (obj_access->get_final_type(actually_type));
     } else if (T_QUESTIONMARK == param->get_expr_type()) {
       int64_t var_idx = OB_INVALID_INDEX;
-      const ObPLVar *var = NULL;
+      const ObPLVar *local_variable = NULL;
       CK (OB_NOT_NULL(current_block_));
       OX (var_idx = static_cast<const ObConstRawExpr*>(param)->get_value().get_unknown());
-      CK (OB_NOT_NULL(var = current_block_->get_variable(var_idx)));
-      OX (actually_type = var->get_pl_data_type());
+      CK (OB_NOT_NULL(local_variable = current_block_->get_variable(var_idx)));
+      OX (actually_type = local_variable->get_pl_data_type());
+      OX (is_anonymous_array_type = actually_type.is_local_type()
+                                    && actually_type.is_collection_type()
+                                    && local_variable->get_name().prefix_match(ANONYMOUS_ARG));
     } else if (param->has_flag(IS_PL_MOCK_DEFAULT_EXPR)) {
       new(&actually_type)ObPLDataType(ObNullType);
     } else {
       new(&actually_type)ObPLDataType(param->get_data_type());
       actually_type.get_data_type()->set_udt_id(param->get_result_type().get_udt_id());
     }
+    // Step: get formal parameter type
     if (OB_SUCC(ret)) {
       if (param_info->is_schema_routine_param()) {
         const ObRoutineParam* iparam = static_cast<const ObRoutineParam*>(param_info);
@@ -7261,6 +7268,7 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
         OX (expected_type = iparam->get_type());
       }
     }
+    // Step: check compatible with real parameter & formal parameter
     if (OB_SUCC(ret) && !(actually_type == expected_type)) {
       bool is_legal = true;
       if (actually_type.is_cursor_type() && expected_type.is_cursor_type()) {
@@ -7268,66 +7276,42 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
       } else if (actually_type.is_obj_type() && ObNullType == actually_type.get_obj_type()) {
         // do nothing ...
       } else if (actually_type.is_composite_type() && expected_type.is_composite_type()) {
-        uint64_t actual_udt_id = actually_type.get_user_type_id();
-        if ((OB_INVALID_ID == actual_udt_id || OB_INVALID_ID == extract_package_id(actual_udt_id)) &&
-            resolve_ctx_.is_prepare_protocol_ &&
-            actually_type.is_collection_type() &&
-            OB_NOT_NULL(resolve_ctx_.params_.param_list_) &&
-            T_QUESTIONMARK == param->get_expr_type()) { // anony array
-          int64_t index = static_cast<const ObConstRawExpr*>(param)->get_value().get_unknown();
-          CK (resolve_ctx_.params_.param_list_->count() > index);
-          if (OB_SUCC(ret)) {
-            const ObObjParam &param = resolve_ctx_.params_.param_list_->at(index);
-            const pl::ObPLComposite *src_composite = NULL;
-            const pl::ObPLCollection *src_coll = NULL;
-            const pl::ObUserDefinedType *pl_user_type = NULL;
-            const pl::ObCollectionType *coll_type = NULL;
-            CK (OB_NOT_NULL(src_composite = reinterpret_cast<const ObPLComposite *>(param.get_ext())));
-            OZ (resolve_ctx_.get_user_type(expected_type.get_user_type_id(), pl_user_type));
-            CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(pl_user_type)));
-            CK (OB_NOT_NULL(src_coll = static_cast<const ObPLCollection *>(src_composite)));
-            if (OB_FAIL(ret)) {
-            } else if (coll_type->get_element_type().is_obj_type() ^
-                      src_coll->get_element_desc().is_obj_type()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("incorrect argument type, diff type",
-                            K(ret), K(coll_type->get_element_type()), K(src_coll->get_element_desc()));
-            } else if (coll_type->get_element_type().is_obj_type()) { // basic data type
-              const ObDataType *src_data_type = &src_coll->get_element_desc();
-              const ObDataType *dst_data_type = coll_type->get_element_type().get_data_type();
-              if (dst_data_type->get_obj_type() == src_data_type->get_obj_type()) {
-                // do nothing
-              } else if (cast_supported(src_data_type->get_obj_type(),
-                                        src_data_type->get_collation_type(),
-                                        dst_data_type->get_obj_type(),
-                                        dst_data_type->get_collation_type())) {
-                // do nothing
-              } else {
-                ret = OB_INVALID_ARGUMENT;
-                LOG_WARN("incorrect argument type, diff type", K(ret));
-              }
+
+        if (is_anonymous_array_type && expected_type.is_collection_type()) { // check anonymous array compatible
+
+          const ObUserDefinedType *left_type = NULL;
+          const ObUserDefinedType *right_type = NULL;
+          const ObCollectionType *left_coll_type = NULL;
+          const ObCollectionType *right_coll_type = NULL;
+
+          OZ (current_block_->get_namespace().get_pl_data_type_by_id(actually_type.get_user_type_id(), left_type));
+          OZ (current_block_->get_namespace().get_pl_data_type_by_id(expected_type.get_user_type_id(), right_type));
+          CK (OB_NOT_NULL(left_coll_type = static_cast<const ObCollectionType *>(left_type)));
+          CK (OB_NOT_NULL(right_coll_type = static_cast<const ObCollectionType *>(right_type)));
+
+          if (OB_FAIL(ret)) {
+          } else if (left_coll_type->get_element_type().is_obj_type() ^ right_coll_type->get_element_type().is_obj_type()) {
+            is_legal = false;
+            LOG_WARN("uncompatible with anonymous array type", K(ret), KPC(left_coll_type), KPC(right_coll_type));
+          } else if (left_coll_type->get_element_type().is_obj_type()) {
+            const ObDataType *left_basic_type = left_coll_type->get_element_type().get_data_type();
+            const ObDataType *right_basic_type = right_coll_type->get_element_type().get_data_type();
+            if (left_basic_type->get_obj_type() != right_basic_type->get_obj_type()
+                && !cast_supported(left_basic_type->get_obj_type(),
+                                   left_basic_type->get_collation_type(),
+                                   right_basic_type->get_obj_type(),
+                                   right_basic_type->get_collation_type())) {
+              is_legal = false;
+              LOG_WARN("uncompatible with anonymous array type", K(ret), KPC(left_coll_type), KPC(right_coll_type));
             } else {
-              // element is composite type
-              uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
-              is_legal = element_type_id == coll_type->get_element_type().get_user_type_id();
-              if (!is_legal) {
-                OZ (ObPLResolver::check_composite_compatible(
-                  NULL == resolve_ctx_.params_.secondary_namespace_
-                      ? static_cast<const ObPLINS&>(resolve_ctx_)
-                      : static_cast<const ObPLINS&>(*resolve_ctx_.params_.secondary_namespace_),
-                  element_type_id, coll_type->get_element_type().get_user_type_id(), is_legal));
-              }
+              // compatible with anonymous array type
             }
-          } else {
-            if (actual_udt_id != expected_type.get_user_type_id()) {
-              OZ (check_composite_compatible(current_block_->get_namespace(),
-                                            actual_udt_id,
-                                            expected_type.get_user_type_id(),
-                                            is_legal));
-            }
+          } else if (left_coll_type->get_element_type().get_user_type_id() != right_coll_type->get_element_type().get_user_type_id()) {
+            OZ (check_composite_compatible(current_block_->get_namespace(),
+                                           left_coll_type->get_element_type().get_user_type_id(),
+                                           right_coll_type->get_element_type().get_user_type_id(),
+                                           is_legal));
           }
-        }
-        if (OB_FAIL(ret)) {
         } else if (actually_type.get_user_type_id() != expected_type.get_user_type_id()) {
 #ifdef OB_BUILD_ORACLE_PL
           if (ObPlJsonUtil::is_pl_jsontype(actually_type.get_user_type_id())) {
@@ -7358,6 +7342,7 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
           is_legal = false;
         }
       } else { /*do nothing*/ }
+
       if (OB_SUCC(ret) && !is_legal) {
         ret = OB_ERR_WRONG_TYPE_FOR_VAR;
         LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",

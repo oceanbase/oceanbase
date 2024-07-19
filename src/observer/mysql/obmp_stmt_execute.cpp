@@ -986,7 +986,9 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       if (OB_SUCC(ret) && is_arraybinding_) {
         OZ (check_param_type_for_arraybinding(session, param_type_infos));
       }
-      if (OB_SUCC(ret) && stmt::T_CALL_PROCEDURE == ps_session_info->get_stmt_type()) {
+      if (OB_SUCC(ret)
+          && (stmt::T_CALL_PROCEDURE == ps_session_info->get_stmt_type()
+              || stmt::T_ANONYMOUS_BLOCK == ps_session_info->get_stmt_type())) {
         ctx_.is_execute_call_stmt_ = true;
       }
 
