@@ -3851,7 +3851,11 @@ int ObBasicSessionInfo::get_sync_sys_vars(ObIArray<ObSysVarClassType>
     if (OB_FAIL(ObSysVarFactory::calc_sys_var_store_idx(ids.at(i), sys_var_idx))) {
       LOG_WARN("fail to calc sys var store idx", K(i), K(sys_var_idx), K(ids.at(i)), K(ret));
     } else {
-      if (!ObSysVariables::get_base_value(sys_var_idx).can_compare(
+      if (GET_MIN_CLUSTER_VERSION() <= CLUSTER_VERSION_4_2_1_7
+        && GCONF.in_upgrade_mode()
+        && ids.at(i) == SYS_VAR_OPTIMIZER_FEATURES_ENABLE) {
+        // dont sync
+      } else if (!ObSysVariables::get_base_value(sys_var_idx).can_compare(
         sys_vars_[sys_var_idx]->get_value())||ObSysVariables::get_base_value(sys_var_idx) !=
         sys_vars_[sys_var_idx]->get_value() ||
         ObSysVariables::get_base_value(sys_var_idx).get_scale()
@@ -4080,7 +4084,7 @@ int ObBasicSessionInfo::calc_need_serialize_vars(ObIArray<ObSysVarClassType> &sy
   // 普通租户，序列化和 hardcode 不一致的变量
   const ObIArray<ObSysVarClassType> &ids = sys_var_inc_info_.get_all_sys_var_ids();
   for (int64_t i = 0; OB_SUCC(ret) && i < ids.count(); ++i) {
-    if (SYS_VAR_OPTIMIZER_FEATURES_ENABLE == ids.at(i) && GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_2_1_0) {
+    if (SYS_VAR_OPTIMIZER_FEATURES_ENABLE == ids.at(i) && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_2_1_0) {
       continue;
     }
     int64_t sys_var_idx = -1;
