@@ -15,7 +15,7 @@ OceanBase 向量数据库能力支持将您的向量数据与其他数据一起�
 ## 部署单机版OceanBase向量数据库
 拉取并启动OceanBase向量数据库单机docker镜像：
 ```shell
-docker run -p 2881:2881 --name obvec -d oceanbase/oceanbase-ce:vector
+docker run -p 2881:2881 --name obvec -d oceanbase/oceanbase-ce:vector0.2
 ```
 ## 操作示例（省流版）
 ```sql
