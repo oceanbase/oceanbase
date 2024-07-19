@@ -29,6 +29,7 @@
 
 #include "common/ob_member_list.h"
 #include "common/ob_zone.h"
+#include "common/ob_tenant_data_version_mgr.h"
 #include "share/ob_version.h"
 
 #include "share/ob_version.h"
@@ -1940,6 +1941,13 @@ int ObService::check_server_empty(bool &is_empty)
       }
     }
 #endif
+    if (is_empty) {
+      if (ODV_MGR.get_file_exists_when_loading()) {
+        // ignore ret
+        FLOG_WARN("[CHECK_SERVER_EMPTY] data_version file exists");
+        is_empty = false;
+      }
+    }
   }
   return ret;
 }
