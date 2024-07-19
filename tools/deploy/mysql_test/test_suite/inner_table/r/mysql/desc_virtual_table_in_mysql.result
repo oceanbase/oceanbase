@@ -2881,7 +2881,7 @@ rebuild_seq	bigint(20)	NO		NULL
 tablet_change_checkpoint_scn	bigint(20) unsigned	NO		NULL	
 transfer_scn	bigint(20) unsigned	NO		NULL	
 tx_blocked	bigint(20)	NO		NULL	
-required_size	bigint(20)	NO		0	
+required_data_disk_size	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_info;
 IF(count(*) >= 0, 1, 0)
 1

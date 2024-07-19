@@ -5084,7 +5084,7 @@ int ObInnerTableSchema::all_virtual_ls_info_ora_schema(ObTableSchema &table_sche
   }
 
   if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("REQUIRED_SIZE", //column_name
+    ADD_COLUMN_SCHEMA("REQUIRED_DATA_DISK_SIZE", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id

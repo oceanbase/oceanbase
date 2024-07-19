@@ -198,7 +198,7 @@ int ObAllVirtualLSInfo::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(ls_info.tx_blocked_);
           break;
         case OB_APP_MIN_COLUMN_ID + 16:
-          // required_size
+          // required_data_disk_size
           cur_row_.cells_[i].set_int(0);
           break;
         default:
