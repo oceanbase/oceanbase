@@ -140,7 +140,7 @@ private:
   public: \
   bool operator()(ObTransCtx *tx_ctx_base) { \
     bool bool_ret = false; \
-    ObPartTransCtx *tx_ctx = dynamic_cast<transaction::ObPartTransCtx*>(tx_ctx_base); \
+    ObPartTransCtx *tx_ctx = static_cast<transaction::ObPartTransCtx*>(tx_ctx_base); \
     ObTransID tx_id = tx_ctx->get_trans_id(); \
     share::ObLSID ls_id = tx_ctx->get_ls_id(); \
     func_stat_.begin_iter_single(); \
