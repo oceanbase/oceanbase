@@ -1551,6 +1551,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("deep copy external_file_format failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
         LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.vector_ivfflat_centers_, vector_ivfflat_centers_))) {
+        LOG_WARN("deep copy vector_ivfflat_centers failed", K(ret));
+      } else {
+        LOG_INFO("##################oom:", K(src_schema.vector_ivfflat_centers_.length()));
       }
 
       //view schema
@@ -3355,6 +3359,7 @@ void ObTableSchema::reset()
 
   vector_ivfflat_lists_ = OB_DEFAULT_VECTOR_IVFFLAT_LISTS;
   vector_distance_func_ = common::INVALID_DISTANCE_TYPE;
+  reset_string(vector_ivfflat_centers_);
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -6377,7 +6382,8 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(mlog_tid),
     K_(auto_increment_cache_size),
     K_(vector_ivfflat_lists),
-    K_(vector_distance_func));
+    K_(vector_distance_func),
+    K_(vector_ivfflat_centers));
   J_OBJ_END();
 
   return pos;
@@ -6659,7 +6665,8 @@ OB_DEF_SERIALIZE(ObTableSchema)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ENCODE,
                 vector_ivfflat_lists_,
-                vector_distance_func_);
+                vector_distance_func_,
+                vector_ivfflat_centers_);
   }
   }();
 
@@ -7094,7 +7101,8 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
                 vector_ivfflat_lists_,
-                vector_distance_func_);
+                vector_distance_func_,
+                vector_ivfflat_centers_);
   }
   }();
 
@@ -7252,6 +7260,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(auto_increment_cache_size_);
   OB_UNIS_ADD_LEN(vector_ivfflat_lists_);
   OB_UNIS_ADD_LEN(vector_distance_func_);
+  OB_UNIS_ADD_LEN(vector_ivfflat_centers_);
   return len;
 }
 

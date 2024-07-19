@@ -6420,30 +6420,11 @@ int ObPartitionUtils::check_param_valid_(
           }
         }
         if (OB_SUCC(ret) && !finded) {
-          const ObTableSchema *table_schema = nullptr;
-          if (related_table->related_tids_->count() == 1) {
-            const uint64_t related_tid =
-              share::is_oracle_mapping_real_virtual_table(related_table->related_tids_->at(0)) ?
-                    ObSchemaUtils::get_real_table_mappings_tid(related_table->related_tids_->at(0))
-                    : related_table->related_tids_->at(0);
-            if (FAILEDx(guard->get_table_schema(
-                tenant_id, related_tid, table_schema))) {
-              LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(related_tid));
-            } else if (OB_ISNULL(table_schema)) {
-              ret = OB_TABLE_NOT_EXIST;
-              LOG_WARN("data table schema not exist", KR(ret), K(tenant_id), K(related_tid));
-            } else if (!table_schema->vec_ivfflat_container_table()) {
-              ret = OB_TABLE_NOT_EXIST;
-            }
-          } else {
-            ret = OB_TABLE_NOT_EXIST;
-          }
-          if (OB_FAIL(ret)) {
-            LOG_WARN("local index's data table not exist in related tids", KR(ret),
-                    "index_id", table_id, K(data_table_id), "related_tids",
-                    ObArrayWrap<uint64_t>(related_table->related_tids_->get_data(),
-                                          related_table->related_tids_->count()));
-          }
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("local index's data table not exist in related tids", KR(ret),
+                   "index_id", table_id, K(data_table_id), "related_tids",
+                   ObArrayWrap<uint64_t>(related_table->related_tids_->get_data(),
+                                         related_table->related_tids_->count()));
         }
         if (FAILEDx(guard->get_table_schema(
             tenant_id, data_table_id, data_schema))) {
@@ -6479,19 +6460,8 @@ int ObPartitionUtils::check_param_valid_(
             finded = (related_tid == table_schema.get_mlog_tid());
           }
           if (OB_SUCC(ret) && !finded && related_tid != data_table_id) {
-            const ObTableSchema *table_schema = nullptr;
-            if (OB_FAIL(guard->get_table_schema(
-                tenant_id, related_tid, table_schema))) {
-              LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(related_tid));
-            } else if (OB_ISNULL(table_schema)) {
-              ret = OB_TABLE_NOT_EXIST;
-              LOG_WARN("data table schema not exist", KR(ret), K(tenant_id), K(related_tid));
-            } else if (table_schema->vec_ivfflat_container_table()) {
-              // do nothing // ignore error if related_tid is ivfflat container table
-            } else {
-              ret = OB_TABLE_NOT_EXIST;
-              LOG_WARN("local index not exist", KR(ret), K(table_id), K(data_table_id), K(related_tid));
-            }
+            ret = OB_TABLE_NOT_EXIST;
+            LOG_WARN("local index not exist", KR(ret), K(table_id));
           }
         } // end for related_tids
         if (OB_SUCC(ret) && !index_exist) {

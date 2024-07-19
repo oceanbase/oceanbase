@@ -250,23 +250,12 @@ public:
   { related_ctdefs_.set_capacity(1); return related_ctdefs_.push_back(lookup_ctdef); }
   int set_lookup_rtdef(ObDASScanRtDef *lookup_rtdef)
   { related_rtdefs_.set_capacity(1); return related_rtdefs_.push_back(lookup_rtdef); }
-  // container table
-  int set_container_ctdef(const ObDASScanCtDef *container_ctdef)
-  { container_ctdefs_.set_capacity(1); return container_ctdefs_.push_back(container_ctdef); }
-  int set_container_rtdef(ObDASScanRtDef *container_rtdef)
-  { container_rtdefs_.set_capacity(1); return container_rtdefs_.push_back(container_rtdef); }
   //only used in local index lookup, it it nullptr when scan data table or scan index table
   const ObDASScanCtDef *get_lookup_ctdef() const
   { return related_ctdefs_.empty() ? nullptr : static_cast<const ObDASScanCtDef*>(related_ctdefs_.at(0)); }
   ObDASScanRtDef *get_lookup_rtdef()
   { return related_rtdefs_.empty() ? nullptr : static_cast<ObDASScanRtDef*>(related_rtdefs_.at(0)); }
-  // container table
-  const ObDASScanCtDef *get_container_ctdef() const
-  { return container_ctdefs_.empty() ? nullptr : static_cast<const ObDASScanCtDef*>(container_ctdefs_.at(0)); }
-  ObDASScanRtDef *get_container_rtdef()
-  { return container_rtdefs_.empty() ? nullptr : static_cast<ObDASScanRtDef*>(container_rtdefs_.at(0)); }
   int set_lookup_tablet_id(const common::ObTabletID &tablet_id);
-  int set_container_tablet_id(const common::ObTabletID &tablet_id);
   int init_scan_param();
   virtual int rescan();
   virtual int reuse_iter();
@@ -383,26 +372,14 @@ public:
       state_(CONTAINER_SCAN),
       cur_row_idx_(0),
       index_iter_(nullptr),
-      container_iter_(nullptr),
       index_ctdef_(nullptr),
       index_rtdef_(nullptr),
-      container_ctdef_(nullptr),
-      container_rtdef_(nullptr),
-      tx_desc_(nullptr),
-      snapshot_(nullptr),
-      tablet_id_(),
-      ls_id_(),
-      container_scan_param_(),
       index_scan_param_(nullptr),
       arena_allocator_(),
       ivfflat_helper_(nullptr)
   {}
   int init(const ObDASScanCtDef *index_ctdef,
            ObDASScanRtDef *index_rtdef,
-           const ObDASScanCtDef *container_ctdef,
-           ObDASScanRtDef *container_rtdef,
-           transaction::ObTxDesc *tx_desc,
-           transaction::ObTxReadSnapshot *snapshot,
            storage::ObTableScanParam *scan_param,
            share::ObIvfflatIndexSearchHelper *ivfflat_helper);
   virtual ~ObIvfflatAnnScanOp() {}
@@ -411,17 +388,12 @@ public:
   virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   virtual void reset() { cur_row_idx_ = 0; }
 
-  void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
-  void set_ls_id(const share::ObLSID &ls_id) { ls_id_ = ls_id; }
-
   // int rescan();
   int reuse();
   int revert_iter();
 private:
-  int init_scan_param();
-  int prepare_container_key_range();
   common::ObITabletScan &get_tsc_service();
-  int reuse_iter(ObNewRowIterator *iter);
+  int reuse_iter(const bool switch_param, ObNewRowIterator *iter);
 
   int do_container_scan(const int64_t capcity = 1);
   int do_index_scan(const int64_t capcity = 1);
@@ -432,18 +404,8 @@ protected:
   int64_t cur_row_idx_;
   // 和lookup不同，这里初始时两个迭代器都是空（没有做table_scan），因为是index_iter_依赖container_iter_得到的rowkey
   common::ObNewRowIterator *index_iter_;
-  common::ObNewRowIterator *container_iter_;
   const ObDASScanCtDef *index_ctdef_; //index ctdef
   ObDASScanRtDef *index_rtdef_; //index rtdef
-  const ObDASScanCtDef *container_ctdef_;
-  ObDASScanRtDef *container_rtdef_;
-  // container table的依赖信息
-  transaction::ObTxDesc *tx_desc_;
-  transaction::ObTxReadSnapshot *snapshot_;
-  common::ObTabletID tablet_id_;
-  share::ObLSID ls_id_;
-  storage::ObTableScanParam container_scan_param_;
-
   storage::ObTableScanParam *index_scan_param_;
   common::ObArenaAllocator arena_allocator_;
   share::ObIvfflatIndexSearchHelper *ivfflat_helper_;

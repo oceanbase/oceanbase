@@ -60,10 +60,9 @@ public:
   common::ObVectorDistanceType get_vd_type() const { return vd_type_; }
   void set_vector_hnsw_m(const int64_t vector_hnsw_m) { vector_hnsw_m_ = vector_hnsw_m; }
   void set_vector_hnsw_ef_construction(const int64_t vector_hnsw_ef_construction) { vector_hnsw_ef_construction_ = vector_hnsw_ef_construction; }
-  void set_container_table_id(const int64_t container_table_id) { container_table_id_ = container_table_id; }
   TO_STRING_KV(K_(data_table_id), K_(dest_table_id), K_(schema_version), K_(snapshot_version),
                K_(execution_id), K_(consumer_group_id), K_(trace_id), K_(parallelism), K_(nls_date_format),
-               K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(is_vector_index), K_(container_table_id),
+               K_(nls_timestamp_format), K_(nls_timestamp_tz_format), K_(is_vector_index),
                K_(vector_index_using_type), K_(vd_type), K_(vector_hnsw_m), K_(vector_hnsw_ef_construction));
 
 private:
@@ -99,7 +98,6 @@ private:
   ObRootService *root_service_;
   common::ObAddr inner_sql_exec_addr_;
   bool is_vector_index_;
-  int64_t container_table_id_; // for ivfflat indexs
   share::schema::ObIndexUsingType vector_index_using_type_;
   common::ObVectorDistanceType vd_type_;
   int64_t vector_hnsw_m_;
@@ -126,7 +124,6 @@ public:
       const obrpc::ObCreateIndexArg &create_index_arg,
       const int64_t parent_task_id /* = 0 */,
       const uint64_t tenant_data_version,
-      const ObTableSchema *container_schema = nullptr,
       const int64_t task_status = share::ObDDLTaskStatus::PREPARE,
       const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);

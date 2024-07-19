@@ -20,6 +20,79 @@ namespace oceanbase
 {
 namespace common
 {
+
+int ObVectorArray::get_part_cnt(int64_t idx, int64_t& part_cnt)
+{
+  int ret = OB_SUCCESS;
+  part_cnt = -1;
+  if (OB_UNLIKELY(idx < 0 || idx >= part_cnt_length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "idx out of range", K(ret), K(idx));
+  } else {
+    part_cnt = part_cnts_[idx] - (idx == 0 ? 0 : part_cnts_[idx - 1]);
+  }
+  return ret;
+}
+
+int ObVectorArray::get_part_offset(int64_t idx, int64_t dims, int64_t& part_offset)
+{
+  int ret = OB_SUCCESS;
+  part_offset = -1;
+  if (OB_UNLIKELY(idx < 0 || idx >= part_cnt_length_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "idx out of range", K(ret), K(idx));
+  } else {
+    part_offset = (idx == 0 ? 0 : part_cnts_[idx - 1] * dims);
+  }
+  return ret;
+}
+
+DEFINE_SERIALIZE(ObVectorArray)
+{
+  int ret = OB_SUCCESS;
+  const int64_t serialize_size = get_serialize_size();
+  //Null ObString is allowed
+  if (OB_ISNULL(buf) || OB_UNLIKELY(serialize_size > buf_len - pos)) {
+    ret = OB_SIZE_OVERFLOW;
+    LIB_LOG(WARN, "size overflow", K(ret),
+        KP(buf), K(serialize_size), "remain", buf_len - pos);
+  } else if (OB_FAIL(serialization::encode_vstr(buf, buf_len, pos, part_cnts_, sizeof(int64_t) * part_cnt_length_))) {
+    LIB_LOG(WARN, "string serialize failed", K(ret), K(part_cnt_length_));
+  } else if (OB_FAIL(serialization::encode_vstr(buf, buf_len, pos, ptr_, length_ * sizeof(float)))) {
+    LIB_LOG(WARN, "string serialize failed", K(ret), K(length_));
+  }
+  return ret;
+}
+
+DEFINE_DESERIALIZE(ObVectorArray)
+{
+  int ret = OB_SUCCESS;
+  int64_t len = 0;
+  const int64_t MINIMAL_NEEDED_SIZE = 2; //at least need two bytes
+  if (OB_ISNULL(buf) || OB_UNLIKELY((data_len - pos) < MINIMAL_NEEDED_SIZE)) {
+    ret = OB_INVALID_ARGUMENT;
+    LIB_LOG(WARN, "invalid argument", K(ret), KP(buf), "remain", data_len - pos);
+  } else {
+    int64_t offset_cnt_len = 0;
+    part_cnts_ = reinterpret_cast<int64_t*>(const_cast<char*>(serialization::decode_vstr(buf, data_len, pos, &offset_cnt_len)));
+    ptr_ = reinterpret_cast<float *>((const_cast<char *>(serialization::decode_vstr(buf, data_len, pos, &len))));
+    if (OB_ISNULL(ptr_) || OB_ISNULL(part_cnts_)) {
+      ret = OB_ERROR;
+      LIB_LOG(WARN, "decode NULL string", K(ret));
+    } else {
+      length_ = static_cast<int64_t>(len) / sizeof(float);
+      part_cnt_length_ = static_cast<int64_t>(offset_cnt_len) / sizeof(int64_t);
+    }
+  }
+  return ret;
+}
+
+DEFINE_GET_SERIALIZE_SIZE(ObVectorArray)
+{
+  return serialization::encoded_length_vstr(length_ * sizeof(float)) + 
+         serialization::encoded_length_vstr(part_cnt_length_ * sizeof(int64_t));
+}
+
 void ObTypeVector::destroy(ObIAllocator &allocator)
 {
   if (OB_NOT_NULL(vals_)) {

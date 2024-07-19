@@ -940,6 +940,7 @@ public:
 public:
   ExprFixedArray calc_exprs_; //所有需要下压到存储层的表达式
   ExprFixedArray access_exprs_;
+  ExprFixedArray extra_access_exprs_;  // ivfflat索引必须访问的列表达式
   int64_t max_batch_size_;
 
   // filters push down to storage.

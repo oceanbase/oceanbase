@@ -4282,7 +4282,6 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_index_back(ap->est_cost_info_.index_meta_info_.is_index_back_);
     scan->set_is_spatial_index(ap->est_cost_info_.index_meta_info_.is_geo_index_);
     scan->set_is_vector_index(ap->est_cost_info_.index_meta_info_.is_vector_index_);
-    scan->set_container_table_id(ap->est_cost_info_.index_meta_info_.container_table_id_);
     scan->set_use_das(ap->use_das_);
     scan->set_table_partition_info(ap->table_partition_info_);
     scan->set_table_opt_info(ap->table_opt_info_);
@@ -12467,8 +12466,7 @@ int ObLogPlan::collect_table_location(ObLogicalOperator *op)
       } else if (OB_FAIL(table_partition_info->replace_final_location_key(
           *optimizer_context_.get_exec_ctx(),
           table_scan->get_real_index_table_id(),
-          table_scan->is_index_scan() && !table_scan->get_is_index_global(),
-          table_scan->get_container_table_id()))) {
+          table_scan->is_index_scan() && !table_scan->get_is_index_global()))) {
         LOG_WARN("failed to set table partition info", K(ret));
       } else if (OB_FAIL(add_global_table_partition_info(table_partition_info))) {
         LOG_WARN("failed to add table partition info", K(ret));
@@ -12547,7 +12545,6 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
       TableLocRelInfo rel_info;
       rel_info.table_loc_id_ = tsc_op.get_table_id();
       rel_info.ref_table_id_ = tsc_op.get_real_ref_table_id();
-      // 索引表 主表 聚簇中心表
       if (OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_real_index_table_id()))) {
         LOG_WARN("store the source table id failed", K(ret));
       } else if (table_part_info != nullptr &&
@@ -12558,13 +12555,10 @@ int ObLogPlan::collect_location_related_info(ObLogicalOperator &op)
           LOG_WARN("store the related table id failed", K(ret));
         }
       }
-      if (OB_SUCC(ret) && tsc_op.need_container_table() && OB_FAIL(rel_info.related_ids_.push_back(tsc_op.get_container_table_id()))) {
-        LOG_WARN("store the related container table id failed", K(ret));
-      }
       if (OB_SUCC(ret) && OB_FAIL(optimizer_context_.get_loc_rel_infos().push_back(rel_info))) {
         LOG_WARN("store location related info failed", K(ret));
       }
-    } else if (tsc_op.get_is_index_global() && tsc_op.get_index_back()) { // TODO(@jingshui) 全局索引
+    } else if (tsc_op.get_is_index_global() && tsc_op.get_index_back()) {
       //for global index lookup
       TableLocRelInfo rel_info;
       rel_info.table_loc_id_ = tsc_op.get_table_id();
@@ -13111,7 +13105,7 @@ int ObLogPlan::get_extra_access_exprs(const uint64_t table_id,
   const ObColumnSchemaV2 *column_schema = NULL;
   const ColumnItem *column_item = NULL;
   ColumnItem column_item2;
-  if (table_schema.is_using_vector_index()) {
+  if (table_schema.is_using_ivfflat_index()) {
     const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
     for (int i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
       uint64_t  column_id = OB_INVALID_ID;

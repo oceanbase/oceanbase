@@ -1746,7 +1746,6 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->est_cost_info_.index_meta_info_.is_global_index_ = index_info_entry->is_index_global();
     ap->est_cost_info_.index_meta_info_.is_geo_index_ = index_info_entry->is_index_geo();
     ap->est_cost_info_.index_meta_info_.is_vector_index_ = index_info_entry->is_index_vector();
-    ap->est_cost_info_.index_meta_info_.container_table_id_ = index_info_entry->get_container_table_id();
     ap->est_cost_info_.is_virtual_table_ = is_virtual_table(ref_id);
     ap->est_cost_info_.table_metas_ = &get_plan()->get_basic_table_metas();
     ap->est_cost_info_.sel_ctx_ = &get_plan()->get_selectivity_ctx();
@@ -2665,28 +2664,6 @@ int ObJoinOrder::fill_index_info_entry(const uint64_t table_id,
         entry->set_is_index_vector(is_index_vector);
         entry->set_is_unique_index(is_unique_index);
         entry->get_ordering_info().set_scan_direction(direction);
-        if (is_index_vector && index_schema->is_using_ivfflat_index()) {
-          const ObTableSchema *container_schema = NULL;
-          ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
-          if (OB_FAIL(index_schema->get_simple_index_infos(simple_index_infos))) {
-            LOG_WARN("get simple_index_infos failed", KR(ret), K(table_id));
-          }
-          for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
-            const uint64_t container_id = simple_index_infos.at(i).table_id_;
-            if (OB_FAIL(schema_guard->get_table_schema(container_id, container_schema))) {
-              LOG_WARN("cannot get table schema for table", KR(ret), K(container_id));
-            } else if (OB_ISNULL(container_schema)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("index schema should not be null", KR(ret), K(container_id));
-            } else if (!container_schema->vec_ivfflat_container_table()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid container table for ivfflat index table", K(ret), K(*container_schema));
-            } else {
-              entry->set_container_table_id(container_id);
-              break;
-            }
-          }
-        }
       }
       if (OB_SUCC(ret)) {
         ObSEArray<OrderItem, 4> index_ordering;

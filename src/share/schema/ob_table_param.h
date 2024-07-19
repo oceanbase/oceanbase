@@ -410,8 +410,8 @@ private:
   ObIndexUsingType index_using_type_;
   bool is_build_vector_index_;
   uint64_t build_vector_index_table_id_;
-  uint64_t build_vector_index_container_table_id_; // 对于查询来说，这里存储了container_table_id
-  int64_t rowkey_cnt_; // 只在container的查询param里有值
+  uint64_t build_vector_index_container_table_id_;
+  int64_t rowkey_cnt_;
 };
 } //namespace schema
 } //namespace share

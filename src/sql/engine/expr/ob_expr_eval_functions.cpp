@@ -341,6 +341,7 @@
 #include "ob_expr_transaction_id.h"
 #include "ob_expr_inner_row_cmp_val.h"
 #include "sql/engine/expr/ob_expr_vector.h"
+#include "ob_expr_ivfflat_vec_cluster_id.h"
 
 namespace oceanbase
 {
@@ -1137,7 +1138,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprVectorL2Distance::calc_result,
   ObExprVectorIpDistance::calc_result,
   ObExprVectorCosineDistance::calc_result,
-
+  ObExprIvfflatVecClusterId::eval_ivfflat_vec_cluster_id,
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

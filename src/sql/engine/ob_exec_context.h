@@ -147,6 +147,8 @@ public:
   void reset_op_env();
   void reset_op_ctx();
 
+  void set_extra_info(uint64_t extra) { extra_info_ = extra; }
+  uint64_t get_extra_info() { return extra_info_; }
   bool is_valid() const
   {
     return (NULL != phy_plan_ctx_ && NULL != my_session_);
@@ -663,6 +665,7 @@ protected:
   // for online stats gathering
   bool is_online_stats_gathering_;
   //---------------
+  uint64_t extra_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExecContext);
 };

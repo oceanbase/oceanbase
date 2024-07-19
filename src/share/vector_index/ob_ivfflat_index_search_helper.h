@@ -93,6 +93,7 @@ public:
 
   int get_centers_by_cache();
   bool has_cached_centers() const { return centers_ != nullptr; }
+  int64_t get_center_heap_cnt() const { return center_heap_.count(); }
 private:
   int alloc_rows(const bool need_objs);
   int get_centers_by_sql(

@@ -1363,7 +1363,6 @@ public:
   {
     index_action_type_ = DROP_INDEX;
     index_table_id_ = common::OB_INVALID_ID;
-    container_table_id_ = common::OB_INVALID_ID;
     is_add_to_scheduler_ = false;
     is_hidden_ = false;
     is_in_recyclebin_ = false;
@@ -1381,7 +1380,6 @@ public:
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
-  uint64_t container_table_id_;
   bool is_add_to_scheduler_;
   bool is_hidden_;
   bool is_in_recyclebin_;
@@ -2521,10 +2519,8 @@ public:
         local_session_var_(&allocator_),
         exist_all_column_group_(false),
         index_cgs_(),
-        container_table_id_(common::OB_INVALID_ID),
         vector_hnsw_m_(0),
-        vector_hnsw_ef_construction_(0),
-        vector_help_schema_()
+        vector_hnsw_ef_construction_(0)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2556,10 +2552,8 @@ public:
     allocator_.reset();
     exist_all_column_group_ = false;
     index_cgs_.reset();
-    container_table_id_ = common::OB_INVALID_ID;
     vector_hnsw_m_ = 0;
     vector_hnsw_ef_construction_ = 0;
-    vector_help_schema_.reset();
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2581,8 +2575,6 @@ public:
       SHARE_LOG(WARN, "fail to assign index schema", K(ret));
     } else if (OB_FAIL(local_session_var_.deep_copy(other.local_session_var_))){
       SHARE_LOG(WARN, "fail to copy local session vars", K(ret));
-    } else if (OB_FAIL(vector_help_schema_.assign(other.vector_help_schema_))) {
-      SHARE_LOG(WARN, "fail to assign vector_help_schema", K(ret));
     } else {
       index_type_ = other.index_type_;
       index_option_ = other.index_option_;
@@ -2599,7 +2591,6 @@ public:
       inner_sql_exec_addr_ = other.inner_sql_exec_addr_;
       consumer_group_id_ = other.consumer_group_id_;
       exist_all_column_group_ = other.exist_all_column_group_;
-      container_table_id_ = other.container_table_id_;
       vector_hnsw_m_ = other.vector_hnsw_m_;
       vector_hnsw_ef_construction_ = other.vector_hnsw_ef_construction_;
     }
@@ -2673,10 +2664,8 @@ public:
   ObLocalSessionVar local_session_var_;
   bool exist_all_column_group_;
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
-  int64_t container_table_id_;
   int64_t vector_hnsw_m_;
   int64_t vector_hnsw_ef_construction_;
-  common::ObSArray<share::schema::ObTableSchema> vector_help_schema_; // table schema for ivffalt index container
 
 };
 

@@ -26,8 +26,10 @@ int ObTableIvfflatCenters::init(const int64_t tenant_id, const common::ObIArray<
 {
   int ret = OB_SUCCESS;
   if (array.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret));
+    count_ = 0;
+    centers_ = nullptr;
+    // ret = OB_INVALID_ARGUMENT;
+    // LOG_WARN("invalid argument", K(ret));
   } else {
     count_ = array.count();
     allocator_.set_attr(lib::ObMemAttr(tenant_id, "TblIvfCts"));
@@ -139,6 +141,87 @@ void ObTenantIvfflatCenterCache::destroy()
   }
 }
 
+int ObTenantIvfflatCenterCache::decode_centers(
+    common::ObIArray<ObTypeVector *> &array,
+    ObIAllocator &allocator,
+    ObVectorArray &vec_array,
+    const int64_t dims,
+    const int64_t index)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_cnt = -1;
+  int64_t part_offset = -1;
+  float* centers = nullptr; 
+  if (OB_FAIL(vec_array.get_part_cnt(index, part_cnt))) {
+    LOG_WARN("fail to get partition cluster cnt", K(ret), K(index));
+  } else if (OB_FAIL(vec_array.get_part_offset(index, dims, part_offset))) {
+    LOG_WARN("fail to get partition cluster offset", K(ret), K(index));
+  } else {
+    centers = vec_array.ptr_ + part_offset;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_cnt; ++i) {
+    ObTypeVector *vector = nullptr;
+    if (OB_ISNULL(vector = static_cast<ObTypeVector*>(allocator.alloc(sizeof(ObTypeVector))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc vector", K(ret));
+    } else if (FALSE_IT(vector->assign(centers + dims * i, dims))) {
+    } else if (OB_FAIL(array.push_back(vector))) {
+      LOG_WARN("failed to push back array", K(ret));
+    } else {
+      LOG_INFO("######ivfflatindexcache###### decode centers from schema", K(index), K(*vector));
+    }
+  }
+  return ret;
+}
+
+int ObTenantIvfflatCenterCache::put(const schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObTableIvfflatCenters *entry = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantIvfflatCenterCache is not inited", K(ret));
+  } else if (!table_schema.is_valid() || !table_schema.is_using_ivfflat_index()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(table_schema));
+  } else {
+    ObArenaAllocator allocator(lib::ObLabel("CtCache"));
+    const int64_t partition_num = PARTITION_LEVEL_ZERO == table_schema.get_part_level() ? 1 : table_schema.get_partition_num();
+    const int64_t length = table_schema.get_vector_ivfflat_centers_str().length();
+    const char* ptr = table_schema.get_vector_ivfflat_centers();
+    ObArray<ObTypeVector *> array;
+    array.set_attr(ObMemAttr(MTL_ID(), "CtCache"));
+    ObVectorArray centers;
+    int64_t pos = 0;
+    if (OB_FAIL(centers.deserialize(ptr, length, pos))) {
+      LOG_WARN("failed to deserialize center array", K(ret));
+    }
+    // TODO:(@wangmiao) change the method to get dims.
+    int64_t dims = -1;
+    const schema::ObColumnSchemaV2 *column_schema = table_schema.get_column_schema(table_schema.get_index_info().get_column(0)->column_id_);
+    if (OB_ISNULL(column_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+    } else if (OB_FALSE_IT(dims = static_cast<int64_t>(column_schema->get_accuracy().get_length()))) {
+    } else if (OB_UNLIKELY(partition_num != centers.part_cnt_length_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partiton num not match", K(ret), K(partition_num), K(centers.part_cnt_length_));
+    }
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) {
+      const int64_t idx = PARTITION_LEVEL_ZERO == table_schema.get_part_level() ? -1 : i;
+      array.reuse();
+      if (OB_FAIL(decode_centers(array, allocator, centers, dims, i))) {
+        LOG_WARN("failed to decode centers", K(ret));
+      } else if (OB_FAIL(put(table_schema.get_table_id(),
+                             idx, static_cast<ObVectorDistanceType>(table_schema.get_vector_distance_func()), array))) {
+        LOG_WARN("failed to put into cache", K(ret), K(table_schema));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTenantIvfflatCenterCache::put(
     const int64_t table_id,
     const int64_t partition_idx,
@@ -180,6 +263,8 @@ int ObTenantIvfflatCenterCache::put(
           allocator_.free(entry);
           entry = nullptr;
         }
+      } else {
+        LOG_INFO("######ivfflatindexcache###### set new entry", K(table_id), K(partition_idx));
       }
     }
   }
@@ -255,6 +340,65 @@ int ObTenantIvfflatCenterCache::erase_map_entry(const int64_t table_id, const in
     if (OB_FAIL(map_.erase_refactored(ObTableCenterKey(table_id, part_idx)))) {
       LOG_WARN("failed to erase from map", K(ret), K(table_id), K(part_idx));
     }
+  }
+  return ret;
+}
+
+int ObTenantIvfflatCenterCache::check_ivfflat_index_table_id_valid(
+    const int64_t tenant_id,
+    const int64_t ivfflat_index_table_id,
+    const int64_t base_table_id)
+{
+  int ret = OB_SUCCESS;
+  const schema::ObTableSchema *table_schema = nullptr;
+  schema::ObSchemaGetterGuard schema_guard;
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == ivfflat_index_table_id || OB_INVALID == base_table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ivfflat_index_table_id), K(base_table_id));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, ivfflat_index_table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(ivfflat_index_table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exists", K(ret), K(tenant_id), K(ivfflat_index_table_id));
+  } else if (OB_UNLIKELY(base_table_id != table_schema->get_data_table_id())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("ivfflat_index_table_id is not the index table of base_table_id", K(ret), K(ivfflat_index_table_id), K(base_table_id));
+  }
+  return ret;
+}
+
+int ObTenantIvfflatCenterCache::get_partition_index_with_tablet_id(
+      const int64_t tenant_id,
+      const int64_t table_id,
+      const uint64_t tablet_id,
+      int64_t &partition_index)
+{
+  int ret = OB_SUCCESS;
+  const schema::ObTableSchema *table_schema = nullptr;
+  schema::ObSchemaGetterGuard schema_guard;
+  partition_index = -1;
+  int64_t sub_part_id = -1;
+  const ObPartition *part = nullptr;
+  common::ObTabletID struct_tablet_id(tablet_id);
+  if (OB_INVALID_ID == tenant_id || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exists", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_UNLIKELY(
+              PARTITION_LEVEL_ZERO != table_schema->get_part_level() &&
+              PARTITION_LEVEL_ONE != table_schema->get_part_level())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("multi-level partition is not supported", K(ret), K(tenant_id), K(table_id));
+  } else if (OB_FAIL(table_schema->get_part_idx_by_tablet(struct_tablet_id, partition_index, sub_part_id))) {
+    LOG_WARN("fail to get part id by tablet_id", K(ret), K(tablet_id));
   }
   return ret;
 }

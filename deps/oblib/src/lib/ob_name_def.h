@@ -1079,4 +1079,5 @@
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
 #define N_EXTRACT_CERT_EXPIRED_TIME         "extract_cert_expired_time"
 #define N_INNER_ROW_CMP_VALUE               "inner_row_cmp_value"
+#define N_IVFFLAT_VECTOR_CLUSTER_ID         "ivfflat_vec_cluster_id"
 #endif //OCEANBASE_LIB_OB_NAME_DEF_H_

@@ -2364,6 +2364,7 @@ int ObFilterExecutorConstructor::apply(
 ObPushdownExprSpec::ObPushdownExprSpec(ObIAllocator &alloc)
   : calc_exprs_(alloc),
     access_exprs_(alloc),
+    extra_access_exprs_(alloc),
     max_batch_size_(0),
     pushdown_filters_(alloc),
     pd_storage_flag_(0),
@@ -2383,6 +2384,7 @@ OB_DEF_SERIALIZE(ObPushdownExprSpec)
   LST_DO_CODE(OB_UNIS_ENCODE,
               calc_exprs_,
               access_exprs_,
+              extra_access_exprs_,
               max_batch_size_,
               pushdown_filters_,
               fake_filters_before_index_back, //mock a fake filters to compatible with 4.0
@@ -2404,6 +2406,7 @@ OB_DEF_DESERIALIZE(ObPushdownExprSpec)
   LST_DO_CODE(OB_UNIS_DECODE,
               calc_exprs_,
               access_exprs_,
+              extra_access_exprs_,
               max_batch_size_,
               pushdown_filters_,
               fake_filters_before_index_back, //mock a fake filters to compatible with 4.0
@@ -2425,6 +2428,7 @@ OB_DEF_SERIALIZE_SIZE(ObPushdownExprSpec)
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               calc_exprs_,
               access_exprs_,
+              extra_access_exprs_,
               max_batch_size_,
               pushdown_filters_,
               fake_filters_before_index_back, //mock a fake filters to compatible with 4.0

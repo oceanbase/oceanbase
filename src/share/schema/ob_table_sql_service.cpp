@@ -3000,6 +3000,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("vector_ivfflat_lists", table.get_vector_ivfflat_lists())))
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("vector_distance_func", table.get_vector_distance_func())))
+        || (data_version >= DATA_VERSION_4_3_0_0
+            && OB_FAIL(dml.add_column("vector_ivfflat_centers", ObHexEscapeSqlStr(table.get_vector_ivfflat_centers_str()))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3144,6 +3146,8 @@ int ObTableSqlService::gen_table_options_dml(
             && OB_FAIL(dml.add_column("vector_ivfflat_lists", table.get_vector_ivfflat_lists())))
         || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("vector_distance_func", table.get_vector_distance_func())))
+        || (data_version >= DATA_VERSION_4_3_0_0
+            && OB_FAIL(dml.add_column("vector_ivfflat_centers", ObHexEscapeSqlStr(table.get_vector_ivfflat_centers_str()))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }
@@ -3218,7 +3222,9 @@ int ObTableSqlService::update_table_attribute(ObISQLClient &sql_client,
       || (data_version >= DATA_VERSION_4_3_0_0
             && OB_FAIL(dml.add_column("vector_ivfflat_lists", new_table_schema.get_vector_ivfflat_lists())))
       || (data_version >= DATA_VERSION_4_3_0_0
-            && OB_FAIL(dml.add_column("vector_distance_func", new_table_schema.get_vector_distance_func())))) {
+            && OB_FAIL(dml.add_column("vector_distance_func", new_table_schema.get_vector_distance_func())))
+      || (data_version >= DATA_VERSION_4_3_0_0
+            && OB_FAIL(dml.add_column("vector_ivfflat_centers", ObHexEscapeSqlStr(new_table_schema.get_vector_ivfflat_centers_str()))))) {
             LOG_WARN("add column failed", K(ret));
   } else {
     if (new_table_schema.is_interval_part()) {

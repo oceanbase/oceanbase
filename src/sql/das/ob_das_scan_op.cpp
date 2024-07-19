@@ -275,6 +275,7 @@ int ObDASScanOp::init_scan_param()
   scan_param_.frozen_version_ = scan_rtdef_->frozen_version_;
   scan_param_.force_refresh_lc_ = scan_rtdef_->force_refresh_lc_;
   scan_param_.output_exprs_ = &(scan_ctdef_->pd_expr_spec_.access_exprs_);
+  scan_param_.extra_access_exprs_ = &(scan_ctdef_->pd_expr_spec_.extra_access_exprs_);
   scan_param_.ext_file_column_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_file_column_exprs_);
   scan_param_.ext_column_convert_exprs_ = &(scan_ctdef_->pd_expr_spec_.ext_column_convert_exprs_);
   scan_param_.calc_exprs_ = &(scan_ctdef_->pd_expr_spec_.calc_exprs_);
@@ -383,13 +384,8 @@ int ObDASScanOp::open_op()
       LOG_WARN("failed to create ivfflat ann result", K(ret));
     }
   } else if (OB_NOT_NULL(ivfflat_helper_) && ivfflat_helper_->is_inited()) {
-    if (get_container_ctdef() != nullptr) {
-      if (OB_FAIL(create_ivfflat_ann_scan_op())) {
-        LOG_WARN("failed to create ivfflat ann scan op", K(ret));
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null container ctdef", K(ret));
+    if (OB_FAIL(create_ivfflat_ann_scan_op())) {
+      LOG_WARN("failed to create ivfflat ann scan op", K(ret));
     }
   } else if (OB_FAIL(tsc_service.table_scan(scan_param_, result_))) {
     if (OB_SNAPSHOT_DISCARDED == ret && scan_param_.fb_snapshot_.is_valid()) {
@@ -619,16 +615,10 @@ int ObDASScanOp::create_ivfflat_ann_scan_op()
     ObIvfflatAnnScanOp *op = new(buf) ObIvfflatAnnScanOp();
     if (OB_FAIL(op->init(scan_ctdef_,
                         scan_rtdef_,
-                        get_container_ctdef(),
-                        get_container_rtdef(),
-                        trans_desc_,
-                        snapshot_,
                         &scan_param_,
                         ivfflat_helper_))) {
       LOG_WARN("failed to init ivfflat ann scan op", K(ret));
     } else {
-      op->set_tablet_id(container_tablet_ids_.at(0));
-      op->set_ls_id(ls_id_);
       result_ = op;
     }
   }
@@ -637,29 +627,18 @@ int ObDASScanOp::create_ivfflat_ann_scan_op()
 
 int ObIvfflatAnnScanOp::init(const ObDASScanCtDef *index_ctdef,
                              ObDASScanRtDef *index_rtdef,
-                             const ObDASScanCtDef *container_ctdef,
-                             ObDASScanRtDef *container_rtdef,
-                             transaction::ObTxDesc *tx_desc,
-                             transaction::ObTxReadSnapshot *snapshot,
                              storage::ObTableScanParam *scan_param,
                              share::ObIvfflatIndexSearchHelper *ivfflat_helper)
 {
   int ret = OB_SUCCESS;
   index_ctdef_ = index_ctdef;
   index_rtdef_ = index_rtdef;
-  container_ctdef_ = container_ctdef;
-  container_rtdef_ = container_rtdef;
-  tx_desc_ = tx_desc;
-  snapshot_ = snapshot;
   state_ = CONTAINER_SCAN;
   index_scan_param_ = scan_param;
   ivfflat_helper_ = ivfflat_helper;
 
   uint64_t tenant_id = MTL_ID();
   arena_allocator_.set_attr(ObMemAttr(tenant_id, "AnnScan"));
-  if (OB_FAIL(init_scan_param())) {
-    LOG_WARN("init scan param failed", K(ret));
-  }
   return ret;
 }
 
@@ -674,11 +653,7 @@ int ObIvfflatAnnScanOp::reuse()
   ObITabletScan &tsc_service = get_tsc_service();
   if (OB_FAIL(tsc_service.reuse_scan_iter(index_scan_param_->need_switch_param_, index_iter_))) {
     LOG_WARN("reuse index table scan iterator failed", K(ret));
-  } else if (OB_FAIL(tsc_service.reuse_scan_iter(container_scan_param_.need_switch_param_, container_iter_))) {
-    LOG_WARN("reuse index table scan iterator failed", K(ret));
   } else {
-    container_scan_param_.key_ranges_.reuse();
-    container_scan_param_.ss_key_ranges_.reuse();
     ivfflat_helper_->reuse();
     state_ = CONTAINER_SCAN;
     cur_row_idx_ = 0;
@@ -690,29 +665,10 @@ int ObIvfflatAnnScanOp::revert_iter()
 {
   int ret = OB_SUCCESS;
   ObITabletScan &tsc_service = get_tsc_service();
-  if (OB_FAIL(tsc_service.revert_scan_iter(container_iter_))) {
-    LOG_WARN("revert scan iterator failed", K(ret));
-  } else if (OB_FAIL(tsc_service.revert_scan_iter(index_iter_))) {
+  if (OB_FAIL(tsc_service.revert_scan_iter(index_iter_))) {
     LOG_WARN("revert scan iterator failed", K(ret));
   }
-  container_iter_ = nullptr;
   index_iter_ = nullptr;
-  // container_scan_param_.need_switch_param_ = false;
-  // container_scan_param_.partition_guard_ = nullptr;
-  container_scan_param_.destroy_schema_guard();
-  container_scan_param_.~ObTableScanParam();
-  return ret;
-}
-
-int ObIvfflatAnnScanOp::prepare_container_key_range()
-{
-  int ret = OB_SUCCESS;
-  ObNewRange key_range;
-  ObRangeArray &key_ranges = container_scan_param_.key_ranges_;
-  key_range.set_whole_range();
-  if (OB_FAIL(key_ranges.push_back(key_range))) {
-    LOG_WARN("failed to push back key range", K(ret));
-  }
   return ret;
 }
 
@@ -731,6 +687,8 @@ int ObIvfflatAnnScanOp::get_next_row()
       case CONTAINER_SCAN: {
         if (OB_FAIL(do_container_scan())) {
           LOG_WARN("failed to do container table scan", K(ret));
+        // } else if (0 == ivfflat_helper_->get_center_heap_cnt()) {
+        //   ret = OB_ITER_END;
         } else {
           state_ = INDEX_SCAN;
         }
@@ -746,7 +704,9 @@ int ObIvfflatAnnScanOp::get_next_row()
       }
       case OUTPUT_ROWS: {
         if (OB_FAIL(do_get_row())) {
-          LOG_WARN("failed to get row from ivfflat helper", K(ret));
+          if (OB_ITER_END != ret) {
+            LOG_WARN("failed to get row from ivfflat helper", K(ret));
+          }
         } else {
           got_next_row = true;
         }
@@ -773,6 +733,8 @@ int ObIvfflatAnnScanOp::get_next_rows(int64_t &count, int64_t capacity)
       case CONTAINER_SCAN: {
         if (OB_FAIL(do_container_scan(capacity))) {
           LOG_WARN("failed to do container table scan", K(ret));
+        // } else if (0 == ivfflat_helper_->get_center_heap_cnt()) {
+        //   ret = OB_ITER_END;
         } else {
           state_ = INDEX_SCAN;
         }
@@ -811,87 +773,11 @@ int ObIvfflatAnnScanOp::get_next_rows(int64_t &count, int64_t capacity)
 int ObIvfflatAnnScanOp::do_container_scan(const int64_t capcity)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(ivfflat_helper_->reset_centers())) {
-    LOG_WARN("failed to reset center cache", K(tmp_ret));
-  } else if (OB_TMP_FAIL(ivfflat_helper_->get_centers_by_cache())) {
-    LOG_WARN("failed to get centers by cache", K(tmp_ret));
+  if (OB_FAIL(ivfflat_helper_->reset_centers())) {
+    LOG_WARN("failed to reset center cache", K(ret));
+  } else if (OB_FAIL(ivfflat_helper_->get_centers_by_cache())) {
+    LOG_WARN("failed to get centers by cache", K(ret));
   }
-  if (OB_SUCCESS != tmp_ret) {
-    ObITabletScan &tsc_service = get_tsc_service();
-    if (nullptr == container_iter_) { // 第一次查询
-      container_scan_param_.tablet_id_ = tablet_id_;
-      container_scan_param_.ls_id_ = ls_id_;
-      if (container_scan_param_.key_ranges_.empty() && OB_FAIL(prepare_container_key_range())) {
-        LOG_WARN("failed to prepare key range", K(ret));
-      } else if (OB_FAIL(tsc_service.table_scan(container_scan_param_, container_iter_))) {
-        if (OB_SNAPSHOT_DISCARDED == ret && container_scan_param_.fb_snapshot_.is_valid()) {
-          ret = OB_INVALID_QUERY_TIMESTAMP;
-        } else if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-          LOG_WARN("fail to scan table", K(container_scan_param_), K(ret));
-        }
-      }
-    } else {
-      const ObTabletID &storage_tablet_id = container_scan_param_.tablet_id_;
-      container_scan_param_.need_switch_param_ = (storage_tablet_id.is_valid() && storage_tablet_id != tablet_id_ ? true : false);
-      container_scan_param_.tablet_id_ = tablet_id_;
-      container_scan_param_.ls_id_ = ls_id_;
-      if (OB_FAIL(reuse_iter(container_iter_))) {
-        LOG_WARN("failed to reuse iter", K(ret));
-      } else if (container_scan_param_.key_ranges_.empty() && OB_FAIL(prepare_container_key_range())) {
-        LOG_WARN("failed to prepare key range", K(ret));
-      } else if (OB_FAIL(tsc_service.table_rescan(container_scan_param_, container_iter_))) {
-        LOG_WARN("table_rescan scan iter failed", K(ret));
-      }
-    }
-    // collect results and calculate
-    if (OB_SUCC(ret)) {
-      int64_t row_cnt = 0;
-      if (capcity == 1) {
-        while (OB_SUCC(ret)) {
-          container_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
-          if (OB_FAIL(container_iter_->get_next_row())) {
-            if (OB_ITER_END != ret) {
-              LOG_WARN("failed to get next row from container table", K(ret));
-            }
-          } else if (OB_FAIL(ivfflat_helper_->generate_centers_by_storage(container_scan_param_.output_exprs_, container_rtdef_->eval_ctx_))) {
-            LOG_WARN("failed to generate centers by storage", K(ret));
-          } else {
-            ++row_cnt;
-          }
-        }
-      } else {
-        while (OB_SUCC(ret)) {
-          int64_t row_count = 0;
-          container_rtdef_->p_pd_expr_op_->clear_evaluated_flag();
-          ret = container_iter_->get_next_rows(row_count, capcity);
-          if (OB_ITER_END == ret && row_count > 0) {
-            ret = OB_SUCCESS;
-          }
-          if (OB_UNLIKELY(OB_SUCCESS != ret)) {
-            if (OB_ITER_END != ret) {
-              LOG_WARN("get next batch from container table scan failed", K(ret));
-            }
-          } else {
-            ObEvalCtx::BatchInfoScopeGuard batch_info_guard(*container_rtdef_->eval_ctx_);
-            batch_info_guard.set_batch_size(row_count);
-            for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
-              batch_info_guard.set_batch_idx(i);
-              if (OB_FAIL(ivfflat_helper_->generate_centers_by_storage(container_scan_param_.output_exprs_, container_rtdef_->eval_ctx_))) {
-                LOG_WARN("failed to generate centers by storage", K(ret));
-              }
-            }
-            row_cnt += row_count;
-          }
-        }
-      }
-      if (OB_ITER_END == ret) {
-        ret = OB_SUCCESS;
-      }
-      LOG_TRACE("total scan row count", K(ret), K(row_cnt));
-    }
-  }
-
   return ret;
 }
 
@@ -904,7 +790,7 @@ int ObIvfflatAnnScanOp::do_index_scan(const int64_t capcity)
   index_scan_param_->ss_key_ranges_.reuse();
   if (OB_FAIL(ivfflat_helper_->prepare_rowkey_ranges(
               index_scan_param_->key_ranges_,
-              container_scan_param_.table_param_->get_rowkey_cnt(),
+              index_scan_param_->table_param_->get_rowkey_cnt(),
               index_ctdef_->ref_table_id_,
               allocator))) {
     LOG_WARN("failed to prepare rowkey range", K(ret));
@@ -919,7 +805,7 @@ int ObIvfflatAnnScanOp::do_index_scan(const int64_t capcity)
         }
       }
     } else {
-      if (OB_FAIL(reuse_iter(index_iter_))) {
+      if (OB_FAIL(reuse_iter(index_scan_param_->need_switch_param_, index_iter_))) {
         LOG_WARN("failed to reuse iter", K(ret));
       } else if (OB_FAIL(tsc_service.table_rescan(*index_scan_param_, index_iter_))) {
         LOG_WARN("table_rescan scan iter failed", K(ret));
@@ -935,7 +821,7 @@ int ObIvfflatAnnScanOp::do_index_scan(const int64_t capcity)
               LOG_WARN("failed to get next row from index table", K(ret));
             }
           } else if (OB_FAIL(ivfflat_helper_->get_rows_by_storage(
-              container_scan_param_.output_exprs_, index_scan_param_->output_exprs_, index_rtdef_->eval_ctx_))) {
+              index_scan_param_->extra_access_exprs_, index_scan_param_->output_exprs_, index_rtdef_->eval_ctx_))) {
             LOG_WARN("failed to get rows by storage", K(ret));
           } else {
             ++row_cnt;
@@ -959,7 +845,7 @@ int ObIvfflatAnnScanOp::do_index_scan(const int64_t capcity)
             for (int64_t i = 0; OB_SUCC(ret) && i < row_count; i++) {
               batch_info_guard.set_batch_idx(i);
               if (OB_FAIL(ivfflat_helper_->get_rows_by_storage(
-                  container_scan_param_.output_exprs_, index_scan_param_->output_exprs_, index_rtdef_->eval_ctx_))) {
+                  index_scan_param_->extra_access_exprs_, index_scan_param_->output_exprs_, index_rtdef_->eval_ctx_))) {
                 LOG_WARN("failed to get rows by storage", K(ret));
               }
             }
@@ -1024,79 +910,13 @@ int ObIvfflatAnnScanOp::do_get_rows(int64_t &count, const int64_t capacity)
   return ret;
 }
 
-int ObIvfflatAnnScanOp::reuse_iter(ObNewRowIterator *iter)
+int ObIvfflatAnnScanOp::reuse_iter(const bool switch_param, ObNewRowIterator *iter)
 {
   int ret = OB_SUCCESS;
   ObITabletScan &tsc_service = get_tsc_service();
-  if (OB_FAIL(tsc_service.reuse_scan_iter(container_scan_param_.need_switch_param_, iter))) {
+  if (OB_FAIL(tsc_service.reuse_scan_iter(switch_param, iter))) {
     LOG_WARN("reuse scan iterator failed", K(ret));
   }
-  return ret;
-}
-
-int ObIvfflatAnnScanOp::init_scan_param()
-{
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = MTL_ID();
-  container_scan_param_.tenant_id_ = tenant_id;
-  container_scan_param_.key_ranges_.set_attr(ObMemAttr(tenant_id, "ScanParamKR"));
-  container_scan_param_.ss_key_ranges_.set_attr(ObMemAttr(tenant_id, "ScanParamSSKR"));
-  container_scan_param_.tx_lock_timeout_ = container_rtdef_->tx_lock_timeout_;
-  container_scan_param_.index_id_ = container_ctdef_->ref_table_id_;
-  container_scan_param_.is_get_ = container_ctdef_->is_get_;
-  container_scan_param_.is_for_foreign_check_ = container_rtdef_->is_for_foreign_check_;
-  container_scan_param_.timeout_ = container_rtdef_->timeout_ts_;
-  container_scan_param_.scan_flag_ = container_rtdef_->scan_flag_;
-  container_scan_param_.reserved_cell_count_ = container_ctdef_->access_column_ids_.count();
-  container_scan_param_.allocator_ = &container_rtdef_->stmt_allocator_;
-  container_scan_param_.sql_mode_ = container_rtdef_->sql_mode_;
-  container_scan_param_.scan_allocator_ = &container_rtdef_->scan_allocator_;
-  container_scan_param_.frozen_version_ = container_rtdef_->frozen_version_;
-  container_scan_param_.force_refresh_lc_ = container_rtdef_->force_refresh_lc_;
-  container_scan_param_.output_exprs_ = &(container_ctdef_->pd_expr_spec_.access_exprs_);
-  container_scan_param_.aggregate_exprs_ = &(container_ctdef_->pd_expr_spec_.pd_storage_aggregate_output_);
-  container_scan_param_.table_param_ = &(container_ctdef_->table_param_);
-  container_scan_param_.op_ = container_rtdef_->p_pd_expr_op_;
-  container_scan_param_.row2exprs_projector_ = container_rtdef_->p_row2exprs_projector_;
-  container_scan_param_.schema_version_ = container_ctdef_->schema_version_;
-  container_scan_param_.tenant_schema_version_ = container_rtdef_->tenant_schema_version_;
-  container_scan_param_.limit_param_ = container_rtdef_->limit_param_;
-  container_scan_param_.need_scn_ = container_rtdef_->need_scn_;
-  container_scan_param_.pd_storage_flag_ = container_ctdef_->pd_expr_spec_.pd_storage_flag_.pd_flag_;
-  container_scan_param_.fb_snapshot_ = container_rtdef_->fb_snapshot_;
-  container_scan_param_.fb_read_tx_uncommitted_ = container_rtdef_->fb_read_tx_uncommitted_;
-  container_scan_param_.ls_id_ = ls_id_;
-  container_scan_param_.tablet_id_ = tablet_id_;
-  if (container_rtdef_->is_for_foreign_check_) {
-    container_scan_param_.trans_desc_ = tx_desc_;
-  }
-  // container table should full scan
-  container_scan_param_.is_get_ = false;
-  container_scan_param_.is_for_foreign_check_ = container_rtdef_->is_for_foreign_check_;
-  if (container_rtdef_->is_for_foreign_check_) {
-    container_scan_param_.trans_desc_ = tx_desc_;
-  }
-  if (OB_NOT_NULL(snapshot_)) {
-    container_scan_param_.snapshot_ = *snapshot_;
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("snapshot is null", K(ret), KPC(this));
-  }
-  // set tx_id for read-latest,
-  // TODO: add if(query_flag.is_read_latest) ..
-  if (OB_NOT_NULL(tx_desc_)) {
-    container_scan_param_.tx_id_ = tx_desc_->get_tx_id();
-  } else {
-    container_scan_param_.tx_id_.reset();
-  }
-  if (!container_ctdef_->pd_expr_spec_.pushdown_filters_.empty()) {
-    container_scan_param_.op_filters_ = &container_ctdef_->pd_expr_spec_.pushdown_filters_;
-  }
-  container_scan_param_.pd_storage_filters_ = container_rtdef_->p_pd_expr_op_->pd_storage_filters_;
-  if (OB_FAIL(container_scan_param_.column_ids_.assign(container_ctdef_->access_column_ids_))) {
-    LOG_WARN("init column ids failed", K(ret));
-  }
-  LOG_DEBUG("init ann scan op container scan_param", K(container_scan_param_));
   return ret;
 }
 
@@ -1184,6 +1004,7 @@ void ObDASScanOp::reset_access_datums_ptr()
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
       info.point_to_frame_ = true;
     }
+    // TODO(@jingshui) extra_access_exprs
     FOREACH_CNT(e, scan_ctdef_->pd_expr_spec_.pd_storage_aggregate_output_) {
       (*e)->locate_datums_for_update(*scan_rtdef_->eval_ctx_, scan_rtdef_->eval_ctx_->max_batch_size_);
       ObEvalInfo &info = (*e)->get_eval_info(*scan_rtdef_->eval_ctx_);
@@ -1208,14 +1029,6 @@ void ObDASScanOp::reset_access_datums_ptr()
       trans_expr->locate_datums_for_update(*get_lookup_rtdef()->eval_ctx_,
                                            get_lookup_rtdef()->eval_ctx_->max_batch_size_);
       ObEvalInfo &info = trans_expr->get_eval_info(*scan_rtdef_->eval_ctx_);
-      info.point_to_frame_ = true;
-    }
-  }
-  if (get_container_rtdef() != nullptr && get_container_rtdef()->p_pd_expr_op_->is_vectorized()) {
-    FOREACH_CNT(e, get_container_ctdef()->pd_expr_spec_.access_exprs_) {
-      (*e)->locate_datums_for_update(*get_container_rtdef()->eval_ctx_,
-                                     get_container_rtdef()->eval_ctx_->max_batch_size_);
-      ObEvalInfo &info = (*e)->get_eval_info(*get_container_rtdef()->eval_ctx_);
       info.point_to_frame_ = true;
     }
   }
@@ -1404,8 +1217,7 @@ int ObDASScanOp::rescan()
   ObNewRowIterator *row_iter = get_storage_scan_iter();
   if (OB_UNLIKELY(ObNewRowIterator::ObIvfflatAnnOp == row_iter->get_type())) {
     ObIvfflatAnnScanOp *ivfflat_op = static_cast<ObIvfflatAnnScanOp *>(row_iter);
-    ivfflat_op->set_tablet_id(container_tablet_ids_.at(0));
-    ivfflat_op->set_ls_id(ls_id_);
+    // TODO
   } else if (OB_FAIL(tsc_service.table_rescan(scan_param_, row_iter))) {
     LOG_WARN("rescan the table iterator failed", K(ret));
   }
@@ -1450,18 +1262,6 @@ int ObDASScanOp::set_lookup_tablet_id(const ObTabletID &tablet_id)
     ret = related_tablet_ids_.push_back(tablet_id);
   } else {
     related_tablet_ids_.at(0) = tablet_id;
-  }
-  return ret;
-}
-
-int ObDASScanOp::set_container_tablet_id(const common::ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  if (container_tablet_ids_.empty()) {
-    container_tablet_ids_.set_capacity(1);
-    ret = container_tablet_ids_.push_back(tablet_id);
-  } else {
-    container_tablet_ids_.at(0) = tablet_id;
   }
   return ret;
 }

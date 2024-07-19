@@ -3028,10 +3028,8 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(local_session_var),
        K_(exist_all_column_group),
        K_(index_cgs),
-       K_(container_table_id),
        K_(vector_hnsw_m),
-       K_(vector_hnsw_ef_construction),
-       K_(vector_help_schema));
+       K_(vector_hnsw_ef_construction));
   J_OBJ_END();
   return pos;
 }
@@ -3058,10 +3056,8 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     local_session_var_,
                     exist_all_column_group_,
                     index_cgs_,
-                    container_table_id_,
                     vector_hnsw_m_,
-                    vector_hnsw_ef_construction_,
-                    vector_help_schema_);
+                    vector_hnsw_ef_construction_);
 
 bool ObAlterIndexArg::is_valid() const
 {
@@ -3093,7 +3089,6 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(database_name),
        K_(index_action_type),
        K_(index_table_id),
-       K_(container_table_id),
        K_(is_add_to_scheduler),
        K_(is_in_recyclebin),
        K_(is_hidden),
@@ -3108,7 +3103,6 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     database_name_,
                     index_action_type_,
                     index_table_id_,
-                    container_table_id_,
                     is_add_to_scheduler_,
                     is_in_recyclebin_,
                     is_hidden_,

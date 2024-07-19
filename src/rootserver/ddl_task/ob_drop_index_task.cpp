@@ -45,8 +45,7 @@ int ObDropIndexTask::init(
     const int64_t parent_task_id,
     const int64_t consumer_group_id,
     const int32_t sub_task_trace_id,
-    const obrpc::ObDropIndexArg &drop_index_arg,
-    const ObTableSchema *container_schema)
+    const obrpc::ObDropIndexArg &drop_index_arg)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || task_id <= 0 || OB_INVALID_ID == data_table_id
@@ -74,9 +73,6 @@ int ObDropIndexTask::init(
     dst_schema_version_ = schema_version_;
     is_inited_ = true;
     ddl_tracing_.open();
-    if (OB_NOT_NULL(container_schema)) {
-      drop_index_arg_.container_table_id_ = container_schema->get_table_id();
-    }
   }
   return ret;
 }
@@ -263,7 +259,6 @@ int ObDropIndexTask::drop_index_impl()
     drop_index_arg.ddl_stmt_str_      = drop_index_sql.string();
     drop_index_arg.is_add_to_scheduler_ = false;
     drop_index_arg.task_id_           = task_id_;
-    drop_index_arg.container_table_id_ = drop_index_arg_.container_table_id_;
     if (OB_FAIL(ObDDLUtil::get_ddl_rpc_timeout(index_schema->get_all_part_num() + data_table_schema->get_all_part_num(), ddl_rpc_timeout))) {
       LOG_WARN("failed to get ddl rpc timeout", K(ret));
     } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DROP_INDEX_RPC_FAILED))) {

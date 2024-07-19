@@ -680,20 +680,6 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
-  // create ivfflat container table schema
-  if (OB_SUCC(ret) && ObIndexUsingType::USING_IVFFLAT == crt_idx_stmt->get_index_using_type()) {
-    SMART_VAR(ObTableSchema, container_table_schema) {
-      ObTableSchema &index_schema = crt_idx_stmt->get_create_index_arg().index_schema_;
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(container_table_schema.assign(index_schema))) {
-          LOG_WARN("failed to assign table schema", K(ret));
-        } else if (OB_FAIL(crt_idx_stmt->get_create_index_arg().vector_help_schema_.push_back(container_table_schema))) {
-          LOG_WARN("fail to push back container table schema", KR(ret));
-        }
-      }
-    }
-  }
-
   if (OB_SUCC(ret)) {
     const ParseNode *parallel_node = parse_tree.children_[8];
     if (OB_FAIL(resolve_hints(parse_tree.children_[8], *crt_idx_stmt, *tbl_schema))) {

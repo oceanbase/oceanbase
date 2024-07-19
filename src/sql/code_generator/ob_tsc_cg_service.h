@@ -45,12 +45,6 @@ public:
                               const share::schema::ObTableSchema &table_schema,
                               const ObSQLSessionInfo &session,
                               ObDASTableLocMeta &loc_meta);
-  int generate_table_loc_meta(uint64_t table_loc_id,
-                              const uint64_t data_table_id,
-                              const ObDMLStmt &stmt,
-                              const share::schema::ObTableSchema &table_schema,
-                              const ObSQLSessionInfo &session,
-                              ObDASTableLocMeta &loc_meta);
   int generate_das_result_output(const common::ObIArray<uint64_t> &output_cids,
                                  ObDASScanCtDef &scan_ctdef,
                                  const ObRawExpr *trans_info_expr,

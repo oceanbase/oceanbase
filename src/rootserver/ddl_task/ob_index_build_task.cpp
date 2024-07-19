@@ -377,6 +377,8 @@ int ObIndexSSTableBuildTask::inner_ivfflat_process(
     ObString index_table_name;
     ObString data_table_name;
     ObString database_name;
+    const schema::ObColumnSchemaV2 *vector_col = nullptr;
+    ObString vector_col_name;
     ObSqlString select_column_str;
     common::ObArray<uint64_t> index_col_ids;
     int64_t affected_rows = 0;
@@ -405,6 +407,11 @@ int ObIndexSSTableBuildTask::inner_ivfflat_process(
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("fail to get table schema", K(ret), KP(index_table_schema), KP(data_table_schema),
         K_(tenant_id), K(dest_table_id_), K(data_table_id_));
+    } else if (OB_ISNULL(vector_col = index_table_schema->get_column_schema(
+                         index_table_schema->get_index_info().get_column(0)->column_id_))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("error unexpected, column schema must not be nullptr", K(ret));
+    } else if (OB_FALSE_IT(vector_col_name = vector_col->get_column_name_str())) {
     } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id_, data_table_schema->get_database_id(), db_schema))) {
       LOG_WARN("fail to get database schema", K(ret), K_(tenant_id), K(data_table_schema->get_database_id()));
     } else if (OB_ISNULL(db_schema)) {
@@ -421,9 +428,15 @@ int ObIndexSSTableBuildTask::inner_ivfflat_process(
     for (int64_t i = 0; OB_SUCC(ret) && i < index_col_ids.count(); ++i) {
       const ObColumnSchemaV2 *index_col_schema = index_table_schema->get_column_schema(index_col_ids.at(i));
       const ObString& index_col_name = index_col_schema->get_column_name();
-      if (index_col_schema->is_hidden() ||
-          index_col_name == "center_idx") {
+      if (index_col_schema->is_hidden()) {
         // do nothing
+      } else if (index_col_name == "center_idx") {
+        if (OB_FAIL(select_column_str.append_fmt(select_column_str.empty() ? "ivfflat_vec_cluster_id(%.*s, %ld)" : 
+                                                 ",ivfflat_vec_cluster_id(%.*s, %ld)",
+                                                 vector_col_name.length(), vector_col_name.ptr(),
+                                                 dest_table_id_))) {
+          LOG_WARN("fail to append select_column_str", K(ret), K(index_col_name));
+        }
       } else if (OB_FAIL(select_column_str.append_fmt(select_column_str.empty() ? "%.*s" : ",%.*s",
                   static_cast<int>(index_col_name.length()), index_col_name.ptr()))) {
         LOG_WARN("fail to append select_column_str", K(ret), K(index_col_name));
@@ -514,6 +527,7 @@ int ObIndexSSTableBuildTask::process()
     if (OB_FAIL(inner_ivfflat_process(*data_schema, *index_schema, oracle_mode))) {
       LOG_WARN("failed to process ivfflat index", K(ret));
     }
+    // TODO(@wangmiao)
   } else if (OB_FAIL(ObDDLUtil::generate_build_replica_sql(tenant_id_, data_table_id_,
                                                           dest_table_id_,
                                                           data_schema->get_schema_version(),
@@ -581,7 +595,6 @@ ObAsyncTask *ObIndexSSTableBuildTask::deep_copy(char *buf, const int64_t buf_siz
     task->set_vd_type(vd_type_);
     task->set_vector_hnsw_m(vector_hnsw_m_);
     task->set_vector_hnsw_ef_construction(vector_hnsw_ef_construction_);
-    task->set_container_table_id(container_table_id_);
     if (OB_SUCCESS != (task->set_nls_format(nls_date_format_, nls_timestamp_format_, nls_timestamp_tz_format_))) {
       task->~ObIndexSSTableBuildTask();
       task = nullptr;
@@ -737,7 +750,6 @@ int ObIndexBuildTask::init(
     const obrpc::ObCreateIndexArg &create_index_arg,
     const int64_t parent_task_id /* = 0 */,
     const uint64_t tenant_data_version,
-    const ObTableSchema *container_schema /* nullptr */,
     const int64_t task_status /* = TaskStatus::PREPARE */,
     const int64_t snapshot_version /* = 0 */)
 {
@@ -779,9 +791,6 @@ int ObIndexBuildTask::init(
     tenant_id_ = tenant_id;
     object_id_ = data_table_schema->get_table_id();
     index_table_id_ = index_schema->get_table_id();
-    if (OB_NOT_NULL(container_schema)) {
-      create_index_arg_.container_table_id_ = container_schema->get_table_id();
-    }
     schema_version_ = schema_version;
     parallelism_ = parallelism;
     create_index_arg_.exec_tenant_id_ = tenant_id_;
@@ -1262,14 +1271,6 @@ int ObIndexBuildTask::send_build_single_replica_request()
       task.set_vd_type(create_index_arg_.index_columns_.at(0).vd_type_);
       task.set_vector_hnsw_m(create_index_arg_.vector_hnsw_m_);
       task.set_vector_hnsw_ef_construction(create_index_arg_.vector_hnsw_ef_construction_);
-      if (USING_IVFFLAT == create_index_arg_.index_using_type_) {
-        if (create_index_arg_.vector_help_schema_.empty()) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected empty vector help schema", K(ret), K_(create_index_arg));
-        } else {
-          task.set_container_table_id(create_index_arg_.container_table_id_);
-        }
-      }
     }
     if (OB_FAIL(task.set_nls_format(create_index_arg_.nls_date_format_,
                                     create_index_arg_.nls_timestamp_format_,

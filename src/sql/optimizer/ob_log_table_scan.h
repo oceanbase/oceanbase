@@ -81,7 +81,6 @@ public:
         table_type_(share::schema::MAX_TABLE_TYPE),
         use_column_store_(false),
         is_vector_index_(false),
-        container_table_id_(common::OB_INVALID_ID),
         vector_ann_k_expr_(NULL),
         query_vector_expr_(NULL),
         is_build_vector_index_(false),
@@ -216,14 +215,6 @@ public:
   inline bool get_is_vector_index() const
   { return is_vector_index_; }
 
-  inline void set_container_table_id(const int64_t container_table_id)
-  { container_table_id_ = container_table_id; }
-
-  inline int64_t get_container_table_id() const
-  { return container_table_id_; }
-
-  inline bool need_container_table() const
-  { return OB_INVALID_ID != container_table_id_; }
   /**
    *  Set scan direction
    */
@@ -642,7 +633,6 @@ protected: // memeber variables
 
   ObPxRFStaticInfo px_rf_info_;
   bool is_vector_index_;
-  int64_t container_table_id_;
   ObRawExpr *vector_ann_k_expr_;
   ObRawExpr *query_vector_expr_;
   bool is_build_vector_index_;

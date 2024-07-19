@@ -1509,6 +1509,7 @@ int ObSchemaRetrieveUtils::fill_table_schema(
         int64_t, true, true/*ignore_column_error*/, OB_DEFAULT_VECTOR_IVFFLAT_LISTS);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(result, vector_distance_func, table_schema,
         ObVectorDistanceType, true, true/*ignore_column_error*/, 0);
+    EXTRACT_VARCHAR_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, vector_ivfflat_centers, table_schema);
   }
   if (OB_SUCC(ret) && OB_FAIL(fill_sys_table_lob_tid(table_schema))) {
     SHARE_SCHEMA_LOG(WARN, "fail to fill lob table id for inner table", K(ret), K(table_schema.get_table_id()));

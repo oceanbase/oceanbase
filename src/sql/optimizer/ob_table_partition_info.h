@@ -59,7 +59,7 @@ public:
   int calc_phy_table_loc_and_select_leader(ObExecContext &exec_ctx,
                                            const ParamStore &params,
                                            const common::ObDataTypeCastParams &dtc_params);
-  int replace_final_location_key(ObExecContext &exec_ctx, uint64_t ref_table_id, bool is_local_index, uint64_t container_table_id = OB_INVALID_ID);
+  int replace_final_location_key(ObExecContext &exec_ctx, uint64_t ref_table_id, bool is_local_index);
 
   int set_table_location_direction(const ObOrderDirection &direction);
   int fill_phy_tbl_loc_info_direction();

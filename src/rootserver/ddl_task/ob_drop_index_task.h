@@ -35,8 +35,7 @@ public:
       const int64_t parent_task_id,
       const int64_t consumer_group_id,
       const int32_t sub_task_trace_id,
-      const obrpc::ObDropIndexArg &drop_index_arg,
-      const ObTableSchema *container_schema = nullptr);
+      const obrpc::ObDropIndexArg &drop_index_arg);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
   virtual bool is_valid() const override;
