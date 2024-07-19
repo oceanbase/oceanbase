@@ -44,7 +44,8 @@ private:
   const static int32_t END_KEY_OFFSET_OF_SCAN_ROWS_RANGE = 3;
   const static int32_t SKIP_SCAN_ROWKEY_DATUMS_ARRAY_CNT = 4;
   const static int64_t SKIP_SCAN_CHECK_INTERRUPT_CNT = 100;
-  const static int64_t SKIP_SCAN_RETIRE_TO_NORMAL_SCAN_LIMIT = 1000;
+  const static int64_t SKIP_SCAN_RETIRE_TO_NORMAL_SCAN_ROWKEY_LIMIT = 1000;
+  const static int64_t SKIP_SCAN_RETIRE_TO_NORMAL_SCAN_MICRO_LIMIT = 100000;
   int open_skip_scan(const blocksstable::ObDatumRange &range, const blocksstable::ObDatumRange &skip_scan_range);
   int prepare_range(blocksstable::ObStorageDatum *datums, blocksstable::ObDatumRange &range);
   void prepare_rowkey(blocksstable::ObStorageDatum *datums, const blocksstable::ObDatumRowkey &rowkey,
@@ -76,7 +77,8 @@ private:
   }
   OB_INLINE bool should_retire_to_scan() const
   {
-    return scan_rowkey_cnt_ > SKIP_SCAN_RETIRE_TO_NORMAL_SCAN_LIMIT;
+    return scan_rowkey_cnt_ > SKIP_SCAN_RETIRE_TO_NORMAL_SCAN_ROWKEY_LIMIT ||
+           access_ctx_->table_store_stat_.micro_access_cnt_ > SKIP_SCAN_RETIRE_TO_NORMAL_SCAN_MICRO_LIMIT;
   }
 
   enum SkipScanState {

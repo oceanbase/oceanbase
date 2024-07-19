@@ -1682,7 +1682,7 @@ int ObMultipleMerge::set_base_version() const {
   int ret = OB_SUCCESS;
   // When the major table is currently being processed, the snapshot version is taken and placed
   // in the current context for base version to filter unnecessary rows in the mini or minor sstable
-  if (is_scan() && tables_.count() > 1) {
+  if (!access_param_->iter_param_.is_skip_scan() && is_scan() && tables_.count() > 1) {
     ObITable *table = nullptr;
     if (OB_FAIL(tables_.at(0, table))) {
       STORAGE_LOG(WARN, "Fail to get the first store", K(ret));
