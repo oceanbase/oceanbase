@@ -1157,7 +1157,7 @@ int ObDMLResolver::pre_check_dot_notation(ParseNode &node, int8_t& depth, bool& 
 }
 
 // process json_expr in query sql
-int ObDMLResolver::pre_process_json_expr(ParseNode &node)
+int ObDMLResolver::pre_process_one_json_expr(ParseNode &node)
 {
   INIT_SUCC(ret);
   int8_t depth = 0;
@@ -1182,12 +1182,41 @@ int ObDMLResolver::pre_process_json_expr(ParseNode &node)
   } else if (OB_FAIL(pre_process_json_expr_constraint(&node, *allocator_))) { // check json expr with is json constraint
     LOG_WARN("fail to process json exor with json constraint", K(ret));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < node.num_child_; i++) {
-    if (OB_ISNULL(node.children_[i])) {
-    } else if (OB_FAIL(SMART_CALL(pre_process_json_expr(*node.children_[i])))) {
-      LOG_WARN("pre process dot notation failed", K(ret), K(i));
+
+  return ret;
+}
+
+int ObDMLResolver::pre_process_json_expr(ParseNode &node)
+{
+  int ret = OB_SUCCESS;
+  ObArray<void *> parse_node_list;
+  void *tmp_node = nullptr;
+
+  if (OB_FAIL(parse_node_list.push_back(static_cast<void *>(&node)))) {
+    LOG_WARN("fail to push back parse node", K(ret));
+  } else {
+    while (OB_SUCC(ret) && !parse_node_list.empty()) {
+      if (OB_FAIL(parse_node_list.pop_back(tmp_node))) {
+        LOG_WARN("fail to pop back parse node", K(ret));
+      } else {
+        ParseNode *curr_node = static_cast<ParseNode *>(tmp_node);
+
+        if (OB_FAIL(pre_process_one_json_expr(*curr_node))) {
+          LOG_WARN("deal dot notation fail", K(ret));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < curr_node->num_child_; i++) {
+            int64_t index = curr_node->num_child_ - 1 - i;
+            ParseNode *child = curr_node->children_[index];
+            if (OB_ISNULL(child)) {
+            } else if (OB_FAIL(parse_node_list.push_back(child))) {
+              LOG_WARN("parse node list push back failed", K(ret), K(index));
+            }
+          }
+        }
+      }
     }
   }
+
   return ret;
 }
 
