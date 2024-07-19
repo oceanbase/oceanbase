@@ -1175,6 +1175,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21585	func	1	201003	1
 21589	DBA_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
 21590	CDB_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
+21603	INNODB_SYS_FIELDS	1	201002	1
+21604	INNODB_SYS_FOREIGN	1	201002	1
+21605	INNODB_SYS_FOREIGN_COLS	1	201002	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

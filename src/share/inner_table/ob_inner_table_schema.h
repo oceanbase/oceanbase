@@ -1773,6 +1773,9 @@ public:
   static int func_schema(share::schema::ObTableSchema &table_schema);
   static int dba_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_fields_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_foreign_schema(share::schema::ObTableSchema &table_schema);
+  static int innodb_sys_foreign_cols_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_objects_schema(share::schema::ObTableSchema &table_schema);
@@ -4557,6 +4560,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::func_schema,
   ObInnerTableSchema::dba_scheduler_job_run_details_schema,
   ObInnerTableSchema::cdb_scheduler_job_run_details_schema,
+  ObInnerTableSchema::innodb_sys_fields_schema,
+  ObInnerTableSchema::innodb_sys_foreign_schema,
+  ObInnerTableSchema::innodb_sys_foreign_cols_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
   ObInnerTableSchema::all_objects_schema,
@@ -6227,6 +6233,9 @@ const uint64_t tenant_space_tables [] = {
   OB_ROLE_ROUTINE_GRANTS_TID,
   OB_FUNC_TID,
   OB_DBA_SCHEDULER_JOB_RUN_DETAILS_TID,
+  OB_INNODB_SYS_FIELDS_TID,
+  OB_INNODB_SYS_FOREIGN_TID,
+  OB_INNODB_SYS_FOREIGN_COLS_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
   OB_ALL_OBJECTS_TID,
@@ -8792,6 +8801,9 @@ const char* const tenant_space_table_names [] = {
   OB_ROLE_ROUTINE_GRANTS_TNAME,
   OB_FUNC_TNAME,
   OB_DBA_SCHEDULER_JOB_RUN_DETAILS_TNAME,
+  OB_INNODB_SYS_FIELDS_TNAME,
+  OB_INNODB_SYS_FOREIGN_TNAME,
+  OB_INNODB_SYS_FOREIGN_COLS_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
   OB_ALL_OBJECTS_TNAME,
@@ -12767,10 +12779,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 281;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 802;
-const int64_t OB_SYS_VIEW_COUNT = 910;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 1998;
+const int64_t OB_SYS_VIEW_COUNT = 913;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2001;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2001;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2004;
 
 } // end namespace share
 } // end namespace oceanbase
