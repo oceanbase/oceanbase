@@ -97,7 +97,7 @@ public:
 class ObTableTransUtils final
 {
 public:
-  static const uint32_t OB_KV_DEFAULT_SESSION_ID = 1;
+  static const uint32_t OB_KV_DEFAULT_SESSION_ID = 0;
 public:
   static int init_read_trans(ObTableTransParam &trans_param);
   static void release_read_trans(transaction::ObTxDesc *&trans_desc);

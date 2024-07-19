@@ -142,16 +142,16 @@ int ObTableQueryAndMutateP::try_process()
     LOG_WARN("fail to get ls id", K(ret), K_(tablet_id));
   } else if (OB_FAIL(check_table_has_global_index(exist_global_index))) {
     LOG_WARN("fail to check global index", K(ret), K_(table_id));
+  } else if (is_hkv && OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(lock_handle))) {
+    LOG_WARN("fail to get htable lock handle", K(ret));
+  } else if (is_hkv && OB_FAIL(ObHTableUtils::lock_htable_row(table_id_, query, *lock_handle, ObHTableLockMode::EXCLUSIVE))) {
+    LOG_WARN("fail to lock htable row", K(ret), K_(table_id), K(query));
   } else if (OB_FAIL(start_trans(false, /* is_readonly */
                                  consistency_level,
                                  ls_id,
                                  get_timeout_ts(),
                                  exist_global_index))) {
     LOG_WARN("fail to start readonly transaction", K(ret));
-  } else if (is_hkv && OB_FAIL(HTABLE_LOCK_MGR->acquire_handle(lock_handle))) {
-    LOG_WARN("fail to get htable lock handle", K(ret));
-  } else if (is_hkv && OB_FAIL(ObHTableUtils::lock_htable_row(table_id_, query, *lock_handle, ObHTableLockMode::EXCLUSIVE))) {
-    LOG_WARN("fail to lock htable row", K(ret), K_(table_id), K(query));
   } else if (is_hkv && FALSE_IT(lock_handle->set_tx_id(get_trans_desc()->tid()))) {
   } else {
     ObTableQMParam qm_param(arg_.query_and_mutate_);

@@ -212,6 +212,8 @@ int ObTableTransUtils::end_trans(ObTableTransParam &trans_param)
         }
       }
       trans_state_ptr->clear_start_trans_executed();
+    } else if (OB_NOT_NULL(trans_param.lock_handle_)) {
+      HTABLE_LOCK_MGR->release_handle(*trans_param.lock_handle_); // also release lock when start trans failed
     }
     trans_state_ptr->reset();
   }
