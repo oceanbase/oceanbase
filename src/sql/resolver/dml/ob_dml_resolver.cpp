@@ -9411,7 +9411,9 @@ int ObDMLResolver::check_disable_parallel_state(ObRawExpr *expr)
         udf_expr->get_result_type().is_ext() &&
         (pl::PL_RECORD_TYPE == udf_expr->get_result_type().get_extend_type() ||
           pl::PL_NESTED_TABLE_TYPE == udf_expr->get_result_type().get_extend_type() ||
-          pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type())) {
+          pl::PL_VARRAY_TYPE == udf_expr->get_result_type().get_extend_type() ||
+          (false && pl::PL_OPAQUE_TYPE == udf_expr->get_result_type().get_extend_type() &&
+          (udf_expr->get_result_type().get_udt_id() == 300004 || udf_expr->get_result_type().get_udt_id() == 300005)))) {
       OX (stmt->get_query_ctx()->disable_udf_parallel_ |= true);
     }
     if (OB_SUCC(ret) && return_value_version.count()) {

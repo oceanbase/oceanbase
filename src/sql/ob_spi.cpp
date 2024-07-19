@@ -6981,6 +6981,13 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
           OZ (store_result(ctx, bulk_tables, row_count, type_count, tmp_result,
                           NULL == implicit_cursor ? false : implicit_cursor->get_in_forall(), is_type_record));
         }
+        if (tmp_result.count() > 0) {
+          int tmp = OB_SUCCESS;
+          for (int i = 0; i < tmp_result.count(); ++i) {
+            tmp = ObUserDefinedType::destruct_obj(tmp_result.at(i), nullptr);
+          }
+          ret = OB_SUCCESS == ret ? tmp : ret;
+        }
         if (!for_cursor && OB_NOT_NULL(implicit_cursor)) {
           OX (implicit_cursor->set_rowcount(row_count)); // 设置隐式游标
         }
@@ -7652,9 +7659,6 @@ int ObSPIService::check_and_copy_composite(
     // now deep copy to table allocator and destruct obj_array
     // @hr351303: consider in collect_cells use table allocator directly to avoid twice deep copy
     OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, src, result));
-    if (OB_SUCC(ret) && src.get_meta().get_extend_type() != PL_CURSOR_TYPE) {
-      OZ (ObUserDefinedType::destruct_obj(src, nullptr));
-    }
   }
   return ret;
 }
@@ -7795,13 +7799,6 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
               new_data++;
               table->set_count(old_count);
             }
-          }
-        }
-      } else {
-        for (int64_t i = 0; i < obj_array.count(); ++i) {
-          int ret = OB_SUCCESS;
-          if (OB_FAIL(ObUserDefinedType::destruct_obj(obj_array.at(i), ctx->exec_ctx_->get_my_session()))) {
-            LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(i), K(obj_array));
           }
         }
       }
