@@ -17,21 +17,96 @@ create table t3(c1 int, c2 int);
 
 set ob_query_timeout = 10000000000;
 
-insert /*+append enable_parallel_dml parallel(8) */ into t1
+insert /*+append enable_parallel_dml parallel(1) */ into t1
 select if(random(7) % 10 = 0, null, UNIFORM(1, 10000, random(7))),
        if(random(7) % 10 = 0, null, ZIPF(1, 1000, random(7))) from table(generator(100000));
 
-insert /*+append enable_parallel_dml parallel(8) */ into t2
+insert /*+append enable_parallel_dml parallel(1) */ into t2
 select if(random(7) % 10 = 0, null, UNIFORM(1, 10000, random(7))),
        if(random(7) % 10 = 0, null, ZIPF(1, 1000, random(7))) from table(generator(100000));
 
-insert /*+append enable_parallel_dml parallel(8) */ into t3
+insert /*+append enable_parallel_dml parallel(1) */ into t3
 select if(random(7) % 10 = 0, null, UNIFORM(1, 10000, random(7))),
        if(random(7) % 10 = 0, null, ZIPF(1, 1000, random(7))) from table(generator(100000));
 
 --result_format 4
 --explain_protocol 2
 
+## minor freeze
+alter system minor freeze;
+## wait minor merge done
+# set __table_id__ outside
+
+--disable_query_log
+--disable_result_log
+
+# connect (obsys_minor,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+# connection obsys_minor;
+
+
+let $__i__=180;
+while($__i__ > 0)
+{
+  sleep 1;
+  dec $__i__;
+  let $__memstore_cnt__ = query_get_value(select count(*) as cnt from oceanbase.__all_virtual_memstore_info where is_active='NO', cnt, 1);
+  if ($__memstore_cnt__ == 0)
+  {
+    let $__i__ = -5;
+  }
+}
+
+if ($__i__ != -5)
+{
+  --echo minor freeze failed
+}
+# disconnect obsys_minor;
+# connection default;
+
+--enable_query_log
+--enable_result_log
+
+alter system major freeze;
+## wait daily merge done
+#--disable_query_log
+#--disable_result_log
+# connect (obsys_ydm,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+# connection obsys_ydm;
+let $__i__= 600;
+sleep 3;
+while($__i__ > 0)
+{
+    sleep 1;
+    dec $__i__;
+    let $__frozen_scn__ = query_get_value(select /*+query_timeout(100000000)*/sum(frozen_scn/1000) as sum_value from oceanbase.CDB_OB_MAJOR_COMPACTION, sum_value, 1);
+    let $__merged_version__ = query_get_value(select /*+query_timeout(100000000)*/sum(last_scn/1000) as sum_value from oceanbase.CDB_OB_MAJOR_COMPACTION, sum_value, 1);
+    #--echo sum_frozen_scn=$__frozen_scn__
+    #--echo sum_merged_version=$__merged_version__
+    #--echo remain_time_s=$__i__
+    #--echo =======================================
+    # all tenant should major merge complete
+    if($__frozen_scn__ == $__merged_version__)
+    {
+        let $__i__ = -5;
+    }
+}
+
+if($__i__ != -5)
+{
+    --echo major freeze failed
+    select * from oceanbase.CDB_OB_MAJOR_COMPACTION;
+    let $__tenant_id__ = query_get_value(select tenant_id from oceanbase.CDB_OB_MAJOR_COMPACTION where last_scn != frozen_scn, tenant_id, 1);
+    let $__frozen_scn__ = query_get_value(select frozen_scn from oceanbase.CDB_OB_MAJOR_COMPACTION where tenant_id = $__tenant_id__, frozen_scn, 1);
+    eval select * from oceanbase.__all_virtual_server_compaction_event_history where tenant_id = $__tenant_id__ and compaction_scn = $__frozen_scn__;
+    select * from oceanbase.__all_virtual_compaction_diagnose_info;
+}
+sleep 2;
+
+# disconnect obsys_ydm;
+# connection default;
+--enable_query_log
+--enable_result_log
+## --source mysql_test/include/wait_daily_merge.inc
 
 ### 单min/max
 
