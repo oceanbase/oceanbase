@@ -1679,8 +1679,10 @@ int FetchStream::read_log_(const char *data,
       palf::MemPalfBufferIterator entry_iter;
       const char *buffer = nullptr;
 
-      if (OB_FAIL(ls_fetch_ctx_->get_next_group_entry(group_entry, group_start_lsn,
-          buffer, replayable_point, data_end_source))) {
+      if (OB_FAIL(ls_fetch_ctx_->get_next_group_entry(group_entry, group_start_lsn, buffer,
+        replayable_point, data_end_source))) {
+        // If failed, reset memory storage
+        ls_fetch_ctx_->reset_memory_storage();
         if (OB_ITER_END != ret) {
           if (obrpc::ObCdcFetchRawSource::ARCHIVE != data_end_source && OB_PARTIAL_LOG != ret) {
             LOG_ERROR("get next_group_entry failed", KR(ret), K_(ls_fetch_ctx), K(data_end_source));

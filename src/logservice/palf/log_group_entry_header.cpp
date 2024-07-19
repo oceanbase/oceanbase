@@ -11,15 +11,18 @@
  */
 
 #include "log_group_entry_header.h"       // LogGroupEntryHeader
-#include "log_entry.h"                    // LogEntry
-#include "log_entry_header.h"             // LogEntryHeader
 #include "lib/checksum/ob_crc64.h"        // ob_crc64
+#include "lib/checksum/ob_crc16.h"        // ob_crc16
 #include "lib/checksum/ob_parity_check.h" // parity_check
 #include "lib/utility/utility.h"          // !FALSE_IT
 #include "lib/oblog/ob_log_module.h"      // LOG*
 #include "share/scn.h"                    // SCN
+#include "share/ob_cluster_version.h"     // GET_MIN_DATA_VERSION
+#include "share/rc/ob_tenant_base.h"      // MTL_ID
 #include "log_define.h"                   // is_valid_log_id...
 #include "log_writer_utils.h"             // LogWriteBuf
+#include "log_entry.h"                    // LogEntry
+#include "log_entry_header.h"             // LogEntryHeader
 
 namespace oceanbase
 {
@@ -29,6 +32,18 @@ using namespace common;
 using namespace share;
 
 const int64_t LogGroupEntryHeader::HEADER_SER_SIZE = sizeof(LogGroupEntryHeader);
+const int16_t LogGroupEntryHeader::MAGIC = 0x4752;
+
+const int16_t LogGroupEntryHeader::LOG_GROUP_ENTRY_HEADER_VERSION = 1;
+const int64_t LogGroupEntryHeader::PADDING_TYPE_MASK = 1 << 1;
+const int64_t LogGroupEntryHeader::RAW_WRITE_MASK = 1 << 2;
+const int64_t LogGroupEntryHeader::PADDING_LOG_DATA_CHECKSUM = 0;
+
+const int16_t LogGroupEntryHeader::LOG_GROUP_ENTRY_HEADER_VERSION2 = 2;
+const int64_t LogGroupEntryHeader::PADDING_TYPE_MASK_VERSION2 = 1ll << 62;
+const int64_t LogGroupEntryHeader::RAW_WRITE_MASK_VERSION2 = 1ll << 61;
+const int64_t LogGroupEntryHeader::CRC16_MASK = 0xffff;
+const int64_t LogGroupEntryHeader::PARITY_MASK = 0x01;
 
 LogGroupEntryHeader::LogGroupEntryHeader()
 {
@@ -43,7 +58,7 @@ LogGroupEntryHeader::~LogGroupEntryHeader()
 bool LogGroupEntryHeader::is_valid() const
 {
   return LogGroupEntryHeader::MAGIC == magic_
-         && LOG_GROUP_ENTRY_HEADER_VERSION == version_
+         && (LOG_GROUP_ENTRY_HEADER_VERSION == version_ || LOG_GROUP_ENTRY_HEADER_VERSION2 == version_)
          && INVALID_PROPOSAL_ID != proposal_id_
          && true == committed_end_lsn_.is_valid()
          && true == max_scn_.is_valid()
@@ -83,24 +98,23 @@ int LogGroupEntryHeader::generate(const bool is_raw_write,
         K(max_scn), K(log_id), K(committed_end_lsn), K(log_proposal_id));
   } else {
     magic_ = LogGroupEntryHeader::MAGIC;
-    version_ = LOG_GROUP_ENTRY_HEADER_VERSION;
+    version_ = get_version_();
     group_size_ = static_cast<int32_t>(data_len);
     max_scn_ = max_scn;
     log_id_ = log_id;
     committed_end_lsn_ = committed_end_lsn;
     proposal_id_ = log_proposal_id;
     if (is_padding_log) {
-      flag_ |= PADDING_TYPE_MASK;
+      flag_ = (flag_ | get_padding_mask_());
     }
     if (is_raw_write) {
-      flag_ |= RAW_WRITE_MASK;
+      flag_ = (flag_ | get_raw_write_mask_());
     }
     if (OB_FAIL(calculate_log_checksum_(is_padding_log, log_write_buf, data_len, data_checksum))) {
-      PALF_LOG(ERROR, "calculate_log_checksum_ failed", K(ret));
+      PALF_LOG(ERROR, "calculate_log_checksum_ failed", K(ret), KPC(this));
     }
   }
-  PALF_LOG(TRACE, "LogGroupEntryHeader generate", K(ret), K(is_padding_log), K(*this), K(data_checksum),
-      "haeder_checksum", get_header_parity_check_res_());
+  PALF_LOG(TRACE, "LogGroupEntryHeader generate", K(ret), K(is_padding_log), K(*this), K(data_checksum));
   return ret;
 }
 
@@ -211,19 +225,31 @@ int LogGroupEntryHeader::calculate_log_checksum_(const bool is_padding_log,
   return ret;
 }
 
-bool LogGroupEntryHeader::get_header_parity_check_res_() const
+uint16_t LogGroupEntryHeader::calculate_header_checksum_() const
 {
-  bool bool_ret = parity_check(reinterpret_cast<const uint16_t &>(magic_));
-  bool_ret ^= parity_check(reinterpret_cast<const uint16_t &>(version_));
-  bool_ret ^= parity_check(reinterpret_cast<const uint32_t &>(group_size_));
-  bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(proposal_id_));
-  bool_ret ^= parity_check(committed_end_lsn_.val_);
-  bool_ret ^= parity_check(max_scn_.get_val_for_logservice());
-  bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(accumulated_checksum_));
-  bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(log_id_));
-  int64_t tmp_flag = (flag_ & ~(0x1));
-  bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(tmp_flag));
-  return bool_ret;
+  uint16_t checksum = 0;
+  if (LOG_GROUP_ENTRY_HEADER_VERSION == version_) {
+    bool bool_ret = parity_check(reinterpret_cast<const uint16_t &>(magic_));
+    bool_ret ^= parity_check(reinterpret_cast<const uint16_t &>(version_));
+    bool_ret ^= parity_check(reinterpret_cast<const uint32_t &>(group_size_));
+    bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(proposal_id_));
+    bool_ret ^= parity_check(committed_end_lsn_.val_);
+    bool_ret ^= parity_check(max_scn_.get_val_for_logservice());
+    bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(accumulated_checksum_));
+    bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(log_id_));
+    int64_t tmp_flag = (flag_ & ~PARITY_MASK);
+    bool_ret ^= parity_check(reinterpret_cast<const uint64_t &>(tmp_flag));
+    checksum = (bool_ret ? 1 : 0);
+  } else if (LOG_GROUP_ENTRY_HEADER_VERSION2 == version_) {
+    // NB: To avoid dealing with endianness issue, make the last two bytes of flag_ with zero.
+    int64_t ori_flag = flag_;
+    this->flag_ = (ori_flag & ~CRC16_MASK);
+    checksum = xxhash_16(checksum, reinterpret_cast<const uint8_t*>(this), sizeof(LogGroupEntryHeader));
+    this->flag_ = ori_flag;
+  } else  {
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected version", KPC(this));
+  }
+  return checksum;
 }
 
 void LogGroupEntryHeader::update_header_checksum()
@@ -233,13 +259,9 @@ void LogGroupEntryHeader::update_header_checksum()
 
 void LogGroupEntryHeader::update_header_checksum_()
 {
-  if (get_header_parity_check_res_()) {
-    flag_ |= 0x1;
-  } else {
-    // group header可能会被复用并更新部分字段(比如raw write场景)
-    flag_ = (flag_ & ~(0x1));
-  }
-  PALF_LOG(TRACE, "update_header_checksum_ finished", K(*this), "flag", (flag_ & 0x1));
+  reset_header_checksum_();
+  flag_ = (flag_ | calculate_header_checksum_());
+  PALF_LOG(TRACE, "update_header_checksum_ finished", KPC(this));
 }
 
 LogGroupEntryHeader& LogGroupEntryHeader::operator=(const LogGroupEntryHeader &header)
@@ -331,7 +353,7 @@ int LogGroupEntryHeader::update_committed_end_lsn(const LSN &lsn)
 void LogGroupEntryHeader::update_write_mode(const bool is_raw_write)
 {
   if (true == is_raw_write) {
-    flag_ |= RAW_WRITE_MASK;
+    flag_ = (flag_ | get_raw_write_mask_());
   }
 }
 
@@ -406,9 +428,16 @@ void LogGroupEntryHeader::update_accumulated_checksum(int64_t accumulated_checks
 
 bool LogGroupEntryHeader::check_header_checksum_() const
 {
-  const int64_t header_checksum = get_header_parity_check_res_() ? 1 : 0;
-  const int64_t saved_header_checksum = flag_ & (0x1);
-  return (header_checksum == saved_header_checksum);
+  bool bool_ret = false;
+  const uint16_t header_checksum = calculate_header_checksum_();
+  if (LOG_GROUP_ENTRY_HEADER_VERSION2 != version_ && LOG_GROUP_ENTRY_HEADER_VERSION != version_) {
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "check_header_checksum_ failed, invalid version_", KPC(this));
+  } else {
+    int64_t mask = get_header_checksum_mask_();
+    const uint16_t saved_header_checksum = (flag_ & mask);
+    bool_ret = (header_checksum == saved_header_checksum);
+  }
+  return bool_ret;
 }
 
 bool LogGroupEntryHeader::check_log_checksum_(const char *buf,
@@ -451,12 +480,12 @@ bool LogGroupEntryHeader::check_log_checksum_(const char *buf,
 
 bool LogGroupEntryHeader::is_padding_log() const
 {
-  return (flag_ & PADDING_TYPE_MASK) > 0;
+  return (flag_ & get_padding_mask_()) > 0;
 }
 
 bool LogGroupEntryHeader::is_raw_write() const
 {
-  return (flag_ & RAW_WRITE_MASK) > 0;
+  return (flag_ & get_raw_write_mask_()) > 0;
 }
 
 int LogGroupEntryHeader::truncate(const char *buf,
@@ -507,6 +536,82 @@ int LogGroupEntryHeader::truncate(const char *buf,
   }
   PALF_LOG(INFO, "truncate finished", K(ret), K(*this));
   return ret;
+}
+
+int16_t LogGroupEntryHeader::get_version_() const
+{
+  int ret = OB_SUCCESS;
+  int16_t version = LOG_GROUP_ENTRY_HEADER_VERSION;
+  uint64_t min_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
+    PALF_LOG(WARN, "GET_MIN_DATA_VERSION failed", K(ret));
+  } else if (min_data_version >= DATA_VERSION_4_2_5_0) {
+    version = LOG_GROUP_ENTRY_HEADER_VERSION2;
+  }
+  return version;
+}
+
+int64_t LogGroupEntryHeader::get_padding_mask_() const
+{
+  int64_t mask = PADDING_TYPE_MASK;
+  if (LOG_GROUP_ENTRY_HEADER_VERSION2 == version_) {
+    mask = PADDING_TYPE_MASK_VERSION2;
+  } else if (LOG_GROUP_ENTRY_HEADER_VERSION == version_) {
+    mask = PADDING_TYPE_MASK;
+  } else {
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected version_", KPC(this));
+  }
+  return mask;
+}
+
+int64_t LogGroupEntryHeader::get_header_checksum_mask_() const
+{
+  int64_t header_checksum_mask = 0;
+  if (LOG_GROUP_ENTRY_HEADER_VERSION2 == version_) {
+    header_checksum_mask = CRC16_MASK;
+  } else if (LOG_GROUP_ENTRY_HEADER_VERSION == version_) {
+    header_checksum_mask = PARITY_MASK;
+  } else {
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected version!!!", KPC(this));
+  }
+  return header_checksum_mask;
+}
+
+int64_t LogGroupEntryHeader::get_raw_write_mask_() const
+{
+  int64_t mask = RAW_WRITE_MASK;
+  if (LOG_GROUP_ENTRY_HEADER_VERSION2 == version_) {
+    mask = RAW_WRITE_MASK_VERSION2;
+  } else if (LOG_GROUP_ENTRY_HEADER_VERSION == version_) {
+    mask = RAW_WRITE_MASK;
+  } else {
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected version_", KPC(this));
+  }
+  return mask;
+}
+
+void LogGroupEntryHeader::reset_header_checksum_()
+{
+  if (LOG_GROUP_ENTRY_HEADER_VERSION2 == version_) {
+    flag_ &= (~CRC16_MASK);
+  } else if (LOG_GROUP_ENTRY_HEADER_VERSION == version_) {
+    flag_ &= (~PARITY_MASK);
+  } else {
+    PALF_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "unexpected version_", KPC(this));
+  }
+}
+
+bool LogGroupEntryHeader::check_compatibility() const
+{
+  bool bool_ret = false;
+  if (!is_valid()) {
+    PALF_LOG_RET(WARN, OB_EAGAIN, "invalid LogGroupEntryHeader", KPC(this));
+  } else if (LOG_GROUP_ENTRY_HEADER_VERSION2 == version_ && LOG_GROUP_ENTRY_HEADER_VERSION2 != get_version_()) {
+    PALF_LOG_RET(WARN, OB_EAGAIN, "data version not match!!!", KPC(this));
+  } else {
+    bool_ret = true;
+  }
+  return bool_ret;
 }
 } // end namespace palf
 } // end namespace oceanbase
