@@ -1267,6 +1267,14 @@ int ObWrDeleter::do_delete()
                    OB_WR_SYSTEM_EVENT_TNAME, tenant_id, cluster_id, snap_id, query_timeout))) {
       LOG_WARN(
           "failed to delete __wr_system_event data ", K(ret), K(tenant_id), K(cluster_id), K(snap_id));
+    } else if (OB_FAIL(delete_expired_data_from_wr_table(
+                   OB_WR_SQLSTAT_TNAME, tenant_id, cluster_id, snap_id, query_timeout))) {
+      LOG_WARN(
+          "failed to delete __wr_sqlstat data ", K(ret), K(tenant_id), K(cluster_id), K(snap_id));
+    } else if (OB_FAIL(delete_expired_data_from_wr_table(
+                   OB_WR_SQLTEXT_TNAME, tenant_id, cluster_id, snap_id, query_timeout))) {
+      LOG_WARN(
+          "failed to delete __wr_sqltext data ", K(ret), K(tenant_id), K(cluster_id), K(snap_id));
     }
     if (OB_FAIL(ret)) {
       int tmp_ret = OB_SUCCESS;
