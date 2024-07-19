@@ -3872,6 +3872,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_S2_REUSE_VERSION_MISMATCH__USER_ERROR_MSG "reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache"
 #define OB_S2_ENTRY_NOT_EXIST__USER_ERROR_MSG "entry not exist in s2 micro_cache"
 #define OB_TABLET_IS_SPLIT_SRC__USER_ERROR_MSG "cannot access split src tablet"
+#define OB_ALLOCATE_TMP_FILE_PAGE_FAILED__USER_ERROR_MSG "fail to allocate a tmp file page"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -6191,6 +6192,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_S2_REUSE_VERSION_MISMATCH__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9121, reuse_version of mem_block or phy_block is not mismatched with micro_meta in s2 micro_cache"
 #define OB_S2_ENTRY_NOT_EXIST__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9122, entry not exist in s2 micro_cache"
 #define OB_TABLET_IS_SPLIT_SRC__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9123, cannot access split src tablet"
+#define OB_ALLOCATE_TMP_FILE_PAGE_FAILED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9124, fail to allocate a tmp file page"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9202, Auto extend param is not ready to start extending file"
@@ -6552,7 +6554,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2315];
+extern int g_all_ob_errnos[2316];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
