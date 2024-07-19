@@ -1710,5 +1710,63 @@ REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL,
 REG_SER_FUNC_ARRAY(OB_SFA_DECIMAL_INT_EXPR_EVAL_BATCH,
                    g_decimal_int_eval_batch_functions,
                    ARRAYSIZEOF(g_decimal_int_eval_batch_functions));
+
+static ObExpr::EvalFunc g_collection_eval_functions[] = {
+  NULL, // ObExprAdd::add_collection_collection_int8_t,
+  NULL, // ObExprAdd::add_collection_collection_int16_t,
+  NULL, // ObExprAdd::add_collection_collection_int32_t,
+  NULL, // ObExprAdd::add_collection_collection_int64_t,
+  NULL, // ObExprAdd::add_collection_collection_float,
+  NULL, // ObExprAdd::add_collection_collection_double,
+  NULL, // ObExprMinus::minus_collection_collection_int8_t,
+  NULL, // ObExprMinus::minus_collection_collection_int16_t,
+  NULL, // ObExprMinus::minus_collection_collection_int32_t,
+  NULL, // ObExprMinus::minus_collection_collection_int64_t,
+  NULL, // ObExprMinus::minus_collection_collection_float,
+  NULL // ObExprMinus::minus_collection_collection_double,
+};
+
+static ObExpr::EvalBatchFunc g_collection_eval_batch_functions[] = {
+  NULL, // ObExprAdd::add_collection_collection_int8_t_batch,
+  NULL, // ObExprAdd::add_collection_collection_int16_t_batch,
+  NULL, // ObExprAdd::add_collection_collection_int32_t_batch,
+  NULL, // ObExprAdd::add_collection_collection_int64_t_batch,
+  NULL, // ObExprAdd::add_collection_collection_float_batch,
+  NULL, // ObExprAdd::add_collection_collection_double_batch,
+  NULL, // ObExprMinus::minus_collection_collection_int8_t_batch,
+  NULL, // ObExprMinus::minus_collection_collection_int16_t_batch,
+  NULL, // ObExprMinus::minus_collection_collection_int32_t_batch,
+  NULL, // ObExprMinus::minus_collection_collection_int64_t_batch,
+  NULL, // ObExprMinus::minus_collection_collection_float_batch,
+  NULL // ObExprMinus::minus_collection_collection_double_batch,
+};
+
+static ObExpr::EvalVectorFunc g_collection_expr_eval_vector_functions[] = {
+  NULL, // ObExprAdd::add_collection_collection_int8_t_vector,
+  NULL, // ObExprAdd::add_collection_collection_int16_t_vector,
+  NULL, // ObExprAdd::add_collection_collection_int32_t_vector,
+  NULL, // ObExprAdd::add_collection_collection_int64_t_vector,
+  NULL, // ObExprAdd::add_collection_collection_float_vector,
+  NULL, // ObExprAdd::add_collection_collection_double_vector,
+  NULL, // ObExprMinus::minus_collection_collection_int8_t_vector,
+  NULL, // ObExprMinus::minus_collection_collection_int16_t_vector,
+  NULL, // ObExprMinus::minus_collection_collection_int32_t_vector,
+  NULL, // ObExprMinus::minus_collection_collection_int64_t_vector,
+  NULL, // ObExprMinus::minus_collection_collection_float_vector,
+  NULL // ObExprMinus::minus_collection_collection_double_vector,
+};
+
+REG_SER_FUNC_ARRAY(OB_SFA_COLLECTION_EXPR_EVAL,
+                   g_collection_eval_functions,
+                   ARRAYSIZEOF(g_collection_eval_functions));
+
+REG_SER_FUNC_ARRAY(OB_SFA_COLLECTION_EXPR_EVAL_BATCH,
+                   g_collection_eval_batch_functions,
+                   ARRAYSIZEOF(g_collection_eval_batch_functions));
+
+REG_SER_FUNC_ARRAY(OB_SFA_COLLECTION_EXPR_EVAL_VEC,
+                   g_collection_expr_eval_vector_functions,
+                   ARRAYSIZEOF(g_collection_expr_eval_vector_functions));
+
 } // end namespace sql
 } // end namespace oceanbase
