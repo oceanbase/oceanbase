@@ -165,6 +165,7 @@
 #endif
 #include "sql/optimizer/ob_log_values_table_access.h"
 #include "sql/engine/basic/ob_values_table_access_op.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 namespace oceanbase
 {
@@ -6818,10 +6819,19 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
                                                            .get_online_sample_percent());
       // check is insert overwrite
       bool is_insert_overwrite = false;
+      ObExecContext *exec_ctx = NULL;
+      ObPhysicalPlanCtx *plan_ctx = NULL;
       if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
         LOG_WARN("check is insert overwrite failed", K(ret));
-      } else if (is_insert_overwrite) {
-        spec.plan_->set_is_insert_overwrite(true);
+      } else if (OB_FALSE_IT(spec.plan_->set_is_insert_overwrite(is_insert_overwrite))) {
+      } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexcepted null exec ctx", KR(ret), KP(exec_ctx));
+      } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null plan ctx", KR(ret), KP(plan_ctx));
+      } else {
+        plan_ctx->set_is_direct_insert_plan(ObTableDirectInsertService::is_direct_insert(*(spec.plan_)));
       }
     }
     int64_t partition_expr_idx = OB_INVALID_INDEX;

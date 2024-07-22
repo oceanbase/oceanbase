@@ -125,7 +125,8 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       hint_xa_trans_stop_check_lock_(false),
       main_xa_trans_branch_(false),
       total_memstore_read_row_count_(0),
-      total_ssstore_read_row_count_(0)
+      total_ssstore_read_row_count_(0),
+      is_direct_insert_plan_(false)
 {
 }
 
@@ -778,6 +779,7 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_ENCODE(mview_ids_);
   OB_UNIS_ENCODE(last_refresh_scns_);
+  OB_UNIS_ENCODE(is_direct_insert_plan_);
   return ret;
 }
 
@@ -877,6 +879,7 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_ADD_LEN(mview_ids_);
   OB_UNIS_ADD_LEN(last_refresh_scns_);
+  OB_UNIS_ADD_LEN(is_direct_insert_plan_);
   return len;
 }
 
@@ -1002,6 +1005,7 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_DECODE(mview_ids_);
   OB_UNIS_DECODE(last_refresh_scns_);
+  OB_UNIS_DECODE(is_direct_insert_plan_);
   return ret;
 }
 
