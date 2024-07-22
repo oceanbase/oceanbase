@@ -35533,6 +35533,7 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
+# 21606: VARIABLES_BY_THREAD
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -63364,6 +63365,7 @@ left join
 # 28250: ALL_PLSQL_TYPE_ATTRS
 # 28251: DBA_PLSQL_TYPE_ATTRS
 # 28252: USER_PLSQL_TYPE_ATTRS
+# 28253: GV$OB_SESSION_SYS_VARIABLES
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
