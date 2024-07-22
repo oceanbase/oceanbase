@@ -3873,6 +3873,14 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
           }
         }
 
+        if (T_CHAR == default_node->children_[0]->type_
+            && (T_CHAR == type_node->type_ || T_NCHAR == type_node->type_)
+            && default_node->children_[0]->str_len_ == 0) {
+          default_node->children_[0]->str_len_++;
+          default_node->children_[0]->str_value_ = " ";
+          default_node->children_[0]->raw_text_ = "' '";
+          default_node->children_[0]->text_len_++;
+        }
         OZ (resolve_expr(default_node->children_[0], unit_ast, default_expr,
                          combine_line_and_col(default_node->children_[0]->stmt_loc_),
                          true, &data_type));
