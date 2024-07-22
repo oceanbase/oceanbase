@@ -406,6 +406,8 @@ int ObLobMetaRowIterator::get_next_row(const blocksstable::ObDatumRow *&row)
       tmp_row_.storage_datums_[ObLobMetaUtil::SEQ_ID_COL_ID + 2].set_int(-get_seq_no());
       tmp_row_.set_trans_id(trans_id_);
       tmp_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      tmp_row_.mvcc_row_flag_.set_compacted_multi_version_row(true);
+      tmp_row_.mvcc_row_flag_.set_first_multi_version_row(true);
       tmp_row_.mvcc_row_flag_.set_last_multi_version_row(true);
       tmp_row_.mvcc_row_flag_.set_uncommitted_row(trans_id_.is_valid());
       row = &tmp_row_;

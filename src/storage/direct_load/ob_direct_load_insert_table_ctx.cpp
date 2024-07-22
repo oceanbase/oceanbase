@@ -358,6 +358,8 @@ int ObDirectLoadInsertTabletContext::init_datum_row(ObDatumRow &datum_row)
         !param_->is_incremental_ ? param_->snapshot_version_ : INT64_MAX;
       datum_row.trans_id_ = param_->trans_param_.tx_id_;
       datum_row.row_flag_.set_flag(ObDmlFlag::DF_INSERT, !param_->is_incremental_ ? DF_TYPE_NORMAL : DF_TYPE_INSERT_DELETE);
+      datum_row.mvcc_row_flag_.set_compacted_multi_version_row(true);
+      datum_row.mvcc_row_flag_.set_first_multi_version_row(true);
       datum_row.mvcc_row_flag_.set_last_multi_version_row(true);
       datum_row.mvcc_row_flag_.set_uncommitted_row(param_->is_incremental_);
       // fill trans_version
@@ -387,6 +389,8 @@ int ObDirectLoadInsertTabletContext::init_lob_datum_row(blocksstable::ObDatumRow
         !param_->is_incremental_ ? param_->snapshot_version_ : INT64_MAX;
       datum_row.trans_id_ = param_->trans_param_.tx_id_;
       datum_row.row_flag_.set_flag(is_delete ? ObDmlFlag::DF_DELETE : ObDmlFlag::DF_INSERT);
+      datum_row.mvcc_row_flag_.set_compacted_multi_version_row(true);
+      datum_row.mvcc_row_flag_.set_first_multi_version_row(true);
       datum_row.mvcc_row_flag_.set_last_multi_version_row(true);
       datum_row.mvcc_row_flag_.set_uncommitted_row(param_->is_incremental_);
       // fill trans_version
