@@ -381,12 +381,9 @@ protected:
         SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
       }
     } else {
-      int64_t max_bucket_cnt = buckets->get_capacity();
-      if (max_bucket_cnt < bucket_num) {
-        buckets->reuse();
-        if (OB_FAIL(buckets->init(bucket_num))) {
-          LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
-        }
+      buckets->reuse();
+      if (OB_FAIL(buckets->init(bucket_num))) {
+        LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
       }
     }
     return ret;
