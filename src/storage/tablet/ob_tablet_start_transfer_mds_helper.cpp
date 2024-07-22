@@ -284,7 +284,7 @@ int ObTabletStartTransferOutHelper::on_register_success_(
       ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::START_TRANSFER_OUT_FIRST_REPALY_LOG_TIMESTAMP,
       ret, start_ts, start_ts, false/*is_report*/);
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_start_transfer_out",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_start_transfer_out",
                    "stage", "on_register_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_start_transfer_out_info.src_ls_id_.id(),
@@ -689,7 +689,7 @@ int ObTabletStartTransferOutCommonHelper::on_replay_success_(
       ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::START_TRANSFER_OUT_FIRST_REPALY_LOG_TIMESTAMP,
       ret, start_ts, start_ts, false/*is_report*/);
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_start_transfer_out",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_start_transfer_out",
                    "stage", "on_replay_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_start_transfer_out_info.src_ls_id_.id(),
@@ -1102,7 +1102,7 @@ int ObTabletStartTransferInHelper::on_register_success_(
     LOG_INFO("[TRANSFER] finish tx start transfer in on_register_success_", K(tx_start_transfer_in_info),
         "cost_ts", ObTimeUtil::current_time() - start_ts);
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_start_transfer_in",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_start_transfer_in",
                    "stage", "on_register_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_start_transfer_in_info.src_ls_id_.id(),
