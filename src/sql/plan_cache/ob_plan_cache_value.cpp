@@ -69,7 +69,8 @@ int PCVSchemaObj::init(const ObTableSchema *schema)
   return ret;
 }
 
-int PCVSchemaObj::init_with_synonym(const ObSimpleSynonymSchema *schema) {
+int PCVSchemaObj::init_with_synonym(const ObSimpleSynonymSchema *schema)
+{
   int ret = OB_SUCCESS;
   if (OB_ISNULL(schema) || OB_ISNULL(inner_alloc_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -135,7 +136,6 @@ int PCVSchemaObj::init_with_version_obj(const ObSchemaObjVersion &schema_obj_ver
   schema_type_ = schema_obj_version.get_schema_type();
   schema_id_ = schema_obj_version.object_id_;
   schema_version_ = schema_obj_version.version_;
-  is_explicit_db_name_ = schema_obj_version.is_db_explicit_;
   return ret;
 }
 
@@ -1927,21 +1927,16 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           tenant_id = get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
         } else if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
           const ObSimpleSynonymSchema *synonym_schema = nullptr;
-          if (pcv_schema->is_explicit_db_name_) {
-            if (OB_FAIL(schema_guard.get_simple_synonym_info(tenant_id, pcv_schema->schema_id_,
-                                                             synonym_schema))) {
-              LOG_WARN("failed to get private synonym", K(ret));
-            }
-          } else {
-            if (OB_FAIL(schema_guard.get_synonym_info(tenant_id, database_id,
-                                                      pcv_schema->table_name_, synonym_schema))) {
-              LOG_WARN("failed to get private synonym", K(ret));
-            } else if (OB_ISNULL(synonym_schema)
-                       && OB_FAIL(schema_guard.get_synonym_info(tenant_id, OB_PUBLIC_SCHEMA_ID,
-                                                                pcv_schema->table_name_,
-                                                                synonym_schema))) {
-              LOG_WARN("failed to get public synonym", K(ret));
-            }
+          uint64_t synonym_database_id =
+            OB_PUBLIC_SCHEMA_ID == pcv_schema->database_id_ ? database_id : pcv_schema->database_id_;
+          if (OB_FAIL(schema_guard.get_synonym_info(tenant_id, synonym_database_id,
+                                                    pcv_schema->table_name_, synonym_schema))) {
+            LOG_WARN("failed to get private synonym", K(ret));
+          } else if (OB_ISNULL(synonym_schema)
+                      && OB_FAIL(schema_guard.get_synonym_info(tenant_id, OB_PUBLIC_SCHEMA_ID,
+                                                              pcv_schema->table_name_,
+                                                              synonym_schema))) {
+            LOG_WARN("failed to get public synonym", K(ret));
           }
           if (OB_FAIL(ret)) {
           } else if (OB_NOT_NULL(synonym_schema)) {
@@ -2092,21 +2087,36 @@ int ObPlanCacheValue::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
   int ret = OB_SUCCESS;
   schema_array.reset();
   const ObSimpleTableSchemaV2 *table_schema = nullptr;
+  const ObSimpleSynonymSchema *synonym_schema = nullptr;
   PCVSchemaObj tmp_schema_obj;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_schema_objs.count(); i++) {
     if (TABLE_SCHEMA != dep_schema_objs.at(i).get_schema_type()) {
-      if (OB_FAIL(tmp_schema_obj.init_with_version_obj(dep_schema_objs.at(i)))) {
+      if (SYNONYM_SCHEMA == dep_schema_objs.at(i).get_schema_type()) {
+        synonym_schema = nullptr;
+        if (OB_FAIL(schema_guard.get_simple_synonym_info(
+              MTL_ID(), dep_schema_objs.at(i).get_object_id(), synonym_schema))) {
+          LOG_WARN("failed to get synonym schema", K(ret), K(dep_schema_objs.at(i)));
+        } else if (nullptr == synonym_schema) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get an unexpected null synonym schema", K(ret));
+        } else {
+          tmp_schema_obj.database_id_ = synonym_schema->get_database_id();
+          tmp_schema_obj.schema_version_ = synonym_schema->get_schema_version();
+          tmp_schema_obj.schema_id_ = synonym_schema->get_synonym_id();
+          tmp_schema_obj.schema_type_ = SYNONYM_SCHEMA;
+        }
+      } else if (OB_FAIL(tmp_schema_obj.init_with_version_obj(dep_schema_objs.at(i)))) {
         LOG_WARN("failed to init pcv schema obj", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(schema_array.push_back(tmp_schema_obj))) {
         LOG_WARN("failed to push back pcv schema obj", K(ret));
       } else {
         tmp_schema_obj.reset();
       }
     } else if (OB_FAIL(schema_guard.get_simple_table_schema(
-                                     MTL_ID(),
-                                     dep_schema_objs.at(i).get_object_id(),
-                                     table_schema))) {
+                 MTL_ID(), dep_schema_objs.at(i).get_object_id(), table_schema))) {
       LOG_WARN("failed to get table schema",
                K(ret), K(dep_schema_objs.at(i)));
     } else if (nullptr == table_schema) {
