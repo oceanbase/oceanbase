@@ -7057,7 +7057,7 @@ CAST_FUNC_NAME(time, double)
     ObObjType out_type = expr.datum_meta_.type_;
     if (OB_FAIL(ObTimeConverter::time_to_double(in_val, out_val))) {
       LOG_WARN("time_to_int failed", K(ret), K(in_val));
-    } else if (ObUFloatType == out_type && CAST_FAIL(numeric_negative_check(out_val))) {
+    } else if (ObUDoubleType == out_type && CAST_FAIL(numeric_negative_check(out_val))) {
       LOG_WARN("int_range_check failed", K(ret), K(out_val));
     } else {
       res_datum.set_double(out_val);
@@ -7083,6 +7083,8 @@ CAST_FUNC_NAME(time, number)
       LOG_WARN("time_to_str failed", K(ret), K(in_val));
     } else if (CAST_FAIL(number.from(buf, len, tmp_alloc, &res_precision, &res_scale))) {
       LOG_WARN("number.from failed", K(ret));
+    } else if (ObUNumberType == expr.datum_meta_.type_ && CAST_FAIL(numeric_negative_check(number))) {
+      LOG_WARN("numeric_negative_check failed", K(ret));
     } else {
       res_datum.set_number(number);
     }

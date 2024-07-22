@@ -4412,6 +4412,8 @@ static int time_number(const ObObjType expect_type, ObObjCastParams &params,
         K(ret), K(in), K(expect_type));
   } else if (OB_FAIL(ObTimeConverter::time_to_str(in.get_time(), in.get_scale(), buf, sizeof(buf), len, false))) {
   } else if (CAST_FAIL(value.from(buf, len, params, &res_precision, &res_scale))) {
+  } else if (ObUNumberType == expect_type && CAST_FAIL(numeric_negative_check(value))) {
+    LOG_WARN("numeric_negative_check failed", K(ret));
   } else {
     out.set_number(expect_type, value);
   }
