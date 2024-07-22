@@ -7298,6 +7298,9 @@ def_table_schema(
 
 # 520 : __all_spm_evo_result
 # 521 : __all_detect_lock_info_v2
+# 522 : __all_pkg_type
+# 523 : __all_pkg_type_attr
+# 524 : __all_pkg_coll_type
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14558,6 +14561,10 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12495: __all_virtual_spm_evo_result
 # 12496: __all_virtual_vector_index_info
 
+# 12497: __all_virtual_pkg_type
+# 12498: __all_virtual_pkg_type_attr
+# 12499: __all_virtual_pkg_coll_type
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15048,6 +15055,37 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15465: __all_virtual_session_sys_variable
 # 15466: __all_spm_evo_result
 # 15467: __all_virtual_vector_index_info
+
+# 15468: __all_pkg_type
+# 15469: __all_pkg_type_attr
+# 15470: __all_pkg_coll_type
+# 15471: __all_pkg_type
+# 15472: __all_pkg_type_attr
+# 15473: __all_pkg_coll_type
+
+# 15474: __all_pkg_type
+# 15474: idx_pkg_db_type_name
+# 15474: idx_pkg_db_type_name_real_agent
+
+# 15475: __all_pkg_type
+# 15475: idx_pkg_type_name
+# 15475: idx_pkg_type_name_real_agent
+
+# 15476: __all_pkg_type_attr
+# 15476: idx_pkg_type_attr_name
+# 15476: idx_pkg_type_attr_name_real_agent
+
+# 15477: __all_pkg_type_attr
+# 15477: idx_pkg_type_attr_id
+# 15477: idx_pkg_type_attr_id_real_agent
+
+# 15478: __all_pkg_coll_type
+# 15478: idx_pkg_coll_name_type
+# 15478: idx_pkg_coll_name_type_real_agent
+
+# 15479: __all_pkg_coll_type
+# 15479: idx_pkg_coll_name_id
+# 15479: idx_pkg_coll_name_id_real_agent
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -63308,6 +63346,15 @@ left join
 # 28241: V$OB_SS_LOCAL_CACHE
 # 28242: GV$OB_KV_GROUP_COMMIT_STATUS
 # 28243: V$OB_KV_GROUP_COMMIT_STATUS
+# 28244: ALL_PLSQL_TYPES
+# 28245: DBA_PLSQL_TYPES
+# 28246: USER_PLSQL_TYPES
+# 28247: ALL_PLSQL_COLL_TYPES
+# 28248: DBA_PLSQL_COLL_TYPES
+# 28249: USER_PLSQL_COLL_TYPES
+# 28250: ALL_PLSQL_TYPE_ATTRS
+# 28251: DBA_PLSQL_TYPE_ATTRS
+# 28252: USER_PLSQL_TYPE_ATTRS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -64244,6 +64291,13 @@ def_sys_index_table(
   index_using_type = 'USING_BTREE',
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
+
+# 101107: __all_pkg_type
+# 101108: __all_pkg_type
+# 101109: __all_pkg_type_attr
+# 101110: __all_pkg_type_attr
+# 101111: __all_pkg_coll_type
+# 101112: __all_pkg_coll_type
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
