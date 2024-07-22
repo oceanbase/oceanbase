@@ -449,7 +449,7 @@ int ObObj2strHelper::convert_ob_geometry_to_ewkt_(const common::ObObj &obj,
     common::ObIAllocator &allocator) const
 {
   const ObString &wkb = obj.get_string();
-  return ObGeoTypeUtil::geo_to_ewkt(wkb, str, allocator, 0, true /*output_srid0*/);
+  return ObGeoTypeUtil::geo_to_ewkt(wkb, str, allocator, -1 /*use default prec*/, true /*output_srid0*/);
 }
 
 int ObObj2strHelper::convert_xmltype_to_text_(
