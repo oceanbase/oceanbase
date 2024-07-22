@@ -15062,30 +15062,12 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15471: __all_pkg_type
 # 15472: __all_pkg_type_attr
 # 15473: __all_pkg_coll_type
-
 # 15474: __all_pkg_type
-# 15474: idx_pkg_db_type_name
-# 15474: idx_pkg_db_type_name_real_agent
-
 # 15475: __all_pkg_type
-# 15475: idx_pkg_type_name
-# 15475: idx_pkg_type_name_real_agent
-
 # 15476: __all_pkg_type_attr
-# 15476: idx_pkg_type_attr_name
-# 15476: idx_pkg_type_attr_name_real_agent
-
 # 15477: __all_pkg_type_attr
-# 15477: idx_pkg_type_attr_id
-# 15477: idx_pkg_type_attr_id_real_agent
-
 # 15478: __all_pkg_coll_type
-# 15478: idx_pkg_coll_name_type
-# 15478: idx_pkg_coll_name_type_real_agent
-
 # 15479: __all_pkg_coll_type
-# 15479: idx_pkg_coll_name_id
-# 15479: idx_pkg_coll_name_id_real_agent
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
