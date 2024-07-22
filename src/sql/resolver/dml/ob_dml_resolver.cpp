@@ -7389,7 +7389,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     if (OB_NOT_NULL(stmt)) {
       if (OB_FAIL(add_synonym_obj_id(synonym_checker, is_db_explicit /* is_db_expilicit */))) {
         LOG_WARN("add_synonym_obj_id failed", K(ret));
-      } else if (is_public_synonym) {
+      } else {
         /**
         * create table oms_test.tab_a (id int, value int);
         * create PUBLIC SYNONYM tab_b for oms_test.tab_a;
