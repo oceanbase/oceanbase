@@ -442,6 +442,7 @@
 #include "sql/engine/expr/ob_expr_transaction_id.h"
 #include "sql/engine/expr/ob_expr_audit_log_func.h"
 #include "sql/engine/expr/ob_expr_can_access_trigger.h"
+#include "sql/engine/expr/ob_expr_split_part.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -661,6 +662,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprCoalesce);
     REG_OP(ObExprNvl);
     REG_OP(ObExprConcat);
+    REG_OP(ObExprSplitPart);
     REG_OP(ObExprCurrentUser);
     REG_OP(ObExprCurrentUserPriv);
     REG_OP(ObExprYear);
@@ -1108,6 +1110,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprRemainder);
   REG_OP_ORCL(ObExprAbs);
   REG_OP_ORCL(ObExprConcat);
+  REG_OP_ORCL(ObExprSplitPart);
   REG_OP_ORCL(ObExprToNumber);
   REG_OP_ORCL(ObExprOracleRpad);
   REG_OP_ORCL(ObExprOracleLpad);

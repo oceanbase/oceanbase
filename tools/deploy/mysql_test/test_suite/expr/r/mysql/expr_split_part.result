@@ -1,0 +1,255 @@
+SELECT SPLIT_PART('a,b,c,d', ',', 1);
+SPLIT_PART('a,b,c,d', ',', 1)
+a
+SELECT SPLIT_PART('a,b,c,d', ',', 2);
+SPLIT_PART('a,b,c,d', ',', 2)
+b
+SELECT SPLIT_PART('a,b,c,d', ',', 4);
+SPLIT_PART('a,b,c,d', ',', 4)
+d
+SELECT SPLIT_PART('apple#banana#cherry', '#', 2);
+SPLIT_PART('apple#banana#cherry', '#', 2)
+banana
+SELECT SPLIT_PART('apple@banana@cherry', '@', 3);
+SPLIT_PART('apple@banana@cherry', '@', 3)
+cherry
+SELECT SPLIT_PART('a--b--c--d', '--', 3);
+SPLIT_PART('a--b--c--d', '--', 3)
+c
+SELECT SPLIT_PART('a,b,c,d', '#', 1);
+SPLIT_PART('a,b,c,d', '#', 1)
+
+SELECT SPLIT_PART('x,y,z', ',', 5);
+SPLIT_PART('x,y,z', ',', 5)
+
+SELECT SPLIT_PART('abc', '', 2);
+SPLIT_PART('abc', '', 2)
+
+SELECT SPLIT_PART('abc', '', 4);
+SPLIT_PART('abc', '', 4)
+
+SELECT SPLIT_PART(',a,b,c,', ',', 1);
+SPLIT_PART(',a,b,c,', ',', 1)
+
+SELECT SPLIT_PART(',a,b,c,', ',', 5);
+SPLIT_PART(',a,b,c,', ',', 5)
+
+SELECT SPLIT_PART('', ',', 1);
+SPLIT_PART('', ',', 1)
+
+SELECT SPLIT_PART('a,b,c', ',', 0);
+SPLIT_PART('a,b,c', ',', 0)
+a
+SELECT SPLIT_PART('a,b,c', ',', -1);
+SPLIT_PART('a,b,c', ',', -1)
+c
+SELECT SPLIT_PART('a,,b,,c', ',', 2);
+SPLIT_PART('a,,b,,c', ',', 2)
+
+SELECT SPLIT_PART('a,,b,,c', ',', 3);
+SPLIT_PART('a,,b,,c', ',', 3)
+b
+SELECT SPLIT_PART('a,,b', ',', 2);
+SPLIT_PART('a,,b', ',', 2)
+
+SELECT SPLIT_PART('a,,b,,c,,', ',', 6);
+SPLIT_PART('a,,b,,c,,', ',', 6)
+
+SELECT SPLIT_PART(2134, 1, 2);
+SPLIT_PART(2134, 1, 2)
+34
+SELECT SPLIT_PART(2134, '1', 2);
+SPLIT_PART(2134, '1', 2)
+34
+SELECT SPLIT_PART(1.2345, '.', 1);
+SPLIT_PART(1.2345, '.', 1)
+1
+SELECT SPLIT_PART('a,,b,,c', null, 2);
+SPLIT_PART('a,,b,,c', null, 2)
+NULL
+SELECT SPLIT_PART(null, ',', 2);
+SPLIT_PART(null, ',', 2)
+NULL
+SELECT SPLIT_PART('a,,b,,c', ',', null);
+SPLIT_PART('a,,b,,c', ',', null)
+NULL
+drop table if exists charset_test;
+CREATE TABLE charset_test (
+id INT PRIMARY KEY AUTO_INCREMENT,
+utf8_col VARCHAR(255) CHARACTER SET utf8,
+gbk_col VARCHAR(255) CHARACTER SET gbk,
+binary_col VARCHAR(255) CHARACTER SET binary
+);
+INSERT INTO charset_test (utf8_col, gbk_col, binary_col)
+VALUES ('abcabc', 'abcabc', 'abcabc'),
+('你好', '你好', '你好'),
+('nihao你好你好', 'nihao你好你好', 'nihao你好你好'),
+('好好', '好好', '好好');
+SELECT SPLIT_PART(utf8_col, 'a', 2) FROM charset_test;
+SPLIT_PART(utf8_col, 'a', 2)
+bc
+
+o你好你好
+
+SELECT SPLIT_PART(gbk_col, 'a', 2) FROM charset_test;
+SPLIT_PART(gbk_col, 'a', 2)
+bc
+
+o你好你好
+
+SELECT SPLIT_PART(binary_col, 'a', 2) FROM charset_test;
+SPLIT_PART(binary_col, 'a', 2)
+bc
+
+o你好你好
+
+SELECT COLLATION(SPLIT_PART(utf8_col, 'a', 2)) FROM charset_test;
+COLLATION(SPLIT_PART(utf8_col, 'a', 2))
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+SELECT COLLATION(SPLIT_PART(gbk_col, 'a', 2)) FROM charset_test;
+COLLATION(SPLIT_PART(gbk_col, 'a', 2))
+gbk_chinese_ci
+gbk_chinese_ci
+gbk_chinese_ci
+gbk_chinese_ci
+SELECT COLLATION(SPLIT_PART(binary_col, 'a', 2)) FROM charset_test;
+COLLATION(SPLIT_PART(binary_col, 'a', 2))
+binary
+binary
+binary
+binary
+SELECT COERCIBILITY(SPLIT_PART(utf8_col, 'a', 2)) FROM charset_test;
+COERCIBILITY(SPLIT_PART(utf8_col, 'a', 2))
+2
+2
+2
+2
+SELECT COERCIBILITY(SPLIT_PART(gbk_col, 'a', 2)) FROM charset_test;
+COERCIBILITY(SPLIT_PART(gbk_col, 'a', 2))
+2
+2
+2
+2
+SELECT COERCIBILITY(SPLIT_PART(binary_col, 'a', 2)) FROM charset_test;
+COERCIBILITY(SPLIT_PART(binary_col, 'a', 2))
+2
+2
+2
+2
+SELECT SPLIT_PART(utf8_col, '好', 1) FROM charset_test;
+SPLIT_PART(utf8_col, '好', 1)
+
+你
+nihao你
+
+SELECT SPLIT_PART(gbk_col, '好', 1) FROM charset_test;
+SPLIT_PART(gbk_col, '好', 1)
+
+你
+nihao你
+
+SELECT SPLIT_PART(binary_col, '好', 1) FROM charset_test;
+SPLIT_PART(binary_col, '好', 1)
+
+你
+nihao你
+
+SELECT COLLATION(SPLIT_PART(utf8_col, '好', 1)) FROM charset_test;
+COLLATION(SPLIT_PART(utf8_col, '好', 1))
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+SELECT COLLATION(SPLIT_PART(gbk_col, '好', 1)) FROM charset_test;
+COLLATION(SPLIT_PART(gbk_col, '好', 1))
+gbk_chinese_ci
+gbk_chinese_ci
+gbk_chinese_ci
+gbk_chinese_ci
+SELECT COLLATION(SPLIT_PART(binary_col, '好', 1)) FROM charset_test;
+COLLATION(SPLIT_PART(binary_col, '好', 1))
+binary
+binary
+binary
+binary
+SELECT COERCIBILITY(SPLIT_PART(utf8_col, '好', 1)) FROM charset_test;
+COERCIBILITY(SPLIT_PART(utf8_col, '好', 1))
+2
+2
+2
+2
+SELECT COERCIBILITY(SPLIT_PART(gbk_col, '好', 1)) FROM charset_test;
+COERCIBILITY(SPLIT_PART(gbk_col, '好', 1))
+2
+2
+2
+2
+SELECT COERCIBILITY(SPLIT_PART(binary_col, '好', 1)) FROM charset_test;
+COERCIBILITY(SPLIT_PART(binary_col, '好', 1))
+2
+2
+2
+2
+SELECT COLLATION(SPLIT_PART('abcabcabca', utf8_col, 2)) FROM charset_test;
+COLLATION(SPLIT_PART('abcabcabca', utf8_col, 2))
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+SELECT COLLATION(SPLIT_PART('abcabcabca', gbk_col, 2)) FROM charset_test;
+COLLATION(SPLIT_PART('abcabcabca', gbk_col, 2))
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+SELECT COLLATION(SPLIT_PART('abcabcabca', binary_col, 2)) FROM charset_test;
+COLLATION(SPLIT_PART('abcabcabca', binary_col, 2))
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+utf8mb4_general_ci
+SELECT COERCIBILITY(SPLIT_PART('abcabcabca', utf8_col, 2)) FROM charset_test;
+COERCIBILITY(SPLIT_PART('abcabcabca', utf8_col, 2))
+4
+4
+4
+4
+SELECT COERCIBILITY(SPLIT_PART('abcabcabca', gbk_col, 2)) FROM charset_test;
+COERCIBILITY(SPLIT_PART('abcabcabca', gbk_col, 2))
+4
+4
+4
+4
+SELECT COERCIBILITY(SPLIT_PART('abcabcabca', binary_col, 2)) FROM charset_test;
+COERCIBILITY(SPLIT_PART('abcabcabca', binary_col, 2))
+4
+4
+4
+4
+SELECT COLLATION(SPLIT_PART(_utf8mb4'abcabcabcs' COLLATE utf8mb4_bin, 'gbk_col', 2)) FROM charset_test;
+COLLATION(SPLIT_PART(_utf8mb4'abcabcabcs' COLLATE utf8mb4_bin, 'gbk_col', 2))
+utf8mb4_bin
+utf8mb4_bin
+utf8mb4_bin
+utf8mb4_bin
+SELECT COERCIBILITY(SPLIT_PART(_utf8mb4'abcabcabcs' COLLATE utf8mb4_bin, 'gbk_col', 2)) FROM charset_test;
+COERCIBILITY(SPLIT_PART(_utf8mb4'abcabcabcs' COLLATE utf8mb4_bin, 'gbk_col', 2))
+0
+0
+0
+0
+SELECT COLLATION(SPLIT_PART( gbk_col,_utf8mb4'abcabcabcs' COLLATE utf8mb4_bin, 2)) FROM charset_test;
+COLLATION(SPLIT_PART( gbk_col,_utf8mb4'abcabcabcs' COLLATE utf8mb4_bin, 2))
+gbk_chinese_ci
+gbk_chinese_ci
+gbk_chinese_ci
+gbk_chinese_ci
+SELECT COERCIBILITY(SPLIT_PART( gbk_col,_utf8mb4'abcabcabcs' COLLATE utf8mb4_bin, 2)) FROM charset_test;
+COERCIBILITY(SPLIT_PART( gbk_col,_utf8mb4'abcabcabcs' COLLATE utf8mb4_bin, 2))
+2
+2
+2
+2
