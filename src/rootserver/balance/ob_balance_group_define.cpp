@@ -27,6 +27,8 @@ using namespace share::schema;
 namespace rootserver
 {
 
+const ObBalanceGroupID ObBalanceGroupID::NON_PART_BG_ID = ObBalanceGroupID(0, 0);
+const ObBalanceGroupID ObBalanceGroupID::DUP_TABLE_BG_ID = ObBalanceGroupID(0, 1);
 const char* ObBalanceGroup::NON_PART_BG_NAME = "NON_PART_TABLE";
 const char* ObBalanceGroup::DUP_TABLE_BG_NAME = "DUP_TABLE";
 
@@ -91,14 +93,14 @@ int ObBalanceGroup::init_by_table(const ObSimpleTableSchemaV2 &table_schema,
     if (OB_FAIL(bg_name_str.append_fmt("%s", DUP_TABLE_BG_NAME))) {
       LOG_WARN("assign failed", KR(ret), K(table_schema));
     } else {
-      id_ = DUP_TABLE_BG_ID;
+      id_ = ObBalanceGroupID::DUP_TABLE_BG_ID;
     }
   } else if (PARTITION_LEVEL_ZERO == part_level) {
     // All tenant's non-partition table is a balance group
     if (OB_FAIL(bg_name_str.append_fmt("%s", NON_PART_BG_NAME))) {
       LOG_WARN("fail to append fmt", KR(ret), K(table_schema));
     } else {
-      id_ = NON_PART_BG_ID;
+      id_ = ObBalanceGroupID::NON_PART_BG_ID;
     }
   } else if (PARTITION_LEVEL_ONE == part_level) {
     // Level one partition table is a single balance group
