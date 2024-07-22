@@ -262,7 +262,8 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
   bool enable_udr = sql_ctx.get_enable_user_defined_rewrite();
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
-  if (enable_udr && !(pc_ctx.is_inner_sql() || PC_PL_MODE == pc_ctx.mode_)) {
+  if (enable_udr
+      && !(pc_ctx.is_arraybinding_ || pc_ctx.is_inner_sql() || PC_PL_MODE == pc_ctx.mode_)) {
     ObIAllocator &allocator = result.get_mem_pool();
     PatternConstConsList cst_cons_list;
     if (OB_FAIL(match_udr_item(pattern, session, ectx, allocator, item_guard, &cst_cons_list))) {

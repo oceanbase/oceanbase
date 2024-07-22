@@ -2395,6 +2395,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
         pc_ctx.set_is_parameterized_execute();
         pc_ctx.set_is_inner_sql(is_inner_sql);
         pc_ctx.ab_params_ = ps_ab_params;
+        pc_ctx.is_arraybinding_ = (ps_info->get_num_of_returning_into() > 0);
         if (OB_FAIL(construct_parameterized_params(ps_params, pc_ctx))) {
           LOG_WARN("construct parameterized params failed", K(ret));
         } else {
