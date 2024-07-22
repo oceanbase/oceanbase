@@ -99,7 +99,7 @@ int ObDBMSSchedJobExecutor::init_session(
   OX (session.set_database_id(database_id));
   OZ (session.set_user(
     user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));
-  OX (session.set_user_priv_set(OB_PRIV_ALL | OB_PRIV_GRANT));
+  OX (session.set_user_priv_set(user_info->get_priv_set()));
   OX (session.set_shadow(true));
   return ret;
 }
