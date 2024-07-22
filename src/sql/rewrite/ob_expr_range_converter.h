@@ -88,12 +88,15 @@ private:
                           ObItemType cmp_type,
                           const ObExprResType &result_type,
                           int64_t expr_depth,
+                          bool null_safe,
                           ObRangeNode *&range_node);
-  int gen_row_column_cmp_node(const ObRawExpr &l_expr,
-                              const ObRawExpr &r_expr,
+  int gen_row_column_cmp_node(const ObIArray<const ObColumnRefRawExpr*> &l_exprs,
+                              const ObIArray<const ObRawExpr*> &r_exprs,
                               ObItemType cmp_type,
-                              const ObExprResType &result_type,
+                              const ObIArray<const ObExprCalcType*> &calc_types,
                               int64_t expr_depth,
+                              int64_t row_dim,
+                              bool null_safe,
                               ObRangeNode *&range_node);
   int get_rowid_node(const ObRawExpr &l_expr,
                      const ObRawExpr &r_expr,
@@ -147,6 +150,70 @@ private:
                                const ObRangeColumnMeta *column_meta,
                                const ObRawExpr *&out_expr);
   int set_column_flags(int64_t key_idx, ObItemType type);
+  static int get_dwithin_item(const ObRawExpr *expr, const ObConstRawExpr *&extra_item);
+  int convert_geo_expr(const ObRawExpr *expr, int64_t expr_depth, ObRangeNode *&range_node);
+  int get_geo_range_node(const ObColumnRefRawExpr *column_expr,
+                         common::ObGeoRelationType geo_type,
+                         const ObRawExpr* wkb_expr,
+                         const ObRawExpr *distance_expr,
+                         ObRangeNode *&range_node);
+  int fill_range_node_for_geo_node(const int64_t key_idx,
+                                   common::ObGeoRelationType geo_type,
+                                   uint32_t srid,
+                                   const int64_t start_val_idx,
+                                   const int64_t end_val_idx,
+                                   ObRangeNode &range_node) const;
+  int get_implicit_cast_range(const ObRawExpr &l_expr,
+                              const ObRawExpr &r_expr,
+                              ObItemType cmp_type,
+                              const ObExprResType &result_type,
+                              int64_t expr_depth,
+                              ObRangeNode *&range_node);
+  int gen_implicit_cast_range(const ObColumnRefRawExpr *column_expr,
+                              const ObRawExpr *const_expr,
+                              ObItemType cmp_type,
+                              const ObExprResType &result_type,
+                              int64_t expr_depth,
+                              ObRangeNode *&range_node);
+  int build_double_to_int_expr(const ObRawExpr *double_expr,
+                               bool is_start,
+                               ObItemType cmp_type,
+                               bool is_unsigned,
+                               bool is_decimal,
+                               const ObRawExpr *&out_expr);
+  int get_row_cmp_node(const ObRawExpr &l_expr,
+                       const ObRawExpr &r_expr,
+                       ObItemType cmp_type,
+                       const ObExprResType &result_type,
+                       int64_t expr_depth,
+                       ObRangeNode *&range_node);
+  int gen_row_implicit_cast_range(const ObIArray<const ObColumnRefRawExpr*> &column_exprs,
+                                  const ObIArray<const ObRawExpr*> &const_exprs,
+                                  ObItemType cmp_type,
+                                  const ObIArray<const ObExprCalcType*> &calc_types,
+                                  ObIArray<int64_t> &implicit_cast_idxs,
+                                  int64_t expr_depth,
+                                  int64_t row_dim,
+                                  ObRangeNode *&range_node);
+  int build_decimal_to_year_expr(const ObRawExpr *decimal_expr,
+                                 bool is_start,
+                                 ObItemType cmp_type,
+                                 const ObRawExpr *&out_expr);
+
+  int build_implicit_cast_range_expr(const ObColumnRefRawExpr *column_expr,
+                                     const ObRawExpr *const_expr,
+                                     ObItemType cmp_type,
+                                     bool is_start,
+                                     const ObRawExpr *&out_expr);
+  int can_extract_implicit_cast_range(const ObColumnRefRawExpr &column_expr,
+                                      const ObRawExpr &const_expr,
+                                      bool &can_extract);
+  int check_can_use_range_get(const ObRawExpr &const_expr,
+                              const ObRangeColumnMeta &column_meta);
+  int set_extract_implicit_is_precise(const ObColumnRefRawExpr &column_expr,
+                                      const ObRawExpr &const_expr,
+                                      ObItemType cmp_type,
+                                      bool &is_precise);
 private:
   ObIAllocator &allocator_;
   ObQueryRangeCtx &ctx_;

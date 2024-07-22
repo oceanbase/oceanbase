@@ -36,7 +36,8 @@ public:
       range_prefix_count_(0),
       index_column_count_(0),
       range_columns_(),
-      expr_constraints_() {}
+      expr_constraints_(),
+      index_prefix_(-1) {}
   const ObQueryRange* get_query_range() const { return query_range_; }
   const ObPreRangeGraph* get_pre_range_graph() const { return pre_range_graph_; }
   const ObQueryRangeProvider *get_query_range_provider() const
@@ -95,10 +96,13 @@ public:
   { index_column_count_ = index_column_count; };
   void set_contain_always_false(const bool contain_always_false)
   { contain_always_false_ = contain_always_false; }
+  void set_index_prefix(int64_t index_prefix)
+  { index_prefix_  = index_prefix; }
+  int64_t get_index_prefix() const { return index_prefix_; }
 
   TO_STRING_KV(K_(is_valid), K_(contain_always_false), K_(range_columns), K_(equal_prefix_count),
                K_(equal_prefix_null_count), K_(range_prefix_count),
-               K_(index_column_count), K_(expr_constraints));
+               K_(index_column_count), K_(expr_constraints), K_(index_prefix));
 private:
   bool is_valid_;
   bool contain_always_false_;
@@ -112,6 +116,7 @@ private:
   int64_t index_column_count_; // index column count without adding primary key
   common::ObArray<ColumnItem> range_columns_;
   common::ObArray<ObExprConstraint> expr_constraints_;
+  int64_t index_prefix_;
   DISALLOW_COPY_AND_ASSIGN(QueryRangeInfo);
 };
 

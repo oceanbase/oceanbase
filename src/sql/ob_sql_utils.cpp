@@ -2698,7 +2698,8 @@ int ObSQLUtils::extract_geo_query_range(const ObQueryRangeProvider &query_range_
   if (query_range_provider.is_new_query_range()) {
     if (OB_FAIL(query_range_provider.get_tablet_ranges(allocator, exec_ctx, key_ranges,
                                                       dummy_all_single_value_ranges,
-                                                      dtc_params))) {
+                                                      dtc_params,
+                                                      mbr_filters))) {
       LOG_WARN("failed to get tablet ranges", K(ret));
     }
   } else {

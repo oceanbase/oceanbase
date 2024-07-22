@@ -1052,6 +1052,7 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
     int64_t range_prefix_count = 0;
     bool contain_always_false = false;
     bool has_exec_param = false;
+    int64_t out_index_prefix = -1;
     common::ObSEArray<ObRawExpr *, 4> agent_table_filter;
     bool is_oracle_inner_index_table = share::is_oracle_mapping_real_virtual_table(index_schema->get_table_id());
     if (is_oracle_inner_index_table
@@ -1065,7 +1066,8 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
                                                                  range_info.get_expr_constraints(),
                                                                  table_id,
 								             query_range_provider,
-                                                                 index_id))) {
+                                                                 index_id,
+                                                                 out_index_prefix))) {
       LOG_WARN("failed to extract query range", K(ret), K(index_id));
     } else if (is_geo_index && OB_FAIL(extract_geo_preliminary_query_range(range_columns,
                                                                       is_oracle_inner_index_table
@@ -1116,6 +1118,7 @@ int ObJoinOrder::get_query_range_info(const uint64_t table_id,
       range_info.set_index_column_count(index_schema->is_index_table() ?
                                         index_schema->get_index_column_num() :
                                         index_schema->get_rowkey_column_num());
+      range_info.set_index_prefix(out_index_prefix);
       LOG_TRACE("succeed to get query range", K(ranges), K(ss_ranges), K(helper.filters_),
                   KPC(query_range_provider), K(range_columns),
                   K(query_range_provider->get_range_exprs()), K(table_id), K(index_id));
@@ -1756,6 +1759,7 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->interesting_order_info_ = index_info_entry->get_interesting_order_info();
     ap->for_update_ = table_item->for_update_;
     ap->use_skip_scan_ = use_skip_scan;
+    ap->index_prefix_ = index_info_entry->get_range_info().get_index_prefix();
     if (!get_plan()->get_stmt()->is_select_stmt()) {
       // do nothing
       // sample scan doesn't support DML other than SELECT.
@@ -3362,24 +3366,29 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                  ObIArray<ObExprConstraint> &expr_constraints,
                                                  int64_t table_id,
                                                  ObQueryRangeProvider *&query_range,
-                                                 int64_t index_id)
+                                                 int64_t index_id,
+                                                 int64_t &out_index_prefix)
 {
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
   const ParamStore *params = NULL;
   ObSQLSessionInfo *session_info = NULL;
   bool enable_better_inlist = false;
+  bool enable_index_prefix_cost = false;
   ObSEArray<ObRawExpr*, 4> range_predicates;
-  int64_t index_prefix = -1;
+  ObSEArray<uint64_t, 4> total_range_counts;
+  const LogTableHint *log_table_hint = NULL;
+  out_index_prefix = -1;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
       OB_ISNULL(allocator_) ||
       OB_ISNULL(params = opt_ctx->get_params()) ||
-      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
+      OB_ISNULL(session_info = opt_ctx->get_session_info())||
+      OB_ISNULL(get_plan()->get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
         K(allocator_), K(params), K(ret));
-  } else if (OB_FAIL(check_enable_better_inlist(table_id, enable_better_inlist))) {
+  } else if (OB_FAIL(check_enable_better_inlist(table_id, enable_better_inlist, enable_index_prefix_cost))) {
     LOG_WARN("failed to check better inlist enabled", K(ret));
   } else if (enable_better_inlist &&
              OB_FAIL(get_candi_range_expr(range_columns,
@@ -3391,8 +3400,8 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
     LOG_WARN("failed to assign exprs", K(ret));
   } else if (OB_FAIL(get_plan()->get_log_plan_hint().get_index_prefix(table_id,
                                                       index_id,
-                                                      index_prefix))) {
-    LOG_WARN("failed to get index prefix", K(table_id), K(index_id), K(index_prefix), K(ret));
+                                                      out_index_prefix))) {
+    LOG_WARN("failed to get index prefix", K(table_id), K(index_id), K(out_index_prefix), K(ret));
   } else if (opt_ctx->enable_new_query_range()) {
     void *ptr = allocator_->alloc(sizeof(ObPreRangeGraph));
     ObPreRangeGraph *pre_range_graph = NULL;
@@ -3407,7 +3416,30 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                                           opt_ctx->get_exec_ctx(),
                                                                           &expr_constraints,
                                                                           params, false, true,
-                                                                          index_prefix))) {
+                                                                          out_index_prefix))) {
+        LOG_WARN("failed to preliminary extract query range", K(ret));
+      } else if (FALSE_IT(log_table_hint = get_plan()->get_log_plan_hint().get_index_hint(table_id))) {
+      } else if (NULL != log_table_hint && log_table_hint->is_use_index_hint()) {
+        // do nothing
+      } else if (!enable_index_prefix_cost) {
+        // do nothing
+      } else if (OB_FAIL(pre_range_graph->get_total_range_sizes(total_range_counts))) {
+        LOG_WARN("failed to get total range sizes", K(ret));
+      } else if (total_range_counts.empty()) {
+        // do nothing
+      } else if (OB_FAIL(get_better_index_prefix(pre_range_graph->get_range_exprs(),
+                                                 pre_range_graph->get_range_expr_max_offsets(),
+                                                 total_range_counts,
+                                                 out_index_prefix))) {
+        LOG_WARN("failed to get better index prefix", K(ret));
+      } else if (-1 == out_index_prefix) {
+        // do nothing
+      } else if (OB_FALSE_IT(pre_range_graph->reset())) {
+      } else if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, range_predicates,
+                                                                          opt_ctx->get_exec_ctx(),
+                                                                          &expr_constraints,
+                                                                          params, false, true,
+                                                                          out_index_prefix))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }
@@ -3439,7 +3471,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
                                                           &expr_constraints,
                                                           params, false, true,
                                                           is_in_range_optimization_enabled,
-                                                          index_prefix))) {
+                                                          out_index_prefix))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
     }
@@ -3455,16 +3487,21 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
   return ret;
 }
 
-int ObJoinOrder::check_enable_better_inlist(int64_t table_id, bool &enable)
+int ObJoinOrder::check_enable_better_inlist(int64_t table_id,
+                                            bool &enable_better_inlist,
+                                            bool &enable_index_prefix_cost)
 {
   int ret = OB_SUCCESS;
-  enable = false;
+  bool enable = false;
+  enable_better_inlist = false;
+  enable_index_prefix_cost = false;
   ObOptimizerContext *opt_ctx = NULL;
   ObSQLSessionInfo *session_info = NULL;
   OptTableMeta *table_meta = NULL;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
-      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
+      OB_ISNULL(session_info = opt_ctx->get_session_info())||
+      OB_ISNULL(get_plan()->get_stmt())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(ret));
   } else if (!session_info->is_user_session()) {
@@ -3479,6 +3516,14 @@ int ObJoinOrder::check_enable_better_inlist(int64_t table_id, bool &enable)
     LOG_WARN("unexpect null table meta", K(ret));
   } else if (table_meta->use_default_stat()) {
     enable = false;
+  }
+
+  if (OB_SUCC(ret) && enable) {
+    if (get_plan()->get_stmt()->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_5) {
+      enable_better_inlist = true;
+    } else {
+      enable_index_prefix_cost = true;
+    }
   }
   return ret;
 }
@@ -3498,6 +3543,31 @@ int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx),
         K(allocator_), K(params), K(ret));
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_5_0 &&
+             opt_ctx->enable_new_query_range()) {
+    void *ptr = allocator_->alloc(sizeof(ObPreRangeGraph));
+    ObPreRangeGraph *pre_range_graph = NULL;
+    if (OB_ISNULL(ptr)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for pre range graph", K(ret));
+    } else {
+      pre_range_graph = new(ptr)ObPreRangeGraph(*allocator_);
+      if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns, predicates,
+                                                                   opt_ctx->get_exec_ctx(),
+                                                                   nullptr,
+                                                                   params, false, true,
+                                                                   -1, &column_schema_info))) {
+        LOG_WARN("failed to preliminary extract query range", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      query_range = pre_range_graph;
+    } else {
+      if (NULL != pre_range_graph) {
+        pre_range_graph->~ObPreRangeGraph();
+        pre_range_graph = NULL;
+      }
+    }
   } else {
     void *tmp_ptr = allocator_->alloc(sizeof(ObQueryRange));
     ObQueryRange *tmp_qr = NULL;
@@ -3671,28 +3741,45 @@ int ObJoinOrder::calculate_range_expr_cost(ObIArray<CandiRangeExprs*> &sorted_pr
                                            double &cost)
 {
   int ret = OB_SUCCESS;
-  double range_sel = 1;
   ObSEArray<ObRawExpr*, 4> filters;
+  if (OB_FAIL(get_range_filter(sorted_predicates,
+                               range_exprs,
+                               filters))) {
+    LOG_WARN("failed to get range filter", K(ret));
+  } else if (OB_FAIL(calculate_range_and_filter_expr_cost(range_exprs,
+                                                          filters,
+                                                          range_column_count,
+                                                          range_count,
+                                                          cost))) {
+    LOG_WARN("failed to calculate range expr cost", K(ret));
+  }
+  return ret;
+}
+
+int ObJoinOrder::calculate_range_and_filter_expr_cost(ObIArray<ObRawExpr*> &range_exprs,
+                                                      ObIArray<ObRawExpr*> &filter_exprs,
+                                                      int64_t range_column_count,
+                                                      int64_t range_count,
+                                                      double &cost)
+{
+  int ret = OB_SUCCESS;
+  double range_sel = 1;
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null plan", K(ret));
-  } else if (OB_FAIL(get_range_filter(sorted_predicates,
-                                      range_exprs,
-                                      filters))) {
-    LOG_WARN("failed to get range filter", K(ret));
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
-                                                              get_plan()->get_selectivity_ctx(),
-                                                              range_exprs,
-                                                              range_sel,
-                                                              get_plan()->get_predicate_selectivities()))) {
+                                                             get_plan()->get_selectivity_ctx(),
+                                                             range_exprs,
+                                                             range_sel,
+                                                             get_plan()->get_predicate_selectivities()))) {
     LOG_WARN("failed to calculate selectivity", K(ret));
   } else if (OB_FAIL(ObOptEstCost::cost_range_scan(table_meta_info_,
-                                                  filters,
-                                                  range_column_count,
-                                                  range_count,
-                                                  range_sel,
-                                                  cost,
-                                                  get_plan()->get_optimizer_context()))) {
+                                                   filter_exprs,
+                                                   range_column_count,
+                                                   range_count,
+                                                   range_sel,
+                                                   cost,
+                                                   get_plan()->get_optimizer_context()))) {
       LOG_WARN("failed to estimate range scan cost", K(ret));
   } else {
     LOG_TRACE("query range cost:", K(range_column_count), K(range_count), K(range_sel), K(cost));
@@ -15798,6 +15885,68 @@ int ObJoinOrder::param_values_table_expr(ObIArray<ObRawExpr*> &values_vector,
       LOG_WARN("failed to append", K(ret));
     } else {
       values_vector.at(i) = new_values_exprs.at(0);
+    }
+  }
+  return ret;
+}
+
+int ObJoinOrder::get_better_index_prefix(const ObIArray<ObRawExpr*> &range_exprs,
+                                         const ObIArray<int64_t> &range_expr_max_offsets,
+                                         const ObIArray<uint64_t> &total_range_counts,
+                                         int64_t &better_index_prefix)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr*, 4> used_range_exprs;
+  ObSEArray<ObRawExpr*, 4> used_filters;
+  double range_sel = 1;
+  double cost = 1;
+  double min_cost = DBL_MAX;
+  int64_t min_cost_offset = -1;
+  uint64_t min_cost_range_count = 0;
+  better_index_prefix = -1;
+  if (OB_UNLIKELY(range_exprs.count() != range_expr_max_offsets.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected range exprs", K(ret));
+  } else if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null plan", K(ret));
+  }
+  for (int64_t offset = total_range_counts.count() - 1; OB_SUCC(ret) && offset >= 0; --offset) {
+    used_range_exprs.reuse();
+    used_filters.reuse();
+    range_sel = 1;
+    uint64_t range_count = offset == -1 ? 1 : total_range_counts.at(offset);
+    for (int64_t i = 0; OB_SUCC(ret) && i < range_exprs.count(); ++i) {
+      if (range_expr_max_offsets.at(i) <= offset) {
+        if (OB_FAIL(used_range_exprs.push_back(range_exprs.at(i)))) {
+          LOG_WARN("failed to push back array", K(ret));
+        }
+      } else {
+        if (OB_FAIL(used_filters.push_back(range_exprs.at(i)))) {
+          LOG_WARN("failed to push back array", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(calculate_range_and_filter_expr_cost(used_range_exprs,
+                                                            used_filters,
+                                                            total_range_counts.count(),
+                                                            range_count,
+                                                            cost))) {
+      LOG_WARN("failed to calculate range and filter expr cost", K(ret));
+    } else if (total_range_counts.count() - 1 == offset) {
+      min_cost_offset = offset;
+      min_cost = cost;
+      min_cost_range_count = range_count;
+    } else if ( cost < min_cost) {
+      min_cost_offset = offset;
+      min_cost_range_count = range_count;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (total_range_counts.at(total_range_counts.count() - 1) - min_cost_range_count > 500) {
+      better_index_prefix = min_cost_offset + 1;
+      LOG_TRACE("choose better index prefix", K(better_index_prefix));
     }
   }
   return ret;

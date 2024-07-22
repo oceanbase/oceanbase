@@ -22,7 +22,7 @@
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "sql/rewrite/ob_query_range.h"
-
+#include "src/share/object/ob_obj_cast_util.h"
 
 namespace oceanbase
 {
@@ -553,6 +553,7 @@ int ObRangeGenerator::formalize_standard_range(const ObRangeNode *node, ObTmpRan
 int ObRangeGenerator::generate_complex_ranges(const ObRangeNode *node)
 {
   int ret = OB_SUCCESS;
+  bool need_merge = true;
   tmp_range_lists_ = static_cast<TmpRangeList*>(
           allocator_.alloc(sizeof(TmpRangeList) * pre_range_graph_->get_column_cnt()));
   if (OB_ISNULL(tmp_range_lists_)) {
@@ -578,6 +579,10 @@ int ObRangeGenerator::generate_complex_ranges(const ObRangeNode *node)
     }
     if (OB_FAIL(formalize_complex_range(node))) {
       LOG_WARN("failed to formalize range");
+    } else if (OB_FAIL(check_need_merge_range_nodes(node, need_merge))) {
+      LOG_WARN("failed to check need merge range nodes");
+    } else if (!need_merge) {
+      // do nothing
     } else if (OB_FAIL(merge_and_remove_ranges())) {
       LOG_WARN("faield to merge and remove ranges");
     }
@@ -597,7 +602,9 @@ int ObRangeGenerator::formalize_complex_range(const ObRangeNode *node)
     add_last = false;
     // min_offset = -1 means current node is a const value node. After final node will become always true of false.
     pre_node_offset = cur_node->min_offset_ == -1 ? 0 : cur_node->min_offset_;
-    if (!cur_node->contain_in_ && !cur_node->is_not_in_node_) {
+    if (!cur_node->contain_in_ &&
+        !cur_node->is_not_in_node_ &&
+        !cur_node->is_geo_node_) {
       ObTmpRange *new_range = nullptr;
       if (OB_FAIL(final_range_node(cur_node, new_range, true))) {
         LOG_WARN("failed to final range node");
@@ -675,6 +682,46 @@ int ObRangeGenerator::formalize_complex_range(const ObRangeNode *node)
           }
           add_last = false;
           if (OB_FAIL(final_not_in_range_node(*cur_node, i, tmp_in_param, new_range))) {
+            LOG_WARN("failed to final in range node");
+          } else if (OB_UNLIKELY(!tmp_range_lists_[pre_node_offset].add_last(new_range))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to add last to dlist", KPC(new_range));
+          } else if (OB_FALSE_IT(add_last = true)) {
+          } else if (cur_node->and_next_ == nullptr) {
+            if (OB_FAIL(generate_one_complex_range())) {
+              LOG_WARN("faield to generate one range");
+            }
+          } else if (OB_FAIL(SMART_CALL(formalize_complex_range(cur_node->and_next_)))) {
+            LOG_WARN("failed to formalize range");
+          }
+        }
+      }
+    } else if (cur_node->is_geo_node_) {
+      ObTmpGeoParam *tmp_geo_param = nullptr;
+      if (OB_FAIL(generate_tmp_geo_param(*cur_node, tmp_geo_param))) {
+        LOG_WARN("failed to generate tmp geo param", K(ret));
+      } else if (OB_ISNULL(tmp_geo_param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (tmp_geo_param->always_true_) {
+        if (cur_node->and_next_ == nullptr) {
+          if (OB_FAIL(generate_one_complex_range())) {
+            LOG_WARN("faield to generate one range");
+          }
+        } else if (OB_FAIL(SMART_CALL(formalize_complex_range(cur_node->and_next_)))) {
+          LOG_WARN("failed to formalize range");
+        }
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < tmp_geo_param->start_keys_.count(); ++i) {
+          ObTmpRange *new_range = nullptr;
+          if (pre_node_offset != -1 && add_last) {
+            tmp_range_lists_[pre_node_offset].remove_last();
+          }
+          add_last = false;
+          if (OB_FAIL(final_geo_range_node(*cur_node,
+                                           tmp_geo_param->start_keys_.at(i),
+                                           tmp_geo_param->end_keys_.at(i),
+                                           new_range))) {
             LOG_WARN("failed to final in range node");
           } else if (OB_UNLIKELY(!tmp_range_lists_[pre_node_offset].add_last(new_range))) {
             ret = OB_ERR_UNEXPECTED;
@@ -1121,7 +1168,30 @@ int ObRangeGenerator::try_cast_value(const ObRangeColumnMeta &meta,
     ObExpectType expect_type;
     expect_type.set_type(meta.column_type_.get_type());
     expect_type.set_collation_type(collation_type);
-    EXPR_CAST_OBJ_V2(expect_type, value, dest_val);
+    ObObj tmp_dest_obj;
+    if (lib::is_mysql_mode() &&
+        value.get_meta().get_type_class() == ObDoubleTC &&
+        meta.column_type_.get_obj_meta().get_type_class() == ObDoubleTC &&
+        meta.column_type_.get_accuracy().get_scale() != SCALE_UNKNOWN_YET) {
+      /*
+        The code here is primarily designed to fix the issue with double(-1,-1) -> double(20, 10), for example,
+        in the following SQL, the c2 column is an unsigned double(20,10), and the generated range
+        is (1.175494351e-38,MIN; 1.175494351e-38,MAX). However, at the storage layer,
+        this range is transformed to (0.,MIN; 0., MAX), which could result in the erroneous scanning of 0.
+
+        select * from t1 where c2 = 1.175494351e-38;
+      */
+      if (OB_FAIL(cast_double_to_fixed_double(meta, value, tmp_dest_obj))) {
+        LOG_WARN("failed to cast double to fixed double", K(ret));
+      } else {
+        dest_val = &tmp_dest_obj;
+      }
+    } else {
+      if (OB_FAIL(ObObjCaster::to_type(expect_type, cast_ctx, value, tmp_dest_obj, dest_val))) {
+        LOG_WARN("failed to cast object to expect_type", K(ret), K(value), K(expect_type));
+      }
+    }
+
     // to check if EXPR CAST losses number precise
     ObObjType cmp_type = ObMaxType;
     if (OB_SUCC(ret)) {
@@ -1545,6 +1615,549 @@ int ObRangeGenerator::final_not_in_range_node(const ObRangeNode &node,
       } else {
         all_tmp_ranges_.at(node.node_id_) = range;
       }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGenerator::generate_tmp_geo_param(const ObRangeNode &node,
+                                             ObTmpGeoParam *&tmp_geo_param)
+{
+  int ret = OB_SUCCESS;
+  uint32_t input_srid;
+  ObObj objs_ptr[2];
+  ObString wkb_str;
+  double distance = NAN;
+  bool is_valid = false;
+  ObArenaAllocator tmp_allocator(ObModIds::OB_LOB_ACCESS_BUFFER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  common::ObGeoRelationType op_type = (common::ObGeoRelationType)node.geo_extra_.geo_releation_type_;
+  if (OB_UNLIKELY(!node.is_geo_node_ ||
+                  node.node_id_ < 0 ||
+                  node.node_id_ >= all_tmp_node_caches_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected not in node", K(node.node_id_), K(all_tmp_node_caches_.count()));
+  } else if (OB_NOT_NULL(tmp_geo_param = static_cast<ObTmpGeoParam*>(all_tmp_node_caches_.at(node.node_id_)))) {
+    // do nothing
+  } else if (OB_UNLIKELY(node.min_offset_ < 0 ||
+                         node.min_offset_ >= pre_range_graph_->get_column_cnt())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected range", K(node));
+  } else if (OB_ISNULL(tmp_geo_param = (ObTmpGeoParam*)allocator_.alloc(sizeof(ObTmpGeoParam)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memeory failed", K(tmp_geo_param));
+  } else if (OB_FALSE_IT(tmp_geo_param = new(tmp_geo_param) ObTmpGeoParam(allocator_))) {
+  } else if (OB_FAIL(get_result_value(node.start_keys_[node.min_offset_], objs_ptr[0], is_valid, exec_ctx_))) {
+    LOG_WARN("failed to get result value", K(node.start_keys_[node.min_offset_]));
+  } else if (!is_valid) {
+    tmp_geo_param->always_true_ = true;
+  } else if (op_type == ObGeoRelationType::T_DWITHIN &&
+             OB_FAIL(get_result_value(node.end_keys_[node.min_offset_], objs_ptr[1], is_valid, exec_ctx_))) {
+    LOG_WARN("failed to get result value", K(ret));
+  } else if (!is_valid) {
+    tmp_geo_param->always_true_ = true;
+  } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, objs_ptr[0], wkb_str))) {
+    LOG_WARN("fail to get real string data", K(ret), K(objs_ptr[0]));
+  } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb_str, input_srid))) {
+    LOG_WARN("failed to get srid", K(ret), K(wkb_str));
+  } else if (OB_FAIL(ObSqlGeoUtils::check_srid(node.geo_extra_.srid_, input_srid))) {
+    ret = OB_ERR_WRONG_SRID_FOR_COLUMN;
+    LOG_USER_ERROR(OB_ERR_WRONG_SRID_FOR_COLUMN, static_cast<uint64_t>(input_srid),
+      static_cast<uint64_t>(node.geo_extra_.srid_));
+  } else{
+    if (op_type == ObGeoRelationType::T_DWITHIN) {
+      distance = objs_ptr[1].get_double();
+    }
+    switch (op_type) {
+      case ObGeoRelationType::T_INTERSECTS:
+      case ObGeoRelationType::T_COVERS:
+      case ObGeoRelationType::T_DWITHIN:
+        if (OB_FAIL(get_intersects_tmp_geo_param(input_srid, wkb_str, op_type, distance, tmp_geo_param))) {
+          LOG_WARN("failed to get keypart from intersects_keypart", K(ret), K(op_type));
+        }
+        break;
+      case ObGeoRelationType::T_COVEREDBY:
+        if (OB_FAIL(get_coveredby_tmp_geo_param(input_srid, wkb_str, op_type, tmp_geo_param))) {
+          LOG_WARN("failed to get keypart from intersects_keypart", K(ret), K(op_type));
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Not support op_type", K(ret), K(op_type));
+        break;
+    }
+    if (OB_SUCC(ret)) {
+      all_tmp_node_caches_.at(node.node_id_) = tmp_geo_param;
+    }
+  }
+  return ret;
+}
+
+int ObRangeGenerator::get_intersects_tmp_geo_param(uint32_t input_srid,
+                                                   const common::ObString &wkb_str,
+                                                   const common::ObGeoRelationType op_type,
+                                                   const double &distance,
+                                                   ObTmpGeoParam *geo_param)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_alloc(lib::ObLabel("GisIndex"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObS2Cellids cells;
+  ObS2Cellids cells_with_ancestors;
+  ObSpatialMBR mbr_filter(op_type);
+  ObGeoType geo_type = ObGeoType::GEOMETRY;
+  const ObSrsItem *srs_item = NULL;
+  omt::ObSrsCacheGuard srs_guard;
+  const ObSrsBoundsItem *srs_bound = NULL;
+  ObS2Adapter *s2object = NULL;
+  ObString buffer_geo;
+
+  if ((input_srid != 0) && OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
+    LOG_WARN("get tenant srs guard failed", K(input_srid), K(ret));
+  } else if ((input_srid != 0) && OB_FAIL(srs_guard.get_srs_item(input_srid, srs_item))) {
+    LOG_WARN("get tenant srs failed", K(input_srid), K(ret));
+  } else if (((input_srid == 0) || !(srs_item->is_geographical_srs())) &&
+             OB_FAIL(OTSRS_MGR->get_srs_bounds(input_srid, srs_item, srs_bound))) {
+    LOG_WARN("failed to get srs item", K(ret));
+  } else if (op_type == ObGeoRelationType::T_DWITHIN) {
+    if (std::isnan(distance)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid distance para", K(ret));
+    } else if (input_srid != 0 && srs_item->is_geographical_srs()) {
+      double sphere_radius = (srs_item->semi_major_axis() * 2 + srs_item->semi_minor_axis()) /  3;
+      const double SPHERIOD_ERR_FRACTION = 0.005;
+      double radius = ((1.0 + SPHERIOD_ERR_FRACTION) * distance) / sphere_radius;
+      s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), true, radius);
+      if (OB_ISNULL(s2object)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc s2 object", K(ret));
+      }
+    } else {
+      if (OB_FAIL(ObGeoTypeUtil::get_buffered_geo(&tmp_alloc, wkb_str, distance, srs_item, buffer_geo))) {
+        LOG_WARN("failed to get buffer geo", K(ret));
+        if (ret == OB_INVALID_ARGUMENT) {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, N_ST_BUFFER);
+        } else if (ret == OB_ERR_GIS_INVALID_DATA) {
+          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_BUFFER);
+        }
+      }
+    }
+  }
+
+  if (s2object == NULL && OB_SUCC(ret)) {
+    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false), true);
+    if (OB_ISNULL(s2object)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc s2 object", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
+    // build s2 object from wkb
+    if (OB_FAIL(ObGeoTypeUtil::get_type_from_wkb((buffer_geo.empty() ? wkb_str : buffer_geo), geo_type))) {
+      LOG_WARN("fail to get geo type by wkb", K(ret));
+    } else if (OB_FAIL(s2object->init((buffer_geo.empty() ? wkb_str : buffer_geo), srs_bound))) {
+      LOG_WARN("Init s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_cellids_and_unrepeated_ancestors(cells, cells_with_ancestors))) {
+      LOG_WARN("Get cellids from s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_mbr(mbr_filter))) {
+      LOG_WARN("Get mbr from s2object failed", K(ret));
+    } else if (OB_FAIL(mbr_filters_.push_back(mbr_filter))) {
+      LOG_WARN("Push back to mbr_filters array failed", K(ret));
+    } else if (mbr_filter.is_empty()) {
+      if (cells.size() == 0) {
+        LOG_INFO("it's might be empty geometry collection", K(wkb_str));
+        geo_param->always_true_ = true;
+      } else {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        LOG_WARN("invalid geometry", K(ret), K(wkb_str));
+      }
+    } else {
+      int64_t range_count = cells_with_ancestors.size();
+      range_count += cells.size();
+      if (OB_FAIL(geo_param->start_keys_.init(range_count))) {
+        LOG_WARN("failed to init start keys", K(ret));
+      } else if (OB_FAIL(geo_param->end_keys_.init(range_count))) {
+        LOG_WARN("failed to init end keys", K(ret));
+      }
+      // build keypart from cells_with_ancestors
+      for (uint64_t i = 0; OB_SUCC(ret) && i < cells_with_ancestors.size(); i++) {
+        if (OB_FAIL(geo_param->start_keys_.push_back(cells_with_ancestors[i]))) {
+          LOG_WARN("failed to push back into array", K(ret));
+        } else if (OB_FAIL(geo_param->end_keys_.push_back(cells_with_ancestors[i]))) {
+          LOG_WARN("failed to push back into array", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (((geo_type != ObGeoType::POINT && geo_type != ObGeoType::POINTZ) || !std::isnan(distance))) {
+        // build keypart to index child_of_cellid
+        for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
+          uint64_t cellid = cells.at(i);
+          uint64_t start_id = 0;
+          uint64_t end_id = 0;
+          ObS2Adapter::get_child_of_cellid(cellid, start_id, end_id);
+          if (OB_FAIL(geo_param->start_keys_.push_back(start_id))) {
+            LOG_WARN("failed to push back into array", K(ret));
+          } else if (OB_FAIL(geo_param->end_keys_.push_back(end_id))) {
+            LOG_WARN("failed to push back into array", K(ret));
+          }
+        }
+      } else {
+        for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
+          if (OB_FAIL(geo_param->start_keys_.push_back(cells[i]))) {
+            LOG_WARN("failed to push back into array", K(ret));
+          } else if (OB_FAIL(geo_param->end_keys_.push_back(cells[i]))) {
+            LOG_WARN("failed to push back into array", K(ret));
+          }
+        }
+      }
+    }
+  }
+
+  if (OB_NOT_NULL(s2object)) {
+    s2object->~ObS2Adapter();
+  }
+
+  return ret;
+}
+
+int ObRangeGenerator::get_coveredby_tmp_geo_param(uint32_t input_srid,
+                                                  const common::ObString &wkb_str,
+                                                  const common::ObGeoRelationType op_type,
+                                                  ObTmpGeoParam *geo_param)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_alloc(lib::ObLabel("GisIndex"), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObS2Cellids cells;
+  ObSpatialMBR mbr_filter(op_type);
+  const ObSrsItem *srs_item = NULL;
+  omt::ObSrsCacheGuard srs_guard;
+  const ObSrsBoundsItem *srs_bound = NULL;
+  ObS2Adapter *s2object = NULL;
+  ObString buffer_geo;
+
+  if ((input_srid != 0) && OB_FAIL(OTSRS_MGR->get_tenant_srs_guard(srs_guard))) {
+    LOG_WARN("get tenant srs guard failed", K(input_srid), K(ret));
+  } else if ((input_srid != 0) && OB_FAIL(srs_guard.get_srs_item(input_srid, srs_item))) {
+    LOG_WARN("get tenant srs failed", K(input_srid), K(ret));
+  } else if (((input_srid == 0) || !(srs_item->is_geographical_srs())) &&
+             OB_FAIL(OTSRS_MGR->get_srs_bounds(input_srid, srs_item, srs_bound))) {
+    LOG_WARN("failed to get srs item", K(ret));
+  }
+  if (s2object == NULL && OB_SUCC(ret)) {
+    s2object = OB_NEWx(ObS2Adapter, (&tmp_alloc), (&tmp_alloc), (input_srid != 0 ? srs_item->is_geographical_srs() : false));
+    if (OB_ISNULL(s2object)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc s2 object", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(MTL_ID(), "S2Adapter"));
+    // build s2 object from wkb
+    if (OB_FAIL(s2object->init((buffer_geo.empty() ? wkb_str : buffer_geo), srs_bound))) {
+      LOG_WARN("Init s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_inner_cover_cellids(cells))) {
+      LOG_WARN("Get cellids from s2object failed", K(ret));
+    } else if (OB_FAIL(s2object->get_mbr(mbr_filter))) {
+      LOG_WARN("Get mbr from s2object failed", K(ret));
+    } else if (OB_FAIL(mbr_filters_.push_back(mbr_filter))) {
+      LOG_WARN("Push back to mbr_filters array failed", K(ret));
+    } else if (mbr_filter.is_empty()) {
+      if (cells.size() == 0) {
+        LOG_INFO("it's might be empty geometry collection", K(wkb_str));
+        geo_param->always_true_ = true;
+      } else {
+        ret = OB_ERR_GIS_INVALID_DATA;
+        LOG_WARN("invalid geometry", K(ret), K(wkb_str));
+      }
+    } else {
+      hash::ObHashSet<uint64_t> cellid_set;
+      if (OB_FAIL(cellid_set.create(128, "CoveredByKeyPart", "HashNode", MTL_ID()))) {
+        LOG_WARN("failed to create cellid set", K(ret));
+      } else if (!cellid_set.created()) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("fail to init cellid set", K(ret));
+      }
+      for (uint64_t i = 0; OB_SUCC(ret) && i < cells.size(); i++) {
+        int hash_ret = cellid_set.exist_refactored(cells[i]);
+        ObS2Cellids ancestors;
+        if (OB_HASH_NOT_EXIST == hash_ret) {
+          if (OB_FAIL(cellid_set.set_refactored(cells[i]))) {
+            LOG_WARN("failed to add cellid into set", K(ret));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(s2object->get_ancestors(cells[i], ancestors))) {
+            LOG_WARN("Get ancestors of cell failed", K(ret));
+          }
+          // if cur cellid is exists in set, then it's ancestors also exist in set
+          int hash_ret = OB_HASH_NOT_EXIST;
+          for (uint64_t i = 0; OB_SUCC(ret) && i < ancestors.size(); i++) {
+            hash_ret = cellid_set.exist_refactored(ancestors[i]);
+            if (hash_ret == OB_HASH_NOT_EXIST) {
+              if (OB_FAIL(cellid_set.set_refactored(ancestors[i]))) {
+                LOG_WARN("failed to add cellid into set", K(ret));
+              }
+            } else if (OB_HASH_EXIST != hash_ret) {
+              ret = hash_ret;
+              LOG_WARN("fail to check if key exist", K(ret), K(ancestors[i]), K(i));
+            }
+          }
+        } else if (OB_HASH_EXIST != hash_ret) {
+          ret = hash_ret;
+          LOG_WARN("fail to check if key exist", K(ret), K(cells[i]), K(i));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(geo_param->start_keys_.init(cellid_set.size()))) {
+          LOG_WARN("failed to init start keys", K(ret));
+        } else if (OB_FAIL(geo_param->end_keys_.init(cellid_set.size()))) {
+          LOG_WARN("failed to init end keys", K(ret));
+        } else {
+          for (hash::ObHashSet<uint64_t>::const_iterator itr = cellid_set.begin(); OB_SUCC(ret) && itr != cellid_set.end();
+               ++itr) {
+            if (OB_FAIL(geo_param->start_keys_.push_back(itr->first))) {
+              LOG_WARN("failed to push back array", K(ret));
+            } else if (OB_FAIL(geo_param->end_keys_.push_back(itr->first))) {
+              LOG_WARN("failed to push back array", K(ret));
+            }
+          }
+        }
+      }
+      // clear hashset
+      if (cellid_set.created()) {
+        int tmp_ret = cellid_set.destroy();
+        if (OB_SUCC(ret) && OB_FAIL(tmp_ret)) {
+          LOG_WARN("failed to destory param set", K(ret));
+        }
+      }
+    }
+  }
+  if (OB_NOT_NULL(s2object)) {
+    s2object->~ObS2Adapter();
+  }
+  return ret;
+}
+
+int ObRangeGenerator::final_geo_range_node(const ObRangeNode &node,
+                                           const uint64_t start,
+                                           const uint64_t end,
+                                           ObTmpRange *&range)
+{
+  int ret = OB_SUCCESS;
+  range = all_tmp_ranges_.at(node.node_id_);
+  if (range == nullptr) {
+    if (OB_FAIL(generate_tmp_range(range, pre_range_graph_->get_column_cnt()))) {
+      LOG_WARN("failed to generate tmp range");
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(range)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else {
+      range->always_false_ = false;
+      range->always_true_ = false;
+      range->min_offset_ = node.min_offset_;
+      range->max_offset_ = node.max_offset_;
+      range->include_start_ = node.include_start_;
+      range->include_end_ = node.include_end_;
+      range->is_phy_rowid_ = node.is_phy_rowid_;
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < pre_range_graph_->get_column_cnt(); ++i) {
+        if (i == node.min_offset_) {
+          range->start_[node.min_offset_].set_uint64(start);
+          range->end_[node.min_offset_].set_uint64(end);
+        } else {
+          int64_t start = node.start_keys_[i];
+          int64_t end = node.end_keys_[i];
+          if (start == OB_RANGE_MIN_VALUE) {
+            range->start_[i].set_min_value();
+          } else if (start == OB_RANGE_MAX_VALUE) {
+            range->start_[i].set_max_value();
+          } else if (start == OB_RANGE_NULL_VALUE) {
+            range->start_[i].set_null();
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected range node", K(ret), K(node));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (end == OB_RANGE_MIN_VALUE) {
+            range->end_[i].set_min_value();
+          } else if (end == OB_RANGE_MAX_VALUE) {
+            range->end_[i].set_max_value();
+          } else if (end == OB_RANGE_NULL_VALUE) {
+            range->end_[i].set_null();
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected range node", K(ret), K(node));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRangeGenerator::check_need_merge_range_nodes(const ObRangeNode *node,
+                                                   bool &need_merge)
+{
+  int ret = OB_SUCCESS;
+  need_merge = true;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (node->is_geo_node_ && OB_ISNULL(node->or_next_)) {
+    need_merge = false;
+  }
+  return ret;
+}
+int ObRangeGenerator::generate_fast_nlj_range(const ObPreRangeGraph &pre_range_graph,
+                                              const ParamStore &param_store,
+                                              ObIAllocator &allocator,
+                                              void *range_buffer)
+{
+  int ret = OB_SUCCESS;
+  bool always_false = false;
+  const ObRangeNode *node = pre_range_graph.get_range_head();
+  const ObRangeMap &range_map = pre_range_graph.get_range_map();
+  ObNewRange *range = static_cast<ObNewRange*>(range_buffer);
+  ObObj *starts = reinterpret_cast<ObObj*>(static_cast<char*>(range_buffer) + sizeof(ObNewRange));
+  ObObj *ends = starts + node->column_cnt_;
+  for (int i = 0; OB_SUCC(ret) && !always_false && i < node->column_cnt_; ++i) {
+    int64_t start_idx = node->start_keys_[i];
+    int64_t end_idx = node->end_keys_[i];
+    if (start_idx == OB_RANGE_MIN_VALUE &&
+        end_idx == OB_RANGE_MAX_VALUE) {
+      starts[i].set_min_value();
+      ends[i].set_max_value();
+    } else if (start_idx == OB_RANGE_NULL_VALUE) {
+      starts[i].set_null();
+      ends[i].set_null();
+    } else {
+      const ObRangeMap::ExprFinalInfo& expr_info = range_map.expr_final_infos_.at(start_idx);
+      const ObObj* src_obj = nullptr;
+      if (expr_info.is_param_) {
+        src_obj = &param_store.at(expr_info.param_idx_);
+      } else if (expr_info.is_const_) {
+        src_obj = expr_info.const_val_;
+      }
+      if (src_obj->is_null() && !expr_info.null_safe_) {
+        always_false = true;
+      } else if (OB_FAIL(ob_write_obj(allocator, *src_obj, *(starts + i)))) {
+        LOG_WARN("failed to write obj", K(ret));
+      } else {
+        *(ends + i) = *(starts + i);
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    range->is_physical_rowid_range_ = node->is_phy_rowid_;
+    if (OB_LIKELY(!always_false)) {
+      if (node->include_start_) {
+        range->border_flag_.set_inclusive_start();
+      } else {
+        range->border_flag_.unset_inclusive_start();
+      }
+      if (node->include_end_) {
+        range->border_flag_.set_inclusive_end();
+      } else {
+        range->border_flag_.unset_inclusive_end();
+      }
+      range->start_key_.assign(starts, node->column_cnt_);
+      range->end_key_.assign(ends, node->column_cnt_);
+    } else {
+      range->set_false_range();
+    }
+  }
+  return ret;
+}
+
+int ObRangeGenerator::check_can_final_fast_nlj_range(const ObPreRangeGraph &pre_range_graph,
+                                                     const ParamStore &param_store,
+                                                     bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  const ObRangeNode *node = pre_range_graph.get_range_head();
+  const ObRangeMap &range_map = pre_range_graph.get_range_map();
+  is_valid = true;
+  for (int i = 0; OB_SUCC(ret) && i < node->column_cnt_; ++i) {
+    int64_t start_idx = node->start_keys_[i];
+    int64_t end_idx = node->end_keys_[i];
+    const ObRangeColumnMeta *meta = pre_range_graph.get_column_meta(i);
+    int64_t cmp = 0;
+    const ObObj* src_obj = nullptr;
+    if (OB_ISNULL(meta)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null column meta");
+    } else if (start_idx == OB_RANGE_MIN_VALUE &&
+               end_idx == OB_RANGE_MAX_VALUE) {
+      // do nothing
+    } else if (OB_UNLIKELY(start_idx != end_idx ||
+                           !is_const_expr_or_null(start_idx) ||
+                           !is_const_expr_or_null(end_idx) ||
+                           start_idx < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("start idx should equal to end idx", K(start_idx), K(end_idx));
+    } else if (start_idx == OB_RANGE_NULL_VALUE) {
+      // do nothing
+    } else if (range_map.expr_final_infos_.at(start_idx).is_param_) {
+      src_obj = &param_store.at(range_map.expr_final_infos_.at(start_idx).param_idx_);
+    } else if (range_map.expr_final_infos_.at(start_idx).is_const_) {
+      src_obj = range_map.expr_final_infos_.at(start_idx).const_val_;
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected range node in fast nlj range", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (src_obj == nullptr) {
+      // do nothing
+    } else if (OB_LIKELY(ObSQLUtils::is_same_type_for_compare(src_obj->get_meta(),
+                                                              meta->column_type_.get_obj_meta()))) {
+      // do nothing
+    } else {
+      is_valid = false;
+    }
+  }
+  return ret;
+}
+
+int ObRangeGenerator::cast_double_to_fixed_double(const ObRangeColumnMeta &meta,
+                                                  const ObObj& in_value,
+                                                  ObObj &out_value)
+{
+  int ret = OB_SUCCESS;
+  double value = in_value.get_double();
+  if (ObUDoubleType == meta.column_type_.get_type() && value < 0.) {
+    out_value.set_double(meta.column_type_.get_type(), 0.);
+  } else if (OB_FAIL(refine_real_range(meta.column_type_.get_accuracy(), value))) {
+    LOG_WARN("failed to real range check", K(ret));
+  } else {
+    out_value.set_double(meta.column_type_.get_type(), value);
+  }
+  return ret;
+}
+
+int ObRangeGenerator::refine_real_range(const ObAccuracy &accuracy, double &value)
+{
+  int ret = OB_SUCCESS;
+  const ObPrecision precision = accuracy.get_precision();
+  const ObScale scale = accuracy.get_scale();
+  if (OB_LIKELY(precision > 0) &&
+      OB_LIKELY(scale >= 0) &&
+      OB_LIKELY(precision >= scale)) {
+    double integer_part = static_cast<double>(pow(10.0, static_cast<double>(precision - scale)));
+    double decimal_part = static_cast<double>(pow(10.0, static_cast<double>(scale)));
+    double max_value = static_cast<double>(integer_part - 1 / decimal_part);
+    double min_value = static_cast<double>(-max_value);
+    if (value < min_value) {
+      value = min_value;
+    } else if (value > max_value) {
+      value = max_value;
+    } else {
+      value = static_cast<double>(rint((value -
+                                  floor(static_cast<double>(value)))* decimal_part) /
+                                  decimal_part + floor(static_cast<double>(value)));
     }
   }
   return ret;

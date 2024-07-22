@@ -1759,6 +1759,16 @@ int ObLogTableScan::print_range_annotation(char *buf,
     }
   }
 
+  if (OB_SUCC(ret) && EXPLAIN_EXTENDED == type) {
+    if (pre_range_graph_ != nullptr && pre_range_graph_->is_fast_nlj_range()) {
+      if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF(" is_fast_range = true"))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1813,7 +1823,7 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   TableItem *table_item = NULL;
   ObString qb_name;
   const ObString *index_name = NULL;
-  int64_t index_prefix = -1;
+  int64_t index_prefix = index_prefix_;
   ObItemType index_type = T_INDEX_HINT;
   const ObDMLStmt *stmt = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt())) {
@@ -1841,10 +1851,6 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
     } else {
       index_name = &get_index_name();
     }
-  } else if (OB_FAIL(get_plan()->get_log_plan_hint().get_index_prefix(table_id_,
-                                                  index_table_id_,
-                                                  index_prefix))) {
-    LOG_WARN("failed to get index prefix", K(table_id_), K(index_table_id_), K(index_prefix), K(ret));
   } else if (ref_table_id_ == index_table_id_ && index_prefix < 0) {
     index_type = T_FULL_HINT;
     index_name = &ObIndexHint::PRIMARY_KEY;

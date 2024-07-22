@@ -1076,13 +1076,17 @@ public:
                                const EqualSets &equal_sets,
                                const ObIArray<ObRawExpr *> &const_exprs,
                                bool &is_match);
-
-  static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless);
+  static int is_lossless_column_cast(const ObRawExpr *expr, bool &is_lossless, bool is_query_range = false);
   static bool is_lossless_type_conv(const ObExprResType &child_type, const ObExprResType &dst_type);
   static int is_lossless_column_conv(const ObRawExpr *expr, bool &is_lossless);
-  static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr);
-  static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr);
+  static int get_expr_without_lossless_cast(const ObRawExpr* ori_expr, const ObRawExpr*& expr, bool is_query_range = false);
+  static int get_expr_without_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr, bool is_query_range = false);
+  /**
+   * This interface is specifically designed for query range, used to retrieve the column c1 that can extract the range from nvl(c1, 1) = 1.
+  */
   static int get_column_expr_without_nvl(ObRawExpr* ori_expr, ObRawExpr*& expr);
+  static int get_expr_without_unprecise_and_lossless_cast(ObRawExpr* ori_expr, ObRawExpr*& expr);
+  static int is_lossless_or_unprecise_column_cast(const ObRawExpr *expr, bool &is_lossless);
   static int gen_set_target_list(ObIAllocator *allocator,
                                  ObSQLSessionInfo *session_info,
                                  ObRawExprFactory *expr_factory,

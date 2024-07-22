@@ -86,7 +86,13 @@ public:
   int64_t* end_keys_;
   int64_t min_offset_;
   int64_t max_offset_;
-  int64_t in_param_count_;
+  union {
+    int64_t in_param_count_;
+    struct {
+      uint32_t srid_;
+      int32_t  geo_releation_type_;
+    } geo_extra_;
+  };
   int64_t node_id_;
   //list member
   ObRangeNode *or_next_;
@@ -172,10 +178,14 @@ struct ObQueryRangeCtx
       params_(nullptr),
       expr_factory_(nullptr),
       session_info_(nullptr),
+      geo_column_id_map_(nullptr),
       max_mem_size_(128*1024*1024),
       enable_not_in_range_(true),
       optimizer_features_enable_version_(0),
-      index_prefix_(-1) {}
+      index_prefix_(-1),
+      is_geo_range_(false),
+      can_range_get_(true),
+      contail_geo_filters_(false) {}
   ~ObQueryRangeCtx() {}
   int init(ObPreRangeGraph *pre_range_graph,
            const ObIArray<ColumnItem> &range_columns,
@@ -184,7 +194,8 @@ struct ObQueryRangeCtx
            ObRawExprFactory *expr_factory,
            const bool phy_rowid_for_table_loc,
            const bool ignore_calc_failure,
-           const int64_t index_prefix);
+           const int64_t index_prefix,
+           const ColumnIdInfoMap *geo_column_id_map);
   int64_t column_cnt_;
   // 131 is the next prime number larger than OB_MAX_ROWKEY_COLUMN_NUMBER
   common::hash::ObPlacementHashMap<int64_t, int64_t, 131> range_column_map_;
@@ -207,10 +218,14 @@ struct ObQueryRangeCtx
   common::ObSEArray<std::pair<int64_t, int64_t>, 16> rowid_idxs_;
   common::ObSEArray<int64_t, 4> column_flags_;
   common::ObSEArray<int64_t, 16> non_first_in_row_value_idxs_;
+  const ColumnIdInfoMap *geo_column_id_map_;
   int64_t max_mem_size_;
   bool enable_not_in_range_;
   uint64_t optimizer_features_enable_version_;
   int64_t index_prefix_;
+  bool is_geo_range_;
+  bool can_range_get_;
+  bool contail_geo_filters_;
 };
 
 class ObPreRangeGraph : public ObQueryRangeProvider
@@ -235,7 +250,9 @@ public:
     range_exprs_(alloc),
     ss_range_exprs_(alloc),
     unprecise_range_exprs_(alloc),
-    total_range_sizes_(alloc) {}
+    total_range_sizes_(alloc),
+    range_expr_max_offsets_(alloc),
+    flags_(0) {}
 
   virtual ~ObPreRangeGraph() { reset(); }
 
@@ -257,7 +274,8 @@ public:
                                       const ParamStore *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,
                                       const bool ignore_calc_failure = true,
-                                      const int64_t index_prefix = -1);
+                                      const int64_t index_prefix = -1,
+                                      const ColumnIdInfoMap *geo_column_id_map = NULL);
   virtual int get_tablet_ranges(common::ObIAllocator &allocator,
                                 ObExecContext &exec_ctx,
                                 ObQueryRangeArray &ranges,
@@ -266,6 +284,19 @@ public:
   virtual int get_tablet_ranges(ObQueryRangeArray &ranges,
                                 bool &all_single_value_ranges,
                                 const common::ObDataTypeCastParams &dtc_params);
+  virtual int get_tablet_ranges(common::ObIAllocator &allocator,
+                                ObExecContext &exec_ctx,
+                                ObQueryRangeArray &ranges,
+                                bool &all_single_value_ranges,
+                                const common::ObDataTypeCastParams &dtc_params,
+                                ObIArray<common::ObSpatialMBR> &mbr_filters) const;
+  virtual int get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj_range_ctx,
+                                         common::ObIAllocator &allocator,
+                                         ObExecContext &exec_ctx,
+                                         const ParamStore &param_store,
+                                         void *range_buffer,
+                                         ObQueryRangeArray &ranges,
+                                         const common::ObDataTypeCastParams &dtc_params) const;
   int fill_column_metas(const ObIArray<ColumnItem> &range_columns);
   virtual int get_ss_tablet_ranges(common::ObIAllocator &allocator,
                                    ObExecContext &exec_ctx,
@@ -290,7 +321,7 @@ public:
     return common::OB_SUCCESS;
   }
   virtual inline bool has_range() const { return column_count_ > 0; }
-  virtual bool is_contain_geo_filters() const { return false; }
+  virtual bool is_contain_geo_filters() const { return contain_geo_filters_; }
   virtual const common::ObIArray<ObRawExpr*> &get_range_exprs() const { return range_exprs_; }
   virtual const common::ObIArray<ObRawExpr*> &get_ss_range_exprs() const { return ss_range_exprs_; }
   virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const { return unprecise_range_exprs_; }
@@ -298,6 +329,9 @@ public:
                               int64_t &range_prefix_count,
                               bool &contain_always_false) const;
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const;
+
+  const ObIArray<uint64_t>& get_range_sizes() const { return total_range_sizes_; }
+  virtual bool is_fast_nlj_range() const { return fast_nlj_range_; }
   int get_prefix_info(const ObRangeNode *range_node,
                       bool* equals,
                       int64_t &equal_prefix_count) const;
@@ -329,6 +363,7 @@ public:
   int set_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return range_exprs_.assign(range_exprs); }
   int set_ss_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return ss_range_exprs_.assign(range_exprs); }
   int set_unprecise_range_exprs(ObIArray<ObRawExpr*> &range_exprs) { return unprecise_range_exprs_.assign(range_exprs); }
+  void set_fast_nlj_range(bool v) { fast_nlj_range_ = v; }
 
   int serialize_range_graph(ObRangeNode *range_node, char *buf,
                             int64_t buf_len, int64_t &pos) const;
@@ -339,7 +374,9 @@ public:
   int64_t range_graph_to_string(char *buf, const int64_t buf_len,
                                 ObRangeNode *range_node) const;
   int64_t set_total_range_sizes(uint64_t* total_range_sizes, int64_t count);
-
+  void set_contain_geo_filters(bool v) { contain_geo_filters_ = v; }
+  int64_t set_range_expr_max_offsets(const ObIArray<int64_t> &max_offsets) { return range_expr_max_offsets_.assign(max_offsets); }
+  const ObIArray<int64_t>& get_range_expr_max_offsets() const { return range_expr_max_offsets_; }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPreRangeGraph);
 private:
@@ -366,6 +403,15 @@ private:
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> ss_range_exprs_;
   common::ObFixedArray<ObRawExpr*, common::ObIAllocator> unprecise_range_exprs_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> total_range_sizes_;
+  common::ObFixedArray<int64_t, common::ObIAllocator> range_expr_max_offsets_;
+  union {
+    uint32_t flags_;
+    struct {
+      uint32_t contain_geo_filters_  :  1;
+      uint32_t fast_nlj_range_       :  1;
+      uint32_t reserved_             : 30;
+    };
+  };
 };
 
 } // namespace sql

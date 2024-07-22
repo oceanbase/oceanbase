@@ -45,7 +45,8 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       LOG_WARN("get null expr");
     } else if (OB_FAIL(generate_range_node(expr, range_node_generator, range_node, 0, is_precise, max_offset))) {
       LOG_WARN("faield to generate range node", K(ret));
-    } else if (OB_FAIL(range_nodes.push_back(range_node))) {
+    } else if (!range_node->always_true_ &&
+               OB_FAIL(range_nodes.push_back(range_node))) {
       LOG_WARN("failed to push back range node");
     } else if (expr->is_const_expr()) {
       // isolated const expr which can be used as startup filter. Consider it imprecise.
@@ -66,8 +67,18 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
     LOG_INFO("use too much memory during extract query range, fall back to whole range",
         K(ctx_.max_mem_size_));
   }
+  if (OB_SUCC(ret) && ctx_.is_geo_range_ && range_nodes.count() > 1) {
+    ObRangeNode *final_geo_range = nullptr;
+    if (OB_FAIL(or_range_nodes(range_node_generator, range_nodes, ctx_.column_cnt_, final_geo_range))) {
+      LOG_WARN("failed to or range nodes");
+    } else if (OB_FALSE_IT(range_nodes.reuse())) {
+    } else if (OB_FAIL(range_nodes.push_back(final_geo_range))) {
+      LOG_WARN("failed to push back range nodes");
+    }
+  }
   if (OB_SUCC(ret)) {
     ObRangeNode *final_range_node = nullptr;
+    bool can_fast_nlj_extraction = false;
     if (range_nodes.empty()) {
       if (OB_FAIL(range_node_generator.generate_always_true_or_false_node(true, final_range_node))) {
         LOG_WARN("failed to generate whole range");
@@ -96,6 +107,16 @@ int ObRangeGraphGenerator::generate_range_graph(const ObIArray<ObRawExpr*> &expr
       LOG_WARN("failed to fill range exprs", K(ret));
     } else if (OB_FAIL(generate_expr_final_info())) {
       LOG_WARN("failed to generate final exprs");
+    } else if (pre_range_graph_->has_exec_param() &&
+               ctx_.optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_5 &&
+               OB_FAIL(check_can_fast_nlj_range_extraction(pre_range_graph_->get_range_head(),
+                                                           pre_range_graph_->get_range_map(),
+                                                           pre_range_graph_->is_equal_range(),
+                                                           can_fast_nlj_extraction))) {
+      LOG_WARN("failed to check can fast nlj range extraction", K(ret));
+    } else {
+      pre_range_graph_->set_fast_nlj_range(can_fast_nlj_extraction);
+      pre_range_graph_->set_contain_geo_filters(ctx_.contail_geo_filters_);
     }
   }
   return ret;
@@ -113,11 +134,12 @@ int ObRangeGraphGenerator::generate_range_node(ObRawExpr* expr,
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null expr");
-  } else if (T_OP_AND == expr->get_expr_type()) {
+  } else if (T_OP_AND == expr->get_expr_type() && !ctx_.is_geo_range_) {
     if (OB_FAIL(generate_and_range_node(expr, range_node_generator, range_node, expr_depth+1, is_precise, max_offset))) {
       LOG_WARN("failed to generate and range node");
     }
-  } else if (T_OP_OR == expr->get_expr_type()) {
+  } else if (T_OP_OR == expr->get_expr_type() ||
+             (T_OP_AND == expr->get_expr_type() && ctx_.is_geo_range_)) {
     if (OB_FAIL(generate_or_range_node(expr, range_node_generator, range_node, expr_depth+1, is_precise, max_offset))) {
       LOG_WARN("failed to generate or range node");
     }
@@ -266,7 +288,8 @@ int ObRangeGraphGenerator::and_range_nodes(ObIArray<ObRangeNode*> &range_nodes,
         last_node = cur_node;
       }
     } else if (cur_node->min_offset_ == -1 || last_node->min_offset_ == -1 ||
-               cur_node->is_not_in_node_ || last_node->is_not_in_node_) {
+               cur_node->is_not_in_node_ || last_node->is_not_in_node_||
+               cur_node->is_geo_node_ || last_node->is_geo_node_) {
       and_link_range_node(last_node, cur_node);
       last_node = cur_node;
     } else if (nullptr == cur_node->and_next_ && nullptr == cur_node->or_next_ &&
@@ -771,6 +794,8 @@ int ObRangeGraphGenerator::collect_graph_infos(ObRangeNode *range_node,
         cur_or_count += cur_node->in_param_count_;
       } else if (cur_node->is_not_in_node_) {
         cur_or_count += cur_node->in_param_count_ + 1;
+      } else if (cur_node->is_geo_node_) {
+        cur_or_count += 25;
       } else {
         ++cur_or_count;
       }
@@ -895,7 +920,7 @@ int ObRangeGraphGenerator::check_graph_type(ObRangeNode *range_node)
       LOG_WARN("is strict equal graph failed", K(ret));
     } else {
       pre_range_graph_->set_is_equal_range(is_equal_range);
-      pre_range_graph_->set_is_get(is_get);
+      pre_range_graph_->set_is_get(ctx_.can_range_get_ && is_get);
     }
   }
   return ret;
@@ -923,7 +948,8 @@ bool ObRangeGraphGenerator::is_standard_range(ObRangeNode *range_node) const
        is_standard_range && cur_node != nullptr;
        cur_node = cur_node->and_next_) {
     if (cur_node->contain_in_ || cur_node->or_next_ != nullptr ||
-        cur_node->is_not_in_node_) {
+        cur_node->is_not_in_node_ ||
+        cur_node->is_geo_node_) {
       is_standard_range = false;
     }
   }
@@ -960,6 +986,7 @@ int ObRangeGraphGenerator::inner_get_max_precise_pos(const ObRangeNode *range_no
 
     if (cur_node->min_offset_ >= 0 &&
         !cur_node->is_not_in_node_ &&
+        !cur_node->is_geo_node_ &&
       OB_FAIL(get_new_equal_idx(cur_node, equals, new_idx))) {
       LOG_WARN("failed to get new idx");
     } else if (cur_node->and_next_ != nullptr) {
@@ -1038,9 +1065,14 @@ int ObRangeGraphGenerator::inner_is_strict_equal_graph(const ObRangeNode *range_
       max_node_offset = cur_node->max_offset_;
     }
 
-    if (cur_node->min_offset_ >= 0 &&
-        !cur_node->is_not_in_node_ &&
-        OB_FAIL(get_new_equal_idx(cur_node, equals, new_idx))) {
+    if (cur_node->min_offset_ < 0 &&
+        cur_node->and_next_ == nullptr) {
+      is_strict_equal = false;
+    } else if (cur_node->is_not_in_node_ ||
+               cur_node->is_geo_node_) {
+      is_strict_equal = false;
+    } else if (cur_node->min_offset_ >= 0 &&
+               OB_FAIL(get_new_equal_idx(cur_node, equals, new_idx))) {
       LOG_WARN("failed to get new idx");
     } else if (cur_node->and_next_ != nullptr) {
       if(OB_FAIL(SMART_CALL(inner_is_strict_equal_graph(cur_node->and_next_, equals, max_offset,
@@ -1150,11 +1182,14 @@ int ObRangeGraphGenerator::fill_range_exprs(ObIArray<ObPriciseExprItem> &pricise
   ObSEArray<ObRawExpr*, 4> range_exprs;
   ObSEArray<ObRawExpr*, 4> ss_range_exprs;
   ObSEArray<ObRawExpr*, 4> unpricise_range_exprs;
+  ObSEArray<int64_t, 4> range_expr_max_offsets;
   for (int64_t i = 0; OB_SUCC(ret) && i < pricise_exprs.count(); ++i) {
     ObPriciseExprItem &expr_item = pricise_exprs.at(i);
     if (expr_item.max_offset_ < max_precise_offset_) {
       if (OB_FAIL(range_exprs.push_back(const_cast<ObRawExpr*>(expr_item.expr_)))) {
         LOG_WARN("push back precise range expr failed", K(ret));
+      } else if (OB_FAIL(range_expr_max_offsets.push_back(expr_item.max_offset_))) {
+        LOG_WARN("failed to push back to array", K(ret));
       }
     } else if (expr_item.max_offset_ < ss_max_precise_offset_) {
       if (OB_FAIL(ss_range_exprs.push_back(const_cast<ObRawExpr*>(expr_item.expr_)))) {
@@ -1177,6 +1212,8 @@ int ObRangeGraphGenerator::fill_range_exprs(ObIArray<ObPriciseExprItem> &pricise
       LOG_WARN("failed to assign range exprs", K(ret));
     } else if (OB_FAIL(pre_range_graph_->set_unprecise_range_exprs(unpricise_range_exprs))) {
       LOG_WARN("failed to assign range exprs", K(ret));
+    } else if (OB_FAIL(pre_range_graph_->set_range_expr_max_offsets(range_expr_max_offsets))) {
+      LOG_WARN("failed to assign range expr max offsets", K(ret));
     } else {
       LOG_TRACE("finish fill range exprs", K(max_precise_offset_), K(ss_max_precise_offset_),
                   K(range_exprs), K(ss_range_exprs), K(unpricise_range_exprs));
@@ -1605,6 +1642,42 @@ int ObRangeGraphGenerator::get_start_from_zero(const ObRangeNode *range_node, bo
         }
       }
 
+    }
+  }
+  return ret;
+}
+
+int ObRangeGraphGenerator::check_can_fast_nlj_range_extraction(const ObRangeNode *range_node,
+                                                               const ObRangeMap &range_map,
+                                                               bool is_equal_range,
+                                                               bool &fast_nlj_range)
+{
+  int ret = OB_SUCCESS;
+  fast_nlj_range = false;
+  if (OB_ISNULL(range_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!is_equal_range) {
+    // do nothing
+  } else if (range_node->contain_in_ ||
+             range_node->is_not_in_node_||
+             range_node->is_geo_node_) {
+    // do nothing
+  } else if (OB_NOT_NULL(range_node->or_next_) ||
+             OB_NOT_NULL(range_node->and_next_)) {
+    // do nothing
+  } else if (range_node->always_false_ ||
+             range_node->always_true_) {
+    // do nothing
+  } else {
+    fast_nlj_range = true;
+    for (int64_t i = 0; OB_SUCC(ret) && fast_nlj_range && i < range_map.expr_final_infos_.count(); ++i) {
+      if (range_map.expr_final_infos_.at(i).is_const_ ||
+          range_map.expr_final_infos_.at(i).is_param_) {
+        // do nothing
+      } else {
+        fast_nlj_range = false;
+      }
     }
   }
   return ret;

@@ -367,6 +367,8 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_inet.cpp
   engine/expr/ob_expr_initcap.cpp
   engine/expr/ob_expr_inner_decode_like.cpp
+  engine/expr/ob_expr_inner_double_to_int.cpp
+  engine/expr/ob_expr_inner_decimal_to_year.cpp
   engine/expr/ob_expr_inner_trim.cpp
   engine/expr/ob_expr_insert.cpp
   engine/expr/ob_expr_instr.cpp

@@ -85,7 +85,8 @@ public:
         global_index_back_table_partition_info_(NULL),
         has_index_scan_filter_(false),
         has_index_lookup_filter_(false),
-        table_type_(share::schema::MAX_TABLE_TYPE)
+        table_type_(share::schema::MAX_TABLE_TYPE),
+        index_prefix_(-1)
   {
   }
 
@@ -342,6 +343,9 @@ public:
 
   inline void set_index_name(common::ObString &index_name)
   { index_name_= index_name; }
+
+  inline void set_index_prefix(int64_t index_prefix)
+  { index_prefix_ = index_prefix; }
 
   inline ObTablePartitionInfo *get_table_partition_info() { return table_partition_info_; }
   inline const ObTablePartitionInfo *get_table_partition_info() const { return table_partition_info_; }
@@ -630,6 +634,7 @@ protected: // memeber variables
   // end for global index lookup
 
   share::schema::ObTableType table_type_;
+  int64_t index_prefix_;
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
 };

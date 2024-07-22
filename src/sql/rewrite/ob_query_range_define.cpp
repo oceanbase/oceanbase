@@ -320,7 +320,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
                           ObRawExprFactory *expr_factory,
                           const bool phy_rowid_for_table_loc,
                           const bool ignore_calc_failure,
-                          const int64_t index_prefix)
+                          const int64_t index_prefix,
+                          const ColumnIdInfoMap *geo_column_id_map)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(pre_range_graph)  || OB_ISNULL(exec_ctx_) || OB_ISNULL(exec_ctx_->get_my_session()) ||
@@ -347,6 +348,8 @@ int ObQueryRangeCtx::init(ObPreRangeGraph *pre_range_graph,
     session_info_ = exec_ctx_->get_my_session();
     max_mem_size_ = exec_ctx_->get_my_session()->get_range_optimizer_max_mem_size();
     index_prefix_ = index_prefix;
+    geo_column_id_map_ = geo_column_id_map;
+    is_geo_range_ = geo_column_id_map != NULL;
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < range_columns.count(); ++i) {
     const ColumnItem &col = range_columns.at(i);
@@ -383,6 +386,7 @@ void ObPreRangeGraph::reset()
   ss_range_exprs_.reset();
   unprecise_range_exprs_.reset();
   total_range_sizes_.reset();
+  flags_ = 0;
 }
 
 int ObPreRangeGraph::deep_copy(const ObPreRangeGraph &other)
@@ -398,6 +402,7 @@ int ObPreRangeGraph::deep_copy(const ObPreRangeGraph &other)
   is_get_ = other.is_get_;
   contain_exec_param_ = other.contain_exec_param_;
   skip_scan_offset_ = other.skip_scan_offset_;
+  flags_ = other.flags_;
   if (OB_FAIL(range_exprs_.assign(other.range_exprs_))) {
     LOG_WARN("failed to assign range exprs");
   } else if (OB_FAIL(ss_range_exprs_.assign(other.ss_range_exprs_))) {
@@ -583,7 +588,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
                                                      const ParamStore *params,
                                                      const bool phy_rowid_for_table_loc,
                                                      const bool ignore_calc_failure,
-                                                     const int64_t index_prefix /* =-1*/)
+                                                     const int64_t index_prefix /* =-1*/,
+                                                     const ColumnIdInfoMap *geo_column_id_map /* = NULL*/)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory expr_factory(allocator_);
@@ -592,7 +598,8 @@ int ObPreRangeGraph::preliminary_extract_query_range(const ObIArray<ColumnItem> 
     LOG_WARN("failed to fill column metas");
   } else if (OB_FAIL(ctx.init(this, range_columns, expr_constraints,
                               params, &expr_factory,
-                              phy_rowid_for_table_loc, ignore_calc_failure, index_prefix))) {
+                              phy_rowid_for_table_loc, ignore_calc_failure, index_prefix,
+                              geo_column_id_map))) {
     LOG_WARN("failed to init query range context");
   } else {
     ObExprRangeConverter converter(allocator_, ctx);
@@ -614,7 +621,8 @@ int ObPreRangeGraph::get_tablet_ranges(common::ObIAllocator &allocator,
                                        const common::ObDataTypeCastParams &dtc_params)  const
 {
   int ret = OB_SUCCESS;
-  ObRangeGenerator range_generator(allocator, exec_ctx, this, ranges, all_single_value_ranges, dtc_params);
+  ObMbrFilterArray mbr_filter;
+  ObRangeGenerator range_generator(allocator, exec_ctx, this, ranges, all_single_value_ranges, dtc_params, mbr_filter);
   if (OB_FAIL(range_generator.generate_ranges())) {
     LOG_WARN("failed to generate ranges");
   }
@@ -630,24 +638,81 @@ int ObPreRangeGraph::get_tablet_ranges(ObQueryRangeArray &ranges,
   return ret;
 }
 
+int ObPreRangeGraph::get_tablet_ranges(common::ObIAllocator &allocator,
+                                ObExecContext &exec_ctx,
+                                ObQueryRangeArray &ranges,
+                                bool &all_single_value_ranges,
+                                const common::ObDataTypeCastParams &dtc_params,
+                                ObIArray<common::ObSpatialMBR> &mbr_filters) const
+{
+  int ret = OB_SUCCESS;
+  ObRangeGenerator range_generator(allocator, exec_ctx, this, ranges, all_single_value_ranges, dtc_params, mbr_filters);
+  if (OB_FAIL(range_generator.generate_ranges())) {
+    LOG_WARN("failed to generate ranges");
+  }
+  return ret;
+}
+
 int ObPreRangeGraph::get_ss_tablet_ranges(common::ObIAllocator &allocator,
                                           ObExecContext &exec_ctx,
                                           ObQueryRangeArray &ss_ranges,
                                           const common::ObDataTypeCastParams &dtc_params) const
 {
   int ret = OB_SUCCESS;
+  ObMbrFilterArray mbr_filter;
   ss_ranges.reuse();
   if (!is_ss_range()) {
     // do nothing
   } else {
     bool dummy_all_single_value = false;
-    ObRangeGenerator range_generator(allocator, exec_ctx, this, ss_ranges, dummy_all_single_value, dtc_params);
+    ObRangeGenerator range_generator(allocator, exec_ctx, this, ss_ranges, dummy_all_single_value, dtc_params, mbr_filter);
     if (OB_FAIL(range_generator.generate_ss_ranges())) {
       LOG_WARN("failed to generate ranges");
     } else {
       LOG_DEBUG("get skip range success", K(ss_ranges));
     }
   }
+  return ret;
+}
+
+int ObPreRangeGraph::get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj_range_ctx,
+                                                common::ObIAllocator &allocator,
+                                                ObExecContext &exec_ctx,
+                                                const ParamStore &param_store,
+                                                void *range_buffer,
+                                                ObQueryRangeArray &ranges,
+                                                const common::ObDataTypeCastParams &dtc_params) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!fast_nlj_range_ctx.has_check_valid)) {
+    if (OB_FAIL(ObRangeGenerator::check_can_final_fast_nlj_range(*this,
+                                                                 param_store,
+                                                                 fast_nlj_range_ctx.is_valid))) {
+      LOG_WARN("failed to check can final fast nlj range", K(ret));
+    }
+    fast_nlj_range_ctx.has_check_valid = true;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_LIKELY(fast_nlj_range_ctx.is_valid)) {
+    if (OB_FAIL(ObRangeGenerator::generate_fast_nlj_range(*this,
+                                                          param_store,
+                                                          allocator,
+                                                          range_buffer))) {
+      LOG_WARN("failed to generate fast nlj range", K(ret));
+    } else if (OB_FAIL(ranges.push_back(static_cast<ObNewRange*>(range_buffer)))) {
+      LOG_WARN("failed to push back array", K(ret));
+    }
+  } else {
+    bool dummy_all_single_value_ranges = false;
+    if (OB_FAIL(get_tablet_ranges(allocator,
+                                  exec_ctx,
+                                  ranges,
+                                  dummy_all_single_value_ranges,
+                                  dtc_params))) {
+      LOG_WARN("failed to get tablet ranges", K(ret));
+    }
+  }
+
   return ret;
 }
 
@@ -900,6 +965,7 @@ OB_DEF_SERIALIZE(ObPreRangeGraph)
   }
   OB_UNIS_ENCODE(range_map_);
   OB_UNIS_ENCODE(skip_scan_offset_);
+  OB_UNIS_ENCODE(flags_);
   return ret;
 }
 
@@ -946,6 +1012,7 @@ OB_DEF_DESERIALIZE(ObPreRangeGraph)
   }
   OB_UNIS_DECODE(range_map_);
   OB_UNIS_DECODE(skip_scan_offset_);
+  OB_UNIS_DECODE(flags_);
   return ret;
 }
 
@@ -969,6 +1036,7 @@ OB_DEF_SERIALIZE_SIZE(ObPreRangeGraph)
   }
   OB_UNIS_ADD_LEN(range_map_);
   OB_UNIS_ADD_LEN(skip_scan_offset_);
+  OB_UNIS_ADD_LEN(flags_);
   return len;
 }
 

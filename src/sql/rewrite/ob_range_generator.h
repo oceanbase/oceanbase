@@ -71,6 +71,19 @@ struct ObTmpInParam
   ObFixedArray<ObObj*, ObIAllocator> in_param_;
 };
 
+struct ObTmpGeoParam
+{
+  ObTmpGeoParam(common::ObIAllocator &allocator)
+    : always_true_(false),
+      start_keys_(allocator),
+      end_keys_(allocator) {}
+
+  TO_STRING_KV(K(always_true_), K(start_keys_), K(end_keys_));
+  bool always_true_;
+  ObFixedArray<uint64_t, ObIAllocator> start_keys_;
+  ObFixedArray<uint64_t, ObIAllocator> end_keys_;
+};
+
 class ObRangeGenerator
 {
 public:
@@ -79,7 +92,8 @@ public:
                    const ObPreRangeGraph *pre_range_graph,
                    ObIArray<common::ObNewRange *> &ranges,
                    bool &all_single_value_ranges,
-                   const common::ObDataTypeCastParams &dtc_params)
+                   const common::ObDataTypeCastParams &dtc_params,
+                   ObIArray<common::ObSpatialMBR> &mbr_filters)
     : allocator_(allocator),
       exec_ctx_(exec_ctx),
       pre_range_graph_(pre_range_graph),
@@ -93,6 +107,7 @@ public:
       tmp_range_lists_(nullptr),
       all_tmp_node_caches_(allocator),
       always_false_tmp_range_(nullptr),
+      mbr_filters_(mbr_filters),
       is_generate_ss_range_(false),
       cur_datetime_(0)
   {
@@ -103,6 +118,13 @@ public:
 
   int generate_ranges();
   int generate_ss_ranges();
+  static int generate_fast_nlj_range(const ObPreRangeGraph &pre_range_graph,
+                                     const ParamStore &param_store,
+                                     ObIAllocator &allocator,
+                                     void *range_buffer);
+  static int check_can_final_fast_nlj_range(const ObPreRangeGraph &pre_range_graph,
+                                            const ParamStore &param_store,
+                                            bool &is_valid);
 private:
   int generate_tmp_range(ObTmpRange *&tmp_range, const int64_t column_cnt);
   int generate_one_range(ObTmpRange &tmp_range);
@@ -124,13 +146,36 @@ private:
   int merge_and_remove_ranges();
   int try_intersect_delayed_range(ObTmpRange &range);
   int create_new_range(ObNewRange *&range, int64_t column_cnt);
-  inline bool is_const_expr_or_null(int64_t idx) { return idx < OB_RANGE_EXTEND_VALUE || OB_RANGE_NULL_VALUE == idx; }
+  static inline bool is_const_expr_or_null(int64_t idx) { return idx < OB_RANGE_EXTEND_VALUE || OB_RANGE_NULL_VALUE == idx; }
   int final_not_in_range_node(const ObRangeNode &node,
                               const int64_t not_in_idx,
                               ObTmpInParam *in_param,
                               ObTmpRange *&range);
   int generate_tmp_not_in_param(const ObRangeNode &node,
                                 ObTmpInParam *&in_param);
+  int generate_tmp_geo_param(const ObRangeNode &node,
+                             ObTmpGeoParam *&tmp_geo_param);
+  int get_intersects_tmp_geo_param(uint32_t input_srid,
+                                   const common::ObString &wkb,
+                                   const common::ObGeoRelationType op_type,
+                                   const double &distance,
+                                   ObTmpGeoParam *geo_param);
+  int get_coveredby_tmp_geo_param(uint32_t input_srid,
+                                  const common::ObString &wkb,
+                                  const common::ObGeoRelationType op_type,
+                                  ObTmpGeoParam *geo_param);
+  int final_geo_range_node(const ObRangeNode &node,
+                           const uint64_t start,
+                           const uint64_t end,
+                           ObTmpRange *&range);
+  int check_need_merge_range_nodes(const ObRangeNode *node,
+                                   bool &need_merge);
+
+  int cast_double_to_fixed_double(const ObRangeColumnMeta &meta,
+                                  const ObObj& in_value,
+                                  ObObj &out_value);
+
+  int refine_real_range(const ObAccuracy &accuracy, double &value);
 private:
   ObRangeGenerator();
   static const int64_t RANGE_BUCKET_SIZE = 1000;
@@ -148,6 +193,7 @@ private:
   TmpRangeList* tmp_range_lists_;
   ObFixedArray<void*, ObIAllocator> all_tmp_node_caches_;
   ObTmpRange *always_false_tmp_range_;
+  ObIArray<common::ObSpatialMBR> &mbr_filters_;
   bool is_generate_ss_range_;
   int64_t cur_datetime_;
 };

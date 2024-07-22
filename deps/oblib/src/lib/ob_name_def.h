@@ -1092,6 +1092,8 @@
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
 #define N_INEER_IS_TRUE                     "inner_is_true"
 #define N_INNER_DECODE_LIKE                 "inner_decode_like"
+#define N_INNER_DOUBLE_TO_INT               "inner_double_to_int"
+#define N_INNER_DECIMAL_TO_YEAR             "inner_decimal_to_year"
 #define N_PRIV_ST_MAKEENVELOPE              "_st_makeenvelope"
 #define N_PRIV_ST_CLIPBYBOX2D               "_st_clipbybox2d"
 #define N_PRIV_ST_POINTONSURFACE            "_st_pointonsurface"

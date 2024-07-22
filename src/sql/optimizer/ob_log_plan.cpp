@@ -4461,6 +4461,7 @@ int ObLogPlan::allocate_access_path(AccessPath *ap,
     scan->set_pre_range_graph(ap->pre_range_graph_);
     scan->set_skip_scan(OptSkipScanState::SS_DISABLE != ap->use_skip_scan_);
     scan->set_table_type(table_schema->get_table_type());
+    scan->set_index_prefix(ap->index_prefix_);
     if (!ap->is_inner_path_ &&
         OB_FAIL(scan->set_query_ranges(ap->get_cost_table_scan_info().ranges_,
                                        ap->get_cost_table_scan_info().ss_ranges_))) {

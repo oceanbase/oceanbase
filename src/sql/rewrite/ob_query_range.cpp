@@ -6684,6 +6684,25 @@ int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
   return ret;
 }
 
+int ObQueryRange::get_tablet_ranges(common::ObIAllocator &allocator,
+                                    ObExecContext &exec_ctx,
+                                    ObQueryRangeArray &ranges,
+                                    bool &all_single_value_ranges,
+                                    const common::ObDataTypeCastParams &dtc_params,
+                                    ObIArray<common::ObSpatialMBR> &mbr_filters) const
+{
+  int ret = OB_SUCCESS;
+  UNUSED(mbr_filters);
+  if (OB_FAIL(get_tablet_ranges(allocator,
+                                exec_ctx,
+                                ranges,
+                                all_single_value_ranges,
+                                dtc_params))) {
+    LOG_WARN("failed to get tablet ranges", K(ret));
+  }
+  return ret;
+}
+
 int ObQueryRange::get_ss_tablet_ranges(common::ObIAllocator &allocator,
                                        ObExecContext &exec_ctx,
                                        ObQueryRangeArray &ss_ranges,
@@ -6706,6 +6725,26 @@ int ObQueryRange::get_ss_tablet_ranges(common::ObIAllocator &allocator,
   } else {
     LOG_DEBUG("get skip range success", K(ss_ranges));
   }
+  return ret;
+}
+
+int ObQueryRange::get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj_range_ctx,
+                                             common::ObIAllocator &allocator,
+                                             ObExecContext &exec_ctx,
+                                             const ParamStore &param_store,
+                                             void *range_buffer,
+                                             ObQueryRangeArray &ranges,
+                                             const common::ObDataTypeCastParams &dtc_params) const
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(fast_nlj_range_ctx);
+  UNUSED(allocator);
+  UNUSED(exec_ctx);
+  UNUSED(param_store);
+  UNUSED(range_buffer);
+  UNUSED(ranges);
+  UNUSED(dtc_params);
+  LOG_WARN("old qeury range not support this interface");
   return ret;
 }
 
@@ -8840,7 +8879,7 @@ DEF_TO_STRING(ObQueryRange::ObRangeExprItem)
   return pos;
 }
 
-common::ObGeoRelationType ObQueryRange::get_geo_relation(ObItemType type) const
+common::ObGeoRelationType ObQueryRange::get_geo_relation(ObItemType type)
 {
   common::ObGeoRelationType rel_type = common::ObGeoRelationType::T_INVALID;
   switch (type) {
@@ -9290,7 +9329,6 @@ int ObQueryRange::get_geo_range(const common::ObObj &wkb, const common::ObGeoRel
       }
     }
   }
-
   return ret;
 }
 

@@ -215,6 +215,7 @@ struct ObTableScanRtDef
       lookup_rtdef_(nullptr),
       range_buffers_(nullptr),
       range_buffer_idx_(0),
+      fast_final_nlj_range_ctx_(),
       group_size_(0),
       max_group_size_(0)
   { }
@@ -233,6 +234,7 @@ struct ObTableScanRtDef
   // for equal_query_range opt
   void *range_buffers_;
   int64_t range_buffer_idx_;
+  ObFastFinalNLJRangeCtx fast_final_nlj_range_ctx_;
   // for equal_query_range opt end
   int64_t group_size_;
   int64_t max_group_size_;
@@ -610,6 +612,13 @@ protected:
     int64_t range_buffer_idx_;
   };
 
+  OB_INLINE void* locate_range_buffer()
+  {
+    int64_t column_count = MY_SPEC.tsc_ctdef_.get_query_range_provider().get_column_count();
+    size_t range_size = sizeof(ObNewRange) + sizeof(ObObj) * column_count * 2;
+    void *range_buffers = static_cast<char*>(tsc_rtdef_.range_buffers_) + tsc_rtdef_.range_buffer_idx_ * range_size;
+    return range_buffers;
+  }
 private:
   const ObTableScanSpec& get_tsc_spec() {return MY_SPEC;}
   const ObTableScanCtDef& get_tsc_ctdef() {return MY_SPEC.tsc_ctdef_;}

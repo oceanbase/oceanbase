@@ -181,6 +181,11 @@ private:
   static int get_max_offset(const ObRangeNode *range_node, int64_t &max_offset);
 
   static int get_start_from_zero(const ObRangeNode *range_node, bool &start_from_zero);
+
+  static int check_can_fast_nlj_range_extraction(const ObRangeNode *range_node,
+                                                 const ObRangeMap &range_map,
+                                                 bool is_equal_range,
+                                                 bool &fast_nlj_range);
 private:
   ObRangeGraphGenerator();
 private:

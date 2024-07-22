@@ -371,6 +371,8 @@
 #include "ob_expr_password.h"
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_transaction_id.h"
+#include "ob_expr_inner_double_to_int.h"
+#include "ob_expr_inner_decimal_to_year.h"
 #include "ob_expr_audit_log_func.h"
 #include "ob_expr_can_access_trigger.h"
 
@@ -1163,6 +1165,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprTopNFilter::eval_topn_filter,                        /* 692 */
   ObExprIsEnabledRole::eval_is_enabled_role,                          /* 693 */
   ObExprCanAccessTrigger::can_access_trigger,                         /* 694 */
+  ObExprInnerDoubleToInt::eval_inner_double_to_int,                   /* 728 */
+  ObExprInnerDecimalToYear::eval_inner_decimal_to_year,               /* 729 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

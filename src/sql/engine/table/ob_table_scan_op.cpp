@@ -1109,6 +1109,18 @@ int ObTableScanOp::prepare_single_scan_range(int64_t group_idx)
              ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
     LOG_WARN("failed to extract pre query ranges", K(ret));
   } else if (!MY_CTDEF.get_query_range_provider().is_contain_geo_filters() &&
+             MY_CTDEF.get_query_range_provider().is_fast_nlj_range() &&
+             OB_FAIL(MY_CTDEF.get_query_range_provider().get_fast_nlj_tablet_ranges(
+              tsc_rtdef_.fast_final_nlj_range_ctx_,
+              range_allocator,
+              ctx_,
+              plan_ctx->get_param_store(),
+              locate_range_buffer(),
+              key_ranges,
+              ObBasicSessionInfo::create_dtc_params(ctx_.get_my_session())))) {
+    LOG_WARN("failed to extract pre fast nlj query range", K(ret));
+  } else if (!MY_CTDEF.get_query_range_provider().is_contain_geo_filters() &&
+             !MY_CTDEF.get_query_range_provider().is_fast_nlj_range() &&
              OB_FAIL(ObSQLUtils::extract_pre_query_range(
               MY_CTDEF.get_query_range_provider(),
               range_allocator,
@@ -1289,6 +1301,26 @@ int ObTableScanOp::inner_open()
     // here need add plan batch_size, because in vectorized execution,
     // left batch may greater than OB_MAX_BULK_JOIN_ROWS
     tsc_rtdef_.max_group_size_ = OB_MAX_BULK_JOIN_ROWS + MY_SPEC.plan_->get_batch_size();
+    if (MY_CTDEF.get_query_range_provider().is_fast_nlj_range()) {
+      int64_t column_count = MY_CTDEF.get_query_range_provider().get_column_count();
+      size_t range_size = sizeof(ObNewRange) + sizeof(ObObj) * column_count * 2;
+      if (!MY_SPEC.batch_scan_flag_) {
+        tsc_rtdef_.range_buffers_ = ctx_.get_allocator().alloc(range_size);
+      } else {
+        tsc_rtdef_.range_buffers_ = ctx_.get_allocator().alloc(tsc_rtdef_.max_group_size_ * range_size);
+      }
+      if (OB_ISNULL(tsc_rtdef_.range_buffers_)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory failed", K(ret), K(range_size), K(tsc_rtdef_.range_buffers_));
+      } else if (!MY_SPEC.batch_scan_flag_) {
+        ObNewRange *key_range = new(tsc_rtdef_.range_buffers_) ObNewRange();
+      } else {
+        for (int64_t i = 0; i < tsc_rtdef_.max_group_size_; ++i) {
+          char *range_buffers_off = static_cast<char*>(tsc_rtdef_.range_buffers_) + i * range_size;
+          ObNewRange *key_range = new(range_buffers_off) ObNewRange();
+        }
+      }
+    }
   }
 
   // create and init iter_tree_.

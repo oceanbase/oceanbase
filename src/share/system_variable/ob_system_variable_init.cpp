@@ -3307,7 +3307,7 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[234].default_value_ = "4.2.4.0" ;
+      ObSysVars[234].default_value_ = "4.2.5.0" ;
       ObSysVars[234].info_ = "enabling a series of optimizer features based on an OceanBase release number" ;
       ObSysVars[234].name_ = "optimizer_features_enable" ;
       ObSysVars[234].data_type_ = ObVarcharType ;

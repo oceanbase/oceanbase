@@ -436,6 +436,19 @@ public:
                                 ObQueryRangeArray &ranges,
                                 bool &all_single_value_ranges,
                                 const common::ObDataTypeCastParams &dtc_params) const;
+  virtual int get_tablet_ranges(common::ObIAllocator &allocator,
+                                ObExecContext &exec_ctx,
+                                ObQueryRangeArray &ranges,
+                                bool &all_single_value_ranges,
+                                const common::ObDataTypeCastParams &dtc_params,
+                                ObIArray<common::ObSpatialMBR> &mbr_filters) const;
+  virtual int get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj_range_ctx,
+                                         common::ObIAllocator &allocator,
+                                         ObExecContext &exec_ctx,
+                                         const ParamStore &param_store,
+                                         void *range_buffer,
+                                         ObQueryRangeArray &ranges,
+                                         const common::ObDataTypeCastParams &dtc_params) const;
   // deep copy query range except the pointer of phy_plan_
   int deep_copy(const ObQueryRange &other, const bool copy_for_final = false);
   // necessary condition:
@@ -460,7 +473,7 @@ public:
   virtual int is_get(bool &is_get) const;
   int is_get(int64_t column_count, bool &is_get) const;
   virtual bool is_precise_get() const { return table_graph_.is_precise_get_; }
-  common::ObGeoRelationType get_geo_relation(ObItemType type) const;
+  static common::ObGeoRelationType get_geo_relation(ObItemType type);
   virtual const common::ObIArray<ObRawExpr*> &get_range_exprs() const { return range_exprs_; }
   virtual const common::ObIArray<ObRawExpr*> &get_ss_range_exprs() const { return ss_range_exprs_; }
   virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const { return unprecise_range_exprs_; }
@@ -520,6 +533,7 @@ public:
                              int64_t &equal_prefix_count,
                              int64_t &range_prefix_count,
                              bool &contain_always_false) const;
+  virtual bool is_fast_nlj_range() const { return false; }
 private:
 
   int init_query_range_ctx(common::ObIAllocator &allocator,

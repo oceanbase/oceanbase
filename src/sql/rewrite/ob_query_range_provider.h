@@ -16,7 +16,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/container/ob_se_array.h"
 #include "common/ob_range.h"
-
+#include "lib/geo/ob_s2adapter.h"
 namespace oceanbase
 {
 namespace common
@@ -31,6 +31,17 @@ typedef common::ObSEArray<common::ObNewRange, 4, common::ModulePageAllocator, tr
 typedef common::ObSEArray<ColumnItem, 16, common::ModulePageAllocator, true> ColumnArray;
 static const int64_t MAX_NOT_IN_SIZE = 10; //do not extract range for not in row over this size
 static const int64_t NEW_MAX_NOT_IN_SIZE = 1000; // mysql support 1000 not in range node
+
+struct ObFastFinalNLJRangeCtx
+{
+  ObFastFinalNLJRangeCtx()
+    : has_check_valid(false),
+      is_valid(false) {}
+
+  bool has_check_valid;
+  bool is_valid;
+};
+
 class ObQueryRangeProvider
 {
 public:
@@ -48,6 +59,19 @@ public:
                                    ObExecContext &exec_ctx,
                                    ObQueryRangeArray &ss_ranges,
                                    const common::ObDataTypeCastParams &dtc_params) const = 0;
+  virtual int get_tablet_ranges(common::ObIAllocator &allocator,
+                                ObExecContext &exec_ctx,
+                                ObQueryRangeArray &ranges,
+                                bool &all_single_value_ranges,
+                                const common::ObDataTypeCastParams &dtc_params,
+                                ObIArray<common::ObSpatialMBR> &mbr_filters) const = 0;
+  virtual int get_fast_nlj_tablet_ranges(ObFastFinalNLJRangeCtx &fast_nlj_range_ctx,
+                                         common::ObIAllocator &allocator,
+                                         ObExecContext &exec_ctx,
+                                         const ParamStore &param_store,
+                                         void *range_buffer,
+                                         ObQueryRangeArray &ranges,
+                                         const common::ObDataTypeCastParams &dtc_params) const = 0;
   virtual bool is_precise_whole_range() const = 0;
   virtual int is_get(bool &is_get) const = 0;
   virtual bool is_precise_get() const = 0;
@@ -68,6 +92,7 @@ public:
   // to string
   virtual int64_t to_string(char *buf, const int64_t buf_len) const = 0;
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const = 0;
+  virtual bool is_fast_nlj_range() const = 0;
 };
 
 }

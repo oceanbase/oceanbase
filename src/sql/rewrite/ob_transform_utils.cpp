@@ -3034,14 +3034,12 @@ int ObTransformUtils::get_simple_filter_column(const ObDMLStmt *stmt,
                    OB_ISNULL(right = expr->get_param_expr(1))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexcept null param expr", K(ret));
-        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(left, left)) ||
-                   OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(right, right))) {
+        } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(left, left)) ||
+                   OB_FAIL(ObOptimizerUtil::get_expr_without_unprecise_and_lossless_cast(right, right))) {
           LOG_WARN("failed to get expr without lossless cast", K(ret));
         } else if (IS_BASIC_CMP_OP(expr->get_expr_type()) &&
-                   OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left))) {
-          LOG_WARN("failed to get column expr without nvl", K(ret));
-        } else if (IS_BASIC_CMP_OP(expr->get_expr_type()) &&
-                   OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right))) {
+                   (OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(left, left)) ||
+                    OB_FAIL(ObOptimizerUtil::get_column_expr_without_nvl(right, right)))) {
           LOG_WARN("failed to get column expr without nvl", K(ret));
         } else if (left->is_column_ref_expr() &&
                    table_id == static_cast<ObColumnRefRawExpr*>(left)->get_table_id()) {

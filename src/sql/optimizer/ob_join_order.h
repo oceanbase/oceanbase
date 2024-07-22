@@ -621,7 +621,8 @@ struct EstimateCostInfo {
         range_prefix_count_(0),
         table_opt_info_(),
         for_update_(false),
-        use_skip_scan_(OptSkipScanState::SS_UNSET)
+        use_skip_scan_(OptSkipScanState::SS_UNSET),
+        index_prefix_(-1)
     {
     }
     virtual ~AccessPath() {
@@ -760,6 +761,7 @@ struct EstimateCostInfo {
     BaseTableOptInfo *table_opt_info_;
     bool for_update_;
     OptSkipScanState use_skip_scan_;
+    int64_t index_prefix_;
   private:
     DISALLOW_COPY_AND_ASSIGN(AccessPath);
   };
@@ -1655,9 +1657,12 @@ struct NullAwareAntiJoinInfo {
                                         ObIArray<ObExprConstraint> &expr_constraints,
                                         int64_t table_id,
                                         ObQueryRangeProvider* &range,
-                                        int64_t index_id);
+                                        int64_t index_id,
+                                        int64_t &out_index_prefix);
 
-    int check_enable_better_inlist(int64_t table_id, bool &enable);
+    int check_enable_better_inlist(int64_t table_id,
+                                   bool &enable_better_inlist,
+                                   bool &enable_index_prefix_cost);
 
     int get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
                             const ObIArray<ObRawExpr*> &predicates,
@@ -1668,6 +1673,17 @@ struct NullAwareAntiJoinInfo {
                                   int64_t range_column_count,
                                   int64_t range_count,
                                   double &cost);
+
+    int calculate_range_and_filter_expr_cost(ObIArray<ObRawExpr*> &range_exprs,
+                                             ObIArray<ObRawExpr*> &filter_exprs,
+                                             int64_t range_column_count,
+                                             int64_t range_count,
+                                             double &cost);
+
+    int get_better_index_prefix(const ObIArray<ObRawExpr*> &range_exprs,
+                                const ObIArray<int64_t> &range_expr_max_offsets,
+                                const ObIArray<uint64_t> &total_range_counts,
+                                int64_t &better_index_prefix);
 
     int sort_predicate_by_index_column(const ObIArray<ColumnItem> &range_columns,
                                        const ObIArray<ObRawExpr*> &predicates,
