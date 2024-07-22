@@ -1375,6 +1375,14 @@ static int common_string_decimalint(const ObExpr &expr, const ObString &in_str,
       } else {
         res_val.from(decint, int_bytes);
       }
+    } else {
+      // set to default zero value
+      const ObDecimalInt *tmp_decint = nullptr;
+      if (OB_FAIL(wide::ObDecimalIntConstValue::get_zero_value_byte_precision(out_prec, tmp_decint, int_bytes))) {
+        LOG_WARN("get zero value failed", K(ret));
+      } else {
+        res_val.from(tmp_decint, int_bytes);
+      }
     }
     if (OB_SUCC(ret)) {
       const ObCastMode cast_mode = expr.extra_;

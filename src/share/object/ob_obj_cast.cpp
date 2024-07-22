@@ -10443,6 +10443,9 @@ static int string_decimalint(const ObObjType expected_type, ObObjCastParams &par
   ObScale in_scale = NUMBER_SCALE_UNKNOWN_YET;
   ObPrecision in_precision = PRECISION_UNKNOWN_YET;
   ObString utf8_string;
+  ObPrecision out_prec = params.res_accuracy_->get_precision();
+  ObScale out_scale = params.res_accuracy_->get_scale();
+  ObObj tmp_val;
   if (OB_UNLIKELY((ObStringTC != in.get_type_class() && ObTextTC != in.get_type_class()
                    && ObGeometryTC != in.get_type_class())
                   || ObDecimalIntType != expected_type)) {
@@ -10460,35 +10463,91 @@ static int string_decimalint(const ObObjType expected_type, ObObjCastParams &par
     if (OB_FAIL(wide::from_integer(hex_v, params, decint, int_bytes))) {
       LOG_WARN("cast integer to decimal int failed", K(ret));
     } else {
-      ObObj tmp_val;
       tmp_val.set_decimal_int(int_bytes, DEFAULT_SCALE_FOR_INTEGER, decint);
-      if (NEED_SCALE_DECIMAL_INT(tmp_val, tmp_val.get_scale(), *params.res_accuracy_)) {
-        DO_SCALE_DECIMAL_INT(tmp_val, tmp_val.get_scale(), out);
-      } else {
-        out = tmp_val;
-      }
+      in_precision = ob_fast_digits10(hex_v);
+      in_scale = 0;
     }
   } else if (OB_UNLIKELY(0 == in.get_string().length())) {
     ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD;
-    out.set_decimal_int(0, 0, nullptr); // zero value
+    decint = nullptr;
+    int_bytes = 0;
   } else if (OB_FAIL(convert_string_collation(in.get_string(), in.get_collation_type(), utf8_string,
                                               ObCharset::get_system_collation(), params))) {
     LOG_WARN("convert_string_collation failed", K(ret));
   } else if (OB_FAIL(wide::from_string(utf8_string.ptr(), utf8_string.length(),
                                        *params.allocator_v2_, in_scale, in_precision, int_bytes,
                                        decint))) {
-    LOG_WARN("parse decimal int failed", K(ret));
-  } else {
-    ObObj tmp_val;
+    if (OB_NUMERIC_OVERFLOW == ret && lib::is_mysql_mode()) {
+      // bug: 4263211. compatible with mysql behavior when value overflows type range.
+      // select cast('1e500' as decimal);  -> max_val
+      // select cast('-1e500' as decimal); -> min_val
+      int64_t i = 0;
+      while (i < utf8_string.length() && isspace(utf8_string[i])) { ++i; }
+      bool is_neg = (utf8_string[i] == '-');
+      const ObDecimalInt *limit_decint = nullptr;
+      if (is_neg) {
+        limit_decint = wide::ObDecimalIntConstValue::get_min_value(out_prec);
+        int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
+      } else {
+        limit_decint = wide::ObDecimalIntConstValue::get_max_value(out_prec);
+        int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
+      }
+      in_scale = out_scale;
+      in_precision = out_prec;
+      if (OB_ISNULL(limit_decint)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null decimal int", K(ret));
+      } else if (OB_ISNULL(decint = (ObDecimalInt *)params.alloc(int_bytes))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory", K(ret));
+      } else {
+        MEMCPY(decint, limit_decint, int_bytes);
+      }
+    }
+  }
+  int warning = ret;
+  ret = OB_SUCCESS;
+  if (decint != nullptr && int_bytes != 0) {
     tmp_val.set_decimal_int(int_bytes, in_scale, decint);
+    // Decimal int not null means a valid decimal int was parsed regardless of wether there's
+    // error or not.We then do scale and calculate res_datum as normal in order to be compatible
+    // with mysql.
+    // e.g.
+    //  OceanBase(root@test)>set sql_mode = '';
+    //  Query OK, 0 rows affected (0.00 sec)
+    //
+    //  OceanBase(root@test)>insert into t2 values ('1ab');
+    //  Query OK, 1 row affected (0.00 sec)
+    //
+    //  OceanBase(root@test)>select * from t2;
+    //  +-------+
+    //  | a     |
+    //  +-------+
+    //  | 1.000 |
+    //  +-------+
+    //  1 row in set (0.01 sec)
     if (NEED_SCALE_DECIMAL_INT(tmp_val, in_scale, *params.res_accuracy_)) {
       DO_SCALE_DECIMAL_INT(tmp_val, in_scale, out);
     } else {
       out = tmp_val;
     }
+  } else {
+    // set to default zero
+    const ObDecimalInt *tmp_decint = nullptr;
+    if (OB_FAIL(wide::ObDecimalIntConstValue::get_zero_value_byte_precision(out_prec, tmp_decint, int_bytes))) {
+      LOG_WARN("get zero value failed", K(ret));
+    } else if (OB_ISNULL(decint = (ObDecimalInt *)params.alloc(int_bytes))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else {
+      MEMCPY(decint, tmp_decint, int_bytes);
+      out.set_decimal_int(int_bytes, out_scale, decint);
+    }
   }
-  if (CAST_FAIL(ret)) {
-    LOG_WARN("string_decimalint failed", K(ret), K(in), K(expected_type), K(cast_mode));
+  if (OB_SUCC(ret)) {
+    if (CAST_FAIL(warning)) {
+      LOG_WARN("string_decimalint failed", K(ret), K(in), K(expected_type), K(cast_mode));
+    }
   }
   return ret;
 }
