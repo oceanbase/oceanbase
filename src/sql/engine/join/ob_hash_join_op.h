@@ -275,6 +275,8 @@ public:
   bool is_shared_ht_;
   // record which equal cond is null safe equal
   common::ObFixedArray<bool, common::ObIAllocator> is_ns_equal_cond_;
+  ExprFixedArray adaptive_hj_scan_cols_;
+  ExprFixedArray adaptive_nlj_scan_cols_;
 };
 
 // hash join has no expression result overwrite problem:
