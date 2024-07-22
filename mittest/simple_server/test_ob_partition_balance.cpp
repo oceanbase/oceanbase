@@ -93,6 +93,7 @@ public:
     sql_proxy.write("use test", affected_rows);
     sql_proxy.write("drop tablegroup if exists my_tablegroup", affected_rows);
   }
+
   int run(int ls_cnt) {
     int ret = OB_SUCCESS;
     g_ls_cnt = ls_cnt;
@@ -103,25 +104,61 @@ public:
 
     if (OB_FAIL(guard.switch_to(OB_SYS_TENANT_ID))) {
       LOG_WARN("switch tenant", KR(ret));
-    } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_, GCTX.sql_proxy_, 1,1))) {
+    } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_, GCTX.sql_proxy_, 1, 1))) {
       LOG_WARN("balance_part_job init fail", KR(ret));
     } else if (OB_FAIL(balance_part_job.process())) {
       LOG_WARN("balance_part_job process fail", KR(ret));
     } else {
-      std::sort(balance_part_job.ls_desc_array_.begin(), balance_part_job.ls_desc_array_.end(), [] (const ObPartitionBalance::ObLSDesc* left, const ObPartitionBalance::ObLSDesc* right) {
+      lib::ob_sort(balance_part_job.ls_desc_array_.begin(), balance_part_job.ls_desc_array_.end(), [] (const ObPartitionBalance::ObLSDesc* left, const ObPartitionBalance::ObLSDesc* right) {
         return left->partgroup_cnt_ < right->partgroup_cnt_;
       });
       LOG_INFO("balance_part_job bg_map size", K(balance_part_job.bg_map_.size()));
-      for (auto iter = balance_part_job.bg_map_.begin(); iter != balance_part_job.bg_map_.end(); iter++) {
-        for (int i = 0; i < iter->second.count(); i++) {
-          LOG_INFO("balance_part_job bg_map", K(iter->first), K(iter->second.at(i)->ls_id_), K(iter->second.at(i)->part_groups_.count()));
+      FOREACH(iter, balance_part_job.bg_map_) {
+        const ObBalanceGroup &bg = iter->first;
+        const ObArray<ObBalanceGroupInfo*> &ls_part_groups = iter->second;
+        for (int ls_idx = 0; ls_idx < ls_part_groups.count(); ls_idx++) {
+          const ObBalanceGroupInfo *part_groups = ls_part_groups.at(ls_idx);
+          ObSqlString part_groups_str;
+          ObArray<ObTransferPartGroup *> part_groups_arr;
+          for (auto unit_it = part_groups->bg_units_.begin(); unit_it != part_groups->bg_units_.end(); unit_it++) {
+            const ObBalanceGroupUnit *unit = unit_it->second;
+            for (int i = 0; i < unit->part_group_buckets_.count(); i++) {
+              append(part_groups_arr, unit->part_group_buckets_.at(i));
+            }
+          }
+          lib::ob_sort(part_groups_arr.begin(), part_groups_arr.end(), [] (const ObTransferPartGroup *left, const ObTransferPartGroup *right) {
+            const ObTransferPartInfo &part_left = left->part_list_.at(0);
+            const ObTransferPartInfo &part_right = right->part_list_.at(0);
+            if (part_left.table_id_ == part_right.table_id_) {
+              return part_left.part_object_id_ < part_right.part_object_id_;
+            }
+            return part_left.table_id_ < part_right.table_id_;
+          });
+          for (int i = 0; i < part_groups_arr.count(); i++) {
+            ObTransferPartGroup *part_group = part_groups_arr.at(i);
+            if (i > 0) {
+              part_groups_str.append(" ");
+            }
+            part_groups_str.append("[");
+            for (int j = 0; j < part_group->count(); j++) {
+              ObTransferPartInfo &part = part_group->part_list_.at(j);
+              if (j > 0) {
+                part_groups_str.append_fmt(" ");
+              }
+              part_groups_str.append_fmt("%ld:%ld", part.table_id(), part.part_object_id());
+            }
+            part_groups_str.append_fmt("]");
+          }
+          LOG_INFO("balance_part_job bg_map", "balance group", bg.id_, "ls_id", part_groups->ls_id_,
+                  "part_group_count", part_groups->get_part_group_count(),
+                  "part_groups", part_groups_str);
         }
       }
       LOG_INFO("balance_part_job res", "size", balance_part_job.transfer_logical_tasks_.size(), "ls_array", balance_part_job.ls_desc_array_);
       for (auto iter = balance_part_job.transfer_logical_tasks_.begin(); iter != balance_part_job.transfer_logical_tasks_.end(); iter++) {
         LOG_INFO("balance_part_job:", "task_key", iter->first, "part_cnt", iter->second.count(), "part_list", iter->second);
       }
-      if (balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)->partgroup_cnt_ - balance_part_job.ls_desc_array_.at(0)->partgroup_cnt_ > 1) {
+      if (balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count() - 1)->partgroup_cnt_ - balance_part_job.ls_desc_array_.at(0)->partgroup_cnt_ > 1) {
         ret = -1;
         LOG_WARN("partition not balance", KR(ret), K(balance_part_job.ls_desc_array_.at(balance_part_job.ls_desc_array_.count()-1)), K(balance_part_job.ls_desc_array_.at(0)));
       }
@@ -151,7 +188,7 @@ TEST_F(ObBalancePartitionTest, simple_table)
   ObSqlString sql;
   int64_t affected_rows = 0;
   // 创建表
-  for (int i = 1; i <= 17; i++) {
+  for (int i = 1; i <= 60; i++) {
     sql.assign_fmt("create table basic_%d(col1 int)", i);
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
@@ -168,7 +205,7 @@ TEST_F(ObBalancePartitionTest, partition)
   // 创建表
   for (int i = 1; i <= 5; i++) {
     ObSqlString sql;
-    sql.assign_fmt("create table partition_%d(col1 int) partition by hash(col1) partitions 10", i);
+    sql.assign_fmt("create table partition_%d(col1 int) partition by hash(col1) partitions 30", i);
     int64_t affected_rows = 0;
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
@@ -184,7 +221,7 @@ TEST_F(ObBalancePartitionTest, subpart)
    // 创建表
    for (int i = 1; i <= 5; i++) {
     ObSqlString sql;
-    sql.assign_fmt("create table subpart_%d(col1 int) partition by range(col1) subpartition by hash(col1) subpartitions 10 (partition p1 values less than (100), partition p2 values less than MAXVALUE)", i);
+    sql.assign_fmt("create table subpart_%d(col1 int) partition by range(col1) subpartition by hash(col1) subpartitions 20 (partition p1 values less than (100), partition p2 values less than MAXVALUE)", i);
     int64_t affected_rows = 0;
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }

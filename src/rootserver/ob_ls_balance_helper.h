@@ -98,7 +98,8 @@ struct ObSplitLSParam
 {
 public:
   ObSplitLSParam(const share::ObLSStatusInfo *ls_info, const double current_factor) :
-                    info_(ls_info), current_factor_(current_factor){}
+      info_(ls_info),
+      current_factor_(current_factor) {}
   ObSplitLSParam() : info_(NULL), current_factor_(OB_FLOAT_EPSINON) {}
   bool is_valid() const
   {
@@ -193,11 +194,14 @@ public:
   int generate_balance_task_for_expand_(const ObSplitLSParamArray &dest_split_param,
                                         const uint64_t ls_group_id);
   int generate_ls_split_task_(const ObSplitLSParamArray &dest_split_param,
-                                  int64_t &task_begin_index);
+                              share::ObLSID &dest_ls_id,
+                              int64_t &task_begin_index);
   int prepare_ls_partition_info_();
   int add_ls_part_info(const share::ObLSID &ls_id, const share::ObTransferPartInfo &part_info,
                         const ObBalanceGroupID &bg_id);
-  int construct_ls_part_info_(const ObSplitLSParam &src_ls, share::ObTransferPartList &part_list);
+  int construct_ls_part_info_(const ObSplitLSParam &src_ls,
+                              const share::ObLSID &dest_ls_id,
+                              share::ObTransferPartList &part_list);
   int generate_ls_alter_task_(const share::ObLSStatusInfo &ls_status_info, ObUnitGroupBalanceInfo &dest_unit_group);
   int generate_task_for_shrink_(const ObSplitLSParamArray &src_split_param, const share::ObLSStatusInfo &ls_status_info);
   int generate_transfer_task_(const ObSplitLSParam &param, const share::ObLSStatusInfo &ls_status_info);

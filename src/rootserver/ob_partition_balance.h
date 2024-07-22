@@ -38,7 +38,7 @@ class ObPartitionBalance final : public ObAllBalanceGroupBuilder::NewPartitionCa
 public:
   ObPartitionBalance() : inited_(false), tenant_id_(OB_INVALID_TENANT_ID), sql_proxy_(nullptr),
                          allocator_("PART_BALANCE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-                         bg_builder_(), cur_part_group_(nullptr),
+                         bg_builder_(),
                          ls_desc_array_(), ls_desc_map_(),
                          bg_map_(),
                          transfer_logical_tasks_(),
@@ -57,8 +57,12 @@ public:
     GEN_TRANSFER_TASK
   };
 
-  int init(uint64_t tenant_id, schema::ObMultiVersionSchemaService *schema_service, common::ObMySQLProxy *sql_proxy,
-      const int64_t primary_zone_num, const int64_t unit_group_num,
+  int init(
+      uint64_t tenant_id,
+      schema::ObMultiVersionSchemaService *schema_service,
+      common::ObMySQLProxy *sql_proxy,
+      const int64_t primary_zone_num,
+      const int64_t unit_group_num,
       TaskMode mode = GEN_BG_STAT);
   void destroy();
   int process();
@@ -75,48 +79,24 @@ public:
   // For ObAllBalanceGroupBuilder::NewPartitionCallback
   // handle new partition of every balance group
   int on_new_partition(
-      const ObBalanceGroup &bg,
+      const ObBalanceGroup &bg_in,
+      const ObObjectID bg_unit_id,
       const ObObjectID table_id,
       const ObObjectID part_object_id,
-      const ObTabletID tablet_id,
       const ObLSID &src_ls_id,
       const ObLSID &dest_ls_id,
       const int64_t tablet_size,
       const bool in_new_partition_group,
       const uint64_t part_group_uid);
 
-  class ObLSPartGroupDesc
-  {
-  public:
-    ObLSPartGroupDesc(ObLSID ls_id, ObIAllocator &alloc) :
-        ls_id_(ls_id),
-        alloc_(alloc),
-        part_groups_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(alloc, "LSPartGroupDesc")) {}
-    ~ObLSPartGroupDesc() {
-      ls_id_.reset();
-      for (int64_t i = 0; i < part_groups_.count(); i++) {
-        if (OB_NOT_NULL(part_groups_.at(i))) {
-          part_groups_.at(i)->~ObTransferPartGroup();
-          alloc_.free(part_groups_.at(i));
-          part_groups_.at(i) = NULL;
-        }
-      }
-      part_groups_.reset();
-    }
-    ObLSID get_ls_id() const { return ls_id_; }
-    ObArray<ObTransferPartGroup *> &get_part_groups() { return part_groups_; }
-    int add_new_part_group(ObTransferPartGroup *&part_gourp);
-    TO_STRING_KV(K_(ls_id), K_(part_groups));
-  private:
-    ObLSID ls_id_;
-    ObIAllocator &alloc_;
-    ObArray<ObTransferPartGroup *> part_groups_;
-  };
-
   class ObLSDesc
   {
   public:
-    ObLSDesc(ObLSID ls_id, uint64_t ls_group_id) : ls_id_(ls_id), ls_group_id_(ls_group_id), partgroup_cnt_(0), data_size_(0) {}
+    ObLSDesc(ObLSID ls_id, uint64_t ls_group_id) :
+        ls_id_(ls_id),
+        ls_group_id_(ls_group_id),
+        partgroup_cnt_(0),
+        data_size_(0) {}
     ~ObLSDesc() {
       ls_id_.reset();
       ls_group_id_ = OB_INVALID_ID;
@@ -170,14 +150,6 @@ public:
 private:
   int prepare_balance_group_();
   int save_balance_group_stat_();
-  int construct_balance_group_();
-  int construct_bg_for_partlevel_zero_(const schema::ObSimpleTableSchemaV2 &table_schema);
-  int construct_bg_for_partlevel_one_(const schema::ObSimpleTableSchemaV2 &table_schema);
-  int construct_bg_for_partlevel_two_(const schema::ObSimpleTableSchemaV2 &table_schema);
-  int construct_bg_for_tablegroup_sharding_none_(const schema::ObSimpleTablegroupSchema &tablegroup_schema, ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
-  int construct_bg_for_tablegroup_sharding_partition_(const schema::ObSimpleTablegroupSchema &tablegroup_schema, ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
-  int construct_bg_for_tablegroup_sharding_subpart_(const schema::ObSimpleTablegroupSchema &tablegroup_schema, ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas);
-  int add_tablet_to_bg_(ObTransferPartGroup *&dest_part_group, ObLSID &dest_ls_id, ObTabletID tablet_id, ObBalanceGroupID &bg_id, ObObjectID table_id, ObObjectID part_id);
   // balance group inner balance
   int process_balance_partition_inner_();
   // balance group extend balance
@@ -187,13 +159,23 @@ private:
   int generate_balance_job_from_logical_task_();
 
   int prepare_ls_();
-  int add_new_pg_to_bg_map_(const ObLSID &ls_id, ObBalanceGroup &bg, ObTransferPartGroup *&part_group);
-  int add_transfer_task_(const ObLSID &src_ls_id, const ObLSID &dest_ls_id, ObTransferPartGroup *part_group, bool modify_ls_desc = true);
+  int add_part_to_bg_map_(
+      const ObLSID &ls_id,
+      ObBalanceGroup &bg,
+      const ObObjectID &bg_unit_id,
+      const uint64_t part_group_uid,
+      const ObTransferPartInfo &part_info,
+      const int64_t tablet_size);
+  int add_transfer_task_(
+      const ObLSID &src_ls_id,
+      const ObLSID &dest_ls_id,
+      ObTransferPartGroup *part_group,
+      bool modify_ls_desc = true);
   int update_ls_desc_(const ObLSID &ls_id, int64_t cnt, int64_t size);
-  int try_swap_part_group_(ObLSDesc &src_ls, ObLSDesc &dest_ls, int64_t part_group_min_size ,int64_t &swap_cnt);
-  int get_table_schemas_in_tablegroup_(int64_t tablegroup_id,
-                                      ObArray<const schema::ObSimpleTableSchemaV2*> &table_schemas,
-                                      int &max_part_level);
+  int try_swap_part_group_(ObLSDesc &src_ls,
+                          ObLSDesc &dest_ls,
+                          int64_t part_group_min_size,
+                          int64_t &swap_cnt);
   bool check_ls_need_swap_(uint64_t ls_more_size, uint64_t ls_less_size);
 private:
   bool inited_;
@@ -202,14 +184,13 @@ private:
   common::ObArenaAllocator allocator_;
 
   ObAllBalanceGroupBuilder bg_builder_;
-  ObTransferPartGroup *cur_part_group_;
 
   // ls array to assign part
   ObArray<ObLSDesc*> ls_desc_array_;
   hash::ObHashMap<ObLSID, ObLSDesc*> ls_desc_map_;
 
   // partition distribute in balance group and ls
-  hash::ObHashMap<ObBalanceGroup, ObArray<ObLSPartGroupDesc *>> bg_map_;
+  hash::ObHashMap<ObBalanceGroup, ObArray<ObBalanceGroupInfo*>> bg_map_;
 
   // logical transfer task
   hash::ObHashMap<ObTransferTaskKey, ObTransferPartList> transfer_logical_tasks_;
@@ -249,7 +230,6 @@ public:
   static int get_sub_part_num(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, int64_t &sub_part_num);
   static int get_sub_part_info(const schema::ObSimpleTableSchemaV2 &table_schema, int64_t part_idx, int64_t sub_part_idx, ObPartInfo &part_info);
   static int check_partition_option(const schema::ObSimpleTableSchemaV2 &t1, const schema::ObSimpleTableSchemaV2 &t2, bool is_subpart, bool &is_matched);
-  static int check_partition_match(const schema::ObSimpleTableSchemaV2 &t1, const schema::ObSimpleTableSchemaV2 &t2, bool &match);
 };
 
 } // end rootserver

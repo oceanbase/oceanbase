@@ -58,6 +58,13 @@ public:
   bool operator !=(const ObBalanceGroupID &other) const {
     return !(*this == other);
   }
+  bool is_non_part_table_bg() const {
+    return 0 == id_high_ && 0 == id_low_;
+  }
+  void reset() {
+    id_high_ = common::OB_INVALID_ID;
+    id_low_ = common::OB_INVALID_ID;
+  }
 
   TO_STRING_KV(K_(id_high),
                K_(id_low));
@@ -94,6 +101,8 @@ public:
   bool operator !=(const ObBalanceGroup &other) const {
     return !(*this == other);
   }
+  bool is_non_part_table_bg() const { return id_.is_non_part_table_bg(); }
+  bool is_valid() const { return id_.is_valid() && !name_.is_empty(); }
 
   TO_STRING_KV(K_(id), K_(name));
 public:

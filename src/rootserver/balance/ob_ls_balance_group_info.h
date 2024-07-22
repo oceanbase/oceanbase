@@ -29,17 +29,19 @@ namespace rootserver
 class ObLSBalanceGroupInfo final
 {
 public:
-  ObLSBalanceGroupInfo() :
+  ObLSBalanceGroupInfo(common::ObIAllocator &alloc) :
       inited_(false),
       ls_id_(),
-      alloc_("LSBGInfo", common::OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      alloc_(alloc),
       bg_map_(),
-      orig_part_group_cnt_map_()
+      orig_part_group_cnt_map_(),
+      ls_num_(0)
   {}
   ~ObLSBalanceGroupInfo() { destroy(); }
 
-  int init(const share::ObLSID &ls_id);
+  int init(const share::ObLSID &ls_id, int64_t ls_num);
   void destroy();
+  bool is_valid() const { return inited_; }
 
   // append partition at the newest partition group in target balance group.
   // create new partition group in balance group if needed.
@@ -47,42 +49,48 @@ public:
   // NOTE: if balance group not exist, it will create a new balance group automatically
   //
   // @param [in] bg_id                        target balance group id
+  // @param [in] bg_unit_id                   target balance group unit id
+  // @param [in] part_group_uid               target partition group unique id
   // @param [in] part                         target partition info which will be added
   // @param [in] data_size                    partition data size
-  // @param [in] part_group_uid               target partition group unique id
   //
   // @return OB_SUCCESS         success
   // @return OB_ENTRY_EXIST     no partition group found
   // @return other              fail
-  int append_part_into_balance_group(const ObBalanceGroupID &bg_id,
+  int append_part_into_balance_group(
+      const ObBalanceGroupID &bg_id,
+      const ObObjectID &bg_unit_id,
+      const uint64_t part_group_uid,
       share::ObTransferPartInfo &part,
-      const int64_t data_size,
-      const uint64_t part_group_uid);
+      const int64_t data_size);
 
   ////////////////////////////////////////////////
   // Transfer out partition groups by specified factor
   //
   // NOTE: This function can be called only if all partitions are added.
-  int transfer_out_by_factor(const float factor, share::ObTransferPartList &part_list);
+  int transfer_out_by_factor(ObLSBalanceGroupInfo &dst_ls_bg_info,
+                            const float factor,
+                            share::ObTransferPartList &part_list);
 
-  TO_STRING_KV(K_(inited), K_(ls_id), "balance_group_count", bg_map_.size());
+  TO_STRING_KV(K_(inited), K_(ls_id), "balance_group_count", bg_map_.size(), K_(ls_num));
 
 private:
-  int create_new_balance_group_(const ObBalanceGroupID &bg_id,
-      ObBalanceGroupInfo *&bg);
+  int get_or_create_(const ObBalanceGroupID &bg_id,
+                    ObBalanceGroupInfo *&bg);
 
 private:
   static const int64_t MAP_BUCKET_NUM = 4096;
 
   bool                      inited_;
   share::ObLSID             ls_id_;
-  common::ObArenaAllocator  alloc_;
+  common::ObIAllocator      &alloc_;
   // map for all balance groups on this LS
   common::hash::ObHashMap<ObBalanceGroupID, ObBalanceGroupInfo *> bg_map_;
   // map for all balance groups' original partition group count
   // This original count will be maintained during adding partitions into balance group.
   // When all partitions are added, the original count will not change anymore.
   common::hash::ObHashMap<ObBalanceGroupID, int64_t> orig_part_group_cnt_map_;
+  int64_t ls_num_;
 };
 
 }

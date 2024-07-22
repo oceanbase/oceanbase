@@ -78,9 +78,10 @@ public:
     //       You can check 'in_new_partition_group' to find whether new partition group found
     //
     // @param [in]  bg                        balance group
+    // @param [in]  bg_unit_id                balance group unit id
     // @param [in]  table_id                  table id of partition
-    // @param [in]  part_object_id            partition object id: part id for one-level part table, subpart id for two-level part table
-    // @param [in]  tablet_id                 tablet id
+    // @param [in]  part_object_id            partition object id: part id for one-level part table,
+    //                                        subpart id for two-level part table
     // @param [in]  src_ls_id                 the LS that partition is current located
     // @param [in]  dest_ls_id                the LS that partition should be located
     // @param [in]  tablet_size               tablet data size
@@ -88,9 +89,9 @@ public:
     // @param [in]  part_group_uid            partition group unique id
     virtual int on_new_partition(
         const ObBalanceGroup &bg,
+        const common::ObObjectID bg_unit_id,
         const common::ObObjectID table_id,
         const common::ObObjectID part_object_id,
-        const common::ObTabletID tablet_id,
         const share::ObLSID &src_ls_id,
         const share::ObLSID &dest_ls_id,
         const int64_t tablet_size,
@@ -135,6 +136,7 @@ private:
   int build_bg_for_partlevel_two_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
   int add_new_part_(
       const ObBalanceGroup &bg,
+      const common::ObObjectID bg_unit_id,
       const common::ObObjectID table_id,
       const common::ObObjectID part_object_id,
       const common::ObTabletID tablet_id,
