@@ -18,8 +18,6 @@ target_include_directories(
   ${DEP_DIR}/include
   ${DEP_DIR}/include/libxml2
   ${DEVTOOLS_DIR}
-  ${DEP_3RD_DIR}/usr/local/include
-  ${DEP_3RD_DIR}/usr/include/
   ${DEP_DIR}/include/apr-1/
   ${DEP_DIR}/include/icu/common
   ${USSL_INCLUDE_DIRS}
@@ -29,6 +27,12 @@ if(OB_BUILD_OPENSOURCE)
   target_include_directories(
     oblib_base_base_base INTERFACE
     ${DEP_DIR}/include/mariadb
+    )
+else()
+  target_include_directories(
+    oblib_base_base_base INTERFACE
+    ${DEP_3RD_DIR}/usr/local/include
+    ${DEP_3RD_DIR}/usr/include/
     )
 endif()
 
