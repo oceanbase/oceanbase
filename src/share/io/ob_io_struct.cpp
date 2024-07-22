@@ -810,10 +810,20 @@ int ObIOTuner::send_detect_task()
   return ret;
 }
 
-void ObIOTuner::destroy()
+void ObIOTuner::stop()
 {
   TG_STOP(lib::TGDefIDs::IO_TUNING);
+}
+
+void ObIOTuner::wait()
+{
   TG_WAIT(lib::TGDefIDs::IO_TUNING);
+}
+
+void ObIOTuner::destroy()
+{
+  stop();
+  wait();
   is_inited_ = false;
 }
 
@@ -1756,6 +1766,12 @@ void ObIOScheduler::stop()
   for (int64_t i = 0; i < senders_.count(); ++i) {
     senders_.at(i)->stop_submit();
   }
+  io_tuner_.stop();
+}
+
+void ObIOScheduler::wait()
+{
+  io_tuner_.wait();
 }
 
 int ObIOScheduler::schedule_request(ObIORequest &req)
