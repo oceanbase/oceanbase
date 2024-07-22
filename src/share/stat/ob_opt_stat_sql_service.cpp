@@ -1191,7 +1191,7 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
         stat.set_stat_expired_time(ObTimeUtility::current_time() + ObOptStatMonitorCheckTask::CHECK_INTERVAL);
       }
     }
-    EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, sample_size, stat, int64_t);
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, sample_size, stat, int64_t);
   }
   return ret;
 }
