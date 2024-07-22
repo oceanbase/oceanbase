@@ -124,6 +124,9 @@ int ObS3Client::init_s3_client_configuration_(const ObS3Account &account,
     config.payloadSigningPolicy = Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never;
     config.endpointOverride = account.endpoint_;
     config.executor = nullptr;
+    if (account.addressing_model_ == ObIStorageUtil::PATH_STYLE) {
+      config.useVirtualAddressing = false;
+    }
 
     // Default maxRetries is 10
     std::shared_ptr<Aws::Client::DefaultRetryStrategy> retryStrategy =
@@ -819,6 +822,7 @@ void ObS3Account::reset()
   MEMSET(endpoint_, 0, sizeof(endpoint_));
   MEMSET(access_id_, 0, sizeof(access_id_));
   MEMSET(secret_key_, 0, sizeof(secret_key_));
+  addressing_model_ = ObIStorageUtil::VIRTUAL_HOSTED_STYLE;
 }
 
 int64_t ObS3Account::hash() const
@@ -871,6 +875,15 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
           OB_LOG(WARN, "failed to set s3 secret key", K(ret), KP(token));
         } else {
           bitmap |= (1 << 2);
+        }
+      } else if (0 == strncmp(ADDRESSING_MODEL, token, strlen(ADDRESSING_MODEL))) {
+        if (0 == strcmp(token + strlen(ADDRESSING_MODEL), "virtual_hosted_style")) {
+          addressing_model_ = ObIStorageUtil::VIRTUAL_HOSTED_STYLE;
+        } if (0 == strcmp(token + strlen(ADDRESSING_MODEL), "path_style")) {
+          addressing_model_ = ObIStorageUtil::PATH_STYLE;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          OB_LOG(WARN, "addressing model is invalid", K(ret), KCSTRING(token));
         }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (0 == strcmp(token + strlen(DELETE_MODE), "delete")) {

@@ -207,6 +207,12 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
           LOG_WARN("failed to set appid", K(ret), K(token));
         }
+      } else if (0 == strncmp(ADDRESSING_MODEL, token, strlen(ADDRESSING_MODEL))) {
+        if (OB_FAIL(check_addressing_model_(token + strlen(ADDRESSING_MODEL)))) {
+          OB_LOG(WARN, "failed to check addressing model", K(ret), K(token));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("failed to set addressing model", K(ret), K(token));
+        }
       } else if (0 == strncmp(DELETE_MODE, token, strlen(DELETE_MODE))) {
         if (OB_STORAGE_FILE == device_type_) {
           ret = OB_INVALID_BACKUP_DEST;
@@ -238,6 +244,19 @@ int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode) const
   } else if (0 != strcmp(delete_mode, "delete") && 0 != strcmp(delete_mode, "tagging")) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(delete_mode));
+  }
+  return ret;
+}
+
+int ObObjectStorageInfo::check_addressing_model_(const char *addressing_model) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(addressing_model)) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "invalid args", K(ret), KP(addressing_model));
+  } else if (0 != strcmp(addressing_model, "virtual_hosted_style") && 0 != strcmp(addressing_model, "path_style")) {
+    ret = OB_INVALID_ARGUMENT;
+    OB_LOG(WARN, "addressing model is invalid", K(ret), K(addressing_model));
   }
   return ret;
 }
