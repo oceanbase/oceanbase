@@ -1035,6 +1035,8 @@ public:
   virtual void set_duplicate_scope(const share::ObDuplicateScope duplicate_scope) override { duplicate_scope_ = duplicate_scope; }
   virtual void set_duplicate_scope(const int64_t duplicate_scope) override { duplicate_scope_ = static_cast<share::ObDuplicateScope>(duplicate_scope); }
 
+  inline void set_duplicate_read_consistency(const share::ObDuplicateReadConsistency duplicate_read_consistency) { duplicate_read_consistency_ = duplicate_read_consistency; }
+  inline share::ObDuplicateReadConsistency get_duplicate_read_consistency() const { return duplicate_read_consistency_; }
   // for encrypt
   int set_encryption_str(const common::ObString &str) { return deep_copy_str(str, encryption_); }
   virtual const common::ObString &get_encryption_str() const override { return encryption_; }
@@ -1079,6 +1081,7 @@ protected:
   // Only the type of index is valid in oracle mode, which means the original index name without prefix (__idx__table_id_)
   common::ObString origin_index_name_;
   share::ObDuplicateScope duplicate_scope_;
+  share::ObDuplicateReadConsistency duplicate_read_consistency_;
   common::ObString encryption_;
   uint64_t tablespace_id_;
   common::ObString encrypt_key_;

@@ -182,6 +182,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       partition_schema_version_ = other.partition_schema_version_;
       session_id_ = other.session_id_;
       duplicate_scope_ = other.duplicate_scope_;
+      duplicate_read_consistency_ = other.duplicate_read_consistency_;
       tablespace_id_ = other.tablespace_id_;
       master_key_id_ = other.master_key_id_;
       dblink_id_ = other.dblink_id_;
@@ -321,6 +322,7 @@ void ObSimpleTableSchemaV2::reset()
   link_schema_version_ = OB_INVALID_ID;
   link_database_name_.reset();
   duplicate_scope_ = ObDuplicateScope::DUPLICATE_SCOPE_NONE;
+  duplicate_read_consistency_ = ObDuplicateReadConsistency::STRONG;
   simple_constraint_info_array_.reset();
   encryption_.reset();
   tablespace_id_ = OB_INVALID_ID;
@@ -995,7 +997,8 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(max_dependency_version),
     K_(object_status),
     K_(is_force_view),
-    K_(truncate_version)
+    K_(truncate_version),
+    K_(duplicate_read_consistency)
 );
   J_OBJ_END();
 
@@ -6828,6 +6831,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(mlog_tid_);
   OB_UNIS_ENCODE(auto_increment_cache_size_);
   OB_UNIS_ENCODE(local_session_vars_);
+  OB_UNIS_ENCODE(duplicate_read_consistency_);
   return ret;
 }
 
@@ -7258,6 +7262,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(mlog_tid_);
   OB_UNIS_DECODE(auto_increment_cache_size_);
   OB_UNIS_DECODE(local_session_vars_);
+  OB_UNIS_DECODE(duplicate_read_consistency_);
   return ret;
 }
 
@@ -7409,6 +7414,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(mlog_tid_);
   OB_UNIS_ADD_LEN(auto_increment_cache_size_);
   OB_UNIS_ADD_LEN(local_session_vars_);
+  OB_UNIS_ADD_LEN(duplicate_read_consistency_);
   return len;
 }
 
@@ -9300,7 +9306,8 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
     K_(aux_lob_piece_tid),
     K_(is_column_store_supported),
     K_(max_used_column_group_id),
-    K_(mlog_tid)
+    K_(mlog_tid),
+    K_(duplicate_read_consistency)
   );
   J_OBJ_END();
   return pos;
