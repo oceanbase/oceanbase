@@ -590,7 +590,7 @@ bool ObComplementDataDag::ignore_warning()
 int ObComplementDataDag::prepare_context()
 {
   int ret = OB_SUCCESS;
-  ObWholeDataStoreDesc data_desc(true/*is_ddl*/);
+  ObWholeDataStoreDesc data_desc;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *hidden_table_schema = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -608,7 +608,8 @@ int ObComplementDataDag::prepare_context()
   } else if (OB_ISNULL(hidden_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("hidden table schema not exist", K(ret), K(param_));
-  } else if (OB_FAIL(data_desc.init(*hidden_table_schema,
+  } else if (OB_FAIL(data_desc.init(true/*is_ddl*/,
+                                    *hidden_table_schema,
                                     param_.dest_ls_id_,
                                     param_.dest_tablet_id_,
                                     MAJOR_MERGE,
@@ -1376,12 +1377,11 @@ int ObComplementWriteTask::append_row(ObScan *scan)
   int ret = OB_SUCCESS;
   ObComplementDataDag *current_dag = nullptr;
   const int64_t CHECK_DAG_NEED_EXIT_INTERVAL = 10000; // 1w rows.
-  ObDataStoreDesc data_desc;
   HEAP_VARS_4((ObMacroBlockWriter, writer),
               (ObSchemaGetterGuard, schema_guard),
               (ObRelativeTable, relative_table),
               (blocksstable::ObNewRowBuilder, new_row_builder)) {
-  HEAP_VAR(ObWholeDataStoreDesc, data_desc, true) {
+  HEAP_VAR(ObWholeDataStoreDesc, data_desc) {
     ObArray<int64_t> report_col_checksums;
     ObArray<int64_t> report_col_ids;
     ObDDLRedoLogWriterCallback callback;
@@ -1444,7 +1444,7 @@ int ObComplementWriteTask::append_row(ObScan *scan)
       } else if (OB_ISNULL(hidden_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table not exist", K(ret), K(param_->dest_tenant_id_), K(param_->dest_table_id_));
-      } else if (OB_FAIL(data_desc.init(*hidden_table_schema,
+      } else if (OB_FAIL(data_desc.init(true/*is_ddl*/, *hidden_table_schema,
                                         param_->dest_ls_id_,
                                         param_->dest_tablet_id_,
                                         MAJOR_MERGE,

@@ -105,8 +105,7 @@ int ObProgressiveMergeHelper::init(const ObSSTable &sstable, const ObMergeParame
   } else {
     int64_t rewrite_macro_cnt = 0, reduce_macro_cnt = 0, rewrite_block_cnt_for_progressive = 0;
     bool last_is_small_data_macro = false;
-    const bool is_major = is_major_merge_type(static_param.get_merge_type());
-    const bool need_calc_progressive_merge = is_major && static_param.progressive_merge_step_ < static_param.progressive_merge_num_;
+    const bool need_calc_progressive_merge = static_param.need_calc_progressive_merge();
 
     progressive_merge_round_ = static_param.progressive_merge_round_;
 

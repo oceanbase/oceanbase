@@ -49,6 +49,11 @@ struct ObStaticMergeParam final
     is_full_merge_ = is_full_merge;
     merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
   }
+  bool need_calc_progressive_merge() const
+  {
+    return is_major_merge_type(get_merge_type())
+      && progressive_merge_step_ < progressive_merge_num_;
+  }
 private:
   int init_multi_version_column_descs();
 

@@ -196,6 +196,11 @@ int ObSSTableBuilder::build_sstable_merge_res(
     } else if (OB_FAIL(rebuild_index_builder_.close(res))) {
       STORAGE_LOG(WARN, "fail to close", K(ret), K(rebuild_index_builder_));
     } else { //update merge info
+      STORAGE_LOG(INFO, "after rebuild sstable", K(ret), "cg_idx", data_store_desc_.get_desc().get_table_cg_idx(),
+        "old_multiplexed_macro_block_count", sstable_merge_info.multiplexed_macro_block_count_,
+        "old_total_macro_count", sstable_merge_info.macro_block_count_,
+        "new_multiplexed_macro_block_count", multiplexed_macro_block_count,
+        "new_total_macro_count", res.data_blocks_cnt_);
       sstable_merge_info.multiplexed_macro_block_count_ = multiplexed_macro_block_count;
       sstable_merge_info.macro_block_count_ = res.data_blocks_cnt_;
     }
@@ -254,6 +259,7 @@ int ObSSTableBuilder::check_need_rebuild(const ObStaticMergeParam &merge_param,
   if (OB_FAIL(pre_check_rebuild(merge_param, iter, need_check_rebuild))) {
     STORAGE_LOG(WARN, "Fail to pre check need rebuild", K(ret));
   } else if (need_check_rebuild) {
+    // find continues macro to rewrite
     while (OB_SUCC(ret) && OB_SUCC(iter.get_next_macro_block(macro_meta))) {
       if (OB_ISNULL(macro_meta)) {
         ret = OB_ERR_UNEXPECTED;
@@ -261,10 +267,10 @@ int ObSSTableBuilder::check_need_rebuild(const ObStaticMergeParam &merge_param,
       } else if (check_macro_block_could_merge(*macro_meta)) {
         const int64_t macro_block_sum = macro_meta->val_.occupy_size_ + macro_meta->val_.block_size_;
         bool need_merge = false;
-
+        // check last_macro_block_sum + cur_macro can be merged into one
         if (OB_FAIL(check_cur_macro_need_merge(last_macro_block_sum, *macro_meta, need_merge))) {
           STORAGE_LOG(WARN, "fail to check_cur_macro_need_merge", K(ret), K(macro_meta));
-        } else if (!need_merge) {
+        } else if (!need_merge) { // found first can't merge macro, reset collect info
           last_macro_id = macro_meta->get_macro_id();
           last_macro_is_first = true;
           last_macro_block_sum = macro_block_sum;

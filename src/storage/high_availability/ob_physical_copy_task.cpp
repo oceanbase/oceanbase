@@ -833,6 +833,7 @@ int ObSSTableCopyFinishTask::prepare_data_store_desc_(
       }
     }
     if (FAILEDx(desc.init(
+        false/*is ddl*/,
         *storage_schema,
         ls_id,
         tablet_id,

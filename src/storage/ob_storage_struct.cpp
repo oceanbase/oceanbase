@@ -307,6 +307,7 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
     is_simplified_ = src.is_simplified_;
     is_backfill_ = src.is_backfill_;
     backfill_scn_ = src.backfill_scn_;
+    snapshot_info_ = src.snapshot_info_;
   }
   return ret;
 }

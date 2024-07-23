@@ -292,8 +292,12 @@ int ObStaticMergeParam::cal_major_merge_param()
   }
 
   if (OB_SUCC(ret)) {
-    if (is_full_merge_ || is_meta_major_merge(get_merge_type()) || (merge_level_ != MACRO_BLOCK_MERGE_LEVEL && is_schema_changed_)) {
+    if (is_full_merge_
+      || is_meta_major_merge(get_merge_type())
+      || (merge_level_ != MACRO_BLOCK_MERGE_LEVEL && is_schema_changed_)
+      || (data_version_ >= DATA_VERSION_4_3_3_0 && need_calc_progressive_merge())) {
       merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
+      // for progressive merge, if all macro have larger progressive_merge_round, no need progressive merge any more TODO;
     }
   }
   return ret;
@@ -790,7 +794,7 @@ int ObBasicTabletMergeCtx::init_static_param_and_desc()
   int ret = OB_SUCCESS;
   if (OB_FAIL(static_param_.init_static_info(get_concurrent_cnt(), tablet_handle_))) {
     LOG_WARN("failed to init basic info", KR(ret));
-  } else if (OB_FAIL(static_desc_.init(*get_schema(), get_ls_id(), get_tablet_id(),
+  } else if (OB_FAIL(static_desc_.init(false/*is_ddl*/, *get_schema(), get_ls_id(), get_tablet_id(),
                                 get_merge_type(), get_snapshot(),
                                 static_param_.scn_range_.end_scn_,
                                 static_param_.data_version_))) {

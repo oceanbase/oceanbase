@@ -1423,7 +1423,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
     const uint64_t data_format_version = tablet_direct_load_mgr->get_data_format_version();
     ObLSID ls_id = tablet_direct_load_mgr->get_ls_id();
 
-    if (OB_FAIL(data_desc_.init(*storage_schema,
+    if (OB_FAIL(data_desc_.init(true/*is ddl*/, *storage_schema,
                                 ls_id,
                                 table_key.get_tablet_id(),
                                 compaction::ObMergeType::MAJOR_MERGE,

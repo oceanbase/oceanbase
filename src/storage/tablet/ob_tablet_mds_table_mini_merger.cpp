@@ -377,7 +377,7 @@ int ObMdsTableMiniMerger::init(compaction::ObTabletMergeCtx &ctx, ObMdsMiniMerge
     } else if (OB_UNLIKELY(!storage_schema->is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mds storage schema is invalid", K(ret), KP(storage_schema), KPC(storage_schema));
-    } else if (OB_FAIL(data_desc_.init(*storage_schema, ls_id, tablet_id,
+    } else if (OB_FAIL(data_desc_.init(false/*is ddl*/, *storage_schema, ls_id, tablet_id,
         ctx.get_merge_type(), ctx.get_snapshot(), data_version,
         ctx.static_param_.scn_range_.end_scn_))) {
       LOG_WARN("fail to init whole desc", KR(ret), K(ctx), K(ls_id), K(tablet_id));

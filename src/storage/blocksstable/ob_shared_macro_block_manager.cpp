@@ -780,6 +780,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mds storage schema is invalid", K(ret), KP(storage_schema), KPC(storage_schema));
     } else if (OB_FAIL(data_desc.init(
+          false/*is_ddl*/,
           *storage_schema,
           tablet.get_tablet_meta().ls_id_,
           tablet.get_tablet_meta().tablet_id_,
@@ -809,6 +810,7 @@ int ObSharedMacroBlockMgr::prepare_data_desc(
     }
 
     if (FAILEDx(data_desc.init(
+          false/*is_ddl*/,
           *storage_schema,
           tablet.get_tablet_meta().ls_id_,
           tablet.get_tablet_meta().tablet_id_,

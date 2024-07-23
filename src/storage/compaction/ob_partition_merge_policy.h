@@ -206,7 +206,7 @@ public:
                                 storage::ObLS &ls,
                                 const storage::ObTablet &,
                                 storage::ObGetMergeTablesResult&);
-  static GetMergeTables get_merge_tables[compaction::ObMergeType::MERGE_TYPE_MAX];
+  static GetMergeTables get_merge_tables[];
 };
 
 struct ObMinorExecuteRangeMgr

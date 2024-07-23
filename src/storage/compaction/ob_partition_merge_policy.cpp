@@ -50,8 +50,10 @@ namespace compaction
 ERRSIM_POINT_DEF(EN_COMPACTION_DISABLE_ROW_COL_SWITCH);
 
 // keep order with ObMergeType
-ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[MERGE_TYPE_MAX]
-  = { ObPartitionMergePolicy::get_minor_merge_tables,
+ObPartitionMergePolicy::GetMergeTables ObPartitionMergePolicy::get_merge_tables[]
+  = {
+      ObPartitionMergePolicy::not_support_merge_type,
+      ObPartitionMergePolicy::get_minor_merge_tables,
       ObPartitionMergePolicy::get_hist_minor_merge_tables,
       ObAdaptiveMergePolicy::get_meta_merge_tables,
       ObPartitionMergePolicy::get_mini_merge_tables,

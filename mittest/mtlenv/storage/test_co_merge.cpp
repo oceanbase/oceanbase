@@ -386,7 +386,7 @@ void TestCOMerge::prepare_co_sstable(
     ObCOMergeProjector *row_project = nullptr;
     ObTableHandleV2 *table_handle = nullptr;
 
-    OK(data_store_desc.init(table_schema,
+    OK(data_store_desc.init(false/*is_ddl*/, table_schema,
                           ObLSID(ls_id_),
                           ObTabletID(tablet_id_),
                           merge_type,
