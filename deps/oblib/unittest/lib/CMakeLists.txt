@@ -128,3 +128,7 @@ oblib_addtest(utility/test_defer.cpp)
 oblib_addtest(hash/test_ob_ref_mgr.cpp)
 oblib_addtest(compress/test_compressor.cpp)
 oblib_addtest(compress/test_compressor_pool.cpp)
+
+if (NOT OB_BUILD_OPENSOURCE)
+  add_subdirectory(allocator_new)
+endif()
