@@ -3390,6 +3390,7 @@ int ObPartTransCtx::submit_redo_active_info_log_()
   ObTxLogBlock log_block;
   bool has_redo = false;
   ObRedoLogSubmitHelper helper;
+  ObTableLockPrioOpArray prio_op_array;
   if (OB_FAIL(submit_redo_if_parallel_logging_())) {
   } else if (OB_FAIL(init_log_block_(log_block))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
@@ -3416,7 +3417,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
                                       last_scn_, exec_info_.max_submitted_seq_no_,
                                       cluster_version_,
                                       exec_info_.xid_,
-                                      exec_info_.serial_final_seq_no_);
+                                      exec_info_.serial_final_seq_no_,
+                                      prio_op_array);
     ObTxLogCb *log_cb = nullptr;
     if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
       TRANS_LOG(WARN, "get log cb failed", KR(ret), KP(log_cb), K(*this));
