@@ -420,7 +420,7 @@ int ObScheduledTriggerPartitionBalance::check_if_scheduled_trigger_pb_enabled_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("not user tenant", KR(ret), K(tenant_id));
   } else if (OB_FAIL(sql.assign_fmt(
-      "select enabled from %s where job_name = '%s' and job = 0",
+      "select enabled from %s where tenant_id = 0 and job_name = '%s' and job = 0",
       OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
       SCHEDULED_TRIGGER_PARTITION_BALANCE_JOB_NAME))) {
     LOG_WARN("failed to assign sql", KR(ret), K(sql));
@@ -453,12 +453,19 @@ int ObScheduledTriggerPartitionBalance::check_enable_trigger_job(
     const common::ObString &job_name)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   if (!is_trigger_job(job_name)) {
     // do nothing
   } else if (!is_user_tenant(tenant_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("not user tenant", KR(ret), K(tenant_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "not user tenant, enable SCHEDULED_TRIGGER_PARTITION_BALANCE is");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get min data_version failed", KR(ret), K(tenant_id), K(data_version));
+  } else if (data_version < DATA_VERSION_4_2_4_0) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("old version, not allowed to enable trigger job", KR(ret), K(tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant data version is less than 4.2.4, enable SCHEDULED_TRIGGER_PARTITION_BALANCE is");
   } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
     if (OB_UNLIKELY(!tenant_config.is_valid())) {
@@ -482,12 +489,19 @@ int ObScheduledTriggerPartitionBalance::check_disable_trigger_job(
     const common::ObString &job_name)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   if (!is_trigger_job(job_name)) {
     // do nothing
   } else if (!is_user_tenant(tenant_id)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("not user tenant", KR(ret), K(tenant_id));
     LOG_USER_ERROR(OB_OP_NOT_ALLOW, "not user tenant, disable SCHEDULED_TRIGGER_PARTITION_BALANCE is");
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("get min data_version failed", KR(ret), K(tenant_id), K(data_version));
+  } else if (data_version < DATA_VERSION_4_2_4_0) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("old version, not allowed to disable trigger job", KR(ret), K(tenant_id), K(data_version));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tenant data version is less than 4.2.4, disable SCHEDULED_TRIGGER_PARTITION_BALANCE is");
   }
   return ret;
 }
