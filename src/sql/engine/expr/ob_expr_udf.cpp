@@ -111,7 +111,7 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
         if (udf_package_id_ == T_OBJ_XML
             && types[i].is_xml_sql_type() && params_type_.at(i).is_string_type()) {
             ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
-            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+            LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                      K(i), K(udf_package_id_), K(udf_id_), K(types[i]), K(params_type_.at(i)));
         } else {
           types[i].set_calc_accuracy(params_type_.at(i).get_accuracy());

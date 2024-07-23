@@ -10849,7 +10849,7 @@ int ObPLResolver::resolve_inner_call(
             OZ (resolve_call_param_list(params, package_routine_info->get_params(), call_stmt, func));
           } else if (params.count() != 0) {
             ret = OB_INVALID_ARGUMENT_NUM;
-            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+            LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                      K(ret), K(params.count()), K(package_routine_info->get_param_count()));
           }
         } else if (access_idxs.at(idx_cnt - 1).is_external_procedure()) {
@@ -10882,7 +10882,7 @@ int ObPLResolver::resolve_inner_call(
             OZ (resolve_call_param_list(params, schema_routine_info->get_routine_params(), call_stmt, func));
           } else if (params.count() != 0) {
             ret = OB_INVALID_ARGUMENT_NUM;
-            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+            LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                      K(ret), K(params.count()), K(schema_routine_info->get_param_count()));
           }
         } else if (access_idxs.at(idx_cnt - 1).is_nested_procedure()) {
@@ -10899,7 +10899,7 @@ int ObPLResolver::resolve_inner_call(
             OZ (resolve_call_param_list(params, root_routine_info->get_params(), call_stmt, func));
           } else if (params.count() != 0) {
             ret = OB_INVALID_ARGUMENT_NUM;
-            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+            LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                      K(ret), K(params.count()), K(root_routine_info->get_param_count()));
           }
         } else {
@@ -12577,7 +12577,7 @@ int ObPLResolver::resolve_udf_info(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("You tried to execute a SQL statement that referenced a package or function\
                 that contained an OUT parameter. This is not allowed.", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ORA-06572: function name has out arguments");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBE-06572: function name has out arguments");
     }
     if (OB_SUCC(ret) && !resolve_ctx_.is_sql_scope_) {
       ObUDFRawExpr *udf_raw_expr = NULL;
@@ -15208,32 +15208,32 @@ struct ObPredefinedException {
 
 static ObPredefinedException PREDEFINED_EXCEPTIONS[] =
 {
-  DEFINED_EXCEPTION("ACCESS_INTO_NULL", OB_ERR_ACCESS_INTO_NULL), // ORA-6530
-  DEFINED_EXCEPTION("CASE_NOT_FOUND", OB_ER_SP_CASE_NOT_FOUND), // ORA-6592
-  DEFINED_EXCEPTION("COLLECTION_IS_NULL", OB_ERR_COLLECION_NULL), // ORA-6531
-  DEFINED_EXCEPTION("CURSOR_ALREADY_OPEN", OB_ER_SP_CURSOR_ALREADY_OPEN), // ORA-6511
-  DEFINED_EXCEPTION("DUP_VAL_ON_INDEX", OB_ERR_PRIMARY_KEY_DUPLICATE), // ORA-1
+  DEFINED_EXCEPTION("ACCESS_INTO_NULL", OB_ERR_ACCESS_INTO_NULL), // OBE-6530
+  DEFINED_EXCEPTION("CASE_NOT_FOUND", OB_ER_SP_CASE_NOT_FOUND), // OBE-6592
+  DEFINED_EXCEPTION("COLLECTION_IS_NULL", OB_ERR_COLLECION_NULL), // OBE-6531
+  DEFINED_EXCEPTION("CURSOR_ALREADY_OPEN", OB_ER_SP_CURSOR_ALREADY_OPEN), // OBE-6511
+  DEFINED_EXCEPTION("DUP_VAL_ON_INDEX", OB_ERR_PRIMARY_KEY_DUPLICATE), // OBE-1
 
-  DEFINED_EXCEPTION("INVALID_CURSOR", OB_ERR_INVALID_CURSOR), // ORA-1001
-  DEFINED_EXCEPTION("INVALID_NUMBER", OB_INVALID_NUMERIC), // ORA-1722
-  DEFINED_EXCEPTION("LOGIN_DENIED", OB_ERR_LOGIN_DENIED), // ORA-1017
-  DEFINED_EXCEPTION("NO_DATA_FOUND", OB_READ_NOTHING), // ORA-+100
-  DEFINED_EXCEPTION("NO_DATA_NEEDED", OB_ERR_NO_DATA_NEEDED), // ORA-6548
+  DEFINED_EXCEPTION("INVALID_CURSOR", OB_ERR_INVALID_CURSOR), // OBE-1001
+  DEFINED_EXCEPTION("INVALID_NUMBER", OB_INVALID_NUMERIC), // OBE-1722
+  DEFINED_EXCEPTION("LOGIN_DENIED", OB_ERR_LOGIN_DENIED), // OBE-1017
+  DEFINED_EXCEPTION("NO_DATA_FOUND", OB_READ_NOTHING), // OBE-+100
+  DEFINED_EXCEPTION("NO_DATA_NEEDED", OB_ERR_NO_DATA_NEEDED), // OBE-6548
 
-  DEFINED_EXCEPTION("NOT_LOGGED_ON", OB_ERR_NOT_LOGGED_ON), // ORA-1012
-  DEFINED_EXCEPTION("PROGRAM_ERROR", OB_ERR_PROGRAM_ERROR), // ORA-6501
-  DEFINED_EXCEPTION("ROWTYPE_MISMATCH", OB_ERR_ROWTYPE_MISMATCH), // ORA-6504
-  DEFINED_EXCEPTION("SELF_IS_NULL", OB_ERR_SELF_IS_NULL), // ORA-30625
-  DEFINED_EXCEPTION("STORAGE_ERROR", OB_ERR_STORAGE_ERROR), // ORA-6500
+  DEFINED_EXCEPTION("NOT_LOGGED_ON", OB_ERR_NOT_LOGGED_ON), // OBE-1012
+  DEFINED_EXCEPTION("PROGRAM_ERROR", OB_ERR_PROGRAM_ERROR), // OBE-6501
+  DEFINED_EXCEPTION("ROWTYPE_MISMATCH", OB_ERR_ROWTYPE_MISMATCH), // OBE-6504
+  DEFINED_EXCEPTION("SELF_IS_NULL", OB_ERR_SELF_IS_NULL), // OBE-30625
+  DEFINED_EXCEPTION("STORAGE_ERROR", OB_ERR_STORAGE_ERROR), // OBE-6500
 
-  DEFINED_EXCEPTION("SUBSCRIPT_BEYOND_COUNT", OB_ERR_SUBSCRIPT_BEYOND_COUNT), // ORA-6533
-  DEFINED_EXCEPTION("SUBSCRIPT_OUTSIDE_LIMIT", OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT), // ORA-6532
-  DEFINED_EXCEPTION("SYS_INVALID_ROWID", OB_INVALID_ROWID), // ORA-1410
-  DEFINED_EXCEPTION("TIMEOUT_ON_RESOURCE", OB_ERR_TIMEOUT_ON_RESOURCE), // ORA-51
-  DEFINED_EXCEPTION("TOO_MANY_ROWS", OB_ERR_TOO_MANY_ROWS), // ORA-1422
+  DEFINED_EXCEPTION("SUBSCRIPT_BEYOND_COUNT", OB_ERR_SUBSCRIPT_BEYOND_COUNT), // OBE-6533
+  DEFINED_EXCEPTION("SUBSCRIPT_OUTSIDE_LIMIT", OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT), // OBE-6532
+  DEFINED_EXCEPTION("SYS_INVALID_ROWID", OB_INVALID_ROWID), // OBE-1410
+  DEFINED_EXCEPTION("TIMEOUT_ON_RESOURCE", OB_ERR_TIMEOUT_ON_RESOURCE), // OBE-51
+  DEFINED_EXCEPTION("TOO_MANY_ROWS", OB_ERR_TOO_MANY_ROWS), // OBE-1422
 
-  DEFINED_EXCEPTION("VALUE_ERROR", OB_ERR_NUMERIC_OR_VALUE_ERROR), // ORA-6502
-  DEFINED_EXCEPTION("ZERO_DIVIDE", OB_ERR_DIVISOR_IS_ZERO), // ORA-1476
+  DEFINED_EXCEPTION("VALUE_ERROR", OB_ERR_NUMERIC_OR_VALUE_ERROR), // OBE-6502
+  DEFINED_EXCEPTION("ZERO_DIVIDE", OB_ERR_DIVISOR_IS_ZERO), // OBE-1476
 };
 
 int ObPLResolver::resolve_pre_condition(const ObString &name, const ObPLConditionValue **value)

@@ -1204,7 +1204,11 @@ LOG_MOD_END(PL)
   {                                                                     \
     CHECK_LOG_USER_CONST_FMT(errcode)                                   \
     if (lib::is_oracle_mode()) {                                                 \
-      _LOG_USER_MSG(level, errcode, LOG_MACRO_JOIN(errcode, __ORA_USER_ERROR_MSG), ##args); \
+      if (!g_enable_ob_error_msg_style) {                               \
+        _LOG_USER_MSG(level, errcode, LOG_MACRO_JOIN(errcode, __ORA_USER_ERROR_MSG), ##args); \
+      } else {                                                          \
+        _LOG_USER_MSG(level, errcode, LOG_MACRO_JOIN(errcode, __OBE_USER_ERROR_MSG), ##args); \
+      }                                                                 \
     } else {                                                                            \
       _LOG_USER_MSG(level, errcode, LOG_MACRO_JOIN(errcode, __USER_ERROR_MSG), ##args); \
     }                                                                   \
@@ -1219,7 +1223,11 @@ LOG_MOD_END(PL)
   do                                                                    \
   {                                                                     \
     CHECK_LOG_USER_CONST_FMT(errcode)                                   \
-    _LOG_USER_MSG(level, errcode, LOG_MACRO_JOIN(errcode, __ORA_USER_ERROR_MSG), ##args); \
+    if (!g_enable_ob_error_msg_style) {                                 \
+      _LOG_USER_MSG(level, errcode, LOG_MACRO_JOIN(errcode, __ORA_USER_ERROR_MSG), ##args); \
+    } else {                                                            \
+      _LOG_USER_MSG(level, errcode, LOG_MACRO_JOIN(errcode, __OBE_USER_ERROR_MSG), ##args); \
+    }                                                                   \
   } while(0)
 #define LOG_MYSQL_USER_ERROR(errcode, args...)                                \
   LOG_USER_MYSQL(::oceanbase::common::ObLogger::USER_ERROR, errcode, ##args)

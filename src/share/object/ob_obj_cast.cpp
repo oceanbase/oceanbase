@@ -9301,7 +9301,7 @@ static int cast_to_udt_not_support(const ObObjType expect_type, ObObjCastParams 
     LOG_WARN_RET(ret, "invalid CAST to a type that is not a nested table or VARRAY");
   } else {
     // other udts
-    // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
+    // OBE-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
     // currently other types to udt not supported
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN_RET(ret, "not expected obj type convert", K(expect_type), K(in), K(out), K(cast_mode));
@@ -9690,7 +9690,7 @@ static int cast_udt_to_other_not_support(const ObObjType expect_type, ObObjCastP
     LOG_WARN_RET(ret, "inconsistent datatypes", K(expect_type), K(in), K(out), K(cast_mode));
   } else {
     // other udts
-    // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
+    // OBE-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
     // currently other types to udt not supported
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN_RET(ret, "not expected obj type convert", K(expect_type), K(in), K(out), K(cast_mode));

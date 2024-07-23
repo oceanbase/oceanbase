@@ -89,6 +89,7 @@ enable_global_background_resource_isolation
 enable_kv_ttl
 enable_major_freeze
 enable_monotonic_weak_read
+enable_ob_error_msg_style
 enable_ob_ratelimit
 enable_perf_event
 enable_rebalance

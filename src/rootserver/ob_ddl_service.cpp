@@ -38803,7 +38803,7 @@ int ObDDLService::recursive_check_trigger_ref_cyclic(share::schema::ObSchemaGett
         if (0 == trg_info->get_ref_trg_name().case_compare(ref_trigger_info.get_trigger_name())) {
           if (0 == trg_info->get_trigger_name().case_compare(generate_cyclic_name)) {
             ret = OB_ERR_REF_CYCLIC_IN_TRG;
-            LOG_WARN("ORA-25023: cyclic trigger dependency is not allowed", K(ret),
+            LOG_WARN("OBE-25023: cyclic trigger dependency is not allowed", K(ret),
                      K(generate_cyclic_name), KPC(trg_info));
           }
           OZ (SMART_CALL(recursive_check_trigger_ref_cyclic(schema_guard, *trg_info, trigger_list,

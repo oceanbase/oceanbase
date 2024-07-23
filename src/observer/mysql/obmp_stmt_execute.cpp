@@ -454,7 +454,7 @@ int ObMPStmtExecute::save_exception_for_arraybinding(
   } else {
     errm_result = ob_errpkt_strerror(error_code, true);
     if (NULL == errm_result) {
-      errm_result = "ORA%ld: Message error_code not found; product=RDBMS; facility=ORA";
+      errm_result = "OBE%ld: Message error_code not found; product=RDBMS; facility=ORA";
     }
     errm_length = strlen(errm_result);
   }

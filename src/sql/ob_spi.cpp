@@ -355,28 +355,28 @@ int ObSPIResultSet::check_nested_stmt_legal(ObExecContext &exec_ctx, const ObStr
        */
       if (!(lib::is_mysql_mode())) {
         ret = OB_ERR_CANNOT_PERFORM_DML_INSIDE_QUERY;
-        LOG_WARN("ORA-14551: cannot perform a DML operation inside a query",
+        LOG_WARN("OBE-14551: cannot perform a DML operation inside a query",
                  K(ret), K(stmt_type), K(exec_ctx.get_sql_ctx()),
                  K(&exec_ctx), K(exec_ctx.get_my_session()->get_cur_exec_ctx()));
       }
     } else if (stmt::T_SELECT == parent_stmt_type && stmt::T_SELECT == stmt_type && for_update && lib::is_oracle_mode()) {
       ret = OB_ERR_CANNOT_PERFORM_DML_INSIDE_QUERY;
-      LOG_WARN("ORA-14551: cannot perform a DML operation inside a query",
+      LOG_WARN("OBE-14551: cannot perform a DML operation inside a query",
                  K(ret), K(stmt_type), K(exec_ctx.get_sql_ctx()),
                  K(&exec_ctx), K(exec_ctx.get_my_session()->get_cur_exec_ctx()));
     } else if (ObStmt::is_ddl_stmt(stmt_type, has_global_variable) || ObStmt::is_tcl_stmt(stmt_type)) {
       ret = lib::is_oracle_mode() ? OB_NOT_SUPPORTED : OB_ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG;
-      LOG_WARN("ORA-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips",
+      LOG_WARN("OBE-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips",
                K(ret), K(stmt_type), K(lbt()));
       if (OB_NOT_SUPPORTED == ret) {
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ORA-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBE-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips");
       }
     } else if (lib::is_oracle_mode() &&
               (stmt::T_CREATE_SAVEPOINT == stmt_type
                || stmt::T_ROLLBACK_SAVEPOINT == stmt_type
                || stmt::T_RELEASE_SAVEPOINT == stmt_type)) {
       ret = OB_ERR_CANNOT_PERFORM_DDL_COMMIT_OR_ROLLBACK_INSIDE_QUERY_OR_DML_TIPS;
-      LOG_WARN("ORA-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips",
+      LOG_WARN("OBE-14552: Cannot Perform a DDL Commit or Rollback Inside a Query or DML tips",
                K(ret), K(stmt_type), K(lbt()));
     } else if (exec_ctx.get_my_session()->is_in_user_scope() && ObStmt::is_dml_write_stmt(stmt_type)) {
       ret = OB_ERR_CANT_UPDATE_TABLE_IN_CREATE_TABLE_SELECT;
@@ -2647,7 +2647,7 @@ int ObSPIService::calc_dynamic_sqlstr(
   } else if (result.is_null_oracle()) {
     ret = OB_ERR_STATEMENT_STRING_IN_EXECUTE_IMMEDIATE_IS_NULL_OR_ZERO_LENGTH;
     LOG_WARN(
-      "ORA-06535: statement string in EXECUTE IMMEDIATE is NULL or 0 length", K(ret), K(result));
+      "OBE-06535: statement string in EXECUTE IMMEDIATE is NULL or 0 length", K(ret), K(result));
   } else if (!result.is_string_type() && !result.is_clob_locator()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Dynamic sql is not a string", K(ret), K(result), K(sql_str));
@@ -2744,7 +2744,7 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
             : pl_prepare_result.result_set_->get_param_fields()->count();
         if (pl_prepare_result.result_set_->is_returning() && 0 == into_cnt) {
             ret = OB_ERR_MISSING_INTO_KEYWORD;
-            LOG_WARN("ORA-00925: missing INTO keyword", K(ret),
+            LOG_WARN("OBE-00925: missing INTO keyword", K(ret),
                     K(pl_prepare_result.result_set_->is_returning()), K(into_cnt));
         } else {
           /*!
@@ -2762,12 +2762,12 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
               LOG_USER_ERROR(OB_ERR_WRONG_DYNAMIC_PARAM, exec_param_cnt, param_cnt);
             } else if (param_cnt < need_exec_param_cnt) {
               ret = OB_ERR_NOT_ALL_VARIABLE_BIND;
-              LOG_WARN("ORA-01008: not all variables bound",
+              LOG_WARN("OBE-01008: not all variables bound",
                         K(ret), K(param_cnt),
                         K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
             } else {
               ret = OB_ERR_BIND_VARIABLE_NOT_EXIST;
-              LOG_WARN("ORA-01006: bind variable does not exist",
+              LOG_WARN("OBE-01006: bind variable does not exist",
                         K(ret), K(param_cnt),
                         K(need_exec_param_cnt), K(into_cnt), K(is_returning), K(stmt_type));
             }
@@ -2782,13 +2782,13 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
                 && stmt_type != stmt::T_DELETE
                 && stmt_type != stmt::T_UPDATE) {
               ret = OB_ERR_CLAUSE_RETURN_ILLEGAL;
-              LOG_WARN("ORA-06547: RETURNING clause must be used with "
+              LOG_WARN("OBE-06547: RETURNING clause must be used with "
                       "INSERT, UPDATE, or DELETE statements", K(ret), K(stmt_type));
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "RETURNING clause used with not "
                       "INSERT, UPDATE, or DELETE statements");
           } else if (pl_prepare_result.result_set_->get_into_exprs().empty()) {
             ret = OB_ERR_MISSING_INTO_KEYWORD;
-            LOG_WARN("ORA-00925: missing INTO keyword", K(ret));
+            LOG_WARN("OBE-00925: missing INTO keyword", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "missing INTO keyword");
           } else {
             remove_into = true;
@@ -2809,8 +2809,8 @@ int ObSPIService::prepare_dynamic(ObPLExecCtx *ctx,
             * DECLARE
             * *
             * ERROR at line 1:
-            * ORA-01006: bind variable does not exist
-            * ORA-06512: at line 6
+            * OBE-01006: bind variable does not exist
+            * OBE-06512: at line 6
             * */
           remove_into = !pl_prepare_result.result_set_->get_into_exprs().empty();
         } else { /*do nothing*/ }
@@ -2953,7 +2953,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
               OZ (out_using_params.push_back(params[i]));
             } else {
               ret = OB_ERR_INOUT_PARAM_PLACEMENT_NOT_PROPERLY;
-              LOG_WARN("ORA-06536: IN bind variable bound to an OUT position", K(ret));
+              LOG_WARN("OBE-06536: IN bind variable bound to an OUT position", K(ret));
             }
           }
         } else if (ObStmt::is_dml_write_stmt(stmt_type) && inner_into_cnt > 0 && into_count > 0 && !is_returning) {
@@ -2962,7 +2962,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
             ObPLRoutineParamMode pm = static_cast<ObPLRoutineParamMode>(params_mode[i]);
             if (PL_PARAM_IN == pm) {
               ret = OB_ERR_INOUT_PARAM_PLACEMENT_NOT_PROPERLY;
-              LOG_WARN("ORA-06536: IN bind variable bound to an OUT position", K(ret));
+              LOG_WARN("OBE-06536: IN bind variable bound to an OUT position", K(ret));
             }
           }
         } else { /*do nothing*/ }
@@ -4602,7 +4602,7 @@ int ObSPIService::do_cursor_fetch(ObPLExecCtx *ctx,
     LOG_WARN("Limit must be used with Bulk Collect Into Clause", K(is_bulk), K(limit), K(ret));
   } else if (limit != INT64_MAX && limit <= 0) {
     ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
-    LOG_WARN("ORA-06502: PL/SQL: numeric or value error", K(ret), K(limit));
+    LOG_WARN("OBE-06502: PL/SQL: numeric or value error", K(ret), K(limit));
   } else if (!cursor->isopen()) {
     ret = OB_ER_SP_CURSOR_NOT_OPEN;
     LOG_USER_ERROR(OB_ER_SP_CURSOR_NOT_OPEN);
@@ -5265,7 +5265,7 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
       table = reinterpret_cast<ObPLCollection*>(result.get_ext());
       if (!table->is_inited()) {
         ret = OB_NOT_INIT;
-        LOG_WARN("ORA-06531: Reference to uninitialized collection", K(ret));
+        LOG_WARN("OBE-06531: Reference to uninitialized collection", K(ret));
       } else if (0 == table->get_column_count()) {
         table->set_column_count(column_count);
       }
@@ -5598,7 +5598,7 @@ int ObSPIService::spi_trim_collection(pl::ObPLExecCtx *ctx,
 
     if (OB_SUCC(ret) && !table->is_inited()) {
       ret = OB_NOT_INIT;
-      LOG_WARN("ORA-06531: Reference to uninitialized collection", K(ret));
+      LOG_WARN("OBE-06531: Reference to uninitialized collection", K(ret));
     }
     if (OB_SUCC(ret) && table->is_associative_array()) {
       ret = OB_NOT_SUPPORTED;
@@ -5670,7 +5670,7 @@ int ObSPIService::spi_delete_collection(pl::ObPLExecCtx *ctx,
     CK (!(OB_ISNULL(m_expr) && OB_NOT_NULL(n_expr)));
     if (OB_SUCC(ret) && !table->is_inited()) {
       ret = OB_NOT_INIT;
-      LOG_WARN("ORA-06531: Reference to uninitialized collection", K(ret));
+      LOG_WARN("OBE-06531: Reference to uninitialized collection", K(ret));
     }
     if (OB_SUCC(ret)) {
       if (OB_ISNULL(m_expr) && OB_ISNULL(n_expr)) {
@@ -5856,7 +5856,7 @@ int ObSPIService::spi_sub_nestedtable(ObPLExecCtx *ctx, int64_t src_idx, int64_t
           || lower > src_coll->get_count()
           || upper > src_coll->get_count()) {
         ret = OB_ARRAY_OUT_OF_RANGE;
-        LOG_WARN("ORA-22160: element at index does not exist",
+        LOG_WARN("OBE-22160: element at index does not exist",
                  K(lower), K(upper), K(src_coll->get_count()), K(ret));
       } else if (OB_ISNULL(dst_coll = static_cast<ObPLCollection*>(ctx->allocator_->alloc(sizeof(ObPLCollection))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -5989,7 +5989,7 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
         ObPLVArray &va = static_cast<ObPLVArray&>(coll); \
         if (va.get_capacity() < va.get_count() + n) { \
           ret = OB_SIZE_OVERFLOW; \
-          LOG_WARN("varray size overflow, ORA-06532: Subscript outside of limit", K(va), K(va.get_capacity()), K(n), K(coll.get_count()), K(ret)); \
+          LOG_WARN("varray size overflow, OBE-06532: Subscript outside of limit", K(va), K(va.get_capacity()), K(n), K(coll.get_count()), K(ret)); \
         } \
       } \
     } \
@@ -6025,7 +6025,7 @@ int ObSPIService::spi_set_collection(int64_t tenant_id,
   bool set_data = false;
   if (extend_mode && !coll.is_inited()) {
     ret = OB_NOT_INIT;
-    LOG_WARN("ORA-06531: Reference to uninitialized collection", K(ret));
+    LOG_WARN("OBE-06531: Reference to uninitialized collection", K(ret));
   } else if (NULL == coll.get_allocator()) {
     collection_allocator = static_cast<common::ObIAllocator*>(allocator.alloc(sizeof(ObPLCollAllocator)));
     if (OB_ISNULL(collection_allocator)) {
@@ -6202,8 +6202,8 @@ int ObSPIService::spi_reset_collection(ObPLCollection *coll)
      *
      * declare TYPE ARRYTYPE is table of Varchar2(10);
      * ERROR at line 1:
-     * ORA-06531: Reference to uninitialized collection
-     * ORA-06512: at line 6
+     * OBE-06531: Reference to uninitialized collection
+     * OBE-06512: at line 6
      * */
     if (OB_NOT_NULL(coll->get_allocator())) {
       OZ (spi_set_collection(MTL_ID(), NULL, *(coll->get_allocator()), *coll, 0, false));
