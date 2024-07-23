@@ -2551,6 +2551,9 @@ typedef enum ObItemType
   T_OLAP_ASYNC_JOB_SUBMIT = 4706,
   T_OLAP_ASYNC_JOB_CANCEL = 4707,
   T_SHOW_OLAP_ASYNC_JOB_STATUS = 4708,
+  T_USE_ADAPTIVE = 4709,
+  T_NO_USE_ADAPTIVE = 4710,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
