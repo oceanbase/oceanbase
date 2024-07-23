@@ -204,6 +204,8 @@ public:
   ObIOTuner(ObIOScheduler &io_scheduler);
   virtual ~ObIOTuner();
   int init();
+  void stop();
+  void wait();
   void destroy();
   int send_detect_task();
   virtual void run1() override;
@@ -300,6 +302,7 @@ public:
   void destroy();
   int start();
   void stop();
+  void wait();
   void accumulate(const ObIORequest &req);
   int schedule_request(ObIORequest &req);
   int init_group_queues(const uint64_t tenant_id, const int64_t group_num, ObIOAllocator *io_allocator);
