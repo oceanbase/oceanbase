@@ -15075,11 +15075,12 @@ def_table_schema(
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
                     left join (
-                      select e.tenant_id,
-                             e.data_table_id,
-                             (f.macro_blk_cnt * 2 * 1024 * 1024) AS index_length
+                      select e.tenant_id as tenant_id,
+                             e.data_table_id as data_table_id,
+                             SUM(f.macro_blk_cnt * 2 * 1024 * 1024) AS index_length
                       FROM oceanbase.__all_table e JOIN oceanbase.__all_table_stat f ON e.table_id = f.table_id
                       WHERE e.index_type = 1 and e.table_type = 5 and (f.partition_id = -1 or f.partition_id = e.table_id)
+                            group by tenant_id, data_table_id
                     ) idx_stat on idx_stat.tenant_id = a.tenant_id and idx_stat.data_table_id = a.table_id
                     where a.tenant_id = 0
                     and a.table_type in (0, 1, 2, 3, 4, 14)
@@ -29682,14 +29683,14 @@ FROM
   LEFT JOIN OCEANBASE.__ALL_TENANT_TABLESPACE TP ON TP.TABLESPACE_ID = IFNULL(SP.TABLESPACE_ID, P.TABLESPACE_ID) AND TP.TENANT_ID = T.TENANT_ID
   LEFT JOIN OCEANBASE.__ALL_TABLE_STAT TS ON T.TENANT_ID = TS.TENANT_ID AND TS.TABLE_ID = T.TABLE_ID AND TS.PARTITION_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END
   LEFT JOIN (
-    SELECT E.TENANT_ID,
-           E.DATA_TABLE_ID,
-           F.PART_IDX,
-           (G.macro_blk_cnt * 2 * 1024 * 1024) AS INDEX_LENGTH
+    SELECT E.TENANT_ID AS TENANT_ID,
+           E.DATA_TABLE_ID AS DATA_TABLE_ID,
+           F.PART_IDX AS PART_IDX,
+           SUM(G.macro_blk_cnt * 2 * 1024 * 1024) AS INDEX_LENGTH
     FROM OCEANBASE.__ALL_TABLE E
          JOIN OCEANBASE.__ALL_PART F ON E.TABLE_ID = F.TABLE_ID
          JOIN OCEANBASE.__ALL_TABLE_STAT G ON E.TABLE_ID = G.TABLE_ID AND F.part_id = G.partition_id
-    WHERE E.INDEX_TYPE = 1 AND E.TABLE_TYPE = 5
+    WHERE E.INDEX_TYPE = 1 AND E.TABLE_TYPE = 5 GROUP BY TENANT_ID, DATA_TABLE_ID, PART_IDX
   ) IDX_STAT ON IDX_STAT.TENANT_ID = T.TENANT_ID AND
                 IDX_STAT.DATA_TABLE_ID = T.TABLE_ID AND
                 IDX_STAT.PART_IDX = CASE T.PART_LEVEL WHEN 0 THEN -1 WHEN 1 THEN P.PART_IDX WHEN 2 THEN SP.SUB_PART_IDX END
