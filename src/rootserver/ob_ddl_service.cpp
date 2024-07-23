@@ -15502,6 +15502,10 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       hidden_table_schema.set_association_table_id(orig_table_schema.get_table_id());
       // set the hidden attributes of the table
       hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
+      if (orig_table_schema.get_tenant_id() != hidden_table_schema.get_tenant_id()) {
+        // recover restore table, do not sync log to cdc.
+        hidden_table_schema.set_ddl_ignore_sync_cdc_flag(ObDDLIgnoreSyncCdcFlag::DONT_SYNC_LOG_FOR_CDC);
+      }
       // in oracle mode, need to add primary key constraints
       if (is_oracle_mode && !hidden_table_schema.is_heap_table()) {
         uint64_t new_cst_id = OB_INVALID_ID;
@@ -18219,6 +18223,7 @@ int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &al
           tmp_schema.set_association_table_id(OB_INVALID_ID);
           tmp_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
           tmp_schema.set_in_offline_ddl_white_list(true);
+          tmp_schema.set_ddl_ignore_sync_cdc_flag(ObDDLIgnoreSyncCdcFlag::DO_SYNC_LOG_FOR_CDC); // reset.
           ObArray<ObSchemaType> conflict_schema_types;
           uint64_t synonym_id = OB_INVALID_ID;
           bool object_exist = false;
