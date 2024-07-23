@@ -2686,7 +2686,7 @@ int ObPL::insert_error_msg(int errcode)
   return ret;
 }
 
-int ObPL::check_trigger_arg(const ParamStore &params, const ObPLFunction &func)
+int ObPL::check_trigger_arg(ParamStore &params, const ObPLFunction &func)
 {
   int ret = OB_SUCCESS;
   if (TriggerHandle::is_trigger_body_routine(func.get_package_id(), func.get_routine_id(), func.get_proc_type())) {
@@ -2712,6 +2712,7 @@ int ObPL::check_trigger_arg(const ParamStore &params, const ObPLFunction &func)
           ObPLRecord *record = reinterpret_cast<ObPLRecord *>(params.at(i).get_ext());
           CK (OB_NOT_NULL(record));
           CK (record->get_count() == (static_cast<const ObRecordType *>(udt))->get_member_count());
+          OX (params.at(i).set_udt_id(udt_id));
         }
       }
     }
@@ -3143,6 +3144,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   if (OB_FAIL(ret)) {
   } else if (real_pl_type->is_ref_cursor_type() || real_pl_type->is_sys_refcursor_type()) {
     OX (obj.set_is_ref_cursor_type(true));
+    OX (obj.set_extend(0, real_pl_type->get_type()));
   } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
     OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false, set_null));
@@ -3161,6 +3163,91 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
     OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false, set_null));
   }
   OX (obj.set_udt_id(real_pl_type->get_user_type_id()));
+  return ret;
+}
+
+// This function is designed to defend against the modification of stored procedures during execution, which could lead
+// to unexpected parameters being passed to the stored procedure, resulting in unknown errors.
+// This function can be removed after the feature of defending the compilation cache of the executing stored procedure
+// from being eliminated on the PL cache side.
+int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type)
+{
+  int ret = OB_SUCCESS;
+  if (actual_param.is_null() || actual_param.is_pl_mock_default_param()) {
+    // no actual param type info(eg: out params), skip check
+  } else if (!actual_param.is_ext()) {
+    if (!formal_param_type.is_obj_type()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("incorrect argument type, expected complex, but get basic type",
+               K(ret), K(formal_param_type), K(actual_param));
+    }
+  } else if ((PL_REF_CURSOR_TYPE == actual_param.get_meta().get_extend_type()
+              || PL_CURSOR_TYPE == actual_param.get_meta().get_extend_type())
+             && formal_param_type.is_cursor_type()) {
+    // skip check
+  } else {  // user defined type
+    uint64_t formal_udt_id = OB_INVALID_ID;
+    uint64_t actual_udt_id = OB_INVALID_ID;
+
+    OV (formal_param_type.is_composite_type(), OB_INVALID_ARGUMENT, formal_param_type);
+    OX (formal_udt_id = formal_param_type.get_user_type_id());
+    OV (OB_INVALID_ID != formal_udt_id, OB_ERR_UNEXPECTED, formal_param_type);
+
+    OX (actual_udt_id = actual_param.get_udt_id());
+    if (OB_SUCC(ret) && OB_INVALID_ID == actual_udt_id) {
+      if (PL_RECORD_TYPE == actual_param.get_meta().get_extend_type()
+          || PL_NESTED_TABLE_TYPE == actual_param.get_meta().get_extend_type()
+          || PL_ASSOCIATIVE_ARRAY_TYPE == actual_param.get_meta().get_extend_type()
+          || PL_VARRAY_TYPE == actual_param.get_meta().get_extend_type()) {
+        const pl::ObPLComposite *actual_composite = nullptr;
+        CK (OB_NOT_NULL(actual_composite = reinterpret_cast<const ObPLComposite *>(actual_param.get_ext())));
+        OX (actual_udt_id = actual_composite->get_id());
+        OV (OB_INVALID_ID != actual_udt_id || actual_composite->is_collection(),  // anonymous array has invalid udt id
+            OB_ERR_UNEXPECTED, KPC(actual_composite), actual_param);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected extend type without udt id", K(ret), K(actual_param));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_INVALID_ID == actual_udt_id || formal_udt_id == actual_udt_id) {
+      // skip anonymous array & same udt id
+    } else {
+      bool is_compatible = true;
+      OZ (ObPLResolver::check_composite_compatible(ctx_, actual_udt_id, formal_udt_id, is_compatible));
+      if (OB_INVALID_ARGUMENT == ret) {
+        LOG_INFO("the type of actual param is not found in the current procedure's lexical scope, "
+                 "should search caller's scope",
+                 K(ret), K(actual_udt_id), K(formal_udt_id));
+        ret = OB_SUCCESS;
+        const ObUserDefinedType *actual_type = nullptr;
+        const ObUserDefinedType *formal_type = nullptr;
+        ObPLContext *pl_ctx = nullptr;
+        ObPLExecState *caller = nullptr;
+        CK (OB_NOT_NULL(ctx_.exec_ctx_));
+        CK (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session()));
+        CK (OB_NOT_NULL(pl_ctx = ctx_.exec_ctx_->get_my_session()->get_pl_context()));
+        CK (pl_ctx->get_exec_stack().count() >= 2);
+        CK (OB_NOT_NULL(caller = pl_ctx->get_exec_stack().at(pl_ctx->get_exec_stack().count() - 2)));
+        // fetch actual param type from caller
+        OZ (caller->get_exec_ctx().get_user_type(actual_udt_id, actual_type));
+        // fetch formal param type from callee
+        OZ (get_exec_ctx().get_user_type(formal_udt_id, formal_type));
+        OV (OB_NOT_NULL(actual_type) && OB_NOT_NULL(formal_type), OB_ERR_UNEXPECTED, actual_udt_id, formal_udt_id);
+        OZ (ObPLResolver::check_composite_compatible(actual_type, formal_type, is_compatible));
+      }
+      OV (is_compatible, OB_INVALID_ARGUMENT, formal_udt_id, actual_udt_id, formal_param_type, actual_param);
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    LOG_WARN("param type not match, procedure/function could have been replaced",
+             K(ret), K(actual_param), K(formal_param_type));
+    ret = OB_ERR_UNEXPECTED;  // replace errno, indicating that it's an internal error
+    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "param type not match, procedure/function could have been replaced");
+  }
+
   return ret;
 }
 
@@ -3420,8 +3507,11 @@ do {                                                                  \
        * In Args of Anonymous, If need_to_check_type_ is true then check to convert.
        *   else It will directly used by static sql, do not need to check.
        */
-      if (func_.get_in_args().has_member(i)) {
-        const ObPLDataType &pl_type = func_.get_variables().at(i);
+      const ObPLDataType &pl_type = func_.get_variables().at(i);  // formal param type
+      if (FAILEDx(defend_stored_routine_change(params->at(i), pl_type))) {
+        LOG_WARN("param type not match, procedure/function could have been replaced",
+                 K(ret), K(i), K(params->at(i)), K(pl_type));
+      } else if (func_.get_in_args().has_member(i)) {
         if (is_anonymous && !func_.get_params_info().at(i).flag_.need_to_check_type_) {
           OX (get_params().at(i) = params->at(i));
         } else if (params->at(i).is_pl_mock_default_param()) { // 使用参数默认值
@@ -3560,7 +3650,7 @@ do {                                                                  \
       } else {
         CHECK_NOT_NULL_VIOLATED(i, params->at(i));
         if (OB_FAIL(ret)) {
-        } else if (func_.get_variables().at(i).is_obj_type()) {
+        } else if (pl_type.is_obj_type()) {
           // 纯OUT参数, 对于基础类型直接传入NULL的ObObj
           ObObj obj;  // 基础类型apply一个空的OBJECT
           ObObjMeta null_meta = get_params().at(i).get_meta();
@@ -3573,8 +3663,7 @@ do {                                                                  \
           }
           OX (get_params().at(i).set_param_meta(null_meta));
         } else if (is_anonymous
-                   && (func_.get_variables().at(i).is_nested_table_type()
-                        || func_.get_variables().at(i).is_varray_type())
+                   && (pl_type.is_nested_table_type() || pl_type.is_varray_type())
                    && params->at(i).is_ext()) {
 #ifndef OB_BUILD_ORACLE_PL
           ret = OB_NOT_SUPPORTED;
@@ -3593,7 +3682,7 @@ do {                                                                  \
           // 这里先copy入参的值, 由init_complex_obj函数判断是否重新分配内存
           OX (get_params().at(i) = params->at(i));
           OZ (init_complex_obj(*(get_allocator()),
-                               func_.get_variables().at(i),
+                               pl_type,
                                get_params().at(i),
                                !(top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_)));
         }

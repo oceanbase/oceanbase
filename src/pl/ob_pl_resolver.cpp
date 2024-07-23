@@ -7321,22 +7321,11 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
                                            is_legal));
           }
         } else if (actually_type.get_user_type_id() != expected_type.get_user_type_id()) {
-#ifdef OB_BUILD_ORACLE_PL
-          if (ObPlJsonUtil::is_pl_jsontype(actually_type.get_user_type_id())) {
-            OZ (check_composite_compatible(current_block_->get_namespace(),
-                                          expected_type.get_user_type_id(),
-                                          actually_type.get_user_type_id(),
-                                          is_legal));
-          } else {
-#endif
-            OZ (check_composite_compatible(current_block_->get_namespace(),
-                                          actually_type.get_user_type_id(),
-                                          expected_type.get_user_type_id(),
-                                          is_legal));
-          }
-#ifdef OB_BUILD_ORACLE_PL
+          OZ (check_composite_compatible(current_block_->get_namespace(),
+                                         actually_type.get_user_type_id(),
+                                         expected_type.get_user_type_id(),
+                                         is_legal));
         }
-#endif
       } else if (actually_type.is_composite_type() || expected_type.is_composite_type()) {
         if (actually_type.is_obj_type()
              && ObExtendType == actually_type.get_data_type()->get_obj_type()) {
@@ -9790,67 +9779,97 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
   return ret;
 }
 
-bool ObPLResolver::is_json_type_compatible(const ObUserDefinedType *left, const ObUserDefinedType *right)
-{
+bool ObPLResolver::is_json_type_compatible(const ObUserDefinedType *actual_param_type,
+                                           const ObUserDefinedType *formal_param_type) {
 #ifdef OB_BUILD_ORACLE_PL
-  return (ObPlJsonUtil::is_pl_json_element_type(left->get_user_type_id())
-          && (ObPlJsonUtil::is_pl_json_object_type(right->get_user_type_id())
-          || ObPlJsonUtil::is_pl_json_array_type(right->get_user_type_id()))) ;
+  // TYPE JSON_OBJECT_T UNDER JSON_ELEMENT_T
+  // TYPE JSON_ARRAY_T UNDER JSON_ELEMENT_T
+  return (ObPlJsonUtil::is_pl_json_object_type(actual_param_type->get_user_type_id())
+          || ObPlJsonUtil::is_pl_json_array_type(actual_param_type->get_user_type_id()))
+         && ObPlJsonUtil::is_pl_json_element_type(formal_param_type->get_user_type_id());
 #else
   return false;
 #endif
 }
 
 int ObPLResolver::check_composite_compatible(const ObPLINS &ns,
-                                             uint64_t left_type_id,
-                                             uint64_t right_type_id,
+                                             uint64_t actual_param_type_id,
+                                             uint64_t formal_param_type_id,
                                              bool &is_compatible)
 {
   int ret = OB_SUCCESS;
-  const ObUserDefinedType *left_type = NULL;
-  const ObUserDefinedType *right_type = NULL;
+  const ObUserDefinedType *actual_param_type = nullptr;
+  const ObUserDefinedType *formal_param_type = nullptr;
   ObArenaAllocator allocator;
   is_compatible = false;
-  //NOTICE: do not call this function when left_type_id equal to right_type_id
-  CK (left_type_id != right_type_id);
-  OZ (ns.get_user_type(left_type_id, left_type, &allocator));
-  OZ (ns.get_user_type(right_type_id, right_type, &allocator));
-  CK (OB_NOT_NULL(left_type) && OB_NOT_NULL(right_type));
+  // NOTICE: do not call this function when left_type_id equal to right_type_id
+  CK (actual_param_type_id != formal_param_type_id);
+
+  // The type of the actual argument may not exist in the current function's lexical scope, an error needs to be
+  // reported to the upper level to search in the caller's lexical scope. Consider case below:
+  // ```
+  // declare
+  //   cursor cur is select * from some_table;
+  // begin
+  //   for v in cur loop
+  //     some_proc(v);
+  //   end loop;
+  // end;
+  // ```
+  // The type of actual param V passed to SOME_PROC can not be found in SOME_PROC's scope, it is recorded in the caller
+  // anonymous block's scope.
+  OZ (ns.get_user_type(actual_param_type_id, actual_param_type, &allocator));
+  if (OB_FAIL(ret) || OB_ISNULL(actual_param_type)) {
+    LOG_WARN("failed to get user type of actual param", K(ret), K(actual_param_type_id));
+    ret = OB_INVALID_ARGUMENT;  // indicates that the type of the actual argument was not found
+  }
+  OV (OB_NOT_NULL(actual_param_type), OB_INVALID_ARGUMENT, actual_param_type_id, formal_param_type_id);
+
+  // The type of the formal argument must exist in the current function's lexical scope.
+  OZ (ns.get_user_type(formal_param_type_id, formal_param_type, &allocator));
+  CK (OB_NOT_NULL(formal_param_type));
+
+  OZ (check_composite_compatible(actual_param_type, formal_param_type, is_compatible));
+  return ret;
+}
+
+int ObPLResolver::check_composite_compatible(const ObUserDefinedType *actual_param_type,
+                                             const ObUserDefinedType *formal_param_type,
+                                             bool &is_compatible)
+{
+  int ret = OB_SUCCESS;
   // Assigning One Record Variable to Another
   // You can assign the value of one record variable to another record variable only in these cases:
-  // The two variables have the same RECORD type.
-  // The target variable is declared with a RECORD type, the source variable is declared with %ROWTYPE,
-  // their fields match in number and order, and corresponding fields have the same data type.
-  // For record components of composite variables, the types of the composite variables need not match.
-  if (OB_FAIL(ret)) {
-  } else if (is_json_type_compatible(left_type, right_type)) {
+  // 1. The two variables have the same RECORD type.
+  // 2. The target variable is declared with a RECORD type, the source variable is declared with %ROWTYPE,
+  //    their fields match in number and order, and corresponding fields have the same data type.
+  // 3. For record components of composite variables, the types of the composite variables need not match.
+  if (is_json_type_compatible(actual_param_type, formal_param_type)) {
     is_compatible = true;
-  } else if (left_type->is_cursor_type() && right_type->is_cursor_type()) {
+  } else if (actual_param_type->is_cursor_type() && formal_param_type->is_cursor_type()) {
     is_compatible = true;
-  } else if (right_type->is_generic_type()) {
-    if ((right_type->is_generic_adt_type()
-         || right_type->is_generic_record_type())
-        && left_type->is_record_type()) {
+  } else if (formal_param_type->is_generic_type()) {
+    if ((formal_param_type->is_generic_adt_type() || formal_param_type->is_generic_record_type())
+        && actual_param_type->is_record_type()) {
       is_compatible = true;
-    } else if ((right_type->is_generic_varray_type()
-               || right_type->is_generic_v2_table_type()
-               || right_type->is_generic_table_type()
-               || right_type->is_generic_collection_type())
-              && left_type->is_collection_type()) {
+    } else if ((formal_param_type->is_generic_varray_type()
+                || formal_param_type->is_generic_v2_table_type()
+                || formal_param_type->is_generic_table_type()
+                || formal_param_type->is_generic_collection_type())
+               && actual_param_type->is_collection_type()) {
       is_compatible = true;
-    } else if (right_type->is_generic_ref_cursor_type()
-               && left_type->is_cursor_type()) {
+    } else if (formal_param_type->is_generic_ref_cursor_type() && actual_param_type->is_cursor_type()) {
       is_compatible = true;
     }
-  } else if (left_type->is_record_type()
-      && right_type->is_record_type()
-      && !left_type->is_udt_type()
-      && !right_type->is_udt_type()
-      && (left_type->is_rowtype_type() || right_type->is_rowtype_type())) {
-    const ObRecordType *left_r_type = static_cast<const ObRecordType *>(left_type);
-    const ObRecordType *right_r_type = static_cast<const ObRecordType *>(right_type);
-    CK (OB_NOT_NULL(left_r_type) && OB_NOT_NULL(right_r_type));
-    OZ (left_r_type->is_compatble(*right_r_type, is_compatible));
+  } else if (actual_param_type->is_record_type()
+             && formal_param_type->is_record_type()
+             && !actual_param_type->is_udt_type()
+             && !formal_param_type->is_udt_type()
+             && (actual_param_type->is_rowtype_type() || formal_param_type->is_rowtype_type())) {
+    const ObRecordType *actual_r_type = static_cast<const ObRecordType *>(actual_param_type);
+    const ObRecordType *formal_r_type = static_cast<const ObRecordType *>(formal_param_type);
+    CK (OB_NOT_NULL(actual_r_type) && OB_NOT_NULL(formal_r_type));
+    OZ (actual_r_type->is_compatble(*formal_r_type, is_compatible));
   }
   return ret;
 }
@@ -10081,17 +10100,17 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
                && expr->get_expr_type() != T_FUN_SYS_PDB_GET_RUNTIME_INFO) {
       bool is_compatible = false;
       OZ (check_composite_compatible(current_block_->get_namespace(),
-                                     expected_type->get_user_type_id(),
                                      expr->get_result_type().get_udt_id(),
+                                     expected_type->get_user_type_id(),
                                      is_compatible));
       if (OB_FAIL(ret)) {
       } else if (!is_compatible) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
 #ifdef OB_BUILD_ORACLE_PL
         // error code compiltable with oracle
-        if (ObPlJsonUtil::is_pl_json_object_type(expected_type->get_user_type_id())
-            && ObPlJsonUtil::is_pl_json_element_type(expr->get_result_type().get_udt_id())
-            && ObPlJsonUtil::is_pl_json_array_type(expr->get_result_type().get_udt_id())) {
+        if ((ObPlJsonUtil::is_pl_json_array_type(expected_type->get_user_type_id())
+             || ObPlJsonUtil::is_pl_json_object_type(expected_type->get_user_type_id()))
+            && ObPlJsonUtil::is_pl_json_element_type(expr->get_result_type().get_udt_id())) {
           ret = OB_ERR_EXPRESSION_WRONG_TYPE;
         }
 #endif

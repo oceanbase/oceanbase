@@ -1030,27 +1030,14 @@ int ObResolverUtils::check_type_match(const pl::ObPLResolveCtx &resolve_ctx,
     } else {
       // 复杂类型的TypeClass相同, 需要检查兼容性
       bool is_compatible = false;
-#ifdef OB_BUILD_ORACLE_PL
-      if (ObPlJsonUtil::is_pl_jsontype(src_type_id)) {
-        OZ (ObPLResolver::check_composite_compatible(
-          NULL == resolve_ctx.params_.secondary_namespace_
-              ? static_cast<const ObPLINS&>(resolve_ctx)
-                  : static_cast<const ObPLINS&>(*resolve_ctx.params_.secondary_namespace_),
-          dst_pl_type.get_user_type_id(),
-          src_type_id,
-          is_compatible), K(src_type_id), K(dst_pl_type), K(resolve_ctx.params_.is_execute_call_stmt_));
-      } else {
-#endif
-        OZ (ObPLResolver::check_composite_compatible(
-            NULL == resolve_ctx.params_.secondary_namespace_
-                ? static_cast<const ObPLINS&>(resolve_ctx)
-                    : static_cast<const ObPLINS&>(*resolve_ctx.params_.secondary_namespace_),
-            src_type_id,
-            dst_pl_type.get_user_type_id(),
-            is_compatible), K(src_type_id), K(dst_pl_type), K(resolve_ctx.params_.is_execute_call_stmt_));
-#ifdef OB_BUILD_ORACLE_PL
-      }
-#endif
+      OZ (ObPLResolver::check_composite_compatible(
+              NULL == resolve_ctx.params_.secondary_namespace_
+                  ? static_cast<const ObPLINS &>(resolve_ctx)
+                  : static_cast<const ObPLINS &>(*resolve_ctx.params_.secondary_namespace_),
+              src_type_id,
+              dst_pl_type.get_user_type_id(),
+              is_compatible),
+          K(src_type_id), K(dst_pl_type), K(resolve_ctx.params_.is_execute_call_stmt_));
       if (OB_FAIL(ret)) {
       } else if (is_compatible) {
         OX (match_info = ObRoutineMatchInfo::MatchInfo(true, src_type, dst_type));

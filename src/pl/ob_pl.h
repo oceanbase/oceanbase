@@ -729,10 +729,10 @@ public:
   virtual ~ObPLExecState();
 
   int init(const ParamStore *params = NULL, bool is_anonymous = false);
+  int defend_stored_routine_change(const ObObjParam &actual_param, const ObPLDataType &formal_param_type);
   int check_routine_param_legal(ParamStore *params = NULL);
   int check_anonymous_collection_compatible(ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
   int convert_composite(ObObjParam &param, const ObPLDataType &dest_type);
-
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
   int execute();
   int final(int ret);
@@ -1208,7 +1208,7 @@ public:
 
   static int simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv);
 
-  static int check_trigger_arg(const ParamStore &params, const ObPLFunction &func);
+  static int check_trigger_arg(ParamStore &params, const ObPLFunction &func);
 
   std::pair<common::ObBucketLock, common::ObBucketLock>& get_jit_lock() { return jit_lock_; }
 

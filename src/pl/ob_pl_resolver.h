@@ -498,10 +498,15 @@ public:
                                    ObIArray<ObRawExpr*>& params,
                                    const ObUserDefinedType *user_type,
                                    ObPLDataType &pl_type);
-  static bool is_json_type_compatible(
-    const ObUserDefinedType *left, const ObUserDefinedType *right);
+  static bool is_json_type_compatible(const ObUserDefinedType *actual_param_type,
+                                      const ObUserDefinedType *formal_param_type);
   static int check_composite_compatible(const ObPLINS &ns,
-    uint64_t left_type_id, uint64_t right_type_id, bool &is_compatible);
+                                        uint64_t actual_param_type_id,
+                                        uint64_t formal_param_type_id,
+                                        bool &is_compatible);
+  static int check_composite_compatible(const ObUserDefinedType *actual_param_type,
+                                        const ObUserDefinedType *formal_param_type,
+                                        bool &is_compatible);
 
   static
   int resolve_nocopy_params(const share::schema::ObIRoutineInfo *routine_info,
