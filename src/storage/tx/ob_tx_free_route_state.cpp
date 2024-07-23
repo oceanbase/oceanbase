@@ -152,7 +152,8 @@ TXN_FREE_ROUTE_MEMBERS(extra, PRE_ENCODE_EXTRA_FOR_VERIFY, PRE_EXTRA_DECODE, POS
                        isolation_,  // dup with static
                        snapshot_version_,
                        snapshot_scn_,
-                       seq_base_);
+                       seq_base_,
+                       tx_consistency_type_);
 
 #undef TXN_FREE_ROUTE_MEMBERS
 int64_t ObTxDesc::estimate_state_size()
