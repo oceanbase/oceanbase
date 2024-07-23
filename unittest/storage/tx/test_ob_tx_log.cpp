@@ -193,6 +193,7 @@ TEST_F(TestObTxLog, tx_log_body_except_redo)
   ObTxActiveInfoLog fill_active_state(TEST_ADDR,
                                        TEST_TRANS_TYPE,
                                        TEST_SESSION_ID,
+                                       0,
                                        TEST_TRACE_ID_STR,
                                        TEST_SCHEMA_VERSION,
                                        TEST_CAN_ELR,

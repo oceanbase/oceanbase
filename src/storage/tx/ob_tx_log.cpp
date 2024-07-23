@@ -252,7 +252,8 @@ OB_TX_SERIALIZE_MEMBER(ObTxActiveInfoLog,
                        /* 16 */ cluster_version_,
                        /* 17 */ max_submitted_seq_no_,
                        /* 18 */ xid_,
-                       /* 19 */ serial_final_seq_no_);
+                       /* 19 */ serial_final_seq_no_,
+                       /* 20 */ associated_session_id_);
 
 OB_TX_SERIALIZE_MEMBER(ObTxCommitInfoLog,
                        compat_bytes_,

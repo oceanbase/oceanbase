@@ -80,6 +80,7 @@ static void statistics_for_standby()
 int ObPartTransCtx::init(const uint64_t tenant_id,
                          const common::ObAddr &scheduler,
                          const uint32_t session_id,
+                         const uint32_t associated_session_id,
                          const ObTransID &trans_id,
                          const int64_t trans_expired_time,
                          const ObLSID &ls_id,
@@ -129,6 +130,7 @@ int ObPartTransCtx::init(const uint64_t tenant_id,
   if (OB_SUCC(ret)) {
     tenant_id_ = tenant_id;
     session_id_ = session_id;
+    associated_session_id_ = associated_session_id;
     addr_ = trans_service->get_server();
     trans_id_ = trans_id;
     trans_expired_time_ = trans_expired_time;
@@ -289,6 +291,7 @@ void ObPartTransCtx::default_init_()
 
   request_id_ = OB_INVALID_TIMESTAMP;
   session_id_ = 0;
+  associated_session_id_ = 0;
   timeout_task_.reset();
   trace_info_.reset();
   can_elr_ = false;
@@ -3031,6 +3034,7 @@ int ObPartTransCtx::submit_redo_active_info_log_()
     TRANS_LOG(WARN, "submit record log failed", KR(ret), K(*this));
   } else {
     ObTxActiveInfoLog active_info_log(exec_info_.scheduler_, exec_info_.trans_type_, session_id_,
+                                      associated_session_id_,
                                       trace_info_.get_app_trace_id(),
                                       mt_ctx_.get_min_table_version(), can_elr_,
                                       addr_,                 //

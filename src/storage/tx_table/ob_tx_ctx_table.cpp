@@ -114,6 +114,7 @@ int ObTxCtxTableRecoverHelper::recover_one_tx_ctx_(transaction::ObLSTxCtxMgr* ls
                                  ctx_info.cluster_id_,     /* cluster_id */
                                  cluster_version,
                                  0, /*session_id*/
+                                 0, /*associated_session_id*/
                                  scheduler,
                                  INT64_MAX,
                                  MTL(ObTransService*));
