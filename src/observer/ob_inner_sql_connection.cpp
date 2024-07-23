@@ -2234,11 +2234,10 @@ int ObInnerSQLConnection::create_default_session()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("default session buf allocated failed", K(ret));
   } else if (FALSE_IT(inner_session_ = new(buf) ObSQLSessionInfo())) {
+  } else if (FALSE_IT(free_session_ctx_.sessid_ = INNER_SQL_SESS_ID)) {
+  } else if (FALSE_IT(free_session_ctx_.proxy_sessid_ = INNER_SQL_PROXY_SESS_ID)) {
   } else if (OB_FAIL(inner_session_->init(INNER_SQL_SESS_ID, INNER_SQL_PROXY_SESS_ID, allocator))) {
     LOG_WARN("init session failed", K(ret));
-  } else {
-    free_session_ctx_.sessid_ = INNER_SQL_SESS_ID;
-    free_session_ctx_.proxy_sessid_ = INNER_SQL_PROXY_SESS_ID;
   }
   return ret;
 }
