@@ -1955,8 +1955,10 @@ int ObLoadDataSPImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
     while (OB_SUCC(ret)
            && !box.read_cursor.is_end_file()
            && box.data_trimer.get_lines_count() < box.ignore_rows) {
+      box.temp_handle->data_buffer->reset();
       OZ (next_file_buffer(ctx, box, box.temp_handle,
                            box.ignore_rows - box.data_trimer.get_lines_count()));
+      OZ (ObLoadDataUtils::check_session_status(*ctx.get_my_session()));
       LOG_DEBUG("LOAD DATA ignore rows", K(box.ignore_rows), K(box.data_trimer.get_lines_count()));
     }
 
