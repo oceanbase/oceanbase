@@ -76,6 +76,34 @@ inline int ObPSAnalysisChecker::detection(const int64_t len)
   return ret;
 }
 
+void ObPsSessionInfoParamsCleaner::operator()(
+    common::hash::HashMapPair<uint64_t, ObPsSessionInfo *> &entry) {
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(entry.second)) {
+    ObPsSessionInfo *ps_session_info =
+        static_cast<ObPsSessionInfo *>(entry.second);
+    ps_session_info->get_param_types().reuse();
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "ps session info pointer is NULL", K(ret));
+  }
+  ret_ = ret;
+}
+
+void ObPsSessionInfoParamsAssignment::operator()(
+    common::hash::HashMapPair<uint64_t, ObPsSessionInfo *> &entry) {
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(entry.second)) {
+    ObPsSessionInfo *ps_session_info =
+        static_cast<ObPsSessionInfo *>(entry.second);
+    ps_session_info->get_param_types().assign(param_types_);
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "ps session info pointer is NULL", K(ret));
+  }
+  ret_ = ret;
+}
+
 ObMPStmtExecute::ObMPStmtExecute(const ObGlobalContext &gctx)
     : ObMPBase(gctx),
       retry_ctrl_(/*ctx_.retry_info_*/),
@@ -887,7 +915,13 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
         // Step2: 获取new_param_bound_flag字段
         ObMySQLUtil::get_int1(pos, new_param_bound_flag);
         if (new_param_bound_flag == 1) {
-          param_types.reuse();
+          // reset param_types
+          ObPsSessionInfoParamsCleaner cleaner;
+          if (OB_FAIL(session->update_ps_session_info_safety(stmt_id_, cleaner))) {
+            LOG_WARN("failed to reset param_types", K(ret), K(stmt_id_));
+          } else if (OB_FAIL(cleaner.ret_)) {
+            LOG_WARN("failed to reset param_types", K(ret), K(stmt_id_));
+          }
         }
       }
       if (OB_FAIL(ret)) {
@@ -916,16 +950,37 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       }
 
       // Step3: 获取type信息
-      if (OB_SUCC(ret) && OB_FAIL(parse_request_type(pos,
-                                                     input_param_num,
-                                                     new_param_bound_flag,
-                                                     cs_conn,
-                                                     cs_server,
-                                                     param_types,
-                                                     param_type_infos))) {
-        LOG_WARN("fail to parse input params type", K(ret));
-      } else if (is_contain_complex_element(param_types)) {
-        analysis_checker_.need_check_ = false;
+      if (OB_SUCC(ret)) {
+        if (1 == new_param_bound_flag) {
+          ParamTypeArray tmp_param_types;
+          ObPsSessionInfoParamsAssignment assignment(tmp_param_types);
+          if (OB_FAIL(parse_request_type(pos,
+                                         input_param_num,
+                                         new_param_bound_flag,
+                                         cs_conn,
+                                         cs_server,
+                                         tmp_param_types,
+                                         param_type_infos))) {
+            LOG_WARN("fail to parse input params type from packet", K(ret));
+          } else if (OB_FAIL(session->update_ps_session_info_safety(stmt_id_, assignment))) {
+            LOG_WARN("fail to update params type of PsSessionInfo", K(ret));
+          } else if (OB_FAIL(assignment.ret_)) {
+            LOG_WARN("fail to update params type of PsSessionInfo", K(ret));
+          }
+        } else {
+          if (OB_FAIL(parse_request_type(pos,
+                                         input_param_num,
+                                         new_param_bound_flag,
+                                         cs_conn,
+                                         cs_server,
+                                         param_types,
+                                         param_type_infos))) {
+            LOG_WARN("fail to parse input params type", K(ret));
+          }
+        }
+        if (OB_SUCC(ret) && is_contain_complex_element(param_types)) {
+          analysis_checker_.need_check_ = false;
+        }
       }
 
       // Step3-2: 获取returning into params type信息

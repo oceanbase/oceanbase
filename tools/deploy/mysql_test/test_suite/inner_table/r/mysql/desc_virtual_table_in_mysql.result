@@ -4889,6 +4889,26 @@ IS_MANDATORY	varchar(1024)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.ENABLED_ROLES;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_session_ps_info;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+proxy_session_id	bigint(20) unsigned	NO		NULL	
+session_id	bigint(20) unsigned	NO		NULL	
+ps_client_stmt_id	bigint(20)	NO		NULL	
+ps_inner_stmt_id	bigint(20)	NO		NULL	
+stmt_type	varchar(256)	NO		NULL	
+param_count	bigint(20)	NO		NULL	
+param_types	longtext	NO		NULL	
+ref_count	bigint(20)	NO		NULL	
+checksum	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_session_ps_info;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_session_ps_info runs in single server"
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tracepoint_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

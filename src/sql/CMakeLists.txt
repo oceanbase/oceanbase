@@ -764,6 +764,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_rb_calc.cpp
   engine/expr/ob_expr_rb_to_string.cpp
   engine/expr/ob_expr_rb_from_string.cpp
+  engine/expr/ob_expr_decode_trace_id.cpp
 )
 
 ob_set_subtarget(ob_sql engine_join

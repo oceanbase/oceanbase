@@ -41,9 +41,6 @@ int ObExpVisitor::add_row(const Op &cur_op)
   if (OB_ISNULL(cells = cur_row_.cells_)) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "cur row cell is NULL", K(ret));
-  } else if (OB_UNLIKELY(col_count < 1)) {
-    ret = OB_ERR_UNEXPECTED;
-    SERVER_LOG(WARN, "column count error ", K(ret), K(col_count));
   } else {
     ObString ipstr;
     common::ObAddr addr;
@@ -57,7 +54,7 @@ int ObExpVisitor::add_row(const Op &cur_op)
       }
       case ObPlanCachePlanExplain::IP_COL: {
         ipstr.reset();
-        if (OB_FAIL(ObServerUtils::get_server_ip(allocator_, ipstr))) {
+        if (OB_FAIL(ObServerUtils::get_server_ip(&allocator_, ipstr))) {
           SERVER_LOG(ERROR, "get server ip failed", K(ret));
         } else {
           cells[i].set_varchar(ipstr);
@@ -80,7 +77,7 @@ int ObExpVisitor::add_row(const Op &cur_op)
         char *buf = NULL;
         int64_t buf_len = cur_op.get_plan_depth() + strlen(cur_op.get_name()) + 1;
         int64_t pos = 0;
-        if (OB_ISNULL(buf = static_cast<char *> (allocator_->alloc(buf_len)))) {
+        if (OB_ISNULL(buf = static_cast<char *> (allocator_.alloc(buf_len)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
         } else {
           int64_t j = cur_op.get_plan_depth();
@@ -148,8 +145,12 @@ int ObExpVisitor::add_row(const Op &cur_op)
       }
     } // end for
     if (OB_SUCC(ret)) {
+      // deep copy row
       if (OB_FAIL(scanner_.add_row(cur_row_))) {
         SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
+      } else {
+        // free memory
+        allocator_.reuse();
       }
     }
   }
@@ -168,7 +169,7 @@ int ObExpVisitor::get_table_name<ObOpSpec>(const ObOpSpec &cur_op, ObString &tab
   char *buffer = NULL;
   ObString index_name;
   ObString tmp_table_name;
-  if (OB_ISNULL(buffer = static_cast<char *>(allocator_->alloc(OB_MAX_PLAN_EXPLAIN_NAME_LENGTH)))) {
+  if (OB_ISNULL(buffer = static_cast<char *>(allocator_.alloc(OB_MAX_PLAN_EXPLAIN_NAME_LENGTH)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SERVER_LOG(WARN, "failed to allocate memory", K(ret));
   } else if (PHY_TABLE_SCAN == cur_op.get_type()) {
@@ -194,7 +195,7 @@ int ObExpVisitor::get_table_access_desc(bool is_idx_access, const ObQueryFlag &s
   char *buffer = NULL;
   int64_t tmp_pos = 0;
 
-  if (OB_ISNULL(buffer = static_cast<char *>(allocator_->alloc(OB_MAX_PLAN_EXPLAIN_NAME_LENGTH)))) {
+  if (OB_ISNULL(buffer = static_cast<char *>(allocator_.alloc(OB_MAX_PLAN_EXPLAIN_NAME_LENGTH)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SERVER_LOG(WARN, "failed to allocate memory", K(ret));
   } else {
@@ -241,7 +242,7 @@ int ObExpVisitor::get_property<ObOpSpec>(const ObOpSpec &cur_op,
   int ret = OB_SUCCESS;
   char *buf = NULL;
   int64_t pos = 0;
-  if (OB_ISNULL(buf = static_cast<char *> (allocator_->alloc(OB_MAX_OPERATOR_PROPERTY_LENGTH)))) {
+  if (OB_ISNULL(buf = static_cast<char *> (allocator_.alloc(OB_MAX_OPERATOR_PROPERTY_LENGTH)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SERVER_LOG(WARN, "failed to allocate memory", K(ret));
   } else {
@@ -265,6 +266,67 @@ int ObExpVisitor::get_property<ObOpSpec>(const ObOpSpec &cur_op,
   return ret;
 }
 
+int ObCacheObjIterator::operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entry.second)) {
+    ret = OB_ERR_UNEXPECTED;
+    SERVER_LOG(WARN, "HashMapPair second element is NULL", K(ret));
+  } else if (ObLibCacheNameSpace::NS_CRSR != entry.second->get_ns()) {
+  } else if (OB_FAIL(plan_id_array_.push_back(entry.first))){
+    SERVER_LOG(WARN, "fail to push plan id into plan_id_array_", K(ret), K(entry.first));
+  }
+  return ret;
+}
+
+int ObCacheObjIterator::next(int64_t &tenant_id, ObCacheObjGuard &guard)
+{
+  int ret = OB_SUCCESS;
+  do {
+    if (plan_id_array_.count() == 0) {
+      if (tenant_id_array_idx_ < tenant_id_array_.count() - 1) {
+        ++tenant_id_array_idx_;
+        tenant_id = tenant_id_array_.at(tenant_id_array_idx_);
+        MTL_SWITCH(tenant_id) {
+          cur_plan_cache_ = MTL(ObPlanCache*);
+          if (OB_ISNULL(cur_plan_cache_)) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "cur_plan_cache_ is NULL", K(ret));
+          } else if (OB_FAIL(cur_plan_cache_->foreach_cache_obj(*this))) {
+            SERVER_LOG(WARN, "fail to traverse plan cache obj", K(ret));
+          }
+        } else {
+          ret = OB_SUCCESS;
+          SERVER_LOG(INFO, "fail to switch tenant, may be deleted", K(ret), K(tenant_id));
+        }
+      } else {
+        ret = OB_ITER_END;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (plan_id_array_.count() == 0) {
+      } else {
+        uint64_t plan_id = 0;
+        if (OB_FAIL(plan_id_array_.pop_back(plan_id))) {
+          SERVER_LOG(WARN, "failed to pop back plan id", K(ret));
+        } else if (OB_ISNULL(cur_plan_cache_)) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "cur_plan_cache_ is NULL", K(ret));
+        } else if (OB_FAIL(cur_plan_cache_->ref_cache_obj(plan_id, guard))) {
+          if (ret == OB_HASH_NOT_EXIST) {
+            ret = OB_SUCCESS;
+          } else {
+            SERVER_LOG(WARN, "fail to ref physical plan", K(ret));
+          }
+        } else {
+          break;
+        }
+      }
+    }
+  } while (OB_SUCC(ret));
+  return ret;
+}
+
 int ObPlanCachePlanExplain::set_tenant_plan_id(const common::ObIArray<common::ObNewRange> &ranges)
 {
   int ret = OB_SUCCESS;
@@ -272,6 +334,7 @@ int ObPlanCachePlanExplain::set_tenant_plan_id(const common::ObIArray<common::Ob
   if (ranges.count() == 1 && ranges.at(0).is_single_rowkey()) {
     ObRowkey start_key = ranges.at(0).start_key_;
     const ObObj *start_key_obj_ptr = start_key.get_obj_ptr();
+    scan_all_plan_ = false;
     if (OB_ISNULL(start_key_obj_ptr)
         || start_key.get_obj_cnt() != 4)  /* (tenant_id, svr_ip, svr_port, plan_id) */ {
       ret = OB_ERR_UNEXPECTED;
@@ -284,6 +347,8 @@ int ObPlanCachePlanExplain::set_tenant_plan_id(const common::ObIArray<common::Ob
       tenant_id_ = start_key_obj_ptr[0].get_int();
       plan_id_ = start_key_obj_ptr[3].get_int();
     }
+  } else {
+    scan_all_plan_ = true;
   }
   return ret;
 }
@@ -292,43 +357,62 @@ int ObPlanCachePlanExplain::inner_open()
 {
   int ret = OB_SUCCESS;
   ObPhysicalPlan *plan = NULL;
-  // !!!引用plan cache资源之前必须加ObReqTimeGuard
-  ObReqTimeGuard req_timeinfo_guard;
+  static_engine_exp_visitor_.set_effective_tenant_id(effective_tenant_id_);
   if (OB_FAIL(set_tenant_plan_id(key_ranges_))) {
     LOG_WARN("set tenant id and plan id failed", K(ret));
-  } else if (!is_sys_tenant(effective_tenant_id_) && tenant_id_ != effective_tenant_id_) {
-    // user tenant can only show self tenant infos
-    // return nothing
-    LOG_INFO("non-sys tenant can only show self tenant plan cache plan explain infos",
-        K(effective_tenant_id_), K(tenant_id_), K(plan_id_));
-  } else if (OB_INVALID_INDEX != tenant_id_ && OB_INVALID_INDEX != plan_id_) {
+  } else if (!scan_all_plan_) {
     ObPlanCache *plan_cache = NULL;
+    // !!!引用plan cache资源之前必须加ObReqTimeGuard
+    ObReqTimeGuard req_timeinfo_guard;
     ObCacheObjGuard guard(PLAN_EXPLAIN_HANDLE);
     int tmp_ret = OB_SUCCESS;
-
-    MTL_SWITCH(tenant_id_) {
-      plan_cache = MTL(ObPlanCache*);
-      if (OB_SUCCESS != (tmp_ret = plan_cache->ref_plan(plan_id_, guard))) {
-        // should not panic
-      } else if (FALSE_IT(plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj()))) {
-        // do nothing
-      } else if (OB_ISNULL(plan)) {
-        // maybe pl object, do nothing
-      } else if (OB_NOT_NULL(plan->get_root_op_spec())) {
-        if (OB_FAIL(static_engine_exp_visitor_.init(tenant_id_, plan_id_, allocator_))) {
-          SERVER_LOG(WARN, "failed to init visitor", K(ret));
-        } else if (OB_FAIL(plan->get_root_op_spec()->accept(static_engine_exp_visitor_))) {
-          SERVER_LOG(WARN, "fail to traverse physical plan", K(ret));
+    if (!is_sys_tenant(effective_tenant_id_) && tenant_id_ != effective_tenant_id_) {
+      // user tenant can only show self tenant infos
+      // return nothing
+      LOG_INFO("non-sys tenant can only show self tenant plan cache plan explain infos",
+        K(effective_tenant_id_), K(tenant_id_), K(plan_id_));
+    } else {
+      MTL_SWITCH(tenant_id_) {
+        plan_cache = MTL(ObPlanCache*);
+        if (OB_SUCCESS != (tmp_ret = plan_cache->ref_plan(plan_id_, guard))) {
+          // should not panic
+        } else if (FALSE_IT(plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj()))) {
+          // do nothing
+        } else if (OB_ISNULL(plan)) {
+          // maybe pl object, do nothing
+        } else if (OB_NOT_NULL(plan->get_root_op_spec())) {
+          if (OB_FAIL(static_engine_exp_visitor_.init(tenant_id_, plan_id_))) {
+            SERVER_LOG(WARN, "failed to init visitor", K(ret));
+          } else if (OB_FAIL(plan->get_root_op_spec()->accept(static_engine_exp_visitor_))) {
+            SERVER_LOG(WARN, "fail to traverse physical plan", K(ret));
+          }
+        } else {
+          // done
         }
       } else {
-        // done
+        // failed to switch tenant
+        ret = OB_SUCCESS;
+        SERVER_LOG(INFO, "fail to switch tenant, may be deleted", K(ret), K(tenant_id_));
       }
-    } // mtl switch ends
+    }
   } else {
-    SERVER_LOG(DEBUG, "invalid tenant_id or plan_id", K_(tenant_id), K_(plan_id));
+    // scan all plan
+    if (is_sys_tenant(effective_tenant_id_)) {
+      if (OB_ISNULL(GCTX.omt_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "GCTX.omt_ is NULL", K(ret));
+      } else if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_id_array_))) {
+        SERVER_LOG(WARN, "failed to get all tenant id", K(ret));
+      }
+    } else {
+      // user tenant show self tenant info
+      if (OB_FAIL(tenant_id_array_.push_back(effective_tenant_id_))) {
+        SERVER_LOG(WARN, "failed to push back tenant id", K(ret),
+                   K(effective_tenant_id_));
+      }
+    }
   }
 
-  // data is ready
   if (OB_SUCC(ret)) {
     scanner_it_ = scanner_.begin();
   }
@@ -339,14 +423,42 @@ int ObPlanCachePlanExplain::inner_open()
 int ObPlanCachePlanExplain::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
-    if (OB_ITER_END != ret) {
-      SERVER_LOG(WARN, "fail to get next row", K(ret));
-    }
+  if (iter_end_) {
+    ret = OB_ITER_END;
   } else {
-    row = &cur_row_;
+    do {
+      if (OB_FAIL(scanner_it_.get_next_row(cur_row_))) {
+        if (OB_ITER_END != ret) {
+          SERVER_LOG(WARN, "fail to get next row", K(ret));
+        } else {
+          if (scan_all_plan_) {
+            ret = OB_SUCCESS;
+            ObReqTimeGuard req_timeinfo_guard;
+            ObCacheObjGuard guard(PLAN_EXPLAIN_HANDLE);
+            if (OB_FAIL(cache_obj_iterator_.next(tenant_id_, guard))) {
+              if (OB_ITER_END == ret) {
+                iter_end_ = true;
+              } else {
+                SERVER_LOG(WARN, "fail to get next physical plan", K(ret));
+              }
+            } else {
+              ObPhysicalPlan *plan = static_cast<ObPhysicalPlan*>(guard.get_cache_obj());
+              if (OB_FAIL(static_engine_exp_visitor_.init(tenant_id_, plan->get_plan_id()))) {
+                SERVER_LOG(WARN, "failed to init visitor", K(ret));
+              } else if (OB_FAIL(plan->get_root_op_spec()->accept(static_engine_exp_visitor_))) {
+                SERVER_LOG(WARN, "fail to traverse physical plan", K(ret));
+              }
+            }
+          } else {
+            iter_end_ = true;
+          }
+        }
+      } else {
+        row = &cur_row_;
+        break;
+      }
+    } while (OB_SUCC(ret));
   }
-
   return ret;
 }
 

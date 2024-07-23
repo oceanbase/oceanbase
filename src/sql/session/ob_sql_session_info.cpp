@@ -1978,7 +1978,8 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   audit_record_.request_type_ = mode;
   audit_record_.session_id_ = get_sessid();
   audit_record_.proxy_session_id_ = get_proxy_sessid();
-  audit_record_.tenant_id_ = get_priv_tenant_id();
+  // sql audit don't distinguish between two tenant IDs
+  audit_record_.tenant_id_ = get_effective_tenant_id();
   audit_record_.user_id_ = get_user_id();
   audit_record_.proxy_user_id_ = get_proxy_user_id();
   audit_record_.effective_tenant_id_ = get_effective_tenant_id();
@@ -2018,7 +2019,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     } else {
       ObString sql = get_current_query_string();
       audit_record_.sql_ = const_cast<char *>(sql.ptr());
-      audit_record_.sql_len_ = min(sql.length(), OB_MAX_SQL_LENGTH);
+      audit_record_.sql_len_ = min(sql.length(), ObSQLUtils::get_query_record_size_limit(get_effective_tenant_id()));
       audit_record_.sql_cs_type_ = get_local_collation_connection();
     }
 
@@ -2049,6 +2050,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     // do nothing
   }
   audit_record_.flt_trace_id_[pos] = '\0';
+  audit_record_.stmt_type_ = get_stmt_type();
   return audit_record_;
 }
 

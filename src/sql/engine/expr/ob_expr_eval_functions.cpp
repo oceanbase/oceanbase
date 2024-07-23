@@ -380,6 +380,7 @@
 #include "ob_expr_sdo_relate.h"
 #include "ob_expr_inner_table_option_printer.h"
 #include "ob_expr_password.h"
+#include "ob_expr_decode_trace_id.h"
 #include "ob_expr_rb_build_empty.h"
 #include "ob_expr_rb_is_empty.h"
 #include "ob_expr_rb_build_varbinary.h"
@@ -1163,7 +1164,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprTransactionId::eval_transaction_id,                           /* 670 */
   ObExprInnerTableOptionPrinter::eval_inner_table_option_printer,     /* 671 */
   ObExprInnerTableSequenceGetter::eval_inner_table_sequence_getter,   /* 672 */
-  NULL, //ObExprDecodeTraceId::calc_decode_trace_id_expr,             /* 673 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr,                     /* 673 */
   ObExprInnerRowCmpVal::eval_inner_row_cmp_val,                       /* 674 */
   ObExprIs::json_is_true,                                             /* 675 */
   ObExprIs::json_is_false,                                            /* 676 */
@@ -1372,7 +1373,7 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObUIntTC>,         /* 126 */
   ObBatchCast::explicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 127 */
   ObBatchCast::implicit_batch_cast<ObDecimalIntTC, ObNumberTC>,       /* 128 */
-  NULL,//ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,        /* 129 */
+  ObExprDecodeTraceId::calc_decode_trace_id_expr_batch,               /* 129 */
   ObExprTopNFilter::eval_topn_filter_batch,                           /* 130 */
   NULL,//ObRelationalExprOperator::eval_batch_min_max_compare,        /* 131 */
   NULL,//ObExprBM25::eval_batch_bm25_relevance_expr,                  /* 132 */

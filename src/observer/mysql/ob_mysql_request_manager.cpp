@@ -32,6 +32,7 @@
 #include "sql/plan_cache/ob_plan_cache_value.h"
 #include "sql/session/ob_basic_session_info.h"
 #include "observer/mysql/ob_query_response_time.h"
+#include "ob_dl_queue.h"
 
 namespace oceanbase
 {
@@ -49,7 +50,9 @@ const int64_t ObMySQLRequestManager::EVICT_INTERVAL;
 ObMySQLRequestManager::ObMySQLRequestManager()
   : inited_(false), destroyed_(false), request_id_(0), mem_limit_(0),
     allocator_(), queue_(), task_(),
-    tenant_id_(OB_INVALID_TENANT_ID), tg_id_(-1), stop_flag_(true)
+    tenant_id_(OB_INVALID_TENANT_ID), tg_id_(-1), stop_flag_(true),
+    destroy_second_level_mutex_(common::ObLatchIds::SQL_AUDIT),
+    construct_task_()
 {
 }
 
@@ -67,7 +70,7 @@ int ObMySQLRequestManager::init(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   if (inited_) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(queue_.init(ObModIds::OB_MYSQL_REQUEST_RECORD, queue_size, tenant_id))) {
+  } else if (OB_FAIL(queue_.init(ObModIds::OB_MYSQL_REQUEST_RECORD, tenant_id))) {
     SERVER_LOG(WARN, "Failed to init ObMySQLRequestQueue", K(ret));
   } else if (OB_FAIL(allocator_.init(SQL_AUDIT_PAGE_SIZE,
                                      ObModIds::OB_MYSQL_REQUEST_RECORD,
@@ -78,6 +81,8 @@ int ObMySQLRequestManager::init(uint64_t tenant_id,
     //check FIFO mem used and sql audit records every 1 seconds
     if (OB_FAIL(task_.init(this))) {
       SERVER_LOG(WARN, "fail to init sql audit time tast", K(ret));
+    } else if (OB_FAIL(construct_task_.init(this))) {
+      SERVER_LOG(WARN, "fail to init sql audit construct time tast", K(ret));
     } else {
       mem_limit_ = max_mem_size;
       tenant_id_ = tenant_id;
@@ -103,6 +108,8 @@ int ObMySQLRequestManager::start()
     SERVER_LOG(WARN, "init timer fail", K(ret));
   } else if (OB_FAIL(TG_SCHEDULE(tg_id_, task_, EVICT_INTERVAL, true))) {
     SERVER_LOG(WARN, "start eliminate task failed", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(tg_id_, construct_task_, CONSTRUCT_EVICT_INTERVAL, true))) {
+    SERVER_LOG(WARN, "start construct task failed", K(ret));
   } else {
     stop_flag_ = false;
   }
@@ -113,6 +120,8 @@ void ObMySQLRequestManager::stop()
 {
   if (inited_ && !stop_flag_) {
     TG_STOP(tg_id_);
+    TG_CANCEL(tg_id_, task_);
+    TG_CANCEL(tg_id_, construct_task_);
   }
 }
 
@@ -184,7 +193,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
       record->data_ = audit_record;
       //deep copy sql
       if ((audit_record.sql_len_ > 0) && (NULL != audit_record.sql_)) {
-        int64_t stmt_len = min(audit_record.sql_len_, OB_MAX_SQL_LENGTH);
+        int64_t stmt_len = min(audit_record.sql_len_, ObSQLUtils::get_query_record_size_limit(get_tenant_id()));
         MEMCPY(buf + pos, audit_record.sql_, stmt_len);
         record->data_.sql_ = buf + pos;
         pos += stmt_len;
@@ -249,7 +258,7 @@ int ObMySQLRequestManager::record_request(const ObAuditRecordData &audit_record,
         if (is_sensitive) {
           free(record);
           record = NULL;
-        } else if (OB_FAIL(queue_.push_with_imme_seq(record, record->data_.request_id_))) {
+        } else if (OB_FAIL(queue_.push(record, record->data_.request_id_))) {
           //sql audit槽位已满时会push失败, 依赖后台线程进行淘汰获得可用槽位
           if (REACH_TIME_INTERVAL(2 * 1000 * 1000)) {
             SERVER_LOG(WARN, "push into queue failed", K(ret));
@@ -292,6 +301,44 @@ int ObMySQLRequestManager::get_mem_limit(uint64_t tenant_id,
              K(tenant_id), K(tenant_mem_limit), K(mem_pct), K(mem_limit));
   }
   return ret;
+}
+
+int ObMySQLRequestManager::release_record(int64_t release_cnt) {
+  int ret = OB_SUCCESS;
+  LockGuard lock_guard(destroy_second_level_mutex_);
+  if (OB_FAIL(queue_.release_record(release_cnt, std::move(this)))) {
+    SERVER_LOG(WARN, "fail to release record",
+          K(release_cnt), K(ret));
+  }
+
+  return ret;
+}
+
+void ObMySQLRequestManager::freeCallback(void* ptr) {
+  free(ptr);
+}
+
+int ObMySQLRequestManager::clear_leaf_queue(int64_t idx, int64_t size)
+{
+  int ret = OB_SUCCESS;
+  queue_.clear_leaf_queue(idx, size, std::bind(&ObMySQLRequestManager::freeCallback, this, std::placeholders::_1));
+  return ret;
+}
+
+int64_t ObMySQLRequestManager::get_start_idx() {
+  return queue_.get_start_idx();
+}
+
+int64_t ObMySQLRequestManager::get_end_idx() {
+  return queue_.get_end_idx();
+}
+
+int64_t ObMySQLRequestManager::get_capacity() {
+  return queue_.get_capacity();
+}
+
+int64_t ObMySQLRequestManager::get_size_used() {
+  return queue_.get_size_used();
 }
 
 int ObMySQLRequestManager::mtl_new(ObMySQLRequestManager* &req_mgr)

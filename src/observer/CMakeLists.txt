@@ -104,6 +104,8 @@ ob_set_subtarget(ob_server mysql
   mysql/obsm_utils.cpp
   mysql/obmp_set_option.cpp
   mysql/ob_feedback_proxy_utils.cpp
+  mysql/ob_dl_queue.cpp
+  mysql/ob_construct_queue.cpp
 )
 
 ob_set_subtarget(ob_server net
@@ -444,6 +446,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sys_variable_default_value.cpp
   virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_compatibility_control.cpp
+  virtual_table/ob_all_virtual_session_ps_info.cpp
 )
 
 ob_server_add_target(ob_server)

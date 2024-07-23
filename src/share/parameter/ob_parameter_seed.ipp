@@ -1974,6 +1974,9 @@ DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "regio
         "the policy of choose source in migration and add replica. 'idc' means firstly choose follower replica of the same idc as source, "
         "'region' means firstly choose follower replica of the same region as source",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_query_record_size_limit, OB_TENANT_PARAMETER, "65536", "[0, 67108864] in integer",
+        "set sql_audit and plan stat query sql size. Range: [0,67108864] in integer in integer.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
         "Control whether to use chose_migration_source_policy. "
         "If the value of configure is false, it will not use chose_migration_source_policy and choose replica with the largest checkpoint scn as the source.",
