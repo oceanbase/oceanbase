@@ -3141,6 +3141,120 @@ int ObService::force_set_ls_as_single_replica(
   return ret;
 }
 
+int ObService::force_set_server_list(const obrpc::ObForceSetServerListArg &arg, obrpc::ObForceSetServerListResult &result)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("force_set_server_list", K(arg));
+
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ob_service is not inited", KR(ret));
+  } else if (OB_ISNULL(GCTX.omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.omt_ is null", KR(ret), K(arg));
+  } else {
+    common::ObArray<uint64_t> tenant_ids;
+    (void) GCTX.omt_->get_mtl_tenant_ids(tenant_ids);
+    const int64_t new_membership_timestamp = ObTimeUtility::current_time();
+    bool all_succeed = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); ++i) {
+      const int64_t tenant_id = tenant_ids[i];
+      COMMON_LOG(INFO, "start to excute force_set_server_list", K(tenant_id));
+      MTL_SWITCH(tenant_id) {
+        ObLSService *ls_svr = MTL(ObLSService*);
+        logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+        ObSharedGuard<storage::ObLSIterator> ls_iter_guard;
+        ObForceSetServerListResult::ResultInfo result_info(tenant_id);
+
+        if (OB_ISNULL(ls_svr) || OB_ISNULL(log_service)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ptr is null", KR(ret), K(tenant_id), KP(ls_svr), KP(log_service));
+        } else if (OB_FAIL(ls_svr->get_ls_iter(ls_iter_guard, ObLSGetMod::OBSERVER_MOD))) {
+          LOG_WARN("fail to get ls iter guard", KR(ret), K(tenant_id));
+        }
+
+        if (OB_FAIL(ret)) {
+          all_succeed = false;
+          COMMON_LOG(WARN, "force_set_server_list with current tenant failed", KR(ret), K(tenant_id));
+        }
+
+        while (OB_SUCC(ret)) {
+          COMMON_LOG(INFO, "start to iterate every log stream of tenant", K(tenant_id));
+          ObLS *ls = nullptr;
+          logservice::ObLogHandler *log_handler = NULL;
+          if (OB_FAIL(ls_iter_guard->get_next(ls))) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("fail to get next ls", KR(ret), K(tenant_id));
+            }
+          } else if (OB_ISNULL(ls)){
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("ls is nullptr", KR(ret), K(tenant_id));
+          } else {
+            common::ObMemberList old_member_list;
+            int64_t old_replica_num = 0;
+            ObLSID ls_id = ls->get_ls_id();
+
+            if (OB_ISNULL(log_handler = ls->get_log_handler())) {
+              ret = OB_ERR_UNEXPECTED;
+              COMMON_LOG(ERROR, "log_handler is null", KR(ret), K(tenant_id), K(ls_id), KP(ls));
+            } else if (OB_FAIL(log_handler->get_paxos_member_list(old_member_list, old_replica_num))) {
+              LOG_WARN("get old_member_list failed", KR(ret), K(tenant_id), K(ls_id), KP(ls));
+            } else {
+              common::ObMemberList new_member_list;
+              // new_member_list is the intersection of args.server_list_ and old_member_list
+              for (int64_t j = 0; OB_SUCC(ret) && j < arg.server_list_.size(); ++j) {
+                const common::ObAddr &server = arg.server_list_[j];
+                if (!old_member_list.contains(server)) {
+                } else if (OB_FAIL(new_member_list.add_member(ObMember(server, new_membership_timestamp)))){
+                  LOG_WARN("new_member_list add_member failed", K(ret), K(server));
+                }
+              }
+
+              if (OB_FAIL(ret)) {
+              } else if (arg.replica_num_ != new_member_list.get_member_number()) {
+                ret = OB_STATE_NOT_MATCH;
+                LOG_WARN("new_member_list number does not equal to arg.replica_num", K(ret), K(arg), K(new_member_list.get_member_number()));
+              } else if (OB_FAIL(log_handler->force_set_member_list(new_member_list, arg.replica_num_))) {
+                LOG_WARN("force_set_server_list failed", KR(ret), K(arg), K(tenant_id), K(ls_id));
+              } else {
+                COMMON_LOG(INFO, "execute force_set_server_list successfully with "
+                           "current tenant and ls", K(arg), K(tenant_id), K(ls_id));
+              }
+            }
+
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(result_info.add_ls_info(ls_id, ret))) {
+              LOG_WARN("add_result_info failed", K(tmp_ret), K(ls_id), "actual ret", ret);
+            }
+
+            if (OB_FAIL(ret)) {
+              COMMON_LOG(WARN, "failed to execute force_set_server_list with "
+                         "current tenant and ls", KR(ret), K(arg), K(tenant_id), K(ls_id));
+              ret = OB_SUCCESS; // ignore failed return code, keep executing next ls
+            }
+          } // end if
+        } // end while
+
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(result.result_list_.push_back(result_info))) {
+          LOG_WARN("result_list_ push_back failed", K(tmp_ret), K(tenant_id), K(result_info));
+        }
+        if (0 != result_info.failed_ls_info_.size()) {
+          all_succeed = false;
+        }
+        ret = OB_SUCCESS; // ignore failed return code, keep executing next tenant
+      } // MTL_SWITCH end
+    } // for end
+
+    if (all_succeed) {
+      result.ret_ = OB_SUCCESS;
+    } else {
+      result.ret_ = OB_PARTIAL_FAILED;
+    }
+  }
+  return ret;
+}
+
 int ObService::refresh_tenant_info(
     const ObRefreshTenantInfoArg &arg,
     ObRefreshTenantInfoRes &result)

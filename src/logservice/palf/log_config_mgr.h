@@ -72,6 +72,7 @@ enum LogConfigChangeType
   UNLOCK_CONFIG_CHANGE,
   REPLACE_LEARNERS,
   SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM,
+  FORCE_SET_MEMBER_LIST,
 };
 
 inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
@@ -98,6 +99,7 @@ inline const char *LogConfigChangeType2Str(const LogConfigChangeType state)
     CHECK_LOG_CONFIG_TYPE_STR(UNLOCK_CONFIG_CHANGE);
     CHECK_LOG_CONFIG_TYPE_STR(REPLACE_LEARNERS);
     CHECK_LOG_CONFIG_TYPE_STR(SWITCH_LEARNER_TO_ACCEPTOR_AND_NUM);
+    CHECK_LOG_CONFIG_TYPE_STR(FORCE_SET_MEMBER_LIST);
     default:
       return "Invalid";
   }
@@ -164,18 +166,20 @@ inline bool is_upgrade_or_degrade(const LogConfigChangeType type)
 
 inline bool is_use_replica_num_args(const LogConfigChangeType type)
 {
-  return ADD_MEMBER == type || REMOVE_MEMBER == type || CHANGE_REPLICA_NUM == type ||
-      FORCE_SINGLE_MEMBER == type || SWITCH_LEARNER_TO_ACCEPTOR == type || SWITCH_ACCEPTOR_TO_LEARNER == type;
+  return ADD_MEMBER == type || REMOVE_MEMBER == type ||
+         CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type ||
+         SWITCH_LEARNER_TO_ACCEPTOR == type ||
+         SWITCH_ACCEPTOR_TO_LEARNER == type || FORCE_SET_MEMBER_LIST == type;
 }
 
 inline bool need_exec_on_leader_(const LogConfigChangeType type)
 {
-  return (FORCE_SINGLE_MEMBER != type);
+  return (FORCE_SINGLE_MEMBER != type && FORCE_SET_MEMBER_LIST != type);
 }
 
 inline bool is_may_change_replica_num(const LogConfigChangeType type)
 {
-  return is_add_member_list(type) || is_remove_member_list(type) || CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type;
+  return is_add_member_list(type) || is_remove_member_list(type) || CHANGE_REPLICA_NUM == type || FORCE_SINGLE_MEMBER == type || FORCE_SET_MEMBER_LIST == type;
 }
 
 inline bool is_must_not_change_replica_num(const LogConfigChangeType type)
@@ -226,7 +230,8 @@ public:
       lock_type_(ConfigChangeLockType::LOCK_NOTHING),
       type_(INVALID_LOG_CONFIG_CHANGE_TYPE),
       added_list_(),
-      removed_list_() { }
+      removed_list_(),
+      new_member_list_() { }
 
   LogConfigChangeArgs(const common::ObMember &server,
                       const int64_t new_replica_num,
@@ -235,14 +240,14 @@ public:
     : server_(server), curr_member_list_(), curr_replica_num_(0), new_replica_num_(new_replica_num),
       config_version_(config_version), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
       lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type),
-      added_list_(), removed_list_() { }
+      added_list_(), removed_list_(), new_member_list_() { }
 
   LogConfigChangeArgs(const common::ObMember &server,
                       const int64_t new_replica_num,
                       const LogConfigChangeType type)
     : server_(server), curr_member_list_(), curr_replica_num_(0), new_replica_num_(new_replica_num),
       config_version_(), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
-      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type), added_list_(), removed_list_() { }
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type), added_list_(), removed_list_(), new_member_list_() { }
 
   LogConfigChangeArgs(const common::ObMemberList &member_list,
                       const int64_t curr_replica_num,
@@ -250,14 +255,14 @@ public:
                       const LogConfigChangeType type)
     : server_(), curr_member_list_(member_list), curr_replica_num_(curr_replica_num), new_replica_num_(new_replica_num),
       config_version_(), ref_scn_(), lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
-      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type), added_list_(), removed_list_() { }
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type), added_list_(), removed_list_(), new_member_list_() { }
 
   LogConfigChangeArgs(const int64_t lock_owner,
                       const int64_t lock_type,
                       const LogConfigChangeType type)
     : server_(), curr_member_list_(), curr_replica_num_(0), new_replica_num_(),
       config_version_(), ref_scn_(), lock_owner_(lock_owner),
-      lock_type_(lock_type), type_(type), added_list_(), removed_list_() { }
+      lock_type_(lock_type), type_(type), added_list_(), removed_list_(), new_member_list_() { }
 
   LogConfigChangeArgs(const common::ObMemberList &added_list,
                       const common::ObMemberList &removed_list,
@@ -266,8 +271,16 @@ public:
       new_replica_num_(0), config_version_(), ref_scn_(),
       lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
       lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type),
-      added_list_(added_list), removed_list_(removed_list) { }
+      added_list_(added_list), removed_list_(removed_list), new_member_list_() { }
 
+  LogConfigChangeArgs(const common::ObMemberList &new_member_list,
+                      const int64_t new_replica_num,
+                      const LogConfigChangeType type)
+    : server_(), curr_member_list_(), curr_replica_num_(0),
+      new_replica_num_(new_replica_num), config_version_(), ref_scn_(),
+      lock_owner_(OB_INVALID_CONFIG_CHANGE_LOCK_OWNER),
+      lock_type_(ConfigChangeLockType::LOCK_NOTHING), type_(type),
+      added_list_(), removed_list_(), new_member_list_(new_member_list) { }
   ~LogConfigChangeArgs()
   {
     reset();
@@ -277,7 +290,7 @@ public:
 
   TO_STRING_KV(K_(server), K_(curr_member_list), K_(curr_replica_num), K_(new_replica_num),
       K_(config_version), K_(ref_scn), K_(lock_owner), K_(lock_type), K_(added_list),
-      K_(removed_list), "type", LogConfigChangeType2Str(type_));
+      K_(removed_list), K_(new_member_list), "type", LogConfigChangeType2Str(type_));
   common::ObMember server_;
   common::ObMemberList curr_member_list_;
   int64_t curr_replica_num_;
@@ -289,6 +302,7 @@ public:
   LogConfigChangeType type_;
   common::ObMemberList added_list_;
   common::ObMemberList removed_list_;
+  common::ObMemberList new_member_list_;
 };
 
 struct LogReconfigBarrier
@@ -485,6 +499,7 @@ public:
   void set_sync_to_degraded_learners();
   bool is_sync_to_degraded_learners() const;
   int forward_initial_config_meta_to_arb();
+  int force_set_member_list(const LogConfigChangeArgs &args, const int64_t proposal_id);
   // ================ Config Change ==================
   // ==================== Child ========================
   virtual int register_parent();

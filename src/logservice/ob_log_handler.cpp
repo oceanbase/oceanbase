@@ -675,6 +675,33 @@ int ObLogHandler::force_set_as_single_replica()
   return ret;
 }
 
+int ObLogHandler::force_set_member_list(const common::ObMemberList &new_member_list, const int64_t new_replica_num)
+{
+  int ret = OB_SUCCESS;
+  common::TCWLockGuard deps_guard(deps_lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogHandler is not inited", KR(ret));
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(WARN, "ObLogHandler is in stop state", KR(ret));
+  } else {
+    const int64_t timeout_us = 10 * 1000L * 1000L;
+    LogConfigChangeCmd req(self_, id_, new_member_list, new_replica_num,
+                           FORCE_SET_MEMBER_LIST_CMD, timeout_us);
+    ConfigChangeCmdHandler cmd_handler(&palf_handle_);
+    LogConfigChangeCmdResp resp;
+    if (OB_FAIL(cmd_handler.handle_config_change_cmd(req, resp))) {
+      CLOG_LOG(WARN, "handle force_set_member_list_cmd failed", KR(ret), K_(id), K(req));
+    } else {
+      CLOG_LOG(INFO, "force_set_member_list success", K_(id), K_(self), K(new_member_list), K(new_replica_num), K(resp));
+    }
+  }
+
+  return ret;
+}
+
+
 // @desc: add_member interface
 //        | 1.add_member()
 //        V

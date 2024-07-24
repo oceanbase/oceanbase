@@ -700,6 +700,26 @@ int PalfHandleImpl::force_set_as_single_replica()
   return ret;
 }
 
+int PalfHandleImpl::force_set_member_list(const common::ObMemberList &new_member_list,
+                                          const int64_t new_replica_num)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "PalfHandleImpl is not inited!", KR(ret), KPC(this));
+  } else if (!new_member_list.is_valid() || !is_valid_replica_num(new_replica_num) ||
+             new_replica_num != new_member_list.get_member_number()) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid argument", KR(ret), KPC(this), K(new_member_list), K(new_replica_num));
+  } else if (OB_FAIL(force_set_member_list_(new_member_list, new_replica_num))){
+    PALF_LOG(WARN, "failed to force to set member list", KR(ret), KPC(this), K(new_member_list), K(new_replica_num));
+  } else {
+    PALF_LOG(INFO, "force to set member list successfully", K_(palf_id), K(new_member_list), K(new_replica_num));
+  }
+
+  return ret;
+}
+
 int PalfHandleImpl::change_replica_num(
     const common::ObMemberList &member_list,
     const int64_t curr_replica_num,
@@ -5278,6 +5298,17 @@ void PalfHandleImpl::report_force_set_as_single_replica_(const int64_t prev_repl
       palf_id_, config_version, prev_replica_num, curr_replica_num, EXTRA_INFOS);
 }
 
+void PalfHandleImpl::report_force_set_member_list(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list)
+{
+  LogConfigVersion config_version;
+  (void) config_mgr_.get_config_version(config_version);
+  ObSqlString member_list_buf;
+  (void) member_list_to_string(member_list, member_list_buf);
+  PALF_REPORT_INFO_KV("member_list", member_list_buf);
+  plugins_.record_reconfiguration_event(LogConfigChangeType2Str(LogConfigChangeType::FORCE_SET_MEMBER_LIST),
+      palf_id_, config_version, prev_replica_num, curr_replica_num, EXTRA_INFOS);
+}
+
 void PalfHandleImpl::report_change_replica_num_(const int64_t prev_replica_num, const int64_t curr_replica_num, const common::ObMemberList &member_list)
 {
   LogConfigVersion config_version;
@@ -5613,6 +5644,59 @@ int PalfHandleImpl::raw_read(const LSN &lsn,
     PALF_LOG(TRACE, "raw_read success", K(ret), K_(palf_id), K(lsn),  K(nbytes),
              K(real_read_size), K(readable_end_lsn), K(read_size), K(time_guard));
   }
+  return ret;
+}
+
+int PalfHandleImpl::force_set_member_list_(const common::ObMemberList &new_member_list,
+                                           const int64_t new_replica_num)
+{
+  int ret = OB_SUCCESS;
+  int64_t prev_replica_num = 0;
+  ObMemberList prev_member_list;
+  LogConfigInfoV2 new_config_info;
+
+  {
+    WLockGuard guard(lock_);
+    LogConfigChangeArgs args(new_member_list, new_replica_num, FORCE_SET_MEMBER_LIST);
+    if (OB_FAIL(config_mgr_.get_curr_member_list(prev_member_list, prev_replica_num))) {
+      PALF_LOG(WARN, "failed to get prev member list", KR(ret), KPC(this));
+    } else {
+      ObMember tmp_member;
+      // get removed members which are in prev_member_list but not in new_member_list
+      // args.removed_list_ will be used for update_match_lsn_map_()
+      for (int64_t i = 0; OB_SUCC(ret) && i < prev_member_list.get_member_number(); ++i) {
+        tmp_member.reset();
+        if (OB_FAIL(prev_member_list.get_member_by_index(i, tmp_member))) {
+          PALF_LOG(WARN, "get_server_by_index from memberlist failed", K(ret), K_(palf_id), K(prev_member_list));
+        } else if (new_member_list.contains(tmp_member.get_server())) {
+        } else if (OB_FAIL(args.removed_list_.add_member(tmp_member))) {
+          PALF_LOG(WARN, "removed_list_.add_member failed", K(ret), K(tmp_member), K(args));
+        }
+      }
+    }
+
+    int64_t proposal_id = INVALID_PROPOSAL_ID;
+    bool is_already_finished = false;
+    int64_t election_epoch = INVALID_PROPOSAL_ID;
+    if (OB_FAIL(config_mgr_.start_change_config(proposal_id, election_epoch, args.type_))) {
+      PALF_LOG(WARN, "start_change_config failed", KR(ret), KPC(this), K(args));
+    } else if (OB_FAIL(config_mgr_.check_args_and_generate_config(
+                   args, proposal_id, election_epoch, is_already_finished,
+                   new_config_info))) {
+      PALF_LOG(WARN, "check_args_and_generate_config failed", K(ret), KPC(this), K(args));
+    } else if (OB_FAIL(config_mgr_.force_set_member_list(args, proposal_id))) {
+      PALF_LOG(WARN, "failed to force to set member list", KR(ret), KPC(this), K(args), K(proposal_id));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(config_mgr_.wait_config_log_persistence(new_config_info.config_.config_version_))) {
+    PALF_LOG(WARN, "wait_config_log_persistence failed", K(ret), KPC(this), K(new_config_info));
+  } else {
+    PALF_EVENT("force_set_member_list success", palf_id_, KR(ret), KPC(this), K(new_member_list), K(new_replica_num));
+    report_force_set_member_list(prev_replica_num, new_replica_num, new_member_list);
+  }
+
   return ret;
 }
 

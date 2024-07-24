@@ -2034,41 +2034,14 @@ int ObUpdateTenantMemoryP::process()
 
 int ObForceSetServerListP::process()
 {
-  int ret = OB_NOT_SUPPORTED;
-  // ObPartitionService *partition_service = gctx_.par_ser_;
-  // TRANS_LOG(INFO, "force_set_server_list");
-  // if (NULL == partition_service) {
-  //   ret = OB_ERR_UNEXPECTED;
-  //   TRANS_LOG(ERROR, "partition_service is NULL");
-  // } else {
-  //   storage::ObIPartitionGroupIterator *partition_iter = NULL;
-  //   if (NULL == (partition_iter = partition_service->alloc_pg_iter())) {
-  //     ret = OB_ALLOCATE_MEMORY_FAILED;
-  //     TRANS_LOG(ERROR, "partition_mgr alloc_scan_iter failed", K(ret));
-  //   } else {
-  //     storage::ObIPartitionGroup *partition = NULL;
-  //     ObIPartitionLogService *pls = NULL;
-  //     while (OB_SUCC(ret)) {
-  //       int tmp_ret = OB_SUCCESS;
-  //       if (OB_FAIL(partition_iter->get_next(partition)) || NULL == partition) {
-  //         TRANS_LOG(INFO, "get_next failed or partition is NULL", K(ret));
-  //       } else if (!partition->is_valid() || (NULL == (pls = partition->get_log_service()))) {
-  //         TRANS_LOG(INFO, "partition is invalid or pls is NULL", "partition_key", partition->get_partition_key());
-  //       } else if (OB_SUCCESS != (tmp_ret = pls->force_set_server_list(arg_.server_list_, arg_.replica_num_))) {
-  //         TRANS_LOG(WARN, "force_set_server_list failed", K(ret), K(tmp_ret), "partition_key",
-  //             partition->get_partition_key());
-  //       }
-  //     }
-  //   }
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->force_set_server_list(arg_, result_))) {
+    COMMON_LOG(WARN, "force_set_server_list failed", KR(ret), K(arg_));
+  }
 
-  //   if (NULL != partition_iter) {
-  //     partition_service->revert_pg_iter(partition_iter);
-  //     partition_iter = NULL;
-  //   }
-  //   if (OB_ITER_END == ret) {
-  //     ret = OB_SUCCESS;
-  //   }
-  // }
   return ret;
 }
 
