@@ -112,6 +112,7 @@ enum ObDDLType
   DDL_ALTER_PARTITION_AUTO_SPLIT_ATTRIBUTE = 10005, // auto table auto partition // online
   DDL_ADD_COLUMN_INSTANT = 10006, // add after/before column
   DDL_COMPOUND_INSTANT = 10007,
+  DDL_ALTER_COLUMN_GROUP_DELAYED = 10008,
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };
