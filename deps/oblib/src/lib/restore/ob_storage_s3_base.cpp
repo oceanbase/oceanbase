@@ -828,10 +828,12 @@ void ObS3Account::reset()
 int64_t ObS3Account::hash() const
 {
   int64_t hash_value = 0;
+  char addressing_model_char = static_cast<char>(addressing_model_);
   hash_value = murmurhash(region_, static_cast<int32_t>(strlen(region_)), hash_value);
   hash_value = murmurhash(endpoint_, static_cast<int32_t>(strlen(endpoint_)), hash_value);
   hash_value = murmurhash(access_id_, static_cast<int32_t>(strlen(access_id_)), hash_value);
   hash_value = murmurhash(secret_key_, static_cast<int32_t>(strlen(secret_key_)), hash_value);
+  hash_value = murmurhash(&addressing_model_char, sizeof(addressing_model_char), hash_value);
   return hash_value;
 }
 
