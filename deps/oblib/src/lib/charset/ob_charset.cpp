@@ -284,6 +284,7 @@ const ObCharsetWrapper ObCharset::charset_wrap_arr_[ObCharset::VALID_CHARSET_TYP
   {CHARSET_GB18030_2022, "GB18030-2022 charset", CS_TYPE_GB18030_2022_PINYIN_CI, 4},
   {CHARSET_ASCII, "US ASCII", CS_TYPE_ASCII_GENERAL_CI, 1},
   {CHARSET_TIS620, "TIS620 Thai", CS_TYPE_TIS620_THAI_CI, 1},
+  {CHARSET_UJIS, "EUC-JP Japanese", CS_TYPE_UJIS_JAPANESE_CI, 3},
 };
 
 const ObCollationWrapper ObCharset::collation_wrap_arr_[ObCharset::VALID_COLLATION_TYPES] =
@@ -317,11 +318,15 @@ const ObCollationWrapper ObCharset::collation_wrap_arr_[ObCharset::VALID_COLLATI
   {CS_TYPE_TIS620_THAI_CI, CHARSET_TIS620, CS_TYPE_TIS620_THAI_CI,true, true, 1},
   {CS_TYPE_TIS620_BIN, CHARSET_TIS620, CS_TYPE_TIS620_BIN,false, true, 1},
   {CS_TYPE_UTF8MB4_0900_AI_CI, CHARSET_UTF8MB4, CS_TYPE_UTF8MB4_0900_AI_CI, false, true, 1},
+  {CS_TYPE_UJIS_JAPANESE_CI, CHARSET_UJIS, CS_TYPE_UJIS_JAPANESE_CI, true, true, 1},
+  {CS_TYPE_UJIS_BIN, CHARSET_UJIS, CS_TYPE_UJIS_BIN, false, true, 1},
 };
 
 ObCharsetInfo *ObCharset::charset_arr[CS_TYPE_MAX] = {
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 0 ~ 7
-  &ob_charset_latin1, NULL, NULL, NULL, NULL, NULL, NULL, NULL,   // 8
+  &ob_charset_latin1,                                             // 9
+  NULL, NULL, NULL, &ob_charset_ujis_japanese_ci,                 // 12 
+  NULL, NULL, NULL,                                               
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 16
   NULL, NULL, NULL, NULL, &ob_charset_gbk_chinese_ci,             // 24
                                 NULL, NULL, NULL,                 // 29
@@ -339,7 +344,8 @@ ObCharsetInfo *ObCharset::charset_arr[CS_TYPE_MAX] = {
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 72
   NULL, NULL, NULL, NULL, NULL, NULL, NULL,                       // 80
                                            &ob_charset_gbk_bin,   // 87
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL,                 // 88
+  NULL, NULL, NULL, &ob_charset_ujis_bin,                                         // 91
+  NULL, NULL, NULL, NULL,                 
   NULL, NULL, NULL, NULL, NULL,                                   // 96
                                 &ob_charset_utf16_unicode_ci,     // 101
                                       NULL, NULL,                 // 102
@@ -1410,6 +1416,10 @@ const char *ObCharset::charset_name(ObCharsetType charset_type)
       ret_name = "tis620";
       break;
     }
+    case CHARSET_UJIS: {
+      ret_name = "ujis";
+      break;
+    }
     default: {
       break;
     }
@@ -1528,6 +1538,8 @@ ObCharsetType ObCharset::charset_type(const ObString &cs_name)
     charset_type = CHARSET_ASCII;
   } else if (0 == cs_name.case_compare(ob_charset_tis620_bin.csname)) {
     charset_type = CHARSET_TIS620;
+  } else if (0 == cs_name.case_compare(ob_charset_ujis_bin.csname)) {
+    charset_type = CHARSET_UJIS;
   }
   return charset_type;
 }
@@ -1552,6 +1564,8 @@ ObCharsetType ObCharset::charset_type_by_name_oracle(const ObString &cs_name)
     charset_type = CHARSET_ASCII;
   } else if (0 == cs_name.case_compare("TH8TISASCII")) {
     charset_type = CHARSET_TIS620;
+  } else if (0 == cs_name.case_compare("UJA16SJIS")) {
+    charset_type = CHARSET_UJIS;
   }
   return charset_type;
 }
@@ -1646,6 +1660,10 @@ ObCollationType ObCharset::collation_type(const ObString &cs_name)
     collation_type = CS_TYPE_TIS620_BIN;
   } else if (0 == cs_name.case_compare(ob_charset_tis620_thai_ci.name)) {
     collation_type = CS_TYPE_TIS620_THAI_CI;
+  } else if (0 == cs_name.case_compare(ob_charset_ujis_bin.name)) {
+    collation_type = CS_TYPE_UJIS_BIN;
+  } else if (0 == cs_name.case_compare(ob_charset_ujis_japanese_ci.name)) {
+    collation_type = CS_TYPE_UJIS_JAPANESE_CI;
   }
   return collation_type;
 }
@@ -1703,6 +1721,10 @@ bool ObCharset::is_valid_collation(ObCharsetType charset_type, ObCollationType c
     if (CS_TYPE_TIS620_THAI_CI == collation_type || CS_TYPE_TIS620_BIN == collation_type) {
       ret = true;
     }
+  } else if (CHARSET_UJIS == charset_type) {
+    if (CS_TYPE_UJIS_JAPANESE_CI == collation_type || CS_TYPE_UJIS_BIN == collation_type) {
+      ret = true;
+    }
   }
   return ret;
 }
@@ -1724,6 +1746,7 @@ ObCollationType ObCharset::get_coll_type_by_nlssort_param(ObCharsetType charset_
     CS_TYPE_GB18030_2022_BIN,
     CS_TYPE_ASCII_BIN,
     CS_TYPE_TIS620_BIN,
+    CS_TYPE_UJIS_BIN,
   };
   static ObCollationType non_bin_coll_marks[NLS_COLLATION_MAX] = {
     CS_TYPE_INVALID,
@@ -1760,7 +1783,9 @@ ObCollationType ObCharset::get_coll_type_by_nlssort_param(ObCharsetType charset_
     } else if (nls_coll_type == NLS_COLLATION_SCHINESE_STROKE2_M) {
       coll_type = CS_TYPE_GB18030_2022_STROKE_CS;
     } else {
-      coll_type = static_cast<ObCollationType>(non_bin_coll_marks[nls_coll_type] + (charset_type - CHARSET_BINARY));
+      if (charset_type != CHARSET_UJIS){
+        coll_type = static_cast<ObCollationType>(non_bin_coll_marks[nls_coll_type] + (charset_type - CHARSET_BINARY));
+      }
     }
   }
   return coll_type;
@@ -1792,6 +1817,8 @@ bool ObCharset::is_valid_collation(int64_t collation_type_int)
     || CS_TYPE_ASCII_BIN == collation_type
     || CS_TYPE_TIS620_THAI_CI == collation_type
     || CS_TYPE_TIS620_BIN == collation_type
+    || CS_TYPE_UJIS_JAPANESE_CI == collation_type
+    || CS_TYPE_UJIS_BIN == collation_type
     || (CS_TYPE_EXTENDED_MARK < collation_type && collation_type < CS_TYPE_MAX)
     ;
 }
@@ -1881,6 +1908,11 @@ ObCharsetType ObCharset::charset_type_by_coll(ObCollationType collation_type)
       charset_type = CHARSET_TIS620;
       break;
     }
+    case CS_TYPE_UJIS_BIN:
+    case CS_TYPE_UJIS_JAPANESE_CI: {
+      charset_type = CHARSET_UJIS;
+      break;
+    }
     default: {
       break;
     }
@@ -1917,6 +1949,9 @@ ObNlsCharsetId ObCharset::charset_type_to_ora_charset_id(ObCharsetType cs_type)
   case CHARSET_TIS620:
     cs_id = CHARSET_TH8TISASCII_ID;
     break;
+  case CHARSET_UJIS:
+    cs_id = CHARSET_UJA16SJIS_ID;
+    break;
   default:
     break;
   }
@@ -1951,6 +1986,9 @@ ObCharsetType ObCharset::ora_charset_type_to_charset_type(ObNlsCharsetId charset
       break;
     case CHARSET_TH8TISASCII_ID:
       cs_type = CHARSET_TIS620;
+      break;
+    case CHARSET_UJA16SJIS_ID:
+      cs_type = CHARSET_UJIS;
       break;
     default:
       break;
@@ -2201,7 +2239,11 @@ int ObCharset::aggregate_collation_old(
       } else if (charset_type_by_coll(collation_type1) == CHARSET_TIS620) {
         res_type = CS_TYPE_TIS620_BIN;
         res_level = (CS_TYPE_TIS620_BIN == collation_type1) ? collation_level1 : collation_level2;
-      } else {
+      } else if (charset_type_by_coll(collation_type1) == CHARSET_UJIS) {
+        res_type = CS_TYPE_UJIS_BIN;
+        res_level = (CS_TYPE_UJIS_BIN == collation_type1) ? collation_level1 : collation_level2;
+      } 
+      else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("Unexpected charset", K(ret), K(collation_type1), K(collation_type2), KCSTRING(lbt()));
       }
@@ -2468,6 +2510,10 @@ ObCollationType ObCharset::get_default_collation(ObCharsetType charset_type)
       collation_type = CS_TYPE_TIS620_THAI_CI;
       break;
     }
+    case CHARSET_UJIS: {
+      collation_type = CS_TYPE_UJIS_JAPANESE_CI;
+      break;
+    }
     default: {
       break;
     }
@@ -2522,6 +2568,10 @@ ObCollationType ObCharset::get_default_collation_oracle(ObCharsetType charset_ty
       collation_type = CS_TYPE_TIS620_BIN;
       break;
     }
+    case CHARSET_UJIS: {
+      collation_type = CS_TYPE_UJIS_BIN;
+      break;
+    }
     default: {
       break;
     }
@@ -2567,6 +2617,10 @@ int ObCharset::get_default_collation(ObCharsetType charset_type, ObCollationType
     }
     case CHARSET_TIS620: {
       collation_type = CS_TYPE_TIS620_THAI_CI;
+      break;
+    }
+    case CHARSET_UJIS: {
+      collation_type = CS_TYPE_UJIS_JAPANESE_CI;
       break;
     }
     default: {
@@ -2616,6 +2670,10 @@ ObCollationType ObCharset::get_bin_collation(ObCharsetType charset_type)
     }
     case CHARSET_TIS620: {
       collation_type = CS_TYPE_TIS620_BIN;
+      break;
+    }
+    case CHARSET_UJIS: {
+      collation_type = CS_TYPE_UJIS_BIN;
       break;
     }
     default: {
@@ -2753,6 +2811,7 @@ bool ObCharset::is_default_collation(ObCollationType collation_type)
     case CS_TYPE_ASCII_GENERAL_CI:
     case CS_TYPE_TIS620_THAI_CI:
     case CS_TYPE_GB18030_2022_PINYIN_CI:
+    case CS_TYPE_UJIS_JAPANESE_CI:
     case CS_TYPE_BINARY: {
       ret = true;
       break;
@@ -3187,7 +3246,8 @@ int ObCharset::get_aggregate_len_unit(const ObCollationType collation_type, bool
       || CHARSET_UTF16 == res_charset
       || CHARSET_GBK == res_charset
       || CHARSET_GB18030 == res_charset
-      || CHARSET_GB18030_2022 == res_charset) {
+      || CHARSET_GB18030_2022 == res_charset
+      || CHARSET_UJIS == res_charset) {
     len_in_byte = false;
   } else if (CHARSET_BINARY == res_charset) {
     len_in_byte = true;
@@ -3456,7 +3516,8 @@ bool ObCharset::is_valid_connection_collation(ObCollationType collation_type)
       || cs_type == CHARSET_GBK
       || cs_type == CHARSET_GB18030
       || cs_type == CHARSET_GB18030_2022
-      || cs_type == CHARSET_BINARY;
+      || cs_type == CHARSET_BINARY
+      || cs_type == CHARSET_UJIS;
 }
 
 const char *ObCharset::get_oracle_charset_name_by_charset_type(ObCharsetType charset_type)
@@ -3487,6 +3548,8 @@ const char *ObCharset::get_oracle_charset_name_by_charset_type(ObCharsetType cha
   case CHARSET_TIS620:
     ret = "TH8TISASCII";
     break;
+  case CHARSET_UJIS:
+    ret = "UJA16SJIS";
   default:
     break;
   }
@@ -3521,6 +3584,8 @@ int ObCharset::get_nls_charset_id_by_charset_type(ObCharsetType charset_type)
   case CHARSET_TIS620:
     ret_id = ObNlsCharsetId::CHARSET_TH8TISASCII_ID;
     break;
+  case CHARSET_UJIS:
+    ret_id = ObNlsCharsetId::CHARSET_UJA16SJIS_ID;
   default:
     break;
   }

@@ -25,6 +25,7 @@ ob_set_subtarget(oblib_lib charset
   charset/ob_ctype_uca.cc
   charset/ob_ctype_utf8.cc
   charset/ob_ctype_utf16.cc
+  charset/ob_ctype_ujis.cc
   charset/ob_dtoa.cc
   charset/uca900_ja_tbls.cc
   charset/uca900_zh_tbls.cc

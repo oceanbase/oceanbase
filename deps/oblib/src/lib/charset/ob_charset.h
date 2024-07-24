@@ -40,6 +40,7 @@ enum ObCharsetType
   CHARSET_GB18030_2022 = 7,
   CHARSET_ASCII = 8,
   CHARSET_TIS620 = 9,
+  CHARSET_UJIS = 10,
   CHARSET_MAX,
 };
 
@@ -69,6 +70,7 @@ enum ObCollationType
   CS_TYPE_INVALID = 0,
   CS_TYPE_LATIN1_SWEDISH_CI = 8,
   CS_TYPE_ASCII_GENERAL_CI = 11,
+  CS_TYPE_UJIS_JAPANESE_CI = 12,
   CS_TYPE_TIS620_THAI_CI = 18,
   CS_TYPE_GBK_CHINESE_CI = 28,
   CS_TYPE_UTF8MB4_GENERAL_CI = 45,
@@ -80,6 +82,7 @@ enum ObCollationType
   CS_TYPE_ASCII_BIN = 65,
   CS_TYPE_GBK_BIN = 87,
   CS_TYPE_TIS620_BIN = 89,
+  CS_TYPE_UJIS_BIN = 91,
   CS_TYPE_COLLATION_FREE = 100, // mysql中间没有使用这个
   CS_TYPE_UTF16_UNICODE_CI = 101,
   CS_TYPE_ANY = 125, // unused in mysql
@@ -111,6 +114,7 @@ enum ObCollationType
   CS_TYPE_LATIN1_ZH_0900_AS_CS,
   CS_TYPE_GB18030_2022_ZH_0900_AS_CS,
   CS_TYPE_ASCII_ZH_0900_AS_CS,
+  CS_TYPE_UJIS_ZH_0900_AS_CS, // invalid
   CS_TYPE_TIS620_ZH_0900_AS_CS,
 
   //radical-stroke order
@@ -122,6 +126,7 @@ enum ObCollationType
   CS_TYPE_LATIN1_ZH2_0900_AS_CS,
   CS_TYPE_GB18030_2022_ZH2_0900_AS_CS,
   CS_TYPE_ASCII_ZH2_0900_AS_CS,
+  CS_TYPE_UJIS_ZH2_0900_AS_CS, //invalid
   CS_TYPE_TIS620_ZH2_0900_AS_CS,
 
   //stroke order
@@ -133,6 +138,7 @@ enum ObCollationType
   CS_TYPE_LATIN1_ZH3_0900_AS_CS,
   CS_TYPE_GB18030_2022_ZH3_0900_AS_CS,
   CS_TYPE_ASCII_ZH3_0900_AS_CS,
+  CS_TYPE_UJIS_ZH3_0900_AS_CS, // invalid
   CS_TYPE_TIS620_ZH3_0900_AS_CS,
 
   CS_TYPE_MAX
@@ -146,6 +152,7 @@ enum ObNlsCharsetId
   CHARSET_US7ASCII_ID = 1,
   CHARSET_WE8MSWIN1252_ID=31,
   CHARSET_TH8TISASCII_ID = 41,
+  CHARSET_UJA16SJIS_ID = 832,
   CHARSET_ZHS16GBK_ID = 852,
   CHARSET_ZHS32GB18030_ID = 854,
   CHARSET_ZHS32GB18030_2022_ID = 859, // not used in oracle
@@ -234,8 +241,8 @@ public:
   //比如latin1 1byte ,utf8mb4 4byte,转换因子为4，也可以理解为最多使用4字节存储一个字符
   static const int32_t CharConvertFactorNum = 4;
 
-  static const int64_t VALID_CHARSET_TYPES = 9;
-  static const int64_t VALID_COLLATION_TYPES = 28;
+  static const int64_t VALID_CHARSET_TYPES = 10;
+  static const int64_t VALID_COLLATION_TYPES = 30;
 
   static int init_charset();
   // strntodv2 is an enhanced version of strntod,
@@ -418,7 +425,8 @@ public:
       || CHARSET_GB18030_2022 == charset_type
       || CHARSET_LATIN1 == charset_type
       || CHARSET_ASCII == charset_type
-      || CHARSET_TIS620 == charset_type;
+      || CHARSET_TIS620 == charset_type
+      || CHARSET_UJIS == charset_type;
   }
   static bool is_gb18030_2022(int64_t coll_type_int) {
     ObCollationType coll_type = static_cast<ObCollationType>(coll_type_int);

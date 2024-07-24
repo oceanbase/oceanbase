@@ -214,19 +214,19 @@ static size_t ob_casefold_ujis(const ObCharsetInfo *cs, char *src, size_t srclen
 }
 
 size_t ob_caseup_ujis(const ObCharsetInfo *cs, char *src, size_t srclen, char *dst, size_t dstlen) {
-  assert(dstlen >= srclen * cs->caseup_multiply);
-  assert(src != dst || cs->caseup_multiply == 1);
+  // assert(dstlen >= srclen * cs->caseup_multiply);
+  // assert(src != dst || cs->caseup_multiply == 1);
   return ob_casefold_ujis(cs, src, srclen, dst, dstlen, cs->to_upper, 1);
 }
 
 size_t ob_casedn_ujis(const ObCharsetInfo *cs, char *src, size_t srclen,
                       char *dst, size_t dstlen) {
-  assert(dstlen >= srclen * cs->casedn_multiply);
-  assert(src != dst || cs->casedn_multiply == 1);
+  // assert(dstlen >= srclen * cs->casedn_multiply);
+  // assert(src != dst || cs->casedn_multiply == 1);
   return ob_casefold_ujis(cs, src, srclen, dst, dstlen, cs->to_lower, 0);
 }
 
-int ob_strnncoll_simple(const ObCharsetInfo *cs __attribute__((unused)),
+int ob_strnncoll_ujis(const ObCharsetInfo *cs __attribute__((unused)),
                         const unsigned char *s, size_t slen,
                         const unsigned char *t, size_t tlen,
                         bool is_prefix)
@@ -243,7 +243,7 @@ int ob_strnncoll_simple(const ObCharsetInfo *cs __attribute__((unused)),
   return slen > tlen ? 1 : slen < tlen ? -1 : 0;
 }
 
-int ob_strnncollsp_simple(const ObCharsetInfo *cs
+int ob_strnncollsp_ujis(const ObCharsetInfo *cs
                           __attribute__((unused)),
                           const unsigned char *s, size_t slen,
                           const unsigned char *t, size_t tlen,
@@ -287,7 +287,7 @@ int ob_strnncollsp_simple(const ObCharsetInfo *cs
   return res;
 }
 
-size_t ob_strnxfrm_simple(const ObCharsetInfo* cs __attribute__((unused)), unsigned char* dst, size_t dstlen,
+size_t ob_strnxfrm_ujis(const ObCharsetInfo* cs __attribute__((unused)), unsigned char* dst, size_t dstlen,
     unsigned int nweights, const unsigned char* src, size_t srclen, unsigned int flags, bool* is_valid_unicode)
 {
   unsigned char *dst0 = dst;
@@ -318,9 +318,9 @@ static ObCollationHandler ob_collation_ujis_ci_handler =
 {
   NULL,
   NULL,
-  ob_strnncoll_simple,
-  ob_strnncollsp_simple,
-  ob_strnxfrm_simple,
+  ob_strnncoll_ujis,
+  ob_strnncollsp_ujis,
+  ob_strnxfrm_ujis,
   ob_strnxfrmlen_simple,
   NULL,
   ob_like_range_mb,
@@ -391,4 +391,39 @@ ObCharsetInfo ob_charset_ujis_japanese_ci=
     1, // unsure
     &ob_charset_ujis_handler,
     &ob_collation_ujis_ci_handler,
+    PAD_SPACE};
+
+ObCharsetInfo ob_charset_ujis_bin = {
+    91,
+    0,
+    0,                              
+    OB_CS_COMPILED|OB_CS_BINSORT, 
+    "ujis",                        
+    "ujis_bin",                    
+    "EUC-JP Japanese",             
+    nullptr,                        
+    nullptr,                      
+    ctype_ujis,
+    to_lower_ujis,
+    to_upper_ujis,
+    nullptr,         
+    nullptr,         
+    nullptr,          
+    nullptr,          
+    &ob_caseinfo_ujis,
+    nullptr,           
+    nullptr,          
+    1,                
+    1,                
+    2,                
+    1,                
+    3,               
+    0,                 
+    0xFEFE,            
+    ' ',               
+    false,             
+    1,                
+    1,
+    &ob_charset_ujis_handler,
+    &ob_collation_mb_bin_handler,
     PAD_SPACE};

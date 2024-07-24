@@ -103,7 +103,7 @@ static unsigned char to_upper_ujis[]=
   (unsigned char) '\370',(unsigned char) '\371',(unsigned char) '\372',(unsigned char) '\373',(unsigned char) '\374',(unsigned char) '\375',(unsigned char) '\376',(unsigned char) '\377',
 };
 
-static ObUnicaseInfoChar cA2[256] = 
+static ObUnicaseInfoChar cA2_ujis[256] = 
 {
     {0, 0, 0},
     {0, 0, 0},
@@ -363,7 +363,7 @@ static ObUnicaseInfoChar cA2[256] =
     {0xA2FF, 0xA2FF, 0x003F}
 };
 
-static ObUnicaseInfoChar cA3[256] = {
+static ObUnicaseInfoChar cA3_ujis[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -622,7 +622,7 @@ static ObUnicaseInfoChar cA3[256] = {
     {0xA3FF, 0xA3FF, 0x003F}
 };
 
-static ObUnicaseInfoChar cA6[256] = {
+static ObUnicaseInfoChar cA6_ujis[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -881,7 +881,7 @@ static ObUnicaseInfoChar cA6[256] = {
     {0xA6FF, 0xA6FF, 0x003F}
 };
 
-static ObUnicaseInfoChar cA7[256] = {
+static ObUnicaseInfoChar cA7_ujis[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -2436,7 +2436,7 @@ static ObUnicaseInfoChar c8FAB[] = {
     {0x8FABFF, 0x8FABFF, 0x003F}
 };
 
-static ObUnicaseInfoChar *my_caseinfo_pages_ujis[512] = {
+const static ObUnicaseInfoChar *my_caseinfo_pages_ujis[512] = {
     /* JIS-X-0208 */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, /* 0 */
@@ -2468,7 +2468,7 @@ static ObUnicaseInfoChar *my_caseinfo_pages_ujis[512] = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, /* 9 */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, cA2, cA3, nullptr, nullptr, cA6, cA7, /* A */
+    nullptr, nullptr, cA2_ujis, cA3_ujis, nullptr, nullptr, cA6_ujis, cA7_ujis, /* A */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, /* B */
