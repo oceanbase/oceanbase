@@ -348,6 +348,76 @@ TEST_F(TestStorageS3, test_util_is_tagging)
   }
 }
 
+TEST_F(TestStorageS3, test_util_addressing_model)
+{
+  int ret = OB_SUCCESS;
+  if (enable_test_) {
+    ObStorageUtil util;
+    const char *tmp_util_dir = "test_util_addressing_model";
+    const int64_t ts = ObTimeUtility::current_time();
+    ASSERT_EQ(OB_SUCCESS, databuff_printf(dir_uri, sizeof(dir_uri), "%s/%s/%s_%ld",
+      bucket, dir_name, tmp_util_dir, ts));
+
+    char tmp_account[OB_MAX_URI_LENGTH];
+    ObObjectStorageInfo tmp_s3_base;
+    const char *write_content = "123456789ABCDEF";
+
+    // wrong addressing model
+    ASSERT_EQ(OB_SUCCESS,
+              databuff_printf(tmp_account, sizeof(tmp_account),
+              "host=%s&access_id=%s&access_key=%s&addressing_model=addressing",
+              endpoint, secretid, secretkey));
+    ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
+    tmp_s3_base.reset();
+
+    ASSERT_EQ(OB_SUCCESS,
+              databuff_printf(tmp_account, sizeof(tmp_account),
+              "host=%s&access_id=%s&access_key=%s&addressing_model=tag_tag",
+              endpoint, secretid, secretkey));
+    ASSERT_EQ(OB_INVALID_ARGUMENT, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
+    tmp_s3_base.reset();
+
+    // virtual_hosted_style mode
+    ASSERT_EQ(OB_SUCCESS,
+              databuff_printf(tmp_account, sizeof(tmp_account),
+              "host=%s&access_id=%s&access_key=%s&addressing_model=virtual_hosted_style",
+              endpoint, secretid, secretkey));
+    ASSERT_EQ(OB_SUCCESS, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
+
+    ASSERT_EQ(OB_SUCCESS, util.open(&tmp_s3_base));
+    ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, write_content, strlen(write_content)));
+
+    ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
+    tmp_s3_base.reset();
+    util.close();
+
+    // path_style mode
+    ASSERT_EQ(OB_SUCCESS,
+              databuff_printf(tmp_account, sizeof(tmp_account),
+              "s3_region=%s&host=%s&access_id=%s&access_key=%s&addressing_model=path_style",
+              region, endpoint, secretid, secretkey));
+    ASSERT_EQ(OB_SUCCESS, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
+
+    ASSERT_EQ(OB_SUCCESS, util.open(&tmp_s3_base));
+    ASSERT_EQ(OB_SUCCESS, util.write_single_file(uri, write_content, strlen(write_content)));
+
+    ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
+    tmp_s3_base.reset();
+    util.close();
+
+    // clean
+    ASSERT_EQ(OB_SUCCESS,
+              databuff_printf(tmp_account, sizeof(tmp_account),
+              "s3_region=%s&host=%s&access_id=%s&access_key=%s",
+              region, endpoint, secretid, secretkey));
+    ASSERT_EQ(OB_SUCCESS, tmp_s3_base.set(ObStorageType::OB_STORAGE_S3, tmp_account));
+
+    ASSERT_EQ(OB_SUCCESS, util.open(&tmp_s3_base));
+    ASSERT_EQ(OB_SUCCESS, util.del_file(uri));
+    util.close();
+  }
+}
+
 class TestS3ListOp : public ObBaseDirEntryOperator
 {
 public:
