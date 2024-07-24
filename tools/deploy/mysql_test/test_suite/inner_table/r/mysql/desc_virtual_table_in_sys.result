@@ -9595,7 +9595,7 @@ log_date	timestamp(6)	YES		NULL
 owner	varchar(128)	YES		NULL	
 job_subname	varchar(128)	YES		NULL	
 job_class	varchar(128)	YES		NULL	
-operation	varchar(65536)	YES		NULL	
+operation	varchar(128)	YES		NULL	
 status	varchar(128)	YES		NULL	
 code	bigint(20)	YES		0	
 req_start_date	timestamp(6)	YES		NULL	
