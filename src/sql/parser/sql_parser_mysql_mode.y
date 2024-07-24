@@ -356,7 +356,7 @@ END_P SET_VAR DELIMITER
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
-        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE
+        SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER SKIP_BLANK_LINES STATEMENT SUM_OPNSIZE ST_COLLECT
 
         TABLE_CHECKSUM TABLE_MODE TABLE_ID TABLE_NAME TABLEGROUPS TABLES TABLESPACE TABLET TABLET_ID TABLET_MAX_SIZE
         TEMPLATE TEMPORARY TEMPTABLE TENANT TEXT THAN TIME TIMESTAMP TIMESTAMPADD TIMESTAMPDIFF TP_NO
@@ -2131,6 +2131,11 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_BIT_XOR, 2, $3, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
 }
+| ST_COLLECT '(' opt_distinct_or_all expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_COLLECT, 2, $3, $4);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
+}
 ;
 
 first_or_last:
@@ -3248,6 +3253,10 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_RB_AND_AGG, 1, $3);
   $$->reserved_ = 0;
+}
+| ST_COLLECT '(' opt_distinct_or_all expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_ST_COLLECT, 2, $3, $4);
 }
 ;
 
@@ -22610,6 +22619,7 @@ ACCOUNT
 |       RB_OR_AGG
 |       RB_AND_AGG
 |       OVERWRITE
+|       ST_COLLECT
 ;
 
 unreserved_keyword_special:

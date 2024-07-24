@@ -865,6 +865,7 @@ typedef enum ObItemType
   T_FUN_SYS_VECTOR_DIMS = 1742,
   T_FUN_SYS_VECTOR_NORM = 1743,
   T_FUN_SYS_VECTOR_DISTANCE = 1744,
+  T_FUN_SYS_ST_COLLECT = 1745,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table
@@ -2694,7 +2695,7 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_ORA_JSON_ARRAYAGG || (op) == T_FUN_ORA_JSON_OBJECTAGG ||\
                          (op) == T_FUN_GROUP_ID || \
                          (op) == T_FUN_ORA_XMLAGG || \
-                         (op) == T_FUN_SYS_ST_ASMVT || \
+                         (op) == T_FUN_SYS_ST_ASMVT || (op) == T_FUN_SYS_ST_COLLECT ||\
                          (op) == T_FUN_SUM_OPNSIZE ||\
                          (op) == T_FUN_SYS_RB_BUILD_AGG ||\
                          (op) == T_FUN_SYS_RB_OR_AGG ||\

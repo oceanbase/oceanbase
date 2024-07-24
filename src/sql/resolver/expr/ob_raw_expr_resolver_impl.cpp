@@ -787,7 +787,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_SYS_ST_ASMVT:
       case T_FUN_SYS_RB_BUILD_AGG:
       case T_FUN_SYS_RB_OR_AGG:
-      case T_FUN_SYS_RB_AND_AGG: {
+      case T_FUN_SYS_RB_AND_AGG: 
+      case T_FUN_SYS_ST_COLLECT: {
         if (OB_FAIL(process_agg_node(node, expr))) {
           LOG_WARN("fail to process agg node", K(ret), K(node));
         }
@@ -7236,7 +7237,8 @@ int ObRawExprResolverImpl::process_window_function_node(const ParseNode *node, O
         || T_FUN_SYS_BIT_OR == func_type
         || T_FUN_SYS_BIT_XOR == func_type
         || T_FUN_JSON_ARRAYAGG == func_type
-        || T_FUN_JSON_OBJECTAGG == func_type) {
+        || T_FUN_JSON_OBJECTAGG == func_type
+        || T_FUN_SYS_ST_COLLECT == func_type) {
       ctx_.is_win_agg_ = true;
       if (T_FUN_PL_AGG_UDF == func_type) {
         ParseNode *agg_udf_node = NULL;

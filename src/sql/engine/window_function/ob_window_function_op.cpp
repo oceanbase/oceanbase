@@ -1292,7 +1292,8 @@ int ObWindowFunctionOp::init()
           case T_FUN_SYS_ST_ASMVT:
           case T_FUN_SYS_RB_BUILD_AGG:
           case T_FUN_SYS_RB_OR_AGG:
-          case T_FUN_SYS_RB_AND_AGG: {
+          case T_FUN_SYS_RB_AND_AGG: 
+          case T_FUN_SYS_ST_COLLECT: {
             void *tmp_ptr = local_allocator_.alloc(sizeof(AggrCell));
             void *tmp_array = local_allocator_.alloc(sizeof(AggrInfoFixedArray));
             ObIArray<ObAggrInfo> *aggr_infos = NULL;
