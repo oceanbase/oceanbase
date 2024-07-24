@@ -246,6 +246,7 @@ ObTableApiProcessorBase::ObTableApiProcessorBase(const ObGlobalContext &gctx)
      stat_event_type_(-1),
      audit_row_count_(0),
      need_audit_(false),
+     enable_query_response_time_stats_(true),
      request_string_(NULL),
      request_string_len_(0),
      need_retry_in_queue_(false),
@@ -300,10 +301,14 @@ int ObTableApiProcessorBase::check_user_access(const ObString &credential_str)
   } else if (sess_credetial->cluster_id_ != credential_.cluster_id_) {
     ret = OB_ERR_NO_PRIVILEGE;
     LOG_WARN("invalid credential cluster id", K(ret), K_(credential), K(*sess_credetial));
-  } else if (OB_FAIL(check_mode(guard.get_sess_info()))) {
-    LOG_WARN("fail to check mode", K(ret));
   } else {
-    LOG_DEBUG("user can access", K_(credential));
+    ObSQLSessionInfo &sess_info = guard.get_sess_info();
+    enable_query_response_time_stats_ = sess_info.enable_query_response_time_stats();
+    if (OB_FAIL(check_mode(sess_info))) {
+      LOG_WARN("fail to check mode", K(ret));
+    } else {
+      LOG_DEBUG("user can access", K_(credential));
+    }
   }
   return ret;
 }
@@ -803,7 +808,7 @@ void ObTableApiProcessorBase::end_audit()
     if (nullptr == req_manager) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get request manager for current tenant", K(ret));
-    } else if (OB_FAIL(req_manager->record_request(audit_record_, true))) {
+    } else if (OB_FAIL(req_manager->record_request(audit_record_, enable_query_response_time_stats_))) {
       if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
         LOG_DEBUG("cannot allocate mem for record", K(ret));
         ret = OB_SUCCESS;

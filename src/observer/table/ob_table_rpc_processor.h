@@ -180,6 +180,7 @@ protected:
   int32_t stat_event_type_;
   int64_t audit_row_count_;
   bool need_audit_;
+  bool enable_query_response_time_stats_;
   const char *request_string_;
   int64_t request_string_len_;
   sql::ObAuditRecordData audit_record_;
