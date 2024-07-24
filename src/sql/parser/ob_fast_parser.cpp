@@ -139,6 +139,9 @@ int ObFastParserBase::parse(const ObString &stmt,
       static_cast<char *>(allocator_.alloc(alloc_len_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret), K(alloc_len_));
+  } else if (OB_ISNULL(charset_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", K(ret), K(charset_info_));
   } else {
     no_param_sql_[0] = '\0';
     while (len > 0 && is_space(stmt[len - 1])) {
