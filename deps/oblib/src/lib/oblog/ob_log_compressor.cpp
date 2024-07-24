@@ -225,6 +225,7 @@ void ObLogCompressor::log_compress_loop_()
     int64_t log_min_time[OB_SYSLOG_COMPRESS_TYPE_COUNT] = {0};
     int64_t compressed_file_count = 0;
     int64_t deleted_file_count = 0;
+    bool fast_delete_log_mode = false;
 
     while (!stopped_) {
       // wait until stoped or needing to work
@@ -336,7 +337,7 @@ void ObLogCompressor::log_compress_loop_()
         }
 
         // compress syslog file if necessary
-        if (OB_SUCC(ret) && !stopped_ && is_enable_compress() && disk_remaining_size < OB_SYSLOG_COMPRESS_RESERVE_SIZE) {
+        if (OB_SUCC(ret) && !stopped_ && is_enable_compress() && disk_remaining_size < OB_SYSLOG_COMPRESS_RESERVE_SIZE && !fast_delete_log_mode) {
           if (compressor_ != next_compressor_) {
             compressor_ = next_compressor_;
           }
@@ -358,6 +359,13 @@ void ObLogCompressor::log_compress_loop_()
               }
             }
           }
+        }
+
+        // get disk remaining size
+        disk_remaining_size = get_disk_remaining_size_();
+        disk_remaining_size = disk_remaining_size >=0 ? disk_remaining_size : INT64_MAX;
+        if (max_disk_size_ > 0 && max_disk_size_ - total_size < disk_remaining_size) {
+          disk_remaining_size = max_disk_size_ - total_size;
         }
 
         // delete oldest syslog file if necessary
@@ -386,12 +394,24 @@ void ObLogCompressor::log_compress_loop_()
           }
         }
 
+        // In the following two cases, we need to enter the fast log deletion mode (no compression).
+        // 1. If we need to delete the log file after compressing the log, it means that the log is printed too quickly.
+        // 2. deleted_file_count reaches the upper limit of the array size.
+        if ((compressed_file_count > 0 && deleted_file_count > 0)
+            || deleted_file_count >= OB_SYSLOG_DELETE_ARRAY_SIZE - 1) {
+          fast_delete_log_mode = true;
+        } else if (deleted_file_count == 0) {
+          fast_delete_log_mode = false;
+        }
+
         // record cost time, sleep
         int64_t cost_time = ObClockGenerator::getClock() - start_time;
         LOG_INFO("log compressor cycles once. ", K(ret), K(cost_time),
-                 K(compressed_file_count), K(deleted_file_count), K(disk_remaining_size));
+                 K(compressed_file_count), K(deleted_file_count), K(disk_remaining_size), K(fast_delete_log_mode));
         cost_time = cost_time >= 0 ? cost_time:0;
-        if (!stopped_ && cost_time < loop_interval_) {
+        if (!stopped_ && fast_delete_log_mode) {
+          usleep(100000);
+        } else if (!stopped_ && cost_time < loop_interval_) {
           usleep(loop_interval_ - cost_time);
         }
       } // if (!stopped_)
