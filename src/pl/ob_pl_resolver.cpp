@@ -13907,7 +13907,8 @@ int ObPLResolver::convert_pltype_to_restype(ObIAllocator &alloc,
         result_type->set_collation_type(data_type->get_collation_type());
         result_type->set_collation_level(data_type->get_collation_level());
       } else if (ob_is_number_tc(result_type->get_type()) ||
-                 ob_is_interval_tc(result_type->get_type())) {
+                 ob_is_interval_tc(result_type->get_type()) ||
+                 ob_is_decimal_int_tc(result_type->get_type())) {
         result_type->set_precision(data_type->get_precision());
         result_type->set_scale(data_type->get_scale());
       } else if (ob_is_text_tc(result_type->get_type())
