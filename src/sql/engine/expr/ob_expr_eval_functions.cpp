@@ -1241,6 +1241,11 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRegexpReplace::eval_hs_regexp_replace,               /* 747 */
   NULL, // ObExprRegexpSubstr::eval_hs_regexp_substr,                 /* 748 */
   NULL, // ObExprColumnConv::column_convert_fast,                     /* 749 */
+  NULL, //ObExprArrayContains::eval_array_contains_int64_t,           /* 750 */
+  NULL, //ObExprArrayContains::eval_array_contains_float,             /* 751 */
+  NULL, //ObExprArrayContains::eval_array_contains_double,            /* 752 */
+  NULL, //ObExprArrayContains::eval_array_contains_ObString,          /* 753 */
+  NULL, //ObExprArrayContains::eval_array_contains_array,             /* 754 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -1383,6 +1388,11 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL, // ObExprDiv::div_vec_batch,                                  /* 136 */
   NULL, // ObExprColumnConv::column_convert_batch,                    /* 137 */
   NULL, // ObExprColumnConv::column_convert_batch_fast,               /* 138 */
+  NULL, // ObExprArrayContains::eval_array_contains_batch_int64_t,    /* 139 */
+  NULL, // ObExprArrayContains::eval_array_contains_batch_float,      /* 140 */
+  NULL, // ObExprArrayContains::eval_array_contains_batch_double,     /* 141 */
+  NULL, // ObExprArrayContains::eval_array_contains_batch_ObString,   /* 142 */
+  NULL, // ObExprArrayContains::eval_array_contains_array_batch,      /* 143 */
 };
 
 static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
@@ -1503,6 +1513,11 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   ObExprCeilFloor::calc_ceil_floor_vector,                      /* 114 */
   ObExprRepeat::eval_repeat_vector,                             /* 115 */
   NULL, // ObExprRegexpReplace::eval_hs_regexp_replace_vector,  /* 116 */
+  NULL, // ObExprArrayContains::eval_array_contains_vector_int64_t,      /* 117 */
+  NULL, // ObExprArrayContains::eval_array_contains_vector_float,        /* 118 */
+  NULL, // ObExprArrayContains::eval_array_contains_vector_double,       /* 119 */
+  NULL, // ObExprArrayContains::eval_array_contains_vector_ObString,     /* 120 */
+  NULL, // ObExprArrayContains::eval_array_contains_array_vector,        /* 121 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
@@ -1724,7 +1739,9 @@ static ObExpr::EvalFunc g_collection_eval_functions[] = {
   NULL, // ObExprMinus::minus_collection_collection_int32_t,
   NULL, // ObExprMinus::minus_collection_collection_int64_t,
   NULL, // ObExprMinus::minus_collection_collection_float,
-  NULL // ObExprMinus::minus_collection_collection_double,
+  NULL, // ObExprMinus::minus_collection_collection_double,
+  NULL, // ObExprAdd::add_collection_collection_uint64_t,
+  NULL  // ObExprMinus::minus_collection_collection_uint64_t,
 };
 
 static ObExpr::EvalBatchFunc g_collection_eval_batch_functions[] = {
@@ -1739,7 +1756,9 @@ static ObExpr::EvalBatchFunc g_collection_eval_batch_functions[] = {
   NULL, // ObExprMinus::minus_collection_collection_int32_t_batch,
   NULL, // ObExprMinus::minus_collection_collection_int64_t_batch,
   NULL, // ObExprMinus::minus_collection_collection_float_batch,
-  NULL // ObExprMinus::minus_collection_collection_double_batch,
+  NULL, // ObExprMinus::minus_collection_collection_double_batch,
+  NULL, // ObExprAdd::add_collection_collection_uint64_t_batch,
+  NULL  // ObExprMinus::minus_collection_collection_uint64_t_batch,
 };
 
 static ObExpr::EvalVectorFunc g_collection_expr_eval_vector_functions[] = {
@@ -1754,7 +1773,9 @@ static ObExpr::EvalVectorFunc g_collection_expr_eval_vector_functions[] = {
   NULL, // ObExprMinus::minus_collection_collection_int32_t_vector,
   NULL, // ObExprMinus::minus_collection_collection_int64_t_vector,
   NULL, // ObExprMinus::minus_collection_collection_float_vector,
-  NULL // ObExprMinus::minus_collection_collection_double_vector,
+  NULL, // ObExprMinus::minus_collection_collection_double_vector,
+  NULL, // ObExprAdd::add_collection_collection_uint64_t_vector,
+  NULL  // ObExprMinus::minus_collection_collection_uint64_t_vector,
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_COLLECTION_EXPR_EVAL,
