@@ -453,6 +453,23 @@ public:
   bool is_committed_;
 };
 
+struct ObLogicTabletID final
+{
+public:
+  ObLogicTabletID();
+  ~ObLogicTabletID() = default;
+  int init(const common::ObTabletID &tablet_id, const int64_t transfer_seq);
+  bool is_valid() const;
+  void reset();
+  bool operator == (const ObLogicTabletID &other) const;
+  bool operator != (const ObLogicTabletID &other) const;
+  TO_STRING_KV(
+      K_(tablet_id),
+      K_(transfer_seq));
+  common::ObTabletID tablet_id_;
+  int64_t transfer_seq_;
+};
+
 
 }
 }

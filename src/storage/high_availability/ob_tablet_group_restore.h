@@ -63,7 +63,7 @@ public:
   share::ObTaskId task_id_;
   ObStorageHASrcInfo src_;
   ObStorageHATableInfoMgr ha_table_info_mgr_;
-  ObArray<common::ObTabletID> tablet_id_array_;
+  ObArray<ObLogicTabletID> tablet_id_array_;
   ObHATabletGroupCtx tablet_group_ctx_;
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;

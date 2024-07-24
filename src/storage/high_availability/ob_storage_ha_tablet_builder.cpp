@@ -209,8 +209,8 @@ int ObStorageHATabletsBuilder::create_all_tablets(
     const bool need_check_tablet_limit,
     ObICopyLSViewInfoReader *reader,
     ObIDagNet *dag_net,
-    common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
-    common::ObIArray<common::ObTabletID> &data_tablet_id_list,
+    common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
+    common::ObIArray<ObLogicTabletID> &data_tablet_id_list,
     CopyTabletSimpleInfoMap &simple_info_map)
 {
   int ret = OB_SUCCESS;
@@ -218,6 +218,7 @@ int ObStorageHATabletsBuilder::create_all_tablets(
   obrpc::ObCopyTabletInfo tablet_info;
   ObCopyTabletSimpleInfo tablet_simple_info;
   const int overwrite = 1;
+  ObLogicTabletID logic_tablet_id;
   sys_tablet_id_list.reset();
   data_tablet_id_list.reset();
 
@@ -236,6 +237,7 @@ int ObStorageHATabletsBuilder::create_all_tablets(
     while (OB_SUCC(ret)) {
       tablet_info.reset();
       tablet_simple_info.reset();
+      logic_tablet_id.reset();
       if (OB_ISNULL(dag_net)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
@@ -253,13 +255,15 @@ int ObStorageHATabletsBuilder::create_all_tablets(
         LOG_WARN("failed to modified tablet info", K(ret), K(tablet_info));
       } else if (OB_FAIL(create_or_update_tablet_(tablet_info, need_check_tablet_limit, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
+      } else if (OB_FAIL(logic_tablet_id.init(tablet_info.tablet_id_, tablet_info.param_.transfer_info_.transfer_seq_))) {
+        LOG_WARN("failed to init logic tablet id", K(ret), K(tablet_info));
       } else if (tablet_info.tablet_id_.is_ls_inner_tablet()) {
-        if (OB_FAIL(sys_tablet_id_list.push_back(tablet_info.tablet_id_))) {
-          LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_info));
+        if (OB_FAIL(sys_tablet_id_list.push_back(logic_tablet_id))) {
+          LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_info), K(logic_tablet_id));
         }
       } else {
-        if (OB_FAIL(data_tablet_id_list.push_back(tablet_info.tablet_id_))) {
-          LOG_WARN("failed to push tablet id into data tablet id list", K(ret), K(tablet_info));
+        if (OB_FAIL(data_tablet_id_list.push_back(logic_tablet_id))) {
+          LOG_WARN("failed to push tablet id into data tablet id list", K(ret), K(tablet_info), K(logic_tablet_id));
         }
       }
 
@@ -290,7 +294,9 @@ int ObStorageHATabletsBuilder::create_all_tablets(
 
 int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
     ObIDagNet *dag_net,
-    CopyTabletSimpleInfoMap &simple_info_map)
+    CopyTabletSimpleInfoMap &simple_info_map,
+    common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
+    common::ObIArray<ObLogicTabletID> &data_tablet_id_list)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -299,6 +305,9 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
   const int overwrite = 1;
   ObCopyTabletSimpleInfo tablet_simple_info;
   const bool need_check_tablet_limit = false;
+  ObLogicTabletID logic_tablet_id;
+  sys_tablet_id_list.reset();
+  data_tablet_id_list.reset();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -314,6 +323,7 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
   } else {
     while (OB_SUCC(ret)) {
       tablet_info.reset();
+      logic_tablet_id.reset();
       if (OB_ISNULL(dag_net)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
@@ -331,6 +341,19 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
         LOG_WARN("failed to modified tablet info", K(ret), K(tablet_info));
       } else if (OB_FAIL(create_or_update_tablet_(tablet_info, need_check_tablet_limit, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_info));
+      } else if (OB_FAIL(logic_tablet_id.init(tablet_info.tablet_id_, tablet_info.param_.transfer_info_.transfer_seq_))) {
+        LOG_WARN("failed to init logic tablet id", K(ret), K(tablet_info));
+      } else if (tablet_info.tablet_id_.is_ls_inner_tablet()) {
+        if (OB_FAIL(sys_tablet_id_list.push_back(logic_tablet_id))) {
+          LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_info), K(logic_tablet_id));
+        }
+      } else {
+        if (OB_FAIL(data_tablet_id_list.push_back(logic_tablet_id))) {
+          LOG_WARN("failed to push tablet id into data tablet id list", K(ret), K(tablet_info), K(logic_tablet_id));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
       } else {
         tablet_simple_info.tablet_id_ = tablet_info.tablet_id_;
         tablet_simple_info.status_ = tablet_info.status_;

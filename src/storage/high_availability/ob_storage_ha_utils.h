@@ -57,7 +57,9 @@ public:
 
   static int check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info);
   static int check_log_need_rebuild(const uint64_t tenant_id, const share::ObLSID &ls_id, bool &need_rebuild);
-
+  static int append_tablet_list(
+      const common::ObIArray<ObLogicTabletID> &logic_tablet_id_array,
+      common::ObIArray<ObTabletID> &tablet_id_array);
 private:
   static int check_merge_error_(const uint64_t tenant_id, common::ObISQLClient &sql_client);
   static int fetch_src_tablet_meta_info_(const uint64_t tenant_id, const common::ObTabletID &tablet_id,

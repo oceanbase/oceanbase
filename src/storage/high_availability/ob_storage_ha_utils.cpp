@@ -447,6 +447,21 @@ int ObStorageHAUtils::check_replica_validity(const obrpc::ObFetchLSMetaInfoResp 
   return ret;
 }
 
+int ObStorageHAUtils::append_tablet_list(
+    const common::ObIArray<ObLogicTabletID> &logic_tablet_id_array,
+    common::ObIArray<ObTabletID> &tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < logic_tablet_id_array.count(); ++i) {
+    const ObLogicTabletID &logic_tablet_id = logic_tablet_id_array.at(i);
+    if (OB_FAIL(tablet_id_array.push_back(logic_tablet_id.tablet_id_))) {
+      LOG_WARN("failed to push back tablet id", K(ret), K(logic_tablet_id));
+    }
+  }
+  return ret;
+}
+
+
 bool ObTransferUtils::is_need_retry_error(const int err)
 {
   bool bool_ret = false;

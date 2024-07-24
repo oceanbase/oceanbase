@@ -135,16 +135,16 @@ class ObHATabletGroupCtx
 public:
   ObHATabletGroupCtx();
   virtual ~ObHATabletGroupCtx();
-  int init(const common::ObIArray<ObTabletID> &tablet_id_array);
-  int get_next_tablet_id(common::ObTabletID &tablet_id);
-  int get_all_tablet_ids(common::ObIArray<ObTabletID> &tablet_id);
+  int init(const common::ObIArray<ObLogicTabletID> &tablet_id_array);
+  int get_next_tablet_id(ObLogicTabletID &logic_tablet_id);
+  int get_all_tablet_ids(common::ObIArray<ObLogicTabletID> &tablet_id);
   void reuse();
 
   TO_STRING_KV(K_(tablet_id_array), K_(index));
 private:
   bool is_inited_;
   common::SpinRWLock lock_;
-  ObArray<ObTabletID> tablet_id_array_;
+  ObArray<ObLogicTabletID> tablet_id_array_;
   int64_t index_;
   DISALLOW_COPY_AND_ASSIGN(ObHATabletGroupCtx);
 };
@@ -158,7 +158,7 @@ public:
   int get_next_tablet_group_ctx(
       ObHATabletGroupCtx *&tablet_group_ctx);
   int build_tablet_group_ctx(
-      const common::ObIArray<ObTabletID> &tablet_id_array);
+      const common::ObIArray<ObLogicTabletID> &tablet_id_array);
   void reuse();
 
   TO_STRING_KV(K_(tablet_group_ctx_array), K_(index));

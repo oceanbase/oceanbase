@@ -1668,6 +1668,58 @@ bool ObTabletBackfillInfo::operator == (const ObTabletBackfillInfo &other) const
   }
   return is_same;
 }
+
+ObLogicTabletID::ObLogicTabletID()
+  : tablet_id_(),
+    transfer_seq_(-1)
+{
+}
+
+int ObLogicTabletID::init(
+    const common::ObTabletID &tablet_id,
+    const int64_t transfer_seq)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_valid() || transfer_seq < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init logic tablet id get invalid argument", K(ret), K(tablet_id), K(transfer_seq));
+  } else {
+    tablet_id_ = tablet_id;
+    transfer_seq_ = transfer_seq;
+  }
+  return ret;
+}
+
+void ObLogicTabletID::reset()
+{
+  tablet_id_.reset();
+  transfer_seq_ = -1;
+}
+
+bool ObLogicTabletID::is_valid() const
+{
+  return tablet_id_.is_valid() && transfer_seq_ >= 0;
+}
+
+bool ObLogicTabletID::operator == (const ObLogicTabletID &other) const
+{
+  bool is_same = true;
+  if (this == &other) {
+    // same
+  } else if (tablet_id_ != other.tablet_id_
+      || transfer_seq_ != other.transfer_seq_) {
+    is_same = false;
+  } else {
+    is_same = true;
+  }
+  return is_same;
+}
+
+bool ObLogicTabletID::operator != (const ObLogicTabletID &other) const
+{
+  return !(*this == other);
+}
+
 }
 }
 
