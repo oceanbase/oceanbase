@@ -786,13 +786,14 @@ class ObTxCommitInfoLogTempRef
 {
 public:
   ObTxCommitInfoLogTempRef()
-      : scheduler_(), participants_(), app_trace_id_str_(), app_trace_info_(),
-        incremental_participants_(), prev_record_lsn_(), redo_lsns_(), xid_()
+    : scheduler_(), participants_(), commit_parts_(), app_trace_id_str_(), app_trace_info_(),
+    incremental_participants_(), prev_record_lsn_(), redo_lsns_(), xid_()
   {}
 
 public:
   common::ObAddr scheduler_;
   share::ObLSArray participants_;
+  ObTxCommitParts commit_parts_;
   common::ObString app_trace_id_str_;
   common::ObString app_trace_info_;
   share::ObLSArray incremental_participants_;
@@ -812,7 +813,7 @@ public:
         incremental_participants_(temp_ref.incremental_participants_), cluster_version_(0),
         app_trace_id_str_(temp_ref.app_trace_id_str_), app_trace_info_(temp_ref.app_trace_info_),
         prev_record_lsn_(temp_ref.prev_record_lsn_), redo_lsns_(temp_ref.redo_lsns_),
-        xid_(temp_ref.xid_), commit_parts_(), epoch_(0)
+        xid_(temp_ref.xid_), commit_parts_(temp_ref.commit_parts_), epoch_(0)
   {
     before_serialize();
   }
@@ -829,7 +830,7 @@ public:
                     share::ObLSArray &incremental_participants,
                     uint64_t cluster_version,
                     const ObXATransID &xid,
-                    const ObTxCommitParts &commit_parts,
+                    ObTxCommitParts &commit_parts,
                     int64_t epoch)
       : scheduler_(scheduler), participants_(participants), upstream_(upstream),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), can_elr_(is_elr),
@@ -895,7 +896,8 @@ private:
   ObRedoLSNArray &redo_lsns_;
   // for xa
   ObXATransID xid_;
-  ObTxCommitParts commit_parts_;
+  // for transfer
+  ObTxCommitParts &commit_parts_;
   int64_t epoch_;
 };
 
