@@ -1077,6 +1077,10 @@ int ObMultiTenant::create_tenant(const ObTenantMeta &meta, bool write_slog, cons
     }
   }
   if (OB_FAIL(ret) && tenant_allocator_created) {
+    auto& cache_washer = ObKVGlobalCache::get_instance();
+    if (OB_TMP_FAIL(cache_washer.sync_flush_tenant(tenant_id))) {
+      LOG_WARN("Fail to sync flush tenant cache", K(tmp_ret));
+    }
     malloc_allocator->recycle_tenant_allocator(tenant_id);
   }
   if (lock_succ) {
