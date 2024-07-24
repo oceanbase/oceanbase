@@ -268,6 +268,8 @@ STAT_EVENT_ADD_DEF(OPT_SYSTEM_STAT_CACHE_MISS, "opt system stat cache miss", ObS
 
 STAT_EVENT_ADD_DEF(LOG_KV_CACHE_HIT, "log kv cache hit", ObStatClassIds::CACHE, 50065, false, true, true)
 STAT_EVENT_ADD_DEF(LOG_KV_CACHE_MISS, "log kv cache miss", ObStatClassIds::CACHE, 50066, false, true, true)
+STAT_EVENT_ADD_DEF(DATA_BLOCK_CACHE_MISS, "data block cache miss", ObStatClassIds::CACHE, 50067, true, true, true)
+STAT_EVENT_ADD_DEF(INDEX_BLOCK_CACHE_MISS, "index block cache miss", ObStatClassIds::CACHE, 50068, true, true, true)
 
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false)
