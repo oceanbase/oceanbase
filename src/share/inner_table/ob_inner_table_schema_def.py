@@ -10203,14 +10203,14 @@ def_table_schema(
   ('try_lock_times', 'int'),
   ('time_after_recv', 'int'),
   ('session_id', 'int'),
-  ('holder_session_id', 'int'),
   ('block_session_id', 'int'),
   ('type', 'int'),
   ('lock_mode', 'varchar:MAX_LOCK_MODE_BUF_LENGTH'),
   ('last_compact_cnt', 'int'),
   ('total_update_cnt', 'int'),
   ('trans_id', 'int'),
-  ('holder_trans_id', 'int')
+  ('holder_trans_id', 'int'),
+  ('holder_session_id', 'int')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
