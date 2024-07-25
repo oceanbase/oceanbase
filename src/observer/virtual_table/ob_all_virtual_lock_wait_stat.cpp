@@ -139,9 +139,6 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
         case SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->sessid_);
           break;
-        case HOLDER_SESSION_ID:
-          cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
-          break;
         case BLOCK_SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->block_sessid_);
           break;
@@ -218,6 +215,9 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(holder_tx_id.get_id());
           break;
         }
+        case HOLDER_SESSION_ID:
+          cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
+          break;
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));
