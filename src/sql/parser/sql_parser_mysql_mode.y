@@ -101,49 +101,47 @@ extern void obsql_oracle_parse_fatal_error(int32_t errcode, yyscan_t yyscanner, 
 
 %nonassoc BASIC OUTLINE EXTENDED EXTENDED_NOADDR PARTITIONS PLANREGRESS
 %nonassoc PRETTY PRETTY_COLOR
-%nonassoc   KILL_EXPR
-%nonassoc   CONNECTION QUERY
-%nonassoc   LOWER_COMMA
-%nonassoc   REMAP
-%nonassoc   ',' WITH
+%nonassoc KILL_EXPR
+%nonassoc CONNECTION QUERY
+%nonassoc LOWER_COMMA
+%nonassoc REMAP
+%nonassoc ',' WITH
 %nonassoc OVERWRITE
 %left	UNION EXCEPT MINUS
 %left	INTERSECT
-%left   JOIN CROSS LEFT FULL RIGHT INNER WINDOW
-%left   SET_VAR
+%left LOWER_ON /*on expr*/
+%left JOIN CROSS LEFT FULL RIGHT INNER WINDOW ON USING OUTER NATURAL STRAIGHT_JOIN
+%left SET_VAR
 %left	OR OR_OP
 %left	XOR
 %left	AND AND_OP
-%left   BETWEEN CASE WHEN THEN ELSE
+%left BETWEEN CASE WHEN THEN ELSE
 %nonassoc LOWER_THAN_COMP
-%left   COMP_EQ COM P_NSEQ COMP_GE COMP_GT COMP_LE COMP_LT COMP_NE IS LIKE IN REGEXP SOUNDS
+%left COMP_EQ COM P_NSEQ COMP_GE COMP_GT COMP_LE COMP_LT COMP_NE IS LIKE IN REGEXP SOUNDS
 %nonassoc STRING_VALUE
-%right  ESCAPE /*for conflict for escape*/
-%left   '|'
-%left   '&'
-%left   SHIFT_LEFT SHIFT_RIGHT
-%left  JSON_EXTRACT JSON_EXTRACT_UNQUOTED MEMBER
-%left   '+' '-'
-%left   '*' '/' '%' MOD DIV POW
-%left   '^'
+%right ESCAPE /*for conflict for escape*/
+%left '|'
+%left '&'
+%left SHIFT_LEFT SHIFT_RIGHT
+%left JSON_EXTRACT JSON_EXTRACT_UNQUOTED MEMBER
+%left '+' '-'
+%left '*' '/' '%' MOD DIV POW
+%left '^'
 %nonassoc LOWER_THAN_NEG SAMPLE/* for simple_expr conflict*/
 %left CNNOP
-%left   NEG '~'
+%left NEG '~'
 %nonassoc LOWER_PARENS
-//%nonassoc STRING_VALUE
-%left   '(' ')'
+%left '(' ')'
 %nonassoc SQL_CACHE SQL_NO_CACHE HIGH_PRIORITY SQL_SMALL_RESULT SQL_BIG_RESULT SQL_BUFFER_RESULT CHARSET DATABASE_ID REPLICA_NUM/*for shift/reduce conflict between opt_query_expresion_option_list and SQL_CACHE*/
 %nonassoc LOW_PRIORITY QUICK
 %nonassoc HIGHER_PARENS TRANSACTION SIZE AUTO SKEWONLY DEFAULT AS/*for simple_expr conflict*/
 %nonassoc TENANT /*for opt_tenant conflict*/
-%left   '.'
-%right  NOT NOT2
+%left '.'
+%right NOT NOT2
 %right BINARY COLLATE
 %left INTERVAL
 %nonassoc LOWER_KEY /* for unique key and unique and key*/
 %nonassoc KEY /* for unique key and unique and key*/
-%nonassoc LOWER_ON /*on expr*/
-%nonassoc ON /*on expr*/
 %nonassoc LOWER_OVER
 %nonassoc OVER
 %nonassoc LOWER_INTO
@@ -434,7 +432,7 @@ END_P SET_VAR DELIMITER
 %type <node> intnum_list
 %type <node> qb_name_option qb_name_string qb_name_list multi_qb_name_list
 %type <node> coalesce_strategy_list
-%type <node> join_condition inner_join_type opt_inner outer_join_type opt_outer natural_join_type except_full_outer_join_type opt_full_table_factor
+%type <node> join_condition inner_join_type except_full_outer_join_type opt_outer natural_join_type opt_full_table_factor
 %type <ival> string_length_i opt_string_length_i opt_string_length_i_v2 opt_int_length_i opt_bit_length_i opt_datetime_fsp_i opt_unsigned_i opt_zerofill_i opt_year_i opt_time_func_fsp_i opt_cast_float_precision
 %type <node> opt_float_precision opt_number_precision
 %type <node> opt_equal_mark opt_default_mark read_only_or_write not not2 opt_disk_alias
@@ -12007,6 +12005,39 @@ table_factor
 {
   $$ = $3;
 }
+| table_reference FULL %prec LOWER_ON
+{
+  /* to resolve FULL as alias comflict */
+  if ($1->type_ == T_ORG) {
+    ParseNode *name_node = NULL;
+    make_name_node(name_node, result->malloc_pool_, "full");
+    $$ = new_node(result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
+    if (OB_UNLIKELY($$ == NULL)) {
+      yyerror(NULL, result, "No more space for malloc\n");
+      YYABORT_NO_MEMORY;
+    } else {
+      for (int i = 0; i <= $1->num_child_; ++i) {
+        if (i == 0) {
+          $$->children_[i] = $1->children_[i];
+        } else if (i == 1) {
+          $$->children_[i] = name_node;
+        } else {
+          $$->children_[i] = $1->children_[i - 1];
+        }
+      }
+      $$->sql_str_off_ = @1.first_column;
+    }
+  } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&
+             strlen($1->children_[1]->str_value_) == 0) {
+    ParseNode *name_node = NULL;
+    make_name_node(name_node, result->malloc_pool_, "full");
+    $1->children_[1] = name_node;
+    $$ = $1;
+  } else {
+    yyerror(&@2, result, "occur multi alias name\n");
+    YYERROR;
+  }
+}
 ;
 
 table_factor:
@@ -12053,13 +12084,14 @@ tbl_name
   unname_node->sql_str_off_ = @2.first_column;
   $$->value_ = 1; //lateral
 }
-| '(' table_references ')'
-{
-  $$ = $2;
-}
 | json_table_expr
 {
   $$ = $1;
+}
+| '(' table_references ')'
+{
+  $$ = $2;
+  $$->value_ = 1; // value_ = 1 means with parentheses
 }
 ;
 
@@ -13025,79 +13057,77 @@ joined_table:
 /**
  * ref: https://dev.mysql.com/doc/refman/8.0/en/join.html
  */
-table_reference inner_join_type opt_full_table_factor %prec LOWER_ON
+table_reference inner_join_type table_reference %prec LOWER_ON
 {
   JOIN_MERGE_NODES($1, $3);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, NULL, NULL);
+  if ($3->value_ == 1) {
+    // $3 has parenthese, theere is no need to adjust
+    malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, NULL, NULL);
+  } else {
+    ParseNode *inner_join = NULL;
+    malloc_non_terminal_node(inner_join, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, NULL, NULL, NULL);
+    adjust_inner_join(result, $$, inner_join, $3);
+  }
+  /*
+    consider following case: t1 join t2 join t3 on 1=1;
+    1. t1 join (t2 join t3 on 1 = 1);
+    2. (t1 join t2) join t3 on 1 = 1;
+    3. t1 join (t2 join t3) on 1 = 1;
+    the number 2 is what the query meaning, inner join should join from left to right even without a
+    join_condition. So multi inner join should be parsed as a left-deep true;
+
+    It reduces t2 join t3 on 1=1 firstly.
+
+         join_1
+        /      \
+       t2      t3
+
+    Then it reduces t1, which adds a new join on join_1. So the finial tree is a right-deep joined_tree.
+
+       join_2
+       /    \
+      t1    join_1
+            /    \
+           t2    t3
+
+    However, this isn't the meaning of query, which actually should be a left-deep tree:
+
+            join_1
+           /     \
+        join_2   t3
+      /      \
+     t1      t2
+
+    Then I adjust the right-deep tree to a left-deep tree, this is the actual meaning of the query.
+  */
 }
-| table_reference inner_join_type opt_full_table_factor ON expr
-{
-  JOIN_MERGE_NODES($1, $3);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, $5, NULL);
-}
-| table_reference inner_join_type opt_full_table_factor USING '(' column_list ')'
-{
-  JOIN_MERGE_NODES($1, $3);
-  ParseNode *condition_node = NULL;
-  merge_nodes(condition_node, result, T_COLUMN_LIST, $6);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, condition_node, NULL);
-}
-| table_reference except_full_outer_join_type opt_full_table_factor join_condition
+| table_reference inner_join_type table_reference join_condition
 {
   JOIN_MERGE_NODES($1, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, $4, NULL);
 }
-| table_reference FULL JOIN opt_full_table_factor join_condition
+| table_reference except_full_outer_join_type table_reference join_condition
+{
+  JOIN_MERGE_NODES($1, $3);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, $4, NULL);
+}
+| table_reference FULL JOIN table_reference join_condition
 {
   JOIN_MERGE_NODES($1, $4);
   malloc_terminal_node($$, result->malloc_pool_, T_JOIN_FULL);
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $$, $1, $4, $5, NULL);
 }
-| table_reference FULL OUTER JOIN opt_full_table_factor join_condition
+| table_reference FULL OUTER JOIN table_reference join_condition
 {
   JOIN_MERGE_NODES($1, $5);
   malloc_terminal_node($$, result->malloc_pool_, T_JOIN_FULL);
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $$, $1, $5, $6, NULL);
 }
-| table_reference FULL %prec LOWER_COMMA
-{
-  if ($1->type_ == T_ORG) {
-    ParseNode *name_node = NULL;
-    make_name_node(name_node, result->malloc_pool_, "full");
-    $$ = new_node(result->malloc_pool_, T_ALIAS, $1->num_child_ + 1);
-    if (OB_UNLIKELY($$ == NULL)) {
-      yyerror(NULL, result, "No more space for malloc\n");
-      YYABORT_NO_MEMORY;
-    } else {
-      for (int i = 0; i <= $1->num_child_; ++i) {
-        if (i == 0) {
-          $$->children_[i] = $1->children_[i];
-        } else if (i == 1) {
-          $$->children_[i] = name_node;
-        } else {
-          $$->children_[i] = $1->children_[i - 1];
-        }
-      }
-      $$->sql_str_off_ = @1.first_column;
-    }
-  } else if ($1->type_ == T_ALIAS && $1->children_[1] != NULL &&
-             strlen($1->children_[1]->str_value_) == 0) {
-    ParseNode *name_node = NULL;
-    make_name_node(name_node, result->malloc_pool_, "full");
-    $1->children_[1] = name_node;
-    $$ = $1;
-  } else {
-    yyerror(&@2, result, "occur multi alias name\n");
-    YYERROR;
-  }
-}
 | table_reference natural_join_type opt_full_table_factor
 {
   JOIN_MERGE_NODES($1, $3);
-
   ParseNode *join_attr = NULL;
   malloc_terminal_node(join_attr, result->malloc_pool_, T_NATURAL_JOIN);
-
   malloc_non_terminal_node($$, result->malloc_pool_, T_JOINED_TABLE, 5, $2, $1, $3, NULL, join_attr);
 }
 ;
@@ -13142,13 +13172,22 @@ table_factor %prec LOWER_COMMA
 ;
 
 natural_join_type:
-NATURAL outer_join_type
+NATURAL except_full_outer_join_type
 {
   $$ = $2
 }
-| NATURAL opt_inner JOIN
+| NATURAL FULL opt_outer JOIN
 {
-  (void)$2;
+  /* make bison mute */
+  (void)($3);
+  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_FULL);
+}
+| NATURAL JOIN
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_INNER);
+}
+| NATURAL INNER JOIN
+{
   malloc_terminal_node($$, result->malloc_pool_, T_JOIN_INNER);
 }
 ;
@@ -13169,32 +13208,6 @@ JOIN
 | STRAIGHT_JOIN
 {
   malloc_terminal_node($$, result->malloc_pool_, T_STRAIGHT_JOIN);
-}
-;
-
-opt_inner:
-INNER { $$ = NULL; }
-| /* EMPTY */ { $$ = NULL; }
-;
-
-outer_join_type:
-FULL opt_outer JOIN
-{
-  /* make bison mute */
-  (void)($2);
-  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_FULL);
-}
-| LEFT opt_outer JOIN
-{
-  /* make bison mute */
-  (void)($2);
-  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_LEFT);
-}
-| RIGHT opt_outer JOIN
-{
-  /* make bison mute */
-  (void)($2);
-  malloc_terminal_node($$, result->malloc_pool_, T_JOIN_RIGHT);
 }
 ;
 
