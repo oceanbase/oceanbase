@@ -46,7 +46,8 @@ protected:
   virtual void reset_ctx() override;
   virtual uint64_t get_request_checksum() override;
   virtual int before_response(int error_code) override;
-
+  virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
+  virtual bool is_kv_processor() override { return true; }
 private:
   int init_tb_ctx();
   int init_group_ctx(table::ObTableGroupCtx &ctx);

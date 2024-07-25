@@ -43,6 +43,8 @@ protected:
   virtual int try_process() override;
   virtual void reset_ctx() override;
   virtual uint64_t get_request_checksum() override;
+  virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
+  virtual bool is_kv_processor() override { return true; }
 private:
   common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;

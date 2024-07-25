@@ -195,6 +195,7 @@ ob_set_subtarget(ob_server table
   table/redis/cmd/ob_redis_string_cmd.cpp
   table/redis/operator/ob_redis_string_operator.cpp
   table/ob_table_audit.cpp
+  table/ob_table_mode_control.cpp
 )
 
 ob_set_subtarget(ob_server table_load

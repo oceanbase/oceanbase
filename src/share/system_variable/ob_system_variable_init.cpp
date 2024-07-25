@@ -7121,13 +7121,27 @@ static struct VarsInit{
     ObSysVars[508].alias_ = "OB_SV_KEY_CACHE_BLOCK_SIZE" ;
     }();
 
+    [&] (){
+      ObSysVars[509].default_value_ = "0" ;
+      ObSysVars[509].info_ = "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode." ;
+      ObSysVars[509].name_ = "ob_kv_mode" ;
+      ObSysVars[509].data_type_ = ObIntType ;
+      ObSysVars[509].enum_names_ = "[u'ALL', u'TABLEAPI', u'HBASE', u'REDIS', u'NONE']" ;
+      ObSysVars[509].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
+      ObSysVars[509].id_ = SYS_VAR_OB_KV_MODE ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_KV_MODE)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_KV_MODE] = 509 ;
+      ObSysVars[509].base_value_ = "0" ;
+    ObSysVars[509].alias_ = "OB_SV_KV_MODE" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 509;
+static int64_t var_amount = 510;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

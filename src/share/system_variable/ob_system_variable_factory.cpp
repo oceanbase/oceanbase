@@ -435,6 +435,14 @@ const char *ObSysVarOldAlterTable::OLD_ALTER_TABLE_NAMES[] = {
   "ON",
   0
 };
+const char *ObSysVarObKvMode::OB_KV_MODE_NAMES[] = {
+  "ALL",
+  "TABLEAPI",
+  "HBASE",
+  "REDIS",
+  "NONE",
+  0
+};
 
 const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_aggregation_optimization_settings",
@@ -779,6 +787,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "ob_enable_truncate_flashback",
   "ob_global_debug_sync",
   "ob_interm_result_mem_limit",
+  "ob_kv_mode",
   "ob_last_schema_version",
   "ob_log_level",
   "ob_max_read_stale_time",
@@ -1291,6 +1300,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_OB_ENABLE_TRUNCATE_FLASHBACK,
   SYS_VAR_OB_GLOBAL_DEBUG_SYNC,
   SYS_VAR_OB_INTERM_RESULT_MEM_LIMIT,
+  SYS_VAR_OB_KV_MODE,
   SYS_VAR_OB_LAST_SCHEMA_VERSION,
   SYS_VAR_OB_LOG_LEVEL,
   SYS_VAR_OB_MAX_READ_STALE_TIME,
@@ -1969,7 +1979,8 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "old_alter_table",
   "table_definition_cache",
   "innodb_sort_buffer_size",
-  "key_cache_block_size"
+  "key_cache_block_size",
+  "ob_kv_mode"
 };
 
 bool ObSysVarFactory::sys_var_name_case_cmp(const char *name1, const ObString &name2)
@@ -2647,6 +2658,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarTableDefinitionCache)
         + sizeof(ObSysVarInnodbSortBufferSize)
         + sizeof(ObSysVarKeyCacheBlockSize)
+        + sizeof(ObSysVarObKvMode)
         ;
     void *ptr = NULL;
     if (OB_ISNULL(ptr = allocator_.alloc(total_mem_size))) {
@@ -7234,6 +7246,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_KEY_CACHE_BLOCK_SIZE))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarKeyCacheBlockSize));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObKvMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObKvMode", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_KV_MODE))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarObKvMode));
       }
     }
 
@@ -12842,6 +12863,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarKeyCacheBlockSize())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarKeyCacheBlockSize", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_OB_KV_MODE: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarObKvMode)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarObKvMode)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObKvMode())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarObKvMode", K(ret));
       }
       break;
     }

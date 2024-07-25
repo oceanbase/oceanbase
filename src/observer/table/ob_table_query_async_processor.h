@@ -227,7 +227,8 @@ protected:
   virtual void reset_ctx() override;
   virtual uint64_t get_request_checksum() override;
   int init_query_ctx(const ObString &arg_table_name);
-
+  virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
+  virtual bool is_kv_processor() override { return true; }
 private:
   int process_query_start();
   int process_query_next();
