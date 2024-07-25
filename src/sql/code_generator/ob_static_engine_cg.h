@@ -444,6 +444,8 @@ private:
   int generate_spec(ObLogTempTableInsert &op, ObTempTableInsertVecOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTempTableAccess &op, ObTempTableAccessVecOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTempTableTransformation &op, ObTempTableTransformationVecOpSpec &spec, const bool in_root_job);
+  template<typename MergeDistinctSpecType>
+  int generate_merge_distinct_spec(ObLogDistinct &op, MergeDistinctSpecType &spec, const bool in_root_job);
 private:
   int disable_use_rich_format(const ObLogicalOperator &op, ObOpSpec &spec);
   int add_update_set(ObSubPlanFilterSpec &spec);

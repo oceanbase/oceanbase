@@ -1186,8 +1186,9 @@ int ObStaticEngineCG::generate_spec(ObLogLimit &op, ObLimitVecSpec &spec, const 
   return ret;
 }
 
-int ObStaticEngineCG::generate_spec(
-  ObLogDistinct &op, ObMergeDistinctSpec &spec, const bool in_root_job)
+template<typename MergeDistinctSpecType>
+int ObStaticEngineCG::generate_merge_distinct_spec(
+  ObLogDistinct &op, MergeDistinctSpecType &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
@@ -1237,53 +1238,15 @@ int ObStaticEngineCG::generate_spec(
 }
 
 int ObStaticEngineCG::generate_spec(
+  ObLogDistinct &op, ObMergeDistinctSpec &spec, const bool in_root_job)
+{
+  return generate_merge_distinct_spec<ObMergeDistinctSpec> (op, spec, in_root_job);
+}
+
+int ObStaticEngineCG::generate_spec(
   ObLogDistinct &op, ObMergeDistinctVecSpec &spec, const bool in_root_job)
 {
-  int ret = OB_SUCCESS;
-  UNUSED(in_root_job);
-  spec.by_pass_enabled_ = false;
-  if (op.get_block_mode()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("merge distinct has no block mode", K(op.get_algo()), K(op.get_block_mode()), K(ret));
-  } else if (OB_FAIL(spec.cmp_funcs_.init(op.get_distinct_exprs().count()))) {
-    LOG_WARN("failed to init sort functions", K(ret));
-  } else if (OB_FAIL(spec.distinct_exprs_.init(op.get_distinct_exprs().count()))) {
-    LOG_WARN("failed to init distinct exprs", K(ret));
-  } else {
-    ObExpr *expr = nullptr;
-    ARRAY_FOREACH(op.get_distinct_exprs(), i) {
-      const ObRawExpr* raw_expr = op.get_distinct_exprs().at(i);
-      if (OB_ISNULL(raw_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("null pointer", K(ret));
-      } else if (is_oracle_mode() && OB_UNLIKELY(ObLongTextType == raw_expr->get_data_type()
-                                                 || ObLobType == raw_expr->get_data_type())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("select distinct lob not allowed", K(ret));
-      } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == raw_expr->get_data_type())) {
-        ret = OB_ERR_INVALID_CMP_OP;
-        LOG_WARN("select distinct json not allowed", K(ret));
-      } else if (OB_UNLIKELY(ObRoaringBitmapType == raw_expr->get_data_type())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("select distinct roaringbitmap not allowed", K(ret));
-      } else if (raw_expr->is_const_expr()) {
-          // distinct const value, 这里需要注意：distinct 1被跳过了，
-          // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
-          continue;
-      } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
-        LOG_WARN("failed to generate rt expr", K(ret));
-      } else if (OB_FAIL(spec.distinct_exprs_.push_back(expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else {
-        ObCmpFunc cmp_func;
-        // no matter null first or null last.
-        cmp_func.cmp_func_ = expr->basic_funcs_->null_last_cmp_;
-        CK(NULL != cmp_func.cmp_func_);
-        OZ(spec.cmp_funcs_.push_back(cmp_func));
-      }
-    }
-  }
-  return ret;
+  return generate_merge_distinct_spec<ObMergeDistinctVecSpec> (op, spec, in_root_job);
 }
 
 void ObStaticEngineCG::set_murmur_hash_func(
