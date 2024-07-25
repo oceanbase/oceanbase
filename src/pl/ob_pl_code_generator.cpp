@@ -2715,17 +2715,25 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
                                                              generator_.CTX_IDX),
                                                          s.get_out_index(i),
                                                          p_result_obj));
-          } else if (!s.get_param_expr(i)->is_obj_access_expr()
-              || !(static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i)))->for_write()) {
+          } else if ((!s.get_param_expr(i)->is_obj_access_expr() && !(s.get_param_expr(i)->get_result_type().is_ext() && s.is_out(i)))
+                      || (s.get_param_expr(i)->is_obj_access_expr() && !(static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i)))->for_write())) {
             OZ (generator_.generate_expr(s.get_param(i), s, OB_INVALID_INDEX, p_result_obj));
           } else {
             ObLLVMValue address;
             ObPLDataType final_type;
             bool is_no_copy_param = s.get_nocopy_params().count() > 0 && OB_INVALID_INDEX != s.get_nocopy_params().at(i);
-            const ObObjAccessRawExpr *obj_access
-              = static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i));
-            CK (OB_NOT_NULL(obj_access));
-            OZ (obj_access->get_final_type(final_type));
+            if (s.get_param_expr(i)->is_obj_access_expr()) {
+              const ObObjAccessRawExpr *obj_access = static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i));
+              CK (OB_NOT_NULL(obj_access));
+              OZ (obj_access->get_final_type(final_type));
+            } else {
+              uint64_t udt_id = s.get_param_expr(i)->get_result_type().get_udt_id();
+              const ObUserDefinedType *user_type = NULL;
+              user_type = generator_.get_ast().get_user_type_table().get_type(udt_id);
+              user_type = NULL == user_type ? generator_.get_ast().get_user_type_table().get_external_type(udt_id) : user_type;
+              CK (OB_NOT_NULL(user_type));
+              OX (final_type = *user_type);
+            }
             OZ (generator_.generate_expr(s.get_param(i),
                                          s,
                                          OB_INVALID_INDEX,
