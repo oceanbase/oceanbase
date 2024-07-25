@@ -2556,6 +2556,7 @@ typedef enum ObItemType
   T_NO_USE_ADAPTIVE = 4710,
   T_SHOW_CHECK_PARTITION = 4711,
   T_ALTER_COLUMN_GROUP_DELAYED = 4712,
+  T_DUPLICATE_READ_CONSISTENCY = 4713,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
