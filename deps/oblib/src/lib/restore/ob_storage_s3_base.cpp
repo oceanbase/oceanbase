@@ -881,7 +881,7 @@ int ObS3Account::parse_from(const char *storage_info_str, const int64_t size)
       } else if (0 == strncmp(ADDRESSING_MODEL, token, strlen(ADDRESSING_MODEL))) {
         if (0 == strcmp(token + strlen(ADDRESSING_MODEL), "virtual_hosted_style")) {
           addressing_model_ = ObIStorageUtil::VIRTUAL_HOSTED_STYLE;
-        } if (0 == strcmp(token + strlen(ADDRESSING_MODEL), "path_style")) {
+        } else if (0 == strcmp(token + strlen(ADDRESSING_MODEL), "path_style")) {
           addressing_model_ = ObIStorageUtil::PATH_STYLE;
         } else {
           ret = OB_INVALID_ARGUMENT;
