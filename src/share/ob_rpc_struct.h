@@ -760,14 +760,27 @@ struct ObAddSysVarArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObAddSysVarArg() : sysvar_(), if_not_exist_(false), update_sys_var_(false) {}
+  ObAddSysVarArg() : sysvar_(), if_not_exist_(false), update_sys_var_(false), is_batch_(false), sysvars_() {}
   DECLARE_TO_STRING;
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   int assign(const ObAddSysVarArg &other);
+  bool get_update_sys_var() const { return update_sys_var_; }
+  bool is_batch() const { return is_batch_; }
+  const share::schema::ObSysVarSchema &get_sysvar() const { return sysvar_; }
+  const ObIArray<share::schema::ObSysVarSchema> &get_sysvars() const { return sysvars_; }
+  int init(const bool &update_sys_var, const bool &if_not_exist, const uint64_t &tenant_id,
+      const share::schema::ObSysVarSchema &sysvar);
+  int init(const bool &update_sys_var, const bool &if_not_exist, const uint64_t &tenant_id,
+      const ObIArray<share::schema::ObSysVarSchema> &sysvars);
+private:
   share::schema::ObSysVarSchema sysvar_;
   bool if_not_exist_;
   bool update_sys_var_; // Distinguish add/update sys var, for internal use only
+  // if is_batch_==true, sysvar_ is invalid and sysvars_ is valid
+  // if is_batch_==false, sysvar_ is valid and sysvars_ is invalid
+  bool is_batch_;
+  common::ObSArray<share::schema::ObSysVarSchema> sysvars_;
 };
 
 struct ObModifySysVarArg : public ObDDLArg

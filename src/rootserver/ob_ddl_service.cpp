@@ -29161,14 +29161,14 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
   const ObSysVarSchema *old_schema = NULL;
   const ObTenantSchema *tenant_info = NULL;
   const ObSysVariableSchema *sys_variable_schema = NULL;
-  const ObString var_name = arg.sysvar_.get_name();
-  const uint64_t tenant_id = arg.sysvar_.get_tenant_id();
+  const ObString var_name = arg.get_sysvar().get_name();
+  const uint64_t tenant_id = arg.get_sysvar().get_tenant_id();
   bool execute = true;
   ObSysVarSchema new_sys_var;
   int64_t refreshed_schema_version = 0;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat failed", KR(ret), K(arg));
-  } else if (OB_FAIL(new_sys_var.assign(arg.sysvar_))) {
+  } else if (OB_FAIL(new_sys_var.assign(arg.get_sysvar()))) {
     LOG_WARN("fail to assign sysvar", KR(ret), K(arg));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
@@ -29182,7 +29182,7 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
   }
   // check sys var schema
   if (FAILEDx(sys_variable_schema->get_sysvar_schema(var_name, old_schema))) {
-    if (!arg.update_sys_var_ && OB_ERR_SYS_VARIABLE_UNKNOWN == ret) {
+    if (!arg.get_update_sys_var() && OB_ERR_SYS_VARIABLE_UNKNOWN == ret) {
       // add sys var, sys var should not exist
       ret = OB_SUCCESS;
     } else {
@@ -29191,7 +29191,7 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
   } else if (OB_ISNULL(old_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys var schema is null", KR(ret), K(arg));
-  } else if (!arg.update_sys_var_) {
+  } else if (!arg.get_update_sys_var()) {
     // case 1. add sys var, and sys var exist
     if (new_sys_var.is_equal_for_add(*old_schema)) {
       // new sys var will be mocked by schema when upgrade,
