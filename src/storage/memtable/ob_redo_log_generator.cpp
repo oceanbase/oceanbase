@@ -119,9 +119,6 @@ public:
       } else if (callback->is_logging_blocked()) {
         ret = OB_BLOCK_FROZEN;
         ctx_.last_log_blocked_memtable_ = callback->get_memtable();
-      } else if (OB_UNLIKELY(callback->get_freeze_clock() >= ctx_.freeze_clock_)) {
-        // when flush redo for frozen memtable, if memtable is active, should stop
-        ret = OB_BLOCK_FROZEN;
       } else {
         bool fake_fill = false;
         if (MutatorType::MUTATOR_ROW == callback->get_mutator_type()) {
