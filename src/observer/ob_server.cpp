@@ -1600,6 +1600,10 @@ int ObServer::wait()
     multi_tenant_.wait();
     FLOG_INFO("wait multi tenant success");
 
+    FLOG_INFO("begin to wait io manager");
+    ObIOManager::get_instance().wait();
+    FLOG_INFO("wait io manager success");
+
     FLOG_INFO("begin to wait ratelimit manager");
     rl_mgr_.wait();
     FLOG_INFO("wait ratelimit manager success");

@@ -150,6 +150,11 @@ void ObIOManager::stop()
   io_scheduler_.stop();
 }
 
+void ObIOManager::wait()
+{
+  io_scheduler_.wait();
+}
+
 bool ObIOManager::is_stopped() const
 {
   return !is_working_;
