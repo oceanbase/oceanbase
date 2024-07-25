@@ -22,10 +22,46 @@ namespace storage
 {
 using namespace transaction;
 
-OB_SERIALIZE_MEMBER(CollectTxCtxInfo, src_ls_id_, dest_ls_id_, task_id_, transfer_epoch_, transfer_scn_, args_);
-OB_SERIALIZE_MEMBER(ObTxCtxMoveArg, tx_id_, epoch_, session_id_, tx_state_, trans_version_, prepare_version_, commit_version_, cluster_id_, cluster_version_, scheduler_, tx_expired_time_, xid_, last_seq_no_, max_submitted_seq_no_, tx_start_scn_, tx_end_scn_, is_sub2pc_, happened_before_, table_lock_info_);
-OB_SERIALIZE_MEMBER(ObTransferDestPrepareInfo, task_id_, src_ls_id_, dest_ls_id_);
-OB_SERIALIZE_MEMBER(ObTransferMoveTxParam, src_ls_id_, transfer_epoch_, transfer_scn_, op_scn_, op_type_, is_replay_, is_incomplete_replay_);
+OB_SERIALIZE_MEMBER(CollectTxCtxInfo,
+                    src_ls_id_,
+                    dest_ls_id_,
+                    task_id_,
+                    transfer_epoch_,
+                    transfer_scn_,
+                    args_);
+OB_SERIALIZE_MEMBER(ObTxCtxMoveArg,
+                    tx_id_,
+                    epoch_,
+                    session_id_,
+                    tx_state_,
+                    trans_version_,
+                    prepare_version_,
+                    commit_version_,
+                    cluster_id_,
+                    cluster_version_,
+                    scheduler_,
+                    tx_expired_time_,
+                    xid_,
+                    last_seq_no_,
+                    max_submitted_seq_no_,
+                    tx_start_scn_,
+                    tx_end_scn_,
+                    is_sub2pc_,
+                    happened_before_,
+                    table_lock_info_,
+                    associated_session_id_);
+OB_SERIALIZE_MEMBER(ObTransferDestPrepareInfo,
+                    task_id_,
+                    src_ls_id_,
+                    dest_ls_id_);
+OB_SERIALIZE_MEMBER(ObTransferMoveTxParam,
+                    src_ls_id_,
+                    transfer_epoch_,
+                    transfer_scn_,
+                    op_scn_,
+                    op_type_,
+                    is_replay_,
+                    is_incomplete_replay_);
 
 int CollectTxCtxInfo::assign(const CollectTxCtxInfo &other)
 {
