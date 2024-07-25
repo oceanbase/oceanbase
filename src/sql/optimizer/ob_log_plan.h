@@ -739,9 +739,9 @@ public:
   int check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
                                       bool &can_push);
 
-  int check_tenant_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
-                                         bool &enable_aggr_push_down,
-                                         bool &enable_groupby_push_down);
+  int check_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
+                                  bool &enable_aggr_push_down,
+                                  bool &enable_groupby_push_down);
 
   int check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &aggrs,
                                      const ObIArray<ObRawExpr *> &group_exprs,

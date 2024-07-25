@@ -334,6 +334,7 @@ private:
 
   // generate normal table scan
   int generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &spec);
+  int get_pushdown_storage_level(ObOptimizerContext &optimizer_context, const int64_t tenant_pd_level, int64_t &level);
   int generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &spec);
   int need_prior_exprs(common::ObIArray<ObExpr*> &self_output,
       common::ObIArray<ObExpr*> &left_output,

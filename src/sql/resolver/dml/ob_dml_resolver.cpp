@@ -14556,7 +14556,7 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_INDEX_SS_ASC_HINT:
     case T_INDEX_SS_DESC_HINT:
     case T_USE_COLUMN_STORE_HINT:
-    case T_NO_USE_COLUMN_STORE_HINT:  {
+    case T_NO_USE_COLUMN_STORE_HINT: {
       if (OB_FAIL(resolve_index_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve index hint", K(ret));
       }

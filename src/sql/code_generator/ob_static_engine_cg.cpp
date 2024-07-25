@@ -5343,6 +5343,21 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   return ret;
 }
 
+int ObStaticEngineCG::get_pushdown_storage_level(ObOptimizerContext &optimizer_context, const int64_t tenant_pd_level, int64_t &pd_level)
+{
+  int ret = OB_SUCCESS;
+  int64_t hint_pd_level = INT64_MAX;
+  const ObGlobalHint &global_hint = optimizer_context.get_global_hint();
+  if (OB_FAIL(global_hint.opt_params_.get_integer_opt_param(ObOptParamHint::PUSHDOWN_STORAGE_LEVEL, hint_pd_level))) {
+    LOG_WARN("failed to get integer opt param", K(ret));
+  } else if (hint_pd_level == INT64_MAX) {
+    pd_level = tenant_pd_level;
+  } else {
+    pd_level = hint_pd_level;
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &spec)
 {
   int ret = OB_SUCCESS;
@@ -5360,10 +5375,12 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
   } else {
     uint64_t tenant_id = session_info->get_effective_tenant_id();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    int64_t pd_level = 0;
     if (OB_UNLIKELY(!tenant_config.is_valid())) {
       LOG_WARN("failed to init tenant config", K(tenant_id));
+    } else if (OB_FAIL(get_pushdown_storage_level(log_plan->get_optimizer_context(), tenant_config->_pushdown_storage_level, pd_level))) {
+      LOG_WARN("failed to get hint pushdown storage level", K(ret));
     } else {
-      const int64_t pd_level = tenant_config->_pushdown_storage_level;
       const int64_t io_read_batch_size = tenant_config->_io_read_batch_size;
       const int64_t io_read_gap_size = io_read_batch_size * tenant_config->_io_read_redundant_limit_percentage / 100;
       pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
@@ -5380,7 +5397,7 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
       scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
       if (nullptr != lookup_ctdef) {
         lookup_ctdef->pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
-                                                               enable_column_store, enable_prefetch_limit);
+                                                              enable_column_store, enable_prefetch_limit);
         lookup_ctdef->table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
         lookup_ctdef->table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
         lookup_ctdef->table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
