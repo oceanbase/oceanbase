@@ -12702,6 +12702,9 @@ int ObDDLService::create_hidden_table(
                                                            ObTableLockOwnerID(task_id),
                                                            trans))) {
           LOG_WARN("failed to lock ddl lock", K(ret));
+        } else if (OB_UNLIKELY(orig_table_schema->is_offline_ddl_table())) {
+          ret = OB_SCHEMA_EAGAIN;
+          LOG_WARN("table in offline ddl or direct load, retry", K(ret), K(orig_table_schema->get_table_id()), K(orig_table_schema->get_table_mode()));
         } else if (OB_FAIL(create_user_hidden_table(
                   *orig_table_schema,
                   new_table_schema,
@@ -12748,9 +12751,6 @@ int ObDDLService::create_hidden_table(
                                         task_id);
               if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
                 LOG_WARN("submit ddl task failed", K(ret));
-              } else if (orig_table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_OFFLINE_DDL) {
-                ret = OB_OP_NOT_ALLOW;
-                LOG_WARN("offline ddl is being executed, other ddl operations are not allowed, create hidden table fail", K(ret), K(create_hidden_table_arg));
               } else {
                 res.tenant_id_ = tenant_id;
                 res.table_id_ = table_id;
