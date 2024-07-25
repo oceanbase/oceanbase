@@ -1916,22 +1916,18 @@ int ObInnerTableSchema::all_virtual_session_info_schema(ObTableSchema &table_sch
   }
 
   if (OB_SUCC(ret)) {
-    ObObj time_default;
-    time_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("time", //column_name
+    ADD_COLUMN_SCHEMA("time", //column_name
       ++column_id, //column_id
       0, //rowkey_id
       0, //index_id
       0, //part_key_pos
-      ObIntType, //column_type
+      ObDoubleType, //column_type
       CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
+      sizeof(double), //column_length
       -1, //column_precision
       -1, //column_scale
       false, //is_nullable
-      false, //is_autoincrement
-      time_default,
-      time_default); //default_value
+      false); //is_autoincrement
   }
 
   if (OB_SUCC(ret)) {
@@ -2199,6 +2195,21 @@ int ObInnerTableSchema::all_virtual_session_info_schema(ObTableSchema &table_sch
       false, //is_autoincrement
       user_client_port_default,
       user_client_port_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("total_cpu_time", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObDoubleType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(double), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false); //is_autoincrement
   }
   if (OB_SUCC(ret)) {
     table_schema.get_part_option().set_part_num(1);

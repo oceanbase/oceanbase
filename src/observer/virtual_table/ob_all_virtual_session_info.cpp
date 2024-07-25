@@ -54,7 +54,8 @@ int ObAllVirtualSessionInfo::inner_get_next_row(ObNewRow *&row)
                                      session_,
                                      &cur_row_,
                                      output_column_ids_,
-                                     schema_guard_))) {
+                                     schema_guard_,
+                                     table_schema_))) {
         SERVER_LOG(WARN, "init fill_scanner fail", K(ret));
       } else if (OB_FAIL(session_mgr_->for_each_hold_session(fill_scanner_))) {
         SERVER_LOG(WARN, "fill scanner fail", K(ret));
@@ -110,11 +111,23 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
     char peer_buf[common::OB_IP_PORT_STR_BUFF];
     char sql_id[common::OB_MAX_SQL_ID_LENGTH + 1];
     //If you are in system tenant, you can see all thread.
-    if (true) {
+    if ((OB_SYS_TENANT_ID == my_session_->get_priv_tenant_id())
+        || (sess_info->get_priv_tenant_id() == my_session_->get_priv_tenant_id())) {
       ObSQLSessionInfo::LockGuard lock_guard(sess_info->get_thread_data_lock());
       const int64_t col_count = output_column_ids_.count();
       ObCharsetType default_charset = ObCharset::get_default_charset();
       ObCollationType default_collation = ObCharset::get_default_collation(default_charset);
+      // for compatibility，the time type of the new version is converted from int to double
+      bool type_is_double = true;
+      const ObColumnSchemaV2 *tmp_column_schema = NULL;
+      if (OB_ISNULL(table_schema_) ||
+          OB_ISNULL(tmp_column_schema = table_schema_->get_column_schema("TIME"))) {
+        ret = OB_ERR_UNEXPECTED;
+        SERVER_LOG(WARN, "table or column schema is null", KR(ret), KP(table_schema_), KP(tmp_column_schema));
+      } else {
+        type_is_double = tmp_column_schema->get_meta_type().is_double();
+      }
+      int64_t current_time = ::oceanbase::common::ObTimeUtility::current_time();
       for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
         uint64_t col_id = output_column_ids_.at(i);
         switch(col_id) {
@@ -173,8 +186,14 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
             break;
           }
           case TIME: {
-            int64_t time_sec = (::oceanbase::common::ObTimeUtility::current_time() - sess_info->get_cur_state_start_time()) / 1000000;
-            cur_row_->cells_[cell_idx].set_int(time_sec);
+            if (type_is_double) {
+              double time_sec = (static_cast<double> (current_time - sess_info->get_cur_state_start_time())) / 1000000;
+              cur_row_->cells_[cell_idx].set_double(time_sec);
+              cur_row_->cells_[cell_idx].set_scale(6);
+            } else {
+              int64_t time_sec = (current_time - sess_info->get_cur_state_start_time()) / 1000000;
+              cur_row_->cells_[cell_idx].set_int(time_sec);
+            }
             break;
           }
           case STATE: {
@@ -303,6 +322,18 @@ int ObAllVirtualSessionInfo::FillScanner::operator()(
             cur_row_->cells_[cell_idx].set_int(sess_info->get_client_addr_port());
             break;
           }
+          case TOTAL_CPU_TIME: {
+            if (ObSQLSessionState::QUERY_ACTIVE == sess_info->get_session_state()) {
+              // time_sec = current time - sql packet received from easy time
+              double time_sec = (static_cast<double> (sess_info->get_retry_active_time() + current_time - sess_info->get_cur_state_start_time())) / 1000000;
+              cur_row_->cells_[cell_idx].set_double(time_sec);
+            } else {
+              double time_sec = (static_cast<double> (sess_info->get_retry_active_time())) / 1000000;
+              cur_row_->cells_[cell_idx].set_double(time_sec);
+            }
+            cur_row_->cells_[cell_idx].set_scale(6);
+            break;
+          }
           default: {
             ret = OB_ERR_UNEXPECTED;
             SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx),
@@ -329,7 +360,9 @@ void ObAllVirtualSessionInfo::FillScanner::reset()
   cur_row_ = NULL;
   my_session_ = NULL;
   trace_id_[0] = '\0';
+  schema_guard_ = NULL;
   output_column_ids_.reset();
+  table_schema_ = NULL;
 }
 
 int ObAllVirtualSessionInfo::FillScanner::init(ObIAllocator *allocator,
@@ -337,16 +370,19 @@ int ObAllVirtualSessionInfo::FillScanner::init(ObIAllocator *allocator,
                                                sql::ObSQLSessionInfo *session_info,
                                                common::ObNewRow *cur_row,
                                                const ObIArray<uint64_t> &column_ids,
-                                               share::schema::ObSchemaGetterGuard* schema_guard)
+                                               share::schema::ObSchemaGetterGuard* schema_guard,
+                                               const share::schema::ObTableSchema *table_schema)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(NULL == allocator
                   || NULL == scanner
                   || NULL == cur_row
-                  || NULL == session_info)) {
+                  || NULL == session_info
+                  || NULL == table_schema)) {
     ret = OB_NOT_INIT;
     SERVER_LOG(WARN,
-               "some parameter is NULL", K(ret), K(allocator), K(scanner), K(cur_row), K(session_info));
+               "some parameter is NULL", K(ret), K(allocator), K(scanner), K(cur_row),
+                K(session_info), K(table_schema));
   } else if (OB_FAIL(output_column_ids_.assign(column_ids))) {
     SQL_ENG_LOG(WARN, "fail to assign output column ids", K(ret), K(column_ids));
   } else {
@@ -355,7 +391,7 @@ int ObAllVirtualSessionInfo::FillScanner::init(ObIAllocator *allocator,
     cur_row_ = cur_row;
     my_session_ = session_info;
     schema_guard_ = schema_guard;
-
+    table_schema_ = table_schema;
   }
   return ret;
 }
