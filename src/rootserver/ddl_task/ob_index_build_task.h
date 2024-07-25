@@ -169,7 +169,6 @@ private:
   using ObDDLTask::snapshot_version_;
   uint64_t &index_table_id_;
   ObRootService *root_service_;
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
   bool snapshot_held_;
   bool is_sstable_complete_task_submitted_;
   int64_t sstable_complete_request_time_;

@@ -67,7 +67,6 @@ private:
   }
 private:
   static const int64_t OB_DROP_INDEX_TASK_VERSION = 1;
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
   ObRootService *root_service_;
   obrpc::ObDropIndexArg drop_index_arg_;
 };

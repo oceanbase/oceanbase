@@ -160,7 +160,7 @@ ObAsyncTask *ObUpdateAutoincSequenceTask::deep_copy(char *buf, const int64_t buf
 }
 
 ObModifyAutoincTask::ObModifyAutoincTask()
-  : ObDDLTask(ObDDLType::DDL_INVALID), lock_(), wait_trans_ctx_(), alter_table_arg_(),
+  : ObDDLTask(ObDDLType::DDL_INVALID), lock_(), alter_table_arg_(),
     update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0)
 {
 }

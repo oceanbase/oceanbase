@@ -515,7 +515,7 @@ public:
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
       longops_stat_(nullptr), gmt_create_(0), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
       execution_id_(-1), start_time_(0), data_format_version_(0), is_unique_index_(false), is_global_index_(false),
-      consensus_schema_version_(OB_INVALID_VERSION)
+      consensus_schema_version_(OB_INVALID_VERSION), wait_trans_ctx_()
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -644,6 +644,8 @@ protected:
              || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_);
   }
   int init_ddl_task_monitor_info(const uint64_t target_table_id);
+private:
+  void clear_old_status_context();
 protected:
   static const int64_t TASK_EXECUTE_TIME_THRESHOLD = 3 * 24 * 60 * 60 * 1000000L; // 3 days
   common::TCRWLock lock_;
@@ -687,6 +689,7 @@ protected:
   bool is_unique_index_;
   bool is_global_index_;
   int64_t consensus_schema_version_;
+  ObDDLWaitTransEndCtx wait_trans_ctx_;
 };
 
 enum ColChecksumStat
