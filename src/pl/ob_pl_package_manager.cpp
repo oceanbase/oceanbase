@@ -777,8 +777,10 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
 {
   int ret = OB_SUCCESS;
   ObPLPackageState *package_state = NULL;
+  bool need_free_new = false;
+  bool need_free_old = false;
   ObObj old_var_val;
-  ObObj new_var_val = var_val;
+  ObObj new_var_val;
   const ObPLVar *var = NULL;
   CK (package_id != OB_INVALID_ID);
   CK (var_idx != OB_INVALID_INDEX);
@@ -796,6 +798,7 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                          NULL,
                                          false,
                                          new_var_val), K(package_id), K(var_idx), K(var_val));
+    OX (need_free_new = true);
     if (OB_FAIL(ret)) {
     } else if (var->get_type().is_cursor_type()) {
       OV (var_val.is_tinyint() || var_val.is_number(), OB_ERR_UNEXPECTED, K(var_val));
@@ -828,18 +831,25 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                       new_var_val), K(package_id), K(var_idx), K(var_val));
     }
     LOG_DEBUG("deserialize package var", K(package_id), K(var_idx), K(var_val), K(new_var_val));
+  } else {
+    new_var_val = var_val;
   }
   if (OB_SUCC(ret) && var->is_not_null() && new_var_val.is_null()) {
     ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
     LOG_WARN("not null check violated", K(var->is_not_null()), K(var_val.is_null()), K(ret));
   }
   OZ (package_state->set_package_var_val(var_idx, new_var_val, !need_deserialize));
+  OX (need_free_old = true);
+  OX (need_free_new = false);
   if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
     // package ref cursor variable, refrence outside, do not destruct it.
-  } else if (OB_FAIL(ret)) {
-    OZ (ObUserDefinedType::destruct_obj(new_var_val, &(resolve_ctx.session_info_)));
   } else {
-    OZ (ObUserDefinedType::destruct_obj(old_var_val, &(resolve_ctx.session_info_)));
+    if (OB_FAIL(ret) && need_free_new) {
+      ObUserDefinedType::destruct_obj(new_var_val, &(resolve_ctx.session_info_));
+    }
+    if (need_free_old) {
+      ObUserDefinedType::destruct_obj(old_var_val, &(resolve_ctx.session_info_));
+    }
   }
   if (!need_deserialize) {
     OZ (package_state->update_changed_vars(var_idx));
