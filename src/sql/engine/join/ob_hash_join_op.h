@@ -277,6 +277,7 @@ public:
   common::ObFixedArray<bool, common::ObIAllocator> is_ns_equal_cond_;
   ExprFixedArray adaptive_hj_scan_cols_;
   ExprFixedArray adaptive_nlj_scan_cols_;
+  bool is_adaptive_;
 };
 
 // hash join has no expression result overwrite problem:
