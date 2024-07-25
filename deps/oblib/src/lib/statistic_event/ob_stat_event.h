@@ -573,6 +573,8 @@ STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_MC_PREWARM, "ss_micro_cache major_compaction p
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HA_PREWARM, "ss_micro_cache migrate prewarm count", ObStatClassIds::CACHE, 240006, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_REPLICA_PREWARM, "ss_micro_cache replica prewarm count", ObStatClassIds::CACHE, 240007, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_DDL_PREWARM, "ss_micro_cache ddl prewarm count", ObStatClassIds::CACHE, 240008, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HOLD_COUNT, "ss_micro_cache total hold micro_block count", ObStatClassIds::CACHE, 240009, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HOLD_SIZE, "ss_micro_cache total hold micro_block size", ObStatClassIds::CACHE, 240010, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_HIT_BYTES, "ss_micro_cache hit total bytes", ObStatClassIds::CACHE, 240011, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_MISS_BYTES, "ss_micro_cache miss total bytes", ObStatClassIds::CACHE, 240012, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_MC_PREWARM_BYTES, "ss_micro_cache major_compaction prewarm bytes", ObStatClassIds::CACHE, 240013, true, true, true)
@@ -694,8 +696,6 @@ STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_R, "ss_local_cache tmpf
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_META_USED_DISK_SIZE, "ss_local_cache meta file used disk size", ObStatClassIds::CACHE, 245008, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_INCREMENTAL_DATA_USED_DISK_SIZE, "ss_local_cache incremental data used disk size", ObStatClassIds::CACHE, 245009, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_MAJOR_MACRO_USED_DISK_SIZE, "ss_local_cache major macro used disk size", ObStatClassIds::CACHE, 245010, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_HOLD_COUNT, "ss_micro_cache total hold micro_block count", ObStatClassIds::CACHE, 245011, false, true, true)
-STAT_EVENT_SET_DEF(SS_MICRO_CACHE_HOLD_SIZE, "ss_micro_cache total hold micro_block size", ObStatClassIds::CACHE, 245012, false, true, true)
 
 
 // END
