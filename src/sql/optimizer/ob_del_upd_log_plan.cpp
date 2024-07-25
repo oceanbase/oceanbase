@@ -264,8 +264,8 @@ int ObDelUpdLogPlan::check_table_rowkey_distinct(
       if (OB_ISNULL(index_dml_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("index dml info is null", K(ret));
-      } else if (!use_pdml() && !index_dml_info->is_primary_index_) {
-        // for PDML, primary table & index table both need unique checker.
+      } else if (!index_dml_info->is_primary_index_) {
+        // only primary table need unique checker.
       } else if (OB_FAIL(index_dml_info->get_rowkey_exprs(rowkey_exprs))) {
         LOG_WARN("failed to get rowkey exprs", K(ret));
       } else if (OB_FAIL(ObOptimizerUtil::is_exprs_unique(rowkey_exprs,

@@ -40,7 +40,6 @@ public:
       cache_(eval_ctx, op_monitor_info),
       reader_(nullptr),
       writer_(nullptr),
-      uniq_checker_(nullptr),
       dml_rtdef_(nullptr),
       state_(FILL_CACHE),
       eval_ctx_(eval_ctx),
@@ -61,7 +60,6 @@ public:
            ObDMLBaseRtDef &dml_rtdef,
            ObDMLOpDataReader *reader,
            ObDMLOpDataWriter *writer,
-           ObDMLOpUniqueRowChecker *uniq_checker,
            const bool is_heap_table_insert,
            const bool with_barrier = false);
 
@@ -143,7 +141,6 @@ private:
   ObPDMLOpBatchRowCache cache_; // 用于缓存数据，需要在init函数中初始化，并且分配alloctor
   ObDMLOpDataReader *reader_;
   ObDMLOpDataWriter *writer_;
-  ObDMLOpUniqueRowChecker *uniq_checker_;
   ObDMLBaseRtDef *dml_rtdef_;
   DriverState state_; // Driver 当前状态：读写数据状态、向上返回数据状态
 
