@@ -2045,6 +2045,11 @@ int ObOptSelectivity::get_compare_value(const OptSelectivityCtx &ctx,
                        &dtc_params,
                        CM_NONE,
                        col->get_result_type().get_collation_type());
+    ObAccuracy res_acc;
+    if (col->get_result_type().is_decimal_int()) {
+      res_acc = col->get_result_type().get_accuracy();
+      cast_ctx.res_accuracy_ = &res_acc;
+    }
     if (OB_FAIL(ObObjCaster::to_type(col->get_result_type().get_type(),
                                      col->get_result_type().get_collation_type(),
                                      cast_ctx,
