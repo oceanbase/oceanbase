@@ -55,7 +55,6 @@ private:
     TRY_LOCK_TIMES,
     TIME_AFTER_RECV,
     SESSION_ID,
-    HOLDER_SESSION_ID,
     BLOCK_SESSION_ID,
     TYPE,
     LMODE,
@@ -63,6 +62,7 @@ private:
     TOTAL_UPDATE_CNT,
     TRANS_ID,
     HOLDER_TRANS_ID,
+    HOLDER_SESSION_ID
   };
   rpc::ObLockWaitNode *node_iter_;
   rpc::ObLockWaitNode cur_node_;
