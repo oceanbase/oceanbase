@@ -434,8 +434,10 @@ int ObLogPartMgr::try_get_offline_ddl_origin_table_schema_(const ObSimpleTableSc
               "hidden_table_id", table_schema.get_table_id(),
               "hidden_table_name", table_schema.get_table_name(),
               K(origin_table_id),
-              "origin_table_name", origin_table_schema->get_table_name(),
-              "origin_table_state_flag", origin_table_schema->get_table_state_flag());
+              "origin_table_name", nullptr == origin_table_schema ? "origin_table_schema is null"
+                  : origin_table_schema->get_table_name(),
+              "origin_table_state_flag", nullptr == origin_table_schema ? ObTableStateFlag::TABLE_STATE_MAX
+                  : origin_table_schema->get_table_state_flag());
         }
       } else if (OB_ISNULL(origin_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -480,7 +482,8 @@ int ObLogPartMgr::try_get_offline_ddl_origin_table_meta_(const datadict::ObDictT
             "hidden_table_id", table_meta.get_table_id(),
             "hidden_table_name", table_meta.get_table_name(),
             K(origin_table_id),
-            "origin_table_name", origin_table_meta->get_table_name());
+            "origin_table_name", nullptr == origin_table_meta ? "origin_table_meta is null"
+                : origin_table_meta->get_table_name());
       } else if (OB_ISNULL(origin_table_meta)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid schema", KR(ret), K(origin_table_meta));
@@ -523,8 +526,10 @@ int ObLogPartMgr::try_get_lob_aux_primary_table_schema_(const ObSimpleTableSchem
               "lob_aux_table_id", table_schema.get_table_id(),
               "lob_aux_table_name", table_schema.get_table_name(),
               K(primary_table_id),
-              "primary_table_name", primary_table_schema->get_table_name(),
-              "primary_table_state_flag", primary_table_schema->get_table_state_flag());
+              "primary_table_name", nullptr == primary_table_schema ? "primary_table_schema is null"
+                  : primary_table_schema->get_table_name(),
+              "primary_table_state_flag", nullptr == primary_table_schema ? ObTableStateFlag::TABLE_STATE_MAX
+                  : primary_table_schema->get_table_state_flag());
         }
       } else if (OB_ISNULL(primary_table_schema)) {
         ret = OB_ERR_UNEXPECTED;
@@ -566,7 +571,8 @@ int ObLogPartMgr::try_get_lob_aux_primary_table_meta_(const datadict::ObDictTabl
             "lob_aux_table_id", table_meta.get_table_id(),
             "lob_aux_table_name", table_meta.get_table_name(),
             K(primary_table_id),
-            "primary_table_name", primary_table_meta->get_table_name());
+            "primary_table_name", nullptr == primary_table_meta ? "primary_table_meta is null"
+                : primary_table_meta->get_table_name());
       } else if (OB_ISNULL(primary_table_meta)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("invalid schema", KR(ret), K(primary_table_meta));
@@ -2409,6 +2415,8 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
   uint64_t table_id = OB_INVALID_ID;
   const ObSimpleTableSchemaV2 *final_table_schema = NULL;
   bool is_index_table = false;
+  // table level recover scenario
+  bool is_ddl_ignored_table = false;
   if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("table_schema is NULL", KR(ret), K(table_schema));
@@ -2416,6 +2424,9 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
   } else if (table_schema->is_index_table()) {
     is_index_table = true;
     LOG_INFO("table is index table, ignore it", K(table_id), KPC(table_schema));
+  } else if (table_schema->is_ddl_table_ignored_to_sync_cdc()) {
+    is_ddl_ignored_table = true;
+    LOG_INFO("table is ddl ignored table, ignore it", K(table_id), KPC(table_schema));
   } else if (table_schema->is_user_hidden_table()) {
     const ObSimpleTableSchemaV2 *origin_table_schema = nullptr;
     if (OB_FAIL(try_get_offline_ddl_origin_table_schema_(*table_schema, schema_guard,
@@ -2457,6 +2468,9 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
     } else if (OB_ISNULL(primary_table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("primary_table_schema is NULL", KR(ret), K(primary_table_schema));
+    } else if (primary_table_schema->is_ddl_table_ignored_to_sync_cdc()) {
+      is_ddl_ignored_table = true;
+      LOG_INFO("table is ddl ignored table, ignore it", KPC(table_schema));
     } else if (primary_table_schema->is_aux_lob_meta_table()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("the primary table of lob_aux_meta table can't be another lob_aux_meta table",
@@ -2482,6 +2496,8 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
 
   if (OB_SUCC(ret)) {
     if (is_index_table) {
+      is_user_table = false;
+    } else if (is_ddl_ignored_table) {
       is_user_table = false;
     } else if (OB_FAIL(inner_get_table_info_of_table_schema_(schema_guard, final_table_schema, tenant_name,
         database_name, table_name, database_id, is_user_table, timeout))) {
@@ -2509,6 +2525,8 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
   uint64_t table_id = OB_INVALID_ID;
   const datadict::ObDictTableMeta *final_table_meta = NULL;
   bool is_index_table = false;
+  // table level recover scenario
+  bool is_ddl_ignored_table = false;
   if (OB_ISNULL(tenant_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("tenant_info is NULL", KR(ret), K_(tenant_id));
@@ -2519,6 +2537,9 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
   } else if (table_meta->is_index_table()) {
     is_index_table = true;
     LOG_INFO("table is index table, ignore it", K(table_id), KPC(table_meta));
+  } else if (table_meta->is_ddl_table_ignored_to_sync_cdc()) {
+    is_ddl_ignored_table = true;
+    LOG_INFO("table is ddl ignored table, ignore it", K(table_id), KPC(table_meta));
   } else if (table_meta->is_user_hidden_table()) {
     datadict::ObDictTableMeta *origin_table_meta = nullptr;
     if (OB_FAIL(try_get_offline_ddl_origin_table_meta_(*table_meta, tenant_info,
@@ -2553,6 +2574,9 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
     } else if (OB_ISNULL(primary_table_meta)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("primary_table_meta is NULL", KR(ret), K(primary_table_meta));
+    } else if (primary_table_meta->is_ddl_table_ignored_to_sync_cdc()) {
+      is_ddl_ignored_table = true;
+      LOG_INFO("table is ddl ignored table, ignore it", KPC(primary_table_meta));
     } else if (primary_table_meta->is_aux_lob_meta_table()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("the primary table of lob_aux_meta table can't be another lob_aux_meta table",
@@ -2574,6 +2598,8 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
 
   if (OB_SUCC(ret)) {
     if (is_index_table) {
+      is_user_table = false;
+    } else if (is_ddl_ignored_table) {
       is_user_table = false;
     } else if (OB_FAIL(inner_get_table_info_of_table_meta_(tenant_info, final_table_meta,
         tenant_name, database_name, table_name, database_id, is_user_table))) {
