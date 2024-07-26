@@ -1765,6 +1765,11 @@ void ObTenantDagWorker::run1()
           THIS_WORKER.set_module_type(type);
 #endif
           THIS_WORKER.set_compatibility_mode(compat_mode);
+          if (is_compaction_dag(dag->get_type())) {
+            THIS_WORKER.set_log_reduction_mode(LogReductionMode::REFINED);
+          } else {
+            THIS_WORKER.set_log_reduction_mode(LogReductionMode::NONE);
+          }
           if (OB_FAIL(set_dag_resource(dag->get_consumer_group_id()))) {
             LOG_WARN("isolate dag CPU and IOPS failed", K(ret));
           } else if (OB_FAIL(task_->do_work())) {

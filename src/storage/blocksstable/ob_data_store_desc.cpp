@@ -269,7 +269,7 @@ int ObColDataStoreDesc::init(
         col_desc_array_, schema_rowkey_col_cnt_, is_oracle_mode, allocator_))) {
       STORAGE_LOG(WARN, "Failed to init datum utils", K(ret));
     } else {
-      STORAGE_LOG(INFO, "success to init data desc", K(ret), KPC(this), K(merge_schema), K(table_cg_idx),
+      STORAGE_LOG(TRACE, "success to init col data desc", K(ret), KPC(this), K(merge_schema), K(table_cg_idx),
         K(is_oracle_mode), K(col_desc_array_));
     }
   }
@@ -848,7 +848,7 @@ int ObWholeDataStoreDesc::init(
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));
   } else {
-    STORAGE_LOG(INFO, "success to init data store desc", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx), KPC(this));
+    STORAGE_LOG(INFO, "success to init data store desc", KR(ret), K(cg_schema), K(table_cg_idx), KPC(this));
   }
   return ret;
 }

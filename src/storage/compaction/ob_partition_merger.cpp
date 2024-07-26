@@ -431,8 +431,6 @@ int ObPartitionMerger::close()
     merge_info_.merge_finish_time_ = common::ObTimeUtility::fast_current_time();
     if (OB_FAIL(merge_info.add_macro_blocks(merge_info_))) {
       STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
-    } else {
-      merge_info_.dump_info("macro block builder close");
     }
   }
 

@@ -893,7 +893,7 @@ void ObPartitionMergeHelper::reset()
     if (OB_NOT_NULL(iter = merge_iters_.at(i))) {
       if (OB_NOT_NULL(table = iter->get_table())) {
         FLOG_INFO("partition merge iter row count", K(i), "row_count", iter->get_iter_row_count(),
-            "ghost_row_count", iter->get_ghost_row_count(), "pkey", table->get_key(), KPC(table), KPC(iter));
+            "ghost_row_count", iter->get_ghost_row_count(), "table_key", table->get_key(), KPC(iter));
       }
       iter->~ObPartitionMergeIter();
       iter = nullptr;

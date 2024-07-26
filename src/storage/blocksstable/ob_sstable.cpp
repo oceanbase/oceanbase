@@ -300,7 +300,7 @@ int ObSSTable::init(const ObTabletCreateSSTableParam &param, common::ObArenaAllo
       ret = OB_STATE_NOT_MATCH;
     }
     reset();
-  } else {
+  } else if(!lib::is_log_reduction()) {
     FLOG_INFO("succeeded to init sstable", K(ret), KPC(this));
   }
   return ret;
@@ -1186,10 +1186,6 @@ int ObSSTable::serialize_full_table(char *buf, const int64_t buf_len, int64_t &p
     } else if (OB_FAIL(meta_handle.get_sstable_meta().serialize(buf, buf_len, pos))) {
       LOG_WARN("fail to serialize sstable meta", K(ret), K(buf_len), K(pos));
     }
-
-    if (OB_SUCC(ret)) {
-      LOG_INFO("succeed to serialize full sstable", K(status.pack_), KPC(this), K(buf_len), K(old_pos), K(pos));
-    }
   }
   return ret;
 }
@@ -1252,8 +1248,8 @@ int ObSSTable::serialize(char *buf, const int64_t buf_len, int64_t &pos) const
       LOG_WARN("fail to serialize fix sstable struct", K(ret), K(buf_len), K(pos));
     } else if (status.with_meta() && OB_FAIL(meta_->serialize(buf, buf_len, pos))) {
       LOG_WARN("fail to serialize sstable meta", K(ret), K(buf_len), K(pos));
-    } else {
-      LOG_INFO("succeed to serialize sstable", K(status.pack_), KPC(this));
+    } else if (!lib::is_log_reduction()) {
+      LOG_INFO("succeed to serialize sstable", K(status.pack_), KPC(this), K(lbt()));
     }
   }
   return ret;

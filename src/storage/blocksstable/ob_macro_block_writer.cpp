@@ -988,7 +988,9 @@ int ObMacroBlockWriter::init_data_pre_warmer(const ObMacroDataSeq &start_seq)
       ObTabletStatAnalyzer tablet_analyzer;
       if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->get_tablet_analyzer(
               data_store_desc_->get_ls_id(), tablet_id, tablet_analyzer))) {
-        STORAGE_LOG(WARN, "Failed to get tablet stat analyzer", K(tmp_ret));
+        if (OB_HASH_NOT_EXIST != tmp_ret) {
+          STORAGE_LOG(WARN, "Failed to get tablet stat analyzer", K(tmp_ret));
+        }
       } else {
         need_pre_warm = true;
       }

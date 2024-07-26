@@ -271,8 +271,7 @@ int ObTabletMergeInfo::create_sstable(
       }
 
       if (OB_SUCC(ret) && !skip_to_create_empty_cg) {
-        FLOG_INFO("succeed to merge sstable", K(param), "table_key", merge_table_handle.get_table()->get_key(),
-            KPC(cg_schema), KPC(this));
+        LOG_TRACE("succeed to merge sstable", K(param), KPC(cg_schema), KPC(this));
       }
     }
   }

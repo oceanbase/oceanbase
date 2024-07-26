@@ -165,8 +165,6 @@ int ObWriteHelper::end_write(ObTabletMergeInfo &merge_info)
   } else if (FALSE_IT(merge_info_.merge_finish_time_ = common::ObTimeUtility::fast_current_time())) {
   } else if (OB_FAIL(merge_info.add_macro_blocks(merge_info_))) {
     STORAGE_LOG(WARN, "Failed to add macro blocks", K(ret));
-  } else {
-    merge_info_.dump_info("macro block builder close");
   }
 
   return ret;
