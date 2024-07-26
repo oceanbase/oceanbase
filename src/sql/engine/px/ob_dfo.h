@@ -62,6 +62,7 @@ class ObSqcTaskMgr;
 class ObPxSqcHandler;
 class ObJoinFilter;
 class ObPxCoordInfo;
+class ObDfo;
 
 // 在 PX 端描述每个 SQC 的 task
 // 通过 exec_addr 区分 SQC
@@ -185,7 +186,7 @@ public:
 struct ObQCMonitoringInfo {
   OB_UNIS_VERSION(1);
 public:
-  int init(const ObExecContext &exec_ctx);
+  int init(const ObDfo &dfo);
   int assign(const ObQCMonitoringInfo &other);
   void reset();
 public:
@@ -503,7 +504,8 @@ public:
     need_p2p_info_(false),
     p2p_dh_map_info_(),
     coord_info_ptr_(nullptr),
-    force_bushy_(false)
+    force_bushy_(false),
+    query_sql_()
   {
   }
 
@@ -676,6 +678,9 @@ public:
   ObP2PDhMapInfo &get_p2p_dh_map_info() { return p2p_dh_map_info_;};
   bool force_bushy() { return force_bushy_; }
   void set_force_bushy(bool flag) { force_bushy_ = flag; }
+
+  const ObString &query_sql() const { return query_sql_; }
+  void set_query_sql(const ObString &query_sql) { query_sql_ = query_sql; }
   TO_STRING_KV(K_(execution_id),
                K_(dfo_id),
                K_(is_active),
@@ -781,6 +786,7 @@ private:
   // ---------------
   ObPxCoordInfo *coord_info_ptr_;
   bool force_bushy_;
+  ObString query_sql_;
 };
 
 
