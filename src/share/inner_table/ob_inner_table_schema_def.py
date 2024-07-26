@@ -14591,6 +14591,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12497: __all_virtual_pkg_type
 # 12498: __all_virtual_pkg_type_attr
 # 12499: __all_virtual_pkg_coll_type
+# 12500: __all_virtual_kv_client_info
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -15095,6 +15096,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15477: __all_pkg_type_attr
 # 15478: __all_pkg_coll_type
 # 15479: __all_pkg_coll_type
+# 15480: __all_virtual_kv_client_info
 #
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -35618,6 +35620,8 @@ def_table_schema(
 )
 
 # 21606: VARIABLES_BY_THREAD
+# 21607: GV$OB_KV_CLIENT_INFO
+# 21608: V$OB_KV_CLIENT_INFO
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -63512,6 +63516,8 @@ left join
 # 28251: DBA_PLSQL_TYPE_ATTRS
 # 28252: USER_PLSQL_TYPE_ATTRS
 # 28253: GV$OB_SESSION_SYS_VARIABLES
+# 28254: GV$OB_KV_CLIENT_INFO
+# 28255: V$OB_KV_CLIENT_INFO
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

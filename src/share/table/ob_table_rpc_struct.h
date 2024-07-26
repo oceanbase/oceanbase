@@ -28,6 +28,24 @@ class ObTableLoginRequest final
 {
   OB_UNIS_VERSION(1);
 public:
+  ObTableLoginRequest()
+    : auth_method_(1),
+      client_type_(0),
+      client_version_(1),
+      reserved1_(0),
+      client_capabilities_(0),
+      max_packet_size_(0),
+      reserved2_(0),
+      reserved3_(0),
+      tenant_name_(),
+      user_name_(),
+      pass_secret_(),
+      pass_scramble_(),
+      database_name_(),
+      ttl_us_(0),
+      client_info_()
+  {}
+public:
   uint8_t auth_method_;  // always 1 for now
   uint8_t client_type_;  // 1: libobtable; 2: java client
   uint8_t client_version_;  // always 1 for now
@@ -42,6 +60,7 @@ public:
   ObString pass_scramble_;  // 20 bytes random string
   ObString database_name_;
   int64_t ttl_us_;  // 0 means no TTL
+  ObString client_info_; // json format string, record client parameters
 public:
   TO_STRING_KV(K_(auth_method),
                K_(client_type),
@@ -54,7 +73,8 @@ public:
                K_(tenant_name),
                K_(user_name),
                K_(database_name),
-               K_(ttl_us));
+               K_(ttl_us),
+               K_(client_info));
 };
 
 class ObTableLoginResult final
