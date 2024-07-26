@@ -2051,28 +2051,44 @@ int ObPlanCache::deal_add_ps_plan_result(int add_plan_ret,
                                          const ObILibCacheObject &cache_object)
 {
   int ret = add_plan_ret;
-  if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
-    ret = OB_SUCCESS;
-    LOG_TRACE("this plan has been added by others, need not add again", K(cache_object));
-  } else if (OB_REACH_MEMORY_LIMIT == ret || OB_SQL_PC_PLAN_SIZE_LIMIT == ret) {
-    if (REACH_TIME_INTERVAL(1000000)) { //1s, 当内存达到上限时, 该日志打印会比较频繁, 所以以1s为间隔打印
-      ObTruncatedString trunc_sql(pc_ctx.raw_sql_);
-      LOG_INFO("can't add plan to plan cache",
-               K(ret), K(cache_object.get_mem_size()), K(trunc_sql),
-               K(get_mem_used()));
-    }
-    ret = OB_SUCCESS;
-  } else if (is_not_supported_err(ret)) {
-    ret = OB_SUCCESS;
-    LOG_TRACE("plan cache don't support add this kind of plan now",  K(cache_object));
-  } else if (OB_FAIL(ret)) {
-    if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
-      ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
-      LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+
+  if (pc_ctx.sql_ctx_.is_batch_params_execute()) {
+    // for batch_dml optimization, only can cover the error OB_SQL_PC_PLAN_DUPLICATE
+    // others error occur during add plan to plan_cache, we must stop batch_dml optimization
+    if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
+      ret = OB_SUCCESS;
+      LOG_TRACE("this plan has been added by others, need not add again", K(cache_object));
+    } else if (OB_FAIL(ret)) {
+      ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+      LOG_WARN("some unexpected error occured, change ret_code to 5787", K(ret));
+    } else {
+      pc_ctx.sql_ctx_.self_add_plan_ = true;
+      LOG_TRACE("Successed to add batch plan to ObPlanCache", K(cache_object));
     }
   } else {
-    pc_ctx.sql_ctx_.self_add_plan_ = true;
-    LOG_TRACE("Succeed to add plan to ObPlanCache", K(cache_object));
+    if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
+      ret = OB_SUCCESS;
+      LOG_TRACE("this plan has been added by others, need not add again", K(cache_object));
+    } else if (OB_REACH_MEMORY_LIMIT == ret || OB_SQL_PC_PLAN_SIZE_LIMIT == ret) {
+      if (REACH_TIME_INTERVAL(1000000)) { //1s, 当内存达到上限时, 该日志打印会比较频繁, 所以以1s为间隔打印
+        ObTruncatedString trunc_sql(pc_ctx.raw_sql_);
+        LOG_INFO("can't add plan to plan cache",
+                 K(ret), K(cache_object.get_mem_size()), K(trunc_sql),
+                 K(get_mem_used()));
+      }
+      ret = OB_SUCCESS;
+    } else if (is_not_supported_err(ret)) {
+      ret = OB_SUCCESS;
+      LOG_TRACE("plan cache don't support add this kind of plan now",  K(cache_object));
+    } else if (OB_FAIL(ret)) {
+      if (OB_REACH_MAX_CONCURRENT_NUM != ret) { //如果是达到限流上限, 则将错误码抛出去
+        ret = OB_SUCCESS; //add plan出错, 覆盖错误码, 确保因plan cache失败不影响正常执行路径
+        LOG_WARN("Failed to add plan to ObPlanCache", K(ret));
+      }
+    } else {
+      pc_ctx.sql_ctx_.self_add_plan_ = true;
+      LOG_TRACE("Succeed to add plan to ObPlanCache", K(cache_object));
+    }
   }
 
   return ret;
