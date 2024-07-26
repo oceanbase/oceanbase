@@ -929,6 +929,14 @@ public:
   bool is_aggregate_query() const { return !aggregations_.empty(); }
   int generate_stmt(const common::ObString &table_name, char *buf, int64_t buf_len, int64_t &pos) const;
   int64_t get_stmt_length(const common::ObString &table_name) const;
+  OB_INLINE const ObIArray<common::ObString> &get_scan_range_columns() const
+  {
+    return scan_range_columns_;
+  }
+  OB_INLINE int64_t get_scan_range_columns_count() const
+  {
+    return scan_range_columns_.count();
+  }
   TO_STRING_KV(K_(key_ranges),
                K_(select_columns),
                K_(filter_string),
@@ -1300,11 +1308,6 @@ public:
   {
     return key_ranges_;
   }
-  OB_INLINE const ObIArray<common::ObString> &get_scan_range_columns() const
-  {
-    return scan_range_columns_;
-  }
-
   OB_INLINE const common::ObString &get_index_name() const
   {
     return index_name_;
@@ -1312,10 +1315,6 @@ public:
   OB_INLINE const ObString &get_filter_string() const
   {
     return filter_string_;
-  }
-  OB_INLINE int64_t get_scan_range_columns_count() const
-  {
-    return scan_range_columns_.count();
   }
   OB_INLINE void set_dictionary(const ObIArray<ObString> *all_rowkey_names)
   {
