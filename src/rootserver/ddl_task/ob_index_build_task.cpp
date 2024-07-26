@@ -937,6 +937,7 @@ int ObIndexBuildTask::wait_and_send_single_partition_replica_task(bool &state_fi
     } else if (OB_UNLIKELY(ret == OB_ITER_END)) {
       LOG_WARN("schedule queue is null", K(ret), K(parallelism), K(execution_id), K(tablets));
       ret = OB_SUCCESS;
+      sstable_complete_ts_ = ObTimeUtility::current_time();
       state_finished = true;
     } else {
       LOG_WARN("fail to get next batch tablets", K(ret), K(parallelism), K(execution_id), K(tablets));
@@ -1318,7 +1319,7 @@ int ObIndexBuildTask::verify_checksum()
     }
   }
 
-  if (state_finished) {
+  if (state_finished || OB_FAIL(ret)) {
     (void)switch_status(ObDDLTaskStatus::TAKE_EFFECT, true, ret);
     LOG_INFO("verify checksum finished", K(ret), K(*this));
   }

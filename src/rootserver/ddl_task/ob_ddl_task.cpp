@@ -1736,6 +1736,7 @@ int ObDDLWaitTransEndCtx::init(
         || table_id <= 0
         || !is_wait_trans_type_valid(wait_trans_type)
         || wait_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ddl_task_id), K(table_id), K(wait_trans_type), K(wait_version));
   } else if (OB_FALSE_IT(tablet_ids_.reset())) {
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, table_id, tablet_ids_))) {
