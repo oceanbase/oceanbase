@@ -214,15 +214,15 @@ static size_t ob_casefold_ujis(const ObCharsetInfo *cs, char *src, size_t srclen
 }
 
 size_t ob_caseup_ujis(const ObCharsetInfo *cs, char *src, size_t srclen, char *dst, size_t dstlen) {
-  // assert(dstlen >= srclen * cs->caseup_multiply);
-  // assert(src != dst || cs->caseup_multiply == 1);
+  assert(dstlen >= srclen * cs->caseup_multiply);
+  assert(src != dst || cs->caseup_multiply == 1);
   return ob_casefold_ujis(cs, src, srclen, dst, dstlen, cs->to_upper, 1);
 }
 
 size_t ob_casedn_ujis(const ObCharsetInfo *cs, char *src, size_t srclen,
                       char *dst, size_t dstlen) {
-  // assert(dstlen >= srclen * cs->casedn_multiply);
-  // assert(src != dst || cs->casedn_multiply == 1);
+  assert(dstlen >= srclen * cs->casedn_multiply);
+  assert(src != dst || cs->casedn_multiply == 1);
   return ob_casefold_ujis(cs, src, srclen, dst, dstlen, cs->to_lower, 0);
 }
 
