@@ -56,7 +56,7 @@ public:
   ObGeoType type(uint64_t pos) const;
   void set_crs(ObGeoCRS crs) { crs_ = crs; }
   int to_2d_geo(ObIAllocator &allocator, ObGeometry *&res, uint32_t srid = 0);
-  int to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid = 0, int64_t maxdecimaldigits = -1);
+  int to_wkt(ObIAllocator &allocator, ObString &wkt, uint32_t srid = 0, int64_t maxdecimaldigits = -1, bool output_srid0 = false);
   int reverse_coordinate();
   int check_wkb_valid();
   int check_3d_coordinate_range(const ObSrsItem *srs, const bool is_normalized, ObGeoCoordRangeResult &result);

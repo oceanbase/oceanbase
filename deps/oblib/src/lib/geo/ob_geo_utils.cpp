@@ -1645,7 +1645,7 @@ int ObGeoTypeUtil::geo_to_ewkt(const ObString &swkb,
     // do nothing
   } else if (is_3d_geo_type(geo->type())) {
     ObGeometry3D *geo_3d = static_cast<ObGeometry3D *>(geo);
-    if (OB_FAIL(geo_3d->to_wkt(allocator, ewkt, header.srid_))) {
+    if (OB_FAIL(geo_3d->to_wkt(allocator, ewkt, header.srid_, -1, output_srid0))) {
       LOG_WARN("fail to transform ewkt from 3d-wkb", K(ret));
     }
   } else {
