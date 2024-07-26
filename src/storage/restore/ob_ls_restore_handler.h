@@ -191,7 +191,7 @@ protected:
       const share::ObTaskId &trace_id, const int result = OB_SUCCESS, const char *comment = "");
 
   int online_();
-  int offline_();
+  void offline_();
   int update_restore_status_(
       storage::ObLS &ls,
       const share::ObLSRestoreStatus &next_status);
