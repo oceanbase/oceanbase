@@ -7294,6 +7294,7 @@ def_table_schema(
     ('destination_owner', 'varchar:128', 'true'),
     ('destination', 'varchar:128', 'true'),
     ('message', 'varchar:4000'),
+    ('database_name', 'varchar:OB_MAX_DATABASE_NAME_LENGTH', 'true'),
   ],
 )
 

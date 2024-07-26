@@ -9641,6 +9641,7 @@ credential_name	varchar(128)	YES		NULL
 destination_owner	varchar(128)	YES		NULL	
 destination	varchar(128)	YES		NULL	
 message	varchar(4000)	NO		NULL	
+database_name	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_scheduler_job_run_detail_v2;
 IF(count(*) >= 0, 1, 0)
 1
