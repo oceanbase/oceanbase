@@ -984,7 +984,7 @@ ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMerg
     bool reuse_uncommit_row = false;
     if (!transaction::ObTransID(static_param.tx_id_).is_valid() || !static_cast<const ObSSTable *>(table)->contain_uncommitted_row()) {
       reuse_uncommit_row = false;
-    }else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(meta_handle))) {
+    } else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(meta_handle))) {
       STORAGE_LOG(ERROR, "fail to get meta", K(ret), KPC(table));
     } else if (meta_handle.get_sstable_meta().get_tx_id_count() > 0) {
       const int64_t tx_id = meta_handle.get_sstable_meta().get_tx_ids(0);

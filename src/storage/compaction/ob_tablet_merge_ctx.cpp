@@ -408,7 +408,7 @@ int ObTabletExeMergeCtx::init_static_param_tx_id()
     }
   }
 
-  STORAGE_LOG(INFO, "finish tx id init", K(ret), K(static_param_tx_id));
+  STORAGE_LOG(INFO, "finish tx id init", K(ret), K(static_param_tx_id), K(tx_table_guard));
   return ret;
 }
 
