@@ -538,43 +538,35 @@ int ObTableLoadMerger::build_del_lob_ctx(bool &need_del_lob)
     table_array = &empty_table_array;
   }
   if (OB_SUCC(ret)) {
-    if (table_array->empty()) {
-      FLOG_INFO("LOAD NO NEED DEL LOB");
-      need_del_lob = false;
-      if (OB_FAIL(store_ctx_->set_status_merged())) {
-        LOG_WARN("fail to set status", K(ret));
+    ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array;
+    ObDirectLoadMultipleMergeRangeSplitter range_splitter;
+    multiple_sstable_array.set_tenant_id(MTL_ID());
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_array->count(); ++i) {
+      ObDirectLoadMultipleSSTable *sstable = nullptr;
+      if (OB_ISNULL(sstable = static_cast<ObDirectLoadMultipleSSTable *>(table_array->at(i)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected table", KR(ret), K(i), K(table_array));
+      } else if (OB_FAIL(multiple_sstable_array.push_back(sstable))) {
+        LOG_WARN("fail to push back sstable", KR(ret));
       }
-    } else {
-      ObArray<ObDirectLoadMultipleSSTable *> multiple_sstable_array;
-      ObDirectLoadMultipleMergeRangeSplitter range_splitter;
-      multiple_sstable_array.set_tenant_id(MTL_ID());
-      for (int64_t i = 0; OB_SUCC(ret) && i < table_array->count(); ++i) {
-        ObDirectLoadMultipleSSTable *sstable = nullptr;
-        if (OB_ISNULL(sstable = static_cast<ObDirectLoadMultipleSSTable *>(table_array->at(i)))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected table", KR(ret), K(i), K(table_array));
-        } else if (OB_FAIL(multiple_sstable_array.push_back(sstable))) {
-          LOG_WARN("fail to push back sstable", KR(ret));
-        }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(range_splitter.init(multiple_sstable_array, store_ctx_->lob_id_table_data_desc_,
+                                      &(store_ctx_->ctx_->schema_.lob_meta_datum_utils_),
+                                      store_ctx_->ctx_->schema_.lob_meta_column_descs_))) {
+        LOG_WARN("fail to init range splitter", KR(ret));
       }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(range_splitter.init(multiple_sstable_array, store_ctx_->lob_id_table_data_desc_,
-                                        &(store_ctx_->ctx_->schema_.lob_meta_datum_utils_),
-                                        store_ctx_->ctx_->schema_.lob_meta_column_descs_))) {
-          LOG_WARN("fail to init range splitter", KR(ret));
-        }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_merge_ctxs.count(); ++i) {
+      ObDirectLoadTabletMergeCtx *tablet_merge_ctx = tablet_merge_ctxs.at(i);
+      if (OB_FAIL(tablet_merge_ctx->build_del_lob_task(
+            multiple_sstable_array, range_splitter, param_.session_count_))) {
+        LOG_WARN("fail to build merge task for multiple pk table", KR(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < tablet_merge_ctxs.count(); ++i) {
-        ObDirectLoadTabletMergeCtx *tablet_merge_ctx = tablet_merge_ctxs.at(i);
-        if (OB_FAIL(tablet_merge_ctx->build_del_lob_task(
-              multiple_sstable_array, range_splitter, param_.session_count_))) {
-          LOG_WARN("fail to build merge task for multiple pk table", KR(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(del_lob_task_iter_.init(&merge_ctx_))) {
-          LOG_WARN("fail to build del lob task", KR(ret));
-        }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(del_lob_task_iter_.init(&merge_ctx_))) {
+        LOG_WARN("fail to build del lob task", KR(ret));
       }
     }
   }
