@@ -218,8 +218,6 @@ struct ObStmtHint
   int merge_stmt_hint(const ObStmtHint &other, ObHintMergePolicy policy = HINT_DOMINATED_EQUAL);
   int merge_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
   int merge_normal_hint(ObHint &hint, ObHintMergePolicy policy, ObIArray<ObItemType> &conflict_hints);
-  int reset_explicit_trans_hint(ObItemType hint_type);
-  int get_max_table_parallel(const ObDMLStmt &stmt, int64_t &max_table_parallel) const;
 
 
   bool has_enable_hint(ObItemType hint_type) const;

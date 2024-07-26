@@ -1358,47 +1358,6 @@ int ObStmtHint::merge_normal_hint(ObHint &hint,
   return ret;
 }
 
-int ObStmtHint::reset_explicit_trans_hint(ObItemType hint_type)
-{
-  int ret = OB_SUCCESS;
-  const ObHint *cur_hint = get_normal_hint(hint_type);
-  if (NULL == cur_hint) {
-    /* do nothing */
-  } else if (OB_UNLIKELY(!cur_hint->is_transform_hint())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected hint type", K(ret), K(*cur_hint));
-  } else if (!static_cast<const ObTransHint*>(cur_hint)->is_explicit()) {
-    /* do nothing */
-  } else if (OB_FAIL(remove_normal_hints(&hint_type, 1))) {
-    LOG_WARN("failed to remove hints", K(ret));
-  }
-  return ret;
-}
-
-int ObStmtHint::get_max_table_parallel(const ObDMLStmt &stmt, int64_t &max_table_parallel) const
-{
-  int ret = OB_SUCCESS;
-  max_table_parallel = ObGlobalHint::UNSET_PARALLEL;
-  const ObHint *hint = NULL;
-  bool matched = false;
-  if (OB_ISNULL(query_hint_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(query_hint_));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < other_opt_hints_.count(); ++i) {
-    if (OB_NOT_NULL(hint = other_opt_hints_.at(i)) && hint->is_table_parallel_hint()) {
-      if (OB_FAIL(stmt.check_hint_table_matched_table_item(query_hint_->cs_type_,
-                      static_cast<const ObTableParallelHint*>(hint)->get_table(), matched))) {
-        LOG_WARN("failed to check hint table matched table item", K(ret));
-      } else if (matched) {
-        max_table_parallel = std::max(max_table_parallel,
-                                    static_cast<const ObTableParallelHint*>(hint)->get_parallel());
-      }
-    }
-  }
-  return ret;
-}
-
 bool ObStmtHint::has_enable_hint(ObItemType hint_type) const
 {
   const ObHint *cur_hint = get_normal_hint(hint_type);
