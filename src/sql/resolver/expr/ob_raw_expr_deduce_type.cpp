@@ -1523,6 +1523,12 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         }
         break;
       }
+      case T_FUN_SYS_ST_COLLECT: {
+        if (OB_FAIL(set_st_collect_result_type(expr, result_type))) {
+          LOG_WARN("set st collect result type failed", K(ret));
+        }
+        break;
+      }
       case T_FUN_SYS_RB_BUILD_AGG:
       case T_FUN_SYS_RB_OR_AGG:
       case T_FUN_SYS_RB_AND_AGG: {
@@ -3363,6 +3369,22 @@ int ObRawExprDeduceType::set_asmvt_result_type(ObAggFunRawExpr &expr,
     result_type.set_collation_type(CS_TYPE_BINARY);
     result_type.set_collation_level(CS_LEVEL_IMPLICIT);
     result_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObLongTextType]);
+    expr.set_result_type(result_type);
+  }
+  return ret;
+}
+int ObRawExprDeduceType::set_st_collect_result_type(ObAggFunRawExpr &expr,
+                                                    ObExprResType& result_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(expr.get_real_param_count() != 1)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get unexpected error", K(ret), K(expr.get_param_count()), K(expr.get_real_param_count()), K(expr));
+  } else {
+    result_type.set_type(ObGeometryType);
+    result_type.set_collation_type(CS_TYPE_BINARY);
+    result_type.set_collation_level(CS_LEVEL_IMPLICIT);
+    result_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]);
     expr.set_result_type(result_type);
   }
   return ret;

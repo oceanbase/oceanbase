@@ -41,6 +41,9 @@
 #include "lib/alloc/malloc_hook.h"
 #include "pl/ob_pl_user_type.h"
 #include "pl/ob_pl.h"
+#include "observer/omt/ob_tenant_srs.h"
+#include "sql/engine/expr/ob_geo_expr_utils.h"
+#include "lib/geo/ob_geo_utils.h"
 
 namespace oceanbase
 {
@@ -937,7 +940,8 @@ int ObAggregateProcessor::init()
                             T_FUN_ORA_JSON_ARRAYAGG == aggr_info.get_expr_type() ||
                             T_FUN_JSON_OBJECTAGG == aggr_info.get_expr_type() ||
                             T_FUN_ORA_JSON_OBJECTAGG == aggr_info.get_expr_type() ||
-                            T_FUN_ORA_XMLAGG == aggr_info.get_expr_type());
+                            T_FUN_ORA_XMLAGG == aggr_info.get_expr_type() ||
+                            T_FUN_SYS_ST_COLLECT == aggr_info.get_expr_type());
       has_order_by_ |= aggr_info.has_order_by_;
       if (!has_extra_) {
         has_extra_ |= aggr_info.has_distinct_;
@@ -1986,6 +1990,7 @@ int ObAggregateProcessor::generate_group_row(GroupRow *&new_group_row,
         case T_FUN_SYS_RB_BUILD_AGG:
         case T_FUN_SYS_RB_OR_AGG:
         case T_FUN_SYS_RB_AND_AGG:
+        case T_FUN_SYS_ST_COLLECT:
         {
           void *tmp_buf = NULL;
           set_need_advance_collect();
@@ -2191,6 +2196,7 @@ int ObAggregateProcessor::fill_group_row(GroupRow *new_group_row,
         case T_FUN_SYS_RB_BUILD_AGG:
         case T_FUN_SYS_RB_OR_AGG:
         case T_FUN_SYS_RB_AND_AGG:
+        case T_FUN_SYS_ST_COLLECT:
         {
           void *tmp_buf = NULL;
           set_need_advance_collect();
@@ -2629,6 +2635,7 @@ int ObAggregateProcessor::rollup_aggregation(AggrCell &aggr_cell, AggrCell &roll
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUN_SYS_ST_COLLECT:
     {
       GroupConcatExtraResult *aggr_extra = NULL;
       GroupConcatExtraResult *rollup_extra = NULL;
@@ -2912,6 +2919,7 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUN_SYS_ST_COLLECT:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -3229,6 +3237,7 @@ int ObAggregateProcessor::process_aggr_batch_result(
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUN_SYS_ST_COLLECT:
     {
       GroupConcatExtraResult *extra_info = NULL;
       if (OB_ISNULL(extra_info = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -3495,6 +3504,7 @@ int ObAggregateProcessor::process_aggr_result(const ObChunkDatumStore::StoredRow
     case T_FUN_SYS_RB_BUILD_AGG:
     case T_FUN_SYS_RB_OR_AGG:
     case T_FUN_SYS_RB_AND_AGG:
+    case T_FUN_SYS_ST_COLLECT:
     {
       GroupConcatExtraResult *extra = NULL;
       if (OB_ISNULL(extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra()))) {
@@ -3894,6 +3904,16 @@ int ObAggregateProcessor::collect_aggr_result(
       }
       break;
     }
+    
+    case T_FUN_SYS_ST_COLLECT: {
+      GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
+      if (OB_FAIL(get_st_collect_result(aggr_info, eval_ctx_, extra, result))) {
+        LOG_WARN("failed to get st_collect result", K(ret));
+      } else {
+      }
+      break;
+    }
+
     case T_FUN_SYS_RB_BUILD_AGG: {
       GroupConcatExtraResult *extra = static_cast<GroupConcatExtraResult *>(aggr_cell.get_extra());
       if (OB_FAIL(get_rb_build_agg_result(aggr_info, extra, result))) {
@@ -8391,6 +8411,97 @@ int ObAggregateProcessor::init_asmvt_result(ObIAllocator &allocator,
       mvt_res.column_cnt_ = column_cnt;
       if (OB_FAIL(mvt_res.init_layer())) {
         LOG_WARN("failed to init layer", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
+                                                ObEvalCtx &ctx,
+                                                GroupConcatExtraResult *&extra,
+                                                ObDatum &concat_result)
+{
+  int ret = OB_SUCCESS;
+  common::ObArenaAllocator tmp_alloc(ObModIds::OB_SQL_AGGR_FUNC, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  if (OB_ISNULL(extra) || OB_UNLIKELY(extra->empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unpexcted null", K(ret), K(extra));
+  } else if (extra->is_iterated() && OB_FAIL(extra->rewind())) {
+    // Group concat row may be iterated in rollup_process(), rewind here.
+    LOG_WARN("rewind failed", KPC(extra), K(ret));
+  } else if (!extra->is_iterated() && OB_FAIL(extra->finish_add_row())) {
+    LOG_WARN("finish_add_row failed", KPC(extra), K(ret));
+  } else {
+    const ObChunkDatumStore::StoredRow *storted_row = NULL;
+    const ObDatumMeta &datum_meta = aggr_info.expr_->args_[0]->datum_meta_;
+    const bool has_lob_header = aggr_info.expr_->args_[0]->obj_meta_.has_lob_header();
+
+    omt::ObSrsCacheGuard srs_guard;
+    const ObSrsItem *srs = NULL;
+    uint32_t srid = 0;
+    
+    bool is_null_result = true;
+    bool is_inited = false;
+    ObGeometrycollection *gc = NULL;
+    ObGeometry *cur_geo = NULL;
+
+    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+      if (OB_ISNULL(storted_row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(storted_row));
+      } else {        
+        const ObDatum& gis_datum = storted_row->cells()[0];
+        if (gis_datum.is_null()) { // ignore NULL arguments
+          continue;
+        } 
+        is_null_result = false;
+        ObString wkb = gis_datum.get_string();
+
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_alloc, gis_datum, datum_meta,
+                                                              has_lob_header, wkb))) {
+          LOG_WARN("fail to get real string data", K(ret), K(wkb));
+        } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_alloc, wkb, srs_guard, 
+                                                              srs, cur_geo, N_ST_COLLECT))) {
+          LOG_WARN("fail to create geo", K(ret), K(wkb));
+        } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
+          ret = OB_ERR_GIS_INVALID_DATA;
+          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_COLLECT);
+          LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
+        } else if (!is_inited) {
+          if (OB_FAIL(ObGeometrycollection::create_collection(cur_geo->crs(), srid,
+                                                              tmp_alloc, gc))) {
+            LOG_WARN("fail to create geometry collection", K(ret), K(wkb));
+          } else {
+            is_inited = true;
+          }
+        } 
+
+        if (OB_SUCC(ret)) {
+          if (srid != gc->get_srid()) {
+            ret = OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION;
+            LOG_WARN("geometry in collection must in the same SRS", K(ret));
+            break;
+          } else {
+            gc->push_back(*cur_geo);
+          }
+        }
+      }
+    } // end while
+
+    if (ret != OB_ITER_END && ret != OB_SUCCESS) {
+      LOG_WARN("fail to get next row", K(ret));
+    } else {
+      if (is_null_result) {
+        concat_result.set_null();
+      } else {
+        ObString res_wkb;
+        if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*static_cast<ObGeometry*>(gc), 
+                                               *aggr_info.expr_, ctx, srs, res_wkb))) {
+          LOG_WARN("failed to write geometry to wkb", K(ret));
+        } else {
+          concat_result.set_string(res_wkb);
+        }
       }
     }
   }
