@@ -1695,6 +1695,9 @@ DEF_BOOL(_enable_protocol_diagnose, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_enable_transaction_internal_routing, OB_TENANT_PARAMETER, "True",
          "enable SQLs of transaction routed to any servers in the cluster on demand",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_wait_remote_lock, OB_TENANT_PARAMETER, "True",
+         "enable remote execution wait in lock wait mgr when lock conflict occurs",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(_load_tde_encrypt_engine, OB_CLUSTER_PARAMETER, "NONE",
         "load the engine that meet the security classification requirement to encrypt data.  default NONE",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

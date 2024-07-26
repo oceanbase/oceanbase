@@ -62,12 +62,21 @@ private:
     TOTAL_UPDATE_CNT,
     TRANS_ID,
     HOLDER_TRANS_ID,
-    HOLDER_SESSION_ID
+    HOLDER_SESSION_ID,
+    LS_ID,
+    ASSOC_SESS_ID,
+    WAIT_TIMEOUT,
+    TX_ACTIVE_TS,
+    NODE_ID,
+    NODE_TYPE,
+    REMTOE_ADDR,
+    IS_PLACEHOLDER,
   };
   rpc::ObLockWaitNode *node_iter_;
   rpc::ObLockWaitNode cur_node_;
   char rowkey_[common::MAX_LOCK_ROWKEY_BUF_LENGTH];
   char lock_mode_[common::MAX_LOCK_MODE_BUF_LENGTH];
+  char remote_addr_[common::MAX_LOCK_REMOTE_ADDR_BUF_LENGTH];
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualLockWaitStat);

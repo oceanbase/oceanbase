@@ -10219,7 +10219,15 @@ def_table_schema(
   ('total_update_cnt', 'int'),
   ('trans_id', 'int'),
   ('holder_trans_id', 'int'),
-  ('holder_session_id', 'int')
+  ('holder_session_id', 'int'),
+  ('ls_id', 'int'),
+  ('assoc_session_id', 'int'),
+  ('wait_timeout', 'int'),
+  ('tx_active_ts', 'int'),
+  ('node_id', 'int'),
+  ('node_type', 'int'),
+  ('remote_addr', 'varchar:MAX_LOCK_REMOTE_ADDR_BUF_LENGTH'),
+  ('is_placeholder', 'int')
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],

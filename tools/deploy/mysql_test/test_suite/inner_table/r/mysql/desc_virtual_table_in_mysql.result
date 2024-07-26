@@ -1604,6 +1604,14 @@ total_update_cnt	bigint(20)	NO		NULL
 trans_id	bigint(20)	NO		NULL	
 holder_trans_id	bigint(20)	NO		NULL	
 holder_session_id	bigint(20)	NO		NULL	
+ls_id	bigint(20)	NO		NULL	
+assoc_session_id	bigint(20)	NO		NULL	
+wait_timeout	bigint(20)	NO		NULL	
+tx_active_ts	bigint(20)	NO		NULL	
+node_id	bigint(20)	NO		NULL	
+node_type	bigint(20)	NO		NULL	
+remote_addr	varchar(64)	NO		NULL	
+is_placeholder	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_lock_wait_stat;
 IF(count(*) >= 0, 1, 0)
 1
