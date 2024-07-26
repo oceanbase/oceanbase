@@ -89,6 +89,7 @@ ObDirectLoadInsertTabletContext::ObDirectLoadInsertTabletContext()
     context_id_(0),
     row_count_(0),
     open_err_(OB_SUCCESS),
+    can_write_lob_(true),
     is_open_(false),
     is_create_(false),
     is_cancel_(false),
@@ -149,11 +150,14 @@ int ObDirectLoadInsertTabletContext::init(ObDirectLoadInsertTableContext *table_
       origin_tablet_id_ = origin_tablet_id;
       tablet_id_ = tablet_id;
       lob_tablet_id_ = ddl_data.lob_meta_tablet_id_;
-      start_seq_.set_parallel_degree(param_->reserved_parallel_);
-      if (need_del_lob()) {
-        lob_start_seq_.set_parallel_degree(param_->parallel_);
+      tablet_id_in_lob_id_ = lob_tablet_id_; // 与ObDirectLoadSliceWriter::fill_lob_into_macro_block中的取值保持一致
+      if (OB_FAIL(start_seq_.set_parallel_degree(param_->reserved_parallel_))) {
+        LOG_WARN("fail to set parallel degree", KR(ret), K(param_->reserved_parallel_));
+      } else if (need_del_lob() && OB_FAIL(lob_start_seq_.set_parallel_degree(param_->parallel_))) {
+        LOG_WARN("fail to set parallel degree", KR(ret), K(param_->parallel_));
+      } else {
+        is_inited_ = true;
       }
-      is_inited_ = true;
     }
   }
   return ret;
@@ -286,6 +290,20 @@ int ObDirectLoadInsertTabletContext::get_lob_pk_interval(uint64_t count,
       }
     }
   }
+  // set min_insert_lob_id_
+  if (OB_SUCC(ret) && !min_insert_lob_id_.is_valid()) {
+    uint64_t value = 0;
+    if (OB_FAIL(pk_interval.get_value(value))) {
+      LOG_WARN("fail to get value", KR(ret), K(lob_tablet_id_), K(pk_interval));
+      ret = OB_ERR_UNEXPECTED; // rewrite error code
+    } else if (OB_UNLIKELY(value == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected lob id zero", KR(ret), K(lob_tablet_id_), K(pk_interval));
+    } else {
+      min_insert_lob_id_.tablet_id_ = tablet_id_in_lob_id_.id();
+      ObLobManager::transform_lob_id(value, min_insert_lob_id_.lob_id_);
+    }
+  }
   return ret;
 }
 
@@ -315,7 +333,10 @@ int ObDirectLoadInsertTabletContext::get_lob_write_ctx(ObDirectLoadInsertTabletW
     LOG_WARN("ObDirectLoadLobTabletContext not init", KR(ret), KP(this));
   } else {
     ObMutexGuard guard(mutex_);
-    if (OB_FAIL(get_lob_pk_interval(WRITE_BATCH_SIZE, write_ctx.pk_interval_))) {
+    if (OB_UNLIKELY(!can_write_lob_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected cannot write lob", KR(ret));
+    } else if (OB_FAIL(get_lob_pk_interval(WRITE_BATCH_SIZE, write_ctx.pk_interval_))) {
       LOG_WARN("fail to get pk interval", KR(ret), KP(this));
     } else {
       write_ctx.start_seq_.macro_data_seq_ = lob_start_seq_.macro_data_seq_;
@@ -644,6 +665,38 @@ int ObDirectLoadInsertTabletContext::fill_column_group(const int64_t thread_cnt,
     if (OB_FAIL(sstable_insert_mgr->fill_column_group(ls_id_, tablet_id_, !param_->is_incremental_,
                                                       thread_cnt, thread_id))) {
       LOG_WARN("fail to fill column group", KR(ret), K(tablet_id_), K(thread_cnt), K(thread_id));
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTabletContext::get_del_lob_macro_data_seq(
+    const bool insert_front,
+    const int64_t parallel_idx,
+    ObMacroDataSeq &start_seq)
+{
+  int ret = OB_SUCCESS;
+  start_seq.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDirectLoadInsertTableContext not init", KR(ret), KP(this));
+  } else if (OB_UNLIKELY(!need_del_lob())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected no need del lob", KR(ret), KPC(this));
+  } else if (OB_UNLIKELY(parallel_idx < 0 || parallel_idx >= param_->parallel_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected parallel idx", KR(ret), KPC(param_), K(parallel_idx));
+  } else {
+    int64_t real_parallel_idx = -1;
+    if (insert_front) {
+      real_parallel_idx = parallel_idx;
+    } else {
+      ObMutexGuard guard(mutex_);
+      can_write_lob_ = false;
+      real_parallel_idx = lob_start_seq_.get_parallel_idx() + parallel_idx + 1;
+    }
+    if (OB_FAIL(start_seq.set_parallel_degree(real_parallel_idx))) {
+      LOG_WARN("fail to set parallel degree", KR(ret), K(real_parallel_idx));
     }
   }
   return ret;
