@@ -194,6 +194,12 @@ struct ObTabletMergeCtx
             scn_range_.end_scn_.get_val_for_tx() : sstable_version_range_.snapshot_version_;
   }
   int get_merge_tables(ObGetMergeTablesResult &get_merge_table_result);
+  int inner_init_for_backfill(
+      const share::SCN &backfill_scn,
+      const share::ObLSID &ls_id,
+      ObTabletHandle &tablet_handle,
+      ObTableHandleV2 &backfill_table);
+
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
   // 1. init in dag
@@ -244,6 +250,7 @@ struct ObTabletMergeCtx
   uint64_t data_version_;
   ObTransNodeDMLStat tnode_stat_; // collect trans node dml stat on memtable, only worked in mini compaction.
   bool need_parallel_minor_merge_;
+  bool is_backfill_;
 
   TO_STRING_KV(K_(param), K_(sstable_version_range), K_(create_snapshot_version),
                K_(is_full_merge), K_(merge_level),
@@ -257,7 +264,12 @@ struct ObTabletMergeCtx
                K_(ls_handle), K_(tablet_handle),
                KPC_(merge_progress),
                KPC_(compaction_filter), K_(time_guard), K_(rebuild_seq), K_(data_version),
-               K_(need_parallel_minor_merge));
+               K_(need_parallel_minor_merge), K_(is_backfill));
+private:
+  int inner_prepare_backfill_merge_result_(
+      const share::SCN &backfill_scn,
+      const ObTableHandleV2 &backfill_table_handle,
+      ObGetMergeTablesResult &get_merge_table_result);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletMergeCtx);
 };

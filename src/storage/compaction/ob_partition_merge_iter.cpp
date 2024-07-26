@@ -894,7 +894,7 @@ bool ObPartitionMinorRowMergeIter::inner_check(const ObMergeParameter &merge_par
 {
   bool bret = true;
 
-  if (!is_multi_version_merge(merge_param.merge_type_) && !storage::is_backfill_tx_merge(merge_param.merge_type_)) {
+  if (!is_multi_version_merge(merge_param.merge_type_)) {
     bret = false;
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "Unexpected merge type for minor row merge iter", K(bret), K(merge_param));
   } else if (merge_param.merge_level_ != MACRO_BLOCK_MERGE_LEVEL) {

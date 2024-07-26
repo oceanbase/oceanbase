@@ -298,6 +298,9 @@ struct ObGetMergeTablesResult
   bool schedule_major_;
   share::ObScnRange scn_range_;
   int64_t read_base_version_;
+  //for backfill
+  bool is_backfill_;
+  share::SCN backfill_scn_;
 
   static const int64_t INVALID_INT_VALUE = -1;
 
@@ -308,7 +311,7 @@ struct ObGetMergeTablesResult
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
   TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(create_snapshot_version),
-      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(read_base_version));
+      K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(read_base_version), K_(is_backfill), K_(backfill_scn));
 };
 
 OB_INLINE bool is_valid_migrate_status(const ObMigrateStatus &status)

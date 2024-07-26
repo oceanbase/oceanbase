@@ -249,7 +249,9 @@ ObGetMergeTablesResult::ObGetMergeTablesResult()
     update_tablet_directly_(false),
     schedule_major_(false),
     scn_range_(),
-    read_base_version_(0)
+    read_base_version_(0),
+    is_backfill_(false),
+    backfill_scn_()
 {
 }
 
@@ -258,7 +260,8 @@ bool ObGetMergeTablesResult::is_valid() const
   return scn_range_.is_valid()
       && handle_.get_count() >= 1
       && merge_version_ >= 0
-      && create_snapshot_version_ >= 0;
+      && create_snapshot_version_ >= 0
+      && (!is_backfill_ || backfill_scn_.is_valid());
 }
 
 void ObGetMergeTablesResult::reset_handle_and_range()
@@ -277,6 +280,8 @@ void ObGetMergeTablesResult::reset()
   schedule_major_ = false;
   scn_range_.reset();
   read_base_version_ = 0;
+  is_backfill_ = false;
+  backfill_scn_.reset();
 }
 
 int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
@@ -291,6 +296,8 @@ int ObGetMergeTablesResult::copy_basic_info(const ObGetMergeTablesResult &src)
     create_snapshot_version_ = src.create_snapshot_version_;
     schedule_major_ = src.schedule_major_;
     scn_range_ = src.scn_range_;
+    is_backfill_ = src.is_backfill_;
+    backfill_scn_ = src.backfill_scn_;
   }
   return ret;
 }

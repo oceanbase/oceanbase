@@ -334,7 +334,7 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObTabletMerge
     } else if (OB_FAIL(range_spliter.get_range_split_info(tables, rowkey_read_info, whole_range, range_info))) {
       STORAGE_LOG(WARN, "Failed to init range spliter", K(ret));
     } else if (OB_FAIL(calc_mini_minor_parallel_degree(tablet_size, range_info.total_size_, tables.count(),
-                                                       range_info.parallel_target_count_))) {
+                                                       merge_ctx.is_backfill_, range_info.parallel_target_count_))) {
       STORAGE_LOG(WARN, "Failed to calc mini minor parallel degree", K(ret));
     } else if (range_info.parallel_target_count_ <= 1) {
       if (OB_FAIL(init_serial_merge())) {
@@ -370,11 +370,12 @@ int ObParallelMergeCtx::init_parallel_mini_minor_merge(compaction::ObTabletMerge
 int ObParallelMergeCtx::calc_mini_minor_parallel_degree(const int64_t tablet_size,
                                                         const int64_t total_size,
                                                         const int64_t sstable_count,
+                                                        const bool is_backfill,
                                                         int64_t &parallel_degree)
 {
   int ret = OB_SUCCESS;
   int64_t minor_merge_thread = 0;
-  if (OB_UNLIKELY(tablet_size == 0 || total_size < 0 || sstable_count <= 1)) {
+  if (OB_UNLIKELY(tablet_size == 0 || total_size < 0 || (sstable_count <= 1 && !is_backfill))) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to calc mini minor parallel degree", K(ret), K(tablet_size),
                 K(total_size), K(sstable_count));

@@ -27,8 +27,7 @@ enum ObMergeType
   MAJOR_MERGE = 4,
   MEDIUM_MERGE = 5,
   DDL_KV_MERGE = 6,
-  BACKFILL_TX_MERGE = 7,
-  MDS_TABLE_MERGE = 8,
+  MDS_TABLE_MERGE = 7,
   MERGE_TYPE_MAX
 };
 
@@ -58,8 +57,7 @@ inline bool is_multi_version_merge(const ObMergeType &merge_type)
 {
   return MINOR_MERGE == merge_type
       || MINI_MERGE == merge_type
-      || HISTORY_MINOR_MERGE == merge_type
-      || BACKFILL_TX_MERGE == merge_type;
+      || HISTORY_MINOR_MERGE == merge_type;
 }
 inline bool is_history_minor_merge(const ObMergeType &merge_type)
 {
@@ -76,11 +74,6 @@ inline bool is_meta_major_merge(const ObMergeType &merge_type)
 inline bool is_major_or_meta_merge_type(const ObMergeType &merge_type)
 {
   return is_major_merge_type(merge_type) || is_meta_major_merge(merge_type);
-}
-
-inline bool is_backfill_tx_merge(const ObMergeType &merge_type)
-{
-  return BACKFILL_TX_MERGE == merge_type;
 }
 
 inline bool is_mds_table_merge(const ObMergeType &merge_type)

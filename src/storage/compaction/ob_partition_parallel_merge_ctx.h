@@ -71,6 +71,7 @@ private:
   int calc_mini_minor_parallel_degree(const int64_t tablet_size,
                                       const int64_t total_size,
                                       const int64_t sstable_count,
+                                      const bool is_backfill,
                                       int64_t &parallel_degree);
 
   int get_major_parallel_ranges(

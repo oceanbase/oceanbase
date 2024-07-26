@@ -466,7 +466,8 @@ ObTabletMergeCtx::ObTabletMergeCtx(
     rebuild_seq_(-1),
     data_version_(0),
     tnode_stat_(),
-    need_parallel_minor_merge_(true)
+    need_parallel_minor_merge_(true),
+    is_backfill_(false)
 {
   merge_scn_.set_max();
 }
@@ -797,7 +798,7 @@ int ObTabletMergeCtx::get_schema_and_gene_from_result(const ObGetMergeTablesResu
   }
 
   if (OB_SUCC(ret)) {
-    merge_scn_ = scn_range_.end_scn_;
+    merge_scn_ = get_merge_table_result.is_backfill_ ? get_merge_table_result.backfill_scn_ : scn_range_.end_scn_;
     if (OB_UNLIKELY(is_minor_merge_type(param_.merge_type_) && scn_range_.is_empty())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("Unexcepted empty scn range in minor merge", K(ret), K(scn_range_));
@@ -1271,6 +1272,93 @@ void ObTabletMergeCtx::collect_running_info()
     LOG_WARN_RET(tmp_ret, "failed to add sstable merge info ", K(tmp_ret), K(sstable_merge_info));
   }
   sstable_merge_info.info_param_ = nullptr;
+}
+
+int ObTabletMergeCtx::inner_init_for_backfill(
+    const share::SCN &backfill_scn,
+    const share::ObLSID &ls_id,
+    ObTabletHandle &tablet_handle,
+    ObTableHandleV2 &backfill_table)
+{
+  int ret = OB_SUCCESS;
+  ObLSService *ls_service = nullptr;
+  ObLS *ls = nullptr;
+  ObGetMergeTablesParam get_merge_table_param;
+  ObGetMergeTablesResult get_merge_table_result;
+  get_merge_table_param.merge_type_ = param_.merge_type_;
+  get_merge_table_param.merge_version_ = param_.merge_version_;
+  is_backfill_ = true;
+  SCN max_end_scn;
+
+  if (!backfill_scn.is_valid() || !ls_id.is_valid() || !tablet_handle.is_valid() || !backfill_table.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inner init for backfill get invalid argument", K(ret), K(backfill_scn), K(ls_id), K(tablet_handle), K(backfill_table));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle_, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be NULL", K(ret), K(ls_id), K(ls_handle_));
+  } else if (FALSE_IT(rebuild_seq_ = ls->get_rebuild_seq())) {
+  } else if (FALSE_IT(tablet_handle_ = tablet_handle)) {
+  } else if (OB_FAIL(inner_prepare_backfill_merge_result_(backfill_scn, backfill_table, get_merge_table_result))) {
+    LOG_WARN("failed to do inner prepare backfill merge result", K(ret), K(backfill_scn), K(backfill_table));
+  } else if (FALSE_IT(max_end_scn = SCN::max(backfill_scn, get_merge_table_result.scn_range_.end_scn_))) {
+  } else if (!ObTenantTabletScheduler::check_tx_table_ready(
+      *ls_handle_.get_ls(),
+      max_end_scn)) {
+    ret = OB_EAGAIN;
+    LOG_INFO("tx table is not ready. waiting for max_decided_log_ts ...",
+        KR(ret), "merge_scn", get_merge_table_result.scn_range_.end_scn_, K(backfill_scn));
+  } else if (OB_FAIL(get_schema_and_gene_from_result(get_merge_table_result))) {
+    LOG_WARN("Fail to get storage schema", K(ret), K(get_merge_table_result), KPC(this));
+  } else if (OB_FAIL(init_merge_info())) {
+    LOG_WARN("fail to init merge info", K(ret), KPC(this));
+  } else if (OB_FAIL(prepare_index_tree())) {
+    LOG_WARN("fail to prepare sstable index tree", K(ret), KPC(this));
+  }
+  return ret;
+}
+
+int ObTabletMergeCtx::inner_prepare_backfill_merge_result_(
+    const share::SCN &backfill_scn,
+    const ObTableHandleV2 &backfill_table_handle,
+    ObGetMergeTablesResult &get_merge_table_result)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  //do not reset get_merge_table_result, because
+
+  if (!backfill_scn.is_valid() || !backfill_table_handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("inner prepare backfill merge result get invalid argument", K(ret), K(backfill_scn), K(backfill_table_handle));
+  } else if (!ls_handle_.is_valid() || !tablet_handle_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls or tablet handle do not init, unexpected", K(ret), K(ls_handle_), K(tablet_handle_));
+  } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle_), KP(tablet));
+  } else if (OB_FAIL(get_merge_table_result.handle_.add_table(backfill_table_handle))) {
+    LOG_WARN("failed to add table into merge table result", K(ret), K(backfill_table_handle));
+  } else {
+    get_merge_table_result.version_range_.base_version_ = 0; //for minor merge filter data which already in major.
+    get_merge_table_result.version_range_.multi_version_start_ = tablet->get_multi_version_start();
+    get_merge_table_result.version_range_.snapshot_version_ = tablet->get_snapshot_version();
+    // Here using a smaller snapshot version make snapshot version semantics is right
+    // The freeze_snapshot_version represents that
+    // all tx of the previous version has been committed.
+    get_merge_table_result.scn_range_ = backfill_table_handle.get_table()->get_key().scn_range_;
+    get_merge_table_result.merge_version_ = ObVersionRange::MIN_VERSION;
+    get_merge_table_result.is_backfill_ = true;
+    get_merge_table_result.backfill_scn_ = backfill_scn;
+    get_merge_table_result.schedule_major_ = false;
+    get_merge_table_result.update_tablet_directly_ = false; //only for mini, local sstable version range already contains mini will update tablet directly
+    get_merge_table_result.create_snapshot_version_ = 0; //only for medium or meta merge, mini or minor set the value of 0
+    get_merge_table_result.read_base_version_ = 0; //only for medium merge, mini or minor set the value of 0
+  }
+  return ret;
 }
 
 

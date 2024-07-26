@@ -987,9 +987,7 @@ ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMerg
 {
   UNUSED(is_base_iter);
   ObPartitionMergeIter *merge_iter = nullptr;
-  if (storage::is_backfill_tx_merge(merge_param.merge_type_)) {
-    merge_iter = alloc_helper<ObPartitionMinorRowMergeIter> (allocator_);
-  } else if (!is_small_sstable && !is_mini_merge(merge_param.merge_type_) && !merge_param.is_full_merge_ && merge_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {
+  if (!is_small_sstable && !is_mini_merge(merge_param.merge_type_) && !merge_param.is_full_merge_ && merge_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {
     merge_iter = alloc_helper<ObPartitionMinorMacroMergeIter>(allocator_);
   } else {
     merge_iter = alloc_helper<ObPartitionMinorRowMergeIter>(allocator_);

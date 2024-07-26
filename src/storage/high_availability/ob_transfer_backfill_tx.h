@@ -189,28 +189,12 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStartTransferBackfillTXTask);
 };
 
-class ObTransferReplaceTableDag : public ObBaseTransferBackfillTXDag
-{
-public:
-  ObTransferReplaceTableDag();
-  virtual ~ObTransferReplaceTableDag();
-  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int create_first_task() override;
-  virtual bool check_can_retry();
-  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
-  int init(share::ObIDagNet *dag_net);
-  INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
-protected:
-  bool is_inited_;
-  DISALLOW_COPY_AND_ASSIGN(ObTransferReplaceTableDag);
-};
-
 class ObTransferReplaceTableTask : public share::ObITask
 {
 public:
   ObTransferReplaceTableTask();
   virtual ~ObTransferReplaceTableTask();
-  int init();
+  int init(const ObTabletBackfillInfo &tablet_info);
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTransferReplaceTableTask"), KP(this), KPC(ctx_));
 private:
@@ -267,6 +251,7 @@ private:
   void transfer_tablet_restore_stat_() const;
 private:
   bool is_inited_;
+  ObTabletBackfillInfo tablet_info_;
   ObTransferBackfillTXCtx *ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTransferReplaceTableTask);
 };

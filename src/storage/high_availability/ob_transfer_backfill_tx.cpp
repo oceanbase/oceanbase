@@ -674,7 +674,6 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObStartTransferBackfillTXDag *backfill_tx_dag = nullptr;
-  ObTransferReplaceTableDag *replace_logical_dag = nullptr;
   share::ObTenantDagScheduler *scheduler = nullptr;
 
   if (IS_NOT_INIT) {
@@ -685,48 +684,21 @@ int ObTransferBackfillTXDagNet::start_running_for_backfill_()
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(scheduler->alloc_dag(backfill_tx_dag))) {
     LOG_WARN("failed to alloc transfer backfill tx dag ", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(replace_logical_dag))) {
-    LOG_WARN("failed to alloc replace logical dag ", K(ret));
   } else if (OB_FAIL(backfill_tx_dag->init(this))) {
     LOG_WARN("failed to init transfer backfill tx dag", K(ret));
   } else if (OB_FAIL(add_dag_into_dag_net(*backfill_tx_dag))) {
     LOG_WARN("failed to add transfer backfill tx dag into dag net", K(ret));
   } else if (OB_FAIL(backfill_tx_dag->create_first_task())) {
     LOG_WARN("failed to create transfer backfill tx first task", K(ret));
-  } else if (OB_FAIL(replace_logical_dag->init(this))) {
-    LOG_WARN("failed to init replace logical dag", K(ret));
-  } else if (OB_FAIL(backfill_tx_dag->add_child(*replace_logical_dag))) {
-    LOG_WARN("failed to add child into transfer backfill tx", K(ret));
-  } else if (OB_FAIL(replace_logical_dag->create_first_task())) {
-    LOG_WARN("failed to create replace logical first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(replace_logical_dag))) {
-    LOG_WARN("failed to add transfer backfill tx dag into scheduer", K(ret), K(*replace_logical_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
   } else if (OB_FAIL(scheduler->add_dag(backfill_tx_dag))) {
     LOG_WARN("failed to add backfill dag", K(ret), K(*backfill_tx_dag));
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
       LOG_WARN("Fail to add task", K(ret));
       ret = OB_EAGAIN;
     }
-    if (OB_NOT_NULL(replace_logical_dag)) {
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(replace_logical_dag, backfill_tx_dag))) {
-        LOG_WARN("failed to cancel replace logical dag", K(tmp_ret), KPC(backfill_tx_dag));
-      } else {
-        replace_logical_dag = nullptr;
-      }
-    }
   } else {
-    FLOG_INFO("[TRANSFER_BACKFILL]succeed to schedule transfer backfill tx dag", K(*backfill_tx_dag), K(*replace_logical_dag));
+    FLOG_INFO("[TRANSFER_BACKFILL]succeed to schedule transfer backfill tx dag", K(*backfill_tx_dag));
     backfill_tx_dag = nullptr;
-    replace_logical_dag = nullptr;
-  }
-
-  if (OB_NOT_NULL(replace_logical_dag) && OB_NOT_NULL(scheduler)) {
-    scheduler->free_dag(*replace_logical_dag, backfill_tx_dag);
-    replace_logical_dag = nullptr;
   }
 
   if (OB_NOT_NULL(backfill_tx_dag) && OB_NOT_NULL(scheduler)) {
@@ -1165,100 +1137,11 @@ int ObStartTransferBackfillTXTask::generate_transfer_backfill_tx_dags_()
   return ret;
 }
 
-/*****************ObTransferReplaceTableDag***********************/
-ObTransferReplaceTableDag::ObTransferReplaceTableDag()
-  : ObBaseTransferBackfillTXDag(ObDagType::DAG_TYPE_TRANSFER_REPLACE_TABLE),
-    is_inited_(false)
-{
-}
-
-ObTransferReplaceTableDag::~ObTransferReplaceTableDag()
-{
-}
-
-int ObTransferReplaceTableDag::fill_dag_key(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  ObTransferBackfillTXCtx *self_ctx = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("transfer replace tables dag do not init", K(ret));
-  } else if (ObIHADagNetCtx::TRANSFER_BACKFILL_TX != ha_dag_net_ctx_->get_dag_net_ctx_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (FALSE_IT(self_ctx = static_cast<ObTransferBackfillTXCtx *>(ha_dag_net_ctx_))) {
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObTransferReplaceTableDag: ls_id = %s",
-         to_cstring(self_ctx->dest_ls_id_)))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
-  }
-  return ret;
-}
-
-int ObTransferReplaceTableDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("transfer replace tables dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dag net is NULL", K(ret));
-  } else if (OB_FAIL(prepare_ctx(dag_net))) {
-    LOG_WARN("failed to prepare ctx", K(ret));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObTransferReplaceTableDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  ObTransferReplaceTableTask *task = NULL;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("transfer replace tables dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init transfer replace tables task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("fail to add ObTransferReplaceTableTask", K(ret));
-  } else {
-    LOG_INFO("[TRANSFER_BACKFILL]success to create first ObTransferReplaceTableTask", K(ret), KPC(this));
-  }
-  return ret;
-}
-
-int ObTransferReplaceTableDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
-{
-  int ret = OB_SUCCESS;
-  ObTransferBackfillTXCtx *ctx = nullptr;
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start transfer backfill tx dag do not init", K(ret));
-  } else if (FALSE_IT(ctx = static_cast<ObTransferBackfillTXCtx *>(ha_dag_net_ctx_))) {
-  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
-                                static_cast<int64_t>(ctx->tenant_id_),
-                                ctx->dest_ls_id_.id(),
-                                "dag_net_task_id", to_cstring(ctx->task_id_)))){
-    LOG_WARN("failed to fill info param", K(ret));
-  }
-  return ret;
-}
-
-bool ObTransferReplaceTableDag::check_can_retry()
-{
-  return false;
-}
-
 /******************ObTransferReplaceTableTask*********************/
 ObTransferReplaceTableTask::ObTransferReplaceTableTask()
   : ObITask(TASK_TYPE_TRANSFER_REPLACE_TABLE),
     is_inited_(false),
+    tablet_info_(),
     ctx_(nullptr)
 {
 }
@@ -1267,7 +1150,8 @@ ObTransferReplaceTableTask::~ObTransferReplaceTableTask()
 {
 }
 
-int ObTransferReplaceTableTask::init()
+int ObTransferReplaceTableTask::init(
+    const ObTabletBackfillInfo &tablet_info)
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
@@ -1285,6 +1169,7 @@ int ObTransferReplaceTableTask::init()
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(backfill_dag_net = static_cast<ObTransferBackfillTXDagNet*>(dag_net))) {
   } else {
+    tablet_info_ = tablet_info;
     ctx_ = backfill_dag_net->get_ctx();
     is_inited_ = true;
     LOG_INFO("[TRANSFER_BACKFILL]succeed init transfer replace tables task", "ls id", ctx_->dest_ls_id_,
@@ -1292,6 +1177,7 @@ int ObTransferReplaceTableTask::init()
   }
   return ret;
 }
+
 int ObTransferReplaceTableTask::check_src_memtable_is_empty_(
     const ObTabletBackfillInfo &tablet_info,
     ObTablet *tablet,
@@ -1734,59 +1620,56 @@ int ObTransferReplaceTableTask::do_replace_logical_tables_(ObLS *ls)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ls is nullptr", K(ret));
   } else {
-    for (int i = 0; OB_SUCC(ret) && i < ctx_->tablet_infos_.count(); i++) {
-      user_data.reset();
-      const ObTabletBackfillInfo tablet_info = ctx_->tablet_infos_.at(i);
-      bool in_migration = false;
-      ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
-      const int64_t start_ts = ObTimeUtility::current_time();
-      process_transfer_perf_diagnose_(start_ts, start_ts, false/*is_report*/, ls->get_ls_id(),
-          ctx_->backfill_scn_, tablet_info.tablet_id_, share::ObStorageHACostItemName::TRANSFER_REPLACE_BEGIN);
-      if (ctx_->is_failed()) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = ctx_->get_result(ret))) {
-          ret = tmp_ret;
-        }
-        LOG_WARN("ctx already failed", K(ret), KPC(ctx_), K(tablet_info));
-      } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
-        LOG_WARN("failed to get migration status", K(ret), KPC(ls));
-      } else if (FALSE_IT(in_migration = ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status)) {
-      } else if (OB_FAIL(ls->get_tablet(tablet_info.tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-        LOG_WARN("failed to get tablet", K(ret), K(tablet_info));
-      } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet));
-      } else if (tablet_info.tablet_id_.is_ls_inner_tablet()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inner tablet cannot transfer", KR(ret), K(tablet_info), KPC(this));
-      } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
-        LOG_WARN("failed to get tablet status", K(ret), K(tablet_handle));
-      } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_ && !in_migration) {
-        ret = OB_UNEXPECTED_TABLET_STATUS;
-        LOG_WARN("tablet status should be TRANSFER_IN", K(ret), K(user_data), K(in_migration), KPC(tablet), KPC(ls));
-      } else if (OB_FAIL(transfer_replace_tables_(ls, tablet_info, tablet))) {
-        LOG_WARN("failed to transfer replace tables", K(ret), K(tablet_info), KPC(ls), KPC(tablet), KPC(ctx_));
-      } else {
+    const ObTabletBackfillInfo &tablet_info = tablet_info_;
+    bool in_migration = false;
+    ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
+    const int64_t start_ts = ObTimeUtility::current_time();
+    process_transfer_perf_diagnose_(start_ts, start_ts, false/*is_report*/, ls->get_ls_id(),
+        ctx_->backfill_scn_, tablet_info.tablet_id_, share::ObStorageHACostItemName::TRANSFER_REPLACE_BEGIN);
+    if (ctx_->is_failed()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = ctx_->get_result(ret))) {
+        ret = tmp_ret;
+      }
+      LOG_WARN("ctx already failed", K(ret), KPC(ctx_), K(tablet_info));
+    } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+      LOG_WARN("failed to get migration status", K(ret), KPC(ls));
+    } else if (FALSE_IT(in_migration = ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status)) {
+    } else if (OB_FAIL(ls->get_tablet(tablet_info.tablet_id_, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+      LOG_WARN("failed to get tablet", K(ret), K(tablet_info));
+    } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet should not be NULL", K(ret), KPC(tablet));
+    } else if (tablet_info.tablet_id_.is_ls_inner_tablet()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("inner tablet cannot transfer", KR(ret), K(tablet_info), KPC(this));
+    } else if (OB_FAIL(ObTXTransferUtils::get_tablet_status(false/*get_commit*/, tablet, user_data))) {
+      LOG_WARN("failed to get tablet status", K(ret), K(tablet_handle));
+    } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_ && !in_migration) {
+      ret = OB_UNEXPECTED_TABLET_STATUS;
+      LOG_WARN("tablet status should be TRANSFER_IN", K(ret), K(user_data), K(in_migration), KPC(tablet), KPC(ls));
+    } else if (OB_FAIL(transfer_replace_tables_(ls, tablet_info, tablet))) {
+      LOG_WARN("failed to transfer replace tables", K(ret), K(tablet_info), KPC(ls), KPC(tablet), KPC(ctx_));
+    } else {
 #ifdef ERRSIM
-        ObErrsimBackfillPointType point_type(ObErrsimBackfillPointType::TYPE::ERRSIM_REPLACE_AFTER);
-        if (ctx_->errsim_point_info_.is_errsim_point(point_type)) {
-          ret = OB_EAGAIN;
-          LOG_WARN("[ERRSIM TRANSFER] errsim transfer replace after", K(ret), K(point_type));
-        }
-        SERVER_EVENT_ADD("TRANSFER", "REPLACE_LOGICAL_TABLE",
-                         "task_id", ctx_->task_id_,
-                         "tenant_id", ctx_->tenant_id_,
-                         "src_ls_id", ctx_->src_ls_id_.id(),
-                         "dest_ls_id", ctx_->dest_ls_id_.id(),
-                         "tablet_id", tablet_info.tablet_id_.id());
+      ObErrsimBackfillPointType point_type(ObErrsimBackfillPointType::TYPE::ERRSIM_REPLACE_AFTER);
+      if (ctx_->errsim_point_info_.is_errsim_point(point_type)) {
+        ret = OB_EAGAIN;
+        LOG_WARN("[ERRSIM TRANSFER] errsim transfer replace after", K(ret), K(point_type));
+      }
+      SERVER_EVENT_ADD("TRANSFER", "REPLACE_LOGICAL_TABLE",
+                       "task_id", ctx_->task_id_,
+                       "tenant_id", ctx_->tenant_id_,
+                       "src_ls_id", ctx_->src_ls_id_.id(),
+                       "dest_ls_id", ctx_->dest_ls_id_.id(),
+                       "tablet_id", tablet_info.tablet_id_.id());
 #endif
-        const int64_t end_ts = ObTimeUtility::current_time();
-        process_transfer_perf_diagnose_(end_ts, start_ts, true/*is_report*/, ls->get_ls_id(),
-            ctx_->backfill_scn_, tablet_info.tablet_id_, share::ObStorageHACostItemName::TRANSFER_REPLACE_END);
-      }
-      if (OB_FAIL(ret)) {
-        ObTransferUtils::add_transfer_error_diagnose_in_backfill(ls->get_ls_id(), ctx_->backfill_scn_, ret, tablet_info.tablet_id_, diagnose_result_msg);
-      }
+      const int64_t end_ts = ObTimeUtility::current_time();
+      process_transfer_perf_diagnose_(end_ts, start_ts, true/*is_report*/, ls->get_ls_id(),
+          ctx_->backfill_scn_, tablet_info.tablet_id_, share::ObStorageHACostItemName::TRANSFER_REPLACE_END);
+    }
+    if (OB_FAIL(ret)) {
+      ObTransferUtils::add_transfer_error_diagnose_in_backfill(ls->get_ls_id(), ctx_->backfill_scn_, ret, tablet_info.tablet_id_, diagnose_result_msg);
     }
   }
   return ret;

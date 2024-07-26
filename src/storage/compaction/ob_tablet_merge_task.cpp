@@ -152,10 +152,10 @@ int ObMergeParameter::init(compaction::ObTabletMergeCtx &merge_ctx, const int64_
     merge_scn_ = merge_ctx.merge_scn_;
 
     if (merge_scn_ > merge_ctx.scn_range_.end_scn_) {
-      if (ObMergeType::BACKFILL_TX_MERGE != merge_type_) {
+      if (!merge_ctx.is_backfill_) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("merge scn is bigger than scn range but merge type is not backfill, unexpected",
-            K(ret), K(merge_scn_), K(merge_ctx.scn_range_), K(merge_type_));
+        LOG_WARN("merge scn is bigger than scn range but merge is not backfill, unexpected",
+            K(ret), K(merge_scn_), K(merge_ctx.scn_range_), K(merge_type_), K(merge_ctx.is_backfill_));
       } else {
         FLOG_INFO("set backfill merge scn", K(merge_scn_), K(merge_ctx.scn_range_), K(merge_type_));
       }
