@@ -1176,7 +1176,8 @@ int ObComplementWriteTask::do_local_scan()
       LOG_WARN("ddl sim failure", K(ret), KPC(param_));
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(param_->orig_tablet_id_,
         ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
-        param_->snapshot_version_, iterator, allow_not_ready))) {
+        param_->snapshot_version_, param_->snapshot_version_,
+        iterator, allow_not_ready))) {
       if (OB_REPLICA_NOT_READABLE == ret) {
         ret = OB_EAGAIN;
       } else {

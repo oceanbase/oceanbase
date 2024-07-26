@@ -1458,6 +1458,9 @@ int ObMultipleMerge::refresh_tablet_iter()
     const int64_t remain_timeout = THIS_WORKER.get_timeout_remain();
     const share::ObLSID &ls_id = access_ctx_->ls_id_;
     const common::ObTabletID &tablet_id = get_table_param_->tablet_iter_.get_tablet()->get_tablet_meta().tablet_id_;
+    const int64_t snapshot_version = get_table_param_->sample_info_.is_no_sample()
+      ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
+      : INT64_MAX;
     if (OB_UNLIKELY(remain_timeout <= 0)) {
       ret = OB_TIMEOUT;
       LOG_WARN("timeout reached", K(ret), K(ls_id), K(tablet_id), K(remain_timeout));
@@ -1469,9 +1472,8 @@ int ObMultipleMerge::refresh_tablet_iter()
     } else if (OB_FAIL(ls_handle.get_ls()->get_tablet_svr()->get_read_tables(
         tablet_id,
         remain_timeout,
-        get_table_param_->sample_info_.is_no_sample()
-          ? access_ctx_->store_ctx_->mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx()
-          : INT64_MAX,
+        snapshot_version,
+        snapshot_version,
         get_table_param_->tablet_iter_,
         false/*allow_not_ready*/))) {
       LOG_WARN("failed to refresh tablet iterator", K(ret), K(ls_id), K_(get_table_param), KP_(access_param));
