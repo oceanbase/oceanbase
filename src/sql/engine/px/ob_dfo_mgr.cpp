@@ -615,6 +615,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       dfo->set_execution_id(exec_ctx.get_my_session()->get_current_execution_id());
       dfo->set_px_sequence_id(dfo_int_gen.get_px_sequence_id());
       dfo->set_partition_random_affinitize(partition_random_affinitize);
+      dfo->set_query_sql(px_coord_info.coord_.query_sql());
       if (OB_NOT_NULL(phy_op->get_phy_plan()) && phy_op->get_phy_plan()->is_enable_px_fast_reclaim()) {
         ObDetectableId sqc_detectable_id;
         // if generate_detectable_id failed, means that server id is not ready
@@ -656,6 +657,7 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
       dfo->set_dfo_id(transmit->get_dfo_id());
       dfo->set_execution_id(exec_ctx.get_my_session()->get_current_execution_id());
       dfo->set_px_sequence_id(dfo_int_gen.get_px_sequence_id());
+      dfo->set_query_sql(px_coord_info.coord_.query_sql());
       if (OB_NOT_NULL(phy_op->get_phy_plan()) && phy_op->get_phy_plan()->is_enable_px_fast_reclaim()) {
         ObDetectableId sqc_detectable_id;
         // if generate_detectable_id failed, means that server id is not ready

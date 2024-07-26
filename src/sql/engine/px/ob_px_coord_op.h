@@ -90,6 +90,7 @@ public:
       ObExecContext &ctx, ObDfo &parent, dtl::ObDtlChTotalInfo &ch_info) override;
   virtual int notify_peers_mock_eof(
       ObDfo *dfo, int64_t timeout_ts, common::ObAddr addr) const;
+  const ObString &query_sql() { return query_sql_; }
 protected:
   virtual int free_allocator() { return common::OB_SUCCESS; }
   /* destroy all channel */
@@ -155,6 +156,7 @@ protected:
   int64_t batch_rescan_param_version_;
   ObExtraServerAliveCheck server_alive_checker_;
   int64_t last_px_batch_rescan_size_;
+  ObString query_sql_;
 };
 
 class ObPxCoordSpec : public ObPxReceiveSpec
