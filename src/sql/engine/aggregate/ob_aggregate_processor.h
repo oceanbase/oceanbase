@@ -1002,6 +1002,9 @@ private:
                             ObEvalCtx &ctx,
                             GroupConcatExtraResult *&extra,
                             ObDatum &concat_result);
+  int narrow_st_collect_result(ObIAllocator &allocator,
+                               const ObGeometry *&source_gc,
+                               ObGeometry *&narrow_gc);
   int get_rb_build_agg_result(const ObAggrInfo &aggr_info,
                               GroupConcatExtraResult *&extra,
                               ObDatum &concat_result);

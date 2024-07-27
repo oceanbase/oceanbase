@@ -8446,6 +8446,8 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
     ObGeometrycollection *gc = NULL;
     ObGeometry *cur_geo = NULL;
 
+    bool has_pt = false, has_ls = false, has_py = false, has_other = false;
+
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
       if (OB_ISNULL(storted_row)) {
         ret = OB_ERR_UNEXPECTED;
@@ -8483,7 +8485,23 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
             LOG_WARN("geometry in collection must in the same SRS", K(ret));
             break;
           } else {
+            switch (cur_geo->type()) {
+              case common::ObGeoType::POINT:
+                has_pt = TRUE;
+                break;
+              case common::ObGeoType::LINESTRING:
+                has_ls = TRUE;
+                break;
+              case common::ObGeoType::POLYGON:
+                has_py = TRUE;
+                break;
+              default:
+                has_other = TRUE;
+                break;
+            }
             gc->push_back(*cur_geo);
+            // release cur_geo 
+            // cur_geo = NULL;
           }
         }
       }
@@ -8496,15 +8514,38 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
         concat_result.set_null();
       } else {
         ObString res_wkb;
-        if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*static_cast<ObGeometry*>(gc), 
-                                               *aggr_info.expr_, ctx, srs, res_wkb))) {
+        ObGeometry* narrow_gc = gc;
+        if (!has_other && !(has_pt & has_ls & has_py) && (has_pt ^ has_ls ^ has_py)
+            && OB_FAIL(narrow_st_collect_result(tmp_alloc, gc, narrow_gc))) { 
+          LOG_WARN("fail to get narrowest multigeometry", K(ret));
+        } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(narrow_gc, *aggr_info.expr_, 
+                                                      ctx, srs, res_wkb))) {
           LOG_WARN("failed to write geometry to wkb", K(ret));
         } else {
           concat_result.set_string(res_wkb);
         }
+
+        // release narrow_gc
+        // narrow_gc = NULL;
       }
     }
+
+    if (gc != NULL){
+      // release gc
+    }
   }
+  return ret;
+}
+
+int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
+                                                   const ObGeometry *&source_gc,
+                                                   ObGeometry *&narrow_gc)
+{
+  int ret = OB_SUCCESS;
+  narrow_gc = NULL;
+
+  // 分为geom和geog两类，分别调用split
+
   return ret;
 }
 
