@@ -320,16 +320,18 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
   int ret = OB_SUCCESS;
   const bool is_arbitration_mode = OBSERVER.is_arbitration_mode();
   int64_t memory_limit = server_config.memory_limit;
-
+  int64_t phy_mem_size = get_phy_mem_size();
   if (0 == memory_limit) {
-    memory_limit = get_phy_mem_size() * server_config.memory_limit_percentage / 100;
+    memory_limit = phy_mem_size * server_config.memory_limit_percentage / 100;
+  } else if (memory_limit >= phy_mem_size) {
+    OB_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "memory_limit is larger than phy_mem_size", K(memory_limit), K(phy_mem_size));
   }
 
   if (is_arbitration_mode) {
     if (memory_limit < (1LL << 30) ) {
       // The memory_limit should not be less than 1G for arbitration mode
       ret = OB_INVALID_CONFIG;
-      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
+      LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), K(phy_mem_size));
     } else {
       memory_limit_ = memory_limit;
       LOG_INFO("update observer memory config success", K_(memory_limit));
@@ -337,7 +339,7 @@ int ObServerMemoryConfig::reload_config(const ObServerConfig& server_config)
   } else if (memory_limit < (4LL << 30)) {
     // The memory_limit should not be less than 4G for observer
     ret = OB_INVALID_CONFIG;
-    LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), "phy mem", get_phy_mem_size());
+    LOG_ERROR("memory_limit with unexpected value", K(ret), K(memory_limit), K(phy_mem_size));
   } else {
     // update observer memory config
     int64_t system_memory = server_config.system_memory;
