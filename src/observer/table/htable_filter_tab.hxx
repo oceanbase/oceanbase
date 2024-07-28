@@ -45,29 +45,30 @@
      QualifierFilter = 260,
      SingleColumnValueFilter = 261,
      PageFilter = 262,
-     ColumnCountGetFilter = 263,
-     CheckAndMutateFilter = 264,
-     PrefixFilter = 265,
-     TableCompareFilter = 266,
-     LESS = 267,
-     LESS_OR_EQUAL = 268,
-     EQUAL = 269,
-     NOT_EQUAL = 270,
-     GREATER = 271,
-     GREATER_OR_EQUAL = 272,
-     NO_OP = 273,
-     IS = 274,
-     IS_NOT = 275,
-     BOOL_VALUE = 276,
-     STRING_VALUE = 277,
-     INT_VALUE = 278,
-     OR = 279,
-     AND = 280,
-     T_OR = 281,
-     T_AND = 282,
-     WHILE = 283,
-     SKIP = 284,
-     ERROR = 285
+     ColumnPaginationFilter = 263,
+     ColumnCountGetFilter = 264,
+     CheckAndMutateFilter = 265,
+     PrefixFilter = 266,
+     TableCompareFilter = 267,
+     LESS = 268,
+     LESS_OR_EQUAL = 269,
+     EQUAL = 270,
+     NOT_EQUAL = 271,
+     GREATER = 272,
+     GREATER_OR_EQUAL = 273,
+     NO_OP = 274,
+     IS = 275,
+     IS_NOT = 276,
+     BOOL_VALUE = 277,
+     STRING_VALUE = 278,
+     INT_VALUE = 279,
+     OR = 280,
+     AND = 281,
+     T_OR = 282,
+     T_AND = 283,
+     WHILE = 284,
+     SKIP = 285,
+     ERROR = 286
    };
 #endif
 
@@ -89,7 +90,7 @@ typedef union YYSTYPE
 
 
 /* Line 1676 of yacc.c  */
-#line 93 "../../../src/observer/table/htable_filter_tab.hxx"
+#line 94 "../../../src/observer/table/htable_filter_tab.hxx"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

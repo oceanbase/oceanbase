@@ -1134,6 +1134,52 @@ int PageFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &po
 }
 
 ////////////////////////////////////////////////////////////////
+int ColumnPaginationFilter::filter_cell(const ObHTableCell &cell, ReturnCode &ret_code)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(cell);
+  if (count_ >= offset_ + limit_) {
+    ret_code = ReturnCode::NEXT_ROW;
+  } else{
+    ret_code = count_ < offset_ ? ReturnCode::NEXT_COL : ReturnCode::INCLUDE_AND_NEXT_COL;
+    count_++;
+  }
+  return ret;
+}
+
+void ColumnPaginationFilter::reset()
+{
+  count_ = 0;
+  return;
+}
+
+// statement is "ColumnPaginationFilter"
+int64_t ColumnPaginationFilter::get_format_filter_string_length() const
+{
+  return strlen("ColumnPaginationFilter");
+}
+
+int ColumnPaginationFilter::get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(buf)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("buf is bull", KR(ret));
+  } else {
+    int64_t n = snprintf(buf + pos, buf_len - pos, "ColumnPaginationFilter");
+    if (n < 0 || n > buf_len - pos) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_WARN("snprintf error or buf not enough", KR(ret), K(n), K(pos), K(buf_len));
+    } else {
+      pos += n;
+    }
+  }
+
+  return ret;
+}
+
+////////////////////////////////////////////////////////////////
 void ColumnCountGetFilter::reset()
 {
   count_ = 0;

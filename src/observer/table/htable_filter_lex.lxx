@@ -89,6 +89,7 @@ ValueFilter { return ValueFilter; }
 QualifierFilter { return QualifierFilter; }
 SingleColumnValueFilter { return SingleColumnValueFilter; }
 PageFilter { return PageFilter; }
+ColumnPaginationFilter { return ColumnPaginationFilter; }
 ColumnCountGetFilter { return ColumnCountGetFilter; }
 CheckAndMutateFilter { return CheckAndMutateFilter; }
 PrefixFilter { return PrefixFilter; }

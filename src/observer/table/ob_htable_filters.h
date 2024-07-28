@@ -499,6 +499,31 @@ private:
   DISALLOW_COPY_AND_ASSIGN(PageFilter);
 };
 
+
+/// Simple filter that limits results to a specific column size
+class ColumnPaginationFilter: public FilterBase
+{
+public:
+  ColumnPaginationFilter(int64_t limit, int64_t offset)
+      : limit_(limit),
+        offset_(offset),
+        count_(0)
+  {}
+  virtual ~ColumnPaginationFilter() {}
+  virtual int filter_cell(const ObHTableCell &cell, ReturnCode &ret_code) override;
+  virtual void reset() override;
+  virtual int64_t get_format_filter_string_length() const override;
+  virtual int get_format_filter_string(char *buf, int64_t buf_len, int64_t &pos) const override;
+  TO_STRING_KV("filter", "ColumnPaginationFilter", K_(limit), K_(offset));
+private:
+  int64_t limit_;
+  int64_t offset_;
+  int64_t count_;
+  // disallow copy
+  DISALLOW_COPY_AND_ASSIGN(ColumnPaginationFilter);
+};
+
+
 /// Simple filter that returns first N columns on row only.
 class ColumnCountGetFilter: public FilterBase
 {
