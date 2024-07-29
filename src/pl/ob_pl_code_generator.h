@@ -647,6 +647,8 @@ public:
                                 const ObPLStmt &s,
                                 jit::ObLLVMValue &p_result_obj);
 
+  ObSQLSessionInfo& get_session_info() const { return session_info_; }
+
 private:
   int init_spi_service();
   int init_adt_service();
