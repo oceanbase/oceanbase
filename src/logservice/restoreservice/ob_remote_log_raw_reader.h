@@ -53,7 +53,7 @@ public:
   //            iteraotr should be inited again to follow this change
   ObRemoteLogRawReader(GetSourceFunc &get_source_func,
       UpdateSourceFunc &update_source_func = DefaultUpdateSourceFunctor(),
-       RefreshStorageInfoFunc &refresh_storage_info_func = DefaultRefreshStorageInfoFunctor());
+      RefreshStorageInfoFunc &refresh_storage_info_func = DefaultRefreshStorageInfoFunctor());
   virtual ~ObRemoteLogRawReader();
 public:
   // init remote log raw reader, as archive log directory is splitted by scn, the pre_scn is indispensable to help locate directory

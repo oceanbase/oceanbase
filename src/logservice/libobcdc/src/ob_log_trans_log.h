@@ -18,7 +18,8 @@
 #include "storage/tx/ob_trans_log.h"       // ObTransPrepareLog, ObTransCommitLog
 #include "lib/queue/ob_link.h"             // ObLink
 #include "lib/allocator/ob_mod_define.h"
-#include "ob_cdc_lightly_sorted_list.h"    // SortedLightyList
+#include "ob_cdc_sorted_treeify_list.h"    // SortedTreeifyList
+#include "ob_cdc_sorted_list_iterator.h"   // SortedListIterator
 #include "ob_log_utils.h"                  // ObLogLSNArray
 
 namespace oceanbase
@@ -70,19 +71,26 @@ private:
   LogEntryNode    *next_;         // next LogEntry(for the same PartTransTask)
 };
 
-typedef SortedLightyList<LogEntryNode> SortedLogEntryArray;
+struct LogEntryNodeComparator
+{
+  static int compare(const LogEntryNode& node1, const LogEntryNode& node2) {
+    return node1.get_lsn().val_ > node2.get_lsn().val_ ? 1 : (node1.get_lsn().val_ == node2.get_lsn().val_ ? 0 : -1);
+  }
+};
+
+typedef SortedTreeifyList<LogEntryNode, LogEntryNodeComparator> SortedLogEntryList;
 class SortedLogEntryInfo
 {
 public:
-  SortedLogEntryInfo() :
+  SortedLogEntryInfo(ObIAllocator& allocator) :
       last_fetched_redo_log_entry_(NULL),
-      fetched_log_entry_arr_(true), /*is_unique*/
+      fetched_log_entry_arr_(allocator, true), /* auto_treeify_mode=true */
       recorded_lsn_arr_() {}
   ~SortedLogEntryInfo() { reset(); }
   void reset()
   {
     last_fetched_redo_log_entry_ = NULL;
-    fetched_log_entry_arr_.reset_data();
+    fetched_log_entry_arr_.reset();
     recorded_lsn_arr_.reset();
   }
 
@@ -100,7 +108,10 @@ public:
   // note: RollbackTo is treated as Redo.
   int is_all_log_entry_fetched(bool &is_all_redo_fetched);
 
-  SortedLogEntryArray &get_fetched_log_entry_node_arr() { return fetched_log_entry_arr_; }
+  SortedLogEntryList &get_fetched_log_entry_node_arr() { return fetched_log_entry_arr_; }
+
+  int treeify_fetched_log_entry_list() { return fetched_log_entry_arr_.treeify(); }
+  int untreeify_fetched_log_entry_list() { return fetched_log_entry_arr_.untreeify(); }
 
   TO_STRING_KV(
       "fetched_log_entry_count", fetched_log_entry_arr_.count(),
@@ -110,7 +121,7 @@ public:
 private:
   LogEntryNode *last_fetched_redo_log_entry_;
   // hold all fetched log_entry_info.(include lsn of log_entry which contains redo_log and rollback_to log)
-  SortedLogEntryArray fetched_log_entry_arr_;
+  SortedLogEntryList fetched_log_entry_arr_;
   // hold all prev_redo_log_lsn in all TxLog:
   // 1. prev_redo_lsn_arr recorded by RecordLog/CommitInfoLog
   // 2. lsn of commit_info_log_entry that contains redo_log.
@@ -150,7 +161,7 @@ public:
   void set_host_logentry_node(LogEntryNode *log_entry_node) { host_log_entry_ = log_entry_node; };
   LogEntryNode *get_host_logentry_node() { return host_log_entry_; }
   // Is the log ID sequentially located before the target node
-  bool before(const RedoLogMetaNode &node) { return start_log_lsn_ < node.start_log_lsn_; }
+  bool before(const RedoLogMetaNode &node) const { return start_log_lsn_ < node.start_log_lsn_; }
 
   void set_data(char *data, int64_t data_len)
   {
@@ -324,75 +335,72 @@ private:
 
 class IStmtTask;
 class DmlStmtTask;
+struct RedoLogMetaComparator
+{
+  static int compare(const RedoLogMetaNode& a, const RedoLogMetaNode& b)
+  {
+    return (a.before(b)) ? -1 : ((b.before(a)) ? 1 : 0);
+  }
+};
+typedef SortedTreeifyList<RedoLogMetaNode, RedoLogMetaComparator> RedoNodeList;
+typedef SortedTreeifyList<RedoLogMetaNode, RedoLogMetaComparator>::Iterator RedoNodeIterator;
 // Ordered Redo log list
 struct SortedRedoLogList
 {
-  int32_t     node_num_;
   // When the data of node need be stored, than need callback to increase ready_node_num
   // Otherwise, we can increase ready_node_num directly
   int32_t     ready_node_num_;
-  int32_t     log_num_;
   bool        is_dml_stmt_iter_end_;
-
-  RedoLogMetaNode *head_;
-  RedoLogMetaNode *tail_;
-  RedoLogMetaNode *last_push_node_;
-  RedoLogMetaNode *cur_dispatch_redo_;
-  RedoLogMetaNode *cur_sort_redo_;
+  RedoNodeList    redo_node_list_;
+  RedoNodeIterator cur_dispatch_redo_;
+  RedoNodeIterator cur_sort_redo_;
   ObLink          *cur_sort_stmt_;
   RedoSortedProgress sorted_progress_;
 
-  SortedRedoLogList() :
-      node_num_(0),
+  SortedRedoLogList(ObIAllocator& allocator) :
       ready_node_num_(0),
-      log_num_(0),
       is_dml_stmt_iter_end_(false),
-      head_(NULL),
-      tail_(NULL),
-      last_push_node_(NULL),
-      cur_dispatch_redo_(NULL),
-      cur_sort_redo_(NULL),
+      redo_node_list_(allocator, true), /* auto_treeify_mode=true */
+      cur_dispatch_redo_(&redo_node_list_, nullptr),
+      cur_sort_redo_(&redo_node_list_, nullptr),
       cur_sort_stmt_(NULL),
       sorted_progress_()
   {}
 
   ~SortedRedoLogList() { reset(); }
 
-  int32_t get_node_number() const { return ATOMIC_LOAD(&node_num_); }
+  int32_t get_node_number() const { return redo_node_list_.count(); }
   int32_t get_ready_node_number() const { return ATOMIC_LOAD(&ready_node_num_); }
   void inc_ready_node_num() { ATOMIC_INC(&ready_node_num_); }
   int check_node_num_equality(bool &is_equal);
 
   void reset()
   {
-    node_num_ = 0;
     ready_node_num_ = 0;
-    log_num_ = 0;
     is_dml_stmt_iter_end_ = false;
-    head_ = NULL;
-    tail_ = NULL;
-    last_push_node_ = NULL;
-    cur_dispatch_redo_ = NULL;
-    cur_sort_redo_ = NULL;
+    cur_dispatch_redo_.reset();
+    cur_sort_redo_.reset();
     cur_sort_stmt_ = NULL;
     sorted_progress_.reset();
+    redo_node_list_.reset();
   }
 
   bool is_valid() const
   {
-    return node_num_ > 0
-        && log_num_ > 0
-        && NULL != head_
-        && NULL != tail_
-        && NULL != last_push_node_;
+    return get_node_number() > 0;
   }
 
-  OB_INLINE bool is_dispatch_finish() const { return node_num_ == sorted_progress_.get_dispatched_redo_count(); }
+  OB_INLINE bool is_dispatch_finish() const { return get_node_number() == sorted_progress_.get_dispatched_redo_count(); }
 
   OB_INLINE bool has_dispatched_but_unsorted_redo() const
   { return sorted_progress_.get_dispatched_not_sort_redo_count() > 0; }
 
   OB_INLINE void set_sorted_row_seq_no(const transaction::ObTxSEQ &row_seq_no) { sorted_progress_.set_sorted_row_seq_no(row_seq_no); }
+
+  int treeify() { return redo_node_list_.treeify(); }
+  int untreeify() { return redo_node_list_.untreeify(); }
+  RedoNodeIterator redo_iter_begin() { return redo_node_list_.begin(); }
+  RedoNodeIterator redo_iter_end() { return redo_node_list_.end(); }
 
   bool is_dml_stmt_iter_end() const { return is_dml_stmt_iter_end_; }
 
@@ -436,25 +444,19 @@ struct SortedRedoLogList
   int next_dml_stmt(ObLink *&dml_stmt_task);
 
   TO_STRING_KV(
-      K_(node_num),
-      K_(log_num),
       K_(ready_node_num),
-      KP_(head),
-      KP_(tail),
-      KP_(last_push_node),
       "redo_sorted_progress", sorted_progress_,
-      KP_(cur_dispatch_redo),
-      KP_(cur_sort_redo),
-      "cur_sort_redo", static_cast<DmlRedoLogNode*>(cur_sort_redo_),
+      K_(cur_dispatch_redo),
+      K_(cur_sort_redo),
       KP_(cur_sort_stmt),
       K_(is_dml_stmt_iter_end));
 
   void mark_sys_ls_dml_trans_dispatched()
   {
-    cur_dispatch_redo_ = NULL;
-    cur_sort_redo_ = NULL;
+    cur_dispatch_redo_.reset();
+    cur_sort_redo_.reset();
     cur_sort_stmt_ = NULL;
-    sorted_progress_.reset_for_sys_ls_dml_trans(node_num_);
+    sorted_progress_.reset_for_sys_ls_dml_trans(get_node_number());
   }
 
 };

@@ -360,7 +360,7 @@ int MutatorRow::parse_columns_(
   } else if (OB_FAIL(row_reader.read_row(col_data, col_data_size, nullptr, datum_row))) {
     LOG_WARN("Failed to read datum row", KR(ret), K(tenant_id), K(table_id), K(is_parse_new_col));
   } else {
-    LOG_DEBUG("prepare to handle datum_row", K(datum_row));
+    OBLOG_FORMATTER_LOG(DEBUG, "prepare to handle datum_row", K(is_parse_new_col), K(datum_row));
     // Iterate through all Cells using Cell Reader
     for (int64_t column_stored_idx = 0; OB_SUCC(ret) && column_stored_idx < datum_row.get_column_count(); column_stored_idx++) {
       const ObObj *value = NULL;
@@ -371,8 +371,6 @@ int MutatorRow::parse_columns_(
       if (OB_FAIL(deep_copy_encoded_column_value_(datum))) {
         LOG_ERROR("deep_copy_encoded_column_value_ failed", KR(ret),
             K(tenant_id), K(table_id), K(column_stored_idx), K(datum), K(is_parse_new_col));
-      } else if (datum.is_nop()) {
-        LOG_DEBUG("ignore nop datum", K(column_stored_idx), K(datum));
       } else if (OB_FAIL(get_column_info_(
             tb_schema_info,
             all_ddl_operation_table_schema_info,
@@ -381,6 +379,29 @@ int MutatorRow::parse_columns_(
             column_id,
             column_schema_info))) {
         LOG_ERROR("get_column_info", KR(ret), K_(table_id), K(column_stored_idx));
+      } else if (datum.is_nop()) {
+        OBLOG_FORMATTER_LOG(DEBUG, "handle nop datum", K(column_stored_idx), K(is_parse_new_col), K(datum));
+        if (OB_NOT_NULL(column_schema_info) && column_schema_info->is_usr_column()) {
+          ColValue *cv_node = nullptr;
+          if (OB_ISNULL(cv_node = static_cast<ColValue*>(allocator_.alloc(sizeof(ColValue))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_ERROR("allcate memory for ColValue failed", KR(ret), "size", sizeof(ColValue));
+          } else if (OB_ISNULL(column_schema_info)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("column_schema_info should be not null", KR(ret), K(tenant_id), K(table_id), K(column_stored_idx));
+          } else {
+            cv_node->reset();
+            cv_node->column_id_ = column_schema_info->get_column_id();
+            cv_node->is_col_nop_ = 1;
+            if (OB_FAIL(cols.add(cv_node))) {
+              LOG_ERROR("add column_node into ColValueList failed", KR(ret), KPC(cv_node), K(tenant_id), K(table_id));
+            }
+          }
+          if (OB_FAIL(ret) && OB_NOT_NULL(cv_node)) {
+            allocator_.free(cv_node);
+            cv_node = nullptr;
+          }
+        }
       } else {
         bool ignore_column = false;
         if (OB_NOT_NULL(tb_schema_info)) {
@@ -390,8 +411,8 @@ int MutatorRow::parse_columns_(
           // if is hidden column of udt, is_usr_column is false, is_udt_column is true.
           if (! (column_schema_info->is_usr_column() || column_schema_info->is_udt_column())) {
             // ignore non user columns
-            LOG_DEBUG("ignore non user-required column",
-                K(tenant_id), K(table_id), K(column_stored_idx), K(column_schema_info));
+            OBLOG_FORMATTER_LOG(DEBUG, "ignore non user-required column",
+                K(tenant_id), K(table_id), K(column_stored_idx), K(is_parse_new_col), K(column_schema_info));
 
             ignore_column = true;
           // when udt is fast deleted, main column is marked as hidden and is_usr_column is false, but not real delete.
@@ -438,10 +459,10 @@ int MutatorRow::parse_columns_(
             } else if (is_lob_storage) {
               const ObLobCommon &lob_common = datum.get_lob_data();
               is_out_row = ! lob_common.in_row_;
-              LOG_DEBUG("handle_lob_v2_data", K(column_stored_idx), K(lob_common), K(obj));
+              OBLOG_FORMATTER_LOG(DEBUG, "handle_lob_v2_data", K(is_parse_new_col), K(column_stored_idx), K(lob_common), K(obj));
 
               if (! is_out_row) {
-                LOG_DEBUG("is_lob_storage in row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common), K(obj));
+                OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage in row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common), K(obj));
                 obj.set_string(obj.get_type(), lob_common.get_inrow_data_ptr(), lob_common.get_byte_size(datum.len_));
               } else {
                 const ObLobData &lob_data = *(reinterpret_cast<const ObLobData *>(lob_common.buffer_));
@@ -449,7 +470,7 @@ int MutatorRow::parse_columns_(
                 const ObLobDataOutRowCtx *lob_data_out_row_ctx =
                   reinterpret_cast<const ObLobDataOutRowCtx *>(lob_data.buffer_);
 
-                LOG_DEBUG("is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
+                OBLOG_FORMATTER_LOG(DEBUG, "is_lob_storage out row", K(column_id), K(is_lob_storage), K(is_parse_new_col), K(lob_common),
                     K(lob_data), K(obj), KPC(lob_data_out_row_ctx));
 
                 if (is_parse_new_col) {
@@ -589,7 +610,7 @@ int MutatorRow::add_column_(
       collation_type = column_schema_info->get_collation_type();
     }
 
-    LOG_DEBUG("column_cast: ",
+    OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ",
         K(tenant_id),
         K(table_id),
         K(column_id),
@@ -598,22 +619,22 @@ int MutatorRow::add_column_(
 
     // If the LOB is larger than 2M, do not print the contents, but the address and length, in case of taking too long to print the log
     if (value->is_lob() && value->get_string_len() > 2 * _M_) {
-      LOG_DEBUG("column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
+      OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
           "old_obj_len", value->get_string_len(),
           "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
           "new_obj_len", cv_node->value_.get_string_len());
     } else if (value->is_json() && value->get_string_len() > 2 * _M_) { // Json may exceed 2M
-      LOG_DEBUG("column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
+      OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
           "old_obj_len", value->get_string_len(),
           "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
           "new_obj_len", cv_node->value_.get_string_len());
     } else if (value->is_geometry() && value->get_string_len() > 2 * _M_) { // geometry may exceed 2M
-      LOG_DEBUG("column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
+      OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj_ptr", (void *)value->get_string_ptr(),
           "old_obj_len", value->get_string_len(),
           "new_obj_ptr", (void *)cv_node->value_.get_string_ptr(),
           "new_obj_len", cv_node->value_.get_string_len());
     } else {
-      LOG_DEBUG("column_cast: ", "old_obj", *value, "new_obj",
+      OBLOG_FORMATTER_LOG(DEBUG, "column_cast: ", "old_obj", *value, "new_obj",
           cv_node->value_);
     }
 
@@ -698,8 +719,8 @@ int MutatorRow::parse_rowkey_(
   const ObObj *rowkey_objs = rowkey.get_obj_ptr();
 
   if (OB_UNLIKELY(rowkey_count <= 0) || OB_ISNULL(rowkey_objs)) {
-    LOG_ERROR("rowkey is invalid", K(rowkey_count), K(rowkey_objs), K(rowkey));
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("rowkey is invalid", KR(ret), K(rowkey_count), K(rowkey_objs), K(rowkey));
   } else {
     for (int64_t index = 0; OB_SUCC(ret) && index < rowkey_count; index++) {
       // Column ID is invalid when Table Schema is not provided
@@ -726,7 +747,7 @@ int MutatorRow::parse_rowkey_(
               K(tenant_id), K(table_id), K(rowkey_count), K(rowkey_info), KPC(tb_schema_info));
         } else if (! column_schema_info->is_usr_column()) {
           // ignore hidden rowkey column
-          LOG_DEBUG("ignore non user-required rowkey column", KPC(column_schema_info),
+          OBLOG_FORMATTER_LOG(DEBUG, "ignore non user-required rowkey column", KPC(column_schema_info),
               K(tenant_id), K(table_id), K(column_id));
 
           ignore_column = true;
@@ -783,7 +804,7 @@ int MutatorRow::parse_columns_(
   } else if (OB_FAIL(row_reader.read_row(col_data, col_data_size, nullptr, datum_row))) {
     LOG_ERROR("Failed to read datum row", KR(ret));
   } else {
-    LOG_DEBUG("parse_columns_", K(is_parse_new_col), K(datum_row));
+    OBLOG_FORMATTER_LOG(DEBUG, "parse_columns_", K(is_parse_new_col), K(datum_row));
 
     // Iterate through all Cells using Cell Reader
     for (int64_t i = 0; OB_SUCC(ret) && i < datum_row.get_column_count(); i++) {
@@ -795,11 +816,11 @@ int MutatorRow::parse_columns_(
       if (OB_FAIL(deep_copy_encoded_column_value_(datum))) {
         LOG_ERROR("deep_copy_encoded_column_value_ failed", KR(ret), "column_stored_idx", i, K(datum), K(is_parse_new_col));
       } else if (datum.is_nop()) {
-        LOG_DEBUG("ignore nop datum", "column_stored_idx", i, K(datum));
+        OBLOG_FORMATTER_LOG(DEBUG, "ignore nop datum", "column_stored_idx", i, K(datum));
       } else if (OB_INVALID_ID == column_id) {
         // Note: the column_id obtained here may be invalid
         // For example a delete statement with only one cell and an invalid column_id in the cell
-        LOG_DEBUG("cell column_id is invalid", K(i), K(datum_row), K_(table_id), K_(rowkey));
+        OBLOG_FORMATTER_LOG(DEBUG, "cell column_id is invalid", K(i), K(datum_row), K_(table_id), K_(rowkey));
       } else {
         if (OB_SUCC(ret)) {
           ObObjMeta obj_meta;
@@ -883,8 +904,8 @@ int MutatorRow::add_column_(
 
   // NOTE: Allow obj2str_helper and column_schema to be empty
   if (OB_ISNULL(cv_node)) {
-    LOG_ERROR("allocate memory for ColValue fail", "size", sizeof(ColValue));
     ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("allocate memory for ColValue fail", KR(ret), "size", sizeof(ColValue));
   } else {
     cv_node->reset();
     cv_node->value_ = *value;
@@ -1456,10 +1477,10 @@ int DdlStmtTask::parse_ddl_info(
 
   if (OB_SUCCESS == ret) {
     _LOG_INFO("[STAT] [DDL] [PARSE] OP_TYPE=%s(%ld) SCHEMA_VERSION=%ld "
-        "VERSION_DELAY=%.3lf(sec) EXEC_TENANT_ID=%ld TABLE_ID=%ld TENANT_ID=%ld DB_ID=%ld "
+        "VERSION_DELAY=%s EXEC_TENANT_ID=%ld TABLE_ID=%ld TENANT_ID=%ld DB_ID=%ld "
         "TG_ID=%ld DDL_STMT=[%s] CONTAIN_DDL=%d IS_VALID=%d",
         ObSchemaOperation::type_str((ObSchemaOperationType)ddl_operation_type_),
-        ddl_operation_type_, ddl_op_schema_version_, get_delay_sec(ddl_op_schema_version_),
+        ddl_operation_type_, ddl_op_schema_version_, TS_TO_DELAY(ddl_op_schema_version_),
         ddl_exec_tenant_id_, ddl_op_table_id_, ddl_op_tenant_id_,
         ddl_op_database_id_, ddl_op_tablegroup_id_,
         to_cstring(ddl_stmt_str_), contain_ddl_stmt, is_valid_ddl);
@@ -2195,6 +2216,8 @@ void ObLogEntryTask::set_row_ref_cnt(const int64_t row_ref_cnt)
 
 PartTransTask::PartTransTask() :
     ObLogResourceRecycleTask(ObLogResourceRecycleTask::PART_TRANS_TASK),
+    allocator_(),
+    log_entry_task_base_allocator_(),
     serve_state_(SERVED),
     cluster_id_(0),
     type_(TASK_TYPE_UNKNOWN),
@@ -2214,8 +2237,8 @@ PartTransTask::PartTransTask() :
     participants_(),
     trace_id_(),
     trace_info_(),
-    sorted_log_entry_info_(),
-    sorted_redo_list_(),
+    sorted_log_entry_info_(allocator_),
+    sorted_redo_list_(allocator_),
     part_tx_fetch_state_(0),
     rollback_list_(),
     ref_cnt_(0),
@@ -2234,9 +2257,7 @@ PartTransTask::PartTransTask() :
     wait_data_ready_cond_(),
     wait_formatted_cond_(NULL),
     output_br_count_by_turn_(0),
-    tic_update_infos_(),
-    allocator_(),
-    log_entry_task_base_allocator_()
+    tic_update_infos_()
 {
 }
 
@@ -3214,6 +3235,8 @@ int PartTransTask::commit(
           K(trans_commit_version), K(trans_type), K(ls_info_array), K(commit_log_lsn), KPC(this));
     } else if (OB_FAIL(to_string_part_trans_info_())) {
       LOG_ERROR("to_string_part_trans_info_str failed", KR(ret), K(trans_commit_version), K(cluster_id), K(commit_log_lsn), KPC(this));
+    } else if (OB_FAIL(untreeify_redo_list_())) {
+      LOG_ERROR("untreeify redo_list failed", KR(ret), K(trans_commit_version), K(cluster_id), K(commit_log_lsn), KPC(this));
     } else {
       // 3. trans_version, cluster_id and commit_log_lsn
       commit_ts_ = commit_log_submit_ts;
@@ -3238,6 +3261,7 @@ int PartTransTask::commit(
 
   return ret;
 }
+
 
 int PartTransTask::try_to_set_data_ready_status()
 {
@@ -3425,6 +3449,32 @@ int PartTransTask::parse_tablet_change_mds_(
     } else {
       LOG_DEBUG("get tablet_change_info", K_(tls_id), K_(trans_id), K(tablet_change_info), K(multi_data_source_node));
     }
+  }
+
+  return ret;
+}
+
+int PartTransTask::treeify_redo_list_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(sorted_log_entry_info_.treeify_fetched_log_entry_list())) {
+    LOG_ERROR("treeify fetched_log_entry_list failed", KR(ret), KPC(this));
+  } else if (OB_FAIL(sorted_redo_list_.treeify())) {
+    LOG_ERROR("treeify sorted_redo_list failed", KR(ret), KPC(this));
+  }
+
+  return ret;
+}
+
+int PartTransTask::untreeify_redo_list_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(sorted_log_entry_info_.untreeify_fetched_log_entry_list())) {
+    LOG_ERROR("untreeify fetched_log_entry_list failed", KR(ret), KPC(this));
+  } else if (OB_FAIL(sorted_redo_list_.untreeify())) {
+    LOG_ERROR("untreeify sorted_redo_list failed", KR(ret), KPC(this));
   }
 
   return ret;

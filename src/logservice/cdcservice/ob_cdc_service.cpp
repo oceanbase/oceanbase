@@ -26,6 +26,7 @@ ExpiredArchiveClientLSFunctor::ExpiredArchiveClientLSFunctor(const int64_t curre
     current_time_us_(current_time),
     valid_client_ls_cnt_v1_(0),
     valid_client_ls_cnt_v2_(0),
+    valid_client_ls_cnt_misc_(0),
     other_client_ls_cnt_(0)
 {
 }
@@ -34,6 +35,7 @@ ExpiredArchiveClientLSFunctor::~ExpiredArchiveClientLSFunctor()
 {
   valid_client_ls_cnt_v1_ = 0;
   valid_client_ls_cnt_v2_ = 0;
+  valid_client_ls_cnt_misc_ = 0;
   other_client_ls_cnt_ = 0;
 }
 
@@ -52,8 +54,7 @@ bool ExpiredArchiveClientLSFunctor::operator()(const ClientLSKey &key, ClientLSC
       } else if (is_v2_fetch_log_protocol(proto)) {
         valid_client_ls_cnt_v2_++;
       } else {
-        other_client_ls_cnt_++;
-        EXTLOG_LOG_RET(WARN, OB_ERR_UNEXPECTED, "get suspicious proto, unexpected", K(key), K(proto));
+        valid_client_ls_cnt_misc_++;
       }
     } else {
       other_client_ls_cnt_++;
@@ -457,9 +458,6 @@ int ObCdcService::get_or_create_client_ls_ctx(const obrpc::ObCdcRpcId &client_id
           }
         } else if (ObCdcFetchLogProtocolType::RawLogDataProto == proto_type) {
           ctx->set_proto_type(proto_type);
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          EXTLOG_LOG(WARN, "get invalid proto_type", K(proto_type), K(ls_id), K(client_id));
         }
       } else {
         EXTLOG_LOG(ERROR, "get client ls ctx from ctx map failed", KR(ret));
@@ -636,9 +634,10 @@ int ObCdcService::resize_log_ext_handler_()
     const int64_t other_ls_count = functor.get_other_client_ls_cnt();
     const int64_t valid_ls_v1_count = functor.get_valid_client_ls_v1_cnt();
     const int64_t valid_ls_v2_count = functor.get_valid_client_ls_v2_cnt();
+    const int64_t valid_ls_misc_count = functor.get_valid_client_ls_misc_cnt();
     const int64_t single_read_concurrency = 8; // default 8
     const int64_t new_concurrency = min(tenant_max_cpu, (single_read_concurrency - 1) *
-        (valid_ls_v1_count + valid_ls_v2_count));
+        (valid_ls_v1_count + valid_ls_v2_count + valid_ls_misc_count));
 
     if (OB_FAIL(log_ext_handler_.resize(new_concurrency))) {
       EXTLOG_LOG(WARN, "log_ext_handler failed to resize", K(new_concurrency));
@@ -646,7 +645,7 @@ int ObCdcService::resize_log_ext_handler_()
 
     if (OB_SUCC(ret)) {
       EXTLOG_LOG(INFO, "finish to resize log external storage handler", K(current_ts), K(tenant_max_cpu),
-          K(valid_ls_v1_count), K(valid_ls_v2_count), K(other_ls_count), K(new_concurrency));
+          K(valid_ls_v1_count), K(valid_ls_v2_count), K(valid_ls_misc_count), K(other_ls_count), K(new_concurrency));
     }
   }
 

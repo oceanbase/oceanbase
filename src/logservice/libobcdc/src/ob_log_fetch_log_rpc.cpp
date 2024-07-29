@@ -66,14 +66,15 @@ int FetchLogSRpc::fetch_log(IObLogRpc &rpc,
     const share::ObLSID &ls_id,
     const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
     const common::ObAddr &svr,
-    const int64_t timeout)
+    const int64_t timeout,
+    const int64_t progress)
 {
   int ret = OB_SUCCESS;
 
   reset();
 
   // build request
-  if (OB_FAIL(build_request_(tenant_id, ls_id, miss_log_array))) {
+  if (OB_FAIL(build_request_(tenant_id, ls_id, miss_log_array, progress))) {
     LOG_ERROR("build request fail", KR(ret), K(tenant_id), K(ls_id));
   }
   // Send asynchronous fetch log RPC
@@ -103,7 +104,8 @@ int FetchLogSRpc::fetch_log(IObLogRpc &rpc,
 int FetchLogSRpc::build_request_(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
-    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array)
+    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+    const int64_t progress)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -111,6 +113,7 @@ int FetchLogSRpc::build_request_(
   // Set request parameters
   req_.set_ls_id(ls_id);
   req_.set_client_pid(static_cast<uint64_t>(getpid()));
+  req_.set_progress(progress);
 
   ARRAY_FOREACH_N(miss_log_array, idx, count) {
     const ObCdcLSFetchMissLogReq::MissLogParam &miss_log_param = miss_log_array.at(idx);
@@ -989,6 +992,7 @@ void FetchLogARpc::clear_result_()
   if (res_queue_.count() > 0) {
     // Require result_pool_ be valid
     if (OB_ISNULL(result_pool_)) {
+      // ignore ret
       LOG_ERROR("invalid rpc result pool, can not clear results", K(result_pool_));
     } else {
       while (OB_SUCC(res_queue_.pop(data))) {

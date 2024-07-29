@@ -1046,6 +1046,23 @@ int LSFetchCtx::next_server(common::ObAddr &request_svr)
   return ret;
 }
 
+int LSFetchCtx::get_server_count(int64_t &server_count)
+{
+  int ret = OB_SUCCESS;
+  logservice::ObLogRouteService *log_route_service = nullptr;
+
+  if (OB_FAIL(get_log_route_service_(log_route_service))) {
+    LOG_ERROR("get_log_route_service_ failed", KR(ret));
+  } else if (OB_FAIL(log_route_service->get_server_count(
+      tls_id_.get_tenant_id(),
+      tls_id_.get_ls_id(),
+      server_count))) {
+    LOG_ERROR("get_server_count failed", KR(ret), K_(tls_id));
+  }
+
+  return ret;
+}
+
 int LSFetchCtx::init_locate_req_svr_list_(StartLSNLocateReq &req, LocateSvrList &locate_svr_list)
 {
   int ret = OB_SUCCESS;

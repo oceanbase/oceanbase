@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#define USING_LOG_PREFIX OBLOG
+#define USING_LOG_PREFIX OBLOG_FORMATTER
 
 #include "ob_cdc_udt.h"
 #include "ob_log_utils.h"
@@ -218,7 +218,12 @@ int ObCDCUdtValueBuilder::build(
     ColValue &cv)
 {
   int ret = OB_SUCCESS;
-  if (column_schema_info.is_xmltype()) {
+  if (OB_UNLIKELY(cv.is_col_nop_)) {
+    LOG_DEBUG("ignore nop col",
+        "tls_id", dml_stmt_task.get_tls_id(),
+        "table_id", dml_stmt_task.get_table_id(),
+        "column_id", column_schema_info.get_column_id());
+  } else if (column_schema_info.is_xmltype()) {
     if (OB_FAIL(build_xmltype(
         column_schema_info,
         tz_info_wrap,

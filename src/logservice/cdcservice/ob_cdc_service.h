@@ -62,14 +62,19 @@ public:
     return valid_client_ls_cnt_v1_;
   }
 
-    int64_t get_valid_client_ls_v2_cnt() const {
+  int64_t get_valid_client_ls_v2_cnt() const {
     return valid_client_ls_cnt_v2_;
+  }
+
+  int64_t get_valid_client_ls_misc_cnt() const {
+    return valid_client_ls_cnt_misc_;
   }
 
 private:
   int64_t current_time_us_;
   int64_t valid_client_ls_cnt_v1_;
   int64_t valid_client_ls_cnt_v2_;
+  int64_t valid_client_ls_cnt_misc_;
   int64_t other_client_ls_cnt_;
 };
 
