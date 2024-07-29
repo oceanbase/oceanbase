@@ -504,7 +504,7 @@ int ObSimpleLogServer::init_log_kv_cache_()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(OB_LOG_KV_CACHE.init(OB_LOG_KV_CACHE_NAME, 1))) {
-    if (OB_INIT_TWICE == ret) {
+    if (OB_INIT_TWICE == ret || OB_INVALID_ARGUMENT == ret) {
       ret = OB_SUCCESS;
     } else {
       PALF_LOG(WARN, "OB_LOG_KV_CACHE init failed", KR(ret));
