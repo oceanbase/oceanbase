@@ -511,9 +511,10 @@ int ObExprUDF::is_child_of(ObObj &parent, ObObj &child, bool &is_child)
       case pl::PL_VARRAY_TYPE: {
         pl::ObPLCollection* coll = reinterpret_cast<pl::ObPLCollection*>(parent.get_ext());
         CK (OB_NOT_NULL(coll));
-        CK (coll->get_data());
         for (int64_t i = 0; OB_SUCC(ret) && i < coll->get_count(); ++i) {
-          if (!(coll->get_data()[i]).is_ext()) {
+          CK (OB_NOT_NULL(coll->get_data()));
+          if (OB_FAIL(ret)) {
+          } else if (!(coll->get_data()[i]).is_ext()) {
             ObObj tmp;
             tmp.set_ext(reinterpret_cast<int64_t>(&(coll->get_data()[i])));
             OZ (SMART_CALL(is_child_of(tmp, child, is_child)));
