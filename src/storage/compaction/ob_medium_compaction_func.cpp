@@ -858,7 +858,6 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
           *co_sstable,
           tables,
           medium_info.storage_schema_,
-          tablet_handle_,
           major_merge_type))) {
     LOG_WARN("failed to decide co major merge type", K(ret));
   } else {

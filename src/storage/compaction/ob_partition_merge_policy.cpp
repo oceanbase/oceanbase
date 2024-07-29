@@ -35,6 +35,7 @@
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/access/ob_table_estimator.h"
 #include "storage/access/ob_index_sstable_estimator.h"
+#include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
 {
@@ -1935,55 +1936,6 @@ int ObCOMajorMergePolicy::decide_co_major_sstable_status(
   return ret;
 }
 
-int ObCOMajorMergePolicy::estimate_row_cnt_for_major_merge(
-    const uint64_t table_id,
-    const ObIArray<ObITable *> &tables,
-    const ObStorageSchema &storage_schema,
-    const ObTabletHandle &tablet_handle,
-    int64_t &estimate_row_cnt)
-{
-  int ret = OB_SUCCESS;
-  ObQueryFlag query_flag(ObQueryFlag::Forward,
-                          true,   /*is daily merge scan*/
-                          true,   /*is read multiple macro block*/
-                          false,  /*sys task scan, read one macro block in single io*/
-                          false,  /*full row scan flag, obsoleted*/
-                          false,  /*index back*/
-                          false); /*query_stat*/
-  estimate_row_cnt = 0;
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_COMPACTION_ESTIMATE_ROW_FAILED) ret;
-  if (OB_FAIL(ret)) {
-    LOG_INFO("ERRSIM EN_COMPACTION_ESTIMATE_ROW_FAILED", K(ret));
-    return ret;
-  }
-#endif
-  /*
-  * 1. if tables.empty(), no writes, row count = 0
-  * 2. else, do estimate, use logical row count instead of physical
-  */
-  if (!tables.empty()) {
-    ObTableEstimateBaseInput base_input(query_flag, table_id, transaction::ObTransID(), tables, tablet_handle);
-    ObDatumRange whole_range;
-    whole_range.set_whole_range();
-    ObSEArray<ObDatumRange, 1> ranges;
-    if (OB_FAIL(ranges.push_back(whole_range))) {
-      LOG_WARN("failed to add ranges", K(ret), K(ranges), K(whole_range));
-    } else {
-      ObPartitionEst part_estimate;
-      ObSEArray<ObEstRowCountRecord, MAX_SSTABLE_CNT_IN_STORAGE> records;
-      if (OB_FAIL(ObTableEstimator::estimate_row_count_for_scan(base_input, ranges, part_estimate, records))) {
-        LOG_WARN("failed to estimate row counts", K(ret), K(part_estimate), K(records));
-      } else {
-        estimate_row_cnt = MAX(1, part_estimate.logical_row_count_);
-        LOG_DEBUG("successfully estimate row cnt", K(ret), K(estimate_row_cnt));
-      }
-    }
-  }
-
-  return ret;
-}
-
 bool ObCOMajorMergePolicy::whether_to_build_row_store(
     const int64_t &estimate_row_cnt,
     const int64_t &column_cnt)
@@ -2005,16 +1957,54 @@ bool ObCOMajorMergePolicy::whether_to_rebuild_column_store(
   return bret;
 }
 
+int ObCOMajorMergePolicy::accumulate_physical_row_cnt(
+    const ObIArray<ObITable *> &tables,
+    int64_t &physical_row_cnt)
+{
+  int ret = OB_SUCCESS;
+  const int64_t count = tables.count();
+  physical_row_cnt = 0;
+
+#ifdef ERRSIM
+  ret = OB_E(EventTable::EN_COMPACTION_ESTIMATE_ROW_FAILED) ret;
+  if (OB_FAIL(ret)) {
+    LOG_INFO("ERRSIM EN_COMPACTION_ESTIMATE_ROW_FAILED", K(ret));
+  }
+#endif
+
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < count; ++idx) {
+    const ObITable *table = tables.at(idx);
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null table", K(ret), K(idx), K(tables));
+    } else if (OB_UNLIKELY(table->is_empty())) {
+    } else if (table->is_sstable()) {
+      const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
+      physical_row_cnt += sstable->get_row_count();
+    } else if (table->is_data_memtable()) {
+      const memtable::ObMemtable *memtable = static_cast<const memtable::ObMemtable *>(table);
+      // not auccurate, empty_mvcc_row_count_ only consider the latest 5000 rollback operations
+      physical_row_cnt += MAX(1, memtable->get_physical_row_cnt() - memtable->get_mt_stat().empty_mvcc_row_count_);
+    } else if (table->is_direct_load_memtable()) {
+      const ObDDLKV *ddlkv = static_cast<const ObDDLKV *>(table);
+      physical_row_cnt += ddlkv->get_row_count();
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected table type", K(ret), KPC(table));
+    }
+  }
+  return ret;
+}
+
 int ObCOMajorMergePolicy::decide_co_major_merge_type(
     const ObCOSSTableV2 &co_sstable,
     const ObIArray<ObITable *> &tables,
     const ObStorageSchema &storage_schema,
-    const ObTabletHandle &tablet_handle,
     ObCOMajorMergeType &major_merge_type)
 {
   int ret = OB_SUCCESS;
   ObCOMajorSSTableStatus major_sstable_status = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
-  int64_t estimate_row_cnt = 0;
+  int64_t physical_row_cnt = 0;
   const ObTabletID tablet_id = co_sstable.get_key().tablet_id_;
 
   if (OB_FAIL(decide_co_major_sstable_status(co_sstable, storage_schema, major_sstable_status))) {
@@ -2022,26 +2012,26 @@ int ObCOMajorMergePolicy::decide_co_major_merge_type(
   } else if (OB_UNLIKELY(EN_COMPACTION_DISABLE_ROW_COL_SWITCH)) {
     major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : REBUILD_COLUMN_STORE_MERGE;
     LOG_INFO("[RowColSwitch] disable row col switch, only allow co major merge", K(tablet_id), K(co_sstable), K(tables), K(major_sstable_status), K(major_merge_type));
-  } else if (OB_FAIL(estimate_row_cnt_for_major_merge(tablet_id.id(), tables, storage_schema, tablet_handle, estimate_row_cnt))) {
-    // if estimate row cnt failed, make major sstable match schema
+  } else if (OB_FAIL(accumulate_physical_row_cnt(tables, physical_row_cnt))) {
+    // if accumulate row cnt failed, make major sstable match schema
     major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : REBUILD_COLUMN_STORE_MERGE;
-    LOG_WARN("failed to estimate row count for co major merge, build column store by default", "estimate_ret", ret, K(major_sstable_status), K(major_merge_type));
+    LOG_WARN("failed to accumulate row count for co major merge, build column store by default", "accumulate_ret", ret, K(major_sstable_status), K(major_merge_type));
     ret = OB_SUCCESS;
   } else {
     int64_t column_cnt = storage_schema.get_column_count();
-    bool build_row_store_flag = whether_to_build_row_store(estimate_row_cnt, column_cnt);
+    bool build_row_store_flag = whether_to_build_row_store(physical_row_cnt, column_cnt);
     if (is_major_sstable_match_schema(major_sstable_status)) {
       if (build_row_store_flag) {
         major_merge_type = BUILD_ROW_STORE_MERGE;
       } else {
         major_merge_type = BUILD_COLUMN_STORE_MERGE;
       }
-    } else if (!build_row_store_flag && whether_to_rebuild_column_store(major_sstable_status, estimate_row_cnt, column_cnt)) {
+    } else if (!build_row_store_flag && whether_to_rebuild_column_store(major_sstable_status, physical_row_cnt, column_cnt)) {
       major_merge_type = REBUILD_COLUMN_STORE_MERGE;
     } else {
       major_merge_type = BUILD_ROW_STORE_MERGE;
     }
-    LOG_INFO("[RowColSwitch] finish decide major merge type", K(tablet_id), K(co_sstable), K(tables), K(major_sstable_status), K(major_merge_type), K(estimate_row_cnt), K(column_cnt));
+    LOG_INFO("[RowColSwitch] finish decide major merge type", K(tablet_id), K(co_sstable), K(tables), K(major_sstable_status), K(major_merge_type), K(physical_row_cnt), K(column_cnt));
   }
   return ret;
 }
