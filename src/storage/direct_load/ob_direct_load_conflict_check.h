@@ -33,11 +33,21 @@ public:
   ObDirectLoadConflictCheckParam();
   ~ObDirectLoadConflictCheckParam();
   bool is_valid() const;
-  TO_STRING_KV(
-      K(tablet_id_), K(store_column_count_), K(table_data_desc_), KP(origin_table_), KP(range_),
-      KP(col_descs_), KP(lob_column_idxs_), KP(builder_), KP(datum_utils_), KP(dml_row_handler_));
+  TO_STRING_KV(K_(tablet_id),
+               K_(tablet_id_in_lob_id),
+               K_(store_column_count),
+               K_(table_data_desc),
+               KP_(origin_table),
+               KPC_(range),
+               KP_(col_descs),
+               KPC_(lob_column_idxs),
+               KP_(builder),
+               KP_(datum_utils),
+               KPC_(lob_meta_datum_utils),
+               KP_(dml_row_handler));
 public:
   common::ObTabletID tablet_id_;
+  common::ObTabletID tablet_id_in_lob_id_;
   int64_t store_column_count_;
   ObDirectLoadTableDataDesc table_data_desc_;
   ObDirectLoadOriginTable *origin_table_;
@@ -46,6 +56,7 @@ public:
   const common::ObArray<int64_t> *lob_column_idxs_;
   ObIDirectLoadPartitionTableBuilder *builder_;
   const blocksstable::ObStorageDatumUtils *datum_utils_;
+  const blocksstable::ObStorageDatumUtils *lob_meta_datum_utils_;
   ObDirectLoadDMLRowHandler *dml_row_handler_;
 };
 
@@ -59,6 +70,7 @@ public:
       const ObDirectLoadConflictCheckParam &param,
       ObIStoreRowIterator *load_iter);
   int get_next_row(const blocksstable::ObDatumRow *&datum_row);
+  const ObLobId &get_max_del_lob_id() const { return max_del_lob_id_; }
 private:
   int handle_get_next_row_finish(
       const ObDatumRow *load_row,
@@ -69,6 +81,7 @@ private:
       int &cmp_ret);
   int reopen_origin_iter(const ObDatumRow *datum_row);
   int handle_old_row(const ObDatumRow *old_row);
+  int update_max_del_lob_id(const ObLobId &lob_id);
 private:
   common::ObArenaAllocator allocator_;
   common::ObArenaAllocator range_allocator_;
@@ -78,6 +91,7 @@ private:
   const blocksstable::ObDatumRow *origin_row_;
   blocksstable::ObDatumRow append_row_;
   ObDatumRange new_range_;
+  ObLobId max_del_lob_id_;
   bool origin_iter_is_end_;
   bool is_inited_;
 };
@@ -90,6 +104,7 @@ public:
   int init(const ObDirectLoadConflictCheckParam &param,
            const common::ObIArray<ObDirectLoadSSTable *> &sstable_array);
   int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+  const ObLobId &get_max_del_lob_id() const { return conflict_check_.get_max_del_lob_id(); }
 private:
   ObDirectLoadSSTableScanMerge scan_merge_;
   ObDirectLoadConflictCheck conflict_check_;
@@ -105,6 +120,7 @@ public:
       const ObDirectLoadConflictCheckParam &param,
       const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array);
   int get_next_row(const blocksstable::ObDatumRow *&datum_row) override;
+  const ObLobId &get_max_del_lob_id() const { return conflict_check_.get_max_del_lob_id(); }
 private:
   ObDirectLoadMultipleDatumRange range_;
   ObDirectLoadMultipleSSTableScanMerge scan_merge_;

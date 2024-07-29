@@ -559,9 +559,14 @@ int ObTableLoadMerger::build_del_lob_ctx(bool &need_del_lob)
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_merge_ctxs.count(); ++i) {
       ObDirectLoadTabletMergeCtx *tablet_merge_ctx = tablet_merge_ctxs.at(i);
-      if (OB_FAIL(tablet_merge_ctx->build_del_lob_task(
-            multiple_sstable_array, range_splitter, param_.session_count_))) {
-        LOG_WARN("fail to build merge task for multiple pk table", KR(ret));
+      ObDirectLoadInsertTabletContext *insert_tablet_ctx = nullptr;
+      if (OB_FAIL(store_ctx_->insert_table_ctx_->get_tablet_context(
+            tablet_merge_ctx->get_tablet_id(), insert_tablet_ctx))) {
+        LOG_WARN("fail to get tablet ctx", KR(ret), K(tablet_merge_ctx->get_tablet_id()));
+      } else if (OB_FAIL(tablet_merge_ctx->build_del_lob_task(
+                   multiple_sstable_array, range_splitter, param_.session_count_,
+                   insert_tablet_ctx->get_min_insert_lob_id()))) {
+        LOG_WARN("fail to build del lob task for multiple pk table", KR(ret));
       }
     }
     if (OB_SUCC(ret)) {

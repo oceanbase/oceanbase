@@ -30,7 +30,8 @@ public:
   int init(const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
            ObDirectLoadOriginTable *origin_table,
            const common::ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array,
-           const blocksstable::ObDatumRange &range, int64_t parallel_idx);
+           const blocksstable::ObDatumRange &range, const bool insert_front,
+           const int64_t parallel_idx);
   int process();
   void stop();
   TO_STRING_KV(K_(parallel_idx), K_(is_stop));
@@ -60,6 +61,7 @@ private:
   ObDirectLoadOriginTable *origin_table_;
   const ObIArray<ObDirectLoadMultipleSSTable *> *sstable_array_;
   const blocksstable::ObDatumRange *range_;
+  bool insert_front_;
   int64_t parallel_idx_;
   bool is_stop_;
   bool is_inited_;

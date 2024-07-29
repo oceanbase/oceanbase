@@ -353,6 +353,8 @@ public:
 
   inline bool can_write_inrow(uint64_t len, int64_t inrow_threshold) { return len <= inrow_threshold; }
 
+  static void transform_lob_id(uint64_t src, uint64_t &dst);
+
 private:
   // private function
   int write_inrow_inner(ObLobAccessParam& param, ObString& data, ObString& old_data);
@@ -431,7 +433,6 @@ private:
               ObLobAccessParam& param_right,
               int64_t& result);
   int load_all(ObLobAccessParam &param, ObLobPartialData &partial_data);
-  void transform_lob_id(uint64_t src, uint64_t &dst);
   int append_outrow(ObLobAccessParam& param, ObLobLocatorV2& lob, int64_t append_lob_len, ObString& ori_inrow_data);
   int append_outrow(ObLobAccessParam& param, bool ori_is_inrow, ObString &data);
   int fill_outrow_with_zero(ObLobAccessParam& param);

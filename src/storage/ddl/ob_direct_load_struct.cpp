@@ -989,7 +989,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
       } else {
         ObLobId lob_id;
         lob_id.lob_id_ = pk_seq;
-        lob_id.tablet_id_ = tablet_direct_load_mgr_->get_tablet_id().id(); // lob meta tablet id.
+        lob_id.tablet_id_ = tablet_direct_load_mgr_->get_tablet_id().id(); // lob meta tablet id. 与ObDirectLoadInsertTabletContext::tablet_id_in_lob_id_的取值保持一致
         ObLobMetaRowIterator *row_iter = nullptr;
         if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
             info.data_tablet_id_, info.trans_version_, col_types.at(i).get_type(), col_types.at(i).get_collation_type(), lob_id,
