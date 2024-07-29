@@ -101,6 +101,13 @@ OB_DEF_SERIALIZE(ObDASRemoteInfo)
       OB_UNIS_ENCODE(child_rtdef);
     }
   }
+  if (need_subschema_ctx_) {
+    if (OB_NOT_NULL(exec_ctx_->get_physical_plan_ctx()->get_phy_plan())) {
+      OB_UNIS_ENCODE(exec_ctx_->get_physical_plan_ctx()->get_phy_plan()->get_subschema_ctx());
+    } else {
+      OB_UNIS_ENCODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
+    }
+  }
   return ret;
 }
 
@@ -241,6 +248,9 @@ OB_DEF_DESERIALIZE(ObDASRemoteInfo)
       }
     }
   }
+  if (need_subschema_ctx_) {
+    OB_UNIS_DECODE(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
+  }
   return ret;
 }
 
@@ -296,6 +306,13 @@ OB_DEF_SERIALIZE_SIZE(ObDASRemoteInfo)
     for (int j = 0; j < rtdef->children_cnt_; ++j) {
       ObDASBaseRtDef *child_rtdef = rtdef->children_[j];
       OB_UNIS_ADD_LEN(child_rtdef);
+    }
+  }
+  if (need_subschema_ctx_) {
+    if (OB_NOT_NULL(exec_ctx_->get_physical_plan_ctx()->get_phy_plan())) {
+      OB_UNIS_ADD_LEN(exec_ctx_->get_physical_plan_ctx()->get_phy_plan()->get_subschema_ctx());
+    } else {
+      OB_UNIS_ADD_LEN(exec_ctx_->get_physical_plan_ctx()->get_subschema_ctx());
     }
   }
   return len;

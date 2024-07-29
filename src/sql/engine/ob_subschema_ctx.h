@@ -24,6 +24,7 @@ namespace sql
 // implement of subschema mapping
 enum ObSubSchemaType {
   OB_SUBSCHEMA_UDT_TYPE = 0,
+  OB_SUBSCHEMA_ENUM_SET_TYPE = 1,
   OB_SUBSCHEMA_MAX_TYPE
 };
 
