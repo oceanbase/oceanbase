@@ -4293,7 +4293,9 @@ int ObLSTabletService::process_lob_row(
           // get new lob locator
           ObString new_lob_str = (new_obj.is_null() || new_obj.is_nop_value())
                                  ? ObString(0, nullptr) : new_obj.get_string();
-          ObLobLocatorV2 new_lob(new_lob_str, new_obj.has_lob_header());
+          // for not strict sql mode, will insert empty string without lob header
+          bool has_lob_header = new_obj.has_lob_header() && new_lob_str.length() > 0;
+          ObLobLocatorV2 new_lob(new_lob_str, has_lob_header);
           if (OB_FAIL(ret)) {
           } else if (new_obj.is_null() ||
                      new_obj.is_nop_value() ||
