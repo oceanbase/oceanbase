@@ -29,7 +29,7 @@ class ObActiveSessHistTask : public common::ObTimerTask
 {
 public:
   ObActiveSessHistTask()
-      : wr_proxy_(), is_inited_(false), sample_time_(OB_INVALID_TIMESTAMP), prev_sample_time_(OB_INVALID_TIMESTAMP) {}
+      : is_inited_(false), sample_time_(OB_INVALID_TIMESTAMP), prev_sample_time_(OB_INVALID_TIMESTAMP) {}
   virtual ~ObActiveSessHistTask() = default;
   static ObActiveSessHistTask &get_instance();
   int init();
@@ -41,7 +41,6 @@ public:
   bool operator()(sql::ObSQLSessionMgr::Key key, sql::ObSQLSessionInfo *sess_info);
   void process_net_request(const ObNetInfo &net_info);
 private:
-  obrpc::ObWrRpcProxy wr_proxy_;
   bool is_inited_;
   int64_t sample_time_;
   int64_t prev_sample_time_;  // record prev sample time for rpc db time calculation.

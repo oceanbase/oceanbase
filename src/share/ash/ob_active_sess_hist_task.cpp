@@ -68,12 +68,10 @@ int ObActiveSessHistTask::start()
                                  REFRESH_INTERVAL,
                                  true /* repeat */))) {
     LOG_WARN("fail define timer schedule", K(ret));
+  } else if (OB_FAIL(ObAshRefreshTask::get_instance().start())) {
+    LOG_WARN("failed to start ash refresh task", K(ret));
   } else {
     LOG_INFO("ASH init OK");
-  }
-  // start timer task to check snapshot ahead
-  if (OB_FAIL(ObAshRefreshTask::get_instance().start())) {
-    LOG_WARN("failed to start ash refresh task", K(ret));
   }
   return ret;
 }

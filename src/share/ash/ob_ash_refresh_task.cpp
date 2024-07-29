@@ -19,6 +19,7 @@
 #include "share/wr/ob_wr_task.h"
 #include "share/wr/ob_wr_service.h"
 #include "share/location_cache/ob_location_service.h"
+#include <cassert>
 
 using namespace oceanbase::common;
 using namespace oceanbase::share;
@@ -34,7 +35,7 @@ constexpr int64_t ASH_REFRESH_INTERVAL = 30 * 1000L * 1000L;  // 30s
 // we should snapshot ahead if current speed is SPEED_THRESHOLD times larger than expect speed
 constexpr int SPEED_THRESHOLD = 10;
 // ahead snapshot will be triggered only if the time remaining until the next scheduled snapshot is greater than SNAPSHOT_THRESHOLD
-constexpr int SNAPSHOT_THRESHOLD = 60;  // 60s
+constexpr int SNAPSHOT_THRESHOLD = 60 * 1000L * 1000L;  // 60s
 
 ObAshRefreshTask &ObAshRefreshTask::get_instance()
 {
@@ -45,7 +46,7 @@ ObAshRefreshTask &ObAshRefreshTask::get_instance()
 int ObAshRefreshTask::start()
 {
   int ret = OB_SUCCESS;
-  assert(ASH_REFRESH_INTERVAL < SNAPSHOT_THRESHOLD);
+  static_assert(ASH_REFRESH_INTERVAL < SNAPSHOT_THRESHOLD, "ASH_REFRESH_INTERVAL should be less than SNAPSHOT_THRESHOLD");
   if (OB_FAIL(TG_SCHEDULE(lib::TGDefIDs::ServerGTimer,
                                  *this,
                                  ASH_REFRESH_INTERVAL,
@@ -175,26 +176,28 @@ void ObAshRefreshTask::runTimerTask()
           }
         }
       }
-      prev_write_pos_ = ObActiveSessHistList::get_instance().write_pos();
     }
+    prev_write_pos_ = ObActiveSessHistList::get_instance().write_pos();
   }
 }
 
 bool ObAshRefreshTask::require_snapshot_ahead()
 {
+  bool ret = false;
   int64_t write_pos = ObActiveSessHistList::get_instance().write_pos();
   int64_t free_slots_num = ObActiveSessHistList::get_instance().free_slots_num();
-  int64_t scheduled_snapshot_interval = GCTX.wr_service_->get_snapshot_interval(false);
-  int64_t next_scheduled_snapshot_interval = scheduled_snapshot_interval * 60 - (ObTimeUtility::current_time() - last_scheduled_snapshot_time_) / (1000L * 1000L);
-  if (next_scheduled_snapshot_interval <= 0 || next_scheduled_snapshot_interval > scheduled_snapshot_interval * 60) {
+  int64_t scheduled_snapshot_interval = GCTX.wr_service_->get_snapshot_interval(false) * 60 * 1000L * 1000L;
+  int64_t next_scheduled_snapshot_interval = scheduled_snapshot_interval - (ObTimeUtility::current_time() - last_scheduled_snapshot_time_);
+  if (next_scheduled_snapshot_interval <= 0 || next_scheduled_snapshot_interval > scheduled_snapshot_interval) {
     // last scheduled snapshot time update may lose or no last scheduled snapshot or this machine's clock is behind
     // cluster pressure may be heavy
     LOG_WARN_RET(OB_INVALID_TIMESTAMP, "unexpected next scheduled snapshot interval");
-    return false;
+    ret = false;
+  } else {
+    double cur_speed = 1.0 * (write_pos - prev_write_pos_) / (ASH_REFRESH_INTERVAL / 1000 / 1000);
+    double expect_speed = 1.0 * free_slots_num / (next_scheduled_snapshot_interval / 1000 / 1000);
+    ret = (cur_speed >= SPEED_THRESHOLD * expect_speed) && (next_scheduled_snapshot_interval > SNAPSHOT_THRESHOLD);
   }
-  double cur_speed = 1.0 * (write_pos - prev_write_pos_) / (ASH_REFRESH_INTERVAL / 1000 / 1000);
-  double expect_speed = 1.0 * free_slots_num / next_scheduled_snapshot_interval;
-  bool ret = (cur_speed >= SPEED_THRESHOLD * expect_speed) && (next_scheduled_snapshot_interval > SNAPSHOT_THRESHOLD);
   return ret;
 }
 

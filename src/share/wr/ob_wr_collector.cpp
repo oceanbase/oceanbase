@@ -216,7 +216,9 @@ int ObWrCollector::collect_ash()
   int32_t svr_port;
   bool is_cache_hit = false;
 
-  if (OB_FAIL(GCTX.location_service_->vtable_get(
+  if (snapshot_begin_time_ < snapshot_end_time_) {
+    LOG_WARN("outdated snapshot", K(snap_id_), K(snapshot_begin_time_), K(snapshot_end_time_), K(timeout_ts_));
+  } else if (OB_FAIL(GCTX.location_service_->vtable_get(
         MTL_ID(),
         OB_ALL_VIRTUAL_ASH_TID,
         0,/*expire_renew_time*/
@@ -518,11 +520,8 @@ int ObWrCollector::collect_ash()
         }      
       }
       // record snapshot_end_time_
-      // ignore useless snapshot
-      if (snapshot_begin_time_ < snapshot_end_time_) {
-        if (OB_FAIL(update_last_snapshot_end_time())) {
-          LOG_WARN("failed to update last snapshot end time", KR(ret));
-        }
+      if (OB_FAIL(update_last_snapshot_end_time())) {
+        LOG_WARN("failed to update last snapshot end time", KR(ret));
       }
     }
   }
@@ -1400,10 +1399,7 @@ int ObWrCollector::get_cur_snapshot_id(int64_t &snap_id)
   int ret = OB_SUCCESS;
   // we can't access sequence.currval in one new session
   // so we have to read from __wr_snapshot
-  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
   ObSqlString sql;
-  ObObj snap_id_obj;
-  const uint64_t tenant_id = OB_SYS_TENANT_ID;
   SMART_VAR(ObISQLClient::ReadResult, res)
   {
     ObMySQLResult *result = nullptr;
