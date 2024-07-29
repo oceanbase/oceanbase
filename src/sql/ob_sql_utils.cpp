@@ -4629,6 +4629,7 @@ int ObSQLUtils::handle_audit_record(bool need_retry,
       const ObAuditRecordData &audit_record = session.get_final_audit_record(exec_mode);
       if (OB_FAIL(req_manager->record_request(audit_record,
                                               session.enable_query_response_time_stats(),
+                                              session.get_tenant_query_record_size_limit(),
                                               is_sensitive))) {
         if (OB_SIZE_OVERFLOW == ret || OB_ALLOCATE_MEMORY_FAILED == ret) {
           LOG_DEBUG("cannot allocate mem for record", K(ret));

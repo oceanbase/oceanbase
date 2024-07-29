@@ -1221,8 +1221,7 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
     stat_.slow_count_ = 0;
     stat_.slowest_exec_time_ = 0;
     stat_.slowest_exec_usec_ = 0;
-    int64_t sql_length = ObSQLUtils::get_query_record_size_limit(
-        pc_ctx.sql_ctx_.session_info_->get_effective_tenant_id());
+    int64_t sql_length = pc_ctx.sql_ctx_.session_info_->get_tenant_query_record_size_limit();
     if (PC_PS_MODE == pc_ctx.mode_ || PC_PL_MODE == pc_ctx.mode_) {
       ObTruncatedString trunc_stmt(pc_ctx.raw_sql_, sql_length);
       if (OB_FAIL(ob_write_string(get_allocator(),

@@ -114,6 +114,7 @@ public:
 
   int record_request(const ObAuditRecordData &audit_record,
                      const bool enable_query_response_time_stats,
+                     const int64_t query_record_size_limit,
                      bool is_sensitive = false);
   int64_t get_start_idx();
   int64_t get_end_idx();
