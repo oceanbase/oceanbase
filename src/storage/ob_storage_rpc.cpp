@@ -200,8 +200,7 @@ OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, da
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
     occupy_size_(0),
-    macro_meta_row_(),
-    allocator_("CMBlockHeader")
+    data_type_(DataType::MACRO_DATA)
 {
 }
 
@@ -209,16 +208,14 @@ void ObCopyMacroBlockHeader::reset()
 {
   is_reuse_macro_block_ = false;
   occupy_size_ = 0;
-  macro_meta_row_.reset();
-  allocator_.reset();
 }
 
 bool ObCopyMacroBlockHeader::is_valid() const
 {
-  return occupy_size_ > 0;
+  return occupy_size_ > 0 && data_type_ >= DataType::MACRO_DATA && data_type_ < DataType::MAX;
 }
 
-OB_SERIALIZE_MEMBER(ObCopyMacroBlockHeader, is_reuse_macro_block_, occupy_size_);
+OB_SERIALIZE_MEMBER(ObCopyMacroBlockHeader, is_reuse_macro_block_, occupy_size_, data_type_);
 
 ObCopyTabletInfoArg::ObCopyTabletInfoArg()
   : tenant_id_(OB_INVALID_ID),
