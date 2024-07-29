@@ -1,9 +1,9 @@
 ob_define(DEBUG_PREFIX "-fdebug-prefix-map=${CMAKE_SOURCE_DIR}=.")
-ob_define(OB_LD_BIN "/opt/alibaba-cloud-compiler/bin/ld.lld")
+ob_define(OB_LD_BIN "/usr/bin/ld.lld")
 ob_define(ASAN_IGNORE_LIST "${CMAKE_SOURCE_DIR}/asan_ignore_list.txt")
 
 ob_define(DEP_3RD_DIR "${CMAKE_SOURCE_DIR}/deps/3rd")
-ob_define(DEVTOOLS_DIR "/opt/alibaba-cloud-compiler")
+ob_define(DEVTOOLS_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools")
 ob_define(DEP_DIR "${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/deps/devel")
 
 ob_define(OB_BUILD_CDC OFF)
@@ -25,8 +25,8 @@ ob_define(HOTFUNC_PATH "${CMAKE_SOURCE_DIR}/hotfuncs.txt")
 ob_define(OB_BUILD_CCLS OFF)
 ob_define(LTO_JOBS 32)
 # get compiler from build.sh
-ob_define(OB_CC "/opt/alibaba-cloud-compiler/bin/clang")
-ob_define(OB_CXX "/opt/alibaba-cloud-compiler/bin/clang++")
+ob_define(OB_CC "/usr/bin/clang")
+ob_define(OB_CXX "/usr/bin/clang++")
 
 # 'ENABLE_PERF_MODE' use for offline system insight performance test
 # PERF_MODE macro controls many special code path in system
@@ -57,7 +57,7 @@ endif()
 ob_define(AUTO_FDO_OPT "")
 if(ENABLE_AUTO_FDO)
   # file name pattern [observer.prof.{current_timestamp ms}]
-  set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof.1693473964865")
+  # set(AUTO_FDO_OPT "-fprofile-sample-use=${CMAKE_SOURCE_DIR}/observer.prof.1693473964865")
 endif()
 
 ob_define(THIN_LTO_OPT "")
@@ -187,7 +187,7 @@ if (OB_USE_CLANG)
     message(STATUS "Using OB_CC compiler: ${OB_CC}")
   else()
     find_program(OB_CC clang
-    "${DEVTOOLS_DIR}/bin"
+    "/usr/bin"
       NO_DEFAULT_PATH)
   endif()
 
@@ -195,13 +195,10 @@ if (OB_USE_CLANG)
     message(STATUS "Using OB_CXX compiler: ${OB_CXX}")
   else()
     find_program(OB_CXX clang++
-    "${DEVTOOLS_DIR}/bin"
+    "/usr/bin"
       NO_DEFAULT_PATH)
   endif()
-
-  find_file(GCC9 devtools
-    PATHS ${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase
-    NO_DEFAULT_PATH)
+  
   set(_CMAKE_TOOLCHAIN_PREFIX llvm-)
   set(_CMAKE_TOOLCHAIN_LOCATION "${DEVTOOLS_DIR}/bin")
 
@@ -210,14 +207,14 @@ if (OB_USE_CLANG)
   endif()
 
   if (OB_USE_LLD)
-    set(LD_OPT "-fuse-ld=/opt/alibaba-cloud-compiler/bin/ld.lld")
+    set(LD_OPT "-fuse-ld=/usr/bin/ld.lld")
     set(REORDER_COMP_OPT "-ffunction-sections -fdebug-info-for-profiling")
     set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--no-warn-symbol-ordering,--symbol-ordering-file,${HOTFUNC_PATH}")
-    set(OB_LD_BIN "/opt/alibaba-cloud-compiler/bin/ld.lld")
+    set(OB_LD_BIN "/usr/bin/ld.lld")
   endif()
-  set(CMAKE_CXX_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} -std=gnu++11")
-  set(CMAKE_C_FLAGS "--gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG}")
-  set(CMAKE_CXX_LINK_FLAGS "${LD_OPT} ${THIN_LTO_CONCURRENCY_LINK} --gcc-toolchain=${GCC9} ${DEBUG_PREFIX} ${AUTO_FDO_OPT}")
+  set(CMAKE_CXX_FLAGS "${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG} -std=gnu++11")
+  set(CMAKE_C_FLAGS "${DEBUG_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG}")
+  set(CMAKE_CXX_LINK_FLAGS "${LD_OPT} ${THIN_LTO_CONCURRENCY_LINK} ${DEBUG_PREFIX} ${AUTO_FDO_OPT}")
   set(CMAKE_SHARED_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack ${THIN_LTO_CONCURRENCY_LINK} ${REORDER_LINK_OPT}")
   set(CMAKE_EXE_LINKER_FLAGS "${LD_OPT} -Wl,-z,noexecstack -pie ${THIN_LTO_CONCURRENCY_LINK} ${REORDER_LINK_OPT} ${CMAKE_COVERAGE_EXE_LINKER_OPTIONS}")
 else() # not clang, use gcc
