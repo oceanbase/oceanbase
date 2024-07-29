@@ -362,7 +362,6 @@ public:
   void compile_module(bool optimization = true);
   void dump_module();
   void dump_debuginfo();
-  int verify_function(ObLLVMFunction &function);
   int verify_module();
   uint64_t get_function_address(const common::ObString &name);
   static void add_symbol(const common::ObString &name, void *value);
