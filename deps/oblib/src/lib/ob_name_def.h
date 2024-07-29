@@ -1095,6 +1095,8 @@
 #define N_PRIV_ST_TOUCHES                   "_st_touches"
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
 #define N_ST_COLLECT                        "st_collect"
+#define N_ST_VALIDATE                       "st_validate"
+#define N_ST_GEOMETRYN                      "st_geometryn"
 
 // for lock function
 #define N_GET_LOCK                          "get_lock"

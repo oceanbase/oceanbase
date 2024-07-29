@@ -389,6 +389,8 @@
 #include "ob_expr_rb_calc.h"
 #include "ob_expr_rb_to_string.h"
 #include "ob_expr_rb_from_string.h"
+#include "ob_expr_st_geometryn.h"
+#include "ob_expr_st_validate.h"
 
 namespace oceanbase
 {
@@ -1239,6 +1241,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRegexpLike::eval_hs_regexp_like,                     /* 746 */
   NULL, // ObExprRegexpReplace::eval_hs_regexp_replace,               /* 747 */
   NULL, // ObExprRegexpSubstr::eval_hs_regexp_substr,                 /* 748 */
+  ObExprSTGeometryN::eval_st_geometryn,                               /* 749 */
+  ObExprSTValidate::eval_st_validate,                                 /* 750 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
