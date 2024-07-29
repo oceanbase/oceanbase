@@ -613,11 +613,10 @@ int ObSQLSessionMgr::kill_session(ObSQLSessionInfo &session)
   bool need_disconnect = false;
   session.set_query_start_time(ObTimeUtility::current_time());
   if (session.is_in_transaction()) {
-    auto tx_desc = session.get_tx_desc();
     if (OB_SUCCESS != (tmp_ret = ObSqlTransControl::kill_tx_on_session_killed(&session))) {
       LOG_WARN("fail to rollback transaction", K(session.get_sessid()),
                "proxy_sessid", session.get_proxy_sessid(),
-               K(tmp_ret), KPC(tx_desc),
+               K(tmp_ret), KPC(session.get_tx_desc()),
                "query_str", session.get_current_query_string(),
                K(need_disconnect));
     }
@@ -654,11 +653,9 @@ int ObSQLSessionMgr::disconnect_session(ObSQLSessionInfo &session)
   session.set_query_start_time(ObTimeUtility::current_time());
   // 调用这个函数之前会在ObSMHandler::on_disconnect中调session.set_session_state(SESSION_KILLED)，
   if (session.is_in_transaction()) {
-    auto tx_desc = session.get_tx_desc();
     if (OB_FAIL(ObSqlTransControl::kill_tx_on_session_disconnect(&session))) {
       LOG_WARN("fail to rollback transaction", K(session.get_sessid()),
                "proxy_sessid", session.get_proxy_sessid(), K(ret),
-               KPC(tx_desc),
                "query_str", session.get_current_query_string(),
                K(need_disconnect));
     }
