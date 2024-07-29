@@ -42,6 +42,7 @@ int ObTabletReplicaChecksumIterator::init(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
   } else {
+    checksum_items_.set_attr(ObMemAttr(tenant_id, "RepCkmIter"));
     tenant_id_ = tenant_id;
     sql_proxy_ = sql_proxy;
     is_inited_ = true;

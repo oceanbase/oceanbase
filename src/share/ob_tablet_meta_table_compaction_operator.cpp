@@ -393,6 +393,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_report_scn(
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     bool update_done = false;
     SMART_VAR(ObArray<uint64_t>, tablet_ids) {
+      tablet_ids.set_attr(ObMemAttr(tenant_id, "TabMetaCompOp"));
       while (OB_SUCC(ret) && !update_done && !stop) {
         bool is_match = true;
         ObMySQLTransaction trans;
@@ -451,6 +452,7 @@ int ObTabletMetaTableCompactionOperator::batch_update_status(
     const uint64_t meta_tenant_id = gen_meta_tenant_id(tenant_id);
     bool update_done = false;
     SMART_VAR(ObArray<uint64_t>, tablet_ids) {
+      tablet_ids.set_attr(ObMemAttr(tenant_id, "TabMetaCompOp"));
       while (OB_SUCC(ret) && !update_done) {
         bool is_match = true;
         ObMySQLTransaction trans;
