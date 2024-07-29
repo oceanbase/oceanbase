@@ -4045,6 +4045,7 @@ TTL_DEL_CNT	bigint(20)	NO		NULL
 MAX_VERSION_DEL_CNT	bigint(20)	NO		NULL	
 SCAN_CNT	bigint(20)	NO		NULL	
 RET_CODE	varchar(512)	NO		NULL	
+TASK_TYPE	varchar(12)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_KV_TTL_TASKS limit 1);
 cnt
 1
@@ -4062,6 +4063,7 @@ TTL_DEL_CNT	bigint(20)	NO		NULL
 MAX_VERSION_DEL_CNT	bigint(20)	NO		NULL	
 SCAN_CNT	bigint(20)	NO		NULL	
 RET_CODE	varchar(512)	NO		NULL	
+TASK_TYPE	varchar(12)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY limit 1);
 cnt
 1

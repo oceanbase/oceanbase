@@ -5211,7 +5211,8 @@ all_kv_ttl_task_def = dict(
     ('max_version_del_cnt', 'int'),
     ('scan_cnt', 'int'),
     ('row_key', 'varbinary:2048'),
-    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN')
+    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN'),
+    ('task_type', 'int', 'false', 0)
   ],
 )
 
@@ -5239,7 +5240,8 @@ all_kv_ttl_task_history_def = dict(
     ('max_version_del_cnt', 'int'),
     ('scan_cnt', 'int'),
     ('row_key', 'varbinary:2048'),
-    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN')
+    ('ret_code', 'varchar:OB_MAX_ERROR_MSG_LEN'),
+    ('task_type', 'int', 'false', 0)
   ],
 )
 def_table_schema(**all_kv_ttl_task_def)
@@ -27449,7 +27451,11 @@ def_table_schema(
       a.ttl_del_cnt as TTL_DEL_CNT,
       a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
       a.scan_cnt as SCAN_CNT,
-      a.ret_code as RET_CODE
+      a.ret_code as RET_CODE,
+      case a.task_type
+        when 0 then "NORMAL"
+        when 1 then "HBASE ROWKEY"
+        else "INVALID" END AS TASK_TYPE
       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_table b on
           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
           and b.table_mode >> 12 & 15 in (0,1)
@@ -27488,7 +27494,11 @@ def_table_schema(
       a.ttl_del_cnt as TTL_DEL_CNT,
       a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
       a.scan_cnt as SCAN_CNT,
-      a.ret_code as RET_CODE
+      a.ret_code as RET_CODE,
+      case a.task_type
+        when 0 then "NORMAL"
+        when 1 then "HBASE ROWKEY"
+        else "INVALID" END AS TASK_TYPE
       FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_table b on
           a.table_id = b.table_id and a.tenant_id = effective_tenant_id()
           and b.table_mode >> 12 & 15 in (0,1)
@@ -27688,7 +27698,11 @@ def_table_schema(
       a.ttl_del_cnt as TTL_DEL_CNT,
       a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
       a.scan_cnt as SCAN_CNT,
-      a.ret_code as RET_CODE
+      a.ret_code as RET_CODE,
+      case a.task_type
+        when 0 then "NORMAL"
+        when 1 then "HBASE ROWKEY"
+        else "INVALID" END AS TASK_TYPE
       FROM oceanbase.__all_virtual_kv_ttl_task a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
           and b.table_mode >> 12 & 15 in (0,1)
@@ -27727,7 +27741,11 @@ def_table_schema(
       a.ttl_del_cnt as TTL_DEL_CNT,
       a.max_version_del_cnt as MAX_VERSION_DEL_CNT,
       a.scan_cnt as SCAN_CNT,
-      a.ret_code as RET_CODE
+      a.ret_code as RET_CODE,
+      case a.task_type
+        when 0 then "NORMAL"
+        when 1 then "HBASE ROWKEY"
+        else "INVALID" END AS TASK_TYPE
       FROM oceanbase.__all_virtual_kv_ttl_task_history a left outer JOIN oceanbase.__all_virtual_table b on
           a.table_id = b.table_id and a.tenant_id = b.tenant_id
           and b.table_mode >> 12 & 15 in (0,1)

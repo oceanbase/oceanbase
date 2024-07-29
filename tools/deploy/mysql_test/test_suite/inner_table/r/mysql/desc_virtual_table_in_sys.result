@@ -7262,6 +7262,7 @@ max_version_del_cnt	bigint(20)	NO		NULL
 scan_cnt	bigint(20)	NO		NULL	
 row_key	varbinary(2048)	NO		NULL	
 ret_code	varchar(512)	NO		NULL	
+task_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_kv_ttl_task;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7282,6 +7283,7 @@ max_version_del_cnt	bigint(20)	NO		NULL
 scan_cnt	bigint(20)	NO		NULL	
 row_key	varbinary(2048)	NO		NULL	
 ret_code	varchar(512)	NO		NULL	
+task_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_kv_ttl_task_history;
 IF(count(*) >= 0, 1, 0)
 1
