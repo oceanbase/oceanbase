@@ -462,19 +462,6 @@ private:
   typedef common::hash::ObHashSet<MinMinorSSTableInfo, common::hash::NoPthreadDefendMode> SSTableSet;
   typedef common::hash::ObHashSet<ObTabletMapKey, hash::NoPthreadDefendMode> PinnedTabletSet;
 
-  class TenantMetaAllocator : public common::ObFIFOAllocator
-  {
-  public:
-    TenantMetaAllocator(const uint64_t tenant_id, TryWashTabletFunc &wash_func)
-    : common::ObFIFOAllocator(tenant_id), wash_func_(wash_func) {};
-    virtual ~TenantMetaAllocator() = default;
-    TO_STRING_KV("used", used(), "total", total());
-  protected:
-    virtual void *alloc_align(const int64_t size, const int64_t align) override;
-  private:
-    TryWashTabletFunc &wash_func_;
-  };
-
 private:
   int acquire_tablet(const ObTabletPoolType type, ObTabletHandle &tablet_handle);
   int acquire_tablet(ObITenantMetaObjPool *pool, ObTablet *&tablet);

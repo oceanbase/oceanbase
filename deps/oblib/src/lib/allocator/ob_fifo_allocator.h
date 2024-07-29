@@ -98,7 +98,6 @@ public:
   void reset();
   void *alloc(const int64_t size);
   void *alloc(const int64_t size, const ObMemAttr &attr);
-  virtual void *alloc_align(const int64_t size, const int64_t align);
   void free(void *p);
   void set_label(const lib::ObLabel &label) { attr_.label_ = label; }
   void set_attr(const ObMemAttr &attr) { attr_ = attr; }
@@ -130,6 +129,7 @@ public:
   }
 
 private:
+  void *inner_alloc_align(const int64_t size, const int64_t align);
   BasePageHeader *get_page_header(void *p);
   bool check_param(const int64_t size, const int64_t align);
   bool check_magic(void *p, int64_t &size);

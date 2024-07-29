@@ -277,16 +277,16 @@ bool ObFIFOAllocator::check_magic(void *p, int64_t &size)
 
 void *ObFIFOAllocator::alloc(const int64_t size)
 {
-  return alloc_align(size, 16);
+  return inner_alloc_align(size, 16);
 }
 
 void *ObFIFOAllocator::alloc(const int64_t size, const ObMemAttr &attr)
 {
   UNUSED(attr);
-  return alloc_align(size, 16);
+  return inner_alloc_align(size, 16);
 }
 
-void *ObFIFOAllocator::alloc_align(const int64_t size, const int64_t align)
+void *ObFIFOAllocator::inner_alloc_align(const int64_t size, const int64_t align)
 {
   ObLockGuard<ObSpinLock> guard(lock_);
   void *ptr = nullptr;

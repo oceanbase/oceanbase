@@ -60,15 +60,6 @@ public:
   {
     return alloc(size);
   }
-  void *alloc_align(const int64_t size, const int64_t align)
-  {
-    UNUSED(align);
-    return alloc(size);
-  }
-  virtual void *alloc_align(const int64_t size, const int64_t align, const ObMemAttr &)
-  {
-    return alloc_align(size, align);
-  }
   virtual void free(void *ptr) override;
 
   void set_label(const lib::ObLabel &label) { UNUSED(label); }
