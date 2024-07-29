@@ -161,7 +161,7 @@ static ObCharsetHandler ob_charset_euckr_handler = {
     ob_strntoull10rnd_8bit,
     ob_scan_8bit};
 
-ObCharsetInfo my_charset_euckr_korean_ci = {
+ObCharsetInfo ob_charset_euckr_korean_ci = {
     19,
     0,
     0,                              /* number */
@@ -196,7 +196,7 @@ ObCharsetInfo my_charset_euckr_korean_ci = {
     &ob_collation_8bit_simple_ci_handler,
     PAD_SPACE};
 
-ObCharsetInfo my_charset_euckr_bin = {
+ObCharsetInfo ob_charset_euckr_bin = {
     85,
     0,
     0,                              /* number */

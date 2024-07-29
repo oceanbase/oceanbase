@@ -211,7 +211,7 @@ static  unsigned char sort_order_euc_kr[] = {
     u'\377',
 };
 
-static const MY_UNICASE_CHARACTER cA3_euckr[256] = {
+static const ObUnicaseInfoChar cA3_euckr[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -469,7 +469,7 @@ static const MY_UNICASE_CHARACTER cA3_euckr[256] = {
     {0xA3FE, 0xA3FE, 0xFFE3},
     {0xA3FF, 0xA3FF, 0x003F}};
 
-static const MY_UNICASE_CHARACTER cA5_euckr[256] = {
+static const ObUnicaseInfoChar cA5_euckr[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -727,7 +727,7 @@ static const MY_UNICASE_CHARACTER cA5_euckr[256] = {
     {0xA5FE, 0xA5FE, 0x003F},
     {0xA5FF, 0xA5FF, 0x003F}};
 
-static const MY_UNICASE_CHARACTER cA7_euckr[256] = {
+static const ObUnicaseInfoChar cA7_euckr[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -985,7 +985,7 @@ static const MY_UNICASE_CHARACTER cA7_euckr[256] = {
     {0xA7FE, 0xA7FE, 0x003F},
     {0xA7FF, 0xA7FF, 0x003F}};
 
-static const MY_UNICASE_CHARACTER cA8_euckr[256] = {
+static const ObUnicaseInfoChar cA8_euckr[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -1243,7 +1243,7 @@ static const MY_UNICASE_CHARACTER cA8_euckr[256] = {
     {0xA8FE, 0xA8FE, 0x215E},
     {0xA8FF, 0xA8FF, 0x003F}};
 
-static const MY_UNICASE_CHARACTER cA9_euckr[256] = {
+static const ObUnicaseInfoChar cA9_euckr[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -1501,7 +1501,7 @@ static const MY_UNICASE_CHARACTER cA9_euckr[256] = {
     {0xA9FE, 0xA9FE, 0x2084},
     {0xA9FF, 0xA9FF, 0x003F}};
 
-static const MY_UNICASE_CHARACTER cAC_euckr[256] = {
+static const ObUnicaseInfoChar cAC_euckr[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -1759,7 +1759,7 @@ static const MY_UNICASE_CHARACTER cAC_euckr[256] = {
     {0xACFE, 0xACFE, 0x003F},
     {0xACFF, 0xACFF, 0x003F}};
 
-static const ObUnicaseInfoChar *my_caseinfo_pages_euckr[256] = {
+static const ObUnicaseInfoChar *ob_caseinfo_pages_euckr[256] = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, nullptr, /* 0 */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
@@ -1811,7 +1811,7 @@ static const ObUnicaseInfoChar *my_caseinfo_pages_euckr[256] = {
     nullptr, nullptr};
 
 static ObUnicaseInfo ob_caseinfo_euckr = {0xFFFF,
-                                                  my_caseinfo_pages_euckr};
+                                                  ob_caseinfo_pages_euckr};
 
 /* page 0 0x8141-0xC8FE */
 static  uint16_t tab_ksc5601_uni0[] = {
