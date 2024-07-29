@@ -1953,7 +1953,7 @@ void ObFreezer::PendTenantReplayHelper::restore_tenant_replay_()
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "[ObFreezer] invalid ls handle", KR(ret), KPC(ls));
     } else if (OB_FAIL(ls->get_freezer()->restore_ls_replay())) {
-      STORAGE_LOG(ERROR, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
+      STORAGE_LOG(WARN, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
     }
   }
   host_.unset_tenant_replay_is_pending();
