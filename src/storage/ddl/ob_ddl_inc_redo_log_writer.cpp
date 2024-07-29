@@ -738,6 +738,7 @@ int ObDDLIncRedoLogWriterCallback::write(
     redo_info_.data_format_version_ = data_format_version_;
     redo_info_.type_ = direct_load_type_;
     redo_info_.trans_id_ = trans_id_;
+    redo_info_.with_cs_replica_ = false; // TODO(chengkong): placeholder for column store replica feature
     if (OB_FAIL(ddl_inc_writer_.write_inc_redo_log_with_retry(redo_info_, macro_block_id_, task_id_, tx_desc_))) {
       LOG_WARN("write ddl inc redo log fail", K(ret));
     }

@@ -203,13 +203,14 @@ public:
   int64_t get_execution_id() const { return execution_id_; }
   ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }
   const ObTabletID &get_lob_meta_tablet_id() const { return lob_meta_tablet_id_; }
-  TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id), K_(direct_load_type), K_(lob_meta_tablet_id));
+  TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id), K_(direct_load_type), K_(lob_meta_tablet_id), K_(with_cs_replica));
 private:
   ObITable::TableKey table_key_; // use table type to distinguish column store, column group id is valid
   uint64_t data_format_version_; // used for compatibility
   int64_t execution_id_;
   ObDirectLoadType direct_load_type_;
   ObTabletID lob_meta_tablet_id_; // avoid replay get newest mds data
+  bool with_cs_replica_;
 };
 
 class ObDDLRedoLog final
