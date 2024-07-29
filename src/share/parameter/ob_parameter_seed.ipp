@@ -1393,6 +1393,10 @@ DEF_INT(open_cursors, OB_TENANT_PARAMETER, "50", "[0,65535]",
         "can use this parameter to prevent a session from opening an excessive number of cursors."
         "Range: [0, 65535] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_enhanced_cursor_validation, OB_TENANT_PARAMETER, "False",
+        "enable enhanced cursor validation, which let cursor can be fetched after transaction committed"
+        " if it has not read uncommitted data.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_batch_rescan, OB_TENANT_PARAMETER, "True",
          "enable px batch rescan for nlj or subplan filter",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

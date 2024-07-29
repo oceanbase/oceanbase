@@ -305,6 +305,7 @@ _enable_dbms_lob_partial_update
 _enable_decimal_int_type
 _enable_defensive_check
 _enable_easy_keepalive
+_enable_enhanced_cursor_validation
 _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive

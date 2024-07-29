@@ -1177,6 +1177,8 @@ private:
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
   static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
+private:
+  static int setup_cursor_snapshot_verify_(pl::ObPLCursorInfo *cursor, ObSPIResultSet *spi_result);
 };
 
 struct ObPLSubPLSqlTimeGuard

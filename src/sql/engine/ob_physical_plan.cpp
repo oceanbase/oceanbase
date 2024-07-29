@@ -145,7 +145,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     online_sample_percent_(1.),
     can_set_feedback_info_(true),
     need_switch_to_table_lock_worker_(false),
-    data_complement_gen_doc_id_(false)
+    data_complement_gen_doc_id_(false),
+    dml_table_ids_()
 {
 }
 
@@ -250,6 +251,7 @@ void ObPhysicalPlan::reset()
   can_set_feedback_info_.store(true);
   need_switch_to_table_lock_worker_ = false;
   data_complement_gen_doc_id_ = false;
+  dml_table_ids_.reset();
 }
 void ObPhysicalPlan::destroy()
 {

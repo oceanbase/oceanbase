@@ -8720,6 +8720,29 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
       phy_plan_->set_has_link_udf(log_plan.get_stmt()->get_query_ctx()->has_dblink_udf_);
     }
   }
+
+  // remember DML's table id set for cursor validation
+  // for more details refer to `phy_plan.dml_table_ids_`
+  if (OB_SUCC(ret) && log_plan.get_stmt()->is_dml_write_stmt()) {
+    const int64_t tenant_id = my_session->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid() && tenant_config->_enable_enhanced_cursor_validation) {
+      const ObDelUpdStmt *dml_stmt = static_cast<const ObDelUpdStmt*>(log_plan.get_stmt());
+      ObSEArray<const ObDmlTableInfo*, 1> table_infos;
+      if (OB_FAIL(dml_stmt->get_dml_table_infos(table_infos))) {
+        LOG_WARN("get dml table infos failed", K(ret));
+      } else {
+        phy_plan.get_dml_table_ids().set_capacity(table_infos.count());
+        ARRAY_FOREACH(table_infos, i) {
+          if (OB_FAIL(phy_plan.get_dml_table_ids().push_back(table_infos[i]->ref_table_id_))) {
+            LOG_WARN("push dml table id failed", K(ret));
+          }
+        }
+      }
+      LOG_TRACE("record dml table ids for cursor validation", K(phy_plan.get_dml_table_ids()));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();
   }
