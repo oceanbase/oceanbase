@@ -65,6 +65,11 @@ bool is_merge_dag(ObDagType::ObDagTypeEnum dag_type)
     || dag_type == ObDagType::DAG_TYPE_MDS_TABLE_MERGE;
 }
 
+bool is_ha_backfill_dag(const ObDagType::ObDagTypeEnum dag_type)
+{
+  return ObDagType::DAG_TYPE_TABLET_BACKFILL_TX == dag_type;
+}
+
 /*
  *  ----------------------------------------------ObMergeParameter--------------------------------------------------
  */
@@ -1578,7 +1583,7 @@ int ObTabletMergeTask::generate_next_task(ObITask *&next_task)
     LOG_WARN("not init", K(ret));
   } else if (idx_ + 1 == ctx_->get_concurrent_cnt()) {
     ret = OB_ITER_END;
-  } else if (!is_merge_dag(dag_->get_type())) {
+  } else if (!is_merge_dag(dag_->get_type()) && !is_ha_backfill_dag(dag_->get_type())) {
     ret = OB_ERR_SYS;
     LOG_ERROR("dag type not match", K(ret), KPC(dag_));
   }  else {
