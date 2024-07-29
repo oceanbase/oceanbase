@@ -187,6 +187,8 @@ int ObWrAsyncSnapshotTaskP::process()
       if (OB_UNLIKELY(MTL_ID() != snapshot_arg.get_tenant_id())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("wr snapshot task tenant_id mismatch!", K(MTL_ID()), K(snapshot_arg));
+      } else if (OB_FAIL(collector.init())) {
+        LOG_WARN("failed to init wr collector", K(ret));
       } else if (snapshot_arg.get_snap_id() == -1) {  // snapshot ahead
         if (OB_UNLIKELY(MTL_ID() != snapshot_arg.get_tenant_id())) {
           ret = OB_ERR_UNEXPECTED;

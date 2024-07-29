@@ -337,6 +337,7 @@ public:
       int64_t snapshot_timeout_ts);
   ~ObWrCollector() = default;
   DISABLE_COPY_ASSIGN(ObWrCollector);
+  int init();
   int collect();
   int collect_ash();
   TO_STRING_KV(K_(snap_id), K_(snapshot_begin_time), K_(snapshot_end_time), K_(timeout_ts));

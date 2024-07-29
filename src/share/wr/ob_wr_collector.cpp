@@ -46,6 +46,12 @@ ObWrCollector::ObWrCollector(int64_t snap_id, int64_t snapshot_begin_time,
   if (OB_UNLIKELY(snapshot_begin_time_ == snapshot_end_time_)) {
     snapshot_begin_time_ = 0;
   }
+}
+
+ERRSIM_POINT_DEF(ERRSIM_WR_SNAPSHOT_COLLECTOR_FAILURE);
+
+int ObWrCollector::init()
+{
   // read from __wr_snapshot to get the newest snapshot_begin_time
   ObSqlString sql;
   int ret = OB_SUCCESS;
@@ -82,11 +88,10 @@ ObWrCollector::ObWrCollector(int64_t snap_id, int64_t snapshot_begin_time,
   }
   // read from OB_WORKLOAD_REPOSITORY_SNAP_ID_SEQNENCE to get snap id for ahead records
   if (snap_id_ == -1) {
-    get_cur_snapshot_id(snap_id_);
+    ret = get_cur_snapshot_id(snap_id_);
   }
+  return ret;
 }
-
-ERRSIM_POINT_DEF(ERRSIM_WR_SNAPSHOT_COLLECTOR_FAILURE);
 
 int ObWrCollector::collect()
 {
@@ -510,14 +515,14 @@ int ObWrCollector::collect_ash()
               LOG_WARN("failed to batch write remaining part to wr", KR(ret));
             }
           }
-          // record snapshot_end_time_
-          // ignore useless snapshot
-          if (snapshot_begin_time_ < snapshot_end_time_) {
-            if (OB_FAIL(update_last_snapshot_end_time())) {
-              LOG_WARN("failed to update last snapshot end time", KR(ret));
-            }
-          }
         }      
+      }
+      // record snapshot_end_time_
+      // ignore useless snapshot
+      if (snapshot_begin_time_ < snapshot_end_time_) {
+        if (OB_FAIL(update_last_snapshot_end_time())) {
+          LOG_WARN("failed to update last snapshot end time", KR(ret));
+        }
       }
     }
   }

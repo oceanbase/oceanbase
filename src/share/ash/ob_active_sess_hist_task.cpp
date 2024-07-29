@@ -50,8 +50,6 @@ int ObActiveSessHistTask::init()
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(wr_proxy_.init(GCTX.net_frame_->get_req_transport()))) {
-    LOG_WARN("failed to init wr proxy", K(ret));
   } else {
     is_inited_ = true;
   }
@@ -74,7 +72,9 @@ int ObActiveSessHistTask::start()
     LOG_INFO("ASH init OK");
   }
   // start timer task to check snapshot ahead
-  ObAshRefreshTask::get_instance().start();
+  if (OB_FAIL(ObAshRefreshTask::get_instance().start())) {
+    LOG_WARN("failed to start ash refresh task", K(ret));
+  }
   return ret;
 }
 
