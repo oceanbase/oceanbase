@@ -725,7 +725,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
                                                    first_ls_id,
                                                    stmt_expire_ts,
                                                    snapshot))) {
-      } else if (is_single_tablet) {
+      } else if (is_single_tablet && snapshot.snapshot_ls_role_ != ObRole::FOLLOWER) {
         // 1. No need to check has_same_lsid method for single table and
         //    single tablet scenario to reduce the overhead;
         // 2. When transfer scenario happens, transaction layer will return
