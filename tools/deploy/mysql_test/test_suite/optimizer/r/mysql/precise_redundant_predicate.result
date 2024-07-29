@@ -1,0 +1,227 @@
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+c0 INT,
+c1 INT,
+c2 INT,
+c3 INT
+);
+DROP PROCEDURE IF EXISTS FillTable;
+CREATE PROCEDURE FillTable()
+BEGIN
+DECLARE i INT DEFAULT 0;
+WHILE i < 1000 DO
+INSERT INTO t1 (c0, c1, c2, c3) VALUES (MOD(i, 10), MOD(i, 10), MOD(i, 10), MOD(i, 10));
+SET i = i + 1;
+END WHILE;
+END //
+CALL FillTable();
+SET GLOBAL optimizer_dynamic_sampling = 0;
+alter system set enable_sql_extension = true;
+call dbms_stats.delete_table_stats('test', 't1');
+call dbms_stats.gather_table_stats('test', 't1', method_opt=>'FOR ALL COLUMNS SIZE 1');
+set ob_enable_show_trace=true;
+set ob_log_level='debug';
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c2,2,c2)=(1,c2,3) and c2=2;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |42          |
+|1 |└─TABLE FULL SCAN|t1  |100     |41          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([t1.c2 = 2], [(t1.c2) = (3)]), rowset=256
+      access([t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where c2=4 and c2=4;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |48          |
+|1 |└─TABLE FULL SCAN|t1  |100     |47          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([t1.c2 = 4], [t1.c2 = 4]), rowset=256
+      access([t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c2,c3)=((2,3)) and (c2,c3)=(2,3);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |61          |
+|1 |└─TABLE FULL SCAN|t1  |11      |61          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([(t1.c2, t1.c3) = (2, 3)], [(t1.c2, t1.c3) = (2, 3)]), rowset=16
+      access([t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where (2,2) in ((c2,c2));
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |41          |
+|1 |└─TABLE FULL SCAN|t1  |100     |39          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([(2) = (t1.c2)]), rowset=256
+      access([t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where c0 in (1,2,3,7) AND c0 in (4,5);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |46          |
+|1 |└─TABLE FULL SCAN|t1  |200     |42          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([t1.c0 IN (4, 5)], [t1.c0 IN (1, 2, 3, 7)]), rowset=256
+      access([t1.c0]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c0,c1) in ((1,2), (3,4));
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |61          |
+|1 |└─TABLE FULL SCAN|t1  |21      |61          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([(t1.c0, t1.c1) IN ((1, 2), (3, 4))]), rowset=256
+      access([t1.c0], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c0,c1)=(1,2) AND 3 in (c0,c1,c2);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |84          |
+|1 |└─TABLE FULL SCAN|t1  |2       |84          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([3 IN (t1.c2)], [(t1.c0, t1.c1) = (1, 2)]), rowset=16
+      access([t1.c0], [t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c0,c1)=(1,2) AND c0 in (7,3);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |61          |
+|1 |└─TABLE FULL SCAN|t1  |11      |61          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([t1.c0 IN (7, 3)], [(t1.c0, t1.c1) = (1, 2)]), rowset=16
+      access([t1.c0], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c0,c1)=(1,2) AND c0>=9 AND c1<=2;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |62          |
+|1 |└─TABLE FULL SCAN|t1  |11      |62          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([t1.c0 >= 9], [t1.c1 <= 2], [(t1.c0, t1.c1) = (1, 2)]), rowset=16
+      access([t1.c0], [t1.c1]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where c1>=5 and c2=1;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |71          |
+|1 |└─TABLE FULL SCAN|t1  |55      |70          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([t1.c2 = 1], [t1.c1 >= 5]), rowset=256
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where c1>0 and c1<0 and c2=1;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |68          |
+|1 |└─TABLE FULL SCAN|t1  |0       |68          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=16
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([t1.c1 < 0], [t1.c2 = 1], [t1.c1 > 0]), rowset=16
+      access([t1.c1], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
+explain select /*+ NO_REWRITE */ count(*) from t1 where c0 >> 12 & 15 in (0,1);
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |SCALAR GROUP BY  |    |1       |45          |
+|1 |└─TABLE FULL SCAN|t1  |200     |41          |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT_SUM(T_FUN_COUNT(*))]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT_SUM(T_FUN_COUNT(*))])
+  1 - output([T_FUN_COUNT(*)]), filter([(T_OP_BIT_AND, cast((T_OP_BIT_RIGHT_SHIFT, cast(t1.c0, BIGINT(-1, 0)), 12), BIGINT(-1, 0)), 15) IN (0, 1)]), rowset=256
+      access([t1.c0]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true, 
+      pushdown_aggregation([T_FUN_COUNT(*)])
