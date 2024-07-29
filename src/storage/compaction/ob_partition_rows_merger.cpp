@@ -817,7 +817,9 @@ int ObPartitionMergeHelper::build_rows_merger()
         item.iter_ = iter;
         item.iter_idx_ = i;
         if (OB_FAIL(rows_merger_->push(item))) {
-          STORAGE_LOG(WARN, "failed to push item", K(ret), K(i), KPC(rows_merger_));
+          if (OB_BLOCK_SWITCHED != ret) {
+            STORAGE_LOG(WARN, "failed to push item", K(ret), K(i), KPC(rows_merger_));
+          }
         }
       }
     } // end for

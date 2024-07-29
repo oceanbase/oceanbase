@@ -493,6 +493,7 @@ void TestCOMerge::prepare_merge_context(const ObMergeType &merge_type,
                                         ObCOTabletMergeCtx &merge_context)
 {
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  merge_context.static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_COLUMN_STORE_MERGE;
   merge_context.static_param_.data_version_ = DATA_VERSION_4_3_0_0;
   merge_context.static_param_.dag_param_.merge_version_ = trans_version_range.snapshot_version_;
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());

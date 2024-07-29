@@ -265,9 +265,8 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     }
     schema_version_ = static_param.schema_version_;
     create_snapshot_version_ = static_param.create_snapshot_version_;
-    progressive_merge_round_ = static_param.progressive_merge_round_;
-    progressive_merge_step_ = std::min(
-            static_param.progressive_merge_num_, static_param.progressive_merge_step_ + 1);
+    progressive_merge_round_ = ctx.get_progressive_merge_round();
+    progressive_merge_step_ = ctx.get_result_progressive_merge_step(column_group_idx);
     is_co_table_without_cgs_ = is_main_table ? (0 == res.data_blocks_cnt_ || static_param.is_build_row_store()) : false;
     column_cnt_ = res.data_column_cnt_;
     if ((0 == res.row_count_ && 0 == res.max_merged_trans_version_)
@@ -521,9 +520,8 @@ int ObTabletCreateSSTableParam::init_for_mds(
   recycle_version_ = 0;
   schema_version_ = mds_schema.get_schema_version();
   create_snapshot_version_ = static_param.create_snapshot_version_;
-  progressive_merge_round_ = static_param.progressive_merge_round_;
-  progressive_merge_step_ = std::min(
-          static_param.progressive_merge_num_, static_param.progressive_merge_step_ + 1);
+  progressive_merge_round_ = 0;
+  progressive_merge_step_ = 0;
 
   column_cnt_ = res.data_column_cnt_;
   if (0 == res.row_count_ && 0 == res.max_merged_trans_version_) {

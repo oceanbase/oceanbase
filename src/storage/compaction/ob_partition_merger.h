@@ -32,6 +32,7 @@
 #include "storage/compaction/ob_compaction_memory_context.h"
 #include "storage/blocksstable/ob_data_store_desc.h"
 #include "storage/compaction/ob_tablet_merge_info.h"
+#include "storage/compaction/ob_progressive_merge_helper.h"
 
 namespace oceanbase
 {
@@ -81,40 +82,6 @@ public:
       ObTabletMergeInfo &input_merge_info,
       blocksstable::ObDataStoreDesc &data_store_desc,
       ObSSTableMergeInfo &output_merge_info);
-};
-
-class ObProgressiveMergeHelper final
-{
-public:
-  ObProgressiveMergeHelper(const int64_t table_idx = 0)
-    : table_idx_(table_idx),
-      progressive_merge_round_(0),
-      rewrite_block_cnt_(0),
-      need_rewrite_block_cnt_(0),
-      data_version_(0),
-      full_merge_(false),
-      check_macro_need_merge_(false),
-      is_inited_(false)
-    {}
-  ~ObProgressiveMergeHelper() = default;
-  int init(const ObSSTable &sstable, const ObMergeParameter &merge_param, ObIAllocator &allocator);
-  void reset();
-  inline bool is_valid() const { return is_inited_; }
-  int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObMacroBlockOp &block_op) const;
-  inline void inc_rewrite_block_cnt() { rewrite_block_cnt_++; }
-  inline bool is_progressive_merge_finish() { return need_rewrite_block_cnt_ == 0 || rewrite_block_cnt_ >= need_rewrite_block_cnt_; }
-  TO_STRING_KV(K_(table_idx), K_(progressive_merge_round), K_(rewrite_block_cnt), K_(need_rewrite_block_cnt), K_(data_version), K_(full_merge), K_(check_macro_need_merge), K_(is_inited));
-private:
-  const static int64_t CG_TABLE_CHECK_REWRITE_CNT_ = 4;
-  const static int64_t DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD = 30;
-  const int64_t table_idx_;
-  int64_t progressive_merge_round_;
-  int64_t rewrite_block_cnt_;
-  int64_t need_rewrite_block_cnt_;
-  int64_t data_version_;
-  bool full_merge_;
-  bool check_macro_need_merge_;
-  bool is_inited_;
 };
 
 class ObMerger
@@ -208,7 +175,6 @@ public:
   INHERIT_TO_STRING_KV("ObPartitionMajorMerger", ObPartitionMerger, "curr merger", "major merger");
 protected:
   virtual int inner_process(const blocksstable::ObDatumRow &row) override;
-
 private:
   virtual int inner_init() override;
   int init_progressive_merge_helper();

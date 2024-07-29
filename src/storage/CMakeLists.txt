@@ -659,6 +659,7 @@ ob_set_subtarget(ob_storage compaction
   compaction/ob_sstable_builder.cpp
   compaction/ob_compaction_memory_pool.cpp
   compaction/ob_compaction_memory_context.cpp
+  compaction/ob_progressive_merge_helper.cpp
 )
 
 ob_set_subtarget(ob_storage memtable

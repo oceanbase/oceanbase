@@ -311,8 +311,11 @@ int ObCOMerger:: alloc_row_writers(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(writer->init(default_row, merge_param_, task_idx_, read_info, *cg_schema_ptr, idx, *merge_infos[idx], table, add_column))) {
-      STORAGE_LOG(WARN, "failed to init writer", K(ret), K(default_row), K(merge_param_), KPC(table));
+    } else if (OB_FAIL(writer->init(default_row, merge_param_, task_idx_,
+                                    read_info, *cg_schema_ptr, idx, ctx->progressive_merge_mgr_,
+                                    *merge_infos[idx], table, add_column))) {
+      STORAGE_LOG(WARN, "failed to init writer", K(ret), K(default_row),
+                  K(merge_param_), KPC(table));
     } else if (OB_FAIL(merge_writers_.push_back(writer))) {
       STORAGE_LOG(WARN, "failed to push writer", K(ret), K(merge_writers_));
     }
@@ -322,7 +325,7 @@ int ObCOMerger:: alloc_row_writers(
       merger_arena_.free(writer);
       writer = nullptr;
     }
-  }
+  } // for
 
   return ret;
 }

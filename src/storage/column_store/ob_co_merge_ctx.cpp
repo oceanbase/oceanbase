@@ -173,14 +173,33 @@ int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
   if (OB_FAIL(ObBasicTabletMergeCtx::build_ctx(finish_flag))) {
     LOG_WARN("failed to build basic ctx", KR(ret), "param", get_dag_param(), KPC(this));
   } else if (OB_FAIL(init_major_sstable_status())) {
-    LOG_WARN("failed to get major sstable status", K(ret));
+    LOG_WARN("failed to init major sstable status", K(ret));
   } else if (is_major_merge_type(get_merge_type())) {
     // meta major merge not support row col switch now
-    if (OB_FAIL(static_param_.init_co_major_merge_params())) {
-      LOG_WARN("failed to set major merge params", K(ret), K(static_param_));
-    } else if (is_build_row_store_from_rowkey_cg() && OB_FAIL(init_table_read_info())) {
+    if (is_build_row_store_from_rowkey_cg() && OB_FAIL(init_table_read_info())) {
       STORAGE_LOG(WARN, "fail to init table read info", K(ret));
     }
+  }
+  return ret;
+}
+
+int ObCOTabletMergeCtx::cal_merge_param()
+{
+  int ret = OB_SUCCESS;
+  bool force_full_merge = false;
+  const ObCOMajorMergePolicy::ObCOMajorMergeType co_major_merge_type = static_param_.co_major_merge_type_;
+  if (OB_UNLIKELY(!ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid major merge type", K(ret), K(co_major_merge_type));
+  } else if (ObCOMajorMergePolicy::is_build_column_store_merge(co_major_merge_type)) {
+  } else if (ObCOMajorMergePolicy::is_build_row_store_merge(co_major_merge_type)) {
+    force_full_merge = true;
+  } else if (ObCOMajorMergePolicy::is_rebuild_column_store_merge(co_major_merge_type)) {
+    force_full_merge = true;
+    static_param_.is_rebuild_column_store_ = true;
+  }
+  if (FAILEDx(static_param_.cal_major_merge_param(force_full_merge, progressive_merge_mgr_))) {
+    LOG_WARN("failed to calc major merge param", KR(ret), K(force_full_merge));
   }
   return ret;
 }

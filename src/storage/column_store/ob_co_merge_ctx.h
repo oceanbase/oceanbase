@@ -55,7 +55,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   ~ObCOTabletMergeCtx();
   void destroy();
   virtual int prepare_schema() override;
-  virtual int cal_merge_param() override { return static_param_.cal_major_merge_param(); }
+  virtual int cal_merge_param() override;
   virtual int init_tablet_merge_info(const bool need_check = true) override;
   virtual int prepare_index_tree() override { return OB_SUCCESS; }
   virtual int collect_running_info() override;
@@ -123,6 +123,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
   OB_INLINE bool is_build_row_store() const { return static_param_.is_build_row_store(); }
   int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);
+
   INHERIT_TO_STRING_KV("ObCOTabletMergeCtx", ObBasicTabletMergeCtx,
       K_(array_count), K_(exe_stat));
 

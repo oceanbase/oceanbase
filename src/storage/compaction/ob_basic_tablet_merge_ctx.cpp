@@ -39,6 +39,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     is_schema_changed_(false),
     need_parallel_minor_merge_(true),
     is_tenant_major_merge_(false),
+    is_backfill_(false),
     merge_level_(MICRO_BLOCK_MERGE_LEVEL),
     merge_reason_(ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE),
     co_major_merge_type_(ObCOMajorMergePolicy::INVALID_CO_MAJOR_MERGE_TYPE),
@@ -46,9 +47,6 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     sstable_logic_seq_(0),
     ls_handle_(),
     tables_handle_(MTL_ID()),
-    progressive_merge_round_(0),
-    progressive_merge_num_(0),
-    progressive_merge_step_(0),
     concurrent_cnt_(0),
     data_version_(0),
     ls_rebuild_seq_(-1),
@@ -64,8 +62,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     report_(nullptr),
     snapshot_info_(),
     tx_id_(0),
-    multi_version_column_descs_(),
-    is_backfill_(false)
+    multi_version_column_descs_()
 {
   merge_scn_.set_max();
 }
@@ -122,22 +119,6 @@ int ObStaticMergeParam::init_static_info(
   concurrent_cnt_ = concurrent_cnt;
   if (OB_FAIL(init_multi_version_column_descs())) {
     LOG_WARN("failed to init multi_version_column_descs", KR(ret));
-  }
-  return ret;
-}
-
-int ObStaticMergeParam::init_co_major_merge_params()
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!ObCOMajorMergePolicy::is_valid_major_merge_type(co_major_merge_type_))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid major merge type", K(ret), K(major_sstable_status_), K(co_major_merge_type_));
-  } else if (ObCOMajorMergePolicy::is_build_column_store_merge(co_major_merge_type_)) {
-  } else if (ObCOMajorMergePolicy::is_build_row_store_merge(co_major_merge_type_)) {
-    set_full_merge_and_level(true);
-  } else if (ObCOMajorMergePolicy::is_rebuild_column_store_merge(co_major_merge_type_)) {
-    set_full_merge_and_level(true);
-    is_rebuild_column_store_ = true;
   }
   return ret;
 }
@@ -235,7 +216,9 @@ int ObStaticMergeParam::cal_minor_merge_param(const bool has_compaction_filter)
   return ret;
 }
 
-int ObStaticMergeParam::cal_major_merge_param()
+int ObStaticMergeParam::cal_major_merge_param(
+  const bool force_full_merge,
+  ObProgressiveMergeMgr &progressive_mgr)
 {
   int ret = OB_SUCCESS;
   ObSSTable *base_table = nullptr;
@@ -260,44 +243,23 @@ int ObStaticMergeParam::cal_major_merge_param()
       K(sstable_meta_hdl), KPC(this));
   } else {
     read_base_version_ = base_table->get_snapshot_version();
-    if (1 == schema_->get_progressive_merge_num() || is_rebuild_column_store_) {
+    if (1 == schema_->get_progressive_merge_num() || force_full_merge || is_rebuild_column_store_) {
       is_full_merge_ = true;
     } else {
       is_full_merge_ = false;
     }
-
-    const ObSSTableBasicMeta &base_meta = sstable_meta_hdl.get_sstable_meta().get_basic_meta();
-    const int64_t meta_progressive_merge_round = base_meta.progressive_merge_round_;
-    const int64_t schema_progressive_merge_round = schema_->get_progressive_merge_round();
-    if (0 == schema_->get_progressive_merge_num()) {
-      progressive_merge_num_ = (1 == schema_progressive_merge_round) ? 0 : OB_AUTO_PROGRESSIVE_MERGE_NUM;
-    } else {
-      progressive_merge_num_ = schema_->get_progressive_merge_num();
-    }
-
-    if (is_full_merge_) {
-      progressive_merge_round_ = schema_progressive_merge_round;
-      progressive_merge_step_ = progressive_merge_num_;
-    } else if (meta_progressive_merge_round < schema_progressive_merge_round) { // new progressive merge
-      progressive_merge_round_ = schema_progressive_merge_round;
-      progressive_merge_step_ = 0;
-    } else if (meta_progressive_merge_round == schema_progressive_merge_round) {
-      progressive_merge_round_ = meta_progressive_merge_round;
-      progressive_merge_step_ = base_meta.progressive_merge_step_;
-    }
-    // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
-    FLOG_INFO("Calc progressive param", K_(is_schema_changed), K(progressive_merge_num_),
-        K(progressive_merge_round_), K(meta_progressive_merge_round), K(progressive_merge_step_),
-        K(is_full_merge_), K(full_stored_col_cnt), K(sstable_meta_hdl.get_sstable_meta().get_column_count()));
-  }
-
-  if (OB_SUCC(ret)) {
-    if (is_full_merge_
-      || is_meta_major_merge(get_merge_type())
+    if (OB_FAIL(progressive_mgr.init(
+            dag_param_.tablet_id_, is_full_merge_,
+            sstable_meta_hdl.get_sstable_meta().get_basic_meta(), *schema_,
+            data_version_))) {
+      LOG_WARN("failed to init progressive merge mgr", KR(ret), K_(is_full_merge), K(sstable_meta_hdl), KPC(schema_));
+    } else if (is_full_merge_
       || (merge_level_ != MACRO_BLOCK_MERGE_LEVEL && is_schema_changed_)
-      || (data_version_ >= DATA_VERSION_4_3_3_0 && need_calc_progressive_merge())) {
+      || (data_version_ >= DATA_VERSION_4_3_3_0 && progressive_mgr.need_calc_progressive_merge())) {
       merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
-      // for progressive merge, if all macro have larger progressive_merge_round, no need progressive merge any more TODO;
+      // ATTENTION! Critical diagnostic log, DO NOT CHANGE!!!
+      LOG_INFO("set merge_level to MACRO_BLOCK_MERGE_LEVEL", K_(is_schema_changed), K(force_full_merge),
+        K(is_full_merge_), K(full_stored_col_cnt), K(sstable_meta_hdl.get_sstable_meta().get_column_count()));
     }
   }
   return ret;
@@ -438,7 +400,7 @@ int ObBasicTabletMergeCtx::build_ctx(bool &finish_flag)
   } else if (OB_FAIL(static_param_.get_basic_info_from_result(get_merge_table_result))) {
     LOG_PRINT_WRAPPER("failed to get basic infor from result");
   } else if (FALSE_IT(time_guard_click(ObStorageCompactionTimeGuard::COMPACTION_POLICY))) {
-  } else if (OB_FAIL(prepare_schema())) {
+  } else if (OB_FAIL(prepare_schema())) { // get schema(medium info)
     LOG_PRINT_WRAPPER("failed to get schema");
   } else if (OB_FAIL(build_ctx_after_init())) {
     LOG_PRINT_WRAPPER("failed to build ctx after init");

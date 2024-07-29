@@ -97,7 +97,10 @@ protected:
   virtual int prepare_schema() override;
   virtual int try_swap_tablet(ObGetMergeTablesResult &get_merge_table_result) override
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
-  virtual int cal_merge_param() override { return static_param_.cal_major_merge_param(); }
+  virtual int cal_merge_param() override {
+    return static_param_.cal_major_merge_param(false /*force_full_merge*/,
+                                               progressive_merge_mgr_);
+  }
 };
 
 } // namespace compaction

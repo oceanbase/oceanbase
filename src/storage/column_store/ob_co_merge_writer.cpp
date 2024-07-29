@@ -480,6 +480,7 @@ int ObCOMergeRowWriter::init(const blocksstable::ObDatumRow &default_row,
                           const ObITableReadInfo *full_read_info,
                           const ObStorageColumnGroupSchema &cg_schema,
                           const int64_t cg_idx,
+                          ObProgressiveMergeMgr &progressive_merge_mgr,
                           ObTabletMergeInfo &merge_info,
                           ObITable *table,
                           const bool add_column)
@@ -514,7 +515,7 @@ int ObCOMergeRowWriter::init(const blocksstable::ObDatumRow &default_row,
     if (OB_ISNULL(progressive_merge_helper_)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "Failed to allocate memory for progressive_merge_helper_", K(ret));
-    } else if (OB_FAIL(progressive_merge_helper_->init(*sstable, merge_param, allocator_))) {
+    } else if (OB_FAIL(progressive_merge_helper_->init(*sstable, merge_param, &progressive_merge_mgr))) {
       STORAGE_LOG(WARN, "failed to init progressive_merge_helper", K(ret), KPC(table));
     }
   }
@@ -545,7 +546,6 @@ int ObCOMergeRowWriter::process(const ObMacroBlockDesc &macro_desc)
 
   if (OB_FAIL(ret)) {
   } else if (block_op.is_rewrite()) {
-    progressive_merge_helper_->inc_rewrite_block_cnt();
     if (OB_FAIL(process_macro_rewrite())) {
       STORAGE_LOG(WARN, "failed to process_macro_rewrite", K(ret));
     }
@@ -603,6 +603,15 @@ int ObCOMergeRowWriter::replay_mergelog(const ObMergeLog &mergelog, const blocks
 
   return ret;
 }
+
+int ObCOMergeRowWriter::end_write(const int64_t task_idx, ObTabletMergeInfo &merge_info)
+{
+  if (OB_NOT_NULL(progressive_merge_helper_)) {
+    progressive_merge_helper_->end();
+  }
+  return write_helper_.end_write(merge_info);
+}
+
 
 /**
  * ---------------------------------------------------------ObCOMergeSingleWriter--------------------------------------------------------------

@@ -527,7 +527,7 @@ void ObTabletMergeDag::fill_compaction_progress(
   progress.dag_id_ = get_dag_id();
   progress.create_time_ = add_time_;
   progress.start_time_ = start_time_;
-  progress.progressive_merge_round_ = ctx.static_param_.progressive_merge_round_;
+  progress.progressive_merge_round_ = ctx.get_progressive_merge_round();
   progress.estimated_finish_time_ = ObTimeUtility::fast_current_time() + ObCompactionProgress::EXTRA_TIME;
   progress.start_cg_idx_ = start_cg_idx;
   progress.end_cg_idx_ = end_cg_idx;

@@ -601,8 +601,7 @@ int ObMacroBlockWriter::append(const ObDataMacroBlockMeta &macro_meta)
       merge_info_->multiplexed_macro_block_count_++;
       merge_info_->macro_block_count_++;
       merge_info_->total_row_count_ += macro_meta.val_.row_count_;
-      merge_info_->occupy_size_
-          += macro_meta.val_.occupy_size_;
+      merge_info_->occupy_size_ += macro_meta.val_.occupy_size_;
     }
   }
 

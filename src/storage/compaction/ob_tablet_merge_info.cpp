@@ -77,8 +77,8 @@ void ObTabletMergeInfo::build_sstable_merge_info(const ObBasicTabletMergeCtx &ct
   sstable_merge_info_.tablet_id_ = ctx.get_tablet_id();
   sstable_merge_info_.compaction_scn_ = static_param.get_compaction_scn();
   sstable_merge_info_.merge_type_ = ctx.get_inner_table_merge_type();
-  sstable_merge_info_.progressive_merge_round_ = static_param.progressive_merge_round_;
-  sstable_merge_info_.progressive_merge_num_ = static_param.progressive_merge_num_;
+  sstable_merge_info_.progressive_merge_round_ = ctx.get_progressive_merge_round();
+  sstable_merge_info_.progressive_merge_num_ = ctx.get_progressive_merge_num();
   sstable_merge_info_.concurrent_cnt_ = static_param.concurrent_cnt_;
   sstable_merge_info_.is_full_merge_ = static_param.is_full_merge_;
 }
