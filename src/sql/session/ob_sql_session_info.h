@@ -790,6 +790,7 @@ public:
                                  _ob_sqlstat_enable_(true),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
+                                 sql_plan_management_mode_(0),
                                  session_(session)
     {
     }
@@ -813,6 +814,7 @@ public:
     int64_t get_range_optimizer_max_mem_size() const { return range_optimizer_max_mem_size_; }
     int64_t get_query_record_size_limit() const { return _query_record_size_limit_; }
     bool get_ob_sqlstat_enable() const { return _ob_sqlstat_enable_; }
+    int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -836,6 +838,7 @@ public:
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
+    int64_t sql_plan_management_mode_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1363,7 +1366,7 @@ public:
   bool is_spf_mlj_group_rescan_enabled() const;
   bool enable_parallel_das_dml() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
-  int get_spm_mode(int64_t &spm_mode) const;
+  int get_spm_mode(int64_t &spm_mode);
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   void set_ddl_info(const ObSessionDDLInfo &ddl_info) { ddl_info_ = ddl_info; }
@@ -1481,6 +1484,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_ob_sqlstat_enable();
+  }
+  int64_t get_sql_plan_management_mode()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_sql_plan_management_mode();
   }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);

@@ -654,21 +654,15 @@ bool ObSQLSessionInfo::enable_parallel_das_dml() const
   return bret;
 }
 
-int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode) const
+int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode)
 {
   int ret = OB_SUCCESS;
-  spm_mode = 0;
-  int64_t tenant_id = get_effective_tenant_id();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    spm_mode = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
-        tenant_config->sql_plan_management_mode.get_value_string());
-    if (0 == spm_mode) {
-      bool sysvar_use_baseline = false;
-      get_use_plan_baseline(sysvar_use_baseline);
-      if (sysvar_use_baseline) {
-        spm_mode = 1;
-      }
+  spm_mode = get_sql_plan_management_mode();
+  if (0 == spm_mode) {
+    bool sysvar_use_baseline = false;
+    get_use_plan_baseline(sysvar_use_baseline);
+    if (sysvar_use_baseline) {
+      spm_mode = 1;
     }
   }
   return ret;
@@ -3037,6 +3031,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       enable_sql_extension_ = tenant_config->enable_sql_extension;
       px_join_skew_handling_ = tenant_config->_px_join_skew_handling;
       px_join_skew_minfreq_ = tenant_config->_px_join_skew_minfreq;
+      sql_plan_management_mode_ = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
+        tenant_config->sql_plan_management_mode.get_value_string());
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }
