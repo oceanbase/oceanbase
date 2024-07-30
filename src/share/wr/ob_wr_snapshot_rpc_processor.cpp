@@ -150,32 +150,77 @@ int ObWrAsyncSnapshotTaskP::process()
     ObWrCreateSnapshotArg &snapshot_arg = static_cast<ObWrCreateSnapshotArg &>(arg);
     int64_t origin_worker_timeout = THIS_WORKER.get_timeout_ts();
     THIS_WORKER.set_timeout_ts(snapshot_arg.get_timeout_ts());
-    ObWrCollector collector(snapshot_arg.get_snap_id(), snapshot_arg.get_snapshot_begin_time(),
-        snapshot_arg.get_snapshot_end_time(), snapshot_arg.get_timeout_ts());
-    if (OB_UNLIKELY(MTL_ID() != snapshot_arg.get_tenant_id())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("wr snapshot task tenant_id mismatch!", K(MTL_ID()), K(snapshot_arg));
-    } else if (OB_FAIL(collector.collect())) {
-      LOG_WARN("failed to collect wr data", K(ret), K(snapshot_arg), K(MTL_ID()));
-    }
-    // update snapshot info
-    if (OB_FAIL(ret)) {
-      status = ObWrSnapshotStatus::FAILED;
+
+    // gurantee one snapshot task processing
+    bool exit = true;
+    if (snapshot_arg.get_snap_id() == -1) {
+      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->try_lock())) {
+        LOG_WARN("snapshot ahead request failed to lock", K(arg));
+      } else {
+        exit = false;
+      }
     } else {
-      status = ObWrSnapshotStatus::SUCCESS;
-    }
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(WorkloadRepositoryTask::modify_tenant_snapshot_status_and_startup_time(
-            snapshot_arg.get_snap_id(), snapshot_arg.get_tenant_id(), GCONF.cluster_id,
-            GCONF.self_addr_, GCTX.start_service_time_, status))) {
-      LOG_WARN("failed to modify snapshot info", KR(tmp_ret), K(snapshot_arg), K(status));
-    } else if (is_sys_tenant(snapshot_arg.get_tenant_id())) {
-      if (OB_TMP_FAIL(WorkloadRepositoryTask::update_snap_info_in_wr_control(snapshot_arg.get_tenant_id(),
-              snapshot_arg.get_snap_id(), snapshot_arg.get_snapshot_end_time()))) {
-        LOG_WARN("failed to update wr control info", KR(tmp_ret), K(snapshot_arg));
+      // scheduled task must be processed
+      if (OB_FAIL(MTL(ObWorkloadRepositoryContext*)->lock(snapshot_arg.get_timeout_ts() - common::ObTimeUtility::current_time()))) {
+        LOG_WARN("scheduled aysnc snapshot task failed", K(MTL_ID()), K(snapshot_arg), K(common::ObTimeUtility::current_time()));
+        status = ObWrSnapshotStatus::FAILED;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(WorkloadRepositoryTask::modify_tenant_snapshot_status_and_startup_time(
+                snapshot_arg.get_snap_id(), snapshot_arg.get_tenant_id(), GCONF.cluster_id,
+                GCONF.self_addr_, GCTX.start_service_time_, status))) {
+          LOG_WARN("failed to modify snapshot info", KR(tmp_ret), K(snapshot_arg), K(status));
+        } else if (is_sys_tenant(snapshot_arg.get_tenant_id())) {
+          if (OB_TMP_FAIL(WorkloadRepositoryTask::update_snap_info_in_wr_control(snapshot_arg.get_tenant_id(),
+                  snapshot_arg.get_snap_id(), snapshot_arg.get_snapshot_end_time()))) {
+            LOG_WARN("failed to update wr control info", KR(tmp_ret), K(snapshot_arg));
+          }
+        }
+      } else {
+        exit = false;
       }
     }
-    ret = COVER_SUCC(tmp_ret);
+
+    if (!exit) {
+      // hold the lock
+      ObWrCollector collector(snapshot_arg.get_snap_id(), snapshot_arg.get_snapshot_begin_time(),
+          snapshot_arg.get_snapshot_end_time(), snapshot_arg.get_timeout_ts());
+      if (OB_UNLIKELY(MTL_ID() != snapshot_arg.get_tenant_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("wr snapshot task tenant_id mismatch!", K(MTL_ID()), K(snapshot_arg));
+      } else if (OB_FAIL(collector.init())) {
+        LOG_WARN("failed to init wr collector", K(ret));
+      } else if (snapshot_arg.get_snap_id() == -1) {  // snapshot ahead
+        if (OB_UNLIKELY(MTL_ID() != snapshot_arg.get_tenant_id())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("wr snapshot ahead task should be trigger by sys tenant!", K(MTL_ID()), K(snapshot_arg));        
+        } else if (OB_FAIL(collector.collect_ash())) {
+          LOG_WARN("failed to wr snapshot ahead", K(ret), K(snapshot_arg), K(MTL_ID()));
+        }
+      } else if (OB_FAIL(collector.collect())) {  // scheduled snapshot
+        LOG_WARN("failed to collect wr data", K(ret), K(snapshot_arg), K(MTL_ID()));
+      }
+      // update scheduled snapshot info
+      if (snapshot_arg.get_snap_id() != -1) {
+        if (OB_FAIL(ret)) {
+          status = ObWrSnapshotStatus::FAILED;
+        } else {
+          status = ObWrSnapshotStatus::SUCCESS;
+        }
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(WorkloadRepositoryTask::modify_tenant_snapshot_status_and_startup_time(
+                snapshot_arg.get_snap_id(), snapshot_arg.get_tenant_id(), GCONF.cluster_id,
+                GCONF.self_addr_, GCTX.start_service_time_, status))) {
+          LOG_WARN("failed to modify snapshot info", KR(tmp_ret), K(snapshot_arg), K(status));
+        } else if (is_sys_tenant(snapshot_arg.get_tenant_id())) {
+          if (OB_TMP_FAIL(WorkloadRepositoryTask::update_snap_info_in_wr_control(snapshot_arg.get_tenant_id(),
+                  snapshot_arg.get_snap_id(), snapshot_arg.get_snapshot_end_time()))) {
+            LOG_WARN("failed to update wr control info", KR(tmp_ret), K(snapshot_arg));
+          }
+        }
+        ret = COVER_SUCC(tmp_ret);
+      }
+      MTL(ObWorkloadRepositoryContext*)->release_lock();
+    }
     THIS_WORKER.set_timeout_ts(origin_worker_timeout);
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -220,7 +265,6 @@ int ObWrSyncUserSubmitSnapshotTaskP::process()
   WR_STAT_GUARD(WR_SNAPSHOT);
   ObWrSnapshotArg &arg = ObWrSyncUserSubmitSnapshotTaskP::arg_;
   ObWrUserSubmitSnapResp &resp = ObWrSyncUserSubmitSnapshotTaskP::result_;
-  LOG_DEBUG("user submit a wr take snapshot task", K(MTL_ID()), K(arg));
   if (OB_ISNULL(GCTX.wr_service_) || OB_ISNULL(GCTX.net_frame_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN(
@@ -354,6 +398,5 @@ int ObWrSyncUserModifySettingsTaskP::process()
   }
   return ret;
 }
-
 }  // end of namespace share
 }  // end of namespace oceanbase

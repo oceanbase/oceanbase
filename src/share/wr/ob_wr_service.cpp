@@ -25,6 +25,32 @@ namespace oceanbase
 namespace share
 {
 
+int ObWorkloadRepositoryContext::mtl_init(ObWorkloadRepositoryContext* &ptr)
+{
+  ptr->is_inited_ = true;
+  return OB_SUCCESS;
+}
+
+void ObWorkloadRepositoryContext::destroy()
+{
+  is_inited_ = false;
+}
+
+int ObWorkloadRepositoryContext::try_lock()
+{
+  return mutex_.trylock();
+}
+
+int ObWorkloadRepositoryContext::lock(const int64_t abs_timeout_us)
+{
+  return mutex_.lock(abs_timeout_us);
+}
+
+void ObWorkloadRepositoryContext::release_lock()
+{
+  mutex_.unlock();
+}
+
 ObWorkloadRepositoryService::ObWorkloadRepositoryService() : is_inited_(false), wr_timer_task_()
 {}
 

@@ -14,15 +14,16 @@
 
 #include "lib/oblog/ob_log.h"
 #include "lib/thread/thread_mgr.h"
+#include "observer/ob_srv_network_frame.h"
 #include "share/ob_thread_mgr.h"
 #include "share/ash/ob_active_sess_hist_task.h"
 #include "share/ash/ob_active_sess_hist_list.h"
+#include "share/ash/ob_ash_refresh_task.h"
 #include "sql/session/ob_sql_session_mgr.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/statistic_event/ob_stat_event.h"
 #include "lib/time/ob_time_utility.h"
 #include "share/wr/ob_wr_stat_guard.h"
-#include "share/wr/ob_wr_service.h"
 #include "observer/omt/ob_th_worker.h"
 #include "deps/oblib/src/rpc/obmysql/ob_mysql_packet.h"
 
@@ -33,10 +34,6 @@ using namespace oceanbase::sql;
 // a sample would be taken place up to 20ms after ash iteration begins.
 // if sample time is above this threshold, mean ash execution too slow
 constexpr int64_t ash_iteration_time = 40000;   // 40ms
-// a decision-making for snapshot ahead will be triggered after snapshot_interval
-constexpr int snapshot_interval = 10;           // 10s
-// we should snapshot ahead if current speed is speed_threshold times larger than expect speed
-constexpr int speed_threshold = 10;
 
 #define GET_OTHER_TSI_ADDR(var_name, addr) \
 const int64_t var_name##_offset = ((int64_t)addr - (int64_t)pthread_self()); \
@@ -71,6 +68,8 @@ int ObActiveSessHistTask::start()
                                  REFRESH_INTERVAL,
                                  true /* repeat */))) {
     LOG_WARN("fail define timer schedule", K(ret));
+  } else if (OB_FAIL(ObAshRefreshTask::get_instance().start())) {
+    LOG_WARN("failed to start ash refresh task", K(ret));
   } else {
     LOG_INFO("ASH init OK");
   }
@@ -185,14 +184,6 @@ void ObActiveSessHistTask::runTimerTask()
         }
       }
     } // end for
-    elapsed_secs_++;
-    if (elapsed_secs_ % snapshot_interval == 0) {
-      elapsed_secs_ = 0;
-      if (do_snapshot_ahead()) {
-        // send rpc
-      }
-      prev_write_pos_ = ObActiveSessHistList::get_instance().write_pos();
-    }
   }
   ObActiveSessHistList::get_instance().unlock();
 }
@@ -336,14 +327,4 @@ void ObActiveSessHistTask::process_net_request(
     LOG_WARN_RET(
         OB_SUCCESS, "unsupport net packet type for active session history sampling", K(net_info));
   }
-}
-
-bool ObActiveSessHistTask::do_snapshot_ahead()
-{
-  int64_t write_pos = ObActiveSessHistList::get_instance().write_pos();
-  int64_t free_slots_num = ObActiveSessHistList::get_instance().free_slots_num();
-  int64_t next_regular_snapshot_interval = GCTX.wr_service_->get_snapshot_interval(true /*is_laze_load*/) * 60 - (ObTimeUtility::current_time() - last_regular_snapshot_time_) / (1000L * 1000L);
-  int64_t cur_speed = (write_pos - prev_write_pos_) / snapshot_interval;
-  int64_t expect_speed = free_slots_num / next_regular_snapshot_interval;
-  return (cur_speed >= speed_threshold * expect_speed) && (next_regular_snapshot_interval > 60);
 }

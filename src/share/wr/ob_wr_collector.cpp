@@ -34,6 +34,7 @@ namespace share
 #define WR_INSERT_BATCH_SIZE 5000
 #define WR_ASH_INSERT_BATCH_SIZE 1000
 #define WR_INSERT_SQL_STAT_BATCH_SIZE 16
+#define WR_SNAP_ID_SEQNENCE_NAME "OB_WORKLOAD_REPOSITORY_SNAP_ID_SEQNENCE"
 
 ObWrCollector::ObWrCollector(int64_t snap_id, int64_t snapshot_begin_time,
     int64_t snapshot_end_time, int64_t snapshot_timeout_ts)
@@ -48,6 +49,49 @@ ObWrCollector::ObWrCollector(int64_t snap_id, int64_t snapshot_begin_time,
 }
 
 ERRSIM_POINT_DEF(ERRSIM_WR_SNAPSHOT_COLLECTOR_FAILURE);
+
+int ObWrCollector::init()
+{
+  // read from __wr_snapshot to get the newest snapshot_begin_time
+  ObSqlString sql;
+  int ret = OB_SUCCESS;
+  int64_t begin_interval_time = 0;
+  const uint64_t tenant_id = MTL_ID();
+  SMART_VAR(ObISQLClient::ReadResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
+    } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ WORKLOAD_REPOSITORY */ time_to_usec(END_INTERVAL_TIME) FROM %s where "
+                                      "snap_id=%d and tenant_id=%ld",
+                  OB_WR_SNAPSHOT_TNAME, -1, tenant_id))) {
+      LOG_WARN("failed to format sql", KR(ret));
+    } else if (OB_FAIL(
+                  GCTX.sql_proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+      LOG_WARN("failed to fetch snapshot info", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get mysql result", KR(ret), K(sql));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        // no record in __wr_snapshot table. this is the first time we take snapshot in this
+        // cluster or user delete this record.
+        ret = OB_SUCCESS;
+        LOG_WARN("first time to take wr snapshot in this cluster", K(tenant_id), K(begin_interval_time));
+        get_begin_interval_time(begin_interval_time);
+      }
+    } else if (OB_FAIL(result->get_int(0L, begin_interval_time))) {
+        LOG_WARN("get column fail", KR(ret), K(sql));
+    }
+    snapshot_begin_time_ = begin_interval_time;
+  }
+  // read from OB_WORKLOAD_REPOSITORY_SNAP_ID_SEQNENCE to get snap id for ahead records
+  if (snap_id_ == -1) {
+    ret = get_cur_snapshot_id(snap_id_);
+  }
+  return ret;
+}
 
 int ObWrCollector::collect()
 {
@@ -167,288 +211,317 @@ int ObWrCollector::collect_ash()
   int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
   int64_t collected_ash_row_count = 0;
   uint64_t data_version = 0;
+  ObSEArray<ObAddr, 8> part_locations;
+  char svr_ip[common::OB_IP_STR_BUFF];
+  int32_t svr_port;
+  bool is_cache_hit = false;
 
-  SMART_VAR(ObISQLClient::ReadResult, res)
-  {
-    ObMySQLResult *result = nullptr;
-    const char *ASH_VIEW_SQL = "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, sample_id, session_id, "
-                   "time_to_usec(sample_time) as sample_time, "
-                   "user_id, session_type, sql_id, trace_id, event_no, time_waited, "
-                   "p1, p2, p3, sql_plan_line_id, time_model, module, action, "
-                   "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, tm_delta_db_time from "
-                   "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
-                   "sample_time between usec_to_time(%ld) and usec_to_time(%ld)";
-    const char *ASH_VIEW_SQL_422 =
-        "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, "
-        "sample_id, session_id, "
-        "time_to_usec(sample_time) as sample_time, "
-        "user_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, "
-        "time_waited, "
-        "p1, p2, p3, sql_plan_line_id, plan_hash, thread_id, stmt_type, group_id, time_model, "
-        "module, action, "
-        "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, "
-        "tm_delta_db_time, "
-        "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, "
-        "plsql_object_id, "
-        "plsql_subprogram_id, plsql_subprogram_name  from "
-        "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
-        "sample_time between usec_to_time(%ld) and usec_to_time(%ld)";
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-      LOG_WARN("get_min_data_version failed", K(ret), K(tenant_id));
-    } else if (OB_UNLIKELY(query_timeout <= 0)) {
-      ret = OB_TIMEOUT;
-      LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
-    } else if (OB_FAIL(sql.assign_fmt(
-                   data_version >= DATA_VERSION_4_2_2_0 ? ASH_VIEW_SQL_422 : ASH_VIEW_SQL,
-                   query_timeout, tenant_id, snapshot_begin_time_, snapshot_end_time_))) {
-      LOG_WARN("failed to assign ash query string", KR(ret));
-    } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
-      LOG_WARN("failed to fetch ash", KR(ret), K(tenant_id), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
-    } else {
-      const bool skip_null_error = true;
-      const bool skip_column_error = false;
-      const int64_t default_value = -1;
-      while (OB_SUCC(ret)) {
-        if (OB_FAIL(result->next())) {
-          if (OB_ITER_END == ret) {
-            ret = OB_SUCCESS;
-            break;
-          } else {
-            LOG_WARN("fail to get next row", KR(ret));
-          }
+  if (snapshot_begin_time_ < snapshot_end_time_) {
+    LOG_WARN("outdated snapshot", K(snap_id_), K(snapshot_begin_time_), K(snapshot_end_time_), K(timeout_ts_));
+  } else if (OB_FAIL(GCTX.location_service_->vtable_get(
+        MTL_ID(),
+        OB_ALL_VIRTUAL_ASH_TID,
+        0,/*expire_renew_time*/
+        is_cache_hit,
+        part_locations))) {
+      LOG_WARN("fail to get virtual table location", KR(ret), K(OB_ALL_VIRTUAL_ASH_TID));
+  } else {
+    SMART_VAR(ObISQLClient::ReadResult, res)
+    {
+      // iterate every partition
+      for (int64_t i = 0; i < OB_SUCC(ret) && i < part_locations.count(); i++) {
+        ObMySQLResult *result = nullptr;
+        res.reuse();
+        sql.reuse();
+        part_locations[i].ip_to_string(svr_ip, sizeof(svr_ip));
+        svr_port = part_locations[i].get_port();
+        const char *ASH_VIEW_SQL = "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, sample_id, session_id, "
+                      "time_to_usec(sample_time) as sample_time, "
+                      "user_id, session_type, sql_id, trace_id, event_no, time_waited, "
+                      "p1, p2, p3, sql_plan_line_id, time_model, module, action, "
+                      "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, tm_delta_db_time from "
+                      "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
+                      "sample_time between usec_to_time(%ld) and usec_to_time(%ld) and "
+                      "svr_ip='%s' and svr_port=%d";
+        const char *ASH_VIEW_SQL_422 =
+            "select /*+ WORKLOAD_REPOSITORY_SNAPSHOT QUERY_TIMEOUT(%ld) */ svr_ip, svr_port, "
+            "sample_id, session_id, "
+            "time_to_usec(sample_time) as sample_time, "
+            "user_id, session_type, sql_id, top_level_sql_id, trace_id, event_no, event_id, "
+            "time_waited, "
+            "p1, p2, p3, sql_plan_line_id, plan_hash, thread_id, stmt_type, group_id, time_model, "
+            "module, action, "
+            "client_id, backtrace, plan_id, program, tm_delta_time, tm_delta_cpu_time, "
+            "tm_delta_db_time, "
+            "plsql_entry_object_id, plsql_entry_subprogram_id, plsql_entry_subprogram_name, "
+            "plsql_object_id, "
+            "plsql_subprogram_id, plsql_subprogram_name  from "
+            "__all_virtual_ash where tenant_id=%ld and is_wr_sample=true and "
+            "sample_time between usec_to_time(%ld) and usec_to_time(%ld) and "
+            "svr_ip='%s' and svr_port=%d";
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("get_min_data_version failed", K(ret), K(tenant_id));
+        } else if (OB_UNLIKELY(query_timeout <= 0)) {
+          ret = OB_TIMEOUT;
+          LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
+        } else if (OB_FAIL(sql.assign_fmt(
+                      data_version >= DATA_VERSION_4_2_2_0 ? ASH_VIEW_SQL_422 : ASH_VIEW_SQL,
+                      query_timeout, tenant_id, snapshot_begin_time_, snapshot_end_time_,
+                      svr_ip, svr_port))) {
+          LOG_WARN("failed to assign ash query string", KR(ret));
+        } else if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
+          LOG_WARN("failed to fetch ash", KR(ret), K(tenant_id), K(sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
         } else {
-          ObWrAsh ash;
-          EXTRACT_STRBUF_FIELD_MYSQL(
-              *result, "svr_ip", ash.svr_ip_, sizeof(ash.svr_ip_), tmp_real_str_len);
-          EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", ash.svr_port_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*result, "sample_id", ash.sample_id_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*result, "session_id", ash.session_id_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*result, "sample_time", ash.sample_time_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*result, "user_id", ash.user_id_, int64_t);
-          EXTRACT_BOOL_FIELD_MYSQL(*result, "session_type", ash.session_type_);
-          EXTRACT_STRBUF_FIELD_MYSQL(
-              *result, "sql_id", ash.sql_id_, sizeof(ash.sql_id_), tmp_real_str_len);
-          EXTRACT_STRBUF_FIELD_MYSQL(
-              *result, "trace_id", ash.trace_id_, sizeof(ash.trace_id_), tmp_real_str_len);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "event_no", ash.event_no_, int64_t, skip_null_error, skip_column_error, default_value);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "event_id", ash.event_id_, int64_t, skip_null_error, skip_column_error, default_value);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "time_waited", ash.time_waited_, int64_t, skip_null_error, skip_column_error, default_value);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "p1", ash.p1_, int64_t, skip_null_error, skip_column_error, default_value);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "p2", ash.p2_, int64_t, skip_null_error, skip_column_error, default_value);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "p3", ash.p3_, int64_t, skip_null_error, skip_column_error, default_value);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "sql_plan_line_id", ash.sql_plan_line_id_, int64_t, skip_null_error, skip_column_error, default_value);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "group_id", ash.group_id_, int64_t, skip_null_error, skip_column_error, default_value);
-          EXTRACT_UINT_FIELD_MYSQL(*result, "time_model", ash.time_model_, uint64_t);
-          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "program", ash.program_, sizeof(ash.program_), tmp_real_str_len);
-          EXTRACT_INT_FIELD_MYSQL(*result, "tm_delta_time", ash.tm_delta_time_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*result, "tm_delta_cpu_time", ash.tm_delta_cpu_time_, int64_t);
-          EXTRACT_INT_FIELD_MYSQL(*result, "tm_delta_db_time", ash.tm_delta_db_time_, int64_t);
-          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "module", ash.module_, sizeof(ash.module_), tmp_real_str_len);
-          // ash not implement this for now.
-          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "action", ash.action_, sizeof(ash.action_), tmp_real_str_len);
-          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "client_id", ash.client_id_, sizeof(ash.client_id_), tmp_real_str_len);
-          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
-              *result, "backtrace", ash.backtrace_, sizeof(ash.backtrace_), tmp_real_str_len);
-          EXTRACT_INT_FIELD_MYSQL(*result, "plan_id", ash.plan_id_, int64_t);
-          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
-              *result, "top_level_sql_id", ash.top_level_sql_id_, sizeof(ash.top_level_sql_id_), tmp_real_str_len);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plsql_entry_object_id", ash.plsql_entry_object_id_,
-              int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plsql_entry_subprogram_id", ash.plsql_entry_subprogram_id_,
-              int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
-          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
-              *result, "plsql_entry_subprogram_name", ash.plsql_entry_subprogram_name_, sizeof(ash.plsql_entry_subprogram_name_), tmp_real_str_len);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plsql_object_id", ash.plsql_object_id_,
-              int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plsql_subprogram_id", ash.plsql_subprogram_id_,
-              int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
-          EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
-              *result, "plsql_subprogram_name", ash.plsql_subprogram_name_, sizeof(ash.plsql_subprogram_name_), tmp_real_str_len);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "thread_id", ash.thread_id_, int64_t,
-              skip_null_error, skip_column_error, default_value);
-          EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "stmt_type", ash.stmt_type_, int64_t,
-              skip_null_error, skip_column_error, default_value);
-          EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_hash", ash.plan_hash_,
-              uint64_t, skip_null_error, skip_column_error, default_value);
+          const bool skip_null_error = true;
+          const bool skip_column_error = false;
+          const int64_t default_value = -1;
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(result->next())) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("fail to get next row", KR(ret));
+              }
+            } else {
+              ObWrAsh ash;
+              EXTRACT_STRBUF_FIELD_MYSQL(
+                  *result, "svr_ip", ash.svr_ip_, sizeof(ash.svr_ip_), tmp_real_str_len);
+              EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", ash.svr_port_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "sample_id", ash.sample_id_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "session_id", ash.session_id_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "sample_time", ash.sample_time_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "user_id", ash.user_id_, int64_t);
+              EXTRACT_BOOL_FIELD_MYSQL(*result, "session_type", ash.session_type_);
+              EXTRACT_STRBUF_FIELD_MYSQL(
+                  *result, "sql_id", ash.sql_id_, sizeof(ash.sql_id_), tmp_real_str_len);
+              EXTRACT_STRBUF_FIELD_MYSQL(
+                  *result, "trace_id", ash.trace_id_, sizeof(ash.trace_id_), tmp_real_str_len);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "event_no", ash.event_no_, int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "event_id", ash.event_id_, int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "time_waited", ash.time_waited_, int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "p1", ash.p1_, int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "p2", ash.p2_, int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "p3", ash.p3_, int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "sql_plan_line_id", ash.sql_plan_line_id_, int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "group_id", ash.group_id_, int64_t, skip_null_error, skip_column_error, default_value);
+              EXTRACT_UINT_FIELD_MYSQL(*result, "time_model", ash.time_model_, uint64_t);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "program", ash.program_, sizeof(ash.program_), tmp_real_str_len);
+              EXTRACT_INT_FIELD_MYSQL(*result, "tm_delta_time", ash.tm_delta_time_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "tm_delta_cpu_time", ash.tm_delta_cpu_time_, int64_t);
+              EXTRACT_INT_FIELD_MYSQL(*result, "tm_delta_db_time", ash.tm_delta_db_time_, int64_t);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "module", ash.module_, sizeof(ash.module_), tmp_real_str_len);
+              // ash not implement this for now.
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "action", ash.action_, sizeof(ash.action_), tmp_real_str_len);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(*result, "client_id", ash.client_id_, sizeof(ash.client_id_), tmp_real_str_len);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                  *result, "backtrace", ash.backtrace_, sizeof(ash.backtrace_), tmp_real_str_len);
+              EXTRACT_INT_FIELD_MYSQL(*result, "plan_id", ash.plan_id_, int64_t);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                  *result, "top_level_sql_id", ash.top_level_sql_id_, sizeof(ash.top_level_sql_id_), tmp_real_str_len);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plsql_entry_object_id", ash.plsql_entry_object_id_,
+                  int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plsql_entry_subprogram_id", ash.plsql_entry_subprogram_id_,
+                  int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                  *result, "plsql_entry_subprogram_name", ash.plsql_entry_subprogram_name_, sizeof(ash.plsql_entry_subprogram_name_), tmp_real_str_len);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plsql_object_id", ash.plsql_object_id_,
+                  int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plsql_subprogram_id", ash.plsql_subprogram_id_,
+                  int64_t, skip_null_error, skip_column_error, OB_INVALID_ID);
+              EXTRACT_STRBUF_FIELD_MYSQL_SKIP_RET(
+                  *result, "plsql_subprogram_name", ash.plsql_subprogram_name_, sizeof(ash.plsql_subprogram_name_), tmp_real_str_len);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "thread_id", ash.thread_id_, int64_t,
+                  skip_null_error, skip_column_error, default_value);
+              EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "stmt_type", ash.stmt_type_, int64_t,
+                  skip_null_error, skip_column_error, default_value);
+              EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "plan_hash", ash.plan_hash_,
+                  uint64_t, skip_null_error, skip_column_error, default_value);
 
-          char plan_hash_char[64] = "";
-          if (OB_SUCC(ret)) {
-            sprintf(plan_hash_char, "%lu", ash.plan_hash_);
-          }
+              char plan_hash_char[64] = "";
+              if (OB_SUCC(ret)) {
+                sprintf(plan_hash_char, "%lu", ash.plan_hash_);
+              }
 
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
-              LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
-            } else if (OB_FAIL(dml_splicer.add_pk_column(K(cluster_id)))) {
-              LOG_WARN("failed to add column cluster_id", KR(ret), K(cluster_id));
-            } else if (OB_FAIL(dml_splicer.add_pk_column("SNAP_ID", snap_id_))) {
-              LOG_WARN("failed to add column SNAP_ID", KR(ret), K(snap_id_));
-            } else if (OB_FAIL(dml_splicer.add_pk_column("svr_ip", ash.svr_ip_))) {
-              LOG_WARN("failed to add column svr_ip", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_pk_column("svr_port", ash.svr_port_))) {
-              LOG_WARN("failed to add column svr_port", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_pk_column("sample_id", ash.sample_id_))) {
-              LOG_WARN("failed to add column sample_id", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_pk_column("session_id", ash.session_id_))) {
-              LOG_WARN("failed to add column session_id", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_time_column("sample_time", ash.sample_time_))) {
-              LOG_WARN("failed to add column sample_time", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("user_id", ash.user_id_))) {
-              LOG_WARN("failed to add column user_id", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("session_type", ash.session_type_))) {
-              LOG_WARN("failed to add column session_type", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("sql_id", ash.sql_id_))) {
-              LOG_WARN("failed to add column sql_id", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("trace_id", ash.trace_id_))) {
-              LOG_WARN("failed to add column trace_id", KR(ret), K(ash));
-            } else if (ash.event_no_ < 0 && OB_FAIL(dml_splicer.add_column(true, "event_no"))) {
-              LOG_WARN("failed to add column event_no", KR(ret), K(ash));
-            } else if (ash.event_no_ >= 0 && OB_FAIL(dml_splicer.add_column("event_no", ash.event_no_))) {
-              LOG_WARN("failed to add column event_no", KR(ret), K(ash));
-            } else if (ash.event_no_ < 0 && OB_FAIL(dml_splicer.add_column(true, "event_id"))) {
-              LOG_WARN("failed to add column event_id", KR(ret), K(ash));
-            } else if (ash.event_no_ >= 0 && OB_FAIL(dml_splicer.add_column("event_id", ash.event_id_))) {
-              LOG_WARN("failed to add column event_id", KR(ret), K(ash));
-            } else if (ash.time_waited_ < 0 && OB_FAIL(dml_splicer.add_column(true, "time_waited"))) {
-              LOG_WARN("failed to add column time_waited", KR(ret), K(ash));
-            } else if (ash.time_waited_ >= 0 && OB_FAIL(dml_splicer.add_column("time_waited", ash.time_waited_))) {
-              LOG_WARN("failed to add column time_waited", KR(ret), K(ash));
-            } else if (ash.p1_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p1"))) {
-              LOG_WARN("failed to add column p1", KR(ret), K(ash));
-            } else if (ash.p1_ >= 0 && OB_FAIL(dml_splicer.add_column("p1", ash.p1_))) {
-              LOG_WARN("failed to add column p1", KR(ret), K(ash));
-            } else if (ash.p2_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p2"))) {
-              LOG_WARN("failed to add column p2", KR(ret), K(ash));
-            } else if (ash.p2_ >= 0 && OB_FAIL(dml_splicer.add_column("p2", ash.p2_))) {
-              LOG_WARN("failed to add column p2", KR(ret), K(ash));
-            } else if (ash.p2_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p3"))) {
-              LOG_WARN("failed to add column p3", KR(ret), K(ash));
-            } else if (ash.p3_ >= 0 && OB_FAIL(dml_splicer.add_column("p3", ash.p3_))) {
-              LOG_WARN("failed to add column p3", KR(ret), K(ash));
-            } else if (ash.sql_plan_line_id_ < 0 &&
-                       OB_FAIL(dml_splicer.add_column(true, "sql_plan_line_id"))) {
-              LOG_WARN("failed to add column sql_plan_line_id", KR(ret), K(ash));
-            } else if (ash.sql_plan_line_id_ >= 0 &&
-                       OB_FAIL(dml_splicer.add_column("sql_plan_line_id", ash.sql_plan_line_id_))) {
-              LOG_WARN("failed to add column sql_plan_line_id", KR(ret), K(ash));
-            } else if (ash.group_id_ < 0 && OB_FAIL(dml_splicer.add_column(true, "group_id"))) {
-              LOG_WARN("failed to add column group_id", KR(ret), K(ash));
-            } else if (ash.group_id_ >= 0 && OB_FAIL(dml_splicer.add_column("group_id", ash.group_id_))) {
-              LOG_WARN("failed to add column group_id", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("time_model", ash.time_model_))) {
-              LOG_WARN("failed to add column time_model", KR(ret), K(ash));
-            } else if (ash.module_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "module"))) {
-              LOG_WARN("failed to add column module", KR(ret), K(ash));
-            } else if (ash.module_[0] != '\0' && OB_FAIL(dml_splicer.add_column("module", ash.module_))) {
-              LOG_WARN("failed to add column module", KR(ret), K(ash));
-            } else if (ash.action_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "action"))) {
-              LOG_WARN("failed to add column action", KR(ret), K(ash));
-            } else if (ash.action_[0] != '\0' && OB_FAIL(dml_splicer.add_column("action", ash.action_))) {
-              LOG_WARN("failed to add column action", KR(ret), K(ash));
-            } else if (ash.client_id_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "client_id"))) {
-              LOG_WARN("failed to add column client_id", KR(ret), K(ash));
-            } else if (ash.client_id_[0] != '\0' && OB_FAIL(dml_splicer.add_column("client_id", ash.client_id_))) {
-              LOG_WARN("failed to add column client_id", KR(ret), K(ash));
-            } else if (ash.backtrace_[0] == '\0' &&
-                       OB_FAIL(dml_splicer.add_column(true, "backtrace"))) {
-              LOG_WARN("failed to add column backtrace", KR(ret), K(ash));
-            } else if (ash.backtrace_[0] != '\0' &&
-                       OB_FAIL(dml_splicer.add_column("backtrace", ash.backtrace_))) {
-              LOG_WARN("failed to add column backtrace", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("plan_id", ash.plan_id_))) {
-              LOG_WARN("failed to add column plan_id", KR(ret), K(ash));
-            } else if (ash.program_[0] == '\0' &&
-                       OB_FAIL(dml_splicer.add_column(true, "program"))) {
-              LOG_WARN("failed to add null column program", KR(ret), K(ash));
-            } else if (ash.program_[0] != '\0' &&
-                       OB_FAIL(dml_splicer.add_column("program", ash.program_))) {
-              LOG_WARN("failed to add column program", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("tm_delta_time", ash.tm_delta_time_))) {
-              LOG_WARN("failed to add column tm_delta_time", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("tm_delta_cpu_time", ash.tm_delta_cpu_time_))) {
-              LOG_WARN("failed to add column tm_delta_cpu_time", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.add_column("tm_delta_db_time", ash.tm_delta_db_time_))) {
-              LOG_WARN("failed to add column tm_delta_db_time", KR(ret), K(ash));
-            } else if (ash.top_level_sql_id_[0] == '\0' &&
-                       OB_FAIL(dml_splicer.add_column(true, "top_level_sql_id"))) {
-              LOG_WARN("failed to add column top_level_sql_id", KR(ret), K(ash));
-            } else if (ash.top_level_sql_id_[0] != '\0' &&
-                       OB_FAIL(dml_splicer.add_column("top_level_sql_id", ash.top_level_sql_id_))) {
-              LOG_WARN("failed to add column sql_id", KR(ret), K(ash));
-            } else if (OB_INVALID_ID == ash.plsql_entry_object_id_ &&
-                       OB_FAIL(dml_splicer.add_column(true, "plsql_entry_object_id"))) {
-              LOG_WARN("failed to add column plsql_entry_object_id", KR(ret), K(ash));
-            } else if (OB_INVALID_ID != ash.plsql_entry_object_id_ &&
-                        OB_FAIL(dml_splicer.add_column("plsql_entry_object_id", ash.plsql_entry_object_id_))) {
-              LOG_WARN("failed to add column plsql_entry_object_id", KR(ret), K(ash));
-            } else if (OB_INVALID_ID == ash.plsql_entry_subprogram_id_ &&
-                       OB_FAIL(dml_splicer.add_column(true, "plsql_entry_subprogram_id"))) {
-              LOG_WARN("failed to add column plsql_entry_subprogram_id", KR(ret), K(ash));
-            } else if (OB_INVALID_ID != ash.plsql_entry_subprogram_id_ &&
-                        OB_FAIL(dml_splicer.add_column("plsql_entry_subprogram_id", ash.plsql_entry_subprogram_id_))) {
-              LOG_WARN("failed to add column plsql_entry_subprogram_id", KR(ret), K(ash));
-            } else if (ash.plsql_entry_subprogram_name_[0] == '\0' &&
-                       OB_FAIL(dml_splicer.add_column(true, "plsql_entry_subprogram_name"))) {
-              LOG_WARN("failed to add column plsql_entry_subprogram_name", KR(ret), K(ash));
-            } else if (OB_FAIL(ash.plsql_entry_subprogram_name_[0] != '\0'
-                        && dml_splicer.add_column("plsql_entry_subprogram_name", ash.plsql_entry_subprogram_name_))) {
-              LOG_WARN("failed to add column plsql_entry_subprogram_name", KR(ret), K(ash));
-            } else if (OB_INVALID_ID == ash.plsql_object_id_ &&
-                       OB_FAIL(dml_splicer.add_column(true, "plsql_object_id"))) {
-              LOG_WARN("failed to add column plsql_object_id", KR(ret), K(ash));
-            } else if (OB_INVALID_ID != ash.plsql_object_id_ &&
-                        OB_FAIL(dml_splicer.add_column("plsql_object_id", ash.plsql_object_id_))) {
-              LOG_WARN("failed to add column plsql_object_id", KR(ret), K(ash));
-            } else if (OB_INVALID_ID == ash.plsql_subprogram_id_ &&
-                       OB_FAIL(dml_splicer.add_column(true, "plsql_subprogram_id"))) {
-              LOG_WARN("failed to add column plsql_subprogram_id", KR(ret), K(ash));
-            } else if (OB_INVALID_ID != ash.plsql_subprogram_id_ &&
-                        OB_FAIL(dml_splicer.add_column("plsql_subprogram_id", ash.plsql_subprogram_id_))) {
-              LOG_WARN("failed to add column plsql_subprogram_id", KR(ret), K(ash));
-            } else if (OB_FAIL(ash.plsql_subprogram_name_[0] == '\0'
-                        && dml_splicer.add_column(true, "plsql_subprogram_name"))) {
-              LOG_WARN("failed to add column plsql_subprogram_name", KR(ret), K(ash));
-            } else if (ash.plsql_subprogram_name_[0] != '\0'  &&
-                       OB_FAIL(dml_splicer.add_column("plsql_subprogram_name", ash.plsql_subprogram_name_))) {
-              LOG_WARN("failed to add column plsql_subprogram_name", KR(ret), K(ash));
-            } else if (ash.plan_hash_ == static_cast<uint64_t>(-1) &&
-                       OB_FAIL(dml_splicer.add_column(true, "plan_hash"))) {
-              LOG_WARN("failed to add column plan_hash", KR(ret), K(ash));
-            } else if (ash.plan_hash_ != static_cast<uint64_t>(-1) &&
-                       OB_FAIL(dml_splicer.add_column("plan_hash", plan_hash_char))) {
-              LOG_WARN("failed to add column plan_hash", KR(ret), K(ash));
-            } else if (ash.thread_id_ < 0 &&
-                       OB_FAIL(dml_splicer.add_column(true, "thread_id"))) {
-              LOG_WARN("failed to add column thread_id", KR(ret), K(ash));
-            } else if (ash.thread_id_ >= 0 &&
-                       OB_FAIL(dml_splicer.add_column("thread_id", ash.thread_id_))) {
-              LOG_WARN("failed to add column thread_id", KR(ret), K(ash));
-            } else if (ash.stmt_type_ < 0 &&
-                       OB_FAIL(dml_splicer.add_column(true, "stmt_type"))) {
-              LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
-            } else if (ash.stmt_type_ >= 0 &&
-                       OB_FAIL(dml_splicer.add_column("stmt_type", ash.stmt_type_))) {
-              LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
-            } else if (OB_FAIL(dml_splicer.finish_row())) {
-              LOG_WARN("failed to finish row", KR(ret));
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(dml_splicer.add_pk_column(K(tenant_id)))) {
+                  LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
+                } else if (OB_FAIL(dml_splicer.add_pk_column(K(cluster_id)))) {
+                  LOG_WARN("failed to add column cluster_id", KR(ret), K(cluster_id));
+                } else if (OB_FAIL(dml_splicer.add_pk_column("SNAP_ID", snap_id_))) {
+                  LOG_WARN("failed to add column SNAP_ID", KR(ret), K(snap_id_));
+                } else if (OB_FAIL(dml_splicer.add_pk_column("svr_ip", ash.svr_ip_))) {
+                  LOG_WARN("failed to add column svr_ip", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_pk_column("svr_port", ash.svr_port_))) {
+                  LOG_WARN("failed to add column svr_port", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_pk_column("sample_id", ash.sample_id_))) {
+                  LOG_WARN("failed to add column sample_id", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_pk_column("session_id", ash.session_id_))) {
+                  LOG_WARN("failed to add column session_id", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_time_column("sample_time", ash.sample_time_))) {
+                  LOG_WARN("failed to add column sample_time", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("user_id", ash.user_id_))) {
+                  LOG_WARN("failed to add column user_id", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("session_type", ash.session_type_))) {
+                  LOG_WARN("failed to add column session_type", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("sql_id", ash.sql_id_))) {
+                  LOG_WARN("failed to add column sql_id", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("trace_id", ash.trace_id_))) {
+                  LOG_WARN("failed to add column trace_id", KR(ret), K(ash));
+                } else if (ash.event_no_ < 0 && OB_FAIL(dml_splicer.add_column(true, "event_no"))) {
+                  LOG_WARN("failed to add column event_no", KR(ret), K(ash));
+                } else if (ash.event_no_ >= 0 && OB_FAIL(dml_splicer.add_column("event_no", ash.event_no_))) {
+                  LOG_WARN("failed to add column event_no", KR(ret), K(ash));
+                } else if (ash.event_no_ < 0 && OB_FAIL(dml_splicer.add_column(true, "event_id"))) {
+                  LOG_WARN("failed to add column event_id", KR(ret), K(ash));
+                } else if (ash.event_no_ >= 0 && OB_FAIL(dml_splicer.add_column("event_id", ash.event_id_))) {
+                  LOG_WARN("failed to add column event_id", KR(ret), K(ash));
+                } else if (ash.time_waited_ < 0 && OB_FAIL(dml_splicer.add_column(true, "time_waited"))) {
+                  LOG_WARN("failed to add column time_waited", KR(ret), K(ash));
+                } else if (ash.time_waited_ >= 0 && OB_FAIL(dml_splicer.add_column("time_waited", ash.time_waited_))) {
+                  LOG_WARN("failed to add column time_waited", KR(ret), K(ash));
+                } else if (ash.p1_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p1"))) {
+                  LOG_WARN("failed to add column p1", KR(ret), K(ash));
+                } else if (ash.p1_ >= 0 && OB_FAIL(dml_splicer.add_column("p1", ash.p1_))) {
+                  LOG_WARN("failed to add column p1", KR(ret), K(ash));
+                } else if (ash.p2_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p2"))) {
+                  LOG_WARN("failed to add column p2", KR(ret), K(ash));
+                } else if (ash.p2_ >= 0 && OB_FAIL(dml_splicer.add_column("p2", ash.p2_))) {
+                  LOG_WARN("failed to add column p2", KR(ret), K(ash));
+                } else if (ash.p2_ < 0 && OB_FAIL(dml_splicer.add_column(true, "p3"))) {
+                  LOG_WARN("failed to add column p3", KR(ret), K(ash));
+                } else if (ash.p3_ >= 0 && OB_FAIL(dml_splicer.add_column("p3", ash.p3_))) {
+                  LOG_WARN("failed to add column p3", KR(ret), K(ash));
+                } else if (ash.sql_plan_line_id_ < 0 &&
+                          OB_FAIL(dml_splicer.add_column(true, "sql_plan_line_id"))) {
+                  LOG_WARN("failed to add column sql_plan_line_id", KR(ret), K(ash));
+                } else if (ash.sql_plan_line_id_ >= 0 &&
+                          OB_FAIL(dml_splicer.add_column("sql_plan_line_id", ash.sql_plan_line_id_))) {
+                  LOG_WARN("failed to add column sql_plan_line_id", KR(ret), K(ash));
+                } else if (ash.group_id_ < 0 && OB_FAIL(dml_splicer.add_column(true, "group_id"))) {
+                  LOG_WARN("failed to add column group_id", KR(ret), K(ash));
+                } else if (ash.group_id_ >= 0 && OB_FAIL(dml_splicer.add_column("group_id", ash.group_id_))) {
+                  LOG_WARN("failed to add column group_id", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("time_model", ash.time_model_))) {
+                  LOG_WARN("failed to add column time_model", KR(ret), K(ash));
+                } else if (ash.module_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "module"))) {
+                  LOG_WARN("failed to add column module", KR(ret), K(ash));
+                } else if (ash.module_[0] != '\0' && OB_FAIL(dml_splicer.add_column("module", ash.module_))) {
+                  LOG_WARN("failed to add column module", KR(ret), K(ash));
+                } else if (ash.action_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "action"))) {
+                  LOG_WARN("failed to add column action", KR(ret), K(ash));
+                } else if (ash.action_[0] != '\0' && OB_FAIL(dml_splicer.add_column("action", ash.action_))) {
+                  LOG_WARN("failed to add column action", KR(ret), K(ash));
+                } else if (ash.client_id_[0] == '\0' && OB_FAIL(dml_splicer.add_column(true, "client_id"))) {
+                  LOG_WARN("failed to add column client_id", KR(ret), K(ash));
+                } else if (ash.client_id_[0] != '\0' && OB_FAIL(dml_splicer.add_column("client_id", ash.client_id_))) {
+                  LOG_WARN("failed to add column client_id", KR(ret), K(ash));
+                } else if (ash.backtrace_[0] == '\0' &&
+                          OB_FAIL(dml_splicer.add_column(true, "backtrace"))) {
+                  LOG_WARN("failed to add column backtrace", KR(ret), K(ash));
+                } else if (ash.backtrace_[0] != '\0' &&
+                          OB_FAIL(dml_splicer.add_column("backtrace", ash.backtrace_))) {
+                  LOG_WARN("failed to add column backtrace", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("plan_id", ash.plan_id_))) {
+                  LOG_WARN("failed to add column plan_id", KR(ret), K(ash));
+                } else if (ash.program_[0] == '\0' &&
+                          OB_FAIL(dml_splicer.add_column(true, "program"))) {
+                  LOG_WARN("failed to add null column program", KR(ret), K(ash));
+                } else if (ash.program_[0] != '\0' &&
+                          OB_FAIL(dml_splicer.add_column("program", ash.program_))) {
+                  LOG_WARN("failed to add column program", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("tm_delta_time", ash.tm_delta_time_))) {
+                  LOG_WARN("failed to add column tm_delta_time", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("tm_delta_cpu_time", ash.tm_delta_cpu_time_))) {
+                  LOG_WARN("failed to add column tm_delta_cpu_time", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.add_column("tm_delta_db_time", ash.tm_delta_db_time_))) {
+                  LOG_WARN("failed to add column tm_delta_db_time", KR(ret), K(ash));
+                } else if (ash.top_level_sql_id_[0] == '\0' &&
+                          OB_FAIL(dml_splicer.add_column(true, "top_level_sql_id"))) {
+                  LOG_WARN("failed to add column top_level_sql_id", KR(ret), K(ash));
+                } else if (ash.top_level_sql_id_[0] != '\0' &&
+                          OB_FAIL(dml_splicer.add_column("top_level_sql_id", ash.top_level_sql_id_))) {
+                  LOG_WARN("failed to add column sql_id", KR(ret), K(ash));
+                } else if (OB_INVALID_ID == ash.plsql_entry_object_id_ &&
+                          OB_FAIL(dml_splicer.add_column(true, "plsql_entry_object_id"))) {
+                  LOG_WARN("failed to add column plsql_entry_object_id", KR(ret), K(ash));
+                } else if (OB_INVALID_ID != ash.plsql_entry_object_id_ &&
+                            OB_FAIL(dml_splicer.add_column("plsql_entry_object_id", ash.plsql_entry_object_id_))) {
+                  LOG_WARN("failed to add column plsql_entry_object_id", KR(ret), K(ash));
+                } else if (OB_INVALID_ID == ash.plsql_entry_subprogram_id_ &&
+                          OB_FAIL(dml_splicer.add_column(true, "plsql_entry_subprogram_id"))) {
+                  LOG_WARN("failed to add column plsql_entry_subprogram_id", KR(ret), K(ash));
+                } else if (OB_INVALID_ID != ash.plsql_entry_subprogram_id_ &&
+                            OB_FAIL(dml_splicer.add_column("plsql_entry_subprogram_id", ash.plsql_entry_subprogram_id_))) {
+                  LOG_WARN("failed to add column plsql_entry_subprogram_id", KR(ret), K(ash));
+                } else if (ash.plsql_entry_subprogram_name_[0] == '\0' &&
+                          OB_FAIL(dml_splicer.add_column(true, "plsql_entry_subprogram_name"))) {
+                  LOG_WARN("failed to add column plsql_entry_subprogram_name", KR(ret), K(ash));
+                } else if (OB_FAIL(ash.plsql_entry_subprogram_name_[0] != '\0'
+                            && dml_splicer.add_column("plsql_entry_subprogram_name", ash.plsql_entry_subprogram_name_))) {
+                  LOG_WARN("failed to add column plsql_entry_subprogram_name", KR(ret), K(ash));
+                } else if (OB_INVALID_ID == ash.plsql_object_id_ &&
+                          OB_FAIL(dml_splicer.add_column(true, "plsql_object_id"))) {
+                  LOG_WARN("failed to add column plsql_object_id", KR(ret), K(ash));
+                } else if (OB_INVALID_ID != ash.plsql_object_id_ &&
+                            OB_FAIL(dml_splicer.add_column("plsql_object_id", ash.plsql_object_id_))) {
+                  LOG_WARN("failed to add column plsql_object_id", KR(ret), K(ash));
+                } else if (OB_INVALID_ID == ash.plsql_subprogram_id_ &&
+                          OB_FAIL(dml_splicer.add_column(true, "plsql_subprogram_id"))) {
+                  LOG_WARN("failed to add column plsql_subprogram_id", KR(ret), K(ash));
+                } else if (OB_INVALID_ID != ash.plsql_subprogram_id_ &&
+                            OB_FAIL(dml_splicer.add_column("plsql_subprogram_id", ash.plsql_subprogram_id_))) {
+                  LOG_WARN("failed to add column plsql_subprogram_id", KR(ret), K(ash));
+                } else if (OB_FAIL(ash.plsql_subprogram_name_[0] == '\0'
+                            && dml_splicer.add_column(true, "plsql_subprogram_name"))) {
+                  LOG_WARN("failed to add column plsql_subprogram_name", KR(ret), K(ash));
+                } else if (ash.plsql_subprogram_name_[0] != '\0'  &&
+                          OB_FAIL(dml_splicer.add_column("plsql_subprogram_name", ash.plsql_subprogram_name_))) {
+                  LOG_WARN("failed to add column plsql_subprogram_name", KR(ret), K(ash));
+                } else if (ash.plan_hash_ == static_cast<uint64_t>(-1) &&
+                          OB_FAIL(dml_splicer.add_column(true, "plan_hash"))) {
+                  LOG_WARN("failed to add column plan_hash", KR(ret), K(ash));
+                } else if (ash.plan_hash_ != static_cast<uint64_t>(-1) &&
+                          OB_FAIL(dml_splicer.add_column("plan_hash", plan_hash_char))) {
+                  LOG_WARN("failed to add column plan_hash", KR(ret), K(ash));
+                } else if (ash.thread_id_ < 0 &&
+                          OB_FAIL(dml_splicer.add_column(true, "thread_id"))) {
+                  LOG_WARN("failed to add column thread_id", KR(ret), K(ash));
+                } else if (ash.thread_id_ >= 0 &&
+                          OB_FAIL(dml_splicer.add_column("thread_id", ash.thread_id_))) {
+                  LOG_WARN("failed to add column thread_id", KR(ret), K(ash));
+                } else if (ash.stmt_type_ < 0 &&
+                          OB_FAIL(dml_splicer.add_column(true, "stmt_type"))) {
+                  LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
+                } else if (ash.stmt_type_ >= 0 &&
+                          OB_FAIL(dml_splicer.add_column("stmt_type", ash.stmt_type_))) {
+                  LOG_WARN("failed to add column stmt_type", KR(ret), K(ash));
+                } else if (OB_FAIL(dml_splicer.finish_row())) {
+                  LOG_WARN("failed to finish row", KR(ret));
+                }
+              }
+            }
+            if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_ASH_INSERT_BATCH_SIZE) {
+              collected_ash_row_count += dml_splicer.get_row_count();
+              if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
+                LOG_WARN("failed to batch write to wr", KR(ret));
+              }
             }
           }
-        }
-        if (OB_SUCC(ret) && dml_splicer.get_row_count() >= WR_ASH_INSERT_BATCH_SIZE) {
-          collected_ash_row_count += dml_splicer.get_row_count();
-          if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
-            LOG_WARN("failed to batch write to wr", KR(ret));
+          if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0) {
+            collected_ash_row_count += dml_splicer.get_row_count();
+            if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
+              LOG_WARN("failed to batch write remaining part to wr", KR(ret));
+            }
           }
-        }
+        }      
       }
-      if (OB_SUCC(ret) && dml_splicer.get_row_count() > 0) {
-        collected_ash_row_count += dml_splicer.get_row_count();
-        if (OB_FAIL(write_to_wr(dml_splicer, OB_WR_ACTIVE_SESSION_HISTORY_TNAME, tenant_id))) {
-          LOG_WARN("failed to batch write remaining part to wr", KR(ret));
-        }
+      // record snapshot_end_time_
+      if (OB_FAIL(update_last_snapshot_end_time())) {
+        LOG_WARN("failed to update last snapshot end time", KR(ret));
       }
     }
   }
@@ -996,6 +1069,62 @@ int ObWrCollector::update_sqlstat()
   return ret;
 }
 
+int ObWrCollector::update_last_snapshot_end_time()
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  const uint64_t tenant_id = MTL_ID();
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+
+  LOG_DEBUG("wr snapshot update last snapshot end time", K(tenant_id), K(snapshot_begin_time_), K(snapshot_end_time_));
+  SMART_VAR(ObISQLClient::ReadResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    ObDMLSqlSplicer dml_splicer;
+    int64_t query_timeout = timeout_ts_ - common::ObTimeUtility::current_time();
+    if (OB_UNLIKELY(query_timeout <= 0)) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
+    } else if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", tenant_id))) {
+      LOG_WARN("failed to add tenant_id", KR(ret), K(-1));
+    } else if (OB_FAIL(dml_splicer.add_pk_column("cluster_id", -1))) {
+      LOG_WARN("failed to add column cluster_id", KR(ret), K(-1));
+    } else if (OB_FAIL(dml_splicer.add_pk_column("snap_id", -1))) {
+      LOG_WARN("failed to add column SNAP_ID", KR(ret), K(-1));
+    } else if (OB_FAIL(dml_splicer.add_pk_column("svr_ip", ""))) {
+      LOG_WARN("failed to add column svr_ip", KR(ret), K(""));
+    } else if (OB_FAIL(dml_splicer.add_pk_column("svr_port", -1))) {
+      LOG_WARN("failed to add column svr_port", KR(ret));
+    } else if (OB_FAIL(dml_splicer.add_time_column("begin_interval_time", snapshot_begin_time_))) {
+      LOG_WARN("failed to add column begin_interval_time", KR(ret), K(snapshot_begin_time_));
+    } else if (OB_FAIL(dml_splicer.add_time_column("end_interval_time", snapshot_end_time_))) {
+      LOG_WARN("failed to add column end_interval_time", KR(ret), K(snapshot_end_time_));
+    } else if (OB_FAIL(dml_splicer.add_column("snap_flag", snap_id_ == -1 
+                                              ? ObWrSnapshotFlag::LAST_AHEAD_SNAPSHOT 
+                                              : ObWrSnapshotFlag::LAST_SCHEDULED_SNAPSHOT))) {
+      LOG_WARN("failed to add column snap_flag", KR(ret));
+    } else if (OB_FAIL(dml_splicer.add_column(true, "startup_time"))) {
+      LOG_WARN("failed to add column snap_flag", KR(ret));
+    } else if (OB_FAIL(dml_splicer.add_column("status", ObWrSnapshotStatus::SUCCESS))) {
+      LOG_WARN("failed to add column snap_flag", KR(ret));
+    } else if (OB_FAIL(dml_splicer.finish_row())) {
+      LOG_WARN("failed to finish row", KR(ret));
+    } else if (OB_FAIL(dml_splicer.splice_insert_update_sql(OB_WR_SNAPSHOT_TNAME, sql))) {
+      LOG_WARN("failed to generate snapshot insertion sql", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(
+                  GCTX.sql_proxy_->write(gen_meta_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to write snapshot_info", KR(ret), K(sql), K(gen_meta_tenant_id(tenant_id)));
+    } else if (affected_rows != 1 && affected_rows != 2) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid affected rows", KR(ret), K(affected_rows), K(sql));
+    } else {
+      LOG_DEBUG("success to insert snapshot info", K(sql));
+    } 
+  }
+  return ret;
+}
+
 int ObWrCollector::collect_sqltext()
 {
   int ret = OB_SUCCESS;
@@ -1229,6 +1358,115 @@ int ObWrCollector::write_to_wr(
   } else {
     LOG_TRACE("execute wr batch insertion sql success", K(sql), K(affected_rows));
     dml_splicer.reset();
+  }
+  return ret;
+}
+
+int ObWrCollector::fetch_snapshot_id_sequence_curval(int64_t &snap_id)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = OB_SYS_TENANT_ID;
+  common::ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  ObSqlString sql;
+  ObObj snap_id_obj;
+  SMART_VAR(ObISQLClient::ReadResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
+    } else if (OB_FAIL(sql.assign_fmt(
+                   "SELECT /*+ WORKLOAD_REPOSITORY */ %s.currval as snap_id FROM DUAL", WR_SNAP_ID_SEQNENCE_NAME))) {
+      LOG_WARN("failed to assign create sequence sql string", KR(ret));
+    } else if (OB_FAIL(sql_proxy->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+      LOG_WARN("failed to fetch cur snap_id sequence", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get mysql result", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("get next result failed", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_FAIL(result->get_obj((int64_t)0, snap_id_obj))) {
+      LOG_WARN("failed to get snap_id obj", KR(ret));
+    } else if (OB_FAIL(snap_id_obj.get_number().cast_to_int64(snap_id))) {
+      LOG_WARN("failed to get snap_id value", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObWrCollector::get_cur_snapshot_id(int64_t &snap_id)
+{
+  int ret = OB_SUCCESS;
+  // we can't access sequence.currval in one new session
+  // so we have to read from __wr_snapshot
+  ObSqlString sql;
+  SMART_VAR(ObISQLClient::ReadResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
+    } else if (OB_FAIL(sql.assign_fmt(
+                   "SELECT max(snap_id)+1 as snap_id FROM %s", OB_WR_SNAPSHOT_TNAME))) {
+      LOG_WARN("failed to assign select sql string", KR(ret));
+    } else if (OB_FAIL(
+                   GCTX.sql_proxy_->read(res, gen_meta_tenant_id(OB_SYS_TENANT_ID), sql.ptr()))) {
+      LOG_WARN("failed to fetch snapshot info", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get mysql result", KR(ret), K(sql));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        // no record in __wr_snapshot table. this is the first time we take snapshot in this
+        // cluster.
+        ret = OB_SUCCESS;
+        snap_id = 0;
+        LOG_WARN("first time to take wr snapshot in this cluster", K(snap_id));
+      } else {
+        LOG_WARN("get next result failed", KR(ret), K(sql));
+      }
+    } else if (OB_FAIL(result->get_int(0L, snap_id))) {
+      LOG_WARN("get column fail", KR(ret), K(sql));
+    }
+  }
+
+  return ret;
+}
+
+int ObWrCollector::get_begin_interval_time(int64_t &begin_interval_time)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const int64_t tenant_id = MTL_ID();
+  SMART_VAR(ObISQLClient::ReadResult, res)
+  {
+    ObMySQLResult *result = nullptr;
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
+    } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ WORKLOAD_REPOSITORY */ time_to_usec(END_INTERVAL_TIME) FROM %s where "
+                                      "tenant_id=%ld order by snap_id desc limit 1",
+                   OB_WR_SNAPSHOT_TNAME, tenant_id))) {
+      LOG_WARN("failed to format sql", KR(ret));
+    } else if (OB_FAIL(
+                   GCTX.sql_proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+      LOG_WARN("failed to fetch snapshot info", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get mysql result", KR(ret), K(sql));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        // no record in __wr_snapshot table. this is the first time we take snapshot in this
+        // cluster.
+        ret = OB_SUCCESS;
+        begin_interval_time = 0;
+        LOG_WARN("first time to take wr snapshot in this cluster", K(tenant_id), K(begin_interval_time));
+      } else {
+        LOG_WARN("get next result failed", KR(ret), K(sql));
+      }
+    } else if (OB_FAIL(result->get_int(0L, begin_interval_time))) {
+      LOG_WARN("get column fail", KR(ret), K(sql));
+    }
   }
   return ret;
 }

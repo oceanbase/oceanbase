@@ -35,6 +35,8 @@ enum class ObWrSnapshotFlag : int64_t
   SCHEDULE = 0,
   MANUAL,
   IMPORT,
+  LAST_SCHEDULED_SNAPSHOT,
+  LAST_AHEAD_SNAPSHOT,
 };
 
 class WorkloadRepositoryTask : public common::ObTimerTask

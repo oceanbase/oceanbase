@@ -306,7 +306,7 @@ public:
   int64_t write_pos() const { return write_pos_; }
   int64_t read_pos() const { return read_pos_; }
   int64_t size() const { return buffer_.size(); }
-  int64_t free_slots_num() const { return (write_pos_ - read_pos_) <= buffer_.size() ? (buffer_.size() - write_pos_ + read_pos_) : 0; }
+  int64_t free_slots_num() const { return buffer_.size() - min(buffer_.size(), write_pos_ - read_pos_); }
   inline void set_label(const lib::ObLabel &label) { return buffer_.set_label(label); }
   inline void set_tenant_id(const uint64_t &tenant_id) { return buffer_.set_tenant_id(tenant_id); }
   void set_read_pos(int64_t pos);

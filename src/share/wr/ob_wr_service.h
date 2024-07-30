@@ -21,6 +21,19 @@ namespace oceanbase
 namespace share
 {
 
+class ObWorkloadRepositoryContext {
+public:
+  ObWorkloadRepositoryContext(): is_inited_(false), mutex_() {}
+  static int mtl_init(ObWorkloadRepositoryContext* &ptr);
+  void destroy();
+  int try_lock();
+  int lock(const int64_t abs_timeout_us = INT64_MAX);
+  void release_lock();
+private:
+  bool is_inited_;
+  lib::ObMutex mutex_;
+};
+
 class ObWorkloadRepositoryService : public logservice::ObIReplaySubHandler,
                                     public logservice::ObIRoleChangeSubHandler,
                                     public logservice::ObICheckpointSubHandler
