@@ -391,7 +391,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
       need_retry_add_plan_(true),
       insert_batch_opt_info_(allocator),
       is_max_curr_limit_(false),
-      is_batch_insert_opt_(false)
+      is_batch_insert_opt_(false),
+      is_arraybinding_(false)
   {
     fp_result_.pc_key_.mode_ = mode_;
   }
@@ -466,7 +467,8 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
     K(need_retry_add_plan_),
     K(insert_batch_opt_info_),
     K(is_max_curr_limit_),
-    K(is_batch_insert_opt_)
+    K(is_batch_insert_opt_),
+    K(is_arraybinding_)
     );
   PlanCacheMode mode_; //control use which variables to do match
 
@@ -531,6 +533,7 @@ struct ObPlanCacheCtx : public ObILibCacheCtx
   bool is_max_curr_limit_;
   bool is_batch_insert_opt_;
 
+  bool is_arraybinding_;
 };
 
 struct ObPlanCacheStat
