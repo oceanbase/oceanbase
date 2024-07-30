@@ -1733,7 +1733,7 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
     if (!is_virtual_tenant_id(tenant_id)) {
       LOG_INFO("removed_tenant begin to kill tenant session", K(tenant_id));
       if (OB_FAIL(GCTX.session_mgr_->kill_tenant(tenant_id))) {
-        LOG_ERROR("fail to kill tenant session", K(ret), K(tenant_id));
+        LOG_WARN("fail to kill tenant session", K(ret), K(tenant_id));
         {
           SpinWLockGuard guard(lock_);
           removed_tenant->start();
