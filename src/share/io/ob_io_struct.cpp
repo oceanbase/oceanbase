@@ -556,11 +556,17 @@ void ObIOUsage::calculate_io_usage()
   }
 }
 
-void ObIOUsage::get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us)
+int ObIOUsage::get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us)
 {
-  avg_iops.assign(group_avg_iops_);
-  avg_bytes.assign(group_avg_byte_);
-  avg_rt_us.assign(group_avg_rt_us_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(avg_iops.assign(group_avg_iops_))) {
+    LOG_ERROR("fail to assign avg_iops", K(ret));
+  } else if(OB_FAIL(avg_bytes.assign(group_avg_byte_))) {
+    LOG_ERROR("fail to assign avg_bytes", K(ret));
+  } else if (OB_FAIL(avg_rt_us.assign(group_avg_rt_us_))) {
+    LOG_ERROR("fail to assign avg_rt_us", K(ret));
+  }
+  return ret;
 }
 
 void ObIOUsage::record_request_start(ObIORequest &req)
@@ -703,11 +709,17 @@ void ObSysIOUsage::calculate_io_usage()
   }
 }
 
-void ObSysIOUsage::get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us)
+int ObSysIOUsage::get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us)
 {
-  avg_iops.assign(group_avg_iops_);
-  avg_bytes.assign(group_avg_byte_);
-  avg_rt_us.assign(group_avg_rt_us_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(avg_iops.assign(group_avg_iops_))) {
+    LOG_ERROR("fail to assign avg_iops", K(ret));
+  } else if(OB_FAIL(avg_bytes.assign(group_avg_byte_))) {
+    LOG_ERROR("fail to assign avg_bytes", K(ret));
+  } else if (OB_FAIL(avg_rt_us.assign(group_avg_rt_us_))) {
+    LOG_ERROR("fail to assign avg_rt_us", K(ret));
+  }
+  return ret;
 }
 
 /******************             CpuUsage              **********************/
