@@ -549,11 +549,11 @@ endif()
 if (OB_ENABLE_BOLT)
   message(STATUS "Using bolt link opt: ${BOLT_OPT}")
   add_custom_command(
-    OUTPUT observer_bolt
+    OUTPUT fake_observer_bolt
     COMMAND ${CMAKE_SOURCE_DIR}/cmake/script/do_bolt_opt --build_dir=${CMAKE_BINARY_DIR}
     DEPENDS observer)
-  add_custom_target(fake_custom_target ALL
-    DEPENDS observer_bolt)
+  add_custom_target(observer_bolt ALL
+    DEPENDS fake_observer_bolt)
 endif()
 
 configure_file(../share/ob_version.cpp.in ob_version.cpp)
