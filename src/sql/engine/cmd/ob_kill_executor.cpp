@@ -46,7 +46,7 @@ int ObKillExecutor::execute(ObExecContext &ctx, ObKillStmt &stmt)
       is_client_id_support = ctx.get_my_session()->is_client_sessid_support();
     }
     bool direct_mode = !is_client_id_support ||
-        ((arg.sess_id_ & SERVER_SESSID_TAG) >> 31) || arg.is_query_ == true;
+        ((arg.sess_id_ & SERVER_SESSID_TAG) >> 31);
     // Direct connection scenario kill session or kill query
     if (direct_mode) {
       if (OB_FAIL(kill_session(arg, session_mgr))) {
@@ -61,14 +61,20 @@ int ObKillExecutor::execute(ObExecContext &ctx, ObKillStmt &stmt)
         }
       }
     } else {
-      // Proxy connection scenario kill session.
-      if (OB_FAIL(kill_client_session(arg, session_mgr, ctx))) {
-        if (ret == OB_ERR_KILL_CLIENT_SESSION) {
-          LOG_DEBUG("Succ to Kill Client Session", K(ret), K(arg));
-        } else {
-          LOG_WARN("Fail to kill client session", K(ret), K(arg));
+      // Proxy connection scenario kill session or kill query.
+      if (arg.is_query_ == true) {
+        // kill query proxy cs id scene
+        if (OB_FAIL(kill_query_cs_id(arg, session_mgr, ctx))) {
+          LOG_WARN("Fail to kill query cs id", K(ret), K(arg));
         }
       } else {
+        if (OB_FAIL(kill_client_session(arg, session_mgr, ctx))) {
+          if (ret == OB_ERR_KILL_CLIENT_SESSION) {
+            LOG_DEBUG("Succ to Kill Client Session", K(ret), K(arg));
+          } else {
+            LOG_WARN("Fail to kill client session", K(ret), K(arg));
+          }
+        }
       }
     }
   }
@@ -78,6 +84,84 @@ int ObKillExecutor::execute(ObExecContext &ctx, ObKillStmt &stmt)
   } else if (OB_ERR_KILL_DENIED == ret) {
     LOG_USER_ERROR(OB_ERR_KILL_DENIED, static_cast<uint64_t>(arg.sess_id_));
   }
+  return ret;
+}
+
+int ObKillExecutor::kill_query_cs_id(const ObKillSessionArg &arg, ObSQLSessionMgr &sess_mgr,
+                                       ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObSQLSessionInfo *sess_info = NULL;
+  ObSQLSessionInfo *curr_sess_info = NULL;
+  ObAddr addr;
+  uint32_t client_sess_id = arg.sess_id_;
+  uint32_t server_sess_id = INVALID_SESSID;
+  // Proxy connection scenario kill session
+  ObArray<share::ObServerInfoInTable> servers_info;
+  common::ObZone zone;
+  obrpc::ObKillQueryClientSessionArg cs_arg;
+  bool is_kill_succ = true;
+  LOG_DEBUG("Begin to send kill query rpc", K(arg.sess_id_));
+  if (OB_ISNULL(curr_sess_info = ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret), K(ctx));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("fail to get srv_rpc_proxy", K(ret), K(GCTX.srv_rpc_proxy_),
+              K(GCTX.root_service_));
+  } else if (OB_FAIL(share::ObAllServerTracer::get_instance().get_active_servers_info(
+    zone, servers_info))) {
+    LOG_WARN("fail to get servers info", K(ret));
+  } else if (FALSE_IT(cs_arg.set_client_sess_id(client_sess_id))) {
+  } else {
+    ObAddr addr;
+    const int64_t rpc_timeout = GCONF.rpc_timeout;
+    rootserver::ObKillQueryClientSessionProxy proxy(*GCTX.srv_rpc_proxy_,
+                        &obrpc::ObSrvRpcProxy::kill_query_client_session);
+    for (int64_t i = 0; OB_SUCC(ret) && i < servers_info.count(); i++) {
+      addr = servers_info.at(i).get_server();
+      if (OB_FAIL(proxy.call(addr, rpc_timeout,
+                        curr_sess_info->get_effective_tenant_id(), cs_arg))) {
+        LOG_WARN("send rpc failed", KR(ret),
+            K(rpc_timeout), K(arg), "server", addr);
+        ret = OB_SUCCESS;
+      }
+    }
+
+    int tmp_ret = OB_SUCCESS;
+    ObArray<int> return_code_array;
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      LOG_WARN("wait result failed", KR(tmp_ret));
+      is_kill_succ = false;
+    } else if (return_code_array.count() != proxy.get_results().count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cnt not match",
+          K(ret),
+          "return_cnt",
+          return_code_array.count(),
+          "result_cnt",
+          proxy.get_results().count());
+    } else {
+      for (int64_t i = 0; i < proxy.get_results().count() && OB_SUCC(ret); i++) {
+        if (OB_FAIL(return_code_array.at(i))) {
+          if (return_code_array.at(i) == OB_TENANT_NOT_IN_SERVER) {
+            ret = OB_SUCCESS;  // ignore error
+          } else {
+            ret = return_code_array.at(i);
+            LOG_WARN("rpc execute failed", KR(ret));
+          }
+        } else {
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("Fail to Kill Query Client Session", K(ret), K(client_sess_id));
+  } else {
+    LOG_INFO("Succ to Kill Query Client Session", K(ret), K(client_sess_id));
+  }
+
   return ret;
 }
 

@@ -11493,6 +11493,29 @@ public:
   bool can_kill_client_sess_;
 };
 
+// kill query client session arg
+struct ObKillQueryClientSessionArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObKillQueryClientSessionArg() : client_sess_id_(0) {}
+  ~ObKillQueryClientSessionArg() {}
+  bool is_valid() const;
+  void reset() { client_sess_id_ = 0; }
+  int assign(const ObKillQueryClientSessionArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    client_sess_id_ = other.client_sess_id_;
+    return ret;
+  }
+  void set_client_sess_id(uint32_t client_sess_id) { client_sess_id_ = client_sess_id; }
+  uint32_t get_client_sess_id() { return client_sess_id_; }
+  TO_STRING_KV(K_(client_sess_id));
+private:
+  uint32_t client_sess_id_;
+};
+
+
 // kill client session arg & Authentication
 struct ObClientSessionCreateTimeAndAuthArg
 {
