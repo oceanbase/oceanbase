@@ -174,7 +174,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 20;
+  static const int64_t DATA_VERSION_NUM = 21;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -231,6 +231,7 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 5)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 6)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 7)
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 8)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 2, 1, 9)
 
 class ObUpgradeFor4220Processor : public ObBaseUpgradeProcessor
 {
