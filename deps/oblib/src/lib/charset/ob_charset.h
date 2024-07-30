@@ -42,6 +42,7 @@ enum ObCharsetType
   CHARSET_TIS620 = 9,
   CHARSET_UJIS = 10,
   CHARSET_EUCKR = 11,
+  CHARSET_EUCJPMS = 12,
   CHARSET_MAX,
 };
 
@@ -86,6 +87,8 @@ enum ObCollationType
   CS_TYPE_GBK_BIN = 87,
   CS_TYPE_TIS620_BIN = 89,
   CS_TYPE_UJIS_BIN = 91,
+  CS_TYPE_EUCJPMS_JAPANESE_CI = 97,
+  CS_TYPE_EUCJPMS_BIN = 98,
   CS_TYPE_COLLATION_FREE = 100, // mysql中间没有使用这个
   CS_TYPE_UTF16_UNICODE_CI = 101,
   CS_TYPE_ANY = 125, // unused in mysql
@@ -131,6 +134,7 @@ enum ObCollationType
   CS_TYPE_ASCII_ZH2_0900_AS_CS,
   CS_TYPE_UJIS_ZH2_0900_AS_CS, //invalid
   CS_TYPE_EUCKR_ZH2_0900_AS_CS, // invalid
+  CS_TYPE_EUCJPMS_ZH2_0900_AS_CS, // invalid
   CS_TYPE_TIS620_ZH2_0900_AS_CS,
 
   //stroke order
@@ -144,6 +148,7 @@ enum ObCollationType
   CS_TYPE_ASCII_ZH3_0900_AS_CS,
   CS_TYPE_UJIS_ZH3_0900_AS_CS, // invalid
   CS_TYPE_EUCKR_ZH3_0900_AS_CS, // invalid
+  CS_TYPE_EUCJPMS_ZH3_0900_AS_CS, // invalid
   CS_TYPE_TIS620_ZH3_0900_AS_CS,
 
   CS_TYPE_MAX
@@ -246,8 +251,8 @@ public:
   //比如latin1 1byte ,utf8mb4 4byte,转换因子为4，也可以理解为最多使用4字节存储一个字符
   static const int32_t CharConvertFactorNum = 4;
 
-  static const int64_t VALID_CHARSET_TYPES = 11;
-  static const int64_t VALID_COLLATION_TYPES = 32;
+  static const int64_t VALID_CHARSET_TYPES = 12;
+  static const int64_t VALID_COLLATION_TYPES = 34;
 
   static int init_charset();
   // strntodv2 is an enhanced version of strntod,
@@ -432,7 +437,8 @@ public:
       || CHARSET_ASCII == charset_type
       || CHARSET_TIS620 == charset_type
       || CHARSET_UJIS == charset_type
-      || CHARSET_EUCKR == charset_type;
+      || CHARSET_EUCKR == charset_type
+      || CHARSET_EUCJPMS == charset_type;
   }
   static bool is_gb18030_2022(int64_t coll_type_int) {
     ObCollationType coll_type = static_cast<ObCollationType>(coll_type_int);

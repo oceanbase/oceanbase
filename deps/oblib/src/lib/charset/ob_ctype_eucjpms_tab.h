@@ -233,7 +233,7 @@ static unsigned char sort_order_eucjpms[] = {
     u'\377'};
 // clang-format on
 
-static ObUnicaseInfoChar cA2[256] = {
+static ObUnicaseInfoChar cA2_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -492,7 +492,7 @@ static ObUnicaseInfoChar cA2[256] = {
     {0xA2FF, 0xA2FF, 0x003F},
 };
 
-static ObUnicaseInfoChar cA3[256] = {
+static ObUnicaseInfoChar cA3_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -751,7 +751,7 @@ static ObUnicaseInfoChar cA3[256] = {
     {0xA3FF, 0xA3FF, 0x003F},
 };
 
-static ObUnicaseInfoChar cA6[256] = {
+static ObUnicaseInfoChar cA6_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -1010,7 +1010,7 @@ static ObUnicaseInfoChar cA6[256] = {
     {0xA6FF, 0xA6FF, 0x003F},
 };
 
-static ObUnicaseInfoChar cA7[256] = {
+static ObUnicaseInfoChar cA7_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -1269,7 +1269,7 @@ static ObUnicaseInfoChar cA7[256] = {
     {0xA7FF, 0xA7FF, 0x003F},
 };
 
-static ObUnicaseInfoChar cAD[256] = {
+static ObUnicaseInfoChar cAD_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -1530,7 +1530,7 @@ static ObUnicaseInfoChar cAD[256] = {
 
 /* Case info pages for JIS-X-0212 range */
 
-static ObUnicaseInfoChar c8FA6[256] = {
+static ObUnicaseInfoChar c8FA6_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -1789,7 +1789,7 @@ static ObUnicaseInfoChar c8FA6[256] = {
     {0x8FA6FF, 0x8FA6FF, 0x003F},
 };
 
-static ObUnicaseInfoChar c8FA7[256] = {
+static ObUnicaseInfoChar c8FA7_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -2048,7 +2048,7 @@ static ObUnicaseInfoChar c8FA7[256] = {
     {0x8FA7FF, 0x8FA7FF, 0x003F},
 };
 
-static ObUnicaseInfoChar c8FA9[256] = {
+static ObUnicaseInfoChar c8FA9_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -2307,7 +2307,7 @@ static ObUnicaseInfoChar c8FA9[256] = {
     {0x8FA9FF, 0x8FA9FF, 0x003F},
 };
 
-static ObUnicaseInfoChar c8FAA[256] = {
+static ObUnicaseInfoChar c8FAA_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -2566,7 +2566,7 @@ static ObUnicaseInfoChar c8FAA[256] = {
     {0x8FAAFF, 0x8FAAFF, 0x003F},
 };
 
-static ObUnicaseInfoChar c8FAB[256] = {
+static ObUnicaseInfoChar c8FAB_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -2825,7 +2825,7 @@ static ObUnicaseInfoChar c8FAB[256] = {
     {0x8FABFF, 0x8FABFF, 0x003F},
 };
 
-static ObUnicaseInfoChar c8FF3[256] = {
+static ObUnicaseInfoChar c8FF3_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -3084,7 +3084,7 @@ static ObUnicaseInfoChar c8FF3[256] = {
     {0x8FF3FF, 0x8FF3FF, 0x003F},
 };
 
-static ObUnicaseInfoChar c8FF4[256] = {
+static ObUnicaseInfoChar c8FF4_eucjpms[256] = {
     {0, 0, 0},
     {0, 0, 0},
     {0, 0, 0},
@@ -3375,8 +3375,8 @@ const static ObUnicaseInfoChar *ob_caseinfo_pages_eucjpms[512] = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, /* 9 */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, cA2, cA3, nullptr, nullptr, cA6, cA7, /* A */
-    nullptr, nullptr, nullptr, nullptr, nullptr, cAD, nullptr, nullptr, nullptr,
+    nullptr, nullptr, cA2_eucjpms, cA3_eucjpms, nullptr, nullptr, cA6_eucjpms, cA7_eucjpms, /* A */
+    nullptr, nullptr, nullptr, nullptr, nullptr, cAD_eucjpms, nullptr, nullptr, nullptr,
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, /* B */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
@@ -3423,8 +3423,8 @@ const static ObUnicaseInfoChar *ob_caseinfo_pages_eucjpms[512] = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, /* 9 */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, c8FA6, c8FA7, /* A */
-    nullptr, c8FA9, c8FAA, c8FAB, nullptr, nullptr, nullptr, nullptr, nullptr,
+    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, c8FA6_eucjpms, c8FA7_eucjpms, /* A */
+    nullptr, c8FA9_eucjpms, c8FAA_eucjpms, c8FAB_eucjpms, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, /* B */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
@@ -3436,7 +3436,7 @@ const static ObUnicaseInfoChar *ob_caseinfo_pages_eucjpms[512] = {
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
     nullptr, /* E */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-    nullptr, nullptr, nullptr, c8FF3, c8FF4, nullptr, nullptr, nullptr, /* F */
+    nullptr, nullptr, nullptr, c8FF3_eucjpms, c8FF4_eucjpms, nullptr, nullptr, nullptr, /* F */
     nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr};
 
 static ObUnicaseInfo my_caseinfo_eucjpms = {0x0FFFF,

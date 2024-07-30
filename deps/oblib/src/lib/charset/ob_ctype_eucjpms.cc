@@ -83,11 +83,6 @@ static int ob_mb_wc_eucjpms(const ObCharsetInfo *cs __attribute__((unused)),
   return OB_CS_ILSEQ;
 }
 
-static inline void OB_PUT_MB2(unsigned char *s, uint16_t code) {
-  s[0] = code >> 8;
-  s[1] = code & 0xFF;
-}
-
 static int ob_wc_mb_eucjpms(const ObCharsetInfo *cs __attribute__((unused)), ob_wc_t wc,
                             uint8_t *s, uint8_t *e) {
   int jp;
@@ -104,7 +99,8 @@ static int ob_wc_mb_eucjpms(const ObCharsetInfo *cs __attribute__((unused)), ob_
   if ((jp = unicode_to_jisx0208_eucjpms[wc])) /* JIS-X-0208 MS */
   {
     if (s + 2 > e) return OB_CS_TOOSMALL2;
-    OB_PUT_MB2(s, jp);
+    s[0] = jp >> 8;
+    s[1] = jp & 0xFF;
     return 2;
   }
 
@@ -112,7 +108,8 @@ static int ob_wc_mb_eucjpms(const ObCharsetInfo *cs __attribute__((unused)), ob_
   {
     if (s + 3 > e) return OB_CS_TOOSMALL3;
     s[0] = 0x8F;
-    OB_PUT_MB2(s + 1, jp);
+    (s+1)[0] = jp >> 8;
+    (s+1)[1] = jp & 0xFF;
     return 3;
   }
 
@@ -234,7 +231,7 @@ static ObCharsetHandler ob_charset_eucjpms_handler=
   ob_scan_8bit
 };
 
-ObCharsetInfo my_charset_eucjpms_japanese_ci = {
+ObCharsetInfo ob_charset_eucjpms_japanese_ci = {
     97,
     0,
     0,                              /* number       */
@@ -269,7 +266,7 @@ ObCharsetInfo my_charset_eucjpms_japanese_ci = {
     &ob_collation_8bit_simple_ci_handler,
     PAD_SPACE};
 
-ObCharsetInfo my_charset_eucjpms_bin = {
+ObCharsetInfo ob_charset_eucjpms_bin = {
     98,
     0,
     0,                              /* number       */

@@ -35,13 +35,6 @@
 #define OB_LATIN1_SWEDISH_CI OB_LATIN1 "_swedish_ci"
 #define OB_LATIN1_BIN OB_LATIN1 "_bin"
 
-#define OB_UJIS "ujis"
-#define OB_UJIS_GENERAL_CI OB_UJIS "_japanese_ci"
-#define OB_UJIS_BIN OB_UJIS "_bin"
-
-#define OB_EUCKR "euckr"
-#define OB_EUCKR_GENERAL_CI OB_EUCKR "_korean_ci"
-#define OB_EUCKR_BIN OB_EUCKR "_bin"
 
 /* wm_wc and wc_mb return codes */
 #define OB_CS_ILSEQ	0     /* Wrong by sequence: wb_wc                   */
@@ -487,6 +480,8 @@ extern ObCharsetInfo ob_charset_ujis_japanese_ci;
 extern ObCharsetInfo ob_charset_ujis_bin;
 extern ObCharsetInfo ob_charset_euckr_korean_ci;
 extern ObCharsetInfo ob_charset_euckr_bin;
+extern ObCharsetInfo ob_charset_eucjpms_bin;
+extern ObCharsetInfo ob_charset_eucjpms_japanese_ci;
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;
 extern ObCharsetHandler ob_charset_utf16_handler;
