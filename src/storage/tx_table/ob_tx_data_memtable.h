@@ -386,6 +386,7 @@ private:  // ObTxDataMemtable
                                           ObCommitVersionsArray::Node &node);
 
   int get_past_commit_versions_(ObCommitVersionsArray &past_commit_versions);
+  void clear_fake_node_if_exist_(ObCommitVersionsArray &past_commit_versions);
 
   int merge_cur_and_past_commit_verisons_(const share::SCN recycle_scn,
                                           ObCommitVersionsArray &cur_commit_versions,
