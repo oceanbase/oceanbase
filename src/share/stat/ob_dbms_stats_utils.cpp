@@ -143,19 +143,15 @@ int ObDbmsStatsUtils::cast_number_to_double(const number::ObNumber &src_val, dou
   return ret;
 }
 
-// gather statistic related inner table should not read or write during tenant restore or on 
-// standby cluster.
+// gather statistic related inner table should not read or write restore or standby tenant
 int ObDbmsStatsUtils::check_table_read_write_valid(const uint64_t tenant_id, bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
-  bool in_restore = false;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->check_tenant_is_restore(NULL, tenant_id, in_restore))) {
-    LOG_WARN("failed to check tenant is restore", K(ret));
-  } else if (OB_UNLIKELY(in_restore) || GCTX.is_standby_cluster()) {
+  bool is_primary = true;
+  if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_primary)) {
     is_valid = false;
   }
   return ret;

@@ -2021,9 +2021,6 @@ int ObAutoIncInnerTableProxy::next_autoinc_value(const AutoincKey &key,
             if (sql_len >= OB_MAX_SQL_LENGTH || sql_len <= 0) {
               ret = OB_SIZE_OVERFLOW;
               LOG_WARN("failed to format sql. size not enough", K(ret), K(sql_len));
-            } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != exec_tenant_id) {
-              ret = OB_OP_NOT_ALLOW;
-              LOG_WARN("can't write sys table now", K(ret), K(exec_tenant_id));
             } else if (OB_FAIL(trans.write(exec_tenant_id, sql, affected_rows))) {
               LOG_WARN("failed to write data", K(ret));
             } else if (affected_rows != 1) {
@@ -2323,9 +2320,6 @@ int ObAutoIncInnerTableProxy::sync_autoinc_value(const AutoincKey &key,
                     table_name, sync_value, new_seq_value,
                     OB_INVALID_TENANT_ID, table_id, column_id, inner_autoinc_version))) {
           LOG_WARN("failed to assign sql", K(ret));
-        } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != exec_tenant_id) {
-          ret = OB_OP_NOT_ALLOW;
-          LOG_WARN("can't write sys table now", K(ret), K(exec_tenant_id));
         } else if (OB_FAIL((trans.write(exec_tenant_id, sql.ptr(), affected_rows)))) {
           LOG_WARN("failed to execute", K(sql), K(ret));
         } else if (!is_single_row(affected_rows)) {
@@ -2468,9 +2462,6 @@ int ObAutoIncInnerTableProxy::read_and_push_inner_table(const AutoincKey &key,
                       table_name, new_seq_value,
                       OB_INVALID_TENANT_ID, table_id, column_id, inner_autoinc_version))) {
             LOG_WARN("failed to assign sql", K(ret));
-          } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != exec_tenant_id) {
-            ret = OB_OP_NOT_ALLOW;
-            LOG_WARN("can't write sys table now", K(ret), K(exec_tenant_id));
           } else if (OB_FAIL((trans.write(exec_tenant_id, sql.ptr(), affected_rows)))) {
             LOG_WARN("failed to execute", K(sql), K(ret));
           } else if (!is_single_row(affected_rows)) {

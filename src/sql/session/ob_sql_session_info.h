@@ -960,7 +960,6 @@ public:
   // 清除临时表
   int drop_temp_tables(const bool is_sess_disconn = true, const bool is_xa_trans = false);
   void refresh_temp_tables_sess_active_time(); //更新临时表的sess active time
-  int drop_reused_oracle_temp_tables();
   int delete_from_oracle_temp_tables(const obrpc::ObDropTableArg &const_drop_table_arg);
 
   //To generate an unique key for Oracle Global Temporary Table

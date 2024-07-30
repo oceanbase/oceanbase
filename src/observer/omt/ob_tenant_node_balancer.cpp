@@ -245,13 +245,6 @@ int ObTenantNodeBalancer::notify_create_tenant(const obrpc::TenantServerUnitConf
     }
   }
 
-  // In standby cluster, may repeat create tenant, if if_not_grant_ is true, ignore OB_TENANT_EXIST
-  if (OB_TENANT_EXIST == ret && unit.if_not_grant_) {
-    if (GCTX.is_standby_cluster()) {
-      ret = OB_SUCCESS;
-    }
-  }
-
   return ret;
 }
 

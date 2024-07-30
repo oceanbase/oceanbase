@@ -286,9 +286,6 @@ int ObSequenceDMLProxy::next_batch(
                 "WHERE SEQUENCE_ID = %lu",
                 tname, next_value.format(), sequence_id))) {
       LOG_WARN("format update sql fail", K(ret));
-    } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("can't write sys table now", K(ret), K(tenant_id));
     } else if (OB_FAIL(trans.write(tenant_id, sql.ptr(), affected_rows))) {
       LOG_WARN("fail to execute sql", K(sql), K(ret));
     } else {

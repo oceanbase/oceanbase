@@ -618,7 +618,6 @@ public:
   int maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLArg &arg);
   int process_schema_object_dependency(
       const uint64_t tenant_id,
-      const bool is_standby,
       const share::schema::ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
       share::schema::ObSchemaGetterGuard &schema_guard,
       ObMySQLTransaction &trans,
@@ -1275,7 +1274,6 @@ private:
   int modify_tenant_inner_phase(const obrpc::ObModifyTenantArg &arg,
       const ObTenantSchema *orig_tenant_schema,
       ObSchemaGetterGuard &schema_guard,
-      bool is_standby,
       bool is_restore);
   int update_global_index(obrpc::ObAlterTableArg &arg,
       const uint64_t tenant_id,
@@ -2527,7 +2525,6 @@ private:
       const share::schema::ObSysVariableSchema &sys_variable,
       share::schema::ObSysParam *sys_params,
       int64_t params_capacity);
-  int get_is_standby_cluster(bool &is_standby) const;
   int check_can_alter_column(
       const int64_t tenant_id,
       const share::schema::AlterTableSchema &alter_table_schema,

@@ -331,18 +331,19 @@ int ObMultiVersionGarbageCollector::study()
   timeguard.click("study_min_unallocated_GTS");
 
   if (OB_SUCC(ret)) {
-    if (!GCTX.is_standby_cluster() && // standby cluster does not support WRS
-        OB_FAIL(study_min_unallocated_WRS(min_unallocated_WRS))) {
-      MVCC_LOG(WARN, "study min unallocated GTS failed", K(ret));
-    } else if (!min_unallocated_WRS.is_valid()
-               || min_unallocated_WRS.is_min()
-               || min_unallocated_WRS.is_max()) {
+    bool is_primary = true;
+    const uint64_t tenant_id = MTL_ID();
+    if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+      MVCC_LOG(WARN, "fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+    } else if (is_primary && OB_FAIL(study_min_unallocated_WRS(min_unallocated_WRS))) {
+      MVCC_LOG(WARN, "study min unallocated GTS failed", K(ret), K(is_primary));
+    } else if (!min_unallocated_WRS.is_valid() || min_unallocated_WRS.is_min()) {
       ret = OB_ERR_UNEXPECTED;
       MVCC_LOG(ERROR, "wrong min unallocated WRS",
-               K(ret), K(min_unallocated_WRS), KPC(this));
+               K(ret), K(min_unallocated_WRS), KPC(this), K(is_primary));
     } else {
       MVCC_LOG(INFO, "study min unallocated wrs succeed",
-               K(ret), K(min_unallocated_WRS), KPC(this));
+               K(ret), K(min_unallocated_WRS), KPC(this), K(is_primary));
     }
   }
 

@@ -1211,9 +1211,6 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
       TRANS_LOG(WARN, "get next row error", K(ret));
     }
   } else if (FALSE_IT(timeguard.click("mutator_row copy"))) {
-  } else if (OB_FAIL(check_standby_cluster_schema_condition_(ctx, table_id, table_version))) {
-    TRANS_LOG(WARN, "failed to check standby_cluster_schema_condition", K(ret), K(table_id),
-              K(table_version));
   } else if (FALSE_IT(timeguard.click("check_standby_cluster_schema_condition"))) {
   } else if (OB_UNLIKELY(dml_flag == blocksstable::ObDmlFlag::DF_NOT_EXIST)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2864,44 +2861,6 @@ uint32_t ObMemtable::get_freeze_flag()
 void ObMemtable::set_minor_merged()
 {
   minor_merged_time_ = ObTimeUtility::current_time();
-}
-
-int ObMemtable::check_standby_cluster_schema_condition_(ObStoreCtx &ctx,
-                                                        const int64_t table_id,
-                                                        const int64_t table_version)
-{
-  int ret = OB_SUCCESS;
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_CHECK_STANDBY_CLUSTER_SCHEMA_CONDITION) OB_SUCCESS;
-  if (OB_FAIL(ret) && !common::is_inner_table(table_id)) {
-    TRANS_LOG(WARN, "ERRSIM, replay row failed", K(ret));
-    return ret;
-  }
-#endif
-  if (GCTX.is_standby_cluster()) {
-    //only stand_by cluster need to be check
-    uint64_t tenant_id = MTL_ID();
-    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "invalid tenant_id", K(ret), K(tenant_id), K(table_id), K(table_version));
-    } else if (OB_SYS_TENANT_ID == tenant_id) {
-      //sys tenant do not need check
-    } else {
-      int64_t tenant_schema_version = 0;
-      if (OB_FAIL(GSCHEMASERVICE.get_tenant_refreshed_schema_version(tenant_id, tenant_schema_version))) {
-        TRANS_LOG(WARN, "get_tenant_schema_version failed", K(ret), K(tenant_id),
-                  K(table_id), K(tenant_id), K(table_version));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          // tenant schema hasn't been flushed in the case of restart, rewrite OB_ENTRY_NOT_EXIST
-          ret = OB_TRANS_WAIT_SCHEMA_REFRESH;
-        }
-      } else if (table_version > tenant_schema_version) {
-        // replay is not allowed when data's table version is greater than tenant's schema version
-        //remove by msy164651, in 4.0 no need to check schema version
-      } else {/*do nothing*/}
-    }
-  }
-  return ret;
 }
 
 int64_t ObMemtable::get_upper_trans_version() const

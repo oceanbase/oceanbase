@@ -1419,9 +1419,12 @@ int ObIndexBuildTask::enable_index()
     schema_status.tenant_id_ = tenant_id_;
     int64_t version_in_inner_table = OB_INVALID_VERSION;
     int64_t local_schema_version = OB_INVALID_VERSION;
-    if (GCTX.is_standby_cluster()) {
+    bool is_standby = false;
+    if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(tenant_id_, is_standby))) {
+      LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(tenant_id_));
+    } else if (is_standby) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("create global index in slave cluster is not allowed", K(ret), K(index_table_id_));
+      LOG_WARN("create global index in standby tenant is not allowed", K(ret), K(index_table_id_));
     } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("fail to get schema guard", K(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, index_table_id_, index_table_exist))) {

@@ -180,9 +180,6 @@ int ObSchemaHistoryRecycler::check_stop()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (GCTX.is_standby_cluster()) {
-    ret = OB_CANCELED;
-    LOG_WARN("schema history recycler should stopped", KR(ret));
   }
   return ret;
 }
@@ -269,10 +266,20 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("fail to get schema_guard", KR(ret));
+  } else {
+    for (int64_t i = tenant_ids.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
+      const uint64_t tenant_id = tenant_ids.at(i);
+      bool skip = true;
+      if (OB_FAIL(check_can_skip_tenant(tenant_id, skip))) {
+        LOG_WARN("fail to check tenant can skip", KR(ret), K(tenant_id));
+      } else if (skip && OB_FAIL(tenant_ids.remove(i))) {
+        LOG_WARN("fail to remove tenant_id", KR(ret), K(tenant_ids), K(i));
+      }
+    }
+  }
+  if (OB_FAIL(ret) || tenant_ids.count() <= 0 ) {
   } else if (OB_FAIL(calc_recycle_schema_versions(tenant_ids))) {
     LOG_WARN("fail to fetch recycle schema version", KR(ret));
-  } else if (GCTX.is_standby_cluster()) {
-    // standby cluster only calc recycle schema versions
   } else if (OB_FAIL(try_recycle_schema_history(tenant_ids))) {
     LOG_WARN("fail to recycle schema history", KR(ret));
   }
@@ -288,13 +295,8 @@ int ObSchemaHistoryRecycler::try_recycle_schema_history(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
       const uint64_t tenant_id = tenant_ids.at(i);
-      bool skip = true;
       if (OB_FAIL(check_stop())) {
         LOG_WARN("schema history recycler is stopped", KR(ret));
-      } else if (OB_FAIL(check_can_skip_tenant(tenant_id, skip))) {
-        LOG_WARN("fail to check tenant can skip", KR(ret), K(tenant_id));
-      } else if (skip) {
-        // pass
       } else {
         int64_t recycle_schema_version = OB_INVALID_VERSION;
         if (OB_FAIL(recycle_schema_versions_.get_refactored(tenant_id, recycle_schema_version))) {
@@ -319,6 +321,7 @@ int ObSchemaHistoryRecycler::check_can_skip_tenant(
     bool &skip)
 {
   int ret = OB_SUCCESS;
+  bool is_primary = false;
   skip = false;
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -327,6 +330,10 @@ int ObSchemaHistoryRecycler::check_can_skip_tenant(
     // TODO: (yanmu.ztl)
     // Additional schema history of system tenant should be recycled:
     // 1. Other tenant's schema history(except tenant schema history and system table's schema history) generated before schema split.
+    skip = true;
+  } else if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+    LOG_WARN("fail to execute table_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+  } else if (!is_primary) {
     skip = true;
   } else {
     ObSchemaGetterGuard schema_guard;
@@ -479,7 +486,6 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else {
-    bool is_standby = GCTX.is_standby_cluster();
     if (OB_SUCC(ret)) {
       // step 1. calc by schema_history_expire_time
       int64_t conf_expire_time = GCONF.schema_history_expire_time;
@@ -493,13 +499,7 @@ int ObSchemaHistoryRecycler::get_recycle_schema_version_by_global_stat(
         const uint64_t tenant_id = tenant_ids.at(i);
         int64_t expire_schema_version = OB_INVALID_VERSION;
         ObRefreshSchemaStatus schema_status;
-        if (!is_standby) {
-          schema_status.tenant_id_ = tenant_id;  // use strong read
-        } else {
-          if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id, schema_status))) {
-            LOG_WARN("fail to get refresh schema status", KR(ret), K(tenant_id));
-          }
-        }
+        schema_status.tenant_id_ = tenant_id;  // use strong read
         if (FAILEDx(schema_service_->get_schema_version_by_timestamp(
                     schema_status, tenant_id, expire_time, expire_schema_version))) {
           LOG_WARN("fail to get schema version by timestamp",

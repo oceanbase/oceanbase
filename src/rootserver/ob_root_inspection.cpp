@@ -128,8 +128,6 @@ int ObTenantChecker::check_create_tenant_end_()
     LOG_WARN("schema service not init", K(ret));
   } else if (!schema_service_->is_sys_full_schema()) {
     // skip
-  } else if (GCTX.is_standby_cluster()) {
-    // skip
   } else if (OB_FAIL(schema_service_->get_tenant_ids(tenant_ids))) {
     LOG_WARN("get_tenant_ids failed", K(ret));
   } else if (OB_ISNULL(GCTX.root_service_)) {
@@ -990,8 +988,6 @@ int ObRootInspection::calc_diff_names(const uint64_t tenant_id,
                                       ObIArray<Name> &miss_names /* data inner table less than hard code*/)
 {
   int ret = OB_SUCCESS;
-  ObRefreshSchemaStatus schema_status;
-  schema_status.tenant_id_ = tenant_id;
   fetch_names.reset();
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -1006,28 +1002,21 @@ int ObRootInspection::calc_diff_names(const uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("table_name is null or names is empty",
              KR(ret), K(tenant_id), KP(table_name), K(names));
-  } else if (GCTX.is_standby_cluster() && is_user_tenant(tenant_id)) {
-    if (OB_ISNULL(GCTX.schema_status_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema status proxy is null", K(ret));
-    } else if (OB_FAIL(GCTX.schema_status_proxy_->get_refresh_schema_status(tenant_id, schema_status))) {
-      LOG_WARN("fail to get schema status", KR(ret), K(tenant_id));
-    }
   }
 
   if (OB_SUCC(ret)) {
-    const uint64_t exec_tenant_id = schema_status.tenant_id_;
-    int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    const uint64_t exec_tenant_id = tenant_id;
     ObSqlString sql;
-    ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy_,
-                                               snapshot_timestamp);
     if (OB_FAIL(sql.append_fmt("SELECT name FROM %s%s%s", table_name,
         (extra_cond.empty()) ? "" : " WHERE ", extra_cond.ptr()))) {
       LOG_WARN("append_fmt failed", KR(ret), K(tenant_id), K(table_name), K(extra_cond));
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
     } else {
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         ObMySQLResult *result = NULL;
-        if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        if (OB_FAIL(GCTX.sql_proxy_->read(res, exec_tenant_id, sql.ptr()))) {
           LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(sql));
           can_retry_ = true;
         } else if (OB_ISNULL(result = res.get_result())) {
@@ -1062,7 +1051,7 @@ int ObRootInspection::calc_diff_names(const uint64_t tenant_id,
     if (OB_SUCC(ret)) {
       if (fetch_names.count() <= 0) {
         LOG_WARN("maybe tenant or zone has been deleted, ignore it",
-                 KR(ret), K(schema_status), K(table_name), K(extra_cond));
+                 KR(ret), K(table_name), K(extra_cond));
       } else {
         extra_names.reset();
         miss_names.reset();

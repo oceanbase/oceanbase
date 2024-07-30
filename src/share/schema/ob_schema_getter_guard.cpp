@@ -96,7 +96,6 @@ ObSchemaGetterGuard::ObSchemaGetterGuard()
     schema_objs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(local_allocator_)),
     mod_(ObSchemaMgrItem::MOD_STACK),
     schema_guard_type_(INVALID_SCHEMA_GUARD_TYPE),
-    is_standby_cluster_(false),
     restore_tenant_exist_(false),
     is_inited_(false),
     pin_cache_size_(0)
@@ -112,7 +111,6 @@ ObSchemaGetterGuard::ObSchemaGetterGuard(const ObSchemaMgrItem::Mod mod)
     schema_objs_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(local_allocator_)),
     mod_(mod),
     schema_guard_type_(INVALID_SCHEMA_GUARD_TYPE),
-    is_standby_cluster_(false),
     restore_tenant_exist_(false),
     is_inited_(false),
     pin_cache_size_(0)
@@ -128,15 +126,13 @@ ObSchemaGetterGuard::~ObSchemaGetterGuard()
   }
 }
 
-int ObSchemaGetterGuard::init(
-    const bool is_standby_cluster)
+int ObSchemaGetterGuard::init()
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
   } else {
-    is_standby_cluster_ = is_standby_cluster;
     pin_cache_size_ = 0;
     is_inited_ = true;
   }
@@ -149,7 +145,6 @@ int ObSchemaGetterGuard::reset()
   schema_service_ = NULL;
   schema_objs_.reset();
 
-  is_standby_cluster_ = false;
   restore_tenant_exist_ = false;
   if (pin_cache_size_ >= FULL_SCHEMA_MEM_THREHOLD) {
     FLOG_WARN("hold too much full schema memory", K(tenant_id_), K(pin_cache_size_), K(lbt()));
@@ -9915,18 +9910,13 @@ bool ObSchemaGetterGuard::ignore_tenant_not_exist_error(
      const uint64_t tenant_id)
 {
   bool bret = false;
-  if (is_standby_cluster()) {
-    // ingore error while standby cluster create tenant.
+  // ignore error when tenant is in physical restore.
+  bool is_restore = false;
+  int tmp_ret = check_tenant_is_restore(tenant_id, is_restore);
+  if (OB_SUCCESS != tmp_ret) {
+    LOG_WARN_RET(tmp_ret, "fail to check tenant is restore", K(bret), K(tmp_ret), K(tenant_id));
+  } else if (is_restore) {
     bret = true;
-  } else {
-    // ignore error when tenant is in physical restore.
-    bool is_restore = false;
-    int tmp_ret = check_tenant_is_restore(tenant_id, is_restore);
-    if (OB_SUCCESS != tmp_ret) {
-      LOG_WARN_RET(tmp_ret, "fail to check tenant is restore", K(bret), K(tmp_ret), K(tenant_id));
-    } else if (is_restore) {
-      bret = true;
-    }
   }
   return bret;
 }

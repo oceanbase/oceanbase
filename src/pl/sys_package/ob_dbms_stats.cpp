@@ -5341,18 +5341,17 @@ int ObDbmsStats::flush_database_monitoring_info(sql::ObExecContext &ctx,
 int ObDbmsStats::check_statistic_table_writeable(sql::ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
-  share::schema::ObSchemaGetterGuard *schema_guard = ctx.get_virtual_table_ctx().schema_guard_;
-  bool in_restore = false;
-  if (OB_ISNULL(schema_guard) || OB_ISNULL(ctx.get_my_session())) {
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  bool is_primary = true;
+  if (OB_ISNULL(ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(schema_guard));
-  } else if (OB_FAIL(schema_guard->check_tenant_is_restore(ctx.get_my_session()->get_effective_tenant_id(),
-                                                           in_restore))) {
-    LOG_WARN("failed to check tenant is restore", K(ret));
-  } else if (OB_UNLIKELY(in_restore) ||
-             GCTX.is_standby_cluster()) {
+    LOG_WARN("get unexpected null", KR(ret), KP(ctx.get_my_session()));
+  } else if (FALSE_IT(tenant_id = ctx.get_my_session()->get_effective_tenant_id())) {
+  } else if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_primary)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use dbms_stats during restore or standby cluster");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use dbms_stats during non-primary tenant");
   }
   return ret;
 }

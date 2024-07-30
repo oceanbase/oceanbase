@@ -102,15 +102,12 @@ void ObOptStatMonitorFlushAllTask::runTimerTask()
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(optstat_monitor_mgr_) && optstat_monitor_mgr_->inited_) {
     LOG_INFO("run opt stat monitor flush all task", K(optstat_monitor_mgr_->tenant_id_));
-    share::schema::ObMultiVersionSchemaService &schema_service = share::schema::ObMultiVersionSchemaService::get_instance();
-    share::schema::ObSchemaGetterGuard schema_guard;
-    bool in_restore = false;
+    uint64_t tenant_id = optstat_monitor_mgr_->tenant_id_;
+    bool is_primary = true;
     THIS_WORKER.set_timeout_ts(FLUSH_INTERVAL / 2 + ObTimeUtility::current_time());
-    if (OB_FAIL(schema_service.get_tenant_schema_guard(optstat_monitor_mgr_->tenant_id_, schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.check_tenant_is_restore(optstat_monitor_mgr_->tenant_id_, in_restore))) {
-      LOG_WARN("failed to check tenant is restore", K(ret));
-    } else if (in_restore || GCTX.is_standby_cluster()) {
+    if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+      LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+    } else if (!is_primary) {
       // do nothing
     } else if (OB_FAIL(optstat_monitor_mgr_->update_column_usage_info(false))) {
       LOG_WARN("failed to update column usage info", K(ret));
@@ -125,15 +122,12 @@ void ObOptStatMonitorCheckTask::runTimerTask()
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(optstat_monitor_mgr_) && optstat_monitor_mgr_->inited_) {
     LOG_INFO("run opt stat monitor check task", K(optstat_monitor_mgr_->tenant_id_));
-    share::schema::ObMultiVersionSchemaService &schema_service = share::schema::ObMultiVersionSchemaService::get_instance();
-    share::schema::ObSchemaGetterGuard schema_guard;
-    bool in_restore = false;
     THIS_WORKER.set_timeout_ts(CHECK_INTERVAL + ObTimeUtility::current_time());
-    if (OB_FAIL(schema_service.get_tenant_schema_guard(optstat_monitor_mgr_->tenant_id_, schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret));
-    } else if (OB_FAIL(schema_guard.check_tenant_is_restore(optstat_monitor_mgr_->tenant_id_, in_restore))) {
-      LOG_WARN("failed to check tenant is restore", K(ret));
-    } else if (in_restore || GCTX.is_standby_cluster()) {
+    uint64_t tenant_id = optstat_monitor_mgr_->tenant_id_;
+    bool is_primary = true;
+    if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+      LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+    } else if (!is_primary) {
       // do nothing
     } else if (OB_FAIL(optstat_monitor_mgr_->update_column_usage_info(true))) {
       LOG_WARN("failed to update column usage info", K(ret));
@@ -235,35 +229,31 @@ int ObOptStatMonitorManager::flush_database_monitoring_info(sql::ObExecContext &
 int ObOptStatMonitorManager::update_local_cache(common::ObIArray<ColumnUsageArg> &args)
 {
   int ret = OB_SUCCESS;
-  if (GCTX.is_standby_cluster()) {
-    // standby cluster can't write __all_column_usage, so do not need to update local update
-  } else {
-    SpinRLockGuard guard(lock_);
-    for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); ++i) {
-      ColumnUsageArg &arg = args.at(i);
-      StatKey col_key(arg.table_id_, arg.column_id_);
-      int64_t flags = 0;
-      if (OB_FAIL(column_usage_map_.get_refactored(col_key, flags))) {
-        if (OB_LIKELY(ret == OB_HASH_NOT_EXIST)) {
-          if (OB_FAIL(column_usage_map_.set_refactored(col_key, arg.flags_))) {
-            // other thread set the refactor, try update again
-            if (OB_FAIL(column_usage_map_.get_refactored(col_key, flags))) {
-              LOG_WARN("failed to get refactored", K(ret));
-            } else if ((~flags) & arg.flags_) {
-              UpdateValueAtomicOp atomic_op(arg.flags_);
-              if (OB_FAIL(column_usage_map_.atomic_refactored(col_key, atomic_op))) {
-                LOG_WARN("failed to atomic refactored", K(ret));
-              }
+  SpinRLockGuard guard(lock_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); ++i) {
+    ColumnUsageArg &arg = args.at(i);
+    StatKey col_key(arg.table_id_, arg.column_id_);
+    int64_t flags = 0;
+    if (OB_FAIL(column_usage_map_.get_refactored(col_key, flags))) {
+      if (OB_LIKELY(ret == OB_HASH_NOT_EXIST)) {
+        if (OB_FAIL(column_usage_map_.set_refactored(col_key, arg.flags_))) {
+          // other thread set the refactor, try update again
+          if (OB_FAIL(column_usage_map_.get_refactored(col_key, flags))) {
+            LOG_WARN("failed to get refactored", K(ret));
+          } else if ((~flags) & arg.flags_) {
+            UpdateValueAtomicOp atomic_op(arg.flags_);
+            if (OB_FAIL(column_usage_map_.atomic_refactored(col_key, atomic_op))) {
+              LOG_WARN("failed to atomic refactored", K(ret));
             }
           }
-        } else {
-          LOG_WARN("failed to get refactored", K(ret));
         }
-      } else if ((~flags) & arg.flags_) {
-        UpdateValueAtomicOp atomic_op(arg.flags_);
-        if (OB_FAIL(column_usage_map_.atomic_refactored(col_key, atomic_op))) {
-          LOG_WARN("failed to atomic refactored", K(ret));
-        }
+      } else {
+        LOG_WARN("failed to get refactored", K(ret));
+      }
+    } else if ((~flags) & arg.flags_) {
+      UpdateValueAtomicOp atomic_op(arg.flags_);
+      if (OB_FAIL(column_usage_map_.atomic_refactored(col_key, atomic_op))) {
+        LOG_WARN("failed to atomic refactored", K(ret));
       }
     }
   }
@@ -273,34 +263,30 @@ int ObOptStatMonitorManager::update_local_cache(common::ObIArray<ColumnUsageArg>
 int ObOptStatMonitorManager::update_local_cache(ObOptDmlStat &dml_stat)
 {
   int ret = OB_SUCCESS;
-  if (GCTX.is_standby_cluster()) {
-    // standby cluster can't write __all_monitor_modified, so do not need to update local update
-  } else {
-    SpinRLockGuard guard(lock_);
-    StatKey key(dml_stat.table_id_, dml_stat.tablet_id_);
-    ObOptDmlStat tmp_dml_stat;
-    if (OB_FAIL(dml_stat_map_.get_refactored(key, tmp_dml_stat))) {
-      if (OB_LIKELY(ret == OB_HASH_NOT_EXIST)) {
-        if (OB_FAIL(dml_stat_map_.set_refactored(key, dml_stat))) {
-          // other thread set the refactor, try update again
-          if (OB_FAIL(dml_stat_map_.get_refactored(key, tmp_dml_stat))) {
-            LOG_WARN("failed to get refactored", K(ret));
-          } else {
-            UpdateValueAtomicOp atomic_op(dml_stat);
-            if (OB_FAIL(dml_stat_map_.atomic_refactored(key, atomic_op))) {
-              LOG_WARN("failed to atomic refactored", K(ret));
-            }
+  SpinRLockGuard guard(lock_);
+  StatKey key(dml_stat.table_id_, dml_stat.tablet_id_);
+  ObOptDmlStat tmp_dml_stat;
+  if (OB_FAIL(dml_stat_map_.get_refactored(key, tmp_dml_stat))) {
+    if (OB_LIKELY(ret == OB_HASH_NOT_EXIST)) {
+      if (OB_FAIL(dml_stat_map_.set_refactored(key, dml_stat))) {
+        // other thread set the refactor, try update again
+        if (OB_FAIL(dml_stat_map_.get_refactored(key, tmp_dml_stat))) {
+          LOG_WARN("failed to get refactored", K(ret));
+        } else {
+          UpdateValueAtomicOp atomic_op(dml_stat);
+          if (OB_FAIL(dml_stat_map_.atomic_refactored(key, atomic_op))) {
+            LOG_WARN("failed to atomic refactored", K(ret));
           }
         }
-      } else {
-        LOG_WARN("failed to get refactored", K(ret));
       }
     } else {
-      UpdateValueAtomicOp atomic_op(dml_stat);
-      if (OB_FAIL(dml_stat_map_.atomic_refactored(key, atomic_op))) {
-        LOG_WARN("failed to atomic refactored", K(ret));
-      } else {/*do nothing*/}
+      LOG_WARN("failed to get refactored", K(ret));
     }
+  } else {
+    UpdateValueAtomicOp atomic_op(dml_stat);
+    if (OB_FAIL(dml_stat_map_.atomic_refactored(key, atomic_op))) {
+      LOG_WARN("failed to atomic refactored", K(ret));
+    } else {/*do nothing*/}
   }
   return ret;
 }
@@ -575,13 +561,10 @@ int ObOptStatMonitorManager::check_table_writeable(bool &is_writeable)
 {
   int ret = OB_SUCCESS;
   is_writeable = true;
-  bool in_restore = false;
-  if (OB_ISNULL(GCTX.schema_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->check_tenant_is_restore(NULL, tenant_id_, in_restore))) {
-    LOG_WARN("failed to check tenant is restore", K(ret));
-  } else if (OB_UNLIKELY(in_restore) || GCTX.is_standby_cluster()) {
+  bool is_primary = true;
+  if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id_, is_primary))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(!is_primary)) {
     is_writeable = false;
   }
   return ret;

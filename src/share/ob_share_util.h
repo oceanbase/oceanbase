@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_SHARE_UTIL_H_
 #include "share/ob_define.h"
 #include "share/scn.h"
+#include "share/ob_tenant_role.h"
 namespace oceanbase
 {
 namespace common
@@ -120,6 +121,13 @@ public:
     SCN &ora_rowscn);
   static bool is_tenant_enable_rebalance(const uint64_t tenant_id);
   static bool is_tenant_enable_transfer(const uint64_t tenant_id);
+  static int mtl_get_tenant_role(const uint64_t tenant_id, ObTenantRole::Role &tenant_role);
+  static int mtl_check_if_tenant_role_is_primary(const uint64_t tenant_id, bool &is_primary);
+  static int mtl_check_if_tenant_role_is_standby(const uint64_t tenant_id, bool &is_standby);
+  static int table_get_tenant_role(const uint64_t tenant_id, ObTenantRole &tenant_role);
+  static int table_check_if_tenant_role_is_primary(const uint64_t tenant_id, bool &is_primary);
+  static int table_check_if_tenant_role_is_standby(const uint64_t tenant_id, bool &is_standby);
+  static int table_check_if_tenant_role_is_restore(const uint64_t tenant_id, bool &is_restore);
 };
 }//end namespace share
 }//end namespace oceanbase

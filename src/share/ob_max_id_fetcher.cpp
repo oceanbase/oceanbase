@@ -428,9 +428,6 @@ int ObMaxIdFetcher::update_max_id(ObISQLClient &sql_client, const uint64_t tenan
       || OB_INVALID_ID == max_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(max_id_type), K(max_id));
-  } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("can't write sys table now", K(ret), K(tenant_id));
   } else if (OB_ISNULL(id_name = get_max_id_name(max_id_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL name", K(ret));
@@ -531,9 +528,6 @@ int ObMaxIdFetcher::insert_initial_value(common::ObISQLClient &sql_client, uint6
   if (OB_INVALID_ID == tenant_id || !valid_max_id_type(max_id_type) || UINT64_MAX == initial_value) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(max_id_type), K(initial_value));
-  } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("can't write sys table now", K(ret), K(tenant_id));
   } else if (OB_ISNULL(name) || OB_ISNULL(info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL name or info", K(ret), KP(name), KP(info));

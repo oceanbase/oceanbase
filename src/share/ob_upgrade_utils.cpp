@@ -816,10 +816,6 @@ int ObBaseUpgradeProcessor::check_inner_stat() const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid processor status",
              KR(ret), KDV(data_version_), K_(tenant_id), K_(mode));
-  } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("run upgrade job for non-sys tenant in standby cluster is not supported",
-             KR(ret), K_(tenant_id));
   } else if (OB_ISNULL(check_stop_provider_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("check_stop_provider is null", KR(ret));

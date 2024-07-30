@@ -295,10 +295,6 @@ struct ObGlobalContext
   // Refer to the high availability zone design document
   //
   bool is_observer() const;
-  bool is_standby_cluster_and_started() { return is_observer() && is_standby_cluster() && has_start_service(); }
-  bool is_started_and_can_weak_read() { return is_observer() && has_start_service(); }
-  bool is_primary_cluster() const;
-  bool is_standby_cluster() const;
   common::ObClusterRole get_cluster_role() const;
   share::ServerServiceStatus get_server_service_status() const;
   void set_upgrade_stage(obrpc::ObUpgradeStage upgrade_stage) { upgrade_stage_ = upgrade_stage; }
@@ -321,22 +317,6 @@ struct ObThreadContext
 };
 
 ObGlobalContext &global_context();
-
-struct ObUseWeakGuard
-{
-  ObUseWeakGuard();
-  ~ObUseWeakGuard();
-  static bool did_use_weak();
-private:
-  struct TSIUseWeak
-  {
-    bool inited_;
-    bool did_use_weak_;
-    TSIUseWeak()
-        :inited_(false), did_use_weak_(false)
-    {}
-  };
-};
 } // end of namespace observer
 } // end of namespace oceanbase
 

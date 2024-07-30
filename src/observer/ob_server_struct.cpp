@@ -35,16 +35,6 @@ ObGlobalContext &global_context()
 
 bool ObGlobalContext::is_observer() const { return !share::schema::ObSchemaService::g_liboblog_mode_; }
 
-bool ObGlobalContext::is_primary_cluster() const
-{
-  return true;;
-}
-
-bool ObGlobalContext::is_standby_cluster() const
-{
-  return false;
-}
-
 common::ObClusterRole ObGlobalContext::get_cluster_role() const
 {
   return PRIMARY_CLUSTER;
@@ -145,40 +135,6 @@ ObGlobalContext &ObGlobalContext::operator=(const ObGlobalContext &other)
     server_tracer_ = other.server_tracer_;
   }
   return *this;
-}
-
-ObUseWeakGuard::ObUseWeakGuard()
-{
-  auto *tsi_value = GET_TSI(TSIUseWeak);
-  if (NULL != tsi_value) {
-    tsi_value->inited_ = true;
-    tsi_value->did_use_weak_ = GCTX.is_standby_cluster_and_started();;
-  } else {
-    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "tsi value is NULL");
-  }
-}
-
-ObUseWeakGuard::~ObUseWeakGuard()
-{
-  auto *tsi_value = GET_TSI(TSIUseWeak);
-  if (NULL != tsi_value) {
-    tsi_value->inited_ = false;
-  }
-}
-
-bool ObUseWeakGuard::did_use_weak()
-{
-  bool use_weak = false;
-  auto *tsi_value = GET_TSI(TSIUseWeak);
-  if (NULL == tsi_value) {
-    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "tsi value is NULL");
-    use_weak = GCTX.is_standby_cluster_and_started();
-  } else if (tsi_value->inited_) {
-    use_weak = tsi_value->did_use_weak_;
-  } else {
-    use_weak = GCTX.is_standby_cluster_and_started();
-  }
-  return use_weak;
 }
 
 } // end of namespace observer

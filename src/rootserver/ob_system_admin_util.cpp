@@ -1321,26 +1321,36 @@ int ObAdminUpgradeVirtualSchema::execute()
   if (OB_UNLIKELY(!ctx_.is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (GCTX.is_standby_cluster()) {
-    // standby cluster cannot upgrade virtual schema independently,
-    // need to get these information from the primary cluster
-    ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("upgrade virtual schema in standby cluster not allow", KR(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "upgrade virtual schema in standby cluster");
-  } else if (OB_ISNULL(ctx_.root_inspection_)
-             || OB_ISNULL(ctx_.ddl_service_)) {
+  } else if (OB_ISNULL(ctx_.root_inspection_) || OB_ISNULL(ctx_.ddl_service_) || OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ptr is null", KR(ret), KP(ctx_.root_inspection_), KP(ctx_.ddl_service_));
+    LOG_WARN("ptr is null", KR(ret), KP(ctx_.root_inspection_), KP(ctx_.ddl_service_), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(ctx_.ddl_service_->get_tenant_schema_guard_with_version_in_inner_table(
              OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("get_schema_guard failed", KR(ret));
   } else if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
     LOG_WARN("fail to get tenant ids", KR(ret));
   } else {
+    share::ObTenantRole tenant_role;
     FOREACH(tenant_id, tenant_ids) { // ignore ret
       int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = execute(*tenant_id, upgrade_cnt))) {
-        LOG_WARN("fail to execute upgrade virtual table by tenant", KR(tmp_ret), K(*tenant_id));
+      if (OB_TMP_FAIL(ObAllTenantInfoProxy::get_tenant_role(GCTX.sql_proxy_, *tenant_id, tenant_role))) {
+        LOG_WARN("fail to get tenant role", KR(ret), KP(GCTX.sql_proxy_), K(*tenant_id));
+      } else if (tenant_role.is_invalid()) {
+        tmp_ret = OB_NEED_WAIT;
+        LOG_WARN("tenant role is not ready, need wait", KR(ret), K(*tenant_id), KR(tmp_ret), K(tenant_role));
+      } else if (tenant_role.is_restore()) {
+        tmp_ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("restore tenant cannot upgrade virtual schema", KR(ret), K(*tenant_id), KR(tmp_ret), K(tenant_role));
+      } else if (tenant_role.is_standby()) {
+        // skip
+      } else if (tenant_role.is_primary()) {
+        if (OB_TMP_FAIL(execute(*tenant_id, upgrade_cnt))) {
+          LOG_WARN("fail to execute upgrade virtual table by tenant", KR(ret), K(*tenant_id), KR(tmp_ret), K(tenant_role));
+        }
+      } else {
+        // Currently, clone tenant is not available, but it may be added later.
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown tenant_role", KR(ret), K(*tenant_id), KR(tmp_ret), K(tenant_role));
       }
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
