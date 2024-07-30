@@ -984,19 +984,22 @@ ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMerg
       && static_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {
     ObSSTableMetaHandle meta_handle;
     bool reuse_uncommit_row = false;
-    if (!transaction::ObTransID(static_param.tx_id_).is_valid() || !static_cast<const ObSSTable *>(table)->contain_uncommitted_row()) {
-      reuse_uncommit_row = false;
-    } else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(meta_handle))) {
-      STORAGE_LOG(ERROR, "fail to get meta", K(ret), KPC(table));
-    } else if (meta_handle.get_sstable_meta().get_tx_id_count() > 0) {
-      const int64_t tx_id = meta_handle.get_sstable_meta().get_tx_ids(0);
-      if (OB_UNLIKELY(meta_handle.get_sstable_meta().get_tx_id_count() != 1)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(ERROR, "unexpected tx id count", K(ret), KPC(table), KPC(meta_handle.meta_));
-      } else {
-        reuse_uncommit_row = tx_id == static_param.tx_id_;
-      }
-    }
+    //we only have the tx_id on sstable meta, without seq_no, the tuples in the macro block could still be abort
+    //open this flag when we support open empty macro block during reuse/rewrite processing
+
+    //if (!transaction::ObTransID(static_param.tx_id_).is_valid() || !static_cast<const ObSSTable *>(table)->contain_uncommitted_row()) {
+      //reuse_uncommit_row = false;
+    //} else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(meta_handle))) {
+      //STORAGE_LOG(ERROR, "fail to get meta", K(ret), KPC(table));
+    //} else if (meta_handle.get_sstable_meta().get_tx_id_count() > 0) {
+      //const int64_t tx_id = meta_handle.get_sstable_meta().get_tx_ids(0);
+      //if (OB_UNLIKELY(meta_handle.get_sstable_meta().get_tx_id_count() != 1)) {
+        //ret = OB_ERR_UNEXPECTED;
+        //STORAGE_LOG(ERROR, "unexpected tx id count", K(ret), KPC(table), KPC(meta_handle.meta_));
+      //} else {
+        //reuse_uncommit_row = tx_id == static_param.tx_id_;
+      //}
+    //}
     merge_iter = alloc_helper<ObPartitionMinorMacroMergeIter>(allocator_, allocator_, reuse_uncommit_row);
   } else {
     merge_iter = alloc_helper<ObPartitionMinorRowMergeIter>(allocator_, allocator_);
