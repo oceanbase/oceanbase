@@ -275,7 +275,12 @@ int ObTableApiSessPool::init(int64_t hash_bucket/* = SESS_POOL_DEFAULT_BUCKET_NU
                                      MTL_ID()))) {
       LOG_WARN("fail to init sess pool", K(ret), K(hash_bucket), K(MTL_ID()));
     } else {
-      is_inited_ = true;
+      const ObMemAttr attr(MTL_ID(), "TbSessPool");
+      if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
+        LOG_WARN("fail to init allocator", K(ret));
+      } else {
+        is_inited_ = true;
+      }
     }
   }
 
@@ -306,6 +311,8 @@ void ObTableApiSessPool::destroy()
         }
       } else if (OB_NOT_NULL(del_node)) {
         del_node->destroy();
+        allocator_.free(del_node);
+        del_node = nullptr;
       }
     }
   }
@@ -314,12 +321,14 @@ void ObTableApiSessPool::destroy()
   DLIST_FOREACH(node, retired_nodes_) {
     if (OB_NOT_NULL(node)) {
       node->destroy();
+      allocator_.free(node);
+      node = nullptr;
     }
   }
 
   retired_nodes_.clear();
   key_node_map_.destroy();
-  allocator_.reset(); // when mtl_destroy, all worker thread has beed existed, no need to lock allocator
+  allocator_.reset();
   is_inited_ = false;
   LOG_INFO("ObTableApiSessPool destroy successfully", K(MTL_ID()));
 }
@@ -403,7 +412,6 @@ int ObTableApiSessPool::evict_retired_sess()
         ObTableApiSessNode *rm_node = retired_nodes_.remove(node);
         if (OB_NOT_NULL(rm_node)) {
           rm_node->~ObTableApiSessNode();
-          ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
           allocator_.free(rm_node);
           rm_node = nullptr;
           delete_count++;
@@ -509,7 +517,6 @@ int ObTableApiSessPool::get_sess_info(ObTableApiCredential &credential, ObTableA
 int ObTableApiSessPool::create_node_safe(ObTableApiCredential &credential, ObTableApiSessNode *&node)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
   ObTableApiSessNode *tmp_node = nullptr;
   void *buf = nullptr;
 
@@ -523,6 +530,13 @@ int ObTableApiSessPool::create_node_safe(ObTableApiCredential &credential, ObTab
     } else {
       node = tmp_node;
     }
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(tmp_node)) {
+    tmp_node->~ObTableApiSessNode();
+    allocator_.free(tmp_node);
+    tmp_node = nullptr;
+    node = nullptr;
   }
 
   return ret;
@@ -541,8 +555,9 @@ int ObTableApiSessPool::create_and_add_node_safe(ObTableApiCredential &credentia
     } else {
       ret = OB_SUCCESS; // replace error code
     }
-    // this node has been set by other thread, free it
-    ObLockGuard<ObSpinLock> alloc_guard(allocator_lock_); // lock allocator_
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(node)) {
     node->~ObTableApiSessNode();
     allocator_.free(node);
     node = nullptr;
@@ -742,6 +757,7 @@ void ObTableApiSessNode::destroy()
   }
   if (OB_NOT_NULL(mem_ctx_)) {
     DESTROY_CONTEXT(mem_ctx_);
+    mem_ctx_ = nullptr;
   }
 }
 

@@ -94,6 +94,7 @@ public:
                ObTableAuditCtx *audit_ctx)
       : allocator_("ObTableAudit", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         need_audit_(false),
+        is_started_(false),
         request_string_(nullptr),
         request_string_len_(0),
         start_ts_(0),
@@ -169,12 +170,14 @@ public:
       } else if (OB_FAIL(op_.generate_stmt(table_name_, op_stmt_ptr_, op_stmt_length_, op_stmt_pos_))) {
         COMMON_LOG(WARN, "fail to generate statement", K(ret), K_(table_name),
             K_(op_stmt_length), K_(op_stmt_pos));
+      } else {
+        is_started_ = true;
       }
     }
   }
   void end_audit()
   {
-    if (!need_audit_) {
+    if (!need_audit_ || !is_started_) {
       // do nothing
     } else {
       int ret = OB_SUCCESS;
@@ -285,6 +288,7 @@ public:
 public:
   ObArenaAllocator allocator_;
   bool need_audit_;
+  bool is_started_;
   const char *request_string_;
   int64_t request_string_len_;
   common::ObWaitEventStat total_wait_desc_;

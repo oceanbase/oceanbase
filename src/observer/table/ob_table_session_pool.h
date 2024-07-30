@@ -93,7 +93,7 @@ public:
   static const int64_t SESS_UPDATE_TIME_INTERVAL = 5 * 1000 * 1000; // the update interval cannot exceed 5 seconds
 public:
   explicit ObTableApiSessPool()
-      : allocator_("TbSessPool", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      : allocator_(MTL_ID()),
         is_inited_(false),
         last_update_ts_(0)
   {}
@@ -108,14 +108,12 @@ public:
   int evict_retired_sess();
   int create_node_safe(ObTableApiCredential &credential, ObTableApiSessNode *&node);
   int move_node_to_retired_list(ObTableApiSessNode *node);
-  common::ObIAllocator& get_allocator() { return allocator_; };
 private:
   int replace_sess_node_safe(ObTableApiCredential &credential);
   int create_and_add_node_safe(ObTableApiCredential &credential);
   int get_sess_node(uint64_t key, ObTableApiSessNode *&node);
 private:
-  common::ObArenaAllocator allocator_;
-  ObSpinLock allocator_lock_; // for lock allocator_
+  common::ObFIFOAllocator allocator_;
   bool is_inited_;
   CacheKeyNodeMap key_node_map_;
   // 已经淘汰的node，等待被后台删除

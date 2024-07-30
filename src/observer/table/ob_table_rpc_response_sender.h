@@ -255,7 +255,7 @@ int ObTableRpcResponseSender<T>::response(const int cb_param)
       if (common::OB_SUCCESS != retcode
           && observer::ObTableRpcProcessorUtil::is_require_rerouting_err(retcode)) {
         require_rerouting = true;
-        RPC_OBRPC_LOG(INFO, "require rerouting", K(retcode), K(require_rerouting));
+        RPC_OBRPC_LOG(DEBUG, "require rerouting", K(retcode), K(require_rerouting));
       }
     }
 
