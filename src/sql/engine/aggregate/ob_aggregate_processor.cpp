@@ -8467,17 +8467,16 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
           LOG_WARN("fail to get real string data", K(ret), K(wkb));
         } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_alloc, wkb, srs_guard, 
                                                               srs, cur_geo, N_ST_COLLECT))) {
-          LOG_WARN("fail to create geo", K(ret), K(wkb));      // ObIWkbGeom
+          LOG_WARN("fail to create geo", K(ret), K(wkb));     // ObWkbGeo
         } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
           ret = OB_ERR_GIS_INVALID_DATA;
           LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_COLLECT);
           LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
         } else if (!is_inited) {
+          is_inited = true;
           if (OB_FAIL(ObGeometrycollection::create_collection(cur_geo->crs(), srid,
                                                               tmp_alloc, gc))) {
             LOG_WARN("fail to create geometry collection", K(ret), K(wkb));
-          } else {
-            is_inited = true;
           }
         } 
 
@@ -8502,8 +8501,6 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
                 has_other = TRUE;
                 break;
             }
-            // release cur_geo 
-            // cur_geo = NULL;
           }
         }
       }
@@ -8539,6 +8536,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
         }
       }
     }
+    tmp_alloc.clear();
   }
   return ret;
 }
@@ -8548,9 +8546,9 @@ int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
                                                    ObGeometry *&geo)
 {
   int ret = OB_SUCCESS;
+  ObGeoToTreeVisitor tree_visitor(&allocator);
   GcTreeType *&geo_coll = reinterpret_cast<GcTreeType *&>(geo);
-  ObGeoType front_type = geo_coll->front().type();
-  switch(front_type) {
+  switch(geo_coll->front().type()) {
     case ObGeoType::POINT: {
       typename GcTreeType::sub_mpt_type *res_geo = OB_NEWx(typename GcTreeType::sub_mpt_type, 
                                                            &allocator, geo->get_srid(), allocator);
@@ -8577,7 +8575,11 @@ int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
         OB_LOG(WARN, "fail to alloc memory", K(ret));
       }
       for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-        if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
+        // todo
+        if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
+          LOG_WARN("fail to convert geometry to tree", K(ret));
+        }
+        if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
           OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
         }
       }
@@ -8594,7 +8596,11 @@ int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
         OB_LOG(WARN, "fail to alloc memory", K(ret));
       }
       for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-        if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
+        // todo
+        if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
+          LOG_WARN("fail to convert geometry to tree", K(ret));
+        }
+        if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
           OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
         }
       }
@@ -8603,7 +8609,7 @@ int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
       }
       break;
     }
-    default: 
+    default: // do nothing
       break;
   }
   return ret;
