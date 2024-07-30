@@ -52,7 +52,9 @@ public:
       rowkey_exprs_(alloc),
       table_scan_opt_(),
       doc_id_idx_(-1),
-      vec_vid_idx_(-1)
+      vec_vid_idx_(-1),
+      multivalue_idx_(-1),
+      multivalue_type_(0)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -113,6 +115,8 @@ public:
   ObTableScanOption table_scan_opt_;
   int64_t doc_id_idx_;
   int64_t vec_vid_idx_;
+  int64_t multivalue_idx_;
+  int32_t multivalue_type_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
