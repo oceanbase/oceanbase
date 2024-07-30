@@ -565,7 +565,8 @@ bool ObSortOpImpl::Compare::operator()(
 
 ObSortOpImpl::ObSortOpImpl(ObMonitorNode &op_monitor_info)
   : inited_(false), local_merge_sort_(false), need_rewind_(false),
-    got_first_row_(false), sorted_(false), enable_encode_sortkey_(false), mem_context_(NULL),
+    got_first_row_(false), sorted_(false), enable_encode_sortkey_(false),
+    page_allocator_("PartSortBucket", MTL_ID(), ObCtxIds::WORK_AREA), mem_context_(NULL),
     mem_entify_guard_(mem_context_), tenant_id_(OB_INVALID_ID), sort_collations_(nullptr),
     sort_cmp_funs_(nullptr), eval_ctx_(nullptr), datum_store_(ObModIds::OB_SQL_SORT_ROW), inmem_row_size_(0), mem_check_interval_mask_(1),
     row_idx_(0), heap_iter_begin_(false), imms_heap_(NULL), ems_heap_(NULL),
@@ -573,7 +574,7 @@ ObSortOpImpl::ObSortOpImpl(ObMonitorNode &op_monitor_info)
     input_rows_(OB_INVALID_ID), input_width_(OB_INVALID_ID),
     profile_(ObSqlWorkAreaType::SORT_WORK_AREA), op_monitor_info_(op_monitor_info), sql_mem_processor_(profile_, op_monitor_info_),
     op_type_(PHY_INVALID), op_id_(UINT64_MAX), exec_ctx_(nullptr), stored_rows_(nullptr),
-    io_event_observer_(nullptr), buckets_(NULL), max_bucket_cnt_(0), part_hash_nodes_(NULL),
+    io_event_observer_(nullptr), max_bucket_cnt_(0), buckets_(NULL), part_hash_nodes_(NULL),
     max_node_cnt_(0), part_cnt_(0), topn_cnt_(INT64_MAX), outputted_rows_cnt_(0),
     is_fetch_with_ties_(false), topn_heap_(NULL), ties_array_pos_(0), ties_array_(),
     last_ties_row_(NULL), rows_(NULL), sort_exprs_(nullptr),
@@ -664,6 +665,7 @@ int ObSortOpImpl::init(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
+      page_allocator_.set_allocator(&mem_context_->get_malloc_allocator());
       quick_sort_array_.set_block_allocator(
         ModulePageAllocator(mem_context_->get_malloc_allocator(), "SortOpRows"));
       datum_store_.set_dir_id(sql_mem_processor_.get_dir_id());
@@ -802,10 +804,12 @@ void ObSortOpImpl::reset()
       stored_rows_ = NULL;
     }
     if (NULL != buckets_) {
+      buckets_->destroy();
       mem_context_->get_malloc_allocator().free(buckets_);
       buckets_ = NULL;
     }
     if (NULL != part_hash_nodes_) {
+      part_hash_nodes_->destroy();
       mem_context_->get_malloc_allocator().free(part_hash_nodes_);
       part_hash_nodes_ = NULL;
     }
@@ -824,6 +828,7 @@ void ObSortOpImpl::reset()
     }
     // can not destroy mem_entify here, the memory may hold by %iter_ or %datum_store_
   }
+  page_allocator_.set_allocator(nullptr);
   inited_ = false;
   io_event_observer_ = nullptr;
 }
@@ -1259,6 +1264,29 @@ int ObSortOpImpl::is_equal_part(const ObChunkDatumStore::StoredRow *l,
   return ret;
 }
 
+template<typename ArrayType>
+int ObSortOpImpl::prepare_bucket_array(ArrayType *&buckets, uint64_t bucket_num)
+{
+  int ret = OB_SUCCESS;
+  if (nullptr == buckets) {
+    void *buckets_buf = nullptr;
+    ObIAllocator &allocator = mem_context_->get_malloc_allocator();
+    if (OB_ISNULL(buckets_buf = allocator.alloc(sizeof(ArrayType)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret));
+    } else if (FALSE_IT(buckets = new (buckets_buf) ArrayType(page_allocator_))) {
+    } else if (OB_FAIL(buckets->init(bucket_num))) {
+      SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
+    }
+  } else {
+    buckets->reuse();
+    if (OB_FAIL(buckets->init(bucket_num))) {
+      LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
+    }
+  }
+  return ret;
+}
+
 int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRow *> &rows,
                                     const int64_t rows_begin, const int64_t rows_end)
 {
@@ -1276,46 +1304,16 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
     } else if (rows_begin < 0 || rows_end > rows.count()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(rows_begin), K(rows_end), K(rows.count()), K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (max_bucket_cnt_ < bucket_cnt) {
-      if (NULL != buckets_) {
-        allocator.free(buckets_);
-        buckets_ = NULL;
-        max_bucket_cnt_ = 0;
-      }
-      buckets_ = (PartHashNode **)allocator.alloc(sizeof(PartHashNode *) * bucket_cnt);
-      if (OB_ISNULL(buckets_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory", K(ret));
-      } else {
-        max_bucket_cnt_ = bucket_cnt;
-        MEMSET(buckets_, 0, sizeof(PartHashNode *) * bucket_cnt);
-      }
+    } else if (OB_FAIL(prepare_bucket_array<BucketArray>(buckets_, bucket_cnt))) {
+      LOG_WARN("failed to create bucket array", K(ret));
+    } else if (OB_FAIL(prepare_bucket_array<BucketNodeArray>(part_hash_nodes_, node_cnt))) {
+      LOG_WARN("failed to create bucket node array", K(ret));
     } else {
-      MEMSET(buckets_, 0, sizeof(PartHashNode *) * bucket_cnt);
+      buckets_->set_all(nullptr);
+      max_bucket_cnt_ = bucket_cnt;
+      max_node_cnt_ = node_cnt;
     }
   }
-
-  if (OB_SUCC(ret)) {
-    if (max_node_cnt_ < node_cnt) {
-      if (NULL != part_hash_nodes_) {
-        allocator.free(part_hash_nodes_);
-        part_hash_nodes_ = NULL;
-        max_node_cnt_ = 0;
-      }
-      part_hash_nodes_ = (PartHashNode *)allocator.alloc(sizeof(PartHashNode) * node_cnt);
-      if (OB_ISNULL(part_hash_nodes_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc memory", K(ret));
-      } else {
-        max_node_cnt_ = node_cnt;
-      }
-    }
-  }
-
   for (int64_t i = rows_begin; OB_SUCC(ret) && i < rows_end; ++i) {
     if (OB_ISNULL(rows.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1324,8 +1322,8 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
       int64_t hash_idx = sort_collations_->at(0).field_idx_;
       const uint64_t hash_value = rows.at(i)->cells()[hash_idx].get_uint64();
       uint64_t pos = hash_value >> shift_right; // high n bit
-      PartHashNode &insert_node = part_hash_nodes_[i - rows_begin];
-      PartHashNode *&bucket = buckets_[pos];
+      PartHashNode &insert_node = part_hash_nodes_->at(i - rows_begin);
+      PartHashNode *&bucket = buckets_->at(pos);
       insert_node.store_row_ = rows.at(i);
       PartHashNode *exist = bucket;
       bool equal = false;
@@ -1359,7 +1357,7 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
   }
   for (int64_t bucket_idx = 0; OB_SUCC(ret) && bucket_idx < bucket_cnt; ++bucket_idx) {
     int64_t bucket_part_cnt = 0;
-    PartHashNode *bucket_node = buckets_[bucket_idx];
+    PartHashNode *bucket_node = buckets_->at(bucket_idx);
     if (NULL == bucket_node) {
       continue; // no rows add here
     }
