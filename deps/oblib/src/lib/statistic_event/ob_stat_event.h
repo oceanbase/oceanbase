@@ -543,6 +543,10 @@ STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_IDLE_WAIT_TIME, "idle wait time", ObStatClassI
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_DB_TIME, "background database time", ObStatClassIds::SYS, 200012, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, "background database non-idle wait time", ObStatClassIds::SYS, 200013, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, "background database idle wait time", ObStatClassIds::SYS, 200014, false, true, true)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_ALLOC_COUNT, "diagnostic info object allocated count", ObStatClassIds::SYS, 200015, false, true, false)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_ALLOC_FAIL_COUNT, "diagnostic info object allocate failure count", ObStatClassIds::SYS, 200016, false, true, false)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_RETURN_COUNT, "diagnostic info object returned count", ObStatClassIds::SYS, 200017, false, true, false)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_RETURN_FAIL_COUNT, "diagnostic info object return failure count", ObStatClassIds::SYS, 200018, false, true, false)
 
 // wr and ash related  (2100xx)
 STAT_EVENT_ADD_DEF(WR_SNAPSHOT_ELAPSE_TIME, "wr snapshot task elapse time", ObStatClassIds::WR, 210001, false, true, true)
