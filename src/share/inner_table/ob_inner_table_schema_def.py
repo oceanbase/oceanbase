@@ -6008,6 +6008,7 @@ def_table_schema(
     ('plan_hash', 'uint', 'true'),
     ('thread_id', 'int', 'true'),
     ('stmt_type', 'int', 'true'),
+    ('tablet_id', 'int', 'true'),
   ],
 )
 
@@ -7305,6 +7306,8 @@ def_table_schema(
 # 522 : __all_pkg_type
 # 523 : __all_pkg_type_attr
 # 524 : __all_pkg_coll_type
+# 525: __wr_sql_plan
+# 526: __wr_res_mgr_sysstat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -10029,6 +10032,8 @@ def_table_schema(
   vtable_route_policy = 'distributed',
 )
 
+#11120: __all_virtual_res_mgr_sysstat
+
 ################################################################
 # INFORMATION SCHEMA
 ################################################################
@@ -12633,6 +12638,7 @@ def_table_schema(
     ('PLAN_HASH', 'uint', 'true'),
     ('THREAD_ID', 'int', 'true'),
     ('STMT_TYPE', 'int', 'true'),
+    ('TABLET_ID', 'int', 'true'),
   ],
   partition_columns = ['SVR_IP', 'SVR_PORT'],
   vtable_route_policy = 'distributed',
@@ -14603,7 +14609,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12498: __all_virtual_pkg_type_attr
 # 12499: __all_virtual_pkg_coll_type
 # 12500: __all_virtual_kv_client_info
-
+# 12501: __all_virtual_wr_sql_plan
+# 12502: __all_virtual_wr_res_mgr_sysstat
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15108,7 +15115,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15478: __all_pkg_coll_type
 # 15479: __all_pkg_coll_type
 # 15480: __all_virtual_kv_client_info
-#
+# 15481: __all_virtual_wr_sql_plan
+# 15482: __all_virtual_res_mgr_sysstat
+# 15483: __all_virtual_wr_res_mgr_sysstat
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -30813,7 +30823,9 @@ def_table_schema(
       CAST(CASE WHEN (ASH.TIME_MODEL & 256) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_READ,
       CAST(CASE WHEN (ASH.TIME_MODEL & 512) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_WRITE,
       CAST(CASE WHEN (ASH.TIME_MODEL & 1024) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
-      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_FILTER_ROWS,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_COMPILATION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 4096) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_EXECUTION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 8192) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_FILTER_ROWS,
       ASH.PROGRAM AS PROGRAM,
       ASH.MODULE AS MODULE,
       ASH.ACTION AS ACTION,
@@ -30824,8 +30836,6 @@ def_table_schema(
       ASH.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME,
       ASH.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME,
       ASH.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,
-      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_COMPILATION,
-      CAST(CASE WHEN (ASH.TIME_MODEL & 4096) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_EXECUTION,
       ASH.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,
       ASH.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
@@ -30892,7 +30902,9 @@ def_table_schema(
       CAST(CASE WHEN (ASH.TIME_MODEL & 256) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_READ,
       CAST(CASE WHEN (ASH.TIME_MODEL & 512) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_STORAGE_WRITE,
       CAST(CASE WHEN (ASH.TIME_MODEL & 1024) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_REMOTE_DAS_EXECUTION,
-      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_FILTER_ROWS,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_COMPILATION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 4096) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_EXECUTION,
+      CAST(CASE WHEN (ASH.TIME_MODEL & 8192) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_FILTER_ROWS,
       ASH.PROGRAM AS PROGRAM,
       ASH.MODULE AS MODULE,
       ASH.ACTION AS ACTION,
@@ -30903,8 +30915,6 @@ def_table_schema(
       ASH.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME,
       ASH.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME,
       ASH.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,
-      CAST(CASE WHEN (ASH.TIME_MODEL & 2048) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_COMPILATION,
-      CAST(CASE WHEN (ASH.TIME_MODEL & 4096) > 0 THEN 'Y' ELSE 'N' END AS CHAR(1)) AS IN_PLSQL_EXECUTION,
       ASH.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,
       ASH.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
@@ -35650,6 +35660,12 @@ def_table_schema(
 # 21607: GV$OB_KV_CLIENT_INFO
 # 21608: V$OB_KV_CLIENT_INFO
 # 21609: V$OB_VARIABLES_BY_SESSION
+# 21610: GV$OB_RES_MGR_SYSSTAT
+# 21611: V$OB_RES_MGR_SYSSTAT
+# 21612: DBA_WR_SQL_PLAN
+# 21613: CDB_WR_SQL_PLAN
+# 21614: DBA_WR_RES_MGR_SYSSTAT
+# 21615: CDB_WR_RES_MGR_SYSSTAT
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -53387,7 +53403,9 @@ def_table_schema(
       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 256) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_READ,
       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 512) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_STORAGE_WRITE,
       CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 1024) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_REMOTE_DAS_EXECUTION,
-      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2048) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_FILTER_ROWS,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2048) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLSQL_COMPILATION,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 4096) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLSQL_EXECUTION,
+      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 8192) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_FILTER_ROWS,
       ASH.PROGRAM AS PROGRAM,
       ASH.MODULE AS MODULE,
       ASH.ACTION AS ACTION,
@@ -53398,8 +53416,6 @@ def_table_schema(
       ASH.TM_DELTA_CPU_TIME AS TM_DELTA_CPU_TIME,
       ASH.TM_DELTA_DB_TIME AS TM_DELTA_DB_TIME,
       ASH.TOP_LEVEL_SQL_ID AS TOP_LEVEL_SQL_ID,
-      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 2048) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLSQL_COMPILATION,
-      CAST(CASE WHEN BITAND(ASH.TIME_MODEL , 4096) > 0 THEN 'Y' ELSE 'N' END  AS VARCHAR2(1)) AS IN_PLSQL_EXECUTION,
       ASH.PLSQL_ENTRY_OBJECT_ID AS PLSQL_ENTRY_OBJECT_ID,
       ASH.PLSQL_ENTRY_SUBPROGRAM_ID AS PLSQL_ENTRY_SUBPROGRAM_ID,
       ASH.PLSQL_ENTRY_SUBPROGRAM_NAME AS PLSQL_ENTRY_SUBPROGRAM_NAME,
@@ -63547,6 +63563,10 @@ left join
 # 28254: GV$OB_KV_CLIENT_INFO
 # 28255: V$OB_KV_CLIENT_INFO
 # 28256: V$OB_VARIABLES_BY_SESSION
+# 28257: GV$OB_RES_MGR_SYSSTAT
+# 28258: V$OB_RES_MGR_SYSSTAT
+# 28259: DBA_WR_SQL_PLAN
+# 28260: DBA_WR_RES_MGR_SYSSTAT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
