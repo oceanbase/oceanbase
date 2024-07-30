@@ -405,6 +405,9 @@ int ObTransCallbackMgr::append(ObITransCallback *node)
           ob_abort();
 #endif
         } else {
+          // need to push up the callback_list.0's checksum_scn
+          // to avoid it calculate checksum includes those callbacks
+          callback_list_.inc_update_checksum_scn(serial_final_scn_);
           ATOMIC_STORE(&has_branch_replayed_into_first_list_, true);
           TRANS_LOG(INFO, "replay log before serial final when reach serial final",
                     KPC(this), KPC(get_trans_ctx()), KPC(node));
