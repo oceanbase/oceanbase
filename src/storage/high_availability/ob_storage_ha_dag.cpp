@@ -488,7 +488,7 @@ ObHATabletGroupCtx::~ObHATabletGroupCtx()
 {
 }
 
-int ObHATabletGroupCtx::init(const common::ObIArray<ObTabletID> &tablet_id_array)
+int ObHATabletGroupCtx::init(const common::ObIArray<ObLogicTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -506,10 +506,10 @@ int ObHATabletGroupCtx::init(const common::ObIArray<ObTabletID> &tablet_id_array
   return ret;
 }
 
-int ObHATabletGroupCtx::get_next_tablet_id(ObTabletID &tablet_id)
+int ObHATabletGroupCtx::get_next_tablet_id(ObLogicTabletID &logic_tablet_id)
 {
   int ret = OB_SUCCESS;
-  tablet_id.reset();
+  logic_tablet_id.reset();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -522,14 +522,14 @@ int ObHATabletGroupCtx::get_next_tablet_id(ObTabletID &tablet_id)
     } else if (index_ == tablet_id_array_.count()) {
       ret = OB_ITER_END;
     } else {
-      tablet_id = tablet_id_array_.at(index_);
+      logic_tablet_id = tablet_id_array_.at(index_);
       index_++;
     }
   }
   return ret;
 }
 
-int ObHATabletGroupCtx::get_all_tablet_ids(ObIArray<ObTabletID> &tablet_id_array)
+int ObHATabletGroupCtx::get_all_tablet_ids(ObIArray<ObLogicTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
   tablet_id_array.reset();
@@ -608,7 +608,7 @@ int ObHATabletGroupMgr::get_next_tablet_group_ctx(
 }
 
 int ObHATabletGroupMgr::build_tablet_group_ctx(
-    const ObIArray<ObTabletID> &tablet_id_array)
+    const ObIArray<ObLogicTabletID> &tablet_id_array)
 {
   int ret = OB_SUCCESS;
   void *buf = nullptr;

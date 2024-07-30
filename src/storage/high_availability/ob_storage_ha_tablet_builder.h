@@ -74,8 +74,8 @@ public:
   int create_all_tablets(
       const bool need_check_tablet_limit,
       ObICopyLSViewInfoReader *reader,
-      common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
-      common::ObIArray<common::ObTabletID> &data_tablet_id_list,
+      common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
+      common::ObIArray<ObLogicTabletID> &data_tablet_id_list,
       CopyTabletSimpleInfoMap &simple_info_map);
   // Restore PENDING tablets meta. PENDING tablets will be exist at restore phase RESTORE_SYS_TABLETS,
   // RESTORE_TO_CONSISTENT_SCN, or QUICK_RESTORE. Leader gets the meta from backup, follower gets it from leader.
@@ -84,7 +84,9 @@ public:
   int update_pending_tablets_with_remote();
   int build_tablets_sstable_info();
   int create_all_tablets_with_4_1_rpc(
-      CopyTabletSimpleInfoMap &simple_info_map);
+      CopyTabletSimpleInfoMap &simple_info_map,
+      common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
+      common::ObIArray<ObLogicTabletID> &data_tablet_id_list);
 private:
   int get_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
   int get_tablet_info_restore_reader_(ObICopyTabletInfoReader *&reader);
