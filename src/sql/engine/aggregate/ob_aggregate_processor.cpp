@@ -44,6 +44,8 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_utils.h"
+// #include "lib/geo/ob_geo_func_utils.h"
+
 
 namespace oceanbase
 {
@@ -8465,7 +8467,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
           LOG_WARN("fail to get real string data", K(ret), K(wkb));
         } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_alloc, wkb, srs_guard, 
                                                               srs, cur_geo, N_ST_COLLECT))) {
-          LOG_WARN("fail to create geo", K(ret), K(wkb));
+          LOG_WARN("fail to create geo", K(ret), K(wkb));      // ObIWkbGeom
         } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
           ret = OB_ERR_GIS_INVALID_DATA;
           LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_COLLECT);
@@ -8485,6 +8487,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
             LOG_WARN("geometry in collection must in the same SRS", K(ret));
             break;
           } else {
+            gc->push_back(*cur_geo);
             switch (cur_geo->type()) {
               case common::ObGeoType::POINT:
                 has_pt = TRUE;
@@ -8499,7 +8502,6 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
                 has_other = TRUE;
                 break;
             }
-            gc->push_back(*cur_geo);
             // release cur_geo 
             // cur_geo = NULL;
           }
@@ -8514,38 +8516,96 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
         concat_result.set_null();
       } else {
         ObString res_wkb;
-        ObGeometry* narrow_gc = gc;
-        if (!has_other && !(has_pt & has_ls & has_py) && (has_pt ^ has_ls ^ has_py)
-            && OB_FAIL(narrow_st_collect_result(tmp_alloc, gc, narrow_gc))) { 
-          LOG_WARN("fail to get narrowest multigeometry", K(ret));
-        } else if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(narrow_gc, *aggr_info.expr_, 
-                                                      ctx, srs, res_wkb))) {
+        ObGeometry* narrow_gc = static_cast<ObGeometry *>(gc);
+        if (!has_other && !(has_pt & has_ls & has_py) 
+            && (has_pt ^ has_ls ^ has_py)) { 
+          if (narrow_gc->crs() == ObGeoCRS::Geographic) {
+            ret = narrow_st_collect_result<ObGeographGeometrycollection>(
+                      tmp_alloc, narrow_gc);
+          } else {
+            ret = narrow_st_collect_result<ObCartesianGeometrycollection>(
+                      tmp_alloc, narrow_gc);
+          }
+          if (OB_FAIL(ret)) {
+            LOG_WARN("fail to narrow_st_collect_result", K(ret));
+          }
+        }
+        
+        if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*narrow_gc, *aggr_info.expr_, 
+                                               ctx, srs, res_wkb))) {
           LOG_WARN("failed to write geometry to wkb", K(ret));
         } else {
           concat_result.set_string(res_wkb);
         }
-
-        // release narrow_gc
-        // narrow_gc = NULL;
       }
-    }
-
-    if (gc != NULL){
-      // release gc
     }
   }
   return ret;
 }
 
+template<typename GcTreeType>
 int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
-                                                   const ObGeometry *&source_gc,
-                                                   ObGeometry *&narrow_gc)
+                                                   ObGeometry *&geo)
 {
   int ret = OB_SUCCESS;
-  narrow_gc = NULL;
-
-  // 分为geom和geog两类，分别调用split
-
+  GcTreeType *&geo_coll = reinterpret_cast<GcTreeType *&>(geo);
+  ObGeoType front_type = geo_coll->front().type();
+  switch(front_type) {
+    case ObGeoType::POINT: {
+      typename GcTreeType::sub_mpt_type *res_geo = OB_NEWx(typename GcTreeType::sub_mpt_type, 
+                                                           &allocator, geo->get_srid(), allocator);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "fail to alloc memory", K(ret));
+      }
+      for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+        typename GcTreeType::sub_pt_type &geo_point = reinterpret_cast<typename GcTreeType::sub_pt_type &>((*geo_coll)[i]);
+        if (OB_FAIL(res_geo->push_back(geo_point))) {
+          OB_LOG(WARN, "failed to add point to multipoint", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    case ObGeoType::LINESTRING: {
+      typename GcTreeType::sub_ml_type *res_geo = OB_NEWx(typename GcTreeType::sub_ml_type, 
+                                                          &allocator, geo->get_srid(), allocator);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "fail to alloc memory", K(ret));
+      }
+      for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+        if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
+          OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    case ObGeoType::POLYGON: {
+      typename GcTreeType::sub_mp_type *res_geo = OB_NEWx(typename GcTreeType::sub_mp_type, 
+                                                          &allocator, geo->get_srid(), allocator);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "fail to alloc memory", K(ret));
+      }
+      for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+        if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
+          OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    default: 
+      break;
+  }
   return ret;
 }
 
