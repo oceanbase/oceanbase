@@ -233,6 +233,7 @@ int ObSyncPlanDriver::response_result(ObMySQLResultSet &result)
           ok_param.affected_rows_ = curr_affected_row;
           ok_param.is_partition_hit_ = session_.partition_hit().get_bool();
           ok_param.has_more_result_ = !result.is_cursor_end();
+          ok_param.lii_ = result.get_last_insert_id_to_client();
           process_ok = true;
           if (OB_FAIL(sender_.send_ok_packet(session_, ok_param))) {
             LOG_WARN("send ok packet failed", K(ret), K(ok_param));
