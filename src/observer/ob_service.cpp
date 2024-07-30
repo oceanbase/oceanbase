@@ -1303,7 +1303,7 @@ int ObService::switch_schema(
     obrpc::ObSwitchSchemaResult &result)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("start to switch schema", K(arg));
+  FLOG_INFO("start to switch schema", K(arg));
   const ObRefreshSchemaInfo &schema_info = arg.schema_info_;
   const int64_t schema_version = schema_info.get_schema_version();
   const uint64_t tenant_id = schema_info.get_tenant_id();
@@ -1373,7 +1373,7 @@ int ObService::switch_schema(
       }
     }
   }
-  LOG_INFO("switch schema", K(ret), K(schema_info));
+  FLOG_INFO("switch schema", KR(ret), K(schema_info));
   //SERVER_EVENT_ADD("schema", "switch_schema", K(ret), K(schema_info));
   result.set_ret(ret);
   return ret;

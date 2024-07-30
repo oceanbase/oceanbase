@@ -30183,7 +30183,7 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
     }
   }
   LOG_INFO("notify switch schema finished", KR(ret),
-      K(schema_version), K(schema_info), K(arg), K(addrs));
+      K(schema_version), K(schema_info), K(arg), K(addrs), K(server_list));
   return ret;
 }
 
