@@ -250,6 +250,10 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
       notify_tablet_end(context_id, notify_tablet_id, tablet_ids.count(), notify_idx);
     }
   }
+  if (OB_FAIL(ret) && OB_EAGAIN == ret) {
+    LOG_WARN("replace eagain into error unexpected, px not allow eagain", K(ret));
+    ret = OB_TIMEOUT;
+  }
   return ret;
 }
 
