@@ -128,10 +128,6 @@ static int ob_mb_wc_cp932(const ObCharsetInfo *cs __attribute__((unused)), ob_wc
   return 2;
 }
 
-static inline void OB_PUT_MB2(unsigned char *s, uint16_t code) {
-  s[0] = code >> 8;
-  s[1] = code & 0xFF;
-}
 
 static int ob_wc_mb_cp932(const ObCharsetInfo *cs  __attribute__((unused)), ob_wc_t wc,
                           uint8_t *s, uint8_t *e) {
@@ -160,8 +156,8 @@ static int ob_wc_mb_cp932(const ObCharsetInfo *cs  __attribute__((unused)), ob_w
   }
 
   if (s + 2 > e) return OB_CS_TOOSMALL2;
-
-  OB_PUT_MB2(s, code); /* JIS-X-0208(MS) */
+  s[0] = code >> 8;
+  s[1] = code & 0xFF;/* JIS-X-0208(MS) */
   return 2;
 }
 

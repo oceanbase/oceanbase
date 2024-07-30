@@ -432,7 +432,9 @@ typedef ObConstIntMapping<0,
     CS_TYPE_EUCKR_KOREAN_CI, 1,
     CS_TYPE_EUCKR_BIN, 1,
     CS_TYPE_EUCJPMS_JAPANESE_CI, 1,
-    CS_TYPE_EUCJPMS_BIN, 1> SupportedCollections;
+    CS_TYPE_EUCJPMS_BIN, 1,
+    CS_TYPE_CP932_BIN, 1,
+    CS_TYPE_CP932_JAPANESE_CI, 1> SupportedCollections;
 
 // bool is_calc_with_end_space(ObObjType type1, ObObjType type2,
 //                            bool is_oracle_mode,

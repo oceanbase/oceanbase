@@ -482,6 +482,8 @@ extern ObCharsetInfo ob_charset_euckr_korean_ci;
 extern ObCharsetInfo ob_charset_euckr_bin;
 extern ObCharsetInfo ob_charset_eucjpms_bin;
 extern ObCharsetInfo ob_charset_eucjpms_japanese_ci;
+extern ObCharsetInfo ob_charset_cp932_japanese_ci;
+extern ObCharsetInfo ob_charset_cp932_bin;
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;
 extern ObCharsetHandler ob_charset_utf16_handler;
