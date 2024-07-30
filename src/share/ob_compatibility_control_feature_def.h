@@ -29,4 +29,8 @@ DEF_COMPAT_CONTROL_FEATURE(PROJECT_NULL,
 DEF_COMPAT_CONTROL_FEATURE(VAR_NAME_LENGTH,
     "MySQL will limit the length of user-defined variable names to within 64 characters",
     CLUSTER_VERSION_4_2_3_0)
+
+DEF_COMPAT_CONTROL_FEATURE(TRIGGER_CHECK_CONST_VARIABLE_ASSIGN,
+    "OB in version 4_2_1 trigger execution no longer checks const variables cannot assign values, fixed in version 4_2_5",
+    CLUSTER_VERSION_4_2_5_0)
 #endif

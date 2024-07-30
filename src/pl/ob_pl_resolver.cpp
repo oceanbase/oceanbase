@@ -12691,6 +12691,8 @@ int ObPLResolver::check_local_variable_read_only(
   int ret = OB_SUCCESS;
   const ObPLVar *var = NULL;
   const ObPLSymbolTable *symbol_table = NULL;
+  uint64_t compat_version = 0;
+  bool check_trigger_const_var_assign = false;
   CK (OB_NOT_NULL(symbol_table = ns.get_symbol_table()));
   OV (OB_NOT_NULL(var = symbol_table->get_symbol(var_idx)), OB_ERR_UNEXPECTED, K(var_idx));
   if (OB_SUCC(ret)) {
@@ -12753,6 +12755,16 @@ int ObPLResolver::check_local_variable_read_only(
             } else if (0 == trg_info->get_ref_old_name().case_compare(tmp)) {
               ret = OB_ERR_TRIGGER_CANT_CHANGE_OLD_ROW;
               LOG_WARN("can not change OLD row in trigger", K(var->get_name()), K(ret));
+            }
+          } else {
+            if (OB_FAIL(resolve_ctx_.session_info_.get_compatibility_version(compat_version))) {
+              LOG_WARN("failed to get compatibility version", K(ret));
+            } else if (OB_FAIL(ObCompatControl::check_feature_enable(compat_version,
+                       ObCompatFeatureType::TRIGGER_CHECK_CONST_VARIABLE_ASSIGN, check_trigger_const_var_assign))) {
+              LOG_WARN("failed to check feature enable", K(ret));
+            } else if (check_trigger_const_var_assign) {
+              ret = OB_ERR_VARIABLE_IS_READONLY;
+              LOG_WARN("variable is read only", K(ret), K(var_idx), KPC(var));
             }
           }
         } else {
