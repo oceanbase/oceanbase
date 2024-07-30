@@ -699,6 +699,8 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
             ret = OB_SUCCESS;
           } else {
             conn->tenant_id_ = tenant_id;
+            conn->mysql_pkt_context_.set_tenant_id(tenant_id);
+            conn->proto20_pkt_context_.set_tenant_id(tenant_id);
           }
         }
 
