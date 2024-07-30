@@ -407,12 +407,14 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
-        LOG_WARN("fail to fill column checksum for empty major", K(ret), K(res.data_column_checksums_));
-      } else if (OB_UNLIKELY(column_checksums_.count() != column_count)) {
-        // we have corrected the col_default_checksum_array_ in prepare_index_data_desc
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected column checksums", K(ret), K(column_count), KPC(this));
+      } else if (!is_incremental_direct_load(ddl_param.direct_load_type_)) {
+        if (OB_FAIL(column_checksums_.assign(res.data_column_checksums_))) {
+          LOG_WARN("fail to fill column checksum for empty major", K(ret), K(res.data_column_checksums_));
+        } else if (OB_UNLIKELY(column_checksums_.count() != column_count)) {
+          // we have corrected the col_default_checksum_array_ in prepare_index_data_desc
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected column checksums", K(ret), K(column_count), KPC(this));
+        }
       }
     }
   }
