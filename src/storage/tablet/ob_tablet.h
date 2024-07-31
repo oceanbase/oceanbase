@@ -554,7 +554,7 @@ private:
   int update_meta_last_persisted_committed_tablet_status_from_sstable(
       const ObUpdateTableStoreParam &param,
       const ObTabletCreateDeleteMdsUserData &last_tablet_status);
-  int update_tablet_status_from_sstable();
+  int update_tablet_status_from_sstable(const bool expect_persist_status);
   int partial_deserialize(
       common::ObArenaAllocator &allocator,
       const char *buf,

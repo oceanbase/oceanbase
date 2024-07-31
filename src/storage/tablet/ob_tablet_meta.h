@@ -182,7 +182,7 @@ public:
   share::SCN mds_checkpoint_scn_;
   ObTabletTransferInfo transfer_info_; // alignment: 8B, size: 32B
   compaction::ObExtraMediumInfo extra_medium_info_;
-  ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_; // redundant data for tablet status
+  ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_; // quick access for tablet status in sstables
   ObTabletSpaceUsage space_usage_; // calculated by tablet persist, ObMigrationTabletParam doesn't need it
   int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
@@ -303,7 +303,12 @@ public:
   ObStorageSchema storage_schema_; // not valid for empty shell
   compaction::ObMediumCompactionInfoList medium_info_list_; // not valid for empty shell
   compaction::ObExtraMediumInfo extra_medium_info_;
-  ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_; // redundant data for tablet status
+  // Record source tablet last_persisted_committed_tablet_status_ for:
+  // 1. create migration shell tablet in case there's no valid status to get_tablet
+  // 2. create transfer shell tablet for mds table data in case there's no valid status to get_tablet
+  // In other scenes, latest status on destination tablet meta should be get from sstables. The one
+  // on param has no usage.
+  ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_;
   ObTabletTableStoreFlag table_store_flag_;
   share::SCN ddl_start_scn_;
   int64_t ddl_snapshot_version_;
