@@ -789,8 +789,6 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
   bool skip_calc = false;
   upper_trans_version.set_max();
 
-  STORAGE_LOG(DEBUG, "start get upper trans version", K(get_ls_id()));
-
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The tx data table is not inited.", KR(ret));
@@ -802,6 +800,8 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
       STORAGE_LOG(WARN, "update cache failed.", KR(ret));
     }
   }
+
+  STORAGE_LOG(TRACE, "get upper trans version", K(get_ls_id()), K(skip_calc), K(sstable_end_scn));
 
   if (OB_FAIL(ret)) {
   } else if (skip_calc) {
@@ -976,7 +976,12 @@ bool ObTxDataTable::skip_this_sstable_end_scn_(const SCN &sstable_end_scn)
     STORAGE_LOG(WARN, "check min start in tx data failed", KR(ret), KP(this), K(sstable_end_scn));
   }
 
-  if (!need_skip) {
+  const int64_t CALC_FAIL_WARN_THREASHOLD = 30LL * 60LL * 1000LL* 1000LL; // 30 minutes
+  bool need_print_log = (!need_skip)
+                        || (TC_REACH_TIME_INTERVAL(5LL * 1000LL * 1000LL/* 5 seconds */)
+                           && (ObClockGenerator::getClock() - sstable_end_scn.convert_to_ts()) > CALC_FAIL_WARN_THREASHOLD);
+
+  if (need_print_log) {
     STORAGE_LOG(INFO,
                 "do calculate upper trans version.",
                 K(need_skip),
@@ -1074,6 +1079,9 @@ int ObTxDataTable::update_cache_if_needed_(bool &skip_calc)
 
     if (nullptr == table) {
       skip_calc = true;
+      if (REACH_TIME_INTERVAL(10LL * 1000LL * 1000LL /* 10 seconds */)) {
+        STORAGE_LOG(INFO, "empty tx data sstable", K(ls_id_));
+      }
     } else if (!calc_upper_trans_version_cache_.is_inited_ ||
                calc_upper_trans_version_cache_.cache_version_ < table->get_end_scn()) {
       ret = update_calc_upper_trans_version_cache_(table);
@@ -1093,7 +1101,7 @@ int ObTxDataTable::update_cache_if_needed_(bool &skip_calc)
 int ObTxDataTable::update_calc_upper_trans_version_cache_(ObITable *table)
 {
   int ret = OB_SUCCESS;
-  STORAGE_LOG(DEBUG, "update calc upper trans version cache once.");
+  STORAGE_LOG(TRACE, "update calc upper trans version cache once.");
   ObTableIterParam iter_param = read_schema_.iter_param_;
   ObTabletHandle tablet_handle;
 

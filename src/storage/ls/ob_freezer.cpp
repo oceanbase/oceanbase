@@ -639,9 +639,9 @@ void ObFreezer::try_freeze_tx_data_()
   do {
     if (OB_FAIL(ls_->get_tx_table()->self_freeze_task())) {
       if (OB_EAGAIN == ret) {
-        // sleep and retry
+        // sleep 100ms and retry
         retry_times++;
-        usleep(100);
+        usleep(100 * 1000);
       } else {
         STORAGE_LOG(WARN, "freeze tx data table failed", KR(ret), K(get_ls_id()));
       }

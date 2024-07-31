@@ -30,7 +30,8 @@ int ObGCUpperTransHelper::try_get_sstable_upper_trans_version(
   if (INT64_MAX == sstable.get_upper_trans_version()) {
     int64_t max_trans_version = INT64_MAX;
     SCN tmp_scn = SCN::max_scn();
-    if (OB_FAIL(ls.get_upper_trans_version_before_given_scn(sstable.get_end_scn(), tmp_scn))) {
+    const SCN end_scn = sstable.get_end_scn();
+    if (OB_FAIL(ls.get_upper_trans_version_before_given_scn(end_scn, tmp_scn))) {
       LOG_WARN("failed to get upper trans version before given log ts", K(ret), K(sstable));
     } else if (FALSE_IT(max_trans_version = tmp_scn.get_val_for_tx())) {
     } else if (0 == max_trans_version) {
@@ -40,7 +41,7 @@ int ObGCUpperTransHelper::try_get_sstable_upper_trans_version(
       new_upper_trans_version = max_trans_version;
       FLOG_INFO("success to get new upper trans version", K(ret), K(ls_id), K(tablet_id), K(max_trans_version), K(sstable));
     } else {
-      LOG_TRACE("can not get upper trans version", K(ret), K(ls_id), K(tablet_id));
+      LOG_TRACE("can not get upper trans version", K(ret), K(ls_id), K(tablet_id), K(end_scn));
     }
   }
   return ret;
