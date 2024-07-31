@@ -1,3 +1,8 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: jim.wzh
+# owner group: SQL
 # This test takes long time, so only run it with the --big-test mtr-flag.
 #--source mysql_test/include/big_test.inc
 
@@ -353,29 +358,6 @@ SELECT HEX(c1) FROM t1;
 DROP TABLE t1;
 
 
-
-#
-# Bugs#15375: Unassigned multibyte codes are broken
-# into parts when converting to Unicode.
-# This query should return 0x003F0041. I.e. it should
-# scan unassigned double-byte character 0xA5FE, convert
-# it as QUESTION MARK 0x003F and then scan the next
-# character, which is a single byte character 0x41.
-#
-# select hex(convert(_eucjpms 0xA5FE41 using ucs2));
-# This one should return 0x003F0041:
-# scan unassigned three-byte character 0x8FABF8,
-# convert it as QUESTION MARK 0x003F and then scan
-# the next character, which is a single byte character 0x41.
-# select hex(convert(_eucjpms 0x8FABF841 using ucs2));
-
-
-#
-# Bug #48053 String::c_ptr has a race and/or does an invalid 
-#            memory reference
-#            (triggered by Valgrind tests)
-#  (see also ctype_eucjpms.test, ctype_cp1250.test, ctype_cp1251.test)
-#
 --error 1231
 set global LC_TIME_NAMES=convert((convert((0x63) using eucjpms)) using utf8mb3);
 

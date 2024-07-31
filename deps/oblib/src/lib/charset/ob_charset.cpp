@@ -2027,7 +2027,7 @@ ObNlsCharsetId ObCharset::charset_type_to_ora_charset_id(ObCharsetType cs_type)
     cs_id = CHARSET_TH8TISASCII_ID;
     break;
   case CHARSET_UJIS:
-    cs_id = CHARSET_UJA16SJIS_ID;
+    cs_id = CHARSET_JA16EUC_ID;
     break;
   default:
     break;
@@ -2064,7 +2064,7 @@ ObCharsetType ObCharset::ora_charset_type_to_charset_type(ObNlsCharsetId charset
     case CHARSET_TH8TISASCII_ID:
       cs_type = CHARSET_TIS620;
       break;
-    case CHARSET_UJA16SJIS_ID:
+    case CHARSET_JA16EUC_ID:
       cs_type = CHARSET_UJIS;
       break;
     default:
@@ -3728,7 +3728,7 @@ int ObCharset::get_nls_charset_id_by_charset_type(ObCharsetType charset_type)
     ret_id = ObNlsCharsetId::CHARSET_TH8TISASCII_ID;
     break;
   case CHARSET_UJIS:
-    ret_id = ObNlsCharsetId::CHARSET_UJA16SJIS_ID;
+    ret_id = ObNlsCharsetId::CHARSET_JA16EUC_ID;
   default:
     break;
   }
