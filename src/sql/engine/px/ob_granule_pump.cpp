@@ -1077,14 +1077,17 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
   ObPxTabletInfo partition_row_info;
   ObTabletIdxMap idx_map;
   bool qc_order_gi_tasks = false;
+  bool partition_random_affinitize = true;
   if (OB_ISNULL(my_session = GET_MY_SESSION(ctx)) || OB_ISNULL(ctx.get_sqc_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get my session", K(ret), K(my_session), K(ctx.get_sqc_handler()));
   } else {
     qc_order_gi_tasks = ctx.get_sqc_handler()->get_sqc_init_arg().qc_order_gi_tasks_;
+    partition_random_affinitize =
+        ctx.get_sqc_handler()->get_sqc_init_arg().sqc_.partition_random_affinitize();
   }
   int64_t cur_idx = -1;
-  ObPxAffinityByRandom affinitize_rule(qc_order_gi_tasks);
+  ObPxAffinityByRandom affinitize_rule(qc_order_gi_tasks, partition_random_affinitize);
   ARRAY_FOREACH_X(taskset.gi_task_set_, idx, cnt, OB_SUCC(ret)) {
     if (cur_idx != taskset.gi_task_set_.at(idx).idx_) {
       cur_idx = taskset.gi_task_set_.at(idx).idx_; // get all different parition key in Affinitize

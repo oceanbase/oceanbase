@@ -67,7 +67,8 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     p2p_dh_map_info_,
                     sqc_count_,
                     monitoring_info_,
-                    branch_id_base_);
+                    branch_id_base_,
+                    partition_random_affinitize_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -186,6 +187,7 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     px_detectable_ids_ = other.px_detectable_ids_;
     interrupt_by_dm_ = other.interrupt_by_dm_;
     sqc_count_ = other.sqc_count_;
+    partition_random_affinitize_ = other.partition_random_affinitize_;
   }
   access_external_table_files_.reuse();
   for (int i = 0; OB_SUCC(ret) && i < other.access_external_table_files_.count(); i++) {
