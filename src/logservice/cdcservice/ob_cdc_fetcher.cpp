@@ -1022,6 +1022,7 @@ int ObCdcFetcher::fetch_missing_logs_in_archive_(const ObLSID &ls_id,
       MemPalfBufferIterator iter;
       MemoryStorage mem_storage;
       int64_t target_idx = 0;
+      resp.set_next_miss_lsn(read_start_lsn);
       if (ObTimeUtility::current_time() > end_tstamp) {
         frt.stop("OuterTimeUp");
       } else if (OB_FAIL(calc_raw_read_size_(miss_log_array, cur_idx, MAX_READ_SIZE, read_size, target_idx))) {
