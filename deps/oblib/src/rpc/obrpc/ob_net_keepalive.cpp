@@ -339,6 +339,7 @@ void destroy_client(client *c)
     client2rs(c)->c_ = NULL;
     if (c->fd_ >= 0) {
       close(c->fd_);
+      c->fd_ = -1;
     }
   }
 }
