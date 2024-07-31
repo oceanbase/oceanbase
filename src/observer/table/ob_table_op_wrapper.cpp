@@ -195,7 +195,9 @@ int ObTableOpWrapper::process_get(ObTableCtx &tb_ctx, ObNewRow *&row)
   if (OB_FAIL(get_or_create_spec<TABLE_API_EXEC_SCAN>(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create scan spec", K(ret));
   } else if (OB_FAIL(process_get_with_spec(tb_ctx, spec, row))) {
-    LOG_WARN("fail to process get with spec", K(ret));
+    if (ret != OB_ITER_END) {
+      LOG_WARN("fail to process get with spec", K(ret));
+    }
   }
   return ret;
 }
