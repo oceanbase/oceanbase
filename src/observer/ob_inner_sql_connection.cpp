@@ -1538,7 +1538,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
       }
     }
     if (tenant_id < OB_MAX_RESERVED_TENANT_ID) {  //only print log for sys table
-      LOG_INFO("execute write sql", K(ret), K(tenant_id), K(affected_rows), K(sql));
+      LOG_INFO("execute write sql", K(ret), K(tenant_id), K(affected_rows), K(sql), K(get_session().get_sessid()));
     }
   }
 
