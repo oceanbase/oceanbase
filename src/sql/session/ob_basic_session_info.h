@@ -1246,7 +1246,11 @@ public:
   const common::ObCurTraceId::TraceId &get_last_trace_id() const { return last_trace_id_; }
   const common::ObCurTraceId::TraceId &get_current_trace_id() const { return curr_trace_id_; }
   uint64_t get_current_plan_id() const { return plan_id_; }
-  void reset_current_plan_id() { plan_id_ = 0; }
+  void reset_current_plan_id()
+  {
+    plan_id_ = 0;
+    ash_stat_.plan_id_ = 0;
+  }
   uint64_t get_current_plan_hash() const { return plan_hash_; }
   void reset_current_plan_hash() { plan_hash_ = 0; }
   uint64_t get_last_plan_id() const { return last_plan_id_; }

@@ -59,6 +59,7 @@ int ObDASBaseAccessP<pcode>::before_process()
   bkgd_ash_stat_sess_id_ = ObActiveSessionGuard::get_stat().session_id_;
   ObActiveSessionGuard::get_stat().session_id_ = das_remote_info_.session_id_;
   ObActiveSessionGuard::get_stat().plan_id_ = das_remote_info_.plan_id_;
+  ObActiveSessionGuard::get_stat().plan_hash_ = das_remote_info_.plan_hash_;
   MEMCPY(ObActiveSessionGuard::get_stat().sql_id_, das_remote_info_.sql_id_,
       min(sizeof(ObActiveSessionGuard::get_stat().sql_id_), sizeof(das_remote_info_.sql_id_)));
 

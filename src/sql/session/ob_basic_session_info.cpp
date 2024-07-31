@@ -2103,6 +2103,8 @@ int ObBasicSessionInfo::set_cur_phy_plan(ObPhysicalPlan *cur_phy_plan)
   } else {
     cur_phy_plan_ = cur_phy_plan;
     plan_id_ = cur_phy_plan->get_plan_id();
+    ash_stat_.plan_id_ = plan_id_;
+    ash_stat_.plan_hash_ = plan_hash_;
     plan_hash_ = cur_phy_plan->get_plan_hash_value();
     int64_t len = cur_phy_plan->stat_.sql_id_.length();
     MEMCPY(sql_id_, cur_phy_plan->stat_.sql_id_.ptr(), len);
