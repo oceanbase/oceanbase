@@ -421,6 +421,7 @@ constexpr int OB_OBJECT_NOT_EXIST = -9120;
 constexpr int OB_S2_REUSE_VERSION_MISMATCH = -9121;
 constexpr int OB_S2_ENTRY_NOT_EXIST = -9122;
 constexpr int OB_ALLOCATE_TMP_FILE_PAGE_FAILED = -9124;
+constexpr int OB_SS_MICRO_CACHE_DISABLED = -9125;
 constexpr int OB_ERR_XML_PARSE = -9549;
 constexpr int OB_ERR_XSLT_PARSE = -9574;
 constexpr int OB_HDFS_CONNECT_FS_ERROR = -11019;
