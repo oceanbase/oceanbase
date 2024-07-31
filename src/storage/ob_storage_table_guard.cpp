@@ -112,6 +112,11 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
     } else if (OB_FAIL(store_ctx_.ls_->get_tablet_svr()->get_read_tables(
         tablet_id,
         remain_timeout,
+        // snapshot_for_tablet retrieves the versioned tablet status. For write
+        // operations, we need to acquire the latest tablet status; otherwise,
+        // we may obtain an outdated tablet status during the transfer process.
+        share::SCN::max_scn().get_val_for_tx(),
+        // snapshot_for_tables filters the tables during get_read_tables
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
         iter,
         relative_table.allow_not_ready()))) {

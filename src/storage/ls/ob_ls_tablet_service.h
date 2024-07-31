@@ -286,7 +286,17 @@ public:
   int get_read_tables(
       const common::ObTabletID tablet_id,
       const int64_t timeout_us,
-      const int64_t snapshot_version,
+      // snapshot_version_for_tablet refers to the version provided to the
+      // multi-data source for obtaining multi-version tablet status. Generally,
+      // it is the txn's read version provided to obtain the corresponding
+      // tablet status. Sometimes(for example, during write), we also provide
+      // INT64_MAX to get the latest tablet status.
+      const int64_t snapshot_version_for_tablet,
+      // snapshot_version_for_tables refers to the version provided to the
+      // table_store to obtain the required tables (including memtables and
+      // sstables) for the caller. The function use the snapshot version to
+      // filter the unnecessary tables and confirm the OB_SNAPSHOT_DISCARDED
+      const int64_t snapshot_version_for_tables,
       ObTabletTableIterator &iter,
       const bool allow_no_ready_read = false);
   int check_allow_to_read(AllowToReadMgr::AllowToReadInfo &read_info);
