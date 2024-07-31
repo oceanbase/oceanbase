@@ -6232,6 +6232,8 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
     } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT, timestamp, true,
                                            mds_cache_.get_final_notify_array()))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(abort_log));
+    } else if (!ctx_tx_data_.is_read_only() && OB_FAIL(ctx_tx_data_.add_abort_op(timestamp))) {
+      TRANS_LOG(WARN, "add tx data abort_op failed", K(ret), KPC(this));
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else {
