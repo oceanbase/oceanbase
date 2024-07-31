@@ -117,6 +117,12 @@ int ObDirectLoadPartitionMergeTask::process()
       }
       LOG_INFO("add sstable slice end", KR(ret), K(tablet_id), K(parallel_idx_), K(affected_rows_));
     }
+    if (OB_SUCC(ret)) {
+      // finish_check里面会用到row_iter, 所以要在row_iter释放前调用
+      if (OB_FAIL(finish_check())) {
+        LOG_WARN("fail to do finish check", KR(ret));
+      }
+    }
     if (OB_NOT_NULL(row_iter)) {
       row_iter->~ObIStoreRowIterator();
       allocator_.free(row_iter);
@@ -124,9 +130,7 @@ int ObDirectLoadPartitionMergeTask::process()
     }
     if (OB_SUCC(ret)) {
       bool is_ready = false;
-      if (OB_FAIL(finish_check())) {
-        LOG_WARN("fail to do finish check", KR(ret));
-      } else if (OB_FAIL(merge_ctx_->inc_finish_count(is_ready))) {
+      if (OB_FAIL(merge_ctx_->inc_finish_count(is_ready))) {
         LOG_WARN("fail to inc finish count", KR(ret));
       } else if (is_ready) {
         if (insert_tablet_ctx_->need_rescan()) {
