@@ -6934,6 +6934,12 @@ int JoinPath::re_estimate_rows(ObIArray<JoinFilterInfo> &pushdown_join_filter_in
                                                           selectivity,
                                                           equal_sets))) {
       LOG_WARN("failed to calc join output rows", K(ret));
+    } else {
+      for (int64_t i = 0; i < join_filter_infos_.count(); i ++) {
+        if (join_filter_infos_.at(i).join_filter_selectivity_ > OB_DOUBLE_EPSINON) {
+          row_count /= join_filter_infos_.at(i).join_filter_selectivity_;
+        }
+      }
     }
   }
   return ret;
