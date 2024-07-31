@@ -49,7 +49,6 @@ private:
       new_expr_(NULL),
       equal_infos_(),
       need_add_constraint_(PRE_CALC_RESULT_NONE),
-      can_pullup_(false),
       mem_equal_(false),
       is_used_(false),
       is_complex_const_info_(false),
@@ -67,13 +66,12 @@ private:
     ObRawExpr* new_expr_;
     common::ObSEArray<ObPCParamEqualInfo, 2> equal_infos_;
     PreCalcExprExpectResult need_add_constraint_;
-    bool can_pullup_;
     bool mem_equal_; //param expr mem is const expr.
     bool is_used_;
     //record or/in predicate const exprs
     bool is_complex_const_info_;
-    common::ObSEArray<ObRawExpr*, 4> multi_const_exprs_;
-    common::ObSEArray<PreCalcExprExpectResult, 4> multi_need_add_constraints_;
+    common::ObSEArray<ObRawExpr*, 2> multi_const_exprs_;
+    common::ObSEArray<PreCalcExprExpectResult, 2> multi_need_add_constraints_;
 
     TO_STRING_KV(KPC_(column_expr),
                  KPC_(const_expr),
@@ -81,7 +79,6 @@ private:
                  K_(new_expr),
                  K_(equal_infos),
                  K_(need_add_constraint),
-                 K_(can_pullup),
                  K_(mem_equal),
                  K_(is_used),
                  K_(is_complex_const_info),
@@ -99,16 +96,21 @@ private:
     {
     }
     ~ConstInfoContext() {}
+    void reset() {
+      active_const_infos_.reset();
+      expired_const_infos_.reset();
+      extra_excluded_exprs_.reset();
+    }
 
     int add_const_infos(ObIArray<ExprConstInfo> &const_infos);
     int add_const_info(ExprConstInfo &const_info);
-    int merge_expired_const_infos(ConstInfoContext &other, bool is_null_side);
+    int merge_expired_const_infos(ConstInfoContext &other, bool can_pull_up);
     int find_exclude_expr(const ObRawExpr *expr, bool &found);
     int expire_const_infos();
 
-    common::ObSEArray<ExprConstInfo, 4> active_const_infos_;
-    common::ObSEArray<ExprConstInfo, 4> expired_const_infos_;
-    common::ObSEArray<ObRawExpr *, 4> extra_excluded_exprs_;
+    common::ObSEArray<ExprConstInfo, 2> active_const_infos_;
+    common::ObSEArray<ExprConstInfo, 2> expired_const_infos_;
+    common::ObSEArray<ObRawExpr *, 2> extra_excluded_exprs_;
     bool allow_trans_;
     const ObSharedExprChecker &shared_expr_checker_;
 
