@@ -3641,6 +3641,14 @@ do {                                                                  \
               if (OB_NOT_NULL(composite) && composite->is_collection() && OB_INVALID_ID == composite->get_id()) {
                 composite->set_id(pl_type.get_user_type_id());
               }
+            } else if (ObNullType == params->at(i).get_meta().get_type()
+                && (ObCharType == params->at(i).get_param_meta().get_type()
+                || ObNCharType == params->at(i).get_param_meta().get_type())) {
+              //check if meta_.type_ is null and param_meta is char, construct a new param store of ''
+                ObObjParam null_char_param(params->at(i));
+                const ObString v ("");
+                null_char_param.set_string(ObNullType,v);
+                get_params().at(i) = null_char_param;
             } else {
               get_params().at(i) = params->at(i);
             }
