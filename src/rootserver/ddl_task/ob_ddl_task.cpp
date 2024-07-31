@@ -1035,6 +1035,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
           "new_state", real_new_status, K_(snapshot_version), ret_code_);
       }
       task_status_ = real_new_status;
+      clear_old_status_context();
     }
 
     if (OB_CANCELED == real_ret_code) {
@@ -3409,6 +3410,10 @@ int ObDDLTask::init_ddl_task_monitor_info(const uint64_t target_table_id)
 }
 
 
+void ObDDLTask::clear_old_status_context()
+{
+  wait_trans_ctx_.reset();
+}
 
 } // end namespace rootserver
 } // end namespace oceanbase

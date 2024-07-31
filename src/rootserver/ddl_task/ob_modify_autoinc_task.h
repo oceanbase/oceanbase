@@ -84,7 +84,6 @@ private:
 private:
   static const int64_t OB_MODIFY_AUTOINC_TASK_VERSION = 1L; 
   common::TCRWLock lock_;
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
   obrpc::ObAlterTableArg alter_table_arg_;
   int64_t update_autoinc_job_ret_code_;
   int64_t update_autoinc_job_time_;

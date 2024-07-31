@@ -26,7 +26,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObDropLobTask::ObDropLobTask()
-  : ObDDLTask(DDL_DROP_LOB), wait_trans_ctx_(), root_service_(NULL), ddl_arg_()
+  : ObDDLTask(DDL_DROP_LOB), root_service_(NULL), ddl_arg_()
 {
 }
 

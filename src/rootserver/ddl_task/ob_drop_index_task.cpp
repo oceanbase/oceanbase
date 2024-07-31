@@ -26,7 +26,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObDropIndexTask::ObDropIndexTask()
-  : ObDDLTask(DDL_DROP_INDEX), wait_trans_ctx_(), drop_index_arg_()
+  : ObDDLTask(DDL_DROP_INDEX), drop_index_arg_()
 {
 }
 

@@ -470,7 +470,7 @@ public:
       parent_task_id_(0), parent_task_key_(), task_version_(0), parallelism_(0),
       allocator_(lib::ObLabel("DdlTask")), compat_mode_(lib::Worker::CompatMode::INVALID), err_code_occurence_cnt_(0),
       longops_stat_(nullptr), gmt_create_(0), stat_info_(), delay_schedule_time_(0), next_schedule_ts_(0),
-      execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0)
+      execution_id_(-1), sql_exec_addr_(), start_time_(0), data_format_version_(0), wait_trans_ctx_()
   {}
   virtual ~ObDDLTask() {}
   virtual int process() = 0;
@@ -588,6 +588,8 @@ protected:
              || MAX_ERR_TOLERANCE_CNT > ++err_code_occurence_cnt_);
   }
   int init_ddl_task_monitor_info(const uint64_t target_table_id);
+private:
+  void clear_old_status_context();
 protected:
   static const int64_t MAX_ERR_TOLERANCE_CNT = 3L; // Max torlerance count for error code.
   static const int64_t TASK_EXECUTE_TIME_THRESHOLD = 3 * 24 * 60 * 60 * 1000000L; // 3 days
@@ -628,6 +630,7 @@ protected:
   int64_t start_time_;
   int64_t data_format_version_;
   int64_t consumer_group_id_;
+  ObDDLWaitTransEndCtx wait_trans_ctx_;
 };
 
 enum ColChecksumStat

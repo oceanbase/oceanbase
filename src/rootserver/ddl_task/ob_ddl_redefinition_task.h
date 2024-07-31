@@ -117,7 +117,7 @@ class ObDDLRedefinitionTask : public ObDDLTask
 {
 public:
   explicit ObDDLRedefinitionTask(const share::ObDDLType task_type):
-    ObDDLTask(task_type), wait_trans_ctx_(), sync_tablet_autoinc_seq_ctx_(),
+    ObDDLTask(task_type), sync_tablet_autoinc_seq_ctx_(),
     build_replica_request_time_(0), complete_sstable_job_ret_code_(INT64_MAX), alter_table_arg_(),
     dependent_task_result_map_(), snapshot_held_(false), has_synced_autoincrement_(false),
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
@@ -269,7 +269,6 @@ protected:
   static const int64_t MAX_DEPEND_OBJECT_COUNT = 100L;
   static const int64_t RETRY_INTERVAL = 1 * 1000 * 1000; // 1s
   static const int64_t RETRY_LIMIT = 100;   
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
   ObSyncTabletAutoincSeqCtx sync_tablet_autoinc_seq_ctx_;
   int64_t build_replica_request_time_;
   int64_t complete_sstable_job_ret_code_;
