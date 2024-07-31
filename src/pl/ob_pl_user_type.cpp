@@ -1385,7 +1385,7 @@ int ObRecordType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64
   ObObj *member = NULL;
   int64_t init_size = ObRecordType::get_init_size(get_member_count());
   OX (record = reinterpret_cast<ObPLRecord*>(allocator.alloc(init_size)));
-  CK (OB_NOT_NULL(record));
+  OV (OB_NOT_NULL(record), OB_ALLOCATE_MEMORY_FAILED)
   OX (new (record)ObPLRecord(user_type_id_, get_member_count()));
   OX (ptr = reinterpret_cast<int64_t>(record));
   for (int64_t i = 0; OB_SUCC(ret) && i < get_member_count(); ++i) {
