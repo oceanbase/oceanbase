@@ -3110,6 +3110,16 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
                       OZ (exec_params.push_back(new_param), new_param);
                     }
                   }
+                  if (OB_SUCC(ret)) {
+                    char *tmp_ptr = NULL;
+                    int64_t tmp_len = 0;
+                    OZ (ObMPStmtExecute::store_params_value_to_str(spi_result.get_memory_ctx()->get_arena_allocator(),
+                                                                   *ctx->exec_ctx_->get_my_session(),
+                                                                   &exec_params,
+                                                                   tmp_ptr,
+                                                                   tmp_len));
+                    OX (spi_result.get_exec_params_str_ptr()->assign(tmp_ptr, tmp_len));
+                  }
                   LOG_INFO("execute dynamic sql using", K(ps_sql), K(exec_params));
                   OZ (GCTX.sql_engine_->handle_pl_execute(
                     ps_sql, *session, exec_params, *spi_result.get_result_set(), spi_result.get_sql_ctx(),
