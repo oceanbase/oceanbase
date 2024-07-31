@@ -710,6 +710,9 @@ public:
 
   int init(const ParamStore *params = NULL, bool is_anonymous = false);
   int check_routine_param_legal(ParamStore *params = NULL);
+  int check_anonymous_collection_compatible(ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast);
+  int convert_composite(ObObjParam &param, const ObPLDataType &dest_type);
+
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
   int execute();
   int final(int ret);

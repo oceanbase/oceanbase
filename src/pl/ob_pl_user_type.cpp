@@ -315,7 +315,7 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
 {
   int ret = OB_SUCCESS;
 
-  if (src.is_pl_extend()) {
+  if (src.is_pl_extend() && src.get_ext() != 0) {
     switch (src.get_meta().get_extend_type()) {
     case PL_CURSOR_TYPE: {
       ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo*>(src.get_ext());
@@ -2759,8 +2759,12 @@ int ObCollectionType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) con
     for (int64_t i = 0; OB_SUCC(ret) && i < src_table->get_count(); i++) {
       ObObj *src_table_pos = reinterpret_cast<ObObj*>(src_table->get_data()) + i;
       ObObj *dst_table_pos = reinterpret_cast<ObObj*>(table_data) + i;
-      OX (new (dst_table_pos)ObObj());
-      OZ (element_type_.convert(ctx, src_table_pos, dst_table_pos));
+      if (src_table_pos->is_invalid_type()) {
+        OX (dst_table_pos->set_type(ObMaxType));
+      } else {
+        OX (new (dst_table_pos)ObObj());
+        OZ (element_type_.convert(ctx, src_table_pos, dst_table_pos));
+      }
     }
   }
   if (OB_SUCC(ret)) {
