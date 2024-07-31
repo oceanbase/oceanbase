@@ -126,6 +126,9 @@ int ObNgramFTParser::get_next_token(
           start += ob_mbcharlen_ptr(cs, start, end);
           c_nums = NGRAM_TOKEN_SIZE - 1;
           break;
+        } else if (next >= end) {
+          ret = OB_ITER_END;
+          break;
         }
       } while (OB_SUCC(ret) && next < end);
     }
