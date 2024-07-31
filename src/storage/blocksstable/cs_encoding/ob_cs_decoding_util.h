@@ -366,7 +366,7 @@ public:
 
     CHECK_USE_HASHSET_FOR_IN_OP(filter_val_cnt, row_count);
     if (use_hash_set) {
-      common::hash::ObHashSet<ValDataType> datums_val;
+      common::hash::ObHashSet<ValDataType, common::hash::NoPthreadDefendMode> datums_val;
       if (OB_FAIL(datums_val.create(filter_val_cnt))) {
         STORAGE_LOG(WARN, "fail to create hashset", KR(ret), K(filter_val_cnt));
       }
@@ -440,7 +440,7 @@ public:
 
     CHECK_USE_HASHSET_FOR_IN_OP(filter_val_cnt, row_count);
     if (use_hash_set) {
-      common::hash::ObHashSet<uint64_t> datums_val;
+      common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> datums_val;
       if (OB_FAIL(datums_val.create(filter_val_cnt))) {
         STORAGE_LOG(WARN, "fail to create hash set", KR(ret), K(filter_val_cnt));
       }
