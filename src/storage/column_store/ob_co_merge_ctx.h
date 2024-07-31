@@ -93,7 +93,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   void destroy_merge_info_array(
       const uint32_t start_cg_idx,
       const uint32_t end_cg_idx,
-      const bool release_mem_flag = true);
+      const bool release_mem_flag);
   int check_need_schedule_minor(bool &schedule_minor) const;
   int collect_running_info(
     const uint32_t start_cg_idx,

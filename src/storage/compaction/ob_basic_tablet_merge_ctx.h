@@ -61,7 +61,8 @@ public:
       "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_),
       K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
       K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
-      K_(schema_version), KP_(schema), K_(multi_version_column_descs), K_(ls_handle), K_(snapshot_info), KP_(report), K_(is_backfill));
+      K_(schema_version), KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
+      K_(ls_handle), K_(snapshot_info), KP_(report), K_(is_backfill));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge

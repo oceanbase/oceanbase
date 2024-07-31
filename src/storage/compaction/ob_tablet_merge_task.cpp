@@ -140,7 +140,7 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
-    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), KPC(this));
+    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(merge_scn), K_(merge_version_range), K_(merge_rowid_range));
   }
   return ret;
 }
@@ -667,7 +667,7 @@ int ObTabletMergeExecuteDag::prepare_init(
       && !is_meta_major_merge(param.merge_type_) && !is_mds_minor_merge(param.merge_type_))
       || !result.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("result is invalid", K(ret), K(result));
+    LOG_WARN("merge type or result is invalid", K(ret), K(result), K(param));
   } else {
     param_ = param;
     merge_type_ = param.merge_type_;
@@ -842,7 +842,7 @@ int ObTabletMergePrepareTask::process()
   if (OB_FAIL(ret)) {
     FLOG_WARN("sstable merge failed", K(ret), KPC(ctx), "task", *(static_cast<ObITask *>(this)));
   } else {
-    FLOG_INFO("succeed to build merge ctx", "tablet_id", ctx->get_tablet_id(), K(finish_flag), KPC(ctx));
+    FLOG_INFO("succeed to build merge ctx", "tablet_id", ctx->get_tablet_id(), K(finish_flag), "ctx", *static_cast<ObBasicTabletMergeCtx *>(ctx));
   }
   return ret;
 }

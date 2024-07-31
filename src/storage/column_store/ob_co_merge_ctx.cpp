@@ -86,7 +86,7 @@ int ObCOTabletMergeCtx::schedule_minor_errsim(bool &schedule_minor) const
 bool ObCOTabletMergeCtx::is_co_dag_net_failed()
 {
   bool need_cancel = false;
-  if (DAG_NET_ERROR_COUNT_THREASHOLD == exe_stat_.period_error_count_) {
+  if (DAG_NET_ERROR_COUNT_THREASHOLD <= exe_stat_.period_error_count_) {
     if (EXE_DAG_FINISH_GROWTH_RATIO > (double)exe_stat_.period_finish_count_ / array_count_) {
       need_cancel = true;
     }
@@ -146,6 +146,7 @@ int ObCOTabletMergeCtx::init_tablet_merge_info(const bool need_check)
     buf = (void *)(static_cast<char *>(buf) + cg_count * sizeof(ObTabletMergeInfo *));
     merged_sstable_array_ = static_cast<ObITable **>(buf);
     buf = (void *)(static_cast<char *>(buf) + cg_count * sizeof(ObITable*));
+    // new alloc cg_schedule_status_array_, every cg marks CG_SCHE_STATUS_IDLE
     cg_schedule_status_array_ = static_cast<CGScheduleStatus *>(buf);
   }
   return ret;
@@ -285,10 +286,16 @@ int ObCOTabletMergeCtx::prepare_index_builder(
   if (OB_SUCC(ret)) {
     if (OB_FAIL(inner_loop_prepare_index_tree(start_cg_idx, end_cg_idx))) {
       LOG_WARN("failed to loop prepare index tree", KR(ret), KP(this), K(start_cg_idx), K(end_cg_idx));
-      // reuse_merge_info = true in retry progress, release_mem_flag should be false
-      (void) destroy_merge_info_array(start_cg_idx, end_cg_idx, !reuse_merge_info/*release_mem_flag*/);
     } else {
       LOG_INFO("success to init merge info array", K(ret), KP(this), K(start_cg_idx), K(end_cg_idx));
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(buf)) {
+    // reuse_merge_info = true in retry progress, release_mem_flag should be false
+    if (NULL != cg_merge_info_array_[start_cg_idx]) {
+      (void) destroy_merge_info_array(start_cg_idx, end_cg_idx, !reuse_merge_info/*release_mem_flag*/);
+    } else {
+      mem_ctx_.local_free(buf);
     }
   }
   return ret;
@@ -389,7 +396,7 @@ int ObCOTabletMergeCtx::create_sstables(const uint32_t start_cg_idx, const uint3
       exist_cg_tables_cnt++;
       LOG_TRACE("success to create sstable", K(ret), K(i), K(table_handle), "merged_cg_tables_count", count);
     }
-  }
+  } // for
   if (OB_FAIL(ret)) {
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(revert_pushed_table_handle(start_cg_idx, i/*right_border_cg_idx*/, exist_cg_tables_cnt))) {
@@ -508,7 +515,7 @@ int ObCOTabletMergeCtx::create_sstable(const ObSSTable *&new_sstable)
     LOG_WARN("get unexpected cg sstable", K(ret), KPC(base_co_table), K(cg_tables_handle), K(cg_schemas));
     CTX_SET_DIAGNOSE_LOCATION(*this);
   } else {
-    // only exist one co table here, emtpy or empty cg sstables
+    // only exist one co table here, empty or empty cg sstables
     new_sstable = static_cast<ObSSTable *>(base_co_table);
     LOG_DEBUG("[RowColSwitch] FinsihTask with only one co sstable", KPC(new_sstable));
   }

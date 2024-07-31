@@ -254,6 +254,7 @@ public:
   int64_t get_last_visit_child() { return last_visit_child_; }
   void set_last_visit_child(const int64_t idx) { last_visit_child_ = idx; }
   int generate_next_task();
+  virtual int64_t get_sub_task_id() const { return 0; }
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(type), K_(status), K_(dag));
 private:
@@ -465,7 +466,6 @@ public:
   }
 
   virtual int generate_next_dag(ObIDag *&next_dag) { UNUSED(next_dag); return common::OB_ITER_END; }
-  virtual int set_result(const int32_t result) { UNUSED(result); return common::OB_SUCCESS; }
   int fill_comment(char *buf, const int64_t buf_len);
 
   virtual bool is_ha_dag() const { return false; }
@@ -511,8 +511,6 @@ private:
   void clear_task_list();
   void clear_running_info();
   int check_cycle();
-  int lock() { return lock_.lock(); }
-  int unlock() { return lock_.unlock(); }
   void inc_running_task_cnt() { ++running_task_cnt_; }
   void dec_running_task_cnt() { --running_task_cnt_; }
   int inner_add_child_without_inheritance(ObIDag &child);
@@ -1477,26 +1475,26 @@ inline bool is_reserve_mode()
         worker->set_mem_ctx(&mem_ctx);                                   \
       } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L/*30s*/)) { \
         COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                          \
-          "only compaction dag can set memctx", K(worker));              \
+          "only compaction dag can set memctx", K(worker), K(lbt()));    \
       }                                                                  \
     }                                                                    \
   })
 
-#define CURRENT_MEM_CTX()                                                \
-  ({                                                                     \
-    compaction::ObCompactionMemoryContext *mem_ctx = nullptr;            \
-    share::ObTenantDagWorker *worker = share::ObTenantDagWorker::self(); \
-    if (NULL != worker) {                                                \
-      if (worker->hold_by_compaction_dag()) {                            \
-        mem_ctx = worker->get_mem_ctx();                                 \
-      } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L/*30s*/)) { \
-        COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                          \
-          "memctx only provided for compaction dag", K(worker));         \
-      }                                                                  \
-    }                                                                    \
-    mem_ctx;                                                             \
+#define CURRENT_MEM_CTX()                                                      \
+  ({                                                                           \
+    compaction::ObCompactionMemoryContext *mem_ctx = nullptr;                  \
+    share::ObTenantDagWorker *worker = share::ObTenantDagWorker::self();       \
+    if (NULL != worker) {                                                      \
+      if (worker->hold_by_compaction_dag()) {                                  \
+        mem_ctx = worker->get_mem_ctx();                                       \
+      } else if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000L /*30s*/)) {      \
+        COMMON_LOG_RET(WARN, OB_ERR_UNEXPECTED,                                \
+                       "memctx only provided for compaction dag", K(worker),   \
+                       K(lbt()));                                              \
+      }                                                                        \
+    }                                                                          \
+    mem_ctx;                                                                   \
   })
-
 
 constexpr double operator "" _percentage(unsigned long long percentage)
 {

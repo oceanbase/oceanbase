@@ -79,6 +79,7 @@ protected:
   virtual int process() override;
 private:
   int create_schedule_dag(ObCOTabletMergeCtx &ctx);
+  int schedule_minor_exec_dag(ObCOTabletMergeCtx &ctx, ObGetMergeTablesResult &result);
 private:
   bool is_inited_;
   ObCOMergeDagNet *dag_net_;
@@ -247,7 +248,7 @@ public:
     NOT_INIT = 0,
     INITED = 1,
     CTX_PREPARED,
-    PREPARE_FINISHED
+    PREPARE_FINISHED // means prepare_task OR schedule_task finish creating exec_dag
   };
 
   ObCOMergeDagNet();
@@ -291,6 +292,7 @@ public:
       const uint32_t end_cg_idx,
       const int dag_ret);
   void update_merge_status(const COMergeStatus &status) { ATOMIC_SET(&merge_status_, status); }
+  COMergeStatus get_merge_status() const { return ATOMIC_LOAD(&merge_status_); }
   int prepare_co_merge_ctx();
   int get_compat_mode();
   int swap_tablet_after_minor();
@@ -306,7 +308,7 @@ public:
     share::ObIDag *parent = nullptr,
     const bool add_scheduler_flag = true);
   INHERIT_TO_STRING_KV("ObIDagNet", ObIDagNet, K_(is_inited), K_(merge_status), K_(finish_added),
-      K_(merge_batch_size), K_(basic_param), KPC_(co_merge_ctx), KP_(finish_dag));
+      K_(merge_batch_size), K_(basic_param), KP_(finish_dag));
 private:
   static const int64_t DELAY_SCHEDULE_FINISH_DAG_CG_CNT = 150;
   static const int64_t DEFAULT_MAX_RETRY_TIMES = 2;
@@ -327,11 +329,13 @@ private:
   int inner_create_row_store_dag(
       ObIDag *parent_dag,
       const int64_t &max_cg_idx,
+      ObCOMergeBatchExeDag *&dag,
       common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array);
   int inner_create_column_store_dag(
       ObIDag *parent_dag,
       int64_t &allowed_schedule_dag_count,
       const int64_t &max_cg_idx,
+      ObCOMergeBatchExeDag *&dag,
       common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array);
   int inner_schedule_exe_dags(
       common::ObIArray<ObCOMergeBatchExeDag *> &dag_array,
@@ -385,13 +389,15 @@ int ObCOMergeDagNet::create_dag(
     } else if (OB_FAIL(dag->create_first_task())) {
       LOG_WARN("failed to create first task", K(ret), KPC(dag));
     } else if (share::ObDagType::DAG_TYPE_CO_MERGE_BATCH_EXECUTE == dag->get_type()) {
-      dag->set_max_retry_times(DEFAULT_MAX_RETRY_TIMES);
 #ifdef ERRSIM
       dag->set_max_retry_times(30);
+#else
+      dag->set_max_retry_times(DEFAULT_MAX_RETRY_TIMES);
 #endif
     }
     if (OB_SUCC(ret)) {
-      LOG_INFO("success to create dag", K(ret), K_(basic_param), KP(dag), K(add_scheduler_flag), KP(parent));
+      LOG_INFO("success to create dag", K(ret), K_(basic_param), KP(dag),
+        "dag_type", ObIDag::get_dag_type_str(dag->get_type()), K(add_scheduler_flag), KP(parent));
     }
     if (OB_FAIL(ret) || !add_scheduler_flag) {
     } else if (OB_FAIL(MTL(share::ObTenantDagScheduler*)->add_dag(dag))) {

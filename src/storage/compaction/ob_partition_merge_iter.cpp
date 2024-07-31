@@ -382,6 +382,29 @@ int ObPartitionMergeIter::get_curr_row_id(int64_t &row_id) const
   return ret;
 }
 
+int64_t ObPartitionMergeIter::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    if (is_inited_) {
+      J_KV(K_(is_inited), K_(tablet_id), K_(iter_end), K_(schema_rowkey_column_cnt), K_(schema_version), K_(merge_range));
+      J_COMMA();
+      if (OB_NOT_NULL(table_)) {
+        J_KV("table_key", table_->get_key());
+        J_COMMA();
+      }
+      J_KV(K_(iter_row_count), KPC(curr_row_), K_(iter_row_id), K_(last_macro_block_reused),
+        K_(is_rowkey_first_row_already_output), K_(is_base_iter));
+    } else {
+      J_KV(K_(is_inited));
+    }
+    J_OBJ_END();
+  }
+  return pos;
+}
+
 /*
  * ObPartitionRowMergeIter used for major merge
  */

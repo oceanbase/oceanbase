@@ -300,7 +300,7 @@ int ObSSTable::init(const ObTabletCreateSSTableParam &param, common::ObArenaAllo
       ret = OB_STATE_NOT_MATCH;
     }
     reset();
-  } else if(!lib::is_log_reduction()) {
+  } else if (!lib::is_log_reduction()) {
     FLOG_INFO("succeeded to init sstable", K(ret), KPC(this));
   }
   return ret;

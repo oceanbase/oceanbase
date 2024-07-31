@@ -55,7 +55,7 @@ public:
   virtual void update_and_analyze_progress() override;
   virtual int create_sstable(const blocksstable::ObSSTable *&new_sstable) override;
   virtual int collect_running_info() override;
-  INHERIT_TO_STRING_KV("ObBasicTabletMergeCtx", ObBasicTabletMergeCtx, K_(merged_table_handle), K_(merge_info));
+  INHERIT_TO_STRING_KV("ObBasicTabletMergeCtx", ObBasicTabletMergeCtx, K_(merge_info));
   storage::ObTableHandleV2 merged_table_handle_;
   ObTabletMergeInfo merge_info_;
 };

@@ -595,7 +595,7 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
         //TODO(COLUMN_STORE) tmp code, use specific cg sstable according to the ctx of sub merge task
       } else if (table->is_sstable() && sstable->get_data_macro_block_count() <= 0) {
         // do nothing. don't need to construct iter for empty sstable
-        FLOG_INFO("table is empty, need not create iter", K(i), KPC(sstable));
+        FLOG_INFO("table is empty, need not create iter", K(i), "sstable_key", sstable->get_key());
         continue;
       } else if (OB_ISNULL(merge_iter = alloc_merge_iter(merge_param, 0 == i, table->is_sstable() && sstable->is_small_sstable(), table))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -604,7 +604,7 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
         if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
           STORAGE_LOG(WARN, "Failed to init merge iter", K(ret));
         } else {
-          FLOG_INFO("Ignore sstable beyond the range", K(i), K(merge_param.merge_range_), KPC(table));
+          FLOG_INFO("Ignore sstable beyond the range", K(i), K(merge_param.merge_range_), "sstable_key", sstable->get_key());
           ret = OB_SUCCESS;
         }
       } else if (OB_FAIL(merge_iters_.push_back(merge_iter))) {
@@ -895,7 +895,7 @@ void ObPartitionMergeHelper::reset()
     if (OB_NOT_NULL(iter = merge_iters_.at(i))) {
       if (OB_NOT_NULL(table = iter->get_table())) {
         FLOG_INFO("partition merge iter row count", K(i), "row_count", iter->get_iter_row_count(),
-            "ghost_row_count", iter->get_ghost_row_count(), "table_key", table->get_key(), KPC(iter));
+            "ghost_row_count", iter->get_ghost_row_count(), "table_key", table->get_key());
       }
       iter->~ObPartitionMergeIter();
       iter = nullptr;

@@ -858,7 +858,7 @@ void ObBasicTabletMergeCtx::build_update_table_store_param(
   param.need_report_ = is_major_merge_type(merge_type);
   param.merge_type_ = get_inner_table_merge_type();
   param.clog_checkpoint_scn_ = clog_checkpoint_scn;
-  param.need_check_sstable_ = is_minor_merge(merge_type);
+  param.need_check_sstable_ = is_minor_merge(merge_type) || is_history_minor_merge(merge_type);
   param.allow_duplicate_sstable_ = false;
   param.need_check_transfer_seq_ = true;
   param.transfer_seq_ = get_tablet()->get_tablet_meta().transfer_info_.transfer_seq_;
@@ -1109,7 +1109,7 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     }
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info->medium_merge_reason_;
     static_param_.co_major_merge_type_ = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(medium_info->co_major_merge_type_);
-    FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC_(static_param_.schema), KPC(medium_info));
+    FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC(medium_info));
   }
 
   // always free medium info
