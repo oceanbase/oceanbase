@@ -955,10 +955,11 @@ OB_INLINE int ObMPQuery::do_process(ObSQLSessionInfo &session,
       audit_record.is_hit_plan_cache_ = result.get_is_from_plan_cache();
       audit_record.is_multi_stmt_ = session.get_capability().cap_flags_.OB_CLIENT_MULTI_STATEMENTS;
       audit_record.is_batched_multi_stmt_ = ctx_.multi_stmt_item_.is_batched_multi_stmt();
-
-      OZ (store_params_value_to_str(allocator, session, result.get_ps_params()));
-      audit_record.params_value_ = params_value_;
-      audit_record.params_value_len_ = params_value_len_;
+      if (audit_record.params_value_ == nullptr) {
+        OZ (store_params_value_to_str(allocator, session, result.get_ps_params()));
+        audit_record.params_value_ = params_value_;
+        audit_record.params_value_len_ = params_value_len_;
+      }
       audit_record.is_perf_event_closed_ = !lib::is_diagnose_info_enabled();
       audit_record.plsql_exec_time_ = session.get_plsql_exec_time();
       if (result.is_pl_stmt(result.get_stmt_type()) && OB_NOT_NULL(ObCurTraceId::get_trace_id())) {
