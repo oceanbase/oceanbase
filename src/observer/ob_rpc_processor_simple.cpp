@@ -935,6 +935,24 @@ int ObRpcCheckServerForAddingServerP::process()
   } else {}
   return ret;
 }
+ERRSIM_POINT_DEF(ERRSIM_CHECK_SERVER_MACHINE_ERROR);
+int ObRpcCheckServerMachineStatusP::process()
+{
+  int ret = OB_SUCCESS;
+  ObServerHealthStatus server_health_status;
+  if (OB_FAIL(ObHeartbeatHandler::check_disk_status(server_health_status))) {
+    LOG_WARN("fail to check disk status", KR(ret));
+  } else if (OB_FAIL(result_.init(server_health_status))) {
+    LOG_WARN("fail to init result", KR(ret), K(server_health_status));
+  }
+  if (OB_SUCC(ret) && ERRSIM_CHECK_SERVER_MACHINE_ERROR) {
+    (void) server_health_status.init(ObServerHealthStatus::DATA_DISK_STATUS_ERROR);
+    (void) result_.init(server_health_status);
+    LOG_WARN("ERRSIM_CHECK_SERVER_MACHINE_ERROR is opened", KR(ret), K(arg_), K(result_));
+  }
+  LOG_INFO("check server machine status", KR(ret), K(arg_), K(result_));
+  return ret;
+}
 
 int ObRpcCheckDeploymentModeP::process()
 {

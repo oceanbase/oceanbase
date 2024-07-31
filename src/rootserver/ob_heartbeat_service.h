@@ -21,7 +21,7 @@
 #include "share/ob_heartbeat_struct.h"
 #include "rootserver/ob_primary_ls_service.h" // ObTenantThreadHelper
 #include "rootserver/ob_rs_async_rpc_proxy.h" // ObSendHeartbeatProxy
-#include "observer/ob_heartbeat_handler.h" // ObServerHealthStatus
+#include "share/ob_heartbeat_handler.h" // ObServerHealthStatus
 namespace oceanbase
 {
 namespace common

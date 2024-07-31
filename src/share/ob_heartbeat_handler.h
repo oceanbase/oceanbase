@@ -17,11 +17,8 @@ namespace oceanbase
 {
 namespace share
 {
-  struct ObHBRequest;
-  struct ObHBResponse;
-}
-namespace observer
-{
+struct ObHBRequest;
+struct ObHBResponse;
 // currently, server health status only covers data disk status.
 struct ObServerHealthStatus
 {
@@ -63,13 +60,13 @@ public:
       const share::ObHBRequest &hb_request,
       share::ObHBResponse &hb_response);
   static bool is_rs_epoch_id_valid();
+  static int check_disk_status(ObServerHealthStatus &server_health_status);
 private:
-  static int check_disk_status_(ObServerHealthStatus &server_health_status);
   static int init_hb_response_(share::ObHBResponse &hb_response);
   static int64_t rs_epoch_id_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObHeartbeatHandler);
 };
-} // observer
+} // share
 } // oceanbase
 #endif

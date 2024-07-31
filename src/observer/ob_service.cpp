@@ -86,7 +86,7 @@
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
 #include "storage/ddl/ob_tablet_ddl_kv_mgr.h"
 #include "share/backup/ob_backup_struct.h"
-#include "observer/ob_heartbeat_handler.h"
+#include "share/ob_heartbeat_handler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/high_availability/ob_transfer_lock_utils.h"
 #include "rootserver/ob_ls_recovery_stat_handler.h"//get_all_replica_min_readable_scn

@@ -51,7 +51,7 @@ public:
   }
   void set_flags(group_flags_t flags = DEFAULT)
   {
-    if (DEFAULT == flags || INVALID == flags) {
+    if (group_flags_t::DEFAULT == flags || group_flags_t::INVALID == flags) {
       // do nothing
     } else {
       if (CRITICAL & flags) {
