@@ -281,6 +281,16 @@ int ObRemoteFetchWorker::handle_single_task_()
     if (is_fatal_error_(ret) && need_fetch_log_(id)) {
       report_error_(id, ret, cur_lsn, ObLogRestoreErrorContext::ErrorType::FETCH_LOG);
     }
+//errsim: inject restore failed error
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_RESTORE_LOG_FAILED) OB_SUCCESS;
+    if (OB_FAIL(ret) && is_fatal_error_(ret)) {
+      report_error_(id, ret, cur_lsn, ObLogRestoreErrorContext::ErrorType::FETCH_LOG);
+      LOG_WARN("inject restore failed error", K(ret));
+    }
+  }
+#endif
   }
   return ret;
 }
@@ -332,12 +342,6 @@ int ObRemoteFetchWorker::handle_fetch_log_task_(ObFetchLogTask *task)
       LOG_WARN("retire task failed", K(tmp_ret), KP(task));
     }
   }
-
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    ret = OB_E(EventTable::EN_RESTORE_LOG_FAILED) OB_SUCCESS;
-  }
-#endif
   return ret;
 }
 
