@@ -19,6 +19,7 @@
 #include "share/ob_tenant_mem_limit_getter.h"
 #include "share/rc/ob_tenant_base.h"
 #include "logservice/palf/log_reader_utils.h"
+#include "logservice/palf/palf_env_impl.h"
 
 namespace oceanbase
 {
@@ -40,6 +41,16 @@ public:
   ~TestLogCache();
   virtual void SetUp();
   virtual void TearDown();
+  static void SetUpTestCase() {
+    EXPECT_EQ(OB_SUCCESS, ObKVGlobalCache::get_instance().init(&ObTenantMemLimitGetter::get_instance(),
+                                                             DEFAULT_BUCKET_NUM,
+                                                             DEFAULT_MAX_CACHE_SIZE,
+                                                             lib::ACHUNK_SIZE,
+                                                             KV_CACHE_WASH_TIMER_INTERVAL_US));
+  }
+  static void TearDownTestCase() {
+    ObKVGlobalCache::get_instance().destroy();
+  }
 };
 
 TestLogCache::TestLogCache()
@@ -53,12 +64,7 @@ TestLogCache::~TestLogCache()
 void TestLogCache::SetUp()
 {
   // init cache
-  ObKVGlobalCache::get_instance().init(&ObTenantMemLimitGetter::get_instance(),
-                                       DEFAULT_BUCKET_NUM,
-                                       DEFAULT_MAX_CACHE_SIZE,
-                                       lib::ACHUNK_SIZE,
-                                       KV_CACHE_WASH_TIMER_INTERVAL_US);
-  OB_LOG_KV_CACHE.init(OB_LOG_KV_CACHE_NAME, 1);
+  EXPECT_EQ(OB_SUCCESS, OB_LOG_KV_CACHE.init(OB_LOG_KV_CACHE_NAME, 1));
 
   // init MTL
   ObMallocAllocator::get_instance()->create_and_add_tenant_allocator(1001);
@@ -74,7 +80,7 @@ void TestLogCache::TearDown()
 }
 
 LogStorage log_storage;
-IPalfEnvImpl *palf_env_impl;
+PalfEnvImpl palf_env_impl;
 
 TEST_F(TestLogCache, test_basic_func)
 {
@@ -83,13 +89,14 @@ TEST_F(TestLogCache, test_basic_func)
   const int64_t flashback_version = 0;
   int64_t palf_id = 1;
   LogColdCache cold_cache;
-  cold_cache.init(palf_id, palf_env_impl, &log_storage);
+  cold_cache.init(palf_id, &palf_env_impl, &log_storage);
+  cold_cache.tenant_id_ = 1001;
+  cold_cache.is_inited_ = true;
   LSN lsn(0);
   int64_t in_read_size = MAX_LOG_BODY_SIZE;
   char *buf = reinterpret_cast<char *>(ob_malloc(MAX_LOG_BUFFER_SIZE, "LOG_KV_CACHE"));
   LogIteratorInfo iterator_info;
   {
-
     int64_t out_read_size = 0;
     EXPECT_EQ(OB_ENTRY_NOT_EXIST, cold_cache.get_cache_lines_(lsn, flashback_version, in_read_size, buf, out_read_size, &iterator_info));
     ReadBuf read_buf(buf, MAX_LOG_BUFFER_SIZE);
@@ -130,7 +137,7 @@ TEST_F(TestLogCache, test_miss)
   const int64_t flashback_version = 0;
   int64_t palf_id = 1;
   LogColdCache cold_cache;
-  cold_cache.init(palf_id, palf_env_impl, &log_storage);
+  cold_cache.init(palf_id, &palf_env_impl, &log_storage);
   LogIteratorInfo iterator_info;
   // test miss when has_read_size != 0
   {
@@ -196,7 +203,8 @@ TEST_F(TestLogCache, test_flashback)
   int64_t flashback_version = 0;
   int64_t palf_id = 1;
   LogColdCache cold_cache;
-  cold_cache.init(palf_id, palf_env_impl, &log_storage);
+  cold_cache.init(palf_id, &palf_env_impl, &log_storage);
+  cold_cache.tenant_id_ = 1001;
   LSN lsn(0);
   int64_t in_read_size = MAX_LOG_BODY_SIZE;
   char *buf = reinterpret_cast<char *>(ob_malloc(MAX_LOG_BUFFER_SIZE, "LOG_KV_CACHE"));
