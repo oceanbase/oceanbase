@@ -1164,7 +1164,7 @@ int ObPhysicalPlan::set_minimal_worker_map(const common::hash::ObHashMap<ObAddr,
 int ObPhysicalPlan::assign_worker_map(ObPlanStat::AddrMap &worker_map, const common::hash::ObHashMap<ObAddr, int64_t> &c)
 {
   int ret = OB_SUCCESS;
-  ObMemAttr attr(MTL_ID(), "WorkerMap");
+  ObMemAttr attr(tenant_id_, "WorkerMap");
   if (worker_map.created()) {
     worker_map.clear();
   } else if (OB_FAIL(worker_map.create(common::hash::cal_next_prime(100), attr, attr))){
