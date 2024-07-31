@@ -556,7 +556,8 @@ private:
   int get_meta_item_list_(common::ObIArray<ObBackupProviderItem> &list);
   int prepare_macro_block_reader_(const uint64_t tenant_id,
       const common::ObIArray<ObBackupMacroBlockId> &list, ObMultiMacroBlockBackupReader *&reader);
-  int prepare_tablet_meta_reader_(const common::ObTabletID &tablet_id, const ObTabletMetaReaderType &reader_type,
+  int prepare_tablet_meta_reader_(const share::ObLSID &ls_id,
+      const common::ObTabletID &tablet_id, const ObTabletMetaReaderType &reader_type,
       storage::ObTabletHandle &tablet_handle, ObITabletMetaBackupReader *&reader);
   int get_next_macro_block_data_(ObMultiMacroBlockBackupReader *reader, blocksstable::ObBufferReader &buffer_reader,
       blocksstable::ObLogicMacroBlockId &logic_id);

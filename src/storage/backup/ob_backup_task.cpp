@@ -2016,7 +2016,8 @@ int ObPrefetchBackupInfoTask::process()
   const int64_t start_ts = ObTimeUtility::current_time();
   bool need_report_error = false;
 #ifdef ERRSIM
-  if (backup_data_type_.is_major_backup() && 1002 == param_.ls_id_.id() && 1 == param_.turn_id_ && 1 == param_.retry_id_) {
+  const bool is_right_backup_data_type = GCONF.errsim_backup_data_type == backup_data_type_.type_;
+  if (is_right_backup_data_type && GCONF.errsim_backup_ls_id == param_.ls_id_.id() && 1 == param_.turn_id_ && 1 == param_.retry_id_) {
     SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_prefetch_task");
     DEBUG_SYNC(BEFORE_BACKUP_PREFETCH_TASK);
   }
@@ -2623,7 +2624,8 @@ int ObLSBackupDataTask::process()
 
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
-    if (backup_data_type_.is_major_backup() && 1002 == param_.ls_id_.id() && 1 == param_.turn_id_ && 0 == param_.retry_id_ && 1 == task_id_) {
+    const bool is_right_backup_data_type = GCONF.errsim_backup_data_type == backup_data_type_.type_;
+    if (is_right_backup_data_type && GCONF.errsim_backup_ls_id == param_.ls_id_.id() && 1 == param_.turn_id_ && 0 == param_.retry_id_ && 1 == task_id_) {
       ret = EN_BACKUP_DATA_TASK_FAILED ? : OB_SUCCESS;
       if (OB_FAIL(ret)) {
         SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_data_task");
@@ -2891,7 +2893,7 @@ int ObLSBackupDataTask::do_backup_meta_data_()
         LOG_WARN("failed to get tablet meta info", K(ret), K(item));
       } else if (OB_FAIL(get_tablet_handle_(tablet_id, tablet_ref))) {
         LOG_WARN("failed to get tablet handle", K(ret), K_(task_id), K(tablet_id), K(item), K(i), K(item_list));
-      } else if (OB_FAIL(prepare_tablet_meta_reader_(tablet_id, reader_type, tablet_ref->tablet_handle_, reader))) {
+      } else if (OB_FAIL(prepare_tablet_meta_reader_(param_.ls_id_, tablet_id, reader_type, tablet_ref->tablet_handle_, reader))) {
         LOG_WARN("failed to prepare tablet meta reader", K(tablet_id), K(reader_type));
       } else if (OB_FAIL(reader->get_meta_data(buffer_reader))) {
         LOG_WARN("failed to get meta data", K(ret), K(tablet_id));
@@ -3190,7 +3192,8 @@ int ObLSBackupDataTask::prepare_macro_block_reader_(const uint64_t tenant_id,
   return ret;
 }
 
-int ObLSBackupDataTask::prepare_tablet_meta_reader_(const common::ObTabletID &tablet_id,
+int ObLSBackupDataTask::prepare_tablet_meta_reader_(
+    const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
     const ObTabletMetaReaderType &reader_type, storage::ObTabletHandle &tablet_handle,
     ObITabletMetaBackupReader *&reader)
 {
@@ -3202,8 +3205,8 @@ int ObLSBackupDataTask::prepare_tablet_meta_reader_(const common::ObTabletID &ta
   } else if (OB_ISNULL(tmp_reader = ObLSBackupFactory::get_tablet_meta_backup_reader(reader_type, param_.tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc iterator", K(ret), K(reader_type));
-  } else if (OB_FAIL(tmp_reader->init(tablet_id, backup_data_type_, tablet_handle))) {
-    LOG_WARN("failed to init", K(ret), K(tablet_id), K_(backup_data_type));
+  } else if (OB_FAIL(tmp_reader->init(ls_id, tablet_id, backup_data_type_, tablet_handle))) {
+    LOG_WARN("failed to init", K(ret), K(ls_id), K(tablet_id), K_(backup_data_type));
   } else {
     reader = tmp_reader;
     tmp_reader = NULL;

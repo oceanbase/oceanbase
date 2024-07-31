@@ -43,7 +43,8 @@ ObStorageHATabletsBuilderParam::ObStorageHATabletsBuilderParam()
     storage_rpc_(nullptr),
     restore_base_info_(nullptr),
     restore_action_(ObTabletRestoreAction::MAX),
-    meta_index_store_(nullptr)
+    meta_index_store_(nullptr),
+    sec_meta_index_store_(nullptr)
 {
 }
 
@@ -64,6 +65,7 @@ void ObStorageHATabletsBuilderParam::reset()
   restore_base_info_ = nullptr;
   restore_action_ = ObTabletRestoreAction::MAX;
   meta_index_store_ = nullptr;
+  sec_meta_index_store_ = nullptr;
 }
 
 bool ObStorageHATabletsBuilderParam::is_valid() const
@@ -80,7 +82,8 @@ bool ObStorageHATabletsBuilderParam::is_valid() const
     } else {
       bool_ret = OB_NOT_NULL(restore_base_info_)
          && ObTabletRestoreAction::is_valid(restore_action_)
-         && OB_NOT_NULL(meta_index_store_);
+         && OB_NOT_NULL(meta_index_store_)
+         && OB_NOT_NULL(sec_meta_index_store_);
     }
   }
   return bool_ret;
@@ -109,6 +112,7 @@ int ObStorageHATabletsBuilderParam::assign(const ObStorageHATabletsBuilderParam 
     restore_base_info_ = param.restore_base_info_;
     restore_action_ = param.restore_action_;
     meta_index_store_ = param.meta_index_store_;
+    sec_meta_index_store_ = param.sec_meta_index_store_;
   }
   return ret;
 }
@@ -768,7 +772,7 @@ int ObStorageHATabletsBuilder::get_tablets_sstable_restore_reader_(
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(restore_reader->init(param_.ls_->get_ls_id(),
         *param_.restore_base_info_, param_.restore_action_,
-        tablet_id_array, *param_.meta_index_store_))) {
+        tablet_id_array, *param_.meta_index_store_, *param_.sec_meta_index_store_))) {
       LOG_WARN("failed to init restore reader", K(ret), K(param_));
     }
   }

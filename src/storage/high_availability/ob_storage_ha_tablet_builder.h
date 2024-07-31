@@ -58,6 +58,7 @@ struct ObStorageHATabletsBuilderParam final
   const ObRestoreBaseInfo *restore_base_info_;
   ObTabletRestoreAction::ACTION restore_action_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
+  backup::ObBackupMetaIndexStoreWrapper *sec_meta_index_store_;
 
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilderParam);
 };

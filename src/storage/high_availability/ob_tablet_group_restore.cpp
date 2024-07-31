@@ -1060,7 +1060,8 @@ int ObInitialTabletGroupRestoreTask::init_ha_tablets_builder_()
   } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
       ctx_->arg_.tenant_id_, tablet_id_array, ctx_->arg_.is_leader_,
       ctx_->need_check_seq_, ctx_->ls_rebuild_seq_, ctx_->src_,
-      ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, ctx_->arg_.action_, meta_index_store_,
+      ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, ctx_->arg_.action_,
+      meta_index_store_, second_meta_index_store_,
       &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
   }
@@ -1239,7 +1240,8 @@ int ObStartTabletGroupRestoreTask::init(
     } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
         ctx_->arg_.tenant_id_, tablet_id_array, ctx_->arg_.is_leader_,
         ctx_->need_check_seq_, ctx_->ls_rebuild_seq_, ctx_->src_,
-        ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, ctx_->arg_.action_, meta_index_store_,
+        ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, ctx_->arg_.action_,
+        meta_index_store_, second_meta_index_store_,
         &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
       LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
     } else {
@@ -2540,7 +2542,7 @@ int ObTabletRestoreTask::try_update_tablet_()
       tablet_restore_ctx_->tenant_id_, tablet_id_array, tablet_restore_ctx_->is_leader_,
       need_check_seq_, ls_rebuild_seq_, src_info_,
       ls, tablet_restore_ctx_->restore_base_info_, tablet_restore_ctx_->action_,
-      tablet_restore_ctx_->second_meta_index_store_,
+      tablet_restore_ctx_->meta_index_store_, tablet_restore_ctx_->second_meta_index_store_,
       tablet_restore_ctx_->ha_table_info_mgr_, ha_tablets_builder))) {
     LOG_WARN("failed to init ha tablets builder", K(ret), KPC(tablet_restore_ctx_));
   } else {
@@ -2835,6 +2837,7 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
     const ObRestoreBaseInfo *restore_base_info,
     const ObTabletRestoreAction::ACTION &restore_action,
     backup::ObBackupMetaIndexStoreWrapper *meta_index_store,
+    backup::ObBackupMetaIndexStoreWrapper *sec_meta_index_store,
     ObStorageHATableInfoMgr *ha_table_info_mgr,
     ObStorageHATabletsBuilder &ha_tablets_builder)
 {
@@ -2863,6 +2866,7 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
     param.need_check_seq_ = need_check_seq;
     param.ls_ = ls;
     param.meta_index_store_ = meta_index_store;
+    param.sec_meta_index_store_ = sec_meta_index_store;
     param.restore_base_info_ = restore_base_info;
     param.restore_action_ = restore_action;
     param.src_info_ = src_info;

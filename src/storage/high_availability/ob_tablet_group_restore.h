@@ -475,6 +475,7 @@ struct ObTabletGroupRestoreUtils
       const ObRestoreBaseInfo *restore_base_info,
       const ObTabletRestoreAction::ACTION &restore_action,
       backup::ObBackupMetaIndexStoreWrapper *meta_index_store,
+      backup::ObBackupMetaIndexStoreWrapper *sec_meta_index_store,
       ObStorageHATableInfoMgr *ha_table_info_mgr,
       ObStorageHATabletsBuilder &ha_tablets_builder);
 };

@@ -1023,6 +1023,7 @@ int ObBackupSetTaskMgr::get_next_status_(const share::ObBackupStatus &cur_status
       break;
     }
     case ObBackupStatus::Status::BACKUP_META_FINISH: {
+      DEBUG_SYNC(BEFORE_BACKUP_MINOR);
       next_status = ObBackupStatus::Status::BACKUP_DATA_MINOR;
       break;
     }

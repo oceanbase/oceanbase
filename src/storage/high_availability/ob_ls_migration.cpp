@@ -4655,6 +4655,7 @@ int ObLSMigrationUtils::init_ha_tablets_builder(
     param.need_check_seq_ = true;
     param.ls_ = ls;
     param.meta_index_store_ = nullptr;
+    param.sec_meta_index_store_ = nullptr;
     param.need_check_seq_ = true;
     param.restore_base_info_ = nullptr;
     param.restore_action_ = ObTabletRestoreAction::RESTORE_NONE;

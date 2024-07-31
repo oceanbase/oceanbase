@@ -487,7 +487,7 @@ int ObMultiMacroBlockBackupReader::fetch_macro_block_(
 /* ObITabletMetaBackupReader */
 
 ObITabletMetaBackupReader::ObITabletMetaBackupReader()
-    : is_inited_(false), tablet_id_(), backup_data_type_(), tablet_handle_(NULL)
+    : is_inited_(false), ls_id_(), tablet_id_(), backup_data_type_(), tablet_handle_(NULL)
 {}
 
 ObITabletMetaBackupReader::~ObITabletMetaBackupReader()
@@ -501,17 +501,18 @@ ObTabletMetaBackupReader::ObTabletMetaBackupReader() : ObITabletMetaBackupReader
 ObTabletMetaBackupReader::~ObTabletMetaBackupReader()
 {}
 
-int ObTabletMetaBackupReader::init(const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type,
-    storage::ObTabletHandle &tablet_handle)
+int ObTabletMetaBackupReader::init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
+    const share::ObBackupDataType &backup_data_type, storage::ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("cannot init twice", K(ret));
-  } else if (!tablet_id.is_valid()) {
+  } else if (!ls_id.is_valid() || !tablet_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid argument", K(ret), K(tablet_id));
+    LOG_WARN("get invalid argument", K(ret), K(ls_id), K(tablet_id));
   } else {
+    ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     backup_data_type_ = backup_data_type;
     tablet_handle_ = &tablet_handle;
@@ -560,7 +561,7 @@ ObSSTableMetaBackupReader::ObSSTableMetaBackupReader()
 ObSSTableMetaBackupReader::~ObSSTableMetaBackupReader()
 {}
 
-int ObSSTableMetaBackupReader::init(const common::ObTabletID &tablet_id,
+int ObSSTableMetaBackupReader::init(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
     const share::ObBackupDataType &backup_data_type, storage::ObTabletHandle &tablet_handle)
 {
   int ret = OB_SUCCESS;
@@ -571,6 +572,7 @@ int ObSSTableMetaBackupReader::init(const common::ObTabletID &tablet_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid argument", K(ret), K(tablet_id));
   } else {
+    ls_id_ = ls_id;
     tablet_id_ = tablet_id;
     backup_data_type_ = backup_data_type;
     tablet_handle_ = &tablet_handle;
@@ -626,6 +628,7 @@ int ObSSTableMetaBackupReader::get_meta_data(blocksstable::ObBufferReader &buffe
     }
     if (OB_SUCC(ret)) {
       buffer_reader.assign(buffer_writer_.data(), buffer_writer_.length(), buffer_writer_.length());
+      LOG_INFO("backup sstable array", K_(ls_id), K_(tablet_id), K_(backup_data_type), K_(sstable_array));
     }
   }
   return ret;

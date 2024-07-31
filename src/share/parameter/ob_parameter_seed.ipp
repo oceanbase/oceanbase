@@ -1957,6 +1957,10 @@ ERRSIM_DEF_INT(errsim_backup_task_batch_size, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "the batch size backup task receive in errsim mode"
         "Range: [0,) in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_INT(errsim_backup_data_type, OB_CLUSTER_PARAMETER, "-1", "[-1,)",
+        "the backup data type that backup need inject in errsim mode"
+        "Range: [0,) in integer",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // automatically faststack
 DEF_INT(_faststack_req_queue_size_threshold, OB_CLUSTER_PARAMETER, "0", "[0,)",
         "When the size of the req_queue reaches this threshold, the obstack will be "
