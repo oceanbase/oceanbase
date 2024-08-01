@@ -48,7 +48,7 @@ const uint8_t ObMvccTransNode::F_COMMITTED = 0x4;
 const uint8_t ObMvccTransNode::F_ELR = 0x8;
 const uint8_t ObMvccTransNode::F_ABORTED = 0x10;
 const uint8_t ObMvccTransNode::F_DELAYED_CLEANOUT = 0x40;
-const uint8_t ObMvccTransNode::F_MUTEX = 0x80;
+const uint8_t ObMvccTransNode::F_INCOMPLETE_STATE = 0x80;
 
 void ObMvccTransNode::checksum(ObBatchChecksum &bc) const
 {
@@ -894,6 +894,7 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
         }
 
         res.tx_node_ = &writer_node;
+
         total_trans_node_cnt_++;
       }
       if (NULL != writer_node.prev_

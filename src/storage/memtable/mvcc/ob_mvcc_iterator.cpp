@@ -149,8 +149,18 @@ int ObMvccValueIterator::lock_for_read_inner_(const ObQueryFlag &flag,
   const bool is_elr = iter->is_elr();
   const bool is_delayed_cleanout = iter->is_delayed_cleanout();
   const SCN scn = iter->get_scn();
+  const bool is_incomplete = iter->is_incomplete();
+
+  // Opt0: data is incomplete, so we need skip
+  if (is_incomplete) {
+    // After the success of ObMvccRow::mvcc_write_, the trans_node still cannot
+    // be guaranteed to be successful. This is because our subsequent SSTable
+    // check might fail, potentially causing data that is in an incomplete state
+    // to be seen. Therefore, we use the INCOMPLETE state to prevent such data
+    // from being erroneously visible.
+    iter = iter->prev_;
   // Opt1: data is decided
-  if ((is_committed || is_aborted || is_elr)
+  } else if ((is_committed || is_aborted || (is_elr && !is_delayed_cleanout))
       // Opt2: data is not decided while we donot need cleanout
       || (!is_delayed_cleanout
           && (// Opt2.1: snapshot reads the data written by snapshot

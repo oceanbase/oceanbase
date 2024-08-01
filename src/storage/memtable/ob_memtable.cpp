@@ -3029,6 +3029,10 @@ int ObMemtable::multi_set_(
     }
   }
 
+  if (OB_SUCC(ret)) {
+    mvcc_engine_.finish_kvs(mvcc_rows);
+  }
+
   if (OB_TRANSACTION_SET_VIOLATION == ret) {
     ObTxIsolationLevel iso = ctx.mvcc_acc_ctx_.tx_desc_->get_isolation_level();
     if (ObTxIsolationLevel::SERIAL == iso || ObTxIsolationLevel::RR == iso) {
@@ -3317,6 +3321,8 @@ int ObMemtable::mvcc_write_(
     (void)mvcc_engine_.mvcc_undo(value);
     res.is_mvcc_undo_ = true;
     TRANS_LOG(WARN, "register row commit failed", K(ret));
+  } else if (nullptr == mvcc_row && res.has_insert()) {
+    (void)mvcc_engine_.finish_kv(res);
   }
 
   // cannot be serializable when transaction set violation

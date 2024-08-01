@@ -375,9 +375,41 @@ int ObMvccEngine::build_tx_node_(const ObTxNodeArg &arg,
     node->seq_no_ = arg.seq_no_;
     node->prev_ = NULL;
     node->next_ = NULL;
+
+    // After the success of ObMvccRow::mvcc_write_, the trans_node still
+    // cannot be guaranteed to be successful. This is because our subsequent
+    // SSTable check might fail, potentially causing data that is in an
+    // incomplete state to be seen. Therefore, we use the INCOMPLETE state
+    // to prevent such data from being erroneously visible.
+    if (!node->scn_.is_valid()) {
+      node->set_incomplete();
+    }
   }
 
   return ret;
+}
+
+void ObMvccEngine::finish_kv(ObMvccWriteResult& res)
+{
+  // The trans_node after ObMvccRow::mvcc_write_ is incomplete, then we need use
+  // finish_kv as the final step of ObMemtable::set. Therefore, it is safe to
+  // make the data visible.
+  if (nullptr != res.tx_node_) {
+    res.tx_node_->set_complete();
+  }
+}
+
+void ObMvccEngine::finish_kvs(ObMvccRowAndWriteResults& results)
+{
+  // The trans_node after ObMvccRow::mvcc_write_ is incomplete, then we need use
+  // finish_kv as the final step of ObMemtable::multi_set. Therefore, it is safe
+  // to make the data visible.
+  for (int64_t i = 0; i < results.count(); ++i) {
+    ObMvccWriteResult &res = results[i].write_result_;
+    if (nullptr != res.tx_node_) {
+      res.tx_node_->set_complete();
+    }
+  }
 }
 
 int ObMvccEngine::ensure_kv(const ObMemtableKey *stored_key,
