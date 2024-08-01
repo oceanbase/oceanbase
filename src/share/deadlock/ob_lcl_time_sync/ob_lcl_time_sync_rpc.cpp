@@ -14,7 +14,7 @@ extern const char * MEMORY_LABEL;
 namespace obrpc
 {
 
-uint64_t obrpc::ObDeadLockTimeSyncMessageP::ob_server_start_time = ObLCLTimeSyncThread::get_lcl_real_local_time();
+uint64_t obrpc::ObDeadLockTimeSyncMessageP::ob_server_start_time = 0;
 int ObDeadLockTimeSyncMessageP::process()
 {
   int ret = OB_SUCCESS;
@@ -30,17 +30,15 @@ int ObDeadLockTimeSyncMessageP::process()
 
 int ObDeadLockTimeSyncMessageP::process_msg(ObDeadLockTimeSyncResp &resp, const ObDeadLockTimeSyncArg &arg) {
   int ret = OB_SUCCESS;
-
-  int64_t leader_real_ts = ObLCLTimeSyncThread::get_lcl_real_local_time();
+  int64_t leader_real_ts = ObLCLTimeSyncThread::get_time_sync_thread_instance().get_lcl_real_local_time() + ObLCLTimeSyncThread::get_time_sync_thread_instance().get_lcl_local_offset();
   int64_t lcl_time_skew_rate = ObServerConfig::get_instance()._lcl_time_skew_rate;
   int64_t clock_skew_offset_for_test = 0;
   if (lcl_time_skew_rate != 0) {
-    // every 100ms the offset is clock_skew_rate ms
-    double clock_skew_rate = 1.0 * lcl_time_skew_rate / 100 * 1000;
+    double clock_skew_rate = 1.0 * lcl_time_skew_rate / (100 * 1000);
     clock_skew_offset_for_test = (leader_real_ts - ob_server_start_time) * clock_skew_rate;
     leader_real_ts += clock_skew_offset_for_test;
   }
-  DETECT_LOG(INFO, "rs leader receive time sync request", K(leader_real_ts), K(leader_real_ts), K(clock_skew_offset_for_test));
+  DETECT_LOG(INFO, "rs leader receive time sync request", K(leader_real_ts) ,K(this->get_peer()), K(clock_skew_offset_for_test));
   resp.set_leader_current_time(leader_real_ts);
   return ret;
 }

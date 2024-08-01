@@ -212,8 +212,7 @@ ObServer::ObServer()
     ,arb_gcs_(),
     arb_timer_(),
 #endif
-    wr_service_(),
-    time_sync_thread_(100)
+    wr_service_()
 {
   memset(&gctx_, 0, sizeof (gctx_));
 }
@@ -531,7 +530,7 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_WARN("failed to init wr service", K(ret));
     } else if (OB_FAIL(ObStorageHADiagService::instance().init(GCTX.sql_proxy_))) {
       LOG_WARN("init storage ha diagnose service failed", K(ret));
-    } else if (OB_FAIL(time_sync_thread_.init())){
+    } else if (OB_FAIL(share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().init())){
       LOG_WARN("lcl time sync thread init failed", K(ret));
     } else {
       GDS.set_rpc_proxy(&rs_rpc_proxy_);
@@ -843,7 +842,7 @@ void ObServer::destroy()
     FLOG_INFO("WR service destroyed");
 
     FLOG_INFO("begin to destroy time sync thread");
-    time_sync_thread_.destroy();
+    share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().destroy();
     FLOG_INFO("time sync thread destroyed");
 
     deinit_zlib_lite_compressor();
@@ -1171,7 +1170,7 @@ int ObServer::start()
                         "you may find solutions in previous error logs or seek help from official technicians.");
   }
 
-  if (OB_FAIL(time_sync_thread_.start())) {
+  if (OB_FAIL(share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().start())) {
     LOG_ERROR("lcl time sync thread start failed", KR(ret));
   }
   return ret;
@@ -1612,7 +1611,7 @@ int ObServer::stop()
     FLOG_INFO("clock generator stopped");
 
     FLOG_INFO("begin to stop time sync thread");
-    time_sync_thread_.stop();
+    share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().stop();
     FLOG_INFO("time sync thread stopped");
   }
 
@@ -1886,7 +1885,7 @@ int ObServer::wait()
     FLOG_INFO("wait storage ha diagnose success");
 
     FLOG_INFO("time sync thread wait");
-    time_sync_thread_.wait();
+    share::detector::ObLCLTimeSyncThread::get_time_sync_thread_instance().wait();
     FLOG_INFO("wait time_sync_thread success");
 
     gctx_.status_ = SS_STOPPED;
@@ -4073,10 +4072,6 @@ bool ObServer::is_arbitration_mode() const
 #endif
 
 }
-
-void ObServer::try_update_local_time_from_rs_leader_now() {
-  time_sync_thread_.try_update_local_time_from_rs_leader_now();
-};
 
 // ------------------------------- arb server end -------------------------------------------
 } // end of namespace observer

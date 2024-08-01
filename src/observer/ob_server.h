@@ -124,8 +124,6 @@ public:
   void set_stop();
   bool is_stopped();
   
-  void try_update_local_time_from_rs_leader_now();
-
 public:
   //Refer to ObPurgeCompletedMonitorInfoTask
   class ObCTASCleanUpTask: public common::ObTimerTask
@@ -488,7 +486,6 @@ private:
   // If you have tasks that need to be processed in parallel, you can use this handler,
   // but please note that this handler will be destroyed after observer startup.
   ObStartupAccelTaskHandler startup_accel_handler_;
-  share::detector::ObLCLTimeSyncThread time_sync_thread_;
 }; // end of class ObServer
 
 inline ObServer &ObServer::get_instance()

@@ -512,7 +512,7 @@ int ObLCLNode::broadcast_(const BlockList &list,
                  self_key_,
                  lclv,
                  public_label,
-                 ObLCLTimeSyncThread::get_lcl_local_time());
+                 ObLCLTimeSyncThread::get_time_sync_thread_instance().get_lcl_local_time());
     MTL(ObDeadLockDetectorMgr*)->sender_thread_.cache_msg(list.at(idx), msg);
   }
   
@@ -531,11 +531,11 @@ int ObLCLNode::process_lcl_message(const ObLCLMessage &lcl_msg)
   DETECT_TIME_GUARD(100_ms);
   update_lcl_period_if_necessary_with_lock_();
   CLICK();
-  const int64_t current_ts = ObLCLTimeSyncThread::get_lcl_local_time();
+  const int64_t current_ts = ObLCLTimeSyncThread::get_time_sync_thread_instance().get_lcl_local_time();
   if (CLICK() && !if_phase_match_(current_ts, lcl_msg)) {
     int64_t diff = abs(current_ts - lcl_msg.get_send_ts());
     if (diff > PHASE_TIME / 3) {
-      observer::ObServer::get_instance().try_update_local_time_from_rs_leader_now();
+      ObLCLTimeSyncThread::get_time_sync_thread_instance().try_update_local_time_from_rs_leader_now();
       DETECT_LOG_(WARN, "phase not match", K(diff), K(current_ts), K(*this));
     }
   } else {
@@ -866,7 +866,7 @@ void ObLCLNode::update_lcl_period_if_necessary_with_lock_()
 {
   int ret = OB_SUCCESS;
   DETECT_TIME_GUARD(10_ms);
-  int64_t current_ts = ObLCLTimeSyncThread::get_lcl_local_time();
+  int64_t current_ts = ObLCLTimeSyncThread::get_time_sync_thread_instance().get_lcl_local_time();
   int64_t new_period_ = current_ts / PERIOD;
   int64_t timeout_ts = 0;
 
