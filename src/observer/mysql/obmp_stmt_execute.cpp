@@ -2611,6 +2611,15 @@ int ObMPStmtExecute::parse_param_value(ObIAllocator &allocator,
     bool is_null = ObSMUtils::update_from_bitmap(param, bitmap, param_id);
     if (is_null) {
       LOG_DEBUG("param is null", K(param_id), K(param), K(type));
+      if (ob_is_accuracy_length_valid_tc(param.get_param_meta().get_type())) {
+        if (MYSQL_TYPE_OB_NVARCHAR2 == type ||
+            MYSQL_TYPE_OB_NCHAR == type) {
+          const_cast<ObObjMeta &>(param.get_param_meta()).set_collation_type(ncs_type);
+        } else {
+          const_cast<ObObjMeta &>(param.get_param_meta()).set_collation_type(cs_type);
+        }
+        const_cast<ObObjMeta &>(param.get_param_meta()).set_collation_level(CS_LEVEL_COERCIBLE);
+      }
     } else if (OB_UNLIKELY(MYSQL_TYPE_COMPLEX == type)) {
       if (OB_FAIL(parse_complex_param_value(allocator, charset, cs_type, ncs_type,
                                             data, tz_info, type_info,

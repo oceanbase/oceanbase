@@ -813,7 +813,9 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (ObNumberType == field.type_.get_type()) {
           field.type_.set_number(number);
         }
-        if (expr->get_result_type().is_user_defined_sql_type() ||
+        if (context->session_info_->is_varparams_sql_prepare()) {
+          // question mark expr has no valid result type in prepare stage
+        } else if (expr->get_result_type().is_user_defined_sql_type() ||
             expr->get_result_type().is_collection_sql_type() ||
             ((PC_PS_MODE == mode || PC_PL_MODE == mode) && expr->get_result_type().is_geometry() && lib::is_oracle_mode())) {//oracle gis ps protocol
           uint16_t subschema_id = expr->get_result_type().get_subschema_id();
@@ -1252,7 +1254,7 @@ int ObSql::do_real_prepare(const ObString &sql,
     LOG_WARN("There are too many parameters in the prepared statement", K(ret));
     LOG_USER_ERROR(OB_ERR_PS_TOO_MANY_PARAM);
   } else {
-    ps_status_guard.is_varparams_sql_prepare(is_from_pl, parse_result.question_mark_ctx_.count_ > 0 ? true : false);
+    ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0 ? true : false);
   }
   context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
@@ -1508,6 +1510,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
       WITH_CONTEXT(pl_prepare_result.mem_context_) {
           ObResultSet &result = *pl_prepare_result.result_set_;
           LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
+          ObPsPrepareStatusGuard ps_status_guard(sess);
           if (trimed_stmt.empty()) {
             ret = OB_ERR_EMPTY_QUERY;
             LOG_WARN("query is empty", K(ret));
@@ -1533,6 +1536,9 @@ int ObSql::handle_pl_prepare(const ObString &sql,
           }
           context.is_sensitive_ |= parse_result.contain_sensitive_data_;
 
+          if (OB_SUCC(ret) && pl_prepare_ctx.is_dynamic_sql_ && !pl_prepare_ctx.is_dbms_sql_) {
+            ps_status_guard.is_varparams_sql_prepare(parse_result.question_mark_ctx_.count_ > 0 ? true : false);
+          }
           if (OB_FAIL(ret)) {
             // do nothing
           } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
@@ -5716,7 +5722,6 @@ int ObSql::handle_text_execute(const ObStmt *basic_stmt,
     LOG_WARN("stmt is NULL", K(ret), KPC(exec_stmt), KPC(basic_stmt));
   } else {
     ObIAllocator &alloc = result.get_exec_context().get_allocator();
-    ObObjParam obj_param;
     ParamStore param_store((ObWrapperAllocator(alloc)));
     const ObRawExpr *raw_expr = NULL;
     const ObIArray<const ObRawExpr*> &raw_expr_params = exec_stmt->get_params();
@@ -5724,6 +5729,7 @@ int ObSql::handle_text_execute(const ObStmt *basic_stmt,
       LOG_WARN("reserve param store failed", K(ret), K(raw_expr_params));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr_params.count(); ++i) {
+      ObObjParam obj_param;
       if (OB_ISNULL(raw_expr = raw_expr_params.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("expr is NULL", K(ret), K(raw_expr_params));

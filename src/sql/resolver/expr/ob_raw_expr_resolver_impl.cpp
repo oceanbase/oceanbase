@@ -3041,13 +3041,10 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             }
 #endif
           } else {
-            if (ObNullType == param.get_type() &&
-                T_QUESTIONMARK == c_expr->get_expr_type() &&
-                ObDateTimeType == param.get_null_meta().get_type()) {
-              c_expr->set_meta_type(param.get_null_meta());
+            if (ObNullType == param.get_type()) {
+              c_expr->set_meta_type(param.get_param_meta());
             } else {
-              c_expr->set_meta_type(ObSQLUtils::is_oracle_empty_string(param)
-                                  ? param.get_param_meta() : param.get_meta());
+              c_expr->set_meta_type(param.get_meta());
             }
             c_expr->set_expr_obj_meta(param.get_param_meta());
             c_expr->set_accuracy(param.get_accuracy());
@@ -3061,6 +3058,11 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
               } else if (result_type.is_char() || result_type.is_nchar()) {
                 result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
               }
+            }
+            if (-1 == result_type.get_length_semantics() &&
+              ObNullType == param.get_type() &&
+              ob_is_string_tc(param.get_param_meta().get_type())) {
+              result_type.set_length_semantics(session_info->get_actual_nls_length_semantics());
             }
             c_expr->set_result_type(result_type);
           }
