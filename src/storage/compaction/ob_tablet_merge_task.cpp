@@ -1366,13 +1366,16 @@ int ObBatchFreezeTabletsTask::process()
     ObTablet *tablet = nullptr;
     const bool is_sync = true;
     const bool need_rewrite_meta = true;
+    // just try tablet freeze for one second
+    const int64_t max_retry_time_us = 1LL * 1000LL * 1000LL/* 1 second */;
 
     if (OB_UNLIKELY(!cur_pair.is_valid())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN_RET(tmp_ret, "get invalid tablet pair", K(cur_pair));
     } else if (cur_pair.schedule_merge_scn_ > weak_read_ts) {
       // no need to force freeze
-    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(cur_pair.tablet_id_, need_rewrite_meta, is_sync))) {
+    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)
+                               ->tablet_freeze(cur_pair.tablet_id_, is_sync, max_retry_time_us, need_rewrite_meta))) {
       LOG_WARN_RET(tmp_ret, "failed to force freeze tablet", K(param), K(cur_pair));
       ++fail_freeze_cnt;
     } else if (!MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {

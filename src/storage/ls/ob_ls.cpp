@@ -2057,7 +2057,7 @@ void ObLS::record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_
   (void)ls_freezer_.record_async_freeze_tablet(tablet_info);
 }
 
-int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tennat_freeze)
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tenant_freeze)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
@@ -2067,7 +2067,7 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
     ret = OB_TIMEOUT;
     LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
   } else {
-    if (is_tennat_freeze) {
+    if (is_tenant_freeze) {
       ObDataCheckpoint::set_tenant_freeze();
       LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
     }

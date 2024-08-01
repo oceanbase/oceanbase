@@ -1001,13 +1001,15 @@ int ObService::handle_ls_freeze_req_(const obrpc::ObMinorFreezeArg &arg)
   if (1 != arg.tenant_ids_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only one tenant is needed", K(ret), K(arg.tenant_ids_), K(arg.tablet_id_));
-  } else if (OB_FAIL(ls_freeze_(arg.tenant_ids_.at(0), arg.ls_id_, arg.tablet_id_))) {
+  } else if (OB_FAIL(handle_ls_freeze_req_(arg.tenant_ids_.at(0), arg.ls_id_, arg.tablet_id_))) {
     LOG_WARN("fail to freeze tablet", K(ret), K(arg));
   }
   return ret;
 }
 
-int ObService::ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id)
+int ObService::handle_ls_freeze_req_(const uint64_t tenant_id,
+                                     const share::ObLSID &ls_id,
+                                     const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
 
@@ -1021,7 +1023,8 @@ int ObService::ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, 
         LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
       } else if (tablet_id.is_valid()) {
         // tablet freeze
-        if (OB_FAIL(freezer->tablet_freeze(ls_id, tablet_id))) {
+        const bool is_sync = true;
+        if (OB_FAIL(freezer->tablet_freeze(ls_id, tablet_id, is_sync, 0 /*max_retry_time_us*/, false))) {
           if (OB_EAGAIN == ret) {
             ret = OB_SUCCESS;
           } else {
@@ -1032,7 +1035,7 @@ int ObService::ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, 
         }
       } else {
         // logstream freeze
-        if (OB_FAIL(freezer->ls_freeze(ls_id))) {
+        if (OB_FAIL(freezer->ls_freeze_all_unit(ls_id))) {
           if (OB_EAGAIN == ret) {
             ret = OB_SUCCESS;
           } else {

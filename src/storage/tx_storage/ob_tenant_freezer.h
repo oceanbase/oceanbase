@@ -142,15 +142,17 @@ public:
   // freeze a ls, if the ls is freezing, do nothing and return OB_ENTRY_EXIST.
   // if there is some process hold the ls lock or a OB_EAGAIN occur, we will retry
   // until timeout.
-  int ls_freeze(const share::ObLSID &ls_id);
+  int ls_freeze_all_unit(const share::ObLSID &ls_id);
   // freeze a tablet
   int tablet_freeze(const common::ObTabletID &tablet_id,
-                    const bool need_rewrite_tablet_meta = false,
-                    const bool is_sync = false);
+                    const bool is_sync,
+                    const int64_t max_retry_time,
+                    const bool need_rewrite_tablet_meta);
   int tablet_freeze(share::ObLSID ls_id,
                     const common::ObTabletID &tablet_id,
-                    const bool need_rewrite_tablet_meta = false,
-                    const bool is_sync = false);
+                    const bool is_sync,
+                    const int64_t max_retry_time,
+                    const bool need_rewrite_tablet_meta);
   // check if this tenant's memstore is out of range, and trigger minor/major freeze.
   int check_and_do_freeze();
 
@@ -218,7 +220,8 @@ public:
   int print_tenant_usage(char *print_buf,
                          int64_t buf_len,
                          int64_t &pos);
-  // if major freeze is failed and need retry, set the major freeze into at retry_major_info_.
+
+                                // if major freeze is failed and need retry, set the major freeze into at retry_major_info_.
   const ObRetryMajorInfo &get_retry_major_info() const { return retry_major_info_; }
   void record_freeze_failed_tablet(const ObTabletID &tablet_id);
   void erase_freeze_failed_tablet(const ObTabletID &tablet_id);
@@ -252,9 +255,8 @@ private:
                            int64_t &last_check_timestamp,
                            bool &is_out_of_mem,
                            const bool from_user = true);
-  static int ls_freeze_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts);
-  static int ls_freeze_all_unit_(ObLS *ls,
-                                 const int64_t abs_timeout_ts = INT64_MAX);
+  static int ls_freeze_data_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts);
+  static int ls_freeze_all_unit_(ObLS *ls, const int64_t abs_timeout_ts = INT64_MAX);
   static int tablet_freeze_(ObLS *ls,
                             const common::ObTabletID &tablet_id,
                             const bool need_rewrite_tablet_meta,
@@ -262,7 +264,7 @@ private:
                             const int64_t abs_timeout_ts);
   // freeze all the ls of this tenant.
   // return the first failed code.
-  int tenant_freeze_();
+  int tenant_freeze_data_();
   // we can only deal with freeze one by one.
   // set tenant freezing will prevent a new freeze.
   int set_tenant_freezing_();
@@ -283,7 +285,7 @@ private:
   bool need_freeze_(const ObTenantFreezeCtx &ctx);
   bool is_major_freeze_turn_();
   int do_major_if_need_(const bool need_freeze);
-  int do_minor_freeze_(const ObTenantFreezeCtx &ctx);
+  int do_minor_freeze_data_(const ObTenantFreezeCtx &ctx);
   int do_major_freeze_(const int64_t try_frozen_scn);
   void log_frozen_memstore_info_if_need_(const ObTenantFreezeCtx &ctx);
   void halt_prewarm_if_need_(const ObTenantFreezeCtx &ctx);
