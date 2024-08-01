@@ -8542,8 +8542,8 @@ int ObDMLResolver::resolve_generated_column_expr_temp(TableItem *table_item)
         //do nothing
         //匹配被物化到存储中的生成列，减少冗余计算
         //heap table的生成列作为分区键时，也会作为主键进行物化
-      } else if (session_info_->get_ddl_info().is_ddl() && col_schema->is_fulltext_column()) {
-        // do not need fulltext column, because we won't build index using fulltext column
+      } else if (col_schema->is_fulltext_column() && col_schema->is_virtual_generated_column()) {
+        // fulltext columns on main table are hidden virtual generated columns, do not access it by default
       } else if (NULL == get_stmt()->get_column_item_by_id(table_item->table_id_, col_schema->get_column_id())) {
         if (OB_FAIL(resolve_basic_column_item(*table_item, col_schema->get_column_name_str(), true, col_item, get_stmt()))) {
           LOG_WARN("fail to add column item to array", K(ret));
