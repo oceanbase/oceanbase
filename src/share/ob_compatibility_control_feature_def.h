@@ -33,4 +33,8 @@ DEF_COMPAT_CONTROL_FEATURE(VAR_NAME_LENGTH,
 DEF_COMPAT_CONTROL_FEATURE(TRIGGER_CHECK_CONST_VARIABLE_ASSIGN,
     "OB in version 4_2_1 trigger execution no longer checks const variables cannot assign values, fixed in version 4_2_5",
     CLUSTER_VERSION_4_2_5_0)
+
+DEF_COMPAT_CONTROL_FEATURE(NULL_VALUE_FOR_CLOSED_CURSOR,
+    "Return null value to client for closed cursor, indicating that the cursor is not open",
+    CLUSTER_VERSION_4_2_5_0)
 #endif

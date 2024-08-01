@@ -4052,12 +4052,8 @@ int ObSPIService::cursor_close_impl(ObPLExecCtx *ctx,
         LOG_WARN("Cursor is not open", K(cursor), K(ret));
       }
       is_server_cursor ? cursor->reuse() : cursor->reset();
-    } else if (OB_SUCC(ret)) {
-      if (is_server_cursor) {
-        OZ (cursor->close(*ctx->exec_ctx_->get_my_session(), true));
-      } else {
-        OZ (cursor->close(*ctx->exec_ctx_->get_my_session()));
-      }
+    } else {
+      OZ (cursor->close(*ctx->exec_ctx_->get_my_session(), is_server_cursor));
     }
   }
   return ret;
@@ -4070,19 +4066,36 @@ int ObSPIService::spi_cursor_close(ObPLExecCtx *ctx,
                                    bool ignore)
 {
   int ret = OB_SUCCESS;
-  ObPLCursorInfo *cursor = NULL;
+  ObPLCursorInfo *cursor = nullptr;
   ObObjParam cur_var;
   ObCusorDeclareLoc loc;
+  uint64_t compat_version = 0;
+  bool null_value_for_closed_cursor = false;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(ctx->params_));
   OZ (spi_get_cursor_info(ctx, package_id, routine_id, cursor_index, cursor, cur_var, loc),
       package_id, routine_id, cursor_index, cur_var);
-  OV (ignore ? true : NULL != cursor ? !cursor->is_invalid_cursor() : true, OB_ERR_INVALID_CURSOR);
-  OZ (cursor_close_impl(ctx, cursor, cur_var.is_ref_cursor_type(),
-                        package_id, routine_id, ignore),
-                        K(package_id), K(routine_id), K(cursor_index), K(cur_var));
+  OV (ignore || OB_ISNULL(cursor) || !cursor->is_invalid_cursor(), OB_ERR_INVALID_CURSOR, ignore, cur_var);
+
+  if (FAILEDx(ctx->exec_ctx_->get_my_session()->get_compatibility_version(compat_version))) {
+    LOG_WARN("failed to get compatibility version", K(ret));
+  } else if (OB_FAIL(ObCompatControl::check_feature_enable(
+                 compat_version, ObCompatFeatureType::NULL_VALUE_FOR_CLOSED_CURSOR, null_value_for_closed_cursor))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (null_value_for_closed_cursor && OB_NOT_NULL(cursor) && cursor->is_session_cursor()) {
+    OZ (ctx->exec_ctx_->get_my_session()->close_cursor(cursor->get_id()));
+    OX (cur_var.set_obj_value(static_cast<uint64_t>(0)));  // return closed refcursor as null
+    if (DECL_SUBPROG == loc) {
+      OZ (spi_set_subprogram_cursor_var(ctx, package_id, routine_id, cursor_index, cur_var));
+    } else if (DECL_LOCAL == loc) {
+      OX (cur_var.copy_value_or_obj(ctx->params_->at(cursor_index), true));
+    }
+  } else {
+    OZ (cursor_close_impl(ctx, cursor, cur_var.is_ref_cursor_type(), package_id, routine_id, ignore),
+        K(package_id), K(routine_id), K(cursor_index), K(cur_var));
+  }
   if (OB_SUCC(ret) && DECL_PKG == loc) {
     OZ (spi_update_package_change_info(ctx, package_id, cursor_index));
   }
