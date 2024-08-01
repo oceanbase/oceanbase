@@ -529,9 +529,6 @@ private:
       ObLogExchange &op,
       const ObIArray<OrderItem> &old_sort_keys,
       ObIArray<OrderItem> &new_sort_keys);
-  int generate_dynamic_sample_spec_if_need(
-      ObLogExchange &op,
-      ObPxCoordSpec &spec);
 
   int get_is_distributed(ObLogTempTableAccess &op, bool &is_distributed);
 

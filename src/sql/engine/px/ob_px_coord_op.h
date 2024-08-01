@@ -168,10 +168,7 @@ public:
     px_expected_worker_count_(0),
     qc_id_(common::OB_INVALID_ID),
     batch_op_info_(),
-    table_locations_(alloc),
-    sort_exprs_(alloc),
-    sort_collations_(alloc),
-    sort_cmp_funs_(alloc)
+    table_locations_(alloc)
   {}
   ~ObPxCoordSpec() {}
 
@@ -197,10 +194,6 @@ public:
   ObPxCoordOp::ObPxBatchOpInfo batch_op_info_;
   // 对于有条件下推的table_location, 需要序列化
   TableLocationFixedArray table_locations_;
-  // dynamic sample related
-  ExprFixedArray sort_exprs_;
-  ObSortCollations sort_collations_;
-  ObSortFuncs sort_cmp_funs_;
 };
 
 } // end namespace sql

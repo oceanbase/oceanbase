@@ -4494,40 +4494,11 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxReduceTransmitSpec &s
   return ret;
 }
 
-// dynamic sample use data hub model and px coord is the hub.
-// so generate spec for dynamic sample if need
-int ObStaticEngineCG::generate_dynamic_sample_spec_if_need(ObLogExchange &op, ObPxCoordSpec &spec)
-{
-  int ret = OB_SUCCESS;
-  if (op.get_sort_keys().count() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_sort_keys().count(); ++i) {
-      if (OB_FAIL(mark_expr_self_produced(op.get_sort_keys().at(i).expr_))) {
-        LOG_WARN("mark self produced expr failed", K(ret), K(i));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ObArray<OrderItem> sort_keys;
-      if (OB_FAIL(filter_sort_keys(op, op.get_sort_keys(), sort_keys))) {
-        LOG_WARN("filter out expr of partition id failed", K(ret));
-      } else if (OB_FAIL(spec.sort_exprs_.init(sort_keys.count()))) {
-        LOG_WARN("failed to init dynamic sample exprs", K(ret));
-      } else if (OB_FAIL(fill_sort_info(sort_keys, spec.sort_collations_, spec.sort_exprs_))) {
-        LOG_WARN("failed to fill sort info", K(ret));
-      } else if (OB_FAIL(fill_sort_funcs(spec.sort_collations_, spec.sort_cmp_funs_, spec.sort_exprs_))) {
-        LOG_WARN("failed to fill sort funcs", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxFifoCoordSpec &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(generate_basic_receive_spec(op, spec, in_root_job))) {
     LOG_WARN("failed to generate basic transmit spec", K(ret));
-  } else if (OB_FAIL(generate_dynamic_sample_spec_if_need(op, spec))) {
-    LOG_WARN("generate px_coord_spec for dynamic sample failed", K(ret));
   }
   return ret;
 }
@@ -4537,8 +4508,6 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxOrderedCoordSpec &spe
   int ret = OB_SUCCESS;
   if (OB_FAIL(generate_basic_receive_spec(op, spec, in_root_job))) {
     LOG_WARN("failed to generate basic transmit spec", K(ret));
-  } else if (OB_FAIL(generate_dynamic_sample_spec_if_need(op, spec))) {
-    LOG_WARN("generate px_coord_spec for dynamic sample failed", K(ret));
   } else {
     spec.use_rich_format_ = false;
     const_cast<ObOpSpec *> (spec.get_left())->use_rich_format_ = false;

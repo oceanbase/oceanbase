@@ -66,10 +66,14 @@ OB_DEF_SERIALIZE(ObPxCoordSpec)
               px_expected_worker_count_,
               qc_id_,
               batch_op_info_,
-              table_locations_,
-              sort_exprs_,
-              sort_collations_,
-              sort_cmp_funs_);
+              table_locations_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              sort_exprs,
+              sort_collations,
+              sort_cmp_funs);
   return ret;
 }
 
@@ -92,9 +96,12 @@ OB_DEF_DESERIALIZE(ObPxCoordSpec)
       }
     }
   }
-  OB_UNIS_DECODE(sort_exprs_);
-  OB_UNIS_DECODE(sort_collations_);
-  OB_UNIS_DECODE(sort_cmp_funs_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  OB_UNIS_DECODE(sort_exprs);
+  OB_UNIS_DECODE(sort_collations);
+  OB_UNIS_DECODE(sort_cmp_funs);
   return ret;
 }
 
@@ -106,10 +113,14 @@ OB_DEF_SERIALIZE_SIZE(ObPxCoordSpec)
               px_expected_worker_count_,
               qc_id_,
               batch_op_info_,
-              table_locations_,
-              sort_exprs_,
-              sort_collations_,
-              sort_cmp_funs_);
+              table_locations_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              sort_exprs,
+              sort_collations,
+              sort_cmp_funs);
   return len;
 }
 
