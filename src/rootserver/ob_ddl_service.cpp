@@ -27650,7 +27650,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
         ++refresh_count;
         LOG_WARN("refresh schema failed", KR(ret), K(tenant_id), K(refresh_count),
                                           "refresh_schema_interval", static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US));
-        if (refresh_count > 2 && REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000L)) { // 10 min
+        if (refresh_count > 2 && REACH_TIME_INTERVAL_NO_INSTANT(10 * 60 * 1000 * 1000L)) { // 10 min
           LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
                         "msg", "refresh schema failed", KR(ret), K(refresh_count));
         }
