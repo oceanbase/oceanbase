@@ -466,7 +466,7 @@ END_P SET_VAR DELIMITER
 %type <node> alter_column_behavior opt_set opt_position_column
 %type <node> alter_system_stmt alter_system_set_parameter_actions alter_system_settp_actions settp_option alter_system_set_parameter_action server_info_list server_info alter_system_reset_parameter_actions alter_system_reset_parameter_action
 %type <node> opt_comment opt_as
-%type <node> column_name relation_name function_name column_label var_name relation_name_or_string row_format_option
+%type <node> column_name relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
 %type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint
@@ -506,7 +506,7 @@ END_P SET_VAR DELIMITER
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
 %type <node> primary_zone_name change_tenant_name_or_tenant_id distribute_method distribute_method_list
-%type <node> load_data_stmt opt_load_local opt_duplicate opt_load_charset opt_load_ignore_rows infile_string
+%type <node> load_data_stmt opt_load_local opt_duplicate opt_compression opt_load_charset opt_load_ignore_rows infile_string
 %type <node> lines_or_rows opt_field_or_var_spec field_or_vars_list field_or_vars opt_load_set_spec opt_load_data_extended_option_list load_data_extended_option_list load_data_extended_option
 %type <node> load_set_list load_set_element load_data_with_opt_hint
 %type <node> ret_type opt_agg
@@ -4675,23 +4675,24 @@ NAME_OB
  *****************************************************************************/
 load_data_stmt:
 load_data_with_opt_hint opt_load_local INFILE infile_string opt_duplicate INTO TABLE
-relation_factor opt_use_partition opt_load_charset field_opt line_opt opt_load_ignore_rows
+relation_factor opt_use_partition opt_compression opt_load_charset field_opt line_opt opt_load_ignore_rows
 opt_field_or_var_spec opt_load_set_spec opt_load_data_extended_option_list
 {
   (void) $9;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 12,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LOAD_DATA, 13,
                            $2,            /* 0. local */
                            $4,            /* 1. filename */
                            $5,            /* 2. duplicate  */
                            $8,            /* 3. table */
-                           $10,           /* 4. charset */
-                           $11,           /* 5. field */
-                           $12,           /* 6. line */
-                           $13,           /* 7. ignore rows */
-                           $14,           /* 8. field or vars */
-                           $15,           /* 9. set field  */
+                           $11,           /* 4. charset */
+                           $12,           /* 5. field */
+                           $13,           /* 6. line */
+                           $14,           /* 7. ignore rows */
+                           $15,           /* 8. field or vars */
+                           $16,           /* 9. set field  */
                            $1,            /* 10. hint */
-                           $16            /* 11. extended option list */
+                           $17,           /* 11. extended option list */
+                           $10            /* 12. compression format */
                            );
 }
 ;
@@ -4740,6 +4741,26 @@ opt_load_local:
 | REMOTE_OSS
 {
   malloc_terminal_node($$, result->malloc_pool_, T_REMOTE_OSS);
+}
+;
+
+opt_compression:
+/* empty */
+{
+  $$ = NULL;
+}
+| COMPRESSION opt_equal_mark compression_name
+{
+  (void)$2;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION, 1, $3);
+}
+;
+
+compression_name:
+NAME_OB { $$ = $1; }
+| unreserved_keyword
+{
+  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
 }
 ;
 
