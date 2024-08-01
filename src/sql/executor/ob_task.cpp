@@ -430,28 +430,32 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
     dependency_tables_.set_allocator(&(exec_ctx_->get_allocator()));
     OB_UNIS_DECODE(dependency_tables_);
     OB_UNIS_DECODE(snapshot_);
-    exec_ctx_->get_das_ctx().set_snapshot(snapshot_);
-    //DESERIALIZE param_meta_count if 0, (1) params->count() ==0 (2) old version -> new version
-    //for (2) just set obj.meta as param_meta
-    OB_UNIS_DECODE(param_meta_count);
-    if (OB_SUCC(ret)) {
-      if (param_meta_count > 0) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
-          OB_UNIS_DECODE(tmp_meta);
-          ps_params->at(i).set_param_meta(tmp_meta);
-        }
-        for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
-          OB_UNIS_DECODE(tmp_flag);
-          ps_params->at(i).set_param_flag(tmp_flag);
-        }
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < ps_params->count(); ++i) {
-          ps_params->at(i).set_param_meta();
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(exec_ctx_->get_das_ctx().set_snapshot(snapshot_))) {
+      LOG_WARN("fail to set snapshot", K(ret));
+    } else {
+      //DESERIALIZE param_meta_count if 0, (1) params->count() ==0 (2) old version -> new version
+      //for (2) just set obj.meta as param_meta
+      OB_UNIS_DECODE(param_meta_count);
+      if (OB_SUCC(ret)) {
+        if (param_meta_count > 0) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
+            OB_UNIS_DECODE(tmp_meta);
+            ps_params->at(i).set_param_meta(tmp_meta);
+          }
+          for (int64_t i = 0; OB_SUCC(ret) && i < param_meta_count; ++i) {
+            OB_UNIS_DECODE(tmp_flag);
+            ps_params->at(i).set_param_flag(tmp_flag);
+          }
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < ps_params->count(); ++i) {
+            ps_params->at(i).set_param_meta();
+          }
         }
       }
+      OB_UNIS_DECODE(remote_sql_info_->is_original_ps_mode_);
+      OB_UNIS_DECODE(remote_sql_info_->sql_from_pl_);
     }
-    OB_UNIS_DECODE(remote_sql_info_->is_original_ps_mode_);
-    OB_UNIS_DECODE(remote_sql_info_->sql_from_pl_);
   }
   return ret;
 }
