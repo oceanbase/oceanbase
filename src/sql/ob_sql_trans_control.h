@@ -168,7 +168,10 @@ class ObSqlTransControl
 {
 public:
   static int reset_session_tx_state(ObSQLSessionInfo *session, bool reuse_tx_desc = false, bool active_tx_end = true);
-  static int reset_session_tx_state(ObBasicSessionInfo *session, bool reuse_tx_desc = false, bool active_tx_end = true);
+  static int reset_session_tx_state(ObBasicSessionInfo *session,
+                                    bool reuse_tx_desc = false,
+                                    bool active_tx_end = true,
+                                    const uint64_t data_version = 0);
   static int create_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int release_stash_savepoint(ObExecContext &exec_ctx, const ObString &name);
   static int explicit_start_trans(ObExecContext &exec_ctx, const bool read_only, const ObString hint = ObString());

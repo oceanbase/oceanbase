@@ -782,6 +782,7 @@ public:
                                  audit_log_query_sql_(0),
                                  sort_area_size_(128*1024*1024),
                                  hash_area_size_(128*1024*1024),
+                                 data_version_(0),
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
                                  enable_insertup_replace_gts_opt_(false),
@@ -805,6 +806,7 @@ public:
     int64_t get_audit_log_query_sql() const { return audit_log_query_sql_; }
     int64_t get_sort_area_size() const { return ATOMIC_LOAD(&sort_area_size_); }
     int64_t get_hash_area_size() const { return ATOMIC_LOAD(&hash_area_size_); }
+    uint64_t get_data_version() const { return ATOMIC_LOAD(&data_version_); }
     bool enable_query_response_time_stats() const { return enable_query_response_time_stats_; }
     bool enable_udr() const { return ATOMIC_LOAD(&enable_user_defined_rewrite_rules_); }
     bool enable_insertup_replace_gts_opt() const { return ATOMIC_LOAD(&enable_insertup_replace_gts_opt_); }
@@ -829,6 +831,7 @@ public:
     int64_t audit_log_query_sql_;
     int64_t sort_area_size_;
     int64_t hash_area_size_;
+    uint64_t data_version_;
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
     bool enable_insertup_replace_gts_opt_;
@@ -1439,6 +1442,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_sort_area_size();
+  }
+  uint64_t get_data_version()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_data_version();
   }
   bool enable_query_response_time_stats()
   {

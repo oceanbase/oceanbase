@@ -112,7 +112,8 @@ public:
               const int64_t timeout_seconds,
               const uint32_t session_id,
               const ObTxParam &tx_param,
-              ObTxDesc *&tx_desc);
+              ObTxDesc *&tx_desc,
+              const uint64_t data_version);
   int xa_end(const ObXATransID &xid,
              const int64_t flags,
              ObTxDesc *&tx_desc);
@@ -149,7 +150,8 @@ public:
                       const uint32_t session_id,
                       const ObTxParam &tx_param,
                       ObTxDesc *&tx_desc,
-                      ObXATransID &xid);
+                      ObXATransID &xid,
+                      const uint64_t data_version);
   int xa_start_for_dblink_client(const common::sqlclient::DblinkDriverProto dblink_type,
                                  common::sqlclient::ObISQLConnection *dblink_conn,
                                  ObTxDesc *&tx_desc,
@@ -259,7 +261,8 @@ private:
                 const int64_t timeout_seconds,
                 const uint32_t session_id,
                 const ObTxParam &tx_param,
-                ObTxDesc *&tx_desc);
+                ObTxDesc *&tx_desc,
+                const uint64_t data_version);
   int xa_start_join_(const ObXATransID &xid,
                      const int64_t flags,
                      const int64_t timeout_seconds,
@@ -330,7 +333,8 @@ private:
                        const uint32_t session_id,
                        const ObTxParam &tx_param,
                        ObTxDesc *&tx_desc,
-                       ObXATransID &xid);
+                       ObXATransID &xid,
+                       const uint64_t data_version);
 public:
   int xa_scheduler_hb_req();
   int gc_invalid_xa_record(const uint64_t tenant_id);

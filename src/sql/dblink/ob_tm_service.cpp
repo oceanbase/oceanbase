@@ -111,7 +111,7 @@ int ObTMService::tm_rm_start(ObExecContext &exec_ctx,
       tx_param.timeout_us_ = tx_timeout;
       tx_param.lock_timeout_us_ = my_session->get_trx_lock_timeout();
       if (OB_FAIL(xa_service->xa_start_for_tm(0, timeout_seconds, my_session->get_sessid(),
-              tx_param, tx_desc, xid))) {
+              tx_param, tx_desc, xid, my_session->get_data_version()))) {
         LOG_WARN("xa start for dblink failed", K(ret), K(tx_param));
         // TODO, reset
         my_session->reset_first_need_txn_stmt_type();

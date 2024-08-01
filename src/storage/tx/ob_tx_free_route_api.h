@@ -11,7 +11,7 @@
  */
 
 #define DEF_FREE_ROUTE_API_(name)                                       \
-    int txn_free_route__update_##name##_state(const uint32_t session_id, ObTxDesc *&tx, ObTxnFreeRouteCtx &ctx, const char* buf, const int64_t len, int64_t &pos); \
+    int txn_free_route__update_##name##_state(const uint32_t session_id, ObTxDesc *&tx, ObTxnFreeRouteCtx &ctx, const char* buf, const int64_t len, int64_t &pos, const uint64_t data_version); \
     int txn_free_route__serialize_##name##_state(const uint32_t session_id, ObTxDesc *tx, ObTxnFreeRouteCtx &ctx, char* buf, const int64_t len, int64_t &pos); \
     int64_t txn_free_route__get_##name##_state_serialize_size(ObTxDesc *tx, ObTxnFreeRouteCtx &ctx); \
     static int64_t txn_free_route__get_##name##_state_size(ObTxDesc *tx); \
