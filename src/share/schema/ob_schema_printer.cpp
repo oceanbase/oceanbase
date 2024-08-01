@@ -770,6 +770,12 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
         } else if (OB_FAIL(print_table_definition_column_group(*index_schema, buf, buf_len, pos))) {
           LOG_WARN("fail to print column group info", K(ret));
         }
+
+        if (OB_FAIL(ret)) {
+        } else if (!lib::is_mysql_mode()) { /* only used for mysql mode */
+        } else if (!index_schema->is_index_visible() && OB_FAIL(databuff_printf(buf, buf_len, pos, " /*!80000 INVISIBLE */"))) {
+          LOG_WARN("failed to print invisible info", K(ret));
+        }
       }
     }
   }
