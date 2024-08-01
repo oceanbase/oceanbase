@@ -3172,160 +3172,159 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   return ret;
 }
 
-
-int ObPLExecState::check_routine_param_legal(ParamStore *params)
+int ObPLExecState::check_anonymous_collection_compatible(ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast)
 {
   int ret = OB_SUCCESS;
+  const ObUserDefinedType *pl_user_type = NULL;
+  const ObCollectionType *coll_type = NULL;
+  const ObPLCollection *src_coll = NULL;
+  OZ (ctx_.get_user_type(dest_type.get_user_type_id(), pl_user_type));
+  CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(pl_user_type)));
+  CK (OB_NOT_NULL(src_coll = static_cast<const ObPLCollection *>(&composite)));
+  OX (need_cast = src_coll->get_type() != coll_type->get_type());
+  if (OB_FAIL(ret)) {
+  } else if (coll_type->get_element_type().is_obj_type() ^ src_coll->get_element_desc().is_obj_type()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("incorrect argument type, diff type", K(ret), K(coll_type->get_element_type()), K(src_coll->get_element_desc()));
+  } else if (coll_type->get_element_type().is_obj_type()) { // basic data type
+    const ObDataType *src_data_type = &src_coll->get_element_desc();
+    const ObDataType *dst_data_type = coll_type->get_element_type().get_data_type();
+    if (dst_data_type->get_obj_type() == src_data_type->get_obj_type()) {
+      // do nothing ...
+    } else if (cast_supported(src_data_type->get_obj_type(),
+                              src_data_type->get_collation_type(),
+                              dst_data_type->get_obj_type(),
+                              dst_data_type->get_collation_type())) {
+      need_cast = true; // do nothing ...
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("incorrect argument type, diff type", K(ret));
+    }
+  } else {
+    // element is composite type
+    uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
+    bool is_compatible = element_type_id == coll_type->get_element_type().get_user_type_id();
+    if (!is_compatible) {
+      OZ (ObPLResolver::check_composite_compatible(ctx_, element_type_id, dest_type.get_user_type_id(), is_compatible));
+      OX (need_cast = true);
+    }
+    if (OB_SUCC(ret) && !is_compatible) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("incorrect argument type", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObPLExecState::convert_composite(ObObjParam &param, const ObPLDataType &dest_type)
+{
+  int ret = OB_SUCCESS;
+
   ObSQLSessionInfo *session = NULL;
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   common::ObMySQLProxy *sql_proxy = NULL;
   ObPLPackageGuard *package_guard = NULL;
+  const ObUserDefinedType *pl_user_type = NULL;
+
   CK (OB_NOT_NULL(session = ctx_.exec_ctx_->get_my_session()));
   CK (OB_NOT_NULL(schema_guard = ctx_.exec_ctx_->get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
   CK (OB_NOT_NULL(package_guard = ctx_.exec_ctx_->get_package_guard()));
 
-  int64_t arg_num = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && i < func_.get_variables().count(); ++i) {
-    if (func_.get_in_args().has_member(i) ||
-        func_.get_out_args().has_member(i)) {
-      ++arg_num;
+  OZ (ctx_.get_user_type(dest_type.get_user_type_id(), pl_user_type));
+  CK (OB_NOT_NULL(pl_user_type));
+
+  if (OB_SUCC(ret)) {
+    int64_t dst_size = 0;
+    ObObj dst;
+    ObObj *dst_ptr = &dst;
+    ObObj *src_ptr = &param;
+    ObPLResolveCtx resolve_ctx(
+      *get_allocator(), *session, *schema_guard, *package_guard, *sql_proxy, false);
+    OZ (pl_user_type->init_obj(*(schema_guard), *get_allocator(), dst, dst_size));
+    OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
+    CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
+    OZ (ctx_.exec_ctx_->get_pl_ctx()->add(dst));
+    if (OB_FAIL(ret)) {
+      ObUserDefinedType::destruct_obj(dst, session);
     }
+    OZ (ObUserDefinedType::destruct_obj(param, session));
+    OX (param = dst);
+    OX (param.set_param_meta());
+    OX (param.set_udt_id(pl_user_type->get_user_type_id()));
+  }
+  return ret;
+}
+
+
+int ObPLExecState::check_routine_param_legal(ParamStore *params)
+{
+  int ret = OB_SUCCESS;
+
+  if ((NULL == params && func_.get_arg_count() != 0) ||
+      (NULL != params && params->count() != func_.get_arg_count())) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("routine parameters is not match", K(ret), K(func_.get_arg_count()), KPC(params));
   }
 
-  if ((NULL == params && arg_num != 0) ||
-      (NULL != params && params->count() != arg_num)) {
-    ret = OB_ERR_PARAM_SIZE;
-    LOG_WARN("routine parameters is not match", K(ret), K(arg_num));
-  }
-  if (OB_SUCC(ret) && NULL != params) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
-      const ObPLDataType &dest_type = func_.get_variables().at(i);
-      if (params->at(i).is_null() ||
-          params->at(i).is_pl_mock_default_param()) {
-        // need not check
-      } else if (!params->at(i).is_ext()) { // basic type
-        if (!dest_type.is_obj_type()) {
+  for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(params) && i < params->count(); ++i) {
+    const ObPLDataType &dest_type = func_.get_variables().at(i);
+    if (params->at(i).is_null() || params->at(i).is_pl_mock_default_param()) { // use default value
+      // need not check, do nothing ...
+    } else if (!params->at(i).is_ext()) { // basic type, only check dest type is obj type also.
+      if (!dest_type.is_obj_type()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("incorrect argument type, expected complex, but get basic type", K(ret));
+      }
+    } else if (0 == params->at(i).get_ext()) {
+      // null composite through, it same as NULL, do nothing ...
+    } else if ((PL_REF_CURSOR_TYPE == params->at(i).get_meta().get_extend_type()
+                || PL_CURSOR_TYPE == params->at(i).get_meta().get_extend_type())
+              && dest_type.is_cursor_type()) {
+      // cursor input parameter check through, do nothing ...
+    } else if (!dest_type.is_composite_type()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("incorrect argument type", K(ret), K(dest_type), K(params->at(i)), K(i));
+    } else if (!params->at(i).is_pl_extend()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("real parameter is ext ptr, but extend type not set property", K(ret), K(params->at(i)), K(i));
+    } else if (PL_OPAQUE_TYPE == params->at(i).get_meta().get_extend_type() || params->at(i).get_udt_id() != OB_INVALID_ID) {
+      if (params->at(i).get_udt_id() != dest_type.get_user_type_id()) {
+        bool is_compatible = false;
+        OZ (ObPLResolver::check_composite_compatible(
+          ctx_, params->at(i).get_udt_id(), dest_type.get_user_type_id(), is_compatible));
+        if (OB_SUCC(ret) && !is_compatible) {
           ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("incorrect argument type, expected complex, but get basic type", K(ret));
+          LOG_WARN("incorrect argument type", K(ret), K(dest_type), K(params->at(i)), K(i));
         }
-      } else if (0 == params->at(i).get_ext()
-                || ((PL_REF_CURSOR_TYPE == params->at(i).get_meta().get_extend_type()
-                     || PL_CURSOR_TYPE == params->at(i).get_meta().get_extend_type())
-                      && dest_type.is_cursor_type())) {
-        // do nothing
+        OZ (convert_composite(params->at(i), dest_type));
+      }
+    } else {
+      ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(params->at(i).get_ext());
+      CK (OB_NOT_NULL(composite));
+      if (OB_FAIL(ret)) {
+      } else if (OB_INVALID_ID == composite->get_id()) { // anonymous collection, should check element composite.
+        bool need_cast = false;
+        if (!dest_type.is_collection_type()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("incorrect argument type", K(ret), KPC(composite), K(dest_type), K(i));
+        }
+        CK (composite->is_collection());
+        OZ (check_anonymous_collection_compatible(*composite, dest_type, need_cast));
+        if (OB_SUCC(ret) && need_cast) {
+          OZ (convert_composite(params->at(i), dest_type));
+        }
+      } else if (composite->get_id() != dest_type.get_user_type_id()) {
+        bool is_compatible = false;
+        OZ (ObPLResolver::check_composite_compatible(
+          ctx_, composite->get_id(), dest_type.get_user_type_id(), is_compatible));
+        if (OB_SUCC(ret) && !is_compatible) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("incorrect argument type", K(ret), K(dest_type), K(params->at(i)), K(i));
+        }
+        OZ (convert_composite(params->at(i), dest_type));
       } else {
-        const pl::ObPLComposite *src_composite = NULL;
-        uint64_t udt_id = params->at(i).get_udt_id();
-        CK (OB_NOT_NULL(src_composite = reinterpret_cast<const ObPLComposite *>(params->at(i).get_ext())));
-        OV (params->at(i).is_pl_extend(), OB_ERR_UNEXPECTED, K(params->at(i)), K(i));
-        if (OB_FAIL(ret)) {
-        } else if (!dest_type.is_composite_type()) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_WARN("incorrect argument type", K(ret));
-        } else if (OB_INVALID_ID == udt_id) {
-          if (PL_RECORD_TYPE == params->at(i).get_meta().get_extend_type()
-              || PL_NESTED_TABLE_TYPE == params->at(i).get_meta().get_extend_type()
-              || PL_ASSOCIATIVE_ARRAY_TYPE == params->at(i).get_meta().get_extend_type()
-              || PL_VARRAY_TYPE == params->at(i).get_meta().get_extend_type()) {
-            const ObPLComposite *composite = reinterpret_cast<const ObPLComposite *>(params->at(i).get_ext());
-            CK (OB_NOT_NULL(composite));
-            OV (udt_id = composite->get_id(), OB_ERR_UNEXPECTED, KPC(composite), K(params->at(i)), K(i));
-          } else if (PL_OPAQUE_TYPE == params->at(i).get_meta().get_extend_type()) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("opaque type without udtid is unexpected", K(ret), K(params->at(i)), K(i));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_INVALID_ID == udt_id) { // 匿名数组
-          const pl::ObPLCollection *src_coll = NULL;
-          ObPLResolveCtx resolve_ctx(*get_allocator(),
-                                      *session,
-                                      *schema_guard,
-                                      *package_guard,
-                                      *sql_proxy,
-                                      false);
-          const pl::ObUserDefinedType *pl_user_type = NULL;
-          const pl::ObCollectionType *coll_type = NULL;
-          OZ (resolve_ctx.get_user_type(dest_type.get_user_type_id(), pl_user_type));
-          CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(pl_user_type)));
-          CK (OB_NOT_NULL(src_coll = static_cast<const ObPLCollection *>(src_composite)));
-          if (OB_FAIL(ret)) {
-          } else if (coll_type->get_element_type().is_obj_type() ^
-                     src_coll->get_element_desc().is_obj_type()) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("incorrect argument type, diff type",
-                          K(ret), K(coll_type->get_element_type()), K(src_coll->get_element_desc()));
-          } else if (coll_type->get_element_type().is_obj_type()) { // basic data type
-            const ObDataType *src_data_type = &src_coll->get_element_desc();
-            const ObDataType *dst_data_type = coll_type->get_element_type().get_data_type();
-            if (dst_data_type->get_obj_type() == src_data_type->get_obj_type()
-                || (cast_supported(src_data_type->get_obj_type(),
-                                      src_data_type->get_collation_type(),
-                                      dst_data_type->get_obj_type(),
-                                      dst_data_type->get_collation_type()))) {
-              // do nothing ...
-            } else {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("incorrect argument type, diff type", K(ret));
-            }
-          } else {
-            // element is composite type
-            uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
-            bool is_compatible = element_type_id == coll_type->get_element_type().get_user_type_id();
-            if (!is_compatible) {
-              OZ (ObPLResolver::check_composite_compatible(
-                ctx_, element_type_id, dest_type.get_user_type_id(), is_compatible));
-            }
-            if (OB_SUCC(ret) && !is_compatible) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("incorrect argument type", K(ret));
-            }
-          }
-          // do cast to udt
-          if (OB_SUCC(ret)) {
-            int64_t dst_size = 0;
-            ObObjParam &param = params->at(i);
-            ObObj dst;
-            ObObj *dst_ptr = &dst;
-            ObObj *src_ptr = &param;
-            OZ (pl_user_type->init_obj(*(schema_guard), *get_allocator(), dst, dst_size));
-            OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
-            if (OB_SUCC(ret)) {
-              ObPLCollection *collection = reinterpret_cast<ObPLCollection*>(param.get_ext());
-              if (OB_NOT_NULL(collection)
-                  && OB_NOT_NULL(dynamic_cast<ObPLCollAllocator *>(collection->get_allocator()))) {
-                collection->get_allocator()->reset();
-                collection->set_data(NULL);
-                collection->set_count(0);
-                collection->set_first(OB_INVALID_INDEX);
-                collection->set_last(OB_INVALID_INDEX);
-              }
-            }
-            CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
-            if (OB_FAIL(ret)) {
-              ObUserDefinedType::destruct_obj(dst, session);
-            }
-            OZ (ctx_.exec_ctx_->get_pl_ctx()->add(dst));
-            OX (param = dst);
-            OX (param.set_param_meta());
-            OX (param.set_udt_id(pl_user_type->get_user_type_id()));
-          }
-        } else { //非匿名数组复杂类型
-          uint64_t left_type_id = udt_id;
-          uint64_t right_type_id = dest_type.get_user_type_id();
-          bool is_compatible = false;
-          if (left_type_id == right_type_id) {
-            is_compatible = true;
-          } else {
-            OZ (ObPLResolver::check_composite_compatible(ctx_, left_type_id, right_type_id, is_compatible), K(left_type_id), K(right_type_id));
-          }
-          if (OB_SUCC(ret) && !is_compatible) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("incorrect argument type", K(ret));
-          }
-        }
-        
+        // same composite id, do nothing ...
       }
     }
   }
@@ -3560,6 +3559,14 @@ do {                                                                  \
               if (OB_NOT_NULL(composite) && composite->is_collection() && OB_INVALID_ID == composite->get_id()) {
                 composite->set_id(pl_type.get_user_type_id());
               }
+            } else if (ObNullType == params->at(i).get_meta().get_type()
+                && (ObCharType == params->at(i).get_param_meta().get_type()
+                || ObNCharType == params->at(i).get_param_meta().get_type())) {
+              //check if meta_.type_ is null and param_meta is char, construct a new param store of ''
+                ObObjParam null_char_param(params->at(i));
+                const ObString v ("");
+                null_char_param.set_string(ObNullType,v);
+                get_params().at(i) = null_char_param;
             } else {
               get_params().at(i) = params->at(i);
             }

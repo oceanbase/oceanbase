@@ -760,14 +760,27 @@ struct ObAddSysVarArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObAddSysVarArg() : sysvar_(), if_not_exist_(false), update_sys_var_(false) {}
+  ObAddSysVarArg() : sysvar_(), if_not_exist_(false), update_sys_var_(false), is_batch_(false), sysvars_() {}
   DECLARE_TO_STRING;
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   int assign(const ObAddSysVarArg &other);
+  bool get_update_sys_var() const { return update_sys_var_; }
+  bool is_batch() const { return is_batch_; }
+  const share::schema::ObSysVarSchema &get_sysvar() const { return sysvar_; }
+  const ObIArray<share::schema::ObSysVarSchema> &get_sysvars() const { return sysvars_; }
+  int init(const bool &update_sys_var, const bool &if_not_exist, const uint64_t &tenant_id,
+      const share::schema::ObSysVarSchema &sysvar);
+  int init(const bool &update_sys_var, const bool &if_not_exist, const uint64_t &tenant_id,
+      const ObIArray<share::schema::ObSysVarSchema> &sysvars);
+private:
   share::schema::ObSysVarSchema sysvar_;
   bool if_not_exist_;
   bool update_sys_var_; // Distinguish add/update sys var, for internal use only
+  // if is_batch_==true, sysvar_ is invalid and sysvars_ is valid
+  // if is_batch_==false, sysvar_ is valid and sysvars_ is invalid
+  bool is_batch_;
+  common::ObSArray<share::schema::ObSysVarSchema> sysvars_;
 };
 
 struct ObModifySysVarArg : public ObDDLArg
@@ -4255,7 +4268,8 @@ public:
       paxos_replica_number_(0),
       skip_change_member_list_(),
       force_use_data_source_(false),
-      force_data_source_() {}
+      force_data_source_(),
+      prioritize_same_zone_src_(false) {}
 public:
   int assign(const ObLSMigrateReplicaArg &that);
 
@@ -4279,7 +4293,8 @@ public:
                K_(paxos_replica_number),
                K_(skip_change_member_list),
                K_(force_use_data_source),
-               K_(force_data_source));
+               K_(force_data_source),
+               K_(prioritize_same_zone_src));
 
   bool is_valid() const {
     return !task_id_.is_invalid()
@@ -4302,6 +4317,7 @@ public:
   bool force_use_data_source_;
   // deprecated field, in order to fix the upgrade compatibility issue from 430rc2 to master
   common::ObReplicaMember force_data_source_;
+  bool prioritize_same_zone_src_;
 };
 
 struct ObLSAddReplicaArg
@@ -11476,6 +11492,29 @@ public:
   TO_STRING_KV(K_(can_kill_client_sess));
   bool can_kill_client_sess_;
 };
+
+// kill query client session arg
+struct ObKillQueryClientSessionArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObKillQueryClientSessionArg() : client_sess_id_(0) {}
+  ~ObKillQueryClientSessionArg() {}
+  bool is_valid() const;
+  void reset() { client_sess_id_ = 0; }
+  int assign(const ObKillQueryClientSessionArg &other)
+  {
+    int ret = common::OB_SUCCESS;
+    client_sess_id_ = other.client_sess_id_;
+    return ret;
+  }
+  void set_client_sess_id(uint32_t client_sess_id) { client_sess_id_ = client_sess_id; }
+  uint32_t get_client_sess_id() { return client_sess_id_; }
+  TO_STRING_KV(K_(client_sess_id));
+private:
+  uint32_t client_sess_id_;
+};
+
 
 // kill client session arg & Authentication
 struct ObClientSessionCreateTimeAndAuthArg

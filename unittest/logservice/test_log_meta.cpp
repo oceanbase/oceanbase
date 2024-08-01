@@ -15,9 +15,13 @@
 #include "logservice/palf/log_define.h"
 #define private public
 #include "logservice/palf/log_meta.h"
+#include "logservice/palf/log_meta_entry_header.h"
 #undef private
 #include <gtest/gtest.h>
+#include <vector>
+#include <thread>
 
+char **global_argv = nullptr;
 namespace oceanbase
 {
 namespace unittest
@@ -25,11 +29,7 @@ namespace unittest
 using namespace common;
 using namespace palf;
 
-TEST(TestLogMeta, test_log_meta)
-{
-  int64_t proposal_id = INVALID_PROPOSAL_ID;
-  proposal_id = 1;
-  ObAddr addr(ObAddr::IPV4, "127.0.0.1", 4096);
+TEST(TestLogMeta, test_log_meta) { int64_t proposal_id = INVALID_PROPOSAL_ID; proposal_id = 1; ObAddr addr(ObAddr::IPV4, "127.0.0.1", 4096);
 
   // Prepare meta
   LogPrepareMeta log_prepare_meta1;

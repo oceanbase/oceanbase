@@ -35,6 +35,11 @@ enum ObUDTTypeCode
   UDT_TYPE_BASE = 3,        // 系统预定义类型
   UDT_TYPE_OBJECT_BODY = 4, // OBJECT TYPE BODY
   UDT_TYPE_OPAQUE = 5,      // OPAQUE(ANYDATA, XMLTYPE, ANYTYPE etc...)
+  UDT_TYPE_RECORD = 6,      // RECORD TYPE IN PACKAGE
+  UDT_TYPE_ASSOC_ARRAY = 7, // ASSOCIATE ARRAY TYPE IN PACKAGE
+  UDT_TYPE_SUBTYPE = 8,     // SUBTYPE IN PACKAGE
+  UDT_TYPE_ROWTYPE = 9,     // %ROWTYPE IN PACKAGE
+  UDT_TYPE_TABLE_COL = 10,  // %TYPE IN PACKAGE
 };
 
 // use ObUDTBase->properties_ highest bit record collection not null property.

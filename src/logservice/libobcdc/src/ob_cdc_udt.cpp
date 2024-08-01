@@ -224,7 +224,7 @@ int ObCDCUdtValueBuilder::build(
         "table_id", dml_stmt_task.get_table_id(),
         "column_id", column_schema_info.get_column_id());
   } else if (column_schema_info.is_xmltype()) {
-    if (OB_FAIL(build_xmltype(
+    if (OB_FAIL(build_xmltype_(
         column_schema_info,
         tz_info_wrap,
         is_new_value,
@@ -232,7 +232,13 @@ int ObCDCUdtValueBuilder::build(
         obj2str_helper,
         lob_ctx_cols,
         cv))) {
-      LOG_ERROR("build xmltype fail", KR(ret));
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        cv.is_col_nop_ = true;
+        LOG_DEBUG("can't find xml value, mark value nop", KR(ret), K(cv), K(column_schema_info), K(dml_stmt_task));
+        ret = OB_SUCCESS;
+      } else {
+        LOG_ERROR("build xmltype fail", KR(ret));
+      }
     }
   } else {
     ret = OB_NOT_SUPPORTED;
@@ -244,7 +250,7 @@ int ObCDCUdtValueBuilder::build(
   return ret;
 }
 
-int ObCDCUdtValueBuilder::build_xmltype(
+int ObCDCUdtValueBuilder::build_xmltype_(
     const ColumnSchemaInfo &column_schema_info,
     const ObTimeZoneInfoWrap *tz_info_wrap,
     const bool is_new_value,
@@ -275,7 +281,6 @@ int ObCDCUdtValueBuilder::build_xmltype(
           LOG_ERROR("get_lob_column_value fail", KR(ret), K(value->column_id_));
         } else {
           LOG_DEBUG("get_lob_column_value not exist", KR(ret), K(value->column_id_));
-          ret = OB_SUCCESS;
         }
       }
     }

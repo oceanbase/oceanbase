@@ -1585,9 +1585,49 @@ OB_SERIALIZE_MEMBER((ObDropTenantArg, ObDDLArg),
                     force_drop_, object_name_, open_recyclebin_,
                     tenant_id_, drop_only_in_restore_);
 
+int ObAddSysVarArg::init(const bool &update_sys_var, const bool &if_not_exist,
+    const uint64_t &tenant_id, const share::schema::ObSysVarSchema &sysvar)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sysvar_.assign(sysvar))) {
+    LOG_WARN("failed to assign sysvar", KR(ret), K(sysvar));
+  } else {
+    exec_tenant_id_ = tenant_id;
+    update_sys_var_ = update_sys_var;
+    if_not_exist_ = if_not_exist;
+    is_batch_ = false;
+    sysvars_.reset();
+  }
+  return ret;
+}
+
+int ObAddSysVarArg::init(const bool &update_sys_var, const bool &if_not_exist,
+    const uint64_t &tenant_id, const ObIArray<share::schema::ObSysVarSchema> &sysvars)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sysvars_.assign(sysvars))) {
+    LOG_WARN("failed to assign sysvar", KR(ret), K(sysvars));
+  } else {
+    exec_tenant_id_ = tenant_id;
+    update_sys_var_ = update_sys_var;
+    if_not_exist_ = if_not_exist;
+    is_batch_ = true;
+    sysvar_.reset();
+  }
+  return ret;
+}
+
 bool ObAddSysVarArg::is_valid() const
 {
-  return sysvar_.is_valid();
+  bool valid = true;
+  if (!is_batch_) {
+    valid = sysvar_.is_valid();
+  } else {
+    FOREACH_X(it, sysvars_, valid) {
+      valid = it->is_valid();
+    }
+  }
+  return valid;
 }
 
 int ObAddSysVarArg::assign(const ObAddSysVarArg &other)
@@ -1596,20 +1636,24 @@ int ObAddSysVarArg::assign(const ObAddSysVarArg &other)
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("fail to assign ddl arg", KR(ret), K(other));
   } else if (OB_FAIL(sysvar_.assign(other.sysvar_))) {
-    LOG_WARN("fail to assign sy var", KR(ret), K(other));
+    LOG_WARN("fail to assign sysvar", KR(ret), K(other));
+  } else if (OB_FAIL(sysvars_.assign(other.sysvars_))) {
+    LOG_WARN("fail to assign sysvars", KR(ret), K(other));
   } else {
     if_not_exist_ = other.if_not_exist_;
     update_sys_var_ = other.update_sys_var_;
+    is_batch_ = other.is_batch_;
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER((ObAddSysVarArg, ObDDLArg), sysvar_, if_not_exist_, update_sys_var_);
+OB_SERIALIZE_MEMBER((ObAddSysVarArg, ObDDLArg), sysvar_, if_not_exist_, update_sys_var_,
+    is_batch_, sysvars_);
 
 DEF_TO_STRING(ObAddSysVarArg)
 {
   int64_t pos = 0;
-  J_KV(K_(sysvar), K_(if_not_exist), K_(update_sys_var));
+  J_KV(K_(sysvar), K_(if_not_exist), K_(update_sys_var), K_(is_batch), K_(sysvars));
   return pos;
 }
 
@@ -3898,7 +3942,8 @@ OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     paxos_replica_number_,
                     skip_change_member_list_,
                     force_use_data_source_,
-                    force_data_source_);
+                    force_data_source_,
+                    prioritize_same_zone_src_);
 
 int ObLSMigrateReplicaArg::assign(
     const ObLSMigrateReplicaArg &that)
@@ -3914,6 +3959,7 @@ int ObLSMigrateReplicaArg::assign(
   skip_change_member_list_ = that.skip_change_member_list_;
   force_use_data_source_ = that.force_use_data_source_;
   force_data_source_ = that.force_data_source_;
+  prioritize_same_zone_src_ = that.prioritize_same_zone_src_;
   return ret;
 }
 
@@ -10853,8 +10899,14 @@ bool ObKillClientSessionRes::is_valid() const
   return true;
 }
 
+bool ObKillQueryClientSessionArg::is_valid() const
+{
+  return true;
+}
+
 OB_SERIALIZE_MEMBER(ObKillClientSessionArg, create_time_, client_sess_id_);
 OB_SERIALIZE_MEMBER(ObKillClientSessionRes, can_kill_client_sess_);
+OB_SERIALIZE_MEMBER(ObKillQueryClientSessionArg, client_sess_id_);
 
 OB_SERIALIZE_MEMBER(ObClientSessionCreateTimeAndAuthArg, client_sess_id_, tenant_id_, user_id_, has_user_super_privilege_);
 OB_SERIALIZE_MEMBER(ObClientSessionCreateTimeAndAuthRes, client_sess_create_time_, have_kill_auth_);

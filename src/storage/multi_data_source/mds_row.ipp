@@ -16,6 +16,8 @@
 #include "lib/ob_errno.h"
 #include "share/ob_cluster_version.h"
 #include "share/ob_errno.h"
+#include "storage/multi_data_source/compile_utility/mds_dummy_key.h"
+#include "storage/multi_data_source/mds_node.h"
 #include "storage/multi_data_source/mds_table_base.h"
 #include "storage/multi_data_source/runtime_utility/common_define.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
@@ -576,6 +578,11 @@ struct DumpNodeOP {
     }
     STATE state_;
   };
+  // if not tablet status node, don't compile special compat logic
+  template <typename Key = K,
+            typename Value = V,
+            typename std::enable_if<!(std::is_same<Key, DummyKey>::value &&
+                                    std::is_same<Value, ObTabletCreateDeleteMdsUserData>::value), bool>::type = true>
   int dump_node_(const UserMdsNode<K, V> &node) {
     #define PRINT_WRAPPER KR(ret), K(*this)
     int ret = OB_SUCCESS;
@@ -595,6 +602,45 @@ struct DumpNodeOP {
     return ret;
     #undef PRINT_WRAPPER
   }
+  /**********************this is for compat issue**********************************************************************/
+  // if tablet status node, DO compile special compat logic
+  template <typename Key = K,
+            typename Value = V,
+            typename std::enable_if<std::is_same<Key, DummyKey>::value &&
+                                    std::is_same<Value, ObTabletCreateDeleteMdsUserData>::value, bool>::type = true>
+  int dump_node_(const UserMdsNode<K, V> &node) {
+    #define PRINT_WRAPPER KR(ret), K(*this)
+    const UserMdsNode<DummyKey, ObTabletCreateDeleteMdsUserData> &specified_node = node;
+    int ret = OB_SUCCESS;
+    MDS_TG(1_ms);
+    if (MDS_FAIL(dump_kv_.v_.init(mds_table_id_,
+                                  mds_unit_id_,
+                                  node,
+                                  MdsAllocator::get_instance()))) {
+      MDS_LOG_SCAN(WARN, "failt to convert user mds node to dump node", K(node));
+    /**********************this is different logic from normal logic***************************************************/
+    } else if (specified_node.user_data_.data_type_ == ObTabletMdsUserDataType::START_TRANSFER_OUT) {
+      if (specified_node.seq_no_.is_min()) {
+        dump_kv_.v_.seq_no_ = transaction::ObTxSEQ::mk_v0(100);
+        dump_kv_.v_.crc_check_number_ = dump_kv_.v_.generate_hash();
+        MDS_LOG(INFO, "convert start transfer out tablet status mds node's seq no from min to 100 for compat issue", K(node), K(dump_kv_));
+      } else {
+        MDS_LOG(TRACE, "no need convert start transfer out tablet status mds node's seq no cause it is valid", K(node), K(dump_kv_));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    /**********************this is different logic from normal logic***************************************************/
+    } else if (MDS_FAIL(dump_op_(dump_kv_))) {
+      MDS_LOG_SCAN(WARN, "failt to apply op on dump node", K(node));
+    } else if (for_flush_) {
+      row_.report_event_("DUMP_NODE_FOR_FLUSH", node);
+    } else {
+      // report_event_("DUMP_NODE", node);
+    }
+    return ret;
+    #undef PRINT_WRAPPER
+  }
+  /********************************************************************************************************************/
   int scan_from_new_to_old_(const UserMdsNode<K, V> &node) {
     int ret = OB_SUCCESS;
     if (!check_node_scn_beflow_flush(node, flush_scn_)) {// skip

@@ -1263,6 +1263,9 @@ int ObWindowFunctionVecOp::eval_prev_part_exprs(const ObCompactRow *last_row, Ob
   if (OB_FAIL(ret)) {
   } else if (backuped_child_vector && OB_FAIL(tmp_holder.restore())) {
     LOG_WARN("restore vector results failed", K(ret));
+  } else if (backuped_child_vector) {
+    // clear evaluated flags anyway
+    clear_evaluated_flag();
   }
   return ret;
 }
@@ -1625,7 +1628,7 @@ int ObWindowFunctionVecOp::process_child_batch(const int64_t batch_idx,
               LOG_WARN("add aggregate result row for participator failed", K(ret));
             } else {
               LOG_TRACE("found new partition", K(found_next_part), K(part_start_idx), K(row_idx),
-                        K(child_brs), K(need_swap_store));
+                        K(*child_brs), K(need_swap_store));
             }
           }
           if (OB_FAIL(ret)) {
@@ -1772,7 +1775,7 @@ int ObWindowFunctionVecOp::check_same_partition(WinFuncColExpr &wf_col, bool &sa
     int64_t row_idx = eval_ctx_.get_batch_idx();
     int32_t offset = max_pby_col_cnt_ * row_idx;
     int32_t *pby_row_idxes = &(pby_row_mapped_idx_arr_[offset]);
-    if (OB_UNLIKELY(wf_col.reordered_pby_row_idx_ == nullptr)) {
+    if (OB_LIKELY(wf_col.reordered_pby_row_idx_ == nullptr)) {
       same = (MEMCMP(pby_row_idxes, wf_col.pby_row_mapped_idxes_, sizeof(int32_t) * part_cnt) == 0);
     } else {
       same = true;

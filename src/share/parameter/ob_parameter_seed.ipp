@@ -1401,6 +1401,10 @@ DEF_INT(open_cursors, OB_TENANT_PARAMETER, "50", "[0,65535]",
         "can use this parameter to prevent a session from opening an excessive number of cursors."
         "Range: [0, 65535] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_enhanced_cursor_validation, OB_TENANT_PARAMETER, "False",
+        "enable enhanced cursor validation, which let cursor can be fetched after transaction committed"
+        " if it has not read uncommitted data.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_batch_rescan, OB_TENANT_PARAMETER, "True",
          "enable px batch rescan for nlj or subplan filter",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1703,6 +1707,9 @@ DEF_BOOL(_enable_protocol_diagnose, OB_CLUSTER_PARAMETER, "True",
 DEF_BOOL(_enable_transaction_internal_routing, OB_TENANT_PARAMETER, "True",
          "enable SQLs of transaction routed to any servers in the cluster on demand",
          ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_wait_remote_lock, OB_TENANT_PARAMETER, "True",
+         "enable remote execution wait in lock wait mgr when lock conflict occurs",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(_load_tde_encrypt_engine, OB_CLUSTER_PARAMETER, "NONE",
         "load the engine that meet the security classification requirement to encrypt data.  default NONE",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1982,6 +1989,9 @@ DEF_STR_WITH_CHECKER(choose_migration_source_policy, OB_TENANT_PARAMETER, "regio
         "the policy of choose source in migration and add replica. 'idc' means firstly choose follower replica of the same idc as source, "
         "'region' means firstly choose follower replica of the same region as source",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_query_record_size_limit, OB_TENANT_PARAMETER, "65536", "[0, 67108864] in integer",
+        "set sql_audit and plan stat query sql size. Range: [0,67108864] in integer in integer.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_choose_migration_source_policy, OB_TENANT_PARAMETER, "True",
         "Control whether to use chose_migration_source_policy. "
         "If the value of configure is false, it will not use chose_migration_source_policy and choose replica with the largest checkpoint scn as the source.",
@@ -1998,6 +2008,10 @@ DEF_BOOL(_allow_skip_replay_redo_after_detete_tablet, OB_TENANT_PARAMETER, "FALS
 DEF_BOOL(strict_check_os_params, OB_CLUSTER_PARAMETER, "False",
          "A switch that determines whether to enable strict OS parameter check mode, defaulting to true and can be set to false to bypass strict checks."
          "Value: True: allowed; False: allowed but not suggested",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_BOOL(enable_ob_error_msg_style, OB_CLUSTER_PARAMETER, "True",
+         "A switch that determines whether to use the ORA-xx or OBE-xx error code format for ORA error codes, with a default value of True to use the OBE-xx format."
+         "The default value is True. Value: False means we use the ORA-xx format, True means we use the OBE-xx format.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
 DEF_BOOL(_enable_memleak_light_backtrace, OB_CLUSTER_PARAMETER, "True",
         "specifies whether allow memleak to get the backtrace of malloc by light_backtrace",

@@ -549,6 +549,7 @@ int ObExternalTableFileManager::create_alter_table_stmt(sql::ObExecContext &exec
       alter_table_stmt->get_alter_table_arg().is_inner_ = session_info->is_inner();
       alter_table_stmt->get_alter_table_arg().exec_tenant_id_ = session_info->get_effective_tenant_id();
       alter_table_stmt->get_alter_table_arg().session_id_ = session_info->get_sessid_for_table();
+      alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_table_flags(table_schema->get_table_flags());
     }
   }
   return ret;

@@ -122,7 +122,7 @@ int ObParallelMergeCtx::init(compaction::ObBasicTabletMergeCtx &merge_ctx)
   if (OB_SUCC(ret)) {
     is_inited_ = true;
     STORAGE_LOG(INFO, "Succ to init parallel merge ctx", K(ret),
-        K(enable_parallel_minor_merge), K(tablet_size), K(merge_ctx.static_param_), K(concurrent_cnt_));
+        K(enable_parallel_minor_merge), K(tablet_size), K(merge_ctx.get_dag_param()), K(concurrent_cnt_));
   }
 
   return ret;
@@ -537,6 +537,23 @@ int ObParallelMergeCtx::get_major_parallel_ranges(
   }
 
   return ret;
+}
+
+int64_t ObParallelMergeCtx::to_string(char* buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    if (SERIALIZE_MERGE == parallel_type_) {
+      J_KV(K_(concurrent_cnt));
+    } else {
+      J_KV(K_(parallel_type), K_(concurrent_cnt), "array_cnt", range_array_.count(), K_(range_array));
+    }
+    J_COMMA();
+    J_OBJ_END();
+  }
+  return pos;
 }
 
 }

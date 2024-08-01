@@ -34,6 +34,7 @@ public:
   void destroy();
   int start();
   void stop();
+  void wait();
   bool is_stopped() const;
 
   int read(const ObIOInfo &info, ObIOHandle &handle);

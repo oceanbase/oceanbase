@@ -119,6 +119,7 @@ public:
         const ObITableReadInfo *read_info,
         const ObStorageColumnGroupSchema &cg_schema,
         const int64_t cg_idx,
+        ObProgressiveMergeMgr &progressive_merge_mgr,
         ObTabletMergeInfo &merge_info,
         ObITable *table = nullptr,
         const bool add_column = false)
@@ -190,12 +191,13 @@ public:
         const ObITableReadInfo *read_info,
         const ObStorageColumnGroupSchema &cg_schema,
         const int64_t cg_idx,
+        ObProgressiveMergeMgr &progressive_merge_mgr,
         ObTabletMergeInfo &merge_info,
         ObITable *table = nullptr,
         const bool add_column = false);
   virtual int replay_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row) override;
-  virtual int end_write(const int64_t task_idx, ObTabletMergeInfo &merge_info) override { return write_helper_.end_write(merge_info); }
-  INHERIT_TO_STRING_KV("ObCOMergeRowWriter", ObCOMergeWriter, K_(write_helper))
+  virtual int end_write(const int64_t task_idx, ObTabletMergeInfo &merge_info) override;
+  INHERIT_TO_STRING_KV("ObCOMergeRowWriter", ObCOMergeWriter, K_(write_helper));
 private:
   virtual int process(const ObMacroBlockDesc &macro_desc) override;
   virtual int process(const blocksstable::ObMicroBlock &micro_block) override;

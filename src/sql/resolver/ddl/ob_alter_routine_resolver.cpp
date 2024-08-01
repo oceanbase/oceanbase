@@ -302,7 +302,7 @@ int ObAlterRoutineResolver::resolve_compile_parameter(
   for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
     if (params.at(i).first == var_type) {
       ret = OB_ERR_DUP_COMPILE_PARAM;
-      LOG_WARN("ORA-39956: duplicate setting for PL/SQL compiler parameter string");
+      LOG_WARN("OBE-39956: duplicate setting for PL/SQL compiler parameter string");
       LOG_USER_ERROR(OB_ERR_DUP_COMPILE_PARAM, var_name.length(), var_name.ptr());
     }
   }

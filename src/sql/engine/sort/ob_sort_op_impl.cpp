@@ -770,15 +770,15 @@ int ObSortOpImpl::init(
     } else if (use_heap_sort_ && OB_FAIL(init_topn())) {
       LOG_WARN("init topn failed", K(ret));
     } else if (use_heap_sort_ && nullptr != pd_topn_filter_info && pd_topn_filter_info->enabled_
-               && OB_FAIL(pd_topn_filter_.init(pd_topn_filter_info, tenant_id, sort_collations,
-                                               exec_ctx, mem_context_))) {
+               && OB_FAIL(pd_topn_filter_.init(is_fetch_with_ties, pd_topn_filter_info, tenant_id,
+                                               sort_collations, exec_ctx, mem_context_))) {
       LOG_WARN("failed to init pd_topn_filter_");
     } else if (use_partition_topn_sort_ && OB_FAIL(init_partition_topn(est_rows))) {
       LOG_WARN("init partition topn failed", K(ret));
     } else if (batch_size > 0
                && OB_ISNULL(stored_rows_ = static_cast<ObChunkDatumStore::StoredRow **>(
-                       mem_context_->get_malloc_allocator().alloc(
-                           sizeof(*stored_rows_) * batch_size)))) {
+                                mem_context_->get_malloc_allocator().alloc(sizeof(*stored_rows_)
+                                                                           * batch_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("allocate memory failed", K(ret));
     } else {
@@ -1421,13 +1421,9 @@ int ObSortOpImpl::prepare_bucket_array(ArrayType *&buckets, uint64_t bucket_num)
       SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
     }
   } else {
-    int64_t max_bucket_cnt  = buckets->get_capacity();
-    if (max_bucket_cnt < bucket_num) {
-      if (OB_FAIL(buckets->reserve(bucket_num))) {
-        LOG_WARN("failed to reserve bucket array", K(ret), K(bucket_num));
-      }
-    } else {
-      buckets->reuse();
+    buckets->reuse();
+    if (OB_FAIL(buckets->init(bucket_num))) {
+      LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
     }
   }
   return ret;
@@ -1455,6 +1451,7 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
     } else if (OB_FAIL(prepare_bucket_array<BucketNodeArray>(part_hash_nodes_, node_cnt))) {
       LOG_WARN("failed to create bucket node array", K(ret));
     } else {
+      buckets_->set_all(nullptr);
       max_bucket_cnt_ = bucket_cnt;
       max_node_cnt_ = node_cnt;
     }

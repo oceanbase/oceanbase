@@ -293,7 +293,7 @@ ObGCLSLog::ObGCLSLog()
 
 //GC类型日志回放要求同类型内按序, 考虑到回放的性能, 使用前向barrier
 ObGCLSLog::ObGCLSLog(const int16_t log_type)
-    : header_(ObLogBaseType::GC_LS_LOG_BASE_TYPE, ObReplayBarrierType::PRE_BARRIER),
+    : header_(ObLogBaseType::GC_LS_LOG_BASE_TYPE, ObReplayBarrierType::STRICT_BARRIER),
       version_(GC_LOG_VERSION),
       log_type_(log_type)
 {

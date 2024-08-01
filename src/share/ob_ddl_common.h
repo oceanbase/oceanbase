@@ -67,6 +67,9 @@ enum ObDDLType
   DDL_DROP_FTS_INDEX = 12,
   DDL_DROP_MULVALUE_INDEX = 13,
   DDL_DROP_VEC_INDEX = 14,
+  DDL_CREATE_VEC_INDEX = 15,
+  DDL_CREATE_MULTIVALUE_INDEX = 16,
+
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
   DDL_AUTO_SPLIT_NON_RANGE = 101,
@@ -112,6 +115,7 @@ enum ObDDLType
   DDL_ALTER_PARTITION_AUTO_SPLIT_ATTRIBUTE = 10005, // auto table auto partition // online
   DDL_ADD_COLUMN_INSTANT = 10006, // add after/before column
   DDL_COMPOUND_INSTANT = 10007,
+  DDL_ALTER_COLUMN_GROUP_DELAYED = 10008,
   ///< @note add new normal ddl type before this line
   DDL_MAX
 };
@@ -168,6 +172,12 @@ enum ObDDLTaskStatus {
   WAIT_ROWKEY_DOC_TABLE_COMPLEMENT = 26,
   GENERATE_DOC_AUX_SCHEMA = 27,
   WAIT_AUX_TABLE_COMPLEMENT = 28,
+  GENERATE_ROWKEY_VID_SCHEMA = 29,
+  WAIT_ROWKEY_VID_TABLE_COMPLEMENT = 30,
+  GENERATE_VEC_AUX_SCHEMA = 31,
+  WAIT_VEC_AUX_TABLE_COMPLEMENT = 32,
+  GENERATE_VID_ROWKEY_SCHEMA = 33,
+  WAIT_VID_ROWKEY_TABLE_COMPLEMENT = 34,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -286,6 +296,24 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WAIT_AUX_TABLE_COMPLEMENT:
       str = "WAIT_AUX_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_ROWKEY_VID_SCHEMA:
+      str = "GENERATE_ROWKEY_VID_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_ROWKEY_VID_TABLE_COMPLEMENT:
+      str = "WAIT_ROWKEY_VID_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_VEC_AUX_SCHEMA:
+      str = "GENERATE_VEC_AUX_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_VEC_AUX_TABLE_COMPLEMENT:
+      str = "WAIT_VEC_AUX_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::GENERATE_VID_ROWKEY_SCHEMA:
+      str = "GENERATE_VID_ROWKEY_SCHEMA";
+      break;
+    case ObDDLTaskStatus::WAIT_VID_ROWKEY_TABLE_COMPLEMENT:
+      str = "WAIT_VID_ROWKEY_TABLE_COMPLEMENT";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";

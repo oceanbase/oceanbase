@@ -91,16 +91,19 @@ ObColumnIndexArray::ObColumnIndexArray(const bool rowkey_mode /* = false*/,
 int64_t ObColumnIndexArray::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  J_OBJ_START();
-  J_KV(K_(rowkey_mode), K_(for_memtable));
-  if (rowkey_mode_) {
-    J_COMMA();
-    J_KV(K_(schema_rowkey_cnt), K_(column_cnt));
+  if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
-    J_COMMA();
-    J_KV(K_(array));
+    J_OBJ_START();
+    J_KV(K_(rowkey_mode), K_(for_memtable));
+    if (rowkey_mode_) {
+      J_COMMA();
+      J_KV(K_(schema_rowkey_cnt), K_(column_cnt));
+    } else {
+      J_COMMA();
+      J_KV(K_(array));
+    }
+    J_OBJ_END();
   }
-  J_OBJ_END();
   return pos;
 }
 
@@ -266,16 +269,18 @@ int ObReadInfoStruct::generate_for_column_store(ObIAllocator &allocator,
 int64_t ObReadInfoStruct::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  J_OBJ_START();
-  J_KV(K_(is_inited), K_(compat_version), K_(is_oracle_mode),
-       K_(schema_column_count),
-       K_(schema_rowkey_cnt),
-       K_(rowkey_cnt),
-       K_(cols_index),
-       K_(cols_desc),
-       K_(datum_utils));
-  J_OBJ_END();
-
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(is_inited), K_(compat_version), K_(is_oracle_mode),
+        K_(schema_column_count),
+        K_(schema_rowkey_cnt),
+        K_(rowkey_cnt),
+        K_(cols_index),
+        K_(cols_desc),
+        K_(datum_utils));
+    J_OBJ_END();
+  }
   return pos;
 }
 
@@ -638,26 +643,28 @@ int64_t ObTableReadInfo::get_serialize_size() const
 int64_t ObTableReadInfo::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
-  J_OBJ_START();
-  J_KV(K_(schema_column_count),
-       K_(schema_rowkey_cnt),
-       K_(rowkey_cnt),
-       K_(trans_col_index),
-       K_(seq_read_column_count),
-       K_(max_col_index),
-       K_(is_oracle_mode),
-       K_(cols_index),
-       K_(memtable_cols_index),
-       K_(cols_desc),
-       K_(cg_idxs),
-       K_(cols_extend),
-       K_(has_all_column_group),
-       K_(datum_utils),
-       "cols_param",
-       ObArrayWrap<ObColumnParam *>(0 == cols_param_.count() ? NULL : &cols_param_.at(0),
-                                    cols_param_.count()));
-  J_OBJ_END();
-
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    J_KV(K_(schema_column_count),
+        K_(schema_rowkey_cnt),
+        K_(rowkey_cnt),
+        K_(trans_col_index),
+        K_(seq_read_column_count),
+        K_(max_col_index),
+        K_(is_oracle_mode),
+        K_(cols_index),
+        K_(memtable_cols_index),
+        K_(cols_desc),
+        K_(cg_idxs),
+        K_(cols_extend),
+        K_(has_all_column_group),
+        K_(datum_utils),
+        "cols_param",
+        ObArrayWrap<ObColumnParam *>(0 == cols_param_.count() ? NULL : &cols_param_.at(0),
+                                      cols_param_.count()));
+    J_OBJ_END();
+  }
   return pos;
 }
 

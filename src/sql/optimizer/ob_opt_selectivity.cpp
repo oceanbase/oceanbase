@@ -1272,9 +1272,9 @@ int ObOptSelectivity::get_column_range_sel(const OptTableMetas &table_metas,
     LOG_TRACE("Get column range sel", K(selectivity), K(quals));
   }
   if (OB_SUCC(ret) && need_out_of_bounds &&
-      ((ctx.get_compat_version() >= COMPAT_VERSION_4_2_1_BP7 && ctx.get_compat_version() < COMPAT_VERSION_4_2_2) ||
-       (ctx.get_compat_version() >= COMPAT_VERSION_4_2_4 && ctx.get_compat_version() < COMPAT_VERSION_4_3_0) ||
-        ctx.get_compat_version() >= COMPAT_VERSION_4_3_2)) {
+      ctx.check_opt_compat_version(COMPAT_VERSION_4_2_1_BP7, COMPAT_VERSION_4_2_2,
+                                   COMPAT_VERSION_4_2_4, COMPAT_VERSION_4_3_0,
+                                   COMPAT_VERSION_4_3_2)) {
     ObObj min_value;
     ObObj max_value;
     min_value.set_min_value();
@@ -1447,10 +1447,9 @@ int ObOptSelectivity::calc_column_range_selectivity(const OptTableMetas &table_m
     ObObj *new_start_obj = NULL;
     ObObj *new_end_obj = NULL;
     ObArenaAllocator tmp_alloc("ObOptSel");
-    bool convert2sortkey =
-        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_1_BP5 && ctx.get_compat_version() < COMPAT_VERSION_4_2_2) ||
-        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_4 && ctx.get_compat_version() < COMPAT_VERSION_4_3_0) ||
-        ctx.get_compat_version() >= COMPAT_VERSION_4_3_1;
+    bool convert2sortkey = ctx.check_opt_compat_version(COMPAT_VERSION_4_2_1_BP5, COMPAT_VERSION_4_2_2,
+                                                        COMPAT_VERSION_4_2_4, COMPAT_VERSION_4_3_0,
+                                                        COMPAT_VERSION_4_3_1);
     if (OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&start_obj, tmp_alloc, new_start_obj)) ||
         OB_FAIL(ObDbmsStatsUtils::truncate_string_for_opt_stats(&end_obj, tmp_alloc, new_end_obj))) {
       LOG_WARN("failed to convert valid obj for opt stats", K(ret), K(start_obj), K(end_obj),
@@ -1497,10 +1496,9 @@ int ObOptSelectivity::calc_column_range_selectivity(const OptTableMetas &table_m
       //startobj and endobj cannot be min/max in this branch, no need to defend
       ObObj startscalar;
       ObObj endscalar;
-      bool convert2sortkey =
-        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_1_BP5 && ctx.get_compat_version() < COMPAT_VERSION_4_2_2) ||
-        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_4 && ctx.get_compat_version() < COMPAT_VERSION_4_3_0) ||
-        ctx.get_compat_version() >= COMPAT_VERSION_4_3_1;
+      bool convert2sortkey = ctx.check_opt_compat_version(COMPAT_VERSION_4_2_1_BP5, COMPAT_VERSION_4_2_2,
+                                                          COMPAT_VERSION_4_2_4, COMPAT_VERSION_4_3_0,
+                                                          COMPAT_VERSION_4_3_1);
       if (OB_FAIL(ObOptEstObjToScalar::convert_objs_to_scalars(NULL, NULL, &start_obj, &end_obj,
                                                                NULL, NULL, &startscalar, &endscalar,
                                                                convert2sortkey))) {
@@ -2047,6 +2045,11 @@ int ObOptSelectivity::get_compare_value(const OptSelectivityCtx &ctx,
                        &dtc_params,
                        CM_NONE,
                        col->get_result_type().get_collation_type());
+    ObAccuracy res_acc;
+    if (col->get_result_type().is_decimal_int()) {
+      res_acc = col->get_result_type().get_accuracy();
+      cast_ctx.res_accuracy_ = &res_acc;
+    }
     if (OB_FAIL(ObObjCaster::to_type(col->get_result_type().get_type(),
                                      col->get_result_type().get_collation_type(),
                                      cast_ctx,
@@ -2245,10 +2248,9 @@ int ObOptSelectivity::get_less_pred_sel(const OptSelectivityCtx &ctx,
       ObObj minobj(histogram.get(idx).endpoint_value_);
       ObObj maxobj(histogram.get(idx+1).endpoint_value_);
       ObObj startobj(minobj), endobj(maxv);
-      bool convert2sortkey =
-        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_1_BP5 && ctx.get_compat_version() < COMPAT_VERSION_4_2_2) ||
-        (ctx.get_compat_version() >= COMPAT_VERSION_4_2_4 && ctx.get_compat_version() < COMPAT_VERSION_4_3_0) ||
-        ctx.get_compat_version() >= COMPAT_VERSION_4_3_1;
+      bool convert2sortkey = ctx.check_opt_compat_version(COMPAT_VERSION_4_2_1_BP5, COMPAT_VERSION_4_2_2,
+                                                          COMPAT_VERSION_4_2_4, COMPAT_VERSION_4_3_0,
+                                                          COMPAT_VERSION_4_3_1);
       if (OB_FAIL(ObOptEstObjToScalar::convert_objs_to_scalars(
                     &minobj, &maxobj, &startobj, &endobj,
                     &minscalar, &maxscalar, &startscalar, &endscalar,

@@ -54,6 +54,7 @@ public:
   // param[in] upper_limit_scn the upper bound to determain which log entries can reserve
   // param[in] pre_accum_checksum, the accum_checksum of the pre log
   int truncate(const share::SCN &upper_limit_scn, const int64_t pre_accum_checksum);
+  bool check_compatibility() const;
 
   TO_STRING_KV("LogGroupEntryHeader", header_);
   NEED_SERIALIZE_AND_DESERIALIZE;

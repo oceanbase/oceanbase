@@ -335,7 +335,7 @@ int ObDbmsInfo::define_column(int64_t col_idx, ObObjType col_type,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("define column position is invalid", K(col_idx), K(fields_), K(col_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "ORA-06562: type of out argument must match type of column or bind variable");
+                   "OBE-06562: type of out argument must match type of column or bind variable");
   } else {
     #define ENABLE_RECOVER_EXIST 1
     OZ (define_columns_.set_refactored(col_idx, col_size, ENABLE_RECOVER_EXIST));
@@ -364,7 +364,7 @@ int ObDbmsInfo::define_array(int64_t col_idx,
       LOG_WARN("define column position is invalid",
                K(col_idx), K(fields_), K(id),K(elem_type), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                     "ORA-06562: type of out argument must match type of column or bind variable");
+                     "OBE-06562: type of out argument must match type of column or bind variable");
   } else {
     #define ENABLE_RECOVER_EXIST 1
     ArrayDesc desc(id, cnt, lower_bnd, elem_type);
@@ -983,7 +983,7 @@ int ObPLDbmsSql::define_column(ObExecContext &exec_ctx, ParamStore &params, ObOb
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("column size cannot be used for this type", K(column_type), K(column_size), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                     "ORA-06562: type of out argument must match type of column or bind variable");
+                     "OBE-06562: type of out argument must match type of column or bind variable");
     }
   }
 
@@ -1353,7 +1353,7 @@ int ObPLDbmsSql::do_describe(ObExecContext &exec_ctx, ParamStore &params, Descri
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Only select statement can be described", K(cursor->get_stmt_type()), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "ORA-00900: invalid SQL statement, only select statement can be described");
+                   "OBE-00900: invalid SQL statement, only select statement can be described");
   }
 
   OV (3 == params.count(), OB_INVALID_ARGUMENT, params);

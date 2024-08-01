@@ -44,7 +44,7 @@ public:
       int32_t len = 0;
       columns.get_payload(row_num, payload, len);
       if (OB_UNLIKELY(len != LLC_NUM_BUCKETS)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_INVALID_ARGUMENT;
         SQL_LOG(WARN, "unexpected length of input", K(ret), K(len));
       } else if (OB_ISNULL(llc_bitmap_buf)) {
         // not calculated before, copy from payload

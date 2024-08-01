@@ -320,7 +320,7 @@ struct ObGetMergeTablesResult
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
   share::SCN get_merge_scn() const;
-  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version),
+  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(is_simplified),
       K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn));
 };
 

@@ -98,7 +98,7 @@ OB_DEF_SERIALIZE(ObPushDownTopNFilterMsg)
   int ret = OB_SUCCESS;
   BASE_SER((ObPushDownTopNFilterMsg, ObP2PDatahubMsgBase));
   LST_DO_CODE(OB_UNIS_ENCODE, total_sk_cnt_, compares_, heap_top_datums_, cells_size_,
-              data_version_);
+              data_version_, is_fetch_with_ties_);
   return ret;
 }
 
@@ -107,7 +107,7 @@ OB_DEF_DESERIALIZE(ObPushDownTopNFilterMsg)
   int ret = OB_SUCCESS;
   BASE_DESER((ObPushDownTopNFilterMsg, ObP2PDatahubMsgBase));
   LST_DO_CODE(OB_UNIS_DECODE, total_sk_cnt_, compares_, heap_top_datums_, cells_size_,
-              data_version_);
+              data_version_, is_fetch_with_ties_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(adjust_cell_size())) {
     LOG_WARN("fail do adjust cell size", K(ret));
@@ -120,21 +120,23 @@ OB_DEF_SERIALIZE_SIZE(ObPushDownTopNFilterMsg)
   int64_t len = 0;
   BASE_ADD_LEN((ObPushDownTopNFilterMsg, ObP2PDatahubMsgBase));
   LST_DO_CODE(OB_UNIS_ADD_LEN, total_sk_cnt_, compares_, heap_top_datums_, cells_size_,
-              data_version_);
+              data_version_, is_fetch_with_ties_);
   return len;
 }
 ObPushDownTopNFilterMsg::ObPushDownTopNFilterMsg()
     : ObP2PDatahubMsgBase(), total_sk_cnt_(0), compares_(allocator_), heap_top_datums_(allocator_),
-      cells_size_(allocator_), data_version_(0)
+      cells_size_(allocator_), data_version_(0), is_fetch_with_ties_(false)
 {}
 
 int ObPushDownTopNFilterMsg::init(const ObPushDownTopNFilterInfo *pd_topn_filter_info,
                                   uint64_t tenant_id,
                                   const ObIArray<ObSortFieldCollation> *sort_collations,
                                   ObExecContext *exec_ctx,
-                                  int64_t px_seq_id)
+                                  int64_t px_seq_id,
+                                  bool is_fetch_with_ties)
 {
   int ret = OB_SUCCESS;
+  is_fetch_with_ties_ = is_fetch_with_ties;
   int64_t timeout_ts = GET_PHY_PLAN_CTX(*exec_ctx)->get_timeout_timestamp();
   int64_t effective_sk_cnt = pd_topn_filter_info->effective_sk_cnt_;
   ObPxSqcHandler *sqc_handler = exec_ctx->get_sqc_handler();
@@ -207,6 +209,7 @@ int ObPushDownTopNFilterMsg::assign(const ObP2PDatahubMsgBase &src_msg)
   } else if (OB_FAIL(adjust_cell_size())) {
     LOG_WARN("fail to adjust cell size", K(ret));
   } else if (FALSE_IT(data_version_ = src_topn_msg.data_version_)) {
+  } else if (FALSE_IT(is_fetch_with_ties_ = src_topn_msg.is_fetch_with_ties_)) {
   } else {
     // deep copy datum memory
     for (int i = 0; i < src_topn_msg.heap_top_datums_.count() && OB_SUCC(ret); ++i) {

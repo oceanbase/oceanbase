@@ -648,7 +648,7 @@ int ObCommitVersionsGetter::get_next_row(ObCommitVersionsArray &commit_versions)
         STORAGE_LOG(ERROR, "Unexpected empty commit versions array.", KR(ret), KPC(row));
       } else if (!commit_versions.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(ERROR, "invalid cache", KR(ret));
+        STORAGE_LOG(ERROR, "invalid cache", KR(ret), K(commit_versions), KPC(table_));
       } else {
         // get commit versions from tx data sstable done.
       }

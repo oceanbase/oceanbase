@@ -562,11 +562,17 @@ void ObIOUsage::calculate_io_usage()
   }
 }
 
-void ObIOUsage::get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us)
+int ObIOUsage::get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us)
 {
-  avg_iops.assign(group_avg_iops_);
-  avg_bytes.assign(group_avg_byte_);
-  avg_rt_us.assign(group_avg_rt_us_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(avg_iops.assign(group_avg_iops_))) {
+    LOG_ERROR("fail to assign avg_iops", K(ret));
+  } else if(OB_FAIL(avg_bytes.assign(group_avg_byte_))) {
+    LOG_ERROR("fail to assign avg_bytes", K(ret));
+  } else if (OB_FAIL(avg_rt_us.assign(group_avg_rt_us_))) {
+    LOG_ERROR("fail to assign avg_rt_us", K(ret));
+  }
+  return ret;
 }
 
 void ObIOUsage::record_request_start(ObIOResult &result)
@@ -712,11 +718,17 @@ void ObSysIOUsage::calculate_io_usage()
   }
 }
 
-void ObSysIOUsage::get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us)
+int ObSysIOUsage::get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us)
 {
-  avg_iops.assign(group_avg_iops_);
-  avg_bytes.assign(group_avg_byte_);
-  avg_rt_us.assign(group_avg_rt_us_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(avg_iops.assign(group_avg_iops_))) {
+    LOG_ERROR("fail to assign avg_iops", K(ret));
+  } else if(OB_FAIL(avg_bytes.assign(group_avg_byte_))) {
+    LOG_ERROR("fail to assign avg_bytes", K(ret));
+  } else if (OB_FAIL(avg_rt_us.assign(group_avg_rt_us_))) {
+    LOG_ERROR("fail to assign avg_rt_us", K(ret));
+  }
+  return ret;
 }
 
 /******************             CpuUsage              **********************/
@@ -810,10 +822,20 @@ int ObIOTuner::send_detect_task()
   return ret;
 }
 
-void ObIOTuner::destroy()
+void ObIOTuner::stop()
 {
   TG_STOP(lib::TGDefIDs::IO_TUNING);
+}
+
+void ObIOTuner::wait()
+{
   TG_WAIT(lib::TGDefIDs::IO_TUNING);
+}
+
+void ObIOTuner::destroy()
+{
+  stop();
+  wait();
   is_inited_ = false;
 }
 
@@ -1756,6 +1778,12 @@ void ObIOScheduler::stop()
   for (int64_t i = 0; i < senders_.count(); ++i) {
     senders_.at(i)->stop_submit();
   }
+  io_tuner_.stop();
+}
+
+void ObIOScheduler::wait()
+{
+  io_tuner_.wait();
 }
 
 int ObIOScheduler::schedule_request(ObIORequest &req)
@@ -2979,6 +3007,7 @@ void ObIOCallbackManager::destroy()
   }
   config_thread_count_ = 0;
   queue_depth_ = 0;
+  DRWLock::WRLockGuard guard(lock_);
   runners_.reset();
   io_allocator_ = nullptr;
   is_inited_ = false;

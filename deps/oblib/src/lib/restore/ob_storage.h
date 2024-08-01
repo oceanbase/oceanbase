@@ -287,6 +287,7 @@ protected:
   ObStorageS3Reader s3_reader_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
+  ObObjectStorageInfo *storage_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageReader);
 };
@@ -335,6 +336,7 @@ protected:
   ObStorageS3Writer s3_writer_;
   int64_t start_ts_;
   char uri_[OB_MAX_URI_LENGTH];
+  ObObjectStorageInfo *storage_info_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageWriter);
 };
@@ -371,7 +373,7 @@ private:
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
-  common::ObObjectStorageInfo storage_info_;
+  common::ObObjectStorageInfo *storage_info_;
   ObArenaAllocator allocator_;
   ObStorageType type_;
 
@@ -403,7 +405,7 @@ protected:
   int64_t start_ts_;
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
-  common::ObObjectStorageInfo storage_info_;
+  common::ObObjectStorageInfo *storage_info_;
 	DISALLOW_COPY_AND_ASSIGN(ObStorageMultiPartWriter);
 };
 

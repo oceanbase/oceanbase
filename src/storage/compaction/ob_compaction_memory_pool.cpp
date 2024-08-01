@@ -616,7 +616,7 @@ int ObCompactionBufferWriter::ensure_space(int64_t size)
     if (OB_FAIL(resize(size))) {
       LOG_WARN("failed to resize buffer writer", K(ret), K(size));
     } else {
-      LOG_INFO("success to resize buffer writer", K(ret), K(size));
+      LOG_TRACE("success to resize buffer writer", K(ret), K(size));
     }
   }
 

@@ -6201,23 +6201,40 @@ void ObBasicSessionInfo::set_session_sleep()
 int ObBasicSessionInfo::base_save_session(BaseSavedValue &saved_value, bool skip_cur_stmt_tables)
 {
   int ret = OB_SUCCESS;
-  OX (saved_value.cur_phy_plan_ = cur_phy_plan_);
-  OX (cur_phy_plan_ = NULL);
-  int len = MIN(thread_data_.cur_query_len_, static_cast<int64_t>(sizeof(saved_value.cur_query_) - 1));
-  if (thread_data_.cur_query_ != nullptr) {
-    OX (MEMCPY(&saved_value.cur_query_, thread_data_.cur_query_, len));
-    OX (thread_data_.cur_query_[0] = 0);
+  saved_value.cur_phy_plan_ = cur_phy_plan_;
+  cur_phy_plan_ = NULL;
+
+  int64_t truncated_len = MIN(MAX_QUERY_STRING_LEN - 1,
+                                   thread_data_.cur_query_len_);
+  if (saved_value.cur_query_buf_len_ - 1 < truncated_len) {
+    if (saved_value.cur_query_ != nullptr) {
+      ob_free(saved_value.cur_query_);
+    }
+    int64_t len = MAX(MIN_CUR_QUERY_LEN, truncated_len + 1);
+    saved_value.cur_query_ = reinterpret_cast<char*>(ob_malloc(len, ObMemAttr(orig_tenant_id_,
+                                                                 ObModIds::OB_SQL_SESSION_QUERY_SQL)));
+    if (OB_ISNULL(saved_value.cur_query_)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else {
+      saved_value.cur_query_buf_len_ = len;
+    }
   }
-  OX (saved_value.cur_query_len_ = len);
-  OX (thread_data_.cur_query_len_ = 0);
-  OZ (saved_value.total_stmt_tables_.assign(total_stmt_tables_));
-  if (!skip_cur_stmt_tables) {
-    OZ (merge_stmt_tables(), total_stmt_tables_, cur_stmt_tables_);
+  if (OB_SUCC(ret)) {
+    if (thread_data_.cur_query_ != nullptr) {
+      OX (MEMCPY(saved_value.cur_query_, thread_data_.cur_query_, truncated_len));
+      OX (thread_data_.cur_query_[0] = 0);
+    }
+    OX (saved_value.cur_query_len_ = truncated_len);
+    OX (thread_data_.cur_query_len_ = 0);
+    OZ (saved_value.total_stmt_tables_.assign(total_stmt_tables_));
+    if (!skip_cur_stmt_tables) {
+      OZ (merge_stmt_tables(), total_stmt_tables_, cur_stmt_tables_);
+    }
+    OZ (saved_value.cur_stmt_tables_.assign(cur_stmt_tables_));
+    OX (cur_stmt_tables_.reset());
+    OX (sys_vars_cache_.get_autocommit_info(saved_value.inc_autocommit_));
+    OX (sys_vars_cache_.set_autocommit_info(false));
   }
-  OZ (saved_value.cur_stmt_tables_.assign(cur_stmt_tables_));
-  OX (cur_stmt_tables_.reset());
-  OX (sys_vars_cache_.get_autocommit_info(saved_value.inc_autocommit_));
-  OX (sys_vars_cache_.set_autocommit_info(false));
   return ret;
 }
 

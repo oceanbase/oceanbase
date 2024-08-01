@@ -1849,9 +1849,8 @@ int ObWhereSubQueryPullup::check_can_split(ObSelectStmt *subquery,
   if (OB_ISNULL(subquery) || OB_ISNULL(subquery->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(subquery));
-  } else if (subquery->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_3
-             || (subquery->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_0
-                 && subquery->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_2)) {
+  } else if (!subquery->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
+                                                                  COMPAT_VERSION_4_3_2)) {
     can_split = false;
     OPT_TRACE("can not split cartesian tables, optimizer features version lower than 4.3.2");
   } else if (join_type != LEFT_SEMI_JOIN) {

@@ -2165,7 +2165,7 @@ int ObDataIndexBlockBuilder::append_index_micro_block(ObMacroBlock &macro_block,
   if (OB_FAIL(build_index_micro_block(leaf_block_desc))) {
     STORAGE_LOG(WARN, "fail to build n-1 level micro block", K(ret));
   } else {
-    if (OB_TMP_FAIL(index_block_pre_warmer_.reserve_kvpair(leaf_block_desc, 1))) {
+    if (index_block_pre_warmer_.is_valid() && OB_TMP_FAIL(index_block_pre_warmer_.reserve_kvpair(leaf_block_desc, 1))) {
       if (OB_BUF_NOT_ENOUGH != tmp_ret) {
         STORAGE_LOG(WARN, "Fail to reserve index block value", K(tmp_ret));
       }
@@ -2181,11 +2181,13 @@ int ObDataIndexBlockBuilder::append_index_micro_block(ObMacroBlock &macro_block,
       leaf_block_desc.block_offset_ = data_offset;
       leaf_block_size = leaf_block_desc.get_block_size();
       if (OB_TMP_FAIL(tmp_ret)) {
-      } else if (OB_TMP_FAIL(index_block_pre_warmer_.update_and_put_kvpair(leaf_block_desc))) {
+      } else if (index_block_pre_warmer_.is_valid() && OB_TMP_FAIL(index_block_pre_warmer_.update_and_put_kvpair(leaf_block_desc))) {
         STORAGE_LOG(WARN, "Fail to build index block cache key and put into cache", K(tmp_ret));
       }
     }
-    index_block_pre_warmer_.reuse();
+    if (index_block_pre_warmer_.is_valid()) {
+      index_block_pre_warmer_.reuse();
+    }
   }
 
   if (OB_FAIL(ret)) {

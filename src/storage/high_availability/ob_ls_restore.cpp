@@ -1049,9 +1049,11 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
         ctx_->ls_rebuild_seq_ = ctx_->arg_.is_leader_ ? -1 : ls_meta_package.ls_meta_.get_rebuild_seq();
         ctx_->sys_tablet_id_array_.reset();
         int64_t tablet_cnt = 0;
+        ObLogicTabletID logic_tablet_id;
         // create all tablets on the log stream
         while (OB_SUCC(ret)) {
           tablet_info.reset();
+          logic_tablet_id.reset();
           if (OB_FAIL(reader->get_next_tablet_info(tablet_info))) {
             if (OB_ITER_END == ret) {
               LOG_INFO("update ls meta and create all tablets succeed", KPC_(ctx), K(tablet_cnt));
@@ -1060,8 +1062,10 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
             } else {
               LOG_WARN("failed to get next tablet meta", K(ret));
             }
+          } else if (OB_FAIL(logic_tablet_id.init(tablet_info.tablet_id_, tablet_info.param_.transfer_info_.transfer_seq_))) {
+            LOG_WARN("failed to init logicl tablet id", K(ret), K(tablet_info));
           } else if (tablet_info.param_.tablet_id_.is_ls_inner_tablet()
-                     && OB_FAIL(ctx_->sys_tablet_id_array_.push_back(tablet_info.param_.tablet_id_))) {
+                     && OB_FAIL(ctx_->sys_tablet_id_array_.push_back(logic_tablet_id))) {
             LOG_WARN("failed to push sys tablet id into array", K(ret), "array count", ctx_->sys_tablet_id_array_.count());
           } else if (!tablet_info.param_.is_empty_shell() && OB_FALSE_IT(set_tablet_to_restore(tablet_info.param_))) {
           } else if (OB_FAIL(reset_multi_version_start_(tablet_info.param_))) {
@@ -1076,33 +1080,6 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
     }
 
     free_copy_ls_view_reader_(reader);
-  }
-  return ret;
-}
-
-int ObStartLSRestoreTask::generate_tablet_id_array_(
-    const ObIArray<common::ObTabletID> &tablet_id_array)
-{
-  int ret = OB_SUCCESS;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start ls restore task do not init", K(ret));
-  } else if (tablet_id_array.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("generate tablet id array get invalid argument", K(ret), K(tablet_id_array));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
-      const ObTabletID &tablet_id = tablet_id_array.at(i);
-      if (tablet_id.is_ls_inner_tablet()) {
-        if (OB_FAIL(ctx_->sys_tablet_id_array_.push_back(tablet_id))) {
-          LOG_WARN("failed to push tablet id into array", K(ret));
-        }
-      } else {
-        if (OB_FAIL(ctx_->data_tablet_id_array_.push_back(tablet_id))) {
-          LOG_WARN("failed to push tablet id into array", K(ret));
-        }
-      }
-    }
   }
   return ret;
 }
@@ -1298,6 +1275,7 @@ int ObSysTabletsRestoreTask::init()
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
   ObLSRestoreDagNet *ls_restore_dag_net = nullptr;
+  ObArray<ObTabletID> tablet_id_array;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -1320,8 +1298,10 @@ int ObSysTabletsRestoreTask::init()
     const ObTabletRestoreAction::ACTION &restore_action = ObTabletRestoreAction::ACTION::RESTORE_ALL;
     if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+    } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->sys_tablet_id_array_, tablet_id_array))) {
+      LOG_WARN("failed to append tablet list", K(ret));
     } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
-        ctx_->arg_.tenant_id_, ctx_->sys_tablet_id_array_, ctx_->arg_.is_leader_,
+        ctx_->arg_.tenant_id_, tablet_id_array, ctx_->arg_.is_leader_,
         ctx_->need_check_seq_, ctx_->ls_rebuild_seq_, ctx_->src_,
         ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, restore_action,
         meta_index_store_, &ctx_->ha_table_info_mgr_,
@@ -1415,7 +1395,7 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
     LOG_WARN("failed to push sys_tablets_restore_dag into array", K(ret), K(*ctx_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->sys_tablet_id_array_.count(); ++i) {
-      const ObTabletID &tablet_id = ctx_->sys_tablet_id_array_.at(i);
+      const ObTabletID &tablet_id = ctx_->sys_tablet_id_array_.at(i).tablet_id_;
       ObTabletRestoreDag *tablet_restore_dag = nullptr;
       ObInitTabletRestoreParam param;
       param.tenant_id_ = ctx_->arg_.tenant_id_;
@@ -1642,7 +1622,7 @@ int ObDataTabletsMetaRestoreTask::process()
 int ObDataTabletsMetaRestoreTask::build_tablet_group_info_()
 {
   int ret = OB_SUCCESS;
-  ObArray<ObTabletID> tablet_group_id_array;
+  ObArray<ObLogicTabletID> tablet_group_id_array;
   const int64_t MAX_TABLET_GROUP_NUM = 128;
   int64_t index = 0;
 
@@ -1654,7 +1634,7 @@ int ObDataTabletsMetaRestoreTask::build_tablet_group_info_()
     while (OB_SUCC(ret) && index < ctx_->data_tablet_id_array_.count()) {
       for (int64_t i = 0; OB_SUCC(ret) && i < MAX_TABLET_GROUP_NUM
           && index < ctx_->data_tablet_id_array_.count(); ++i, index++) {
-        const ObTabletID &tablet_id = ctx_->data_tablet_id_array_.at(index);
+        const ObLogicTabletID &tablet_id = ctx_->data_tablet_id_array_.at(index);
         if (OB_FAIL(tablet_group_id_array.push_back(tablet_id))) {
           LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id));
         }
@@ -1682,7 +1662,7 @@ int ObDataTabletsMetaRestoreTask::generate_tablet_group_dag_()
   ObIDagNet *dag_net = nullptr;
   ObDataTabletsMetaRestoreDag *data_tablets_meta_restore_dag = nullptr;
   ObHATabletGroupCtx *tablet_group_ctx = nullptr;
-  ObArray<ObTabletID> tablet_id_array;
+  ObArray<ObLogicTabletID> tablet_id_array;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1805,7 +1785,7 @@ int ObTabletGroupMetaRestoreDag::fill_dag_key(char *buf, const int64_t buf_len) 
 }
 
 int ObTabletGroupMetaRestoreDag::init(
-    const common::ObIArray<common::ObTabletID> &tablet_id_array,
+    const common::ObIArray<ObLogicTabletID> &tablet_id_array,
     share::ObIDagNet *dag_net,
     share::ObIDag *finish_dag)
 {
@@ -1865,7 +1845,7 @@ int ObTabletGroupMetaRestoreDag::generate_next_dag(share::ObIDag *&dag)
   bool need_set_failed_result = true;
   ObLSRestoreCtx *ctx = nullptr;
   ObHATabletGroupCtx *tablet_group_ctx = nullptr;
-  ObArray<ObTabletID> tablet_id_array;
+  ObArray<ObLogicTabletID> tablet_id_array;
   ObDagId dag_id;
 
   if (!is_inited_) {
@@ -1934,7 +1914,7 @@ int ObTabletGroupMetaRestoreDag::fill_info_param(compaction::ObIBasicInfoParam *
     LOG_WARN("ls restore ctx should not be NULL", K(ret), KP(ctx));
   } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                   ctx->arg_.ls_id_.id(),
-                                  static_cast<int64_t>(tablet_id_array_.at(0).id()),
+                                  static_cast<int64_t>(tablet_id_array_.at(0).tablet_id_.id()),
                                   static_cast<int64_t>(ctx->arg_.is_leader_),
                                   "dag_net_task_id", to_cstring(ctx->task_id_),
                                   "src", to_cstring(ctx->arg_.src_.get_server())))) {
@@ -1957,7 +1937,7 @@ ObTabletGroupMetaRestoreTask::~ObTabletGroupMetaRestoreTask()
 }
 
 int ObTabletGroupMetaRestoreTask::init(
-    const ObIArray<ObTabletID> &tablet_id_array,
+    const ObIArray<ObLogicTabletID> &tablet_id_array,
     share::ObIDag *finish_dag)
 {
   int ret = OB_SUCCESS;
@@ -2033,7 +2013,7 @@ int ObTabletGroupMetaRestoreTask::create_or_update_tablets_()
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array_.count(); ++i) {
-      const ObTabletID &tablet_id = tablet_id_array_.at(i);
+      const ObTabletID &tablet_id = tablet_id_array_.at(i).tablet_id_;
       if (OB_FAIL(create_or_update_tablet_(tablet_id, ls))) {
         LOG_WARN("failed to create or update tablet", K(ret), K(tablet_id), KPC(ctx_));
       }

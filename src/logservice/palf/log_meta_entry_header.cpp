@@ -55,8 +55,7 @@ bool LogMetaEntryHeader::is_valid() const
 {
   return MAGIC == magic_
          && LOG_META_ENTRY_HEADER_VERSION == version_
-         && 0 != data_len_
-         && 0 != header_checksum_;
+         && 0 != data_len_;
 }
 
 void LogMetaEntryHeader::reset()

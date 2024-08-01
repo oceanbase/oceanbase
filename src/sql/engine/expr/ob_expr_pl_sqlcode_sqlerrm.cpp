@@ -116,16 +116,16 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
       int64_t sqlcode = sqlcode_info->get_sqlcode();
       if (0 == sqlcode) {
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
-        OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "ORA-0000: normal, successful completion"));
+        OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "OBE-0000: normal, successful completion"));
       } else if (sqlcode > 0) {
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
         OZ (databuff_printf(sqlerrm_result, max_buf_size, pos, "User-Defined Exception"));
       } else if (sqlcode >= OB_MIN_RAISE_APPLICATION_ERROR
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
-        max_buf_size = 30 + sqlcode_info->get_sqlmsg().length(); // ORA-CODE: ERRMSG
+        max_buf_size = 30 + sqlcode_info->get_sqlmsg().length(); // OBE-CODE: ERRMSG
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
         OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                           "ORA%ld: %.*s", sqlcode,
+                           "OBE%ld: %.*s", sqlcode,
                            sqlcode_info->get_sqlmsg().length(),
                            sqlcode_info->get_sqlmsg().ptr()));
       } else {
@@ -137,7 +137,7 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
           if (NULL == err_msg) {
             CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
             OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                "ORA%ld: Message error_code not found; product=RDBMS; facility=ORA", sqlcode));
+                "OBE%ld: Message error_code not found; product=RDBMS; facility=ORA", sqlcode));
           } else {
             sqlerrm_result = const_cast<char*>(err_msg);
           }
@@ -156,21 +156,21 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
         OZ (databuff_printf(sqlerrm_result, 200, pos, "-%ld: non-ORACLE exception", sqlcode));
       } else if (sqlcode == 0) {
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
-        OZ (databuff_printf(sqlerrm_result, 200, pos, "ORA-0000: normal, successful completion"));
+        OZ (databuff_printf(sqlerrm_result, 200, pos, "OBE-0000: normal, successful completion"));
       } else if (sqlcode >= OB_MIN_RAISE_APPLICATION_ERROR
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
         if (sqlcode_info->get_sqlcode() == sqlcode) {
-          max_buf_size = 30 + sqlcode_info->get_sqlmsg().length(); // ORA-CODE: ERRMSG
+          max_buf_size = 30 + sqlcode_info->get_sqlmsg().length(); // OBE-CODE: ERRMSG
           CK (OB_NOT_NULL(
             sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
           OZ (databuff_printf(sqlerrm_result, max_buf_size, pos,
-                             "ORA%ld: %.*s", sqlcode,
+                             "OBE%ld: %.*s", sqlcode,
                              sqlcode_info->get_sqlmsg().length(),
                              sqlcode_info->get_sqlmsg().ptr()));
         } else {
           CK (OB_NOT_NULL(sqlerrm_result
             = expr.get_str_res_mem(ctx, max_buf_size)));
-          OZ (databuff_printf(sqlerrm_result, 200, pos, "ORA%ld:", sqlcode));
+          OZ (databuff_printf(sqlerrm_result, 200, pos, "OBE%ld:", sqlcode));
         }
       } else if (sqlcode < 0) {
         const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
@@ -180,7 +180,7 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
           const char* err_msg = ob_errpkt_str_user_error(sqlcode, true);
           if (NULL == err_msg) {
             CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
-            OZ (databuff_printf(sqlerrm_result, 200, pos, "ORA%ld: Message error_code not found; product=RDBMS; facility=ORA", sqlcode));
+            OZ (databuff_printf(sqlerrm_result, 200, pos, "OBE%ld: Message error_code not found; product=RDBMS; facility=ORA", sqlcode));
           } else {
             sqlerrm_result = const_cast<char*>(err_msg);
           }

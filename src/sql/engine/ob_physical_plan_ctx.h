@@ -345,6 +345,12 @@ public:
       last_insert_id_cur_stmt_ = autoinc_id_tmp_;
     }
   }
+  inline void record_last_insert_id_cur_stmt_for_batch()
+  {
+    if (autoinc_id_tmp_ > 0) {
+      last_insert_id_cur_stmt_ = autoinc_id_tmp_;
+    }
+  }
   inline void set_last_insert_id_cur_stmt(const uint64_t last_insert_id)
   {
     last_insert_id_cur_stmt_ = last_insert_id;
@@ -525,6 +531,11 @@ public:
   int64_t get_main_xa_trans_branch() const { return main_xa_trans_branch_; }
   ObIArray<uint64_t> &get_dblink_ids() { return dblink_ids_; }
   inline int keep_dblink_id(uint64_t dblink_id) { return add_var_to_array_no_dup(dblink_ids_, dblink_id); }
+  inline void set_is_direct_insert_plan(const bool is_direct_insert_plan)
+  {
+    is_direct_insert_plan_ = is_direct_insert_plan;
+  }
+  inline bool get_is_direct_insert_plan() const { return is_direct_insert_plan_; }
 private:
   int init_param_store_after_deserialize();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
@@ -677,6 +688,7 @@ private:
   ObSEArray<uint64_t, 8> dblink_ids_;
   int64_t total_memstore_read_row_count_;
   int64_t total_ssstore_read_row_count_;
+  bool is_direct_insert_plan_; // for direct load: insert into/overwrite select
 };
 
 }

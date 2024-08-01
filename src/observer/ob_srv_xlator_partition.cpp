@@ -330,4 +330,6 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRpcCheckandCancelDDLComplementDagP, gctx_);
 
   RPC_PROCESSOR(ObGAISBroadcastAutoIncCacheP);
+  // kill query client session
+  RPC_PROCESSOR(ObKillQueryClientSessionP, gctx_);
 }

@@ -206,7 +206,7 @@ public:
                                 storage::ObLS &ls,
                                 const storage::ObTablet &,
                                 storage::ObGetMergeTablesResult&);
-  static GetMergeTables get_merge_tables[compaction::ObMergeType::MERGE_TYPE_MAX];
+  static GetMergeTables get_merge_tables[];
 };
 
 struct ObMinorExecuteRangeMgr
@@ -344,12 +344,6 @@ public:
       const ObCOSSTableV2 &co_sstable,
       const ObStorageSchema &storage_schema,
       ObCOMajorSSTableStatus &major_sstable_status);
-  static int estimate_row_cnt_for_major_merge(
-      const uint64_t table_id,
-      const ObIArray<ObITable *> &tables,
-      const ObStorageSchema &storage_schema,
-      const ObTabletHandle &tablet_handle,
-      int64_t &estimate_row_cnt);
   static bool whether_to_build_row_store(
       const int64_t &estimate_row_cnt,
       const int64_t &column_cnt);
@@ -357,11 +351,13 @@ public:
       const ObCOMajorSSTableStatus &major_sstable_status,
       const int64_t &estimate_row_cnt,
       const int64_t &column_cnt);
+  static int accumulate_physical_row_cnt(
+      const ObIArray<ObITable *> &tables,
+      int64_t &physical_row_cnt);
   static int decide_co_major_merge_type(
       const ObCOSSTableV2 &co_sstable,
       const ObIArray<ObITable *> &tables,
       const ObStorageSchema &storage_schema,
-      const ObTabletHandle &tablet_handle,
       ObCOMajorMergeType &major_merge_type);
 
 private:

@@ -30,7 +30,8 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::sql;
 
 ObDDLTabletScheduler::ObDDLTabletScheduler()
-  : is_inited_(false), allocator_("TabletScheduler")
+  : is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID), ref_data_table_id_(OB_INVALID_ID),
+    task_id_(OB_INVALID_ID), parallelism_(0), snapshot_version_(0), root_service_(nullptr)
 {
 
 }
@@ -49,6 +50,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
                                const ObIArray<ObTabletID> &tablets)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator arena("tblt_sched_init");
   common::ObAddr inner_sql_exec_addr;
   common::ObArray<ObString> running_sql_info;
   common::ObArray<ObLSID> ls_ids;
@@ -111,7 +113,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
     GCTX.root_service_->get_sql_proxy(),
     tablet_checksum_status_map))) {
     LOG_WARN("fail to get tablet checksum status", K(ret), K(tenant_id), K(table_id), K(task_id), K(tablets));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_running_tasks_inner_sql(root_service_->get_sql_proxy(), trace_id, tenant_id, task_id, snapshot_version, inner_sql_exec_addr, allocator_, running_sql_info))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_running_tasks_inner_sql(root_service_->get_sql_proxy(), trace_id, tenant_id, task_id, snapshot_version, inner_sql_exec_addr, arena, running_sql_info))) {
     LOG_WARN("get running tasks inner sql fail", K(ret), K(trace_id), K(tenant_id), K(task_id), K(snapshot_version), K(inner_sql_exec_addr), K(running_sql_info));
   } else {
     bool is_running_status = false;
@@ -137,7 +139,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
         LOG_WARN("table id to data size map set fail", K(ret), K(ref_data_table_tablets.at(i).id()), K(tablet_data_row_cnt));
       } else if (OB_FAIL(part_tablets.push_back(tablets.at(i)))) {
         LOG_WARN("fail to push back", K(ret), K(tablets.at(i)));
-      } else if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id, ref_data_table_id, table_id, part_tablets, allocator_, partition_names))) {
+      } else if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id, ref_data_table_id, table_id, part_tablets, arena, partition_names))) {
         LOG_WARN("fail to get index table batch partition names", K(ret), K(tenant_id), K(ref_data_table_id), K(table_id), K(part_tablets), K(partition_names));
       } else {
         if (OB_FAIL(tablet_checksum_status_map.get_refactored(tablets.at(i).id(), is_finished_status))) {
@@ -147,7 +149,7 @@ int ObDDLTabletScheduler::init(const uint64_t tenant_id,
         }
         for (int64_t j = 0; j < running_sql_info.count() && OB_SUCC(ret); j++) {
           is_running_status = false;
-          if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(0), allocator_, is_running_status))) {
+          if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(0), arena, is_running_status))) {
             LOG_WARN("fail to check target partition is running", K(ret), K(running_sql_info.at(j)), K(partition_names.at(0)), K(is_running_status));
           } else if (is_running_status) {
             break;
@@ -346,13 +348,14 @@ int ObDDLTabletScheduler::get_next_parallelism(int64_t &parallelism)
 int ObDDLTabletScheduler::get_running_sql_parallelism(int64_t &parallelism)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator arena("tblt_sched_para");
   parallelism = 0;
   common::ObAddr inner_sql_exec_addr;
   common::ObArray<ObString> running_sql_info;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_running_tasks_inner_sql(root_service_->get_sql_proxy(), trace_id_, tenant_id_, task_id_, snapshot_version_, inner_sql_exec_addr, allocator_, running_sql_info))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_running_tasks_inner_sql(root_service_->get_sql_proxy(), trace_id_, tenant_id_, task_id_, snapshot_version_, inner_sql_exec_addr, arena, running_sql_info))) {
     LOG_WARN("get running tasks inner sql fail", K(ret), K(tenant_id_), K(trace_id_), K(task_id_), K(snapshot_version_), K(inner_sql_exec_addr), K(running_sql_info));
   } else {
     for (int64_t i = 0; i < running_sql_info.count() && OB_SUCC(ret); i++) {
@@ -362,7 +365,7 @@ int ObDDLTabletScheduler::get_running_sql_parallelism(int64_t &parallelism)
         uint64_t value;
         int err = 0;
         ObString parallel;
-        if (OB_FAIL(ob_sub_str(allocator_, running_sql_info.at(i), loc+parallel_flag.length()-1, running_sql_info.at(i).length() - 1, parallel))) {
+        if (OB_FAIL(ob_sub_str(arena, running_sql_info.at(i), loc+parallel_flag.length()-1, running_sql_info.at(i).length() - 1, parallel))) {
           LOG_WARN("failed to extract parallel info from running sql", K(ret), K(running_sql_info.at(i)), K(parallel_flag), K(parallel));
         } else {
           parallel = parallel.clip(parallel.find(')'));
@@ -570,13 +573,14 @@ int ObDDLTabletScheduler::calculate_candidate_tablets(const uint64_t left_space_
 int ObDDLTabletScheduler::get_session_running_lsid(ObIArray<share::ObLSID> &running_ls_ids)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator arena("tblt_sched_get");
   common::ObAddr inner_sql_exec_addr;
   common::ObArray<ObString> running_sql_info;
   running_ls_ids.reset();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_running_tasks_inner_sql(root_service_->get_sql_proxy(), trace_id_, tenant_id_, task_id_, snapshot_version_, inner_sql_exec_addr, allocator_, running_sql_info))) {
+  } else if (OB_FAIL(ObDDLTaskRecordOperator::get_running_tasks_inner_sql(root_service_->get_sql_proxy(), trace_id_, tenant_id_, task_id_, snapshot_version_, inner_sql_exec_addr, arena, running_sql_info))) {
     LOG_WARN("get running tasks inner sql fail", K(ret), K(tenant_id_), K(trace_id_), K(task_id_), K(snapshot_version_), K(inner_sql_exec_addr), K(running_sql_info));
   } else {
     TCRLockGuard guard(lock_);
@@ -585,14 +589,14 @@ int ObDDLTabletScheduler::get_session_running_lsid(ObIArray<share::ObLSID> &runn
       share::ObLSID &ls_id = iter->first;
       ObArray<ObTabletID> &tablet_queue = iter->second;
       ObArray<ObString> partition_names;
-      if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id_, ref_data_table_id_, table_id_, tablet_queue, allocator_, partition_names))) {
+      if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id_, ref_data_table_id_, table_id_, tablet_queue, arena, partition_names))) {
         LOG_WARN("fail to get index table batch partition names", K(ret), K(tenant_id_), K(ref_data_table_id_), K(table_id_), K(tablet_queue), K(partition_names));
       } else {
         bool is_running_status = false;
         for (int64_t i = 0; i < partition_names.count() && OB_SUCC(ret); i++) {
           is_running_status = false;
           for (int64_t j = 0; j < running_sql_info.count() && OB_SUCC(ret); j++) {
-            if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(i), allocator_, is_running_status))) {
+            if (OB_FAIL(ObDDLUtil::check_target_partition_is_running(running_sql_info.at(j), partition_names.at(i), arena, is_running_status))) {
               LOG_WARN("fail to check target partition is running", K(ret), K(running_sql_info.at(j)), K(partition_names.at(i)), K(is_running_status));
             } else if (is_running_status) {
               break;

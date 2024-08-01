@@ -397,7 +397,7 @@ DEFINE_GET_SERIALIZE_SIZE(ObDDLClogHeader)
 
 ObDDLStartLog::ObDDLStartLog()
   : table_key_(), data_format_version_(0), execution_id_(-1), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_DDL) /*for compatibility*/,
-    lob_meta_tablet_id_(ObDDLClog::COMPATIBLE_LOB_META_TABLET_ID)
+    lob_meta_tablet_id_(ObDDLClog::COMPATIBLE_LOB_META_TABLET_ID), with_cs_replica_(false)
 {
 }
 
@@ -419,11 +419,12 @@ int ObDDLStartLog::init(
     execution_id_ = execution_id;
     direct_load_type_ = direct_load_type;
     lob_meta_tablet_id_ = lob_meta_tablet_id;
+    with_cs_replica_ = false; // TODO(chengkong): placeholder for column store replica feature
   }
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_, direct_load_type_, lob_meta_tablet_id_);
+OB_SERIALIZE_MEMBER(ObDDLStartLog, table_key_, data_format_version_, execution_id_, direct_load_type_, lob_meta_tablet_id_, with_cs_replica_);
 
 ObDDLRedoLog::ObDDLRedoLog()
   : redo_info_()

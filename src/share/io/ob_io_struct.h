@@ -147,7 +147,7 @@ public:
   void accumulate(ObIOResult &result, ObIORequest &request);
   void calculate_io_usage();
   typedef ObSEArray<ObSEArray<double, GROUP_START_NUM>, 2> AvgItems;
-  void get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us);
+  int get_io_usage(AvgItems &avg_iops, AvgItems &avg_bytes, AvgItems &avg_rt_us);
   void record_request_start(ObIOResult &result);
   void record_request_finish(ObIOResult &result);
   bool is_request_doing(const int64_t index) const;
@@ -173,7 +173,7 @@ public:
   void accumulate(ObIOResult &result, ObIORequest &request);
   void calculate_io_usage();
   typedef ObSEArray<ObSEArray<double, SYS_RESOURCE_GROUP_CNT>, 2> SysAvgItems;
-  void get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us);
+  int get_io_usage(SysAvgItems &avg_iops, SysAvgItems &avg_bytes, SysAvgItems &avg_rt_us);
   TO_STRING_KV(K(io_stats_), K(io_estimators_), K(group_avg_iops_), K(group_avg_byte_), K(group_avg_rt_us_));
 private:
   ObSEArray<ObSEArray<ObIOStat, SYS_RESOURCE_GROUP_CNT>, 2> io_stats_;
@@ -202,6 +202,8 @@ public:
   ObIOTuner(ObIOScheduler &io_scheduler);
   virtual ~ObIOTuner();
   int init();
+  void stop();
+  void wait();
   void destroy();
   int send_detect_task();
   virtual void run1() override;
@@ -300,6 +302,7 @@ public:
   void destroy();
   int start();
   void stop();
+  void wait();
   void accumulate(const ObIORequest &req);
   int schedule_request(ObIORequest &req);
   int retry_request(ObIORequest &req);

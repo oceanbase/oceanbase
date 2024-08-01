@@ -126,7 +126,8 @@ public:
       uint64_t need_calc_expr_                  : 1;
       uint64_t need_calc_udf_                   : 1;
       uint64_t need_tx_                         : 1;
-      uint64_t reserved_                        : 60;
+      uint64_t need_subschema_ctx_              : 1;
+      uint64_t reserved_                        : 59;
     };
   };
   char sql_id_[common::OB_MAX_SQL_ID_LENGTH + 1];

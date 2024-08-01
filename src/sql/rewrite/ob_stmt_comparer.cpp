@@ -165,6 +165,104 @@ bool ObStmtCompareContext::compare_column(const ObColumnRefRawExpr &inner,
   return bret;
 }
 
+int ObStmtComparer::get_map_table(const ObStmtMapInfo& map_info,
+                                  const ObSelectStmt *outer_stmt,
+                                  const ObSelectStmt *inner_stmt,
+                                  const uint64_t &outer_table_id,
+                                  uint64_t &inner_table_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t dummy_outer_column_id = OB_INVALID_ID;
+  uint64_t dummy_inner_column_id = OB_INVALID_ID;
+  if (OB_FAIL(get_map_column(map_info, outer_stmt, inner_stmt,
+                             outer_table_id, dummy_outer_column_id, false,
+                             inner_table_id, dummy_inner_column_id))) {
+    LOG_WARN("failed to get map column", K(ret));
+  }
+  return ret;
+}
+
+int ObStmtComparer::get_map_column(const ObStmtMapInfo& map_info,
+                                   const ObSelectStmt *outer_stmt,
+                                   const ObSelectStmt *inner_stmt,
+                                   const uint64_t &outer_table_id,
+                                   const uint64_t &outer_column_id,
+                                   const bool in_same_stmt,
+                                   uint64_t &inner_table_id,
+                                   uint64_t &inner_column_id)
+{
+  int ret = OB_SUCCESS;
+  bool find = false;
+  int64_t outer_table_idx = OB_INVALID_ID;
+  int64_t inner_table_idx = OB_INVALID_ID;
+  inner_table_id = OB_INVALID_ID;
+  inner_column_id = OB_INVALID_ID;
+  if (OB_ISNULL(outer_stmt) || OB_ISNULL(inner_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < outer_stmt->get_table_size(); ++i) {
+    const TableItem *table = outer_stmt->get_table_item(i);
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else if (outer_table_id == table->table_id_) {
+      find =  true;
+      outer_table_idx = i;
+    }
+  }
+  if (OB_SUCC(ret) && (!find || OB_INVALID_ID == outer_table_idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table shoud be found in subquery" ,K(outer_table_idx), K(ret));
+  }
+  find = false;
+  for (int64_t i = 0; OB_SUCC(ret) && !find && i < map_info.table_map_.count(); ++i) {
+    if (outer_table_idx == map_info.table_map_.at(i)) {
+      inner_table_idx = i;
+      find = true;
+    }
+  }
+  if (OB_SUCC(ret) && (!find || OB_INVALID_ID == inner_table_idx ||  inner_table_idx < 0 ||
+                       inner_table_idx >= inner_stmt->get_table_size())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("incorrect table idx" , K(inner_table_idx), K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    const TableItem *inner_table = inner_stmt->get_table_item(inner_table_idx);
+    if (OB_ISNULL(inner_table)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null table item", K(ret));
+    } else {
+      inner_table_id = inner_table->table_id_;
+    }
+    if (OB_FAIL(ret) || OB_INVALID_ID == outer_column_id) {
+      /* do nothing */
+    } else if (in_same_stmt && inner_table_id == outer_table_id) {
+      inner_column_id = outer_column_id;
+    } else if (OB_UNLIKELY(inner_table_idx >= map_info.view_select_item_map_.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("incorrect id" , K(inner_table_idx), K(ret));
+    } else if (!inner_table->is_generated_table()) {
+      inner_column_id = outer_column_id;
+    } else {
+      int64_t outer_pos = outer_column_id - OB_APP_MIN_COLUMN_ID;
+      const ObIArray<int64_t> &select_item_map = map_info.view_select_item_map_.at(inner_table_idx);
+      find = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !find && i < select_item_map.count(); ++i) {
+        if (outer_pos == select_item_map.at(i)) {
+          inner_column_id = i + OB_APP_MIN_COLUMN_ID;
+          find = true;
+        }
+      }
+      if (OB_SUCC(ret) && (!find || OB_INVALID_ID == inner_column_id)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column shoud be found in subquery" ,K(outer_pos), K(inner_table_idx), K(select_item_map), K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 bool ObStmtCompareContext::compare_const(const ObConstRawExpr &left, const ObConstRawExpr &right)
 {
   int &ret = err_code_;

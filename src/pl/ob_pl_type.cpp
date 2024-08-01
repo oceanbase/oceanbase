@@ -2051,10 +2051,11 @@ bool ObObjAccessIdx::is_contain_object_type(const common::ObIArray<ObObjAccessId
 int ObPLCursorInfo::set_and_register_snapshot(const transaction::ObTxReadSnapshot &snapshot)
 {
   int ret = OB_SUCCESS;
-  set_need_check_snapshot(snapshot.valid_);
   set_snapshot(snapshot);
-  OZ (MTL(transaction::ObTransService*)->register_tx_snapshot_verify(get_snapshot()));
-
+  if (snapshot.is_valid()) {
+    set_need_check_snapshot(true);
+    OZ (MTL(transaction::ObTransService*)->register_tx_snapshot_verify(get_snapshot()));
+  }
   return ret;
 }
 

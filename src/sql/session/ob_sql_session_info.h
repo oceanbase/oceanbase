@@ -592,6 +592,10 @@ public:
     {
       reset();
     }
+    ~StmtSavedValue()
+    {
+      reset();
+    }
     inline void reset()
     {
       ObBasicSessionInfo::StmtSavedValue::reset();
@@ -698,10 +702,12 @@ public:
                                  enable_query_response_time_stats_(false),
                                  enable_user_defined_rewrite_rules_(false),
                                  range_optimizer_max_mem_size_(128*1024*1024),
+                                 _query_record_size_limit_(65536),
                                  enable_column_store_(false),
                                  enable_decimal_int_type_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
+                                 sql_plan_management_mode_(0),
                                  session_(session)
     {
     }
@@ -721,8 +727,10 @@ public:
     bool get_px_join_skew_handling() const { return px_join_skew_handling_; }
     int64_t get_px_join_skew_minfreq() const { return px_join_skew_minfreq_; }
     int64_t get_range_optimizer_max_mem_size() const { return range_optimizer_max_mem_size_; }
+    int64_t get_query_record_size_limit() const { return _query_record_size_limit_; }
     bool get_enable_column_store() const { return enable_column_store_; }
     bool get_enable_decimal_int_type() const { return enable_decimal_int_type_; }
+    int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -739,11 +747,13 @@ public:
     bool enable_query_response_time_stats_;
     bool enable_user_defined_rewrite_rules_;
     int64_t range_optimizer_max_mem_size_;
+    int64_t _query_record_size_limit_;
     bool enable_column_store_;
     bool enable_decimal_int_type_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
     int64_t last_check_ec_ts_;
+    int64_t sql_plan_management_mode_;
     ObSQLSessionInfo *session_;
   };
 
@@ -907,6 +917,37 @@ public:
   int check_ps_stmt_id_in_use(const ObPsStmtId stmt_id, bool &is_in_use);
   int add_ps_stmt_id_in_use(const ObPsStmtId stmt_id);
   int earse_ps_stmt_id_in_use(const ObPsStmtId stmt_id);
+  template <typename Visitor>
+  int visit_ps_session_info(const ObPsStmtId stmt_id,
+                          Visitor &visitor)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ps_session_info_map_.created())) {
+      ret = OB_HASH_NOT_EXIST;
+      SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
+    } else if (OB_FAIL(ps_session_info_map_.read_atomic<Visitor>(stmt_id, visitor))) {
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      if (ret == OB_HASH_NOT_EXIST) {
+        ret = OB_EER_UNKNOWN_STMT_HANDLER;
+      }
+    }
+    return ret;
+  }
+  template <typename T>
+  int update_ps_session_info_safety(const ObPsStmtId stmt_id, T &update)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ps_session_info_map_.created())) {
+      ret = OB_HASH_NOT_EXIST;
+      SQL_ENG_LOG(WARN, "map not created before insert any element", K(ret));
+    } else if (OB_FAIL(ps_session_info_map_.atomic_refactored<T>(stmt_id, update))) {
+      SQL_ENG_LOG(WARN, "get ps session info failed", K(ret), K(stmt_id), K(get_sessid()));
+      if (ret == OB_HASH_NOT_EXIST) {
+        ret = OB_EER_UNKNOWN_STMT_HANDLER;
+      }
+    }
+    return ret;
+  }
   int64_t get_ps_session_info_size() const { return ps_session_info_map_.size(); }
   inline pl::ObPL *get_pl_engine() const { return GCTX.pl_engine_; }
 
@@ -1236,7 +1277,7 @@ public:
   int is_adj_index_cost_enabled(bool &enabled, int64_t &stats_cost_percent) const;
   bool is_spf_mlj_group_rescan_enabled() const;
   int is_preserve_order_for_pagination_enabled(bool &enabled) const;
-  int get_spm_mode(int64_t &spm_mode) const;
+  int get_spm_mode(int64_t &spm_mode);
 
   ObSessionDDLInfo &get_ddl_info() { return ddl_info_; }
   const ObSessionDDLInfo &get_ddl_info() const { return ddl_info_; }
@@ -1347,6 +1388,16 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.get_enable_decimal_int_type();
   }
+  int64_t get_tenant_query_record_size_limit()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_query_record_size_limit();
+  }
+  int64_t get_sql_plan_management_mode()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_sql_plan_management_mode();
+  }
   int get_tmp_table_size(uint64_t &size);
   int ps_use_stream_result_set(bool &use_stream);
   void set_proxy_version(uint64_t v) { proxy_version_ = v; }
@@ -1361,6 +1412,17 @@ public:
   share::schema::ObUserLoginInfo get_login_info () { return login_info_; }
   int set_login_info(const share::schema::ObUserLoginInfo &login_info);
   int set_login_auth_data(const ObString &auth_data);
+  template <typename Function>
+  int for_each_ps_session_info(Function &fn)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!ps_session_info_map_.created())) {
+      // do nothing
+    } else if (OB_FAIL(ps_session_info_map_.foreach_refactored(fn))) {
+      SQL_ENG_LOG(WARN, "failed to read each ps session info", K(ret));
+    }
+    return ret;
+  }
   void set_load_data_exec_session(bool v) { is_load_data_exec_session_ = v; }
   bool is_load_data_exec_session() const { return is_load_data_exec_session_; }
   inline ObSqlString &get_pl_exact_err_msg() { return pl_exact_err_msg_; }
@@ -1434,7 +1496,7 @@ private:
   // 2.2版本之后，不再使用该变量
   bool is_max_availability_mode_;
   typedef common::hash::ObHashMap<ObPsStmtId, ObPsSessionInfo *,
-                                  common::hash::NoPthreadDefendMode> PsSessionInfoMap;
+                                  common::hash::SpinReadWriteDefendMode> PsSessionInfoMap;
   PsSessionInfoMap ps_session_info_map_;
   inline int try_create_ps_session_info_map()
   {

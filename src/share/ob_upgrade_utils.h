@@ -262,7 +262,16 @@ private:
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 2, 1)
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 3, 0)
+class ObUpgradeFor4330Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4330Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4330Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_external_table_flag();
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

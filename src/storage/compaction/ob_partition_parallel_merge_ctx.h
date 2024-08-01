@@ -58,7 +58,7 @@ public:
       const int64_t tablet_size,
       const int64_t macro_block_cnt,
       int64_t &concurrent_cnt);
-  TO_STRING_KV(K_(parallel_type), "array_cnt", range_array_.count(), K_(range_array), K_(concurrent_cnt), K_(is_inited));
+  DECLARE_TO_STRING;
 private:
   static const int64_t MIN_PARALLEL_MINOR_MERGE_THREASHOLD = 2;
   static const int64_t MIN_PARALLEL_MERGE_BLOCKS = 32;

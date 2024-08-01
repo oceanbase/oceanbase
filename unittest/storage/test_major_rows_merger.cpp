@@ -378,7 +378,7 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   int ret = OB_SUCCESS;
   merge_type_ = MAJOR_MERGE;
   ObTabletMergeDagParam param;
-  ObTabletMergeCtx merge_context(param, allocator_);
+  ObTabletMajorMergeCtx merge_context(param, allocator_);
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
@@ -406,12 +406,12 @@ TEST_F(ObMajorRowsMergerTest, two_iters)
   const char *micro_data2[2];
   micro_data2[0] =
       "bigint   var   bigint   bigint   bigint bigint dml           flag    multi_version_row_flag\n"
-      "0        var1  -10       0        NOP     10   T_DML_UPDATE  DELETE   LF\n"
-      "1        var1  -10       0        NOP     12   T_DML_UPDATE  EXIST   LF\n";
+      "0        var1  -30       0        NOP     10   T_DML_UPDATE  DELETE   LF\n"
+      "1        var1  -30       0        NOP     12   T_DML_UPDATE  EXIST   LF\n";
 
   micro_data2[1] =
       "bigint   var   bigint   bigint   bigint bigint dml           flag    multi_version_row_flag\n"
-      "3        var1  -10       0        NOP     10   T_DML_UPDATE  EXIST   LF\n";
+      "3        var1  -30       0        NOP     10   T_DML_UPDATE  EXIST   LF\n";
   snapshot_version = 20;
   scn_range.start_scn_.convert_for_tx(10);
   scn_range.end_scn_.convert_for_tx(20);
@@ -491,7 +491,7 @@ int main(int argc, char **argv)
 {
   system("rm -rf test_major_rows_merger.log*");
   OB_LOGGER.set_log_level("INFO");
-  OB_LOGGER.set_file_name("test_major_rows_merger.log", true, false);
+  OB_LOGGER.set_file_name("test_major_rows_merger.log");
   oceanbase::common::ObLogger::get_logger().set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

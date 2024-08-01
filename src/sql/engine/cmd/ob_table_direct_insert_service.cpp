@@ -39,6 +39,10 @@ int ObTableDirectInsertService::start_direct_insert(ObExecContext &ctx,
 {
   int ret = OB_SUCCESS;
   if (!GCONF._ob_enable_direct_load) { // recheck
+    ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
+    if (OB_NOT_NULL(plan_ctx)) {
+      plan_ctx->set_is_direct_insert_plan(false);
+    }
     phy_plan.set_enable_append(false);
     phy_plan.set_enable_inc_direct_load(false);
     phy_plan.set_enable_replace(false);

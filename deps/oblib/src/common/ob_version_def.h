@@ -179,7 +179,24 @@ public:
   static int64_t print_version_str(char *buf, const int64_t buf_len, uint64_t version);
 };
 
+class ObVersionPrinter
+{
+public:
+  ObVersionPrinter(const uint64_t version);
+  TO_STRING_KV(K_(version_str), K_(version_val));
+private:
+  uint64_t version_val_;
+  char version_str_[OB_SERVER_VERSION_LENGTH];
+};
+
 } // namespace common
 } // namespace oceanbase
 
+#define VP(version) (::oceanbase::common::ObVersionPrinter(version))
+#define DVP(version) VP(version)
+#define CVP(version) VP(version)
+// print data version in human readable way
+#define KDV(x) #x, DVP(x)
+// print cluster version in human readable way
+#define KCV(x) #x, CVP(x)
 #endif

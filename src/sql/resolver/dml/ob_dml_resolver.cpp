@@ -3078,7 +3078,7 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("You tried to execute a SQL statement that referenced a package or function\
             that contained an OUT parameter. This is not allowed.", K(ret), K(q_name));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ORA-06572: function name has out arguments");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBE-06572: function name has out arguments");
       } else if (udf->is_pkg_body_udf()) {
         ret = OB_ERR_PRIVATE_UDF_USE_IN_SQL;
         LOG_WARN("function 'string' may not be used in SQL", K(ret), KPC(udf));
@@ -3268,12 +3268,12 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     // SQL> select nextval from dual;
     // select nextval from dual
     // ERROR at line 1:
-    // ORA-00904: "NEXTVAL": invalid identifier
+    // OBE-00904: "NEXTVAL": invalid identifier
     //
     // SQL> select s.nextval from dual;
     // select s.nextval from dual
     // ERROR at line 1:
-    // ORA-02289: sequence does not exist
+    // OBE-02289: sequence does not exist
     ret = update_errno_if_sequence_object(q_name, ret);
   }
   return ret;
@@ -5402,7 +5402,7 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
           LOG_USER_ERROR(OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE, 14, "TABLE FUNCTION");
         } else if (!user_type->is_collection_type()) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("ORA-22905: cannot access rows from a non-nested table item",
+          LOG_WARN("OBE-22905: cannot access rows from a non-nested table item",
                    K(ret), K(function_table_expr->get_result_type()));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "access rows from a non-nested table item");
         } else if (is_dblink_type_id(user_type->get_user_type_id())) {
@@ -6870,7 +6870,7 @@ int ObDMLResolver::resolve_current_of(const ParseNode &node,
   if (OB_ISNULL(params_.secondary_namespace_)) {
     // secondary_namespace_ 为空, 说明不是在PL中
     ret = OB_UNIMPLEMENTED_FEATURE;
-    LOG_WARN("ORA-03001: unimplemented feature");
+    LOG_WARN("OBE-03001: unimplemented feature");
   }
   CK(T_SP_EXPLICIT_CURSOR_ATTR == node.type_,
      OB_NOT_NULL(params_.expr_factory_),
@@ -9256,7 +9256,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     if (OB_NOT_NULL(stmt)) {
       if (OB_FAIL(add_synonym_obj_id(synonym_checker, is_db_explicit /* is_db_expilicit */))) {
         LOG_WARN("add_synonym_obj_id failed", K(ret));
-      } else if (is_public_synonym) {
+      } else {
         /**
         * create table oms_test.tab_a (id int, value int);
         * create PUBLIC SYNONYM tab_b for oms_test.tab_a;
@@ -9267,7 +9267,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
         * other is the oms_test.tab_a table. However, when planning matching, the database_id on the
         * session and the table name of the cache will be used for matching. As a result, an error
         * will be reported that the table does not exist, resulting in the failure to hit the plan.
-        * For this scenario, if it is a public synonym, the is_db_explicit of the table should be set
+        * For this scenario, if it is a synonym, the is_db_explicit of the table should be set
         * to true, and table_id should be used directly for matching.
         */
         is_db_explicit = true;
@@ -12473,7 +12473,7 @@ int ObDMLResolver::check_oracle_outer_join_condition(const ObRawExpr *expr)
   if (OB_SUCC(ret) && (expr->has_flag(CNT_OUTER_JOIN_SYMBOL))) {
     if (expr->has_flag(CNT_SUB_QUERY)) {
       /**
-       * ORA-01799: 列不能外部联接到子查询
+       * OBE-01799: 列不能外部联接到子查询
        * 01799. 00000 -  "a column may not be outer-joined to a subquery"
        * *Cause:    <expression>(+) <relop> (<subquery>) is not allowed.
        * *Action:   Either remove the (+) or make a view out of the subquery.
@@ -12485,7 +12485,7 @@ int ObDMLResolver::check_oracle_outer_join_condition(const ObRawExpr *expr)
       LOG_WARN("column may not be outer-joined to a subquery");
     } else if (OB_UNLIKELY(expr->has_flag(CNT_IN) || expr->has_flag(CNT_OR))) {
       /**
-       * ORA-01719: OR 或 IN 操作数中不允许外部联接运算符 (+)
+       * OBE-01719: OR 或 IN 操作数中不允许外部联接运算符 (+)
        * 01719. 00000 -  "outer join operator (+) not allowed in operand of OR or IN"
        * *Cause:    An outer join appears in an or clause.
        * *Action:   If A and B are predicates, to get the effect of (A(+) or B),
@@ -12521,9 +12521,9 @@ int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
   if(OB_SUCC(ret)){
     switch (expr->get_expr_type()) {
       case T_OP_IN: {
-        // ORA-1719  t1.c1(+) in (t2.c1, xxxx);  OB_ERR_OUTER_JOIN_AMBIGUOUS
-        // ORA-1468  t1.c1(+) in (t2.c1(+), xxxx);  OB_ERR_MULTI_OUTER_JOIN_TABLE;
-        // ORA-1416  t1.c1(+) in (t1.c1, xxxx);  OB_ERR_OUTER_JOIN_NESTED
+        // OBE-1719  t1.c1(+) in (t2.c1, xxxx);  OB_ERR_OUTER_JOIN_AMBIGUOUS
+        // OBE-1468  t1.c1(+) in (t2.c1(+), xxxx);  OB_ERR_MULTI_OUTER_JOIN_TABLE;
+        // OBE-1416  t1.c1(+) in (t1.c1, xxxx);  OB_ERR_OUTER_JOIN_NESTED
         //@OK: t1.c1(+) in (1, 1);
         if(expr->get_param_count() == 2 && expr->has_flag(CNT_OUTER_JOIN_SYMBOL)) {
           const ObRawExpr * left_expr = expr->get_param_expr(0);
@@ -12538,8 +12538,8 @@ int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
             OZ(extract_column_with_outer_join_symbol(left_expr, le_left_tables, le_right_tables));
             const int64_t param_cnt = right_exprs->get_param_count();
             /* check each expr separately from right to left.
-            * select * from t1,t2 where t1.c1(+) in (t1.c1, t2.c1(+)); will raise ORA-1468
-            * select * from t1,t2 where t1.c1(+) in (t2.c1(+), t1.c1); will raise ORA-1416
+            * select * from t1,t2 where t1.c1(+) in (t1.c1, t2.c1(+)); will raise OBE-1468
+            * select * from t1,t2 where t1.c1(+) in (t2.c1(+), t1.c1); will raise OBE-1416
             */
             for (int64_t i = param_cnt - 1; OB_SUCC(ret) && i >= 0; i--) {
               const ObRawExpr * right_expr = right_exprs->get_param_expr(i);
@@ -12558,7 +12558,7 @@ int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
               for (int64_t i = 0; i < le_right_tables.count(); i++) {
                 OZ((common::add_var_to_array_no_dup)(right_tables, le_right_tables.at(i)));
               }
-              // if there is conflict between two exprs in IN, the error is ORA-1719
+              // if there is conflict between two exprs in IN, the error is OBE-1719
               if (right_tables.count() != 1 || left_tables.count() != 0) {
                 ret = OB_ERR_OUTER_JOIN_AMBIGUOUS;
                 LOG_WARN("outer join operator (+) not allowed in operand of OR or IN", K(ret));
@@ -12571,8 +12571,8 @@ int ObDMLResolver::check_oracle_outer_join_in_or_validity(const ObRawExpr *expr,
       case T_OP_OR: {
         // oracle_outer_join should appear in both side of OR-expr.
         /* the check order is from left to right.
-        * select * from t1,t2 where t1.c1(+) = t1.c1 or t1.c1(+) = t2.c1(+); will raise ORA-1416
-        * select * from t1,t2 where t1.c1(+) = t2.c1(+) or t1.c1(+) = t1.c1; will raise ORA-1468
+        * select * from t1,t2 where t1.c1(+) = t1.c1 or t1.c1(+) = t2.c1(+); will raise OBE-1416
+        * select * from t1,t2 where t1.c1(+) = t2.c1(+) or t1.c1(+) = t1.c1; will raise OBE-1468
         * @OK: select * from t1, t2 where t1.c1(+) = 1 or t1.c2(+) = 2;
         */
         for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); i++) {
@@ -12612,10 +12612,10 @@ int ObDMLResolver::check_oracle_outer_join_expr_validity(const ObRawExpr *expr,
                                                          ObItemType parent_type)
 {
   /* the tmp_left_tables and tmp_right_tables contain the table_id of the tables appear
-  * in e. Conflict between tmp_left_tables and tmp_right_tables will raise ORA-1416 or ORA-1468.
-  * e,g,. t1.c1(+) = t2.c1(+) will raise ORA-1468.
-  *       t1.c1(+) = t1.c1 will raise ORA-1416
-  *       t1.c1(+) + t2.c1 + t1.c1 = 1 or t1.c1(+) + t1.c1 + t2.c1 will raise ORA-1416
+  * in e. Conflict between tmp_left_tables and tmp_right_tables will raise OBE-1416 or OBE-1468.
+  * e,g,. t1.c1(+) = t2.c1(+) will raise OBE-1468.
+  *       t1.c1(+) = t1.c1 will raise OBE-1416
+  *       t1.c1(+) + t2.c1 + t1.c1 = 1 or t1.c1(+) + t1.c1 + t2.c1 will raise OBE-1416
   */
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tmp_left_tables;
@@ -12704,8 +12704,8 @@ int ObDMLResolver::check_single_oracle_outer_join_expr_validity(const ObRawExpr 
       } else {
         bool exist_flag = true;
         // check le_right_tables.count() to avoid left expr being a const.
-        // e,g,. select * from t1, t2 where 1 in (t1.c1(+), t2.c1(+)) should raise ORA-1719
-        // instead of ORA-1468
+        // e,g,. select * from t1, t2 where 1 in (t1.c1(+), t2.c1(+)) should raise OBE-1719
+        // instead of OBE-1468
         for (int64_t i = 0; le_right_tables.count() > 0 && i<re_right_tables.count(); i++) {
           if (!has_exist_in_array(le_right_tables, re_right_tables.at(i))) {
             exist_flag = false;
@@ -12774,7 +12774,7 @@ int ObDMLResolver::resolve_outer_join_symbol(const ObStmtScope scope,
                     || T_START_WITH_SCOPE == scope
                     || T_ORDER_SCOPE == scope)) {
       /*
-       * ORA-30563: 此处不允许使用外部联接运算符 (+)
+       * OBE-30563: 此处不允许使用外部联接运算符 (+)
        * 30563. 00000 -  "outer join operator (+) is not allowed here"
        * *Cause:    An attempt was made to reference (+) in either the select-list,
        *            CONNECT BY clause, START WITH clause, or ORDER BY clause.
@@ -12855,7 +12855,7 @@ int ObDMLResolver::generate_outer_join_dependency(
       // do nothing
     } else if (OB_UNLIKELY(right_tables.count() > 1)) {
       /**
-       * ORA-01468: 一个谓词只能引用一个外部联接的表
+       * OBE-01468: 一个谓词只能引用一个外部联接的表
        * 01468. 00000 -  "a predicate may reference only one outer-joined table"
        * *Cause:
        * *Action:
@@ -13044,7 +13044,7 @@ int ObDMLResolver::deliver_outer_join_conditions(ObIArray<ObRawExpr*> &exprs,
       // do nothing
     } else if (OB_UNLIKELY(right_tables.count() > 1)) {
       /**
-       * ORA-01468: 一个谓词只能引用一个外部联接的表
+       * OBE-01468: 一个谓词只能引用一个外部联接的表
        * 01468. 00000 -  "a predicate may reference only one outer-joined table"
        * *Cause:
        * *Action:
@@ -13352,7 +13352,7 @@ int ObDMLResolver::resolve_ora_rowscn_pseudo_column(
     LOG_WARN("check rowscn table colum namespace failed", K(ret));
   } else if (OB_ISNULL(table_item)) {
     ret = OB_ERR_BAD_FIELD_ERROR;
-    LOG_WARN("ORA_ROWSCN pseudo column only avaliable in basic table", K(ret));
+    LOG_WARN("OBE_ROWSCN pseudo column only avaliable in basic table", K(ret));
   } else if (OB_FAIL(get_stmt()->get_ora_rowscn_column(table_item->table_id_,
                                                        pseudo_column_expr))) {
       LOG_WARN("failed to get ora_rowscn column", K(ret), K(table_item));
@@ -14556,7 +14556,7 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
     case T_INDEX_SS_ASC_HINT:
     case T_INDEX_SS_DESC_HINT:
     case T_USE_COLUMN_STORE_HINT:
-    case T_NO_USE_COLUMN_STORE_HINT:  {
+    case T_NO_USE_COLUMN_STORE_HINT: {
       if (OB_FAIL(resolve_index_hint(hint_node, opt_hint))) {
         LOG_WARN("failed to resolve index hint", K(ret));
       }

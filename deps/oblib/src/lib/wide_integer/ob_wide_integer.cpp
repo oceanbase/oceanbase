@@ -158,7 +158,7 @@ int ObDecimalIntConstValue::init_const_values(ObIAllocator &alloc, const lib::Ob
     ZERO_VALUES[1] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t));
     ZERO_VALUES[2] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t) + sizeof(int64_t));
     ZERO_VALUES[3] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t) + sizeof(int64_t) + sizeof(int128_t));
-    ZERO_VALUES[3] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t) + sizeof(int64_t) + sizeof(int128_t) + sizeof(int256_t));
+    ZERO_VALUES[4] = reinterpret_cast<const ObDecimalInt *>(zero_buf + sizeof(int32_t) + sizeof(int64_t) + sizeof(int128_t) + sizeof(int256_t));
   }
   return ret;
 }

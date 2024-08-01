@@ -854,9 +854,14 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
         }
         is_valid = exist_valid_codec;
       }
+      break;
     }
     case INLIST_REWRITE_THRESHOLD: {
       is_valid = val.is_int() && (0 < val.get_int());
+      break;
+    }
+    case PUSHDOWN_STORAGE_LEVEL: {
+      is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 4);
       break;
     }
     default:

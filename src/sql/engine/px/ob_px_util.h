@@ -443,8 +443,10 @@ public:
     TO_STRING_KV(K_(tablet_id), K_(tablet_idx), K_(hash_value), K_(worker_id), K_(partition_info));
   };
 public:
-  ObPxAffinityByRandom(bool order_partitions) :
-  worker_cnt_(0), tablet_hash_values_(), order_partitions_(order_partitions) {}
+  ObPxAffinityByRandom(bool order_partitions, bool partition_random_affinitize)
+      : worker_cnt_(0), tablet_hash_values_(), order_partitions_(order_partitions),
+        partition_random_affinitize_(partition_random_affinitize)
+  {}
   virtual ~ObPxAffinityByRandom() = default;
   int reserve(int64_t size) { return tablet_hash_values_.reserve(size); }
   int add_partition(int64_t tablet_id,
@@ -459,6 +461,7 @@ private:
   int64_t worker_cnt_;
   ObSEArray<TabletHashValue, 8> tablet_hash_values_;
   bool order_partitions_;
+  bool partition_random_affinitize_;// whether do partition random in gi task split
 };
 
 class ObSlaveMapUtil

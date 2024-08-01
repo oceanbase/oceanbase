@@ -417,7 +417,7 @@ void TestIndexTree::prepare_data()
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
   ObDmlFlag dml = DF_INSERT;
 
-  ret = data_desc.init(table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1, DATA_CURRENT_VERSION);
+  ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1, DATA_CURRENT_VERSION);
   ASSERT_EQ(OB_SUCCESS, ret);
   ret = writer.open(data_desc.get_desc(), start_seq);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -576,7 +576,7 @@ void TestIndexTree::prepare_data_desc(ObWholeDataStoreDesc &data_desc,
                                       ObSSTableIndexBuilder *sstable_builder)
 {
   int ret = OB_SUCCESS;
-  ret = data_desc.init(table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1, DATA_CURRENT_VERSION);
+  ret = data_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1, DATA_CURRENT_VERSION);
   data_desc.get_desc().sstable_index_builder_ = sstable_builder;
   ASSERT_EQ(OB_SUCCESS, ret);
 }
@@ -1704,7 +1704,7 @@ TEST_F(TestIndexTree, test_close_with_old_schema)
 
   // mock old schema with fewer columns
   ObWholeDataStoreDesc index_desc;
-  OK(index_desc.init(table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1/*snapshot*/, 0/*cluster_version*/));
+  OK(index_desc.init(false/*is_ddl*/, table_schema_, ObLSID(1), ObTabletID(1), MAJOR_MERGE, 1/*snapshot*/, 0/*cluster_version*/));
   index_desc.static_desc_.major_working_cluster_version_ = DATA_VERSION_4_0_0_0;
   --index_desc.get_desc().col_desc_->full_stored_col_cnt_;
   index_desc.get_desc().col_desc_->col_default_checksum_array_.pop_back();

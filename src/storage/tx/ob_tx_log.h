@@ -643,13 +643,15 @@ private:
 
 class ObTxActiveInfoLogTempRef {
 public:
-  ObTxActiveInfoLogTempRef() : scheduler_(), app_trace_id_str_(), proposal_leader_(), xid_() {}
+  ObTxActiveInfoLogTempRef()
+    : scheduler_(), app_trace_id_str_(), proposal_leader_(), xid_(), prio_op_array_() {}
 
 public:
   common::ObAddr scheduler_;
   common::ObString app_trace_id_str_;
   common::ObAddr proposal_leader_;
   ObXATransID xid_;
+  tablelock::ObTableLockPrioOpArray prio_op_array_;
 };
 
 class ObTxActiveInfoLog
@@ -663,7 +665,7 @@ public:
         proposal_leader_(temp_ref.proposal_leader_), cur_query_start_time_(0), is_sub2pc_(false),
         is_dup_tx_(false), tx_expired_time_(0), epoch_(0), last_op_sn_(0), first_seq_no_(),
         last_seq_no_(), max_submitted_seq_no_(), serial_final_seq_no_(), cluster_version_(0),
-        xid_(temp_ref.xid_)
+        xid_(temp_ref.xid_), prio_op_array_(temp_ref.prio_op_array_)
   {
     before_serialize();
   }
@@ -686,7 +688,8 @@ public:
                     ObTxSEQ max_submitted_seq_no,
                     uint64_t cluster_version,
                     const ObXATransID &xid,
-                    ObTxSEQ serial_final_seq_no)
+                    ObTxSEQ serial_final_seq_no,
+                    tablelock::ObTableLockPrioOpArray &prio_op_array)
       : scheduler_(scheduler), trans_type_(trans_type), session_id_(session_id),
         associated_session_id_(associated_session_id),
         app_trace_id_str_(app_trace_id_str), schema_version_(schema_version), can_elr_(elr),
@@ -694,7 +697,7 @@ public:
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), tx_expired_time_(tx_expired_time),
         epoch_(epoch), last_op_sn_(last_op_sn), first_seq_no_(first_seq_no), last_seq_no_(last_seq_no),
         max_submitted_seq_no_(max_submitted_seq_no), serial_final_seq_no_(serial_final_seq_no),
-        cluster_version_(cluster_version), xid_(xid)
+        cluster_version_(cluster_version), xid_(xid), prio_op_array_(prio_op_array)
   {
     before_serialize();
   };
@@ -719,6 +722,7 @@ public:
   ObTxSEQ get_serial_final_seq_no() const { return serial_final_seq_no_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   const ObXATransID &get_xid() const { return xid_; }
+  const tablelock::ObTableLockPrioOpArray &get_prio_op_array() const { return prio_op_array_; }
   // for ob_admin
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
@@ -743,7 +747,8 @@ public:
                K(max_submitted_seq_no_),
                K(serial_final_seq_no_),
                K(cluster_version_),
-               K(xid_));
+               K(xid_),
+               K(prio_op_array_));
 
 public:
   int before_serialize();
@@ -774,19 +779,21 @@ private:
   ObTxSEQ serial_final_seq_no_;
   uint64_t cluster_version_;
   ObXATransID xid_;
+  tablelock::ObTableLockPrioOpArray &prio_op_array_;
 };
 
 class ObTxCommitInfoLogTempRef
 {
 public:
   ObTxCommitInfoLogTempRef()
-      : scheduler_(), participants_(), app_trace_id_str_(), app_trace_info_(),
-        incremental_participants_(), prev_record_lsn_(), redo_lsns_(), xid_()
+    : scheduler_(), participants_(), commit_parts_(), app_trace_id_str_(), app_trace_info_(),
+    incremental_participants_(), prev_record_lsn_(), redo_lsns_(), xid_()
   {}
 
 public:
   common::ObAddr scheduler_;
   share::ObLSArray participants_;
+  ObTxCommitParts commit_parts_;
   common::ObString app_trace_id_str_;
   common::ObString app_trace_info_;
   share::ObLSArray incremental_participants_;
@@ -806,7 +813,7 @@ public:
         incremental_participants_(temp_ref.incremental_participants_), cluster_version_(0),
         app_trace_id_str_(temp_ref.app_trace_id_str_), app_trace_info_(temp_ref.app_trace_info_),
         prev_record_lsn_(temp_ref.prev_record_lsn_), redo_lsns_(temp_ref.redo_lsns_),
-        xid_(temp_ref.xid_), commit_parts_(), epoch_(0)
+        xid_(temp_ref.xid_), commit_parts_(temp_ref.commit_parts_), epoch_(0)
   {
     before_serialize();
   }
@@ -823,7 +830,7 @@ public:
                     share::ObLSArray &incremental_participants,
                     uint64_t cluster_version,
                     const ObXATransID &xid,
-                    const ObTxCommitParts &commit_parts,
+                    ObTxCommitParts &commit_parts,
                     int64_t epoch)
       : scheduler_(scheduler), participants_(participants), upstream_(upstream),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), can_elr_(is_elr),
@@ -889,7 +896,8 @@ private:
   ObRedoLSNArray &redo_lsns_;
   // for xa
   ObXATransID xid_;
-  ObTxCommitParts commit_parts_;
+  // for transfer
+  ObTxCommitParts &commit_parts_;
   int64_t epoch_;
 };
 

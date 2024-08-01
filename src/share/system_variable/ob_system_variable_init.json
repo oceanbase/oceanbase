@@ -7007,11 +7007,10 @@
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_ft_stopword_file",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_ft_stopword_file"
   },
   "innodb_ft_cache_size": {
     "id": 10398,
@@ -7023,11 +7022,10 @@
     "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "1600000",
     "max_val": "80000000",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_cache_size",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_cache_size"
   },
   "innodb_ft_sort_pll_degree": {
     "id": 10399,
@@ -7039,11 +7037,10 @@
     "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "1",
     "max_val": "16",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_sort_pll_degree",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_sort_pll_degree"
   },
   "innodb_ft_total_cache_size": {
     "id": 10400,
@@ -7055,11 +7052,10 @@
     "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "32000000",
     "max_val": "1600000000",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_total_cache_size",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_total_cache_size"
   },
   "mecab_rc_file": {
     "id": 10401,
@@ -7069,11 +7065,10 @@
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html"
   },
   "metadata_locks_cache_size": {
     "id": 10402,
@@ -7085,11 +7080,10 @@
     "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "1",
     "max_val": "1048576",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_metadata_locks_cache_size",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_metadata_locks_cache_size"
   },
   "metadata_locks_hash_instances": {
     "id": 10403,
@@ -7101,11 +7095,10 @@
     "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "1",
     "max_val": "1024",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_metadata_locks_hash_instances",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_metadata_locks_hash_instances"
   },
   "innodb_temp_data_file_path": {
     "id": 10404,
@@ -7115,11 +7108,10 @@
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_temp_data_file_path",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_temp_data_file_path"
   },
   "innodb_data_file_path": {
     "id": 10405,
@@ -7129,11 +7121,10 @@
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_data_file_path",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_data_file_path"
   },
   "innodb_data_home_dir": {
     "id": 10406,
@@ -7143,11 +7134,10 @@
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_data_home_dir",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_data_home_dir"
   },
   "avoid_temporal_upgrade": {
     "id": 10407,
@@ -7157,28 +7147,26 @@
     "data_type": "bool",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_avoid_temporal_upgrade",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_avoid_temporal_upgrade"
   },
   "default_tmp_storage_engine": {
     "id": 10408,
     "name": "default_tmp_storage_engine",
-    "default_value": "",
-    "base_value": "",
+    "default_value": "0",
+    "base_value": "0",
     "data_type": "enum",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
     "enum_names": [
       "InnoDB"
     ],
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_default_tmp_storage_engine",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_default_tmp_storage_engine"
   },
   "innodb_ft_enable_diag_print": {
     "id": 10409,
@@ -7188,11 +7176,10 @@
     "data_type": "bool",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_enable_diag_print",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_enable_diag_print"
   },
   "innodb_ft_num_word_optimize": {
     "id": 10410,
@@ -7204,11 +7191,10 @@
     "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "1000",
     "max_val": "10000",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_num_word_optimize",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_num_word_optimize"
   },
   "innodb_ft_result_cache_limit": {
     "id": 10411,
@@ -7220,11 +7206,10 @@
     "flags": "GLOBAL | MYSQL_ONLY",
     "min_val": "1000000",
     "max_val": "4294967295",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_result_cache_limit",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_result_cache_limit"
   },
   "innodb_ft_server_stopword_table": {
     "id": 10412,
@@ -7234,11 +7219,10 @@
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_server_stopword_table",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_ft_server_stopword_table"
   },
   "innodb_optimize_fulltext_only": {
     "id": 10413,
@@ -7248,11 +7232,10 @@
     "data_type": "bool",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_optimize_fulltext_only",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_optimize_fulltext_only"
   },
   "max_tmp_tables": {
     "id": 10414,
@@ -7262,11 +7245,10 @@
     "data_type": "int",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_max_tmp_tables",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/server-system-variables.html#sysvar_max_tmp_tables"
   },
   "innodb_tmpdir": {
     "id": 10415,
@@ -7276,11 +7258,10 @@
     "data_type": "varchar",
     "info": "mock for mysql5.7",
     "flags": "GLOBAL | SESSION | MYSQL_ONLY",
-    "publish_version": "424",
+    "publish_version": "425",
     "info_cn": "",
     "background_cn": "",
-    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_tmpdir",
-    "placeholder": true
+    "ref_url": "https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_tmpdir"
   },
   "group_replication_group_seeds": {
     "id": 10416,

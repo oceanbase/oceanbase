@@ -334,6 +334,7 @@ private:
 
   // generate normal table scan
   int generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &spec);
+  int get_pushdown_storage_level(ObOptimizerContext &optimizer_context, const int64_t tenant_pd_level, int64_t &level);
   int generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &spec);
   int need_prior_exprs(common::ObIArray<ObExpr*> &self_output,
       common::ObIArray<ObExpr*> &left_output,
@@ -444,6 +445,8 @@ private:
   int generate_spec(ObLogTempTableInsert &op, ObTempTableInsertVecOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTempTableAccess &op, ObTempTableAccessVecOpSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTempTableTransformation &op, ObTempTableTransformationVecOpSpec &spec, const bool in_root_job);
+  template<typename MergeDistinctSpecType>
+  int generate_merge_distinct_spec(ObLogDistinct &op, MergeDistinctSpecType &spec, const bool in_root_job);
 private:
   int disable_use_rich_format(const ObLogicalOperator &op, ObOpSpec &spec);
   int add_update_set(ObSubPlanFilterSpec &spec);

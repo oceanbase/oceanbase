@@ -304,15 +304,23 @@ public:
   class BaseSavedValue
   {
   public:
-    BaseSavedValue()
+    BaseSavedValue() : cur_query_(NULL)
+    {
+      reset();
+    }
+    ~BaseSavedValue()
     {
       reset();
     }
     inline void reset()
     {
+      if (cur_query_ != nullptr) {
+        ob_free(cur_query_);
+      }
       cur_phy_plan_ = NULL;
-      cur_query_[0] = 0;
       cur_query_len_ = 0;
+      cur_query_buf_len_ = 0;
+      cur_query_ = NULL;
       total_stmt_tables_.reset();
       cur_stmt_tables_.reset();
       read_uncommited_ = false;
@@ -322,7 +330,6 @@ public:
   public:
     // 原StmtSavedValue的属性
     ObPhysicalPlan *cur_phy_plan_;
-    char cur_query_[MAX_QUERY_STRING_LEN];
     volatile int64_t cur_query_len_;
 //  int64_t cur_query_start_time_;          // 用于计算事务超时时间，如果在base_save_session接口中操作
                                             // 会导致start_trans报事务超时失败，不放在基类中。
@@ -332,6 +339,8 @@ public:
     bool read_uncommited_;
     bool inc_autocommit_;
     bool need_serial_exec_;
+    int64_t cur_query_buf_len_;
+    char *cur_query_;
   public:
     // 原TransSavedValue的属性
 //  transaction::ObTxDesc trans_desc_;   // 两者都有trans_desc，但执行操作完全不同，不放在基类中。
@@ -344,6 +353,10 @@ public:
   {
   public:
     StmtSavedValue()
+    {
+      reset();
+    }
+    ~StmtSavedValue()
     {
       reset();
     }
@@ -2433,7 +2446,7 @@ private:
 inline const common::ObString ObBasicSessionInfo::get_current_query_string() const
 {
   common::ObString str_ret;
-  str_ret.assign_ptr(const_cast<char *>(thread_data_.cur_query_), static_cast<int32_t>(thread_data_.cur_query_len_));
+  str_ret.assign_ptr(const_cast<char *>(thread_data_.cur_query_), static_cast<int64_t>(thread_data_.cur_query_len_));
   return str_ret;
 }
 

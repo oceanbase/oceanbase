@@ -699,7 +699,7 @@ int ObMediumCompactionScheduleFunc::init_schema_changed(
     || (ObRowStoreType::DUMMY_ROW_STORE != tablet_handle_.get_obj()->get_last_major_latest_row_store_type()
       && tablet_handle_.get_obj()->get_last_major_latest_row_store_type() != schema.row_store_type_)) {
     medium_info.is_schema_changed_ = true;
-    LOG_INFO("schema changed", K(schema),
+    LOG_INFO("schema changed", KPC(this), K(schema),
       "col_cnt_in_sstable", tablet_handle_.get_obj()->get_last_major_column_count(),
       "compressor_type_in_sstable", tablet_handle_.get_obj()->get_last_major_compressor_type(),
       "latest_row_store_type_in_sstable", tablet_handle_.get_obj()->get_last_major_latest_row_store_type());
@@ -858,7 +858,6 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
           *co_sstable,
           tables,
           medium_info.storage_schema_,
-          tablet_handle_,
           major_merge_type))) {
     LOG_WARN("failed to decide co major merge type", K(ret));
   } else {

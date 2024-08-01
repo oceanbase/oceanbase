@@ -626,21 +626,15 @@ bool ObSQLSessionInfo::is_spf_mlj_group_rescan_enabled() const
   return bret;
 }
 
-int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode) const
+int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode)
 {
   int ret = OB_SUCCESS;
-  spm_mode = 0;
-  int64_t tenant_id = get_effective_tenant_id();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    spm_mode = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
-        tenant_config->sql_plan_management_mode.get_value_string());
-    if (0 == spm_mode) {
-      bool sysvar_use_baseline = false;
-      get_use_plan_baseline(sysvar_use_baseline);
-      if (sysvar_use_baseline) {
-        spm_mode = 1;
-      }
+  spm_mode = get_sql_plan_management_mode();
+  if (0 == spm_mode) {
+    bool sysvar_use_baseline = false;
+    get_use_plan_baseline(sysvar_use_baseline);
+    if (sysvar_use_baseline) {
+      spm_mode = 1;
     }
   }
   return ret;
@@ -1978,7 +1972,8 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   audit_record_.request_type_ = mode;
   audit_record_.session_id_ = get_sessid();
   audit_record_.proxy_session_id_ = get_proxy_sessid();
-  audit_record_.tenant_id_ = get_priv_tenant_id();
+  // sql audit don't distinguish between two tenant IDs
+  audit_record_.tenant_id_ = get_effective_tenant_id();
   audit_record_.user_id_ = get_user_id();
   audit_record_.proxy_user_id_ = get_proxy_user_id();
   audit_record_.effective_tenant_id_ = get_effective_tenant_id();
@@ -2018,7 +2013,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     } else {
       ObString sql = get_current_query_string();
       audit_record_.sql_ = const_cast<char *>(sql.ptr());
-      audit_record_.sql_len_ = min(sql.length(), OB_MAX_SQL_LENGTH);
+      audit_record_.sql_len_ = min(sql.length(), get_tenant_query_record_size_limit());
       audit_record_.sql_cs_type_ = get_local_collation_connection();
     }
 
@@ -2049,6 +2044,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     // do nothing
   }
   audit_record_.flt_trace_id_[pos] = '\0';
+  audit_record_.stmt_type_ = get_stmt_type();
   return audit_record_;
 }
 
@@ -3021,6 +3017,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_query_response_time_stats_, tenant_config->query_response_time_stats);
       ATOMIC_STORE(&enable_user_defined_rewrite_rules_, tenant_config->enable_user_defined_rewrite_rules);
       ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
+      ATOMIC_STORE(&_query_record_size_limit_, tenant_config->_query_record_size_limit);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
         LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,
@@ -3034,6 +3031,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       px_join_skew_minfreq_ = tenant_config->_px_join_skew_minfreq;
       enable_column_store_ = tenant_config->_enable_column_store;
       enable_decimal_int_type_ = tenant_config->_enable_decimal_int_type;
+      sql_plan_management_mode_ = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
+        tenant_config->sql_plan_management_mode.get_value_string());
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }

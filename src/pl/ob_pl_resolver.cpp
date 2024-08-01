@@ -3873,6 +3873,14 @@ int ObPLResolver::resolve_declare_var_comm(const ObStmtNodeTree *parse_tree,
           }
         }
 
+        if (T_CHAR == default_node->children_[0]->type_
+            && (T_CHAR == type_node->type_ || T_NCHAR == type_node->type_)
+            && default_node->children_[0]->str_len_ == 0) {
+          default_node->children_[0]->str_len_++;
+          default_node->children_[0]->str_value_ = " ";
+          default_node->children_[0]->raw_text_ = "' '";
+          default_node->children_[0]->text_len_++;
+        }
         OZ (resolve_expr(default_node->children_[0], unit_ast, default_expr,
                          combine_line_and_col(default_node->children_[0]->stmt_loc_),
                          true, &data_type));
@@ -7180,25 +7188,32 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(param_info));
   CK (OB_NOT_NULL(param));
+
   if (OB_SUCC(ret)) {
+    // Step: get real parameter type
     ObPLDataType expected_type, actually_type;
+    bool is_anonymous_array_type = false;
     if (param->is_obj_access_expr()) {
       const ObObjAccessRawExpr *obj_access = NULL;
       CK (OB_NOT_NULL(obj_access = static_cast<const ObObjAccessRawExpr*>(param)));
       OZ (obj_access->get_final_type(actually_type));
     } else if (T_QUESTIONMARK == param->get_expr_type()) {
       int64_t var_idx = OB_INVALID_INDEX;
-      const ObPLVar *var = NULL;
+      const ObPLVar *local_variable = NULL;
       CK (OB_NOT_NULL(current_block_));
       OX (var_idx = static_cast<const ObConstRawExpr*>(param)->get_value().get_unknown());
-      CK (OB_NOT_NULL(var = current_block_->get_variable(var_idx)));
-      OX (actually_type = var->get_pl_data_type());
+      CK (OB_NOT_NULL(local_variable = current_block_->get_variable(var_idx)));
+      OX (actually_type = local_variable->get_pl_data_type());
+      OX (is_anonymous_array_type = actually_type.is_local_type()
+                                    && actually_type.is_collection_type()
+                                    && local_variable->get_name().prefix_match(ANONYMOUS_ARG));
     } else if (param->has_flag(IS_PL_MOCK_DEFAULT_EXPR)) {
       new(&actually_type)ObPLDataType(ObNullType);
     } else {
       new(&actually_type)ObPLDataType(param->get_data_type());
       actually_type.get_data_type()->set_udt_id(param->get_result_type().get_udt_id());
     }
+    // Step: get formal parameter type
     if (OB_SUCC(ret)) {
       if (param_info->is_schema_routine_param()) {
         const ObRoutineParam* iparam = static_cast<const ObRoutineParam*>(param_info);
@@ -7225,6 +7240,7 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
         OX (expected_type = iparam->get_type());
       }
     }
+    // Step: check compatible with real parameter & formal parameter
     if (OB_SUCC(ret) && !(actually_type == expected_type)) {
       bool is_legal = true;
       if (actually_type.is_cursor_type() && expected_type.is_cursor_type()) {
@@ -7232,66 +7248,42 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
       } else if (actually_type.is_obj_type() && ObNullType == actually_type.get_obj_type()) {
         // do nothing ...
       } else if (actually_type.is_composite_type() && expected_type.is_composite_type()) {
-        uint64_t actual_udt_id = actually_type.get_user_type_id();
-        if ((OB_INVALID_ID == actual_udt_id || OB_INVALID_ID == extract_package_id(actual_udt_id)) &&
-            resolve_ctx_.is_prepare_protocol_ &&
-            actually_type.is_collection_type() &&
-            OB_NOT_NULL(resolve_ctx_.params_.param_list_) &&
-            T_QUESTIONMARK == param->get_expr_type()) { // anony array
-          int64_t index = static_cast<const ObConstRawExpr*>(param)->get_value().get_unknown();
-          CK (resolve_ctx_.params_.param_list_->count() > index);
-          if (OB_SUCC(ret)) {
-            const ObObjParam &param = resolve_ctx_.params_.param_list_->at(index);
-            const pl::ObPLComposite *src_composite = NULL;
-            const pl::ObPLCollection *src_coll = NULL;
-            const pl::ObUserDefinedType *pl_user_type = NULL;
-            const pl::ObCollectionType *coll_type = NULL;
-            CK (OB_NOT_NULL(src_composite = reinterpret_cast<const ObPLComposite *>(param.get_ext())));
-            OZ (resolve_ctx_.get_user_type(expected_type.get_user_type_id(), pl_user_type));
-            CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(pl_user_type)));
-            CK (OB_NOT_NULL(src_coll = static_cast<const ObPLCollection *>(src_composite)));
-            if (OB_FAIL(ret)) {
-            } else if (coll_type->get_element_type().is_obj_type() ^
-                      src_coll->get_element_desc().is_obj_type()) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("incorrect argument type, diff type",
-                            K(ret), K(coll_type->get_element_type()), K(src_coll->get_element_desc()));
-            } else if (coll_type->get_element_type().is_obj_type()) { // basic data type
-              const ObDataType *src_data_type = &src_coll->get_element_desc();
-              const ObDataType *dst_data_type = coll_type->get_element_type().get_data_type();
-              if (dst_data_type->get_obj_type() == src_data_type->get_obj_type()) {
-                // do nothing
-              } else if (cast_supported(src_data_type->get_obj_type(),
-                                        src_data_type->get_collation_type(),
-                                        dst_data_type->get_obj_type(),
-                                        dst_data_type->get_collation_type())) {
-                // do nothing
-              } else {
-                ret = OB_INVALID_ARGUMENT;
-                LOG_WARN("incorrect argument type, diff type", K(ret));
-              }
+
+        if (is_anonymous_array_type && expected_type.is_collection_type()) { // check anonymous array compatible
+
+          const ObUserDefinedType *left_type = NULL;
+          const ObUserDefinedType *right_type = NULL;
+          const ObCollectionType *left_coll_type = NULL;
+          const ObCollectionType *right_coll_type = NULL;
+
+          OZ (current_block_->get_namespace().get_pl_data_type_by_id(actually_type.get_user_type_id(), left_type));
+          OZ (current_block_->get_namespace().get_pl_data_type_by_id(expected_type.get_user_type_id(), right_type));
+          CK (OB_NOT_NULL(left_coll_type = static_cast<const ObCollectionType *>(left_type)));
+          CK (OB_NOT_NULL(right_coll_type = static_cast<const ObCollectionType *>(right_type)));
+
+          if (OB_FAIL(ret)) {
+          } else if (left_coll_type->get_element_type().is_obj_type() ^ right_coll_type->get_element_type().is_obj_type()) {
+            is_legal = false;
+            LOG_WARN("uncompatible with anonymous array type", K(ret), KPC(left_coll_type), KPC(right_coll_type));
+          } else if (left_coll_type->get_element_type().is_obj_type()) {
+            const ObDataType *left_basic_type = left_coll_type->get_element_type().get_data_type();
+            const ObDataType *right_basic_type = right_coll_type->get_element_type().get_data_type();
+            if (left_basic_type->get_obj_type() != right_basic_type->get_obj_type()
+                && !cast_supported(left_basic_type->get_obj_type(),
+                                   left_basic_type->get_collation_type(),
+                                   right_basic_type->get_obj_type(),
+                                   right_basic_type->get_collation_type())) {
+              is_legal = false;
+              LOG_WARN("uncompatible with anonymous array type", K(ret), KPC(left_coll_type), KPC(right_coll_type));
             } else {
-              // element is composite type
-              uint64_t element_type_id = src_coll->get_element_desc().get_udt_id();
-              is_legal = element_type_id == coll_type->get_element_type().get_user_type_id();
-              if (!is_legal) {
-                OZ (ObPLResolver::check_composite_compatible(
-                  NULL == resolve_ctx_.params_.secondary_namespace_
-                      ? static_cast<const ObPLINS&>(resolve_ctx_)
-                      : static_cast<const ObPLINS&>(*resolve_ctx_.params_.secondary_namespace_),
-                  element_type_id, coll_type->get_element_type().get_user_type_id(), is_legal));
-              }
+              // compatible with anonymous array type
             }
-          } else {
-            if (actual_udt_id != expected_type.get_user_type_id()) {
-              OZ (check_composite_compatible(current_block_->get_namespace(),
-                                            actual_udt_id,
-                                            expected_type.get_user_type_id(),
-                                            is_legal));
-            }
+          } else if (left_coll_type->get_element_type().get_user_type_id() != right_coll_type->get_element_type().get_user_type_id()) {
+            OZ (check_composite_compatible(current_block_->get_namespace(),
+                                           left_coll_type->get_element_type().get_user_type_id(),
+                                           right_coll_type->get_element_type().get_user_type_id(),
+                                           is_legal));
           }
-        }
-        if (OB_FAIL(ret)) {
         } else if (actually_type.get_user_type_id() != expected_type.get_user_type_id()) {
 #ifdef OB_BUILD_ORACLE_PL
           if (ObPlJsonUtil::is_pl_jsontype(actually_type.get_user_type_id())) {
@@ -7322,6 +7314,7 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
           is_legal = false;
         }
       } else { /*do nothing*/ }
+
       if (OB_SUCC(ret) && !is_legal) {
         ret = OB_ERR_WRONG_TYPE_FOR_VAR;
         LOG_WARN("PLS-00306: wrong number or types of arguments in call stmt",
@@ -10841,7 +10834,7 @@ int ObPLResolver::resolve_inner_call(
             OZ (resolve_call_param_list(params, package_routine_info->get_params(), call_stmt, func));
           } else if (params.count() != 0) {
             ret = OB_INVALID_ARGUMENT_NUM;
-            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+            LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                      K(ret), K(params.count()), K(package_routine_info->get_param_count()));
           }
         } else if (access_idxs.at(idx_cnt - 1).is_external_procedure()) {
@@ -10874,7 +10867,7 @@ int ObPLResolver::resolve_inner_call(
             OZ (resolve_call_param_list(params, schema_routine_info->get_routine_params(), call_stmt, func));
           } else if (params.count() != 0) {
             ret = OB_INVALID_ARGUMENT_NUM;
-            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+            LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                      K(ret), K(params.count()), K(schema_routine_info->get_param_count()));
           }
         } else if (access_idxs.at(idx_cnt - 1).is_nested_procedure()) {
@@ -10891,7 +10884,7 @@ int ObPLResolver::resolve_inner_call(
             OZ (resolve_call_param_list(params, root_routine_info->get_params(), call_stmt, func));
           } else if (params.count() != 0) {
             ret = OB_INVALID_ARGUMENT_NUM;
-            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+            LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                      K(ret), K(params.count()), K(root_routine_info->get_param_count()));
           }
         } else {
@@ -12569,7 +12562,7 @@ int ObPLResolver::resolve_udf_info(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("You tried to execute a SQL statement that referenced a package or function\
                 that contained an OUT parameter. This is not allowed.", K(ret));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ORA-06572: function name has out arguments");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBE-06572: function name has out arguments");
     }
     if (OB_SUCC(ret) && !resolve_ctx_.is_sql_scope_) {
       ObUDFRawExpr *udf_raw_expr = NULL;
@@ -13899,7 +13892,8 @@ int ObPLResolver::convert_pltype_to_restype(ObIAllocator &alloc,
         result_type->set_collation_type(data_type->get_collation_type());
         result_type->set_collation_level(data_type->get_collation_level());
       } else if (ob_is_number_tc(result_type->get_type()) ||
-                 ob_is_interval_tc(result_type->get_type())) {
+                 ob_is_interval_tc(result_type->get_type()) ||
+                 ob_is_decimal_int_tc(result_type->get_type())) {
         result_type->set_precision(data_type->get_precision());
         result_type->set_scale(data_type->get_scale());
       } else if (ob_is_text_tc(result_type->get_type())
@@ -15200,32 +15194,32 @@ struct ObPredefinedException {
 
 static ObPredefinedException PREDEFINED_EXCEPTIONS[] =
 {
-  DEFINED_EXCEPTION("ACCESS_INTO_NULL", OB_ERR_ACCESS_INTO_NULL), // ORA-6530
-  DEFINED_EXCEPTION("CASE_NOT_FOUND", OB_ER_SP_CASE_NOT_FOUND), // ORA-6592
-  DEFINED_EXCEPTION("COLLECTION_IS_NULL", OB_ERR_COLLECION_NULL), // ORA-6531
-  DEFINED_EXCEPTION("CURSOR_ALREADY_OPEN", OB_ER_SP_CURSOR_ALREADY_OPEN), // ORA-6511
-  DEFINED_EXCEPTION("DUP_VAL_ON_INDEX", OB_ERR_PRIMARY_KEY_DUPLICATE), // ORA-1
+  DEFINED_EXCEPTION("ACCESS_INTO_NULL", OB_ERR_ACCESS_INTO_NULL), // OBE-6530
+  DEFINED_EXCEPTION("CASE_NOT_FOUND", OB_ER_SP_CASE_NOT_FOUND), // OBE-6592
+  DEFINED_EXCEPTION("COLLECTION_IS_NULL", OB_ERR_COLLECION_NULL), // OBE-6531
+  DEFINED_EXCEPTION("CURSOR_ALREADY_OPEN", OB_ER_SP_CURSOR_ALREADY_OPEN), // OBE-6511
+  DEFINED_EXCEPTION("DUP_VAL_ON_INDEX", OB_ERR_PRIMARY_KEY_DUPLICATE), // OBE-1
 
-  DEFINED_EXCEPTION("INVALID_CURSOR", OB_ERR_INVALID_CURSOR), // ORA-1001
-  DEFINED_EXCEPTION("INVALID_NUMBER", OB_INVALID_NUMERIC), // ORA-1722
-  DEFINED_EXCEPTION("LOGIN_DENIED", OB_ERR_LOGIN_DENIED), // ORA-1017
-  DEFINED_EXCEPTION("NO_DATA_FOUND", OB_READ_NOTHING), // ORA-+100
-  DEFINED_EXCEPTION("NO_DATA_NEEDED", OB_ERR_NO_DATA_NEEDED), // ORA-6548
+  DEFINED_EXCEPTION("INVALID_CURSOR", OB_ERR_INVALID_CURSOR), // OBE-1001
+  DEFINED_EXCEPTION("INVALID_NUMBER", OB_INVALID_NUMERIC), // OBE-1722
+  DEFINED_EXCEPTION("LOGIN_DENIED", OB_ERR_LOGIN_DENIED), // OBE-1017
+  DEFINED_EXCEPTION("NO_DATA_FOUND", OB_READ_NOTHING), // OBE-+100
+  DEFINED_EXCEPTION("NO_DATA_NEEDED", OB_ERR_NO_DATA_NEEDED), // OBE-6548
 
-  DEFINED_EXCEPTION("NOT_LOGGED_ON", OB_ERR_NOT_LOGGED_ON), // ORA-1012
-  DEFINED_EXCEPTION("PROGRAM_ERROR", OB_ERR_PROGRAM_ERROR), // ORA-6501
-  DEFINED_EXCEPTION("ROWTYPE_MISMATCH", OB_ERR_ROWTYPE_MISMATCH), // ORA-6504
-  DEFINED_EXCEPTION("SELF_IS_NULL", OB_ERR_SELF_IS_NULL), // ORA-30625
-  DEFINED_EXCEPTION("STORAGE_ERROR", OB_ERR_STORAGE_ERROR), // ORA-6500
+  DEFINED_EXCEPTION("NOT_LOGGED_ON", OB_ERR_NOT_LOGGED_ON), // OBE-1012
+  DEFINED_EXCEPTION("PROGRAM_ERROR", OB_ERR_PROGRAM_ERROR), // OBE-6501
+  DEFINED_EXCEPTION("ROWTYPE_MISMATCH", OB_ERR_ROWTYPE_MISMATCH), // OBE-6504
+  DEFINED_EXCEPTION("SELF_IS_NULL", OB_ERR_SELF_IS_NULL), // OBE-30625
+  DEFINED_EXCEPTION("STORAGE_ERROR", OB_ERR_STORAGE_ERROR), // OBE-6500
 
-  DEFINED_EXCEPTION("SUBSCRIPT_BEYOND_COUNT", OB_ERR_SUBSCRIPT_BEYOND_COUNT), // ORA-6533
-  DEFINED_EXCEPTION("SUBSCRIPT_OUTSIDE_LIMIT", OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT), // ORA-6532
-  DEFINED_EXCEPTION("SYS_INVALID_ROWID", OB_INVALID_ROWID), // ORA-1410
-  DEFINED_EXCEPTION("TIMEOUT_ON_RESOURCE", OB_ERR_TIMEOUT_ON_RESOURCE), // ORA-51
-  DEFINED_EXCEPTION("TOO_MANY_ROWS", OB_ERR_TOO_MANY_ROWS), // ORA-1422
+  DEFINED_EXCEPTION("SUBSCRIPT_BEYOND_COUNT", OB_ERR_SUBSCRIPT_BEYOND_COUNT), // OBE-6533
+  DEFINED_EXCEPTION("SUBSCRIPT_OUTSIDE_LIMIT", OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT), // OBE-6532
+  DEFINED_EXCEPTION("SYS_INVALID_ROWID", OB_INVALID_ROWID), // OBE-1410
+  DEFINED_EXCEPTION("TIMEOUT_ON_RESOURCE", OB_ERR_TIMEOUT_ON_RESOURCE), // OBE-51
+  DEFINED_EXCEPTION("TOO_MANY_ROWS", OB_ERR_TOO_MANY_ROWS), // OBE-1422
 
-  DEFINED_EXCEPTION("VALUE_ERROR", OB_ERR_NUMERIC_OR_VALUE_ERROR), // ORA-6502
-  DEFINED_EXCEPTION("ZERO_DIVIDE", OB_ERR_DIVISOR_IS_ZERO), // ORA-1476
+  DEFINED_EXCEPTION("VALUE_ERROR", OB_ERR_NUMERIC_OR_VALUE_ERROR), // OBE-6502
+  DEFINED_EXCEPTION("ZERO_DIVIDE", OB_ERR_DIVISOR_IS_ZERO), // OBE-1476
 };
 
 int ObPLResolver::resolve_pre_condition(const ObString &name, const ObPLConditionValue **value)

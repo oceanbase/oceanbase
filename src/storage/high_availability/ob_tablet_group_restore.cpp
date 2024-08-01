@@ -839,9 +839,11 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
   } else {
     ctx_->tablet_id_array_.reset();
     bool can_change = false;
+    ObLogicTabletID logic_tablet_id;
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->arg_.tablet_id_array_.count(); ++i) {
       const ObTabletID &tablet_id = ctx_->arg_.tablet_id_array_.at(i);
       ObTabletHandle tablet_handle;
+      logic_tablet_id.reset();
       if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))
           && OB_TABLET_NOT_EXIST != ret) {
         LOG_WARN("failed to get tablet", K(ret), K(tablet_id), KPC(ctx_), K(timeout_us));
@@ -870,7 +872,9 @@ int ObInitialTabletGroupRestoreTask::check_local_tablets_restore_status_()
       } else if (action_restore_status == tablet_restore_status) {
         LOG_INFO("tablet restore status is equal to restore action, skip restore it", K(tablet_id),
             K(action_restore_status), K(tablet_restore_status), K(ctx_->arg_));
-      } else if (OB_FAIL(ctx_->tablet_id_array_.push_back(tablet_id))) {
+      } else if (OB_FAIL(logic_tablet_id.init(tablet_id, tablet->get_tablet_meta().transfer_info_.transfer_seq_))) {
+        LOG_WARN("failed to init logic tablet id", K(ret), K(tablet_id), KPC(tablet));
+      } else if (OB_FAIL(ctx_->tablet_id_array_.push_back(logic_tablet_id))) {
         LOG_WARN("failed to push tablet id into array", K(ret), K(tablet_id), KPC(ctx_));
       }
     }
@@ -1047,16 +1051,20 @@ int ObInitialTabletGroupRestoreTask::renew_tablets_meta_()
 int ObInitialTabletGroupRestoreTask::init_ha_tablets_builder_()
 {
   int ret = OB_SUCCESS;
+  ObArray<ObTabletID> tablet_id_array;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial tablet group restore task do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->tablet_id_array_, tablet_id_array))) {
+    LOG_WARN("failed to append tablet list", K(ret), KPC(ctx_));
   } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
-      ctx_->arg_.tenant_id_, ctx_->tablet_id_array_, ctx_->arg_.is_leader_,
+      ctx_->arg_.tenant_id_, tablet_id_array, ctx_->arg_.is_leader_,
       ctx_->need_check_seq_, ctx_->ls_rebuild_seq_, ctx_->src_,
       ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, ctx_->arg_.action_, meta_index_store_,
       &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
-   LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
- }
+    LOG_WARN("failed to init ha tablets builder", K(ret), KPC(ctx_));
+  }
   return ret;
 }
 
@@ -1198,6 +1206,7 @@ int ObStartTabletGroupRestoreTask::init(
   ObIDagNet *dag_net = nullptr;
   ObTabletGroupRestoreDagNet* restore_dag_net = nullptr;
   ObLSService *ls_service = nullptr;
+  ObArray<ObTabletID> tablet_id_array;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -1226,8 +1235,10 @@ int ObStartTabletGroupRestoreTask::init(
     finish_dag_ = finish_dag;
     if (OB_FAIL(ls_service->get_ls(ctx_->arg_.ls_id_, ls_handle_, ObLSGetMod::HA_MOD))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+    } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->tablet_id_array_, tablet_id_array))) {
+      LOG_WARN("failed to append tablet list", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObTabletGroupRestoreUtils::init_ha_tablets_builder(
-        ctx_->arg_.tenant_id_, ctx_->tablet_id_array_, ctx_->arg_.is_leader_,
+        ctx_->arg_.tenant_id_, tablet_id_array, ctx_->arg_.is_leader_,
         ctx_->need_check_seq_, ctx_->ls_rebuild_seq_, ctx_->src_,
         ls_handle_.get_ls(), &ctx_->arg_.restore_base_info_, ctx_->arg_.action_, meta_index_store_,
         &ctx_->ha_table_info_mgr_, ha_tablets_builder_))) {
@@ -1279,7 +1290,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
   ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObStartTabletGroupRestoreDag *start_tablet_group_restore_dag = nullptr;
-  ObTabletID tablet_id;
+  ObLogicTabletID logic_tablet_id;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -1295,7 +1306,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
     LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(ctx_->tablet_group_ctx_.get_next_tablet_id(tablet_id))) {
+      if (OB_FAIL(ctx_->tablet_group_ctx_.get_next_tablet_id(logic_tablet_id))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           LOG_INFO("no tablets need restore", KPC(ctx_));
@@ -1310,7 +1321,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
       ObInitTabletRestoreParam param;
       param.tenant_id_ = ctx_->arg_.tenant_id_;
       param.ls_id_ = ctx_->arg_.ls_id_;
-      param.tablet_id_ = tablet_id;
+      param.tablet_id_ = logic_tablet_id.tablet_id_;
       param.ha_dag_net_ctx_ = ctx_;
       param.is_leader_ = ctx_->arg_.is_leader_;
       param.action_ = ctx_->arg_.action_;
@@ -1330,7 +1341,7 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
       } else if (OB_FAIL(tablet_restore_dag->init(param))) {
         if (OB_TABLET_NOT_EXIST == ret) {
           //overwrite ret
-          LOG_INFO("tablet is deleted, skip restore", K(tablet_id), K(param));
+          LOG_INFO("tablet is deleted, skip restore", K(logic_tablet_id), K(param));
           scheduler->free_dag(*tablet_restore_dag);
           tablet_restore_dag = nullptr;
           ret = OB_SUCCESS;
@@ -1371,6 +1382,18 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
 int ObStartTabletGroupRestoreTask::create_tablets_sstable_()
 {
   int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  if (ctx_->arg_.ls_id_.is_user_ls()) {
+    SERVER_EVENT_SYNC_ADD("storage_ha", "before_restore_create_tablets_sstable",
+      "tenant_id", ctx_->arg_.tenant_id_,
+      "ls_id", ctx_->arg_.ls_id_.id(),
+      "action", ObTabletRestoreAction::get_action_str(ctx_->arg_.action_),
+      "is_leader", ctx_->arg_.is_leader_);
+    DEBUG_SYNC(BEFORE_RESTORE_CREATE_TABLETS_SSTABLE);
+  }
+#endif
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start tablet group restore task do not init", K(ret), KPC(ctx_));
@@ -1941,7 +1964,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
   ObTenantDagScheduler *scheduler = nullptr;
   ObTabletRestoreDag *tablet_restore_dag = nullptr;
   bool need_set_failed_result = true;
-  ObTabletID tablet_id;
+  ObLogicTabletID logic_tablet_id;
   ObInitTabletRestoreParam param;
   ObDagId dag_id;
 
@@ -1959,7 +1982,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
     }
   } else {
     while (OB_SUCC(ret)) {
-      if (OB_FAIL(tablet_group_ctx_->get_next_tablet_id(tablet_id))) {
+      if (OB_FAIL(tablet_group_ctx_->get_next_tablet_id(logic_tablet_id))) {
         if (OB_ITER_END == ret) {
           //do nothing
           need_set_failed_result = false;
@@ -1969,7 +1992,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
       } else {
         param.tenant_id_ = tablet_restore_ctx_.tenant_id_;
         param.ls_id_ = tablet_restore_ctx_.ls_id_;
-        param.tablet_id_ = tablet_id;
+        param.tablet_id_ = logic_tablet_id.tablet_id_;
         param.ha_dag_net_ctx_ = ha_dag_net_ctx_;
         param.is_leader_ = tablet_restore_ctx_.is_leader_;
         param.action_ = tablet_restore_ctx_.action_;
@@ -1987,7 +2010,7 @@ int ObTabletRestoreDag::generate_next_dag(share::ObIDag *&dag)
         } else if (OB_FAIL(tablet_restore_dag->init(param))) {
           if (OB_TABLET_NOT_EXIST == ret) {
             //overwrite ret
-            LOG_INFO("tablet is deleted, skip restore", K(tablet_id), K(param));
+            LOG_INFO("tablet is deleted, skip restore", K(logic_tablet_id), K(param));
             scheduler->free_dag(*tablet_restore_dag);
             tablet_restore_dag = nullptr;
             ret = OB_SUCCESS;

@@ -668,6 +668,7 @@ public:
                                 jit::ObLLVMValue &p_result_obj);
   int prepare_expression(ObPLCompileUnit &pl_func);
   int final_expression(ObPLCompileUnit &pl_func);
+  ObSQLSessionInfo& get_session_info() const { return session_info_; }
 
 private:
   int init_spi_service();

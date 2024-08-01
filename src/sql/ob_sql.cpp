@@ -1268,17 +1268,39 @@ int ObSql::do_real_prepare(const ObString &sql,
     param_cnt = parse_result.question_mark_ctx_.count_;
     info_ctx.normalized_sql_ = sql;
     if (stmt::T_ANONYMOUS_BLOCK == stmt_type
-                 && context.is_prepare_protocol_
-                 && context.is_prepare_stage_
-                 && context.is_pre_execute_) {
+        && context.is_prepare_protocol_
+        && context.is_prepare_stage_
+        && context.is_pre_execute_) {
+
       OZ (result.reserve_param_columns(param_cnt));
       for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
         ObField param_field;
         param_field.type_.set_type(ObIntType);
         param_field.cname_ = ObString::make_string("?");
+
+        // 1. why mark 'SP_PARAM_INOUT' here ?
+        //    if this prepare result reused by ps protocol. (here is prexecute protocol prepare)
+        //    ps protocol will use this result to charge `Is this anonymous block has out row or not?`
+        //    and if anonymous block has not out row, anonymous block can use AsyncCmdPlanDriver.
+        //    but for now, anonymous block do not resolve, we can not know about out row infos.
+        //    so we treat all parameter as inout paramter.
+        //
+        // 2. why inout parameter is ok ?
+        //    actully when anonymous block execute, it will do real resolve again,
+        //    and will fill out row infos again, we only use prepare inout infos to avoid to use AsyncCmdPlanDriver,
+        //    because AsyncCmdPlanDriver nerver response result row.
+        //
+        // 3. what if new ps prepare reuse prexecute prepare result?
+        //    it is not possible, because, we mark prexecute flag to PsStmtInfo,
+        //    when ps prepare match PsStmtInfo, will check prexecute flag, if flag is true, will evcit it, and do real prepare.
+        //    so here is a defense, avoid ps prepare reuse wrong.
+        //    if for some reason, ps reuse this, we can make sure result is correct.
+
+        param_field.inout_mode_ = ObRoutineParamInOut::SP_PARAM_INOUT;
         OZ (result.add_param_column(param_field), K(param_field), K(i), K(param_cnt));
       }
     }
+
   } else {
     if (context.is_dynamic_sql_ && !context.is_dbms_sql_) {
       parse_result.input_sql_ = parse_result.no_param_sql_;
@@ -1896,6 +1918,14 @@ int ObSql::handle_ps_prepare(const ObString &stmt,
                                                         *stmt_info,
                                                         is_expired))) {
         LOG_WARN("fail to check schema version", K(ret));
+      } else if (!is_expired
+                 && !context.is_pre_execute_ // ps prepare
+                 && stmt_info->get_is_prexecute() // prexecute prepare
+                 && stmt::T_ANONYMOUS_BLOCK == stmt_info->get_stmt_type()
+                 && FALSE_IT(is_expired = true)) {
+        // prexecute prepare anonymous block result can not reused by ps prepare.
+        // but ps prepare anonymous block can reused by prexecute.
+        // here, we replace to ps prepare result.
       } else if (is_expired) {
         stmt_info->set_is_expired();
         if (OB_FAIL(ps_cache->erase_stmt_item(inner_stmt_id, ps_key))) {
@@ -2365,6 +2395,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
         pc_ctx.set_is_parameterized_execute();
         pc_ctx.set_is_inner_sql(is_inner_sql);
         pc_ctx.ab_params_ = ps_ab_params;
+        pc_ctx.is_arraybinding_ = (ps_info->get_num_of_returning_into() > 0);
         if (OB_FAIL(construct_parameterized_params(ps_params, pc_ctx))) {
           LOG_WARN("construct parameterized params failed", K(ret));
         } else {
@@ -2426,7 +2457,7 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
           // call procedure stmt call always parse as dynamic sql
           context.is_dynamic_sql_ = true;
         }
-        if (stmt::T_CALL_PROCEDURE == stmt_type && !context.is_execute_call_stmt_) {
+        if ((stmt::T_CALL_PROCEDURE == stmt_type || stmt::T_ANONYMOUS_BLOCK == stmt_type) && !context.is_execute_call_stmt_) {
           context.is_execute_call_stmt_ = true;
         }
         ObParser parser(allocator, session.get_sql_mode(),
@@ -5120,15 +5151,25 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
           // constrain. In this situation, we can't compare two plan. So just keep try next baseline.
           spm_ctx.evolution_task_in_two_plan_set_ = false;
           need_get_baseline = true;
+        } else if (spm_ctx.baseline_exists_) {
+          // When adding baseline plan and find other session alerady added. Then stop searching next
+          // baseline and execute this plan directly.
+          need_get_baseline = false;
+          spm_ctx.baseline_exists_ = false;
         } else {
           // add baseline plan failed, need evict unaccepted baseline in baseline cache.
           (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
         }
       } else if (plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
-        spm_ctx.spm_force_disable_ = true;
-        spm_ctx.spm_stat_ = ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN;
-        spm_ctx.is_retry_for_spm_ = false;
-        ret = OB_SQL_RETRY_SPM;
+        if (nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
+            static_cast<ObPlanBaselineItem*>(spm_ctx.baseline_guard_.get_cache_obj())->get_fixed()) {
+          // fixed baseline plan, use is directly
+        } else {
+          spm_ctx.spm_force_disable_ = true;
+          spm_ctx.spm_stat_ = ObSpmCacheCtx::STAT_FIRST_EXECUTE_PLAN;
+          spm_ctx.is_retry_for_spm_ = false;
+          ret = OB_SQL_RETRY_SPM;
+        }
       }
     } else {
       LOG_TRACE("spm need get baseline due to plan hash value not equal");

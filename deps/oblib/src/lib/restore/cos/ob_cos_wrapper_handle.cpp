@@ -89,7 +89,7 @@ int ObCosWrapperHandle::init(const ObObjectStorageInfo *storage_info)
     OB_LOG(WARN, "fail to parse cos account from storage info str", K(ret));
   } else if (strlen(cos_account_.delete_mode_) > 0 && OB_FAIL(set_delete_mode(cos_account_.delete_mode_))) {
     OB_LOG(WARN, "fail to set cos delete mode", K(cos_account_.delete_mode_), K(ret));
-  } {
+  } else {
     is_inited_ = true;
   }
   return ret;

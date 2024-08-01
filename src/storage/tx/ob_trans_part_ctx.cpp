@@ -3390,6 +3390,7 @@ int ObPartTransCtx::submit_redo_active_info_log_()
   ObTxLogBlock log_block;
   bool has_redo = false;
   ObRedoLogSubmitHelper helper;
+  ObTableLockPrioOpArray prio_op_array;
   if (OB_FAIL(submit_redo_if_parallel_logging_())) {
   } else if (OB_FAIL(init_log_block_(log_block))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
@@ -3416,7 +3417,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
                                       last_scn_, exec_info_.max_submitted_seq_no_,
                                       cluster_version_,
                                       exec_info_.xid_,
-                                      exec_info_.serial_final_seq_no_);
+                                      exec_info_.serial_final_seq_no_,
+                                      prio_op_array);
     ObTxLogCb *log_cb = nullptr;
     if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
       TRANS_LOG(WARN, "get log cb failed", KR(ret), KP(log_cb), K(*this));
@@ -4071,7 +4073,7 @@ int ObPartTransCtx::submit_direct_load_inc_log_(
     if (ret == OB_TX_NOLOGCB) {
       if (REACH_COUNT_PER_SEC(10) && REACH_TIME_INTERVAL(100 * 1000)) {
         TRANS_LOG(INFO, "no log cb with dli log", KR(ret), K(dli_log_type), K(batch_key),
-                  KPC(busy_cbs_.get_first()));
+                  "busy_cbs.first", PC(busy_cbs_.is_empty() ? NULL : busy_cbs_.get_first()));
       }
     } else {
       TRANS_LOG(WARN, "try to submit direct load inc log failed", K(ret), KPC(this));
@@ -4532,7 +4534,7 @@ void ObPartTransCtx::handle_submit_log_err_(const ObTxLogType log_type, int &ret
   if (OB_TX_NOLOGCB == ret) {
     if (REACH_COUNT_PER_SEC(10) && REACH_TIME_INTERVAL(100 * 1000)) {
       TRANS_LOG(INFO, "can not get log_cb when submit_log", KR(ret), K(log_type),
-                KPC(busy_cbs_.get_first()));
+                "busy_cbs.first", PC(busy_cbs_.is_empty() ? NULL : busy_cbs_.get_first()));
     }
     if (ObTxLogType::TX_PREPARE_LOG == log_type || ObTxLogType::TX_COMMIT_LOG == log_type
         || ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
@@ -6230,6 +6232,8 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
     } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT, timestamp, true,
                                            mds_cache_.get_final_notify_array()))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(abort_log));
+    } else if (!ctx_tx_data_.is_read_only() && OB_FAIL(ctx_tx_data_.add_abort_op(timestamp))) {
+      TRANS_LOG(WARN, "add tx data abort_op failed", K(ret), KPC(this));
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else {

@@ -1691,7 +1691,7 @@ int ObRawExprResolverImpl::process_dblink_udf_node(const ParseNode *node, ObRawE
     if (0 == column_ref.access_idents_.at(acc_cnt - 1).access_name_.case_compare("NEXTVAL")
         || 0 == column_ref.access_idents_.at(acc_cnt - 1).access_name_.case_compare("CURRVAL")) {
       ret = OB_ERR_SEQ_NOT_ALLOWED_HERE;
-      LOG_WARN("ORA-02287: sequence number not allowed here", K(ret), K(column_ref));
+      LOG_WARN("OBE-02287: sequence number not allowed here", K(ret), K(column_ref));
     }
   }
   OV (column_ref.access_idents_.count() >= 1);

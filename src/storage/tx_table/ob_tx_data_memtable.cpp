@@ -171,6 +171,10 @@ int ObTxDataMemtable::insert(ObTxData *tx_data)
   } else if (OB_ISNULL(tx_data)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "tx data is nullptr", KR(ret));
+  } else if (ObTxCommitData::COMMIT == tx_data->state_ &&
+             (tx_data->commit_version_.is_max() || !tx_data->commit_version_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "invalid tx data", KR(ret), KPC(tx_data));
   } else if (OB_ISNULL(tx_data_map_)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "unexpected null value of tx_data_map_", KR(ret));
@@ -356,7 +360,8 @@ int ObTxDataMemtable::pre_process_commit_version_row_(ObTxData *fake_tx_data)
   if (OB_FAIL(fill_in_cur_commit_versions_(cur_commit_versions)/*step 1*/)) {
     STORAGE_LOG(WARN, "periodical select commit version failed.", KR(ret));
   } else if (OB_FAIL(get_past_commit_versions_(past_commit_versions)/*step 2*/)) {
-    STORAGE_LOG(WARN, "get past commit versions failed.", KR(ret));
+    STORAGE_LOG(WARN, "get past commit versions failed.", KR(ret), K(past_commit_versions));
+  } else if (FALSE_IT(clear_fake_node_if_exist_(past_commit_versions))) {
   } else if (do_recycle_ && OB_FAIL(memtable_mgr_->get_tx_data_table()->get_recycle_scn(recycle_scn) /*step 3*/)) {
     STORAGE_LOG(WARN, "get recycle ts failed.", KR(ret));
   } else if (OB_FAIL(merge_cur_and_past_commit_verisons_(recycle_scn, cur_commit_versions,/*step 4*/
@@ -433,9 +438,6 @@ int ObTxDataMemtable::periodical_get_next_commit_version_(ProcessCommitVersionDa
     // avoid rollback or abort transaction influencing commit versions array
     if (ObTxData::COMMIT != tmp_tx_data->state_) {
       continue;
-    } else if (!tmp_tx_data->commit_version_.is_valid() || tmp_tx_data->commit_version_.is_max()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(ERROR, "unexpected tx data commit version", KPC(tmp_tx_data));
     } else {
       tx_data = tmp_tx_data;
     }
@@ -451,6 +453,11 @@ int ObTxDataMemtable::periodical_get_next_commit_version_(ProcessCommitVersionDa
     // update pre_commit_version
     if (tx_data->commit_version_ > cur_max_commit_version) {
       cur_max_commit_version = tx_data->commit_version_;
+    }
+
+    if (cur_max_commit_version.is_max()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "unexpected max commit version", KR(ret), KPC(tx_data));
     }
 
     // If this tx data is the first tx data in sorted list or its start_log_ts is 1_s larger than
@@ -508,14 +515,27 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
         ObCommitVersionsGetter getter(iter_param, tmp_sstable);
         if (OB_FAIL(getter.get_next_row(past_commit_versions))) {
           STORAGE_LOG(WARN, "get commit versions from tx data sstable failed.", KR(ret));
+        } else if (!past_commit_versions.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(ERROR, "invalid past commit versions array", KR(ret), K(past_commit_versions), KPC(sstable));
+        } else {
+          STORAGE_LOG(INFO, "finish get past commit versions", KR(ret), K(past_commit_versions), KPC(sstable));
         }
       }
     } else {
-      STORAGE_LOG(DEBUG, "There is no tx data sstable yet", KR(ret), KPC(sstable));
+      STORAGE_LOG(INFO, "There is no tx data sstable yet", KR(ret), K(past_commit_versions), KP(sstable));
     }
   }
 
   return ret;
+}
+
+void ObTxDataMemtable::clear_fake_node_if_exist_(ObCommitVersionsArray &past_commit_versions)
+{
+  if (1 == past_commit_versions.array_.count() && past_commit_versions.array_.at(0).commit_version_.is_max()) {
+    STORAGE_LOG(INFO, "clear fake commit version node", K(past_commit_versions));
+    past_commit_versions.reset();
+  }
 }
 
 int ObTxDataMemtable::merge_cur_and_past_commit_verisons_(const SCN recycle_scn,
@@ -608,7 +628,6 @@ int ObTxDataMemtable::merge_pre_process_node_(const int64_t step_len,
         STORAGE_LOG(WARN, "push back commit version node failed.", KR(ret), KPC(this));
       }
     }
-
   }
   return ret;
 }
