@@ -15081,8 +15081,9 @@ def_table_schema(
                       select e.tenant_id as tenant_id,
                              e.data_table_id as data_table_id,
                              SUM(f.macro_blk_cnt * 2 * 1024 * 1024) AS index_length
-                      FROM oceanbase.__all_table e JOIN oceanbase.__all_table_stat f ON e.table_id = f.table_id
-                      WHERE e.index_type = 1 and e.table_type = 5 and (f.partition_id = -1 or f.partition_id = e.table_id)
+                      FROM oceanbase.__all_table e JOIN oceanbase.__all_table_stat f
+                            ON e.tenant_id = f.tenant_id and e.table_id = f.table_id and (f.partition_id = -1 or f.partition_id = e.table_id)
+                      WHERE e.index_type in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12) and e.table_type = 5
                             group by tenant_id, data_table_id
                     ) idx_stat on idx_stat.tenant_id = a.tenant_id and idx_stat.data_table_id = a.table_id
                     where a.tenant_id = 0
@@ -29691,14 +29692,15 @@ FROM
     SELECT E.TENANT_ID AS TENANT_ID,
            E.DATA_TABLE_ID AS DATA_TABLE_ID,
            F.PART_IDX AS PART_IDX,
+           SF.SUB_PART_IDX AS SUB_PART_IDX,
            SUM(G.macro_blk_cnt * 2 * 1024 * 1024) AS INDEX_LENGTH
-    FROM OCEANBASE.__ALL_TABLE E
-         JOIN OCEANBASE.__ALL_PART F ON E.TABLE_ID = F.TABLE_ID
-         JOIN OCEANBASE.__ALL_TABLE_STAT G ON E.TABLE_ID = G.TABLE_ID AND F.part_id = G.partition_id
-    WHERE E.INDEX_TYPE = 1 AND E.TABLE_TYPE = 5 GROUP BY TENANT_ID, DATA_TABLE_ID, PART_IDX
+    FROM OCEANBASE.__ALL_TABLE E LEFT JOIN OCEANBASE.__ALL_PART F ON E.TENANT_ID = F.TENANT_ID AND E.TABLE_ID = F.TABLE_ID
+                                 LEFT JOIN OCEANBASE.__ALL_SUB_PART SF ON E.TENANT_ID = SF.TENANT_ID AND E.TABLE_ID = SF.TABLE_ID AND F.PART_ID = SF.PART_ID
+         JOIN OCEANBASE.__ALL_TABLE_STAT G ON E.TENANT_ID = G.TENANT_ID AND E.TABLE_ID = G.TABLE_ID AND G.PARTITION_ID = CASE E.PART_LEVEL WHEN 0 THEN E.TABLE_ID WHEN 1 THEN F.PART_ID WHEN 2 THEN SF.SUB_PART_ID END
+    WHERE E.INDEX_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12) AND E.TABLE_TYPE = 5 GROUP BY TENANT_ID, DATA_TABLE_ID, PART_IDX, SUB_PART_IDX
   ) IDX_STAT ON IDX_STAT.TENANT_ID = T.TENANT_ID AND
                 IDX_STAT.DATA_TABLE_ID = T.TABLE_ID AND
-                IDX_STAT.PART_IDX = CASE T.PART_LEVEL WHEN 0 THEN -1 WHEN 1 THEN P.PART_IDX WHEN 2 THEN SP.SUB_PART_IDX END
+                CASE T.PART_LEVEL WHEN 0 THEN 1 WHEN 1 THEN P.PART_IDX = IDX_STAT.PART_IDX WHEN 2 THEN P.PART_IDX = IDX_STAT.PART_IDX AND SP.SUB_PART_IDX = IDX_STAT.SUB_PART_IDX END
 WHERE T.TABLE_TYPE IN (3,6,8,9,14)
   """.replace("\n", " "),
 
