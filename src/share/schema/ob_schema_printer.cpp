@@ -3837,6 +3837,11 @@ int ObSchemaPrinter::print_udt_definition(const uint64_t tenant_id,
                            udt_info->get_coll_info()->get_elem_type_id(),
                            udt_info->get_coll_info(),
                            buf, buf_len, pos));
+    if (OB_SUCC(ret)
+        && OB_NOT_NULL(udt_info->get_coll_info())
+        && udt_info->get_coll_info()->is_not_null()) {
+      OZ (databuff_printf(buf, buf_len, pos, "\nNOT NULL;\n"));
+    }
   } else {
     const common::ObIArray<ObUDTObjectType*> &udt_src = udt_info->get_object_type_infos();
     if (0 == udt_src.count()) {
