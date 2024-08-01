@@ -16,6 +16,7 @@
 #include "lib/ob_define.h"
 #include "lib/hash/ob_hashmap.h"
 #include "common/ob_version_def.h"
+#include "rpc/obrpc/ob_rpc_packet.h"
 
 namespace oceanbase
 {
@@ -50,8 +51,10 @@ class ObTenantDataVersionMgr
 {
 public:
   ObTenantDataVersionMgr()
-      : is_inited_(false), allocator_(lib::ObLabel("TenantDVMgr")),
-        mock_data_version_(0), enable_compatible_monotonic_(false) {}
+      : is_inited_(false), allocator_(lib::ObLabel("TenantDVMgr")), mock_data_version_(0),
+        enable_compatible_monotonic_(false), file_exists_when_loading_(false)
+  {
+  }
   ~ObTenantDataVersionMgr() {}
   static ObTenantDataVersionMgr& get_instance();
   int init(bool enable_compatible_monotonic);
@@ -63,15 +66,31 @@ public:
   int set(const uint64_t tenant_id, const uint64_t data_version);
   int remove(const uint64_t tenant_id);
   int load_from_file();
-  bool is_enable_compatible_monotonic() {
+  bool is_enable_compatible_monotonic()
+  {
     return ATOMIC_LOAD(&enable_compatible_monotonic_);
   }
-  void set_enable_compatible_monotonic(bool enable) {
+  void set_enable_compatible_monotonic(bool enable)
+  {
     ATOMIC_STORE(&enable_compatible_monotonic_, enable);
   }
+  bool get_file_exists_when_loading()
+  {
+    return ATOMIC_LOAD(&file_exists_when_loading_);
+  }
+  static bool need_set_for_rpc(obrpc::ObRpcPacketCode pcode)
+  {
+    // these RPC are used when adding a server to the cluster. we can't ensure the correct status
+    // of the new server, so we should not sync its data_version to the cluster in case of
+    // data_version corruption.
+    // TODO: add the new RPC of shared-storage mode later.
+    return pcode != obrpc::OB_CHECK_SERVER_FOR_ADDING_SERVER &&
+           pcode != obrpc::OB_IS_EMPTY_SERVER;
+  }
   // for unittest
-  void set_mock_data_version(const uint64_t data_version) {
-    ATOMIC_SET(&mock_data_version_, data_version);
+  void set_mock_data_version(const uint64_t data_version)
+  {
+    ATOMIC_STORE(&mock_data_version_, data_version);
   }
 private:
   struct ObTenantDataVersion
@@ -127,6 +146,10 @@ private:
                          const uint64_t data_version);
   int load_data_version_(char *buf, int64_t &pos);
   int write_to_file_(char *buf, int64_t buf_length, int64_t data_length);
+  void set_file_exists_when_loading_()
+  {
+    ATOMIC_STORE(&file_exists_when_loading_, true);
+  }
 private:
   // we use NoPthreadDefendMode here, so the hashmap will not lock buckets before get/set.
   // to ensure thread safety, we have several promises:
@@ -146,6 +169,7 @@ private:
   // for unittest
   uint64_t mock_data_version_;
   bool enable_compatible_monotonic_;
+  bool file_exists_when_loading_;
 };
 
 class ObDataVersionPrinter
