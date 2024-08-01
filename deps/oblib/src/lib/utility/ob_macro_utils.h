@@ -750,6 +750,20 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
     bret; \
   })
 
+#define REACH_TIME_INTERVAL_NO_INSTANT(i) \
+  ({                                      \
+    bool bret = false;                    \
+    if (REACH_TIME_INTERVAL(i)) {         \
+      static bool first_call = false;     \
+      if (!first_call) {                  \
+        first_call = true;                \
+      } else {                            \
+        bret = true;                      \
+      }                                   \
+    }                                     \
+    bret;                                 \
+  })
+
 #define REACH_TENANT_TIME_INTERVAL(i) \
   ({ \
     bool bret = false; \
