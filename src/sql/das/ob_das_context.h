@@ -98,7 +98,7 @@ public:
                             const DASTableIDArrayWrap *related_table_ids = nullptr);
   int get_all_lsid(share::ObLSArray &ls_ids);
   int64_t get_related_tablet_cnt() const;
-  void set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { snapshot_ = snapshot; }
+  int set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { return snapshot_.assign(snapshot); }
   transaction::ObTxReadSnapshot &get_snapshot() { return snapshot_; }
   transaction::ObTxSEQ get_savepoint() const { return savepoint_; }
   void set_savepoint(const transaction::ObTxSEQ savepoint) { savepoint_ = savepoint; }

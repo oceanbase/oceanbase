@@ -945,7 +945,7 @@ public:
   inline void set_last_execute_time(int64_t last_execute_time) { last_execute_time_ = last_execute_time; }
   inline int64_t get_last_execute_time() const { return last_execute_time_; }
 
-  void set_snapshot(const transaction::ObTxReadSnapshot &snapshot) { snapshot_ = snapshot; }
+  int set_snapshot(const transaction::ObTxReadSnapshot &snapshot) {  return snapshot_.assign(snapshot); }
   transaction::ObTxReadSnapshot &get_snapshot() { return snapshot_; }
 
   void set_need_check_snapshot(bool is_need_check_snapshot) { is_need_check_snapshot_ = is_need_check_snapshot; }
