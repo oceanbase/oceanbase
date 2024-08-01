@@ -326,6 +326,19 @@ public:
                                        const TableItem *second_table,
                                        ObStmtMapInfo &map_info,
                                        QueryRelation &relation);
+  static int get_map_table(const ObStmtMapInfo& map_info,
+                           const ObSelectStmt *outer_stmt,
+                           const ObSelectStmt *inner_stmt,
+                           const uint64_t &outer_table_id,
+                           uint64_t &inner_table_id);
+  static int get_map_column(const ObStmtMapInfo& map_info,
+                            const ObSelectStmt *outer_stmt,
+                            const ObSelectStmt *inner_stmt,
+                            const uint64_t &outer_table_id,
+                            const uint64_t &outer_column_id,
+                            const bool in_same_stmt,
+                            uint64_t &inner_table_id,
+                            uint64_t &inner_column_id);
 
 };
 
