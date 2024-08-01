@@ -819,7 +819,7 @@ int ObOptSelectivity::add_ds_result_into_selectivity(const ObIArray<ObDSResultIt
   } else {
     int64_t rowcount = basic_item->stat_handle_.stat_->get_rowcount();
     for (int64_t i = 0; OB_SUCC(ret) && i < ds_result_items.count(); ++i) {
-      if (ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT) {
+      if (ds_result_items.at(i).type_ == ObDSResultItemType::OB_DS_OUTPUT_STAT) {
         if (OB_ISNULL(ds_result_items.at(i).stat_handle_.stat_) ||
             OB_UNLIKELY(ds_result_items.at(i).exprs_.count() != 1)) {
           ret = OB_ERR_UNEXPECTED;
@@ -853,7 +853,7 @@ int ObOptSelectivity::add_ds_result_items(const ObIArray<ObRawExpr*> &quals,
   }
   //add filter
   for (int64_t i = 0; OB_SUCC(ret) && i < quals.count(); ++i) {
-    ObDSResultItem tmp_item(ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT, ref_table_id);
+    ObDSResultItem tmp_item(ObDSResultItemType::OB_DS_OUTPUT_STAT, ref_table_id);
     if (OB_FAIL(tmp_item.exprs_.push_back(quals.at(i)))) {
       LOG_WARN("failed to assign", K(ret));
     } else if (OB_FAIL(ds_result_items.push_back(tmp_item))) {

@@ -1796,11 +1796,20 @@ int ObAccessPathEstimation::add_ds_result_items(ObIArray<AccessPath *> &paths,
           if (OB_ISNULL(paths.at(i))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("get unexpected null", K(ret), K(paths.at(i)));
-          } else if (paths.at(i)->est_cost_info_.prefix_filters_.empty()) {
-            //do nothing
-          } else {
-            ObDSResultItem tmp_item(ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT, paths.at(i)->index_id_);
+          } else if (!paths.at(i)->est_cost_info_.prefix_filters_.empty()) {
+            ObDSResultItem tmp_item(ObDSResultItemType::OB_DS_INDEX_SCAN_STAT, paths.at(i)->index_id_);
             if (OB_FAIL(tmp_item.exprs_.assign(paths.at(i)->est_cost_info_.prefix_filters_))) {
+              LOG_WARN("failed to assign", K(ret));
+            } else if (OB_FAIL(ds_result_items.push_back(tmp_item))) {
+              LOG_WARN("failed to push back", K(ret));
+            }
+          }
+          if (OB_SUCC(ret) && (!paths.at(i)->est_cost_info_.prefix_filters_.empty() ||
+                               !paths.at(i)->est_cost_info_.postfix_filters_.empty())) {
+            ObDSResultItem tmp_item(ObDSResultItemType::OB_DS_INDEX_BACK_STAT, paths.at(i)->index_id_);
+            if (OB_FAIL(tmp_item.exprs_.assign(paths.at(i)->est_cost_info_.prefix_filters_))) {
+              LOG_WARN("failed to assign", K(ret));
+            } else if (OB_FAIL(append(tmp_item.exprs_, paths.at(i)->est_cost_info_.postfix_filters_))) {
               LOG_WARN("failed to assign", K(ret));
             } else if (OB_FAIL(ds_result_items.push_back(tmp_item))) {
               LOG_WARN("failed to push back", K(ret));
@@ -1966,7 +1975,10 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
                                               paths.at(i)->use_skip_scan_))) {
         LOG_WARN("failed to reset skip scan info", K(ret));
       } else {
-        const ObDSResultItem *path_ds_result_item = ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT,
+        const ObDSResultItem *index_range_result_item = ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemType::OB_DS_INDEX_SCAN_STAT,
+                                                                                               paths.at(i)->index_id_,
+                                                                                               ds_result_items);
+        const ObDSResultItem *index_back_result_item = ObDynamicSamplingUtils::get_ds_result_item(ObDSResultItemType::OB_DS_INDEX_BACK_STAT,
                                                                                                paths.at(i)->index_id_,
                                                                                                ds_result_items);
         ObCostTableScanInfo &est_cost_info = paths.at(i)->est_cost_info_;
@@ -1982,13 +1994,20 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
         }
         double &logical_row_count = est_cost_info.logical_query_range_row_count_;
         double &physical_row_count = est_cost_info.phy_query_range_row_count_;
-        if (path_ds_result_item == NULL) {
+        double dummy_row_count = 1.0;
+        double &index_back_row_count = est_cost_info.index_meta_info_.is_index_back_ ?
+                                        est_cost_info.index_back_row_count_ :
+                                        dummy_row_count;
+        if (index_range_result_item == NULL) {
           logical_row_count = est_cost_info.table_meta_info_->table_row_count_;
           physical_row_count = logical_row_count;
+          index_back_row_count = logical_row_count;
         } else {
-          logical_row_count = path_ds_result_item->stat_handle_.stat_->get_rowcount();
-          double tmp_ratio = path_ds_result_item->stat_handle_.stat_->get_sample_block_ratio();
+          logical_row_count = index_range_result_item->stat_handle_.stat_->get_rowcount();
+          index_back_row_count = index_back_result_item->stat_handle_.stat_->get_rowcount();
+          double tmp_ratio = index_range_result_item->stat_handle_.stat_->get_sample_block_ratio();
           logical_row_count =  logical_row_count != 0 ? logical_row_count : static_cast<int64_t>(100.0 / tmp_ratio);
+          index_back_row_count = index_back_row_count != 0 ? index_back_row_count : logical_row_count;
           physical_row_count = logical_row_count;
         }
         if (is_inner_path) {
@@ -2000,6 +2019,7 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
             LOG_WARN("failed to calculate selectivity", K(est_cost_info.pushdown_prefix_filters_), K(ret));
           } else {
             logical_row_count = logical_row_count * est_cost_info.pushdown_prefix_filter_sel_;
+            index_back_row_count = index_back_row_count * est_cost_info.pushdown_prefix_filter_sel_;
             physical_row_count = logical_row_count;
             output_rowcnt = output_rowcnt * est_cost_info.pushdown_prefix_filter_sel_;
           }
@@ -2010,19 +2030,18 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(const uin
                 0.01 * est_cost_info.sample_info_.percent_ : 1.0;
           logical_row_count *= block_sample_ratio;
           physical_row_count *= block_sample_ratio;
+          index_back_row_count *= block_sample_ratio;
 
           logical_row_count = std::max(logical_row_count, 1.0);
           physical_row_count = std::max(physical_row_count, 1.0);
+          index_back_row_count = std::max(index_back_row_count, 1.0);
           est_cost_info.output_row_count_ = output_rowcnt;
           // row sampling
           double row_sample_ratio = est_cost_info.sample_info_.is_row_sample() ?
                 0.01 * est_cost_info.sample_info_.percent_ : 1.0;
           est_cost_info.output_row_count_ *= row_sample_ratio;
-
-          if (est_cost_info.index_meta_info_.is_index_back_) {
-            est_cost_info.index_back_row_count_ = logical_row_count;
-          }
-          est_cost_info.table_filter_sel_ = output_rowcnt * 1.0 / physical_row_count;
+          est_cost_info.postfix_filter_sel_ = index_back_row_count * 1.0 / physical_row_count;
+          est_cost_info.table_filter_sel_ = output_rowcnt * 1.0 / index_back_row_count;
 
           if (OB_FAIL(ret)) {
           } else if (!est_cost_info.ss_ranges_.empty()) {
