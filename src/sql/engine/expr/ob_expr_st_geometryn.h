@@ -16,6 +16,7 @@
 
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "observer/omt/ob_tenant_srs.h"
+#include "lib/geo/ob_geo.h"
 
 namespace oceanbase
 {
@@ -36,7 +37,23 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-    DISALLOW_COPY_AND_ASSIGN(ObExprSTGeometryN);
+  template<typename MPT, typename PT>
+  static int get_sub_point(const ObGeometry *g,
+                           const int N,
+                           ObIAllocator &allocator,
+                           ObGeometry *&sub_geo);
+  template<typename MultiType>
+  static int get_sub_geometry(const ObGeometry *g, 
+                              const int N,
+                              ObIAllocator &allocator,
+                              ObGeometry *&sub_geo,
+                              ObGeoType sub_type);
+  template<typename GCInType>
+  static int get_sub_geometry_gc(const ObGeometry *g, 
+                                 const int N,
+                                 ObIAllocator &allocator,
+                                 ObGeometry *&sub_geo);
+  DISALLOW_COPY_AND_ASSIGN(ObExprSTGeometryN);
 };
 } // sql
 } // oceanbase
