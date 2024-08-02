@@ -105,7 +105,7 @@ public:
 
   // to deal with those not running tasks in schedule_list
   // @param [in] task_mgr, to execute over a task
-  int handle_not_in_progress_task(
+  int try_clean_and_cancel_task(
       ObDRTaskMgr &task_mgr);
 
   // remove task from schedule_list and clean it
@@ -242,6 +242,18 @@ public:
   void wait();
   void reuse();
 public:
+  // check whether a migrate task need to be cancelled
+  // @param [in] task, the task to check
+  // @param [out] need_cancel, whether task need to be cancelled
+  int check_need_cancel_migrate_task(
+      const ObDRTask &task,
+      bool &need_cancel);
+
+  // send rpc to target server to cancel a migrate task
+  // @param [in] task, the task to be cancelled
+  int send_rpc_to_cancel_migrate_task(
+      const ObDRTask &task);
+
   // check whether a task is in schedule
   // @param [in] task_key, the task to check
   // @param [in] priority, which queue to check
@@ -334,6 +346,14 @@ public:
       const ObDRTaskRetComment &ret_comment);
 
 private:
+  // check tenant has unit in target server
+  // @param [in] tenant_id, the tenant to which the unit belongs
+  // @param [in] server_addr, unit address
+  // @param [out] has_unit, is there a unit
+  int check_tenant_has_unit_in_server_(
+      const uint64_t tenant_id,
+      const common::ObAddr &server_addr,
+      bool &has_unit);
   ObDRTaskQueue &get_high_priority_queue_() { return high_task_queue_; }
   ObDRTaskQueue &get_low_priority_queue_() { return low_task_queue_; }
   int check_inner_stat_() const;
@@ -373,9 +393,9 @@ private:
       int64_t &last_dump_ts);
   int inner_dump_statistic_() const;
   // try to deal with those tasks not in scheduling
-  int try_clean_not_in_schedule_task_in_schedule_list_(
+  int try_clean_and_cancel_task_in_schedule_list_(
       int64_t &last_check_task_in_progress_ts);
-  int inner_clean_not_in_schedule_task_in_schedule_list_();
+  int inner_clean_and_cancel_task_in_schedule_list_();
 
   // get total wait and schedule task count in two queues
   // @param [out] wait_cnt, total wait task count in two queues

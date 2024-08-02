@@ -468,7 +468,7 @@ int ObDRTaskQueue::check_task_need_cleaning_(
   return ret;
 }
 
-int ObDRTaskQueue::handle_not_in_progress_task(
+int ObDRTaskQueue::try_clean_and_cancel_task(
     ObDRTaskMgr &task_mgr)
 {
   int ret = OB_SUCCESS;
@@ -479,11 +479,16 @@ int ObDRTaskQueue::handle_not_in_progress_task(
     const int ret_code = OB_LS_REPLICA_TASK_RESULT_UNCERTAIN;
     ObDRTaskRetComment ret_comment = ObDRTaskRetComment::MAX;
     bool need_cleaning = false;
+    bool need_cancel = false;
     DLIST_FOREACH(t, schedule_list_) {
       int tmp_ret = OB_SUCCESS;
       need_cleaning = false;
+      need_cancel = false;
       DEBUG_SYNC(BEFORE_CHECK_CLEAN_DRTASK);
-      if (OB_SUCCESS != (tmp_ret = check_task_need_cleaning_(*t, need_cleaning, ret_comment))) {
+      if (OB_ISNULL(t)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("t is null ptr", KR(tmp_ret), KP(t));
+      } else if (OB_SUCCESS != (tmp_ret = check_task_need_cleaning_(*t, need_cleaning, ret_comment))) {
         LOG_WARN("fail to check this task exist for cleaning", KR(tmp_ret), KPC(t));
       } else if (need_cleaning
                  && OB_SUCCESS != (tmp_ret = task_mgr.async_add_cleaning_task_to_updater(
@@ -493,6 +498,33 @@ int ObDRTaskQueue::handle_not_in_progress_task(
                                          true,/*need_record_event*/
                                          ret_comment))) {
         LOG_WARN("do execute over failed", KR(tmp_ret), KPC(t), K(ret_comment));
+      }
+      // ignore ret code
+      if (need_cleaning) {
+        LOG_TRACE("skip, task will be cleared", K(*t));
+      } else if (OB_TMP_FAIL(task_mgr.check_need_cancel_migrate_task(*t, need_cancel))) {
+        LOG_WARN("fail to check need cancel migrate task", KR(tmp_ret), K(*t));
+      } else if (need_cancel) {
+        FLOG_INFO("need cancel migrate task in schedule list", K(*t));
+        if (OB_TMP_FAIL(task_mgr.send_rpc_to_cancel_migrate_task(*t))) {
+          LOG_WARN("fail to send rpc to cancel migrate task", KR(tmp_ret), K(*t));
+        }
+      }
+    }
+    DLIST_FOREACH_REMOVESAFE(t, wait_list_) {
+      // check wait list to cancel migrate task
+      int tmp_ret = OB_SUCCESS;
+      need_cancel = false;
+      if (OB_ISNULL(t)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("t is null ptr", KR(tmp_ret), KP(t));
+      } else if (OB_TMP_FAIL(task_mgr.check_need_cancel_migrate_task(*t, need_cancel))) {
+        LOG_WARN("fail to check need cancel migrate task", KR(tmp_ret), K(*t));
+      } else if (need_cancel) {
+        FLOG_INFO("need cancel migrate task in wait list", K(*t));
+        // remove from wait_list_, need use DLIST_FOREACH_REMOVESAFE
+        wait_list_.remove(t);
+        remove_task_from_map_and_free_it_(t);
       }
     }
   }
@@ -752,7 +784,7 @@ void ObDRTaskMgr::run3()
               last_dump_ts))) {
           LOG_WARN("fail to try dump statistic", KR(tmp_ret), K(last_dump_ts));
         }
-        if (OB_SUCCESS != (tmp_ret = try_clean_not_in_schedule_task_in_schedule_list_(
+        if (OB_SUCCESS != (tmp_ret = try_clean_and_cancel_task_in_schedule_list_(
               last_check_task_in_progress_ts))) {
            LOG_WARN("fail to try check task in progress", KR(tmp_ret), K(last_check_task_in_progress_ts));
         }
@@ -1304,7 +1336,7 @@ int ObDRTaskMgr::inner_dump_statistic_() const
   return ret;
 }
 
-int ObDRTaskMgr::try_clean_not_in_schedule_task_in_schedule_list_(
+int ObDRTaskMgr::try_clean_and_cancel_task_in_schedule_list_(
     int64_t &last_check_task_in_progress_ts)
 {
   int ret = OB_SUCCESS;
@@ -1313,6 +1345,7 @@ int ObDRTaskMgr::try_clean_not_in_schedule_task_in_schedule_list_(
   } else {
     int64_t wait = 0;
     int64_t schedule = 0;
+    DEBUG_SYNC(BEFORE_CHECK_CLEAN_AND_CANCEL_DRTASK); // need before cond guard
     ObThreadCondGuard guard(get_cond());
     if (OB_FAIL(inner_get_task_cnt_(wait, schedule))) {
       LOG_WARN("fail to get task cnt", KR(ret));
@@ -1322,7 +1355,7 @@ int ObDRTaskMgr::try_clean_not_in_schedule_task_in_schedule_list_(
       const int64_t now = ObTimeUtility::current_time();
       if (now > last_check_task_in_progress_ts + schedule * CHECK_IN_PROGRESS_INTERVAL_PER_TASK) {
         last_check_task_in_progress_ts = now;
-        int tmp_ret = inner_clean_not_in_schedule_task_in_schedule_list_();
+        int tmp_ret = inner_clean_and_cancel_task_in_schedule_list_();
         if (OB_SUCCESS != tmp_ret) {
           LOG_WARN("fail to do check task in progress", KR(tmp_ret));
         }
@@ -1332,7 +1365,7 @@ int ObDRTaskMgr::try_clean_not_in_schedule_task_in_schedule_list_(
   return ret;
 }
 
-int ObDRTaskMgr::inner_clean_not_in_schedule_task_in_schedule_list_()
+int ObDRTaskMgr::inner_clean_and_cancel_task_in_schedule_list_()
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat_())) {
@@ -1340,7 +1373,7 @@ int ObDRTaskMgr::inner_clean_not_in_schedule_task_in_schedule_list_()
   } else {
     for (int64_t i = 0; i < ARRAYSIZEOF(queues_); ++i) {
       // ignore error to make sure checking two queues 
-      if (OB_FAIL(queues_[i].handle_not_in_progress_task(*this))) {
+      if (OB_FAIL(queues_[i].try_clean_and_cancel_task(*this))) {
         LOG_WARN("fail to handle not in progress task in this queue", KR(ret),
                  "priority", queues_[i].get_priority_str());
       }
@@ -1548,5 +1581,98 @@ int ObDRTaskMgr::set_sibling_in_schedule(
   }
   return ret;
 }
+
+int ObDRTaskMgr::check_need_cancel_migrate_task(
+    const ObDRTask &task,
+    bool &need_cancel)
+{
+  int ret = OB_SUCCESS;
+  need_cancel = false;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid dr task", KR(ret), K(task));
+  } else if (ObDRTaskType::LS_MIGRATE_REPLICA != task.get_disaster_recovery_task_type()) {
+    LOG_TRACE("skip, task is not a migration task", K(task));
+  } else if ((0 == task.get_comment().case_compare(drtask::MIGRATE_REPLICA_DUE_TO_UNIT_NOT_MATCH)
+           || 0 == task.get_comment().case_compare(drtask::REPLICATE_REPLICA))) {
+    // only surpport cancel unit not match migration task
+    // not include manual migration tasks
+    bool dest_server_has_unit = false;
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(task.get_tenant_id()), tenant_data_version))) {
+      LOG_WARN("fail to get min data version", KR(ret), K(task));
+    } else if (tenant_data_version < DATA_VERSION_4_2_3_0) {
+      need_cancel = false;
+      LOG_INFO("tenant data_version is not match", KR(ret), K(task), K(tenant_data_version));
+    } else if (OB_FAIL(check_tenant_has_unit_in_server_(task.get_tenant_id(), task.get_dst_server(), dest_server_has_unit))) {
+      LOG_WARN("fail to check tenant has unit in server", KR(ret), K(task));
+    } else if (!dest_server_has_unit) {
+      need_cancel = true;
+      FLOG_INFO("need cancel migrate task", KR(ret), K(need_cancel), K(task));
+    }
+  }
+  return ret;
+}
+
+int ObDRTaskMgr::check_tenant_has_unit_in_server_(
+    const uint64_t tenant_id,
+    const common::ObAddr &server_addr,
+    bool &has_unit)
+{
+  int ret = OB_SUCCESS;
+  has_unit = false;
+  share::ObUnitTableOperator unit_operator;
+  common::ObArray<share::ObUnit> unit_info_array;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
+  } else if (OB_UNLIKELY(!server_addr.is_valid() || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server_addr), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(unit_operator.init(*GCTX.sql_proxy_))) {
+    LOG_WARN("unit operator init failed", KR(ret), KP(GCTX.sql_proxy_));
+  } else if (OB_FAIL(unit_operator.get_units_by_tenant(gen_user_tenant_id(tenant_id), unit_info_array))) {
+    LOG_WARN("fail to get unit info array", KR(ret), K(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_unit && i < unit_info_array.count(); ++i) {
+      if (unit_info_array.at(i).server_ == server_addr) {
+        has_unit = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDRTaskMgr::send_rpc_to_cancel_migrate_task(
+    const ObDRTask &task)
+{
+  int ret = OB_SUCCESS;
+  ObLSCancelReplicaTaskArg rpc_arg;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else if (OB_ISNULL(rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rpc_proxy_ ptr is null", KR(ret), KP(rpc_proxy_));
+  } else if (OB_FAIL(rpc_arg.init(task.get_task_id(), task.get_ls_id(), task.get_tenant_id()))) {
+    LOG_WARN("fail to init arg", KR(ret), K(task));
+  } else if (OB_FAIL(rpc_proxy_->to(task.get_dst_server()).by(task.get_tenant_id()).timeout(GCONF.rpc_timeout)
+                                .ls_cancel_replica_task(rpc_arg))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("task not exist", KR(ret), K(task));
+      ret = OB_SUCCESS; // ignore OB_ENTRY_NOT_EXIST
+    } else {
+      LOG_WARN("fail to execute cancel task rpc", KR(ret), K(rpc_arg), K(task));
+    }
+  }
+  return ret;
+}
+
 } // end namespace rootserver
 } // end namespace oceanbase
