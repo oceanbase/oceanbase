@@ -483,6 +483,7 @@ public:
   bool get_local_ob_enable_pl_cache() const;
   bool get_local_ob_enable_plan_cache() const;
   bool get_local_ob_enable_sql_audit() const;
+  bool get_local_ob_enable_parameter_anonymous_block() const;
   bool get_local_cursor_sharing_mode() const;
   ObLengthSemantics get_local_nls_length_semantics() const;
   ObLengthSemantics get_actual_nls_length_semantics() const;
@@ -1696,7 +1697,8 @@ public:
         ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID),
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
         compat_version_(0),
-        enable_sql_plan_monitor_(false)
+        enable_sql_plan_monitor_(false),
+        ob_enable_parameter_anonymous_block_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1762,6 +1764,7 @@ public:
       compat_type_ = share::ObCompatType::COMPAT_MYSQL57;
       compat_version_ = 0;
       enable_sql_plan_monitor_ = false;
+      ob_enable_parameter_anonymous_block_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1811,7 +1814,8 @@ public:
             ncharacter_set_connection_ == other.ncharacter_set_connection_ &&
             default_lob_inrow_threshold_ == other.default_lob_inrow_threshold_ &&
             compat_type_ == other.compat_type_ &&
-            compat_version_ == other.compat_version_;
+            compat_version_ == other.compat_version_ &&
+            ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -1995,6 +1999,7 @@ public:
     uint64_t compat_version_;
     // No use. Placeholder.
     bool enable_sql_plan_monitor_;
+    bool ob_enable_parameter_anonymous_block_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2113,6 +2118,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(share::ObCompatType, compat_type);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, compat_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, enable_sql_plan_monitor);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_parameter_anonymous_block);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2187,6 +2193,7 @@ private:
         bool inc_compat_type_:1;
         bool inc_compat_version_:1;
         bool inc_enable_sql_plan_monitor_:1;
+        bool inc_ob_enable_parameter_anonymous_block_:1;
       };
     };
   };
@@ -2523,6 +2530,11 @@ inline bool ObBasicSessionInfo::get_local_ob_enable_plan_cache() const
 inline bool ObBasicSessionInfo::get_local_ob_enable_sql_audit() const
 {
   return sys_vars_cache_.get_ob_enable_sql_audit();
+}
+
+inline bool ObBasicSessionInfo::get_local_ob_enable_parameter_anonymous_block() const
+{
+  return sys_vars_cache_.get_ob_enable_parameter_anonymous_block();
 }
 
 inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() const

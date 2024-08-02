@@ -3324,6 +3324,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_KV_MODE; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(450); }
 };
+class ObSysVarObEnableParameterAnonymousBlock : public ObBoolSysVar
+{
+public:
+  ObSysVarObEnableParameterAnonymousBlock() : ObBoolSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(451); }
+};
 
 
 class ObSysVarFactory
@@ -3344,7 +3351,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 352;
+  const static int64_t OB_SYS_VARS_COUNT = 353;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 
