@@ -84,7 +84,6 @@ public:
   void run1() override final;
   int submit_io_task(LogIOTask *io_task);
   int64_t get_last_working_time() const { return ATOMIC_LOAD(&last_working_time_); }
-
  int notify_need_writing_throttling(const bool &need_throtting);
   static constexpr int64_t MAX_THREAD_NUM = 1;
   TO_STRING_KV(K_(log_io_worker_num), K_(cb_thread_pool_tg_id), K_(purge_throttling_task_handled_seq), K_(purge_throttling_task_submitted_seq));

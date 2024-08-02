@@ -151,6 +151,11 @@ LogBlockHandler::LogBlockHandler()
     trace_time_(OB_INVALID_TIMESTAMP),
     dir_fd_(-1),
     io_fd_(-1),
+    last_pwrite_start_time_us_(OB_INVALID_TIMESTAMP),
+    last_pwrite_size_(-1),
+    accum_write_size_(0),
+    accum_write_rt_(0),
+    accum_write_count_(0),
     is_inited_(false)
 {
 }
@@ -392,14 +397,20 @@ int LogBlockHandler::inner_write_once_(const offset_t offset,
   int64_t aligned_buf_len = buf_len;
 
   offset_t aligned_block_offset = offset;
+  int64_t start_ts = ObTimeUtility::fast_current_time();
   if (OB_FAIL(dio_aligned_buf_.align_buf(buf, buf_len, aligned_buf,
       aligned_buf_len, aligned_block_offset))) {
     PALF_LOG(ERROR, "align_buf failed", K(ret), K(buf), K(buf_len),
         K(aligned_buf), K(aligned_buf_len), K(aligned_block_offset), K(offset));
+  } else if (FALSE_IT(ATOMIC_STORE(&last_pwrite_start_time_us_, start_ts))) {
+  } else if (FALSE_IT(ATOMIC_STORE(&last_pwrite_size_, aligned_buf_len))) {
   } else if (OB_FAIL(inner_write_impl_(io_fd_, aligned_buf, aligned_buf_len, aligned_block_offset))){
     PALF_LOG(ERROR, "pwrite failed", K(ret), K(io_fd_), K(aligned_buf), K(aligned_block_offset),
         K(offset), K(buf_len));
   } else {
+    int64_t cost_ts = ObTimeUtility::fast_current_time() - start_ts;
+    ATOMIC_STORE(&last_pwrite_start_time_us_, OB_INVALID_TIMESTAMP);
+    ATOMIC_STORE(&last_pwrite_size_, -1);
     dio_aligned_buf_.truncate_buf();
     total_write_size_ += buf_len;
     total_write_size_after_dio_ += aligned_buf_len;
@@ -411,6 +422,10 @@ int LogBlockHandler::inner_write_once_(const offset_t offset,
           K(total_write_size_after_dio_), K_(ob_pwrite_used_ts), K_(count), K(each_pwrite_cost));
       total_write_size_ = total_write_size_after_dio_ = count_ = ob_pwrite_used_ts_ = 0;
     }
+    // === IO Statistic ===
+    accum_write_size_ += aligned_buf_len;
+    accum_write_count_++;
+    accum_write_rt_ += cost_ts;
   }
   return ret;
 }
@@ -462,6 +477,29 @@ int LogBlockHandler::inner_write_impl_(const int fd, const char *buf, const int6
   EVENT_ADD(ObStatEventIds::PALF_WRITE_SIZE, count);
   EVENT_ADD(ObStatEventIds::PALF_WRITE_TIME, cost_ts);
   ob_pwrite_used_ts_ += cost_ts;
+  return ret;
+}
+
+int LogBlockHandler::get_io_statistic_info(int64_t &last_working_time,
+                                           int64_t &last_write_size,
+                                           int64_t &accum_write_size,
+                                           int64_t &accum_write_count,
+                                           int64_t &accum_write_rt) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    last_working_time = ATOMIC_LOAD(&last_pwrite_start_time_us_);
+    last_write_size =  ATOMIC_LOAD(&last_pwrite_size_);
+    if (OB_INVALID_TIMESTAMP == last_working_time || -1 == last_write_size) {
+      last_working_time = OB_INVALID_TIMESTAMP;
+      last_write_size = -1;
+    }
+    accum_write_size = accum_write_size_;
+    accum_write_count = accum_write_count_;
+    accum_write_rt = accum_write_rt_;
+  }
   return ret;
 }
 } // end of logservice

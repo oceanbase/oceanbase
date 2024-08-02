@@ -182,9 +182,17 @@ int PalfEnv::for_each(const ObFunction<int(const PalfHandle &)> &func)
   return palf_env_impl_.for_each(func);
 }
 
-int PalfEnv::get_io_start_time(int64_t &last_working_time)
+int PalfEnv::get_io_statistic_info(int64_t &last_working_time,
+                                   int64_t &pending_write_size,
+                                   int64_t &pending_write_count,
+                                   int64_t &pending_write_rt,
+                                   int64_t &accum_write_size,
+                                   int64_t &accum_write_count,
+                                   int64_t &accum_write_rt)
 {
-  return palf_env_impl_.get_io_start_time(last_working_time);
+  return palf_env_impl_.get_io_statistic_info(last_working_time,
+      pending_write_size, pending_write_count, pending_write_rt,
+      accum_write_size, accum_write_count, accum_write_rt);
 }
 
 // should be removed in version 4.2.0.0
