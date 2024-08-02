@@ -91,6 +91,7 @@ class ObTenantMdsService;
   class ObLobManager;
   class ObTransferService;
   class ObRebuildService;
+  class ObTenantRestoreInfoMgr;
   class ObTableScanIterator;
   class ObTenantSnapshotService;
   class ObTenantCGReadInfoMgr;
@@ -366,7 +367,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::checkpoint::ObCheckpointDiagnoseMgr*, \
       storage::ObStorageHADiagMgr*,                  \
       common::sqlclient::ObTenantDblinkKeeper*,      \
-      storage::ObGlobalIteratorPool*                 \
+      storage::ObGlobalIteratorPool*,                \
+      storage::ObTenantRestoreInfoMgr*              \
   )
 
 

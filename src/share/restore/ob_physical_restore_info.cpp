@@ -241,6 +241,7 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(status),
     K_(comment),
     K_(restore_start_ts),
+    K_(restoring_start_ts),
     K_(restore_scn),
     K_(consistent_scn),
     K_(post_data_version),
@@ -261,7 +262,8 @@ DEF_TO_STRING(ObPhysicalRestoreJob)
     K_(passwd_array),
     K_(multi_restore_path_list),
     K_(white_list),
-    K_(recover_table)
+    K_(recover_table),
+    K_(backup_compatible)
   );
   J_OBJ_END();
   return pos;
@@ -280,6 +282,7 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     restore_type_ = other.restore_type_;
     status_ = other.status_;
     restore_start_ts_ = other.restore_start_ts_;
+    restoring_start_ts_ = other.restoring_start_ts_;
     restore_scn_ = other.restore_scn_;
     consistent_scn_ = other.consistent_scn_;
     post_data_version_ = other.post_data_version_;
@@ -290,6 +293,7 @@ int ObPhysicalRestoreJob::assign(const ObPhysicalRestoreJob &other)
     kms_encrypt_ = other.kms_encrypt_;
     concurrency_ = other.concurrency_;
     recover_table_ = other.recover_table_;
+    backup_compatible_ = other.backup_compatible_;
 
     if (FAILEDx(deep_copy_ob_string(allocator_, other.comment_, comment_))) {
       LOG_WARN("failed to copy string", KR(ret), K(other));
@@ -343,6 +347,7 @@ void ObPhysicalRestoreJob::reset()
   status_ = PhysicalRestoreStatus::PHYSICAL_RESTORE_MAX_STATUS;
   comment_.reset();
   restore_start_ts_ = 0;
+  restoring_start_ts_ = 0;
   restore_scn_ = SCN::min_scn();
   consistent_scn_ = SCN::min_scn();
   post_data_version_ = 0;

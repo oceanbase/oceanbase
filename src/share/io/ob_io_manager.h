@@ -66,7 +66,7 @@ public:
                          const int64_t sync_channel_count,
                          const int64_t max_io_depth);
   int remove_device_channel(ObIODevice *device_handle);
-  int get_device_channel(const ObIODevice *device_handle, ObDeviceChannel *&device_channel);
+  int get_device_channel(const ObIORequest &req, ObDeviceChannel *&device_channel);
 
   // tenant management
   int refresh_tenant_io_config(const uint64_t tenant_id, const ObTenantIOConfig &tenant_io_config);

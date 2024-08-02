@@ -48,14 +48,18 @@ public:
   int join_ls(const share::ObLSID &ls_id);
   int join_complement_log();
   int join_macro_data_dir(const share::ObBackupDataType &type, const int64_t turn_id, const int64_t retry_id);
+  int join_macro_data_dir_v_4_3_2(const share::ObBackupDataType &type, const int64_t turn_id, const int64_t retry_id);
   int join_macro_data_file(const int64_t file_id);
+  int join_intermediate_layer_index(const ObBackupIntermediateTreeType &tree_type, const int64_t file_id);
   int join_tablet_info_file(const int64_t file_id);
   int join_data_info_turn(const share::ObBackupDataType &type, const int64_t turn_id);
   int join_data_info_turn_v_4_1_x(const int64_t turn_id);
-  int join_meta_info_turn_and_retry(const int64_t turn_id, const int64_t retry_id);
+  int join_meta_info_turn_and_retry(const int64_t turn_id, const int64_t retry_id, const bool is_final_fuse);
   int join_tenant_macro_range_index_file(const share::ObBackupDataType &type, const int64_t retry_id);
   int join_tenant_meta_index_file(const share::ObBackupDataType &type, const int64_t retry_id, const bool is_sec_meta);
+  int join_ls_meta_index_file();
   int join_checkpoint_info_file(const common::ObString &path, const uint64_t checkpoint, const ObBackupFileSuffix &type);
+  int join_tenant_macro_block_index_file(const share::ObBackupDataType &type, const int64_t retry_id);
   int join_table_list_dir();
   int join_table_list_part_file(const share::SCN &scn, const int64_t part_no);
   int join_table_list_meta_info_file(const share::SCN &scn);
@@ -123,9 +127,10 @@ struct ObBackupPathUtil
        const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, share::ObBackupPath &backup_path);
 
   // file:///obbackup/backup_set_1_full/log_stream_1/meta_info_turn_1/tablet_info.obbak
+  // file:///obbackup/backup_set_1_full/log_stream_1/fused_meta_info_turn_1/tablet_info.obbak
   static int get_ls_data_tablet_info_path(const share::ObBackupDest &backup_set_dest,
       const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id, const int64_t file_id,
-      share::ObBackupPath &backup_path);
+      const bool is_final_fuse, share::ObBackupPath &backup_path);
 
   // file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/
   static int get_ls_backup_data_dir_path(const share::ObBackupDest &backup_set_dest,
@@ -154,7 +159,7 @@ struct ObBackupPathUtil
       const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
       const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path);
 
-  // file:///obbackup/backup_set_1_full/log_stream_1/major_data_turn_1_retry_0/meta_index.obbak
+  // file:///obbackup/backup_set_1_full/log_stream_1/user_data_turn_1_retry_0/meta_index.obbak
   static int get_ls_meta_index_backup_path(const share::ObBackupDest &backup_set_dest,
       const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
       const int64_t turn_id, const int64_t retry_id, const bool is_sec_meta, share::ObBackupPath &backup_path);
@@ -308,6 +313,68 @@ struct ObBackupPathUtilV_4_1
       const int64_t turn_id, share::ObBackupPath &backup_path);
   static int get_backup_data_tablet_ls_info_path(const share::ObBackupDest &backup_set_dest,
       const uint64_t turn_id, ObBackupPath &path);
+};
+
+// for 4.3.2
+// TODO(yanfeng): do not use v_4_3_2
+
+struct ObBackupPathUtilV_4_3_2
+{
+  // file:///obbackup/backup_set_1_full/log_stream_1/user_data_turn_1_retry_0/
+  static int get_ls_backup_data_dir_path(const share::ObBackupDest &backup_set_dest,
+      const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path);
+
+  static int get_ls_backup_data_dir_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path);
+
+  // file:///obbackup/backup_set_1_full/log_stream_1/user_data_turn_1_retry_0/major_meta_index.obbak
+  static int get_ls_meta_index_backup_path(const share::ObBackupDest &backup_set_dest,
+      const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path);
+
+  static int get_ls_meta_index_backup_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path);
+
+  // file:///obbackup/backup_set_1_full/log_stream_1/user_data_turn_1_retry_0/macro_block_data.1.obbak
+  static int get_macro_block_backup_path(const share::ObBackupDest &backup_set_dest,
+      const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, const int64_t file_id, share::ObBackupPath &backup_path);
+
+  static int get_macro_block_backup_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, const int64_t file_id, share::ObBackupPath &backup_path);
+
+  // file:///obbackup/backup_set_1_full/log_stream_1/user_data_turn_1_retry_0/macro_block_index.obbak
+  static int get_ls_macro_block_index_backup_path(const share::ObBackupDest &backup_set_dest,
+      const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path);
+
+  static int get_ls_macro_block_index_backup_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, share::ObBackupPath &backup_path);
+
+  // file:///obbackup/backup_set_1_full/infos/major_data_info_turn_1/tenant_major_data_macro_block_index.0.obbak
+  static int get_tenant_macro_block_index_backup_path(const share::ObBackupDest &backup_set_dest,
+      const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
+      share::ObBackupPath &backup_path);
+
+  static int get_tenant_macro_block_index_backup_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &desc, const share::ObBackupDataType &backup_data_type, const int64_t turn_id,
+      const int64_t retry_id, share::ObBackupPath &backup_path);
+
+  // file:///obbackup/backup_set_1_full/log_stream_1/user_data_turn_1_retry_0/intermediate_layer_index.1.obbak
+  static int get_intermediate_layer_index_backup_path(const share::ObBackupDest &backup_set_dest,
+      const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, const int64_t file_id,
+      const share::ObBackupIntermediateTreeType &tree_type, share::ObBackupPath &backup_path);
+
+  static int get_intermediate_layer_index_backup_path(const share::ObBackupDest &backup_tenant_dest,
+      const share::ObBackupSetDesc &dest, const share::ObLSID &ls_id, const share::ObBackupDataType &backup_data_type,
+      const int64_t turn_id, const int64_t retry_id, const int64_t file_id,
+      const share::ObBackupIntermediateTreeType &tree_type, share::ObBackupPath &backup_path);
 };
 
 }//share

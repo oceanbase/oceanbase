@@ -258,6 +258,36 @@ int ObStorageHAUtils::check_ls_deleted(
   return ret;
 }
 
+int ObStorageHAUtils::check_tablet_is_deleted(
+    const ObTabletHandle &tablet_handle,
+    bool &is_deleted)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  ObTabletCreateDeleteMdsUserData data;
+
+  is_deleted = false;
+
+  if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet is null", K(ret));
+  } else if (tablet->is_empty_shell()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet is empty shell", K(ret), KPC(tablet));
+  } else if (OB_FAIL(tablet->ObITabletMdsInterface::get_tablet_status(share::SCN::max_scn(), data, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US))) {
+    if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
+      LOG_WARN("tablet_status is null or not committed", K(ret), KPC(tablet));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet));
+    }
+  } else if (ObTabletStatus::DELETED == data.tablet_status_
+             || ObTabletStatus::TRANSFER_OUT_DELETED == data.tablet_status_) {
+    is_deleted = true;
+  }
+  return ret;
+}
+
 int ObStorageHAUtils::check_transfer_ls_can_rebuild(
     const share::SCN replay_scn,
     bool &need_rebuild)
@@ -1292,6 +1322,78 @@ void ObTransferUtils::process_finish_out_perf_diag_info(
                                     timestamp,
                                     start_ts,
                                     is_report);
+  }
+}
+
+void ObTransferUtils::transfer_tablet_restore_stat(
+    const uint64_t tenant_id,
+    const share::ObLSID &src_ls_id,
+    const share::ObLSID &dest_ls_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  ObLSService *ls_service = nullptr;
+  ObLSHandle src_ls_handle;
+  ObLSHandle dest_ls_handle;
+  ObLS *src_ls = nullptr;
+  ObLS *dest_ls = nullptr;
+  ObRestorePersistHelper helper;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  ObArray<ObLSRestoreProgressPersistInfo> ls_restore_progress_array;
+  if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(dest_ls_id, dest_ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(dest_ls_id));
+  } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest ls should not be NULL", K(ret), K(dest_ls_handle));
+  } else if (OB_FAIL(ls_service->get_ls(src_ls_id, src_ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(src_ls_id));
+  } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src ls should not be NULL", K(ret), K(src_ls_handle));
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql prxoy must not be null", K(ret));
+  } else if (OB_FAIL(helper.init(tenant_id, share::OBCG_STORAGE))) {
+    LOG_WARN("fail to init restore table helper", K(ret));
+  } else if (OB_FAIL(trans.start(sql_proxy, gen_meta_tenant_id(tenant_id)))) {
+    LOG_WARN("fail to start trans", K(ret), K(tenant_id));
+  } else {
+    ObLSRestoreJobPersistKey src_ls_key;
+    ObLSRestoreJobPersistKey dest_ls_key;
+    if (OB_FAIL(helper.get_all_ls_restore_progress(trans, ls_restore_progress_array))) {
+      LOG_WARN("fail to get all ls restore progress", K(ret));
+    } else if (ls_restore_progress_array.empty()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("fail to get all ls restore progress", K(ret));
+    } else {
+      dest_ls_key.tenant_id_ = tenant_id;
+      dest_ls_key.job_id_ = ls_restore_progress_array.at(0).key_.job_id_;
+      dest_ls_key.ls_id_ = dest_ls_id;
+      dest_ls_key.addr_ = GCTX.self_addr();
+
+      src_ls_key = dest_ls_key;
+      src_ls_key.ls_id_ = src_ls_id;
+      if (OB_FAIL(helper.transfer_tablet(trans, src_ls_key, dest_ls_key))) {
+        LOG_WARN("fail to transfer tablet restore stat", K(ret), K(src_ls_key), K(dest_ls_key));
+      }
+    }
+
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", K(ret), K(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+
+    if (FAILEDx(dest_ls->get_ls_restore_handler()->restore_stat().inc_total_tablet_cnt())) {
+      LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(dest_ls_key));
+    } else if (OB_FAIL(src_ls->get_ls_restore_handler()->restore_stat().dec_total_tablet_cnt())) {
+      LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(src_ls_key));
+    }
   }
 }
 

@@ -346,7 +346,7 @@ public:
 protected:
   bool is_inited_;
   int tg_id_; // thread group id
-  ObIODevice *device_handle_;
+  ObIODevice *device_handle_; //local device_handle
   ObDeviceChannel *device_channel_;
 };
 
@@ -432,7 +432,7 @@ private:
   ObIAllocator *allocator_;
   ObSEArray<ObIOChannel *, 8> async_channels_;
   ObSEArray<ObIOChannel *, 8> sync_channels_;
-  ObIODevice *device_handle_;
+  ObIODevice *device_handle_; //local device_handle
   int64_t used_io_depth_;
   int64_t max_io_depth_;
 };

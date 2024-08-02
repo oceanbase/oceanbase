@@ -318,6 +318,7 @@ ObBackupDataBaseTask::ObBackupDataBaseTask()
     end_scn_(),
     backup_path_(),
     backup_status_(),
+    fuse_turn_id_(),
     is_only_calc_stat_(false)
 {
 }
@@ -341,6 +342,7 @@ int ObBackupDataBaseTask::deep_copy(const ObBackupDataBaseTask &that)
     backup_user_ls_scn_ = that.backup_user_ls_scn_;
     end_scn_ = that.end_scn_;
     backup_status_.status_ = that.backup_status_.status_;
+    fuse_turn_id_ = that.fuse_turn_id_;
     is_only_calc_stat_ = that.is_only_calc_stat_;
   }
   return ret;
@@ -478,10 +480,11 @@ bool ObBackupDataBaseTask::check_replica_in_black_server_(const ObLSReplica &rep
  *---------------------ObBackupDataLSTask----------------------
  */
 
-int ObBackupDataLSTask::clone(void *input_ptr, ObBackupScheduleTask *&out_task) const
+int ObBackupDataLSTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(input_ptr)) {
+  void *input_ptr = NULL;
+  if (OB_ISNULL(input_ptr = allocator.alloc(get_deep_copy_size()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(input_ptr));
   } else {
@@ -539,10 +542,11 @@ int ObBackupDataLSTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
  *-------------------------ObBackupComplLogTask------------------------------
  */
 
-int ObBackupComplLogTask::clone(void *input_ptr, ObBackupScheduleTask *&out_task) const
+int ObBackupComplLogTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(input_ptr)) {
+  void *input_ptr = NULL;
+  if (OB_ISNULL(input_ptr = allocator.alloc(get_deep_copy_size()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(input_ptr));
   } else {
@@ -670,10 +674,11 @@ int ObBackupComplLogTask::calc_start_replay_scn_(const ObBackupJobAttr &job_attr
  *------------------------ObBackupBuildIndexTask--------------------------
  */
 
-int ObBackupBuildIndexTask::clone(void *input_ptr, ObBackupScheduleTask *&out_task) const
+int ObBackupBuildIndexTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(input_ptr)) {
+  void *input_ptr = NULL;
+  if (OB_ISNULL(input_ptr = allocator.alloc(get_deep_copy_size()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(input_ptr));
   } else {
@@ -746,10 +751,11 @@ ObBackupCleanLSTask::~ObBackupCleanLSTask()
 {
 }
 
-int ObBackupCleanLSTask::clone(void *input_ptr, ObBackupScheduleTask *&out_task) const
+int ObBackupCleanLSTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(input_ptr)) {
+  void *input_ptr = NULL;
+  if (OB_ISNULL(input_ptr = allocator.alloc(get_deep_copy_size()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(input_ptr));
   } else {
@@ -919,10 +925,11 @@ int ObBackupCleanLSTask::build(const ObBackupCleanTaskAttr &task_attr, const ObB
  *-------------------------------ObBackupDataLSMetaTask---------------------------------
  */
 
-int ObBackupDataLSMetaTask::clone(void *input_ptr, ObBackupScheduleTask *&out_task) const 
+int ObBackupDataLSMetaTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(input_ptr)) {
+  void *input_ptr = NULL;
+  if (OB_ISNULL(input_ptr = allocator.alloc(get_deep_copy_size()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(input_ptr));
   } else {
@@ -975,10 +982,15 @@ int ObBackupDataLSMetaTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   return ret;
 }
 
-int ObBackupDataLSMetaFinishTask::clone(void *input_ptr, ObBackupScheduleTask *&out_task) const
+/*
+ *-------------------------------ObBackupDataLSMetaFinishTask---------------------------------
+ */
+
+int ObBackupDataLSMetaFinishTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(input_ptr)) {
+  void *input_ptr = NULL;
+  if (OB_ISNULL(input_ptr = allocator.alloc(get_deep_copy_size()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(input_ptr));
   } else {
@@ -1008,6 +1020,75 @@ int ObBackupDataLSMetaFinishTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
 {
   int ret = OB_SUCCESS;
   UNUSED(rpc_proxy);
+  return ret;
+}
+
+int ObBackupDataFuseTabletMetaTask::build(const share::ObBackupJobAttr &job_attr,
+    const share::ObBackupSetTaskAttr &set_task_attr, const share::ObBackupLSTaskAttr &ls_attr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObBackupDataBaseTask::build(job_attr, set_task_attr, ls_attr))) {
+    LOG_WARN("failed to build task", K(ret), K(job_attr), K(set_task_attr), K(ls_attr));
+  } else {
+    fuse_turn_id_ = set_task_attr.major_turn_id_;
+  }
+  return ret;
+}
+
+int ObBackupDataFuseTabletMetaTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
+{
+  int ret = OB_SUCCESS;
+  void *input_ptr = NULL;
+  if (OB_ISNULL(input_ptr = allocator.alloc(get_deep_copy_size()))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(input_ptr));
+  } else {
+    ObBackupDataFuseTabletMetaTask *my_task = new (input_ptr) ObBackupDataFuseTabletMetaTask();
+    if (OB_ISNULL(my_task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("taks is nullptr", K(ret));
+    } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
+      LOG_WARN("fail to deep copy base task", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      out_task = my_task;
+    } else if (OB_NOT_NULL(my_task)) {
+      my_task->~ObBackupDataFuseTabletMetaTask();
+      my_task = nullptr;
+    }
+  }
+  return ret;
+}
+
+int64_t ObBackupDataFuseTabletMetaTask::get_deep_copy_size() const
+{
+  return sizeof(ObBackupDataFuseTabletMetaTask);
+}
+
+int ObBackupDataFuseTabletMetaTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObBackupFuseTabletMetaArg arg;
+  arg.tenant_id_ = get_tenant_id();
+  arg.job_id_ = get_job_id();
+  arg.task_id_ = get_task_id();
+  arg.trace_id_ = get_trace_id();
+  arg.backup_set_id_ = backup_set_id_;
+  arg.backup_type_ = backup_type_.type_;
+  arg.ls_id_ = ls_id_;
+  arg.turn_id_ = fuse_turn_id_;
+  arg.retry_id_ = retry_id_;
+  arg.dst_server_ = get_dst();
+  if (OB_FAIL(arg.backup_path_.assign(backup_path_))) {
+    LOG_WARN("failed to assign backup path", K(ret), K(backup_path_));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid arg", K(ret), K(arg));
+  } else if (OB_FAIL(rpc_proxy.to(get_dst()).backup_fuse_tablet_meta(arg))) {
+    LOG_WARN("fail to send backup fuse tablet meta task", K(ret), K(arg));
+  } else {
+    LOG_INFO("start to backup fuse tablet meta", K(arg));
+  }
   return ret;
 }
 

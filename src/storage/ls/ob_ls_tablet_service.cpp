@@ -2590,6 +2590,7 @@ int ObLSTabletService::build_create_sstable_param_for_migration(
     MEMCPY(param.encrypt_key_, mig_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     param.root_block_addr_.set_none_addr();
     param.data_block_macro_meta_addr_.set_none_addr();;
+    param.table_flag_                    = mig_param.basic_meta_.table_flag_;
     if (OB_FAIL(param.column_checksums_.assign(mig_param.column_checksums_))) {
       LOG_WARN("fail to assign column checksums", K(ret), K(mig_param));
     }
@@ -6239,6 +6240,8 @@ int ObLSTabletService::build_tablet_iter(ObHALSTabletIDIterator &iter)
   } else if (OB_UNLIKELY(!iter.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iter is invalid", K(ret), K(iter));
+  } else if (OB_FAIL(iter.sort_tablet_ids_if_need())) {
+    LOG_WARN("failed to sort tablet ids if need", K(ret), K(iter));
   }
 
   if (OB_FAIL(ret)) {
@@ -6302,6 +6305,7 @@ int ObLSTabletService::set_allow_to_read_(ObLS *ls)
       FLOG_INFO("set ls do not allow to read", KPC(ls));
     } else {
       allow_to_read_mgr_.enable_to_read();
+      FLOG_INFO("set ls allow to read", KPC(ls));
     }
   }
   return ret;
@@ -6445,14 +6449,16 @@ int ObLSTabletService::set_frozen_for_all_memtables()
   return ret;
 }
 
-int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_tablet_meta_f)
+int ObLSTabletService::ha_scan_all_tablets(
+    const HandleTabletMetaFunc &handle_tablet_meta_f,
+    const bool need_sorted_tablet_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    ObHALSTabletIterator iterator(ls_->get_ls_id(), false/* need_initial_state */);
+    ObHALSTabletIterator iterator(ls_->get_ls_id(), false/* need_initial_state */, need_sorted_tablet_id);
     if (OB_FAIL(build_tablet_iter(iterator))) {
       LOG_WARN("fail to build tablet iterator", K(ret), KPC(this));
     } else {

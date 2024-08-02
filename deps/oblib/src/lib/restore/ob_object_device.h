@@ -85,11 +85,12 @@ public:
   int adaptive_stat(const char *pathname, ObIODFileStat &statbuf);
   int adaptive_unlink(const char *pathname);
   int adaptive_scan_dir(const char *dir_name, ObBaseDirEntryOperator &op);
+  int release_fd(const ObIOFd &fd);
 
 public:
   common::ObFdSimulator& get_fd_mng() {return fd_mng_;}                 
 
-private:
+protected:
   int get_access_type(ObIODOpts *opts, ObStorageAccessType& access_type);
   int open_for_reader(const char *pathname, void*& ctx);
   int open_for_adaptive_reader_(const char *pathname, void *&ctx);
@@ -97,14 +98,13 @@ private:
   int open_for_appender(const char *pathname, ObIODOpts *opts, void*& ctx);
   int open_for_multipart_writer_(const char *pathname, void *&ctx);
   int release_res(void* ctx, const ObIOFd &fd, ObStorageAccessType access_type);
-
   int inner_exist_(const char *pathname, bool &is_exist, const bool is_adaptive = false);
   int inner_stat_(const char *pathname, ObIODFileStat &statbuf, const bool is_adaptive = false);
   int inner_unlink_(const char *pathname, const bool is_adaptive = false);
   int inner_scan_dir_(const char *dir_name,
       ObBaseDirEntryOperator &op, const bool is_adaptive = false);
 
-private:
+protected:
   //maybe fd mng can be device level
   common::ObFdSimulator    fd_mng_;
   
@@ -120,7 +120,7 @@ private:
   char storage_info_str_[OB_MAX_URI_LENGTH];
   common::ObSpinLock lock_;
 
-private:
+protected:
   /*Object device will not use this interface, just return not support error code*/
   virtual int reconfig(const ObIODOpts &opts) override;
   virtual int rename(const char *oldpath, const char *newpath) override;

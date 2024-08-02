@@ -390,7 +390,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_transfer_seq_(false),
     transfer_seq_(-1),
     merge_type_(MERGE_TYPE_MAX),
-    upper_trans_param_()
+    upper_trans_param_(),
+    need_replace_remote_sstable_(false)
 {
   clog_checkpoint_scn_.set_min();
 }
@@ -415,7 +416,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_transfer_seq_(false),
     transfer_seq_(-1),
     merge_type_(MERGE_TYPE_MAX),
-    upper_trans_param_(upper_trans_param)
+    upper_trans_param_(upper_trans_param),
+    need_replace_remote_sstable_(false)
 {
   clog_checkpoint_scn_.set_min();
 }
@@ -447,7 +449,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_transfer_seq_(need_check_transfer_seq),
     transfer_seq_(transfer_seq),
     merge_type_(merge_type),
-    upper_trans_param_()
+    upper_trans_param_(),
+    need_replace_remote_sstable_(false)
 {
   clog_checkpoint_scn_ = clog_checkpoint_scn;
 }
@@ -475,7 +478,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     need_check_transfer_seq_(false),
     transfer_seq_(-1),
     merge_type_(merge_type),
-    upper_trans_param_()
+    upper_trans_param_(),
+    need_replace_remote_sstable_(false)
 {
   clog_checkpoint_scn_.set_min();
 }
@@ -505,7 +509,8 @@ ObBatchUpdateTableStoreParam::ObBatchUpdateTableStoreParam()
     is_transfer_replace_(false),
     start_scn_(SCN::min_scn()),
     tablet_meta_(nullptr),
-    restore_status_(ObTabletRestoreStatus::FULL)
+    restore_status_(ObTabletRestoreStatus::FULL),
+    need_replace_remote_sstable_(false)
 {
 }
 
@@ -517,6 +522,7 @@ void ObBatchUpdateTableStoreParam::reset()
   start_scn_.set_min();
   tablet_meta_ = nullptr;
   restore_status_ = ObTabletRestoreStatus::FULL;
+  need_replace_remote_sstable_ = false;
 }
 
 bool ObBatchUpdateTableStoreParam::is_valid() const
@@ -540,6 +546,7 @@ int ObBatchUpdateTableStoreParam::assign(
     start_scn_ = param.start_scn_;
     tablet_meta_ = param.tablet_meta_;
     restore_status_ = param.restore_status_;
+    need_replace_remote_sstable_ = param.need_replace_remote_sstable_;
 #ifdef ERRSIM
     errsim_point_info_ = param.errsim_point_info_;
 #endif

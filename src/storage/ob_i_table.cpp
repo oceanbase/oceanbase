@@ -874,6 +874,31 @@ int ObTablesHandleArray::get_sstable_with_type_(
   return ret;
 }
 
+int ObTablesHandleArray::get_all_remote_major_sstables(common::ObIArray<ObITable *> &tables) const
+{
+  int ret = OB_SUCCESS;
+  tables.reset();
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < handles_array_.count(); ++i) {
+    ObITable *table = handles_array_.at(i).table_;
+    ObSSTable *sstable = static_cast<ObSSTable *>(table);
+    ObSSTableMetaHandle sst_meta_hdl;
+    if (OB_ISNULL(table)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null table pointer", K(ret), K(i), K_(handles_array));
+    } else if (!table->is_major_sstable()) {
+      // do nothing
+    } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
+      STORAGE_LOG(WARN, "failed to get sstable meta handle", K(ret), K(i));
+    } else if (!sst_meta_hdl.get_sstable_meta().get_table_flag().has_backup()) {
+      // do nothing
+    } else if (OB_FAIL(tables.push_back(table))) {
+      STORAGE_LOG(WARN, "failed to add remote major sstable", K(ret), K(i));
+    }
+  }
+  return ret;
+}
+
 int ObTablesHandleArray::check_continues(const share::ObScnRange *scn_range) const
 {
   int ret = OB_SUCCESS;

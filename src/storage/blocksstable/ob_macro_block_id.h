@@ -14,6 +14,7 @@
 #define SRC_STORAGE_BLOCKSSTABLE_OB_MACRO_BLOCK_ID_H_
 
 #include "share/ob_define.h"
+#include "common/storage/ob_io_device.h"
 
 namespace oceanbase
 {
@@ -40,14 +41,17 @@ public:
     second_id_ = INT64_MAX;
     third_id_ = 0;
   }
-  OB_INLINE bool is_valid() const
-  {
-    return MACRO_BLOCK_ID_VERSION == version_
-        && id_mode_ < (uint64_t)ObMacroBlockIdMode::ID_MODE_MAX
-        && second_id_ >= AUTONOMIC_BLOCK_INDEX && second_id_ < INT64_MAX
-        && 0 == third_id_;
-  }
+  bool is_valid() const;
 
+
+  OB_INLINE bool is_local_id() const
+  {
+    return static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_LOCAL) == id_mode_;
+  }
+  OB_INLINE bool is_backup_id() const
+  {
+    return static_cast<uint64_t>(ObMacroBlockIdMode::ID_MODE_BACKUP) == id_mode_;
+  }
   uint64_t hash() const;
   int hash(uint64_t &hash_val) const;
   int64_t to_string(char *buf, const int64_t buf_len) const;
@@ -64,6 +68,14 @@ public:
   void set_write_seq(const uint64_t write_seq) { write_seq_ = write_seq; }
   int64_t device_id() const { return device_id_; }
   void set_device_id(const uint64_t device_id) { device_id_ = device_id; }
+
+  // Deivce mode
+  void set_from_io_fd(const common::ObIOFd &block_id)
+  {
+    first_id_ = block_id.first_id_;
+    second_id_ = block_id.second_id_;
+    third_id_ = block_id.third_id_;
+  }
 
   MacroBlockId& operator =(const MacroBlockId &other)
   {

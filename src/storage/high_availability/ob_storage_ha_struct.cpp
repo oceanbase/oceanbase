@@ -451,7 +451,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
     //do nothing
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
-  } else if (restore_status.is_in_restore()) {
+  } else if (restore_status.is_in_restoring_or_failed()) {
     allow_gc = true;
     LOG_INFO("ls ls in restore status, allow gc", K(ret), K(restore_status), K(ls_id));
   } else if (OB_FAIL(check_ls_with_transfer_task_(*ls, need_check_allow_gc, need_wait_dest_ls_replay))) {

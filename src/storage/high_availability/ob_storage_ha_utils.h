@@ -41,6 +41,9 @@ public:
   static int check_ls_deleted(
       const share::ObLSID &ls_id,
       bool &is_deleted);
+  static int check_tablet_is_deleted(
+      const ObTabletHandle &tablet_handle,
+      bool &is_deleted);
 
   // When the src_ls of the transfer does not exist, it is necessary to check whether the dest_ls can be rebuilt
   static int check_transfer_ls_can_rebuild(
@@ -168,6 +171,10 @@ public:
               const uint64_t timestamp,
               const int64_t start_ts,
               const bool is_report);
+  static void transfer_tablet_restore_stat(
+      const uint64_t tenant_id,
+      const share::ObLSID &src_ls_id,
+      const share::ObLSID &dest_ls_id);
 private:
   static int get_ls_(
       ObLSHandle &ls_handle,

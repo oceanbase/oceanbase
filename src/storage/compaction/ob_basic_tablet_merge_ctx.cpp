@@ -863,6 +863,7 @@ void ObBasicTabletMergeCtx::build_update_table_store_param(
   param.need_check_transfer_seq_ = true;
   param.transfer_seq_ = get_tablet()->get_tablet_meta().transfer_info_.transfer_seq_;
   param.update_with_major_flag_ = false;
+  param.need_replace_remote_sstable_ = false;
 }
 
 int ObBasicTabletMergeCtx::update_tablet(

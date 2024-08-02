@@ -23,6 +23,7 @@
 #include "lib/file/file_directory_utils.h"
 #include "share/io/ob_io_manager.h"
 #include "observer/ob_server.h"
+#include "storage/backup/ob_backup_device_wrapper.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -592,7 +593,7 @@ bool ObIOUsage::is_request_doing(const int64_t index) const
 
 int64_t ObIOUsage::get_io_usage_num() const
 {
-  return ATOMIC_LOAD(&group_num_);
+  return group_num_;
 }
 
 int64_t ObIOUsage::to_string(char* buf, const int64_t buf_len) const
@@ -1647,7 +1648,7 @@ int ObIOSender::submit(ObIORequest &req)
       LOG_WARN("prepare io request failed", K(ret), K(req));
     }
   } else if (FALSE_IT(time_guard.click("prepare_req"))) {
-  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req.fd_.device_handle_, device_channel))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req, device_channel))) {
     LOG_WARN("get device channel failed", K(ret), K(req));
   } else if (OB_ISNULL(req.io_result_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1802,7 +1803,7 @@ int ObIOScheduler::schedule_request(ObIORequest &req)
     const int64_t count2 = senders_.at(idx2)->get_queue_count();
     const int64_t sender_idx = count1 < count2 ? idx1 : idx2;
     ObIOSender *sender = senders_.at(sender_idx);
-    if (req.fd_.device_handle_->media_id_ != schedule_media_id_) {
+    if (OB_ISNULL(req.fd_.device_handle_) || req.fd_.device_handle_->media_id_ != schedule_media_id_) {
       // direct submit
       if (OB_FAIL(sender->submit(req))) {
         LOG_WARN("direct submit request failed", K(ret));
@@ -1829,7 +1830,7 @@ int ObIOScheduler::retry_request(ObIORequest &req)
   } else {
     // the first sender is for retry_alloc_memory to avoid blocking current sender
     ObIOSender *sender = senders_.at(0);
-    if (req.fd_.device_handle_->media_id_ != schedule_media_id_) {
+    if (OB_ISNULL(req.fd_.device_handle_) || req.fd_.device_handle_->media_id_ != schedule_media_id_) {
       // direct submit
       if (OB_FAIL(sender->submit(req))) {
         LOG_WARN("direct submit request failed", K(ret));
@@ -2456,6 +2457,7 @@ void ObSyncIOChannel::run1()
         LOG_WARN("request is null", K(ret), KP(req));
       } else {
         RequestHolder holder(req);
+        ObTraceIdGuard trace_id_guard(req->trace_id_);
         if (OB_FAIL(do_sync_io(*req))) {
           LOG_WARN("do sync io failed", K(ret), KPC(req));
         }
@@ -2516,20 +2518,33 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
   int ret = OB_SUCCESS;
   int64_t io_size = 0;
   int64_t io_offset = 0;
-  if (OB_ISNULL(device_handle_)) {
+  int64_t io_result_size = 0;
+  ObIODevice *device_handle = nullptr;
+  if (req.fd_.is_backup_block_file()) {
+    device_handle = req.fd_.device_handle_;
+  } else {
+    device_handle = device_handle_;
+  }
+
+  req.calc_io_offset_and_size(io_size, io_offset);
+
+  // no need to perform io for req that has already been canceled
+  if (req.is_canceled()) {
+    ret = OB_CANCELED;
+    LOG_WARN("req is canceled", K(ret), K(req));
+  } else if (OB_ISNULL(device_handle)) {
     ret = OB_ERR_SYS;
     LOG_WARN("device handle is null", K(ret));
   } else if (OB_ISNULL(req.io_result_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret));
-  } else if (FALSE_IT(io_offset = static_cast<int64_t>(req.io_result_->offset_))) {
   } else if (FALSE_IT(req.io_result_->time_log_.submit_ts_ = ObTimeUtility::fast_current_time())) {
   } else if (req.get_flag().is_read()) {
-    if (OB_FAIL(device_handle_->pread(req.fd_, io_offset, req.io_result_->size_, req.calc_io_buf(), io_size))) {
+    if (OB_FAIL(device_handle->pread(req.fd_, io_offset, io_size, req.calc_io_buf(), io_result_size))) {
       LOG_WARN("pread failed", K(ret), K(req));
     }
   } else if (req.get_flag().is_write()) {
-    if (OB_FAIL(device_handle_->pwrite(req.fd_, io_offset, req.io_result_->size_, req.calc_io_buf(), io_size))) {
+    if (OB_FAIL(device_handle->pwrite(req.fd_, io_offset, io_size, req.calc_io_buf(), io_result_size))) {
       LOG_WARN("pread failed", K(ret), K(req));
     }
   } else {
@@ -2540,15 +2555,20 @@ int ObSyncIOChannel::do_sync_io(ObIORequest &req)
     req.io_result_->time_log_.return_ts_ = ObTimeUtility::fast_current_time();
   }
   if (OB_SUCC(ret)) {
-    req.io_result_->complete_size_ = static_cast<int32_t>(io_size);
+    req.io_result_->complete_size_ = static_cast<int32_t>(io_result_size);
     if (!req.is_canceled() && req.can_callback()) {
       if (OB_FAIL(req.tenant_io_mgr_.get_ptr()->enqueue_callback(req))) {
         LOG_WARN("push io request into callback queue failed", K(ret), K(req));
         req.io_result_->finish(ret, &req);
       }
     } else {
+      if (OB_FAIL(req.recycle_buffer())) {
+        LOG_WARN("recycle io raw buffer failed", K(ret), K(req));
+      }
       req.io_result_->finish(ret, &req);
     }
+  } else {
+    req.io_result_->finish(ret, &req);
   }
   return ret;
 }
@@ -2677,7 +2697,7 @@ int ObDeviceChannel::submit(ObIORequest &req)
   int ret = OB_SUCCESS;
   ObIOChannel *ch = nullptr;
   RequestHolder holder(&req);
-  const bool is_sync = req.io_result_ != nullptr && req.get_flag().is_sync();
+  const bool is_sync = req.use_sync_io_channel();
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret), K(is_inited_));

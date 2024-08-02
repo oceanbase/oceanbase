@@ -39,6 +39,8 @@
 #include "storage/column_store/ob_column_oriented_sstable.h"
 #include "storage/backup/ob_backup_data_store.h"
 #include "storage/ddl/ob_ddl_merge_task.h"
+#include "share/backup/ob_backup_tablet_reorganize_helper.h"
+#include "share/ob_tablet_reorganize_history_table_operator.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 
 #include <algorithm>
@@ -87,84 +89,103 @@ int ObBackupUtils::get_sstables_by_data_type(const storage::ObTabletHandle &tabl
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(backup_data_type), K(tablet_table_store));
   } else if (backup_data_type.is_sys_backup()) {
-    const storage::ObSSTableArray *minor_sstable_array_ptr = NULL;
-    const storage::ObSSTableArray *major_sstable_array_ptr = NULL;
-    minor_sstable_array_ptr = &tablet_table_store.get_minor_sstables();
-    major_sstable_array_ptr = &tablet_table_store.get_major_sstables();
-    ObArray<storage::ObSSTableWrapper> minor_sstable_array;
-    ObArray<storage::ObSSTableWrapper> major_sstable_array;
-    if (OB_FAIL(minor_sstable_array_ptr->get_all_table_wrappers(minor_sstable_array))) {
-      LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
-    } else if (OB_FAIL(check_tablet_minor_sstable_validity_(tablet_handle, minor_sstable_array))) {
-      LOG_WARN("failed to check tablet minor sstable validity", K(ret), K(tablet_handle), K(minor_sstable_array));
-    } else if (OB_FAIL(major_sstable_array_ptr->get_all_table_wrappers(major_sstable_array, true/*unpack_table*/))) {
-      LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
-    } else if (OB_FAIL(append(sstable_array, minor_sstable_array))) {
-      LOG_WARN("failed to append", K(ret), K(minor_sstable_array));
-    } else if (OB_FAIL(append(sstable_array, major_sstable_array))) {
-      LOG_WARN("failed to append", K(ret), K(major_sstable_array));
+    if (OB_FAIL(fetch_sys_tablet_sstables_(tablet_handle, tablet_table_store, sstable_array))) {
+      LOG_WARN("failed to fetch sys tablet sstable", K(ret), K(tablet_handle), K(tablet_table_store));
     }
-  } else if (backup_data_type.is_minor_backup()) {
-    const storage::ObSSTableArray *minor_sstable_array_ptr = NULL;
-    const storage::ObSSTableArray *ddl_sstable_array_ptr = NULL;
-    const storage::ObSSTableArray *mds_sstable_array_ptr = NULL;
-    minor_sstable_array_ptr = &tablet_table_store.get_minor_sstables();
-    ddl_sstable_array_ptr = &tablet_table_store.get_ddl_sstables();
-    mds_sstable_array_ptr = &tablet_table_store.get_mds_sstables();
-    ObArray<storage::ObSSTableWrapper> minor_sstable_array;
-    ObArray<storage::ObSSTableWrapper> ddl_sstable_array;
-    ObArray<storage::ObSSTableWrapper> mds_sstable_array;
-    if (OB_FAIL(minor_sstable_array_ptr->get_all_table_wrappers(minor_sstable_array))) {
-      LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
-    } else if (OB_FAIL(ddl_sstable_array_ptr->get_all_table_wrappers(ddl_sstable_array, true/*unpack_table*/))) {
-      LOG_WARN("failed to get all tables", K(ret), KPC(ddl_sstable_array_ptr));
-    } else if (OB_FAIL(mds_sstable_array_ptr->get_all_table_wrappers(mds_sstable_array, true/*unpack_table*/))) {
-      LOG_WARN("failed to get all tables", K(ret), KPC(mds_sstable_array_ptr));
-    } else if (OB_FAIL(check_tablet_minor_sstable_validity_(tablet_handle, minor_sstable_array))) {
-      LOG_WARN("failed to check tablet minor sstable validity", K(ret), K(tablet_handle), K(minor_sstable_array));
-    } else if (OB_FAIL(check_tablet_ddl_sstable_validity_(tablet_handle, ddl_sstable_array))) {
-      LOG_WARN("failed to check tablet ddl sstable validity", K(ret), K(tablet_handle), K(ddl_sstable_array));
-    } else if (OB_FAIL(append(sstable_array, minor_sstable_array))) {
-      LOG_WARN("failed to append", K(ret), K(minor_sstable_array));
-    } else if (OB_FAIL(append(sstable_array, ddl_sstable_array))) {
-      LOG_WARN("failed to append", K(ret), K(ddl_sstable_array));
-    } else if (OB_FAIL(append(sstable_array, mds_sstable_array))) {
-      LOG_WARN("failed to append", K(ret), K(mds_sstable_array));
-    }
-  } else if (backup_data_type.is_major_backup()) {
-    const storage::ObSSTableArray *major_sstable_array_ptr = NULL;
-    major_sstable_array_ptr = &tablet_table_store.get_major_sstables();
-    ObITable *last_major_sstable_ptr = NULL;
-    ObArenaAllocator tmp_allocator("backup_medium", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    bool with_major_sstable = true;
-    const share::ObLSID &ls_id = tablet_handle.get_obj()->get_ls_id();
-    const common::ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_id();
-    const int64_t last_compaction_scn = tablet_handle.get_obj()->get_last_compaction_scn();
-    ObSSTableWrapper major_wrapper;
-
-    if (OB_ISNULL(last_major_sstable_ptr = major_sstable_array_ptr->get_boundary_table(true /*last*/))) {
-      if (OB_FAIL(check_tablet_with_major_sstable(tablet_handle, with_major_sstable))) {
-        LOG_WARN("failed to check tablet with major sstable", K(ret));
-      }
-      if (OB_SUCC(ret) && with_major_sstable) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("last major sstable should not be null", K(ret), K(tablet_handle));
-      }
-    } else if (OB_UNLIKELY(last_compaction_scn > 0
-        && last_compaction_scn != last_major_sstable_ptr->get_snapshot_version())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("extra medium info is invalid for last major sstable", K(ret), K(ls_id), K(tablet_id),
-          K(last_compaction_scn), KPC(last_major_sstable_ptr), K(tablet_handle));
-    } else if (last_major_sstable_ptr->is_co_sstable()) {
-      if (OB_FAIL(static_cast<ObCOSSTableV2 *>(last_major_sstable_ptr)->get_all_tables(sstable_array))) {
-        LOG_WARN("failed to get all cg tables from co table", K(ret), KPC(last_major_sstable_ptr));
-      }
-    } else if (OB_FAIL(major_wrapper.set_sstable(static_cast<ObSSTable *>(last_major_sstable_ptr)))) {
-      LOG_WARN("failed to set major wrapper", K(ret), KPC(last_major_sstable_ptr));
-    } else if (OB_FAIL(sstable_array.push_back(major_wrapper))) {
-      LOG_WARN("failed to push back", K(ret), K(major_wrapper));
+  } else {
+    if (OB_FAIL(fetch_minor_and_ddl_sstables_(tablet_handle, tablet_table_store, sstable_array))) {
+      LOG_WARN("failed to fetch minor and ddl sstables", K(ret), K(tablet_handle), K(tablet_table_store));
+    } else if (OB_FAIL(fetch_major_sstables_(tablet_handle, tablet_table_store, sstable_array))) {
+      LOG_WARN("failed to fetch major sstables", K(ret), K(tablet_handle), K(tablet_table_store));
     }
   }
+  return ret;
+}
+
+int ObBackupUtils::fetch_sys_tablet_sstables_(const storage::ObTabletHandle &tablet_handle,
+    const storage::ObTabletTableStore &tablet_table_store, common::ObIArray<ObSSTableWrapper> &sstable_array)
+{
+  int ret = OB_SUCCESS;
+  const storage::ObSSTableArray *minor_sstable_array_ptr = NULL;
+  const storage::ObSSTableArray *major_sstable_array_ptr = NULL;
+  minor_sstable_array_ptr = &tablet_table_store.get_minor_sstables();
+  major_sstable_array_ptr = &tablet_table_store.get_major_sstables();
+  ObArray<storage::ObSSTableWrapper> minor_sstable_array;
+  ObArray<storage::ObSSTableWrapper> major_sstable_array;
+  if (OB_FAIL(minor_sstable_array_ptr->get_all_table_wrappers(minor_sstable_array))) {
+    LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
+  } else if (OB_FAIL(check_tablet_minor_sstable_validity_(tablet_handle, minor_sstable_array))) {
+    LOG_WARN("failed to check tablet minor sstable validity", K(ret), K(tablet_handle), K(minor_sstable_array));
+  } else if (OB_FAIL(major_sstable_array_ptr->get_all_table_wrappers(major_sstable_array, true/*unpack_table*/))) {
+      LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
+  } else if (OB_FAIL(append(sstable_array, minor_sstable_array))) {
+    LOG_WARN("failed to append", K(ret), K(minor_sstable_array));
+  } else if (OB_FAIL(append(sstable_array, major_sstable_array))) {
+    LOG_WARN("failed to append", K(ret), K(major_sstable_array));
+  }
+  return ret;
+}
+
+int ObBackupUtils::fetch_minor_and_ddl_sstables_(const storage::ObTabletHandle &tablet_handle,
+    const storage::ObTabletTableStore &tablet_table_store, common::ObIArray<ObSSTableWrapper> &sstable_array)
+{
+  int ret = OB_SUCCESS;
+  const storage::ObSSTableArray *minor_sstable_array_ptr = NULL;
+  const storage::ObSSTableArray *ddl_sstable_array_ptr = NULL;
+  const storage::ObSSTableArray *mds_sstable_array_ptr = NULL;
+  minor_sstable_array_ptr = &tablet_table_store.get_minor_sstables();
+  ddl_sstable_array_ptr = &tablet_table_store.get_ddl_sstables();
+  mds_sstable_array_ptr = &tablet_table_store.get_mds_sstables();
+  ObArray<storage::ObSSTableWrapper> minor_sstable_array;
+  ObArray<storage::ObSSTableWrapper> ddl_sstable_array;
+  ObArray<storage::ObSSTableWrapper> mds_sstable_array;
+  if (OB_FAIL(minor_sstable_array_ptr->get_all_table_wrappers(minor_sstable_array))) {
+    LOG_WARN("failed to get all tables", K(ret), KPC(minor_sstable_array_ptr));
+  } else if (OB_FAIL(ddl_sstable_array_ptr->get_all_table_wrappers(ddl_sstable_array, true/*unpack_table*/))) {
+    LOG_WARN("failed to get all tables", K(ret), KPC(ddl_sstable_array_ptr));
+  } else if (OB_FAIL(mds_sstable_array_ptr->get_all_table_wrappers(mds_sstable_array, true/*unpack_table*/))) {
+    LOG_WARN("failed to get all tables", K(ret), KPC(mds_sstable_array_ptr));
+  } else if (OB_FAIL(check_tablet_minor_sstable_validity_(tablet_handle, minor_sstable_array))) {
+    LOG_WARN("failed to check tablet minor sstable validity", K(ret), K(tablet_handle), K(minor_sstable_array));
+  } else if (OB_FAIL(check_tablet_ddl_sstable_validity_(tablet_handle, ddl_sstable_array))) {
+    LOG_WARN("failed to check tablet ddl sstable validity", K(ret), K(tablet_handle), K(ddl_sstable_array));
+  } else if (OB_FAIL(append(sstable_array, minor_sstable_array))) {
+    LOG_WARN("failed to append", K(ret), K(minor_sstable_array));
+  } else if (OB_FAIL(append(sstable_array, ddl_sstable_array))) {
+    LOG_WARN("failed to append", K(ret), K(ddl_sstable_array));
+  } else if (OB_FAIL(append(sstable_array, mds_sstable_array))) {
+    LOG_WARN("failed to append", K(ret), K(mds_sstable_array));
+  }
+  return ret;
+}
+
+int ObBackupUtils::fetch_major_sstables_(const storage::ObTabletHandle &tablet_handle,
+    const storage::ObTabletTableStore &tablet_table_store, common::ObIArray<ObSSTableWrapper> &sstable_array)
+{
+  int ret = OB_SUCCESS;
+  const storage::ObSSTableArray *major_sstable_array_ptr = NULL;
+  major_sstable_array_ptr = &tablet_table_store.get_major_sstables();
+  ObITable *last_major_sstable_ptr = NULL;
+  bool with_major_sstable = true;
+  ObSSTableWrapper major_wrapper;
+
+  if (OB_FAIL(check_tablet_with_major_sstable(tablet_handle, with_major_sstable))) {
+    LOG_WARN("failed to check tablet with major sstable", K(ret));
+  } else if (OB_ISNULL(last_major_sstable_ptr = major_sstable_array_ptr->get_boundary_table(true /*last*/))) {
+    if (with_major_sstable) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("last major sstable should not be null", K(ret), K(tablet_handle));
+    }
+  } else if (last_major_sstable_ptr->is_co_sstable()) {
+    if (OB_FAIL(static_cast<ObCOSSTableV2 *>(last_major_sstable_ptr)->get_all_tables(sstable_array))) {
+      LOG_WARN("failed to get all cg tables from co table", K(ret), KPC(last_major_sstable_ptr));
+    }
+  } else if (OB_FAIL(major_wrapper.set_sstable(static_cast<ObSSTable *>(last_major_sstable_ptr)))) {
+    LOG_WARN("failed to set major wrapper", K(ret), KPC(last_major_sstable_ptr));
+  } else if (OB_FAIL(sstable_array.push_back(major_wrapper))) {
+    LOG_WARN("failed to push back", K(ret), K(major_wrapper));
+  }
+
   return ret;
 }
 
@@ -499,16 +520,15 @@ int ObBackupUtils::fetch_ls_member_list_(const uint64_t tenant_id, const share::
 
 ObBackupTabletCtx::ObBackupTabletCtx()
     : total_tablet_meta_count_(0),
-      total_sstable_meta_count_(0),
-      reused_macro_block_count_(0),
-      total_macro_block_count_(0),
-      total_check_count_(0),
       finish_tablet_meta_count_(0),
-      finish_sstable_meta_count_(0),
-      finish_macro_block_count_(0),
-      finish_check_count_(0),
-      is_all_loaded_(false),
-      mappings_()
+      reused_macro_block_count_(0),
+      total_minor_macro_block_count_(0),
+      finish_minor_macro_block_count_(0),
+      total_major_macro_block_count_(0),
+      finish_major_macro_block_count_(0),
+      opened_rebuilder_count_(0),
+      closed_rebuilder_count_(0),
+      is_all_loaded_(false)
 {}
 
 ObBackupTabletCtx::~ObBackupTabletCtx()
@@ -517,74 +537,32 @@ ObBackupTabletCtx::~ObBackupTabletCtx()
 void ObBackupTabletCtx::reuse()
 {
   total_tablet_meta_count_ = 0;
-  total_sstable_meta_count_ = 0;
-  reused_macro_block_count_ = 0;
-  total_macro_block_count_ = 0;
-  total_check_count_ = 0;
   finish_tablet_meta_count_ = 0;
-  finish_sstable_meta_count_ = 0;
-  finish_macro_block_count_ = 0;
-  finish_check_count_ = 0;
+  reused_macro_block_count_ = 0;
+  total_minor_macro_block_count_ = 0;
+  finish_minor_macro_block_count_ = 0;
+  total_major_macro_block_count_ = 0;
+  finish_major_macro_block_count_ = 0;
+  opened_rebuilder_count_ = 0;
+  closed_rebuilder_count_ = 0;
   is_all_loaded_ = false;
-  mappings_.reuse();
 }
 
 void ObBackupTabletCtx::print_ctx()
 {
-  LOG_INFO("print ctx", K_(total_tablet_meta_count), K_(finish_tablet_meta_count), K_(total_sstable_meta_count),
-      K_(finish_sstable_meta_count), K_(reused_macro_block_count), K_(total_macro_block_count),
-      K_(finish_macro_block_count), K_(is_all_loaded), "sstable_count", mappings_.sstable_count_);
-  for (int64_t i = 0; i < mappings_.id_map_list_.count(); ++i) {
-    ObBackupMacroBlockIDMapping *mapping = mappings_.id_map_list_[i];
-    LOG_INFO("print backup macro block id mapping", K(i), KPC(mapping));
-  }
+  LOG_INFO("print ctx", K_(total_tablet_meta_count), K_(finish_tablet_meta_count),
+      K_(reused_macro_block_count), K_(total_minor_macro_block_count),
+      K_(finish_minor_macro_block_count), K_(total_major_macro_block_count),
+      K_(finish_major_macro_block_count), K_(opened_rebuilder_count), K_(closed_rebuilder_count), K_(is_all_loaded));
 }
 
-int ObBackupTabletCtx::record_macro_block_physical_id(const storage::ObITable::TableKey &table_key,
-    const blocksstable::ObLogicMacroBlockId &logic_id, const ObBackupPhysicalID &physical_id)
+bool ObBackupTabletCtx::is_finished() const
 {
-  int ret = OB_SUCCESS;
-  bool found = false;
-  if (!table_key.is_valid() || !logic_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(table_key), K(logic_id));
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < mappings_.sstable_count_; ++i) {
-    ObBackupMacroBlockIDMapping *mapping = mappings_.id_map_list_[i];
-    if (OB_ISNULL(mapping)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("id mapping should not be null", K(ret), K(i), KPC(mapping));
-    } else if (mapping->table_key_ == table_key) {
-      found = true;
-      int64_t idx = 0;
-      if (!mapping->map_.created()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("id map not created", K(ret), K(i));
-      } else if (OB_FAIL(mapping->map_.get_refactored(logic_id, idx))) {
-        LOG_WARN("failed to get refactored", K(ret), K(i), K(logic_id));
-      } else if (idx >= mapping->id_pair_list_.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("idx out of range", K(ret), K(idx), K(i), "array_count", mapping->id_pair_list_.count());
-      } else {
-        ObBackupMacroBlockIDPair pair;
-        pair.logic_id_ = logic_id;
-        pair.physical_id_ = physical_id;
-        mapping->id_pair_list_.at(idx) = pair;
-        LOG_INFO("record macro block id", K(table_key), K(logic_id), K(physical_id));
-      }
-    }
-  }
-  if (OB_SUCC(ret) && !found) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table key do not exist",
-        K(ret),
-        K(table_key),
-        "sstable_count",
-        mappings_.sstable_count_,
-        K(logic_id),
-        K(physical_id));
-  }
-  return ret;
+  bool bret = false;
+  bret = total_minor_macro_block_count_ == finish_minor_macro_block_count_
+      && total_major_macro_block_count_ == finish_major_macro_block_count_
+      && opened_rebuilder_count_ == closed_rebuilder_count_;
+  return bret;
 }
 
 /* ObBackupTabletStat */
@@ -629,7 +607,7 @@ int ObBackupTabletStat::init(const uint64_t tenant_id, const int64_t backup_set_
 
 int ObBackupTabletStat::prepare_tablet_sstables(const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type,
     const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
-    const common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
+    const common::ObIArray<storage::ObSSTableWrapper> &sstable_array, const int64_t total_tablet_meta_count)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
@@ -646,32 +624,8 @@ int ObBackupTabletStat::prepare_tablet_sstables(const uint64_t tenant_id, const 
   } else if (backup_data_type.type_ != backup_data_type_.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup data type not match", K(backup_data_type), K(backup_data_type_));
-  } else if (FALSE_IT(stat->mappings_.version_ = ObBackupMacroBlockIDMappingsMeta::MAPPING_META_VERSION_V1)) {
-  } else if (OB_FAIL(stat->mappings_.prepare_id_mappings(sstable_array.count()))) {
-    LOG_WARN("failed to prepare id mappings", K(ret), K(sstable_array.count()), K(stat->mappings_));
-  }
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
-    ObSSTable *sstable_ptr = sstable_array.at(i).get_sstable();
-    if (OB_ISNULL(sstable_ptr)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table ptr should not be null", K(ret), K(i), K(sstable_array));
-    } else if (!sstable_ptr->is_sstable()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table is not sstable", K(ret), KPC(sstable_ptr));
-    } else {
-      // TODO(COLUMN_STORE) Attention !!! MajorSSTable in column store canbe COSSTable, maybe should adapt here.
-      const ObITable::TableKey &table_key = sstable_ptr->get_key();
-      ObBackupMacroBlockIDMapping *id_mapping = stat->mappings_.id_map_list_[i];
-      common::ObArray<ObLogicMacroBlockId> logic_id_list;
-      if (OB_FAIL(ObBackupUtils::fetch_macro_block_logic_id_list(tablet_handle, *sstable_ptr, logic_id_list))) {
-        LOG_WARN("failed to fetch macro block logic id list", K(ret), K(tablet_handle), KPC(sstable_ptr));
-      } else if (OB_FAIL(id_mapping->prepare_tablet_sstable(tenant_id, table_key, logic_id_list))) {
-        LOG_WARN("failed to prepare tablet sstable", K(ret), K(table_key), K(logic_id_list));
-      } else {
-        LOG_INFO("prepare tablet sstable", K(backup_data_type), K(tablet_id), K(table_key), K(logic_id_list));
-      }
-    }
+  } else {
+    stat->total_tablet_meta_count_ = total_tablet_meta_count;
   }
   return ret;
 }
@@ -700,7 +654,7 @@ int ObBackupTabletStat::mark_items_pending(
 }
 
 int ObBackupTabletStat::mark_items_reused(const share::ObBackupDataType &backup_data_type,
-    const common::ObIArray<ObBackupProviderItem> &items, common::ObIArray<ObBackupPhysicalID> &physical_ids)
+    const common::ObIArray<ObBackupProviderItem> &items, common::ObIArray<ObBackupDeviceMacroBlockId> &physical_ids)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
@@ -716,7 +670,7 @@ int ObBackupTabletStat::mark_items_reused(const share::ObBackupDataType &backup_
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < items.count(); ++i) {
       const ObBackupProviderItem &item = items.at(i);
-      const ObBackupPhysicalID &physical_id = physical_ids.at(i);
+      const ObBackupDeviceMacroBlockId &physical_id = physical_ids.at(i);
       if (OB_FAIL(do_with_stat_when_reused_(item, physical_id))) {
         LOG_WARN("failed to do with stat when reused", K(ret), K(item));
       } else {
@@ -735,6 +689,7 @@ int ObBackupTabletStat::mark_item_reused(const share::ObBackupDataType &backup_d
   ObBackupProviderItem item;
   ObBackupProviderItemType item_type = PROVIDER_ITEM_MACRO_ID;
   ObBackupMacroBlockId macro_id;
+  macro_id.table_key_ = table_key;
   macro_id.macro_block_id_ = ObBackupProviderItem::get_fake_macro_id_();
   macro_id.logic_id_ = id_pair.logic_id_;
   if (IS_NOT_INIT) {
@@ -743,7 +698,7 @@ int ObBackupTabletStat::mark_item_reused(const share::ObBackupDataType &backup_d
   } else if (backup_data_type.type_ != backup_data_type_.type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("backup data type not match", K(backup_data_type), K(backup_data_type_));
-  } else if (OB_FAIL(item.set(item_type, macro_id, table_key, ObTabletID(id_pair.logic_id_.tablet_id_)))) {
+  } else if (OB_FAIL(item.set(item_type, backup_data_type, macro_id, table_key, ObTabletID(id_pair.logic_id_.tablet_id_)))) {
     LOG_WARN("failed to set provider item", K(ret), K(item));
   } else if (OB_FAIL(do_with_stat_when_reused_(item, id_pair.physical_id_))) {
     LOG_WARN("failed to do with stat when reused", K(ret));
@@ -752,7 +707,7 @@ int ObBackupTabletStat::mark_item_reused(const share::ObBackupDataType &backup_d
 }
 
 int ObBackupTabletStat::mark_item_finished(const share::ObBackupDataType &backup_data_type,
-    const ObBackupProviderItem &item, const ObBackupPhysicalID &physical_id, bool &is_all_finished)
+    const ObBackupProviderItem &item, const ObBackupDeviceMacroBlockId &physical_id)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(mutex_);
@@ -765,10 +720,89 @@ int ObBackupTabletStat::mark_item_finished(const share::ObBackupDataType &backup
     LOG_WARN("backup data type not match", K(backup_data_type), K(backup_data_type_));
   } else if (OB_FAIL(do_with_stat_when_finish_(item, physical_id))) {
     LOG_WARN("failed to do with stat", K(ret), K(item), K(physical_id));
-  } else if (OB_FAIL(check_tablet_finished_(tablet_id, is_all_finished))) {
-    LOG_WARN("failed to check tablet finished", K(ret), K(tablet_id));
   } else {
     LOG_INFO("mark backup item finished", K(backup_data_type), K(item), K(physical_id));
+  }
+  return ret;
+}
+
+int ObBackupTabletStat::add_finished_tablet_meta_count(const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(mutex_);
+  const bool create_if_not_exist = false;
+  ObBackupTabletCtx *ctx = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup tablet stat do not init", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tablet_id));
+  } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
+    LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
+  } else {
+    ctx->finish_tablet_meta_count_++;
+  }
+  return ret;
+}
+
+int ObBackupTabletStat::add_opened_rebuilder_count(const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(mutex_);
+  const bool create_if_not_exist = false;
+  ObBackupTabletCtx *ctx = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup tablet stat do not init", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tablet_id));
+  } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
+    LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
+  } else {
+    ctx->opened_rebuilder_count_++;
+  }
+  return ret;
+}
+
+int ObBackupTabletStat::add_closed_rebuilder_count(const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(mutex_);
+  const bool create_if_not_exist = false;
+  ObBackupTabletCtx *ctx = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup tablet stat do not init", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tablet_id));
+  } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
+    LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
+  } else {
+    ctx->closed_rebuilder_count_++;
+  }
+  return ret;
+}
+
+int ObBackupTabletStat::check_can_release_tablet(const common::ObTabletID &tablet_id, bool &can_release)
+{
+  int ret = OB_SUCCESS;
+  can_release = false;
+  ObMutexGuard guard(mutex_);
+  const bool create_if_not_exist = false;
+  ObBackupTabletCtx *ctx = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup tablet stat do not init", K(ret));
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(tablet_id));
+  } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, ctx))) {
+    LOG_WARN("failed to get tablet stat", K(ret), K(tablet_id));
+  } else {
+    can_release = ctx->finish_tablet_meta_count_ == ctx->total_tablet_meta_count_;
   }
   return ret;
 }
@@ -863,21 +897,16 @@ int ObBackupTabletStat::do_with_stat_when_pending_(const ObBackupProviderItem &i
     LOG_WARN("stat should not be null", K(ret), K_(backup_data_type), K(tablet_id));
   } else {
     const ObBackupProviderItemType type = item.get_item_type();
-    if (PROVIDER_ITEM_CHECK == type) {
-      ++stat->total_check_count_;
-    } else if (PROVIDER_ITEM_MACRO_ID == type) {
-      const ObITable::TableKey &table_key = item.get_table_key();
-      const ObLogicMacroBlockId &logic_id = item.get_logic_id();
-      const ObBackupPhysicalID &fake_physical_id = ObBackupPhysicalID::get_default();
-      if (OB_FAIL(stat->record_macro_block_physical_id(table_key, logic_id, fake_physical_id))) {
-        LOG_WARN("failed to record macro block physical id", K(ret), K(table_key), K(logic_id), K(fake_physical_id));
-      } else {
-        ++stat->total_macro_block_count_;
+    const share::ObBackupDataType &backup_data_type = item.get_backup_data_type();
+    if (PROVIDER_ITEM_MACRO_ID == type) {
+      if (backup_data_type.is_sys_backup()) {
+        ++stat->total_minor_macro_block_count_;
+      } else if (backup_data_type.is_minor_backup()) {
+        ++stat->total_minor_macro_block_count_;
+      } else if (backup_data_type.is_major_backup()) {
+        ++stat->total_major_macro_block_count_;
       }
-    } else if (PROVIDER_ITEM_SSTABLE_META == type) {
-      ++stat->total_sstable_meta_count_;
-    } else if (PROVIDER_ITEM_TABLET_META == type) {
-      ++stat->total_tablet_meta_count_;
+    } else if (PROVIDER_ITEM_TABLET_AND_SSTABLE_META == type) {
       stat->is_all_loaded_ = true;
     }
   }
@@ -885,7 +914,7 @@ int ObBackupTabletStat::do_with_stat_when_pending_(const ObBackupProviderItem &i
 }
 
 int ObBackupTabletStat::do_with_stat_when_reused_(
-    const ObBackupProviderItem &item, const ObBackupPhysicalID &physical_id)
+    const ObBackupProviderItem &item, const ObBackupDeviceMacroBlockId &physical_id)
 {
   int ret = OB_SUCCESS;
   ObBackupTabletCtx *stat = NULL;
@@ -894,7 +923,11 @@ int ObBackupTabletStat::do_with_stat_when_reused_(
   const ObITable::TableKey &table_key = item.get_table_key();
   const ObLogicMacroBlockId &logic_id = item.get_logic_id();
   const ObBackupProviderItemType type = item.get_item_type();
-  if (!item.is_valid() || !physical_id.is_valid()) {
+  const ObBackupDataType &backup_data_type = item.get_backup_data_type();
+  if (!backup_data_type.is_major_backup()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("reuse should only be major", K(ret), K(item));
+  } else if (!item.is_valid() || !physical_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(item), K(physical_id));
   } else if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, stat))) {
@@ -905,18 +938,15 @@ int ObBackupTabletStat::do_with_stat_when_reused_(
   } else if (PROVIDER_ITEM_MACRO_ID != type) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only macro block can reuse", K(type));
-  } else if (OB_FAIL(stat->record_macro_block_physical_id(table_key, logic_id, physical_id))) {
-    LOG_WARN("failed to record macro block physical id", K(ret), K(table_key), K(logic_id), K(physical_id));
   } else {
     ++stat->reused_macro_block_count_;
-    ++stat->finish_macro_block_count_;
-    ++stat->total_macro_block_count_;
+    ++stat->total_major_macro_block_count_;
   }
   return ret;
 }
 
 int ObBackupTabletStat::do_with_stat_when_finish_(
-    const ObBackupProviderItem &item, const ObBackupPhysicalID &physical_id)
+    const ObBackupProviderItem &item, const ObBackupDeviceMacroBlockId &physical_id)
 {
   int ret = OB_SUCCESS;
   ObBackupTabletCtx *stat = NULL;
@@ -932,46 +962,15 @@ int ObBackupTabletStat::do_with_stat_when_finish_(
     LOG_WARN("stat should not be null", K(ret), K_(backup_data_type), K(tablet_id));
   } else {
     const ObBackupProviderItemType type = item.get_item_type();
-    if (PROVIDER_ITEM_CHECK == type) {
-      ++stat->finish_check_count_;
-    } else if (PROVIDER_ITEM_MACRO_ID == type) {
-      const ObITable::TableKey &table_key = item.get_table_key();
-      const ObLogicMacroBlockId &logic_id = item.get_logic_id();
-      if (OB_FAIL(stat->record_macro_block_physical_id(table_key, logic_id, physical_id))) {
-        LOG_WARN("failed to record macro block physical id", K(ret), K(table_key), K(logic_id), K(physical_id));
-      } else {
-        ++stat->finish_macro_block_count_;
+    const ObBackupDataType &backup_data_type = item.get_backup_data_type();
+    if (PROVIDER_ITEM_MACRO_ID == type) {
+      if (backup_data_type.is_sys_backup()) {
+        ++stat->finish_minor_macro_block_count_;
+      } else if (backup_data_type.is_minor_backup()) {
+        ++stat->finish_minor_macro_block_count_;
+      } else if (backup_data_type.is_major_backup()) {
+        ++stat->finish_major_macro_block_count_;
       }
-    } else if (PROVIDER_ITEM_SSTABLE_META == type) {
-      ++stat->finish_sstable_meta_count_;
-    } else if (PROVIDER_ITEM_TABLET_META == type) {
-      ++stat->finish_tablet_meta_count_;
-    }
-  }
-  return ret;
-}
-
-int ObBackupTabletStat::check_tablet_finished_(const common::ObTabletID &tablet_id, bool &is_finished)
-{
-  int ret = OB_SUCCESS;
-  is_finished = false;
-  ObBackupTabletCtx *stat = NULL;
-  const bool create_if_not_exist = false;
-  if (OB_FAIL(get_tablet_stat_(tablet_id, create_if_not_exist, stat))) {
-    LOG_WARN("failed to get tablet stat", K(ret), K(stat));
-  } else if (OB_ISNULL(stat)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("stat should not be null", K(ret), K_(backup_data_type), K(tablet_id));
-  } else if (!stat->is_all_loaded_) {
-    // not all loaded, false
-  } else {
-    is_finished = stat->total_macro_block_count_ == stat->finish_macro_block_count_ &&
-                  stat->total_sstable_meta_count_ == stat->finish_sstable_meta_count_ &&
-                  stat->total_tablet_meta_count_ == stat->finish_tablet_meta_count_ &&
-                  stat->total_check_count_ == stat->finish_check_count_;
-    if (is_finished) {
-      report_event_(tablet_id, *stat);
-      LOG_INFO("tablet is finished", K(tablet_id), KPC(stat));
     }
   }
   return ret;
@@ -992,8 +991,6 @@ int ObBackupTabletStat::get_tablet_stat_(
         LOG_WARN("failed to set refactored", K(ret), K(tablet_id), KPC(stat));
         free_stat_(stat);
         stat = nullptr;
-      } else {
-        stat->mappings_.version_ = ObBackupMacroBlockIDMappingsMeta::MAPPING_META_VERSION_V1;
       }
     } else {
       ret = hash_ret;
@@ -1033,26 +1030,9 @@ void ObBackupTabletStat::report_event_(const common::ObTabletID &tablet_id, cons
   const char *backup_event = NULL;
   if (backup_data_type_.is_sys_backup()) {
     backup_event = "backup_sys_tablet";
-  } else if (backup_data_type_.is_minor_backup()) {
-    backup_event = "backup_minor_tablet";
-  } else if (backup_data_type_.is_major_backup()) {
-    backup_event = "backup_major_tablet";
+  } else if (backup_data_type_.is_user_backup()) {
+    backup_event = "backup_user_tablet";
   }
-  SERVER_EVENT_ADD("backup",
-      backup_event,
-      "tenant_id",
-      tenant_id_,
-      "backup_set_id",
-      backup_set_id_,
-      "ls_id",
-      ls_id_.id(),
-      "tablet_id",
-      tablet_id.id(),
-      "finished_macro_block_count",
-      tablet_ctx.finish_macro_block_count_,
-      "reused_macro_block_count",
-      tablet_ctx.reused_macro_block_count_,
-      tablet_ctx.total_macro_block_count_);
 }
 
 int ObBackupTabletStat::PrintTabletStatOp::operator()(
@@ -1249,19 +1229,22 @@ int ObBackupDiskChecker::check_disk_space()
 /* ObBackupProviderItem */
 
 ObBackupProviderItem::ObBackupProviderItem()
-    : item_type_(PROVIDER_ITEM_MAX), logic_id_(),
-      macro_block_id_(), table_key_(), tablet_id_(),
-      nested_offset_(0), nested_size_(0)
+    : item_type_(PROVIDER_ITEM_MAX), backup_data_type_(),
+      logic_id_(), macro_block_id_(),
+      table_key_(), tablet_id_(),
+      nested_offset_(0), nested_size_(0),
+      timestamp_(0), need_copy_(true), macro_index_(),
+      absolute_row_offset_(0)
 {}
 
 ObBackupProviderItem::~ObBackupProviderItem()
 {}
 
-int ObBackupProviderItem::set_with_fake(const ObBackupProviderItemType &item_type, const common::ObTabletID &tablet_id)
+int ObBackupProviderItem::set_with_fake(const ObBackupProviderItemType &item_type,
+    const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type)
 {
   int ret = OB_SUCCESS;
-  if (PROVIDER_ITEM_SSTABLE_META != item_type && PROVIDER_ITEM_TABLET_META != item_type
-      && PROVIDER_ITEM_CHECK != item_type) {
+  if (PROVIDER_ITEM_TABLET_AND_SSTABLE_META != item_type) {
     ret = OB_ERR_SYS;
     LOG_WARN("get invalid args", K(ret));
   } else if (!tablet_id.is_valid()) {
@@ -1269,6 +1252,7 @@ int ObBackupProviderItem::set_with_fake(const ObBackupProviderItemType &item_typ
     LOG_WARN("get invalid args", K(ret), K(tablet_id));
   } else {
     item_type_ = item_type;
+    backup_data_type_ = backup_data_type;
     logic_id_ = get_fake_logic_id_();
     macro_block_id_ = get_fake_macro_id_();
     table_key_ = get_fake_table_key_();
@@ -1281,8 +1265,8 @@ int ObBackupProviderItem::set_with_fake(const ObBackupProviderItemType &item_typ
   return ret;
 }
 
-int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const ObBackupMacroBlockId &macro_id,
-     const ObITable::TableKey &table_key, const common::ObTabletID &tablet_id)
+int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const share::ObBackupDataType &backup_data_type,
+    const ObBackupMacroBlockId &macro_id, const ObITable::TableKey &table_key, const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   if (PROVIDER_ITEM_MACRO_ID != item_type) {
@@ -1293,12 +1277,14 @@ int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const O
     LOG_WARN("get invalid args", K(ret), K(macro_id), K(table_key), K(tablet_id));
   } else {
     item_type_ = item_type;
+    backup_data_type_ = backup_data_type;
     logic_id_ = macro_id.logic_id_;
     macro_block_id_ = macro_id.macro_block_id_;
     table_key_ = table_key;
     tablet_id_ = tablet_id;
     nested_offset_ = macro_id.nested_offset_;
     nested_size_ = macro_id.nested_size_;
+    absolute_row_offset_ = macro_id.absolute_row_offset_;
     if (!is_valid()) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("provider item not valid", K(ret), KPC(this));
@@ -1309,9 +1295,10 @@ int ObBackupProviderItem::set(const ObBackupProviderItemType &item_type, const O
 
 bool ObBackupProviderItem::operator==(const ObBackupProviderItem &other) const
 {
-  return item_type_ == other.item_type_ && logic_id_ == other.logic_id_ &&
-         macro_block_id_ == other.macro_block_id_ && table_key_ == other.table_key_ &&
-         tablet_id_ == other.tablet_id_ && nested_size_ == other.nested_size_ && nested_offset_ == other.nested_offset_;
+  return item_type_ == other.item_type_ && backup_data_type_ == other.backup_data_type_ && logic_id_ == other.logic_id_
+      && macro_block_id_ == other.macro_block_id_ && table_key_ == other.table_key_
+      && tablet_id_ == other.tablet_id_ && nested_size_ == other.nested_size_ && nested_offset_ == other.nested_offset_
+      && need_copy_ == other.need_copy_ && macro_index_ == other.macro_index_ && absolute_row_offset_ == other.absolute_row_offset_;
 }
 
 bool ObBackupProviderItem::operator!=(const ObBackupProviderItem &other) const
@@ -1322,6 +1309,11 @@ bool ObBackupProviderItem::operator!=(const ObBackupProviderItem &other) const
 ObBackupProviderItemType ObBackupProviderItem::get_item_type() const
 {
   return item_type_;
+}
+
+ObBackupDataType ObBackupProviderItem::get_backup_data_type() const
+{
+  return backup_data_type_;
 }
 
 blocksstable::ObLogicMacroBlockId ObBackupProviderItem::get_logic_id() const
@@ -1359,17 +1351,38 @@ int64_t ObBackupProviderItem::get_deep_copy_size() const
   return 0;
 }
 
-int ObBackupProviderItem::deep_copy(const ObBackupProviderItem &src, char *buf, int64_t len, int64_t &pos)
+int ObBackupProviderItem::deep_copy(const ObBackupProviderItem &src)
 {
   int ret = OB_SUCCESS;
-  UNUSEDx(buf, len, pos);
   item_type_ = src.item_type_;
+  backup_data_type_ = src.backup_data_type_;
   logic_id_ = src.logic_id_;
   macro_block_id_ = src.macro_block_id_;
   table_key_ = src.table_key_;
   tablet_id_ = src.tablet_id_;
   nested_offset_ = src.nested_offset_;
   nested_size_ = src.nested_size_;
+  need_copy_ = src.need_copy_;
+  macro_index_ = src.macro_index_;
+  absolute_row_offset_ = src.absolute_row_offset_;
+  return ret;
+}
+
+int ObBackupProviderItem::deep_copy(const ObBackupProviderItem &src, char *buf, int64_t len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  UNUSEDx(buf, len, pos);
+  item_type_ = src.item_type_;
+  backup_data_type_ = src.backup_data_type_;
+  logic_id_ = src.logic_id_;
+  macro_block_id_ = src.macro_block_id_;
+  table_key_ = src.table_key_;
+  tablet_id_ = src.tablet_id_;
+  nested_offset_ = src.nested_offset_;
+  nested_size_ = src.nested_size_;
+  need_copy_ = src.need_copy_;
+  macro_index_ = src.macro_index_;
+  absolute_row_offset_ = src.absolute_row_offset_;
   return ret;
 }
 
@@ -1377,9 +1390,7 @@ bool ObBackupProviderItem::is_valid() const
 {
   bool bret = false;
   if (PROVIDER_ITEM_MACRO_ID != item_type_
-      && PROVIDER_ITEM_SSTABLE_META != item_type_
-      && PROVIDER_ITEM_TABLET_META != item_type_
-      && PROVIDER_ITEM_CHECK != item_type_) {
+      && PROVIDER_ITEM_TABLET_AND_SSTABLE_META != item_type_) {
     bret = false;
   } else {
     bret = logic_id_.is_valid() && macro_block_id_.is_valid()
@@ -1391,70 +1402,16 @@ bool ObBackupProviderItem::is_valid() const
 void ObBackupProviderItem::reset()
 {
   item_type_ = PROVIDER_ITEM_MAX;
+  backup_data_type_.reset();
   logic_id_.reset();
   macro_block_id_.reset();
   table_key_.reset();
   tablet_id_.reset();
   nested_offset_ = 0;
   nested_size_ = 0;
-}
-
-DEFINE_SERIALIZE(ObBackupProviderItem)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, item_type_))) {
-    LOG_WARN("failed to encode key", K(ret));
-  } else if (OB_FAIL(logic_id_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("failed to serialize logic id", K(ret));
-  } else if (OB_FAIL(macro_block_id_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("failed to serialize macro block id", K(ret));
-  } else if (OB_FAIL(table_key_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("failed to serialize table key", K(ret));
-  } else if (OB_FAIL(tablet_id_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("failed to serialize tablet id", K(ret));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, nested_offset_))) {
-    LOG_WARN("failed to serialize nested_offset_", K(ret));
-  } else if (OB_FAIL(serialization::encode_vi64(buf, buf_len, pos, nested_size_))) {
-    LOG_WARN("failed to serialize nested_size_", K(ret));
-  }
-  return ret;
-}
-
-DEFINE_DESERIALIZE(ObBackupProviderItem)
-{
-  int ret = OB_SUCCESS;
-  int64_t item_type_value = 0;
-  if (pos < data_len && OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &item_type_value))) {
-    LOG_WARN("failed to decode key", K(ret), K(data_len), K(pos));
-  } else if (pos < data_len && OB_FAIL(logic_id_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize logic id", K(ret), K(data_len), K(pos));
-  } else if (pos < data_len && OB_FAIL(macro_block_id_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize macro block id", K(ret), K(data_len), K(pos));
-  } else if (pos < data_len && OB_FAIL(table_key_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize table key", K(ret), K(data_len), K(pos));
-  } else if (pos < data_len && OB_FAIL(tablet_id_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize tablet id", K(ret), K(data_len), K(pos));
-  } else if (pos < data_len && OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &nested_offset_))) {
-    LOG_WARN("failed to deserialize nested_offset_", K(ret), K(data_len), K(pos));
-  } else if (pos < data_len && OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &nested_size_))) {
-    LOG_WARN("failed to deserialize nested_size_", K(ret), K(data_len), K(pos));
-  } else {
-    item_type_ = static_cast<ObBackupProviderItemType>(item_type_value);
-  }
-  return ret;
-}
-
-DEFINE_GET_SERIALIZE_SIZE(ObBackupProviderItem)
-{
-  int64_t size = 0;
-  size += serialization::encoded_length_vi64(item_type_);
-  size += logic_id_.get_serialize_size();
-  size += macro_block_id_.get_serialize_size();
-  size += table_key_.get_serialize_size();
-  size += tablet_id_.get_serialize_size();
-  size += serialization::encoded_length_vi64(nested_offset_);
-  size += serialization::encoded_length_vi64(nested_size_);
-  return size;
+  need_copy_ = true;
+  macro_index_.reset();
+  absolute_row_offset_ = 0;
 }
 
 ObITable::TableKey ObBackupProviderItem::get_fake_table_key_()
@@ -1543,19 +1500,19 @@ ObBackupTabletProvider::ObBackupTabletProvider()
     : is_inited_(),
       is_run_out_(false),
       meet_end_(false),
-      sort_ret_(0),
       mutex_(common::ObLatchIds::BACKUP_LOCK),
       param_(),
       backup_data_type_(),
       cur_task_id_(),
-      external_sort_(),
       ls_backup_ctx_(NULL),
       index_kv_cache_(NULL),
       sql_proxy_(NULL),
-      backup_item_cmp_(sort_ret_),
+      index_builder_mgr_(NULL),
       meta_index_store_(),
       prev_item_(),
-      has_prev_item_(false)
+      has_prev_item_(false),
+      lighty_queue_(),
+      fifo_allocator_()
 {}
 
 ObBackupTabletProvider::~ObBackupTabletProvider()
@@ -1573,15 +1530,20 @@ int ObBackupTabletProvider::init(const ObLSBackupParam &param, const share::ObBa
   } else if (!param.is_valid() || !backup_data_type.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(param), K(backup_data_type));
-  } else if (FALSE_IT(backup_item_cmp_.set_backup_data_type(backup_data_type))) {
-    LOG_WARN("failed to set backup data type", K(ret), K(backup_data_type));
   } else if (OB_FAIL(param_.assign(param))) {
     LOG_WARN("failed to assign param", K(ret), K(param));
+  } else if (OB_FAIL(lighty_queue_.init(QUEUE_SIZE))) {
+    LOG_WARN("failed to init lighty queue", K(ret));
+  } else if (OB_FAIL(fifo_allocator_.init(ObMallocAllocator::get_instance(),
+                                          PAGE_SIZE,
+                                          lib::ObMemAttr(param.tenant_id_, ObModIds::BACKUP)))) {
+    LOG_WARN("failed to init allocator", K(ret));
   } else {
     backup_data_type_ = backup_data_type;
     ls_backup_ctx_ = &ls_backup_ctx;
     index_kv_cache_ = &index_kv_cache;
     sql_proxy_ = &sql_proxy;
+    index_builder_mgr_ = &ls_backup_ctx_->index_builder_mgr_;
     cur_task_id_ = 0;
     is_run_out_ = false;
     is_inited_ = true;
@@ -1593,9 +1555,9 @@ void ObBackupTabletProvider::reset()
 {
   ObMutexGuard guard(mutex_);
   is_inited_ = true;
-  sort_ret_ = OB_SUCCESS;
-  external_sort_.clean_up();
   ls_backup_ctx_ = NULL;
+  free_queue_item_();
+  fifo_allocator_.reset();
 }
 
 void ObBackupTabletProvider::reuse()
@@ -1619,7 +1581,6 @@ void ObBackupTabletProvider::set_backup_data_type(const share::ObBackupDataType 
 {
   ObMutexGuard guard(mutex_);
   backup_data_type_ = backup_data_type;
-  backup_item_cmp_.set_backup_data_type(backup_data_type);
 }
 
 ObBackupDataType ObBackupTabletProvider::get_backup_data_type() const
@@ -1689,29 +1650,24 @@ int ObBackupTabletProvider::inner_get_batch_items_(
 {
   int ret = OB_SUCCESS;
   items.reset();
-  const ObBackupProviderItem *next_item = NULL;
   if (batch_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(batch_size));
   }
   while (OB_SUCC(ret) && items.count() < batch_size) {
-    if (OB_FAIL(external_sort_.get_next_item(next_item))) {
-      if (OB_ITER_END == ret) {
+    ObBackupProviderItem item;
+    if (OB_FAIL(pop_item_from_queue_(item))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         break;
       } else {
-        LOG_WARN("failed to get next item", K(ret));
+        LOG_WARN("failed to pop item from queue", K(ret));
       }
-    } else if (!next_item->is_valid()) {
+    } else if (!item.is_valid()) {
       ret = OB_INVALID_DATA;
-      LOG_WARN("next item is not valid", K(ret), KPC(next_item));
-    } else if (OB_FAIL(items.push_back(*next_item))) {
-      LOG_WARN("failed to push back", K(ret), K(next_item));
-    } else if (has_prev_item_ && OB_FAIL(compare_prev_item_(*next_item))) {
-      LOG_WARN("failed to compare prev item", K(ret), K(prev_item_), KPC(next_item));
-    } else {
-      has_prev_item_ = true;
-      prev_item_ = *next_item;
+      LOG_WARN("next item is not valid", K(ret), K(item));
+    } else if (OB_FAIL(items.push_back(item))) {
+      LOG_WARN("failed to push back", K(ret), K(item));
     }
   }
   LOG_INFO("inner get batch item", K(items), K_(backup_data_type));
@@ -1722,48 +1678,28 @@ int ObBackupTabletProvider::prepare_batch_tablet_(const uint64_t tenant_id, cons
 {
   int ret = OB_SUCCESS;
   int64_t total_count = 0;
-  const bool need_prepare = external_sort_.is_all_got();
-  if (need_prepare) {
-    external_sort_.clean_up();
-    if (OB_FAIL(external_sort_.init(
-            BUF_MEM_LIMIT, FILE_BUF_SIZE, EXPIRE_TIMESTAMP, OB_SYS_TENANT_ID, &backup_item_cmp_))) {
-      LOG_WARN("failed to init external sort", K(ret));
+  while (OB_SUCC(ret) && total_count < BATCH_SIZE) {
+    ObTabletID tablet_id;
+    int64_t count = 0;
+    if (OB_ISNULL(ls_backup_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("log stream backup ctx should not be null", K(ret));
+    } else if (OB_FAIL(ls_backup_ctx_->next(tablet_id))) {
+      if (OB_ITER_END == ret) {
+        meet_end_ = true;
+        LOG_INFO("tablet meet end", K(ret), K(tenant_id), K(ls_id), K_(backup_data_type));
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        LOG_WARN("failed to get next tablet", K(ret));
+      }
+    } else if (OB_FAIL(prepare_tablet_(tenant_id, ls_id, tablet_id, backup_data_type_, count))) {
+      LOG_WARN("failed to prepare tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, ls_backup_ctx_->rebuild_seq_))) {
+      LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id));
     } else {
-      LOG_INFO("reinit external sort", K(tenant_id), K(ls_id));
+      total_count += count;
     }
-    while (OB_SUCC(ret) && total_count < BATCH_SIZE) {
-      ObTabletID tablet_id;
-      int64_t count = 0;
-      if (OB_ISNULL(ls_backup_ctx_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("log stream backup ctx should not be null", K(ret));
-      } else if (OB_FAIL(ls_backup_ctx_->next(tablet_id))) {
-        if (OB_ITER_END == ret) {
-          meet_end_ = true;
-          LOG_INFO("tablet meet end", K(ret), K(tenant_id), K(ls_id), K_(backup_data_type));
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get next tablet", K(ret));
-        }
-      } else if (OB_FAIL(prepare_tablet_(tenant_id, ls_id, tablet_id, backup_data_type_, count))) {
-        LOG_WARN("failed to prepare tablet", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
-      } else if (OB_FAIL(ObBackupUtils::check_ls_valid_for_backup(tenant_id, ls_id, ls_backup_ctx_->rebuild_seq_))) {
-        LOG_WARN("failed to check ls valid for backup", K(ret), K(tenant_id), K(ls_id));
-      } else {
-        total_count += count;
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(external_sort_.do_sort(true /*final_merge*/))) {
-        LOG_WARN("failed to do external sort", K(ret));
-      } else {
-        LOG_INFO("do sort");
-      }
-    }
-  } else {
-    LOG_INFO("no need prepare now", K(tenant_id), K(ls_id), "is_all_got", external_sort_.is_all_got(),
-        "is_sorted", external_sort_.is_sorted());
   }
   return ret;
 }
@@ -1778,6 +1714,7 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
   bool is_normal = false;
   bool can_explain = false;
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
+  bool need_skip_tablet = false;
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
@@ -1789,8 +1726,14 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
       LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
       ret = OB_SUCCESS;
       ObBackupSkippedType skipped_type(ObBackupSkippedType::MAX_TYPE);
-      if (OB_FAIL(get_tablet_skipped_type_(param_.tenant_id_, ls_id, tablet_id, skipped_type))) {
+      bool need_report_skip = false;
+      share::ObLSID split_ls_id;
+      if (OB_FAIL(get_tablet_skipped_type_(param_.tenant_id_, ls_id, tablet_id, skipped_type, split_ls_id))) {
         LOG_WARN("failed to get tablet skipped type", K(ret), K(param_), K(ls_id), K(tablet_id));
+      } else if (OB_FAIL(check_need_report_tablet_skipped_(split_ls_id, tablet_id, skipped_type, need_report_skip))) {
+        LOG_WARN("failed to check need report tablet skipped", K(ret));
+      } else if (!need_report_skip) {
+        LOG_INFO("skip report tablet skipped", K(ret), K(tablet_id), K(skipped_type), K_(param));
       } else if (OB_FAIL(report_tablet_skipped_(tablet_id, skipped_type, backup_data_type))) {
         LOG_WARN("failed to report tablet skipped", K(ret), K(tablet_id), K_(param), K(skipped_type));
       } else {
@@ -1799,50 +1742,52 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
     } else {
       LOG_WARN("failed to get tablet handle", K(ret), K(tenant_id), K(ls_id), K(tablet_id));
     }
+  } else if (OB_FAIL(check_tablet_split_status_(tenant_id, tablet_id, need_skip_tablet))) {
+    LOG_WARN("failed to check tablet split status", K(ret), K(tenant_id), K(tablet_id));
+  } else if (need_skip_tablet) {
+    LOG_INFO("tablet skipped", K(tenant_id), K(tablet_id));
   } else if (OB_FAIL(check_tx_data_can_explain_user_data_(tablet_ref->tablet_handle_, can_explain))) {
     LOG_WARN("failed to check tx data can explain user data", K(ret), K(ls_id), K(tablet_id));
   } else if (!can_explain) {
     ret = OB_REPLICA_CANNOT_BACKUP;
     LOG_WARN("can not backup replica", K(ret), K(tablet_id), K(ls_id));
+  } else if (OB_FAIL(check_tablet_replica_validity_(tenant_id, ls_id, tablet_id, backup_data_type))) {
+    LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(tablet_id), K(backup_data_type));
   } else if (OB_FAIL(tablet_ref->tablet_handle_.get_obj()->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FAIL(fetch_tablet_sstable_array_(
       tablet_id, tablet_ref->tablet_handle_, *table_store_wrapper.get_member(), backup_data_type, sstable_array))) {
     LOG_WARN("failed to fetch tablet sstable array", K(ret), K(tablet_id), KPC(tablet_ref), K(backup_data_type));
-  } else if (OB_FAIL(add_check_tablet_item_(tablet_id))) {
-    LOG_WARN("failed to add check tablet item", K(ret), K(tablet_id));
+  } else if (OB_FAIL(prepare_tablet_sstable_index_builders_(tablet_id, sstable_array))) {
+    LOG_WARN("failed to prepare tablet sstable index builders", K(ret), K_(param), K(tablet_id), K(sstable_array));
   } else {
+    int64_t cur_tablet_meta_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < sstable_array.count(); ++i) {
       int64_t count = 0;
-      ObSSTable *sstable = sstable_array.at(i).get_sstable();
-      if (OB_ISNULL(sstable)) {
+      storage::ObSSTableWrapper &sstable_wrapper = sstable_array.at(i);
+      ObSSTable *sstable_ptr = NULL;
+      if (OB_ISNULL(sstable_ptr = sstable_wrapper.get_sstable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table should not be null", K(ret));
-      } else  {
+      } else {
         // TODO(COLUMN_STORE) Attention !!! MajorSSTable in column store canbe COSSTable, maybe should adapt here.
-        const ObITable::TableKey &table_key = sstable->get_key();
-        if (OB_FAIL(fetch_all_logic_macro_block_id_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable, count))) {
+        const ObITable::TableKey &table_key = sstable_ptr->get_key();
+        if (OB_FAIL(fetch_all_logic_macro_block_id_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable_ptr, count))) {
           LOG_WARN("failed to fetch all logic macro block id", K(ret), K(tablet_id), KPC(tablet_ref), K(table_key));
+        } else if (OB_FAIL(open_tablet_sstable_index_builder_(tablet_id, tablet_ref->tablet_handle_, table_key, sstable_ptr, 0 == count/*is_empty*/))) {
+          LOG_WARN("failed to open tablet sstable index builder", K(ret), K(tablet_id), KPC(tablet_ref), K(table_key));
         } else {
           total_count += count;
         }
       }
     }
-    if (OB_SUCC(ret) && !sstable_array.empty()) {
-      if (OB_FAIL(add_sstable_item_(tablet_id))) {
-        LOG_WARN("failed to add sstable item", K(ret), K(tablet_id));
-      } else {
-        total_count += 1;
-      }
+    if (FAILEDx(add_tablet_item_(tablet_id))) {
+      LOG_WARN("failed to add tablet item if need", K(ret), K(tablet_id));
     }
     if (OB_SUCC(ret)) {
       if (OB_FAIL(ls_backup_ctx_->tablet_stat_.prepare_tablet_sstables(
-          tenant_id, backup_data_type, tablet_id, tablet_ref->tablet_handle_, sstable_array))) {
+          tenant_id, backup_data_type, tablet_id, tablet_ref->tablet_handle_, sstable_array, cur_tablet_meta_count))) {
         LOG_WARN("failed to prepare tablet sstable", K(ret), K(backup_data_type), K(tablet_id), K(sstable_array));
-      } else if (OB_FAIL(add_tablet_item_(tablet_id))) {
-        LOG_WARN("failed to add tablet item", K(ret), K(tablet_id));
-      } else {
-        total_count += 1;
       }
     }
   }
@@ -1868,7 +1813,7 @@ int ObBackupTabletProvider::check_tx_data_can_explain_user_data_(
   if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is nullptr.", K(ret), K(tablet_handle));
-  } else if (!ls_backup_ctx_->backup_data_type_.is_minor_backup()) {
+  } else if (!ls_backup_ctx_->backup_data_type_.is_user_backup()) {
   } else if (OB_FAIL(tablet->fetch_table_store(table_store_wrapper))) {
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (table_store_wrapper.get_member()->get_minor_sstables().empty()) {
@@ -1903,6 +1848,10 @@ int ObBackupTabletProvider::check_tx_data_can_explain_user_data_(
                  K(OB_REPLICA_CANNOT_BACKUP), K(can_explain),
                  K(tablet_id), K(min_filled_tx_scn),
                  "backup_tx_table_filled_tx_scn", ls_backup_ctx_->backup_tx_table_filled_tx_scn_);
+      } else {
+        if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+          LOG_INFO("tx data can explain user data", K(ret), K(tablet_handle));
+        }
       }
     }
   }
@@ -2037,36 +1986,27 @@ int ObBackupTabletProvider::inner_get_tablet_handle_without_memtables_(const uin
 }
 
 int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id, ObBackupSkippedType &skipped_type)
+    const common::ObTabletID &tablet_id, ObBackupSkippedType &skipped_type, share::ObLSID &split_ls_id)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   int64_t tablet_count = 0;
   int64_t tmp_ls_id = 0;
-  HEAP_VAR(ObMySQLProxy::ReadResult, res)
-  {
-    common::sqlclient::ObMySQLResult *result = NULL;
-    if (OB_FAIL(sql.assign_fmt(
-            "select count(*) as count, ls_id from %s where tablet_id = %ld",
-            OB_ALL_TABLET_TO_LS_TNAME, tablet_id.id()))) {
-      LOG_WARN("failed to assign sql", K(ret), K(tablet_id));
-    } else if (OB_ISNULL(sql_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sql proxy should not be null", K(ret));
-    } else if (OB_FAIL(sql_proxy_->read(res, tenant_id, sql.ptr()))) {
-      LOG_WARN("failed to execute sql", KR(ret), K(sql));
-    } else if (OB_ISNULL(result = res.get_result())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("result is NULL", KR(ret), K(sql));
-    } else if (OB_FAIL(result->next())) {
-      LOG_WARN("failed to get next result", KR(ret), K(sql));
-    } else {
-      EXTRACT_INT_FIELD_MYSQL(*result, "count", tablet_count, int64_t);
-      EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "ls_id", tmp_ls_id, int64_t);
-    }
+  bool tablet_reorganized = false;
+  if (OB_FAIL(share::ObBackupTabletReorganizeHelper::check_tablet_has_reorganized(
+      *sql_proxy_, tenant_id, tablet_id, split_ls_id, tablet_reorganized))) {
+    LOG_WARN("failed to check tablet has reorganized", K(ret), K(tenant_id), K(tablet_id));
+  } else if (tablet_reorganized) {
+    // do nothing
+  } else if (OB_FAIL(ObLSBackupOperator::get_tablet_to_ls_info(
+      *sql_proxy_, tenant_id, tablet_id, tablet_count, tmp_ls_id))) {
+    LOG_WARN("failed to get tablet to ls info", K(ret), K(tenant_id), K(tablet_id));
   }
+
   if (OB_SUCC(ret)) {
-    if (0 == tablet_count) {
+    if (tablet_reorganized) {
+      skipped_type = ObBackupSkippedType(ObBackupSkippedType::REORGANIZED);
+    } else if (0 == tablet_count) {
       skipped_type = ObBackupSkippedType(ObBackupSkippedType::DELETED);
     } else if (1 == tablet_count) {
       if (tmp_ls_id == ls_id.id()) {
@@ -2098,6 +2038,41 @@ int ObBackupTabletProvider::get_tablet_skipped_type_(const uint64_t tenant_id, c
       LOG_WARN("tablet count should not greater than 1", K(ret), K(tablet_count));
     }
   }
+  return ret;
+}
+
+int ObBackupTabletProvider::check_need_report_tablet_skipped_(const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id, const share::ObBackupSkippedType &skipped_type, bool &need_report_skip)
+{
+  int ret = OB_SUCCESS;
+  need_report_skip = ObBackupSkippedType::DELETED == skipped_type.get_type()
+                  || ObBackupSkippedType::TRANSFER == skipped_type.get_type();
+  // TODO(yanfeng): need auto_split branch merge
+  // if (ObBackupSkippedType::REORGANIZED != skipped_type.get_type()) {
+  //   need_report_skip = false;
+  // } else {
+  //   ObArray<ReorganizeTabletPair> tablet_pairs;
+  //   if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_src(
+  //       *sql_proxy_, param_.tenant_id_, ls_id, tablet_id, tablet_pairs))) {
+  //     LOG_WARN("failed to get split tablet pairs", K(ret));
+  //   } else {
+  //     ObArray<ObTabletID> *tablet_id_ptr = &ls_backup_ctx_->data_tablet_id_list_;
+  //     ARRAY_FOREACH_X(tablet_pairs, i, cnt, OB_SUCC(ret)) {
+  //       const ReorganizeTabletPair &pair = tablet_pairs.at(i);
+  //       bool exist = false;
+  //       ARRAY_FOREACH_X(*tablet_id_ptr, j, cnt, OB_SUCC(ret)) {
+  //         if (tablet_id_ptr->at(j) == pair.dest_tablet_id_) {
+  //           exist = true;
+  //           break;
+  //         }
+  //       }
+  //       if (!exist) {
+  //         need_report_skip = true;
+  //         break;
+  //       }
+  //     }
+  //   }
+  // }
   return ret;
 }
 
@@ -2158,6 +2133,47 @@ int ObBackupTabletProvider::fetch_tablet_sstable_array_(const common::ObTabletID
     LOG_WARN("failed to get sstables by data type", K(ret), K(tablet_handle), K(backup_data_type), K(table_store));
   } else {
     LOG_INFO("fetch tablet sstable array", K(ret), K(tablet_id), K(backup_data_type), K(sstable_array));
+  }
+  return ret;
+}
+
+int ObBackupTabletProvider::prepare_tablet_sstable_index_builders_(const common::ObTabletID &tablet_id,
+    common::ObIArray<storage::ObSSTableWrapper> &sstable_array)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_builder_mgr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index builder mgr should not be null", K(ret));
+  } else {
+    ObArray<storage::ObITable::TableKey> table_key_array;
+    ARRAY_FOREACH_X(sstable_array, idx, cnt, OB_SUCC(ret)) {
+      storage::ObSSTableWrapper &sstable_wrapper = sstable_array.at(idx);
+      ObSSTable *sstable_ptr = NULL;
+      if (OB_ISNULL(sstable_ptr = sstable_wrapper.get_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table should not be null", K(ret));
+      } else if (OB_FAIL(table_key_array.push_back(sstable_ptr->get_key()))) {
+        LOG_WARN("failed to push back", K(ret), KPC(sstable_ptr));
+      }
+    }
+    if (FAILEDx(index_builder_mgr_->prepare_sstable_index_builders(tablet_id, table_key_array))) {
+      LOG_WARN("failed to open sstable index builder", K(ret), K(tablet_id), K(table_key_array));
+    }
+  }
+  return ret;
+}
+
+int ObBackupTabletProvider::open_tablet_sstable_index_builder_(
+    const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle,
+    const storage::ObITable::TableKey &table_key, blocksstable::ObSSTable *sstable, const bool is_empty_sstable)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_builder_mgr_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("index builder mgr should not be null", K(ret));
+  } else if (OB_FAIL(index_builder_mgr_->open_sstable_index_builder(
+      tablet_id, tablet_handle, table_key, sstable, is_empty_sstable))) {
+    LOG_WARN("failed to open sstable index builder", K(ret), K(tablet_id), K(tablet_handle), K(table_key), KPC(sstable));
   }
   return ret;
 }
@@ -2240,17 +2256,16 @@ int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTablet
     const ObBackupMacroBlockId &macro_id = list.at(i);
     ObBackupProviderItem item;
     bool need_skip = false;
-    if (OB_FAIL(check_macro_block_need_skip_(macro_id.logic_id_, need_skip))) {
-      LOG_WARN("failed to check macro block need skip", K(ret), K(macro_id));
-    } else if (need_skip) {
-      // do nothing
-    } else if (OB_FAIL(item.set(PROVIDER_ITEM_MACRO_ID, macro_id, table_key, tablet_id))) {
+    share::ObBackupDataType backup_data_type;
+    if (OB_FAIL(get_backup_data_type_(table_key, backup_data_type))) {
+      LOG_WARN("failed to get backup data type", K(ret), K(table_key));
+    } else if (OB_FAIL(item.set(PROVIDER_ITEM_MACRO_ID, backup_data_type, macro_id, table_key, tablet_id))) {
       LOG_WARN("failed to set item", K(ret), K(macro_id), K(table_key), K(tablet_id));
     } else if (!item.is_valid()) {
       ret = OB_INVALID_DATA;
       LOG_WARN("backup item is not valid", K(ret), K(item));
-    } else if (OB_FAIL(external_sort_.add_item(item))) {
-      LOG_WARN("failed to add item", KR(ret), K(item));
+    } else if (OB_FAIL(push_item_to_queue_(item))) {
+      LOG_WARN("failed to push item to queue", K(ret), K(item));
     } else {
       added_count += 1;
       LOG_INFO("add macro block id", K(tablet_id), K(table_key), K(macro_id));
@@ -2259,55 +2274,52 @@ int ObBackupTabletProvider::add_macro_block_id_item_list_(const common::ObTablet
   return ret;
 }
 
-int ObBackupTabletProvider::add_check_tablet_item_(const common::ObTabletID &tablet_id)
+int ObBackupTabletProvider::get_backup_data_type_(
+    const storage::ObITable::TableKey &table_key, share::ObBackupDataType &backup_data_type)
 {
   int ret = OB_SUCCESS;
-  ObBackupProviderItem item;
-  if (!backup_data_type_.is_major_backup()) {
-    // do nothing
-  } else if (OB_FAIL(item.set_with_fake(PROVIDER_ITEM_CHECK, tablet_id))) {
-    LOG_WARN("failed to set item", K(ret), K(tablet_id));
-  } else if (!item.is_valid()) {
-    ret = OB_INVALID_DATA;
-    LOG_WARN("backup item is not valid", K(ret), K(item));
-  } else if (OB_FAIL(external_sort_.add_item(item))) {
-    LOG_WARN("failed to add item", KR(ret), K(item));
+  if (backup_data_type_.is_sys_backup()) {
+    backup_data_type.set_sys_data_backup();
+  } else if (table_key.is_minor_sstable() || table_key.is_ddl_sstable() || table_key.is_mds_sstable()) {
+    backup_data_type.set_minor_data_backup();
+  } else if (table_key.is_major_sstable()) {
+    backup_data_type.set_major_data_backup();
   } else {
-    LOG_INFO("add check tablet item", K(tablet_id));
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table key not expected", K(backup_data_type), K(table_key));
   }
   return ret;
 }
 
-int ObBackupTabletProvider::add_sstable_item_(const common::ObTabletID &tablet_id)
+bool ObBackupTabletProvider::is_same_type_(const storage::ObITable::TableKey &lhs, const storage::ObITable::TableKey &rhs)
 {
-  int ret = OB_SUCCESS;
-  ObBackupProviderItem item;
-  if (OB_FAIL(item.set_with_fake(PROVIDER_ITEM_SSTABLE_META, tablet_id))) {
-    LOG_WARN("failed to set item", K(ret), K(tablet_id));
-  } else if (!item.is_valid()) {
-    ret = OB_INVALID_DATA;
-    LOG_WARN("backup item is not valid", K(ret), K(item));
-  } else if (OB_FAIL(external_sort_.add_item(item))) {
-    LOG_WARN("failed to add item", KR(ret), K(item));
+  bool bret = false;
+  if (lhs.is_major_sstable() && rhs.is_major_sstable()) {
+    bret = true;
+  } else if ((lhs.is_minor_sstable() || lhs.is_ddl_sstable())
+      && (rhs.is_minor_sstable() || rhs.is_ddl_sstable())) {
+    bret = true;
   } else {
-    LOG_INFO("add sstable item", K(tablet_id));
+    bret = false;
   }
-  return ret;
+  return bret;
 }
 
 int ObBackupTabletProvider::add_tablet_item_(const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
   ObBackupProviderItem item;
-  if (OB_FAIL(item.set_with_fake(PROVIDER_ITEM_TABLET_META, tablet_id))) {
-    LOG_WARN("failed to set item", K(ret), K(tablet_id));
+  ObBackupDataType backup_data_type;
+  backup_data_type.set_user_data_backup();
+  if (OB_FAIL(item.set_with_fake(PROVIDER_ITEM_TABLET_AND_SSTABLE_META, tablet_id, backup_data_type))) {
+    LOG_WARN("failed to set item", K(ret), K(tablet_id), K(backup_data_type));
   } else if (!item.is_valid()) {
     ret = OB_INVALID_DATA;
     LOG_WARN("backup item is not valid", K(ret), K(item));
-  } else if (OB_FAIL(external_sort_.add_item(item))) {
-    LOG_WARN("failed to add item", KR(ret), K(item));
+  } else if (OB_FAIL(push_item_to_queue_(item))) {
+    LOG_WARN("failed to push item to queue", K(ret), K(item));
   } else {
-    LOG_INFO("add tablet item", K(tablet_id));
+    LOG_INFO("add tablet item", K(tablet_id), K(backup_data_type));
   }
   return ret;
 }
@@ -2342,45 +2354,6 @@ int ObBackupTabletProvider::remove_duplicates_(common::ObIArray<ObBackupProvider
   return ret;
 }
 
-int ObBackupTabletProvider::check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id, bool &need_skip)
-{
-  int ret = OB_SUCCESS;
-  need_skip = false;
-  if (!logic_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(logic_id));
-  } else if (OB_ISNULL(ls_backup_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls backup ctx should not be null", K(ret));
-  } else if (!ls_backup_ctx_->backup_retry_ctx_.has_need_skip_logic_id_) {
-    need_skip = false;
-  } else {
-    // the reused pair list is sorted by logic_id
-    const ObArray<ObBackupMacroBlockIDPair> &reused_pair_list = ls_backup_ctx_->backup_retry_ctx_.reused_pair_list_;
-    if (OB_FAIL(inner_check_macro_block_need_skip_(logic_id, reused_pair_list, need_skip))) {
-      LOG_WARN("failed to inner check macro block need skip", K(ret), K(logic_id), K(reused_pair_list));
-    }
-  }
-  return ret;
-}
-
-int ObBackupTabletProvider::inner_check_macro_block_need_skip_(const blocksstable::ObLogicMacroBlockId &logic_id,
-    const common::ObArray<ObBackupMacroBlockIDPair> &reused_pair_list, bool &need_skip)
-{
-  int ret = OB_SUCCESS;
-  need_skip = false;
-  ObBackupMacroBlockIDPair search_pair;
-  search_pair.logic_id_ = logic_id;
-  ObArray<ObBackupMacroBlockIDPair>::const_iterator iter = std::lower_bound(reused_pair_list.begin(),
-                                                                            reused_pair_list.end(),
-                                                                            search_pair);
-  if (iter != reused_pair_list.end()) {
-    need_skip = iter->logic_id_ == logic_id;
-    LOG_INFO("logic id need skip", K(need_skip), "iter_logic_id", iter->logic_id_, K(logic_id));
-  }
-  return ret;
-}
-
 int ObBackupTabletProvider::check_tablet_status_(const storage::ObTabletHandle &tablet_handle, bool &is_normal)
 {
   int ret = OB_SUCCESS;
@@ -2396,25 +2369,174 @@ int ObBackupTabletProvider::check_tablet_status_(const storage::ObTabletHandle &
   return ret;
 }
 
-
-
-
-
-int ObBackupTabletProvider::compare_prev_item_(const ObBackupProviderItem &cur_item)
+int ObBackupTabletProvider::check_tablet_split_status_(const uint64_t tenant_id,
+    const common::ObTabletID &tablet_id, bool &need_skip_tablet)
 {
   int ret = OB_SUCCESS;
-  ObBackupProviderItemCompare compare(ret);
-  compare.set_backup_data_type(backup_data_type_);
-  bool bret = compare(&prev_item_, &cur_item); // check if smaller
-  if (!bret) {
-    if (prev_item_ == cur_item && PROVIDER_ITEM_MACRO_ID == cur_item.get_item_type()) {
-      // macro id might be same
+  need_skip_tablet = false;
+  // TODO(yanfeng): wait auto_split branch merge
+  // ReorganizeTabletPair pair;
+  // if (OB_FAIL(ObTabletReorganizeHistoryTableOperator::get_split_tablet_pairs_by_dest(
+  //     *sql_proxy_, tenant_id, tablet_id, pair))) {
+  //   if (OB_ENTRY_NOT_EXIST == ret) {
+  //     ret = OB_SUCCESS;
+  //   } else {
+  //     LOG_WARN("failed to get split tablet pair by dest", K(ret), K(tablet_id));
+  //   }
+  // } else {
+  //   const common::ObTabletID &src_tablet_id = pair.src_tablet_id_;
+  //   bool has_skipped = false;
+  //   if (OB_FAIL(ObLSBackupOperator::check_tablet_skipped_by_reorganize(*sql_proxy_, tenant_id, src_tablet_id, has_skipped))) {
+  //     LOG_WARN("failed to check tablet skipped by reorganize", K(ret), K(src_tablet_id));
+  //   } else if (has_skipped) {
+  //     LOG_INFO("skip check tablet split status", K(ret), K(pair));
+  //   } else {
+  //     ObArray<ObTabletID> *tablet_id_ptr = &ls_backup_ctx_->data_tablet_id_list_;
+  //     bool src_exist = false;
+  //     ARRAY_FOREACH_X(*tablet_id_ptr, i, cnt, OB_SUCC(ret)) {
+  //       if (tablet_id_ptr->at(i) == src_tablet_id) {
+  //         src_exist = true;
+  //         break;
+  //       }
+  //     }
+  //     LOG_INFO("tablet not skipped", K(*tablet_id_ptr), K(src_tablet_id), K(src_exist));
+  //     if (OB_SUCC(ret) && src_exist) {
+  //       ObBackupSkippedType skipped_type(ObBackupSkippedType::REORGANIZED);
+  //       ObBackupDataType backup_data_type;
+  //       backup_data_type.set_major_data_backup();
+  //       if (OB_FAIL(report_tablet_skipped_(tablet_id, skipped_type, backup_data_type))) {
+  //         LOG_WARN("failed to report tablet skipped", K(ret));
+  //       } else {
+  //         need_skip_tablet = true;
+  //         LOG_INFO("report skip tablet", K(tablet_id), K(skipped_type));
+  //       }
+  //     }
+  //   }
+  // }
+  return ret;
+}
+
+int ObBackupTabletProvider::get_tenant_meta_index_turn_id_(int64_t &turn_id)
+{
+  int ret = OB_SUCCESS;
+  ObBackupSetTaskAttr set_task_attr;
+  if (OB_FAIL(share::ObBackupTaskOperator::get_backup_task(*GCTX.sql_proxy_, param_.job_id_, param_.tenant_id_, false, set_task_attr))) {
+    LOG_WARN("failed to get backup task", K(ret));
+  } else {
+    turn_id = set_task_attr.minor_turn_id_;
+  }
+  return ret;
+}
+
+int ObBackupTabletProvider::get_tenant_meta_index_retry_id_(
+    const share::ObBackupDataType &backup_data_type, const int64_t turn_id, int64_t &retry_id)
+{
+  int ret = OB_SUCCESS;
+  const bool is_restore = false;
+  const bool is_macro_index = false;
+  const bool is_sec_meta = false;
+  ObBackupTenantIndexRetryIDGetter retry_id_getter;
+  if (OB_FAIL(retry_id_getter.init(param_.backup_dest_, param_.backup_set_desc_,
+      backup_data_type, turn_id, is_restore, is_macro_index, is_sec_meta))) {
+    LOG_WARN("failed to init retry id getter", K(ret), K(turn_id), K_(param));
+  } else if (OB_FAIL(retry_id_getter.get_max_retry_id(retry_id))) {
+    LOG_WARN("failed to get max retry id", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupTabletProvider::check_tablet_replica_validity_(const uint64_t tenant_id, const share::ObLSID &ls_id,
+    const common::ObTabletID &tablet_id, const share::ObBackupDataType &backup_data_type)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_ts = ObTimeUtility::current_time();
+  if (!backup_data_type.is_user_backup()) {
+    // do nothing
+  } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(ls_backup_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy should not be null", K(ret), KP_(sql_proxy), KP_(ls_backup_ctx));
+  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(tenant_id), K(ls_id), K(tablet_id));
+  } else {
+    const common::ObAddr &src_addr = GCTX.self_addr();
+    if (OB_FAIL(ObStorageHAUtils::check_tablet_replica_validity(tenant_id, ls_id, src_addr, tablet_id, *sql_proxy_))) {
+      LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("comparing item not match", K(ret), K(prev_item_), K(cur_item));
+      ls_backup_ctx_->check_tablet_info_cost_time_ += ObTimeUtility::current_time() - start_ts;
     }
   }
   return ret;
+}
+
+int ObBackupTabletProvider::push_item_to_queue_(const ObBackupProviderItem &item)
+{
+  int ret = OB_SUCCESS;
+  char *buf = NULL;
+  const int64_t size = sizeof(ObBackupProviderItem);
+  ObBackupProviderItem *item_ptr = NULL;
+  if (OB_ISNULL(buf = static_cast<char *>(fifo_allocator_.alloc(size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory", K(ret));
+  } else if (OB_ISNULL(item_ptr = new (buf) ObBackupProviderItem)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to new item", K(ret));
+    fifo_allocator_.free(buf);
+    buf = NULL;
+  } else if (OB_FAIL(item_ptr->deep_copy(item))) {
+    LOG_WARN("failed to deep copy item", K(ret), K(item));
+  } else if (OB_FAIL(lighty_queue_.push(item_ptr))) {
+    LOG_WARN("failed to push back", K(ret));
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(item_ptr)) {
+    item_ptr->~ObBackupProviderItem();
+    fifo_allocator_.free(buf);
+    buf = NULL;
+  }
+  return ret;
+}
+
+int ObBackupTabletProvider::pop_item_from_queue_(ObBackupProviderItem &item)
+{
+  int ret = OB_SUCCESS;
+  void *vp = NULL;
+  ObBackupProviderItem *item_ptr = NULL;
+  if (OB_FAIL(lighty_queue_.pop(vp))) {
+    LOG_WARN("failed to pop from queue", K(ret));
+  } else {
+    item_ptr = static_cast<ObBackupProviderItem *>(vp);
+    item = *item_ptr;
+  }
+  if (OB_NOT_NULL(item_ptr)) {
+    item_ptr->~ObBackupProviderItem();
+    fifo_allocator_.free(item_ptr);
+    item_ptr = NULL;
+  }
+  return ret;
+}
+
+void ObBackupTabletProvider::free_queue_item_()
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret)) {
+    void *vp = NULL;
+    ObBackupProviderItem *item_ptr = NULL;
+    if (OB_FAIL(lighty_queue_.pop(vp))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS; // try best to free
+        break;
+      } else {
+        LOG_ERROR("failed to pop from queue", K(ret));
+      }
+    } else {
+      item_ptr = static_cast<ObBackupProviderItem *>(vp);
+    }
+    if (OB_NOT_NULL(item_ptr)) {
+      item_ptr->~ObBackupProviderItem();
+      fifo_allocator_.free(item_ptr);
+      item_ptr = NULL;
+    }
+  }
 }
 
 /* ObBackupMacroBlockTaskMgr */
@@ -2504,6 +2626,7 @@ int ObBackupMacroBlockTaskMgr::deliver(common::ObIArray<ObBackupProviderItem> &i
   ObThreadCondGuard guard(cond_);
   int64_t begin_ms = ObTimeUtility::fast_current_time();
   while (OB_SUCC(ret) && id_list.empty()) {
+    bool has_enough = false;
     if (OB_ISNULL(ls_backup_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls backup ctx should not be null", K(ret));
@@ -2515,15 +2638,29 @@ int ObBackupMacroBlockTaskMgr::deliver(common::ObIArray<ObBackupProviderItem> &i
       LOG_WARN("failed to get from ready list", K(ret));
     } else if (!id_list.empty()) {
       break;
-    } else if (OB_FAIL(cond_.wait(DEFAULT_WAIT_TIME_MS))) {
-      int64_t duration_ms = ObTimeUtility::fast_current_time() - begin_ms;
-      if (duration_ms >= DEFAULT_WAIT_TIMEOUT_MS) {
-        ret = OB_EAGAIN;
+    } else if (OB_FAIL(try_peeking_enough_non_reused_items_(has_enough))) {
+      LOG_WARN("failed to try peeking enough non reused items", K(ret));
+    } else if (has_enough) {
+      if (OB_FAIL(get_from_ready_list_(id_list))) {
+        LOG_WARN("failed to get from ready list", K(ret));
+      } else {
         break;
       }
-      if (OB_TIMEOUT == ret) {
-        LOG_WARN("waiting for task too slow", K(ret));
-        ret = OB_SUCCESS;
+    } else {
+      if (OB_FAIL(cond_.wait(DEFAULT_WAIT_TIME_MS))) {
+        int64_t duration_ms = ObTimeUtility::fast_current_time() - begin_ms;
+        if (OB_TIMEOUT == ret) {
+          LOG_WARN("waiting for task too slow", K(ret));
+          ret = OB_SUCCESS;
+        }
+        if (duration_ms >= DEFAULT_WAIT_TIMEOUT_MS) {
+          if (OB_FAIL(get_from_ready_list_(id_list))) {
+            LOG_WARN("failed to get from ready list", K(ret));
+          } else if (id_list.empty()) {
+            ret = OB_EAGAIN;
+          }
+          break;
+        }
       }
     }
   }
@@ -2584,6 +2721,18 @@ int ObBackupMacroBlockTaskMgr::wait_task_(const int64_t task_id)
         LOG_WARN("waiting for task too slow", K(ret), K(task_id), K(cur_task_id_));
       }
     }
+  }
+  return ret;
+}
+
+int ObBackupMacroBlockTaskMgr::try_peeking_enough_non_reused_items_(bool &has_enough)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(mutex_);
+  if (!all_item_is_reused(ready_list_)) {
+    has_enough = true;
+  } else {
+    has_enough = false;
   }
   return ret;
 }
@@ -2679,193 +2828,18 @@ int ObBackupMacroBlockTaskMgr::put_to_pending_list_(const common::ObIArray<ObBac
   return ret;
 }
 
-/* ObBackupTabletChecker */
-
-ObBackupTabletChecker::ObBackupTabletChecker()
-  : is_inited_(false),
-    param_(),
-    sql_proxy_(NULL),
-    index_kv_cache_(NULL),
-    meta_index_store_()
-{
-}
-
-ObBackupTabletChecker::~ObBackupTabletChecker()
-{
-}
-
-int ObBackupTabletChecker::init(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
-    common::ObMySQLProxy &sql_proxy, ObBackupIndexKVCache &index_kv_cache)
+bool ObBackupMacroBlockTaskMgr::all_item_is_reused(
+     const common::ObIArray<ObBackupProviderItem> &list) const
 {
   int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("backup tablet checker init twice", K(ret));
-  } else if (!param.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arg", K(ret), K(param));
-  } else if (OB_FAIL(param_.assign(param))) {
-    LOG_WARN("failed to assign param", K(ret), K(param));
-  } else {
-    sql_proxy_ = &sql_proxy;
-    index_kv_cache_ = &index_kv_cache;
-    if (backup_data_type.is_major_backup()) {
-      if (OB_FAIL(build_tenant_minor_meta_index_store_())) {
-        LOG_WARN("failed to init meta index store", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      is_inited_ = true;
+  bool all_no_need_copy = true;
+  ARRAY_FOREACH_N(list, idx, cnt) {
+    if (list.at(idx).get_need_copy()) {
+      all_no_need_copy = false;
+      break;
     }
   }
-  return ret;
-}
-
-int ObBackupTabletChecker::check_tablet_valid(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id, const storage::ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup tablet checker do not init", K(ret));
-  } else if (OB_FAIL(check_tablet_replica_validity_(tenant_id, ls_id, tablet_id))) {
-    LOG_WARN("failed to check tablet replica validity", K(ret));
-  } else if (OB_FAIL(check_tablet_continuity_(ls_id, tablet_id, tablet_handle))) {
-    LOG_WARN("failed to check tablet continuity", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupTabletChecker::check_tablet_replica_validity_(const uint64_t tenant_id, const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("sql proxy should not be null", K(ret), KP_(sql_proxy));
-  } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !tablet_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(tenant_id), K(ls_id), K(tablet_id));
-  } else {
-    const common::ObAddr &src_addr = GCTX.self_addr();
-    if (OB_FAIL(ObStorageHAUtils::check_tablet_replica_validity(tenant_id, ls_id, src_addr, tablet_id, *sql_proxy_))) {
-      LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
-    } else {
-    }
-  }
-  return ret;
-}
-
-int ObBackupTabletChecker::check_tablet_continuity_(const share::ObLSID &ls_id, const common::ObTabletID &tablet_id,
-    const storage::ObTabletHandle &tablet_handle)
-{
-  int ret = OB_SUCCESS;
-  const ObBackupMetaType meta_type = BACKUP_TABLET_META;
-  ObBackupDataType backup_data_type;
-  backup_data_type.set_minor_data_backup();
-  ObBackupMetaIndex tablet_meta_index;
-  ObBackupTabletMeta prev_backup_tablet_meta;
-  share::ObBackupPath backup_path;
-  if (OB_FAIL(meta_index_store_.get_backup_meta_index(tablet_id, meta_type, tablet_meta_index))) {
-    LOG_WARN("failed to get backup meta index", K(ret), K(tablet_id));
-  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(param_.backup_dest_,
-      param_.backup_set_desc_, tablet_meta_index.ls_id_, backup_data_type, tablet_meta_index.turn_id_,
-      tablet_meta_index.retry_id_, tablet_meta_index.file_id_, backup_path))) {
-    LOG_WARN("failed to get macro block backup path", K(ret), K_(param), K(backup_data_type), K(tablet_meta_index));
-  } else if (OB_FAIL(ObLSBackupRestoreUtil::read_tablet_meta(backup_path.get_obstr(),
-      param_.backup_dest_.get_storage_info(), backup_data_type, tablet_meta_index, prev_backup_tablet_meta))) {
-    LOG_WARN("failed to read tablet meta", K(ret), K(backup_path), K_(param));
-  } else {
-    const ObTabletMeta &cur_tablet_meta = tablet_handle.get_obj()->get_tablet_meta();
-    const int64_t cur_snapshot_version = cur_tablet_meta.report_status_.merge_snapshot_version_;
-    const int64_t prev_backup_snapshot_version = prev_backup_tablet_meta.tablet_meta_.report_status_.merge_snapshot_version_;
-    if ((prev_backup_snapshot_version <= 0 && prev_backup_tablet_meta.tablet_meta_.table_store_flag_.with_major_sstable())
-        || (cur_snapshot_version <= 0 && cur_tablet_meta.table_store_flag_.with_major_sstable())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("prev or current snapshot version should not be invalid", K(ret), K(cur_tablet_meta), K(prev_backup_tablet_meta));
-    } else if (cur_snapshot_version < prev_backup_snapshot_version) {
-      ret = OB_BACKUP_MAJOR_NOT_COVER_MINOR;
-      LOG_WARN("tablet is not valid", K(ret), K(cur_tablet_meta), K(prev_backup_tablet_meta));
-    } else {
-      LOG_DEBUG("tablet is valid", K(cur_tablet_meta), K(prev_backup_tablet_meta));
-    }
-  }
-#ifdef ERRSIM
-  if (OB_SUCC(ret)) {
-    const int64_t errsim_tablet_id = GCONF.errsim_backup_tablet_id;
-    if (errsim_tablet_id == tablet_id.id() && 0 == param_.retry_id_) {
-      ret = OB_E(EventTable::EN_BACKUP_CHECK_TABLET_CONTINUITY_FAILED) OB_SUCCESS;
-      FLOG_WARN("errsim backup check tablet continuity", K(ret), K(ls_id), K(tablet_id));
-      SERVER_EVENT_SYNC_ADD("backup_errsim", "check_tablet_continuity",
-                            "ls_id", ls_id.id(), "tablet_id", tablet_id.id());
-    }
-  }
-#endif
-  return ret;
-}
-
-int ObBackupTabletChecker::build_tenant_minor_meta_index_store_()
-{
-  int ret = OB_SUCCESS;
-  ObBackupDataType backup_data_type;
-  backup_data_type.set_minor_data_backup();
-  ObBackupRestoreMode mode = BACKUP_MODE;
-  ObBackupIndexLevel index_level = BACKUP_INDEX_LEVEL_TENANT;
-  ObBackupIndexStoreParam index_store_param;
-  index_store_param.index_level_ = index_level;
-  index_store_param.tenant_id_ = param_.tenant_id_;
-  index_store_param.backup_set_id_ = param_.backup_set_desc_.backup_set_id_;
-  index_store_param.ls_id_ = param_.ls_id_;
-  index_store_param.is_tenant_level_ = true;
-  index_store_param.backup_data_type_ = backup_data_type;
-  int64_t retry_id = 0;
-  if (meta_index_store_.is_inited()) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("meta index store init twice", K(ret));
-  } else if (OB_FAIL(get_tenant_meta_index_turn_id_(index_store_param.turn_id_))) {
-    LOG_WARN("failed to find meta index turn id", K(ret), K(backup_data_type));
-  } else if (OB_FAIL(get_tenant_meta_index_retry_id_(backup_data_type, index_store_param.turn_id_, retry_id))) {
-    LOG_WARN("failed to find meta index retry id", K(ret), K(backup_data_type));
-  } else if (FALSE_IT(index_store_param.retry_id_ = retry_id)) {
-    // assign
-  } else if (OB_FAIL(meta_index_store_.init(mode,
-                                            index_store_param,
-                                            param_.backup_dest_,
-                                            param_.backup_set_desc_,
-                                            false/*is_sec_meta*/,
-                                            *index_kv_cache_))) {
-    LOG_WARN("failed to init macro index store", K(ret), K_(param));
-  }
-  return ret;
-}
-
-int ObBackupTabletChecker::get_tenant_meta_index_turn_id_(int64_t &turn_id)
-{
-  int ret = OB_SUCCESS;
-  ObBackupSetTaskAttr set_task_attr;
-  if (OB_FAIL(share::ObBackupTaskOperator::get_backup_task(*sql_proxy_, param_.job_id_, param_.tenant_id_, false, set_task_attr))) {
-    LOG_WARN("failed to get backup task", K(ret));
-  } else {
-    turn_id = set_task_attr.minor_turn_id_;
-  }
-  return ret;
-}
-
-int ObBackupTabletChecker::get_tenant_meta_index_retry_id_(
-    const share::ObBackupDataType &backup_data_type, const int64_t turn_id, int64_t &retry_id)
-{
-  int ret = OB_SUCCESS;
-  const bool is_restore = false;
-  const bool is_macro_index = false;
-  const bool is_sec_meta = false;
-  ObBackupTenantIndexRetryIDGetter retry_id_getter;
-  if (OB_FAIL(retry_id_getter.init(param_.backup_dest_, param_.backup_set_desc_,
-      backup_data_type, turn_id, is_restore, is_macro_index, is_sec_meta))) {
-    LOG_WARN("failed to init retry id getter", K(ret), K(turn_id), K_(param));
-  } else if (OB_FAIL(retry_id_getter.get_max_retry_id(retry_id))) {
-    LOG_WARN("failed to get max retry id", K(ret));
-  }
-  return ret;
+  return all_no_need_copy;
 }
 
 }  // namespace backup

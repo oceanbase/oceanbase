@@ -138,6 +138,7 @@ public:
   int backup_ls_data(const obrpc::ObBackupDataArg &arg);
   int backup_completing_log(const obrpc::ObBackupComplLogArg &arg);
   int backup_build_index(const obrpc::ObBackupBuildIdxArg &arg);
+  int backup_fuse_tablet_meta(const obrpc::ObBackupFuseTabletMetaArg &arg);
   int check_backup_dest_connectivity(const obrpc::ObCheckBackupConnectivityArg &arg);
   int backup_meta(const obrpc::ObBackupMetaArg &arg);
   int check_backup_task_exist(const obrpc::ObBackupCheckTaskArg &arg, bool &res);

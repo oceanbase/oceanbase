@@ -696,10 +696,8 @@ int ObService::backup_ls_data(const obrpc::ObBackupDataArg &arg)
     const char *backup_event_str = NULL;
     if (backup_data_type.is_sys_backup()) {
       backup_event_str = "schedule_backup_ls_sys_data";
-    } else if (backup_data_type.is_minor_backup()) {
-      backup_event_str = "schedule_backup_ls_minor_data";
-    } else if (backup_data_type.is_major_backup()) {
-      backup_event_str = "schedule_backup_ls_major_data";
+    } else if (backup_data_type.is_user_backup()) {
+      backup_event_str = "schedule_backup_ls_user_data";
     } else {
       backup_event_str = "unknown";
     }
@@ -827,6 +825,47 @@ int ObService::backup_meta(const obrpc::ObBackupMetaArg &arg)
       "retry_id", arg.retry_id_,
       "trace_id", arg.trace_id_);
     LOG_INFO("success recevied backup ls meta rpc", K(arg));
+  }
+  return ret;
+}
+
+int ObService::backup_fuse_tablet_meta(const obrpc::ObBackupFuseTabletMetaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("[BACKUP] receive backup fuse tablet meta rpc", K(arg));
+  ObBackupJobDesc job_desc;
+  job_desc.job_id_ = arg.job_id_;
+  job_desc.task_id_ = arg.task_id_;
+  job_desc.trace_id_ = arg.trace_id_;
+  share::ObBackupDest backup_dest;
+  uint64_t tenant_id = arg.tenant_id_;
+  ObBackupSetDesc backup_set_desc;
+  backup_set_desc.backup_set_id_ = arg.backup_set_id_;
+  backup_set_desc.backup_type_.type_ = arg.backup_type_;
+  const ObLSID &ls_id = arg.ls_id_;
+  const int64_t turn_id = arg.turn_id_;
+  const int64_t retry_id = arg.retry_id_;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", KR(ret), K(arg));
+  } else if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy should not be null", K(ret), KP(sql_proxy));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, arg.backup_path_, backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), K(arg));
+  } else if (OB_FAIL(ObBackupHandler::schedule_backup_fuse_tablet_meta_dag(
+      job_desc, backup_dest, tenant_id, backup_set_desc, ls_id, turn_id, retry_id))) {
+    LOG_WARN("failed to schedule backup data dag", KR(ret), K(arg));
+  } else {
+    SERVER_EVENT_ADD("backup_data", "schedule_backup_fuse_tablet_meta",
+      "tenant_id", arg.tenant_id_,
+      "backup_set_id", arg.backup_set_id_,
+      "ls_id", arg.ls_id_.id(),
+      "turn_id", arg.turn_id_,
+      "retry_id", arg.retry_id_,
+      "trace_id", arg.trace_id_);
+    LOG_INFO("success received backup merge tablet meta rpc", K(arg));
   }
   return ret;
 }

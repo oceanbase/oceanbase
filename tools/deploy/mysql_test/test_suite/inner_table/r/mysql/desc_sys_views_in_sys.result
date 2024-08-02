@@ -1811,6 +1811,12 @@ STATUS	longtext	NO
 START_TIMESTAMP	timestamp(6)	NO			
 BACKUP_SET_LIST	longtext	NO			
 BACKUP_PIECE_LIST	longtext	NO			
+RECOVER_SCN	bigint(20) unsigned	NO			
+RECOVER_SCN_DISPLAY	datetime(6)	NO			
+RECOVER_PROGRESS	decimal(6,2)	NO			
+TABLET_COUNT	bigint(20)	NO			
+FINISH_TABLET_COUNT	bigint(20)	NO			
+RESTORE_PROGRESS	decimal(6,2)	NO			
 TOTAL_BYTES	bigint(20)	NO			
 TOTAL_BYTES_DISPLAY	varchar(27)	NO			
 FINISH_BYTES	bigint(20)	NO			
@@ -5300,6 +5306,12 @@ STATUS	longtext	NO
 START_TIMESTAMP	timestamp(6)	NO			
 BACKUP_SET_LIST	longtext	NO			
 BACKUP_PIECE_LIST	longtext	NO			
+RECOVER_SCN	bigint(20) unsigned	NO			
+RECOVER_SCN_DISPLAY	datetime(6)	NO			
+RECOVER_PROGRESS	decimal(6,2)	NO			
+TABLET_COUNT	bigint(20)	NO			
+FINISH_TABLET_COUNT	bigint(20)	NO			
+RESTORE_PROGRESS	decimal(6,2)	NO			
 TOTAL_BYTES	bigint(20)	NO			
 TOTAL_BYTES_DISPLAY	varchar(27)	NO			
 FINISH_BYTES	bigint(20)	NO			

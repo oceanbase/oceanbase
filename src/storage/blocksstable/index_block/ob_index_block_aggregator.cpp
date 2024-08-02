@@ -841,19 +841,21 @@ int ObSkipIndexAggregator::init_col_aggregator(
   return ret;
 }
 
-
-/* ------------------------------------ObIndexBlockAggregator-------------------------------------*/
-
-ObIndexBlockAggregator::ObIndexBlockAggregator()
-  : skip_index_aggregator_(), aggregated_row_(), row_count_(0), row_count_delta_(0),
-    max_merged_trans_version_(0), macro_block_count_(0), micro_block_count_(0),
-    can_mark_deletion_(true), contain_uncommitted_row_(false), has_string_out_row_(false),
-    has_lob_out_row_(false), is_last_row_last_flag_(false), is_inited_(false) {}
-
-void ObIndexBlockAggregator::reset()
+/* ------------------------------------ObAggregateInfo-------------------------------------*/
+ObAggregateInfo::ObAggregateInfo()
+  : row_count_(0), row_count_delta_(0), max_merged_trans_version_(0), macro_block_count_(0),
+    micro_block_count_(0), can_mark_deletion_(true), contain_uncommitted_row_(false),
+    has_string_out_row_(false), has_lob_out_row_(false), is_last_row_last_flag_(false)
 {
-  skip_index_aggregator_.reset();
-  aggregated_row_.reset();
+}
+
+ObAggregateInfo::~ObAggregateInfo()
+{
+  reset();
+}
+
+void ObAggregateInfo::reset()
+{
   row_count_ = 0;
   row_count_delta_ = 0;
   max_merged_trans_version_ = 0;
@@ -864,22 +866,76 @@ void ObIndexBlockAggregator::reset()
   has_string_out_row_ = false;
   has_lob_out_row_ = false;
   is_last_row_last_flag_ = false;
+}
+
+void ObAggregateInfo::eval(const ObIndexBlockRowDesc &row_desc)
+{
+  row_count_ += row_desc.row_count_;
+  row_count_delta_ += row_desc.row_count_delta_;
+  can_mark_deletion_ = can_mark_deletion_ && row_desc.is_deleted_;
+  max_merged_trans_version_ =
+      max_merged_trans_version_ > row_desc.max_merged_trans_version_
+      ? max_merged_trans_version_ : row_desc.max_merged_trans_version_;
+  macro_block_count_ += row_desc.macro_block_count_;
+  micro_block_count_ += row_desc.micro_block_count_;
+  contain_uncommitted_row_ =
+      contain_uncommitted_row_ || row_desc.contain_uncommitted_row_;
+  has_string_out_row_ =
+      has_string_out_row_ || row_desc.has_string_out_row_;
+  has_lob_out_row_ = has_lob_out_row_ || row_desc.has_lob_out_row_;
+  is_last_row_last_flag_ = row_desc.is_last_row_last_flag_;
+}
+
+void ObAggregateInfo::get_agg_result(ObIndexBlockRowDesc &row_desc) const
+{
+  row_desc.row_count_ = row_count_;
+  row_desc.row_count_delta_ = row_count_delta_;
+  row_desc.is_deleted_ = can_mark_deletion_;
+  row_desc.max_merged_trans_version_ = max_merged_trans_version_;
+  row_desc.macro_block_count_ = macro_block_count_;
+  row_desc.micro_block_count_ = micro_block_count_;
+  row_desc.contain_uncommitted_row_ = contain_uncommitted_row_;
+  row_desc.has_string_out_row_ = has_string_out_row_;
+  row_desc.has_lob_out_row_ = has_lob_out_row_;
+  row_desc.is_last_row_last_flag_ = is_last_row_last_flag_;
+}
+
+/* ------------------------------------ObAggregateInfo-------------------------------------*/
+
+ObIndexRowAggInfo::ObIndexRowAggInfo()
+  : aggregated_row_(), aggregate_info_(), need_data_aggregate_(false) {}
+
+ObIndexRowAggInfo::~ObIndexRowAggInfo()
+{
+  reset();
+}
+
+void ObIndexRowAggInfo::reset()
+{
+  aggregated_row_.reset();
+  aggregate_info_.reset();
+  need_data_aggregate_ = false;
+}
+
+
+/* ------------------------------------ObIndexBlockAggregator-------------------------------------*/
+
+ObIndexBlockAggregator::ObIndexBlockAggregator()
+  : skip_index_aggregator_(), aggregated_row_(), aggregate_info_(), need_data_aggregate_(false), is_inited_(false) {}
+
+void ObIndexBlockAggregator::reset()
+{
+  skip_index_aggregator_.reset();
+  aggregated_row_.reset();
+  aggregate_info_.reset();
+  need_data_aggregate_ = false;
   is_inited_ = false;
 }
 
 void ObIndexBlockAggregator::reuse()
 {
   skip_index_aggregator_.reuse();
-  row_count_ = 0;
-  row_count_delta_ = 0;
-  max_merged_trans_version_ = 0;
-  macro_block_count_ = 0;
-  micro_block_count_ = 0;
-  can_mark_deletion_ = true;
-  contain_uncommitted_row_ = false;
-  has_string_out_row_ = false;
-  has_lob_out_row_ = false;
-  is_last_row_last_flag_ = false;
+  aggregate_info_.reset();
 }
 
 int ObIndexBlockAggregator::init(const ObDataStoreDesc &store_desc, ObIAllocator &allocator)
@@ -889,7 +945,8 @@ int ObIndexBlockAggregator::init(const ObDataStoreDesc &store_desc, ObIAllocator
     ret = OB_INIT_TWICE;
     LOG_WARN("Already inited", K(ret));
   } else {
-    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0 && store_desc.is_major_or_meta_merge_type();
+    need_data_aggregate_ = store_desc.get_agg_meta_array().count() != 0
+                                           && store_desc.is_major_or_meta_merge_type();
     if (!need_data_aggregate_) {
     } else if (OB_FAIL(aggregated_row_.init(allocator, store_desc.get_agg_meta_array().count()))) {
       LOG_WARN("Fail to init aggregated row", K(ret));
@@ -937,19 +994,7 @@ int ObIndexBlockAggregator::eval(const ObIndexBlockRowDesc &row_desc)
   }
 
   if (OB_SUCC(ret)) {
-    row_count_ += row_desc.row_count_;
-    row_count_delta_ += row_desc.row_count_delta_;
-    can_mark_deletion_ = can_mark_deletion_ && row_desc.is_deleted_;
-    max_merged_trans_version_ = max_merged_trans_version_ > row_desc.max_merged_trans_version_
-                              ? max_merged_trans_version_
-                              : row_desc.max_merged_trans_version_;
-    contain_uncommitted_row_ = contain_uncommitted_row_
-                            || row_desc.contain_uncommitted_row_;
-    has_string_out_row_ = has_string_out_row_ || row_desc.has_string_out_row_;
-    has_lob_out_row_ = has_lob_out_row_ || row_desc.has_lob_out_row_;
-    is_last_row_last_flag_ = row_desc.is_last_row_last_flag_;
-    micro_block_count_ += row_desc.micro_block_count_;
-    macro_block_count_ += row_desc.macro_block_count_;
+    aggregate_info_.eval(row_desc);
   }
   return ret;
 }
@@ -964,16 +1009,32 @@ int ObIndexBlockAggregator::get_index_agg_result(ObIndexBlockRowDesc &row_desc)
       && OB_FAIL(skip_index_aggregator_.get_aggregated_row(row_desc.aggregated_row_))) {
     LOG_WARN("Fail to get aggregated row", K(ret));
   } else {
-    row_desc.row_count_ = row_count_;
-    row_desc.row_count_delta_ = row_count_delta_;
-    row_desc.is_deleted_ = can_mark_deletion_;
-    row_desc.max_merged_trans_version_ = max_merged_trans_version_;
-    row_desc.contain_uncommitted_row_ = contain_uncommitted_row_;
-    row_desc.has_string_out_row_ = has_string_out_row_;
-    row_desc.has_lob_out_row_ = has_lob_out_row_;
-    row_desc.is_last_row_last_flag_ = is_last_row_last_flag_;
-    row_desc.macro_block_count_ = macro_block_count_;
-    row_desc.micro_block_count_ = micro_block_count_;
+    aggregate_info_.get_agg_result(row_desc);
+  }
+  return ret;
+}
+
+int ObIndexBlockAggregator::get_index_row_agg_info(ObIndexRowAggInfo &index_row_agg_info,
+                                                   ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  const ObDatumRow *agg_row = nullptr;
+  index_row_agg_info.reset();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (need_data_aggregate_) {
+    if (OB_FAIL(skip_index_aggregator_.get_aggregated_row(agg_row))) {
+      LOG_WARN("Fail to get aggregated row", K(ret));
+    } else if (OB_FAIL(index_row_agg_info.aggregated_row_.init(allocator, aggregated_row_.get_column_count()))) {
+      LOG_WARN("Fail to init aggregated row", K(ret), K(aggregated_row_));
+    } else if (OB_FAIL(index_row_agg_info.aggregated_row_.deep_copy(aggregated_row_, allocator))) {
+      STORAGE_LOG(WARN, "Failed to deep copy datum row", K(ret), K(aggregated_row_));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    index_row_agg_info.aggregate_info_ = aggregate_info_;
+    index_row_agg_info.need_data_aggregate_ = need_data_aggregate_;
   }
   return ret;
 }

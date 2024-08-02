@@ -249,15 +249,10 @@ int ObBackupCleanScheduler::build_task_(
 {
   int ret = OB_SUCCESS;
   int64_t task_deep_copy_size = 0;
-  void *raw_ptr = nullptr;
   ObBackupCleanLSTask tmp_task;
   if (OB_FAIL(tmp_task.build(task_attr, ls_task))) {
     LOG_WARN("failed to build task", K(ret), K(task_attr), K(ls_task));
-  } else if (FALSE_IT(task_deep_copy_size = tmp_task.get_deep_copy_size())) {
-  } else if (nullptr == (raw_ptr = allocator.alloc(task_deep_copy_size))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate task", K(ret));
-  } else if (OB_FAIL(tmp_task.clone(raw_ptr, task))) {
+  } else if (OB_FAIL(tmp_task.clone(allocator, task))) {
     LOG_WARN("fail to clone input task", K(ret));
   } else if (nullptr == task) {
     ret = OB_ERR_UNEXPECTED;

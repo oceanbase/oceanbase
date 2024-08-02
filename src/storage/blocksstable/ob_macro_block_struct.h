@@ -32,6 +32,7 @@ public:
   int deep_copy(ObMacroBlocksWriteCtx *&dst, ObIAllocator &allocator);
   int get_macro_id_array(common::ObIArray<blocksstable::MacroBlockId> &block_ids);
   int add_macro_block_id(const blocksstable::MacroBlockId &macro_block_id);
+  int pop_macro_block_id(blocksstable::MacroBlockId &macro_block_id);
   OB_INLINE void increment_old_block_count() { ++use_old_macro_block_count_; }
   OB_INLINE int64_t get_macro_block_count() const { return macro_block_list_.count(); }
   OB_INLINE bool is_empty() const { return macro_block_list_.empty(); }

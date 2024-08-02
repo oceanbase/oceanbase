@@ -1038,10 +1038,7 @@ int ObStorageOssMultiPartWriter::complete()
 
     //complete multipart upload
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(total_parts == 0)) {
-      // If 'complete' without uploading any data, OSS will create an object with a size of 0
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(total_parts), K(upload_id_.data));
+    //  If 'complete' without uploading any data (total_parts == 0), OSS will create an object with a size of 0
     } else {
       if (OB_ISNULL(aos_ret = oss_complete_multipart_upload(oss_option_, &bucket, &object, &upload_id_,
           &complete_part_list, complete_headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {

@@ -79,7 +79,7 @@ int ObObjectDevice::start(const ObIODOpts &opts)
   common::ObSpinLockGuard guard(lock_);
   if (is_started_) {
     //has inited, no need init again, do nothing
-  } else if (1 != opts.opt_cnt_ || NULL == opts.opts_) {
+  } else if ((1 != opts.opt_cnt_ && 5 != opts.opt_cnt_ && 6 != opts.opt_cnt_) || NULL == opts.opts_) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fail to start device, args cnt is wrong!", K(opts.opt_cnt_), K(ret));
   } else if (0 != STRCMP(opts.opts_[0].key_, "storage_info")) {
@@ -360,8 +360,8 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
   //validate fd
   if (fd_mng_.validate_fd(fd, false)) {
     ret = OB_INIT_TWICE;
-    OB_LOG(WARN, "fd should not be a valid one!", K(fd.first_id_), K(fd.second_id_), K(ret));
-  }  else if (OB_ISNULL(pathname)) {
+    OB_LOG(WARN, "fd should not be a valid one!", K(fd), K(ret));
+  } else if (OB_ISNULL(pathname)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "pathname is null!", K(ret));
   }
@@ -401,6 +401,15 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
     }
   }
 
+  if (OB_SUCC(ret) && OB_NOT_NULL(ctx)) {
+    ObStorageAccesser *storage_accesser = static_cast<ObStorageAccesser *>(ctx);
+    if (OB_FAIL(storage_accesser->init(fd, this))) {
+      OB_LOG(WARN, "fail to set fd", K(ret), K(fd));
+    } else {
+      storage_accesser->inc_ref();
+    }
+  }
+
   //handle resource free when exception happen
   if (OB_FAIL(ret) && !OB_ISNULL(ctx)) {
     int tmp_ret = OB_SUCCESS;
@@ -409,6 +418,7 @@ int ObObjectDevice::open(const char *pathname, const int flags, const mode_t mod
       OB_LOG(WARN, "fail to release the resource!", K(tmp_ret));
     }
   } else {
+    fd.device_handle_ = static_cast<ObIODevice *>(this);
     OB_LOG(DEBUG, "success to open file !", KCSTRING(pathname), K(access_type));
   }
 
@@ -472,18 +482,41 @@ int ObObjectDevice::abort(const ObIOFd &fd)
 int ObObjectDevice::close(const ObIOFd &fd)
 {
   int ret = OB_SUCCESS;
+  void *ctx = nullptr;
+  ObStorageAccesser *storage_accesser = nullptr;
+  if (!fd_mng_.validate_fd(fd, true)) {
+    ret = OB_NOT_INIT;
+    OB_LOG(WARN, "fail to close fd. since fd is invalid!", K(ret), K(fd.first_id_), K(fd.second_id_));
+  } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
+    OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret), K(fd));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "ctx is null", K(ret));
+  } else {
+    storage_accesser = static_cast<ObStorageAccesser *>(ctx);
+    storage_accesser->dec_ref();
+  }
+  return ret;
+}
+
+int ObObjectDevice::release_fd(const ObIOFd &fd)
+{
+  int ret = OB_SUCCESS;
+  // make sure device's lifecycle is longger than fd and ctx.
+  inc_ref();
   int flag = -1;
   void *ctx = NULL;
 
   fd_mng_.get_fd_flag(fd, flag);
   if (!fd_mng_.validate_fd(fd, true)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "fail to close fd. since fd is invalid!", K(ret) ,K(fd.first_id_), K(fd.second_id_));
+    OB_LOG(WARN, "fail to close fd. since fd is invalid!", K(ret) ,K(fd));
   } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
     OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret), K(fd));
   } else if (OB_FAIL(release_res(ctx, fd, (ObStorageAccessType)flag))) {
     OB_LOG(WARN, "fail to release the resource!", K(ret), K(flag));
   }
+  dec_ref();
   return ret;
 }
 
@@ -652,7 +685,7 @@ int ObObjectDevice::pread(const ObIOFd &fd, const int64_t offset, const int64_t 
   fd_mng_.get_fd_flag(fd, flag);
   if (!fd_mng_.validate_fd(fd, true)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "fd is not init!", K(fd.first_id_), K(fd.second_id_));
+    OB_LOG(WARN, "fd is not init!", K(fd));
   } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
     OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
   } else if (OB_ISNULL(ctx)) {
@@ -687,7 +720,7 @@ int ObObjectDevice::write(const ObIOFd &fd, const void *buf, const int64_t size,
   fd_mng_.get_fd_flag(fd, flag);
   if (!fd_mng_.validate_fd(fd, true)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "fd is not init!", K(fd.first_id_), K(fd.second_id_), K(ret));
+    OB_LOG(WARN, "fd is not init!", K(fd), K(ret));
   } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
     OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
   } else if (OB_ISNULL(ctx)) {
@@ -737,9 +770,9 @@ int ObObjectDevice::pwrite(const ObIOFd &fd, const int64_t offset, const int64_t
   fd_mng_.get_fd_flag(fd, flag);
   if (!fd_mng_.validate_fd(fd, true)) {
     ret = OB_NOT_INIT;
-    OB_LOG(WARN, "fd is not init!", K(fd.first_id_), K(fd.second_id_));
+    OB_LOG(WARN, "fd is not init!", K(fd));
   } else if (OB_FAIL(fd_mng_.fd_to_ctx(fd, ctx))) {
-    OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret));
+    OB_LOG(WARN, "fail to get ctx accroding fd!", K(ret), K(fd));
   } else if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "fd ctx is null!", K(flag), K(ret));

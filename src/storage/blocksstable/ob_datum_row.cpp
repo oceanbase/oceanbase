@@ -470,10 +470,14 @@ OB_DEF_DESERIALIZE(ObDatumRow)
               snapshot_version_);
   OB_UNIS_DECODE(count_);
   if (OB_FAIL(ret)) {
-  } else if (get_capacity() < count_) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ObDatumRow has not keep enough datums for deserialize", K(ret), K_(datum_buffer), K_(count));
-  } else {
+  } else if (OB_NOT_NULL(storage_datums_) && get_capacity() < count_) {
+    if (OB_FAIL(datum_buffer_.reserve(count_))) {
+      LOG_WARN("fail to reserve memory for datum buffer", K(ret), K_(count));
+    }
+  } else if (OB_ISNULL(storage_datums_) && OB_FAIL(init(count_))) {
+    LOG_WARN("fail to init datum row", K(ret), K_(count));
+  }
+  if (OB_SUCC(ret)) {
     OB_UNIS_DECODE_ARRAY(storage_datums_, count_);
     fast_filter_skipped_ = false;
     have_uncommited_row_ = false;

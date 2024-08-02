@@ -94,6 +94,7 @@ ObCopyMacroBlockReaderInitParam::ObCopyMacroBlockReaderInitParam()
     copy_macro_range_info_(),
     src_info_(),
     is_leader_restore_(false),
+    restore_action_(ObTabletRestoreAction::RESTORE_NONE),
     bandwidth_throttle_(nullptr),
     svr_rpc_proxy_(nullptr),
     restore_base_info_(nullptr),
@@ -121,10 +122,12 @@ bool ObCopyMacroBlockReaderInitParam::is_valid() const
           && backfill_tx_scn_.is_valid();
     } else if (OB_ISNULL(restore_base_info_)
         || OB_ISNULL(meta_index_store_)
-        || OB_ISNULL(second_meta_index_store_)
-        || OB_ISNULL(restore_macro_block_id_mgr_)) {
+        || OB_ISNULL(second_meta_index_store_)) {
       bool_ret = false;
-    }
+    } else if (!ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_) && OB_ISNULL(restore_macro_block_id_mgr_)) {
+      bool_ret = false;
+      LOG_WARN_RET(OB_INVALID_ARGUMENT, "restore_macro_block_id_mgr_ is null", K_(restore_action), KP_(restore_macro_block_id_mgr));
+     }
   }
   return bool_ret;
 }
@@ -137,6 +140,7 @@ void ObCopyMacroBlockReaderInitParam::reset()
   copy_macro_range_info_ = nullptr;
   src_info_.reset();
   is_leader_restore_ = false;
+  restore_action_ = ObTabletRestoreAction::RESTORE_NONE;
   bandwidth_throttle_ = nullptr;
   svr_rpc_proxy_ = nullptr;
   restore_base_info_ = nullptr;
@@ -160,6 +164,7 @@ int ObCopyMacroBlockReaderInitParam::assign(const ObCopyMacroBlockReaderInitPara
     table_key_ = param.table_key_;
     src_info_ = param.src_info_;
     is_leader_restore_ = param.is_leader_restore_;
+    restore_action_ = param.restore_action_;
     bandwidth_throttle_ = param.bandwidth_throttle_;
     svr_rpc_proxy_ = param.svr_rpc_proxy_;
     restore_base_info_ = param.restore_base_info_;
@@ -476,7 +481,6 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
     ret = OB_ITER_END;
   } else {
     ObLogicMacroBlockId logic_block_id;
-    backup::ObBackupPhysicalID physic_block_id;
     share::ObBackupDataType data_type;
     share::ObBackupPath backup_path;
     const int64_t align_size = DIO_READ_ALIGN_SIZE;
@@ -486,22 +490,19 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
     share::ObBackupDest backup_set_dest;
     data_buffer_.set_pos(0);
     read_buffer_.set_pos(0);
-    if (OB_FAIL(restore_macro_block_id_mgr_->get_macro_block_id(macro_block_index_, logic_block_id, physic_block_id))) {
-      LOG_WARN("failed to get macro block id", K(ret), K(macro_block_index_), K(table_key_), KPC(restore_base_info_));
-    } else if (OB_FAIL(physic_block_id.get_backup_macro_block_index(logic_block_id, macro_index))) {
-      LOG_WARN("failed to get backup macro block index", K(ret), K(logic_block_id), K(physic_block_id));
-    } else if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key_, data_type))) {
+    if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key_, data_type))) {
       LOG_WARN("fail to get backup data type", K(ret), K(table_key_));
+    } else if (OB_FAIL(fetch_macro_block_index_(macro_block_index_, data_type, logic_block_id, macro_index))) {
+      LOG_WARN("failed to fetch macro block index", K(ret), K_(macro_block_index), K(data_type));
     } else if (OB_FAIL(restore_base_info_->get_restore_backup_set_dest(macro_index.backup_set_id_, backup_set_brief_info))) {
       LOG_WARN("fail to get backup set dest", K(ret), K(macro_index));
     } else if (OB_FAIL(backup_set_dest.set(backup_set_brief_info.backup_set_path_))) {
       LOG_WARN("fail to set backup set dest", K(ret));
-    } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest, macro_index.ls_id_,
-        data_type, macro_index.turn_id_, macro_index.retry_id_, macro_index.file_id_, backup_path))) {
+    } else if (OB_FAIL(get_macro_block_backup_path_(backup_set_dest, macro_index, data_type, backup_path))) {
       LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(macro_index), KPC(restore_base_info_));
     } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_data(backup_path.get_obstr(),
         restore_base_info_->backup_dest_.get_storage_info(), macro_index, align_size, read_buffer_, data_buffer_))) {
-      LOG_WARN("failed to read macro block data", K(ret), K(table_key_), K(macro_index), K(physic_block_id), KPC(restore_base_info_));
+      LOG_WARN("failed to read macro block data", K(ret), K(table_key_), K(macro_index), KPC(restore_base_info_));
     } else {
       data_size_ += data_buffer_.length();
       data.assign(data_buffer_.data(), data_buffer_.length(), data_buffer_.length());
@@ -515,9 +516,62 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get macro block end macro block id is not equal to macro block range",
               K(ret), K_(macro_block_count), K_(macro_block_index), K(logic_block_id),
-              "end_macro_block_id", copy_macro_range_info_->end_macro_block_id_, K(physic_block_id), K(table_key_));
+              "end_macro_block_id", copy_macro_range_info_->end_macro_block_id_, K(table_key_));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObCopyMacroBlockRestoreReader::get_macro_block_backup_path_(
+    const share::ObBackupDest &backup_set_dest,
+    const backup::ObBackupMacroBlockIndex &macro_index,
+    const share::ObBackupDataType data_type,
+    ObBackupPath &backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(restore_base_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("restore base info should not be null", K(ret));
+  } else {
+    const share::ObBackupSetFileDesc::Compatible &compatible = restore_base_info_->backup_compatible_;
+    if (share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(compatible)) {
+      if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_set_dest, macro_index.ls_id_,
+          data_type, macro_index.turn_id_, macro_index.retry_id_, macro_index.file_id_, backup_path))) {
+        LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(macro_index), KPC(restore_base_info_));
+      }
+    } else {
+      if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_set_dest, macro_index.ls_id_,
+          data_type, macro_index.turn_id_, macro_index.retry_id_, macro_index.file_id_, backup_path))) {
+        LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(macro_index), KPC(restore_base_info_));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCopyMacroBlockRestoreReader::fetch_macro_block_index_(
+    const int64_t block_id_idx,
+    const share::ObBackupDataType &backup_data_type,
+    blocksstable::ObLogicMacroBlockId &logic_block_id,
+    backup::ObBackupMacroBlockIndex &macro_index)
+{
+  int ret = OB_SUCCESS;
+  const share::ObBackupSetFileDesc::Compatible &compatible = restore_base_info_->backup_compatible_;
+  if (share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(compatible)) {
+    backup::ObBackupDeviceMacroBlockId macro_id;
+    if (OB_FAIL(restore_macro_block_id_mgr_->get_macro_block_id(block_id_idx, logic_block_id, macro_id))) {
+      LOG_WARN("failed to get macro block id", K(ret), K(block_id_idx));
+    } else if (OB_FAIL(macro_id.get_backup_macro_block_index(backup_data_type, logic_block_id, macro_index))) {
+      LOG_WARN("failed to get backup macro block index", K(ret));
+    }
+  } else {
+    backup::ObBackupPhysicalID physic_block_id;
+    if (OB_FAIL(restore_macro_block_id_mgr_->get_macro_block_id(block_id_idx, logic_block_id, physic_block_id))) {
+      LOG_WARN("failed to get macro block id", K(ret), K(block_id_idx), K(table_key_), KPC(restore_base_info_));
+    } else if (OB_FAIL(physic_block_id.get_backup_macro_block_index(logic_block_id, macro_index))) {
+      LOG_WARN("failed to get backup macro block index", K(ret));
     }
   }
   return ret;
@@ -527,7 +581,9 @@ int ObCopyMacroBlockRestoreReader::get_next_macro_block(
 ObCopyMacroBlockHandle::ObCopyMacroBlockHandle()
   : is_reuse_macro_block_(false),
     end_key_buf_("CMacBlockHandle"),
-    read_handle_()
+    read_handle_(),
+    allocator_("CMacBlockHandle"),
+    macro_meta_(nullptr)
 {
 }
 
@@ -536,11 +592,15 @@ void ObCopyMacroBlockHandle::reset()
   is_reuse_macro_block_ = false;
   end_key_buf_.reuse();
   read_handle_.reset();
+  macro_meta_ = nullptr;
+  allocator_.reset();
 }
 
 bool ObCopyMacroBlockHandle::is_valid() const
 {
-  return is_reuse_macro_block_ ? end_key_buf_.is_valid() : read_handle_.is_valid();
+  return (is_reuse_macro_block_ ? end_key_buf_.is_valid() : read_handle_.is_valid())
+       && OB_NOT_NULL(macro_meta_)
+       && macro_meta_->is_valid();
 }
 
 int ObCopyMacroBlockHandle::set_end_key(
@@ -552,6 +612,20 @@ int ObCopyMacroBlockHandle::set_end_key(
     LOG_WARN("set end key get invalid argument", K(ret), K(end_key));
   } else if (OB_FAIL(end_key_buf_.write_serialize(end_key))) {
     LOG_WARN("failed to write seralize end key", K(ret), K(end_key));
+  }
+
+  return ret;
+}
+
+int ObCopyMacroBlockHandle::set_macro_meta(
+    const blocksstable::ObDataMacroBlockMeta &macro_meta)
+{
+  int ret = OB_SUCCESS;
+  if (!macro_meta.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("set macro meta get invalid argument", K(ret), K(macro_meta));
+  } else if (OB_FAIL(macro_meta.deep_copy(macro_meta_, allocator_))) {
+    LOG_WARN("failed to deep copy macro meta", K(ret), K(macro_meta));
   }
 
   return ret;
@@ -688,8 +762,8 @@ int ObCopyMacroBlockObProducer::get_next_macro_block(
     ObCopyMacroBlockHeader &copy_macro_block_header)
 {
   int ret = OB_SUCCESS;
-  copy_macro_block_header.reset();
   int64_t occupy_size = 0;
+  copy_macro_block_header.reset();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -708,10 +782,17 @@ int ObCopyMacroBlockObProducer::get_next_macro_block(
     LOG_WARN("failed to wait read handle", K(ret));
   } else {
     if (copy_macro_block_handle_[handle_idx_].is_reuse_macro_block_) {
-      occupy_size = copy_macro_block_handle_[handle_idx_].end_key_buf_.pos();
-      data.assign(copy_macro_block_handle_[handle_idx_].end_key_buf_.data(), occupy_size);
-      copy_macro_block_header.is_reuse_macro_block_ = true;
-      copy_macro_block_header.occupy_size_ = occupy_size;
+      if (OB_ISNULL(copy_macro_block_handle_[handle_idx_].macro_meta_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("macro meta is null", K(ret), K(handle_idx_));
+      } else if (OB_FAIL(copy_macro_block_header.set_macro_meta(*copy_macro_block_handle_[handle_idx_].macro_meta_))) {
+        LOG_WARN("failed to set macro meta", K(ret));
+      } else {
+        occupy_size = copy_macro_block_handle_[handle_idx_].end_key_buf_.pos();
+        data.assign(copy_macro_block_handle_[handle_idx_].end_key_buf_.data(), occupy_size);
+        copy_macro_block_header.is_reuse_macro_block_ = true;
+        copy_macro_block_header.occupy_size_ = occupy_size;
+      }
     } else {
       blocksstable::ObMacroBlockCommonHeader common_header;
       int64_t pos = 0;
@@ -762,7 +843,10 @@ int ObCopyMacroBlockObProducer::prefetch_()
   } else {
     if (OB_FAIL(second_meta_iterator_.get_next(macro_meta))) {
       LOG_WARN("failed to get next macro meta", K(ret), K(macro_idx_), K(copy_macro_range_info_));
-    } else if (macro_meta.get_logic_id().logic_version_ <= data_version_) {
+    } else if (OB_FAIL(copy_macro_block_handle_[handle_idx_].set_macro_meta(macro_meta))) {
+      LOG_WARN("failed to set macro meta", K(ret), K(macro_meta));
+    } else if (macro_meta.get_logic_id().logic_version_ <= data_version_
+               || !macro_meta.get_macro_id().is_local_id()) {
       copy_macro_block_handle_[handle_idx_].is_reuse_macro_block_ = true;
       if (OB_FAIL(copy_macro_block_handle_[handle_idx_].set_end_key(macro_meta.end_key_))) {
         LOG_WARN("failed to set end key", K(ret), K(macro_meta), K(macro_idx_), K(copy_macro_range_info_));
@@ -932,12 +1016,10 @@ int ObCopyTabletInfoRestoreReader::fetch_tablet_info(obrpc::ObCopyTabletInfo &ta
       ret = OB_SUCCESS;
       tablet_info.status_ = ObCopyTabletStatus::TABLET_NOT_EXIST;
       LOG_INFO("tablet not exist", K(tablet_id));
-    } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(restore_base_info_->backup_dest_,
-        tablet_meta_index.ls_id_, data_type, tablet_meta_index.turn_id_, tablet_meta_index.retry_id_,
-        tablet_meta_index.file_id_, tablet_meta_backup_path))) {
+    } else if (OB_FAIL(get_macro_block_backup_path_(tablet_meta_index, data_type, tablet_meta_backup_path))) {
       LOG_WARN("failed to get macro block backup path", K(ret), KPC(restore_base_info_));
     } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_tablet_meta(tablet_meta_backup_path.get_obstr(),
-        restore_base_info_->backup_dest_.get_storage_info(), data_type, tablet_meta_index, backup_tablet_meta))) {
+        restore_base_info_->backup_dest_.get_storage_info(), tablet_meta_index, backup_tablet_meta))) {
       LOG_WARN("failed to read tablet meta", K(ret), K(data_type), KPC(restore_base_info_));
     } else if (!backup_tablet_meta.is_valid()
         || !backup_tablet_meta.tablet_meta_.ha_status_.is_none()) {
@@ -964,6 +1046,33 @@ int ObCopyTabletInfoRestoreReader::fetch_tablet_info(obrpc::ObCopyTabletInfo &ta
   return ret;
 }
 
+int ObCopyTabletInfoRestoreReader::get_macro_block_backup_path_(
+    const backup::ObBackupMetaIndex &tablet_meta_index,
+    const share::ObBackupDataType data_type,
+    ObBackupPath &tablet_meta_backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(restore_base_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("restore base info should not be null", K(ret));
+  } else {
+    const share::ObBackupSetFileDesc::Compatible &compatible = restore_base_info_->backup_compatible_;
+    if (share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(compatible)) {
+      if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(restore_base_info_->backup_dest_,
+          tablet_meta_index.ls_id_, data_type, tablet_meta_index.turn_id_, tablet_meta_index.retry_id_,
+          tablet_meta_index.file_id_, tablet_meta_backup_path))) {
+        LOG_WARN("failed to get macro block backup path", K(ret), KPC(restore_base_info_));
+      }
+    } else {
+      if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(restore_base_info_->backup_dest_,
+          tablet_meta_index.ls_id_, data_type, tablet_meta_index.turn_id_, tablet_meta_index.retry_id_,
+          tablet_meta_index.file_id_, tablet_meta_backup_path))) {
+        LOG_WARN("failed to get macro block backup path", K(ret), KPC(restore_base_info_));
+      }
+    }
+  }
+  return ret;
+}
 
 ObCopyTabletInfoObProducer::ObCopyTabletInfoObProducer()
   : is_inited_(false),
@@ -1177,10 +1286,14 @@ ObCopySSTableInfoRestoreReader::ObCopySSTableInfoRestoreReader()
     tablet_id_array_(),
     meta_index_store_(nullptr),
     tablet_index_(0),
+    sstable_count_(0),
     sstable_index_(0),
     is_sstable_iter_end_(true),
     backup_sstable_meta_array_(),
-    allocator_("CSSTREReader")
+    allocator_("CSSTREReader"),
+    ls_id_(),
+    ls_handle_(),
+    remote_sstable_producer_()
 {
 }
 
@@ -1215,10 +1328,11 @@ int ObCopySSTableInfoRestoreReader::init(
     restore_action_ = restore_action;
     meta_index_store_ = &meta_index_store;
     tablet_index_ = 0;
+    sstable_count_ = 0;
     sstable_index_ = 0;
     is_sstable_iter_end_ = true;
     is_inited_ = true;
-    LOG_INFO("succeed to init copy tablet sstable info restore reader", K(restore_base_info), K(tablet_id_array));
+    LOG_INFO("succeed to init copy tablet sstable info restore reader", K(restore_base_info), K(tablet_id_array), K(restore_action));
   }
   return ret;
 }
@@ -1258,23 +1372,98 @@ int ObCopySSTableInfoRestoreReader::get_next_sstable_info(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("copy sstable info restore reader do not init", K(ret));
-  } else if (sstable_index_ >= backup_sstable_meta_array_.count()) {
+  } else if (sstable_index_ >= sstable_count_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable index is unexpected", K(ret), K(sstable_index_), K(backup_sstable_meta_array_));
-  } else {
-    const backup::ObBackupSSTableMeta &backup_sstable_meta = backup_sstable_meta_array_.at(sstable_index_);
-    if (OB_FAIL(fetch_sstable_meta_(backup_sstable_meta, sstable_info))) {
-      LOG_WARN("failed to fetch sstable meta", K(ret), K(backup_sstable_meta));
-    } else {
-      sstable_index_++;
-      LOG_INFO("succeed get sstable info", K(sstable_info));
-      if (sstable_index_ == backup_sstable_meta_array_.count()) {
-        is_sstable_iter_end_ = true;
-      }
+  } else if (ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_)) {
+    if (OB_FAIL(get_next_sstable_info_from_local_(sstable_info))) {
+      LOG_WARN("failed to get next sstable from local", K(ret));
     }
-    LOG_INFO("dump fetch sstable info", "backup_sstable_meta_array_count", backup_sstable_meta_array_.count(),
-        K(sstable_index_), "tablet_id_array_count", tablet_id_array_.count(), K(tablet_index_), K(is_sstable_iter_end_));
+  } else if (OB_FAIL(get_next_sstable_info_from_backup_(sstable_info))) {
+    LOG_WARN("failed to get next sstable from backup", K(ret));
   }
+  return ret;
+}
+
+int ObCopySSTableInfoRestoreReader::get_tablet_sstable_header_from_backup_(
+    const common::ObTabletID &tablet_id,
+    obrpc::ObCopyTabletSSTableHeader &copy_header)
+{
+  int ret = OB_SUCCESS;
+  copy_header.tablet_id_ = tablet_id;
+  if (OB_FAIL(get_backup_tablet_meta_(tablet_id, copy_header))) {
+    LOG_WARN("failed to get tablet meta", K(ret), K(tablet_id));
+  } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == copy_header.status_) {
+    sstable_count_ = 0;
+    sstable_index_ = 0;
+    is_sstable_iter_end_ = true;
+    copy_header.sstable_count_ = 0;
+    copy_header.version_ = restore_base_info_->backup_cluster_version_;
+    tablet_index_++;
+  } else if (OB_FAIL(get_backup_sstable_metas_(tablet_id))) {
+    LOG_WARN("failed to get backup sstable metas", K(ret), K(tablet_id), KPC(restore_base_info_));
+  } else {
+    sstable_count_ = backup_sstable_meta_array_.count();
+    sstable_index_ = 0;
+    is_sstable_iter_end_ = sstable_count_ > 0 ? false : true;
+    copy_header.sstable_count_ = sstable_count_;
+    copy_header.version_ = restore_base_info_->backup_cluster_version_;
+    tablet_index_++;
+  }
+
+  return ret;
+}
+
+int ObCopySSTableInfoRestoreReader::get_tablet_sstable_header_from_local_(
+    const common::ObTabletID &tablet_id,
+    obrpc::ObCopyTabletSSTableHeader &copy_header)
+{
+  int ret = OB_SUCCESS;
+  remote_sstable_producer_.reset();
+  copy_header.tablet_id_ = tablet_id;
+  if (OB_FAIL(remote_sstable_producer_.init(tablet_id, ls_handle_.get_ls()))) {
+    LOG_WARN("failed to init producer", K(ret), K(tablet_id));
+  } else if (OB_FAIL(remote_sstable_producer_.get_copy_tablet_sstable_header(copy_header))) {
+    LOG_WARN("failed to get copy tablet sstable header", K(ret), K(tablet_id));
+  } else {
+    is_sstable_iter_end_ = (0 == copy_header.sstable_count_);
+    sstable_index_ = 0;
+    sstable_count_ = copy_header.sstable_count_;
+    tablet_index_++;
+  }
+  return ret;
+}
+
+int ObCopySSTableInfoRestoreReader::get_next_sstable_info_from_backup_(
+    obrpc::ObCopyTabletSSTableInfo &sstable_info)
+{
+  int ret = OB_SUCCESS;
+  const backup::ObBackupSSTableMeta &backup_sstable_meta = backup_sstable_meta_array_.at(sstable_index_);
+  if (OB_FAIL(fetch_sstable_meta_(backup_sstable_meta, sstable_info))) {
+    LOG_WARN("failed to fetch sstable meta", K(ret), K(backup_sstable_meta));
+  } else {
+    sstable_index_++;
+    is_sstable_iter_end_ = (sstable_index_ == sstable_count_);
+    LOG_INFO("succeed get sstable info", K(sstable_info));
+  }
+  LOG_INFO("dump fetch sstable info", K(sstable_count_), K(sstable_index_),
+      "tablet_id_array_count", tablet_id_array_.count(), K(tablet_index_), K(is_sstable_iter_end_));
+  return ret;
+}
+
+int ObCopySSTableInfoRestoreReader::get_next_sstable_info_from_local_(
+    obrpc::ObCopyTabletSSTableInfo &sstable_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(remote_sstable_producer_.get_next_sstable_info(sstable_info))) {
+    LOG_WARN("failed to get next sstable meta", K(ret), K(sstable_index_), K(sstable_count_));
+  } else {
+    sstable_index_++;
+    is_sstable_iter_end_ = (sstable_index_ == sstable_count_);
+    LOG_INFO("succeed get sstable info", K(sstable_info));
+  }
+  LOG_INFO("dump fetch sstable info", K(sstable_count_), K(sstable_index_),
+      "tablet_id_array_count", tablet_id_array_.count(), K(tablet_index_), K(is_sstable_iter_end_));
   return ret;
 }
 
@@ -1343,13 +1532,13 @@ int ObCopySSTableInfoRestoreReader::inner_get_backup_sstable_metas_(
       if (OB_ENTRY_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       }
-  } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(restore_base_info_->backup_dest_,
-      sstable_meta_index.ls_id_, data_type, sstable_meta_index.turn_id_, sstable_meta_index.retry_id_,
-      sstable_meta_index.file_id_, sstable_meta_backup_path))) {
+  } else if (OB_FAIL(get_macro_block_backup_path_(sstable_meta_index, data_type, sstable_meta_backup_path))) {
     LOG_WARN("failed to get macro block backup path", K(ret), KPC(restore_base_info_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(sstable_meta_backup_path.get_obstr(),
       restore_base_info_->backup_dest_.get_storage_info(), sstable_meta_index, backup_sstable_meta_array))) {
     LOG_WARN("failed to read sstable meta", K(ret), KPC(restore_base_info_));
+  } else if (OB_FAIL(filter_backup_sstable_meta_on_data_type_(data_type, backup_sstable_meta_array))) {
+    LOG_WARN("failed to filter backup sstable meta on data type", K(ret), K(data_type));
   } else if (data_type.is_major_backup() && backup_sstable_meta_array.count() > 1) {
     bool check_valid = true;
     for (int64_t i = 0; check_valid && i < backup_sstable_meta_array.count(); ++i) {
@@ -1361,6 +1550,60 @@ int ObCopySSTableInfoRestoreReader::inner_get_backup_sstable_metas_(
     if (!check_valid) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("major tablet should only has one sstable", K(ret), K(tablet_id), K(sstable_meta_index), K(backup_sstable_meta_array));
+    }
+  }
+  return ret;
+}
+
+// after 4.3.2 minor and major sstable is stored together
+int ObCopySSTableInfoRestoreReader::filter_backup_sstable_meta_on_data_type_(
+    const share::ObBackupDataType data_type,
+    common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array)
+{
+  int ret = OB_SUCCESS;
+  if (data_type.is_sys_backup()) {
+    // do nothing
+  } else {
+    ObArray<backup::ObBackupSSTableMeta> tmp_array;
+    ARRAY_FOREACH_X(backup_sstable_meta_array, idx, cnt, OB_SUCC(ret)) {
+      const backup::ObBackupSSTableMeta &meta = backup_sstable_meta_array.at(idx);
+      if ((data_type.is_minor_backup() && !meta.sstable_meta_.table_key_.is_major_sstable())
+          || (data_type.is_major_backup() && meta.sstable_meta_.table_key_.is_major_sstable())) {
+        if (OB_FAIL(tmp_array.push_back(meta))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
+      }
+    }
+    if (FAILEDx(backup_sstable_meta_array.assign(tmp_array))) {
+      LOG_WARN("failed to assign tmp array", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObCopySSTableInfoRestoreReader::get_macro_block_backup_path_(
+    const backup::ObBackupMetaIndex &sstable_meta_index,
+    const share::ObBackupDataType data_type,
+    ObBackupPath &sstable_meta_backup_path)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(restore_base_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("restore base info should not be null", K(ret));
+  } else {
+    const share::ObBackupSetFileDesc::Compatible &compatible = restore_base_info_->backup_compatible_;
+    if (share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(compatible)) {
+      if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(restore_base_info_->backup_dest_,
+          sstable_meta_index.ls_id_, data_type, sstable_meta_index.turn_id_, sstable_meta_index.retry_id_,
+          sstable_meta_index.file_id_, sstable_meta_backup_path))) {
+        LOG_WARN("failed to get macro block backup path", K(ret), KPC(restore_base_info_));
+      }
+    } else {
+      if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(restore_base_info_->backup_dest_,
+          sstable_meta_index.ls_id_, data_type, sstable_meta_index.turn_id_, sstable_meta_index.retry_id_,
+          sstable_meta_index.file_id_, sstable_meta_backup_path))) {
+        LOG_WARN("failed to get macro block backup path", K(ret), KPC(restore_base_info_));
+      }
     }
   }
   return ret;
@@ -1399,24 +1642,14 @@ int ObCopySSTableInfoRestoreReader::get_next_tablet_sstable_header(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable iter do not reach end, unexpected", K(ret), K(tablet_index_));
   } else if (FALSE_IT(tablet_id = tablet_id_array_.at(tablet_index_))) {
-  } else if (FALSE_IT(copy_header.tablet_id_ = tablet_id)) {
-  } else if (OB_FAIL(get_backup_tablet_meta_(tablet_id, copy_header))) {
-    LOG_WARN("failed to get tablet meta", K(ret), K(tablet_id));
-  } else if (ObCopyTabletStatus::TABLET_NOT_EXIST == copy_header.status_) {
-    sstable_index_ = 0;
-    is_sstable_iter_end_ = true;
-    copy_header.sstable_count_ = 0;
-    copy_header.version_ = restore_base_info_->backup_cluster_version_;
-    tablet_index_++;
-  } else if (OB_FAIL(get_backup_sstable_metas_(tablet_id))) {
-    LOG_WARN("failed to get backup sstable metas", K(ret), K(tablet_id), KPC(restore_base_info_));
-  } else {
-    sstable_index_ = 0;
-    is_sstable_iter_end_ = backup_sstable_meta_array_.count() > 0 ? false : true;
-    copy_header.sstable_count_ = backup_sstable_meta_array_.count();
-    copy_header.version_ = restore_base_info_->backup_cluster_version_;
-    tablet_index_++;
+  } else if (ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_)) {
+    if (OB_FAIL(get_tablet_sstable_header_from_local_(tablet_id, copy_header))) {
+      LOG_WARN("failed to get tablet sstable header from local", K(ret), K(tablet_id));
+    }
+  } else if (OB_FAIL(get_tablet_sstable_header_from_backup_(tablet_id, copy_header))) {
+    LOG_WARN("failed to get tablet sstable header from backup", K(ret), K(tablet_id));
   }
+
   return ret;
 }
 
@@ -1527,13 +1760,23 @@ int ObCopySSTableInfoRestoreReader::get_backup_tablet_meta_backup_path_(
   if (!backup_dest.is_valid() || !meta_index.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(meta_index), K(backup_dest));
-  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(backup_dest,
-      meta_index.ls_id_, backup_data_type, meta_index.turn_id_,
-      meta_index.retry_id_, meta_index.file_id_, backup_path))) {
-    LOG_WARN("failed to get macro block backup path", K(ret), K(backup_data_type), K(meta_index));
   } else {
-    LOG_INFO("get macro block backup path", K(backup_data_type), K(backup_path), K(meta_index));
+    const share::ObBackupSetFileDesc::Compatible &compatible = restore_base_info_->backup_compatible_;
+    if (share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(compatible)) {
+      if (OB_FAIL(ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_dest,
+          meta_index.ls_id_, backup_data_type, meta_index.turn_id_,
+          meta_index.retry_id_, meta_index.file_id_, backup_path))) {
+        LOG_WARN("failed to get macro block backup path", K(ret), K(backup_data_type), K(meta_index));
+      }
+    } else {
+      if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(backup_dest,
+          meta_index.ls_id_, backup_data_type, meta_index.turn_id_,
+          meta_index.retry_id_, meta_index.file_id_, backup_path))) {
+        LOG_WARN("failed to get macro block backup path", K(ret), K(backup_data_type), K(meta_index));
+      }
+    }
   }
+  LOG_INFO("get macro block backup path", K(backup_data_type), K(backup_path), K(meta_index));
   return ret;
 }
 
@@ -1546,7 +1789,7 @@ int ObCopySSTableInfoRestoreReader::read_backup_tablet_meta_(
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_tablet_meta(
-      backup_path.get_obstr(), storage_info, backup_data_type, meta_index, tablet_meta))) {
+      backup_path.get_obstr(), storage_info, meta_index, tablet_meta))) {
     LOG_WARN("failed to read tablet meta", K(ret), K(backup_path), K(meta_index), K(backup_data_type));
   }
   return ret;
@@ -2041,14 +2284,16 @@ ObCopySSTableMacroRestoreReader::ObCopySSTableMacroRestoreReader()
     restore_base_info_(nullptr),
     meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
-    macro_block_id_map_(),
-    sstable_index_(0)
+    sstable_index_(0),
+    restore_action_(ObTabletRestoreAction::RESTORE_NONE),
+    sstable_macro_producer_()
 {
 }
 
 int ObCopySSTableMacroRestoreReader::init(
     const obrpc::ObCopySSTableMacroRangeInfoArg &rpc_arg,
     const ObRestoreBaseInfo &restore_base_info,
+    const ObTabletRestoreAction::ACTION &restore_action,
     backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
     backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store)
 {
@@ -2062,10 +2307,19 @@ int ObCopySSTableMacroRestoreReader::init(
     LOG_WARN("init copy sstable macro restore reader get invalid argument", K(ret), K(rpc_arg), K(restore_base_info));
   } else if (OB_FAIL(rpc_arg_.assign(rpc_arg))) {
     LOG_WARN("failed to assign macro range info arg", K(ret), K(rpc_arg));
+  } else if (ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action)
+             && OB_FAIL(sstable_macro_producer_.init(rpc_arg.tenant_id_,
+                                                     rpc_arg.ls_id_,
+                                                     rpc_arg.tablet_id_,
+                                                     rpc_arg.copy_table_key_array_,
+                                                     rpc_arg.macro_range_max_marco_count_))) {
+    LOG_WARN("failed to init sstable macro info producer", K(ret), K(rpc_arg));
   } else {
     restore_base_info_ = &restore_base_info;
     meta_index_store_ = &meta_index_store;
     second_meta_index_store_ = &second_meta_index_store;
+    restore_action_ = restore_action;
+    sstable_index_ = 0;
     is_inited_ = true;
   }
   return ret;
@@ -2082,13 +2336,89 @@ int ObCopySSTableMacroRestoreReader::get_next_sstable_range_info(
     LOG_WARN("copy sstable macro restore reader do not init", K(ret));
   } else if (sstable_index_ == rpc_arg_.copy_table_key_array_.count()) {
     ret = OB_ITER_END;
-  } else {
-    const ObITable::TableKey &table_key = rpc_arg_.copy_table_key_array_.at(sstable_index_);
-    if (OB_FAIL(get_next_sstable_range_info_(table_key, sstable_macro_range_info))) {
-      LOG_WARN("failed to get next sstable range info", K(ret), K(table_key));
-    } else {
-      sstable_index_++;
+  } else if (ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action_)) {
+    if (OB_FAIL(get_next_sstable_range_info_from_local_(sstable_macro_range_info))) {
+      LOG_WARN("failed to get sstable range info from local", K(ret));
     }
+  } else if (OB_FAIL(get_next_sstable_range_info_from_backup_(sstable_macro_range_info))) {
+    LOG_WARN("failed to get sstable range info from backup", K(ret));
+  }
+
+  return ret;
+}
+
+int ObCopySSTableMacroRestoreReader::get_next_sstable_range_info_from_local_(
+    ObCopySSTableMacroRangeInfo &sstable_macro_range_info)
+{
+  int ret = OB_SUCCESS;
+  // If restore action is RESTORE_REPLACE_REMOTE_SSTABLE, macro block list can be obtained by
+  // remote sstable in table store.
+  obrpc::ObCopySSTableMacroRangeInfoHeader header;
+  if (OB_FAIL(sstable_macro_producer_.get_next_sstable_macro_range_info(header))) {
+    if (OB_ITER_END == ret) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get next sstable macro return unexpected end", K(ret));
+    }
+    LOG_WARN("failed to get next sstable macro range info", K(ret));
+  } else if (OB_FAIL(fetch_sstable_macro_range_from_local_(header, sstable_macro_range_info.copy_macro_range_array_))) {
+    LOG_WARN("failed to fetch sstable macro range", K(ret), K(header));
+  } else if (header.macro_range_count_ != sstable_macro_range_info.copy_macro_range_array_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sstable macro range count is not equal to array count", K(ret), K(header), K(sstable_macro_range_info));
+  } else {
+    sstable_macro_range_info.copy_table_key_ = header.copy_table_key_;
+    sstable_index_++;
+  }
+
+  return ret;
+}
+
+int ObCopySSTableMacroRestoreReader::fetch_sstable_macro_range_from_local_(
+    const obrpc::ObCopySSTableMacroRangeInfoHeader &header,
+    common::ObIArray<ObCopyMacroRangeInfo> &macro_range_info_array)
+{
+  int ret = OB_SUCCESS;
+
+  if (!header.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("fetch sstable macro range info get invalid argument", K(ret) ,K(header));
+  } else {
+    SMART_VARS_2((ObCopySSTableMacroRangeObProducer, macro_range_producer), (ObCopyMacroRangeInfo, macro_range_info)) {
+      if (OB_FAIL(macro_range_producer.init(
+                    rpc_arg_.tenant_id_,
+                    rpc_arg_.ls_id_,
+                    rpc_arg_.tablet_id_,
+                    header,
+                    rpc_arg_.macro_range_max_marco_count_))) {
+        LOG_WARN("failed to init macro range producer", K(ret), K(rpc_arg_), K(header));
+      } else {
+        while (OB_SUCC(ret)) {
+          macro_range_info.reuse();
+          if (OB_FAIL(macro_range_producer.get_next_macro_range_info(macro_range_info))) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("failed to get next macro range info", K(ret), K(header), K(rpc_arg_));
+            }
+          } else if (OB_FAIL(macro_range_info_array.push_back(macro_range_info))) {
+            LOG_WARN("failed to push back macro range info", K(ret), K(macro_range_info), K(rpc_arg_));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCopySSTableMacroRestoreReader::get_next_sstable_range_info_from_backup_(ObCopySSTableMacroRangeInfo &sstable_macro_range_info)
+{
+  int ret = OB_SUCCESS;
+  const ObITable::TableKey &table_key = rpc_arg_.copy_table_key_array_.at(sstable_index_);
+  if (OB_FAIL(get_next_sstable_range_info_(table_key, sstable_macro_range_info))) {
+    LOG_WARN("failed to get next sstable range info", K(ret), K(table_key));
+  } else {
+    sstable_index_++;
   }
   return ret;
 }
@@ -2098,7 +2428,12 @@ int ObCopySSTableMacroRestoreReader::get_next_sstable_range_info_(
     ObCopySSTableMacroRangeInfo &sstable_macro_range_info)
 {
   int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObArray<ObRestoreMacroBlockId> block_id_array;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = NULL;
+  ObLS *ls = NULL;
+  ObTabletHandle tablet_handle;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -2106,9 +2441,22 @@ int ObCopySSTableMacroRestoreReader::get_next_sstable_range_info_(
   } else if (!table_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get next sstable range info get invalid argument", K(ret), K(table_key));
-  } else {
+  } else if (OB_FAIL(guard.switch_to(rpc_arg_.tenant_id_))) {
+    LOG_WARN("switch tenant failed", K(ret), K_(rpc_arg));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(rpc_arg_.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("fail to get log stream", KR(ret), K_(rpc_arg));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream should not be NULL", KR(ret), K_(rpc_arg));
+  } else if (OB_FAIL(ls->ha_get_tablet(rpc_arg_.tablet_id_, tablet_handle))) {
+    LOG_WARN("failed to get tablet", K(ret), K_(rpc_arg));
+  }  else {
     SMART_VAR(ObRestoreMacroBlockIdMgr, restore_block_id_mgr) {
-      if (OB_FAIL(restore_block_id_mgr.init(rpc_arg_.tablet_id_, table_key, *restore_base_info_, *meta_index_store_, *second_meta_index_store_))) {
+      if (OB_FAIL(restore_block_id_mgr.init(rpc_arg_.tablet_id_, tablet_handle, table_key,
+          *restore_base_info_, *meta_index_store_, *second_meta_index_store_))) {
         LOG_WARN("failed to init restore block id mgr", K(ret), K(rpc_arg_), K(table_key));
       } else if (OB_FAIL(restore_block_id_mgr.get_restore_macro_block_id_array(block_id_array))) {
         LOG_WARN("failed to get restore macro block id array", K(ret), K(rpc_arg_), K(table_key));
@@ -2571,6 +2919,7 @@ int ObCopyLSViewInfoRestoreReader::init(
     backup::ObBackupMetaIndexStoreWrapper *meta_index_store)
 {
   int ret = OB_SUCCESS;
+  bool is_final_fuse = false;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("can not init twice", K(ret));
@@ -2578,9 +2927,10 @@ int ObCopyLSViewInfoRestoreReader::init(
              || OB_UNLIKELY(!restore_base_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_id), K(restore_base_info));
+  } else if (FALSE_IT(is_final_fuse = share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(restore_base_info.backup_compatible_))) {
   } else if (restore_base_info.backup_data_version_ >= DATA_VERSION_4_2_0_0
-          && OB_FAIL(reader_.init(restore_base_info.backup_dest_, ls_id))) {
-    LOG_WARN("fail to init reader", K(ret), K(restore_base_info), K(ls_id));
+          && OB_FAIL(reader_.init(restore_base_info.backup_dest_, ls_id, is_final_fuse))) {
+    LOG_WARN("fail to init reader", K(ret), K(restore_base_info), K(ls_id), K(is_final_fuse));
   } else if (restore_base_info.backup_data_version_ < DATA_VERSION_4_2_0_0
           && OB_FAIL(init_for_4_1_x_(ls_id, restore_base_info, *meta_index_store))) {
     LOG_WARN("fail to init reader", K(ret), K(restore_base_info), K(ls_id));
@@ -2669,5 +3019,515 @@ int ObCopyLSViewInfoRestoreReader::init_for_4_1_x_(
   }
   return ret;
 }
+
+// ObCopyRemoteSSTableInfoObProducer
+ObCopyRemoteSSTableInfoObProducer::ObCopyRemoteSSTableInfoObProducer()
+  : is_inited_(false),
+    ls_id_(),
+    tablet_id_(),
+    tablet_handle_(),
+    iter_()
+{
+}
+
+int ObCopyRemoteSSTableInfoObProducer::init(
+    const common::ObTabletID tablet_id,
+    ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  bool is_ready_for_read = false;
+
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("copy remote sstable info ob producer init twice", K(ret));
+  } else if (OB_ISNULL(ls)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("copy remote sstable info ob producer init get invalid argument",
+        K(ret), K(tablet_id), KP(ls));
+  } else if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle_))) {
+    LOG_WARN("failed to get tablet handle", K(ret), K(tablet_id), KPC(ls));
+  } else if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), K(tablet_handle_));
+  } else if (OB_FAIL(tablet->get_ha_tables(iter_, is_ready_for_read))) {
+    LOG_WARN("failed to get read tables", K(ret), KPC(tablet));
+  } else {
+    ls_id_ = ls->get_ls_id();
+    tablet_id_ = tablet_id;
+    is_inited_ = true;
+  }
+
+  return ret;
+}
+
+int ObCopyRemoteSSTableInfoObProducer::get_next_sstable_info(
+    obrpc::ObCopyTabletSSTableInfo &sstable_info)
+{
+  int ret = OB_SUCCESS;
+  sstable_info.reset();
+  ObLSTabletService *tablet_svr = nullptr;
+  ObITable *table = nullptr;
+  bool is_ready_for_read = false;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("copy remote sstable info ob producer do not init", K(ret));
+  } else {
+    while (OB_SUCC(ret)) {
+      ObITable *table = nullptr;
+      ObSSTable *sstable = nullptr;
+      bool need_copy_sstable = false;
+
+      if (OB_FAIL(iter_.get_next(table))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next table", K(ret));
+        }
+      } else if (OB_ISNULL(table) || table->is_memtable()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is null or table type is unexpected", K(ret), KPC(table));
+      } else if (FALSE_IT(sstable = static_cast<ObSSTable *> (table))) {
+      } else if (OB_FAIL(check_need_copy_sstable_(sstable, need_copy_sstable))) {
+        LOG_WARN("failed to check need copy sstable", K(ret), KPC(sstable));
+      } else if (!need_copy_sstable) {
+       //do nothing
+        LOG_INFO("no need copy sstable", KPC(sstable));
+      } else if (OB_FAIL(tablet_handle_.get_obj()->build_migration_sstable_param(table->get_key(), sstable_info.param_))) {
+        LOG_WARN("failed to build migration sstable param", K(ret), K(*table));
+      } else {
+        sstable_info.tablet_id_ = tablet_id_;
+        sstable_info.table_key_ = table->get_key();
+        LOG_INFO("succeed get sstable info", K(sstable_info));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
+void ObCopyRemoteSSTableInfoObProducer::reset()
+{
+  is_inited_ = false;
+  ls_id_.reset();
+  tablet_id_.reset();
+  tablet_handle_.reset();
+  iter_.reset();
+}
+
+int ObCopyRemoteSSTableInfoObProducer::check_need_copy_sstable_(
+    blocksstable::ObSSTable *sstable,
+    bool &need_copy_sstable)
+{
+  int ret = OB_SUCCESS;
+  need_copy_sstable = false;
+  ObSSTableMetaHandle sst_meta_hdl;
+  if (OB_ISNULL(sstable) || !sstable->is_sstable()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check need copy sstable get invalid argument", K(ret), KP(sstable));
+  } else if (sstable->is_column_store_sstable()) {
+    // need copy, otherwise co sstable maybe incomplete
+    need_copy_sstable = true;
+  } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
+    LOG_WARN("failed to get sstable meta handle", K(ret), KPC(sstable));
+  } else if (sst_meta_hdl.get_sstable_meta().get_table_flag().has_backup()) {
+    need_copy_sstable = true;
+  }
+
+  return ret;
+}
+
+int ObCopyRemoteSSTableInfoObProducer::get_copy_sstable_count_(int64_t &sstable_count)
+{
+  int ret = OB_SUCCESS;
+  sstable_count = 0;
+
+  if (0 == iter_.count()) {
+    sstable_count = 0;
+  } else {
+    while (OB_SUCC(ret)) {
+      ObITable *table = nullptr;
+      ObSSTable *sstable = nullptr;
+      bool need_copy_sstable = false;
+
+      if (OB_FAIL(iter_.get_next(table))) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("failed to get next table", K(ret));
+        } else {
+          ret = OB_SUCCESS;
+          break;
+        }
+      } else if (OB_ISNULL(table) || table->is_memtable()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is null or table type is unexpected", K(ret), KPC(table));
+      } else if (FALSE_IT(sstable = static_cast<ObSSTable *> (table))) {
+      } else if (OB_FAIL(check_need_copy_sstable_(sstable, need_copy_sstable))) {
+        LOG_WARN("failed to check need copy sstable", K(ret), KPC(sstable));
+      } else if (!need_copy_sstable) {
+       //do nothing
+        LOG_INFO("no need copy sstable", KPC(sstable));
+      } else {
+        sstable_count++;
+      }
+    }
+    iter_.resume();
+  }
+  return ret;
+}
+
+int ObCopyRemoteSSTableInfoObProducer::get_copy_tablet_sstable_header(
+    obrpc::ObCopyTabletSSTableHeader &copy_header)
+{
+  int ret = OB_SUCCESS;
+  copy_header.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("copy remote sstable info ob producer do not init", K(ret));
+  } else if (OB_FAIL(ObStorageHAUtils::get_server_version(copy_header.version_))) {
+    LOG_WARN("failed to get server version", K(ret), K_(ls_id));
+  } else {
+    copy_header.tablet_id_ = tablet_id_;
+    copy_header.status_ = ObCopyTabletStatus::TABLET_EXIST;
+    if (OB_FAIL(get_tablet_meta_(copy_header.tablet_meta_))) {
+      LOG_WARN("failed to get tablet meta", K(ret));
+    } else if (OB_FAIL(get_copy_sstable_count_(copy_header.sstable_count_))) {
+      LOG_WARN("failed to get copy sstable count", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObCopyRemoteSSTableInfoObProducer::get_tablet_meta_(ObMigrationTabletParam &tablet_meta)
+{
+  int ret = OB_SUCCESS;
+  tablet_meta.reset();
+  ObTablet *tablet = nullptr;
+
+  if (OB_ISNULL(tablet = tablet_handle_.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet));
+  } else if (OB_FAIL(tablet->build_migration_tablet_param(tablet_meta))) {
+    LOG_WARN("failed to build migration tablet param", K(ret), KPC(tablet));
+  }
+  return ret;
+}
+
+// ObCopyRemoteSSTableMacroBlockRestoreReader
+ObCopyRemoteSSTableMacroBlockRestoreReader::ObCopyRemoteSSTableMacroBlockRestoreReader()
+  : is_inited_(false),
+    table_key_(),
+    data_version_(0),
+    copy_macro_range_info_(nullptr),
+    restore_base_info_(nullptr),
+    second_meta_index_store_(nullptr),
+    backup_macro_data_buffer_(),
+    backup_macro_read_buffer_(),
+    local_macro_data_buffer_(nullptr),
+    allocator_(),
+    tablet_handle_(),
+    sstable_handle_(),
+    sstable_(nullptr),
+    second_meta_iterator_(),
+    datum_range_(),
+    macro_block_count_(0),
+    data_size_(0)
+{
+  ObMemAttr attr(MTL_ID(), "CMBReReader");
+  allocator_.set_attr(attr);
+}
+
+ObCopyRemoteSSTableMacroBlockRestoreReader::~ObCopyRemoteSSTableMacroBlockRestoreReader()
+{
+  second_meta_iterator_.reset();
+}
+
+int ObCopyRemoteSSTableMacroBlockRestoreReader::init(
+    const ObCopyMacroBlockReaderInitParam &param)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
+  ObLSService *ls_service = nullptr;
+  ObLS *ls = nullptr;
+  ObTablet* tablet = nullptr;
+  const bool is_reverse_scan = false;
+  ObSSTableMetaHandle meta_handle;
+  common::ObSafeArenaAllocator allocator(allocator_);
+
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("cannot init twice", K(ret));
+  } else if (!param.is_valid() || !param.is_leader_restore_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", K(ret), K(param));
+  } else if (OB_FAIL(alloc_buffers_())) {
+    LOG_WARN("failed to alloc buffers", K(ret));
+  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(param.ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("fail to get log stream", KR(ret), K(param));
+  } else if (OB_UNLIKELY(nullptr == (ls = ls_handle.get_ls()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("log stream should not be NULL", KR(ret), K(param));
+  } else if (OB_FAIL(ls->ha_get_tablet(param.table_key_.get_tablet_id(), tablet_handle_))) {
+    LOG_WARN("failed to get tablet handle", K(ret), K(param));
+  } else if (OB_UNLIKELY(nullptr == (tablet = tablet_handle_.get_obj()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet not be NULL", KR(ret), K(param));
+  } else if (OB_FAIL(tablet->get_table(param.table_key_, sstable_handle_))) {
+    LOG_WARN("failed to get table", K(ret), K(param));
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      ret = OB_SSTABLE_NOT_EXIST;
+    }
+  } else if (OB_FAIL(sstable_handle_.get_sstable(sstable_))) {
+    LOG_WARN("failed to get sstable", K(ret), K(param));
+  } else if (OB_FAIL(sstable_->get_meta(meta_handle, &allocator))) {
+    LOG_WARN("failed to get sstable meta", K(ret), K(param));
+  } else if (param.backfill_tx_scn_ != meta_handle.get_sstable_meta().get_basic_meta().filled_tx_scn_) {
+    ret = OB_SSTABLE_NOT_EXIST;
+    LOG_WARN("sstable has been changed", K(ret), K(param), KPC(sstable_));
+  } else if (FALSE_IT(copy_macro_range_info_ = param.copy_macro_range_info_)) {
+  } else {
+    datum_range_.set_start_key(copy_macro_range_info_->start_macro_block_end_key_);
+    datum_range_.end_key_.set_max_rowkey();
+    datum_range_.set_left_closed();
+    datum_range_.set_right_open();
+
+    const storage::ObITableReadInfo *index_read_info = NULL;
+    if (OB_FAIL(tablet->get_sstable_read_info(sstable_, index_read_info))) {
+      LOG_WARN("failed to get index read info ", KR(ret), K(sstable_));
+    }
+
+    if (FAILEDx(second_meta_iterator_.open(datum_range_, blocksstable::DATA_BLOCK_META,
+         *sstable_, *index_read_info, allocator_, is_reverse_scan))) {
+      LOG_WARN("failed to open second meta iterator", K(ret), K(param));
+    } else {
+      table_key_ = param.table_key_;
+      copy_macro_range_info_ = param.copy_macro_range_info_;
+      restore_base_info_ = param.restore_base_info_;
+      second_meta_index_store_ = param.second_meta_index_store_;
+      is_inited_ = true;
+      LOG_INFO("succeed to init macro block producer", K(param));
+    }
+  }
+
+  return ret;
+}
+
+int ObCopyRemoteSSTableMacroBlockRestoreReader::get_next_macro_block(
+    obrpc::ObCopyMacroBlockHeader &header,
+    blocksstable::ObBufferReader &data)
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObDataMacroBlockMeta macro_meta;
+
+  header.reset();
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (macro_block_count_ >= copy_macro_range_info_->macro_block_count_) {
+    ret = OB_ITER_END;
+    LOG_INFO("get next macro block end", K(table_key_), KPC(copy_macro_range_info_));
+  } else if (OB_FAIL(second_meta_iterator_.get_next(macro_meta))) {
+    LOG_WARN("failed to get next macro meta", K(ret), K(macro_block_count_), KPC(copy_macro_range_info_));
+  } else if (macro_meta.get_macro_id().is_local_id()) {
+    // This is a local macro block, reuse it.
+    if (table_key_.is_column_store_sstable() && sstable_->is_small_sstable()) {
+      // TODO:(wangxiaohui.wxh): fix me
+      // avoid reusing macro block in small sstable, as rebuild index will be failed.
+      if (OB_FAIL(read_local_macro_block_data_(macro_meta, header, data))) {
+        LOG_WARN("failed to read local macro block data", K(ret), K(macro_meta));
+      }
+    } else if (OB_FAIL(header.set_macro_meta(macro_meta))) {
+      LOG_WARN("failed to set macro meta", K(ret), K(macro_meta));
+    } else {
+      header.occupy_size_ = sstable_->get_macro_read_size();
+      header.is_reuse_macro_block_ = true;
+
+      macro_block_count_++;
+    }
+  } else {
+    // This is a backup macro block.
+    if (OB_FAIL(read_backup_macro_block_data_(macro_meta, header, data))) {
+      LOG_WARN("failed to read backup macro block data", K(ret), K(macro_meta));
+    }
+  }
+
+  return ret;
+}
+
+int ObCopyRemoteSSTableMacroBlockRestoreReader::alloc_buffers_()
+{
+  int ret = OB_SUCCESS;
+  char *backup_macro_data_buf = NULL;
+  char *backup_macro_read_buf = NULL;
+  char *local_macro_read_buf = NULL;
+
+  const int64_t READ_BACKUP_MACRO_BUFFER_SIZE = OB_DEFAULT_MACRO_BLOCK_SIZE * 2;
+
+  // used in init() func, should not check is_inited_
+  if (OB_ISNULL(backup_macro_data_buf = reinterpret_cast<char*>(allocator_.alloc(OB_DEFAULT_MACRO_BLOCK_SIZE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc backup_macro_data_buf", K(ret));
+  } else if (OB_ISNULL(backup_macro_read_buf = reinterpret_cast<char*>(allocator_.alloc(READ_BACKUP_MACRO_BUFFER_SIZE)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc backup_macro_read_buf", K(ret));
+  } else if (OB_ISNULL(local_macro_read_buf = reinterpret_cast<char*>(allocator_.alloc(OB_SERVER_BLOCK_MGR.get_macro_block_size())))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    int64_t io_size = OB_SERVER_BLOCK_MGR.get_macro_block_size();
+    LOG_WARN("failed to alloc local_macro_read_buf", K(ret), K(io_size));
+  } else {
+    local_macro_data_buffer_ = local_macro_read_buf;
+    backup_macro_data_buffer_.assign(backup_macro_data_buf, OB_DEFAULT_MACRO_BLOCK_SIZE);
+    backup_macro_read_buffer_.assign(backup_macro_read_buf, READ_BACKUP_MACRO_BUFFER_SIZE);
+  }
+
+  if (OB_FAIL(ret)) {
+    allocator_.reset();
+  }
+
+  return ret;
+}
+
+int ObCopyRemoteSSTableMacroBlockRestoreReader::read_local_macro_block_data_(
+    blocksstable::ObDataMacroBlockMeta &macro_meta,
+    obrpc::ObCopyMacroBlockHeader &header,
+    blocksstable::ObBufferReader &data)
+{
+  int ret = OB_SUCCESS;
+  blocksstable::ObMacroBlockReadInfo read_info;
+  blocksstable::ObMacroBlockHandle read_handle;
+  blocksstable::ObMacroBlockCommonHeader common_header;
+  int64_t pos = 0;
+  int64_t occupy_size = 0;
+
+  read_info.macro_block_id_ = macro_meta.get_macro_id();
+  read_info.offset_ = sstable_->get_macro_offset();
+  read_info.size_ = sstable_->get_macro_read_size();
+  read_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_READ);
+  read_info.io_timeout_ms_ = GCONF._data_storage_io_timeout / 1000L;
+  read_info.buf_ = local_macro_data_buffer_;
+  read_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
+  read_info.io_desc_.set_sys_module_id(ObIOModule::HA_COPY_MACRO_BLOCK_IO);
+  if (OB_FAIL(ObBlockManager::async_read_block(read_info, read_handle))) {
+    LOG_WARN("failed to async read block", K(ret), K(read_info));
+  } else if (OB_FAIL(read_handle.wait())) {
+    LOG_WARN("failed to wait io finish", K(ret), K(read_info));
+  } else if (OB_FAIL(common_header.deserialize(read_handle.get_buffer(), read_handle.get_data_size(), pos))) {
+    LOG_ERROR("deserialize common header failed", K(ret), K(read_handle), K(pos), K(common_header));
+  } else if (OB_FAIL(common_header.check_integrity())) {
+    ret = OB_INVALID_DATA;
+    LOG_ERROR("invalid common header", K(ret), K(read_handle), K(pos), K(common_header));
+  } else {
+    occupy_size = common_header.get_header_size() + common_header.get_payload_size();
+    data.assign(read_handle.get_buffer(), occupy_size, occupy_size);
+    header.is_reuse_macro_block_ = false;
+    header.occupy_size_ = occupy_size;
+    macro_block_count_++;
+    LOG_INFO("local small sstable macro data", K(read_handle), K(common_header), K(occupy_size));
+  }
+  return ret;
+}
+
+int ObCopyRemoteSSTableMacroBlockRestoreReader::read_backup_macro_block_data_(
+    blocksstable::ObDataMacroBlockMeta &macro_meta,
+    obrpc::ObCopyMacroBlockHeader &header,
+    blocksstable::ObBufferReader &data)
+
+{
+  int ret = OB_SUCCESS;
+  ObRestoreMacroBlockId restore_macro_id;
+  backup::ObBackupDeviceMacroBlockId backup_macro_id;
+  backup::ObBackupMacroBlockIndex macro_index;
+  if (OB_FAIL(backup_macro_id.set(macro_meta.get_macro_id()))) {
+    LOG_WARN("failed to set restore macro id", K(ret), K(macro_meta));
+  } else if (OB_FAIL(restore_macro_id.set(macro_meta.get_logic_id(), backup_macro_id))) {
+    LOG_WARN("failed to set restore macro id", K(ret), K(macro_meta));
+  } else if (OB_FAIL(get_backup_macro_block_index_(restore_macro_id, macro_index))) {
+    LOG_WARN("failed to get macro block index", K(ret), K(restore_macro_id));
+  } else if (FALSE_IT(backup_macro_data_buffer_.set_pos(0))) {
+  } else if (OB_FAIL(do_read_backup_macro_block_data_(macro_index, backup_macro_data_buffer_))) {
+    LOG_WARN("failed to read backup macro block data", K(ret), K(restore_macro_id), K(macro_index));
+  } else {
+    data.assign(backup_macro_data_buffer_.data(), backup_macro_data_buffer_.length(), backup_macro_data_buffer_.length());
+    header.is_reuse_macro_block_ = false;
+    header.occupy_size_ = backup_macro_data_buffer_.length();
+
+    data_size_ += backup_macro_data_buffer_.length();
+    macro_block_count_++;
+
+    if (macro_block_count_ == copy_macro_range_info_->macro_block_count_) {
+      if (restore_macro_id.logic_block_id_ != copy_macro_range_info_->end_macro_block_id_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get macro block end macro block id is not equal to macro block range",
+            K(ret), K_(macro_block_count), K(restore_macro_id), KPC(copy_macro_range_info_), K(table_key_));
+      }
+    }
+  }
+
+  return ret;
+}
+
+int ObCopyRemoteSSTableMacroBlockRestoreReader::get_backup_macro_block_index_(
+    const ObRestoreMacroBlockId &macro_id,
+    backup::ObBackupMacroBlockIndex &macro_index)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupDataType data_type;
+  if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key_, data_type))) {
+    LOG_WARN("fail to get backup data type", K(ret), K(table_key_));
+  } else if (OB_FAIL(macro_id.macro_id_.get_backup_macro_block_index(data_type, macro_id.logic_block_id_, macro_index))) {
+    LOG_WARN("failed to get backup macro block index", K(ret), K(data_type), K(macro_id));
+  }
+  return ret;
+}
+
+int ObCopyRemoteSSTableMacroBlockRestoreReader::do_read_backup_macro_block_data_(
+    const backup::ObBackupMacroBlockIndex &macro_index,
+    blocksstable::ObBufferReader &data_buffer)
+{
+  int ret = OB_SUCCESS;
+
+  const int64_t align_size = DIO_READ_ALIGN_SIZE;
+  share::ObBackupDataType data_type;
+  share::ObBackupStorageInfo storage_info;
+  share::ObRestoreBackupSetBriefInfo backup_set_brief_info;
+  share::ObBackupDest backup_set_dest;
+  share::ObBackupPath backup_path;
+
+  backup_macro_read_buffer_.set_pos(0);
+
+  if (OB_FAIL(ObRestoreUtils::get_backup_data_type(table_key_, data_type))) {
+    LOG_WARN("fail to get backup data type", K(ret), K(table_key_));
+  } else if (OB_FAIL(restore_base_info_->get_restore_backup_set_dest(
+                     macro_index.backup_set_id_,
+                     backup_set_brief_info))) {
+    LOG_WARN("fail to get backup set dest", K(ret), K(macro_index));
+  } else if (OB_FAIL(backup_set_dest.set(backup_set_brief_info.backup_set_path_))) {
+    LOG_WARN("fail to set backup set dest", K(ret));
+  } else if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(
+                     backup_set_dest,
+                     macro_index.ls_id_,
+                     data_type,
+                     macro_index.turn_id_,
+                     macro_index.retry_id_,
+                     macro_index.file_id_,
+                     backup_path))) {
+    LOG_WARN("failed to get macro block index", K(ret), K(restore_base_info_), K(macro_index), KPC(restore_base_info_));
+  } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_data(
+                     backup_path.get_obstr(),
+                     restore_base_info_->backup_dest_.get_storage_info(),
+                     macro_index,
+                     align_size,
+                     backup_macro_read_buffer_,
+                     data_buffer))) {
+    LOG_WARN("failed to read macro block data", K(ret), K(table_key_), K(macro_index), KPC(restore_base_info_));
+  }
+
+  return ret;
+}
+
+
 }
 }

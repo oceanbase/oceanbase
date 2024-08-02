@@ -230,7 +230,9 @@ int ObDupTabletScanTask::execute_for_dup_ls_()
       DUP_TABLE_LOG(INFO, "ls not leader", K(cur_ls_ptr->get_ls_id()));
 #endif
     } else {
-      storage::ObHALSTabletIDIterator ls_tablet_id_iter(cur_ls_ptr->get_ls_id(), true);
+      storage::ObHALSTabletIDIterator ls_tablet_id_iter(cur_ls_ptr->get_ls_id(),
+                                                        true/*need_initial_state*/,
+                                                        false/*need_sorted_tablet_id*/);
       if (OB_FAIL(cur_ls_ptr->build_tablet_iter(ls_tablet_id_iter))) {
         DUP_TABLE_LOG(WARN, "build ls tablet iter failed", K(cur_ls_ptr->get_ls_id()));
       } else if (!ls_tablet_id_iter.is_valid()) {

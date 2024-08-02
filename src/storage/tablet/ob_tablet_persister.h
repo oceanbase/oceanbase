@@ -202,7 +202,8 @@ public:
   static int copy_shared_macro_info(
       const blocksstable::ObSSTableMacroInfo &macro_info,
       SharedMacroMap &shared_macro_map,
-      ObBlockInfoSet::TabletMacroSet &meta_id_set);
+      ObBlockInfoSet::TabletMacroSet &meta_id_set,
+      ObBlockInfoSet::TabletMacroSet &backup_id_set);
   static int copy_data_macro_ids(
       const blocksstable::ObSSTableMacroInfo &macro_info,
       ObBlockInfoSet &block_info_set);
@@ -211,7 +212,8 @@ private:
   static int inc_ref_with_macro_iter(ObTablet &tablet, ObMacroInfoIterator &macro_iter);
   static int do_copy_ids(
       blocksstable::ObMacroIdIterator &iter,
-      ObBlockInfoSet::TabletMacroSet &id_set);
+      ObBlockInfoSet::TabletMacroSet &id_set,
+      ObBlockInfoSet::TabletMacroSet &backup_id_set);
   static int check_tablet_meta_ids(
       const ObIArray<blocksstable::MacroBlockId> &shared_meta_id_arr,
       const ObTablet &tablet);
@@ -245,6 +247,11 @@ private:
       ObTabletSpaceUsage &space_usage,
       ObTabletMacroInfo &macro_info,
       ObIArray<blocksstable::MacroBlockId> &shared_meta_id_arr);
+  int calc_tablet_space_usage_(
+      ObBlockInfoSet &block_info_set,
+      ObTabletHandle &new_tablet_hdl,
+      ObIArray<MacroBlockId> &shared_meta_id_arr,
+      ObTabletSpaceUsage &space_usage);
   int modify_and_fill_tablet(
       const ObTablet &old_tablet,
       ObITabletMetaModifier &modifier,

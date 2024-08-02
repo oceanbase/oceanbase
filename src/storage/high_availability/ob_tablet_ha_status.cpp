@@ -57,6 +57,7 @@ int ObTabletRestoreStatus::check_can_change_status(
     }
     case ObTabletRestoreStatus::EMPTY: {
       if (ObTabletRestoreStatus::MINOR_AND_MAJOR_META == change_status
+          || ObTabletRestoreStatus::REMOTE == change_status
           || ObTabletRestoreStatus::FULL == change_status
           || ObTabletRestoreStatus::EMPTY == change_status
           || ObTabletRestoreStatus::UNDEFINED == change_status) {
@@ -67,6 +68,13 @@ int ObTabletRestoreStatus::check_can_change_status(
     case ObTabletRestoreStatus::MINOR_AND_MAJOR_META: {
       if (ObTabletRestoreStatus::FULL == change_status
           || ObTabletRestoreStatus::MINOR_AND_MAJOR_META == change_status) {
+        can_change = true;
+      }
+      break;
+    }
+    case ObTabletRestoreStatus::REMOTE: {
+      if (ObTabletRestoreStatus::FULL == change_status
+          || ObTabletRestoreStatus::REMOTE == change_status) {
         can_change = true;
       }
       break;

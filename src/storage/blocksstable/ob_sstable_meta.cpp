@@ -18,6 +18,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/blocksstable/ob_micro_block_reader.h"
 #include "storage/blocksstable/ob_macro_block_reader.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -62,7 +63,8 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     encrypt_id_(0),
     master_key_id_(0),
     sstable_logic_seq_(0),
-    latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE)
+    latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE),
+    table_flag_()
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -84,9 +86,8 @@ bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &oth
   // don't need to compare upper_trans_version and use_old_macro_block_count_
   // 1. meta's upper_trans_version may be different from sstable shell's
   // 2. defragmentation changes use_old_macro_block_count_
-  return version_ == other.version_
-      && length_ == other.length_
-      && row_count_ == other.row_count_
+  // 3. we can not check length_ & version_ for upgrade compatible scenario
+  return row_count_ == other.row_count_
       && occupy_size_ == other.occupy_size_
       && original_size_ == other.original_size_
       && data_checksum_ == other.data_checksum_
@@ -115,7 +116,8 @@ bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &oth
       && encrypt_id_ == other.encrypt_id_
       && master_key_id_ == other.master_key_id_
       && 0 == MEMCMP(encrypt_key_, other.encrypt_key_, sizeof(encrypt_key_))
-      && latest_row_store_type_ == other.latest_row_store_type_;
+      && latest_row_store_type_ == other.latest_row_store_type_
+      && table_flag_ == other.table_flag_;
 }
 
 bool ObSSTableBasicMeta::is_valid() const
@@ -142,7 +144,8 @@ bool ObSSTableBasicMeta::is_valid() const
            && data_index_tree_height_ >= 0
            && sstable_logic_seq_ >= 0
            && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
-           && is_latest_row_store_type_valid());
+           && is_latest_row_store_type_valid())
+           && table_flag_.is_valid();
   return ret;
 }
 
@@ -182,6 +185,7 @@ void ObSSTableBasicMeta::reset()
   sstable_logic_seq_ = 0;
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   latest_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
+  table_flag_.reset();
 }
 
 DEFINE_SERIALIZE(ObSSTableBasicMeta)
@@ -237,7 +241,8 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   encrypt_id_,
                   master_key_id_,
                   sstable_logic_seq_,
-                  latest_row_store_type_);
+                  latest_row_store_type_,
+                  table_flag_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -317,7 +322,8 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               encrypt_id_,
               master_key_id_,
               sstable_logic_seq_,
-              latest_row_store_type_);
+              latest_row_store_type_,
+              table_flag_);
   return ret;
 }
 
@@ -358,7 +364,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               encrypt_id_,
               master_key_id_,
               sstable_logic_seq_,
-              latest_row_store_type_);
+              latest_row_store_type_,
+              table_flag_);
   return len;
 }
 
@@ -635,6 +642,7 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.encrypt_id_ = param.encrypt_id_;
     basic_meta_.master_key_id_ = param.master_key_id_;
     MEMCPY(basic_meta_.encrypt_key_, param.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
+    basic_meta_.table_flag_ = param.table_flag_;
     basic_meta_.length_ = basic_meta_.get_serialize_size();
     if (OB_FAIL(prepare_column_checksum(param.column_checksums_, allocator))) {
       LOG_WARN("fail to prepare column checksum", K(ret), K(param));
@@ -972,7 +980,12 @@ ObMigrationSSTableParam::ObMigrationSSTableParam()
     is_empty_cg_sstables_(false),
     column_group_cnt_(0),
     full_column_cnt_(0),
-    co_base_type_(0)
+    co_base_type_(0),
+    root_block_addr_(),
+    root_block_buf_(nullptr),
+    data_block_macro_meta_addr_(),
+    data_block_macro_meta_buf_(nullptr),
+    is_meta_root_(false)
 {
 }
 
@@ -992,12 +1005,19 @@ void ObMigrationSSTableParam::reset()
   column_group_cnt_ = 0;
   full_column_cnt_ = 0;
   co_base_type_ = 0;
+  root_block_addr_.reset();
+  root_block_buf_ = nullptr;
+  data_block_macro_meta_addr_.reset();
+  data_block_macro_meta_buf_ = nullptr;
+  is_meta_root_ =false;
   allocator_.reset();
 }
 
 bool ObMigrationSSTableParam::is_valid() const
 {
-  return basic_meta_.is_valid() && table_key_.is_valid();
+  return basic_meta_.is_valid() && table_key_.is_valid()
+      && (root_block_addr_.is_memory() ? (root_block_buf_ != nullptr) : (root_block_buf_ == nullptr))
+      && (data_block_macro_meta_addr_.is_memory() ? (data_block_macro_meta_buf_ != nullptr) : (data_block_macro_meta_buf_ == nullptr));
 }
 
 int ObMigrationSSTableParam::assign(const ObMigrationSSTableParam &param)
@@ -1015,12 +1035,66 @@ int ObMigrationSSTableParam::assign(const ObMigrationSSTableParam &param)
     column_group_cnt_ = param.column_group_cnt_;
     full_column_cnt_ = param.full_column_cnt_;
     co_base_type_ = param.co_base_type_;
+    root_block_addr_ = param.root_block_addr_;
+    data_block_macro_meta_addr_ = param.data_block_macro_meta_addr_;
+    is_meta_root_ = param.is_meta_root_;
     if (OB_FAIL(column_checksums_.assign(param.column_checksums_))) {
       LOG_WARN("fail to assign column checksums", K(ret), K(param));
     } else if (OB_FAIL(column_default_checksums_.assign(param.column_default_checksums_))) {
       LOG_WARN("fail to assign default column checksum", K(ret), K(param));
+    } else if (root_block_addr_.is_memory() && (OB_ISNULL(root_block_buf_ =
+        static_cast<char *>(allocator_.alloc(root_block_addr_.size()))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc root block buf", K(ret));
+    } else if (data_block_macro_meta_addr_.is_memory() && (OB_ISNULL(data_block_macro_meta_buf_ =
+        static_cast<char *>(allocator_.alloc(data_block_macro_meta_addr_.size()))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc data block macro meta buf", K(ret));
+    } else {
+      if (root_block_addr_.is_memory()) {
+        MEMCPY(root_block_buf_, param.root_block_buf_, root_block_addr_.size());
+      }
+      if (data_block_macro_meta_addr_.is_memory()) {
+        MEMCPY(data_block_macro_meta_buf_, param.data_block_macro_meta_buf_, data_block_macro_meta_addr_.size());
+      }
+    }
+    if (OB_FAIL(ret)) {
+      reset();
     }
   }
+  return ret;
+}
+
+// this is used for backup to get merge res from backup-ed migration sstable param
+int ObMigrationSSTableParam::get_merge_res(blocksstable::ObSSTableMergeRes &res) const
+{
+  int ret = OB_SUCCESS;
+  res.root_desc_.addr_ = root_block_addr_;
+  res.root_desc_.buf_ = root_block_buf_;
+  res.root_desc_.height_ = basic_meta_.data_index_tree_height_;
+  res.data_root_desc_.addr_ = data_block_macro_meta_addr_;
+  res.data_root_desc_.buf_ = data_block_macro_meta_buf_;
+  res.data_root_desc_.is_meta_root_ = is_meta_root_;
+  res.index_blocks_cnt_ = basic_meta_.index_macro_block_count_;
+  res.data_blocks_cnt_ = basic_meta_.data_macro_block_count_;
+  res.micro_block_cnt_ = basic_meta_.data_micro_block_count_;
+  res.data_column_cnt_ = basic_meta_.column_cnt_;
+  res.row_count_ = basic_meta_.row_count_;
+  res.max_merged_trans_version_ = basic_meta_.max_merged_trans_version_;
+  res.contain_uncommitted_row_ = basic_meta_.contain_uncommitted_row_;
+  res.occupy_size_ = basic_meta_.occupy_size_;
+  res.original_size_ = basic_meta_.original_size_;
+  res.data_checksum_ = basic_meta_.data_checksum_;
+  res.use_old_macro_block_count_ = basic_meta_.use_old_macro_block_count_;
+  res.compressor_type_ = basic_meta_.compressor_type_;
+  res.encrypt_id_ = basic_meta_.encrypt_id_;
+  res.master_key_id_ = basic_meta_.master_key_id_;
+  res.root_row_store_type_ = basic_meta_.root_row_store_type_;
+  STATIC_ASSERT(ARRAYSIZEOF(basic_meta_.encrypt_key_) == share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH,
+  "ObMigrationSSTableParam encrypt_key_ array size mismatch OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH");
+  STATIC_ASSERT(ARRAYSIZEOF(res.encrypt_key_) == share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH,
+  "ObSSTableMergeRes encrypt_key_ array size mismatch OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH");
+  MEMCPY(res.encrypt_key_, basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   return ret;
 }
 
@@ -1072,7 +1146,13 @@ int ObMigrationSSTableParam::serialize_(char *buf, const int64_t buf_len, int64_
     LOG_WARN("fail to serialize co_base_type_", K(ret), KP(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(serialization::encode_bool(buf, buf_len, pos, is_empty_cg_sstables_))) {
     LOG_WARN("fail to serialize is_empty_cg_sstables_", K(ret), KP(buf), K(buf_len), K(pos));
+  } else if (OB_FAIL(addr_serialize(root_block_addr_, root_block_buf_, buf, buf_len, pos))) {
+    STORAGE_LOG(WARN, "fail to serialize address", K(ret), KP(buf), K(buf_len), K(pos), K(root_block_addr_));
+  } else if (OB_FAIL(addr_serialize(data_block_macro_meta_addr_, data_block_macro_meta_buf_, buf, buf_len, pos))) {
+    STORAGE_LOG(WARN, "fail to serialize address", K(ret), KP(buf), K(buf_len), K(pos), K(data_block_macro_meta_addr_));
   }
+
+  LST_DO_CODE(OB_UNIS_ENCODE, is_meta_root_);
   return ret;
 }
 
@@ -1128,7 +1208,14 @@ int ObMigrationSSTableParam::deserialize_(const char *buf, const int64_t data_le
     LOG_WARN("fail to deserialize co_base_type_", K(ret), KP(buf), K(data_len), K(pos));
   } else if (pos < data_len && OB_FAIL(serialization::decode_bool(buf, data_len, pos, &is_empty_cg_sstables_))) {
     LOG_WARN("fail to deserialize is_empty_cg_sstables_", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(addr_deserialize(buf, data_len, pos, root_block_addr_, root_block_buf_))) {
+    STORAGE_LOG(WARN, "fail to deserialize address and buf", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (pos < data_len && OB_FAIL(addr_deserialize(buf, data_len, pos,
+      data_block_macro_meta_addr_, data_block_macro_meta_buf_))) {
+    STORAGE_LOG(WARN, "fail to deserialize address and buf", K(ret), KP(buf), K(data_len), K(pos));
   }
+
+  LST_DO_CODE(OB_UNIS_DECODE, is_meta_root_);
   return ret;
 }
 
@@ -1154,9 +1241,66 @@ int64_t ObMigrationSSTableParam::get_serialize_size_() const
   len += serialization::encoded_length_i32(full_column_cnt_);
   len += serialization::encoded_length_i32(co_base_type_);
   len += serialization::encoded_length_bool(is_empty_cg_sstables_);
+  len += addr_get_serialize_size(root_block_addr_);
+  len += addr_get_serialize_size(data_block_macro_meta_addr_);
+
+  LST_DO_CODE(OB_UNIS_ADD_LEN, is_meta_root_);
   return len;
 }
 
+int ObMigrationSSTableParam::addr_serialize(const ObMetaDiskAddr &addr, const char *addr_buf,
+    char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(addr.serialize(buf, buf_len, pos))) {
+    STORAGE_LOG(WARN, "fail to serialize address", K(ret), KP(buf), K(buf_len), K(pos), K(addr));
+  } else if (addr.is_memory()) {
+    MEMCPY(buf + pos, addr_buf, addr.size());
+    pos += addr.size();
+  }
+  return ret;
+}
+
+int ObMigrationSSTableParam::addr_deserialize(const char *buf, const int64_t data_len, int64_t &pos,
+    ObMetaDiskAddr &addr, char *&root_buf)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(addr.deserialize(buf, data_len, pos))) {
+    STORAGE_LOG(WARN, "fail to deserialize address", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (addr.is_memory()) {
+    char *data_buf = nullptr;
+    if (pos + addr.size() > data_len) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected data len is not enough", K(ret), K(pos), K(data_len), K(addr));
+    } else if (OB_ISNULL(data_buf = static_cast<char *>(allocator_.alloc(addr.size())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc data buffer", K(ret), K(addr));
+    } else {
+      MEMCPY(data_buf, buf + pos, addr.size());
+      root_buf = data_buf;
+      pos += addr.size();
+    }
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(data_buf)) {
+        allocator_.free(data_buf);
+        data_buf = nullptr;
+      }
+    }
+  } else {
+    root_buf = nullptr;
+  }
+  return ret;
+}
+
+int64_t ObMigrationSSTableParam::addr_get_serialize_size(const ObMetaDiskAddr &addr) const
+{
+  int64_t len = 0;
+  len += addr.get_serialize_size();
+  if (addr.is_memory()) {
+    len += addr.size();
+  }
+  return len;
+}
 int ObSSTableMetaChecker::check_sstable_meta_strict_equality(
     const ObSSTableMeta &old_sstable_meta,
     const ObSSTableMeta &new_sstable_meta)
@@ -1191,7 +1335,7 @@ int ObSSTableMetaChecker::check_sstable_meta(
   if (!old_sstable_meta.is_valid() || !new_sstable_meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("old sstable meta or new sstable meta is invalid", K(ret), K(old_sstable_meta), K(new_sstable_meta));
-  } else if (OB_FAIL(check_sstable_basic_meta_(old_sstable_meta.get_basic_meta(), new_sstable_meta.get_basic_meta()))) {
+  } else if (OB_FAIL(check_sstable_basic_meta(old_sstable_meta.get_basic_meta(), new_sstable_meta.get_basic_meta()))) {
     LOG_WARN("failed to check sstable basic meta", K(ret), K(old_sstable_meta), K(new_sstable_meta));
   } else if (OB_FAIL(check_sstable_column_checksum_(old_sstable_meta.get_col_checksum(), old_sstable_meta.get_col_checksum_cnt(),
       new_sstable_meta.get_col_checksum(), new_sstable_meta.get_col_checksum_cnt()))) {
@@ -1208,13 +1352,13 @@ int ObSSTableMetaChecker::check_sstable_meta(
   if (!migration_param.is_valid() || !new_sstable_meta.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("migration param or new sstable meta is invalid", K(ret), K(migration_param), K(new_sstable_meta));
-  } else if (OB_FAIL(check_sstable_basic_meta_(migration_param.basic_meta_, new_sstable_meta.get_basic_meta()))) {
+  } else if (OB_FAIL(check_sstable_basic_meta(migration_param.basic_meta_, new_sstable_meta.get_basic_meta()))) {
     LOG_WARN("failed to check sstable basic meta", K(ret), K(migration_param), K(new_sstable_meta));
   }
   return ret;
 }
 
-int ObSSTableMetaChecker::check_sstable_basic_meta_(
+int ObSSTableMetaChecker::check_sstable_basic_meta(
     const ObSSTableBasicMeta &old_sstable_basic_meta,
     const ObSSTableBasicMeta &new_sstable_basic_meta)
 {

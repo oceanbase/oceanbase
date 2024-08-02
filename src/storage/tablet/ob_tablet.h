@@ -52,6 +52,11 @@ namespace logservice
 class ObLogHandler;
 }
 
+namespace blocksstable
+{
+struct ObSSTableMergeRes;
+}
+
 namespace transaction
 {
 class ObTransID;
@@ -406,6 +411,10 @@ public:
   int build_migration_sstable_param(
       const ObITable::TableKey &table_key,
       blocksstable::ObMigrationSSTableParam &mig_sstable_param) const;
+  int build_migration_sstable_param(
+      const ObITable::TableKey &table_key,
+      const blocksstable::ObSSTableMergeRes &res,
+      blocksstable::ObMigrationSSTableParam &mig_sstable_param) const;
   int get_ha_tables(
       ObTableStoreIterator &iter,
       bool &is_ready_for_read);
@@ -586,7 +595,7 @@ private:
   static void dec_linked_block_ref_cnt(const ObMetaDiskAddr &head_addr);
   int64_t get_try_cache_size() const;
   int inner_release_memtables(const share::SCN scn);
-  int calc_sstable_occupy_size(int64_t &occupy_size);
+  int calc_sstable_occupy_size(int64_t &occupy_size, int64_t &pure_backup_sstable_occupy_size);
   inline void set_space_usage_(const ObTabletSpaceUsage &space_usage) { tablet_meta_.set_space_usage_(space_usage); }
 private:
   static bool ignore_ret(const int ret);
@@ -787,6 +796,7 @@ private:
       ObMigrationTabletParam &mig_tablet_param);
 
   int clear_memtables_on_table_store(); // be careful to call this func, will destroy memtables array on table_store
+  int check_table_store_flag_match_with_table_store_(const ObTabletTableStore *table_store);
 public:
   static constexpr int32_t VERSION_V1 = 1;
   static constexpr int32_t VERSION_V2 = 2;
@@ -875,7 +885,7 @@ inline bool ObTablet::is_valid() const
 
 inline int ObTablet::allow_to_read_()
 {
-  return tablet_meta_.ha_status_.is_none() ? common::OB_SUCCESS : common::OB_REPLICA_NOT_READABLE;
+  return tablet_meta_.ha_status_.check_allow_read() ? common::OB_SUCCESS : common::OB_REPLICA_NOT_READABLE;
 }
 
 inline void ObTablet::update_wash_score(const int64_t score)

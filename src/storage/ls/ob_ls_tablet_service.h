@@ -403,7 +403,9 @@ public:
 
   // migration section
   typedef common::ObFunction<int(const obrpc::ObCopyTabletInfo &tablet_info, const ObTabletHandle &tablet_handle)> HandleTabletMetaFunc;
-  int ha_scan_all_tablets(const HandleTabletMetaFunc &handle_tablet_meta_f);
+  int ha_scan_all_tablets(
+      const HandleTabletMetaFunc &handle_tablet_meta_f,
+      const bool need_sorted_tablet_id);
   int trim_rebuild_tablet(
       const ObTabletID &tablet_id,
       const bool is_rollback = false);

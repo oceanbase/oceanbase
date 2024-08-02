@@ -148,7 +148,7 @@ public:
       tenant_id_(OB_INVALID_TENANT_ID),
       backup_set_id_(0),
       cluster_id_(OB_INVALID_CLUSTER_ID),
-      compat_mode_(),
+      compat_mode_(lib::Worker::CompatMode::INVALID),
       tenant_name_(),
       cluster_name_(),
       locality_(),

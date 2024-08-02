@@ -17,11 +17,15 @@
 #include "ob_storage_oss_base.h"
 #include "ob_storage_cos_base.h"
 #include "ob_storage_s3_base.h"
+#include "common/storage/ob_io_device.h"
 
 namespace oceanbase
 {
 namespace common
 {
+
+class ObObjectDevice;
+
 /* In order to uniform naming format, here we will define the name format about uri/path.
  *   a. 'uri' represents a full path which has type prefix, like OSS/FILE.
  *   b. 'raw_dir_path' represents a dir path which does not have suffix '/'
@@ -268,7 +272,54 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageUtil);
 };
 
-class ObStorageReader
+template <typename T>
+class ObStorageRefHolder final
+{
+public:
+  explicit ObStorageRefHolder(): ptr_(nullptr) {}
+  explicit ObStorageRefHolder(T *ptr): ptr_(nullptr) { hold(ptr); }
+  ~ObStorageRefHolder() { reset(); }
+  T *get_ptr() { return ptr_; }
+  void hold(T *ptr) {
+    if (nullptr != ptr && ptr != ptr_) {
+      ptr->inc_ref();
+      reset(); // reset previous ptr, must after ptr->inc_ref()
+      ptr_ = ptr;
+    }
+  }
+  void reset() {
+    if (nullptr != ptr_) {
+      ptr_->dec_ref();
+      ptr_ = nullptr;
+    }
+  }
+  TO_STRING_KV(KP_(ptr));
+private:
+  T *ptr_;
+};
+
+class ObStorageAccesser
+{
+public:
+  ObStorageAccesser();
+  virtual ~ObStorageAccesser();
+  int init(const ObIOFd &fd, ObObjectDevice *device);
+  // inc_ref when ObObjectDevice::open and ObIORequest::init
+  void inc_ref();
+  // dec_ref when ObObjectDevice::close and ObIORequest::destroy
+  void dec_ref();
+  VIRTUAL_TO_STRING_KV(K_(is_inited), K_(ref_cnt), K_(device_holder), K_(fd));
+
+protected:
+  bool is_inited_;
+  int64_t ref_cnt_;
+  // in order to ensure ObObjectDevice's lifecycle is longer than ObStorageAccesser
+  ObStorageRefHolder<ObObjectDevice> device_holder_;
+  // in order to release fd when ref_cnt_ == 0
+  ObIOFd fd_;
+};
+
+class ObStorageReader : public ObStorageAccesser
 {
 public:
   ObStorageReader();
@@ -294,7 +345,7 @@ private:
 
 // The most important meaning of this class is to read SIMULATE_APPEND file.
 // But, if we use this class to read a normal object/file, it should also work well
-class ObStorageAdaptiveReader
+class ObStorageAdaptiveReader : public ObStorageAccesser
 {
 public:
   ObStorageAdaptiveReader();
@@ -320,7 +371,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageAdaptiveReader);
 };
 
-class ObStorageWriter
+class ObStorageWriter : public ObStorageAccesser
 {
 public:
   ObStorageWriter();
@@ -341,7 +392,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageWriter);
 };
 
-class ObStorageAppender
+class ObStorageAppender : public ObStorageAccesser
 {
 public:
   ObStorageAppender(StorageOpenMode mode);
@@ -381,7 +432,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageAppender);
 };
 
-class ObStorageMultiPartWriter
+class ObStorageMultiPartWriter : public ObStorageAccesser
 {
 public:
   ObStorageMultiPartWriter();
@@ -406,6 +457,7 @@ protected:
   bool is_opened_;
   char uri_[OB_MAX_URI_LENGTH];
   common::ObObjectStorageInfo *storage_info_;
+  int64_t cur_max_offset_;
 	DISALLOW_COPY_AND_ASSIGN(ObStorageMultiPartWriter);
 };
 

@@ -212,6 +212,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, tenant_id);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_tenant_id);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, restore_start_ts);
+    ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, restoring_start_ts);
     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, comment);
 
     // restore_scn
@@ -219,7 +220,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
     // consistent_scn
     ADD_COLUMN_WITH_UINT_VALUE(job_info, consistent_scn, (job_info.get_consistent_scn().get_val_for_inner_table_field()));
     //restore_type
-    ADD_COLUMN_WITH_VALUE(job_info, restore_type, (int64_t)(job_info.get_restore_type()));
+    ADD_COLUMN_WITH_VALUE(job_info, restore_type, job_info.get_restore_type().to_str());
     if (OB_SUCC(ret)) {
       uint64_t post_data_version = job_info.get_post_data_version();
       int64_t len = ObClusterVersion::print_version_str(
@@ -265,6 +266,7 @@ int ObPhysicalRestoreTableOperator::fill_dml_splicer(
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, passwd_array);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, concurrency);
      ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, recover_table);
+     ADD_COLUMN_MACRO_IN_TABLE_OPERATOR(job_info, backup_compatible);
 
      // source_cluster_version
      if (OB_SUCC(ret)) {
@@ -475,6 +477,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_UINT_VALUE(initiator_tenant_id, job);
     RETRIEVE_UINT_VALUE(backup_tenant_id, job);
     RETRIEVE_INT_VALUE(restore_start_ts, job);
+    RETRIEVE_INT_VALUE(restoring_start_ts, job);
     if (OB_SUCC(ret)) {
       if (name == "restore_scn") {
         uint64_t current_value = share::OB_INVALID_SCN_VAL;
@@ -520,6 +523,7 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
     RETRIEVE_STR_VALUE(kms_dest, job);
     RETRIEVE_STR_VALUE(kms_encrypt_key, job);
     RETRIEVE_INT_VALUE(concurrency, job);
+    RETRIEVE_INT_VALUE(backup_compatible, job);
 
     if (OB_SUCC(ret)) {
       if (name == "backup_dest") {
@@ -555,11 +559,17 @@ int ObPhysicalRestoreTableOperator::retrieve_restore_option(
 
     if (OB_SUCC(ret)) {
       if (name == "restore_type") {
-        uint64_t restore_type = 0;
-        if (OB_FAIL(retrieve_uint_value(result, restore_type))) {
-          LOG_WARN("fail to retrive int value", K(ret));
-        } else {
-          job.set_restore_type(share::ObRestoreType(static_cast<share::ObRestoreType::Type>(restore_type)));
+        ObString restore_type_str;
+        EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "value", restore_type_str);
+        if (OB_SUCC(ret))  {
+          share::ObRestoreType tmp_restore_type(restore_type_str);
+          if (ObRestoreType::RESTORE_TYPE_MAX == tmp_restore_type) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_WARN("invalid restore type str extracted from sql", K(ret), K(restore_type_str));
+          } else {
+            job.set_restore_type(tmp_restore_type);
+          }
+
         }
       }
     }
@@ -1062,8 +1072,11 @@ int ObPhysicalRestoreTableOperator::get_restore_job_by_sql_(
   return ret;
 }
 
-int ObPhysicalRestoreTableOperator::check_finish_restore_to_consistent_scn(
-    bool &is_finished, bool &is_success)
+int ObPhysicalRestoreTableOperator::check_finish_restore_to_target_status(
+    const ObLSRestoreStatus &sys_ls_target_status,
+    const ObLSRestoreStatus &user_ls_target_status,
+    bool &is_finished,
+    bool &is_success)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1101,21 +1114,26 @@ int ObPhysicalRestoreTableOperator::check_finish_restore_to_consistent_scn(
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(ls_restore_status.set_status(restore_status))) {
             LOG_WARN("failed to set status", KR(ret), K(restore_status));
-          } else if (!ls_restore_status.is_in_restore_or_none() || ls_restore_status.is_failed()) {
+          } else if (!ls_restore_status.is_valid_restore_status() || ls_restore_status.is_failed()) {
             //restore failed
             is_finished = true;
             is_success = false;
+            LOG_WARN_RET(OB_SUCCESS, "ls restore failed", K(ls_id));
           } else {
-            const ObLSRestoreStatus target_status(ObLSRestoreStatus::Status::WAIT_RESTORE_TO_CONSISTENT_SCN);
-            if (ls_restore_status.get_status() < target_status.get_status()
-                && !ls_restore_status.is_none()
-                && is_finished && is_success) {
+            ObLSID tmp_ls_id(ls_id);
+            if (tmp_ls_id.is_sys_ls() && ls_restore_status == sys_ls_target_status) {
+            } else if (tmp_ls_id.is_user_ls() && ls_restore_status == user_ls_target_status) {
+            } else {
               is_finished = false;
             }
           }
         } // while
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
+        }
+
+        if (OB_SUCC(ret) && is_finished && !is_success) {
+          LOG_INFO("tenant restore failed", K(ls_id), K(ls_restore_status));
         }
       }
     }

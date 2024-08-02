@@ -4865,7 +4865,7 @@ public:
   int assign(const ObBackupComplLogArg &arg);
   bool is_valid() const;
   TO_STRING_KV(K_(trace_id), K_(job_id), K_(tenant_id), K_(task_id), K_(backup_set_id), K_(incarnation_id),
-    K_(backup_type), K_(backup_date), K_(ls_id), K_(dst_server), K_(backup_path), K_(start_scn), K_(end_scn));
+    K_(backup_type), K_(backup_date), K_(ls_id), K_(dst_server), K_(backup_path), K_(start_scn), K_(end_scn), K_(is_only_calc_stat));
 public:
   share::ObTaskId trace_id_;
   int64_t job_id_;
@@ -4923,6 +4923,30 @@ public:
   int64_t start_turn_id_;
   common::ObAddr dst_server_;
   share::ObBackupDataType backup_data_type_;
+};
+
+struct ObBackupFuseTabletMetaArg final
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObBackupFuseTabletMetaArg();
+  int assign(const ObBackupFuseTabletMetaArg &arg);
+  bool is_valid() const;
+  TO_STRING_KV(K_(job_id), K_(task_id), K_(trace_id), K_(tenant_id), K_(backup_set_id), K_(backup_path),
+      K_(backup_type), K_(ls_id), K_(turn_id), K_(retry_id), K_(dst_server));
+public:
+  int64_t job_id_;
+  int64_t task_id_;
+  share::ObTaskId trace_id_;
+  uint64_t tenant_id_;
+  int64_t backup_set_id_;
+  share::ObBackupPathString backup_path_;
+  share::ObBackupType::BackupType backup_type_;
+  share::ObLSID ls_id_;
+  int64_t turn_id_;
+  int64_t retry_id_;
+  common::ObAddr dst_server_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupFuseTabletMetaArg);
 };
 
 struct ObBackupCheckTaskArg

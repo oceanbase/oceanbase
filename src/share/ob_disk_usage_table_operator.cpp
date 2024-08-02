@@ -98,6 +98,9 @@ int ObDiskUsageTableOperator::update_tenant_space_usage(const uint64_t tenant_id
       case ObDiskReportFileType::TENANT_MAJOR_LOCAL_DATA:
         file_type_str = "tenant local data";
         break;
+      case ObDiskReportFileType::TENANT_BACKUP_DATA:
+        file_type_str = "tenant backup data";
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         SHARE_LOG(WARN, "unexpected", K(ret), K(file_type));
@@ -170,6 +173,9 @@ int ObDiskUsageTableOperator::delete_tenant_space_usage(const uint64_t tenant_id
         break;
       case ObDiskReportFileType::TENANT_MAJOR_LOCAL_DATA:
         file_type_str = "tenant local data";
+        break;
+      case ObDiskReportFileType::TENANT_BACKUP_DATA:
+        file_type_str = "tenant backup data";
         break;
       default:
         ret = OB_ERR_UNEXPECTED;

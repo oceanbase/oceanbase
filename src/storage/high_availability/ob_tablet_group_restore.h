@@ -422,6 +422,10 @@ private:
   int check_need_copy_sstable_(
       const ObITable::TableKey &table_key,
       bool &need_copy);
+  int check_remote_sstable_exist_in_table_store_(
+    const ObITable::TableKey &table_key,
+    bool &is_exist,
+    bool &need_copy);
   int record_server_event_();
   int check_src_sstable_exist_();
   int generate_mds_restore_tasks_(
@@ -452,6 +456,7 @@ public:
   virtual int process() override;
   VIRTUAL_TO_STRING_KV(K("ObTabletRestoreTask"), KP(this), KPC(ha_dag_net_ctx_), KPC(tablet_restore_ctx_));
 private:
+  int verify_table_store_();
   int update_restore_status_();
   int record_server_event_();
 

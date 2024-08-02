@@ -497,7 +497,7 @@ int ObTenantTabletScheduler::try_update_upper_trans_version_and_gc_sstable(
     } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
     } else if (FALSE_IT(tablet_id = tablet->get_tablet_meta().tablet_id_)) {
     } else if (tablet_id.is_special_merge_tablet()) {
-    } else if (!tablet->get_tablet_meta().ha_status_.is_none()) {
+    } else if (!tablet->get_tablet_meta().ha_status_.check_allow_read()) {
     } else if (OB_FAIL(ls.check_ls_migration_status(ls_is_migration, rebuild_seq))) {
       LOG_WARN("failed to check ls migration status", K(ret), K(ls_id));
     } else if (ls_is_migration) {

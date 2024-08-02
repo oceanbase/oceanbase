@@ -867,7 +867,7 @@ int ObLSMeta::get_create_type(int64_t &create_type) const
     create_type = ObLSCreateType::MIGRATE;
   } else if (restore_status_.is_in_clone()) {
     create_type = ObLSCreateType::CLONE;
-  } else if (restore_status_.is_in_restore()) {
+  } else if (restore_status_.is_in_restore_status()) {
     create_type = ObLSCreateType::RESTORE;
   } else if (ls_persistent_state_.is_ha_state()) {
     create_type = ObLSCreateType::MIGRATE;

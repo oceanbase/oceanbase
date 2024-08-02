@@ -12,11 +12,13 @@
 
 #include "ob_storage.h"
 #include "lib/restore/ob_i_storage.h"
+#include "lib/restore/ob_object_device.h"
 #include "lib/utility/ob_tracepoint.h"
 #include "lib/stat/ob_diagnose_info.h"
 #include "lib/container/ob_array_iterator.h"
 #include "common/ob_smart_var.h"
 #include "common/storage/ob_device_common.h"
+#include "common/storage/ob_io_device.h"
 #include "lib/atomic/ob_atomic.h"
 
 namespace oceanbase
@@ -1396,6 +1398,62 @@ int ObStorageUtil::del_unmerged_parts(const common::ObString &uri)
   return ret;
 }
 
+
+/**
+ * ------------------------------ObStorageReader------------------------------
+ */
+ObStorageAccesser::ObStorageAccesser() : is_inited_(false), ref_cnt_(0), device_holder_(), fd_()
+{
+}
+
+ObStorageAccesser::~ObStorageAccesser()
+{
+  fd_.reset();
+  device_holder_.reset();
+  ref_cnt_ = 0;
+  is_inited_ = false;
+}
+
+int ObStorageAccesser::init(const ObIOFd &fd, ObObjectDevice *device)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    OB_LOG(WARN, "init twice", K(ret));
+  } else {
+    fd_ = fd;
+    device_holder_.hold(device);
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+void ObStorageAccesser::inc_ref()
+{
+  IGNORE_RETURN ATOMIC_FAA(&ref_cnt_, 1);
+}
+
+void ObStorageAccesser::dec_ref()
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_ref = ATOMIC_SAF(&ref_cnt_, 1);
+  if (tmp_ref < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(ERROR, "ref_cnt < 0", K(ret), K(tmp_ref), KCSTRING(lbt()));
+  } else if (0 == tmp_ref) {
+    ObObjectDevice *object_device = device_holder_.get_ptr();
+    // device may be null, when directly using ObStorageAccesser and not using ObObjectDevice::open
+    if (OB_NOT_NULL(object_device)) {
+      // relaese_fd will destruct ObStorageAccesser, which will reset fd_
+      const ObIOFd fd = fd_;
+      if (OB_FAIL(object_device->release_fd(fd))) {
+        OB_LOG(WARN, "fail to release fd", K(ret), K(fd));
+      }
+    }
+  }
+}
+
+
 /**
  * ------------------------------ObStorageReader------------------------------
  */
@@ -2220,7 +2278,8 @@ ObStorageMultiPartWriter::ObStorageMultiPartWriter()
       s3_multipart_writer_(),
       start_ts_(0),
       is_opened_(false),
-      storage_info_(nullptr)
+      storage_info_(nullptr),
+      cur_max_offset_(0)
 {
   uri_[0] = '\0';
 }
@@ -2332,8 +2391,14 @@ int ObStorageMultiPartWriter::pwrite(const char *buf, const int64_t size, const 
   } else if (OB_ISNULL(multipart_writer_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "multipart writer not opened", K(ret));
+  } else if (OB_UNLIKELY(offset != cur_max_offset_)) {
+    ret = OB_ERR_UNEXPECTED;
+    OB_LOG(WARN, "call pwrite in an unexpected order",
+        K(ret), K(offset), K(size), K_(cur_max_offset));
   } else if (OB_FAIL(multipart_writer_->pwrite(buf, size, offset))) {
     STORAGE_LOG(WARN, "failed to write", K(ret));
+  } else {
+    cur_max_offset_ = offset + size;
   }
 
   print_access_storage_log("ObStorageMultiPartWriter::pwrite", uri_, start_ts, size);
@@ -2413,6 +2478,7 @@ int ObStorageMultiPartWriter::close()
   start_ts_ = 0;
   uri_[0] = '\0';
   is_opened_ = false;
+  cur_max_offset_ = 0;
   storage_info_ = nullptr;
   print_access_storage_log("ObStorageMultiPartWriter::close", uri_, start_ts, 0);
   return ret;

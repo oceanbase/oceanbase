@@ -137,5 +137,19 @@ int ObMacroBlocksWriteCtx::add_macro_block_id(const MacroBlockId &macro_block_id
   return ret;
 }
 
+int ObMacroBlocksWriteCtx::pop_macro_block_id(MacroBlockId &macro_block_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(macro_block_list_.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect macro block list", K(macro_block_list_));
+  } else if (OB_FAIL(macro_block_list_.pop_back(macro_block_id))) {
+    LOG_WARN("fail to pop_back", K(ret));
+  } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.dec_ref(macro_block_id))) {
+    LOG_WARN("fail to dec macro block ref cnt", K(ret), K(macro_block_id));
+  }
+  return ret;
+}
+
 } // end namespace blocksstable
 } // end namespace oceanbase

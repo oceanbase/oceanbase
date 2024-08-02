@@ -59,11 +59,15 @@ public:
       const std::function<int(const common::ObIArray<IndexType> &)> &print_func3,
       const std::function<int(const common::ObIArray<IndexIndexType> &)> &print_func4);
   template <class IndexType>
-  static int parse_from_index_blocks(
+  static int parse_from_data_file_index_blocks(
       blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list);
   template <typename BackupSmallFileType> 
   static int read_backup_info_file(const common::ObString &backup_path, const common::ObString &storage_info_str, 
       BackupSmallFileType &file_info);
+  template <class IndexType>
+  static int uncompress_and_decode_block(
+      const ObCompressorType &compressor_type, const int64_t data_zlength, const int64_t original_size,
+      blocksstable::ObBufferReader &buffer_reader, ObIArray<IndexType> &index_list);
 };
 
 class ObAdminDumpBackupDataExecutor : public ObAdminExecutor {
@@ -94,6 +98,7 @@ private:
   int print_backup_data_file_();
   int print_macro_range_index_file();
   int print_meta_index_file();
+  int print_macro_block_index_file();
 
 private:
   int print_backup_file_header_();
@@ -149,6 +154,8 @@ private:
   int dump_multi_level_index_header_(const backup::ObBackupMultiLevelIndexHeader &header);
   int dump_macro_block_index_(const backup::ObBackupMacroBlockIndex &index);
   int dump_macro_block_index_list_(const common::ObIArray<backup::ObBackupMacroBlockIndex> &index_list);
+  int dump_macro_block_index_index_(const backup::ObBackupMacroBlockIndexIndex &index);
+  int dump_macro_block_index_index_list_(const common::ObIArray<backup::ObBackupMacroBlockIndexIndex> &index_list);
   int dump_macro_range_index_(const backup::ObBackupMacroRangeIndex &index);
   int dump_macro_range_index_list_(const common::ObIArray<backup::ObBackupMacroRangeIndex> &index_list);
   int dump_macro_range_index_index_(const backup::ObBackupMacroRangeIndexIndex &index);

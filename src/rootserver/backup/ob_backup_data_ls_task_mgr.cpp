@@ -119,15 +119,12 @@ int ObBackupDataLSTaskMgr::gen_and_add_task_()
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_ADD_BACKUP_TASK_INTO_SCHEDULER);
   switch (ls_attr_->task_type_.type_) {
-    case ObBackupDataTaskType::Type::BACKUP_DATA_MINOR:
-    case ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR: {
-      if (ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR == ls_attr_->task_type_.type_) {
-#ifdef ERRSIM
+    case ObBackupDataTaskType::Type::BACKUP_USER_DATA: {
+      if (ObBackupDataTaskType::Type::BACKUP_USER_DATA == ls_attr_->task_type_.type_) {
         ROOTSERVICE_EVENT_ADD("backup", "before_backup_major_sstable",
                               "tenant_id", ls_attr_->tenant_id_,
                               "ls_id", ls_attr_->ls_id_.id());
         DEBUG_SYNC(BEFORE_BACKUP_MAJOR_SSTABLE);
-#endif
       }
       if (OB_FAIL(gen_and_add_backup_data_task_())) {
         LOG_WARN("[DATA_BACKUP]failed to gen and add backup data task", K(ret), KPC(ls_attr_));
@@ -144,6 +141,12 @@ int ObBackupDataLSTaskMgr::gen_and_add_task_()
     case ObBackupDataTaskType::Type::BACKUP_BUILD_INDEX: {
       if (OB_FAIL(gen_and_add_build_index_task_())) {
         LOG_WARN("[DATA_BACKUP]failed to gen and add build index task", K(ret), KPC(ls_attr_));
+      }
+      break;
+    }
+    case ObBackupDataTaskType::Type::BACKUP_FUSE_TABLET_META: {
+      if (OB_FAIL(gen_and_add_backup_fuse_tablet_meta_task_())) {
+        LOG_WARN("[DATA_BACKUP]failed to gen and add backup fuse tablet meta task", K(ret), KPC(ls_attr_));
       }
       break;
     }
@@ -168,7 +171,8 @@ int ObBackupDataLSTaskMgr::check_ls_is_dropped(
   ObLSStatusOperator op;
   share::ObLSStatusInfo status_info;
   is_dropped = false;
-  if (share::ObBackupDataTaskType::Type::BACKUP_BUILD_INDEX == ls_attr.task_type_.type_) {
+  if (share::ObBackupDataTaskType::Type::BACKUP_BUILD_INDEX == ls_attr.task_type_.type_
+     || share::ObBackupDataTaskType::Type::BACKUP_FUSE_TABLET_META == ls_attr.task_type_.type_) {
   } else if (OB_FAIL(op.get_ls_status_info(ls_attr.tenant_id_, ls_attr.ls_id_, status_info, sql_proxy))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       is_dropped = true;
@@ -261,6 +265,24 @@ int ObBackupDataLSTaskMgr::gen_and_add_build_index_task_()
   // then build index task status to pending
   int ret = OB_SUCCESS;
   ObBackupBuildIndexTask task;
+  ObBackupTaskStatus next_status;
+  next_status.status_ = ObBackupTaskStatus::Status::PENDING;
+  if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
+    LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(*job_attr_), K(*set_task_attr_), K(*ls_attr_));
+  } else if (OB_FAIL(advance_status_(next_status))) {
+    LOG_WARN("[DATA_BACKUP]failed to advance task status", K(ret), K(*ls_attr_), K(next_status));
+  } else if (OB_FAIL(task_scheduler_->add_task(task))) {
+    LOG_WARN("[DATA_BACKUP]failed to add task", K(ret), KPC(ls_attr_));
+  }
+  return ret;
+}
+
+int ObBackupDataLSTaskMgr::gen_and_add_backup_fuse_tablet_meta_task_()
+{
+  // add backup fuse meta task into task scheduler
+  // then build backup fuse meta task status to pending
+  int ret = OB_SUCCESS;
+  ObBackupDataFuseTabletMetaTask task;
   ObBackupTaskStatus next_status;
   next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*job_attr_, *set_task_attr_, *ls_attr_))) {
@@ -413,9 +435,9 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
         } 
         break;
       }
-      case ObBackupDataTaskType::BACKUP_DATA_MINOR:
-      case ObBackupDataTaskType::BACKUP_DATA_MAJOR:
-      case ObBackupDataTaskType::BACKUP_BUILD_INDEX: {
+      case ObBackupDataTaskType::BACKUP_USER_DATA:
+      case ObBackupDataTaskType::BACKUP_BUILD_INDEX:
+      case ObBackupDataTaskType::BACKUP_FUSE_TABLET_META: {
         int64_t cur_ts = ObTimeUtility::current_time();
         if (!ObBackupUtils::is_need_retry_error(ls_attr_->result_) 
             || set_task_attr_->retry_cnt_ + next_retry_id > OB_BACKUP_MAX_RETRY_TIMES) {

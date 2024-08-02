@@ -97,6 +97,7 @@ private:
       const common::ObIArray<share::ObLSAttr> &ls_attr_array);
   int check_all_ls_restore_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
   int check_all_ls_restore_to_consistent_scn_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
+  int check_all_ls_quick_restore_finish_(const uint64_t tenant_id, TenantRestoreStatus &tenant_restore_status);
   int try_get_tenant_restore_history_(const share::ObPhysicalRestoreJob &job_info,
                                       share::ObHisRestoreJobPersistInfo &history_info,
                                       bool &restore_tenant_exist);
@@ -106,6 +107,15 @@ private:
   int reset_restore_concurrency_(const uint64_t new_tenant_id, const share::ObPhysicalRestoreJob &job_info);
   int update_restore_concurrency_(const common::ObString &tenant_name, const uint64_t tenant_id,
       const int64_t restore_concurrency);
+  int stat_restore_progress_(
+      common::ObISQLClient &proxy,
+      const share::ObPhysicalRestoreJob &job_info,
+      const bool is_restore_stat_start,
+      const bool is_restore_finish);
+  int set_restoring_start_ts_(common::ObISQLClient &proxy, const share::ObPhysicalRestoreJob &job_info);
+  int update_tenant_restore_data_mode_to_remote_(const uint64_t tenant_id);
+  int update_tenant_restore_data_mode_to_normal_(const uint64_t tenant_id);
+  int update_tenant_restore_data_mode_(const uint64_t tenant_id, const share::ObRestoreDataMode &new_restore_data_mode);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

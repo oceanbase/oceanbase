@@ -18,6 +18,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "ob_storage_restore_struct.h"
 #include "ob_storage_ha_reader.h"
+#include "storage/backup/ob_backup_data_struct.h"
 
 namespace oceanbase
 {
@@ -227,8 +228,8 @@ struct ObStorageHACopySSTableParam final
   int assign(const ObStorageHACopySSTableParam &param);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(copy_table_key_array),
-      K_(src_info), K_(local_rebuild_seq), K_(need_check_seq),
-      KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
+      K_(src_info), K_(local_rebuild_seq), K_(need_check_seq), K_(is_leader_restore),
+      K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -239,6 +240,7 @@ struct ObStorageHACopySSTableParam final
   int64_t local_rebuild_seq_;
   bool need_check_seq_;
   bool is_leader_restore_;
+  ObTabletRestoreAction::ACTION restore_action_;
 
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
@@ -286,7 +288,8 @@ public:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const bool need_replace_remote_sstable);
   static int build_table_with_minor_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
@@ -303,13 +306,15 @@ private:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const bool need_replace_remote_sstable);
   // for column store
   static int build_tablet_for_column_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const bool need_replace_remote_sstable);
 
   static int get_tablet_(
       const common::ObTabletID &tablet_id,
@@ -322,6 +327,7 @@ private:
   static int inner_update_tablet_table_store_with_major_(
       const int64_t multi_version_start,
       const ObTableHandleV2 &table_handle,
+      const bool need_replace_remote_sstable,
       ObLS *ls,
       ObTablet *tablet,
       const ObStorageSchema &storage_schema,
@@ -331,7 +337,8 @@ private:
       ObTablet *tablet,
       const bool &need_tablet_meta_merge,
       const ObMigrationTabletParam *src_tablet_meta,
-      const ObTablesHandleArray &tables_handle);
+      const ObTablesHandleArray &tables_handle,
+      const bool is_replace_remote);
   static int check_need_merge_tablet_meta_(
       const ObMigrationTabletParam *src_tablet_meta,
       ObTablet *tablet,
@@ -348,7 +355,8 @@ private:
       ObTablet *tablet,
       const ObStorageSchema &storage_schema,
       const int64_t multi_version_start,
-      const ObTablesHandleArray &co_tables);
+      const ObTablesHandleArray &co_tables,
+      const bool need_replace_remote_sstable);
   static int append_sstable_array_(ObTablesHandleArray &dest_array, const ObTablesHandleArray &src_array);
 };
 

@@ -803,16 +803,15 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
                                                    ddl_param.table_key_.is_major_sstable() ? ObSSTableIndexBuilder::ENABLE : ObSSTableIndexBuilder::DISABLE))) {
       LOG_WARN("init sstable index builder failed", K(ret), K(data_desc));
     } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder,
-            false/*need_sort*/,
             nullptr/*task_idx*/,
-            ddl_param.table_key_.is_ddl_merge_sstable()/*use_absolute_offset*/))) {
+            ddl_param.table_key_.is_ddl_merge_sstable()/*is_ddl_merge*/))) {
       LOG_WARN("fail to alloc index builder", K(ret));
     } else if (meta_array.empty()) {
       // do nothing
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < meta_array.count(); ++i) {
         if (OB_FAIL(index_block_rebuilder.append_macro_row(*meta_array.at(i).block_meta_))) {
-          LOG_WARN("append block meta failed", K(ret), K(i));
+          LOG_WARN("append block meta failed", K(ret), K(i), KPC(meta_array.at(i).block_meta_));
         }
       }
     }

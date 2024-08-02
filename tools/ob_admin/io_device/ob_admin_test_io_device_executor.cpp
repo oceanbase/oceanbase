@@ -468,6 +468,7 @@ int ObAdminTestIODeviceExecutor::test_backup_data_()
         STORAGE_LOG(WARN, "upload data size does not match buf size", K(ret), K(write_size), K(buf_size));
       } else {
         total_size += buf_size;
+        offset = total_size;
       }
     }
     if (OB_SUCC(ret)) {

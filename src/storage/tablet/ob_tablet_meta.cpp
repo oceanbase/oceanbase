@@ -1390,7 +1390,7 @@ int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int6
     } else {
       pos = new_pos;
 
-      FLOG_INFO("succeed to deserialize migration tablet param", K(ret), KPC(this));
+      LOG_TRACE("succeed to deserialize migration tablet param", K(ret), KPC(this));
     }
   }
 

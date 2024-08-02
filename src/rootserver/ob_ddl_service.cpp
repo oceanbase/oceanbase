@@ -13331,6 +13331,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
     }
     }
   }
+  DEBUG_SYNC(AFTER_CREATE_SPLIT_TASK);
   return ret;
 }
 

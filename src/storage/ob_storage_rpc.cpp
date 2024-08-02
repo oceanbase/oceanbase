@@ -215,10 +215,71 @@ void ObCopyMacroBlockHeader::reset()
 
 bool ObCopyMacroBlockHeader::is_valid() const
 {
-  return occupy_size_ > 0;
+  return occupy_size_ > 0 && (!is_reuse_macro_block_ || (is_reuse_macro_block_ && macro_meta_row_.is_valid()));
 }
 
-OB_SERIALIZE_MEMBER(ObCopyMacroBlockHeader, is_reuse_macro_block_, occupy_size_);
+int ObCopyMacroBlockHeader::set_macro_meta(const blocksstable::ObDataMacroBlockMeta &macro_meta)
+{
+  int ret = OB_SUCCESS;
+
+  macro_meta_row_.reset();
+  allocator_.reset();
+
+  if (!macro_meta.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid macro meta", K(ret), K(macro_meta));
+  } else if (OB_FAIL(macro_meta_row_.init(macro_meta.val_.rowkey_count_ + 1))) {
+    LOG_WARN("fail to init macro meta row", K(ret), "row_col_cnt", macro_meta.val_.rowkey_count_ + 1);
+  } else if (OB_FAIL(macro_meta.build_row(macro_meta_row_, allocator_))) {
+    LOG_WARN("failed to build macro meta row", K(ret), K(macro_meta));
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE(ObCopyMacroBlockHeader)
+{
+  int ret = OB_SUCCESS;
+
+  LST_DO_CODE(OB_UNIS_ENCODE, is_reuse_macro_block_);
+  LST_DO_CODE(OB_UNIS_ENCODE, occupy_size_);
+
+  if (OB_FAIL(ret)) {
+  } else if (!is_reuse_macro_block_) {
+  } else if (OB_FAIL(macro_meta_row_.serialize(buf, buf_len, pos))) {
+    LOG_WARN("failed to serialize macro meta row", K(ret));
+  }
+
+  return ret;
+}
+
+OB_DEF_DESERIALIZE(ObCopyMacroBlockHeader)
+{
+  int ret = OB_SUCCESS;
+
+  LST_DO_CODE(OB_UNIS_DECODE, is_reuse_macro_block_);
+  LST_DO_CODE(OB_UNIS_DECODE, occupy_size_);
+
+  if (OB_FAIL(ret)) {
+  } else if (!is_reuse_macro_block_) {
+  } else if (OB_FAIL(macro_meta_row_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("failed to deserialize macro meta row", K(ret));
+  }
+
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObCopyMacroBlockHeader)
+{
+  int64_t len = 0;
+  LST_DO_CODE(OB_UNIS_ADD_LEN, is_reuse_macro_block_);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, occupy_size_);
+  if (is_reuse_macro_block_) {
+    len += macro_meta_row_.get_serialize_size();
+  }
+
+  return len;
+}
+
 
 ObCopyTabletInfoArg::ObCopyTabletInfoArg()
   : tenant_id_(OB_INVALID_ID),
@@ -1719,6 +1780,7 @@ int ObFetchLSInfoP::process()
     bool is_need_rebuild = false;
     bool is_log_sync = false;
     const bool check_archive = true;
+    const bool need_sorted_tablet_id = false;
 
     LOG_INFO("start to fetch log stream info", K(arg_.ls_id_), K(arg_));
 
@@ -1750,7 +1812,7 @@ int ObFetchLSInfoP::process()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("log handler should not be NULL", K(ret), KP(log_handler), K(arg_));
     } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_ids(check_archive,
-            result_.ls_meta_package_, result_.tablet_id_array_))) {
+            need_sorted_tablet_id, result_.ls_meta_package_, result_.tablet_id_array_))) {
       LOG_WARN("failed to get ls meta package and tablet ids", K(ret));
     } else if (OB_FAIL(result_.ls_meta_package_.ls_meta_.get_migration_status(migration_status))) {
       LOG_WARN("failed to get migration status", K(ret), K(result_));
@@ -3088,6 +3150,7 @@ int ObStorageFetchLSViewP::process()
     } else if (OB_FAIL(ls->get_ls_meta_package_and_tablet_metas(
                        false/* no need check archive */,
                        fill_ls_meta_f,
+                       false/*need_sorted_tablet_id*/,
                        fill_tablet_meta_f))) {
       LOG_WARN("failed to get ls meta package and tablet metas", K(ret), K_(arg));
     }

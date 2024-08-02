@@ -46,7 +46,6 @@ private:
   struct ObDeviceInsInfo {
     ObIODevice* device_;
     char        storage_info_[OB_MAX_URI_LENGTH];
-    int64_t     ref_cnt_;
   };
 
   /*notice:

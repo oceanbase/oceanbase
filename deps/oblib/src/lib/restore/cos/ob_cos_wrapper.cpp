@@ -1705,8 +1705,12 @@ int ObCosWrapper::complete_multipart_upload(
         if (total_parts == 0) {
           // If 'complete' without uploading any data, COS will return the error
           // 'MalformedXML, The XML you provided was not well-formed or did not validate against our published schema'
-          ret = OB_ERR_UNEXPECTED;
-          cos_warn_log("[COS]no parts have been uploaded, ret=%d, upload_id=%s\n", ret, upload_id.data);
+          // write an empty object instead
+          ret = put(h, bucket_name, object_name, "", 0);
+          if (OB_SUCCESS != ret) {
+            cos_warn_log("[COS]complete an empty multipart upload, but fail to write an empty object, ret=%d, upload_id=%s\n",
+                ret, upload_id.data);
+          }
         } else if (NULL == (cos_ret = cos_complete_multipart_upload(ctx->options, &bucket, &object,
                                                                     &upload_id, &complete_part_list,
                                                                     NULL, &resp_headers))

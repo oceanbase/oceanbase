@@ -61,8 +61,7 @@ public:
   virtual ~ObFakeBackupMetaIndexIterator();
   int init(const int64_t task_id, const share::ObBackupDest &backup_dest, const uint64_t tenant_id,
       const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-      const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
-      const bool is_sec_meta);
+      const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id);
   virtual int next() override;
   virtual bool is_iter_end() const override;
 
@@ -87,8 +86,7 @@ ObFakeBackupMetaIndexIterator::~ObFakeBackupMetaIndexIterator()
 
 int ObFakeBackupMetaIndexIterator::init(const int64_t task_id, const share::ObBackupDest &backup_dest,
     const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id,
-    const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id,
-    const bool is_sec_meta)
+    const share::ObBackupDataType &backup_data_type, const int64_t turn_id, const int64_t retry_id)
 {
   int ret = OB_SUCCESS;
   max_tablet_id = 0;
@@ -102,7 +100,6 @@ int ObFakeBackupMetaIndexIterator::init(const int64_t task_id, const share::ObBa
   retry_id_ = retry_id;
   cur_idx_ = 0;
   cur_file_id_ = -1;
-  is_sec_meta_ = is_sec_meta;
   generate_random_meta_index_(backup_set_desc.backup_set_id_, ls_id, turn_id, retry_id);
   is_inited_ = true;
   return ret;
@@ -184,7 +181,7 @@ private:
       const share::ObBackupDataType &backup_data_type, const share::ObLSID &ls_id, common::ObISQLClient &sql_proxy,
       common::ObIArray<ObBackupRetryDesc> &retry_list) override;
   virtual int alloc_merge_iter_(const ObBackupIndexMergeParam &merge_param, const ObBackupRetryDesc &retry_desc,
-      const bool is_sec_meta, ObBackupMetaIndexIterator *&iter) override;
+      ObBackupMetaIndexIterator *&iter) override;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFakeBackupMetaIndexMerger);
@@ -217,7 +214,7 @@ int ObFakeBackupMetaIndexMerger::get_all_retries_(const int64_t task_id, const u
 }
 
 int ObFakeBackupMetaIndexMerger::alloc_merge_iter_(const ObBackupIndexMergeParam &merge_param,
-    const ObBackupRetryDesc &retry_desc, const bool is_sec_meta, ObBackupMetaIndexIterator *&iter)
+    const ObBackupRetryDesc &retry_desc, ObBackupMetaIndexIterator *&iter)
 {
   int ret = OB_SUCCESS;
   ObFakeBackupMetaIndexIterator *tmp_iter = NULL;
@@ -234,8 +231,7 @@ int ObFakeBackupMetaIndexMerger::alloc_merge_iter_(const ObBackupIndexMergeParam
                  retry_desc.ls_id_,
                  merge_param.backup_data_type_,
                  retry_desc.turn_id_,
-                 retry_desc.retry_id_,
-                 is_sec_meta))) {
+                 retry_desc.retry_id_))) {
     LOG_WARN("failed to init meta index iterator", K(ret), K(merge_param));
   } else {
     iter = tmp_iter;
@@ -361,7 +357,7 @@ void TestBackupIndexMerger::inner_init_()
   job_desc_.task_id_ = 1;
   backup_set_desc_.backup_set_id_ = 1;
   backup_set_desc_.backup_type_.type_ = ObBackupType::FULL_BACKUP;
-  backup_data_type_.set_major_data_backup();
+  backup_data_type_.set_user_data_backup();
   incarnation_ = 1;
   tenant_id_ = 1;
   dest_id_ = 1;
@@ -384,8 +380,7 @@ void TestBackupIndexMerger::fake_init_meta_index_merger_(ObFakeBackupMetaIndexMe
   common::ObMySQLProxy sql_proxy;
   ObBackupIndexMergeParam merge_param;
   build_backup_index_merge_param_(merge_param);
-  const bool is_sec_meta = false;
-  ret = merger.init(merge_param, is_sec_meta, sql_proxy, throttle_);
+  ret = merger.init(merge_param, sql_proxy, throttle_);
   EXPECT_EQ(OB_SUCCESS, ret);
 }
 
@@ -436,6 +431,7 @@ void TestBackupIndexMerger::build_backup_index_merge_param_(ObBackupIndexMergePa
   merge_param.ls_id_ = ls_id_;
   merge_param.turn_id_ = turn_id_;
   merge_param.retry_id_ = retry_id_;
+  merge_param.compressor_type_ = ObCompressorType::ZSTD_1_3_8_COMPRESSOR;
 }
 
 void TestBackupIndexMerger::build_backup_index_store_param_(ObBackupIndexStoreParam &store_param)
@@ -498,21 +494,6 @@ TEST_F(TestBackupIndexMerger, test_backup_meta_index_merger)
   iterate_meta_index_store_(start_id, end_id, index_store);
 }
 
-TEST_F(TestBackupIndexMerger, test_backup_macro_index_merger)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  fake_init_macro_index_merger_(merger);
-  ret = merger.merge_index();
-  EXPECT_EQ(OB_SUCCESS, ret);
-  ObMockBackupMacroBlockIndexStore index_store;
-  init_backup_macro_index_store_(index_store);
-  const int64_t start_id = 1;
-  const int64_t end_id = max_tablet_id;
-  iterate_macro_index_store_(start_id, end_id, index_store);
-}
-
 TEST_F(TestBackupIndexMerger, test_backup_meta_index_same_meta_index_different_retry)
 {
   ObBackupMetaIndex meta_index1;
@@ -521,7 +502,6 @@ TEST_F(TestBackupIndexMerger, test_backup_meta_index_same_meta_index_different_r
   meta_index1.turn_id_ = 1;
   meta_index1.retry_id_ = 0;
   ObBackupMetaIndexIterator iter1;
-  iter1.is_sec_meta_ = false;
   iter1.cur_idx_ = 0;
   iter1.cur_file_id_ = 0;
   iter1.is_inited_ = true;
@@ -534,7 +514,6 @@ TEST_F(TestBackupIndexMerger, test_backup_meta_index_same_meta_index_different_r
   meta_index2.turn_id_ = 1;
   meta_index2.retry_id_ = 1;
   ObBackupMetaIndexIterator iter2;
-  iter2.is_sec_meta_ = false;
   iter2.cur_idx_ = 0;
   iter2.cur_file_id_ = 0;
   iter2.is_inited_ = true;

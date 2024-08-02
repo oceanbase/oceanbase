@@ -180,7 +180,9 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
   common::ObSArray<blocksstable::MacroBlockId> block_list;
   ObDiskUsageReportKey meta_key;
   ObDiskUsageReportKey data_key;
+  ObDiskUsageReportKey quick_restore_remote_key;
   int64_t meta_size = 0;
+  int64_t backup_size = 0;
   int64_t data_size = 0;
   int64_t occupy_size = 0;
 
@@ -206,6 +208,7 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
         occupy_size += tablet_info.get_occupy_size();
         data_size += tablet_info.get_required_size();
         meta_size += tablet_info.get_meta_size();
+        backup_size += tablet_info.get_backup_size();
       }
       pointer_handle.reset();
     }
@@ -221,10 +224,14 @@ int ObDiskUsageReportTask::count_tenant_data(const uint64_t tenant_id)
     meta_key.file_type_ = ObDiskReportFileType::TENANT_META_DATA;
     data_key.tenant_id_ = tenant_id;
     data_key.file_type_ = ObDiskReportFileType::TENANT_DATA;
+    quick_restore_remote_key.tenant_id_ = tenant_id;
+    quick_restore_remote_key.file_type_ = ObDiskReportFileType::TENANT_BACKUP_DATA;
     if (OB_FAIL(result_map_.set_refactored(meta_key, std::make_pair(meta_size, meta_size), 1 /* whether allowed to override */))) {
       STORAGE_LOG(WARN, "failed to insert meta info result_map_", K(ret), K(meta_key), K(meta_size));
-    } else if (OB_FAIL(result_map_.set_refactored(data_key,std::make_pair(occupy_size, data_size), 1 /* whether allowed to override */))) {
+    } else if (OB_FAIL(result_map_.set_refactored(data_key, std::make_pair(occupy_size, data_size), 1 /* whether allowed to override */))) {
       STORAGE_LOG(WARN, "failed to insert data info result_map_", K(ret), K(data_key), K(occupy_size), K(data_size));
+    } else if (OB_FAIL(result_map_.set_refactored(quick_restore_remote_key, std::make_pair(backup_size, backup_size), 1 /* whether allowed to override */))) {
+      STORAGE_LOG(WARN, "failed to insert backup_size info result_map_", K(ret), K(data_key), K(backup_size));
     }
   }
   return ret;

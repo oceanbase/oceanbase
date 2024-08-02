@@ -39,6 +39,7 @@ public:
   enum Type {
     MACRO_BLOCK_OB_READER = 0,
     MACRO_BLOCK_RESTORE_READER = 1,
+    REMOTE_SSTABLE_MACRO_BLOCK_RESTORE_READER = 2,
     MAX_READER_TYPE
   };
   // macro block list is set in the init func
@@ -62,8 +63,9 @@ struct ObCopyMacroBlockReaderInitParam final
   int assign(const ObCopyMacroBlockReaderInitParam &param);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(table_key), KPC_(copy_macro_range_info), K_(src_info),
-      K_(is_leader_restore), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(restore_base_info),
-      KP_(meta_index_store), KP_(second_meta_index_store), KP_(restore_macro_block_id_mgr));
+      K_(is_leader_restore), K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy),
+      KP_(restore_base_info), KP_(meta_index_store), KP_(second_meta_index_store),
+      KP_(restore_macro_block_id_mgr));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -71,6 +73,7 @@ struct ObCopyMacroBlockReaderInitParam final
   const ObCopyMacroRangeInfo *copy_macro_range_info_;
   ObStorageHASrcInfo src_info_;
   bool is_leader_restore_;
+  ObTabletRestoreAction::ACTION restore_action_;
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   const ObRestoreBaseInfo *restore_base_info_;
@@ -131,6 +134,16 @@ public:
 
 private:
   int alloc_buffers();
+  int fetch_macro_block_index_(
+      const int64_t block_id_idx,
+      const share::ObBackupDataType &backup_data_type,
+      blocksstable::ObLogicMacroBlockId &logic_block_id,
+      backup::ObBackupMacroBlockIndex &macro_index);
+  int get_macro_block_backup_path_(
+      const share::ObBackupDest &backup_set_dest,
+      const backup::ObBackupMacroBlockIndex &macro_index,
+      const share::ObBackupDataType backup_data_type,
+      ObBackupPath &backup_path);
 
 private:
   bool is_inited_;
@@ -155,10 +168,14 @@ struct ObCopyMacroBlockHandle final
   void reset();
   bool is_valid() const;
   int set_end_key(const blocksstable::ObDatumRowkey &end_key);
+  int set_macro_meta(const blocksstable::ObDataMacroBlockMeta &macro_meta);
 
   bool is_reuse_macro_block_;
   ObSelfBufferWriter end_key_buf_;
   blocksstable::ObMacroBlockHandle read_handle_;
+  common::ObArenaAllocator allocator_;
+  blocksstable::ObDataMacroBlockMeta *macro_meta_;
+
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockHandle);
 };
 
@@ -253,6 +270,11 @@ public:
   virtual int fetch_tablet_info(obrpc::ObCopyTabletInfo &tablet_info);
   virtual Type get_type() const { return TABLET_INFO_RESTORE_READER; }
 private:
+  int get_macro_block_backup_path_(
+      const backup::ObBackupMetaIndex &tablet_meta_index,
+      const share::ObBackupDataType data_type,
+      ObBackupPath &tablet_meta_backup_path);
+private:
   bool is_inited_;
   const ObRestoreBaseInfo *restore_base_info_;
   common::ObArray<common::ObTabletID> tablet_id_array_;
@@ -278,6 +300,38 @@ private:
   int64_t tablet_index_;
   ObLSHandle ls_handle_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyTabletInfoObProducer);
+};
+
+class ObCopyRemoteSSTableInfoObProducer final
+{
+public:
+  ObCopyRemoteSSTableInfoObProducer();
+  ~ObCopyRemoteSSTableInfoObProducer() {}
+
+  int init (
+      const common::ObTabletID tablet_id,
+      ObLS *ls);
+  int get_next_sstable_info(
+      obrpc::ObCopyTabletSSTableInfo &sstable_info);
+  int get_copy_tablet_sstable_header(
+      obrpc::ObCopyTabletSSTableHeader &copy_header);
+
+  void reset();
+
+private:
+  int check_need_copy_sstable_(
+      blocksstable::ObSSTable *sstable,
+      bool &need_copy_sstable);
+  int get_copy_sstable_count_(int64_t &sstable_count);
+  int get_tablet_meta_(ObMigrationTabletParam &tablet_meta);
+
+private:
+  bool is_inited_;
+  share::ObLSID ls_id_;
+  common::ObTabletID tablet_id_;
+  ObTabletHandle tablet_handle_;
+  ObTableStoreIterator iter_;
+  DISALLOW_COPY_AND_ASSIGN(ObCopyRemoteSSTableInfoObProducer);
 };
 
 class ObICopySSTableInfoReader
@@ -350,6 +404,16 @@ public:
   virtual Type get_type() const { return COPY_SSTABLE_INFO_RESTORE_READER; }
 
 private:
+  int get_tablet_sstable_header_from_backup_(
+      const common::ObTabletID &tablet_id,
+      obrpc::ObCopyTabletSSTableHeader &copy_header);
+  int get_tablet_sstable_header_from_local_(
+      const common::ObTabletID &tablet_id,
+      obrpc::ObCopyTabletSSTableHeader &copy_header);
+  int get_next_sstable_info_from_backup_(
+      obrpc::ObCopyTabletSSTableInfo &sstable_info);
+  int get_next_sstable_info_from_local_(
+      obrpc::ObCopyTabletSSTableInfo &sstable_info);
   int fetch_sstable_meta_(
       const backup::ObBackupSSTableMeta &backup_sstable_meta,
       obrpc::ObCopyTabletSSTableInfo &sstable_info);
@@ -359,6 +423,13 @@ private:
       const common::ObTabletID &tablet_id,
       const share::ObBackupDataType data_type,
       common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
+  int filter_backup_sstable_meta_on_data_type_(
+      const share::ObBackupDataType data_type,
+      common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
+  int get_macro_block_backup_path_(
+      const backup::ObBackupMetaIndex &sstable_meta_index,
+      const share::ObBackupDataType data_type,
+      ObBackupPath &tablet_meta_backup_path);
   int set_backup_sstable_meta_array_(
       const common::ObIArray<backup::ObBackupSSTableMeta> &backup_sstable_meta_array);
   int get_backup_tablet_meta_(
@@ -392,12 +463,14 @@ private:
   common::ObArray<common::ObTabletID> tablet_id_array_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   int64_t tablet_index_;
+  int64_t sstable_count_;
   int64_t sstable_index_;
   bool is_sstable_iter_end_;
   common::ObArray<backup::ObBackupSSTableMeta> backup_sstable_meta_array_;
   common::ObArenaAllocator allocator_;
   share::ObLSID ls_id_;
   ObLSHandle ls_handle_;
+  ObCopyRemoteSSTableInfoObProducer remote_sstable_producer_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableInfoRestoreReader);
 };
 
@@ -498,48 +571,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroObReader);
 };
 
-class ObCopySSTableMacroRestoreReader : public ObICopySSTableMacroInfoReader
-{
-public:
-  ObCopySSTableMacroRestoreReader();
-  virtual ~ObCopySSTableMacroRestoreReader() {}
-
-  int init(
-      const obrpc::ObCopySSTableMacroRangeInfoArg &rpc_arg,
-      const ObRestoreBaseInfo &restore_base_info,
-      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
-      backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
-
-  virtual int get_next_sstable_range_info(
-      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
-  virtual Type get_type() const { return COPY_SSTABLE_MACRO_INFO_RESTORE_READER; }
-
-private:
-  int get_next_sstable_range_info_(
-      const ObITable::TableKey &table_key,
-      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
-  int build_sstable_range_info_(
-      const ObITable::TableKey &table_key,
-      const common::ObIArray<ObRestoreMacroBlockId> &block_id_array,
-      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
-
-  int fetch_sstable_macro_range_header_(obrpc::ObCopySSTableMacroRangeInfoHeader &header);
-  int fetch_sstable_macro_range_(
-      const obrpc::ObCopySSTableMacroRangeInfoHeader &header,
-      common::ObIArray<ObCopyMacroRangeInfo> &macro_range_info_array);
-
-private:
-  static const int64_t FETCH_SSTABLE_MACRO_INFO_TIMEOUT = 60 * 1000 * 1000; //60s
-  bool is_inited_;
-  obrpc::ObCopySSTableMacroRangeInfoArg rpc_arg_;
-  const ObRestoreBaseInfo *restore_base_info_;
-  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
-  backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
-  backup::ObBackupMacroBlockIDMappingsMeta macro_block_id_map_;
-  int64_t sstable_index_;
-  DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRestoreReader);
-};
-
 
 class ObCopySSTableMacroObProducer
 {
@@ -567,6 +598,58 @@ private:
   ObTabletHandle tablet_handle_;
   int64_t macro_range_max_marco_count_;
   DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroObProducer);
+};
+
+class ObCopySSTableMacroRestoreReader : public ObICopySSTableMacroInfoReader
+{
+public:
+  ObCopySSTableMacroRestoreReader();
+  virtual ~ObCopySSTableMacroRestoreReader() {}
+
+  int init(
+      const obrpc::ObCopySSTableMacroRangeInfoArg &rpc_arg,
+      const ObRestoreBaseInfo &restore_base_info,
+      const ObTabletRestoreAction::ACTION &restore_action,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+      backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
+
+  virtual int get_next_sstable_range_info(
+      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
+  virtual Type get_type() const { return COPY_SSTABLE_MACRO_INFO_RESTORE_READER; }
+
+private:
+  int get_next_sstable_range_info_from_local_(
+      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
+  int fetch_sstable_macro_range_from_local_(
+    const obrpc::ObCopySSTableMacroRangeInfoHeader &header,
+    common::ObIArray<ObCopyMacroRangeInfo> &macro_range_info_array);
+
+  int get_next_sstable_range_info_from_backup_(
+      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
+  int get_next_sstable_range_info_(
+      const ObITable::TableKey &table_key,
+      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
+  int build_sstable_range_info_(
+      const ObITable::TableKey &table_key,
+      const common::ObIArray<ObRestoreMacroBlockId> &block_id_array,
+      ObCopySSTableMacroRangeInfo &sstable_macro_range_info);
+
+  int fetch_sstable_macro_range_header_(obrpc::ObCopySSTableMacroRangeInfoHeader &header);
+  int fetch_sstable_macro_range_(
+      const obrpc::ObCopySSTableMacroRangeInfoHeader &header,
+      common::ObIArray<ObCopyMacroRangeInfo> &macro_range_info_array);
+
+private:
+  static const int64_t FETCH_SSTABLE_MACRO_INFO_TIMEOUT = 60 * 1000 * 1000; //60s
+  bool is_inited_;
+  obrpc::ObCopySSTableMacroRangeInfoArg rpc_arg_;
+  const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
+  backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
+  int64_t sstable_index_;
+  ObTabletRestoreAction::ACTION restore_action_;
+  ObCopySSTableMacroObProducer sstable_macro_producer_;
+  DISALLOW_COPY_AND_ASSIGN(ObCopySSTableMacroRestoreReader);
 };
 
 class ObCopySSTableMacroRangeObProducer
@@ -685,6 +768,63 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCopyLSViewInfoRestoreReader);
 };
 
+class ObCopyRemoteSSTableMacroBlockRestoreReader: public ObICopyMacroBlockReader
+{
+public:
+  ObCopyRemoteSSTableMacroBlockRestoreReader();
+  virtual ~ObCopyRemoteSSTableMacroBlockRestoreReader();
+  int init(const ObCopyMacroBlockReaderInitParam &param);
+  virtual int get_next_macro_block(
+      obrpc::ObCopyMacroBlockHeader &header,
+      blocksstable::ObBufferReader &data);
+  virtual Type get_type() const { return REMOTE_SSTABLE_MACRO_BLOCK_RESTORE_READER; }
+  virtual int64_t get_data_size() const { return data_size_; }
+
+private:
+  int alloc_buffers_();
+  int fetch_macro_block_index_(
+      const int64_t block_id_idx,
+      const share::ObBackupDataType &backup_data_type,
+      blocksstable::ObLogicMacroBlockId &logic_block_id,
+      backup::ObBackupMacroBlockIndex &macro_index);
+
+  int read_backup_macro_block_data_(
+      blocksstable::ObDataMacroBlockMeta &macro_meta,
+      obrpc::ObCopyMacroBlockHeader &header,
+      blocksstable::ObBufferReader &data);
+  int get_backup_macro_block_index_(
+      const ObRestoreMacroBlockId &macro_id,
+      backup::ObBackupMacroBlockIndex &macro_index);
+  int do_read_backup_macro_block_data_(
+      const backup::ObBackupMacroBlockIndex &macro_index,
+      blocksstable::ObBufferReader &data_buffer);
+  int read_local_macro_block_data_(
+      blocksstable::ObDataMacroBlockMeta &macro_meta,
+      obrpc::ObCopyMacroBlockHeader &header,
+      blocksstable::ObBufferReader &data);
+
+private:
+  bool is_inited_;
+  ObITable::TableKey table_key_;
+  int64_t data_version_;
+  const ObCopyMacroRangeInfo *copy_macro_range_info_;
+  const ObRestoreBaseInfo *restore_base_info_;
+  backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
+
+
+  blocksstable::ObBufferReader backup_macro_data_buffer_;
+  blocksstable::ObBufferReader backup_macro_read_buffer_;
+  char *local_macro_data_buffer_;
+  common::ObArenaAllocator allocator_;
+  ObTabletHandle tablet_handle_;
+  ObTableHandleV2 sstable_handle_;
+  const ObSSTable *sstable_;
+  ObSSTableSecMetaIterator second_meta_iterator_;
+  ObDatumRange datum_range_;
+  int64_t macro_block_count_;
+  int64_t data_size_;
+  DISALLOW_COPY_AND_ASSIGN(ObCopyRemoteSSTableMacroBlockRestoreReader);
+};
 }
 }
 #endif

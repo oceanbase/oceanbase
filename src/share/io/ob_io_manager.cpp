@@ -458,9 +458,11 @@ int ObIOManager::remove_device_channel(ObIODevice *device_handle)
   return ret;
 }
 
-int ObIOManager::get_device_channel(const ObIODevice *device_handle, ObDeviceChannel *&device_channel)
+int ObIOManager::get_device_channel(const ObIORequest &req, ObDeviceChannel *&device_channel)
 {
+  // for now, different device_handle use same channel
   int ret = OB_SUCCESS;
+  ObIODevice *device_handle = req.fd_.is_backup_block_file() ? THE_IO_DEVICE : req.fd_.device_handle_;
   device_channel = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -921,7 +923,7 @@ int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_FAIL(req->prepare())) {
     LOG_WARN("prepare io request failed", K(ret), K(req));
   } else if (FALSE_IT(time_guard.click("prepare_detect_req"))) {
-  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req->fd_.device_handle_, device_channel))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(*req, device_channel))) {
     LOG_WARN("get device channel failed", K(ret), K(req));
   } else {
     if (OB_ISNULL(req->io_result_)) {

@@ -27,6 +27,7 @@
 #include "storage/meta_mem/ob_storage_meta_cache.h"
 #include "share/ob_table_range.h"
 #include "share/scn.h"
+#include "storage/blocksstable/ob_table_flag.h"
 
 namespace oceanbase
 {
@@ -156,7 +157,6 @@ public:
     OB_INLINE bool is_normal_cg_sstable() const { return ObITable::is_normal_cg_sstable(table_type_); }
     OB_INLINE bool is_cg_sstable() const { return ObITable::is_cg_sstable(table_type_); }
     OB_INLINE bool is_column_store_sstable() const { return is_co_sstable() || is_cg_sstable(); }
-
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
     share::SCN get_start_scn() const { return scn_range_.start_scn_; }
     share::SCN get_end_scn() const { return scn_range_.end_scn_; }
@@ -168,9 +168,9 @@ public:
     OB_INLINE TableKey& operator=(const TableKey &key)
     {
       table_type_ = key.table_type_;
+      column_group_idx_ = key.column_group_idx_;
       tablet_id_ = key.tablet_id_;
       scn_range_ = key.scn_range_;
-      column_group_idx_ = key.column_group_idx_;
       return *this;
     }
 
@@ -573,6 +573,7 @@ public:
   int get_tables(common::ObIArray<ObITable *> &tables) const;
   int get_first_memtable(ObIMemtable *&memtable) const;
   int get_all_minor_sstables(common::ObIArray<ObITable *> &tables) const;
+  int get_all_remote_major_sstables(common::ObIArray<ObITable *> &tables) const;
   int get_all_ddl_sstables(common::ObIArray<ObITable *> &tables) const;
   int get_all_mds_sstables(common::ObIArray<ObITable *> &tables) const;
   int check_continues(const share::ObScnRange *scn_range) const;

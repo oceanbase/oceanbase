@@ -139,7 +139,7 @@ public:
     nested_offset_ = 0;
     nested_size_ = 0;
   }
-  TO_STRING_KV(K_(val), K_(end_key));
+  TO_STRING_KV(K_(val), K_(end_key), K_(nested_offset), K_(nested_size));
 public:
   ObDataBlockMetaVal val_;
   ObDatumRowkey end_key_; // rowkey is primary key

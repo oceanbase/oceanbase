@@ -643,7 +643,7 @@ void TestIndexBlockDataPrepare::prepare_data(const int64_t micro_block_size)
   ASSERT_EQ(OB_SUCCESS, writer.close());
   // data write ctx has been moved to root_index_builder
   ASSERT_EQ(writer.get_macro_block_write_ctx().get_macro_block_count(), 0);
-  data_macro_block_cnt_ = root_index_builder_->roots_[0]->macro_metas_->count();
+  data_macro_block_cnt_ = root_index_builder_->roots_[0]->meta_block_info_.get_row_count();
   ASSERT_GE(data_macro_block_cnt_, 0);
 
   const int64_t column_cnt =
@@ -715,7 +715,7 @@ void TestIndexBlockDataPrepare::prepare_cg_data()
   OK(data_writer.close());
   // data write ctx has been moved to root_index_builder
   ASSERT_EQ(data_writer.get_macro_block_write_ctx().get_macro_block_count(), 0);
-  data_macro_block_cnt_ = root_index_builder_->roots_[0]->macro_metas_->count();
+  data_macro_block_cnt_ = root_index_builder_->roots_[0]->meta_block_info_.get_row_count();
   ASSERT_GE(data_macro_block_cnt_, 0);
 
   const int64_t column_cnt = data_desc.get_desc().get_row_column_count();
@@ -890,7 +890,7 @@ void TestIndexBlockDataPrepare::prepare_partial_ddl_data()
   ASSERT_EQ(OB_SUCCESS, writer.close());
   // data write ctx has been moved to merge_root_index_builder_
   ASSERT_EQ(writer.get_macro_block_write_ctx().get_macro_block_count(), 0);
-  data_macro_block_cnt_ = merge_root_index_builder_->roots_[0]->macro_metas_->count();
+  data_macro_block_cnt_ = merge_root_index_builder_->roots_[0]->meta_block_info_.get_row_count();
   ASSERT_GE(data_macro_block_cnt_, 0);
   int64_t column_cnt = 0;
   ObTabletID tablet_id(TestIndexBlockDataPrepare::tablet_id_);
@@ -965,7 +965,7 @@ void TestIndexBlockDataPrepare::prepare_partial_cg_data()
   ASSERT_EQ(OB_SUCCESS, writer.close());
   // data write ctx has been moved to merge_root_index_builder_
   ASSERT_EQ(writer.get_macro_block_write_ctx().get_macro_block_count(), 0);
-  data_macro_block_cnt_ = merge_root_index_builder_->roots_[0]->macro_metas_->count();
+  data_macro_block_cnt_ = merge_root_index_builder_->roots_[0]->meta_block_info_.get_row_count();
   ASSERT_GE(data_macro_block_cnt_, 0);
   int64_t column_cnt = 0;
   ObTabletID tablet_id(TestIndexBlockDataPrepare::tablet_id_);
@@ -1192,7 +1192,7 @@ void TestIndexBlockDataPrepare::prepare_contrastive_sstable()
   ASSERT_EQ(OB_SUCCESS, writer.close());
   // data write ctx has been moved to root_index_builder
   ASSERT_EQ(writer.get_macro_block_write_ctx().get_macro_block_count(), 0);
-  data_macro_block_cnt_ = root_index_builder_->roots_[0]->macro_metas_->count();
+  data_macro_block_cnt_ = root_index_builder_->roots_[0]->meta_block_info_.get_row_count();
   ASSERT_GE(data_macro_block_cnt_, 0);
 
   int64_t column_cnt = 0;

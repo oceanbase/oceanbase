@@ -87,6 +87,7 @@
 #include "share/ob_rpc_struct.h"
 #include "rootserver/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
+#include "rootserver/ob_admin_drtask_util.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 
 namespace oceanbase
@@ -343,7 +344,7 @@ int ObAdminDRTaskP::process()
   if (OB_UNLIKELY(!arg_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(arg));
-  } else if (OB_FAIL(ObAdminDRTaskUtil::handle_obadmin_command(arg_))) {
+  } else if (OB_FAIL(rootserver::ObAdminDRTaskUtil::handle_obadmin_command(arg_))) {
     LOG_WARN("fail to handle ob admin command", KR(ret), K_(arg));
   }
   LOG_INFO("finish handle ls replica task triggered by ob_admin", K_(arg));
@@ -670,6 +671,18 @@ int ObRpcBackupMetaP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->backup_meta(arg_);
+  }
+  return ret;
+}
+
+int ObRpcBackupFuseTabletMetaP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->backup_fuse_tablet_meta(arg_);
   }
   return ret;
 }

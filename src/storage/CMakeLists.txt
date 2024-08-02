@@ -49,6 +49,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_datum_row.cpp
   blocksstable/ob_datum_rowkey.cpp
   blocksstable/ob_data_store_desc.cpp
+  blocksstable/ob_table_flag.cpp
   blocksstable/ob_datum_rowkey_vector.cpp
 )
 
@@ -129,6 +130,7 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_index_block_builder.cpp
   blocksstable/index_block/ob_index_block_macro_iterator.cpp
   blocksstable/index_block/ob_index_block_dual_meta_iterator.cpp
+  blocksstable/index_block/ob_index_block_dumper.cpp
   blocksstable/index_block/ob_ddl_sstable_scan_merge.cpp
   blocksstable/index_block/ob_index_block_row_scanner.cpp
   blocksstable/index_block/ob_ddl_index_block_row_iterator.cpp
@@ -221,6 +223,8 @@ ob_set_subtarget(ob_storage restore
   restore/ob_ls_restore_args.cpp
   restore/ob_ls_restore_handler.cpp
   restore/ob_ls_restore_task_mgr.cpp
+  restore/ob_tenant_restore_info_mgr.cpp
+  restore/ob_restore_compatibility_util.cpp
 )
 
 ob_set_subtarget(ob_storage backup
@@ -238,10 +242,18 @@ ob_set_subtarget(ob_storage backup
   backup/ob_backup_task.cpp
   backup/ob_backup_tmp_file.cpp
   backup/ob_backup_utils.cpp
+  backup/ob_backup_index_compressor.cpp
   backup/ob_backup_operator.cpp
   backup/ob_backup_extern_info_mgr.cpp
   backup/ob_backup_restore_util.cpp
   backup/ob_ls_backup_clean_mgr.cpp
+  backup/ob_backup_device_wrapper.cpp
+  backup/ob_backup_index_block_builder_mgr.cpp
+  backup/ob_backup_sstable_sec_meta_iterator.cpp
+  backup/ob_backup_tablet_meta_fuser.cpp
+  backup/ob_backup_fuse_tablet_ctx.cpp
+  backup/ob_backup_fuse_tablet_task.cpp
+  backup/ob_backup_fuse_tablet_dag.cpp
 )
 
 ob_set_subtarget(ob_storage tablet

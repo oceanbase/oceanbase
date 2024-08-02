@@ -298,7 +298,7 @@ int ObSharedMacroBlockMgr::write_block(
     } else if (OB_FAIL(read_handle.wait())) {
       LOG_WARN("fail to wait io finish", K(ret), K(read_info));
     } else if (OB_FAIL(macro_block_checker.check(
-        read_info.buf_,
+        read_handle.get_buffer(),
         read_handle.get_data_size(),
         CHECK_LEVEL_PHYSICAL))) {
       LOG_WARN("fail to verify macro block", K(ret), K(macro_id));
@@ -702,7 +702,7 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
     LOG_WARN("fail to prepare data desc", K(ret), "merge_type", merge_type_to_str(merge_type), K(tablet.get_snapshot_version()));
   } else if (OB_FAIL(sstable_index_builder.init(data_desc.get_desc(), nullptr, ObSSTableIndexBuilder::DISABLE))) {
     LOG_WARN("fail to init sstable index builder", K(ret), K(data_desc));
-  } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder))) {
+  } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder, nullptr, old_sstable.is_ddl_merge_sstable()))) {
     LOG_WARN("fail to init index block rebuilder", K(ret));
   } else if (OB_FAIL(read_sstable_block(old_sstable, block_handle, read_allocator))) {
     LOG_WARN("fail to read old_sstable's block", K(ret), K(old_sstable));
@@ -710,7 +710,8 @@ int ObSharedMacroBlockMgr::rebuild_sstable(
       block_handle.get_buffer(), block_handle.get_data_size(), block_info, write_ctx))) {
     LOG_WARN("fail to write old_sstable's buf to new block", K(ret));
   } else if (OB_FAIL(index_block_rebuilder.append_macro_row(
-      block_handle.get_buffer(), block_handle.get_data_size(), block_info.macro_id_))) {
+      block_handle.get_buffer(), block_handle.get_data_size(),
+      block_info.macro_id_, -1 /*absolute_row_offset*/))) {
     LOG_WARN("fail to append macro row", K(ret), K(block_info));
   } else if (OB_FAIL(index_block_rebuilder.close())) {
     LOG_WARN("fail to close index block rebuilder", K(ret));

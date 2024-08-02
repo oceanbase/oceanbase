@@ -88,7 +88,8 @@ class ObIBackupMultiLevelIndexBuilder {
 public:
   ObIBackupMultiLevelIndexBuilder();
   virtual ~ObIBackupMultiLevelIndexBuilder();
-  int init(const int64_t start_offset, ObBackupIndexBufferNode &node, ObBackupFileWriteCtx &write_ctx);
+  int init(const int64_t start_offset, const ObCompressorType compressor_type,
+      ObBackupIndexBufferNode &node, ObBackupFileWriteCtx &write_ctx);
   template <class T>
   int build_index();
   void reset();
@@ -104,12 +105,12 @@ protected:
   int check_need_build_next_level_(ObBackupIndexBufferNode *node, bool &need_build) const;
   template <class IndexIndex>
   int build_next_level_index_impl_(ObBackupIndexBufferNode &cur_node, ObBackupIndexBufferNode &next_node);
+  template <class IndexType>
+  int write_compressed_data_(const common::ObIArray<IndexType> &index_list, const ObCompressorType &compressor_type,
+      blocksstable::ObSelfBufferWriter &buffer_writer, int64_t &data_length, int64_t &data_zlength);
   template <class IndexIndex>
   int write_index_list_(const ObBackupBlockType &block_type, const int64_t node_level,
       const common::ObIArray<IndexIndex> &index_index_list);
-  template <class IndexIndex>
-  int write_single_index_(const ObBackupBlockType &block_type, const int64_t node_level, const IndexIndex &index_index);
-  int close_index_block_(const ObBackupBlockType &block_type);
   template <class IndexType>
   int encode_index_to_buffer_(const common::ObIArray<IndexType> &index_list, blocksstable::ObBufferWriter &buffer_writer);
   int get_index_tree_height_(int64_t &height) const;
@@ -128,6 +129,7 @@ protected:
   ObBackupFileWriteCtx *write_ctx_;
   common::ObArenaAllocator allocator_;
   blocksstable::ObSelfBufferWriter buffer_writer_;
+  ObCompressorType compressor_type_;
   DISALLOW_COPY_AND_ASSIGN(ObIBackupMultiLevelIndexBuilder);
 };
 
@@ -155,11 +157,24 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupMultiLevelMetaIndexBuilder);
 };
 
+class ObBackupMultiLevelMacroBlockIndexBuilder : public ObIBackupMultiLevelIndexBuilder {
+public:
+  ObBackupMultiLevelMacroBlockIndexBuilder() = default;
+  virtual ~ObBackupMultiLevelMacroBlockIndexBuilder() = default;
+
+private:
+  virtual int build_next_level_index_(ObBackupIndexBufferNode &cur_node, ObBackupIndexBufferNode &next_node) override;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupMultiLevelMacroBlockIndexBuilder);
+};
+
 class ObIBackupIndexMerger {
 public:
   ObIBackupIndexMerger();
   virtual ~ObIBackupIndexMerger();
   virtual int merge_index() = 0;
+  TO_STRING_KV(K_(merge_param));
 
 protected:
   virtual int get_all_retries_(const int64_t task_id, const uint64_t tenant_id, const share::ObBackupDataType &backup_data_type,
@@ -170,6 +185,9 @@ protected:
   int encode_index_to_buffer_(const common::ObIArray<IndexType> &index_list, blocksstable::ObBufferWriter &buffer_writer);
   template <class IndexType, class IndexIndexType>
   int write_index_list_(const ObBackupBlockType &block_type, const common::ObIArray<IndexType> &index_list);
+  template <class IndexType>
+  int write_compressed_data_(const common::ObIArray<IndexType> &index_list, const ObCompressorType &compressor_type,
+      blocksstable::ObSelfBufferWriter &buffer_writer, int64_t &data_length, int64_t &data_zlength);
   int write_backup_file_header_(const ObBackupFileType &file_type);
   int build_backup_file_header_(const ObBackupFileType &file_type, ObBackupFileHeader &file_header);
   int write_backup_file_header_(const ObBackupFileHeader &file_header);
@@ -245,21 +263,21 @@ class ObBackupMetaIndexMerger : public ObIBackupIndexMerger {
 public:
   ObBackupMetaIndexMerger();
   virtual ~ObBackupMetaIndexMerger();
-  int init(const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta, common::ObISQLClient &sql_proxy,
+  int init(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
       common::ObInOutBandwidthThrottle &bandwidth_throttle);
   void reset();
   virtual int merge_index() override;
 
 protected:
   virtual int alloc_merge_iter_(const ObBackupIndexMergeParam &merge_param, const ObBackupRetryDesc &retry_desc,
-      const bool is_sec_meta, ObBackupMetaIndexIterator *&iter);
+      ObBackupMetaIndexIterator *&iter);
 
 private:
   int prepare_merge_ctx_(
-      const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta, common::ObISQLClient &sql_proxy,
+      const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
       common::ObInOutBandwidthThrottle &bandwidth_throttle);
   int prepare_merge_iters_(const ObBackupIndexMergeParam &merge_param,
-      const common::ObIArray<ObBackupRetryDesc> &retry_list, const bool is_sec_meta, MERGE_ITER_ARRAY &merge_iters);
+      const common::ObIArray<ObBackupRetryDesc> &retry_list, MERGE_ITER_ARRAY &merge_iters);
   int get_unfinished_iters_(const MERGE_ITER_ARRAY &merge_iters, MERGE_ITER_ARRAY &unfinished_iters);
   int find_minimum_iters_(const MERGE_ITER_ARRAY &merge_iters, MERGE_ITER_ARRAY &min_iters);
   int get_fuse_result_(const MERGE_ITER_ARRAY &iters, ObBackupMetaIndex &meta_index);
@@ -270,7 +288,7 @@ private:
 
 private:
   int get_output_file_path_(
-      const ObBackupIndexMergeParam &merge_param, const bool is_sec_meta, share::ObBackupPath &path);
+      const ObBackupIndexMergeParam &merge_param, share::ObBackupPath &path);
   virtual int flush_index_tree_() override;
 
 private:
@@ -278,6 +296,85 @@ private:
   MERGE_ITER_ARRAY merge_iter_array_;
   common::ObArray<ObBackupMetaIndex> tmp_index_list_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupMetaIndexMerger);
+};
+
+// To address the issue of the macro index not being totally ordered by logic ID across all 4GB backup data files, we can follow these steps:
+// 1. Fetching Macro Block Index: Read and extract the macro block index stored in the trailer section of each backup data file.
+// 2. Local Sorting: Perform a parallel external sort on the fetched macro block indexes. This will ensure that they are sorted locally within each file.
+// 3. Merging Sorted Lists: Merge all the sorted lists obtained from different backup data files into a single list using an efficient merging algorithm like merge sort or heap merge.
+// 4. Compression and Flushing: Compress and flush a batch of sorted macro block indexes into the backup device. Each compressed block should be approximately 16KB in size to optimize storage efficiency.
+// 5. Building Multi-Level Tree: Construct a multi-level tree structure using the flushed macro block indexes as leaf nodes. This tree will allow for quick retrieval of specific macro blocks during incremental backups when reusing existing blocks is necessary.
+// By following these steps, we can achieve a totally ordered list of macro block indexes across all backup data files and efficiently access them when needed for incremental backups.
+
+// TODO(yanfeng): comments need include an estimated space calculation method and examples actual sizes.
+
+class ObBackupUnorderdMacroBlockIndexMerger : public ObIBackupIndexMerger
+{
+  class BackupMacroBlockIndexComparator
+  {
+  public:
+    BackupMacroBlockIndexComparator(int &sort_ret);
+    bool operator()(const ObBackupMacroBlockIndex *left, const ObBackupMacroBlockIndex *right);
+    int &result_code_;
+  };
+  typedef storage::ObExternalSort<ObBackupMacroBlockIndex, BackupMacroBlockIndexComparator> ExternalSort;
+public:
+  ObBackupUnorderdMacroBlockIndexMerger();
+  virtual ~ObBackupUnorderdMacroBlockIndexMerger();
+  int init(const ObBackupIndexMergeParam &merge_param, common::ObMySQLProxy &sql_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle);
+  virtual int merge_index() override;
+  void reset();
+  TO_STRING_KV(K_(merge_param), K_(total_count), K_(consume_count), K_(input_size), K_(output_size));
+
+private:
+  virtual int get_prev_tenant_index_retry_id_(const ObBackupIndexMergeParam &merge_param,
+      const share::ObBackupSetDesc &prev_backup_set_desc, const int64_t prev_turn_id, int64_t &retry_id);
+  int prepare_merge_ctx_(const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy,
+      common::ObInOutBandwidthThrottle &bandwidth_throttle, common::ObIArray<ObIMacroBlockIndexIterator *> &merge_iters);
+  virtual int prepare_macro_block_iterators_(
+      const ObBackupIndexMergeParam &merge_param, const common::ObIArray<ObBackupRetryDesc> &retry_list,
+      common::ObISQLClient &sql_proxy, common::ObIArray<ObIMacroBlockIndexIterator *> &iterators);
+  int prepare_prev_backup_set_index_iter_(
+      const ObBackupIndexMergeParam &merge_param, common::ObISQLClient &sql_proxy, ObIMacroBlockIndexIterator *&iter);
+  int alloc_merge_iter_(const bool tenant_level, const ObBackupIndexMergeParam &merge_param,
+      const ObBackupRetryDesc &retry_desc, ObIMacroBlockIndexIterator *&iter);
+  int prepare_parallel_external_sort_(const uint64_t tenant_id);
+  int feed_iterators_to_external_sort_(const common::ObArray<ObIMacroBlockIndexIterator *> &iterators);
+  int feed_iterator_to_external_sort_(ObIMacroBlockIndexIterator *iterators);
+  int do_external_sort_();
+  int consume_sort_output_();
+  int get_next_batch_macro_index_list_(const int64_t batch_size,
+      common::ObIArray<ObBackupMacroBlockIndex> &index_list);
+  int get_next_macro_index_(ObBackupMacroBlockIndex &macro_index);
+  int write_macro_index_list_(const common::ObArray<ObBackupMacroBlockIndex> &index_list);
+
+private:
+  int get_output_file_path_(
+      const ObBackupIndexMergeParam &merge_param, share::ObBackupPath &path);
+  virtual int flush_index_tree_() override;
+
+private:
+  static const int64_t BATCH_SIZE = 2000;
+  static const int64_t MACRO_BLOCK_SIZE = OB_DEFAULT_MACRO_BLOCK_SIZE;
+  static const int64_t BUF_MEM_LIMIT = 32 * MACRO_BLOCK_SIZE;
+  static const int64_t FILE_BUF_SIZE = MACRO_BLOCK_SIZE;
+  static const int64_t EXPIRE_TIMESTAMP = 0;
+
+private:
+  bool is_inited_;
+  lib::ObMutex mutex_;
+  int64_t total_count_;
+  int64_t consume_count_;
+  ExternalSort external_sort_;
+  int result_;
+  BackupMacroBlockIndexComparator comparator_;
+  int64_t input_size_;
+  int64_t output_size_;
+  ObBackupIndexBlockCompressor compressor_;
+  common::ObMySQLProxy *sql_proxy_;
+  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
+  DISALLOW_COPY_AND_ASSIGN(ObBackupUnorderdMacroBlockIndexMerger);
 };
 
 }  // namespace backup

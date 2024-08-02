@@ -2528,6 +2528,7 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
   } else {
     uint32_t lock_tid = 0;
     ObDDLRedoLogWriter redo_writer;
+    DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
     if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
       LOG_WARN("failed to wrlock", K(ret), KPC(this));
     } else if (FALSE_IT(sstable_already_created = sqc_build_ctx_.is_task_end_)) {
@@ -2538,7 +2539,6 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
     } else if (OB_FAIL(redo_writer.init(ls_id_, tablet_id_))) {
       LOG_WARN("init redo writer failed", K(ret), K(ls_id_), K(tablet_id_));
     } else {
-      DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
       ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
       if (OB_FAIL(direct_load_mgr_handle.set_obj(this))) {
         LOG_WARN("set direct load mgr handle failed", K(ret));

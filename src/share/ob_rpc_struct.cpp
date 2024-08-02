@@ -7813,6 +7813,63 @@ int ObBackupBuildIdxArg::assign(const ObBackupBuildIdxArg &arg)
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObBackupFuseTabletMetaArg, job_id_, task_id_, trace_id_, tenant_id_, backup_set_id_, backup_path_,
+  backup_type_, ls_id_, turn_id_, retry_id_, dst_server_);
+
+ObBackupFuseTabletMetaArg::ObBackupFuseTabletMetaArg()
+  : job_id_(),
+    task_id_(),
+    trace_id_(),
+    tenant_id_(),
+    backup_set_id_(),
+    backup_path_(),
+    backup_type_(),
+    ls_id_(),
+    turn_id_(),
+    retry_id_(),
+    dst_server_()
+{
+}
+
+bool ObBackupFuseTabletMetaArg::is_valid() const
+{
+  return job_id_ > 0
+      && task_id_ > 0
+      && trace_id_.is_valid()
+      && OB_INVALID_ID != tenant_id_
+      && backup_set_id_ > 0
+      && ObBackupType::is_valid(backup_type_)
+      && !backup_path_.is_empty()
+      && dst_server_.is_valid()
+      && ls_id_.is_valid()
+      && turn_id_ > 0
+      && retry_id_ >= 0
+      && dst_server_.is_valid();
+}
+
+int ObBackupFuseTabletMetaArg::assign(const ObBackupFuseTabletMetaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(arg));
+  } else if (OB_FAIL(backup_path_.assign(arg.backup_path_.ptr()))) {
+    LOG_WARN("fail to assgin backup dest", K(ret));
+  } else {
+    job_id_ = arg.job_id_;
+    task_id_ = arg.task_id_;
+    trace_id_ = arg.trace_id_;
+    tenant_id_ = arg.tenant_id_;
+    backup_set_id_ = arg.backup_set_id_;
+    backup_type_ = arg.backup_type_;
+    ls_id_ = arg.ls_id_;
+    turn_id_ = arg.turn_id_;
+    retry_id_ = arg.retry_id_;
+    dst_server_ = arg.dst_server_;
+  }
+  return ret;
+}
+
 OB_SERIALIZE_MEMBER(ObBackupCheckTaskArg, tenant_id_, trace_id_);
 
 bool ObBackupCheckTaskArg::is_valid() const

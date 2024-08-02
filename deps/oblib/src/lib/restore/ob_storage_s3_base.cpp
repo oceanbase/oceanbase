@@ -1948,12 +1948,10 @@ int64_t ObStorageS3AppendWriter::get_length() const
 
 /*--------------------------------ObStorageS3MultiPartWriter--------------------------------*/
 ObStorageS3MultiPartWriter::ObStorageS3MultiPartWriter()
-    : ObStorageS3Base(),
-      is_opened_(false),
+    : ObStorageS3Writer(),
       base_buf_(NULL), base_buf_pos_(-1),
       upload_id_(NULL),
-      partnum_(0),
-      file_length_(-1)
+      partnum_(0)
 {}
 
 ObStorageS3MultiPartWriter::~ObStorageS3MultiPartWriter()
@@ -1977,7 +1975,7 @@ int ObStorageS3MultiPartWriter::open_(const ObString &uri, ObObjectStorageInfo *
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_S3_ERROR;
     OB_LOG(WARN, "s3 multipart writer already opened, cannot open again", K(ret), K(uri));
-  } else if (OB_FAIL(ObStorageS3Base::open(uri, storage_info))) {
+  } else if (OB_FAIL(ObStorageS3Writer::open(uri, storage_info))) {
     OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri));
   } else {
     Aws::S3::Model::CreateMultipartUploadRequest request;
@@ -2131,8 +2129,11 @@ int ObStorageS3MultiPartWriter::complete_()
     } else if (OB_UNLIKELY(part_num == 0)) {
       // If 'complete' without uploading any data, S3 will return the error
       // 'InvalidRequest，You must specify at least one part'
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(part_num), K_(upload_id));
+      // write an empty object instead
+      if (OB_FAIL(write_obj_(object_.ptr(), "", 0))) {
+        OB_LOG(WARN, "complete an empty multipart upload, but fail to write an empty object",
+            K(ret), K(part_num), K_(upload_id));
+      }
     } else if (OB_FAIL(s3_client_->complete_multipart_upload(complete_multipart_upload_request,
                                                              complete_multipart_upload_outcome))) {
       OB_LOG(WARN, "failed to complete s3 multipart upload", K(ret));

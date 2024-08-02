@@ -223,10 +223,16 @@ int ObLSRestoreDagNet::init_by_param(const ObIDagInitParam *param)
         init_param->arg_.restore_base_info_.backup_dest_,
         backup_set_file_desc.backup_set_file_, false/*is_sec_meta*/, true/*init sys tablet index store*/, OB_BACKUP_INDEX_CACHE))) {
       LOG_WARN("failed to init meta index store", K(ret), KPC(init_param));
-    } else if (OB_FAIL(second_meta_index_store_.init(mode, index_store_param,
-        init_param->arg_.restore_base_info_.backup_dest_,
-        backup_set_file_desc.backup_set_file_, true/*is_sec_meta*/, true/*init sys tablet index store*/, OB_BACKUP_INDEX_CACHE))) {
-      LOG_WARN("failed to init macro index store", K(ret), KPC(init_param));
+    } else if (backup_set_file_desc.backup_set_file_.is_backup_set_not_support_quick_restore()
+            && OB_FAIL(second_meta_index_store_.init(
+                       mode,
+                       index_store_param,
+                       init_param->arg_.restore_base_info_.backup_dest_,
+                       backup_set_file_desc.backup_set_file_,
+                       true/*is_sec_meta*/,
+                       true/*init sys tablet index store*/,
+                       OB_BACKUP_INDEX_CACHE))) {
+      LOG_WARN("failed to init macro index store", K(ret), K(backup_set_file_desc), KPC(init_param));
     }
   }
 
@@ -907,7 +913,6 @@ int ObStartLSRestoreTask::alloc_copy_ls_view_reader_(ObICopyLSViewInfoReader *&r
     ObCopyLSViewInfoRestoreReader *restore_reader = nullptr;
     ObIDagNet *dag_net = nullptr;
     ObLSRestoreDagNet *ls_restore_dag_net = nullptr;
-
     if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
     } else if (OB_ISNULL(dag_net)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1008,6 +1013,7 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
   ObLSService *ls_service = nullptr;
   ObLS *ls = nullptr;
   ObLSHandle ls_handle;
+  const ObBackupSetFileDesc::Compatible backup_compat = ctx_->arg_.restore_base_info_.backup_compatible_;
   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls service should not be null", K(ret), KP(ls_service));
@@ -1067,7 +1073,9 @@ int ObStartLSRestoreTask::update_ls_meta_and_create_all_tablets_()
           } else if (tablet_info.param_.tablet_id_.is_ls_inner_tablet()
                      && OB_FAIL(ctx_->sys_tablet_id_array_.push_back(logic_tablet_id))) {
             LOG_WARN("failed to push sys tablet id into array", K(ret), "array count", ctx_->sys_tablet_id_array_.count());
-          } else if (!tablet_info.param_.is_empty_shell() && OB_FALSE_IT(set_tablet_to_restore(tablet_info.param_))) {
+          } else if (!tablet_info.param_.is_empty_shell()
+                      && !share::ObBackupSetFileDesc::is_backup_set_support_quick_restore(backup_compat)
+                      && OB_FALSE_IT(set_tablet_to_restore(tablet_info.param_))) {
           } else if (OB_FAIL(reset_multi_version_start_(tablet_info.param_))) {
             LOG_WARN("failed to reset multi version start", K(ret), K(tablet_info));
           } else if (OB_FAIL(create_tablet_(tablet_info.param_, ls))) {

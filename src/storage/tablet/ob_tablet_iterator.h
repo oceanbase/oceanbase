@@ -59,9 +59,10 @@ class ObHALSTabletIDIterator final
 {
   friend class ObLSTabletService;
 public:
-  explicit ObHALSTabletIDIterator(
+  ObHALSTabletIDIterator(
       const share::ObLSID &ls_id,
-      const bool need_initial_state);
+      const bool need_initial_state,
+      const bool need_sorted_tablet_id);
   ~ObHALSTabletIDIterator();
   ObHALSTabletIDIterator(const ObHALSTabletIDIterator&) = delete;
   ObHALSTabletIDIterator &operator=(const ObHALSTabletIDIterator&) = delete;
@@ -72,11 +73,16 @@ public:
   bool is_valid() const;
 
   TO_STRING_KV(K_(ls_id), K_(tablet_ids), K_(idx));
+
+private:
+  int sort_tablet_ids_if_need();
+
 private:
   share::ObLSID ls_id_;
   common::ObSEArray<common::ObTabletID, ObTabletCommon::DEFAULT_ITERATOR_TABLET_ID_CNT> tablet_ids_;
   int64_t idx_;
   const bool need_initial_state_;
+  const bool need_sorted_tablet_id_;
 };
 
 
@@ -84,7 +90,9 @@ class ObHALSTabletIterator final
 {
   friend class ObLSTabletService;
 public:
-  explicit ObHALSTabletIterator(const share::ObLSID &ls_id, const bool need_initial_state);
+  ObHALSTabletIterator(const share::ObLSID &ls_id,
+                       const bool need_initial_state,
+                       const bool need_sorted_tablet_id);
   ~ObHALSTabletIterator();
   ObHALSTabletIterator(const ObHALSTabletIterator&) = delete;
   ObHALSTabletIterator &operator=(const ObHALSTabletIterator&) = delete;

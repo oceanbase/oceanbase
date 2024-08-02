@@ -50,6 +50,10 @@ public:
   int set_end_iter_idx(const bool is_start);
   int get_curr_start_row_offset(int64_t &row_offset);
   int get_next_micro_block_data(ObMicroBlockData &micro_block);
+  int get_next_micro_block_desc(ObMicroBlockDesc &micro_block_desc,
+                                const ObDataStoreDesc &data_store_desc,
+                                ObIAllocator &allocator,
+                                const bool need_check_sum);
   int get_next_micro_block_desc(
       ObMicroBlockDesc &micro_block_desc,
       ObMicroIndexInfo &micro_index_info,

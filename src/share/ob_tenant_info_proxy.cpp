@@ -200,6 +200,7 @@ int ObAllTenantInfoProxy::init_tenant_info(
   ObSqlString sql;
   int64_t affected_rows = 0;
   ObTimeoutCtx ctx;
+  uint64_t compat_version = 0;
   if (OB_UNLIKELY(!tenant_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_info is invalid", KR(ret), K(tenant_info));
@@ -209,25 +210,41 @@ int ObAllTenantInfoProxy::init_tenant_info(
   } else if (!is_user_tenant(tenant_info.get_tenant_id())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("meta tenant no need init tenant info", KR(ret), K(tenant_info));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_info.get_tenant_id(), compat_version))) {
+    LOG_WARN("fail to get min data version", K(ret), K(tenant_info));
   } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
     LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
-  } else if (OB_FAIL(sql.assign_fmt(
+  } else  {
+    if (OB_FAIL(sql.assign_fmt(
                  "insert into %s (tenant_id, tenant_role, "
                  "switchover_status, switchover_epoch, "
-                 "sync_scn, replayable_scn, readable_scn, recovery_until_scn, log_mode, max_ls_id) "
-                 "values(%lu, '%s', '%s', %ld, %lu, %lu, %lu, %lu, '%s', %ld)",
-                 OB_ALL_TENANT_INFO_TNAME, tenant_info.get_tenant_id(),
-                 tenant_info.get_tenant_role().to_str(),
-                 tenant_info.get_switchover_status().to_str(),
-                 tenant_info.get_switchover_epoch(),
-                 tenant_info.get_sync_scn().get_val_for_inner_table_field(),
-                 tenant_info.get_replayable_scn().get_val_for_inner_table_field(),
-                 tenant_info.get_standby_scn().get_val_for_inner_table_field(),
-                 tenant_info.get_recovery_until_scn().get_val_for_inner_table_field(),
-                 tenant_info.get_log_mode().to_str(),
-                 tenant_info.get_max_ls_id().id()))) {
-    LOG_WARN("failed to assign sql", KR(ret), K(tenant_info), K(sql));
-  } else if (OB_FAIL(proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+                 "sync_scn, replayable_scn, readable_scn, recovery_until_scn, log_mode, max_ls_id",
+                 OB_ALL_TENANT_INFO_TNAME))) {
+      LOG_WARN("fail to assign fmt", K(ret), K(sql));
+    } else if (compat_version >= DATA_VERSION_4_3_2_0 && OB_FAIL(sql.append_fmt(", restore_data_mode"))) {
+      LOG_WARN("fail to append sql", K(ret), K(sql));
+    } else if (OB_FAIL(sql.append_fmt(
+                      ") values(%lu, '%s', '%s', %ld, %lu, %lu, %lu, %lu, '%s', %ld",
+                      tenant_info.get_tenant_id(),
+                      tenant_info.get_tenant_role().to_str(),
+                      tenant_info.get_switchover_status().to_str(),
+                      tenant_info.get_switchover_epoch(),
+                      tenant_info.get_sync_scn().get_val_for_inner_table_field(),
+                      tenant_info.get_replayable_scn().get_val_for_inner_table_field(),
+                      tenant_info.get_standby_scn().get_val_for_inner_table_field(),
+                      tenant_info.get_recovery_until_scn().get_val_for_inner_table_field(),
+                      tenant_info.get_log_mode().to_str(),
+                      tenant_info.get_max_ls_id().id()))) {
+      LOG_WARN("fail to append sql", K(ret), K(sql));
+    } else if (compat_version >= DATA_VERSION_4_3_2_0
+               && OB_FAIL(sql.append_fmt(", '%s'", tenant_info.get_restore_data_mode().to_str()))) {
+      LOG_WARN("fail to append sql", K(ret), K(sql), K(tenant_info));
+    }
+    if (FAILEDx(sql.append_fmt(")"))) {
+      LOG_WARN("fail to append sql", K(ret), K(sql));
+    }
+  }
+  if (FAILEDx(proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
     LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
@@ -539,6 +556,8 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     ora_rowscn = 0;
     ObString log_mode_str;
     ObString log_mode_default_value("NOARCHIVELOG");
+    ObString restore_data_mode_str;
+    ObString retore_data_mode_default_value("NORMAL");
     SCN sync_scn;
     SCN replay_scn;
     SCN sts_scn;
@@ -555,10 +574,13 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     EXTRACT_UINT_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "recovery_until_scn", recovery_until_scn_val, uint64_t, false /* skip_null_error */, true /* skip_column_error */, OB_MAX_SCN_TS_NS);
     EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "log_mode", log_mode_str,
                 false /* skip_null_error */, true /* skip_column_error */, log_mode_default_value);
+    EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(*result, "restore_data_mode", restore_data_mode_str,
+                false /* skip_null_error */, true /* skip_column_error */, retore_data_mode_default_value);
     EXTRACT_INT_FIELD_MYSQL(*result, "ORA_ROWSCN", ora_rowscn, int64_t);
     ObTenantRole tmp_tenant_role(tenant_role_str);
     ObTenantSwitchoverStatus tmp_tenant_sw_status(status_str);
     ObArchiveMode tmp_log_mode(log_mode_str);
+    ObRestoreDataMode tmp_restore_data_mode(restore_data_mode_str);
     if (OB_FAIL(ret)) {
       LOG_WARN("failed to get result", KR(ret));
       //tenant_id in inner table can be used directly
@@ -573,10 +595,10 @@ int ObAllTenantInfoProxy::fill_cell(common::sqlclient::ObMySQLResult *result, Ob
     } else if (OB_FAIL(tenant_info.init(
             tenant_id, tmp_tenant_role,
             tmp_tenant_sw_status, switchover_epoch,
-            sync_scn, replay_scn, sts_scn, recovery_until_scn, tmp_log_mode, ObLSID(ls_id_value)))) {
+            sync_scn, replay_scn, sts_scn, recovery_until_scn, tmp_log_mode, ObLSID(ls_id_value), tmp_restore_data_mode))) {
       LOG_WARN("failed to init tenant info", KR(ret), K(tenant_id), K(tmp_tenant_role), K(tenant_role_str),
           K(tmp_tenant_sw_status), K(status_str), K(switchover_epoch), K(sync_scn), K(recovery_until_scn),
-          K(log_mode_str), K(tmp_log_mode), K(ls_id_value));
+          K(log_mode_str), K(tmp_log_mode), K(ls_id_value), K(tmp_restore_data_mode));
     }
   }
   return ret;
@@ -998,6 +1020,55 @@ int ObAllTenantInfoProxy::update_tenant_log_mode(
   } else if (0 == affected_rows) {
     ret = OB_NEED_RETRY;
     LOG_WARN("may concurrency with switchover, need retry", KR(ret), K(tenant_id), K(sql));
+  } else if (!is_single_row(affected_rows)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect updating one row", KR(ret), K(affected_rows), K(sql));
+  }
+  return ret;
+}
+
+int ObAllTenantInfoProxy::update_tenant_restore_data_mode(
+      const uint64_t tenant_id,
+      ObISQLClient *proxy,
+      const ObRestoreDataMode &new_restore_data_mode)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  ObAllTenantInfo tenant_info;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  ObTimeoutCtx ctx;
+  uint64_t compat_version = 0;
+
+  if (OB_UNLIKELY(!is_user_tenant(tenant_id) || !new_restore_data_mode.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_restore_data_mode));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+    LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+  } else if (compat_version < DATA_VERSION_4_3_2_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("Tenant COMPATIBLE is below 4.3.2.0, update tenant restore_data_mode is not suppported",
+             KR(ret), K(compat_version));
+  } else if (OB_FAIL(load_tenant_info(tenant_id, proxy, false /*for update*/, tenant_info))) {
+    LOG_WARN("fail to load tenant info", K(ret), K(tenant_id));
+  } else if (new_restore_data_mode.is_same_mode(tenant_info.get_restore_data_mode())) {
+    //do nothing
+  } else if (!tenant_info.get_tenant_role().is_restore()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("tenant is in switchover or invalid role, can not update restore data mode", K(ret), K(tenant_info));
+  } else if (!tenant_info.get_switchover_status().is_normal_status()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("tenant switchover status is not normal, can not update restore data mode", K(ret), K(tenant_info));
+  } else if (OB_FAIL(rootserver::ObRootUtils::get_rs_default_timeout_ctx(ctx))) {
+    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx));
+  } else if (OB_FAIL(sql.assign_fmt(
+             "update %s set restore_data_mode = '%s' where tenant_id = %lu "
+             "and tenant_role = '%s' and switchover_status = '%s'",
+             OB_ALL_TENANT_INFO_TNAME, new_restore_data_mode.to_str(), tenant_id,
+             RESTORE_TENANT_ROLE.to_str(), NORMAL_SWITCHOVER_STATUS.to_str()))) {
+    LOG_WARN("failed to assign sql", KR(ret), K(tenant_id), K(new_restore_data_mode), K(sql));
+  } else if (OB_FAIL(proxy->write(exec_tenant_id, sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to execute sql", KR(ret), K(exec_tenant_id), K(sql));
   } else if (!is_single_row(affected_rows)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expect updating one row", KR(ret), K(affected_rows), K(sql));
