@@ -1252,7 +1252,7 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
     // before revert self
     if (OB_FAIL(ret)) {
       if (OB_EAGAIN == ret) {
-        TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback - retry gts task by TsMgr", KR(ret), K(*this),
+        TRANS_LOG(DEBUG, "ObPartTransCtx::get_gts_callback - retry gts task by TsMgr", KR(ret), K(*this),
                   K(gts));
       } else {
         TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback", KR(ret), K(*this), K(gts));
