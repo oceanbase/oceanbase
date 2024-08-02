@@ -749,7 +749,7 @@ int ObTabletBackfillTXTask::generate_table_backfill_tx_task_(
   int ret = OB_SUCCESS;
   ObTabletBackfillTXDag *tablet_backfill_tx_dag = nullptr;
   ObTabletHandle tablet_handle;
-  ObTabletTableBackfillTXTask *pre_table_backfill_task = nullptr;
+  ObITask *pre_task = this;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
@@ -789,26 +789,25 @@ int ObTabletBackfillTXTask::generate_table_backfill_tx_task_(
         is_add_task = true;
       }
       if (OB_SUCC(ret) && is_add_task) {
-        if (OB_FAIL(tablet_backfill_tx_dag->alloc_task(table_backfill_tx_task))) {
+        ObFakeTask *wait_finish_task = nullptr;
+        if (OB_FAIL(dag_->alloc_task(wait_finish_task))) {
+          LOG_WARN("failed to alloc wait finish task", K(ret));
+        } else if (OB_FAIL(tablet_backfill_tx_dag->alloc_task(table_backfill_tx_task))) {
           LOG_WARN("failed to alloc table backfill tx task", K(ret), KPC(ha_dag_net_ctx_), K(ls_id_), K(tablet_info_));
-        } else if (OB_FAIL(table_backfill_tx_task->init(ls_id_, tablet_info_.tablet_id_, tablet_handle, table_array.at(i), replace_task))) {
+        } else if (OB_FAIL(table_backfill_tx_task->init(ls_id_, tablet_info_.tablet_id_, tablet_handle, table_array.at(i), wait_finish_task))) {
           LOG_WARN("failed to init table backfill tx task", K(ret), K(ls_id_), K(tablet_info_));
-        } else if (OB_ISNULL(pre_table_backfill_task)) {
-          if (OB_FAIL(this->add_child(*table_backfill_tx_task))) {
-            LOG_WARN("failed to add table backfill tx task as child", K(ret), K(ls_id_), K(tablet_info_), KPC(table));
-          }
-        } else {
-          if (OB_FAIL(pre_table_backfill_task->add_child(*table_backfill_tx_task))) {
-            LOG_WARN("failed to add table backfill tx task as child", K(ret), K(ls_id_), K(tablet_info_), KPC(table), KPC(pre_table_backfill_task));
-          }
-        }
-        if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(table_backfill_tx_task->add_child(*replace_task))) {
-          LOG_WARN("failed to add finish backfill tx task as child", K(ret), K(ls_id_), K(tablet_info_), KPC(table));
+        } else if (OB_FAIL(pre_task->add_child(*table_backfill_tx_task))) {
+          LOG_WARN("failed to add table backfill tx task as child", K(ret), K(ls_id_), K(tablet_info_), KPC(table), KPC(pre_task));
+        } else if (OB_FAIL(table_backfill_tx_task->add_child(*wait_finish_task))) {
+          LOG_WARN("failed to add wait finish task", K(ret), K(ls_id_), K(tablet_info_));
+        } else if (OB_FAIL(wait_finish_task->add_child(*replace_task))) {
+          LOG_WARN("failed to add replace task as child", K(ret), K(ls_id_), K(tablet_info_), KPC(table));
         } else if (OB_FAIL(dag_->add_task(*table_backfill_tx_task))) {
           LOG_WARN("failed to add table backfill tx task", K(ret), K(ls_id_), K(tablet_info_));
+        } else if (OB_FAIL(dag_->add_task(*wait_finish_task))) {
+          LOG_WARN("failed to add wait finish task", K(ret), K(ls_id_), K(tablet_info_));
         } else {
-          pre_table_backfill_task = table_backfill_tx_task;
+          pre_task = wait_finish_task;
           LOG_INFO("generate table backfill TX", KPC(table), K(i), KPC(table_backfill_tx_task));
         }
       }
