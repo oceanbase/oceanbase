@@ -3,10 +3,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
 # owner: jim.wzh
 # owner group: SQL
-# This test takes long time, so only run it with the --big-test mtr-flag.
-#--source mysql_test/include/big_test.inc
 
- #Get deafult engine value
 --let $DEFAULT_ENGINE = `select @@global.default_storage_engine`
 
 --disable_warnings
