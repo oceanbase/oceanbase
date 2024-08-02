@@ -406,7 +406,6 @@ public:
   bool need_do_restart() const;
   int set_rs_status(const share::status::ObRootServiceStatus status);
   virtual bool is_full_service() const;
-  virtual bool is_major_freeze_done() const { return is_full_service(); }
   virtual bool is_ddl_allowed() const { return is_full_service(); }
   bool can_start_service() const;
   bool is_stopping() const;

@@ -588,10 +588,10 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           }
           case OB_ALL_VIRTUAL_CORE_META_TABLE_TID: {
             ObCoreMetaTable *core_meta_table = NULL;
-            if (!root_service_.is_major_freeze_done()) {
+            if (!root_service_.is_full_service()) {
               // Some obtest cases detect rootservice status by select this virtual table
               ret = OB_SERVER_IS_INIT;
-              RS_LOG(WARN, "RS major freeze not finished", KR(ret));
+              RS_LOG(WARN, "RS is initializing", KR(ret));
             } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObCoreMetaTable, core_meta_table))) {
               SERVER_LOG(ERROR, "ObCoreMetaTable construct failed", KR(ret));
             } else if (OB_FAIL(core_meta_table->init(root_service_.get_lst_operator(),
