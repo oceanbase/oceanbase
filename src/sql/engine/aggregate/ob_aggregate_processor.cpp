@@ -8467,7 +8467,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
           LOG_WARN("fail to get real string data", K(ret), K(wkb));
         } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_alloc, wkb, srs_guard, 
                                                               srs, cur_geo, N_ST_COLLECT))) {
-          LOG_WARN("fail to create geo", K(ret), K(wkb));     // ObWkbGeo
+          LOG_WARN("fail to create geo", K(ret), K(wkb));     // ObIWkbGeo
         } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
           ret = OB_ERR_GIS_INVALID_DATA;
           LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_COLLECT);
@@ -8478,7 +8478,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
                                                               tmp_alloc, gc))) {
             LOG_WARN("fail to create geometry collection", K(ret), K(wkb));
           }
-        } 
+        }
 
         if (OB_SUCC(ret)) {
           if (srid != gc->get_srid()) {
@@ -8500,7 +8500,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
               default:
                 has_other = TRUE;
                 break;
-            }
+            } // end switch
           }
         }
       }
@@ -8558,7 +8558,9 @@ int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
       }
       for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
         typename GcTreeType::sub_pt_type &geo_point = reinterpret_cast<typename GcTreeType::sub_pt_type &>((*geo_coll)[i]);
-        if (OB_FAIL(res_geo->push_back(geo_point))) {
+        typename GcTreeType::sub_mpt_type::value_type point_tmp(geo_point.template get<1>(), 
+                                                                geo_point.template get<0>());
+        if (OB_FAIL(res_geo->push_back(point_tmp))) {  // ? fail to use geo_point.data 
           OB_LOG(WARN, "failed to add point to multipoint", K(ret));
         }
       }
@@ -8573,14 +8575,14 @@ int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
       if (OB_ISNULL(res_geo)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "fail to alloc memory", K(ret));
-      }
-      for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-        // todo
-        if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
-          LOG_WARN("fail to convert geometry to tree", K(ret));
-        }
-        if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
-          OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
+      } else {
+        for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+          if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
+            LOG_WARN("fail to convert geometry to tree", K(ret));
+          }
+          if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
+            OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
+          }
         }
       }
       if (OB_SUCC(ret)) {
@@ -8594,14 +8596,14 @@ int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
       if (OB_ISNULL(res_geo)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         OB_LOG(WARN, "fail to alloc memory", K(ret));
-      }
-      for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-        // todo
-        if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
-          LOG_WARN("fail to convert geometry to tree", K(ret));
-        }
-        if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
-          OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
+      } else {
+        for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+          if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
+            LOG_WARN("fail to convert geometry to tree", K(ret));
+          }
+          if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
+            OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
+          }
         }
       }
       if (OB_SUCC(ret)) {
