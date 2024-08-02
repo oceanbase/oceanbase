@@ -117,6 +117,7 @@ public:
     } else if (OB_ISNULL(params_.stmt_factory_->get_query_ctx())) {
       SQL_RESV_LOG(WARN, "query ctx is null", K(ret));
     } else if (OB_FAIL(params_.stmt_factory_->create_stmt(stmt))) {
+      stmt = NULL;
       SQL_RESV_LOG(WARN, "create stmt failed", K(ret));
     } else if (OB_ISNULL(stmt)) {
       ret = common::OB_ERR_UNEXPECTED;
@@ -125,10 +126,12 @@ public:
       stmt_ = stmt;
       stmt_->set_query_ctx(params_.query_ctx_);
       //mark prepare stmt
-      stmt_->get_query_ctx()->set_is_prepare_stmt(params_.is_prepare_protocol_ && params_.is_prepare_stage_);		
+      stmt_->get_query_ctx()->set_is_prepare_stmt(params_.is_prepare_protocol_ && params_.is_prepare_stage_);
       stmt_->get_query_ctx()->set_timezone_info(get_timezone_info(params_.session_info_));		
       stmt_->get_query_ctx()->set_sql_stmt_coll_type(get_obj_print_params(params_.session_info_).cs_type_);
       if (OB_FAIL(stmt_->set_stmt_id())) {
+        stmt = NULL;
+        stmt_ = NULL;
         SQL_RESV_LOG(WARN, "fail to set stmt id", K(ret));
       }
     }
