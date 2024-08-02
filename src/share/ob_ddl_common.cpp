@@ -337,6 +337,41 @@ int ObDDLUtil::get_tablet_count(const uint64_t tenant_id,
   return ret;
 }
 
+int ObDDLUtil::get_all_indexes_tablets_count(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const uint64_t data_table_id,
+    int64_t &all_tablet_count)
+{
+  int ret = OB_SUCCESS;
+  all_tablet_count = 0;
+  const ObTableSchema *data_table_schema = nullptr;
+  if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == data_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(data_table_id));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(tenant_id), K(data_table_id));
+  } else {
+    const common::ObIArray<ObAuxTableMetaInfo> &index_infos = data_table_schema->get_simple_index_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); i++) {
+      const uint64_t index_tid = index_infos.at(i).table_id_;
+      const ObTableSchema *index_schema = nullptr;
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, index_tid, index_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(index_tid));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(index_tid));
+      } else {
+        all_tablet_count += index_schema->get_all_part_num();
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLUtil::refresh_alter_table_arg(
     const uint64_t tenant_id,
     const int64_t orig_table_id,
