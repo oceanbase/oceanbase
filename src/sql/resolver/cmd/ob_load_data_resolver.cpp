@@ -1222,6 +1222,9 @@ int ObLoadDataResolver::resolve_string_node(const ParseNode &node, ObString &tar
         OZ (ObResolverUtils::escape_char_for_oracle_mode(*allocator_, target_str, cs_type)); 
       }
       break;
+    case T_HEX_STRING:
+      target_str.assign_ptr(node.str_value_, static_cast<int32_t>(node.str_len_));
+      break;
     case T_OPTIONALLY_CLOSED_STR:
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "optionally enclosed string");

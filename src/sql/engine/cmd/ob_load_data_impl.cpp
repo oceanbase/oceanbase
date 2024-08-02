@@ -3089,10 +3089,12 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     }
   }
 
-  if (OB_SUCC(ret)) {
+  int64_t buf_len = DEFAULT_BUF_LENGTH;
+  bool need_extend = true;
+  while (OB_SUCC(ret) && need_extend) {
     char *buf = NULL;
-    int64_t buf_len = DEFAULT_BUF_LENGTH;
     int64_t pos = 0;
+    buf_len *= 2;
     if (OB_ISNULL(buf = static_cast<char*>(ctx.get_allocator().alloc(buf_len)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("no memory", K(ret), K(buf_len));
@@ -3122,6 +3124,14 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
       OZ (databuff_printf(buf, buf_len, pos, "Load query: \n%.*s\n",
                                 cur_query_str.length(), cur_query_str.ptr()));
       OX (load_info.assign_ptr(buf, pos));
+    }
+    if (OB_SUCC(ret)) {
+      need_extend = false;
+    } else {
+      if (OB_SIZE_OVERFLOW == ret) {
+        ret = OB_SUCCESS;
+        need_extend = true;
+      }
     }
   }
 
