@@ -60,6 +60,7 @@ int64_t ObTxDataMemtable::PERIODICAL_SELECT_INTERVAL_NS = 10LL;
 int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_commit_versions)
 {
   int ret = OB_SUCCESS;
+  ret = past_commit_versions.array_.push_back(ObCommitVersionsArray::Node(SCN::max_scn(), SCN::max_scn()));
   return ret;
 }
 
@@ -184,7 +185,6 @@ public:
   void do_print_leak_slice_test();
 
   void do_split_range_test();
-
 
 private:
   void insert_tx_data_();

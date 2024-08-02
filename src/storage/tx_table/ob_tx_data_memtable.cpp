@@ -330,7 +330,8 @@ int ObTxDataMemtable::pre_process_commit_version_row_(ObTxData *fake_tx_data)
   if (OB_FAIL(fill_in_cur_commit_versions_(cur_commit_versions)/*step 1*/)) {
     STORAGE_LOG(WARN, "periodical select commit version failed.", KR(ret));
   } else if (OB_FAIL(get_past_commit_versions_(past_commit_versions)/*step 2*/)) {
-    STORAGE_LOG(WARN, "get past commit versions failed.", KR(ret));
+    STORAGE_LOG(WARN, "get past commit versions failed.", KR(ret), K(past_commit_versions));
+  } else if (FALSE_IT(clear_fake_node_if_exist_(past_commit_versions))) {
   } else if (do_recycle_ && OB_FAIL(memtable_mgr_->get_tx_data_table()->get_recycle_scn(recycle_scn) /*step 3*/)) {
     STORAGE_LOG(WARN, "get recycle ts failed.", KR(ret));
   } else if (OB_FAIL(merge_cur_and_past_commit_verisons_(recycle_scn, cur_commit_versions,/*step 4*/
@@ -491,6 +492,14 @@ int ObTxDataMemtable::get_past_commit_versions_(ObCommitVersionsArray &past_comm
   return ret;
 }
 
+void ObTxDataMemtable::clear_fake_node_if_exist_(ObCommitVersionsArray &past_commit_versions)
+{
+  if (1 == past_commit_versions.array_.count() && past_commit_versions.array_.at(0).commit_version_.is_max()) {
+    STORAGE_LOG(INFO, "clear fake commit version node", K(past_commit_versions));
+    past_commit_versions.reset();
+  }
+}
+
 int ObTxDataMemtable::merge_cur_and_past_commit_verisons_(const SCN recycle_scn,
                                                           ObCommitVersionsArray &cur_commit_versions,
                                                           ObCommitVersionsArray &past_commit_versions,
@@ -581,7 +590,6 @@ int ObTxDataMemtable::merge_pre_process_node_(const int64_t step_len,
         STORAGE_LOG(WARN, "push back commit version node failed.", KR(ret), KPC(this));
       }
     }
-
   }
   return ret;
 }
