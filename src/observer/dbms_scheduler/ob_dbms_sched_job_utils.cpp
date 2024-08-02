@@ -33,6 +33,9 @@
 #include "sql/session/ob_sql_session_mgr.h"
 #include "share/schema/ob_schema_getter_guard.h"
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
+#include "storage/ob_common_id_utils.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -50,6 +53,8 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
 {
   int ret = OB_SUCCESS;
   tenant_id_ = other.tenant_id_;
+  user_id_ = other.user_id_;
+  database_id_ = other.database_id_;
   job_ = other.job_;
   last_modify_ = other.last_modify_;
   last_date_ = other.last_date_;
@@ -82,6 +87,7 @@ int ObDBMSSchedJobInfo::deep_copy(ObIAllocator &allocator, const ObDBMSSchedJobI
   OZ (ob_write_string(allocator, other.job_class_, job_class_));
   OZ (ob_write_string(allocator, other.program_name_, program_name_));
   OZ (ob_write_string(allocator, other.state_, state_));
+  OZ (ob_write_string(allocator, other.job_action_, job_action_));
   return ret;
 }
 
@@ -96,6 +102,18 @@ int ObDBMSSchedJobClassInfo::deep_copy(common::ObIAllocator &allocator, const Ob
   OZ (ob_write_string(allocator, other.resource_consumer_group_, resource_consumer_group_));
   OZ (ob_write_string(allocator, other.logging_level_, logging_level_));
   OZ (ob_write_string(allocator, other.comments_, comments_));
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::generate_job_id(int64_t tenant_id, int64_t &max_job_id)
+{
+  int ret = OB_SUCCESS;
+  ObCommonID raw_id;
+  if (OB_FAIL(storage::ObCommonIDUtils::gen_unique_id_by_rpc(tenant_id, raw_id))) {
+    LOG_WARN("gen unique id failed", K(ret), K(tenant_id));
+  } else {
+    max_job_id = raw_id.id() + ObDBMSSchedTableOperator::JOB_ID_OFFSET;
+  }
   return ret;
 }
 
@@ -131,11 +149,123 @@ int ObDBMSSchedJobUtils::disable_dbms_sched_job(
   return ret;
 }
 
+int ObDBMSSchedJobUtils::stop_dbms_sched_job(
+    const ObString &user_name,
+    const uint64_t tenant_id,
+    const ObString &job_name,
+    const common::ObString &job_class)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObDBMSSchedJobRpcProxy *rpc_proxy = GCTX.dbms_sched_job_rpc_proxy_;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  ObSqlString sql;
+  CK (OB_NOT_NULL(rpc_proxy));
+  CK (OB_NOT_NULL(sql_proxy));
+
+  uint64_t data_version = 0;
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+    } else if (data_version < MOCK_DATA_VERSION_4_2_1_5
+      || (data_version >= DATA_VERSION_4_2_2_0 && data_version < MOCK_DATA_VERSION_4_2_4_0)
+      || (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_2_0)) {
+      ret = OB_NOT_SUPPORTED;
+    }
+  }
+
+  if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version)) {
+    OZ (sql.append_fmt("select owner,job_class, svr_ip, svr_port, session_id from %s where tenant_id = %lu and job_name = \'%.*s\'",
+        OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TNAME,
+        tenant_id,
+        job_name.length(),
+        job_name.ptr()));
+  } else {
+    OZ (sql.append_fmt("select owner, svr_ip, svr_port, session_id from %s where tenant_id = %lu and job_name = \'%.*s\'",
+        OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TNAME,
+        tenant_id,
+        job_name.length(),
+        job_name.ptr()));
+  }
+
+  if (OB_SUCC(ret)) {
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      if (OB_FAIL(sql_proxy->read(result, sql.ptr()))) {
+        LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_name));
+      } else if (OB_ISNULL(result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql), K(tenant_id), K(job_name));
+      } else {
+        bool result_empty = true;
+        do {
+          if (OB_FAIL(result.get_result()->next())) {
+            if (ret == OB_ITER_END) {
+              LOG_INFO("empty result", K(ret));
+            } else {
+              LOG_WARN("fail to get result", K(ret));
+            }
+          } else {
+            result_empty = false;
+            uint64_t session_id = OB_INVALID_ID;
+            ObAddr svr;
+            ObString owner;
+            ObString job_class_name;
+            ObString svr_ip;
+            int64_t svr_port = OB_INVALID_INDEX;
+            EXTRACT_VARCHAR_FIELD_MYSQL(*(result.get_result()), "owner", owner);
+            if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version)) {
+              EXTRACT_VARCHAR_FIELD_MYSQL(*(result.get_result()), "job_class", job_class_name);
+            }
+            EXTRACT_VARCHAR_FIELD_MYSQL(*(result.get_result()), "svr_ip", svr_ip);
+            EXTRACT_UINT_FIELD_MYSQL(*(result.get_result()), "session_id", session_id, uint64_t);
+            EXTRACT_INT_FIELD_MYSQL(*(result.get_result()), "svr_port", svr_port, int64_t);
+            if (OB_SUCC(ret)) {
+              if (0 != user_name.case_compare("root")
+                && 0 != user_name.case_compare(owner)) {
+                ret = OB_ERR_NO_PRIVILEGE;
+                LOG_WARN("insufficient privalige", K(ret), K(tenant_id), K(job_name), K(user_name), K(owner));
+                LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE,
+                    "insufficient privalige to stop other user job");
+              } else if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version)
+                         && OB_NOT_NULL(job_class) && 0 != job_class.case_compare(job_class_name)) {
+                ret = OB_ERR_NO_PRIVILEGE;
+                LOG_WARN("insufficient privalige", K(ret), K(tenant_id), K(job_name), K(user_name), K(owner));
+                LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE,
+                    "insufficient privalige to stop other user job");
+              } else if (!svr.set_ip_addr(svr_ip, svr_port)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("set addr failed", K(svr_ip), K(svr_port));
+              } else {
+                LOG_INFO("send rpc", K(tenant_id), K(job_name), K(svr), K(session_id));
+                ObString stop_job_name = ObString(job_name);
+                OZ (rpc_proxy->stop_dbms_sched_job(tenant_id,
+                  stop_job_name,
+                  svr,
+                  session_id));
+              }
+            }
+          }
+        } while (OB_SUCC(ret));
+        if (OB_ITER_END == ret) {
+          if (result_empty) {
+            ret = OB_ENTRY_NOT_EXIST;
+            LOG_WARN("no running job", K(ret), K(tenant_id), K(job_name));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    }
+  }
+  LOG_INFO("stop job", K(ret), K(job_name), K(tenant_id));
+  return ret;
+}
+
 int ObDBMSSchedJobUtils::remove_dbms_sched_job(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const ObString &job_name,
-    const bool if_exists)
+    const bool if_exists,
+    const common::ObString &job_class)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
@@ -148,11 +278,16 @@ int ObDBMSSchedJobUtils::remove_dbms_sched_job(
         "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
         || OB_FAIL(dml.add_pk_column("job_name", job_name))) {
       LOG_WARN("add column failed", KR(ret));
+    } else if (OB_NOT_NULL(job_class) && OB_FAIL(dml.add_pk_column("job_class", job_class))) {
+      LOG_WARN("add column failed", KR(ret));
     } else {
       ObDMLExecHelper exec(sql_client, exec_tenant_id);
       int64_t affected_rows = 0;
       if (OB_FAIL(exec.exec_delete(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, dml, affected_rows))) {
         LOG_WARN("execute delete failed", KR(ret));
+      } else if (is_zero_row(affected_rows) && !if_exists) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("execute delete failed", KR(ret), K(if_exists));
       } else if (!if_exists && !is_double_row(affected_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("affected_rows unexpected to be two", KR(ret), K(affected_rows));
@@ -198,35 +333,45 @@ int ObDBMSSchedJobUtils::add_dbms_sched_job(
     ObDMLExecHelper exec(sql_client, exec_tenant_id);
     int64_t affected_rows = 0;
     const int64_t now = ObTimeUtility::current_time();
-
-    OZ (dml.add_gmt_create(now));
-    OZ (dml.add_gmt_modified(now));
-    OZ (dml.add_pk_column("tenant_id",
-        ObSchemaUtils::get_extract_tenant_id(job_info.tenant_id_, job_info.tenant_id_)));
-    OZ (dml.add_pk_column("job", job_id));
-    OZ (dml.add_column("lowner", ObHexEscapeSqlStr(job_info.lowner_)));
-    OZ (dml.add_column("powner", ObHexEscapeSqlStr(job_info.powner_)));
-    OZ (dml.add_column("cowner", ObHexEscapeSqlStr(job_info.cowner_)));
-    OZ (dml.add_raw_time_column("next_date", job_info.start_date_));
-    OZ (dml.add_column("total", 0));
-    OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(
-        job_info.repeat_interval_.empty() ? ObString("null") : job_info.repeat_interval_)));
-    OZ (dml.add_column("flag", job_info.flag_));
-    OZ (dml.add_column("job_name", ObHexEscapeSqlStr(job_info.job_name_)));
-    OZ (dml.add_column("job_style", ObHexEscapeSqlStr(job_info.job_style_)));
-    OZ (dml.add_column("job_type", ObHexEscapeSqlStr(job_info.job_type_)));
-    OZ (dml.add_column("job_class", ObHexEscapeSqlStr(job_info.job_class_)));
-    OZ (dml.add_column("job_action", ObHexEscapeSqlStr(job_info.job_action_)));
-    OZ (dml.add_column("what", ObHexEscapeSqlStr(job_info.job_action_)));
-    OZ (dml.add_raw_time_column("start_date", job_info.start_date_));
-    OZ (dml.add_raw_time_column("end_date", job_info.end_date_));
-    OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(job_info.repeat_interval_)));
-    OZ (dml.add_column("enabled", job_info.enabled_));
-    OZ (dml.add_column("auto_drop", job_info.auto_drop_));
-    OZ (dml.add_column("max_run_duration", job_info.max_run_duration_));
-    OZ (dml.add_column("interval_ts", job_info.interval_ts_));
-    OZ (dml.add_column("scheduler_flags", job_info.scheduler_flags_));
-    OZ (dml.add_column("exec_env", job_info.exec_env_));
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+      LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
+    } else {
+      OZ (dml.add_gmt_create(now));
+      OZ (dml.add_gmt_modified(now));
+      OZ (dml.add_pk_column("tenant_id",
+          ObSchemaUtils::get_extract_tenant_id(job_info.tenant_id_, job_info.tenant_id_)));
+      if ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && DATA_VERSION_4_3_0_0 > data_version) ||
+           data_version > DATA_VERSION_4_3_2_0) {
+        OZ (dml.add_column("user_id", job_info.user_id_));
+        OZ (dml.add_column("database_id", job_info.database_id_));
+      }
+      OZ (dml.add_pk_column("job", job_id));
+      OZ (dml.add_column("lowner", ObHexEscapeSqlStr(job_info.lowner_)));
+      OZ (dml.add_column("powner", ObHexEscapeSqlStr(job_info.powner_)));
+      OZ (dml.add_column("cowner", ObHexEscapeSqlStr(job_info.cowner_)));
+      OZ (dml.add_raw_time_column("next_date", job_info.start_date_));
+      OZ (dml.add_column("total", 0));
+      OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(
+          job_info.repeat_interval_.empty() ? ObString("null") : job_info.repeat_interval_)));
+      OZ (dml.add_column("flag", job_info.flag_));
+      OZ (dml.add_column("job_name", ObHexEscapeSqlStr(job_info.job_name_)));
+      OZ (dml.add_column("job_style", ObHexEscapeSqlStr(job_info.job_style_)));
+      OZ (dml.add_column("job_type", ObHexEscapeSqlStr(job_info.job_type_)));
+      OZ (dml.add_column("job_class", ObHexEscapeSqlStr(job_info.job_class_)));
+      OZ (dml.add_column("job_action", ObHexEscapeSqlStr(job_info.job_action_)));
+      OZ (dml.add_column("what", ObHexEscapeSqlStr(job_info.job_action_)));
+      OZ (dml.add_raw_time_column("start_date", job_info.start_date_));
+      OZ (dml.add_raw_time_column("end_date", job_info.end_date_));
+      OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(job_info.repeat_interval_)));
+      OZ (dml.add_column("enabled", job_info.enabled_));
+      OZ (dml.add_column("auto_drop", job_info.auto_drop_));
+      OZ (dml.add_column("max_run_duration", job_info.max_run_duration_));
+      OZ (dml.add_column("interval_ts", job_info.interval_ts_));
+      OZ (dml.add_column("scheduler_flags", job_info.scheduler_flags_));
+      OZ (dml.add_column("exec_env", job_info.exec_env_));
+      OZ (dml.add_column("comments", ObHexEscapeSqlStr(job_info.comments_)));
+    }
 
     if (OB_SUCC(ret) && OB_FAIL(exec.exec_insert(
         OB_ALL_TENANT_SCHEDULER_JOB_TNAME, dml, affected_rows))) {
@@ -234,6 +379,117 @@ int ObDBMSSchedJobUtils::add_dbms_sched_job(
     } else if (OB_UNLIKELY(!is_single_row(affected_rows))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("affected_rows unexpected to be one", KR(ret), K(affected_rows));
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::update_dbms_sched_job(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const ObString &job_name,
+    int is_auto_drop,
+    int is_enable,
+    int64_t start_date,
+    int64_t end_date,
+    int64_t repeat_ts,
+    const ObString &repeat_interval,
+    const ObString &definer,
+    const ObString &job_rename,
+    const ObString &comments,
+    const ObString &job_action)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
+  } else {
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    ObDMLSqlSplicer dml;
+    if (OB_FAIL(dml.add_pk_column(
+        "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
+        || OB_FAIL(dml.add_pk_column("job_name", job_name))) {
+      LOG_WARN("add column failed", KR(ret));
+    } else if (!definer.empty() && OB_FAIL(dml.add_column("powner", definer))) {
+      LOG_WARN("add column failed", KR(ret), K(definer));
+    } else if (!job_rename.empty() && OB_FAIL(dml.add_column("job_name", job_rename))) {
+      LOG_WARN("add column failed", KR(ret), K(job_rename));
+    } else if (-1 != is_auto_drop && OB_FAIL(dml.add_column("auto_drop", is_auto_drop))) {
+      LOG_WARN("add column failed", KR(ret), K(is_auto_drop));
+    } else if (-1 != is_enable && OB_FAIL(dml.add_column("enabled", is_enable))) {
+      LOG_WARN("add column failed", KR(ret), K(is_enable));
+    } else if (OB_INVALID_TIMESTAMP != start_date && (OB_FAIL(dml.add_raw_time_column("start_date", start_date)
+      || OB_FAIL(dml.add_raw_time_column("next_date", start_date))
+      || OB_FAIL(dml.add_raw_time_column("end_date", end_date))
+      || OB_FAIL(dml.add_column("repeat_interval", repeat_interval))
+      || OB_FAIL(dml.add_column("interval_ts", repeat_ts))))) {
+      LOG_WARN("add column failed", KR(ret), K(start_date), K(end_date), K(repeat_interval), K(repeat_ts));
+    } else if (!comments.empty() && OB_FAIL(dml.add_column("comments", ObHexEscapeSqlStr(comments)))) {
+      LOG_WARN("add column failed", KR(ret), K(comments));
+    } else if (!job_action.empty() && (OB_FAIL(dml.add_column("job_action", job_action))
+      || OB_FAIL(dml.add_column("what", job_action)))) {
+      LOG_WARN("add column failed", KR(ret), K(job_action));
+    } else {
+      ObDMLExecHelper exec(sql_client, exec_tenant_id);
+      int64_t affected_rows = 0;
+      if (OB_FAIL(exec.exec_update(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, dml, affected_rows))) {
+        LOG_WARN("execute update failed", KR(ret));
+      } else if (is_zero_row(affected_rows)) {
+        ret = OB_SUCCESS;
+        LOG_WARN("not change", KR(ret), K(affected_rows));
+      } else if (!is_double_row(affected_rows)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("affected_rows unexpected to be two", KR(ret), K(affected_rows));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::check_dbms_sched_job_exist_and_start_time_on_past(common::ObISQLClient &sql_client,
+                                        const uint64_t tenant_id,
+                                        const ObString &job_name,
+                                        bool &exist,
+                                        bool &start_time_on_past)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  exist = false;
+  start_time_on_past = false;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
+  } else {
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    if (OB_FAIL(sql.append_fmt("select TIME_TO_USEC (start_date) as time from %s where tenant_id = %ld and job_name = \'%.*s\' and job > 0",
+                                                     OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                                                     ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                                     job_name.length(), job_name.ptr()))) {
+        LOG_WARN("failed to assign sql", K(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+          LOG_WARN("execute query failed", K(ret), K(sql));
+        } else {
+          if (res.get_result() != NULL && OB_SUCCESS == (ret = res.get_result()->next())) {
+            exist = true;
+            int64_t time_us = OB_INVALID_TIMESTAMP;
+            sqlclient::ObMySQLResult &result = *res.get_result();
+            EXTRACT_INT_FIELD_MYSQL(result, "time", time_us, uint64_t);
+            if (time_us < ObTimeUtility::current_time()) {
+              start_time_on_past = true;
+            }
+          }
+          if (OB_FAIL(ret)) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              exist = false;
+            } else {
+              LOG_WARN("next failed", K(ret));
+            }
+          }
+        }
+      }
     }
   }
   return ret;

@@ -290,7 +290,8 @@ int64_t ObDBMSSchedJobMaster::run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJ
       job_key->get_job_id(),
       job_key->get_job_name(),
       execute_addr,
-      self_addr_))) {
+      self_addr_,
+      job_info.is_adb_async_job_class() ? share::OBCG_OLAP_ASYNC_JOB : 0))) {
     LOG_WARN("failed to run dbms sched job", K(ret), K(job_info), KPC(job_key));
     if (is_server_down_error(ret)) {
       int tmp = OB_SUCCESS;
@@ -654,6 +655,10 @@ int ObDBMSSchedJobMaster::check_all_tenants()
           OZ (table_operator_.purge_run_detail_histroy(tenant_ids.at(i)));
         }
         */ // not open
+        if (OB_FAIL(table_operator_.purge_adb_async_job_run_detail(tenant_ids.at(i)))) {
+          LOG_WARN("purge adb async job run detail failed", K(ret), K(tenant_ids.at(i)));
+          ret = OB_SUCCESS; // not affect subsequent operations
+        }
         OZ (check_new_jobs(tenant_ids.at(i), tenant_schema->is_oracle_tenant()));
       }
       ret = OB_SUCCESS; // one tenant failed should not affect other
@@ -666,7 +671,7 @@ int ObDBMSSchedJobMaster::check_all_tenants()
 int ObDBMSSchedJobMaster::check_new_jobs(uint64_t tenant_id, bool is_oracle_tenant)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObDBMSSchedJobInfo, 16> job_infos;
+  ObSEArray<ObDBMSSchedJobInfo, 12> job_infos;
   ObArenaAllocator allocator("DBMSSchedTmp");
   OZ (table_operator_.get_dbms_sched_job_infos_in_tenant(tenant_id, is_oracle_tenant, allocator, job_infos));
   OZ (register_new_jobs(tenant_id, is_oracle_tenant, job_infos));

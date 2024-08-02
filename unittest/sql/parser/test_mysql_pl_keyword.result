@@ -171,6 +171,8 @@ Reserved Keyword: LONGBLOB
 Test PL procedure name Sql:create procedure LONGBLOB () select 1;
 Reserved Keyword: VARYING
 Test PL procedure name Sql:create procedure VARYING () select 1;
+Reserved Keyword: LOAD
+Test PL procedure name Sql:create procedure LOAD () select 1;
 Reserved Keyword: CHARSET
 Test PL procedure name Sql:create procedure CHARSET () select 1;
 Reserved Keyword: COMMIT
@@ -181,7 +183,7 @@ Reserved Keyword: DO
 Test PL procedure name Sql:create procedure DO () select 1;
 Reserved Keyword: UNTIL
 Test PL procedure name Sql:create procedure UNTIL () select 1;
-************** Total Count of Reserved Keyword:91   ***************
+************** Total Count of Reserved Keyword:92   ***************
 **************   End Test Reserved Keyword   ***************
 **************   Begin Test Non-Reserved Keyword  ***************
 **************   End Test Non-Reserved Keyword  ***************

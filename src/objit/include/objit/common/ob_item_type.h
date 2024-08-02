@@ -2543,6 +2543,14 @@ typedef enum ObItemType
   // select into outfile
   T_BUFFER_SIZE,
   T_PARTITION_EXPR,
+  T_CACHE_INDEX,
+  T_LOAD_INDEX_INTO_CACHE,
+
+  T_RESOURCE_GROUP,
+  //olap async job
+  T_OLAP_ASYNC_JOB_SUBMIT,
+  T_OLAP_ASYNC_JOB_CANCEL,
+  T_SHOW_OLAP_ASYNC_JOB_STATUS,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

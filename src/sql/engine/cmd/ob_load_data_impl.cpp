@@ -2773,7 +2773,11 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     file_read_param.file_location_   = load_file_storage;
     file_read_param.filename_        = load_args.file_name_;
     file_read_param.access_info_     = load_args.access_info_;
-    file_read_param.packet_handle_   = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
+    if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_my_session()->get_pl_query_sender())) {
+      file_read_param.packet_handle_ = NULL;
+    } else {
+      file_read_param.packet_handle_   = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
+    }
     file_read_param.session_         = ctx.get_my_session();
     file_read_param.timeout_ts_      = THIS_WORKER.get_timeout_ts();
 

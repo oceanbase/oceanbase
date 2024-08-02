@@ -14186,6 +14186,14 @@ SHOW opt_extended_or_full TABLES opt_from_or_in_database_clause opt_show_conditi
   (void)($4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_OPEN_TABLES, 1, $5);
 }
+| SHOW JOB STATUS
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_SHOW_OLAP_ASYNC_JOB_STATUS);
+}
+| SHOW JOB STATUS WHERE JOB COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SHOW_OLAP_ASYNC_JOB_STATUS, 1, $7);
+}
 ;
 
 databases_or_schemas:

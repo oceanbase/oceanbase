@@ -22,6 +22,7 @@
 
 #define DATA_VERSION_SUPPORT_JOB_CLASS(data_version) (data_version >= DATA_VERSION_4_3_2_0)
 #define DATA_VERSION_SUPPORT_RUN_DETAIL_V2(data_version) ((MOCK_DATA_VERSION_4_2_4_0 <= data_version && DATA_VERSION_4_3_0_0 > data_version) || DATA_VERSION_4_3_2_0 <= data_version)
+#define DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version) (DATA_VERSION_4_3_2_1 <= data_version)
 
 namespace oceanbase
 {
@@ -62,6 +63,8 @@ class ObDBMSSchedJobInfo
 public:
   ObDBMSSchedJobInfo() :
     tenant_id_(common::OB_INVALID_ID),
+    user_id_(common::OB_INVALID_ID),
+    database_id_(common::OB_INVALID_ID),
     job_(common::OB_INVALID_ID),
     lowner_(),
     powner_(),
@@ -104,6 +107,8 @@ public:
     is_oracle_tenant_(true) {}
 
   TO_STRING_KV(K(tenant_id_),
+               K(user_id_),
+               K(database_id_),
                K(job_),
                K(job_name_),
                K(lowner_),
@@ -138,6 +143,8 @@ public:
   }
 
   uint64_t get_tenant_id() { return tenant_id_; }
+  uint64_t get_user_id() { return user_id_; }
+  uint64_t get_database_id() { return database_id_; }
   uint64_t get_job_id() { return job_; }
   uint64_t get_job_id_with_tenant() { return common::combine_two_ids(tenant_id_, job_); }
   int64_t  get_this_date() { return this_date_; }
@@ -164,14 +171,19 @@ public:
   common::ObString &get_program_name() { return program_name_; }
   common::ObString &get_job_name() { return job_name_; }
   common::ObString &get_job_class() { return job_class_; }
+  common::ObString &get_job_action() { return job_action_; }
 
   bool is_oracle_tenant() { return is_oracle_tenant_; }
   bool is_date_expression_job_class() const { return !!(scheduler_flags_ & JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS); }
+  bool is_mysql_event_job_class() const { return (0 == job_class_.case_compare("MYSQL_EVENT_JOB_CLASS")); }
+  bool is_adb_async_job_class() const { return (0 == job_class_.case_compare("ADB_ASYNC_JOB_CLASS")); }
 
   int deep_copy(common::ObIAllocator &allocator, const ObDBMSSchedJobInfo &other);
 
 public:
   uint64_t tenant_id_;
+  uint64_t user_id_;
+  uint64_t database_id_;
   uint64_t job_;
   common::ObString lowner_;
   common::ObString powner_;
@@ -264,14 +276,20 @@ public:
 class ObDBMSSchedJobUtils
 {
 public:
+  static int generate_job_id(int64_t tenant_id, int64_t &max_job_id);
   static int disable_dbms_sched_job(common::ObISQLClient &sql_client,
                                     const uint64_t tenant_id,
                                     const common::ObString &job_name,
                                     const bool if_exists = false);
+  static int stop_dbms_sched_job( const ObString &user_name,
+                                  const uint64_t tenant_id,
+                                  const ObString &job_name,
+                                  const common::ObString &job_class = NULL);
   static int remove_dbms_sched_job(common::ObISQLClient &sql_client,
                                   const uint64_t tenant_id,
                                   const common::ObString &job_name,
-                                  const bool if_exists = false);
+                                  const bool if_exists = false,
+                                  const common::ObString &job_class = NULL);
   static int create_dbms_sched_job(common::ObISQLClient &sql_client,
                                    const uint64_t tenant_id,
                                    const int64_t job_id,
@@ -280,6 +298,25 @@ public:
                                 const uint64_t tenant_id,
                                 const int64_t job_id,
                                 const ObDBMSSchedJobInfo &job_info);
+
+  static int check_dbms_sched_job_exist_and_start_time_on_past(common::ObISQLClient &sql_client,
+                                        const uint64_t tenant_id,
+                                        const ObString &job_name,
+                                        bool &exist,
+                                        bool &start_time_on_past);
+  static int update_dbms_sched_job(common::ObISQLClient &sql_client,
+                                   const uint64_t tenant_id,
+                                   const ObString &job_name,
+                                   int is_auto_drop,
+                                   int is_enable,
+                                   int64_t start_date,
+                                   int64_t end_date,
+                                   int64_t repeat_ts,
+                                   const ObString &repeat_interval,
+                                   const ObString &definer,
+                                   const ObString &job_rename,
+                                   const ObString &comments,
+                                   const ObString &job_action);
   static int reserve_user_with_minimun_id(ObIArray<const ObUserInfo *> &user_infos);
 };
 }

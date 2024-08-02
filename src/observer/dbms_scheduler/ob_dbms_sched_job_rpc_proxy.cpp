@@ -33,13 +33,13 @@ OB_SERIALIZE_MEMBER(ObDBMSSchedJobResult, tenant_id_, job_id_, server_addr_, sta
 OB_SERIALIZE_MEMBER(ObDBMSSchedStopJobArg, tenant_id_, job_name_, session_id_, rpc_send_time_);
 
 int ObDBMSSchedJobRpcProxy::run_dbms_sched_job(
-  uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, ObString &job_name, ObAddr server_addr, ObAddr master_addr)
+  uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, ObString &job_name, ObAddr server_addr, ObAddr master_addr, int64_t group_id)
 {
   int ret = OB_SUCCESS;
   ObDBMSSchedJobArg arg(tenant_id, job_id, server_addr, master_addr, is_oracle_tenant, job_name);
   ObRpcAPDBMSSchedJobCB cb;
   CK (arg.is_valid());
-  OZ (this->to(arg.server_addr_).by(arg.tenant_id_).run_dbms_sched_job(arg, &cb), arg);
+  OZ (this->to(arg.server_addr_).by(arg.tenant_id_).group_id(group_id).run_dbms_sched_job(arg, &cb), arg);
   return ret;
 }
 

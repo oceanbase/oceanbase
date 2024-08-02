@@ -173,7 +173,7 @@ public:
 public:
   int run_dbms_sched_job(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, common::ObString &job_name,
-    common::ObAddr server_addr, common::ObAddr master_addr);
+    common::ObAddr server_addr, common::ObAddr master_addr, int64_t group_id);
   int stop_dbms_sched_job(
     uint64_t tenant_id, common::ObString &job_name,
     common::ObAddr server_addr, uint64_t session_id);

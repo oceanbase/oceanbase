@@ -152,6 +152,8 @@
 #include "sql/engine/cmd/ob_tenant_snapshot_executor.h"
 #include "sql/resolver/cmd/ob_tenant_clone_stmt.h"
 #include "sql/engine/cmd/ob_clone_executor.h"
+#include "sql/resolver/cmd/ob_olap_async_job_stmt.h"
+#include "sql/engine/cmd/ob_olap_async_job_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -1060,6 +1062,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
        }
       case stmt::T_TRANSFER_PARTITION: {
         DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
+        break;
+      }
+      case stmt::T_OLAP_ASYNC_JOB_CANCEL: {
+        DEFINE_EXECUTE_CMD(ObOLAPAsyncCancelJobStmt, ObOLAPAsyncCancelJobExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

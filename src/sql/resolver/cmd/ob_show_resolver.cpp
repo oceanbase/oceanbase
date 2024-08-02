@@ -107,7 +107,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_UNLIKELY(parse_tree.type_ < T_SHOW_TABLES || parse_tree.type_ > T_SHOW_GRANTS)
              && (parse_tree.type_ != T_SHOW_TRIGGERS) && (parse_tree.type_ != T_SHOW_PROFILE)
              && (parse_tree.type_ != T_SHOW_PROCEDURE_CODE) && (parse_tree.type_ != T_SHOW_FUNCTION_CODE)
-             && (parse_tree.type_ != T_SHOW_ENGINE) && (parse_tree.type_ != T_SHOW_OPEN_TABLES)) {
+             && (parse_tree.type_ != T_SHOW_ENGINE) && (parse_tree.type_ != T_SHOW_OPEN_TABLES)
+             && (parse_tree.type_ != T_SHOW_OLAP_ASYNC_JOB_STATUS)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected parse tree type", K(ret), K(parse_tree.type_));
   } else {
@@ -1660,6 +1661,54 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                          OB_SYS_DATABASE_NAME,
                          OB_TENANT_VIRTUAL_SHOW_RESTORE_PREVIEW_TNAME);
         }
+        break;
+      }
+      case T_SHOW_OLAP_ASYNC_JOB_STATUS: {
+        [&] {
+          const int WHERE_JOB_NAME_LENGTH = 128 + 20;
+          const int LIMIT_LENGTH = 40;
+          char where_job_name[WHERE_JOB_NAME_LENGTH] = {};
+          char limit_count [LIMIT_LENGTH] = {};
+          uint64_t min_version = OB_INVALID_VERSION;
+
+          if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
+            LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
+          } else if (min_version < DATA_VERSION_4_3_2_1) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support show async job", K(ret), K(real_tenant_id));
+          } else if (parse_tree.num_child_ == 1 && OB_NOT_NULL(parse_tree.children_)) {
+            snprintf(where_job_name, WHERE_JOB_NAME_LENGTH, " AND JOB_NAME = '%.*s' ", (int)parse_tree.children_[0]->str_len_, parse_tree.children_[0]->str_value_);
+            snprintf(limit_count, LIMIT_LENGTH, "order by update_time desc limit 1");
+          } else if (parse_tree.num_child_ == 0) {
+            //nothing to do
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_),
+                    K(parse_tree.children_));
+          }
+          if (OB_SUCC(ret)) {
+            const int WHERE_USR_NAME_LENGTH = OB_MAX_USER_NAME_LENGTH + 20;
+            char where_user_from_jobs[WHERE_USR_NAME_LENGTH] = {};
+            char where_user_from_logs[WHERE_USR_NAME_LENGTH] = {};
+            if (0 != session_info_->get_user_name().case_compare("root")) {
+              snprintf(where_user_from_jobs, WHERE_USR_NAME_LENGTH, " AND T.POWNER = '%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr());
+              snprintf(where_user_from_logs, WHERE_USR_NAME_LENGTH, " AND R.OWNER = '%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr());
+            }
+            show_resv_ctx.stmt_type_ = stmt::T_SHOW_OLAP_ASYNC_JOB_STATUS;
+            GEN_SQL_STEP_1(ObShowSqlSet::SHOW_OLAP_ASYNC_JOB_STATUS);
+            GEN_SQL_STEP_2(ObShowSqlSet::SHOW_OLAP_ASYNC_JOB_STATUS,
+                          OB_SYS_DATABASE_NAME,
+                          OB_ALL_SCHEDULER_JOB_RUN_DETAIL_V2_TNAME,
+                          where_job_name,
+                          where_user_from_logs,
+                          OB_SYS_DATABASE_NAME,
+                          OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                          sql_tenant_id,
+                          where_job_name,
+                          where_user_from_jobs,
+                          limit_count);
+          }
+        }();
         break;
       }
       default:
@@ -3264,5 +3313,13 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_SEQUENCES_LIKE,
                        "SELECT sequence_name FROM %s.%s WHERE database_id = %ld ORDER BY sequence_name COLLATE utf8mb4_bin ASC",
                        NULL,
                        "sequence_name");
+DEFINE_SHOW_CLAUSE_SET(SHOW_OLAP_ASYNC_JOB_STATUS,
+                       NULL,
+                       "(SELECT R.job_name AS 'job_id', R.database_name AS 'schema_name', CASE WHEN R.status = 'COMPLETED' AND R.message = 'SUCCESS' THEN 'FINISH' WHEN R.status = 'COMPLETED' AND R.message <> 'SUCCESS' THEN 'FAILED' ELSE R.status END as 'status', R.message as 'fail_msg', R.req_start_date as 'create_time', R.time as 'update_time', R.operation AS 'definition' FROM %s.%s R WHERE R.JOB_CLASS = 'ADB_ASYNC_JOB_CLASS' %s %s\
+                        UNION ALL\
+                        SELECT T.job_name AS 'job_id', T.cowner AS 'schema_name', CASE WHEN T.state IS NULL THEN 'SUBMITTED' WHEN T.state = 'SCHEDULED' THEN 'RUNNING' ELSE T.state END as 'status', NULL as fail_msg, T.start_date as 'create_time', T.gmt_modified as 'update_time', T.job_action as 'definition'  FROM %s.%s T WHERE T.JOB_CLASS = 'ADB_ASYNC_JOB_CLASS' AND T.TENANT_ID = %d AND T.JOB > 0 %s %s) %s",
+                       NULL,
+                       NULL);
+
 }/* ns sql*/
 }/* ns oceanbase */

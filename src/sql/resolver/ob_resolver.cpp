@@ -137,6 +137,7 @@
 #include "sql/resolver/ddl/ob_drop_context_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_snapshot_resolver.h"
 #include "sql/resolver/cmd/ob_tenant_clone_resolver.h"
+#include "sql/resolver/cmd/ob_olap_async_job_resolver.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_tablespace_resolver.h"
 #include "sql/resolver/ddl/ob_alter_tablespace_resolver.h"
@@ -723,7 +724,8 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_CREATE_TRIGGER:
       case T_SHOW_ENGINE:
       case T_SHOW_OPEN_TABLES:
-      case T_SHOW_SEQUENCES: {
+      case T_SHOW_SEQUENCES:
+      case T_SHOW_OLAP_ASYNC_JOB_STATUS: {
         REGISTER_STMT_RESOLVER(Show);
         break;
       }
@@ -1219,6 +1221,14 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CHECKSUM_TABLE: {
         REGISTER_STMT_RESOLVER(Mock);
+        break;
+      }
+      case T_OLAP_ASYNC_JOB_SUBMIT: {
+        REGISTER_STMT_RESOLVER(OLAPAsyncJob);
+        break;
+      }
+      case T_OLAP_ASYNC_JOB_CANCEL: {
+        REGISTER_STMT_RESOLVER(OLAPAsyncJob);
         break;
       }
       default: {

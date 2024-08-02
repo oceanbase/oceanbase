@@ -501,7 +501,11 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       file_read_param.file_location_ = data_access_param.file_location_;
       file_read_param.filename_      = data_desc.filename_;
       file_read_param.access_info_   = data_access_param.access_info_;
-      file_read_param.packet_handle_ = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
+      if (OB_ISNULL(execute_ctx.exec_ctx_.get_session_info()) || OB_ISNULL(execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender())) {
+        file_read_param.packet_handle_ = NULL;
+      } else {
+        file_read_param.packet_handle_ = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
+      }
       file_read_param.session_       = execute_ctx.exec_ctx_.get_session_info();
       file_read_param.timeout_ts_    = THIS_WORKER.get_timeout_ts();
 

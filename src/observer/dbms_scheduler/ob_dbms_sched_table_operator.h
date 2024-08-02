@@ -90,6 +90,7 @@ public:
 
   int purge_run_detail_histroy(uint64_t tenant_id);
 
+  int purge_adb_async_job_run_detail(uint64_t tenant_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDBMSSchedTableOperator);
 

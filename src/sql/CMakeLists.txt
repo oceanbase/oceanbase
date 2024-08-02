@@ -272,6 +272,7 @@ ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_table_direct_insert_service.cpp
   engine/cmd/ob_tenant_snapshot_executor.cpp
   engine/cmd/ob_mock_executor.cpp
+  engine/cmd/ob_olap_async_job_executor.cpp
 )
 
 ob_set_subtarget(ob_sql engine_dml
@@ -1114,6 +1115,8 @@ ob_set_subtarget(ob_sql resolver_cmd
   resolver/cmd/ob_alter_system_resolver.cpp
   resolver/cmd/ob_tenant_snapshot_resolver.cpp
   resolver/cmd/ob_tenant_clone_resolver.cpp
+  resolver/cmd/ob_olap_async_job_resolver.cpp
+  resolver/cmd/ob_olap_async_job_stmt.cpp
 )
 
 ob_set_subtarget(ob_sql resolver_dcl

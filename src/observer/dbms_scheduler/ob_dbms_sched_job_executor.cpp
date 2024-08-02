@@ -24,6 +24,7 @@
 #include "observer/ob_inner_sql_connection_pool.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/ob_sql.h"
+#include "sql/executor/ob_executor_rpc_processor.h"
 
 namespace oceanbase
 {
@@ -65,6 +66,7 @@ int ObDBMSSchedJobExecutor::init_session(
   ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;
+  ObPrivSet db_priv_set = OB_PRIV_SET_EMPTY;
   ObArenaAllocator *allocator = NULL;
   const bool print_info_log = true;
   const bool is_sys_tenant = true;
@@ -97,19 +99,34 @@ int ObDBMSSchedJobExecutor::init_session(
   OX (session.set_database_id(database_id));
   OZ (session.set_user(
     user_info->get_user_name(), user_info->get_host_name_str(), user_info->get_user_id()));
+  OX (session.set_priv_user_id(user_info->get_user_id()));
   OX (session.set_user_priv_set(user_info->get_priv_set()));
+  OZ (schema_guard.get_db_priv_set(tenant_id, user_info->get_user_id(), database_name, db_priv_set));
+  OX (session.set_db_priv_set(db_priv_set));
   OX (session.set_shadow(true));
-  if (OB_SUCC(ret) && job_info.is_date_expression_job_class()) {
-    // set larger timeout for mview scheduler jobs
-    const int64_t QUERY_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
-    const int64_t TRX_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
-    ObObj query_timeout_obj;
-    ObObj trx_timeout_obj;
-    query_timeout_obj.set_int(QUERY_TIMEOUT_US);
-    trx_timeout_obj.set_int(TRX_TIMEOUT_US);
-    OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
-    OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+  if (OB_SUCC(ret)) {
+    if (job_info.is_date_expression_job_class()) {
+      // set larger timeout for mview scheduler jobs
+      const int64_t QUERY_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
+      const int64_t TRX_TIMEOUT_US = (24 * 60 * 60 * 1000000L); // 24hours
+      ObObj query_timeout_obj;
+      ObObj trx_timeout_obj;
+      query_timeout_obj.set_int(QUERY_TIMEOUT_US);
+      trx_timeout_obj.set_int(TRX_TIMEOUT_US);
+      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
+      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+    } else if (job_info.is_adb_async_job_class()) {
+      const int64_t QUERY_TIMEOUT_US = ((job_info.get_max_run_duration() - ADB_ASYNC_JOB_DEVIATION_SECOND) * 1000000L);
+      const int64_t TRX_TIMEOUT_US = ((job_info.get_max_run_duration() - ADB_ASYNC_JOB_DEVIATION_SECOND) * 1000000L);
+      ObObj query_timeout_obj;
+      ObObj trx_timeout_obj;
+      query_timeout_obj.set_int(QUERY_TIMEOUT_US);
+      trx_timeout_obj.set_int(TRX_TIMEOUT_US);
+      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
+      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+    }
   }
+
   return ret;
 }
 
@@ -136,6 +153,9 @@ int ObDBMSSchedJobExecutor::init_env(ObDBMSSchedJobInfo &job_info, ObSQLSessionI
         job_info.get_tenant_id(), job_info.get_powner(), user_infos));
       OV (1 == user_infos.count(), OB_ERR_UNEXPECTED, K(job_info), K(user_infos));
       CK (OB_NOT_NULL(user_info = user_infos.at(0)));
+    } else if (job_info.get_user_id() != OB_INVALID_ID) {
+      OZ (schema_guard.get_user_info(
+        job_info.get_tenant_id(), job_info.get_user_id(), user_info));
     } else {
       ObString user = job_info.get_powner();
       if (OB_SUCC(ret)) {
@@ -247,6 +267,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       if (job_info.is_oracle_tenant_) {
         OZ (what.append_fmt("BEGIN %.*s; END;",
             job_info.get_what().length(), job_info.get_what().ptr()));
+      } else if (job_info.is_adb_async_job_class()){
+        OZ (what.append_fmt("%.*s",
+            job_info.get_what().length(), job_info.get_what().ptr()));
       } else {
         //mysql mode not support anonymous block
         OZ (what.append_fmt("CALL %.*s;",
@@ -346,6 +369,7 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       }
     }
     if (OB_SUCC(ret)) {
+      ObWorkerSessionGuard worker_session_guard(session_info);
       OZ (ObDBMSSchedJobExecutor::init_env(job_info, *session_info));
       CK (OB_NOT_NULL(pool = static_cast<ObInnerSQLConnectionPool *>(sql_proxy_->get_pool())));
       OX (session_info->set_job_info(&job_info));
