@@ -1265,7 +1265,11 @@ int ObSetConfigExecutor::execute(ObExecContext &ctx, ObSetConfigStmt &stmt)
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed", K(task_exec_ctx));
   } else if (OB_FAIL(common_rpc->admin_set_config(stmt.get_rpc_arg()))) {
-    LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
+    if (stmt.get_rpc_arg().is_backup_config_) {
+      LOG_WARN("set backup config rpc failed", K(ret));
+    } else {
+      LOG_WARN("set config rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
+    }
   }
   return ret;
 }
