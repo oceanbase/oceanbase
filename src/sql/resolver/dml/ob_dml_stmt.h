@@ -364,7 +364,11 @@ struct TableItem
   const common::ObString &get_table_name() const { return alias_name_.empty() ? table_name_ : alias_name_; }
   const common::ObString &get_object_name() const
   {
-    return alias_name_.empty() ? (synonym_name_.empty() ? get_table_name() : synonym_name_) : alias_name_;
+    return alias_name_.empty() ? (synonym_name_.empty() ? table_name_ : synonym_name_) : alias_name_;
+  }
+  const common::ObString &get_object_db_name() const
+  {
+    return synonym_name_.empty() ? database_name_ : synonym_db_name_;
   }
   const TableItem &get_base_table_item() const
   {

@@ -433,6 +433,8 @@ struct ObTableInHint
                 const common::ObString &table_name)
       : qb_name_(qb_name), db_name_(db_name), table_name_(table_name)
   { }
+  ObTableInHint(const TableItem& table)
+  { set_table(table); }
   int assign(const ObTableInHint &other);
   bool is_match_table_item(ObCollationType cs_type, const TableItem &table_item) const;
   bool is_match_physical_table_item(ObCollationType cs_type, const TableItem &table_item) const;

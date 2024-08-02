@@ -13401,11 +13401,7 @@ int ObLogPlan::fill_join_filter_info(JoinFilterInfo &join_filter_info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
-    join_filter_info.pushdown_filter_table_.qb_name_ = qb_name;
-    join_filter_info.pushdown_filter_table_.table_name_ = table_item->get_object_name();
-    if (table_item->is_basic_table()) {
-      join_filter_info.pushdown_filter_table_.db_name_ = table_item->database_name_;
-    }
+    join_filter_info.pushdown_filter_table_.set_table(*table_item);
   }
   return ret;
 }
