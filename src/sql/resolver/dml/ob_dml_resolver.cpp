@@ -14796,8 +14796,7 @@ int ObDMLResolver::resolve_index_hint(const TableItem &table, const ParseNode &i
       } else {
         index_hint->get_index_name().assign_ptr(index_node->str_value_,
                                            static_cast<int32_t>(index_node->str_len_));
-        index_hint->get_table().table_name_ = table.get_object_name();
-        index_hint->get_table().db_name_ = table.database_name_;
+        index_hint->get_table().set_table(table);
       }
     }
     if (OB_SUCC(ret)) {
