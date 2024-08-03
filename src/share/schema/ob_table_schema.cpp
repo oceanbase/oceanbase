@@ -1574,6 +1574,8 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("deep copy external_file_format failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
         LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_properties_, external_properties_))) {
+        LOG_WARN("deep copy external_properties failed", K(ret));
       }
 
       //view schema
@@ -3399,6 +3401,7 @@ int64_t ObTableSchema::get_convert_size() const
     convert_size += column_group_arr_[i]->get_convert_size();
   }
   convert_size += local_session_vars_.get_deep_copy_size();
+  convert_size += external_properties_.length() + 1;
   return convert_size;
 }
 
@@ -3480,6 +3483,7 @@ void ObTableSchema::reset()
   external_file_location_.reset();
   external_file_location_access_info_.reset();
   external_file_pattern_.reset();
+  external_properties_.reset();
   ttl_definition_.reset();
   kv_attributes_.reset();
   name_generated_type_ = GENERATED_TYPE_UNKNOWN;
@@ -6832,6 +6836,10 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(auto_increment_cache_size_);
   OB_UNIS_ENCODE(local_session_vars_);
   OB_UNIS_ENCODE(duplicate_read_consistency_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                external_properties_);
+  }
   return ret;
 }
 
@@ -7263,6 +7271,10 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(auto_increment_cache_size_);
   OB_UNIS_DECODE(local_session_vars_);
   OB_UNIS_DECODE(duplicate_read_consistency_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                external_properties_);
+  }
   return ret;
 }
 
@@ -7415,6 +7427,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(auto_increment_cache_size_);
   OB_UNIS_ADD_LEN(local_session_vars_);
   OB_UNIS_ADD_LEN(duplicate_read_consistency_);
+  OB_UNIS_ADD_LEN(external_properties_);
   return len;
 }
 

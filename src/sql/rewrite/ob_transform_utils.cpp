@@ -11105,12 +11105,16 @@ int ObTransformUtils::check_project_pruning_validity(ObSelectStmt &stmt, bool &i
   int ret = OB_SUCCESS;
   is_valid = false;
   bool is_const = false;
+  bool has_assign = true;
   if (stmt.has_distinct() || stmt.is_recursive_union() ||
       (stmt.is_set_stmt() && stmt.is_set_distinct()) ||
-      stmt.is_hierarchical_query() || stmt.is_contains_assignment() ||
-      stmt.is_values_table_query()) {
+      stmt.is_hierarchical_query() || stmt.is_values_table_query()) {
     // do nothing
     OPT_TRACE("stmt has distinct/assignment or is set stmt");
+  } else if (OB_FAIL(ObTransformUtils::check_has_assignment(stmt, has_assign))) {
+    LOG_WARN("check has assign failed", K(ret));
+  } else if (has_assign) {
+    //do nothing
   } else if (stmt.get_select_item_size() == 1
              && OB_FAIL(check_select_expr_is_const(&stmt, stmt.get_select_item(0).expr_, is_const))) {
     LOG_WARN("failed to check is const expr", K(ret));
