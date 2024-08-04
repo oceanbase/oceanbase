@@ -925,9 +925,7 @@ int ObQueryHint::fill_tables(const TableItem &table, ObIArray<ObTableInHint> &hi
             || OB_FAIL(tables.push_back(join_table->right_table_))) {
           LOG_WARN("failed to push back", K(ret));
         }
-      } else if (OB_FAIL(hint_tables.push_back(ObTableInHint(cur_table->qb_name_,
-                                                             cur_table->database_name_,
-                                                             cur_table->get_object_name())))) {
+      } else if (OB_FAIL(hint_tables.push_back(ObTableInHint(*cur_table)))) {
         LOG_WARN("failed to push back", K(ret));
       }
     }

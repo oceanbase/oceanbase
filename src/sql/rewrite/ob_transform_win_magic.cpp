@@ -103,8 +103,7 @@ int ObTransformWinMagic::construct_transform_hint(ObDMLStmt &stmt, void *trans_p
         if (OB_ISNULL(table)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret));
-        } else if (OB_FAIL(hint->get_tb_name_list().push_back(ObTableInHint(table->qb_name_,
-                                              table->database_name_, table->get_object_name())))) {
+        } else if (OB_FAIL(hint->get_tb_name_list().push_back(ObTableInHint(*table)))) {
           LOG_WARN("failed to push back hint table", K(ret));
         }
       }

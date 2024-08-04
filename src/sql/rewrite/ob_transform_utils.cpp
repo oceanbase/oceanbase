@@ -12690,8 +12690,7 @@ int ObTransformUtils::get_sorted_table_hint(ObSEArray<TableItem *, 4> &tables,
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(table_hints.push_back(
-               ObTableInHint(table->qb_name_, table->database_name_, table->get_object_name())))) {
+    } else if (OB_FAIL(table_hints.push_back(ObTableInHint(*table)))) {
       LOG_WARN("failed to push back hint table", K(ret));
     }
   }
