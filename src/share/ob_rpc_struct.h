@@ -1884,7 +1884,8 @@ public:
                K_(sql_mode),
                K_(tz_info_wrap),
                "nls_formats", common::ObArrayWrap<common::ObString>(nls_formats_, common::ObNLSFormatEnum::NLS_MAX),
-               K_(tablet_ids));
+               K_(tablet_ids),
+               K_(need_reorder_column_id));
   ObCreateHiddenTableArg() :
     ObDDLArg(),
     tenant_id_(common::OB_INVALID_ID),
@@ -1897,7 +1898,8 @@ public:
     sql_mode_(0),
     tz_info_wrap_(),
     nls_formats_{},
-    tablet_ids_()
+    tablet_ids_(),
+    need_reorder_column_id_(false)
     {}
   ~ObCreateHiddenTableArg()
   {
@@ -1915,9 +1917,31 @@ public:
     ddl_stmt_str_.reset();
     sql_mode_ = 0;
     tablet_ids_.reset();
+    need_reorder_column_id_ = false;
   }
   int assign(const ObCreateHiddenTableArg &arg);
-public:
+  int init(const uint64_t tenant_id, const uint64_t dest_tenant_id, uint64_t exec_tenant_id,
+           const uint64_t table_id, const int64_t consumer_group_id, const uint64_t session_id,
+           const int64_t parallelism, const share::ObDDLType ddl_type,
+           const ObSQLMode sql_mode, const ObTimeZoneInfo &tz_info,
+           const common::ObString &local_nls_date, const common::ObString &local_nls_timestamp,
+           const common::ObString &local_nls_timestamp_tz, const ObTimeZoneInfoWrap &tz_info_wrap,
+           const bool need_reorder_column_id);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  int64_t get_table_id() const { return table_id_; }
+  int64_t get_consumer_group_id() const { return consumer_group_id_; }
+  uint64_t get_dest_tenant_id() const { return dest_tenant_id_; }
+  uint64_t get_session_id() const { return session_id_; }
+  uint64_t get_parallelism() const { return parallelism_; }
+  share::ObDDLType get_ddl_type() const { return ddl_type_; }
+  const common::ObString &get_ddl_stmt_str() const { return ddl_stmt_str_; }
+  ObSQLMode get_sql_mode() const { return sql_mode_; }
+  common::ObArenaAllocator &get_allocator() { return allocator_; }
+  common::ObTimeZoneInfo get_tz_info() const { return tz_info_; }
+  const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
+  const common::ObString *get_nls_formats() const { return nls_formats_; }
+  bool get_need_reorder_column_id() const { return need_reorder_column_id_; }
+private:
   uint64_t tenant_id_;
   int64_t table_id_;
   int64_t consumer_group_id_;
@@ -1932,6 +1956,7 @@ public:
   common::ObTimeZoneInfoWrap tz_info_wrap_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   common::ObSArray<common::ObTabletID> tablet_ids_;
+  bool need_reorder_column_id_;
 };
 
 struct ObCreateHiddenTableRes final

@@ -711,9 +711,45 @@ int ObCreateHiddenTableArg::assign(const ObCreateHiddenTableArg &arg)
       nls_formats_[i].assign_ptr(arg.nls_formats_[i].ptr(), static_cast<int32_t>(arg.nls_formats_[i].length()));
     }
     OZ (tablet_ids_.assign(arg.tablet_ids_));
+    need_reorder_column_id_ = arg.need_reorder_column_id_;
   }
   return ret;
 }
+
+int ObCreateHiddenTableArg::init(const uint64_t tenant_id, const uint64_t dest_tenant_id, uint64_t exec_tenant_id,
+                                 const uint64_t table_id, const int64_t consumer_group_id, const uint64_t session_id,
+                                 const int64_t parallelism, const share::ObDDLType ddl_type, const ObSQLMode sql_mode,
+                                 const ObTimeZoneInfo &tz_info, const common::ObString &local_nls_date,
+                                 const common::ObString &local_nls_timestamp, const common::ObString &local_nls_timestamp_tz,
+                                 const ObTimeZoneInfoWrap &tz_info_wrap, const bool need_reorder_column_id)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_FAIL(tz_info_wrap_.deep_copy(tz_info_wrap))) {
+    LOG_WARN("failed to deep copy tz_info_wrap", KR(ret));
+  } else if (FALSE_IT(nls_formats_[ObNLSFormatEnum::NLS_DATE].assign_ptr(local_nls_date.ptr(), static_cast<int32_t>(local_nls_date.length())))) {
+    // do nothing
+  } else if (FALSE_IT(nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP].assign_ptr(local_nls_timestamp.ptr(), static_cast<int32_t>(local_nls_timestamp.length())))) {
+    // do nothing
+  } else if (FALSE_IT(nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ].assign_ptr(local_nls_timestamp_tz.ptr(), static_cast<int32_t>(local_nls_timestamp_tz.length())))) {
+    // do nothing
+  } else {
+    exec_tenant_id_ = exec_tenant_id;
+    tenant_id_ = tenant_id;
+    dest_tenant_id_ = dest_tenant_id;
+    consumer_group_id_ = consumer_group_id;
+    table_id_ = table_id;
+    parallelism_ = parallelism;
+    ddl_type_ = ddl_type;
+    session_id_ = session_id;
+    sql_mode_ = sql_mode;
+    tz_info_ = tz_info;
+    // load data no need to reorder column id
+    need_reorder_column_id_ = need_reorder_column_id;
+  }
+  return ret;
+}
+
 OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
 {
   int ret = OB_SUCCESS;
@@ -743,6 +779,9 @@ OB_DEF_SERIALIZE(ObCreateHiddenTableArg)
     }
     if (OB_SUCC(ret)) {
       OB_UNIS_ENCODE(tablet_ids_);
+    }
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_ENCODE, need_reorder_column_id_);
     }
   }
   return ret;
@@ -786,6 +825,9 @@ OB_DEF_DESERIALIZE(ObCreateHiddenTableArg)
     if (OB_SUCC(ret)) {
       OB_UNIS_DECODE(tablet_ids_);
     }
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_DECODE, need_reorder_column_id_);
+    }
   }
   return ret;
 }
@@ -816,6 +858,9 @@ OB_DEF_SERIALIZE_SIZE(ObCreateHiddenTableArg)
     }
     if (OB_SUCC(ret)) {
       OB_UNIS_ADD_LEN(tablet_ids_);
+    }
+    if (OB_SUCC(ret)) {
+      LST_DO_CODE(OB_UNIS_ADD_LEN, need_reorder_column_id_);
     }
   }
   if (OB_FAIL(ret)) {

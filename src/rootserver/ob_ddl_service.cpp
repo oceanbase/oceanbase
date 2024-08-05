@@ -14273,8 +14273,8 @@ int ObDDLService::create_hidden_table(
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
-  const uint64_t tenant_id = create_hidden_table_arg.tenant_id_;
-  const int64_t table_id = create_hidden_table_arg.table_id_;
+  const uint64_t tenant_id = create_hidden_table_arg.get_tenant_id();
+  const int64_t table_id = create_hidden_table_arg.get_table_id();
   const uint64_t dest_tenant_id = tenant_id;
   ObRootService *root_service = GCTX.root_service_;
   bool bind_tablets = true;
@@ -14353,29 +14353,29 @@ int ObDDLService::create_hidden_table(
         if (OB_SUCC(ret)) {
           HEAP_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
             ObPrepareAlterTableArgParam param;
-            if (OB_FAIL(param.init(create_hidden_table_arg.consumer_group_id_,
-                                  create_hidden_table_arg.session_id_,
-                                  create_hidden_table_arg.sql_mode_,
-                                  create_hidden_table_arg.ddl_stmt_str_,
-                                  orig_table_schema->get_table_name_str(),
-                                  orig_database_schema->get_database_name_str(),
-                                  orig_database_schema->get_database_name_str(),
-                                  create_hidden_table_arg.tz_info_,
-                                  create_hidden_table_arg.tz_info_wrap_,
-                                  create_hidden_table_arg.nls_formats_))) {
+            if (OB_FAIL(param.init(create_hidden_table_arg.get_consumer_group_id(),
+                                   create_hidden_table_arg.get_session_id(),
+                                   create_hidden_table_arg.get_sql_mode(),
+                                   create_hidden_table_arg.get_ddl_stmt_str(),
+                                   orig_table_schema->get_table_name_str(),
+                                   orig_database_schema->get_database_name_str(),
+                                   orig_database_schema->get_database_name_str(),
+                                   create_hidden_table_arg.get_tz_info(),
+                                   create_hidden_table_arg.get_tz_info_wrap(),
+                                   create_hidden_table_arg.get_nls_formats()))) {
               LOG_WARN("param init failed", K(ret));
             } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
               LOG_WARN("prepare alter table arg fail", K(ret));
             } else {
               LOG_DEBUG("alter table arg preparation complete!", K(ret), K(alter_table_arg));
               ObCreateDDLTaskParam param(tenant_id,
-                                        create_hidden_table_arg.ddl_type_,
+                                        create_hidden_table_arg.get_ddl_type(),
                                         orig_table_schema,
                                         &new_table_schema,
                                         table_id,
                                         orig_table_schema->get_schema_version(),
-                                        create_hidden_table_arg.parallelism_,
-                                        create_hidden_table_arg.consumer_group_id_,
+                                        create_hidden_table_arg.get_parallelism(),
+                                        create_hidden_table_arg.get_consumer_group_id(),
                                         &allocator_for_redef,
                                         &alter_table_arg,
                                         0,
