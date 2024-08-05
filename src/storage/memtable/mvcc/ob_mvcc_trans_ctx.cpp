@@ -2020,8 +2020,18 @@ int ObMvccRowCallback::wakeup_row_waiter_if_need_()
 {
   int ret = OB_SUCCESS;
   if (NULL != tnode_ &&
-      (tnode_->is_committed() || tnode_->is_aborted()) &&
-      (tnode_->prev_ == NULL || tnode_->prev_->tx_id_ != tnode_->tx_id_)) {
+      (tnode_->is_committed() || tnode_->is_aborted()) // tnode trans end
+    && !tnode_->is_elr() // no need for elr trx
+    && tnode_->next_ == NULL // latest trans node
+    && (tnode_->prev_ == NULL || (tnode_->prev_->is_committed() // pre node status should be decided
+                               || tnode_->prev_->is_aborted()
+                               || tnode_->prev_->is_elr()))) {
+    // wake up lock waiter, handled by the latest trans node
+    //   case 1: for normal transaction commit or abort
+    //   case 2: for rollback to savepoint, to avoid extra wake-up,
+    //   latest trans node's previous trans node should be committed/aborted/elr/NULL
+    // no need to wake up:
+    //   case 1: elr transaction
     ret = value_.wakeup_waiter(get_tablet_id(), key_);
     /*****[for deadlock]*****/
     ObLockWaitMgr *p_lwm = MTL(ObLockWaitMgr *);
