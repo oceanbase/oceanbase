@@ -167,11 +167,9 @@ struct ObCopyMacroBlockHandle final
   ~ObCopyMacroBlockHandle() = default;
   void reset();
   bool is_valid() const;
-  int set_end_key(const blocksstable::ObDatumRowkey &end_key);
   int set_macro_meta(const blocksstable::ObDataMacroBlockMeta &macro_meta);
 
   bool is_reuse_macro_block_;
-  ObSelfBufferWriter end_key_buf_;
   blocksstable::ObMacroBlockHandle read_handle_;
   common::ObArenaAllocator allocator_;
   blocksstable::ObDataMacroBlockMeta *macro_meta_;
@@ -219,6 +217,7 @@ private:
   ObSSTableSecMetaIterator second_meta_iterator_;
   common::ObArenaAllocator io_allocator_;
   char *io_buf_[MAX_PREFETCH_MACRO_BLOCK_NUM];
+  ObSelfBufferWriter meta_row_buf_; // buffer for macro meta row (ObDatumRow)
   DISALLOW_COPY_AND_ASSIGN(ObCopyMacroBlockObProducer);
 };
 
@@ -823,6 +822,7 @@ private:
   ObDatumRange datum_range_;
   int64_t macro_block_count_;
   int64_t data_size_;
+  ObSelfBufferWriter meta_row_buf_;
   DISALLOW_COPY_AND_ASSIGN(ObCopyRemoteSSTableMacroBlockRestoreReader);
 };
 }

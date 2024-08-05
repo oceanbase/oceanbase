@@ -200,8 +200,7 @@ OB_SERIALIZE_MEMBER(ObCopyMacroBlockRangeArg, tenant_id_, ls_id_, table_key_, da
 ObCopyMacroBlockHeader::ObCopyMacroBlockHeader()
   : is_reuse_macro_block_(false),
     occupy_size_(0),
-    macro_meta_row_(),
-    allocator_("CMBlockHeader")
+    data_type_(DataType::MACRO_DATA) // default value for compat, previous version won't contain data_type_ and will pass macro data all the time
 {
 }
 
@@ -209,77 +208,14 @@ void ObCopyMacroBlockHeader::reset()
 {
   is_reuse_macro_block_ = false;
   occupy_size_ = 0;
-  macro_meta_row_.reset();
-  allocator_.reset();
 }
 
 bool ObCopyMacroBlockHeader::is_valid() const
 {
-  return occupy_size_ > 0 && (!is_reuse_macro_block_ || (is_reuse_macro_block_ && macro_meta_row_.is_valid()));
+  return occupy_size_ > 0 && data_type_ >= DataType::MACRO_DATA && data_type_ < DataType::MAX;
 }
 
-int ObCopyMacroBlockHeader::set_macro_meta(const blocksstable::ObDataMacroBlockMeta &macro_meta)
-{
-  int ret = OB_SUCCESS;
-
-  macro_meta_row_.reset();
-  allocator_.reset();
-
-  if (!macro_meta.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid macro meta", K(ret), K(macro_meta));
-  } else if (OB_FAIL(macro_meta_row_.init(macro_meta.val_.rowkey_count_ + 1))) {
-    LOG_WARN("fail to init macro meta row", K(ret), "row_col_cnt", macro_meta.val_.rowkey_count_ + 1);
-  } else if (OB_FAIL(macro_meta.build_row(macro_meta_row_, allocator_))) {
-    LOG_WARN("failed to build macro meta row", K(ret), K(macro_meta));
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE(ObCopyMacroBlockHeader)
-{
-  int ret = OB_SUCCESS;
-
-  LST_DO_CODE(OB_UNIS_ENCODE, is_reuse_macro_block_);
-  LST_DO_CODE(OB_UNIS_ENCODE, occupy_size_);
-
-  if (OB_FAIL(ret)) {
-  } else if (!is_reuse_macro_block_) {
-  } else if (OB_FAIL(macro_meta_row_.serialize(buf, buf_len, pos))) {
-    LOG_WARN("failed to serialize macro meta row", K(ret));
-  }
-
-  return ret;
-}
-
-OB_DEF_DESERIALIZE(ObCopyMacroBlockHeader)
-{
-  int ret = OB_SUCCESS;
-
-  LST_DO_CODE(OB_UNIS_DECODE, is_reuse_macro_block_);
-  LST_DO_CODE(OB_UNIS_DECODE, occupy_size_);
-
-  if (OB_FAIL(ret)) {
-  } else if (!is_reuse_macro_block_) {
-  } else if (OB_FAIL(macro_meta_row_.deserialize(buf, data_len, pos))) {
-    LOG_WARN("failed to deserialize macro meta row", K(ret));
-  }
-
-  return ret;
-}
-
-OB_DEF_SERIALIZE_SIZE(ObCopyMacroBlockHeader)
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, is_reuse_macro_block_);
-  LST_DO_CODE(OB_UNIS_ADD_LEN, occupy_size_);
-  if (is_reuse_macro_block_) {
-    len += macro_meta_row_.get_serialize_size();
-  }
-
-  return len;
-}
-
+OB_SERIALIZE_MEMBER(ObCopyMacroBlockHeader, is_reuse_macro_block_, occupy_size_, data_type_);
 
 ObCopyTabletInfoArg::ObCopyTabletInfoArg()
   : tenant_id_(OB_INVALID_ID),
