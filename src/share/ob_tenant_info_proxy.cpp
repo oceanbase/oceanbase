@@ -221,7 +221,7 @@ int ObAllTenantInfoProxy::init_tenant_info(
                  "sync_scn, replayable_scn, readable_scn, recovery_until_scn, log_mode, max_ls_id",
                  OB_ALL_TENANT_INFO_TNAME))) {
       LOG_WARN("fail to assign fmt", K(ret), K(sql));
-    } else if (compat_version >= DATA_VERSION_4_3_2_0 && OB_FAIL(sql.append_fmt(", restore_data_mode"))) {
+    } else if (compat_version >= DATA_VERSION_4_3_3_0 && OB_FAIL(sql.append_fmt(", restore_data_mode"))) {
       LOG_WARN("fail to append sql", K(ret), K(sql));
     } else if (OB_FAIL(sql.append_fmt(
                       ") values(%lu, '%s', '%s', %ld, %lu, %lu, %lu, %lu, '%s', %ld",
@@ -236,7 +236,7 @@ int ObAllTenantInfoProxy::init_tenant_info(
                       tenant_info.get_log_mode().to_str(),
                       tenant_info.get_max_ls_id().id()))) {
       LOG_WARN("fail to append sql", K(ret), K(sql));
-    } else if (compat_version >= DATA_VERSION_4_3_2_0
+    } else if (compat_version >= DATA_VERSION_4_3_3_0
                && OB_FAIL(sql.append_fmt(", '%s'", tenant_info.get_restore_data_mode().to_str()))) {
       LOG_WARN("fail to append sql", K(ret), K(sql), K(tenant_info));
     }
@@ -1045,9 +1045,9 @@ int ObAllTenantInfoProxy::update_tenant_restore_data_mode(
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(new_restore_data_mode));
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
-  } else if (compat_version < DATA_VERSION_4_3_2_0) {
+  } else if (compat_version < DATA_VERSION_4_3_3_0) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Tenant COMPATIBLE is below 4.3.2.0, update tenant restore_data_mode is not suppported",
+    LOG_WARN("Tenant COMPATIBLE is below 4.3.3.0, update tenant restore_data_mode is not suppported",
              KR(ret), K(compat_version));
   } else if (OB_FAIL(load_tenant_info(tenant_id, proxy, false /*for update*/, tenant_info))) {
     LOG_WARN("fail to load tenant info", K(ret), K(tenant_id));
