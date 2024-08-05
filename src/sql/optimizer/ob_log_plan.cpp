@@ -13381,13 +13381,10 @@ int ObLogPlan::fill_join_filter_info(JoinFilterInfo &join_filter_info)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt* stmt;
-  ObString qb_name;
   const TableItem* table_item;
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(get_stmt()));
-  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
-    LOG_WARN("failed to get qb name", K(ret));
   } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
                                                     get_selectivity_ctx(),
                                                     join_filter_info.rexprs_,
