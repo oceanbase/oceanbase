@@ -138,6 +138,11 @@ public:
     }
     {
       lib::Thread::RpcGuard guard(addr, pcode);
+      int64_t relative_timeout = get_proxy_timeout(proxy);
+      if (relative_timeout > INT64_MAX/2) {
+        RPC_LOG_RET(WARN, OB_INVALID_ARGUMENT, "rpc timeout is too large", K(relative_timeout), K(pcode));
+        relative_timeout = INT64_MAX/2;
+      }
       if (OB_FAIL(rpc_encode_req(proxy, pool, pcode, args, opts, req, req_sz, false))) {
         RPC_LOG(WARN, "rpc encode req fail", K(ret));
       } else if(OB_FAIL(check_blacklist(addr))) {
@@ -146,7 +151,7 @@ public:
         const pn_pkt_t pkt = {
           req,
           req_sz,
-          start_ts + get_proxy_timeout(proxy),
+          start_ts + relative_timeout,
           static_cast<int16_t>(set.idx_of_pcode(pcode)),
           ObSyncRespCallback::client_cb,
           &cb
