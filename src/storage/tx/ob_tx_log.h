@@ -1586,7 +1586,9 @@ int ObTxLogBlock::add_new_log(T &tx_log_body, ObTxBigSegmentBuf *big_segment_buf
     } else {
       while (OB_SUCC(ret) && len_ < serialize_size + tmp_pos) {
         if (OB_FAIL(extend_log_buf())) {
-          ret = OB_BUF_NOT_ENOUGH;
+          // ret = OB_BUF_NOT_ENOUGH;
+          TRANS_LOG(WARN, "extend a log buf failed", K(ret), K(len_), K(tmp_pos), K(serialize_size),
+                    K(fill_buf_), KPC(this));
         }
       }
     }
