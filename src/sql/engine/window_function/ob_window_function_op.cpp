@@ -461,7 +461,7 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
   } else if (result->is_null()) {
     is_null = true;
     is_valid_param = !need_check_valid;
-  } else if (need_number || expr.obj_meta_.is_number()) {
+  } else if (need_number || expr.obj_meta_.is_number() || expr.obj_meta_.is_number_float()) {
     //we restrict the bucket_num in range [0, (1<<63)-1]
     number::ObNumber result_nmb;
     number::ObCompactNumber &cnum = const_cast<number::ObCompactNumber &>(
