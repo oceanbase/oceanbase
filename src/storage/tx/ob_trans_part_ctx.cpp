@@ -8129,7 +8129,8 @@ int ObPartTransCtx::dup_table_before_preapre_(
 
   if (get_downstream_state() != ObTxState::REDO_COMPLETE
       || (!after_redo_completed && get_upstream_state() != ObTxState::REDO_COMPLETE)
-      || (after_redo_completed && get_upstream_state() > ObTxState::PREPARE)
+      || (after_redo_completed && get_upstream_state() > ObTxState::PREPARE
+          && get_upstream_state() != ObTxState::ABORT)
       || !exec_info_.is_dup_tx_) {
     ret = OB_STATE_NOT_MATCH;
     TRANS_LOG(WARN, "unexpected dup trx state", K(ret), KPC(this));
