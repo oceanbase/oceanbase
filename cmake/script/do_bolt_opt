@@ -138,15 +138,15 @@ def main():
         print_log("architecture: " + architecture)
 
     if architecture == "x86_64":
-        print_log("download alibaba-cloud-compiler-17.0.6.1-2.alios7.x86_64.rpm")
-        result = shell_run_command("wget http://yum.tbsite.net/taobao/7/x86_64/current/alibaba-cloud-compiler/alibaba-cloud-compiler-17.0.6.1-2.alios7.x86_64.rpm",
+        print_log("download corebolt-17.0.6.1-5.alios7.x86_64.rpm")
+        result = shell_run_command("wget http://yum.tbsite.net/taobao/7/x86_64/current/corebolt/corebolt-17.0.6.1-5.alios7.x86_64.rpm",
                                 False, False)
         print_log("rpm2cpio alibaba-cloud-compiler | cpio -div -u")
-        result = shell_run_command("rpm2cpio alibaba-cloud-compiler-17.0.6.1-2.alios7.x86_64.rpm | cpio -div -u", False, False)
+        result = shell_run_command("rpm2cpio corebolt-17.0.6.1-5.alios7.x86_64.rpm | cpio -div -u", False, False)
         print_log("check llvm-bolt version")
-        result = shell_run_command("./opt/alibaba-cloud-compiler/bin/llvm-bolt --version", True, True)
+        result = shell_run_command("./opt/corebolt/bin/llvm-bolt --version", True, True)
         print_log("do bolt opt")
-        result = shell_run_command("./opt/alibaba-cloud-compiler/bin/llvm-bolt "  + GLOBAL_CONF.build_dir + "/src/observer/observer " +
+        result = shell_run_command("./opt/corebolt/bin/llvm-bolt "  + GLOBAL_CONF.build_dir + "/src/observer/observer " +
                                     "-o " + GLOBAL_CONF.build_dir + "/src/observer/observer_bolt " +
                                     "-data=" + GLOBAL_CONF.build_dir + "/../perf.fdata " +
                                     "-reorder-blocks=ext-tsp -reorder-functions=cdsort -split-functions -split-all-cold -dyno-stats --use-gnu-stack --update-debug-sections --bolt-info=false",
