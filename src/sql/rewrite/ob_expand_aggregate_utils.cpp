@@ -2035,6 +2035,7 @@ int ObExpandAggregateUtils::expand_stddev_expr(ObAggFunRawExpr *aggr_expr,
       } else {
         ObString func_name = ObString::make_string("sqrt");
         sqrt_expr->set_func_name(func_name);
+        sqrt_expr->set_extra(aggr_expr->get_expr_type());
         replace_expr = sqrt_expr;
       }
     }
