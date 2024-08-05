@@ -6816,6 +6816,7 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
       spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
                                                            .get_exec_ctx()->get_table_direct_insert_ctx()
                                                            .get_online_sample_percent());
+      spec.plan_->set_direct_load_need_sort(global_hint.get_direct_load_need_sort());
       // check is insert overwrite
       bool is_insert_overwrite = false;
       if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
