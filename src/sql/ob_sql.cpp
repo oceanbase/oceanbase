@@ -764,8 +764,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         } else if (lib::is_oracle_mode() && expr->is_column_ref_expr() &&
                    static_cast<ObColumnRefRawExpr *>(expr)->is_xml_column()) {
           // xmltype is supported, do nothing
-        } else if (NULL == context->secondary_namespace_ // pl resolve
-                    && NULL == context->session_info_->get_pl_context()) { // pl execute
+        } else {
           is_ext_field = true;
           field.type_.set_collation_type(CS_TYPE_BINARY);
           field.type_.set_collation_level(CS_LEVEL_IMPLICIT);
@@ -776,10 +775,13 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
           } else {
             field.charsetnr_ = static_cast<uint16_t>(expr->get_collation_type());
           }
-          if (OB_FAIL(get_composite_type_field_name(*context->schema_guard_,
-                                                    expr->get_result_type().get_udt_id(),
-                                                    composite_field_name))) {
-            LOG_WARN("get record member name fail.", K(ret), K(composite_field_name));
+          if (NULL == context->secondary_namespace_ // pl resolve
+              && NULL == context->session_info_->get_pl_context()) {
+            if (OB_FAIL(get_composite_type_field_name(*context->schema_guard_,
+                                                      expr->get_result_type().get_udt_id(),
+                                                      composite_field_name))) {
+              LOG_WARN("get record member name fail.", K(ret), K(composite_field_name));
+            }
           }
         }
       }
@@ -1743,7 +1745,7 @@ int ObSql::handle_pl_execute(const ObString &sql,
     LOG_WARN("failed to set timeout for pl", K(ret));
   } else if (OB_FAIL(session.store_query_string(sql))) {
     LOG_WARN("store query string fail", K(ret));
-  } else if (OB_FAIL(handle_sql_execute(sql, context, result, params, PC_PL_MODE))) {
+  } else if (OB_FAIL(handle_sql_execute(sql, context, result, params, is_prepare_protocol ? PC_PL_MODE : PC_TEXT_MODE))) {
     LOG_WARN("failed to handle sql execute", K(ret));
   } else {
     result.get_session().set_exec_min_cluster_version();
