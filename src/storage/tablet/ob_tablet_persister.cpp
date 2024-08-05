@@ -131,7 +131,7 @@ int ObTabletPersister::recursively_persist(
     common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
     ObTabletHandle &new_handle)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+  TIMEGUARD_INIT(STORAGE, 50_ms);
   int ret = OB_SUCCESS;
   if (CLICK_FAIL(persist_and_fill_tablet(
       old_tablet, allocator, tablet_meta_write_ctxs, sstable_meta_write_ctxs, new_handle))) {
@@ -155,7 +155,7 @@ int ObTabletPersister::convert_tablet_to_mem_arg(
       ObTabletMemberWrapper<share::ObTabletAutoincSeq> &auto_inc_seq,
       ObTabletTransformArg &arg)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+  TIMEGUARD_INIT(STORAGE, 50_ms);
   int ret = OB_SUCCESS;
   arg.reset();
   if (OB_UNLIKELY(!tablet.is_valid())) {
@@ -195,7 +195,7 @@ int ObTabletPersister::convert_tablet_to_disk_arg(
       ObTabletPoolType &type,
       ObTabletTransformArg &arg)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+  TIMEGUARD_INIT(STORAGE, 50_ms);
   int ret = OB_SUCCESS;
   arg.reset();
 
@@ -257,7 +257,7 @@ int ObTabletPersister::persist_and_fill_tablet(
     common::ObIArray<ObSharedBlocksWriteCtx> &sstable_meta_write_ctxs,
     ObTabletHandle &new_handle)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+  TIMEGUARD_INIT(STORAGE, 50_ms);
   int ret = OB_SUCCESS;
   ObTabletTransformArg arg;
 
@@ -313,7 +313,7 @@ int ObTabletPersister::check_tablet_meta_ids(
     const common::ObIArray<ObSharedBlocksWriteCtx> &tablet_meta_write_ctxs,
     const ObTablet &tablet)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+  TIMEGUARD_INIT(STORAGE, 50_ms);
   int ret = OB_SUCCESS;
   ObSArray<MacroBlockId> meta_ids;
   ObSArray<MacroBlockId> ctx_ids;
@@ -377,7 +377,7 @@ int ObTabletPersister::acquire_tablet(
 
 int ObTabletPersister::persist_4k_tablet(common::ObArenaAllocator &allocator, ObTabletHandle &new_handle)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+  TIMEGUARD_INIT(STORAGE, 50_ms);
   int ret = OB_SUCCESS;
   ObTablet *new_tablet = new_handle.get_obj();
   ObTenantCheckpointSlogHandler *ckpt_slog_handler = MTL(ObTenantCheckpointSlogHandler*);
@@ -432,7 +432,7 @@ int ObTabletPersister::transform(
     char *buf,
     const int64_t len)
 {
-  TIMEGUARD_INIT(STORAGE, 10_ms);
+  TIMEGUARD_INIT(STORAGE, 50_ms);
   int ret = OB_SUCCESS;
   ObTablet *tiny_tablet = reinterpret_cast<ObTablet *>(buf);
   ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "TmpPullMemTbl"));
