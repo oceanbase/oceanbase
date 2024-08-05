@@ -705,7 +705,7 @@ int ObQueryDriver::process_lob_locator_results(ObObj& value,
         LOG_WARN("Lob: handle lob locator v1 failed", K(value), K(GET_MIN_CLUSTER_VERSION()));
       }
     } else { // lob locator v2
-      ObArenaAllocator tmp_alloc("ObLobRead", OB_MALLOC_NORMAL_BLOCK_SIZE, session_info->get_effective_tenant_id());
+      ObArenaAllocator tmp_alloc("LobRead", OB_MALLOC_NORMAL_BLOCK_SIZE, session_info->get_effective_tenant_id());
       ObTextStringIter instr_iter(value);
       if (OB_FAIL(ObTextStringHelper::build_text_iter(instr_iter, exec_ctx, session_info, allocator, &tmp_alloc))) {
         LOG_WARN("init lob str inter failed", K(ret), K(value));
@@ -915,11 +915,14 @@ int ObQueryDriver::convert_text_value_charset(ObObj& value,
         // get full data, buffer size is full byte length * ObCharset::CharConvertFactorNum
         ObString data_str = value.get_string();
         int64_t lob_data_byte_len = data_str.length();
+        ObArenaAllocator tmp_alloc("LobRead", OB_MALLOC_NORMAL_BLOCK_SIZE, session->get_effective_tenant_id());
         if (!value.has_lob_header()) {
         } else {
           ObLobLocatorV2 loc(raw_str, value.has_lob_header());
           ObTextStringIter str_iter(value);
-          if (OB_FAIL(ObTextStringHelper::build_text_iter(str_iter, exec_ctx, session, &allocator))) {
+          // it's fine that res_allocator and tmp_allocator is same
+          // because the final result will be allocated by allocator when convert charset
+          if (OB_FAIL(ObTextStringHelper::build_text_iter(str_iter, exec_ctx, session, &tmp_alloc/*res_allocator*/, &tmp_alloc/*tmp_allocator*/))) {
             LOG_WARN("Lob: init lob str iter failed ", K(ret), K(value));
           } else if (OB_FAIL(str_iter.get_full_data(data_str))) {
             LOG_WARN("Lob: get full data failed ", K(ret), K(value));
