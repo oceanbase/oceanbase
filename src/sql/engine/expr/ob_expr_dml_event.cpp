@@ -76,7 +76,7 @@ int ObExprDmlEvent::calc_dml_event(const ObExpr &expr,
   OV (OB_NOT_NULL(dml));
   if (2 == expr.arg_cnt_) {
     OZ (expr.args_[1]->eval(ctx, update_col));
-    OV (OB_NOT_NULL(update_col) && !update_col->is_null(), OB_INVALID_ARGUMENT);
+    OV (OB_NOT_NULL(update_col), OB_INVALID_ARGUMENT);
   }
   OX (expr_datum.set_bool(false));
   if (OB_SUCC(ret)) {
