@@ -146,7 +146,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     can_set_feedback_info_(true),
     need_switch_to_table_lock_worker_(false),
     data_complement_gen_doc_id_(false),
-    dml_table_ids_()
+    dml_table_ids_(),
+    direct_load_need_sort_(false)
 {
 }
 
@@ -252,6 +253,7 @@ void ObPhysicalPlan::reset()
   need_switch_to_table_lock_worker_ = false;
   data_complement_gen_doc_id_ = false;
   dml_table_ids_.reset();
+  direct_load_need_sort_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -828,7 +830,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     insert_overwrite_,
                     online_sample_percent_,
                     need_switch_to_table_lock_worker_,
-                    data_complement_gen_doc_id_);
+                    data_complement_gen_doc_id_,
+                    direct_load_need_sort_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

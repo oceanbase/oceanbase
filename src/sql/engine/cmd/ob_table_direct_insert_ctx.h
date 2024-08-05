@@ -73,6 +73,10 @@ public:
 private:
   int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
                           ObCompressorType &compressor_type);
+  int get_is_heap_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                        const uint64_t tenant_id,
+                        const uint64_t table_id,
+                        bool &is_heap_table);
 private:
   observer::ObTableLoadExecCtx *load_exec_ctx_;
   observer::ObTableLoadInstance *table_load_instance_;

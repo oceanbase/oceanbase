@@ -523,6 +523,11 @@ public:
   int set_mview_ids(const ObIArray<uint64_t> &mview_ids) { return mview_ids_.assign(mview_ids); }
   ObFixedArray<uint64_t, common::ObIAllocator> &get_dml_table_ids() { return dml_table_ids_; }
   const ObIArray<uint64_t> &get_dml_table_ids() const { return dml_table_ids_; }
+  void set_direct_load_need_sort(const bool direct_load_need_sort)
+  {
+    direct_load_need_sort_ = direct_load_need_sort;
+  }
+  bool get_direct_load_need_sort() const { return direct_load_need_sort_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -720,6 +725,7 @@ private:
   // further cursor stmt will check agains
   // to decide whether it read uncommitted data
   common::ObFixedArray<uint64_t, common::ObIAllocator> dml_table_ids_;
+  bool direct_load_need_sort_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

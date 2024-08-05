@@ -597,6 +597,18 @@ void ObGlobalHint::merge_osg_hint(int8_t flag) {
   osg_hint_.flags_ |= flag;
 }
 
+bool ObGlobalHint::get_direct_load_need_sort() const
+{
+  bool need_sort = false;
+  if (has_direct_load()) {
+    // if direct(need_sort, max_allowed_error_rows) hint is provided,
+    // use its need_sort param, otherwise need_sort = true
+    need_sort = direct_load_hint_.is_enable() ?
+                    direct_load_hint_.need_sort() : true;
+  }
+  return need_sort;
+}
+
 int ObOptimizerStatisticsGatheringHint::print_osg_hint(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;

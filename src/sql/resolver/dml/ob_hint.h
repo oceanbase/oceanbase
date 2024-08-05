@@ -305,6 +305,7 @@ struct ObGlobalHint {
   {
     return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_replace_load_method());
   }
+  bool get_direct_load_need_sort() const;
 
   // wether should generate optimizer_statistics_operator.
   bool should_generate_osg_operator () const {
