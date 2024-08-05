@@ -2217,11 +2217,11 @@ int ObRawExprResolverImpl::resolve_right_node_of_obj_access_idents(const ParseNo
       CK (2 == right_node.num_child_);
       CK (OB_NOT_NULL(right_node.children_[0]));
       CK (OB_NOT_NULL(right_node.children_[1]));
-      OZ (resolve_right_node_of_obj_access_idents(*(right_node.children_[0]), q_name));
-      OZ (resolve_obj_access_idents(*(right_node.children_[1]), q_name));
+      OZ (SMART_CALL(resolve_right_node_of_obj_access_idents(*(right_node.children_[0]), q_name)));
+      OZ (SMART_CALL(resolve_obj_access_idents(*(right_node.children_[1]), q_name)));
     } else {
       // example: a(1).b(1), here, we resolve '.b(1)'
-      OZ (resolve_obj_access_idents(right_node, q_name), K(q_name));
+      OZ (SMART_CALL(resolve_obj_access_idents(right_node, q_name)), K(q_name));
     }
   } else {
     // example: a(1)(2) here, we resolve '(2)'
@@ -2263,7 +2263,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
     LOG_WARN("failed to resolve left node of obj access", K(ret), K(q_name));
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(node.children_[1])) {
-    if (OB_FAIL(resolve_right_node_of_obj_access_idents(*(node.children_[1]), q_name))) {
+    if (OB_FAIL(SMART_CALL(resolve_right_node_of_obj_access_idents(*(node.children_[1]), q_name)))) {
       LOG_WARN("failed to resolve right node of obj access", K(ret));
     }
   }
