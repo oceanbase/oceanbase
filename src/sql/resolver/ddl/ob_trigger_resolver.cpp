@@ -109,7 +109,7 @@ int ObTriggerResolver::resolve_sp_definer(const ParseNode *parse_node,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get_user_info", K(ret));
           } else if (OB_ISNULL(user_info)) {
-            LOG_USER_WARN(OB_ERR_USER_NOT_EXIST);
+            LOG_USER_WARN(OB_ERR_USER_NOT_EXIST, 0, "");
             pl::ObPL::insert_error_msg(OB_ERR_USER_NOT_EXIST);
             ret = OB_SUCCESS;
           }

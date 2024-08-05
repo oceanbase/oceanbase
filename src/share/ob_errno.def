@@ -757,7 +757,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_INSERT_NULL_ROWKEY, -5030, ER_PRIMARY_CANT_HAVE_N
 DEFINE_ERROR_DEP(OB_ERR_COLUMN_NOT_FOUND, -5031, -1, "HY000", "Column not found");
 DEFINE_ERROR(OB_ERR_DELETE_NULL_ROWKEY, -5032, -1, "23000", "Delete null rowkey");
 DEFINE_ERROR(OB_ERR_USER_EMPTY, -5034, -1, "01007", "No user");
-DEFINE_ERROR(OB_ERR_USER_NOT_EXIST, -5035, ER_NO_SUCH_USER, "HY000", "User not exist");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_USER_NOT_EXIST, -5035, ER_NO_SUCH_USER, "HY000", "User not exist", "User %.*snot exist", 1918, "user does not exist", "user '%.*s' does not exist");
 DEFINE_ERROR_EXT(OB_ERR_NO_PRIVILEGE, -5036, ER_SPECIFIC_ACCESS_DENIED_ERROR, "42501", "Access denied", "Access denied; you need (at least one of) the %s privilege(s) for this operation");
 DEFINE_ERROR(OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY, -5037, -1, "HY000", "No privilege entry");
 DEFINE_ERROR(OB_ERR_WRONG_PASSWORD, -5038, ER_PASSWORD_NO_MATCH, "42000", "Incorrect password");

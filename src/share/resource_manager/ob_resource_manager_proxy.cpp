@@ -1303,7 +1303,7 @@ int ObResourceManagerProxy::replace_user_mapping_rule(ObMySQLTransaction &trans,
                                     user_exist))) {
       LOG_WARN("fail check if user exist", K(tenant_id), K(value), K(ret));
     } else if (!user_exist) {
-      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST);
+      LOG_USER_ERROR(OB_ERR_USER_NOT_EXIST, 0, "");
     }
   }
   if (OB_SUCC(ret) && user_exist && consumer_group.empty()) {
