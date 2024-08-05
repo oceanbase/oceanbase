@@ -11549,7 +11549,8 @@ int ObPLResolver::resolve_dblink_udf(sql::ObQualifiedName &q_name,
       OX (dblink_name = dblink_schema->get_dblink_name());
     }
     OZ (schema_checker.init(resolve_ctx_.schema_guard_, resolve_ctx_.session_info_.get_sessid()));
-    OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
+    OZ (ObRawExprUtils::resolve_udf_common_info(sch_routine_info->is_dblink_routine() ?
+                                                    sch_routine_info->get_dblink_db_name() : db_name,
                                                 sch_routine_info->is_dblink_routine() ?
                                                     sch_routine_info->get_dblink_pkg_name() : pkg_name,
                                                 routine_id,
@@ -12536,7 +12537,8 @@ int ObPLResolver::resolve_udf_info(
 #endif
       }
       GET_DBLINK_NAME(schema_routine_info);
-      OZ (ObRawExprUtils::resolve_udf_common_info(db_name,
+      OZ (ObRawExprUtils::resolve_udf_common_info(schema_routine_info->is_dblink_routine() ?
+                                                    schema_routine_info->get_dblink_db_name() : db_name,
                                                   schema_routine_info->is_dblink_routine() ?
                                                     schema_routine_info->get_dblink_pkg_name() : package_name,
                                                   routine_id,

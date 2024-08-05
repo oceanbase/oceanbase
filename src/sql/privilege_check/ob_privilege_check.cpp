@@ -709,6 +709,7 @@ int add_udf_expr_priv(
 {
   int ret = OB_SUCCESS;
   bool is_sys_udf = false;
+  bool is_dblink_udf = false;
   ObOraNeedPriv need_priv;
   ObString db_name;
   ObPackedObjPriv packed_privs = 0;
@@ -716,6 +717,8 @@ int add_udf_expr_priv(
   if (OB_ISNULL(expr) || OB_ISNULL(udf_expr = static_cast<ObUDFRawExpr *>(expr))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", KPC(expr), K(ret));
+  } else if (!udf_expr->get_dblink_name().empty()) {
+    is_dblink_udf = true;
   } else if (0 == udf_expr->get_database_name().case_compare(OB_SYS_DATABASE_NAME)) {
     is_sys_udf = true;
   } else if (common::OB_INVALID_ID != udf_expr->get_type_id()) {
@@ -731,7 +734,7 @@ int add_udf_expr_priv(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid udf expr", KPC(udf_expr), K(ret));
   }
-  if (OB_SUCC(ret) && !is_sys_udf) {
+  if (OB_SUCC(ret) && !is_sys_udf && !is_dblink_udf) {
     // todo: check sys udf privilege after grant privs to public role
     need_priv.grantee_id_ = user_id;
     need_priv.obj_level_ = OBJ_LEVEL_FOR_TAB_PRIV;
