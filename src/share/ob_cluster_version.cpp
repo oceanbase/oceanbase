@@ -398,5 +398,14 @@ ObClusterVersion &ObClusterVersion::get_instance()
   return cluster_version;
 }
 
+ObVersionPrinter::ObVersionPrinter(const uint64_t version)
+    : version_val_(version), version_str_{0}
+{
+  if (OB_INVALID_INDEX ==
+      ObClusterVersion::print_version_str(version_str_, OB_SERVER_VERSION_LENGTH, version)) {
+    MEMSET(version_str_, 0, OB_SERVER_VERSION_LENGTH);
+  }
+}
+
 } // end namespace common
 } // end namespace oceanbase

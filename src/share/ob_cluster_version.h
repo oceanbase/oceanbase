@@ -15,6 +15,8 @@
 
 #include <stdint.h>
 #include "lib/atomic/ob_atomic.h"
+#include "deps/oblib/src/lib/ob_define.h"
+#include "deps/oblib/src/lib/utility/ob_print_utils.h"
 
 namespace oceanbase
 {
@@ -217,7 +219,25 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define TENANT_NEED_UPGRADE(tenant_id, need) (oceanbase::common::ObClusterVersion::get_instance().tenant_need_upgrade((tenant_id), (need)))
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+class ObVersionPrinter
+{
+public:
+  ObVersionPrinter(const uint64_t version);
+  TO_STRING_KV(K_(version_str), K_(version_val));
+private:
+  uint64_t version_val_;
+  char version_str_[OB_SERVER_VERSION_LENGTH];
+};
+
+
 } // end of namespace common
 } // end of namespace oceanbase
 
+#define VP(version) (::oceanbase::common::ObVersionPrinter(version))
+#define DVP(version) VP(version)
+#define CVP(version) VP(version)
+// print data version in human readable way
+#define KDV(x) #x, DVP(x)
+// print cluster version in human readable way
+#define KCV(x) #x, CVP(x)
 #endif /* OCEABASE_OBSERVER_OB_CLUSTER_VERSION_H_*/

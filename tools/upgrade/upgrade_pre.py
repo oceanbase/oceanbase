@@ -1418,8 +1418,6 @@
 #  across_version = upgrade_across_version(cur)
 #  if across_version:
 #    run_upgrade_job(conn, cur, "UPGRADE_ALL", timeout)
-#  else:
-#    run_upgrade_job(conn, cur, "UPGRADE_VIRTUAL_SCHEMA", timeout)
 #
 #  run_root_inspection(cur, timeout)
 #####========******####======== actions begin ========####******========####
@@ -2751,8 +2749,8 @@
 #
 #    times -= 1
 #    if times == -1:
-#      logging.warn("""check {0} job timeout""".format(job_name))
-#      raise MyError("""check {0} job timeout""".format(job_name))
+#      logging.warn("""result not expected, sql: '{0}', expected: '{1}', current: '{2}'""".format(sql, value, results[0][0]))
+#      raise MyError("""result not expected, sql: '{0}', expected: '{1}', current: '{2}'""".format(sql, value, results[0][0]))
 #    time.sleep(10)
 #
 ## 开始健康检查

@@ -2531,6 +2531,9 @@ private:
   int alter_system_table_column_(
       share::schema::ObSchemaGetterGuard &schema_guard,
       const share::schema::ObTableSchema &hard_code_schema);
+  int check_add_system_table_column_(const ObColumnSchemaV2 &column, bool &can_add);
+  bool check_in_add_system_table_column_white_list_(const ObTableSchema &table,
+      const ObColumnSchemaV2 &column);
   int get_obj_privs_ora(const uint64_t tenant_id,
                         const uint64_t obj_id,
                         const uint64_t obj_type,
