@@ -831,7 +831,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
                                                    first_ls_id,
                                                    stmt_expire_ts,
                                                    snapshot))) {
-      } else if (is_single_tablet) {
+      } else if (is_single_tablet && snapshot.snapshot_ls_role_ != ObRole::FOLLOWER) {
         // performance for single tablet scenario
         local_single_ls_plan = true;
       } else {
