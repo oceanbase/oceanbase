@@ -1310,15 +1310,24 @@ int ObTxRedoSyncRetryTask::iter_tx_retry_redo_sync()
 
   return ret;
 }
+
 int ObTxRedoSyncRetryTask::push_back_redo_sync_object(ObTransID tx_id, share::ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
 
-  if (!redo_sync_retry_set_.created()) {
-    if (OB_FAIL(redo_sync_retry_set_.create(100))) {
-      TRANS_LOG(WARN, "alloc a redo sync set failed", K(ret), K(tx_id), K(ls_id));
+  if (ATOMIC_BCAS(&is_created_, false, true)) {
+    if (!redo_sync_retry_set_.created()) {
+      if (OB_FAIL(redo_sync_retry_set_.create(100))) {
+        TRANS_LOG(WARN, "alloc a redo sync set failed", K(ret), K(tx_id), K(ls_id));
+      }
     }
+    if (OB_FAIL(ret)) {
+      ATOMIC_STORE(&is_created_, false);
+    }
+  } else {
+    TRANS_LOG(INFO, "Try to create redo sync task twice. Skip it.", K(ret), K(is_created_),
+              K(tx_id), K(ls_id), K(in_thread_pool_), K(redo_sync_retry_set_.created()));
   }
 
   if (OB_SUCC(ret)) {

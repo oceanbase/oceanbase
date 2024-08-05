@@ -321,7 +321,11 @@ class ObDupTableLoopWorker : public lib::ThreadPool
 public:
   const static int64_t LOOP_INTERVAL = 100 * 1000; // 100ms
 public:
-  ObDupTableLoopWorker() { is_inited_ = false; }
+  ObDupTableLoopWorker()
+  {
+    is_inited_ = false;
+    is_started_ = false;
+  }
   int init();
   int start();
   void stop();
@@ -362,6 +366,8 @@ private:
   };
 private:
   bool is_inited_;
+
+  bool is_started_;
   // SpinRWLock lock_;
   // // dup_table ls map which need to handle
   // // DupTableLSHandlerSet dup_ls_set_;

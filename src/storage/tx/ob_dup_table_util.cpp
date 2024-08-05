@@ -1744,6 +1744,7 @@ int ObDupTableLoopWorker::init()
     if (OB_FAIL(dup_ls_id_set_.create(8, "DUP_LS_SET", "DUP_LS_ID", MTL_ID()))) {
       DUP_TABLE_LOG(WARN, "create dup_ls_map_ error", K(ret));
     } else {
+      ATOMIC_STORE(&is_started_, false);
       is_inited_ = true;
     }
   }
@@ -1758,6 +1759,9 @@ int ObDupTableLoopWorker::start()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     DUP_TABLE_LOG(WARN, "dup_loop_worker has not inited", K(ret));
+  } else if (!ATOMIC_BCAS(&is_started_, false, true)) {
+    ret = OB_INIT_TWICE;
+    DUP_TABLE_LOG(WARN, "start dup_table_loop_worker twice", K(ret), K(is_started_));
   } else {
     lib::ThreadPool::set_run_wrapper(MTL_CTX());
     ret = lib::ThreadPool::start();
@@ -1772,6 +1776,7 @@ void ObDupTableLoopWorker::stop()
     DUP_TABLE_LOG(INFO, "stop ObDupTableLoopWorker");
   }
   lib::ThreadPool::stop();
+  // is_started_ = false; // start a threadpool and release it in the funticon of destroy
 }
 
 void ObDupTableLoopWorker::wait()
@@ -1784,6 +1789,7 @@ void ObDupTableLoopWorker::destroy()
 {
   lib::ThreadPool::destroy();
   (void)dup_ls_id_set_.destroy();
+  ATOMIC_STORE(&is_started_, false);
   DUP_TABLE_LOG(INFO, "destroy ObDupTableLoopWorker");
 }
 
@@ -1795,6 +1801,7 @@ void ObDupTableLoopWorker::reset()
     DUP_TABLE_LOG(WARN, "clear dup_ls_set failed", KR(ret));
   }
   is_inited_ = false;
+  ATOMIC_STORE(&is_started_, false);
 }
 
 void ObDupTableLoopWorker::run1()
