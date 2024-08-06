@@ -128,6 +128,7 @@ void ObTransCtx::after_unlock(CtxLockArg &arg)
 
 void ObTransCtx::print_trace_log_if_necessary_()
 {
+  static const int64_t SAMPLING_SEED = 128 * 64;
   // freectx
   if (!is_exiting_) {
     TRANS_LOG_RET(WARN, OB_ERROR, "ObPartTransCtx not exiting", "context", *this, K(lbt()));
@@ -138,7 +139,7 @@ void ObTransCtx::print_trace_log_if_necessary_()
     static ObMiniStat::ObStatItem item("long trans statistics", 60 * 1000 * 1000);
     ObMiniStat::stat(item);
     FORCE_PRINT_TRACE(tlog_, "[long trans] ");
-  } else if (OB_UNLIKELY(trans_id_ % 128 == 1)) {
+  } else if (OB_UNLIKELY(trans_id_ % SAMPLING_SEED == 1)) {
     FORCE_PRINT_TRACE(tlog_, "[trans sampling] ");
   } else {
     PRINT_TRACE(tlog_);
