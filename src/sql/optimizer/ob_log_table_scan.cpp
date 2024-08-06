@@ -297,17 +297,6 @@ int ObLogTableScan::copy_filter_before_index_back()
   if (OB_FAIL(filter_before_index_back_set())) {
     LOG_WARN("Failed to filter_before_index_back_set", K(ret));
   } else if (get_index_back() && !flags.empty()) {
-    ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
-    const ObDMLStmt *stmt = NULL;
-    ObArray<ObRawExpr *> column_exprs;
-    if (OB_ISNULL(stmt = get_stmt())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(get_stmt()), K(ret));
-    } else if (OB_FAIL(stmt->get_column_exprs(column_exprs))) {
-      LOG_WARN("failed to get column exprs", K(ret));
-    } else if (OB_FAIL(copier.add_skipped_expr(column_exprs))) {
-      LOG_WARN("failed to add skipped exprs", K(ret));
-    }
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
       if (filters.at(i)->has_flag(CNT_PL_UDF)) {
         // do nothing.
@@ -322,8 +311,31 @@ int ObLogTableScan::copy_filter_before_index_back()
           if (OB_FAIL(ObRawExprUtils::contain_virtual_generated_column(filters.at(i), is_contain_vir_gen_column))) {
             LOG_WARN("fail to contain virtual gen column", K(ret));
           } else if (is_contain_vir_gen_column) {
-            if (OB_FAIL(copier.copy(filters.at(i), filters.at(i)))) {
-              LOG_WARN("failed to copy exprs", K(ret));
+            ObArray<ObRawExpr *> vir_gen_par_exprs;
+            if (OB_FAIL(ObRawExprUtils::extract_virtual_generated_column_parents(filters.at(i), filters.at(i), vir_gen_par_exprs))) {
+              LOG_WARN("failed to extract virtual generated column parents", K(ret), K(i));
+            } else {
+              ObRawExprCopier copier(get_plan()->get_optimizer_context().get_expr_factory());
+              for (int64_t j = 0; OB_SUCC(ret) && j < vir_gen_par_exprs.count(); ++j) {
+                ObRawExpr *copied_expr = NULL;
+                if (OB_FAIL(get_plan()->get_optimizer_context().get_expr_factory().create_raw_expr(
+                                                  vir_gen_par_exprs.at(j)->get_expr_class(),
+                                                  vir_gen_par_exprs.at(j)->get_expr_type(),
+                                                  copied_expr))) {
+                  LOG_WARN("failed to create raw expr", K(ret));
+                } else if (OB_FAIL(copied_expr->deep_copy(copier, *vir_gen_par_exprs.at(j)))) {
+                  LOG_WARN("failed to assign old expr", K(ret));
+                } else if (OB_FAIL(copier.add_replaced_expr(vir_gen_par_exprs.at(j), copied_expr))) {
+                  LOG_WARN("failed to add replaced expr", K(ret));
+                } else if (OB_FAIL(copier.copy_on_replace(filters.at(i), filters.at(i)))) {
+                  LOG_WARN("failed to copy exprs", K(ret));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(copier.copy_on_replace(filters.at(i), filters.at(i)))) {
+                  LOG_WARN("failed to copy exprs", K(ret));
+                }
+              }
             }
           }
         }
