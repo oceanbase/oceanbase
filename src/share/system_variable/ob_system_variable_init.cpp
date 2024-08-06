@@ -7135,13 +7135,26 @@ static struct VarsInit{
     ObSysVars[509].alias_ = "OB_SV_KV_MODE" ;
     }();
 
+    [&] (){
+      ObSysVars[510].default_value_ = "1" ;
+      ObSysVars[510].info_ = "wether use parameter anonymous_block" ;
+      ObSysVars[510].name_ = "ob_enable_parameter_anonymous_block" ;
+      ObSysVars[510].data_type_ = ObIntType ;
+      ObSysVars[510].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[510].id_ = SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PARAMETER_ANONYMOUS_BLOCK] = 510 ;
+      ObSysVars[510].base_value_ = "1" ;
+    ObSysVars[510].alias_ = "OB_SV_ENABLE_PARAMETER_ANONYMOUS_BLOCK" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 510;
+static int64_t var_amount = 511;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

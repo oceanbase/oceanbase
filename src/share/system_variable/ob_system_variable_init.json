@@ -7375,5 +7375,18 @@
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""
+  },
+  "ob_enable_parameter_anonymous_block": {
+    "id": 10644,
+    "name": "ob_enable_parameter_anonymous_block",
+    "default_value": "1",
+    "base_value": "1",
+    "data_type": "bool",
+    "info": "wether use parameter anonymous_block",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

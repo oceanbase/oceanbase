@@ -1841,7 +1841,8 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
 
   OX (is_forbid_anony_parameter = is_forbid_anony_parameter
                                     || ctx.get_my_session()->is_pl_debug_on()
-                                    || ctx.get_my_session()->get_pl_profiler() != nullptr);
+                                    || ctx.get_my_session()->get_pl_profiler() != nullptr
+                                    || !ctx.get_my_session()->get_local_ob_enable_parameter_anonymous_block());
 
   OX (param.set_mem_attr(ctx.get_my_session()->get_effective_tenant_id(),
                          ObModIds::OB_PL_TEMP,
