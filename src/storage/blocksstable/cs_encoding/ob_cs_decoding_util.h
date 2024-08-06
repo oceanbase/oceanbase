@@ -541,7 +541,7 @@ public:
   {
     int ret = OB_SUCCESS;
     const ValDataType cast_left_inclusive = *reinterpret_cast<const ValDataType *>(refs_val);
-    const ValDataType cast_right_exclusive = *reinterpret_cast<const ValDataType *>(refs_val + 1);
+    const ValDataType cast_right_inclusive = *reinterpret_cast<const ValDataType *>(refs_val + 1);
     const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(dict_ref_buf);
     start_pos += row_start;
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
@@ -549,7 +549,7 @@ public:
         // skip
       } else {
         ValDataType cur_val = *start_pos;
-        if ((cur_val >= cast_left_inclusive) && (cur_val < cast_right_exclusive) && (cur_val < dict_val_cnt)) {
+        if ((cur_val >= cast_left_inclusive) && (cur_val <= cast_right_inclusive) && (cur_val < dict_val_cnt)) {
           if (OB_FAIL(result_bitmap.set(i))) {
             STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
           }
