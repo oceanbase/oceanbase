@@ -788,7 +788,7 @@ int ObCopyMacroBlockObProducer::get_next_macro_block(
         LOG_WARN("failed to build macro row", K(ret), KPC(copy_macro_block_handle_[handle_idx_].macro_meta_));
       } else if (OB_FAIL(meta_row_buf_.write_serialize(macro_meta_row))) {
         LOG_WARN("failed to write serialize macro meta row into meta row buf", K(ret), K(macro_meta_row), K_(meta_row_buf));
-      } else if (FALSE_IT(occupy_size = meta_row_buf_.get_serialize_size())) {
+      } else if (FALSE_IT(occupy_size = meta_row_buf_.length())) {
       } else {
         data.assign(meta_row_buf_.data(), occupy_size);
         copy_macro_block_header.occupy_size_ = occupy_size;
@@ -3352,7 +3352,7 @@ int ObCopyRemoteSSTableMacroBlockRestoreReader::get_next_macro_block(
       LOG_WARN("failed to build macro row", K(ret), K(macro_meta));
     } else if (OB_FAIL(meta_row_buf_.write_serialize(macro_meta_row))) {
       LOG_WARN("failed to write serialize macro meta row into meta row buf", K(ret), K(macro_meta_row), K_(meta_row_buf));
-    } else if (FALSE_IT(occupy_size = meta_row_buf_.get_serialize_size())) {
+    } else if (FALSE_IT(occupy_size = meta_row_buf_.length())) {
     } else {
       data.assign(meta_row_buf_.data(), occupy_size);
       header.occupy_size_ = occupy_size;
