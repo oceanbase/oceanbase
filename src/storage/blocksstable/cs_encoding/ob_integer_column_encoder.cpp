@@ -87,7 +87,8 @@ int ObIntegerColumnEncoder::do_init_()
     LOG_WARN("not init", K(ret));
   } else if (row_count_ == ctx_->null_cnt_) { // all datums is null
     if (OB_FAIL(enc_ctx_.build_signed_stream_meta(
-        0, 0, true/*is_replace_null*/, 0, precision_width_size_, is_force_raw_, integer_range_))) {
+        0, 0, true/*is_replace_null*/, 0, precision_width_size_, is_force_raw_,
+        ctx_->encoding_ctx_->major_working_cluster_version_, integer_range_))) {
       LOG_WARN("fail to build_signed_stream_meta", K(ret));
     }
   } else if (ObIntSC == store_class_ || ObDecimalIntSC == store_class_) {
@@ -212,7 +213,8 @@ int ObIntegerColumnEncoder::build_signed_stream_meta_()
     }
 
     if (OB_FAIL(enc_ctx_.build_signed_stream_meta(new_int_min, new_int_max, is_replace_null,
-        null_replaced_value, precision_width_size_, is_force_raw_, integer_range_))) {
+        null_replaced_value, precision_width_size_, is_force_raw_,
+        ctx_->encoding_ctx_->major_working_cluster_version_, integer_range_))) {
       LOG_WARN("fail to build_signed_stream_meta", K(ret));
     }
   }
@@ -258,7 +260,7 @@ int ObIntegerColumnEncoder::build_unsigned_encoder_ctx_()
 
     if (OB_FAIL(enc_ctx_.build_unsigned_stream_meta(
         new_uint_min, new_uint_max, is_replace_null, null_replaced_value,
-        is_force_raw_, integer_range_))) {
+        is_force_raw_, ctx_->encoding_ctx_->major_working_cluster_version_, integer_range_))) {
       LOG_WARN("fail to build_unsigned_stream_meta", K(ret));
     }
   }

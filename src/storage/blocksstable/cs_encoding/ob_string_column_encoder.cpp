@@ -127,7 +127,9 @@ int ObStringColumnEncoder::do_init_()
       ctx_->encoding_ctx_->compressor_type_,
       is_force_raw_, &ctx_->encoding_ctx_->cs_encoding_opt_,
       ctx_->encoding_ctx_->previous_cs_encoding_.get_column_encoding(column_index_),
-      int_stream_idx, ctx_->allocator_))) {
+      int_stream_idx,
+      ctx_->encoding_ctx_->major_working_cluster_version_,
+      ctx_->allocator_))) {
     LOG_WARN("fail to build_string_stream_encoder_info", K(ret));
   }
 

@@ -167,7 +167,7 @@ int ObStringStreamEncoder::do_encode_offset_stream_(ObIArray<uint32_t> &stream_o
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "max string offset must equal to total_bytes_len_", K(ret), K(end_offset), KPC_(ctx));
     } else if (OB_FAIL(int_ctx_.build_offset_array_stream_meta(
-        end_offset, ctx_->info_.raw_encoding_str_offset_))) {
+        end_offset, ctx_->info_.raw_encoding_str_offset_, ctx_->info_.major_working_cluster_version_))) {
       STORAGE_LOG(WARN, "fail to build_offset_array_stream_meta", KR(ret));
     } else if (OB_FAIL(int_ctx_.build_stream_encoder_info(
                                 false/*has_null*/,

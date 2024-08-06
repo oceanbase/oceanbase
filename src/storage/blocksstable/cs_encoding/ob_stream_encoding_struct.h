@@ -15,6 +15,7 @@
 
 #include "lib/utility/ob_print_utils.h"
 #include "lib/compress/ob_compress_util.h"
+#include "lib/codec/ob_codecs.h"
 
 namespace oceanbase
 {
@@ -107,13 +108,16 @@ struct ObIntegerStream
 struct ObIntegerStreamMeta
 {
   static constexpr uint8_t OB_INTEGER_STREAM_META_V1 = 0;
+  static constexpr uint8_t OB_INTEGER_STREAM_META_V2 = 1;
   ObIntegerStreamMeta() { reset(); }
 
   OB_INLINE void reset()
   {
     // all member must be reset, or will checksum error between replicas
     memset(this, 0, sizeof(*this));
+    version_ = OB_INTEGER_STREAM_META_V2;
     width_ = ObIntegerStream::UW_MAX_BYTE;
+    pfor_packing_type_ = ObCodec::CPU_ARCH_INDEPENDANT_SCALAR;
   }
 
   OB_INLINE bool is_valid() const
@@ -135,6 +139,10 @@ struct ObIntegerStreamMeta
   OB_INLINE bool is_raw_encoding() const { return ObIntegerStream::EncodingType::RAW == type_; }
   OB_INLINE bool is_unspecified_encoding() const { return ObIntegerStream::EncodingType::MIN_TYPE == type_; }
   OB_INLINE bool is_universal_compress_encoding() const { return ObIntegerStream::EncodingType::UNIVERSAL_COMPRESS == type_; }
+  OB_INLINE ObCodec::PFoRPackingType get_pfor_packing_type() const
+  {
+    return static_cast<ObCodec::PFoRPackingType>(pfor_packing_type_);
+  }
 
   // set
   OB_INLINE void set_use_base() { attr_ |=  ObIntegerStream::Attribute::USE_BASE; }
@@ -165,6 +173,10 @@ struct ObIntegerStreamMeta
   OB_INLINE void set_2_byte_width() { width_ =  ObIntegerStream::UintWidth::UW_2_BYTE; }
   OB_INLINE void set_4_byte_width() { width_ = ObIntegerStream::UintWidth::UW_4_BYTE; }
   OB_INLINE void set_8_byte_width() { width_ = ObIntegerStream::UintWidth::UW_8_BYTE; }
+  OB_INLINE void set_pfor_packing_type(const ObCodec::PFoRPackingType type)
+  {
+    pfor_packing_type_ = type;
+  }
 
 
   OB_INLINE int set_uint_width_size(const uint32_t byte_size)
@@ -257,6 +269,7 @@ struct ObIntegerStreamMeta
   uint64_t base_value_;
   uint64_t null_replaced_value_;
   uint8_t decimal_precision_width_;
+  uint8_t pfor_packing_type_;
 };
 
 struct ObIntegerStreamEncoderInfo
@@ -301,11 +314,14 @@ struct ObIntegerStreamEncoderCtx
   int build_signed_stream_meta(const int64_t min, const int64_t max,
       const bool is_replace_null, const int64_t replace_value,
       const int64_t precision_width_size,
-      const bool force_raw, uint64_t &range);
+      const bool force_raw,
+      const int64_t major_working_cluster_version,
+      uint64_t &range);
   int build_unsigned_stream_meta(const uint64_t min, const uint64_t max,
       const bool is_replace_null, const uint64_t replace_value,
-      const bool force_raw, uint64_t &range);
-  int build_offset_array_stream_meta(const uint64_t end_offset, const bool force_raw);
+      const bool force_raw, const int64_t major_working_cluster_version, uint64_t &range);
+  int build_offset_array_stream_meta(const uint64_t end_offset, const bool force_raw,
+      const int64_t major_working_cluster_version);
   int build_stream_encoder_info(const bool has_null,
                                 bool is_monotonic_inc,
                                 const ObCSEncodingOpt *encoding_opt,
@@ -376,18 +392,20 @@ struct ObStringStreamEncoderInfo
     encoding_opt_ = nullptr;
     previous_encoding_ = nullptr;
     int_stream_idx_ = -1;
+    major_working_cluster_version_ = 0;
     allocator_ = nullptr;
   }
 
   TO_STRING_KV("compressor_type", all_compressor_name[compressor_type_],
       K_(raw_encoding_str_offset), KP_(encoding_opt), KPC_(previous_encoding),
-      K_(int_stream_idx), KP_(allocator));
+      K_(int_stream_idx), K_(major_working_cluster_version), KP_(allocator));
 
   common::ObCompressorType compressor_type_;
   bool raw_encoding_str_offset_;
   const ObCSEncodingOpt *encoding_opt_;
   const ObPreviousColumnEncoding *previous_encoding_;
   int32_t int_stream_idx_;
+  int64_t major_working_cluster_version_;
   ObIAllocator *allocator_;
 };
 
@@ -409,6 +427,7 @@ struct ObStringStreamEncoderCtx
        const ObCSEncodingOpt *encoding_opt,
        const ObPreviousColumnEncoding *previous_encoding,
        const int32_t int_stream_idx,
+       const int64_t major_working_cluster_version,
        ObIAllocator *allocator);
 
   TO_STRING_KV(K_(meta), K_(info));

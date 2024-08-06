@@ -50,6 +50,13 @@ class ObCompositeCodec : public ObCodec
     codec2.set_uint_bytes(uint_bytes);
   }
 
+  virtual void set_pfor_packing_type(const PFoRPackingType pfor_packing_type) override
+  {
+    ObCodec::set_pfor_packing_type(pfor_packing_type);
+    codec1.set_pfor_packing_type(pfor_packing_type);
+    codec2.set_pfor_packing_type(pfor_packing_type);
+  }
+
   virtual int do_encode(const char *in,
                         const uint64_t in_len,
                         char *out,

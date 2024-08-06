@@ -109,6 +109,7 @@ public:
 
   template<typename UIntT>
   static OB_INLINE void inner_do_encode(
+      const PFoRPackingType pfor_packing_type,
       const UIntT *__restrict in,
       uint32_t n,
       char *out,
@@ -125,7 +126,7 @@ public:
     char *orig_out = out;
 
     if (bx == 0) { // no exception
-      inner_bit_packing<UIntT>(in, out, b, out_buf_len);
+      inner_bit_packing<UIntT>(pfor_packing_type, in, out, b, out_buf_len);
     } else {
       uint64_t i = 0;
       uint64_t xn = 0;// the count of exceptions
@@ -162,7 +163,7 @@ public:
       }
 
       // packing data
-      inner_bit_packing<UIntT>(_in, out, b, out_buf_len);
+      inner_bit_packing<UIntT>(pfor_packing_type, _in, out, b, out_buf_len);
     }
     len = (uint32_t)(out - orig_out);
   }
@@ -189,7 +190,8 @@ public:
   }
 
   template<typename UIntT>
-  static OB_INLINE int __encode_array(const UIntT *in, const uint32_t length,
+  static OB_INLINE int __encode_array(const PFoRPackingType pfor_packing_type,
+                                      const UIntT *in, const uint32_t length,
                                       char *out, uint64_t out_buf_len, uint64_t &out_pos)
   {
     int ret = OB_SUCCESS;
@@ -208,7 +210,7 @@ public:
       } else {
         uint32_t len = 0;
         uint64_t remain_out_buf_len = out_buf_len - (out - orig_out);
-        inner_do_encode(in, length, out, b, bx, remain_out_buf_len, len);
+        inner_do_encode(pfor_packing_type, in, length, out, b, bx, remain_out_buf_len, len);
         out += len;
         out_pos = out - orig_out;
       }
@@ -225,7 +227,8 @@ public:
     const UIntT *t_in = reinterpret_cast<const UIntT *>(in);
     for (int64_t i = 0; OB_SUCC(ret) && i < t_in_len; i += BlockSize) {
       const UIntT *next_in = t_in + i;
-      if (OB_FAIL(__encode_array<UIntT>(next_in, BlockSize, out, out_len, out_pos))) {
+      if (OB_FAIL(__encode_array<UIntT>(
+          get_pfor_packing_type(), next_in, BlockSize, out, out_len, out_pos))) {
         LIB_LOG(WARN, "fail to encode array", K(ret), K(BlockSize), K(out_len), K(out_pos));
       }
     }
@@ -270,6 +273,7 @@ public:
 
   template<typename UIntT>
   static OB_INLINE void inner_do_decode(
+      const PFoRPackingType pfor_packing_type,
       const char *_in,
       const uint64_t length,
       uint64_t &pos,
@@ -284,7 +288,7 @@ public:
 
     b = *in++; // bit width
     if (0 == (b & 0x80)) {  // no exception value, direct unpack
-      inner_bit_unpacking<UIntT>(in, _in, length, out, b);
+      inner_bit_unpacking<UIntT>(pfor_packing_type, in, _in, length, out, b);
     } else {
       b &= (0x80 - 1); // get normal bit width
       bx = *in++; // get exception bit width
@@ -307,7 +311,7 @@ public:
       }
 
       // unpacking data
-      inner_bit_unpacking<UIntT>(in, _in, length, out, b);
+      inner_bit_unpacking<UIntT>(pfor_packing_type, in, _in, length, out, b);
       UIntT *out_arr = reinterpret_cast<UIntT *>(_out + out_pos);
 
       // patch exception, TODO, oushen, optimize later
@@ -332,6 +336,7 @@ public:
 
   template<typename UIntT>
   static OB_INLINE void __decode_array(
+      const PFoRPackingType pfor_packing_type,
       const char *in,
       const uint64_t length,
       uint64_t &pos,
@@ -341,7 +346,7 @@ public:
       uint64_t &out_pos)
   {
     for (int64_t i = 0; i < uint_count; i += BlockSize) {
-      inner_do_decode<UIntT>(in, length, pos, out, out_buf_len, out_pos);
+      inner_do_decode<UIntT>(pfor_packing_type, in, length, pos, out, out_buf_len, out_pos);
     }
   }
 
@@ -355,21 +360,22 @@ public:
        uint64_t &out_pos) override
   {
     int ret = OB_SUCCESS;
+    const ObCodec::PFoRPackingType pfor_packing_type = get_pfor_packing_type();
     switch (get_uint_bytes())  {
       case 1 : {
-        __decode_array<uint8_t>(in, in_len, in_pos, uint_count, out, out_len, out_pos);
+        __decode_array<uint8_t>(pfor_packing_type, in, in_len, in_pos, uint_count, out, out_len, out_pos);
         break;
       }
       case 2 : {
-        __decode_array<uint16_t>(in, in_len, in_pos, uint_count, out, out_len, out_pos);
+        __decode_array<uint16_t>(pfor_packing_type, in, in_len, in_pos, uint_count, out, out_len, out_pos);
         break;
       }
       case 4 : {
-        __decode_array<uint32_t>(in, in_len, in_pos, uint_count, out, out_len, out_pos);
+        __decode_array<uint32_t>(pfor_packing_type, in, in_len, in_pos, uint_count, out, out_len, out_pos);
         break;
       }
       case 8 : {
-        __decode_array<uint64_t>(in, in_len, in_pos, uint_count, out, out_len, out_pos);
+        __decode_array<uint64_t>(pfor_packing_type, in, in_len, in_pos, uint_count, out, out_len, out_pos);
         break;
       }
       default : {
@@ -385,21 +391,29 @@ public:
 private:
   template<typename UIntT>
   static OB_INLINE void inner_bit_packing(
+      const PFoRPackingType pfor_packing_type,
       const UIntT *__restrict in,
       char *&out,
       const uint32_t bit,
       const uint64_t out_buf_len)
   {
-    if (4 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
-      // uint32_t simd packing
-      uSIMD_fastpackwithoutmask_128_32((uint32_t *)in, reinterpret_cast<__m128i *>(out), bit);
-      out += BlockSize * bit / 8;
-    } else if (2 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
-      // uint16_t simd packing
-      uSIMD_fastpackwithoutmask_128_16((const uint16_t *)in, reinterpret_cast<__m128i *>(out), bit);
-      out += BlockSize * bit / 8;
-    } else {
-      // uint64_t, uint8_t use scalar packing
+    if (PFoRPackingType::CPU_ARCH_DEPENDANT == pfor_packing_type) {
+      if (4 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
+        // uint32_t simd packing
+        uSIMD_fastpackwithoutmask_128_32((uint32_t *)in, reinterpret_cast<__m128i *>(out), bit);
+        out += BlockSize * bit / 8;
+      } else if (2 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
+        // uint16_t simd packing
+        uSIMD_fastpackwithoutmask_128_16((const uint16_t *)in, reinterpret_cast<__m128i *>(out), bit);
+        out += BlockSize * bit / 8;
+      } else {
+        // uint64_t, uint8_t use scalar packing
+        // use scalar bit-packing for cpu-arch independant format
+        uint64_t out_pos = 0;
+        scalar_bit_packing<UIntT>(in, BlockSize, bit, out, out_buf_len, out_pos);
+        out += out_pos;
+      }
+    } else if (PFoRPackingType::CPU_ARCH_INDEPENDANT_SCALAR == pfor_packing_type) {
       uint64_t out_pos = 0;
       scalar_bit_packing<UIntT>(in, BlockSize, bit, out, out_buf_len, out_pos);
       out += out_pos;
@@ -408,20 +422,32 @@ private:
 
   template<typename UIntT>
   static OB_INLINE void inner_bit_unpacking(
+      const PFoRPackingType pfor_packing_type,
       const char *&in,
       const char *_in,
       const uint64_t length,
       char *&out,
       const uint32_t bit)
   {
-    if (4 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
-      uSIMD_fastunpack_128_32(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint32_t *>(out), bit);
-      in += BlockSize * bit / 8; // convert to byte;
-    } else if (2 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
-      uSIMD_fastunpack_128_16(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint16_t *>(out), bit);
-      in += BlockSize * bit / 8;
-    } else {
-      // uint8 & uint64 does not support simd packing
+    if (PFoRPackingType::CPU_ARCH_DEPENDANT == pfor_packing_type) {
+      if (4 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
+        uSIMD_fastunpack_128_32(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint32_t *>(out), bit);
+        in += BlockSize * bit / 8; // convert to byte;
+      } else if (2 == sizeof(UIntT) && common::is_arch_supported(ObTargetArch::AVX2)) {
+        uSIMD_fastunpack_128_16(reinterpret_cast<const __m128i *>(in), reinterpret_cast<uint16_t *>(out), bit);
+        in += BlockSize * bit / 8;
+      } else {
+        // uint8 & uint64 does not support simd packing
+        uint64_t in_pos = in - _in;
+        uint64_t in_len = length;
+        uint64_t tmp_out_pos = 0;
+        uint64_t tmp_out_buf_len = BlockSize;
+        UIntT *tmp_out = (UIntT *)out;
+        scalar_bit_unpacking<UIntT>(_in, in_len, in_pos, BlockSize, bit,
+            tmp_out, tmp_out_buf_len, tmp_out_pos);
+        in = _in + in_pos;
+      }
+    } else if (PFoRPackingType::CPU_ARCH_INDEPENDANT_SCALAR == pfor_packing_type) {
       uint64_t in_pos = in - _in;
       uint64_t in_len = length;
       uint64_t tmp_out_pos = 0;
