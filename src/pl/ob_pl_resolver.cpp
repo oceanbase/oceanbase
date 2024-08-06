@@ -10628,6 +10628,7 @@ int ObPLResolver::resolve_inner_call(
                       val.set_param_meta();
                       question_expr->set_value(val);
                       type.set_ext();
+                      type.set_udt_id(extract_type_id(routine_info->get_package_id()));
                       question_expr->set_result_type(type);
                       OZ (question_expr->extract_info());
                       OZ (question_expr->add_flag(IS_UDT_UDF_SELF_PARAM));

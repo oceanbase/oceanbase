@@ -2681,7 +2681,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
               const ObUserDefinedType *user_type = NULL;
               user_type = generator_.get_ast().get_user_type_table().get_type(udt_id);
               user_type = NULL == user_type ? generator_.get_ast().get_user_type_table().get_external_type(udt_id) : user_type;
-              CK (OB_NOT_NULL(user_type));
+              OV (OB_NOT_NULL(user_type), OB_ERR_UNEXPECTED, K(udt_id), K(i), KPC(s.get_param_expr(i)));
               OX (final_type = *user_type);
             }
             OZ (generator_.generate_expr(s.get_param(i),
