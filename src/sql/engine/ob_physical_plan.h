@@ -346,6 +346,7 @@ public:
   inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_record_plan_info(bool v) { need_record_plan_info_ = v; }
   bool need_record_plan_info() const { return need_record_plan_info_; }
+  bool try_record_plan_info();
   const common::ObString &get_rule_name() const { return stat_.rule_name_; }
   inline void set_is_rewrite_sql(bool v) { stat_.is_rewrite_sql_ = v; }
   inline bool is_rewrite_sql() const { return stat_.is_rewrite_sql_; }
@@ -669,6 +670,7 @@ public:
   // for detector manager
   bool is_enable_px_fast_reclaim_;
   bool udf_has_dml_stmt_;
+  std::atomic<bool> can_set_feedback_info_;
 private:
   // used to record transaction modified tables and
   // further cursor stmt will check agains

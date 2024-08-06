@@ -133,6 +133,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     append_table_id_(0),
     logical_plan_(),
     is_enable_px_fast_reclaim_(false),
+    can_set_feedback_info_(true),
     dml_table_ids_()
 {
 }
@@ -229,6 +230,7 @@ void ObPhysicalPlan::reset()
   logical_plan_.reset();
   is_enable_px_fast_reclaim_ = false;
   dml_table_ids_.reset();
+  can_set_feedback_info_.store(true);
 }
 
 void ObPhysicalPlan::destroy()
@@ -1347,6 +1349,13 @@ int ObPhysicalPlan::set_feedback_info(ObExecContext &ctx)
     }
   }
   return ret;
+}
+
+bool ObPhysicalPlan::try_record_plan_info()
+{
+  bool expected = true;
+  bool b_ret = can_set_feedback_info_.compare_exchange_strong(expected, false);
+  return b_ret;
 }
 
 } //namespace sql
