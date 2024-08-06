@@ -722,6 +722,12 @@ int ObSchemaPrinter::print_single_index_definition(const ObTableSchema *index_sc
             SHARE_SCHEMA_LOG(WARN, "fail to print partition info for index", K(ret), KPC(index_schema));
           }
         }
+
+        if (OB_FAIL(ret)) {
+        } else if (!lib::is_mysql_mode()) { /* only used for mysql mode */
+        } else if (!index_schema->is_index_visible() && OB_FAIL(databuff_printf(buf, buf_len, pos, " /*!80000 INVISIBLE */"))) {
+          LOG_WARN("failed to print invisible info", K(ret));
+        }
       }
     }
   }
