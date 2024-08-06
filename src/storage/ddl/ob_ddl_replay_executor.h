@@ -78,6 +78,8 @@ class ObDDLStartReplayExecutor final : public ObDDLReplayExecutor
 public:
   ObDDLStartReplayExecutor();
 
+  virtual bool is_replay_ddl_control_log_() const override final { return true; }
+
   int init(
       ObLS *ls,
       const ObDDLStartLog &log,
@@ -130,6 +132,8 @@ class ObDDLCommitReplayExecutor final : public ObDDLReplayExecutor
 {
 public:
   ObDDLCommitReplayExecutor();
+
+  virtual bool is_replay_ddl_control_log_() const override final { return true; }
 
   int init(
       ObLS *ls,

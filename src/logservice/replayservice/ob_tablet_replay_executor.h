@@ -93,6 +93,9 @@ protected:
 
   virtual bool replay_allow_tablet_not_exist_() { return true; }
 
+  // only set true when replay ddl start or commit log
+  virtual bool is_replay_ddl_control_log_() const { return false; }
+
   // not allowed to pass ObTabletCreateDeleteMdsUserData or ObTabletBindingMdsUserData
   template <typename T,
             typename U = typename std::enable_if<

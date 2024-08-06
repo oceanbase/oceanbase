@@ -155,8 +155,12 @@ int ObTabletReplayExecutor::replay_get_tablet_(
     CLOG_LOG(WARN, "log stream should not be NULL", KR(ret), K(scn));
   } else {
     const share::ObLSID &ls_id = ls->get_ls_id();
-    if (is_replay_update_tablet_status_()) {
+    if (is_replay_update_tablet_status_() || is_replay_ddl_control_log_()) {
       const bool allow_tablet_not_exist = replay_allow_tablet_not_exist_();
+      if (!is_replay_update_tablet_status_() && is_replay_ddl_control_log_()) {
+        share::ObTaskController::get().allow_next_syslog();
+        CLOG_LOG(INFO, "force replay ddl control log", K(ls_id), K(tablet_id), K(scn), K(allow_tablet_not_exist));
+      }
       if (OB_FAIL(ls->replay_get_tablet_no_check(tablet_id, scn, allow_tablet_not_exist, tablet_handle))) {
         CLOG_LOG(WARN, "replay get table failed", KR(ret), K(ls_id), K(tablet_id));
       }
