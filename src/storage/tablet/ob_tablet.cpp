@@ -5290,8 +5290,8 @@ int ObTablet::get_kept_snapshot_info(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("snapshot info is invalid", KR(ret), K(snapshot_info));
   }
-  LOG_TRACE("get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
-      K(snapshot_info), K(old_min_reserved_snapshot), K(get_tablet_meta()),
+  LOG_INFO("get multi version start", "ls_id", get_tablet_meta().ls_id_, K(tablet_id),
+      K(snapshot_info), K(old_min_reserved_snapshot),
       K(min_medium_snapshot), K(min_reserved_snapshot_on_ls), K(max_merged_snapshot));
   return ret;
 }
