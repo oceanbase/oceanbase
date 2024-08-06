@@ -85,149 +85,215 @@ int ObTableQueryAsyncSession::deep_copy_select_columns(const common::ObIArray<co
 }
 
 /**
- * ----------------------------------- ObQueryAsyncSessionRecycle -------------------------------------
+ * ----------------------------------- ObTableQueryASyncMgr -------------------------------------
  */
-void ObQueryAsyncSessionRecycle::runTimerTask()
+ObTableQueryASyncMgr::ObTableQueryASyncMgr()
+  : allocator_(MTL_ID()),
+    session_id_(0),
+    is_inited_(false)
 {
-  query_session_recycle();
 }
 
-void ObQueryAsyncSessionRecycle::query_session_recycle()
+int ObTableQueryASyncMgr::mtl_init(ObTableQueryASyncMgr *&query_async_mgr)
 {
-  ObQueryAsyncMgr::get_instance().clean_timeout_query_session();
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(query_async_mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query_async_mgr is null", K(ret));
+  } else if (OB_FAIL(query_async_mgr->init())) {
+    LOG_WARN("failed to init table query async manager", K(ret));
+  }
+  return ret;
 }
 
-/**
- * -----------------------------------Singleton ObQueryAsyncMgr -------------------------------------
- */
-int64_t ObQueryAsyncMgr::once_ = 0;
-ObQueryAsyncMgr *ObQueryAsyncMgr::instance_ = NULL;
-
-ObQueryAsyncMgr::ObQueryAsyncMgr() : session_id_(0)
-{}
-
-ObQueryAsyncMgr &ObQueryAsyncMgr::get_instance()
+int ObTableQueryASyncMgr::start()
 {
-  ObQueryAsyncMgr *instance = NULL;
-  while (OB_UNLIKELY(once_ < 2)) {
-    if (ATOMIC_BCAS(&once_, 0, 1)) {
-      instance = OB_NEW(ObQueryAsyncMgr, "ObQueryAsyncMgr");
-      if (OB_LIKELY(OB_NOT_NULL(instance))) {
-        if (common::OB_SUCCESS != instance->init()) {
-          LOG_WARN_RET(OB_ERROR, "failed to init ObQueryAsyncMgr instance");
-          OB_DELETE(ObQueryAsyncMgr, "ObQueryAsyncMgr", instance);
-          instance = NULL;
-          ATOMIC_BCAS(&once_, 1, 0);
-        } else {
-          instance_ = instance;
-          (void)ATOMIC_BCAS(&once_, 1, 2);
-        }
-      } else {
-        (void)ATOMIC_BCAS(&once_, 1, 0);
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableQueryASyncMgr is not inited", K(ret));
+  } else if (OB_FAIL(TG_SCHEDULE(MTL(omt::ObSharedTimer*)->get_tg_id(), *this,
+                                  QUERY_SESSION_CLEAN_DELAY, true))) {
+    LOG_WARN("failed to schedule QueryASyncMgr task", K(ret));
+  }
+  return ret;
+}
+
+void ObTableQueryASyncMgr::destroy()
+{
+  destroy_all_query_session();
+  query_session_map_.destroy();
+  is_inited_ = false;
+}
+
+void ObTableQueryASyncMgr::stop()
+{
+  TG_CANCEL_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), *this);
+}
+
+void ObTableQueryASyncMgr::wait()
+{
+  TG_WAIT_TASK(MTL(omt::ObSharedTimer*)->get_tg_id(), *this);
+}
+
+void ObTableQueryASyncMgr::runTimerTask()
+{
+  clean_timeout_query_session();
+}
+
+int ObTableQueryASyncMgr::init()
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("ObTableQueryASyncMgr init twice", K(ret), KPC(this));
+  } else {
+    for (int64_t i = 0; i < DEFAULT_LOCK_ARR_SIZE; ++i) {
+      locker_arr_[i].set_latch_id(ObLatchIds::TABLE_API_LOCK);
+    }
+    ObMemAttr attr(MTL_ID(), "TblAQueryAlloc");
+    if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
+      LOG_WARN("fail to init allocator", K(ret));
+    } else if (OB_FAIL(query_session_map_.create(QUERY_SESSION_MAX_SIZE, "TableAQueryBkt", "TableAQueryNode", MTL_ID()))) {
+      LOG_WARN("fail to create query session map", K(ret));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+uint64_t ObTableQueryASyncMgr::generate_query_sessid()
+{
+  int ret = OB_SUCCESS;
+  int sess_id = INVALID_SESSION_ID;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableQueryASyncMgr is not inited", K(ret));
+  } else {
+    sess_id = ATOMIC_AAF(&session_id_, 1);
+  }
+  return sess_id;
+}
+
+int ObTableQueryASyncMgr::get_query_session(uint64_t sessid, ObTableQueryAsyncSession *&query_session)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableQueryASyncMgr is not inited", K(ret));
+  } else {
+    get_locker(sessid).lock();
+    if (OB_FAIL(query_session_map_.get_refactored(sessid, query_session))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get session from query session map", K(ret));
       }
-    }
-  }
-  return *(ObQueryAsyncMgr *)instance_;
-}
-
-int ObQueryAsyncMgr::init()
-{
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < DEFAULT_LOCK_ARR_SIZE; ++i) {
-    locker_arr_[i].set_latch_id(ObLatchIds::TABLE_API_LOCK);
-  }
-  if (OB_FAIL(query_session_map_.create(QUERY_SESSION_MAX_SIZE, "TbAQueSeBuk", "TbAQueSeNod"))) {
-    LOG_WARN("fail to create query session map", K(ret));
-  } else if (FALSE_IT(timer_.set_run_wrapper(MTL_CTX()))) { // 设置当前租户上下文
-  } else if (OB_FAIL(timer_.init())) {
-    LOG_WARN("fail to init timer_", K(ret));
-  } else if (OB_FAIL(timer_.schedule(query_session_recycle_, QUERY_SESSION_CLEAN_DELAY, true))) {
-    LOG_WARN("fail to schedule query session clean task. ", K(ret));
-  } else if (OB_FAIL(timer_.start())) {
-    LOG_WARN("fail to start query session clean task timer.", K(ret));
-  }
-  return ret;
-}
-
-uint64_t ObQueryAsyncMgr::generate_query_sessid()
-{
-  return ATOMIC_AAF(&session_id_, 1);
-}
-
-int ObQueryAsyncMgr::get_query_session(uint64_t sessid, ObTableQueryAsyncSession *&query_session)
-{
-  int ret = OB_SUCCESS;
-  get_locker(sessid).lock();
-  if (OB_FAIL(query_session_map_.get_refactored(sessid, query_session))) {
-    if (OB_HASH_NOT_EXIST != ret) {
+    } else if (OB_ISNULL(query_session)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get session from query session map", K(ret));
+      LOG_WARN("Unexpected null query session", K(ret), K(sessid));
+    } else if (query_session->is_in_use()) { // one session cannot be held concurrently
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("query session already in use", K(sessid));
+    } else {
+      query_session->set_in_use(true);
     }
-  } else if (OB_ISNULL(query_session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null query session", K(ret), K(sessid));
-  } else if (query_session->is_in_use()) { // one session cannot be held concurrently
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("query session already in use", K(sessid));
-  } else {
-    query_session->set_in_use(true);
-  }
-  get_locker(sessid).unlock();
-  return ret;
-}
-
-int ObQueryAsyncMgr::set_query_session(uint64_t sessid, ObTableQueryAsyncSession *query_session)
-{
-  int ret = OB_SUCCESS;
-  bool force = false;
-  if (OB_FAIL(query_session_map_.set_refactored(sessid, query_session, force))) {
-    LOG_WARN("set query session failed", K(ret), K(sessid));
+    get_locker(sessid).unlock();
   }
   return ret;
 }
 
-void ObQueryAsyncMgr::clean_timeout_query_session()
+int ObTableQueryASyncMgr::set_query_session(uint64_t sessid, ObTableQueryAsyncSession *query_session)
 {
   int ret = OB_SUCCESS;
-  common::ObSEArray<uint64_t, 128> session_id_array;
-  ObGetAllSessionIdOp op(session_id_array);
-  if (OB_FAIL(query_session_map_.foreach_refactored(op))) {
-    LOG_WARN("fail to get all session id from query sesion map", K(ret));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableQueryASyncMgr is not inited", K(ret));
   } else {
-    for (int64_t i = 0; i < session_id_array.count(); i++) {
-      uint64_t sess_id = session_id_array.at(i);
-      ObTableQueryAsyncSession *query_session = nullptr;
-      get_locker(sess_id).lock();
-      if (OB_FAIL(query_session_map_.get_refactored(sess_id, query_session))) {
-        LOG_DEBUG("query session already deleted by worker", K(ret), K(sess_id));
-      } else if (OB_ISNULL(query_session)) {
-        ret = OB_ERR_NULL_VALUE;
-        (void)query_session_map_.erase_refactored(sess_id);
-        LOG_WARN("unexpected null query sesion", K(ret));
-      } else if (query_session->is_in_use()) {
-      } else if (query_session->timeout_ts_ >= ObTimeUtility::fast_current_time()) {
-      } else {
-        ObObjectID tenant_id = query_session->get_tenant_id();
-        MTL_SWITCH(tenant_id) {
-          ObAccessService *access_service = NULL;
+    bool force = false;
+    if (OB_FAIL(query_session_map_.set_refactored(sessid, query_session, force))) {
+      LOG_WARN("set query session failed", K(ret), K(sessid));
+    }
+  }
+  return ret;
+}
+
+void ObTableQueryASyncMgr::destroy_all_query_session()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableQueryASyncMgr is not inited", K(ret));
+  } else {
+    common::ObSEArray<uint64_t, 128> session_id_array;
+    ObGetAllSessionIdOp op(session_id_array);
+    if (OB_FAIL(query_session_map_.foreach_refactored(op))) {
+      LOG_WARN("fail to get all session id from query sesion map", K(ret));
+    } else {
+      for (int64_t i = 0; i < session_id_array.count(); i++) {
+        uint64_t sess_id = session_id_array.at(i);
+        ObTableQueryAsyncSession *query_session = nullptr;
+        if (OB_FAIL(query_session_map_.get_refactored(sess_id, query_session))) {
+          LOG_DEBUG("query session already deleted by worker", K(ret), K(sess_id));
+        } else if (OB_ISNULL(query_session)) {
+          ret = OB_ERR_NULL_VALUE;
+          (void)query_session_map_.erase_refactored(sess_id);
+          LOG_WARN("unexpected null query sesion", K(ret));
+        } else {
           if (OB_FAIL(rollback_trans(*query_session))) {
             LOG_WARN("failed to rollback trans for query session", K(ret), K(sess_id));
           }
           (void)query_session_map_.erase_refactored(sess_id);
           ObTableQueryUtils::destroy_result_iterator(query_session->get_result_iter());
-          OB_DELETE(ObTableQueryAsyncSession, "TableAQuerySess", query_session);
-          // connection loses or bug exists
-          LOG_WARN("clean timeout query session success", K(ret), K(sess_id));
-        } else {
-          LOG_WARN("fail to switch tenant", K(ret), K(tenant_id));
+          free_query_session(query_session);
         }
       }
-      get_locker(sess_id).unlock();
     }
   }
 }
 
-int ObQueryAsyncMgr::rollback_trans(ObTableQueryAsyncSession &query_session)
+void ObTableQueryASyncMgr::clean_timeout_query_session()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTableQueryASyncMgr is not inited", K(ret));
+  } else {
+    common::ObSEArray<uint64_t, 128> session_id_array;
+    ObGetAllSessionIdOp op(session_id_array);
+    if (OB_FAIL(query_session_map_.foreach_refactored(op))) {
+      LOG_WARN("fail to get all session id from query sesion map", K(ret));
+    } else {
+      for (int64_t i = 0; i < session_id_array.count(); i++) {
+        uint64_t sess_id = session_id_array.at(i);
+        ObTableQueryAsyncSession *query_session = nullptr;
+        get_locker(sess_id).lock();
+        if (OB_FAIL(query_session_map_.get_refactored(sess_id, query_session))) {
+          LOG_DEBUG("query session already deleted by worker", K(ret), K(sess_id));
+        } else if (OB_ISNULL(query_session)) {
+          ret = OB_ERR_NULL_VALUE;
+          (void)query_session_map_.erase_refactored(sess_id);
+          LOG_WARN("unexpected null query sesion", K(ret));
+        } else if (query_session->is_in_use()) {
+        } else if (query_session->timeout_ts_ >= ObTimeUtility::current_time()) {
+        } else {
+          if (OB_FAIL(rollback_trans(*query_session))) {
+            LOG_WARN("failed to rollback trans for query session", K(ret), K(sess_id));
+          }
+          (void)query_session_map_.erase_refactored(sess_id);
+          ObTableQueryUtils::destroy_result_iterator(query_session->get_result_iter());
+          free_query_session(query_session);
+          // connection loses or bug exists
+          LOG_WARN("clean timeout query session success", K(ret), K(sess_id));
+        }
+        get_locker(sess_id).unlock();
+      }
+    }
+  }
+}
+
+int ObTableQueryASyncMgr::rollback_trans(ObTableQueryAsyncSession &query_session)
 {
   int ret = OB_SUCCESS;
   sql::TransState &trans_state = query_session.trans_state_;
@@ -249,32 +315,45 @@ int ObQueryAsyncMgr::rollback_trans(ObTableQueryAsyncSession &query_session)
       NG_TRACE(T_end_trans_end);
     }
   }
-  LOG_DEBUG("ObQueryAsyncMgr::rollback_trans", KR(ret));
+  LOG_DEBUG("ObTableQueryASyncMgr::rollback_trans", KR(ret));
   query_session.trans_desc_ = NULL;
   trans_state.reset();
   return ret;
 }
 
-ObQueryAsyncMgr::ObQueryHashMap *ObQueryAsyncMgr::get_query_session_map()
+ObTableQueryASyncMgr::ObQueryHashMap *ObTableQueryASyncMgr::get_query_session_map()
 {
   return &query_session_map_;
 }
 
-ObTableQueryAsyncSession *ObQueryAsyncMgr::alloc_query_session()
+ObTableQueryAsyncSession *ObTableQueryASyncMgr::alloc_query_session()
 {
   int ret = OB_SUCCESS;
-  ObTableQueryAsyncSession *query_session = OB_NEW(ObTableQueryAsyncSession, "QueryASyncSess");
+  ObTableQueryAsyncSession *query_session = OB_NEWx(ObTableQueryAsyncSession, &allocator_);
   if (OB_ISNULL(query_session)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate ObTableQueryAsyncSession", K(ret));
   } else if (OB_FAIL(query_session->init())) {
     LOG_WARN("failed to init query session", K(ret));
-    OB_DELETE(ObTableQueryAsyncSession, "QueryASyncSess", query_session);
   }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(query_session)) {
+    free_query_session(query_session);
+    query_session = nullptr;
+  }
+
   return query_session;
 }
 
-int ObQueryAsyncMgr::ObGetAllSessionIdOp::operator()(QuerySessionPair &entry) {
+void ObTableQueryASyncMgr::free_query_session(ObTableQueryAsyncSession *query_session)
+{
+  if (OB_NOT_NULL(query_session)) {
+    query_session->~ObTableQueryAsyncSession();
+    allocator_.free(query_session);
+  }
+}
+
+int ObTableQueryASyncMgr::ObGetAllSessionIdOp::operator()(QuerySessionPair &entry) {
   int ret = OB_SUCCESS;
   if (OB_FAIL(session_id_array_.push_back(entry.first))) {
     LOG_WARN("fail to push back query session id", K(ret));
@@ -338,9 +417,9 @@ int ObTableQueryAsyncP::get_session_id(uint64_t &real_sessid, uint64_t arg_sessi
   int ret = OB_SUCCESS;
   real_sessid = arg_sessid;
   if (ObQueryOperationType::QUERY_START == arg_.query_type_) {
-    real_sessid = ObQueryAsyncMgr::get_instance().generate_query_sessid();
+    real_sessid = MTL(ObTableQueryASyncMgr*)->generate_query_sessid();
   }
-  if (OB_UNLIKELY(real_sessid == ObQueryAsyncMgr::INVALID_SESSION_ID)) {
+  if (OB_UNLIKELY(real_sessid == ObTableQueryASyncMgr::INVALID_SESSION_ID)) {
     ret = OB_ERR_UNKNOWN_SESSION_ID;
     LOG_WARN("session id is invalid", K(ret), K(real_sessid), K(arg_.query_type_));
   }
@@ -350,20 +429,20 @@ int ObTableQueryAsyncP::get_session_id(uint64_t &real_sessid, uint64_t arg_sessi
 int ObTableQueryAsyncP::get_query_session(uint64_t sessid, ObTableQueryAsyncSession *&query_session)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(sessid == ObQueryAsyncMgr::INVALID_SESSION_ID)) {
+  if (OB_UNLIKELY(sessid == ObTableQueryASyncMgr::INVALID_SESSION_ID)) {
     ret = OB_ERR_UNKNOWN_SESSION_ID;
     LOG_WARN("fail to get query session, session id is invalid", K(ret), K(sessid));
   } else if (ObQueryOperationType::QUERY_START == arg_.query_type_) { // query start
-    query_session = ObQueryAsyncMgr::get_instance().alloc_query_session();
+    query_session = MTL(ObTableQueryASyncMgr*)->alloc_query_session();
     if (OB_ISNULL(query_session)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate ObTableQueryAsyncSession", K(ret), K(sessid));
-    } else if (OB_FAIL(ObQueryAsyncMgr::get_instance().set_query_session(sessid, query_session))) {
+    } else if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->set_query_session(sessid, query_session))) {
       LOG_WARN("fail to insert session to query map", K(ret), K(sessid));
-      OB_DELETE(ObTableQueryAsyncSession, "QueryASyncSess", query_session);
+      MTL(ObTableQueryASyncMgr*)->free_query_session(query_session);
     } else {}
   } else if (ObQueryOperationType::QUERY_NEXT == arg_.query_type_ || ObQueryOperationType::QUERY_END == arg_.query_type_) {
-    if (OB_FAIL(ObQueryAsyncMgr::get_instance().get_query_session(sessid, query_session))) {
+    if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->get_query_session(sessid, query_session))) {
       LOG_WARN("fail to get query session from query sync mgr", K(ret), K(sessid));
     } else if (OB_ISNULL(query_session)) {
       ret = OB_ERR_UNEXPECTED;
@@ -815,18 +894,18 @@ int ObTableQueryAsyncP::destory_query_session(bool need_rollback_trans)
   }
   int tmp_ret = ret;
 
-  ObQueryAsyncMgr::get_instance().get_locker(query_session_id_).lock();
+  MTL(ObTableQueryASyncMgr*)->get_locker(query_session_id_).lock();
   if (OB_ISNULL(query_session_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected null value", K(ret), KP_(query_session));
-  } else if (OB_FAIL(ObQueryAsyncMgr::get_instance().get_query_session_map()->erase_refactored(query_session_id_))) {
+  } else if (OB_FAIL(MTL(ObTableQueryASyncMgr*)->get_query_session_map()->erase_refactored(query_session_id_))) {
     LOG_WARN("fail to erase query session from query sync mgr", K(ret));
   } else {
     ObTableQueryUtils::destroy_result_iterator(query_session_->get_result_iter());
-    OB_DELETE(ObTableQueryAsyncSession, "TableAQuerySess", query_session_);
+    MTL(ObTableQueryASyncMgr*)->free_query_session(query_session_);
     LOG_DEBUG("destory query session success", K(ret), K(query_session_id_));
   }
-  ObQueryAsyncMgr::get_instance().get_locker(query_session_id_).unlock();
+  MTL(ObTableQueryASyncMgr*)->get_locker(query_session_id_).unlock();
 
   ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
   return ret;

@@ -174,6 +174,7 @@ namespace observer
   class QueueThread;
   class ObTableLoadService;
   class ObTableLoadResourceService;
+  class ObTableQueryASyncMgr;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -349,7 +350,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       table::ObTableGroupCommitMgr*,                \
       sql::ObAuditLogger*,                          \
       sql::ObAuditLogUpdater*,                      \
-      share::ObWorkloadRepositoryContext*           \
+      share::ObWorkloadRepositoryContext*,          \
+      observer::ObTableQueryASyncMgr*              \
   )
 
 

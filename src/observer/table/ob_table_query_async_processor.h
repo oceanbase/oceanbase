@@ -84,7 +84,7 @@ class ObTableQueryAsyncEntifyDestroyGuard
  */
 class ObTableQueryAsyncSession final
 {
-  friend class ObQueryAsyncMgr;
+  friend class ObTableQueryASyncMgr;
 
 public:
   explicit ObTableQueryAsyncSession()
@@ -140,24 +140,9 @@ private:
 };
 
 /**
- * ------------------------------------ ObQueryAsyncSessionRecycle ------------------------------------
+ * ----------------------------------- ObTableQueryASyncMgr -------------------------------------
  */
-class ObQueryAsyncSessionRecycle : public common::ObTimerTask
-{
-public:
-  ObQueryAsyncSessionRecycle(){}
-  virtual ~ObQueryAsyncSessionRecycle(){}
-  virtual void runTimerTask();
-
-private:
-  void query_session_recycle();
-  DISALLOW_COPY_AND_ASSIGN(ObQueryAsyncSessionRecycle);
-};
-
-/**
- * -----------------------------------Singleton ObQueryAsyncMgr -------------------------------------
- */
-class ObQueryAsyncMgr final
+class ObTableQueryASyncMgr : public common::ObTimerTask
 {
   friend class ObTableQueryAsyncP;
 
@@ -165,9 +150,8 @@ public:
   using ObQueryHashMap =
     common::hash::ObHashMap<uint64_t, ObTableQueryAsyncSession *, common::hash::SpinReadWriteDefendMode>;
   using QuerySessionPair = common::hash::HashMapPair<uint64_t, ObTableQueryAsyncSession*>;
-  ~ObQueryAsyncMgr() {}
-  static ObQueryAsyncMgr &get_instance();
-
+  ~ObTableQueryASyncMgr() {}
+  ObTableQueryASyncMgr();
   struct ObGetAllSessionIdOp {
     explicit ObGetAllSessionIdOp(common::ObIArray<uint64_t>& session_id_array) : session_id_array_(session_id_array)
     {}
@@ -179,6 +163,14 @@ public:
   int get_query_session(uint64_t sessid, ObTableQueryAsyncSession *&query_sess_ctx);
   int set_query_session(uint64_t sessid, ObTableQueryAsyncSession *query_sess_ctx);
   void clean_timeout_query_session();
+  void destroy_all_query_session();
+  void free_query_session(ObTableQueryAsyncSession *query_session);
+  virtual void runTimerTask() override;
+  static int mtl_init(ObTableQueryASyncMgr *&query_async_mgr);
+  int start();
+  void stop();
+  void wait();
+  void destroy();
 
 public:
   ObQueryHashMap *get_query_session_map();
@@ -189,8 +181,7 @@ public:
 private:
   int init();
   int rollback_trans(ObTableQueryAsyncSession &query_session);
-  ObQueryAsyncMgr();
-  DISALLOW_COPY_AND_ASSIGN(ObQueryAsyncMgr);
+  DISALLOW_COPY_AND_ASSIGN(ObTableQueryASyncMgr);
 
 private:
   static const uint64_t INVALID_SESSION_ID = 0;
@@ -199,13 +190,12 @@ private:
   static const uint64_t QUERY_SESSION_CLEAN_DELAY = 180 * 1000 * 1000; // 180s
 
 private:
-  static int64_t once_;  // for creating singleton instance
-  static ObQueryAsyncMgr *instance_;
+  common::ObFIFOAllocator allocator_;
   int64_t session_id_;
   ObQueryHashMap query_session_map_;
   lib::ObMutex locker_arr_[DEFAULT_LOCK_ARR_SIZE];
-  ObQueryAsyncSessionRecycle query_session_recycle_;
   common::ObTimer timer_;
+  bool is_inited_;
 };
 
 /**

@@ -90,6 +90,7 @@
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "observer/table/group/ob_table_tenant_group.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
+#include "observer/table/ob_table_query_async_processor.h"
 
 namespace oceanbase
 {
@@ -732,6 +733,7 @@ int MockTenantModuleEnv::init()
       MTL_BIND2(mtl_new_default, ObIndexUsageInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObOptStatMonitorManager::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, memtable::ObLockWaitMgr::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
+      MTL_BIND2(mtl_new_default, observer::ObTableQueryASyncMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     }
     if (OB_FAIL(ret)) {
 
