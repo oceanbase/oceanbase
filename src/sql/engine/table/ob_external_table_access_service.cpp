@@ -22,6 +22,9 @@
 #include "share/ob_device_manager.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include "sql/engine/table/ob_odps_table_row_iter.h"
+#endif
 
 namespace oceanbase
 {
@@ -355,6 +358,18 @@ int ObExternalTableAccessService::table_scan(
         LOG_WARN("alloc memory failed", K(ret));
       }
       break;
+    case ObExternalFileFormat::ODPS_FORMAT:
+#ifdef OB_BUILD_CPP_ODPS
+      if (OB_ISNULL(row_iter = OB_NEWx(ObODPSTableRowIterator, (scan_param.allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
+      }
+#else
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+      LOG_WARN("not support to read odps in opensource", K(ret));
+#endif
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected format", K(ret), "format", param.external_file_format_.format_type_);
@@ -385,6 +400,15 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
       case ObExternalFileFormat::CSV_FORMAT:
       case ObExternalFileFormat::PARQUET_FORMAT:
         result->reset();
+        break;
+      case ObExternalFileFormat::ODPS_FORMAT:
+#ifdef OB_BUILD_CPP_ODPS
+        result->reset();
+#else
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
+        LOG_WARN("not support to read odps in opensource", K(ret));
+#endif
         break;
       default:
         ret = OB_ERR_UNEXPECTED;
@@ -560,6 +584,13 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     }
   }
+  for (int i = 0; i < scan_param_->key_ranges_.count(); ++i) {
+    int64_t start = 0;
+    int64_t step = 0;
+    int64_t part_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::PARTITION_ID].get_int();
+    const ObString &file_url = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_URL].get_string();
+    int64_t file_id = scan_param_->key_ranges_.at(i).get_start_key().get_obj_ptr()[ObExternalTableUtils::FILE_ID].get_int();
+  }
   return ret;
 }
 
@@ -629,7 +660,7 @@ int ObExternalTableRowIterator::calc_file_partition_list_value(const int64_t par
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table not exist", K(scan_param_->index_id_), K(scan_param_->tenant_id_));
-  } else if (table_schema->is_partitioned_table() && table_schema->is_user_specified_partition_for_external_table()) {
+  } else if (table_schema->is_partitioned_table() && (table_schema->is_user_specified_partition_for_external_table() || table_schema->is_odps_external_table())) {
     if (OB_FAIL(table_schema->get_partition_by_part_id(part_id, CHECK_PARTITION_MODE_NORMAL, partition))) {
       LOG_WARN("get partition failed", K(ret), K(part_id));
     } else if (OB_ISNULL(partition) || OB_UNLIKELY(partition->get_list_row_values().count() != 1)
@@ -905,7 +936,6 @@ int ObCSVTableRowIterator::get_next_row()
       column_expr->set_evaluated_flag(eval_ctx);
     }
   }
-
   return ret;
 }
 
@@ -1047,7 +1077,6 @@ int ObCSVTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   }
 
   count = returned_row_cnt;
-
   return ret;
 }
 

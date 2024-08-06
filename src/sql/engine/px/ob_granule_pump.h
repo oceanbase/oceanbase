@@ -556,7 +556,17 @@ public:
   common::ObIArray<ObTableLocation> *get_pruning_table_location() { return &pruning_table_locations_; }
   int get_first_tsc_range_cnt(int64_t &cnt);
   const GITaskArrayMap &get_task_array_map() const { return gi_task_array_map_; }
+#ifdef OB_BUILD_CPP_ODPS
+  inline int get_odps_downloader(int64_t part_id, apsara::odps::sdk::IDownloadPtr &downloader) {
+    int ret = OB_SUCCESS;
+    downloader = NULL;
+    ret = odps_partition_downloader_mgr_.get_odps_downloader(part_id, downloader);
+    return ret;
+  }
+  ObOdpsPartitionDownloaderMgr &get_odps_mgr() { return odps_partition_downloader_mgr_; }
+#endif
 private:
+  int init_external_odps_table_downloader(ObGranulePumpArgs &args);
   int fetch_granule_by_worker_id(const ObGITaskSet *&task_set,
                                  int64_t &pos,
                                  int64_t thread_id,
@@ -597,6 +607,9 @@ private:
   bool partition_wise_join_;
   volatile bool no_more_task_from_shared_pool_; // try notify worker exit earlier
   GITaskArrayMap gi_task_array_map_;
+#ifdef OB_BUILD_CPP_ODPS
+  ObOdpsPartitionDownloaderMgr odps_partition_downloader_mgr_;
+#endif
   ObGranuleSplitterType splitter_type_;
   common::ObArray<ObGranulePumpArgs> pump_args_;
   bool need_partition_pruning_;

@@ -32,6 +32,38 @@ namespace sql
 class ObPhysicalPlanCtx;
 struct ObUserLoggingCtx;
 
+class ObOdpsDataTypeCastUtil
+{
+public:
+  static int common_int_number_wrap(const ObExpr &expr,
+                                    int64_t in_val,
+                                    ObIAllocator &alloc,
+                                    number::ObNumber &nmb);
+  static int common_string_decimalint_wrap(const ObExpr &expr, const ObString &in_str,
+                                          const ObUserLoggingCtx *user_logging_ctx,
+                                          ObDecimalIntBuilder &res_val);
+  static int common_string_number_wrap(const ObExpr &expr,
+                                      const ObString &in_str,
+                                      ObIAllocator &alloc,
+                                      number::ObNumber &nmb);
+  static int common_string_string_wrap(const ObExpr &expr,
+                                      const ObObjType in_type,
+                                      const ObCollationType in_cs_type,
+                                      const ObObjType out_type,
+                                      const ObCollationType out_cs_type,
+                                      const ObString &in_str,
+                                      ObEvalCtx &ctx,
+                                      ObDatum &res_datum,
+                                      bool& has_set_res);
+  static int common_string_text_wrap(const ObExpr &expr,
+                                    const ObString &in_str,
+                                    ObEvalCtx &ctx,
+                                    const ObLobLocatorV2 *lob_locator,
+                                    ObDatum &res_datum,
+                                    ObObjType &in_type,
+                                    ObCollationType &in_cs_type);
+};
+
 // extract accuracy info from %expr and call datum_accuracy_check() below.
 int datum_accuracy_check(const ObExpr &expr,
                          const uint64_t cast_mode,

@@ -52,12 +52,43 @@ int SelectItem::deep_copy(ObIRawExprCopier &expr_copier,
   return ret;
 }
 
+int ObSelectIntoItem::deep_copy(ObIRawExprCopier &copier,
+                                const ObSelectIntoItem &other)
+{
+  int ret = OB_SUCCESS;
+  into_type_ = other.into_type_;
+  outfile_name_ = other.outfile_name_;
+  field_str_ = other.field_str_;
+  line_str_ = other.line_str_;
+  closed_cht_ = other.closed_cht_;
+  is_optional_ = other.is_optional_;
+  is_single_ = other.is_single_;
+  max_file_size_ = other.max_file_size_;
+  escaped_cht_ = other.escaped_cht_;
+  cs_type_ = other.cs_type_;
+  file_partition_expr_ = other.file_partition_expr_;
+  buffer_size_ = other.buffer_size_;
+  user_vars_.assign(other.user_vars_);
+  if (OB_FAIL(copier.copy(other.file_partition_expr_, file_partition_expr_))) {
+    LOG_WARN("deep copy file partition expr failed", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < other.pl_vars_.count(); ++i) {
+    ObRawExpr* pl_var;
+    if (OB_FAIL(copier.copy(other.pl_vars_.at(i), pl_var))) {
+      LOG_WARN("failed to copy exprs", K(ret));
+    } else if (OB_FAIL(pl_vars_.push_back(pl_var))) {
+      LOG_WARN("failed to push back group by expr", K(ret));
+    }
+  }
+  return ret;
+}
 const char* const ObSelectIntoItem::DEFAULT_LINE_TERM_STR = "\n";
 const char* const ObSelectIntoItem::DEFAULT_FIELD_TERM_STR = "\t";
 const char ObSelectIntoItem::DEFAULT_FIELD_ENCLOSED_CHAR = 0;
 const bool ObSelectIntoItem::DEFAULT_OPTIONAL_ENCLOSED = false;
 const bool ObSelectIntoItem::DEFAULT_SINGLE_OPT = true;
 const int64_t ObSelectIntoItem::DEFAULT_MAX_FILE_SIZE = 256 * 1024 * 1024;
+const int64_t ObSelectIntoItem::DEFAULT_BUFFER_SIZE = 1 * 1024 * 1024;
 const char ObSelectIntoItem::DEFAULT_FIELD_ESCAPED_CHAR = '\\';
 
 //对于select .. for update 也认为是被更改
@@ -340,7 +371,7 @@ int ObSelectStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
         LOG_WARN("failed to allocate select into item", K(ret));
       } else {
         temp_into_item = new(ptr) ObSelectIntoItem();
-        if (OB_FAIL(temp_into_item->assign(*other.into_item_))) {
+        if (OB_FAIL(temp_into_item->deep_copy(expr_copier, *other.into_item_))) {
           LOG_WARN("deep copy into item failed", K(ret));
         } else {
           into_item_ = temp_into_item;
@@ -476,6 +507,10 @@ int ObSelectStmt::iterate_stmt_expr(ObStmtExprVisitor &visitor)
       if (OB_FAIL(visitor.visit(into_item_->pl_vars_.at(i), SCOPE_SELECT_INTO))) {
         LOG_WARN("failed to visit select into", K(ret));
       }
+    }
+    if (OB_SUCC(ret) && into_item_->file_partition_expr_ != NULL
+        && OB_FAIL(visitor.visit(into_item_->file_partition_expr_, SCOPE_SELECT))) {
+      LOG_WARN("failed to visit select into", K(ret));
     }
   }
   return ret;

@@ -8031,6 +8031,10 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
     LOG_WARN("fail to set closed cht", K(op.get_closed_cht()), K(ret));
   } else if (OB_FAIL(deep_copy_obj(alloc, op.get_escaped_cht(), spec.escaped_cht_))) {
     LOG_WARN("fail to set escaped cht", K(op.get_escaped_cht()), K(ret));
+  } else if (OB_FAIL(spec.external_properties_.store_str(op.get_external_properties()))) {
+    LOG_WARN("fail to set external properties", K(op.get_external_properties()), K(ret));
+  } else if (OB_FAIL(spec.external_partition_.store_str(op.get_external_partition()))) {
+    LOG_WARN("fail to set external partition", K(op.get_external_partition()), K(ret));
   } else if (OB_FAIL(spec.user_vars_.init(op.get_user_vars().count()))) {
     LOG_WARN("init fixed array failed", K(ret), K(op.get_user_vars().count()));
   } else if (OB_FAIL(spec.select_exprs_.init(op.get_select_exprs().count()))) {
@@ -8058,12 +8062,24 @@ int ObStaticEngineCG::generate_spec(ObLogSelectInto &op, ObSelectIntoSpec &spec,
       }
     }
     if (OB_SUCC(ret)) {
+      ObExpr *rt_expr = nullptr;
+      const ObRawExpr* file_partition_expr = op.get_file_partition_expr();
+      if (file_partition_expr == NULL) {
+      } else if (OB_FAIL(generate_rt_expr(*file_partition_expr, rt_expr))) {
+        LOG_WARN("failed to generate rt expr", K(ret));
+      } else {
+        spec.file_partition_expr_ = rt_expr;
+      }
+    }
+    if (OB_SUCC(ret)) {
       spec.into_type_ = op.get_into_type();
       spec.is_optional_ = op.get_is_optional();
       spec.is_single_ = op.get_is_single();
       spec.max_file_size_ = op.get_max_file_size();
+      spec.buffer_size_ = op.get_buffer_size();
       spec.cs_type_ = op.get_cs_type();
       spec.parallel_ = op.get_parallel();
+      spec.is_overwrite_ = op.get_is_overwrite();
       spec.plan_->need_drive_dml_query_ = true;
     }
   }

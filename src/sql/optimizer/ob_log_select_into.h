@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "objit/common/ob_item_type.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 
 namespace oceanbase
 {
@@ -36,7 +37,12 @@ public:
         is_optional_(true),
         is_single_(true),
         max_file_size_(DEFAULT_MAX_FILE_SIZE),
-        escaped_cht_()
+        buffer_size_(DEFAULT_BUFFER_SIZE),
+        escaped_cht_(),
+        file_partition_expr_(NULL),
+        is_overwrite_(false),
+        external_properties_(),
+        external_partition_()
   {
     cs_type_ = ObCharset::get_system_collation();
   }
@@ -78,17 +84,37 @@ public:
   {
     max_file_size_ = max_file_size;
   }
-  inline void set_closed_cht(common::ObObj closed_cht)
+  inline void set_buffer_size(int64_t buffer_size)
+  {
+    buffer_size_ = buffer_size;
+  }
+  inline void set_closed_cht(common::ObObj &closed_cht)
   {
     closed_cht_ = closed_cht;
   }
-  inline void set_escaped_cht(common::ObObj escaped_cht)
+  inline void set_escaped_cht(common::ObObj &escaped_cht)
   {
     escaped_cht_ = escaped_cht;
   }
-  inline void set_cs_type(common::ObCollationType cs_type)
+  inline void set_cs_type(common::ObCollationType &cs_type)
   {
     cs_type_ = cs_type;
+  }
+  inline void set_file_partition_expr(sql::ObRawExpr* file_partition_expr)
+  {
+    file_partition_expr_ = file_partition_expr;
+  }
+  inline void set_is_overwrite(bool is_overwrite)
+  {
+    is_overwrite_ = is_overwrite;
+  }
+  inline void set_external_properties(const common::ObString &external_properties)
+  {
+    external_properties_.assign_ptr(external_properties.ptr(), external_properties.length());
+  }
+  inline void set_external_partition(const common::ObString &external_partition)
+  {
+    external_partition_.assign_ptr(external_partition.ptr(), external_partition.length());
   }
   inline ObItemType get_into_type() const
   {
@@ -122,6 +148,10 @@ public:
   {
     return max_file_size_;
   }
+  inline int64_t get_buffer_size() const
+  {
+    return buffer_size_;
+  }
   inline common::ObObj get_closed_cht() const
   {
     return closed_cht_;
@@ -134,6 +164,22 @@ public:
   {
     return cs_type_;
   }
+  inline sql::ObRawExpr* get_file_partition_expr() const
+  {
+    return file_partition_expr_;
+  }
+  inline bool get_is_overwrite() const
+  {
+    return is_overwrite_;
+  }
+  inline common::ObString get_external_properties() const
+  {
+    return external_properties_;
+  }
+  inline common::ObString get_external_partition() const
+  {
+    return external_partition_;
+  }
   const common::ObIArray<ObRawExpr*> &get_select_exprs() const { return select_exprs_; }
   common::ObIArray<ObRawExpr*> &get_select_exprs() { return select_exprs_; }
   virtual int est_cost() override;
@@ -141,6 +187,7 @@ public:
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer);
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256*1024*1024;
+  static const int64_t DEFAULT_BUFFER_SIZE = 1*1024*1024;
 private:
   ObItemType into_type_;
   common::ObObj outfile_name_;
@@ -152,8 +199,13 @@ private:
   bool is_optional_;
   bool is_single_;
   int64_t max_file_size_;
+  int64_t buffer_size_;
   common::ObObj escaped_cht_;
   common::ObCollationType cs_type_;
+  sql::ObRawExpr* file_partition_expr_;
+  bool is_overwrite_;
+  common::ObString external_properties_;
+  common::ObString external_partition_;
 };
 }
 }

@@ -4770,7 +4770,8 @@ int ObResolverUtils::calc_file_column_idx(const ObString &column_name, uint64_t 
     int32_t PREFIX_LEN = column_name.prefix_match_ci(N_PARTITION_LIST_COL) ?
                             str_length(N_PARTITION_LIST_COL) :
                               column_name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX)?
-                                str_length(N_EXTERNAL_FILE_COLUMN_PREFIX) : -1;
+                                str_length(N_EXTERNAL_FILE_COLUMN_PREFIX) : column_name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX) ?
+                                                                              str_length(N_EXTERNAL_TABLE_COLUMN_PREFIX) : -1;
     if (column_name.length() <= PREFIX_LEN) {
       ret = OB_ERR_UNEXPECTED;
     } else {
@@ -4850,6 +4851,16 @@ int ObResolverUtils::resolve_external_table_column_def(ObRawExprFactory &expr_fa
           LOG_WARN("fail to build external table file column expr", K(ret));
         }
       }
+    } else if (ObExternalFileFormat::ODPS_FORMAT == ObResolverUtils::resolve_external_file_column_type(q_name.col_name_)) {
+      if (OB_FAIL(ObResolverUtils::calc_file_column_idx(q_name.col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", K(ret));
+      } else if (nullptr == (file_column_expr = ObResolverUtils::find_file_column_expr(
+                               real_exprs, OB_INVALID_ID, file_column_idx, q_name.col_name_))) {
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_odps(expr_factory, session_info,
+                    OB_INVALID_ID, ObString(), q_name.col_name_, file_column_idx, gen_col_schema, file_column_expr))) {
+          LOG_WARN("fail to build external table file column expr", K(ret));
+        }
+      }
     } else {
       if (OB_FAIL(ObResolverUtils::build_file_row_expr_for_parquet(expr_factory, session_info,
                                                                    OB_INVALID_ID, ObString(),
@@ -4891,6 +4902,8 @@ ObExternalFileFormat::FormatType ObResolverUtils::resolve_external_file_column_t
   ObExternalFileFormat::FormatType type = ObExternalFileFormat::INVALID_FORMAT;
   if (name.prefix_match_ci(N_EXTERNAL_FILE_COLUMN_PREFIX)) {
     type = ObExternalFileFormat::CSV_FORMAT;
+  } else if (name.prefix_match_ci(N_EXTERNAL_TABLE_COLUMN_PREFIX)) {
+    type = ObExternalFileFormat::ODPS_FORMAT;
   } else if (0 == name.case_compare(N_EXTERNAL_FILE_ROW)) {
     type = ObExternalFileFormat::PARQUET_FORMAT;
   }
@@ -5025,6 +5038,46 @@ int ObResolverUtils::build_file_row_expr_for_parquet(
     file_column_expr->set_collation_type(CS_TYPE_BINARY);
   }
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(file_column_expr->formalize(&session_info))) {
+      LOG_WARN("failed to extract info", K(ret));
+    } else {
+      expr = file_column_expr;
+    }
+  }
+
+  return ret;
+}
+
+int ObResolverUtils::build_file_column_expr_for_odps(ObRawExprFactory &expr_factory,
+                                                    const ObSQLSessionInfo &session_info,
+                                                    const uint64_t table_id,
+                                                    const ObString &table_name,
+                                                    const ObString &column_name,
+                                                    int64_t column_idx,
+                                                    const ObColumnSchemaV2 *column_schema,
+                                                    ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  ObPseudoColumnRawExpr *file_column_expr = nullptr;
+  ObItemType type = T_PSEUDO_EXTERNAL_FILE_COL;
+  uint64_t extra = column_idx;
+  if (OB_ISNULL(column_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexcepted null ptr", K(ret));
+  } else if (OB_FAIL(expr_factory.create_raw_expr(type, file_column_expr))) {
+    LOG_WARN("create nextval failed", K(ret));
+  } else if (OB_ISNULL(file_column_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else {
+    file_column_expr->set_expr_name(column_name);
+    file_column_expr->set_table_name(table_name);
+    file_column_expr->set_table_id(table_id);
+    file_column_expr->set_explicited_reference();
+    file_column_expr->set_extra(extra);
+    file_column_expr->set_meta_type(column_schema->get_meta_type());
+    file_column_expr->set_collation_level(CS_LEVEL_IMPLICIT);
+    file_column_expr->set_accuracy(column_schema->get_accuracy());
     if (OB_FAIL(file_column_expr->formalize(&session_info))) {
       LOG_WARN("failed to extract info", K(ret));
     } else {
@@ -9680,6 +9733,37 @@ int ObResolverUtils::check_schema_valid_for_mview(const ObTableSchema &table_sch
       LOG_WARN("create materialized view on xmltype columns is not supported", KR(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
           "create materialized view on xmltype columns is");
+    }
+  }
+  return ret;
+}
+
+bool ObResolverUtils::is_external_pseudo_column(const ObRawExpr &expr)
+{
+  bool ret = false;
+  if (T_PSEUDO_EXTERNAL_FILE_COL == expr.get_expr_type()
+      || T_PSEUDO_EXTERNAL_FILE_URL == expr.get_expr_type()
+      || T_PSEUDO_EXTERNAL_FILE_ROW == expr.get_expr_type()) {
+    ret = true;
+  }
+  return ret;
+}
+
+int ObResolverUtils::cnt_external_pseudo_column(const ObRawExpr &expr, bool &contain)
+{
+  int ret = OB_SUCCESS;
+  contain = false;
+  if (is_external_pseudo_column(expr)) {
+    contain = true;
+  } else {
+    for (int64_t i = 0; !contain && i < expr.get_children_count(); i++) {
+      const ObRawExpr *child = expr.get_param_expr(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid child", K(child));
+      } else if (OB_FAIL(SMART_CALL(cnt_external_pseudo_column(*child, contain)))) {
+        LOG_WARN("failed to check if need to check col duplicate", K(ret));
+      }
     }
   }
   return ret;

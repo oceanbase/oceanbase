@@ -219,6 +219,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         ObTableSchema &alter_schema = alter_table_stmt->get_alter_table_schema();
         alter_schema.set_table_type(table_schema_->get_table_type());
         OZ (alter_schema.set_external_file_format(table_schema_->get_external_file_format()));
+        OZ (alter_schema.set_external_properties(table_schema_->get_external_properties()));
         OZ (alter_schema.set_external_file_location(table_schema_->get_external_file_location()));
         OZ (alter_schema.set_external_file_location_access_info(table_schema_->get_external_file_location_access_info()));
         OZ (alter_schema.set_external_file_pattern(table_schema_->get_external_file_pattern()));

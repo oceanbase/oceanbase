@@ -1375,6 +1375,35 @@ int ObSQLUtils::check_and_copy_column_alias_name(const ObCollationType cs_type, 
   return ret;
 }
 
+int ObSQLUtils::extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list)
+{
+  int ret = OB_SUCCESS;
+  if (all_part_spec.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty odps part spec", K(ret));
+  } else {
+    const char* start = all_part_spec.ptr();
+    const char* end = start + all_part_spec.length();
+    const char* ptr = NULL;
+    while (start < end && OB_SUCC(ret)) {
+      if (ptr == NULL && *start == '\'') {
+        ptr = start;
+      } else if (ptr != NULL && *start == '\'') {
+        int64_t len = start - ptr - 1;
+        if (0 == len) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected part spec", K(ret), K(all_part_spec));
+        } else if (OB_FAIL(part_spec_list.push_back(ObString(len, ptr + 1)))) {
+          LOG_WARN("failed to push back part_spec", K(ret));
+        }
+        ptr = NULL;
+      }
+      ++start;
+    }
+  }
+  return ret;
+}
+
 int ObSQLUtils::check_ident_name(const ObCollationType cs_type, ObString &name,
                                  const bool check_for_path_char, const int64_t max_ident_len)
 {
@@ -5379,7 +5408,7 @@ void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
 
 bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
 {
-  return url.prefix_match_ci(OB_FILE_PREFIX);
+  return url.empty() ? false : url.prefix_match_ci(OB_FILE_PREFIX);
 }
 
 int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageInfo &storage_info)

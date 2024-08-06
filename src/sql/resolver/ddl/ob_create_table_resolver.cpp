@@ -716,6 +716,13 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
           if (create_table_stmt->get_create_table_arg().schema_.get_part_level() == ObPartitionLevel::PARTITION_LEVEL_ONE) {
             OZ (create_default_partition_for_table(create_table_stmt->get_create_table_arg().schema_));
           }
+          /*
+          if (OB_FAIL(ret)) {
+          } else if (ObExternalFileFormat::FormatType::ODPS_FORMAT != external_table_format_type_ &&
+                     OB_FAIL(add_hidden_external_table_pk_col())) {
+            LOG_WARN("fail to add hidden pk col for external table", K(ret));
+          }
+          */
           if (OB_FAIL(ret)) {
           } else if (OB_FAIL(add_hidden_external_table_pk_col())) {
             LOG_WARN("fail to add hidden pk col for external table", K(ret));
@@ -1046,6 +1053,8 @@ int ObCreateTableResolver::check_external_table_generated_partition_column_sanit
         LOG_WARN("user specified partition col expr contains no external partition pseudo column is not supported", K(ret));
       }
     }
+  } else if (table_schema.is_odps_external_table()) {
+    // lcqlog to do check
   } else {
     bool found = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {
@@ -3136,7 +3145,7 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
       int32_t num = node->num_child_;
       for (int32_t i = 0; OB_SUCC(ret) && i < num; ++i) {
         option_node = node->children_[i];
-        if (OB_NOT_NULL(option_node) && T_EXTERNAL_FILE_FORMAT == option_node->type_) {
+        if (OB_NOT_NULL(option_node) && (T_EXTERNAL_FILE_FORMAT == option_node->type_ || T_EXTERNAL_PROPERTIES == option_node->type_)) {
           ObExternalFileFormat format;
           for (int32_t j = 0; OB_SUCC(ret) && j < option_node->num_child_; ++j) {
             if (OB_NOT_NULL(option_node->children_[j])
@@ -3151,12 +3160,6 @@ int ObCreateTableResolver::resolve_external_table_format_early(const ParseNode *
         }
       }
     }
-  }
-  if (OB_SUCC(ret) && external_table_format_type_ >= ObExternalFileFormat::PARQUET_FORMAT) {
-    uint64_t data_version = 0;
-    CK (OB_NOT_NULL(session_info_));
-    OZ (GET_MIN_DATA_VERSION(session_info_->get_effective_tenant_id(), data_version));
-    OV (DATA_VERSION_4_3_2_0 <= data_version, OB_NOT_SUPPORTED, data_version);
   }
   return ret;
 }

@@ -180,7 +180,6 @@ int ObPXServerAddrUtil::get_external_table_loc(
       //For recovered cluster, the file addr may not in the cluster. Then igore it.
       LOG_WARN("filter files in location failed", K(ret));
     }
-
     if (OB_FAIL(ret)) {
     } else if (ext_file_urls.empty()) {
       const char* dummy_file_name = "#######DUMMY_FILE#######";

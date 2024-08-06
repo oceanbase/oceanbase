@@ -65,7 +65,13 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
       LOG_WARN("fail to check location access priv", K(ret));
     } else {
       scan_ctdef.is_external_table_ = true;
-      if (OB_FAIL(scan_ctdef.external_file_format_str_.store_str(table_schema->get_external_file_format()))) {
+      const ObString &format_or_properties = table_schema->get_external_file_format().empty() ?
+                                            table_schema->get_external_properties() :
+                                            table_schema->get_external_file_format();
+      if (format_or_properties.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("format_or_properties is empty", K(ret));
+      } else if (OB_FAIL(scan_ctdef.external_file_format_str_.store_str(format_or_properties))) {
         LOG_WARN("fail to set string", K(ret));
       } else if (OB_FAIL(scan_ctdef.external_file_location_.store_str(table_schema->get_external_file_location()))) {
         LOG_WARN("fail to set string", K(ret));

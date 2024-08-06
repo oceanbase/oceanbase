@@ -139,7 +139,8 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     selectivity_ctx_(ctx, this, stmt),
     alloc_sfu_list_(),
     onetime_copier_(NULL),
-    nonrecursive_plan_for_fake_cte_(NULL)
+    nonrecursive_plan_for_fake_cte_(NULL),
+    has_allocated_range_shuffle_(false)
 {
 }
 
@@ -6978,19 +6979,22 @@ int ObLogPlan::allocate_sort_and_exchange_as_top(ObLogicalOperator *&top,
   bool has_select_into = false;
   bool is_single = true;
   bool has_order_by = false;
+  ObRawExpr* partition_expr = NULL;
   if (OB_ISNULL(top) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_select_into(has_select_into, is_single, has_order_by))) {
+  } else if (OB_FAIL(check_select_into(has_select_into, is_single, has_order_by, partition_expr))) {
     LOG_WARN("failed to check select into", K(ret));
   } else if (exch_info.is_pq_local() && NULL == topn_expr && has_select_into && !is_single
-             && has_order_by) {
+             && has_order_by && (NULL == partition_expr || partition_expr->is_const_expr())) {
     if (OB_FAIL(allocate_dist_range_sort_for_select_into(top,
                                                          sort_keys,
                                                          need_sort,
                                                          is_local_order))) {
       LOG_WARN("failed to allocate dist range sort as top", K(ret));
-    } else { /*do nothing*/ }
+    } else {
+      has_allocated_range_shuffle_ = true;
+    }
   } else if (exch_info.is_pq_local() && NULL == topn_expr && GCONF._enable_px_ordered_coord) {
     if (OB_FAIL(allocate_dist_range_sort_as_top(top, sort_keys, need_sort, is_local_order))) {
       LOG_WARN("failed to allocate dist range sort as top", K(ret));
@@ -7597,11 +7601,16 @@ int ObLogPlan::allocate_limit_as_top(ObLogicalOperator *&old_top,
   return ret;
 }
 
-int ObLogPlan::check_select_into(bool &has_select_into, bool &is_single, bool &has_order_by){
+int ObLogPlan::check_select_into(bool &has_select_into,
+                                 bool &is_single,
+                                 bool &has_order_by,
+                                 ObRawExpr *&file_partition_expr)
+{
   int ret = OB_SUCCESS;
   has_select_into = false;
   is_single = true;
   has_order_by = false;
+  file_partition_expr = NULL;
   ObSelectIntoItem *into_item = NULL;
   if (OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
@@ -7611,11 +7620,11 @@ int ObLogPlan::check_select_into(bool &has_select_into, bool &is_single, bool &h
   } else {
     const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_stmt());
     has_select_into = stmt->has_select_into();
-    into_item = stmt->get_select_into();
-    if (NULL != into_item && !into_item->is_single_) {
-      is_single = false;
-    }
     has_order_by = stmt->has_order_by();
+    if (NULL != (into_item = stmt->get_select_into())) {
+      is_single = into_item->is_single_;
+      file_partition_expr = into_item->file_partition_expr_;
+    }
   }
   return ret;
 }
@@ -7627,12 +7636,16 @@ int ObLogPlan::candi_allocate_select_into()
   bool has_select_into = false;
   bool is_single = true;
   bool has_order_by = false;
+  ObRawExpr* partition_expr = NULL;
+  ObSEArray<ObRawExpr*, 4> partition_exprs;
   CandidatePlan candidate_plan;
   ObSEArray<CandidatePlan, 4> select_into_plans;
-  if (OB_FAIL(check_select_into(has_select_into, is_single, has_order_by))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret));
-  } else if (!is_single && !has_order_by) {
+  if (OB_FAIL(check_select_into(has_select_into, is_single, has_order_by, partition_expr))) {
+    LOG_WARN("failed to check select into", K(ret));
+  } else if (partition_expr != NULL && !partition_expr->is_const_expr()
+             && OB_FAIL(partition_exprs.push_back(partition_expr))) {
+    LOG_WARN("failed to push back partition expr", K(ret));
+  } else if (!is_single && !has_order_by && partition_exprs.count() == 0) {
     exch_info.dist_method_ = ObPQDistributeMethod::RANDOM;
   }
   for (int64_t i = 0 ; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); ++i) {
@@ -7640,7 +7653,12 @@ int ObLogPlan::candi_allocate_select_into()
     if (OB_ISNULL(candidate_plan.plan_tree_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (!has_order_by && candidate_plan.plan_tree_->is_sharding()
+    } else if (!is_single && !has_order_by && partition_exprs.count() != 0
+               && OB_FAIL(get_grouping_style_exchange_info(partition_exprs,
+                                                           candidate_plan.plan_tree_->get_output_equal_sets(),
+                                                           exch_info))) {
+      LOG_WARN("failed to get grouping style exchange info", K(ret));
+    } else if (!has_allocated_range_shuffle_ && candidate_plan.plan_tree_->is_sharding()
                && OB_FAIL((allocate_exchange_as_top(candidate_plan.plan_tree_, exch_info)))) {
       LOG_WARN("failed to allocate exchange as top", K(ret));
     } else if (OB_FAIL(allocate_select_into_as_top(candidate_plan.plan_tree_))) {
@@ -7668,11 +7686,10 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
   } else if (OB_ISNULL(select_into = static_cast<ObLogSelectInto *>(
                        get_log_op_factory().allocate(*this, LOG_SELECT_INTO)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_ERROR("allocate memory for ObLogSelectInto failed", K(ret));
+    LOG_WARN("allocate memory for ObLogSelectInto failed", K(ret));
   } else {
     ObSelectIntoItem *into_item = stmt->get_select_into();
     ObSEArray<ObRawExpr*, 4> select_exprs;
-    ObRawExpr *to_outfile_expr = NULL;
     if (OB_ISNULL(into_item)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("into item is null", K(ret));
@@ -7690,9 +7707,11 @@ int ObLogPlan::allocate_select_into_as_top(ObLogicalOperator *&old_top)
       select_into->set_closed_cht(into_item->closed_cht_);
       select_into->set_is_single(into_item->is_single_);
       select_into->set_max_file_size(into_item->max_file_size_);
+      select_into->set_buffer_size(into_item->buffer_size_);
       select_into->set_escaped_cht(into_item->escaped_cht_);
       select_into->set_cs_type(into_item->cs_type_);
       select_into->set_child(ObLogicalOperator::first_child, old_top);
+      select_into->set_file_partition_expr(into_item->file_partition_expr_);
       // compute property
       if (OB_FAIL(select_into->compute_property())) {
         LOG_WARN("failed to compute equal set", K(ret));

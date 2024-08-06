@@ -898,6 +898,14 @@ static OB_INLINE int common_int_number(const ObExpr &expr,
   return ret;
 }
 
+int ObOdpsDataTypeCastUtil::common_int_number_wrap(const ObExpr &expr,
+                                                  int64_t in_val,
+                                                  ObIAllocator &alloc,
+                                                  number::ObNumber &nmb)
+{
+  return common_int_number(expr, in_val, alloc, nmb);
+}
+
 static OB_INLINE int common_int_date(const ObExpr &expr,
                            const int64_t in_val,
                            ObDatum &res_datum)
@@ -1265,6 +1273,14 @@ static OB_INLINE int common_string_number(const ObExpr &expr,
   return ret;
 }
 
+int ObOdpsDataTypeCastUtil::common_string_number_wrap(const ObExpr &expr,
+                                                      const ObString &in_str,
+                                                      ObIAllocator &alloc,
+                                                      number::ObNumber &nmb)
+{
+  return common_string_number(expr, in_str, alloc, nmb);
+}
+
 static int common_string_decimalint(const ObExpr &expr, const ObString &in_str,
                                     const ObUserLoggingCtx *user_logging_ctx,
                                     ObDecimalIntBuilder &res_val)
@@ -1276,6 +1292,128 @@ static int common_string_decimalint(const ObExpr &expr, const ObString &in_str,
 
   int ret = OB_SUCCESS;
   ObObjType in_type = expr.args_[0]->datum_meta_.get_type();
+  int16_t in_scale = 0, in_precision = 0;
+  ObScale out_scale = expr.datum_meta_.scale_;
+  ObPrecision out_prec = expr.datum_meta_.precision_;
+  ObDecimalIntBuilder tmp_alloc;
+  ObDecimalInt *decint = nullptr;
+  int32_t int_bytes = 0;
+  // set default value
+  switch (get_decimalint_type(out_prec)) {
+  case common::DECIMAL_INT_32: {
+    SET_ZERO(int32_t);
+  }
+  case common::DECIMAL_INT_64: {
+    SET_ZERO(int64_t);
+  }
+  case common::DECIMAL_INT_128: {
+    SET_ZERO(int128_t);
+  }
+  case common::DECIMAL_INT_256: {
+    SET_ZERO(int256_t);
+  }
+  case common::DECIMAL_INT_512: {
+    SET_ZERO(int512_t);
+  }
+  default:
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected precision", K(out_prec));
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    if (ObHexStringType == in_type) {
+      uint64_t in_val = hex_to_uint64(in_str);
+      in_precision = ob_fast_digits10(in_val);
+      if (OB_FAIL(wide::from_integer(in_val, tmp_alloc, decint, int_bytes, in_precision))) {
+        LOG_WARN("from integer failed", K(in_val), K(ret));
+      } else {
+        in_scale = 0;
+      }
+    } else if (0 == in_str.length()) {
+      ret = OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD;
+    } else if (OB_FAIL(wide::from_string(in_str.ptr(), in_str.length(), tmp_alloc, in_scale,
+                                         in_precision, int_bytes, decint))) {
+      LOG_WARN("failed to parse string", K(ret));
+      if (OB_NUMERIC_OVERFLOW == ret && lib::is_mysql_mode()) {
+        // bug: 4263211. compatible with mysql behavior when value overflows type range.
+        // select cast('1e500' as decimal);  -> max_val
+        // select cast('-1e500' as decimal); -> min_val
+        int64_t i = 0;
+        while (i < in_str.length() && isspace(in_str[i])) { ++i; }
+        bool is_neg = (in_str[i] == '-');
+        const ObDecimalInt *limit_decint = nullptr;
+        if (is_neg) {
+          limit_decint = wide::ObDecimalIntConstValue::get_min_value(out_prec);
+          int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
+        } else {
+          limit_decint = wide::ObDecimalIntConstValue::get_max_value(out_prec);
+          int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(out_prec);
+        }
+        in_scale = out_scale;
+        in_precision = out_prec;
+        if (OB_ISNULL(limit_decint)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null decimal int", K(ret));
+        } else if (OB_ISNULL(decint = (ObDecimalInt *)tmp_alloc.alloc(int_bytes))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory", K(ret));
+        } else {
+          MEMCPY(decint, limit_decint, int_bytes);
+        }
+      }
+    }
+    int warning = ret;
+    ret = OB_SUCCESS;
+    if (decint != nullptr && int_bytes != 0) {
+      // Decimal int not null means a valid decimal int was parsed regardless of wether there's
+      // error or not.We then do scale and calculate res_datum as normal in order to be compatible
+      // with mysql.
+      // e.g.
+      //  OceanBase(root@test)>set sql_mode = '';
+      //  Query OK, 0 rows affected (0.00 sec)
+      //
+      //  OceanBase(root@test)>insert into t2 values ('1ab');
+      //  Query OK, 1 row affected (0.00 sec)
+      //
+      //  OceanBase(root@test)>select * from t2;
+      //  +-------+
+      //  | a     |
+      //  +-------+
+      //  | 1.000 |
+      //  +-------+
+      //  1 row in set (0.01 sec)
+      if (ObDatumCast::need_scale_decimalint(in_scale, in_precision, out_scale, out_prec)) {
+        if (OB_FAIL(ObDatumCast::common_scale_decimalint(decint, int_bytes, in_scale, out_scale,
+                                                         out_prec, expr.extra_, res_val,
+                                                         user_logging_ctx))) {
+          LOG_WARN("scale decimal int failed", K(ret));
+        }
+      } else {
+        res_val.from(decint, int_bytes);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const ObCastMode cast_mode = expr.extra_;
+      if (CAST_FAIL(warning)) {
+        LOG_WARN("string_decimalint failed", K(ret), K(in_type), K(cast_mode), K(in_str));
+      }
+    }
+  }
+  return ret;
+#undef SET_ZERO
+}
+
+int ObOdpsDataTypeCastUtil::common_string_decimalint_wrap(const ObExpr &expr, const ObString &in_str,
+                                                      const ObUserLoggingCtx *user_logging_ctx,
+                                                      ObDecimalIntBuilder &res_val)
+{// TODO: add cases
+#define SET_ZERO(int_type)                                                                         \
+  int_type v = 0;                                                                                  \
+  res_val.from(v);                                                                                 \
+  break
+
+  int ret = OB_SUCCESS;
+  ObObjType in_type = ObVarcharType;
   int16_t in_scale = 0, in_precision = 0;
   ObScale out_scale = expr.datum_meta_.scale_;
   ObPrecision out_prec = expr.datum_meta_.precision_;
@@ -1636,6 +1774,19 @@ static int common_string_string(const ObExpr &expr,
   return ret;
 }
 
+int ObOdpsDataTypeCastUtil::common_string_string_wrap(const ObExpr &expr,
+                                                const ObObjType in_type,
+                                                const ObCollationType in_cs_type,
+                                                const ObObjType out_type,
+                                                const ObCollationType out_cs_type,
+                                                const ObString &in_str,
+                                                ObEvalCtx &ctx,
+                                                ObDatum &res_datum,
+                                                bool& has_set_res)
+{
+  return common_string_string(expr, in_type, in_cs_type, out_type, out_cs_type, in_str, ctx, res_datum, has_set_res);
+}
+
 static int common_string_otimestamp(const ObExpr &expr,
                                     const ObString &in_str,
                                     ObEvalCtx &ctx,
@@ -1910,6 +2061,54 @@ static int common_string_text(const ObExpr &expr,
   ObObjType in_type = expr.args_[0]->datum_meta_.type_;
   ObObjType out_type = expr.datum_meta_.type_; // ObLongTextType
   ObCollationType in_cs_type = expr.args_[0]->datum_meta_.cs_type_;
+  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  ObString res_str = in_str;
+  bool is_final_res = false;
+  bool is_different_charset_type = (ObCharset::charset_type_by_coll(in_cs_type)
+                                    != ObCharset::charset_type_by_coll(out_cs_type));
+  OB_ASSERT(ob_is_text_tc(out_type));
+  if (is_different_charset_type) {
+    if (OB_FAIL(common_string_string(expr, in_type, in_cs_type, out_type,
+                                     out_cs_type, in_str, ctx, res_datum, is_final_res))) {
+      LOG_WARN("Lob: fail to cast string to longtext", K(ret), K(in_str), K(expr));
+    } else if (res_datum.is_null()) {
+      // only for blob cast to other types in oracle mode, in/out type/collation type must be different.
+      is_final_res = true;
+    } else if (is_final_res) {
+      // is_final_res = true; // hex to text
+    } else if (OB_FAIL(copy_datum_str_with_tmp_alloc(ctx, res_datum, res_str))) {
+      LOG_WARN("Lob: copy datum str with tmp alloc", K(ret));
+    } else { /* do nothing */ }
+  }
+
+  if (OB_SUCC(ret) && !is_final_res) {
+    ObTextStringDatumResult str_result(expr.datum_meta_.type_, &expr, &ctx, &res_datum);
+    if (lob_locator == NULL) {
+      if (OB_FAIL(str_result.init(res_str.length()))) {
+        LOG_WARN("Lob: init lob result failed");
+      } else if (OB_FAIL(str_result.append(res_str.ptr(), res_str.length()))) {
+        LOG_WARN("Lob: append lob result failed");
+      } else { /* do nothing */ }
+    } else if (OB_FAIL(str_result.copy(lob_locator))) {
+      LOG_WARN("Lob: copy lob result failed");
+    } else { /* do nothing*/ }
+    str_result.set_result();
+  }
+
+  string_lob_debug(in_type, in_cs_type, expr.obj_meta_.has_lob_header(), out_type, out_cs_type, res_str, res_datum, ret);
+  return ret;
+}
+
+int ObOdpsDataTypeCastUtil::common_string_text_wrap(const ObExpr &expr,
+                                              const ObString &in_str,
+                                              ObEvalCtx &ctx,
+                                              const ObLobLocatorV2 *lob_locator,
+                                              ObDatum &res_datum,
+                                              ObObjType &in_type,
+                                              ObCollationType &in_cs_type)
+{
+  int ret = OB_SUCCESS;
+  ObObjType out_type = expr.datum_meta_.type_; // ObLongTextType
   ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
   ObString res_str = in_str;
   bool is_final_res = false;

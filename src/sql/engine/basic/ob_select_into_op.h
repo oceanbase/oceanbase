@@ -17,6 +17,11 @@
 #include "lib/file/ob_file.h"
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
+#ifdef OB_BUILD_CPP_ODPS
+#include <odps/odps_tunnel.h>
+#include <odps/odps_api.h>
+#endif
 
 namespace oceanbase
 {
@@ -68,7 +73,10 @@ public:
       escaped_cht_(),
       parallel_(1),
       file_partition_expr_(NULL),
-      buffer_size_(DEFAULT_BUFFER_SIZE)
+      buffer_size_(DEFAULT_BUFFER_SIZE),
+      is_overwrite_(false),
+      external_properties_(alloc),
+      external_partition_(alloc)
   {
     cs_type_ = ObCharset::get_system_collation();
   }
@@ -89,6 +97,9 @@ public:
   int64_t parallel_;
   sql::ObExpr* file_partition_expr_;
   int64_t buffer_size_;
+  bool is_overwrite_;
+  ObExternalFileFormat::StringData external_properties_;
+  ObExternalFileFormat::StringData external_partition_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
   static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
 };
@@ -103,22 +114,36 @@ public:
   ObSelectIntoOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input),
       top_limit_cnt_(INT64_MAX),
-      file_appender_(),
       is_first_(true),
+      basic_url_(),
       device_handle_(NULL),
       file_location_(IntoFileLocation::SERVER_DISK),
       write_offset_(0),
-      write_bytes_(0),
-      split_file_id_(0),
+      data_writer_(NULL),
       char_enclose_(0),
       char_escape_(0),
       has_enclose_(false),
       has_escape_(false),
       has_lob_(false),
       has_json_(false),
-      is_file_opened_(false),
       print_params_(),
-      escape_printer_()
+      escape_printer_(),
+      do_partition_(false),
+      json_buf_(NULL),
+      json_buf_len_(0),
+      shared_buf_(NULL),
+      shared_buf_len_(0),
+      use_shared_buf_(false),
+      partition_map_(),
+      curr_partition_num_(0),
+      external_properties_(),
+      format_type_(ObExternalFileFormat::FormatType::CSV_FORMAT),
+#ifdef OB_BUILD_CPP_ODPS
+      upload_(NULL),
+      record_writer_(NULL),
+#endif
+      block_id_(0),
+      need_commit_(true)
   {
   }
 
@@ -181,20 +206,30 @@ public:
   {
   public:
     ObIOBufferWriter():
-      buf_(NULL), curr_pos_(0), last_line_pos_(0), buf_len_(0), curr_line_len_(0) {}
+      buf_(NULL),
+      buf_len_(0),
+      curr_pos_(0),
+      last_line_pos_(0),
+      curr_line_len_(0),
+      write_bytes_(0),
+      is_file_opened_(false),
+      file_appender_(),
+      fd_(),
+      split_file_id_(0),
+      url_()
+    {}
+    ~ObIOBufferWriter() {
+      file_appender_.~ObFileAppender();
+    }
     void init(char *buf, int64_t buf_len) {
       buf_ = buf;
       buf_len_ = buf_len;
     }
-    void init_json_buf(char *buf, int64_t buf_len) {
-      json_buf_ = buf;
-      json_buf_len_ = buf_len;
-    }
     template<typename flush_func>
     int flush(flush_func flush_data) {
       int ret = common::OB_SUCCESS;
-      if (last_line_pos_ > 0) {
-        if (OB_FAIL(flush_data(buf_, last_line_pos_))) {
+      if (last_line_pos_ > 0 && OB_NOT_NULL(buf_)) {
+        if (OB_FAIL(flush_data(buf_, last_line_pos_, this))) {
         } else {
           MEMCPY(buf_, buf_ + last_line_pos_, curr_pos_ - last_line_pos_);
           curr_pos_ = curr_pos_ - last_line_pos_;
@@ -203,37 +238,30 @@ public:
       }
       return ret;
     }
-    template<typename flush_func>
-    int flush_all_for_lob(flush_func flush_data) {
-      int ret = common::OB_SUCCESS;
-      if (curr_pos_ > 0) {
-        if (OB_FAIL(flush_data(buf_, curr_pos_))) {
-        } else {
-          curr_line_len_ += (curr_pos_ - last_line_pos_);
-          curr_pos_ = 0;
-          last_line_pos_ = 0;
-        }
-      }
-      return ret;
-    }
     char *get_buf() { return buf_; }
     int64_t get_buf_len() { return buf_len_; }
-    char *get_json_buf() { return json_buf_; }
-    int64_t get_json_buf_len() { return json_buf_len_; }
     int64_t get_curr_pos() { return curr_pos_; }
     int64_t get_last_line_pos() { return last_line_pos_; }
     int64_t get_curr_line_len() {return curr_line_len_; }
+    int64_t get_write_bytes() { return write_bytes_; }
     void set_curr_pos(int64_t curr_pos) { curr_pos_ = curr_pos; }
     void update_last_line_pos() { last_line_pos_ = curr_pos_; }
-    void reset_curr_line_len() {curr_line_len_ = 0; }
+    void reset_curr_line_len() { curr_line_len_ = 0; }
+    void increase_curr_line_len() { curr_line_len_ += (curr_pos_ - last_line_pos_); }
+    void set_write_bytes(int64_t write_bytes) { write_bytes_ = write_bytes; }
   private:
     char *buf_;
+    int64_t buf_len_;
     int64_t curr_pos_;
     int64_t last_line_pos_;
-    int64_t buf_len_;
     int64_t curr_line_len_;
-    char *json_buf_;  //json需要多一个buffer用来放转义前的string
-    int64_t json_buf_len_;
+    int64_t write_bytes_;
+  public:
+    bool is_file_opened_;
+    ObFileAppender file_appender_;
+    ObIOFd fd_;
+    int64_t split_file_id_;
+    ObString url_;
   };
 
   virtual int inner_open() override;
@@ -242,24 +270,34 @@ public:
   virtual int inner_get_next_row() override;
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   virtual void destroy() override;
-  void reset()
-  {
-    is_first_ = true;
-    file_appender_.close();
-    device_handle_ = NULL;
-    file_location_ = IntoFileLocation::SERVER_DISK;
-    write_offset_ = 0;
-    write_bytes_ = 0;
-    split_file_id_ = 0;
-    data_writer_.init(NULL, 0);
-    is_file_opened_ = false;
-  }
 
 private:
+  int init_csv_env();
+#ifdef OB_BUILD_CPP_ODPS
+  int init_odps_tunnel();
+  int into_odps();
+  int into_odps_batch(const ObBatchRows &brs);
+  int odps_commit_upload();
+  int set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableRecord &table_record,
+                                  const ObDatum &datum,
+                                  const ObDatumMeta &datum_meta,
+                                  const ObObjMeta &obj_meta,
+                                  uint32_t col_idx);
+  int set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRecord &table_record,
+                                   const ObDatum &datum,
+                                   const ObDatumMeta &datum_meta,
+                                   const ObObjMeta &obj_meta,
+                                   uint32_t col_idx);
+#endif
+  int decimal_or_number_to_int64(const ObDatum &datum, const ObDatumMeta &datum_meta, int64_t &res);
+  int decimal_to_string(const ObDatum &datum,
+                        const ObDatumMeta &datum_meta,
+                        std::string &res,
+                        ObIAllocator &allocator);
   int get_row_str(const int64_t buf_len, bool is_first_row, char *buf, int64_t &pos);
-  int into_dumpfile();
-  int into_outfile();
-  int into_outfile_batch(const ObBatchRows &brs);
+  int into_dumpfile(ObIOBufferWriter *data_writer);
+  int into_outfile(ObIOBufferWriter *data_writer);
+  int into_outfile_batch(const ObBatchRows &brs, ObIOBufferWriter *data_writer);
   int extract_fisrt_wchar_from_varhcar(const ObObj &obj, int32_t &wchar);
   int print_wchar_to_buf(char *buf,
                          const int64_t buf_len,
@@ -267,55 +305,116 @@ private:
                          int32_t wchar,
                          ObString &str,
                          ObCollationType coll_type);
-  int print_field(const ObObj &obj);
-  int print_lob_field(const ObObj &obj, const ObExpr &expr, const ObDatum &datum);
-  void get_buf(char* &buf, int64_t &buf_len, int64_t &pos, bool is_json = false);
-  int flush_buf(int64_t &pos);
-  int resize_buf(char* &buf, int64_t &buf_len, int64_t &pos, bool is_json = false);
-  int write_obj_to_file(const ObObj &obj, bool need_escape = false);
-  int print_normal_obj_without_escape(const ObObj &obj,
-                                      char* &buf,
-                                      int64_t &buf_len,
-                                      int64_t &pos,
-                                      bool is_json = false);
-  int write_single_char_to_file(const char *wchar);
-  int write_lob_to_file(const ObObj &obj, const ObExpr &expr, const ObDatum &datum);
-  int try_split_file();
+  int print_field(const ObObj &obj, ObIOBufferWriter &data_writer);
+  int print_lob_field(const ObObj &obj,
+                      const ObExpr &expr,
+                      const ObDatum &datum,
+                      ObIOBufferWriter &data_writer);
+  int get_buf(char* &buf, int64_t &buf_len, int64_t &pos, ObIOBufferWriter &data_writer);
+  int flush_buf(ObIOBufferWriter &data_writer);
+  int use_shared_buf(ObIOBufferWriter &data_writer, char* &buf, int64_t &buf_len, int64_t &pos);
+  template<typename flush_func>
+  int flush_shared_buf(ObIOBufferWriter &data_writer, flush_func flush_data, bool continue_use_shared_buf = false) {
+    int ret = common::OB_SUCCESS;
+    if (data_writer.get_curr_pos() > 0 && use_shared_buf_) {
+      if (OB_FAIL(flush_data(shared_buf_, data_writer.get_curr_pos(), &data_writer))) {
+      } else {
+        if (has_lob_) {
+          data_writer.increase_curr_line_len();
+        }
+        data_writer.set_curr_pos(0);
+        data_writer.update_last_line_pos();
+        use_shared_buf_ = continue_use_shared_buf;
+      }
+    }
+    return ret;
+  }
+  int resize_buf(char* &buf,
+                 int64_t &buf_len,
+                 int64_t &pos,
+                 int64_t curr_pos,
+                 bool is_json = false);
+  int resize_or_flush_shared_buf(ObIOBufferWriter &data_writer,
+                                 char* &buf,
+                                 int64_t &buf_len,
+                                 int64_t &pos);
+  int check_buf_sufficient(ObIOBufferWriter &data_writer,
+                           char* &buf,
+                           int64_t &buf_len,
+                           int64_t &pos,
+                           int64_t str_len);
+  int write_obj_to_file(const ObObj &obj, ObIOBufferWriter &data_writer, bool need_escape = false);
+  int print_str_or_json_with_escape(const ObObj &obj, ObIOBufferWriter &data_writer);
+  int print_normal_obj_without_escape(const ObObj &obj, ObIOBufferWriter &data_writer);
+  int print_json_to_json_buf(const ObObj &obj,
+                             char* &buf,
+                             int64_t &buf_len,
+                             int64_t &pos,
+                             ObIOBufferWriter &data_writer);
+  int write_single_char_to_file(const char *wchar, ObIOBufferWriter &data_writer);
+  int write_lob_to_file(const ObObj &obj,
+                        const ObExpr &expr,
+                        const ObDatum &datum,
+                        ObIOBufferWriter &data_writer);
   int into_varlist();
-  int open_file();
-  int calc_next_file_path();
+  int open_file(ObIOBufferWriter &data_writer);
+  int calc_next_file_path(ObIOBufferWriter &data_writer);
   int calc_first_file_path(ObString &path);
-  int split_file();
-  void close_file();
-  std::function<int(const char *, int64_t)> get_flush_function();
+  int calc_file_path_with_partition(ObString partition, ObIOBufferWriter &data_writer);
+  int try_split_file(ObIOBufferWriter &data_writer);
+  int split_file(ObIOBufferWriter &data_writer);
+  void close_file(ObIOBufferWriter &data_writer);
+  std::function<int(const char *, int64_t, ObIOBufferWriter *)> get_flush_function();
   int prepare_escape_printer();
   int check_has_lob_or_json();
+  int create_shared_buffer_for_data_writer();
+  int create_the_only_data_writer(ObIOBufferWriter *&data_writer);
+  int check_secure_file_path(ObString file_name);
+  int get_data_writer_for_partition(ObDatum *partition_datum, ObIOBufferWriter *&data_writer);
+  char *get_json_buf() { return json_buf_; }
+  int64_t get_json_buf_len() { return json_buf_len_; }
+  char *get_shared_buf() { return shared_buf_; }
+  int64_t get_shared_buf_len() { return shared_buf_len_; }
 
 private:
   int64_t top_limit_cnt_;
-  ObFileAppender file_appender_;
   bool is_first_;
   ObObj field_str_;
   ObObj line_str_;
   ObObj file_name_;
-  ObString url_;
+  ObString basic_url_; // url without partition expr
   share::ObBackupStorageInfo access_info_;
   ObIODevice* device_handle_;
-  ObIOFd fd_;
   IntoFileLocation file_location_;
   int64_t write_offset_;
-  int64_t write_bytes_;
-  int64_t split_file_id_;
-  ObIOBufferWriter data_writer_;
+  ObIOBufferWriter* data_writer_;
   char char_enclose_;
   char char_escape_;
   bool has_enclose_;
   bool has_escape_;
   bool has_lob_;
   bool has_json_;
-  bool is_file_opened_;
   common::ObObjPrintParams print_params_;
   ObEscapePrinter escape_printer_;
+  bool do_partition_;
+  char *json_buf_;  //json需要多一个buffer用来放转义前的string
+  int64_t json_buf_len_;
+  char *shared_buf_;
+  int64_t shared_buf_len_;
+  bool use_shared_buf_;
+  typedef common::hash::ObHashMap<common::ObString, ObIOBufferWriter*, hash::NoPthreadDefendMode> ObPartitionWriterMap;
+  ObPartitionWriterMap partition_map_;
+  int curr_partition_num_;
+  ObExternalFileFormat external_properties_;
+  ObExternalFileFormat::FormatType format_type_;
+#ifdef OB_BUILD_CPP_ODPS
+  apsara::odps::sdk::IUploadPtr upload_;
+  apsara::odps::sdk::IRecordWriterPtr record_writer_;
+#endif
+  uint32_t block_id_;
+  bool need_commit_;
+  static const int64_t SHARED_BUFFER_SIZE = 2LL * 1024 * 1024;
+  static const int64_t MAX_OSS_FILE_SIZE = 5LL * 1024 * 1024 * 1024;
 };
 
 

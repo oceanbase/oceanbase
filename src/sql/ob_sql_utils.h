@@ -707,6 +707,7 @@ public:
   static int64_t combine_server_id(int64_t ts, uint64_t server_id) {
     return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
   }
+  static int extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list);
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
 

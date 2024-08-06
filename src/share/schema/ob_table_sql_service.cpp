@@ -2972,6 +2972,7 @@ int ObTableSqlService::gen_table_dml(
                          && (table.is_external_table()
                              || !table.get_external_file_location().empty()
                              || !table.get_external_file_format().empty()
+                             || !table.get_external_properties().empty()
                              || !table.get_external_file_location_access_info().empty()
                              || !table.get_external_file_pattern().empty()))) {
     ret = OB_NOT_SUPPORTED;
@@ -3147,6 +3148,8 @@ int ObTableSqlService::gen_table_dml(
             && OB_FAIL(dml.add_column("column_store", table.is_column_store_supported())))
         || ((data_version >= DATA_VERSION_4_3_2_0 || (data_version < DATA_VERSION_4_3_0_0 && data_version >= MOCK_DATA_VERSION_4_2_3_0))
             && OB_FAIL(dml.add_column("auto_increment_cache_size", table.get_auto_increment_cache_size())))
+        || (data_version >= DATA_VERSION_4_3_2_1 &&
+            OB_FAIL(dml.add_column("external_properties", ObHexEscapeSqlStr(table.get_external_properties()))))
         ) {
       LOG_WARN("add column failed", K(ret));
     }

@@ -91,6 +91,8 @@ int ObCreateTableStmt::get_first_stmt(ObString &first_stmt)
     if (OB_ISNULL(get_query_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("query ctx is null", K(ret));
+    } else if (first_stmt.empty() && EXTERNAL_TABLE == get_table_type()) {
+      //do nothing
     } else if (OB_FAIL(ObCharset::charset_convert(allocator_,
                                                   first_stmt,
                                                   get_query_ctx()->get_sql_stmt_coll_type(),

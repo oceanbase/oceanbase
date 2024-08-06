@@ -196,6 +196,7 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     temp_file.file_id_ = other_file.file_id_;
     temp_file.part_id_ = other_file.part_id_;
     temp_file.file_addr_ = other_file.file_addr_;
+    temp_file.file_size_ = other_file.file_size_;
     if (OB_FAIL(ob_write_string(allocator_, other_file.file_url_, temp_file.file_url_))) {
       LOG_WARN("fail to write string", K(ret));
     } else if (OB_FAIL(access_external_table_files_.push_back(temp_file))) {

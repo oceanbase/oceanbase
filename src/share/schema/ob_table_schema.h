@@ -1249,6 +1249,7 @@ public:
   int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
   int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
+  int set_external_properties(const common::ObString &format) { return deep_copy_str(format, external_properties_); }
   void set_external_table_auto_refresh(const int64_t flag) { table_flags_ |= (flag << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET); }
   inline void set_user_specified_partition_for_external_table() { table_flags_ |= EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG; }
   template<typename ColumnType>
@@ -1392,6 +1393,7 @@ public:
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
   const ObString &get_external_file_format() const { return external_file_format_; }
   const ObString &get_external_file_pattern() const { return external_file_pattern_; }
+  const ObString &get_external_properties() const { return external_properties_; }
   int64_t get_external_table_auto_refresh() const { return (table_flags_ >> EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET) & ((1 << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_BITS) - 1); }
   bool is_external_table_immediate_refresh() const { return get_external_table_auto_refresh() == 1; }
   bool is_external_table_interval_refresh() const { return get_external_table_auto_refresh() == 2; }
@@ -1402,6 +1404,7 @@ public:
   inline ObNameGeneratedType get_name_generated_type() const { return name_generated_type_; }
   bool is_sys_generated_name(bool check_unknown) const;
   inline bool is_user_specified_partition_for_external_table() const { return (table_flags_ & EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG) != 0; }
+  inline bool is_odps_external_table() const { return !external_properties_.empty(); }
   inline bool is_index_visible() const
   {
     return 0 == (index_attributes_set_ & ((uint64_t)(1) << INDEX_VISIBILITY));
@@ -1970,6 +1973,7 @@ protected:
   common::ObString external_file_location_;
   common::ObString external_file_location_access_info_;
   common::ObString external_file_pattern_;
+  common::ObString external_properties_;
 
   // table ttl
   common::ObString ttl_definition_;

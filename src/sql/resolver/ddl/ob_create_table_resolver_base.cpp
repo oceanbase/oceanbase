@@ -396,12 +396,12 @@ int ObCreateTableResolverBase::set_table_option_to_schema(ObTableSchema &table_s
         table_schema.set_lob_inrow_threshold(lob_inrow_threshold_);
       }
     }
-
     if (OB_SUCC(ret) && table_schema.is_external_table()) {
-      if (table_schema.get_external_file_format().empty()
-          || table_schema.get_external_file_location().empty()) {
+      if ((table_schema.get_external_file_format().empty()
+          || table_schema.get_external_file_location().empty()) &&
+           table_schema.get_external_properties().empty()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default format or location option for external table");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Default properties or format or location option for external table");
       }
     }
     if (OB_SUCC(ret) && auto_increment_cache_size_ != 0) {

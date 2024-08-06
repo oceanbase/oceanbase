@@ -7592,46 +7592,52 @@ int ObDMLResolver::resolve_partitions(const ParseNode *part_node,
   int ret = OB_SUCCESS;
   if (NULL != part_node) {
     OB_ASSERT(1 == part_node->num_child_ && part_node->children_[0]->num_child_ > 0);
-    const ParseNode *name_list = part_node->children_[0];
-    ObString partition_name;
-    ObSEArray<ObObjectID, 4> part_ids;
-    ObSEArray<ObString, 4> part_names;
-    for (int i = 0; OB_SUCC(ret) && i < name_list->num_child_; i++) {
-      ObSEArray<ObObjectID, 16> partition_ids;
-      partition_name.assign_ptr(name_list->children_[i]->str_value_,
-                                static_cast<int32_t>(name_list->children_[i]->str_len_));
-      //here just conver partition_name to its lowercase
-      ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, partition_name);
-      ObPartGetter part_getter(table_schema);
-      if (T_USE_PARTITION == part_node->type_) {
-        if (OB_FAIL(part_getter.get_part_ids(partition_name, partition_ids))) {
-          LOG_WARN("failed to get part ids", K(ret), K(partition_name));
-          if (OB_UNKNOWN_PARTITION == ret && lib::is_mysql_mode()) {
-            LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
-                          table_schema.get_table_name_str().length(),
-                          table_schema.get_table_name_str().ptr());
+    if (T_NAME_LIST == part_node->children_[0]->type_) {
+      const ParseNode *name_list = part_node->children_[0];
+      ObString partition_name;
+      ObSEArray<ObObjectID, 4> part_ids;
+      ObSEArray<ObString, 4> part_names;
+      for (int i = 0; OB_SUCC(ret) && i < name_list->num_child_; i++) {
+        ObSEArray<ObObjectID, 16> partition_ids;
+        partition_name.assign_ptr(name_list->children_[i]->str_value_,
+                                  static_cast<int32_t>(name_list->children_[i]->str_len_));
+        //here just conver partition_name to its lowercase
+        ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, partition_name);
+        ObPartGetter part_getter(table_schema);
+        if (T_USE_PARTITION == part_node->type_) {
+          if (OB_FAIL(part_getter.get_part_ids(partition_name, partition_ids))) {
+            LOG_WARN("failed to get part ids", K(ret), K(partition_name));
+            if (OB_UNKNOWN_PARTITION == ret && lib::is_mysql_mode()) {
+              LOG_USER_ERROR(OB_UNKNOWN_PARTITION, partition_name.length(), partition_name.ptr(),
+                            table_schema.get_table_name_str().length(),
+                            table_schema.get_table_name_str().ptr());
+            }
+          }
+        } else if (OB_FAIL(part_getter.get_subpart_ids(partition_name, partition_ids))) {
+          LOG_WARN("failed to get subpart ids", K(ret), K(partition_name));
+        }
+
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(append_array_no_dup(part_ids, partition_ids))) {
+            LOG_WARN("Push partition id error", K(ret));
+          } else if (OB_FAIL(part_names.push_back(partition_name))) {
+            LOG_WARN("failed to push back partition name", K(ret));
+          } else {
+            LOG_INFO("part ids", K(partition_name), K(partition_ids));
           }
         }
-      } else if (OB_FAIL(part_getter.get_subpart_ids(partition_name, partition_ids))) {
-        LOG_WARN("failed to get subpart ids", K(ret), K(partition_name));
       }
-
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(append_array_no_dup(part_ids, partition_ids))) {
-          LOG_WARN("Push partition id error", K(ret));
-        } else if (OB_FAIL(part_names.push_back(partition_name))) {
-          LOG_WARN("failed to push back partition name", K(ret));
-        } else {
-          LOG_INFO("part ids", K(partition_name), K(partition_ids));
+        if (OB_FAIL(table_item.part_ids_.assign(part_ids))) {
+          LOG_WARN("failed to assign part ids", K(ret));
+        } else if (OB_FAIL(table_item.part_names_.assign(part_names))) {
+          LOG_WARN("failed to assign part names", K(ret));
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(table_item.part_ids_.assign(part_ids))) {
-        LOG_WARN("failed to assign part ids", K(ret));
-      } else if (OB_FAIL(table_item.part_names_.assign(part_names))) {
-        LOG_WARN("failed to assign part names", K(ret));
-      }
+    } else if (schema::EXTERNAL_TABLE == table_item.table_type_
+               && T_EXTERNAL_TABLE_PARTITION == part_node->children_[0]->type_) {
+      table_item.external_table_partition_.assign_ptr(part_node->children_[0]->str_value_,
+                                                      part_node->children_[0]->str_len_);
     }
   }
   return ret;
@@ -8211,7 +8217,10 @@ int ObDMLResolver::resolve_external_table_generated_column(
     }
   } else {
     ObExternalFileFormat format;
-    if (OB_FAIL(format.load_from_string(table_schema->get_external_file_format(), *params_.allocator_))) {
+    const ObString &format_or_properties = table_schema->get_external_file_format().empty() ?
+                                            table_schema->get_external_properties() :
+                                            table_schema->get_external_file_format();
+    if (OB_FAIL(format.load_from_string(format_or_properties, *params_.allocator_))) {
       LOG_WARN("load from string failed", K(ret));
     } else if (format.format_type_ != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
       ret = OB_WRONG_COLUMN_NAME;
@@ -8226,6 +8235,19 @@ int ObDMLResolver::resolve_external_table_generated_column(
                                         table_item.table_id_, table_item.table_name_,
                                         col.col_name_, file_column_idx,
                                         real_ref_expr, format))) {
+          LOG_WARN("fail to build external table file column expr", K(ret));
+        }
+      }
+    } else if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+      if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
+        LOG_WARN("fail to calc file column idx", K(ret));
+      } else if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
+                              pseudo_external_file_col_exprs_, table_item.table_id_, file_column_idx, col.col_name_))) {
+        if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_odps(
+                                        *params_.expr_factory_, *params_.session_info_,
+                                        table_item.table_id_, table_item.table_name_,
+                                        col.col_name_, file_column_idx, column_schema,
+                                        real_ref_expr))) {
           LOG_WARN("fail to build external table file column expr", K(ret));
         }
       }

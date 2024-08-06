@@ -74,6 +74,10 @@ protected:
   int candi_allocate_pdml_insert(OSGShareInfo *osg_info);
   int candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info);
 
+  /** @brief Allocate SELECTINTO on top of plan candidates when insert into external table*/
+  int candi_allocate_select_into_for_insert();
+  int allocate_select_into_as_top_for_insert(ObLogicalOperator *&old_top);
+
   int get_osg_type(bool is_multi_part_dml,
                    ObShardingInfo *insert_table_sharding,
                    int64_t distributed_method,

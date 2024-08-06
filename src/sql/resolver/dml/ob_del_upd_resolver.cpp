@@ -25,6 +25,7 @@
 #include "pl/ob_pl_resolver.h"
 #include "sql/parser/parse_malloc.h"
 #include "sql/resolver/dml/ob_merge_resolver.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
 {
@@ -1847,6 +1848,8 @@ int ObDelUpdResolver::add_all_columns_to_stmt(const TableItem &table_item,
       if (OB_ISNULL(column)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid column schema", K(column));
+      } else if (schema::EXTERNAL_TABLE == base_table_item.table_type_
+                 && ObExternalTableUtils::is_skipped_insert_column(*column)) {
       } else if (OB_FAIL(add_column_to_stmt(table_item, *column, column_exprs))) {
         LOG_WARN("add column item to stmt failed", K(ret));
       }
@@ -1944,6 +1947,11 @@ int ObDelUpdResolver::add_all_rowkey_columns_to_stmt(const TableItem &table_item
         LOG_WARN("get rowkey info failed", K(ret), K(i), K(rowkey_info));
       } else if (OB_FAIL(get_column_schema(base_table_item.ref_id_, rowkey_column_id, column_schema, true, base_table_item.is_link_table()))) {
         LOG_WARN("get column schema failed", K(rowkey_column_id));
+      } else if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid column schema", K(column_schema));
+      } else if (schema::EXTERNAL_TABLE == base_table_item.table_type_
+                 && ObExternalTableUtils::is_skipped_insert_column(*column_schema)) {
       } else if (OB_FAIL(add_column_to_stmt(table_item, *column_schema, column_exprs))) {
         LOG_WARN("add column to stmt failed", K(ret), K(table_item));
       }
@@ -3204,6 +3212,7 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
   int ret = OB_SUCCESS;
   TableItem *table_item = NULL;
   ObDelUpdStmt *del_upd_stmt = get_del_upd_stmt();
+  bool is_ext_part_column = false;
   if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid insert stmt", K(del_upd_stmt), K_(session_info), K_(schema_checker));
@@ -3258,6 +3267,13 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
       } else if (!session_info_->get_ddl_info().is_ddl() && OB_HIDDEN_SESS_CREATE_TIME_COLUMN_ID == column_expr->get_column_id()) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "specify __sess_create_time value");
+      } else if (schema::EXTERNAL_TABLE == table_item->table_type_
+                 && OB_FAIL(is_external_table_partition_column(*table_item, column_expr->get_column_id(), is_ext_part_column))) {
+        LOG_WARN("failed to check external table column", K(ret));
+      } else if (is_ext_part_column) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("column list should not contain external table partition column", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "contain external table partition column in insert column list");
       } else if (OB_FAIL(mock_values_column_ref(column_expr))) {
         LOG_WARN("mock values column reference failed", K(ret));
       }
@@ -3299,7 +3315,10 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
         } else if (is_duplicate) {
           ret = OB_ERR_FIELD_SPECIFIED_TWICE;
           LOG_USER_ERROR(OB_ERR_FIELD_SPECIFIED_TWICE, to_cstring(column_items.at(i).column_name_));
-        } else if (OB_FAIL(mock_values_column_ref(column_items.at(i).expr_))) {
+        } else if (schema::EXTERNAL_TABLE == table_item->table_type_
+                   && OB_FAIL(is_external_table_partition_column(*table_item, column_id, is_ext_part_column))) {
+          LOG_WARN("failed to check external table column", K(ret));
+        } else if (!is_ext_part_column && OB_FAIL(mock_values_column_ref(column_items.at(i).expr_))) {
           LOG_WARN("mock values column reference failed", K(ret));
         }
       }
@@ -3333,7 +3352,31 @@ int ObDelUpdResolver::resolve_insert_columns(const ParseNode *node,
   }
   return ret;
 }
-
+int ObDelUpdResolver::is_external_table_partition_column(const TableItem &table_item,
+                                                         uint64_t column_id,
+                                                         bool &is_part_column)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema* table_schema = NULL;
+  const ObColumnSchemaV2 *column_schema = NULL;
+  is_part_column = false;
+  if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                       table_item.ref_id_,
+                                                       table_schema,
+                                                       table_item.is_link_table()))) {
+    LOG_WARN("fail to get table schema", K(ret), K(table_item.ref_id_));
+  } else if (OB_ISNULL(table_schema)
+             || OB_ISNULL(column_schema = table_schema->get_column_schema(column_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column schema is null", K(ret));
+  } else {
+    is_part_column = column_schema->is_tbl_part_key_column();
+  }
+  return ret;
+}
 int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
                                             ObInsertTableInfo& table_info,
                                             ObIArray<uint64_t> &label_se_columns)
@@ -3345,6 +3388,7 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
   uint64_t value_count = OB_INVALID_ID;
   bool is_all_default = false;
   bool is_update_view = false;
+  TableItem* table_item = NULL;
   if (OB_ISNULL(del_upd_stmt) || OB_ISNULL(node) || OB_ISNULL(session_info_) ||
       T_VALUE_LIST != node->type_ || OB_ISNULL(node->children_) || OB_ISNULL(del_upd_stmt->get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
@@ -3365,7 +3409,6 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
     LOG_WARN("reserve memory fail", K(ret));
   }
   if (OB_SUCC(ret)) {
-    TableItem* table_item = NULL;
     if (OB_FAIL(check_need_match_all_params(table_info.values_desc_,
                                             del_upd_stmt->get_query_ctx()->need_match_all_params_))) {
       LOG_WARN("check need match all params failed", K(ret));
@@ -3480,7 +3523,7 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
             } else if (OB_FAIL(check_basic_column_generated(column_expr, del_upd_stmt,
                                                             is_generated_column))) {
               LOG_WARN("check column generated failed", K(ret));
-            } else if (is_generated_column) {
+            } else if (is_generated_column && schema::EXTERNAL_TABLE != table_item->table_type_) {
               ret = OB_NON_DEFAULT_VALUE_FOR_GENERATED_COLUMN;
               if (!is_oracle_mode()) {
                 ColumnItem *orig_col_item = NULL;

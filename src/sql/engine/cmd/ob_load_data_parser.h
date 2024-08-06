@@ -30,6 +30,55 @@ namespace sql
 {
 class ObDataInFileStruct;
 
+struct ObODPSGeneralFormat {
+  ObODPSGeneralFormat() :
+    access_type_(),
+    access_id_(),
+    access_key_(),
+    sts_token_(),
+    endpoint_(),
+    project_(),
+    schema_(),
+    table_(),
+    quota_(),
+    compression_code_()
+  {}
+  int deep_copy_str(const ObString &src,
+                    ObString &dest);
+  int deep_copy(const ObODPSGeneralFormat &src);
+  int encrypt_str(common::ObString &src, common::ObString &dst);
+  int decrypt_str(common::ObString &src, common::ObString &dst);
+  int encrypt();
+  int decrypt();
+  static constexpr const char *OPTION_NAMES[] = {
+    "ACCESSTYPE",
+    "ACCESSID",
+    "ACCESSKEY",
+    "STSTOKEN",
+    "ENDPOINT",
+    "PROJECT_NAME",
+    "SCHEMA_NAME",
+    "TABLE_NAME",
+    "QUOTA_NAME",
+    "COMPRESSION_CODE",
+  };
+  common::ObString access_type_;
+  common::ObString access_id_;
+  common::ObString access_key_;
+  common::ObString sts_token_;
+  common::ObString endpoint_;
+  common::ObString project_;
+  common::ObString schema_;
+  common::ObString table_;
+  common::ObString quota_;
+  common::ObString compression_code_;
+  common::ObArenaAllocator arena_alloc_;
+  int64_t to_json_kv_string(char* buf, const int64_t buf_len) const;
+  int load_from_json_data(json::Pair *&node, common::ObIAllocator &allocator);
+  TO_STRING_KV(K_(access_type), K_(access_id), K_(access_key), K_(sts_token), K_(endpoint), K_(project), K_(schema), K_(table), K_(quota), K_(compression_code));
+  OB_UNIS_VERSION(1);
+};
+
 struct ObCSVGeneralFormat {
   ObCSVGeneralFormat () :
     line_start_str_(),
@@ -501,6 +550,7 @@ struct ObExternalFileFormat
     INVALID_FORMAT = -1,
     CSV_FORMAT,
     PARQUET_FORMAT,
+    ODPS_FORMAT,
     MAX_FORMAT
   };
 
@@ -518,6 +568,7 @@ struct ObExternalFileFormat
   ObOriginFileFormat origin_file_format_str_;
   FormatType format_type_;
   sql::ObCSVGeneralFormat csv_format_;
+  sql::ObODPSGeneralFormat odps_format_;
   uint64_t options_;
 
   static const char *FORMAT_TYPE_STR[];

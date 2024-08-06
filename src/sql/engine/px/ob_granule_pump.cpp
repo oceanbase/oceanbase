@@ -643,6 +643,34 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args)
                                        random_type,
                                        partition_granule))) {
       LOG_WARN("failed to prepare random gi task", K(ret), K(partition_granule));
+    } else if (OB_FAIL(init_external_odps_table_downloader(args))) {
+      LOG_WARN("failed to init external odps table downloader", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObGranulePump::init_external_odps_table_downloader(ObGranulePumpArgs &args)
+{
+  int ret = OB_SUCCESS;
+  const ObTableScanSpec *tsc = NULL;
+  sql::ObExternalFileFormat external_odps_format;
+  if (!args.external_table_files_.empty() &&
+      0 == args.external_table_files_.at(0).file_id_) { //file_id_ == 0 means it's a external odps table
+    ObIArray<const ObTableScanSpec *> &scan_ops = args.op_info_.get_scan_ops();
+    if (scan_ops.empty() || scan_ops.count() != gi_task_array_map_.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid scan ops and gi task array result", K(ret), K(scan_ops.count()), K(gi_task_array_map_.count()));
+    } else if (OB_ISNULL(tsc = scan_ops.at(0))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret));
+#ifdef OB_BUILD_CPP_ODPS
+    } else if (OB_FAIL(odps_partition_downloader_mgr_.init_downloader(args.external_table_files_,
+                                                 tsc->tsc_ctdef_.scan_ctdef_.external_file_format_str_.str_))) {
+      LOG_WARN("init odps_partition_downloader_mgr_ failed", K(ret), K(args.external_table_files_.count()));
+#endif
+    } else {
+      LOG_TRACE("succ to init odps table partition downloader", K(ret));
     }
   }
   return ret;
@@ -693,6 +721,9 @@ void ObGranulePump::destroy()
 {
   gi_task_array_map_.reset();
   pump_args_.reset();
+#ifdef OB_BUILD_CPP_ODPS
+  odps_partition_downloader_mgr_.reset();
+#endif
 }
 
 void ObGranulePump::reset_task_array()
@@ -805,6 +836,8 @@ int ObGranuleSplitter::split_gi_task(ObGranulePumpArgs &args,
                                                    K(ss_ranges),
                                                    K(taskset_idxs),
                                                    K(random_type));
+    } else {
+
     }
   }
   return ret;
@@ -997,8 +1030,6 @@ int ObRandomGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       } else {
         gi_task_array_result.at(idx).tsc_op_id_ = op_id;
       }
-      LOG_TRACE("random granule split a task_array",
-        K(op_id), K(scan_key_id), K(taskset_array), K(ret), K(scan_ops.count()));
     }
   }
   return ret;
@@ -1592,7 +1623,6 @@ int ObGranulePump::init_arg(
   for (int i = 0; OB_SUCC(ret) && i < partitions_info.count(); ++i) {
     OZ(arg.partitions_info_.push_back(partitions_info.at(i)));
   }
-
   OZ(arg.external_table_files_.assign(external_table_files));
 
   if (OB_SUCC(ret)) {

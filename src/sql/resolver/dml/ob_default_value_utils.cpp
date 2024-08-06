@@ -1104,12 +1104,19 @@ int ObDefaultValueUtils::build_nullable_expr(const ColumnItem *column, ObRawExpr
 int ObDefaultValueUtils::build_default_expr_for_generated_column(const ColumnItem &column, ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(column.expr_) || OB_ISNULL(stmt_) || OB_ISNULL(params_) || OB_ISNULL(params_->expr_factory_)) {
+  bool contain = false;
+  if (OB_ISNULL(column.expr_) || OB_ISNULL(stmt_) || OB_ISNULL(params_)
+      || OB_ISNULL(params_->expr_factory_) || OB_ISNULL(column.expr_->get_dependant_expr())) {
     ret = OB_NOT_INIT;
     LOG_WARN("column expr is null", K_(column.expr), K_(stmt));
-  } else if (OB_FAIL(ObDMLResolver::copy_schema_expr(*params_->expr_factory_,
-                                                     column.expr_->get_dependant_expr(),
-                                                     expr))) {
+  } else if (OB_FAIL(ObResolverUtils::cnt_external_pseudo_column(*column.expr_->get_dependant_expr(), contain))) {
+    LOG_WARN("failed to check if contain external pseudo column", K(ret));
+    // 外表生成列包含伪列  默认值为null
+  } else if (contain && OB_FAIL(ObRawExprUtils::build_null_expr(*params_->expr_factory_, expr))) {
+    LOG_WARN("fail to build null expr", K(ret));
+  } else if (!contain && OB_FAIL(ObDMLResolver::copy_schema_expr(*params_->expr_factory_,
+                                                                 column.expr_->get_dependant_expr(),
+                                                                 expr))) {
     LOG_WARN("failed to copy dependant expr", K(ret));
   }
   return ret;

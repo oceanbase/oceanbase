@@ -621,13 +621,14 @@ int ObCreateTableExecutor::execute(ObExecContext &ctx, ObCreateTableStmt &stmt)
               table_schema.get_external_file_location(),
               table_schema.get_external_file_location_access_info(),
               table_schema.get_external_file_pattern(),
+              table_schema.get_external_properties(),
+              table_schema.is_partitioned_table(),
               regexp_vars,
               ctx.get_allocator(),
               tmp,
               file_urls,
               file_sizes));
   }
-
   if (OB_FAIL(ret)) {
   } else {
     create_table_arg.is_inner_ = my_session->is_inner();
@@ -1025,7 +1026,10 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
                   arg.alter_table_schema_.get_table_id(),
                   arg.alter_table_schema_.get_external_file_location(),
                   arg.alter_table_schema_.get_external_file_location_access_info(),
-                  arg.alter_table_schema_.get_external_file_pattern(), regexp_vars, ctx.get_allocator(),
+                  arg.alter_table_schema_.get_external_file_pattern(),
+                  arg.alter_table_schema_.get_external_properties(),
+                  arg.alter_table_schema_.is_partitioned_table(),
+                  regexp_vars, ctx.get_allocator(),
                   full_path,
                   file_urls, file_sizes));
 
@@ -1157,6 +1161,8 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
                     alter_table_arg.alter_table_schema_.get_external_file_location(),
                     alter_table_arg.alter_table_schema_.get_external_file_location_access_info(),
                     alter_table_arg.alter_table_schema_.get_external_file_pattern(),
+                    alter_table_arg.alter_table_schema_.get_external_properties(),
+                    alter_table_arg.alter_table_schema_.is_partitioned_table(),
                     regexp_vars,
                     ctx.get_allocator(),
                     full_path,

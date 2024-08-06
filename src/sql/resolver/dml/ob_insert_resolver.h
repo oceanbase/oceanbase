@@ -113,6 +113,7 @@ private:
     return sub_select_resolver_;
   }
   int try_expand_returning_exprs();
+  int check_insert_into_external_table();
   DISALLOW_COPY_AND_ASSIGN(ObInsertResolver);
 private:
   int64_t row_count_;

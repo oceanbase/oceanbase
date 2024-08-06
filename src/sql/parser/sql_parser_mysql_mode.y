@@ -263,7 +263,7 @@ END_P SET_VAR DELIMITER
 //-----------------------------reserved keyword end-------------------------------------------------
 %token <non_reserved_keyword>
 //-----------------------------non_reserved keyword begin-------------------------------------------
-        ACCESS ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
+        ACCESS ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRATION ARRAY ASCII ASIS AT AUTHORS AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
         AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH
@@ -271,12 +271,12 @@ END_P SET_VAR DELIMITER
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
         BREADTH BUCKETS BISON_LIST BACKUPSET BACKED BACKUPPIECE BACKUP_BACKUP_DEST BACKUPROUND
-        BADFILE
+        BADFILE BUFFER_SIZE
 
         CACHE CALIBRATION CALIBRATION_INFO CANCEL CASCADED CAST CATALOG_NAME CHAIN CHANGED CHARSET CHECKSUM CHECKPOINT CHUNK CIPHER
         CLASS_ORIGIN CLEAN CLEAR CLIENT CLONE CLOG CLOSE CLUSTER CLUSTER_ID CLUSTER_NAME COALESCE COLUMN_STAT
         CODE COLLATION COLUMN_FORMAT COLUMN_NAME COLUMNS COMMENT COMMIT COMMITTED COMPACT COMPLETION COMPLETE
-        COMPRESSED COMPRESSION COMPUTATION COMPUTE CONCURRENT CONDENSED CONDITIONAL CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
+        COMPRESSED COMPRESSION COMPRESSION_CODE COMPUTATION COMPUTE CONCURRENT CONDENSED CONDITIONAL CONNECTION CONSISTENT CONSISTENT_MODE CONSTRAINT_CATALOG
         CONSTRAINT_NAME CONSTRAINT_SCHEMA CONTAINS CONTEXT CONTRIBUTORS COPY COUNT CPU CREATE_TIMESTAMP
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT
 
@@ -285,7 +285,7 @@ END_P SET_VAR DELIMITER
         DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DYNAMIC
         DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND
 
-        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTED ENCRYPTION END ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
+        EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXCLUDING EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
         EXTENDED_NOADDR EXTENT_SIZE EXTRACT EXCEPT EXPIRED ENCODING EMPTY_FIELD_AS_NULL EXTERNAL
 
@@ -332,11 +332,11 @@ END_P SET_VAR DELIMITER
 
         PACK_KEYS PAGE PARALLEL PARAMETERS PARSER PARTIAL PARTITION_ID PARTITIONING PARTITIONS PASSWORD PATH PAUSE PERCENTAGE
         PERCENT_RANK PHASE PLAN PHYSICAL PLANREGRESS PLUGIN PLUGIN_DIR PLUGINS POINT POLYGON PERFORMANCE
-        PROTECTION PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
-        PROCESSLIST PROFILE PROFILES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
+        PROTECTION PROJECT_NAME PRIORITY PL POLICY POOL PORT POSITION PREPARE PRESERVE PRETTY PRETTY_COLOR PREV PRIMARY_ZONE PRIVILEGES PROCESS
+        PROCESSLIST PROFILE PROFILES PROPERTIES PROXY PRECEDING PCTFREE P_ENTITY P_CHUNK
         PUBLIC PROGRESSIVE_MERGE_NUM PREVIEW PS PLUS PATTERN PARTITION_TYPE
 
-        QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK
+        QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
 
         RB_AND_AGG RB_BUILD_AGG RB_OR_AGG REBUILD RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
@@ -352,7 +352,7 @@ END_P SET_VAR DELIMITER
         SOURCE SPFILE SPLIT SQL_AFTER_GTIDS SQL_AFTER_MTS_GAPS SQL_BEFORE_GTIDS SQL_BUFFER_RESULT
         SQL_CACHE SQL_NO_CACHE SQL_ID SCHEMA_ID SQL_THREAD SQL_TSI_DAY SQL_TSI_HOUR SQL_TSI_MINUTE SQL_TSI_MONTH
         SQL_TSI_QUARTER SQL_TSI_SECOND SQL_TSI_WEEK SQL_TSI_YEAR SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
-        STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STRONG
+        STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STRONG STSTOKEN
         SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STRING
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SESSION_ALIAS
@@ -503,7 +503,7 @@ END_P SET_VAR DELIMITER
 %type <node> lock_tables_stmt unlock_tables_stmt lock_type lock_table_list lock_table opt_local
 %type <node> flashback_stmt purge_stmt opt_flashback_rename_table opt_flashback_rename_database opt_flashback_rename_tenant
 %type <node> tenant_name_list opt_tenant_list tenant_list_tuple cache_type flush_scope opt_zone_list
-%type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var file_opt file_option_list file_option file_size_const
+%type <node> into_opt into_clause field_opt field_term field_term_list line_opt line_term line_term_list into_var_list into_var file_partition_opt file_opt file_option_list file_option file_size_const
 %type <node> string_list text_string string_val_list
 %type <node> balance_task_type opt_balance_task_type
 %type <node> list_expr list_partition_element list_partition_expr list_partition_list list_partition_option opt_list_partition_list opt_list_subpartition_list list_subpartition_list list_subpartition_element drop_partition_name_list
@@ -539,8 +539,9 @@ END_P SET_VAR DELIMITER
 %type <node> opt_storage_name opt_calibration_list calibration_info_list
 %type <node> switchover_tenant_stmt switchover_clause opt_verify
 %type <node> recover_tenant_stmt recover_point_clause
-%type <node> external_file_format_list external_file_format external_table_partition_option
+%type <node> external_file_format_list external_file_format external_properties_list external_properties external_table_partition_option
 %type <node> dynamic_sampling_hint add_external_table_partition_actions add_external_table_partition_action
+%type <node> external_table_partitions external_table_partition
 %type <node> skip_index_type opt_skip_index_type_list
 %type <node> opt_rebuild_column_store
 %type <node> json_table_expr mock_jt_on_error_on_empty jt_column_list json_table_column_def
@@ -7159,6 +7160,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2) ; /* make bison mute */
   merge_nodes($$, result, T_EXTERNAL_FILE_FORMAT, $4);
 }
+| PROPERTIES opt_equal_mark '(' external_properties_list ')'
+{
+  (void)($2) ; /* make bison mute */
+  merge_nodes($$, result, T_EXTERNAL_PROPERTIES, $4);
+}
 | PATTERN opt_equal_mark STRING_VALUE
 {
   (void)($2) ; /* make bison mute */
@@ -8126,6 +8132,64 @@ REDUNDANT
   $$->is_hidden_const_ = 1;
 }
 ;
+
+external_properties_list:
+external_properties
+{
+  $$ = $1;
+}
+| external_properties_list opt_comma external_properties
+{
+  (void) ($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+;
+
+external_properties:
+TYPE COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_FORMAT_TYPE, 1, $3);
+}
+| ACCESSTYPE COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ACCESSTYPE, 1, $3);
+}
+| ACCESSID COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ACCESSID, 1, $3);
+}
+| ACCESSKEY COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ACCESSKEY, 1, $3);
+}
+| STSTOKEN COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_STSTOKEN, 1, $3);
+}
+| ENDPOINT COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_ENDPOINT, 1, $3);
+}
+| PROJECT_NAME COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PROJECT, 1, $3);
+}
+| SCHEMA_NAME COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_SCHEMA, 1, $3);
+}
+| QUOTA_NAME COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_QUOTA, 1, $3);
+}
+| COMPRESSION_CODE COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION_CODE, 1, $3);
+}
+| TABLE_NAME COMP_EQ STRING_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_TABLE, 1, $3);
+};
 
 external_file_format_list:
 external_file_format
@@ -10207,9 +10271,9 @@ LIMIT limit_expr OFFSET limit_expr
 ;
 
 into_clause:
-INTO OUTFILE STRING_VALUE opt_charset field_opt line_opt file_opt
+INTO OUTFILE STRING_VALUE file_partition_opt opt_charset field_opt line_opt file_opt
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_INTO_OUTFILE, 5, $3, $4, $5, $6, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_INTO_OUTFILE, 6, $3, $4, $5, $6, $7, $8);
 }
 | INTO DUMPFILE STRING_VALUE
 {
@@ -10338,7 +10402,23 @@ SINGLE opt_equal_mark BOOL_VALUE
   (void)($2);
   malloc_non_terminal_node($$, result->malloc_pool_, T_MAX_FILE_SIZE, 1, $3);
 }
+| BUFFER_SIZE opt_equal_mark file_size_const
+{
+  (void)($2);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_BUFFER_SIZE, 1, $3);
+}
 ;
+
+file_partition_opt:
+/*empty*/
+{
+  $$ = NULL;
+}
+| PARTITION BY bit_expr
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_EXPR, 1, $3);
+  dup_expr_string($$, result, @3.first_column, @3.last_column);
+}
 
 file_size_const:
 INTNUM
@@ -12576,6 +12656,32 @@ PARTITION '(' name_list ')'
   merge_nodes(name_list, result, T_NAME_LIST, $3);
   malloc_non_terminal_node($$, result->malloc_pool_, T_USE_PARTITION, 1, name_list);
 }
+| PARTITION '(' external_table_partitions ')'
+{
+  ParseNode *partition_value = NULL;
+  merge_nodes(partition_value, result, T_EXTERNAL_TABLE_PARTITION, $3);
+  dup_expr_string(partition_value, result, @3.first_column, @3.last_column);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_USE_PARTITION, 1, partition_value);
+}
+
+external_table_partitions:
+external_table_partition
+{
+  $$ = $1;
+}
+| external_table_partitions ',' external_table_partition
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
+}
+|
+{ $$ = NULL; }
+
+external_table_partition:
+relation_name COMP_EQ expr_const
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PARTITION_LIST_ELEMENT, 2, $1, $3);
+}
+;
 
 use_flashback:
 AS OF SNAPSHOT bit_expr %prec LOWER_PARENS
@@ -21700,7 +21806,10 @@ unreserved_keyword_normal { $$=$1;}
 ;
 
 unreserved_keyword_normal:
-ACCOUNT
+ACCESSID
+|       ACCESSKEY
+|       ACCESSTYPE
+|       ACCOUNT
 |       ACTION
 |       ACTIVE
 |       ADDDATE
@@ -21764,6 +21873,7 @@ ACCOUNT
 |       BYTE
 |       BREADTH
 |       BUCKETS
+|       BUFFER_SIZE
 |       CACHE
 |       CALIBRATION
 |       CALIBRATION_INFO
@@ -21806,6 +21916,7 @@ ACCOUNT
 |       COMPLETION
 |       COMPRESSED
 |       COMPRESSION
+|       COMPRESSION_CODE
 |       COMPUTATION
 |       COMPUTE
 |       CONCURRENT
@@ -21882,6 +21993,7 @@ ACCOUNT
 |       ENCRYPTED
 |       ENCRYPTION
 |       END
+|       ENDPOINT
 |       ENDS
 |       ENFORCED
 |       ENGINE_
@@ -22117,6 +22229,7 @@ ACCOUNT
 |       NVARCHAR
 |       OBJECT
 |       OCCUR
+|       QUOTA_NAME
 |       OF
 |       OFF
 |       OFFSET
@@ -22178,6 +22291,8 @@ ACCOUNT
 |       PROFILE
 |       PROFILES
 |       PROGRESSIVE_MERGE_NUM
+|       PROJECT_NAME
+|       PROPERTIES
 |       PS
 |       PUBLIC
 |       PCTFREE
@@ -22334,6 +22449,7 @@ ACCOUNT
 |       STORING
 |       STRONG
 |       STRING
+|       STSTOKEN
 |       SUBCLASS_ORIGIN
 |       SUBDATE
 |       SUBJECT

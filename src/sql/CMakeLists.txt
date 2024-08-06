@@ -887,6 +887,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_table_scan_with_index_back_op.cpp
   engine/table/ob_external_table_access_service.cpp
   engine/table/ob_parquet_table_row_iter.cpp
+  engine/table/ob_odps_table_row_iter.cpp
 )
 
 ob_set_subtarget(ob_sql executor
@@ -1392,7 +1393,17 @@ add_library(ob_sql_static
   EXCLUDE_FROM_ALL)
 
 target_link_libraries(ob_sql_static
-  PUBLIC ob_sql ob_sql_server_parser_static)
+  PUBLIC ob_sql
+  ob_sql_server_parser_static
+  ${DEP_DIR}/lib64/libprotobuf.a
+  ${DEP_DIR}/lib64/libzstd.a
+  ${DEP_DIR}/lib64/libbrotlidec.a
+  ${DEP_DIR}/lib64/libbrotlienc.a
+  ${DEP_DIR}/lib64/libbrotlicommon.a
+  ${DEP_DIR}/lib64/libbz2.a
+  ${DEP_DIR}/lib64/libodps_sdk_tunnel_static.a
+  ${DEP_DIR}/lib64/libodps_sdk_common_static.a
+  ${DEP_DIR}/lib64/libodps_sdk_core_static.a)
 
 execute_process(
   COMMAND bash gen_parser.sh
