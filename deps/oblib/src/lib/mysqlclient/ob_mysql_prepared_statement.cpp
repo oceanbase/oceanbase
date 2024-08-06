@@ -1671,6 +1671,12 @@ int ObMySQLProcStatement::init(ObMySQLConnection &conn,
   if (OB_ISNULL(proc_ = sql)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql", KCSTRING(sql), K(ret));
+  } else if (OB_ISNULL(conn_) || OB_ISNULL(conn_->get_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("conn_ is NULL", K(ret));
+  } else if (FALSE_IT(conn_->get_handler()->field_count = 0)) {
+    // After executing the previous statement, libObClient did not set the value of `mysql->filed_count` to 0,
+    // which may cause coredump. Set it manually here.
   } else if (OB_ISNULL(stmt_ = mysql_stmt_init(conn_->get_handler()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("fail to init stmt", K(ret));
