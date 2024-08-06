@@ -44,7 +44,8 @@ public:
   last_compact_cnt_(0),
   total_update_cnt_(0),
   assoc_sess_id_(0),
-  holder_sess_id_(0) {}
+  holder_sess_id_(0),
+  holder_tx_start_time_(0) {}
   ~ObRowConflictInfo() = default;
   ObRowConflictInfo(const ObRowConflictInfo &) = delete;// disallow default copy
   ObRowConflictInfo &operator=(const ObRowConflictInfo &) = delete;// disallow default assign operator
@@ -89,7 +90,7 @@ public:
                K_(conflict_row_key_str), K_(conflict_sess_id_pair), K_(conflict_tx_scheduler),
                K_(conflict_tx_id), K_(conflict_tx_hold_seq), K_(conflict_hash), K_(lock_seq),
                K_(abs_timeout), K_(self_tx_id), K_(lock_mode), K_(last_compact_cnt), K_(total_update_cnt),
-               K_(assoc_sess_id), K_(holder_sess_id));
+               K_(assoc_sess_id), K_(holder_sess_id), K_(holder_tx_start_time));
   common::ObAddr conflict_happened_addr_;// distributed info
   share::ObLSID conflict_ls_;// resource related
   common::ObTabletID conflict_tablet_;// resource related
@@ -107,12 +108,13 @@ public:
   int64_t total_update_cnt_; // row update cnt
   uint32_t assoc_sess_id_; // trx's associate session id who acquires lock
   uint32_t holder_sess_id_; // lock holder session id
+  int64_t holder_tx_start_time_; // lock holder trans start time
 };
 OB_SERIALIZE_MEMBER_TEMP(inline, ObRowConflictInfo, conflict_happened_addr_, conflict_ls_,
                          conflict_tablet_, conflict_row_key_str_, conflict_sess_id_pair_,
                          conflict_tx_scheduler_, conflict_tx_id_, conflict_tx_hold_seq_, conflict_hash_,
                          lock_seq_, abs_timeout_, self_tx_id_, lock_mode_, last_compact_cnt_,
-                         total_update_cnt_, assoc_sess_id_, holder_sess_id_);
+                         total_update_cnt_, assoc_sess_id_, holder_sess_id_, holder_tx_start_time_);
 }
 }
 #endif
