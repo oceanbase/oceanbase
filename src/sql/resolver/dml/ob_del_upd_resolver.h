@@ -208,7 +208,8 @@ protected:
                               const uint64_t value_count,
                               bool& is_all_default);
   int check_column_value_type(common::ObArray<ObRawExpr*> *value_row,
-                              ObInsertTableInfo& table_info);
+                              ObInsertTableInfo& table_info,
+                              const ParamStore * params);
   int build_row_for_empty_brackets(common::ObArray<ObRawExpr*> &value_row,
                                    ObInsertTableInfo& table_info);
 

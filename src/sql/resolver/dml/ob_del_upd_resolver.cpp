@@ -3544,7 +3544,7 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
         if (OB_FAIL(build_row_for_empty_brackets(value_row, table_info))) {
           LOG_WARN( "fail to build row for empty brackets", K(ret));
         }
-      } else if (OB_FAIL(check_column_value_type(&value_row, table_info))) {
+      } else if (OB_FAIL(check_column_value_type(&value_row, table_info, params_.param_list_))) {
            LOG_WARN("fail to check column value type", K(ret));
       } else {}
       if (OB_SUCC(ret)) {
@@ -3599,21 +3599,27 @@ int ObDelUpdResolver::check_column_value_pair(ObArray<ObRawExpr*> *value_row,
 }
 
 int ObDelUpdResolver::check_column_value_type(ObArray<ObRawExpr*> *value_row,
-                                              ObInsertTableInfo& table_info)
+                                              ObInsertTableInfo& table_info,
+                                              const ParamStore * params)
 {
   int ret = OB_SUCCESS;
   //  if value type is char or varchar but v_.string is nullptr,it can
   // not be assigned to date time type.
   CK (table_info.values_desc_.count() == value_row->count());
   for (int64_t i = 0;i < table_info.values_desc_.count() && OB_SUCCESS == ret; ++i) {
+    bool is_nullptr_str = false;
     ObRawExpr *tmp = value_row->at(i);
     bool isfrom_char_type = (ObCharType == tmp->get_result_type().get_type() ||
                          ObVarcharType == tmp->get_result_type().get_type());
-    bool is_nullptr_val = !tmp->get_result_type().get_param().get_string_ptr();
+    if (T_QUESTIONMARK == tmp->get_expr_type()) {
+      ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(tmp);
+      int64_t param_idx = c_expr->get_value().get_unknown();
+      is_nullptr_str = param_idx < params->count() && !params->at(param_idx).get_string_ptr();
+    }
     ObObjType col_type = table_info.values_desc_.at(i)->get_result_type().get_type();
     bool isto_date_type = (ObDateTimeType<=col_type && ObYearType>=col_type) ||
         (ObTimestampTZType<=col_type && ObTimestampNanoType>=col_type);
-    if (isfrom_char_type && is_nullptr_val && isto_date_type &&
+    if (isfrom_char_type && is_nullptr_str && isto_date_type &&
         session_info_->get_pl_context() != NULL) {
       ret = OB_ERR_INPUT_VALUE_NOT_LONG_ENOUGH;
       LOG_USER_ERROR(OB_ERR_INPUT_VALUE_NOT_LONG_ENOUGH);
