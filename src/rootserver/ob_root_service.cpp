@@ -4996,6 +4996,14 @@ int ObRootService::drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropInd
   return ret;
 }
 
+int ObRootService::rebuild_vec_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(arg);
+  UNUSED(res);
+  return ret;
+}
+
 int ObRootService::rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res)
 {
   int ret = OB_SUCCESS;

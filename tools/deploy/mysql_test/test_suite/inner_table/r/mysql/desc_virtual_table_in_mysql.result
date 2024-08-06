@@ -885,6 +885,7 @@ auto_increment_cache_size	bigint(20)	NO		0
 local_session_vars	longtext	YES		NULL	
 duplicate_read_consistency	bigint(20)	NO		0	
 external_properties	varbinary(1048576)	YES		NULL	
+index_params	varchar(256)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -1813,6 +1814,7 @@ auto_increment_cache_size	bigint(20)	NO		0
 local_session_vars	longtext	YES		NULL	
 duplicate_read_consistency	bigint(20)	NO		0	
 external_properties	varbinary(1048576)	YES		NULL	
+index_params	varchar(256)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1

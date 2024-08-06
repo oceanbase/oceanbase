@@ -1389,6 +1389,7 @@ public:
     is_hidden_ = false;
     is_in_recyclebin_ = false;
     is_inner_ = false;
+    is_rebuild_drop_ = false;
   }
   virtual ~ObDropIndexArg() {}
   void reset()
@@ -1399,6 +1400,7 @@ public:
     is_hidden_ = false;
     is_in_recyclebin_ = false;
     is_inner_ = false;
+    is_rebuild_drop_ = false;
   }
   bool is_valid() const { return ObIndexArg::is_valid(); }
   uint64_t index_table_id_;
@@ -1406,6 +1408,7 @@ public:
   bool is_hidden_;
   bool is_in_recyclebin_;
   bool is_inner_;
+  bool is_rebuild_drop_;
 
   DECLARE_VIRTUAL_TO_STRING;
 };
@@ -2629,7 +2632,9 @@ public:
         allocator_(),
         local_session_var_(&allocator_),
         exist_all_column_group_(false),
-        index_cgs_()
+        index_cgs_(),
+        vidx_refresh_info_(),
+        is_rebuild_index_(false)
   {
     index_action_type_ = ADD_INDEX;
     index_using_type_ = share::schema::USING_BTREE;
@@ -2661,6 +2666,8 @@ public:
     allocator_.reset();
     exist_all_column_group_ = false;
     index_cgs_.reset();
+    vidx_refresh_info_.reset();
+    is_rebuild_index_ = false;
   }
   void set_index_action_type(const IndexActionType type) { index_action_type_  = type; }
   bool is_valid() const;
@@ -2698,6 +2705,8 @@ public:
       inner_sql_exec_addr_ = other.inner_sql_exec_addr_;
       consumer_group_id_ = other.consumer_group_id_;
       exist_all_column_group_ = other.exist_all_column_group_;
+      vidx_refresh_info_ = other.vidx_refresh_info_;
+      is_rebuild_index_ = other.is_rebuild_index_;
     }
     return ret;
   }
@@ -2765,6 +2774,8 @@ public:
   ObLocalSessionVar local_session_var_;
   bool exist_all_column_group_;
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
+  share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;
+  bool is_rebuild_index_;
 };
 
 struct ObGenerateAuxIndexSchemaArg : public ObDDLArg

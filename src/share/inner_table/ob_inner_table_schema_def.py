@@ -315,7 +315,8 @@ all_table_def = dict(
       ('auto_increment_cache_size', 'int', 'false', '0'),
       ('local_session_vars', 'longtext', 'true'),
       ('duplicate_read_consistency', 'int', 'false', '0'),
-      ('external_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true')
+      ('external_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
+      ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', '')
     ],
 )
 

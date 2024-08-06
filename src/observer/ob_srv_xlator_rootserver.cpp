@@ -165,6 +165,7 @@ void oceanbase::observer::init_srv_xlator_for_rootserver(ObSrvRpcXlator *xlator)
     RPC_PROCESSOR(rootserver::ObRpcTryAddDepInfosForSynonymBatchP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcMViewCompleteRefreshP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObRpcUpdateMViewTableStatusP, *gctx_.root_service_);
+    RPC_PROCESSOR(rootserver::ObRpcRebuildVecIndexP, *gctx_.root_service_);
     //ob_admin
     RPC_PROCESSOR(rootserver::ObForceCreateSysTableP, *gctx_.root_service_);
     RPC_PROCESSOR(rootserver::ObForceSetLocalityP, *gctx_.root_service_);

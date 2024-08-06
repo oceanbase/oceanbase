@@ -1287,6 +1287,7 @@ public:
   void clear_constraint();
   int set_ttl_definition(const common::ObString &ttl_definition) { return deep_copy_str(ttl_definition, ttl_definition_); }
   int set_kv_attributes(const common::ObString &kv_attributes) { return deep_copy_str(kv_attributes, kv_attributes_); }
+  int set_index_params(const common::ObString &index_params) { return deep_copy_str(index_params, index_params_); }
   void set_lob_inrow_threshold(const int64_t lob_inrow_threshold) { lob_inrow_threshold_ = lob_inrow_threshold;}
   inline void set_auto_increment_cache_size(const int64_t auto_increment_cache_size)
   { auto_increment_cache_size_ = auto_increment_cache_size; }
@@ -1379,6 +1380,7 @@ public:
   inline const ObViewSchema &get_view_schema() const { return view_schema_; }
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
   inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
+  inline const common::ObString &get_index_params() const { return index_params_; }
   inline int64_t get_lob_inrow_threshold() const { return lob_inrow_threshold_; }
   inline int64_t get_auto_increment_cache_size() const { return auto_increment_cache_size_; }
   bool has_check_constraint() const;
@@ -1999,6 +2001,8 @@ protected:
   CgNameHashArray *cg_name_hash_arr_;
   uint64_t mlog_tid_;
   ObLocalSessionVar local_session_vars_;
+  // vector index
+  common::ObString index_params_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

@@ -69,6 +69,7 @@ enum ObDDLType
   DDL_DROP_VEC_INDEX = 14,
   DDL_CREATE_VEC_INDEX = 15,
   DDL_CREATE_MULTIVALUE_INDEX = 16,
+  DDL_REBUILD_INDEX = 17,
 
   ///< @note tablet split.
   DDL_AUTO_SPLIT_BY_RANGE = 100,
@@ -178,6 +179,8 @@ enum ObDDLTaskStatus {
   WAIT_VEC_AUX_TABLE_COMPLEMENT = 32,
   GENERATE_VID_ROWKEY_SCHEMA = 33,
   WAIT_VID_ROWKEY_TABLE_COMPLEMENT = 34,
+  REBUILD_SCHEMA = 35,
+  SWITCH_INDEX_NAME = 36,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -314,6 +317,12 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WAIT_VID_ROWKEY_TABLE_COMPLEMENT:
       str = "WAIT_VID_ROWKEY_TABLE_COMPLEMENT";
+      break;
+    case ObDDLTaskStatus::REBUILD_SCHEMA:
+      str = "REBUILD_SCHEMA";
+      break;
+    case ObDDLTaskStatus::SWITCH_INDEX_NAME:
+      str = "SWITCH_INDEX_NAME";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";

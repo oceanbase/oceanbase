@@ -3267,7 +3267,8 @@ DEF_TO_STRING(ObCreateIndexArg)
        K_(inner_sql_exec_addr),
        K_(local_session_var),
        K_(exist_all_column_group),
-       K_(index_cgs));
+       K_(index_cgs),
+       K_(is_rebuild_index));
   J_OBJ_END();
   return pos;
 }
@@ -3293,7 +3294,9 @@ OB_SERIALIZE_MEMBER((ObCreateIndexArg, ObIndexArg),
                     inner_sql_exec_addr_,
                     local_session_var_,
                     exist_all_column_group_,
-                    index_cgs_);
+                    index_cgs_,
+                    vidx_refresh_info_,
+                    is_rebuild_index_);
 
 int ObGenerateAuxIndexSchemaArg::assign(const ObGenerateAuxIndexSchemaArg &other)
 {
@@ -3348,7 +3351,8 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(is_add_to_scheduler),
        K_(is_in_recyclebin),
        K_(is_hidden),
-       K_(is_inner));
+       K_(is_inner),
+       K_(is_rebuild_drop));
   J_OBJ_END();
   return pos;
 }
@@ -3362,7 +3366,8 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     is_add_to_scheduler_,
                     is_in_recyclebin_,
                     is_hidden_,
-                    is_inner_);
+                    is_inner_,
+                    is_rebuild_drop_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
