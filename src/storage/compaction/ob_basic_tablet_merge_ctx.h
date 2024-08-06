@@ -66,7 +66,7 @@ public:
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
-  bool is_rebuild_column_store_;
+  bool is_rebuild_column_store_; // use row_store to rebuild column_store(when column store have error)
   bool is_schema_changed_;
   bool need_parallel_minor_merge_;
   bool is_tenant_major_merge_;

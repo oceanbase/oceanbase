@@ -27,9 +27,6 @@ class ObStorageDatum;
 
 namespace storage
 {
-
-struct ObCreateSSTableParamExtraInfo;
-
 struct ObStorageRowkeyColumnSchema
 {
   OB_UNIS_VERSION(1);

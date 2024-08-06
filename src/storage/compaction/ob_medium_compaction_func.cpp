@@ -849,6 +849,9 @@ int ObMediumCompactionScheduleFunc::init_co_major_merge_type(
   if (OB_ISNULL(first_sstable) || OB_UNLIKELY(!first_sstable->is_co_sstable())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("first sstable in tables handle is null or not co sstable", K(ret), K(result.handle_));
+  } else if (ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP == merge_reason_) {
+    // REBUILD_COLUMN_GROUP is requested by user, only use row store to build column store
+    medium_info.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
   } else if (FALSE_IT(co_sstable = static_cast<ObCOSSTableV2 *>(first_sstable))) {
   } else if (OB_FAIL(iter.set_tablet_handle(tablet_handle_))) {
     LOG_WARN("failed to set tablet handle", K(ret), K(iter), K(tablet_handle_));

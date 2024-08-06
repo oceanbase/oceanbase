@@ -461,6 +461,7 @@ int ObPartitionRowMergeIter::construct_out_cols_project(const ObMergeParameter &
 {
   int ret = OB_SUCCESS;
   if (iter_co_build_row_store_ && nullptr == access_param_.iter_param_.out_cols_project_) {
+    // iter whole row from pure col
     int64_t store_schema_column_cnt = 0;
     int64_t col_index = OB_INVALID_INDEX_INT64;
     const ObStorageSchema *schema = nullptr;

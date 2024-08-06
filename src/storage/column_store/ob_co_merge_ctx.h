@@ -20,15 +20,16 @@ struct ObCOMergeExeStat{
   ObCOMergeExeStat()
     : error_count_(0),
       period_error_count_(0),
-      period_finish_count_(0),
-      finish_count_(0)
+      period_finish_cg_count_(0),
+      finish_cg_count_(0)
   {}
   ~ObCOMergeExeStat() {}
-  TO_STRING_KV(K_(error_count), K_(period_error_count), K_(period_finish_count), K_(finish_count));
+  TO_STRING_KV(K_(error_count), K_(period_error_count), K_(period_finish_cg_count), K_(finish_cg_count));
+  // error count means failure batch count
   int16_t error_count_;
   int16_t period_error_count_;
-  int32_t period_finish_count_;
-  int64_t finish_count_;
+  int32_t period_finish_cg_count_;
+  int64_t finish_cg_count_;
 };
 
 struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
@@ -62,17 +63,27 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   virtual int build_ctx(bool &finish_flag) override;
   OB_INLINE bool all_cg_finish() const // locked by ObCODagNet ctx_lock_
   {
-    return exe_stat_.finish_count_ == array_count_;
+    return exe_stat_.finish_cg_count_ == array_count_;
   }
   OB_INLINE void one_batch_finish(const int64_t cg_cnt)
   {
-    exe_stat_.finish_count_ += cg_cnt;
-    exe_stat_.period_finish_count_ += cg_cnt;
+    exe_stat_.finish_cg_count_ += cg_cnt;
+    exe_stat_.period_finish_cg_count_ += cg_cnt;
   }
   OB_INLINE void one_batch_fail()
   {
     ++exe_stat_.error_count_;
     ++exe_stat_.period_error_count_;
+  }
+  const ObITableReadInfo *get_full_read_info() const
+  {
+    const ObITableReadInfo *ret_info = NULL;
+    if (is_build_row_store_from_rowkey_cg()) {
+      ret_info = &mocked_row_store_table_read_info_;
+    } else {
+      ret_info = &read_info_;
+    }
+    return ret_info;
   }
   int create_sstable(const blocksstable::ObSSTable *&new_sstable);
   int prepare_index_builder(
@@ -112,7 +123,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
       const uint64_t column_id,
       const ObStorageColumnSchema *column_schema,
       ObColumnParam &column_param);
-  int init_table_read_info();
+  int mock_row_store_table_read_info();
   int inner_loop_prepare_index_tree(
     const uint32_t start_cg_idx,
     const uint32_t end_cg_idx);
@@ -147,7 +158,12 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   // store merged cg major sstables for random order, just hold table ref
   storage::ObTablesHandleArray merged_cg_tables_handle_;
   ObStorageColumnGroupSchema mocked_row_store_cg_;
-  ObTableReadInfo table_read_info_; // read info for merge from col store to row store
+/*
+  if schema is pure col(EACH CG) but need to output row_store,
+  OLD_MAJOR have row_store as CO, could use read_info from tablet to read full row
+  OLD_MAJOR is pure col, need mock one row_store read_info to read row from pure_col(use query interface)
+*/
+  ObTableReadInfo mocked_row_store_table_read_info_; // read info for merge from col store to row store
 };
 
 } // namespace compaction

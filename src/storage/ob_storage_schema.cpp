@@ -1053,6 +1053,11 @@ int ObStorageSchema::mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_st
   return ret;
 }
 
+/*
+ * base_cg of column store schema can only be ROWKEY_CG OR ALL_CG
+ * "with column group(all columns, each column)" -> ALL_CG + each_cg
+ * "with column group(each column)" -> ROWKEY_CG + each_cg
+*/
 int ObStorageSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
 {
   int ret = OB_SUCCESS;

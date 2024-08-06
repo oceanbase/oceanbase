@@ -31,7 +31,7 @@ ObCOTabletMergeCtx::ObCOTabletMergeCtx(
     cg_tables_handle_lock_(),
     merged_cg_tables_handle_(MTL_ID()),
     mocked_row_store_cg_(),
-    table_read_info_()
+    mocked_row_store_table_read_info_()
 {
 }
 
@@ -56,7 +56,7 @@ ObCOTabletMergeCtx::~ObCOTabletMergeCtx()
     merged_sstable_array_ = nullptr;
   }
   mocked_row_store_cg_.reset();
-  table_read_info_.reset();
+  mocked_row_store_table_read_info_.reset();
 }
 
 int ObCOTabletMergeCtx::schedule_minor_errsim(bool &schedule_minor) const
@@ -87,13 +87,13 @@ bool ObCOTabletMergeCtx::is_co_dag_net_failed()
 {
   bool need_cancel = false;
   if (DAG_NET_ERROR_COUNT_THREASHOLD <= exe_stat_.period_error_count_) {
-    if (EXE_DAG_FINISH_GROWTH_RATIO > (double)exe_stat_.period_finish_count_ / array_count_) {
+    if (EXE_DAG_FINISH_GROWTH_RATIO > (double)exe_stat_.period_finish_cg_count_ / array_count_) {
       need_cancel = true;
     }
     exe_stat_.period_error_count_ = 0;
-    exe_stat_.period_finish_count_ = 0;
+    exe_stat_.period_finish_cg_count_ = 0;
   }
-  if (EXE_DAG_FINISH_UP_RATIO < (double)exe_stat_.finish_count_ / array_count_) {
+  if (EXE_DAG_FINISH_UP_RATIO < (double)exe_stat_.finish_cg_count_ / array_count_) {
     need_cancel = DAG_NET_ERROR_COUNT_UP_THREASHOLD < exe_stat_.error_count_;
   }
   if (need_cancel) {
@@ -177,7 +177,7 @@ int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
     LOG_WARN("failed to init major sstable status", K(ret));
   } else if (is_major_merge_type(get_merge_type())) {
     // meta major merge not support row col switch now
-    if (is_build_row_store_from_rowkey_cg() && OB_FAIL(init_table_read_info())) {
+    if (is_build_row_store_from_rowkey_cg() && OB_FAIL(mock_row_store_table_read_info())) {
       STORAGE_LOG(WARN, "fail to init table read info", K(ret));
     }
   }
@@ -195,7 +195,7 @@ int ObCOTabletMergeCtx::cal_merge_param()
   } else if (ObCOMajorMergePolicy::is_build_column_store_merge(co_major_merge_type)) {
   } else if (ObCOMajorMergePolicy::is_build_row_store_merge(co_major_merge_type)) {
     force_full_merge = true;
-  } else if (ObCOMajorMergePolicy::is_rebuild_column_store_merge(co_major_merge_type)) {
+  } else if (ObCOMajorMergePolicy::is_use_rs_build_schema_match_merge(co_major_merge_type)) {
     force_full_merge = true;
     static_param_.is_rebuild_column_store_ = true;
   }
@@ -622,9 +622,8 @@ int ObCOTabletMergeCtx::validate_column_checksums(
 }
 
 bool ObCOTabletMergeCtx::should_mock_row_store_cg_schema()
-{
-  return is_build_row_store_from_rowkey_cg()
-      || (is_build_row_store() && ObCOMajorSSTableStatus::PURE_COL_ONLY_ALL == static_param_.major_sstable_status_);
+{ // need output ALL_CG but schema don't have one
+  return is_build_row_store() && !get_schema()->has_all_column_group();
 }
 
 int ObCOTabletMergeCtx::prepare_mocked_row_store_cg_schema()
@@ -703,7 +702,8 @@ int ObCOTabletMergeCtx::construct_column_param(
   return ret;
 }
 
-int ObCOTabletMergeCtx::init_table_read_info()
+// mock row_store read info from pure_col schema
+int ObCOTabletMergeCtx::mock_row_store_table_read_info()
 {
   int ret = OB_SUCCESS;
   const ObStorageSchema *storage_schema = get_schema();
@@ -723,7 +723,6 @@ int ObCOTabletMergeCtx::init_table_read_info()
     const int64_t schema_rowkey_cnt = storage_schema->get_rowkey_column_num();
     uint64_t column_id = 0;
     int32_t cg_idx = OB_INVALID_INDEX;
-    int32_t col_index = OB_INVALID_INDEX;       // to construct table_read_info, extra_rowkey_cnt is ignored
     int32_t multi_version_col_cnt = 0;
     bool is_multi_version_col = false;
     const ObStorageColumnSchema *column_schema  = nullptr;
@@ -731,7 +730,6 @@ int ObCOTabletMergeCtx::init_table_read_info()
     for (int32_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
       column_id = all_column_ids.at(i).col_id_;
       cg_idx = OB_INVALID_INDEX;
-      col_index = OB_INVALID_INDEX;
       column_schema = storage_schema->get_column_schema(column_id);
       column = nullptr;
       is_multi_version_col = OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id || OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id;
@@ -741,37 +739,30 @@ int ObCOTabletMergeCtx::init_table_read_info()
         STORAGE_LOG(WARN, "fail to construct column param", K(ret), K(column_id), K(column_schema));
       } else if (OB_FAIL(tmp_cols.push_back(column))) {
         STORAGE_LOG(WARN, "fail to push back column param", K(ret));
-      } else if (is_multi_version_col) {
-        multi_version_col_cnt++; // make col_index INVALID to init table_read_info
-      } else {
-        col_index = i - multi_version_col_cnt;
-      }
-
-      if (FAILEDx(tmp_cols_index.push_back(col_index))) {
-        STORAGE_LOG(WARN, "fail to push back col_index", K(ret), K(i), K(col_index));
+      } else if (OB_FAIL(tmp_cols_index.push_back(i))) {
+        STORAGE_LOG(WARN, "fail to push back col_index", K(ret), K(i));
       } else if (OB_FAIL(storage_schema->get_column_group_index(column_id, i /* real column idx */, cg_idx))) {
-        STORAGE_LOG(WARN, "fail to get column group idx", K(ret), K(i), K(column_id), K(col_index));
+        STORAGE_LOG(WARN, "fail to get column group idx", K(ret), K(i), K(column_id));
       } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
-        STORAGE_LOG(WARN, "fail to push back cg idx");
+        // even if rowkey cg contains all rowkey column, still need to get column from each cg
+        STORAGE_LOG(WARN, "fail to push back cg idx", KR(ret), K(cg_idx));
       }
-    }
+    } // for
 
-    if (FAILEDx(table_read_info_.init(
+    if (FAILEDx(mocked_row_store_table_read_info_.mock_for_sstable_query(
           mem_ctx_.get_allocator(),
           storage_schema->get_column_count(),
           schema_rowkey_cnt,
           storage_schema->is_oracle_mode(),
           all_column_ids,
-          &tmp_cols_index,
-          &tmp_cols,
-          &tmp_cg_idxs,
-          nullptr /* cols_extend */,
-          storage_schema->has_all_column_group()))) {
+          tmp_cols_index,
+          tmp_cols,
+          tmp_cg_idxs))) {
       STORAGE_LOG(WARN, "fail to init table read info", K(ret), K(all_column_ids), K(tmp_cols_index), K(tmp_cols), K(tmp_cg_idxs));
     }
   }
 
-  LOG_INFO("[RowColSwitch] Generate read info for co merge", K(ret), K(table_read_info_));
+  LOG_INFO("[RowColSwitch] Generate read info for co merge", K(ret), K(mocked_row_store_table_read_info_));
   return ret;
 }
 

@@ -314,14 +314,13 @@ private:
   static const int64_t DEFAULT_MAX_RETRY_TIMES = 2;
 
   // call this func with lock
-  int inner_create_and_add_exe_dag(
+  int inner_create_exe_dags(
       const int64_t start_cg_idx,
       const int64_t end_cg_idx,
       const int64_t max_cg_idx,
       int64_t &allowed_schedule_dag_count,
       ObCOMergeBatchExeDag *&dag,
-      common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array,
-      const bool add_scheduler_flag = true);
+      common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array);
   int choose_merge_batch_size(const int64_t column_group_cnt);
   int inner_schedule_finish_dag(ObIDag *parent_dag = nullptr);
   void try_update_merge_batch_size(const int64_t column_group_cnt);
@@ -337,7 +336,7 @@ private:
       const int64_t &max_cg_idx,
       ObCOMergeBatchExeDag *&dag,
       common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array);
-  int inner_schedule_exe_dags(
+  int inner_add_exe_dags_into_scheduler(
       common::ObIArray<ObCOMergeBatchExeDag *> &dag_array,
       int64_t &unscheduled_dag_idx);
   void inner_free_exe_dags(

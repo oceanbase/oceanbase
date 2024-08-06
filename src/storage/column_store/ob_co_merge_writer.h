@@ -116,7 +116,7 @@ public:
         const blocksstable::ObDatumRow &default_row,
         const ObMergeParameter &merge_param,
         const int64_t parallel_idx,
-        const ObITableReadInfo *read_info,
+        const ObITableReadInfo *full_read_info,
         const ObStorageColumnGroupSchema &cg_schema,
         const int64_t cg_idx,
         ObProgressiveMergeMgr &progressive_merge_mgr,
@@ -166,7 +166,7 @@ private:
 protected:
   compaction::ObLocalArena allocator_;
   ObDefaultMergeFuser fuser_;
-  ObMergeIter *iter_;
+  ObMergeIter *iter_; // iter row from old_cg_major OR iter default_row for add column
   blocksstable::ObDatumRow default_row_;
   bool is_inited_;
   bool iter_co_build_row_store_;
@@ -188,7 +188,7 @@ public:
         const blocksstable::ObDatumRow &default_row,
         const ObMergeParameter &merge_param,
         const int64_t idx,
-        const ObITableReadInfo *read_info,
+        const ObITableReadInfo *full_read_info,
         const ObStorageColumnGroupSchema &cg_schema,
         const int64_t cg_idx,
         ObProgressiveMergeMgr &progressive_merge_mgr,
@@ -203,7 +203,11 @@ private:
   virtual int process(const blocksstable::ObMicroBlock &micro_block) override;
   virtual int process(const blocksstable::ObDatumRow &row) override;
   virtual bool is_cg() const override { return write_helper_.is_cg(); }
-
+  int choose_read_info_for_old_major(
+   const ObMergeParameter &merge_param,
+   const ObITableReadInfo &full_read_info,
+   const ObStorageColumnGroupSchema &cg_schema,
+   const ObITableReadInfo *&read_info);
 private:
   ObProgressiveMergeHelper *progressive_merge_helper_;
   ObWriteHelper write_helper_;
@@ -211,6 +215,7 @@ private:
   ObTableReadInfo single_read_info_;
 };
 
+// loop cgs to project & write row into cg
 class ObCOMergeSingleWriter : public ObCOMergeWriter
 {
 public:

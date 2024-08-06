@@ -438,7 +438,7 @@ public:
     // false: ready_list -> waiting_list
     return true;
   }
-  int add_child(ObIDag &child);
+  int add_child(ObIDag &child, const bool check_child_dag_status = true);
   int update_status_in_dag_net(bool &dag_net_finished);
   int finish(const ObDagStatus status, bool &dag_net_finished);
   void gene_dag_info(ObDagInfo &info, const char *list_info);

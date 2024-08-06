@@ -207,7 +207,7 @@ int ObCOMergeWriter::basic_init(const blocksstable::ObDatumRow &default_row,
     STORAGE_LOG(WARN, "failed to deep copy default row", K(ret));
   } else if (OB_FAIL(fuser_.init(column_cnt))) {
     STORAGE_LOG(WARN, "failed to init fuser", K(ret), K(column_cnt));
-  } else if (OB_ISNULL(table)) {
+  } else if (OB_ISNULL(table)) { // last major sstable is empty
     iter_ = nullptr;
   } else if (!table->is_major_sstable()) {
     ret = OB_ERR_UNEXPECTED;
@@ -474,6 +474,32 @@ ObCOMergeRowWriter::~ObCOMergeRowWriter()
   }
 }
 
+int ObCOMergeRowWriter::choose_read_info_for_old_major(
+   const ObMergeParameter &merge_param,
+   const ObITableReadInfo &full_read_info,
+   const ObStorageColumnGroupSchema &cg_schema,
+   const ObITableReadInfo *&read_info)
+{
+  int ret = OB_SUCCESS;
+  read_info = NULL;
+
+  if (cg_schema.is_single_column_group()) {
+    single_read_info_.reset();
+    if (OB_FAIL(ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,
+                                                              full_read_info.is_oracle_mode(),
+                                                              write_helper_.get_col_desc_array().at(0),
+                                                              nullptr,
+                                                              single_read_info_))) {
+      LOG_WARN("Fail to init cg read info", K(ret));
+    } else {
+      read_info = &single_read_info_;
+    }
+  } else {
+    read_info = cg_schema.is_rowkey_column_group() ? merge_param.cg_rowkey_read_info_ : &full_read_info;
+  }
+  return ret;
+}
+
 int ObCOMergeRowWriter::init(const blocksstable::ObDatumRow &default_row,
                           const ObMergeParameter &merge_param,
                           const int64_t parallel_idx,
@@ -488,25 +514,17 @@ int ObCOMergeRowWriter::init(const blocksstable::ObDatumRow &default_row,
   int ret = OB_SUCCESS;
   bool is_all_nop = false;
   const ObITableReadInfo *read_info = nullptr;
-
+  const int64_t cg_column_cnt = cg_schema.column_cnt_;
   if (OB_FAIL(write_helper_.init(merge_param, parallel_idx, cg_idx, cg_schema, merge_info))) {
     STORAGE_LOG(WARN, "fail to init write helper", K(ret), K(parallel_idx), K(cg_idx), K(cg_schema));
-  } else if (OB_FAIL(row_.init(cg_schema.column_cnt_))) {
+  } else if (OB_FAIL(row_.init(cg_column_cnt))) {
     STORAGE_LOG(WARN, "fail to init row", K(ret), K(cg_schema));
-  } else if (add_column) {//skip init read info and progressive_merge_helper_
-  } else if (cg_schema.is_single_column_group()) {
-    single_read_info_.reset();
-    if (OB_FAIL(ObTenantCGReadInfoMgr::construct_cg_read_info(allocator_,
-                                                              full_read_info->is_oracle_mode(),
-                                                              write_helper_.get_col_desc_array().at(0),
-                                                              nullptr,
-                                                              single_read_info_))) {
-      LOG_WARN("Fail to init cg read info", K(ret));
-    } else {
-      read_info = &single_read_info_;
-    }
-  } else {
-    read_info = full_read_info;
+  } else if (add_column) { //skip init read info and progressive_merge_helper_
+  } else if (OB_FAIL(choose_read_info_for_old_major(merge_param, *full_read_info, cg_schema, read_info))) {
+    LOG_WARN("Fail to choose read info", K(ret), K(cg_schema), K(read_info));
+  } else if (OB_ISNULL(read_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("read info is unexpected null", KR(ret), KP(read_info));
   }
 
   if (OB_SUCC(ret) && !merge_param.is_full_merge() && table != nullptr) {
@@ -524,11 +542,12 @@ int ObCOMergeRowWriter::init(const blocksstable::ObDatumRow &default_row,
   } else if (write_helper_.need_project()) {
     if (write_helper_.project(default_row, row_, is_all_nop)) {
       STORAGE_LOG(WARN, "fail to project", K(ret), K(default_row), K(row_));
-    } else if (OB_FAIL(basic_init(row_, merge_param, read_info, cg_schema.column_cnt_, table, add_column))) {
-      STORAGE_LOG(WARN, "Failed to init default row", K(ret), K(cg_schema.column_cnt_));
+    } else if (OB_FAIL(basic_init(row_ /*default_row*/, merge_param, read_info,
+                                  cg_column_cnt, table, add_column))) {
+      STORAGE_LOG(WARN, "Failed to init default row", K(ret), K(cg_column_cnt));
     }
-  } else if (OB_FAIL(basic_init(default_row, merge_param, read_info, cg_schema.column_cnt_, table, add_column))) {
-    STORAGE_LOG(WARN, "Failed to init default row", K(ret), K(cg_schema.column_cnt_));
+  } else if (OB_FAIL(basic_init(default_row, merge_param, read_info, cg_column_cnt, table, add_column))) {
+    STORAGE_LOG(WARN, "Failed to init default row", K(ret), K(cg_column_cnt));
   }
 
   return ret;
@@ -674,9 +693,13 @@ int ObCOMergeSingleWriter::init(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(basic_init(default_row, merge_param, full_read_info,
-      full_column_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(), row_table, false, true))) {
-    STORAGE_LOG(WARN, "fail to basic init", K(ret), K(merge_param), K(full_column_cnt), KPC(row_table));
+  } else if (OB_FAIL(basic_init(
+                 default_row, merge_param, full_read_info,
+                 full_column_cnt + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt(),
+                 row_table, false /*add_column*/,
+                 true /*only_use_row_store*/))) {
+    STORAGE_LOG(WARN, "fail to basic init", K(ret), K(merge_param),
+                K(full_column_cnt), KPC(row_table));
   } else {
     FLOG_INFO("succ to init ObCOMergeSingleWriter", K(ret), K(parallel_idx), K(start_cg_idx), K(end_cg_idx), KPC(row_table));
   }

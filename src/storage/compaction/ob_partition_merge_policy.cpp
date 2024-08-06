@@ -1883,7 +1883,7 @@ const char * ObCOMajorMergeTypeStr[] = {
   "INVALID_CO_MAJOR_MERGE_TYPE",
   "BUILD_COLUMN_STORE_MERGE",
   "BUILD_ROW_STORE_MERGE",
-  "REBUILD_COLUMN_STORE_MERGE",
+  "USE_RS_BUILD_SCHEMA_MATCH_MERGE",
 };
 
 const char* ObCOMajorMergePolicy::co_major_merge_type_to_str(const ObCOMajorMergeType co_merge_type)
@@ -1905,31 +1905,26 @@ int ObCOMajorMergePolicy::decide_co_major_sstable_status(
     ObCOMajorSSTableStatus &major_sstable_status)
 {
   int ret = OB_SUCCESS;
-  const ObIArray<ObStorageColumnGroupSchema> &cg_schemas = storage_schema.get_column_groups();
-  const int64_t cg_count = cg_schemas.count();
   major_sstable_status = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
 
-  for (int64_t idx = 0; idx < cg_count; idx++) {
-    if (cg_schemas.at(idx).is_all_column_group()) {
-      if (co_sstable.is_row_store_only_co_table()) {
-        major_sstable_status = ObCOMajorSSTableStatus::COL_ONLY_ALL;
-      } else {
-        major_sstable_status = ObCOMajorSSTableStatus::COL_WITH_ALL;
-      }
-      break;
-    } else if (cg_schemas.at(idx).is_rowkey_column_group()) {
-      if (co_sstable.is_row_store_only_co_table()) {
-        major_sstable_status = ObCOMajorSSTableStatus::PURE_COL_ONLY_ALL;
-      } else {
-        major_sstable_status = ObCOMajorSSTableStatus::PURE_COL;
-      }
-      break;
+  if (storage_schema.has_all_column_group()) {
+    if (co_sstable.is_row_store_only_co_table()) {
+      major_sstable_status = ObCOMajorSSTableStatus::COL_ONLY_ALL;
+    } else {
+      major_sstable_status = ObCOMajorSSTableStatus::COL_WITH_ALL;
+    }
+  } else {
+    if (co_sstable.is_row_store_only_co_table()) {
+      major_sstable_status = ObCOMajorSSTableStatus::PURE_COL_ONLY_ALL;
+    } else {
+      major_sstable_status = ObCOMajorSSTableStatus::PURE_COL;
     }
   }
 
   if (OB_UNLIKELY(!is_valid_co_major_sstable_status(major_sstable_status))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fail to decide co major sstable status", K(ret), K(major_sstable_status), K(cg_schemas), K(co_sstable));
+    LOG_WARN("fail to decide co major sstable status", K(ret), K(major_sstable_status),
+      "cg_schemas", storage_schema.get_column_groups(), K(co_sstable));
   } else {
     LOG_DEBUG("success to decide co major sstable status", K(ret), K(major_sstable_status));
   }
@@ -2005,16 +2000,16 @@ int ObCOMajorMergePolicy::decide_co_major_merge_type(
   int ret = OB_SUCCESS;
   ObCOMajorSSTableStatus major_sstable_status = ObCOMajorSSTableStatus::INVALID_CO_MAJOR_SSTABLE_STATUS;
   int64_t physical_row_cnt = 0;
-  const ObTabletID tablet_id = co_sstable.get_key().tablet_id_;
+  const ObTabletID &tablet_id = co_sstable.get_key().tablet_id_;
 
   if (OB_FAIL(decide_co_major_sstable_status(co_sstable, storage_schema, major_sstable_status))) {
     LOG_WARN("failed to decide co major sstable status");
   } else if (OB_UNLIKELY(EN_COMPACTION_DISABLE_ROW_COL_SWITCH)) {
-    major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : REBUILD_COLUMN_STORE_MERGE;
+    major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : USE_RS_BUILD_SCHEMA_MATCH_MERGE;
     LOG_INFO("[RowColSwitch] disable row col switch, only allow co major merge", K(tablet_id), K(co_sstable), K(tables), K(major_sstable_status), K(major_merge_type));
   } else if (OB_FAIL(accumulate_physical_row_cnt(tables, physical_row_cnt))) {
     // if accumulate row cnt failed, make major sstable match schema
-    major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : REBUILD_COLUMN_STORE_MERGE;
+    major_merge_type = is_major_sstable_match_schema(major_sstable_status) ? BUILD_COLUMN_STORE_MERGE : USE_RS_BUILD_SCHEMA_MATCH_MERGE;
     LOG_WARN("failed to accumulate row count for co major merge, build column store by default", "accumulate_ret", ret, K(major_sstable_status), K(major_merge_type));
     ret = OB_SUCCESS;
   } else {
@@ -2027,7 +2022,7 @@ int ObCOMajorMergePolicy::decide_co_major_merge_type(
         major_merge_type = BUILD_COLUMN_STORE_MERGE;
       }
     } else if (!build_row_store_flag && whether_to_rebuild_column_store(major_sstable_status, physical_row_cnt, column_cnt)) {
-      major_merge_type = REBUILD_COLUMN_STORE_MERGE;
+      major_merge_type = USE_RS_BUILD_SCHEMA_MATCH_MERGE;
     } else {
       major_merge_type = BUILD_ROW_STORE_MERGE;
     }
