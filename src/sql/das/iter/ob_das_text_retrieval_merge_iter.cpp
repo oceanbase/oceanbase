@@ -97,6 +97,7 @@ ObDASTextRetrievalMergeIter::ObDASTextRetrievalMergeIter()
     input_row_cnt_(0),
     output_row_cnt_(0),
     doc_cnt_calculated_(false),
+    doc_cnt_iter_acquired_(false),
     is_inited_(false)
 {
 }
@@ -267,6 +268,7 @@ int ObDASTextRetrievalMergeIter::inner_release()
   limit_param_.offset_ = 0;
   limit_param_.limit_ = -1;
   doc_cnt_calculated_ = false;
+  doc_cnt_iter_acquired_ = false;
   is_inited_ = false;
   return ret;
 }
@@ -658,12 +660,25 @@ int ObDASTextRetrievalMergeIter::do_total_doc_cnt()
     // skip
   } else if (ir_ctdef_->need_do_total_doc_cnt()) {
     // When estimation info not exist, or we found estimation info not accurate, calculate document count by scan
-    if (OB_FAIL(init_total_doc_cnt_param(tx_desc_, snapshot_))) {
-      LOG_WARN("failed to do total doc cnt", K(ret));
-    } else if (FALSE_IT(whole_doc_cnt_iter_->set_scan_param(whole_doc_agg_param_))) {
-    } else if (OB_FAIL(whole_doc_cnt_iter_->do_table_scan())) {
-      LOG_WARN("failed to do table scan for document count aggregation", K(ret));
+    if (!doc_cnt_iter_acquired_) {
+      if (OB_FAIL(init_total_doc_cnt_param(tx_desc_, snapshot_))) {
+        LOG_WARN("failed to do total doc cnt", K(ret));
+      } else if (FALSE_IT(whole_doc_cnt_iter_->set_scan_param(whole_doc_agg_param_))) {
+      } else if (OB_FAIL(whole_doc_cnt_iter_->do_table_scan())) {
+        LOG_WARN("failed to do table scan for document count aggregation", K(ret));
+      } else {
+        doc_cnt_iter_acquired_ = true;
+      }
     } else {
+      whole_doc_agg_param_.tablet_id_ = doc_id_idx_tablet_id_;
+      whole_doc_agg_param_.ls_id_ = ls_id_;
+      if (OB_FAIL(whole_doc_cnt_iter_->reuse())) {
+        LOG_WARN("failed to reuse whole doc cnt iter", K(ret));
+      } else if (OB_FAIL(whole_doc_cnt_iter_->rescan())) {
+        LOG_WARN("failed to rescan whole doc cnt iter", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(!static_cast<sql::ObStoragePushdownFlag>(whole_doc_agg_param_.pd_storage_flag_).is_aggregate_pushdown())) {
         ret = OB_NOT_IMPLEMENT;
         LOG_ERROR("aggregate without pushdown not implemented", K(ret));
