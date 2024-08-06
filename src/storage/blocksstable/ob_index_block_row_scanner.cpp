@@ -780,7 +780,7 @@ int ObIndexBlockRowScanner::get_next_idx_row(ObMicroIndexInfo &idx_block_row)
     idx_block_row.parent_macro_id_ = macro_id_;
     idx_block_row.nested_offset_ = nested_offset_;
   }
-  LOG_DEBUG("Get next index block row", K(ret), K_(current), K_(start), K_(end), K(idx_block_row), K_(endkey), KP(this));
+  LOG_DEBUG("Get next index block row", K(ret), K_(current), K_(start), K_(end), K(idx_block_row), KP(this));
   return ret;
 }
 
