@@ -695,6 +695,9 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   }
 #define ADD_COMMENT(...) \
   ADD_COMPACTION_INFO_PARAM(sstable_merge_info.comment_, sizeof(sstable_merge_info.comment_), __VA_ARGS__)
+  if(get_is_full_merge()){
+    ADD_COMMENT("is_full_merge",true);
+  }
   if (ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE != static_param_.merge_reason_) {
     ADD_COMMENT("merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(static_param_.merge_reason_));
   }
