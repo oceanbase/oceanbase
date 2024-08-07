@@ -71,6 +71,7 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObDatum *datum2 = NULL;
   ObGeometry *src_geo = NULL;
   ObGeometry *dest_geo = NULL;
+  ObGeometry *tmp_geo = NULL;
   omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
@@ -93,6 +94,8 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
   } else {
     ObString wkb = gis_datum->get_string();
     uint32_t srid = 0;
+    bool is_geog = false;
+
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_alloc, *gis_datum,
               expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
       LOG_WARN("fail to get real string data", K(ret), K(wkb));
@@ -118,7 +121,8 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
         ret = OB_ERR_BAD_FIELD_ERROR;
         // todo LOG
       } else { 
-        bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
+        is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
+
         switch (src_geo->type()) {
           case common::ObGeoType::MULTIPOINT:{
             if (is_geog) {
@@ -163,16 +167,27 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
           default:
             break;
         } // end switch
+
+        if (OB_SUCC(ret)) {
+          if (src_geo->type() == common::ObGeoType::MULTIPOINT) {
+            tmp_geo = dest_geo;
+          } else {
+            ObGeoToTreeVisitor visitor(&tmp_alloc);
+            if (OB_FAIL(dest_geo->do_visit(visitor))) {
+              LOG_WARN("failed to convert bin to tree", K(ret));
+            } else
+              tmp_geo = visitor.get_geometry();
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
       ObString res_wkb;
-      if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*dest_geo, expr, ctx, 
+      if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*tmp_geo, expr, ctx, 
                                              srs, res_wkb, srid))){
         LOG_WARN("failed to write geometry to wkb", K(ret));
-      } else {
-        res.set_string(res_wkb);
-      }
+      } 
+      res.set_string(res_wkb);
     } else {
       LOG_WARN("failed to get N-Geometry from Collection", K(ret));
     }
@@ -194,19 +209,20 @@ int ObExprSTGeometryN::get_sub_point(const ObGeometry *g,
     return ret;
   }
   typename MPT::iterator iter = src_geo->begin();
-  typename MPT::const_pointer sub_ptr;
   for (uint32 i = 0; i < N; ++i) {
     iter++;
   }
-  sub_ptr = iter.operator->();
-  PT *pt = OB_NEWx(PT, &allocator, sub_ptr->template get<0>(),
-                   sub_ptr->template get<1>(), g->get_srid(), &allocator);
+  typename MPT::const_pointer sub_ptr = iter.operator->();
+  PT *pt = OB_NEWx(PT, &allocator, 
+                   sub_ptr->template get<0>(),
+                   sub_ptr->template get<1>(), 
+                   g->get_srid(), &allocator);
   if (OB_ISNULL(pt)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory", K(ret));
-  } else
+  } else {
     sub_geo = pt;
-
+  }
   return ret;
 }
 
@@ -224,12 +240,11 @@ int ObExprSTGeometryN::get_sub_geometry(const ObGeometry *g,
     return ret;
   }
   typename MultiType::iterator iter = src_geo->begin();
-  typename MultiType::const_pointer sub_ptr;
   for (uint32 i = 0; i < N; ++i) {
     iter++;
   }
 
-  sub_ptr = iter.operator->();
+  typename MultiType::const_pointer sub_ptr = iter.operator->();
   bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
   if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, sub_type, is_geog, true, sub_geo))) {
     LOG_WARN("failed to create wkb", K(ret), K(sub_type));    // ObIWkbgeo
@@ -254,12 +269,11 @@ int ObExprSTGeometryN::get_sub_geometry_gc(const ObGeometry *g,
     return ret;
   }
   typename GCInType::iterator iter = src_geo->begin();
-  typename GCInType::const_pointer sub_ptr;
   for (uint32 i = 0; i < N; ++i) {
     iter++;
   }
 
-  sub_ptr = iter.operator->();
+  typename GCInType::const_pointer sub_ptr = iter.operator->();
   ObGeoType sub_type = src_geo->get_sub_type(sub_ptr);
   bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
   if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, sub_type, is_geog, true, sub_geo))) {
