@@ -670,6 +670,9 @@ int ObDASTextRetrievalMergeIter::do_total_doc_cnt()
         doc_cnt_iter_acquired_ = true;
       }
     } else {
+      const ObTabletID old_tablet_id = whole_doc_agg_param_.tablet_id_;
+      whole_doc_agg_param_.need_switch_param_ = whole_doc_agg_param_.need_switch_param_
+          || ((old_tablet_id.is_valid() && old_tablet_id != doc_id_idx_tablet_id_ ) ? true : false);
       whole_doc_agg_param_.tablet_id_ = doc_id_idx_tablet_id_;
       whole_doc_agg_param_.ls_id_ = ls_id_;
       if (OB_FAIL(whole_doc_cnt_iter_->reuse())) {
