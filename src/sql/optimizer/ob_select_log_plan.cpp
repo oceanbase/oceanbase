@@ -340,7 +340,8 @@ int ObSelectLogPlan::candi_allocate_three_stage_group_by(const ObIArray<ObRawExp
           OB_FAIL(candidate_plan.plan_tree_->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                   is_partition_wise))) {
         LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
-      } else if (!candidate_plan.plan_tree_->is_distributed() || is_partition_wise) {
+      } else if (!candidate_plan.plan_tree_->is_distributed() ||
+                  (is_partition_wise && get_optimizer_context().is_partition_wise_plan_enabled())) {
         bool part_sort_valid = !groupby_helper.force_normal_sort_ && !group_by_exprs.empty();
         bool normal_sort_valid = !groupby_helper.force_part_sort_;
         if (OB_FAIL(update_part_sort_method(part_sort_valid, normal_sort_valid))) {
@@ -565,7 +566,9 @@ int ObSelectLogPlan::should_create_rollup_pushdown_plan(ObLogicalOperator *top,
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check is partition wise", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise ) {
+  } else if (!top->is_distributed()) {
+    // do nothing
+  } else if (is_partition_wise && get_optimizer_context().is_partition_wise_plan_enabled()) {
     // do nothing
   } else if (NULL == groupby_helper.rollup_id_expr_ &&
              OB_FAIL(ObRawExprUtils::build_pseudo_rollup_id(get_optimizer_context().get_expr_factory(),
@@ -727,7 +730,8 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() ||
+             (is_partition_wise && get_optimizer_context().is_partition_wise_plan_enabled())) {
     if (OB_FAIL(allocate_group_by_as_top(top,
                                          AggregateAlgo::HASH_AGGREGATE,
                                          group_by_exprs,
@@ -1075,7 +1079,8 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible with reduce expr", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() ||
+             (is_partition_wise && get_optimizer_context().is_partition_wise_plan_enabled())) {
     if (OB_FAIL(try_allocate_sort_as_top(top, sort_keys, need_sort, prefix_pos, part_cnt))) {
       LOG_WARN("failed to allocate sort as top", K(ret));
     } else if (OB_FAIL(allocate_group_by_as_top(top,
@@ -1558,7 +1563,8 @@ int ObSelectLogPlan::create_hash_distinct_plan(ObLogicalOperator *&top,
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check sharding compatible with reduce expr", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() ||
+            (is_partition_wise && get_optimizer_context().is_partition_wise_plan_enabled())) {
     OPT_TRACE("is basic distinct:", !top->is_distributed());
     OPT_TRACE("is partition wise distinct", is_partition_wise);
     if (OB_FAIL(allocate_distinct_as_top(top,
@@ -1645,7 +1651,8 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(reduce_exprs,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check sharding compatible with reduce exprs", K(ret));
-  } else if (!top->is_distributed() || is_partition_wise) {
+  } else if (!top->is_distributed() ||
+            (is_partition_wise && get_optimizer_context().is_partition_wise_plan_enabled())) {
     OPT_TRACE("is basic distinct:", !top->is_distributed());
     OPT_TRACE("is partition wise distinct", is_partition_wise);
     if (OB_FAIL(try_allocate_sort_as_top(top, sort_keys, need_sort, prefix_pos))) {

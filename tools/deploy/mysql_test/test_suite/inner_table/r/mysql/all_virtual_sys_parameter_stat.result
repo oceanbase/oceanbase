@@ -410,6 +410,7 @@ _parallel_max_active_sessions
 _parallel_min_message_pool
 _parallel_redo_logging_trigger
 _parallel_server_sleep_time
+_partition_wise_plan_enabled
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
 _preserve_order_for_pagination

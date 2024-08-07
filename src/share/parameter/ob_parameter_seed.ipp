@@ -2021,3 +2021,7 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
                      "\"Disable\" represent disable spm (default value)."
                      "\"OnlineEvolve\" represent evolve plan online.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_partition_wise_plan_enabled, OB_TENANT_PARAMETER, "True",
+         "enable/disable optimizer partition wise plan",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

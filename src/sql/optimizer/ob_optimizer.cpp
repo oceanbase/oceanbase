@@ -558,6 +558,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool storage_estimation_enabled = false;
   bool has_cursor_expr = false;
   int64_t link_stmt_count = 0;
+  bool partition_wise_plan_enabled = true;
+  bool exists_partition_wise_plan_enabled_hint = false;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session.get_effective_tenant_id()));
   bool rowsets_enabled = tenant_config.is_valid() && tenant_config->_rowsets_enabled;
   ctx_.set_is_online_ddl(session.get_ddl_info().is_ddl());  // set is online ddl first, is used by other extract operations
@@ -587,6 +589,10 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("fail to get storage_estimation_enabled", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_DAS_KEEP_ORDER, das_keep_order_enabled))) {
     LOG_WARN("failed to check das keep order enabled", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::PARTITION_WISE_PLAN_ENABLED,
+                                                   partition_wise_plan_enabled,
+                                                   exists_partition_wise_plan_enabled_hint))) {
+    LOG_WARN("failed to check partition wise plan enabled", K(ret));
   } else {
     ctx_.set_storage_estimation_enabled(storage_estimation_enabled);
     ctx_.set_serial_set_order(force_serial_set_order);
@@ -609,6 +615,12 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
       ctx_.set_hash_join_enabled(tenant_config->_hash_join_enabled);
       ctx_.set_merge_join_enabled(tenant_config->_optimizer_sortmerge_join_enabled);
       ctx_.set_nested_join_enabled(tenant_config->_nested_loop_join_enabled);
+    }
+    if (tenant_config.is_valid()) {
+      ctx_.set_partition_wise_plan_enabled(tenant_config->_partition_wise_plan_enabled);
+    }
+    if (exists_partition_wise_plan_enabled_hint) {
+      ctx_.set_partition_wise_plan_enabled(partition_wise_plan_enabled);
     }
     if (!session.is_inner() && stmt.get_query_ctx()->get_injected_random_status()) {
       ctx_.set_generate_random_plan(true);

@@ -11783,6 +11783,10 @@ int ObJoinOrder::get_valid_path_info_from_hint(const ObRelIds &table_set,
     } else if (log_hint.is_outline_data_) {
       // outline data has no pq distributed hint
       path_info.distributed_methods_ &= DIST_BASIC_METHOD;
+    } else if (!get_plan()->get_optimizer_context().is_partition_wise_plan_enabled()) {
+      path_info.distributed_methods_ &= ~DIST_PARTITION_NONE;
+      path_info.distributed_methods_ &= ~DIST_NONE_PARTITION;
+      path_info.distributed_methods_ &= ~DIST_PARTITION_WISE;
     }
 
     if (NULL != log_join_hint && both_access && !ignore_dist_hint

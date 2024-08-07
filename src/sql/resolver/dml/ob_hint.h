@@ -159,6 +159,7 @@ struct ObOptParamHint
     DEF(ENABLE_DAS_KEEP_ORDER,)           \
     DEF(SPILL_COMPRESSION_CODEC,)   \
     DEF(INLIST_REWRITE_THRESHOLD,)        \
+    DEF(PARTITION_WISE_PLAN_ENABLED,)        \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
