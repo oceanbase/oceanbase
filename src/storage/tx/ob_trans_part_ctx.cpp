@@ -3936,7 +3936,7 @@ int ObPartTransCtx::submit_abort_log_()
     if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
       TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
     }
-  } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(1))) {
+  } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(mds_cache_.count() + 1/*promise tx_op pre_alloc safe*/))) {
     TRANS_LOG(WARN, "reserve tx_op space failed", KR(ret), KPC(this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -7415,7 +7415,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
       } else if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
         TRANS_LOG(WARN, "fill MDS log failed", K(ret));
       } else if (OB_FAIL(exec_info_.multi_data_source_.reserve(
-                     exec_info_.multi_data_source_.count() + log_cb->get_mds_range().count()))) {
+                     exec_info_.multi_data_source_.count() + mds_cache_.count()))) {
         TRANS_LOG(WARN, "reserve mds space failed", K(ret));
       } else if (OB_FAIL(log_block.add_new_log(log, &big_segment_info_.segment_buf_))) {
         // do not handle ret code OB_BUF_NOT_ENOUGH, one log entry should be
@@ -7436,7 +7436,12 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
       } else if (log_block.get_cb_arg_array().count() == 0) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
-      } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(log_cb->get_mds_range().count()))) {
+      // when mds_op concurrent submit log, we must promise tx_op pre_alloc safe
+      // for example: submit_mds1(tx_op_count=10)--->submit_mds2(tx_op_count=50)-->mds1_log_cb_apply()-->mds2_log_cb_apply()
+      // we need pre_alloc tx_op_count=60 for log_cb apply not to alloc memory
+      // reserve tx_op count equals unsubmit log mds_op (mds_cache)
+      // this depend insert tx op and move from mds_cache process when mds redo log callback
+      } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(mds_cache_.count()))) {
         TRANS_LOG(WARN, "reserve tx_op space failed", KR(ret), KPC(this));
       } else if (OB_FAIL(ls_tx_ctx_mgr_->get_tx_table()->alloc_tx_data(log_cb->get_tx_data_guard(), true, INT64_MAX))) {
         TRANS_LOG(WARN, "alloc tx_data failed", KR(ret), KPC(this));

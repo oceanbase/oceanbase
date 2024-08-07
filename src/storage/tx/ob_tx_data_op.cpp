@@ -127,10 +127,11 @@ int ObTxOpVector::try_extend_space(int64_t count, ObIAllocator &allocator)
     STORAGE_LOG(WARN, "check_stat failed", KR(ret));
   } else if (count == 0) {
     // do nothing
+  } else if (count_ + count <= capacity_) {
+    // do nothing
   } else {
     ObTxOp *tx_op_ptr = nullptr;
-    // may concurrent reserve space so we use capacity_
-    int64_t new_capacity = capacity_ + count;
+    int64_t new_capacity = count_ + count;
     if (OB_ISNULL(tx_op_ptr = (ObTxOp*)allocator.alloc(new_capacity * sizeof(ObTxOp)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
