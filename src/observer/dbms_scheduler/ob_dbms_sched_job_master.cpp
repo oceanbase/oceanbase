@@ -337,6 +337,9 @@ int ObDBMSSchedJobMaster::scheduler()
           ob_usleep(MIN_SCHEDULER_INTERVAL);
         } else {
           ob_usleep(max(0, delay));
+          common::ObCurTraceId::TraceId job_trace_id;
+          job_trace_id.init(GCONF.self_addr_);
+          ObTraceIdGuard trace_id_guard(job_trace_id);
           if (OB_SUCCESS != (tmp_ret = scheduler_task_.wait_vector().remove(scheduler_task_.wait_vector().begin()))) {
             LOG_WARN("fail to remove job_id from sorted vector", K(ret));
           } else if (OB_SUCCESS != (tmp_ret = scheduler_job(job_key))) {
