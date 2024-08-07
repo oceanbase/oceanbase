@@ -236,7 +236,7 @@ public:
   sql::ObSqlCtx &get_sql_ctx() { return sql_ctx_; }
   ObResultSet *get_result_set() { return result_set_; }
   ObSPIOutParams &get_out_params() { return out_params_; }
-  ObIAllocator &get_allocaor() { return allocator_; }
+  ObIAllocator &get_allocator() { return allocator_; }
   int destruct_exec_params(ObSQLSessionInfo &session);
 private:
   enum EndStmtType

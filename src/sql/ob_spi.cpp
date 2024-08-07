@@ -3368,11 +3368,16 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
 
   cursor.set_streaming();
   ObSPIResultSet *spi_result = NULL;
+  ObString ps_sql_copy;
 
   OZ (cursor.prepare_spi_result(ctx, spi_result));
   CK (OB_NOT_NULL(spi_result));
   CK (OB_NOT_NULL(spi_result->get_memory_ctx()));
   OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), for_update));
+
+  // in a streaming cursor, lifetime of ps_sql may be shorter than the cursor itself,
+  // so we need to open it with a deep copy.
+  OZ (ob_write_string(spi_result->get_allocator(), ps_sql, ps_sql_copy));
 
   if (OB_SUCC(ret)) {
 
@@ -3395,7 +3400,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
             OZ (inner_open(ctx,
                            spi_result->get_memory_ctx()->get_arena_allocator(),
                            sql,
-                           ps_sql,
+                           ps_sql_copy,
                            type,
                            params,
                            sql_param_count,
@@ -3411,7 +3416,7 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
           OZ (inner_open(ctx,
                          spi_result->get_memory_ctx()->get_arena_allocator(),
                          sql,
-                         ps_sql,
+                         ps_sql_copy,
                          type,
                          params,
                          sql_param_count,
