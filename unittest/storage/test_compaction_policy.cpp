@@ -242,7 +242,6 @@ void TestCompactionPolicy::TearDownTestCase()
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID), false);
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  ASSERT_EQ(OB_SUCCESS, ret);
 
   ObLSID ls_id = ObLSID(TEST_LS_ID);
   ObTabletID tablet_id = ObTabletID(TEST_TABLET_ID);
