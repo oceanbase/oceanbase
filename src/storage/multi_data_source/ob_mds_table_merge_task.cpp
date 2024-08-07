@@ -36,6 +36,7 @@ namespace storage
 {
 namespace mds
 {
+
 ObMdsTableMergeTask::ObMdsTableMergeTask()
   : ObITask(ObITaskType::TASK_TYPE_MDS_MINI_MERGE),
     is_inited_(false),
@@ -77,6 +78,7 @@ int ObMdsTableMergeTask::process()
   ObTabletMergeCtx *ctx_ptr = nullptr;
   DEBUG_SYNC(AFTER_EMPTY_SHELL_TABLET_CREATE);
   bool need_schedule_mds_minor = true;
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited), KPC(mds_merge_dag_));

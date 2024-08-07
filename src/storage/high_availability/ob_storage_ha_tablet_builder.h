@@ -339,10 +339,6 @@ private:
       const ObMigrationTabletParam *src_tablet_meta,
       const ObTablesHandleArray &tables_handle,
       const bool is_replace_remote);
-  static int check_need_merge_tablet_meta_(
-      const ObMigrationTabletParam *src_tablet_meta,
-      ObTablet *tablet,
-      bool &need_merge);
   static int assemble_column_oriented_sstable_(
       const ObTablesHandleArray &mixed_tables,
       ObTablesHandleArray &co_tables);

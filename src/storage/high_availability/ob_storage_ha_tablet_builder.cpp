@@ -2447,39 +2447,40 @@ int ObStorageHATabletBuilderUtil::build_table_with_minor_tables(
   bool need_tablet_meta_merge = true;
   // When we want to place the minor tables on the source side in the local table store,
   // whatever from backup or other observer, tablet meta merge action is necessary,
-  // except for the following two cases.
-  if (ObTabletRestoreAction::is_restore_major(restore_action)) {
-    // 1. Tablet meta merge happened when restore minor, no need for this time.
-    need_tablet_meta_merge = false;
-  } else if (is_replace_remote) {
-    // 2. Tablet meta merge happened when restore remote sstable, no need for this time.
+  // except for the following one cases.
+  if (is_replace_remote) {
+    // Tablet meta merge happened when restore remote sstable, no need for this time.
     need_tablet_meta_merge = false;
   }
 
   if (OB_ISNULL(ls) || !tablet_id.is_valid() || OB_ISNULL(src_tablet_meta) || !ObTabletRestoreAction::is_valid(restore_action)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("build tablet with major tables get invalid argument", K(ret), KP(ls), K(tablet_id), K(restore_action));
-  } else if (OB_FAIL(append_sstable_array_(sstables, mds_tables))) {
-    LOG_WARN("failed to append mds tables handle into array", K(ret), K(mds_tables));
-  } else if (OB_FAIL(append_sstable_array_(sstables, minor_tables))) {
-    LOG_WARN("failed to append minor tables handle into array", K(ret), K(minor_tables));
-  } else if (!ddl_tables.empty() && ddl_tables.get_table(0)->is_column_store_sstable()) {
-    if (OB_FAIL(assemble_column_oriented_sstable_(ddl_tables, ddl_co_tables))) {
-      LOG_WARN("assemble co tables failed", K(ret), K(ddl_tables));
-    } else if (OB_FAIL(append_sstable_array_(sstables, ddl_co_tables))) {
-      LOG_WARN("failed to append ddl tables handle", K(ret), K(ddl_co_tables));
+  } else if (ObTabletRestoreAction::is_restore_major(restore_action)) {
+    //do nothing
+  } else {
+    if (OB_FAIL(append_sstable_array_(sstables, mds_tables))) {
+      LOG_WARN("failed to append mds tables handle into array", K(ret), K(mds_tables));
+    } else if (OB_FAIL(append_sstable_array_(sstables, minor_tables))) {
+      LOG_WARN("failed to append minor tables handle into array", K(ret), K(minor_tables));
+    } else if (!ddl_tables.empty() && ddl_tables.get_table(0)->is_column_store_sstable()) {
+      if (OB_FAIL(assemble_column_oriented_sstable_(ddl_tables, ddl_co_tables))) {
+        LOG_WARN("assemble co tables failed", K(ret), K(ddl_tables));
+      } else if (OB_FAIL(append_sstable_array_(sstables, ddl_co_tables))) {
+        LOG_WARN("failed to append ddl tables handle", K(ret), K(ddl_co_tables));
+      }
+    } else if (OB_FAIL(append_sstable_array_(sstables, ddl_tables))) {
+      LOG_WARN("failed to append ddl tables handle", K(ret), K(ddl_tables));
     }
-  } else if (OB_FAIL(append_sstable_array_(sstables, ddl_tables))) {
-    LOG_WARN("failed to append ddl tables handle", K(ret), K(ddl_tables));
-  }
 
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_tablet_(tablet_id, ls, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(tablet_id), KPC(ls));
-  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
-  } else if (OB_FAIL(inner_update_tablet_table_store_with_minor_(ls, tablet, need_tablet_meta_merge,
-      src_tablet_meta, sstables, is_replace_remote))) {
-    LOG_WARN("failed to update tablet table store with minor", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(get_tablet_(tablet_id, ls, tablet_handle))) {
+      LOG_WARN("failed to get tablet", K(ret), K(tablet_id), KPC(ls));
+    } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
+    } else if (OB_FAIL(inner_update_tablet_table_store_with_minor_(ls, tablet, need_tablet_meta_merge,
+        src_tablet_meta, sstables, is_replace_remote))) {
+      LOG_WARN("failed to update tablet table store with minor", K(ret));
+    }
   }
   return ret;
 }
@@ -2494,17 +2495,13 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
 {
   int ret = OB_SUCCESS;
   ObBatchUpdateTableStoreParam update_table_store_param;
-  const bool is_rollback = false;
-  bool need_merge = false;
 
   if (OB_ISNULL(ls) || OB_ISNULL(tablet) || (need_tablet_meta_merge && OB_ISNULL(src_tablet_meta))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner update tablet table store with minor get invalid argument", K(ret), KP(ls), KP(tablet));
-  } else if (need_tablet_meta_merge && OB_FAIL(check_need_merge_tablet_meta_(src_tablet_meta, tablet, need_merge))) {
-    LOG_WARN("failed to check remote logical sstable exist", K(ret), KPC(tablet));
   } else {
     const ObTabletID &tablet_id = tablet->get_tablet_meta().tablet_id_;
-    update_table_store_param.tablet_meta_ = need_merge ? src_tablet_meta : nullptr;
+    update_table_store_param.tablet_meta_ = need_tablet_meta_merge ? src_tablet_meta : nullptr;
     update_table_store_param.rebuild_seq_ = ls->get_rebuild_seq();
     update_table_store_param.need_replace_remote_sstable_ = is_replace_remote;
 
@@ -2513,31 +2510,6 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_minor_(
     } else if (OB_FAIL(ls->build_ha_tablet_new_table_store(tablet_id, update_table_store_param))) {
       LOG_WARN("failed to build ha tablet new table store", K(ret), K(tablet_id), KPC(tablet), KPC(src_tablet_meta), K(update_table_store_param));
     }
-  }
-  return ret;
-}
-
-int ObStorageHATabletBuilderUtil::check_need_merge_tablet_meta_(
-    const ObMigrationTabletParam *src_tablet_meta,
-    ObTablet *tablet,
-    bool &need_merge)
-{
-  int ret = OB_SUCCESS;
-  need_merge = false;
-  bool is_exist = false;
-  if (OB_ISNULL(tablet) || OB_ISNULL(src_tablet_meta)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("check need merge tablet meta get invalid argument", K(ret), KP(tablet), KP(src_tablet_meta));
-  } else if (tablet->get_tablet_meta().has_transfer_table()) {
-    // If transfer table exist, no remote logical table will be created. And, the replaced transfer table
-    // must be included in the minor tables. The transfer table info of local tablet need to be cleared by
-    // merging tablet meta.
-    need_merge = true;
-  } else if (tablet->get_tablet_meta().clog_checkpoint_scn_ >= src_tablet_meta->clog_checkpoint_scn_
-      && tablet->get_tablet_meta().mds_checkpoint_scn_ >= src_tablet_meta->mds_checkpoint_scn_) {
-    need_merge = false;
-  } else {
-    need_merge = true;
   }
   return ret;
 }
