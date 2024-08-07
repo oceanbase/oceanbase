@@ -909,7 +909,9 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
 //            session断开时则清理掉事务级和会话级的临时表;
 //由于oracle临时表仅仅是清理本session数据, 为避免rs拥塞,不发往rs由sql proxy执行
 //对于分布式计划, 除非ac=1否则交给master session清理, 反序列化得到的session不做事情
-int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn, const bool is_xa_trans)
+int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
+                                       const bool is_xa_trans,
+                                       const bool is_reset_connection)
 {
   int ret = OB_SUCCESS;
   bool ac = false;
@@ -924,14 +926,14 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn, const bool is_xa_t
                  || is_xa_trans)
              && (!get_is_deserialized() || ac)) {
     bool need_drop_temp_table = false;
-    //mysql: 仅直连 & sess 断开时
+    //mysql: 1. 直连 & sess 断开时  2. reset connection
     //oracle: commit; 或者 直连时的断session;
     if (!is_oracle_mode()) {
-      if (false == is_obproxy_mode() && is_sess_disconn) {
+      if ((false == is_obproxy_mode() && is_sess_disconn) || is_reset_connection) {
         need_drop_temp_table = true;
       }
     } else {
-      if (false == is_sess_disconn || false == is_obproxy_mode()) {
+      if (false == is_sess_disconn || false == is_obproxy_mode() || is_reset_connection) {
         need_drop_temp_table = true;
         //ac=1, 反序列化session断开时只是任务结束, 并不是真的sess断开, 视作trx commit
         if (is_sess_disconn && get_is_deserialized() && ac) {
@@ -950,7 +952,7 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn, const bool is_xa_t
       obrpc::ObDropTableArg drop_table_arg;
       drop_table_arg.if_exist_ = true;
       drop_table_arg.to_recyclebin_ = false;
-      if (false == is_sess_disconn) {
+      if (false == is_sess_disconn && false == is_reset_connection) {
         drop_table_arg.table_type_ = share::schema::TMP_TABLE_ORA_TRX;
       } else if (is_oracle_mode()) {
         drop_table_arg.table_type_ = share::schema::TMP_TABLE_ORA_SESS;
@@ -1282,7 +1284,7 @@ int ObSQLSessionInfo::add_prepare(const ObString &ps_name, ObPsStmtId ps_id)
   int ret = OB_SUCCESS;
   ObString stored_name;
   ObPsStmtId exist_ps_id = OB_INVALID_ID;
-  if (OB_FAIL(name_pool_.write_string(ps_name, &stored_name))) {
+  if (OB_FAIL(conn_level_name_pool_.write_string(ps_name, &stored_name))) {
     LOG_WARN("failed to copy name", K(ps_name), K(ps_id), K(ret));
   } else if (OB_FAIL(try_create_ps_name_id_map())) {
     LOG_WARN("fail create ps name id map", K(ret));
@@ -1768,7 +1770,7 @@ int ObSQLSessionInfo::check_read_only_privilege(const bool read_only,
 ObTraceEventRecorder* ObSQLSessionInfo::get_trace_buf()
 {
   if (NULL == trace_recorder_) {
-    void *ptr = name_pool_.alloc(sizeof(ObTraceEventRecorder));
+    void *ptr = sess_level_name_pool_.alloc(sizeof(ObTraceEventRecorder));
     if (NULL == ptr) {
       LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc trace recorder");
     } else {
@@ -3241,6 +3243,18 @@ inline int ObSQLSessionInfo::init_mem_context(uint64_t tenant_id)
     }
   }
   return ret;
+}
+
+void ObSQLSessionInfo::destory_mem_context()
+{
+  if (OB_NOT_NULL(mem_context_)) {
+    destroy_contexts_map(contexts_map_, mem_context_->get_malloc_allocator());
+    app_ctx_info_encoder_.is_changed_ = true;
+    curr_session_context_size_ = 0;
+    contexts_map_.reuse();
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = NULL;
+  }
 }
 
 bool ObSQLSessionInfo::has_sess_info_modified() const {

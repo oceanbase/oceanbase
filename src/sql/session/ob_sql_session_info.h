@@ -876,7 +876,9 @@ public:
   void set_accessed_session_level_temp_table() { has_accessed_session_level_temp_table_ = true; }
   bool has_accessed_session_level_temp_table() const { return has_accessed_session_level_temp_table_; }
   // 清除临时表
-  int drop_temp_tables(const bool is_sess_disconn = true, const bool is_xa_trans = false);
+  int drop_temp_tables(const bool is_sess_disconn = true,
+                       const bool is_xa_trans = false,
+                       const bool is_reset_connection = false);
   void refresh_temp_tables_sess_active_time(); //更新临时表的sess active time
   int drop_reused_oracle_temp_tables();
   int delete_from_oracle_temp_tables(const obrpc::ObDropTableArg &const_drop_table_arg);
@@ -1164,7 +1166,6 @@ public:
   int set_sequence_value(uint64_t tenant_id,
                          uint64_t seq_id,
                          const share::ObSequenceValue &value);
-
   int drop_sequence_value_if_exists(uint64_t seq_id);
   int get_dblink_sequence_id(const common::ObString &sequence_name,
                              uint64_t dblink_id,
@@ -1257,6 +1258,12 @@ public:
                       bool is_inner_sql);
   int get_inner_ps_stmt_id(ObPsStmtId cli_stmt_id, ObPsStmtId &inner_stmt_id);
   int close_ps_stmt(ObPsStmtId stmt_id);
+  void reset_ps_session_info() { ps_session_info_map_.reuse(); }
+  void reset_ps_name()
+  {
+    ps_name_id_map_.reuse();
+    next_client_ps_stmt_id_ = 0;
+  }
 
   bool is_encrypt_tenant();
   int64_t get_expect_group_id() const { return expect_group_id_; }
@@ -1408,6 +1415,7 @@ public:
 
   // piece
   observer::ObPieceCache *get_piece_cache(bool need_init = false);
+  void set_piece_cache(void* piece_cache) { piece_cache_ = reinterpret_cast<observer::ObPieceCache*>(piece_cache); }
 
   share::schema::ObUserLoginInfo get_login_info () { return login_info_; }
   int set_login_info(const share::schema::ObUserLoginInfo &login_info);
@@ -1445,8 +1453,9 @@ public:
 public:
   bool has_tx_level_temp_table() const { return tx_desc_ && tx_desc_->with_temporary_table(); }
   void set_affected_rows_is_changed(int64_t affected_rows);
-private:
   int close_all_ps_stmt();
+  void destory_mem_context();
+private:
   void destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc);
   inline int init_mem_context(uint64_t tenant_id);
   void set_cur_exec_ctx(ObExecContext *cur_exec_ctx) { cur_exec_ctx_ = cur_exec_ctx; }

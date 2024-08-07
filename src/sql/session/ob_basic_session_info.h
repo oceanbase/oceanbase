@@ -986,6 +986,8 @@ public:
   int get_sys_variable_by_name(const common::ObString &var, int64_t &val) const;
   ///@}
 
+  int reset_sys_vars();
+
   /// check the existence of the system variable
   int sys_variable_exists(const common::ObString &var, bool &is_exist) const;
 
@@ -1435,6 +1437,7 @@ public:
   int get_security_version(uint64_t &security_version) const;
   int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
   void trace_all_sys_vars() const;
+  void reuse_labels() { labels_.reuse(); }
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
@@ -2268,7 +2271,8 @@ protected:
   common::ObSmallBlockAllocator<> ps_session_info_allocator_;
   common::ObSmallBlockAllocator<> cursor_info_allocator_; // for alloc memory of PS CURSOR/SERVER REF CURSOR
   common::ObSmallBlockAllocator<> package_info_allocator_; // for alloc memory of session package state
-  common::ObStringBuf name_pool_; // for variables names and statement names
+  common::ObStringBuf sess_level_name_pool_; // will reset when disconnect session
+  common::ObStringBuf conn_level_name_pool_; // will reset when reset connection and disconnect session
   intptr_t json_pl_mngr_; // for pl json manage
   TransFlags trans_flags_;
   SqlScopeFlags sql_scope_flags_;
