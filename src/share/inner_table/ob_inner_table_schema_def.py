@@ -35744,6 +35744,8 @@ def_table_schema(
 # 21613: CDB_WR_SQL_PLAN
 # 21614: DBA_WR_RES_MGR_SYSSTAT
 # 21615: CDB_WR_RES_MGR_SYSSTAT
+# 21616: DBA_OB_SPM_EVO_RESULT
+# 21617: CDB_OB_SPM_EVO_RESULT
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -63685,6 +63687,7 @@ left join
 # 28258: V$OB_RES_MGR_SYSSTAT
 # 28259: DBA_WR_SQL_PLAN
 # 28260: DBA_WR_RES_MGR_SYSSTAT
+# 28261: DBA_OB_SPM_EVO_RESULT
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
