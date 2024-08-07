@@ -201,8 +201,6 @@ int ObTablet::init_for_first_time_creation(
   int ret = OB_SUCCESS;
   const lib::Worker::CompatMode compat_mode = storage_schema.get_compat_mode();
   const int64_t default_max_sync_medium_scn = 0;
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -232,11 +230,9 @@ int ObTablet::init_for_first_time_creation(
         K(create_scn), K(snapshot_version), K(compat_mode), K(store_flag));
   } else if (is_ls_inner_tablet() && OB_FAIL(inner_create_memtable())) {
     LOG_WARN("failed to create first memtable", K(ret), K(tablet_id));
-  } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+  } else if (OB_FAIL(pull_memtables(allocator))) {
     LOG_WARN("fail to pull memtable", K(ret));
   } else {
-    ddl_kvs_ = ddl_kvs_addr;
-    ddl_kv_count_ = ddl_kv_count;
     ALLOC_AND_INIT(allocator, table_store_addr_, (*this), sstable);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, storage_schema_addr_.ptr_))) {
@@ -329,8 +325,6 @@ int ObTablet::init_for_merge(
   const ObTabletMdsData &old_mds_data = old_tablet.mds_data_;
   const bool update_in_major_type_merge = param.need_report_ && param.sstable_->is_major_sstable();
   int64_t finish_medium_scn = 0;
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -365,17 +359,14 @@ int ObTablet::init_for_merge(
     LOG_WARN("failed to fetch old table store", K(ret), K(old_tablet));
   } else if (OB_FAIL(old_table_store_wrapper.get_member(old_table_store))) {
     LOG_WARN("failed to get old table store", K(ret));
-  } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+  } else if (OB_FAIL(pull_memtables(allocator))) {
     LOG_WARN("failed to pull memtable", K(ret));
   } else {
-    ddl_kvs_ = ddl_kvs_addr;
-    ddl_kv_count_ = ddl_kv_count;
     ALLOC_AND_INIT(allocator, table_store_addr_, (*this), param, (*old_table_store));
-    if (OB_SUCC(ret) && OB_UNLIKELY(ddl_kv_count_ != ddl_kv_count
-                 || ddl_kv_count != table_store_addr_.get_ptr()->get_ddl_memtable_count())) {
+    if (OB_SUCC(ret) && OB_UNLIKELY(ddl_kv_count_ != table_store_addr_.get_ptr()->get_ddl_memtable_count())) {
       // This is defense code. If it runs at here, it must be a bug.
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("It encounters a ddl kv array bug, please pay attention", K(ret), K(ddl_kv_count), K(ddl_kv_count_),
+      LOG_ERROR("It encounters a ddl kv array bug, please pay attention", K(ret), K(ddl_kv_count_), K(ddl_kv_count_),
           "table store ddl kv count", table_store_addr_.get_ptr()->get_ddl_memtable_count());
     }
   }
@@ -441,8 +432,6 @@ int ObTablet::init_for_mds_table_dump(
   const ObTabletTableStore *old_table_store = nullptr;
   ObStorageSchema *old_storage_schema = nullptr;
   int64_t finish_medium_scn = 0;
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -460,7 +449,7 @@ int ObTablet::init_for_mds_table_dump(
     LOG_WARN("failed to load storage schema", K(ret), K(old_tablet));
   } else if (CLICK_FAIL(tablet_meta_.init(old_tablet.tablet_meta_, flush_scn))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(flush_scn));
-  } else if (CLICK_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+  } else if (CLICK_FAIL(pull_memtables(allocator))) {
     LOG_WARN("fail to pull memtable", K(ret));
   } else if (CLICK_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
     LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
@@ -471,8 +460,6 @@ int ObTablet::init_for_mds_table_dump(
   } else if (CLICK_FAIL(mds_data_.init_for_mds_table_dump(allocator, mds_table_data, base_data, finish_medium_scn))) {
     LOG_WARN("failed to init mds data", K(ret), K(finish_medium_scn));
   } else {
-    ddl_kvs_ = ddl_kvs_addr;
-    ddl_kv_count_ = ddl_kv_count;
     ALLOC_AND_INIT(allocator, storage_schema_addr_, *old_storage_schema);
   }
 
@@ -507,8 +494,6 @@ int ObTablet::init_with_migrate_param(
   const share::ObLSID &ls_id = param.ls_id_;
   const common::ObTabletID &tablet_id = param.tablet_id_;
   allocator_ = &allocator;
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -555,11 +540,9 @@ int ObTablet::init_with_migrate_param(
     } else {
       if (OB_FAIL(mds_data_.init_by_full_memory_mds_data(*allocator_, param.mds_data_))) {
         LOG_WARN("failed to assign mds data", K(ret), K(param));
-      } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+      } else if (OB_FAIL(pull_memtables(allocator))) {
         LOG_WARN("fail to pull memtable", K(ret));
       } else {
-        ddl_kvs_ = ddl_kvs_addr;
-        ddl_kv_count_ = ddl_kv_count;
         ALLOC_AND_INIT(allocator, table_store_addr_, (*this), nullptr/*ObTableHandleV2*/);
         ALLOC_AND_INIT(allocator, storage_schema_addr_, param.storage_schema_);
       }
@@ -599,8 +582,6 @@ int ObTablet::init_for_defragment(
   ObStorageSchema *old_storage_schema = nullptr;
   const ObTabletMdsData &old_mds_data = old_tablet.mds_data_;
   allocator_ = &allocator;
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -624,15 +605,13 @@ int ObTablet::init_for_defragment(
       old_tablet.get_multi_version_start(),
       old_tablet.tablet_meta_.max_sync_storage_schema_version_))) {
     LOG_WARN("fail to init tablet_meta", K(ret), K(old_tablet.tablet_meta_));
-  } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+  } else if (OB_FAIL(pull_memtables(allocator))) {
     LOG_WARN("fail to pull memtable", K(ret));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
     LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
   } else if (OB_FAIL(table_store_addr_.get_ptr()->init(*allocator_, *this, tables, *old_table_store))) {
     LOG_WARN("fail to init table store", K(ret), K(old_tablet), K(tables));
   } else {
-    ddl_kvs_ = ddl_kvs_addr;
-    ddl_kv_count_ = ddl_kv_count;
     ALLOC_AND_INIT(allocator, storage_schema_addr_, *old_storage_schema);
   }
 
@@ -703,8 +682,6 @@ int ObTablet::init_for_sstable_replace(
   ObStorageSchema *old_storage_schema = nullptr;
   const ObStorageSchema *storage_schema = nullptr;
   int64_t finish_medium_scn = 0;
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
 
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
@@ -729,7 +706,7 @@ int ObTablet::init_for_sstable_replace(
       // use max schema to make sure sstable and schema match
       ))) {
     LOG_WARN("failed to init tablet meta", K(ret), K(old_tablet), K(param));
-  } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))){
+  } else if (OB_FAIL(pull_memtables(allocator))){
     LOG_WARN("fail to pull memtable", K(ret));
   } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
     LOG_WARN("fail to alloc and new table store object", K(ret), K_(table_store_addr));
@@ -759,8 +736,6 @@ int ObTablet::init_for_sstable_replace(
   } else if (OB_FAIL(inner_inc_macro_ref_cnt())) {
     LOG_WARN("failed to increase macro ref cnt", K(ret));
   } else {
-    ddl_kvs_ = ddl_kvs_addr;
-    ddl_kv_count_ = ddl_kv_count;
     if (old_tablet.get_tablet_meta().has_next_tablet_) {
       set_next_tablet_guard(old_tablet.next_tablet_guard_);
     }
@@ -1343,8 +1318,6 @@ int ObTablet::load_deserialize_v1(
   ObTabletTxMultiSourceDataUnit tx_data;
   ObTabletBindingInfo ddl_data;
   ObMediumCompactionInfoList info_list;
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
 
   if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
     LOG_WARN("fail to allocate and new table store", K(ret));
@@ -1377,11 +1350,9 @@ int ObTablet::load_deserialize_v1(
 
   if (FAILEDx(build_read_info(allocator))) {
     LOG_WARN("failed to build read info", K(ret));
-  } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+  } else if (OB_FAIL(pull_memtables(allocator))) {
     LOG_WARN("fail to pull memtable", K(ret), K(len), K(new_pos));
   } else {
-    ddl_kvs_ = ddl_kvs_addr;
-    ddl_kv_count_ = ddl_kv_count;
     set_mem_addr();
     mds_data_.set_mem_addr();
   }
@@ -1494,8 +1465,6 @@ int ObTablet::load_deserialize_v2(
     const bool prepare_memtable)
 {
   int ret = OB_SUCCESS;
-  ObITable **ddl_kvs_addr = nullptr;
-  int64_t ddl_kv_count = 0;
   if (new_pos - pos < length_ && OB_FAIL(tablet_meta_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize tablet meta", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length_ && OB_FAIL(table_store_addr_.addr_.deserialize(buf, len, new_pos))) {
@@ -1509,11 +1478,8 @@ int ObTablet::load_deserialize_v2(
     LOG_WARN("fail to deserialize rowkey read info", K(ret), K(len), K(new_pos));
   } else if (new_pos - pos < length_ && OB_FAIL(mds_data_.deserialize(buf, len, new_pos))) {
     LOG_WARN("failed to deserialize mds data", K(ret), K(len), K(new_pos));
-  } else if (prepare_memtable && OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+  } else if (prepare_memtable && OB_FAIL(pull_memtables(allocator))) {
     LOG_WARN("fail to pull memtable", K(ret), K(len), K(new_pos));
-  } else {
-    ddl_kvs_ = ddl_kvs_addr;
-    ddl_kv_count_ = ddl_kv_count;
   }
   return ret;
 }
@@ -1554,8 +1520,10 @@ int ObTablet::deserialize(
       LOG_WARN("buffer's length is not enough", K(ret), K(length_), K(len - new_pos));
     } else if (new_pos - pos < length_ && OB_FAIL(tablet_meta_.deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize tablet meta", K(ret), K(len), K(new_pos));
-    } else if (OB_FAIL(pull_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
-      LOG_WARN("fail to pull memtable", K(ret), K(len), K(new_pos));
+    } else if (OB_FAIL(pull_memtables_without_ddl())) {
+      LOG_WARN("fail to pull memtables without ddl", K(ret));
+    } else if (OB_FAIL(pull_ddl_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+      LOG_WARN("failed to pull ddl memtables", K(ret));
     } else if (new_pos - pos < length_ && OB_FAIL(table_store_addr_.addr_.deserialize(buf, len, new_pos))) {
       LOG_WARN("failed to deserialize table read info addr", K(ret), K(len), K(new_pos));
     } else if (FALSE_IT(table_store_addr_.addr_.set_seq(tablet_addr_.seq()))) {
@@ -5107,12 +5075,12 @@ int ObTablet::refresh_memtable_and_update_seq(const uint64_t seq)
   return ret;
 }
 
-int ObTablet::pull_memtables(ObArenaAllocator &allocator, ObITable **&ddl_kvs_addr, int64_t &ddl_kv_count)
+int ObTablet::pull_memtables(ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(pull_memtables_without_ddl())) {
     LOG_WARN("fail to pull memtables without ddl", K(ret));
-  } else if (OB_FAIL(pull_ddl_memtables(allocator, ddl_kvs_addr, ddl_kv_count))) {
+  } else if (OB_FAIL(pull_ddl_memtables(allocator, ddl_kvs_, ddl_kv_count_))) {
     LOG_WARN("failed to pull ddl memtables", K(ret));
   }
   return ret;

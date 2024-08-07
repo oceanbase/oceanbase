@@ -699,7 +699,8 @@ private:
 #endif
 
   // memtable operation
-  int pull_memtables(ObArenaAllocator &allocator, ObITable **&ddl_kvs_addr, int64_t &ddl_kv_count);
+  // the allocator must be the same as the allocator used to construct the tablet, otherwise there will be lifecycle problems.
+  int pull_memtables(ObArenaAllocator &allocator);
   int pull_memtables_without_ddl();
   int update_memtables();
   int build_memtable(common::ObIArray<ObTableHandleV2> &handle_array, const int64_t start_pos = 0);
