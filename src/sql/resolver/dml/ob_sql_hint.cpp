@@ -2549,21 +2549,18 @@ int JoinFilterPushdownHintInfo::check_use_join_filter(const ObDMLStmt &stmt,
   const ObIArray<const ObJoinFilterHint*> &join_filters = part_join_filter ? part_join_filter_hints_ :
                                                                              join_filter_hints_;
   const TableItem* table_item;
-  ObString qb_name;
   const ObJoinFilterHint* current_hint = NULL;
   bool found = false;
   if (OB_ISNULL(table_item = stmt.get_table_item_by_id(filter_table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get filter table from stmt", K(ret));
-  } else if(OB_FAIL(stmt.get_qb_name(qb_name))) {
-    LOG_WARN("failed to get qb name", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && !found && i < join_filters.count(); ++i) {
     const ObJoinFilterHint *hint;
     if (OB_ISNULL(hint = join_filters.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (0 != hint->get_pushdown_filter_table().qb_name_.case_compare(qb_name)) {
+    } else if (0 != hint->get_pushdown_filter_table().qb_name_.case_compare(table_item->qb_name_)) {
     } else if (hint->get_pushdown_filter_table().is_match_table_item(query_hint.cs_type_, *table_item)) {
       current_hint = hint;
       if (hint->is_disable_hint()) {

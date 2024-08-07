@@ -3723,8 +3723,8 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."B"@"SEL$1" "db_predicate_deduce"."A"@"SEL$1"))
-      USE_MERGE(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
+      LEADING(@"SEL$0208448F" ("B"@"SEL$1" "A"@"SEL$1"))
+      USE_MERGE(@"SEL$0208448F" "A"@"SEL$1")
       FULL(@"SEL$0208448F" "B"@"SEL$1")
       FULL(@"SEL$0208448F" "A"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
@@ -3806,8 +3806,8 @@ Outline Data:
 -------------------------------------
   /*+
       BEGIN_OUTLINE_DATA
-      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."B"@"SEL$1" "db_predicate_deduce"."A"@"SEL$1"))
-      USE_MERGE(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
+      LEADING(@"SEL$0208448F" ("B"@"SEL$1" "A"@"SEL$1"))
+      USE_MERGE(@"SEL$0208448F" "A"@"SEL$1")
       INDEX(@"SEL$0208448F" "B"@"SEL$1" "c2")
       INDEX(@"SEL$0208448F" "A"@"SEL$1" "c1")
       PRED_DEDUCE(@"SEL$1")
@@ -3900,9 +3900,9 @@ Outline Data:
   /*+
       BEGIN_OUTLINE_DATA
       GBY_PUSHDOWN(@"SEL$0208448F")
-      LEADING(@"SEL$0208448F" ("db_predicate_deduce"."B"@"SEL$1" "db_predicate_deduce"."A"@"SEL$1"))
-      USE_HASH(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1")
-      PQ_DISTRIBUTE(@"SEL$0208448F" "db_predicate_deduce"."A"@"SEL$1" NONE NONE)
+      LEADING(@"SEL$0208448F" ("B"@"SEL$1" "A"@"SEL$1"))
+      USE_HASH(@"SEL$0208448F" "A"@"SEL$1")
+      PQ_DISTRIBUTE(@"SEL$0208448F" "A"@"SEL$1" NONE NONE)
       FULL(@"SEL$0208448F" "B"@"SEL$1")
       FULL(@"SEL$0208448F" "A"@"SEL$1")
       PRED_DEDUCE(@"SEL$1")
