@@ -5400,7 +5400,8 @@ OB_SERIALIZE_MEMBER((ObPhysicalRestoreTenantArg, ObCmdArg),
                     kms_encrypt_key_,
                     restore_timestamp_,
                     initiator_job_id_,
-                    initiator_tenant_id_);
+                    initiator_tenant_id_,
+                    sts_credential_);
 
 ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
   : ObCmdArg(),
@@ -5419,7 +5420,8 @@ ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
     kms_encrypt_key_(),
     restore_timestamp_(),
     initiator_job_id_(0),
-    initiator_tenant_id_(OB_INVALID_TENANT_ID)
+    initiator_tenant_id_(OB_INVALID_TENANT_ID),
+    sts_credential_()
 {
 }
 
@@ -5445,6 +5447,7 @@ int ObPhysicalRestoreTenantArg::assign(const ObPhysicalRestoreTenantArg &other)
     restore_timestamp_ = other.restore_timestamp_;
     initiator_job_id_ = other.initiator_job_id_;
     initiator_tenant_id_ = other.initiator_tenant_id_;
+    sts_credential_ = other.sts_credential_;
   }
   return ret;
 }

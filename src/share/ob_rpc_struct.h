@@ -6050,6 +6050,7 @@ public:
   common::ObString restore_timestamp_;
   uint64_t initiator_job_id_;
   uint64_t initiator_tenant_id_;
+  common::ObString sts_credential_;
 };
 
 struct ObServerZoneArg
