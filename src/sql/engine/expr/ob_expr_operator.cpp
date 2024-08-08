@@ -1173,9 +1173,15 @@ int ObExprOperator::aggregate_result_type_for_merge(
         ret = OB_INVALID_ARGUMENT; // not compatible input
         LOG_WARN("invalid argument. wrong type for merge", K(i), K(types[i].get_type()), K(ret));
       } else if (is_oracle_all_same_number) {
-        is_oracle_all_same_number = types[i].get_type() == types[i-1].get_type() &&
-          types[i].get_precision() == types[i-1].get_precision() &&
-          types[i].get_scale() == types[i-1].get_scale();
+        if (types[i].is_null() && types[0].is_decimal_int()) {
+          // optimization for decimal_int type, when the parameter has null, try not to affect
+          // the result type, otherwise the parameter may be cast to number and result type will
+          // also be number.
+        } else {
+          is_oracle_all_same_number = types[i].get_type() == types[i-1].get_type() &&
+            types[i].get_precision() == types[i-1].get_precision() &&
+            types[i].get_scale() == types[i-1].get_scale();
+        }
       }
     }
     if (OB_SUCC(ret)) {
