@@ -149,7 +149,8 @@ class ObMySQLPreparedStatement
 public:
   ObMySQLPreparedStatement();
   virtual ~ObMySQLPreparedStatement();
-  ObIAllocator &get_allocator();
+  ObIAllocator *get_allocator();
+  void set_allocator(ObIAllocator *alloc);
   ObMySQLConnection *get_connection();
   MYSQL_STMT *get_stmt_handler();
   MYSQL *get_conn_handler();
@@ -204,7 +205,7 @@ protected:
 class ObMySQLProcStatement : public ObMySQLPreparedStatement
 {
 public:
-  ObMySQLProcStatement()
+  ObMySQLProcStatement() : ObMySQLPreparedStatement()
   {
     in_out_map_.reset();
     proc_ = NULL;
@@ -216,6 +217,8 @@ public:
   }
   virtual int init(ObMySQLConnection &conn, const char *sql, int64_t param_count);
   virtual int close();
+  virtual void free_resouce();
+  virtual int close_mysql_stmt();
   int execute_proc(ObIAllocator &allocator,
                    ParamStore &params,
                    const share::schema::ObRoutineInfo &routine_info,

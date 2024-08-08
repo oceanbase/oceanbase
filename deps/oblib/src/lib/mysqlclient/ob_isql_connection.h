@@ -137,7 +137,7 @@ public:
                         const ObTimeZoneInfo *tz_info,
                         ObObj *result,
                         bool is_sql) = 0;
-  virtual int prepare(const char *sql, int64_t param_count) {
+  virtual int prepare(const char *sql, int64_t param_count, ObIAllocator *allocator = NULL) {
     UNUSED(sql);
     return OB_NOT_SUPPORTED;
   }

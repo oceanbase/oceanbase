@@ -123,8 +123,8 @@ public:
   // dblink.
   virtual int connect_dblink(const bool use_ssl, int64_t sql_request_level);
 
-  int prepare(const char *sql, int64_t param_count);
-  int prepare_proc_stmt(const char *sql, int64_t param_count);
+  int prepare(const char *sql, int64_t param_count, ObIAllocator *allocator);
+  int prepare_proc_stmt(const char *sql, int64_t param_count, ObIAllocator *allocator);
   int bind_basic_type_by_pos(uint64_t position,
                              void *param,
                              int64_t param_size,

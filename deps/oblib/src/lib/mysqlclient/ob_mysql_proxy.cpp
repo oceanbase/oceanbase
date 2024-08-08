@@ -645,13 +645,14 @@ int ObDbLinkProxy::dblink_execute_proc(ObISQLConnection *dblink_conn)
 
 int ObDbLinkProxy::dblink_prepare(sqlclient::ObISQLConnection *dblink_conn,
                                   const char *sql,
-                                  int64_t param_count)
+                                  int64_t param_count,
+                                  ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn) || OB_ISNULL(sql)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
-  } else if (OB_FAIL(dblink_conn->prepare(sql, param_count))) {
+  } else if (OB_FAIL(dblink_conn->prepare(sql, param_count, allocator))) {
     LOG_WARN("prepare to dblink failed", K(ret), K(ObString(sql)));
   }
   return ret;

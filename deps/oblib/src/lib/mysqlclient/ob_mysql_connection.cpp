@@ -533,7 +533,7 @@ int ObMySQLConnection::execute_proc(const uint64_t tenant_id,
         real_param_cnt++;
       }
     }
-    if (OB_FAIL(prepare_proc_stmt(sql.ptr(), real_param_cnt))) {
+    if (OB_FAIL(prepare_proc_stmt(sql.ptr(), real_param_cnt, &allocator))) {
       LOG_WARN("create statement failed", K(sql), K(ret));
     } else if (OB_FAIL(proc_stmt_.execute_proc(allocator, params, routine_info, tz_info, result, is_sql))) {
       LOG_WARN("statement execute update failed", K(sql), K(ret));
@@ -699,19 +699,23 @@ int ObMySQLConnection::connect_dblink(const bool use_ssl, int64_t sql_request_le
   return ret;
 }
 
-int ObMySQLConnection::prepare(const char *sql, int64_t param_count)
+int ObMySQLConnection::prepare(const char *sql, int64_t param_count, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(prepare_proc_stmt(sql, param_count))) {
+  if (OB_FAIL(prepare_proc_stmt(sql, param_count, allocator))) {
     LOG_WARN("prepare proc stmt failed", K(ret), KCSTRING(sql));
   }
   return ret;
 }
 
-int ObMySQLConnection::prepare_proc_stmt(const char *sql, int64_t param_count)
+int ObMySQLConnection::prepare_proc_stmt(const char *sql, int64_t param_count, ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(closed_)) {
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is NULL", K(ret));
+  } else if (FALSE_IT(proc_stmt_.set_allocator(allocator))) {
+  } else if (OB_UNLIKELY(closed_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("connection not established. call connect first", K(ret));
   } else if (OB_FAIL(create_statement(proc_stmt_, OB_INVALID_TENANT_ID, sql, param_count))) {

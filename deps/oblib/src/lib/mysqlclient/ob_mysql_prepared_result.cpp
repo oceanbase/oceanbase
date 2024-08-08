@@ -50,7 +50,7 @@ int ObMySQLPreparedResult::init()
     ret = OB_ERR_SQL_CLIENT;
   } else if (result_column_count_ == 0) {
     // insert or replace that do not produce result sets
-  } else if (OB_ISNULL(bind_ = reinterpret_cast<MYSQL_BIND *>(alloc_.alloc(sizeof(MYSQL_BIND) *
+  } else if (OB_ISNULL(bind_ = reinterpret_cast<MYSQL_BIND *>(alloc_->alloc(sizeof(MYSQL_BIND) *
                                                          result_column_count_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("out of memory, alloc mem for mysql bind error", K(ret));
@@ -78,8 +78,9 @@ int ObMySQLPreparedResult::bind_result_param()
 void ObMySQLPreparedResult::close()
 {
   result_column_count_ = 0;
-  alloc_.free(bind_);
+  alloc_->free(bind_);
   bind_ = NULL;
+  alloc_ = NULL;
 }
 
 int ObMySQLPreparedResult::next()

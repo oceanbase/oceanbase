@@ -201,7 +201,8 @@ public:
                           bool is_sql);
   int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn,
                      const char *sql,
-                     int64_t param_count);
+                     int64_t param_count,
+                     ObIAllocator *allocator = NULL);
   int dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
                                     uint64_t position,
                                     void *param,

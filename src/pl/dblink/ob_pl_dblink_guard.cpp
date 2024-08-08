@@ -348,7 +348,7 @@ int ObPLDbLinkGuard::dblink_name_resolve(common::ObDbLinkProxy *dblink_proxy,
   if (OB_ISNULL(dblink_proxy) || OB_ISNULL(dblink_conn) || OB_ISNULL(dblink_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param is NULL", K(ret), K(dblink_proxy), K(dblink_conn), K(dblink_schema));
-  } else if (OB_FAIL(dblink_proxy->dblink_prepare(dblink_conn, call_proc, 7))) {
+  } else if (OB_FAIL(dblink_proxy->dblink_prepare(dblink_conn, call_proc, 7, &alloctor))) {
     LOG_WARN("prepare sql failed", K(ret), K(ObString(call_proc)));
   }
   if (OB_SUCC(ret)) {
@@ -616,7 +616,7 @@ int ObPLDbLinkGuard::check_remote_version(common::ObDbLinkProxy &dblink_proxy,
                                   "   :2 := TO_NUMBER(REGEXP_SUBSTR(version_str, '[^.]+', 1, 2)); "
                                   "   :3 := TO_NUMBER(REGEXP_SUBSTR(version_str, '[^.]+', 1, 3)); "
                                   " end; ";
-    OZ (dblink_proxy.dblink_prepare(&dblink_conn, anonymous_block, 3));
+    OZ (dblink_proxy.dblink_prepare(&dblink_conn, anonymous_block, 3, &alloc_));
     OZ (dblink_proxy.dblink_bind_basic_type_by_pos(&dblink_conn, 1, &part1, size, ObObjType::ObInt32Type, ind, true));
     OZ (dblink_proxy.dblink_bind_basic_type_by_pos(&dblink_conn, 2, &part2, size, ObObjType::ObInt32Type, ind, true));
     OZ (dblink_proxy.dblink_bind_basic_type_by_pos(&dblink_conn, 3, &part3, size, ObObjType::ObInt32Type, ind, true));

@@ -892,9 +892,16 @@ ObMySQLPreparedStatement::~ObMySQLPreparedStatement()
 {
 }
 
-ObIAllocator &ObMySQLPreparedStatement::get_allocator()
+ObIAllocator *ObMySQLPreparedStatement::get_allocator()
 {
-  return *alloc_;
+  return alloc_;
+}
+
+void ObMySQLPreparedStatement::set_allocator(ObIAllocator *alloc)
+{
+  alloc_ = alloc;
+  result_.alloc_ = alloc;
+  param_.alloc_ = alloc;
 }
 
 MYSQL_STMT *ObMySQLPreparedStatement::get_stmt_handler()
@@ -1394,7 +1401,7 @@ int ObMySQLProcStatement::bind_array_type_by_pos(uint64_t position,
     // still need to apply for a memory to prevent observer core.
     int64_t buf_len = sizeof(MYSQL_COMPLEX_BIND_PLARRAY) + array_elem_size;
     char *buf = NULL;
-    if (OB_ISNULL(buf = (char *)arena_allocator_.alloc(buf_len))) {
+    if (OB_ISNULL(buf = (char *)alloc_->alloc(buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("alloc memory failed", K(ret));
     } else {
@@ -1790,7 +1797,7 @@ int ObMySQLProcStatement::execute_proc()
           for (int64_t i = 0; OB_SUCC(ret) && i < result_column_count_; i++) {
             MYSQL_BIND &res_bind = mysql_bind[i];
             void *res_buffer = NULL;
-            if (OB_ISNULL(res_buffer = arena_allocator_.alloc(*mysql_bind[i].length))) {
+            if (OB_ISNULL(res_buffer = alloc_->alloc(*mysql_bind[i].length))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
               LOG_WARN("alloc memory failed", K(ret));
             } else {
@@ -1847,7 +1854,7 @@ int ObMySQLProcStatement::execute_proc()
     }
   }
   int tmp_ret = OB_SUCCESS;
-  if (OB_SUCCESS != close()) {
+  if (OB_SUCCESS != (tmp_ret = close())) {
     LOG_WARN("close proc stmt failed", K(ret));
   }
   ret = (ret == OB_SUCCESS) ? tmp_ret : ret;
@@ -1858,9 +1865,40 @@ int ObMySQLProcStatement::execute_proc()
 int ObMySQLProcStatement::close()
 {
   int ret = OB_SUCCESS;
-  ObMySQLPreparedStatement::close();
+  if (OB_FAIL(close_mysql_stmt())) {
+    LOG_WARN("close mysql stmt failed", K(ret));
+  }
+  free_resouce();
+  return ret;
+}
+
+void ObMySQLProcStatement::free_resouce()
+{
+  if (NULL != bind_params_) {
+    alloc_->free(bind_params_);
+    bind_params_ = NULL;
+    stmt_param_count_ = 0;
+  }
+  if (NULL != result_params_) {
+    alloc_->free(result_params_);
+    result_params_ = NULL;
+    result_column_count_ = 0;
+  }
+  param_.close();
+  result_.close();
   in_out_map_.reset();
   proc_ = NULL;
+}
+
+int ObMySQLProcStatement::close_mysql_stmt()
+{
+  int ret = OB_SUCCESS;
+  if (NULL != stmt_) {
+    if (0 != mysql_stmt_close(stmt_)) {
+      ret = -mysql_errno(conn_->get_handler());
+      LOG_WARN("fail to close stmt", "info", mysql_error(conn_->get_handler()), K(ret));
+    }
+  }
   return ret;
 }
 

@@ -29,6 +29,7 @@ class ObBindParam;
 class ObMySQLPreparedStatement;
 class ObMySQLPreparedResult
 {
+friend ObMySQLPreparedStatement;
 public:
   explicit ObMySQLPreparedResult(ObMySQLPreparedStatement &stmt);
   ~ObMySQLPreparedResult();
@@ -53,7 +54,7 @@ public:
   MYSQL_BIND *&get_bind() { return bind_; }
 private:
   ObMySQLPreparedStatement &stmt_;
-  common::ObIAllocator &alloc_;
+  common::ObIAllocator *alloc_;
   int64_t result_column_count_;
   MYSQL_BIND *bind_;
 };

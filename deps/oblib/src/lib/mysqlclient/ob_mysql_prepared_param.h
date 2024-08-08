@@ -29,6 +29,7 @@ class ObBindParam;
 class ObMySQLPreparedStatement;
 class ObMySQLPreparedParam
 {
+friend ObMySQLPreparedStatement;
 public:
   explicit ObMySQLPreparedParam(ObMySQLPreparedStatement &stmt);
   ~ObMySQLPreparedParam();
@@ -40,7 +41,7 @@ public:
 
 private:
   ObMySQLPreparedStatement &stmt_;
-  common::ObIAllocator &alloc_;
+  common::ObIAllocator *alloc_;
   int64_t param_count_;
   MYSQL_BIND *bind_;
 };
