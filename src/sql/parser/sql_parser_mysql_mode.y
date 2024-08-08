@@ -12673,8 +12673,7 @@ external_table_partition
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LINK_NODE, 2, $1, $3);
 }
-|
-{ $$ = NULL; }
+;
 
 external_table_partition:
 relation_name COMP_EQ expr_const
