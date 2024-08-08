@@ -635,26 +635,26 @@ ObSysIOUsage::~ObSysIOUsage()
 int ObSysIOUsage::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(io_stats_.reserve(SYS_RESOURCE_GROUP_CNT)) ||
-             OB_FAIL(io_estimators_.reserve(SYS_RESOURCE_GROUP_CNT)) ||
-             OB_FAIL(group_avg_iops_.reserve(SYS_RESOURCE_GROUP_CNT)) ||
-             OB_FAIL(group_avg_byte_.reserve(SYS_RESOURCE_GROUP_CNT)) ||
-             OB_FAIL(group_avg_rt_us_.reserve(SYS_RESOURCE_GROUP_CNT))) {
-    LOG_WARN("reserver group failed", K(ret), K(SYS_RESOURCE_GROUP_CNT));
+  if (OB_FAIL(io_stats_.reserve(SYS_MODULE_CNT)) ||
+             OB_FAIL(io_estimators_.reserve(SYS_MODULE_CNT)) ||
+             OB_FAIL(group_avg_iops_.reserve(SYS_MODULE_CNT)) ||
+             OB_FAIL(group_avg_byte_.reserve(SYS_MODULE_CNT)) ||
+             OB_FAIL(group_avg_rt_us_.reserve(SYS_MODULE_CNT))) {
+    LOG_WARN("reserver group failed", K(ret), K(SYS_MODULE_CNT));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < SYS_RESOURCE_GROUP_CNT; ++i) {
-      ObSEArray<ObIOStat, SYS_RESOURCE_GROUP_CNT> cur_stat_array;
-      ObSEArray<ObIOStatDiff, SYS_RESOURCE_GROUP_CNT> cur_estimators_array;
-      ObSEArray<double, SYS_RESOURCE_GROUP_CNT> cur_avg_iops;
-      ObSEArray<double, SYS_RESOURCE_GROUP_CNT> cur_avg_byte;
-      ObSEArray<double, SYS_RESOURCE_GROUP_CNT> cur_avg_rt_us;
+    for (int64_t i = 0; OB_SUCC(ret) && i < SYS_MODULE_CNT; ++i) {
+      ObSEArray<ObIOStat, SYS_MODULE_CNT> cur_stat_array;
+      ObSEArray<ObIOStatDiff, SYS_MODULE_CNT> cur_estimators_array;
+      ObSEArray<double, SYS_MODULE_CNT> cur_avg_iops;
+      ObSEArray<double, SYS_MODULE_CNT> cur_avg_byte;
+      ObSEArray<double, SYS_MODULE_CNT> cur_avg_rt_us;
 
       if (OB_FAIL(cur_stat_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
           OB_FAIL(cur_estimators_array.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
           OB_FAIL(cur_avg_iops.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
           OB_FAIL(cur_avg_byte.reserve(static_cast<int>(ObIOMode::MAX_MODE))) ||
           OB_FAIL(cur_avg_rt_us.reserve(static_cast<int>(ObIOMode::MAX_MODE)))) {
-        LOG_WARN("reserver group failed", K(ret), K(SYS_RESOURCE_GROUP_CNT));
+        LOG_WARN("reserver group failed", K(ret), K(SYS_MODULE_CNT));
       } else {
         for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
           ObIOStat cur_stat;
@@ -698,7 +698,7 @@ void ObSysIOUsage::accumulate(ObIOResult &result, ObIORequest &request)
     int32_t io_offset = 0;
     int64_t io_size = 0;
     result.calc_io_offset_and_size(io_size, io_offset);
-    const uint64_t idx = result.get_sys_module_id() - SYS_RESOURCE_GROUP_START_ID;
+    const uint64_t idx = result.get_sys_module_id() - SYS_MODULE_START_ID;
     const int64_t device_delay = get_io_interval(request.io_result_->time_log_.return_ts_, request.io_result_->time_log_.submit_ts_);
     io_stats_.at(idx).at(static_cast<int>(result.get_mode()))
       .accumulate(1, io_size, device_delay);
@@ -707,7 +707,7 @@ void ObSysIOUsage::accumulate(ObIOResult &result, ObIORequest &request)
 
 void ObSysIOUsage::calculate_io_usage()
 {
-  for (int64_t i = 0; i < SYS_RESOURCE_GROUP_CNT; ++i) {
+  for (int64_t i = 0; i < SYS_MODULE_CNT; ++i) {
     for (int64_t j = 0; j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
       ObIOStatDiff &cur_io_estimator = io_estimators_.at(i).at(j);
       ObIOStat &cur_io_stat = io_stats_.at(i).at(j);

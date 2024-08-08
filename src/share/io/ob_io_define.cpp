@@ -201,8 +201,8 @@ void ObIOFlag::set_sys_module_id(const uint64_t sys_module_id)
 bool ObIOFlag::is_sys_module() const
 {
   return USER_RESOURCE_OTHER_GROUP_ID == group_id_
-          && sys_module_id_ >= SYS_RESOURCE_GROUP_START_ID
-          && sys_module_id_ < SYS_RESOURCE_GROUP_END_ID;
+          && sys_module_id_ >= SYS_MODULE_START_ID
+          && sys_module_id_ < SYS_MODULE_END_ID;
 }
 
 int64_t ObIOFlag::get_wait_event() const
