@@ -248,7 +248,7 @@ void obpl_mysql_wrap_get_user_var_into_subquery(ObParseCtx *parse_ctx, ParseNode
 %type <node> sp_decl_idents sp_data_type opt_sp_decl_default opt_param_default
 %type <node> sp_proc_stmt_if sp_if sp_proc_stmt_case sp_when_list sp_when sp_elseifs 
 %type <node> sp_proc_stmt_return
-%type <node> sql_stmt ident simple_ident
+%type <node> sql_stmt_prefix sql_stmt ident simple_ident
 %type <node> into_clause
 %type <node> sp_name sp_call_name opt_sp_param_list opt_sp_fparam_list sp_param_list sp_fparam_list
 %type <node> sp_param sp_fparam sp_alter_chistics
@@ -390,17 +390,21 @@ outer_stmt:
  *
  *****************************************************************************/
 sql_keyword:
-    '(' sql_keyword { $$ = NULL; }
-  | SQL_KEYWORD { $$ = NULL; }
+    SQL_KEYWORD { $$ = NULL; }
   | TABLE { $$ = NULL; }
   | USER { $$ = NULL; }
+;
+
+sql_stmt_prefix:
+    '(' sql_stmt_prefix { $$ = NULL; }
+  | SQL_KEYWORD { $$ = NULL; }
   | INSERT { $$ = NULL; }
   | DELETE { $$ = NULL; }
   | UPDATE { $$ = NULL; }
 ;
 
 sql_stmt:
-    sql_keyword /*sql stmt tail*/
+    sql_stmt_prefix /*sql stmt tail*/
     {
       //read sql query string直到读到token';'或者END_P
       ParseNode *sql_stmt = NULL;
@@ -591,6 +595,14 @@ call_sp_stmt:
     CALL sp_call_name opt_sp_cparam_list
     {
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_CALL_STMT, 2, $2, $3);
+    }
+  | CALL sp_proc_stmt
+    {
+      if (!parse_ctx->is_inner_parse_) {
+        obpl_mysql_yyerror(&@2, parse_ctx, "Syntax Error\n");
+        YYERROR; //生成一个语法错误
+      }
+      $$ = $2;
     }
   | CALL PROCEDURE opt_if_not_exists sp_name '(' opt_sp_param_list ')' sp_create_chistics procedure_body
     {
