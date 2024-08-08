@@ -33,4 +33,8 @@ DEF_COMPAT_CONTROL_FEATURE(VAR_NAME_LENGTH,
 DEF_COMPAT_CONTROL_FEATURE(NULL_VALUE_FOR_CLOSED_CURSOR,
     "Return null value to client for closed cursor, indicating that the cursor is not open",
     CLUSTER_VERSION_4_2_5_0)
+
+DEF_COMPAT_CONTROL_FEATURE(FUNC_LOCATE_NULL,
+    "The result of REPLACE('x', 'abc', null) is different in MySQL 5.7 and 8.0",
+    CLUSTER_VERSION_4_2_5_0)
 #endif

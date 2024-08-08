@@ -5650,13 +5650,36 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
   if (OB_SUCC(ret) && !has_result && 3 == expr.arg_cnt_) {
     if (OB_FAIL(expr.args_[2]->eval(ctx, pos))) {
       LOG_WARN("eval arg 2 failed", K(ret));
-    } else if (pos->is_null()) {
-      res_datum.set_int(0);
-      has_result = true;
-    } else {
+    } else if (!pos->is_null()) {
       // TODO: 验证MySQL下uint64超过int64值域范围，隐式cast的结果
       //
       pos_int = pos->get_int();
+    } else if (lib::is_oracle_mode()) {
+      res_datum.set_int(0);
+      has_result = true;
+    } else {
+      has_result = true;
+      ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+      const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      uint64_t compat_version = 0;
+      ObCompatType compat_type = COMPAT_MYSQL57;
+      bool is_enable = false;
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is null", K(ret));
+      } else if (OB_FAIL(helper.get_compat_version(compat_version))) {
+        LOG_WARN("failed to get compat version", K(ret));
+      } else if (OB_FAIL(ObCompatControl::check_feature_enable(compat_version,
+                                                               ObCompatFeatureType::FUNC_LOCATE_NULL,
+                                                               is_enable))) {
+        LOG_WARN("failed to check feature enable", K(ret));
+      } else if (OB_FAIL(session->get_compatibility_control(compat_type))) {
+        LOG_WARN("failed to get compat type", K(ret));
+      } else if (is_enable && COMPAT_MYSQL8 == compat_type) {
+        res_datum.set_null();
+      } else {
+        res_datum.set_int(0);
+      }
     }
   }
 
