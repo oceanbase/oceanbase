@@ -93,7 +93,7 @@ public:
       const ObRelativeTable &table,
       ObStoreCtx &store_ctx,
       const ObITableReadInfo &rowkey_read_info);
-  int check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRelativeTable &table);
+  int check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRelativeTable &table, bool check_dup = true);
   blocksstable::ObDatumRowkey& get_duplicate_rowkey()
   {
     return min_key_;

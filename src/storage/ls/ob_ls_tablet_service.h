@@ -561,7 +561,22 @@ private:
       storage::ObStoreRow *tbl_rows,
       int64_t &afct_num,
       int64_t &dup_num);
+
+  static int put_rows_to_tablet(
+      ObTabletHandle &tablet_handle,
+      ObDMLRunningCtx &run_ctx,
+      const common::ObNewRow *const rows,
+      const int64_t row_count,
+      ObRowsInfo &rows_info,
+      storage::ObStoreRow *tbl_rows,
+      int64_t &afct_num);
   static int insert_tablet_rows(
+      const int64_t row_count,
+      ObTabletHandle &tablet_handle,
+      ObDMLRunningCtx &run_ctx,
+      ObStoreRow *rows,
+      ObRowsInfo &rows_info);
+  static int put_tablet_rows(
       const int64_t row_count,
       ObTabletHandle &tablet_handle,
       ObDMLRunningCtx &run_ctx,
