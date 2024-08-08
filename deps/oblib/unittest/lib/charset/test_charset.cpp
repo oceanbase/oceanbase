@@ -349,6 +349,99 @@ TEST_F(TestCharset, well_formed_length)
   ASSERT_TRUE(OB_INVALID_ARGUMENT == ret);
 }
 
+TEST_F(TestCharset, well_formed_length_performance)
+{
+  int all_tests = 10000;
+  char data[100][INT16_MAX];
+  int test_data_bytes = 0;
+  ObCollationType cs_type =  CS_TYPE_UTF8MB4_GENERAL_CI;
+  int64_t well_formed_length = 0;
+  int64_t time_start = 0;
+  int64_t time_dur = 0;
+  int status = 0;
+  auto start_timer = [&]() { time_start = ObTimeUtility::current_time();};
+  auto end_timer = [&]() {
+    time_dur = ObTimeUtility::current_time() - time_start;
+    /*don't change this fprintf func unless you know what you are doing*/
+    fprintf(stdout, "==> speed:%ldM/s, time is %ld", (test_data_bytes*all_tests >> 12) * (1000000>>6) / (time_dur<<2), time_dur);
+  };
+  auto prepare_data = [&]() {
+    for (int i = 0 ; i < 100 ; i++) {
+        if(i%status == 0){
+            for (int j = 0 ; j < INT16_MAX ; j++) {
+                data[i][j] = 1;
+            }
+            
+        }
+        else {
+            for (int j = 0 ; j < INT16_MAX ; j+=4) {
+                data[i][j] = 0xf0;
+                data[i][j+1] = 0x9f;
+                data[i][j+2] = 0x91;
+                data[i][j+3] = 0x8b;
+
+            }
+        }
+    }
+  };
+  status = INT16_MAX;
+  prepare_data();
+  fprintf(stdout, "\nNo ascci \n");
+  for (test_data_bytes = 4; test_data_bytes <= INT16_MAX ; test_data_bytes *=2 ) {
+    fprintf(stdout, "\n# For charset: %s, TestDataLen: %d\n", ObCharset::charset_name(cs_type), test_data_bytes);
+    start_timer();
+    for(int i = 0 ; i < all_tests ; i ++){
+      ObCharset::well_formed_len(cs_type, data[i%100], test_data_bytes, well_formed_length);
+    }
+    end_timer();
+  }
+  status = 1;
+  prepare_data();
+  fprintf(stdout, "\nAll Ascii \n");
+  for (test_data_bytes = 4; test_data_bytes <= INT16_MAX ; test_data_bytes *=2 ) {
+    fprintf(stdout, "\n# For charset: %s, TestDataLen: %d\n", ObCharset::charset_name(cs_type), test_data_bytes);
+    start_timer();
+    for(int i = 0 ; i < all_tests ; i ++){
+      ObCharset::well_formed_len(cs_type, data[i%100], test_data_bytes, well_formed_length);
+    }
+    end_timer();
+  }
+  status = 2;
+  prepare_data();
+  fprintf(stdout, "\n0.5 Ascii \n");
+  for (test_data_bytes = 4; test_data_bytes <= INT16_MAX ; test_data_bytes *=2 ) {
+    fprintf(stdout, "\n# For charset: %s, TestDataLen: %d\n", ObCharset::charset_name(cs_type), test_data_bytes);
+    start_timer();
+    for(int i = 0 ; i < all_tests ; i ++){
+      ObCharset::well_formed_len(cs_type, data[i%100], test_data_bytes, well_formed_length);
+    }
+    end_timer();
+  }
+  status = 3;
+  prepare_data();
+  fprintf(stdout, "\n0.33 Ascii \n");
+  for (test_data_bytes = 4; test_data_bytes <= INT16_MAX ; test_data_bytes *=2 ) {
+    fprintf(stdout, "\n# For charset: %s, TestDataLen: %d\n", ObCharset::charset_name(cs_type), test_data_bytes);
+    start_timer();
+    for(int i = 0 ; i < all_tests ; i ++){
+      ObCharset::well_formed_len(cs_type, data[i%100], test_data_bytes, well_formed_length);
+    }
+    end_timer();
+  }
+  status = 4;
+  prepare_data();
+  fprintf(stdout, "\n0.25 Ascii \n");
+  for (test_data_bytes = 4; test_data_bytes <= INT16_MAX ; test_data_bytes *=2 ) {
+    fprintf(stdout, "\n# For charset: %s, TestDataLen: %d\n", ObCharset::charset_name(cs_type), test_data_bytes);
+    start_timer();
+    for(int i = 0 ; i < all_tests ; i ++){
+      ObCharset::well_formed_len(cs_type, data[i%100], test_data_bytes, well_formed_length);
+    }
+    end_timer();
+  }
+  
+}
+
 TEST_F(TestCharset, test_max_byte_char_pos)
 {
   int ret = OB_SUCCESS;

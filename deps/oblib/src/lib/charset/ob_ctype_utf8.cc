@@ -227,7 +227,33 @@ static int inline utf8_naive(const unsigned char *data, int len)
 }
 
 OB_DECLARE_SSE42_SPECIFIC_CODE(
-  static const int8_t _first_len_tbl[] = {
+
+static inline int ascii_simd(const uint8_t *data, int len) {
+  if (len >= 32) {
+    const uint8_t *data2 = data + 16;
+
+    __m128i or1 = _mm_set1_epi8(0), or2 = or1;
+
+    while (len >= 32) {
+      __m128i input1 = _mm_loadu_si128((const __m128i *)data);
+      __m128i input2 = _mm_loadu_si128((const __m128i *)data2);
+
+      or1 = _mm_or_si128(or1, input1);
+      or2 = _mm_or_si128(or2, input2);
+
+      data += 32;
+      data2 += 32;
+      len -= 32;
+    }
+
+    or1 = _mm_or_si128(or1, or2);
+    if (_mm_movemask_epi8(_mm_cmplt_epi8(or1, _mm_set1_epi8(0)))) return 0;
+  }
+
+  return ascii_u64(data, len);
+}
+
+static const int8_t _first_len_tbl[] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3,
 };
 
@@ -456,9 +482,11 @@ static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
                                          const char *b, const char *e,
                                          size_t pos, int *error)
 {
-  int len = (int)(e-b);
+    int len = (int)(e-b);
   if (OB_UNLIKELY(len <= 0)) {
     return 0;
+  } else if (len>=15 && ascii_simd((const uint8_t *)b, len)) {
+    return (size_t)len;
   }
   int err_pos = utf8_range((unsigned char *)b, len);
   if (err_pos == 0) {
@@ -474,6 +502,31 @@ static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
 )
 
 OB_DECLARE_AVX2_SPECIFIC_CODE(
+
+static inline int ascii_simd(const uint8_t *data, int len) {
+  if (len >= 32) {
+    const uint8_t *data2 = data + 16;
+
+    __m128i or1 = _mm_set1_epi8(0), or2 = or1;
+
+    while (len >= 32) {
+      __m128i input1 = _mm_loadu_si128((const __m128i *)data);
+      __m128i input2 = _mm_loadu_si128((const __m128i *)data2);
+
+      or1 = _mm_or_si128(or1, input1);
+      or2 = _mm_or_si128(or2, input2);
+
+      data += 32;
+      data2 += 32;
+      len -= 32;
+    }
+
+    or1 = _mm_or_si128(or1, or2);
+    if (_mm_movemask_epi8(_mm_cmplt_epi8(or1, _mm_set1_epi8(0)))) return 0;
+  }
+
+  return ascii_u64(data, len);
+}
   /*
  * Map high nibble of "First Byte" to legal character length minus 1
  * 0x00 ~ 0xBF --> 0
@@ -735,6 +788,8 @@ static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
   int len = (int)(e-b);
   if (OB_UNLIKELY(len <= 0)) {
     return 0;
+  } else if (len>=15 && ascii_simd((const uint8_t *)b, len)) {
+    return (size_t)len;
   }
   int err_pos = utf8_range_avx2((unsigned char *)b, len);
   if (err_pos == 0) {
@@ -1574,6 +1629,21 @@ int ob_mb_wc_utf8mb4_thunk(const ObCharsetInfo *cs __attribute__((unused)),
   return ob_mb_wc_utf8mb4(cs, pwc, s, e);
 }
 
+typedef size_t (*well_formed_len_ptr)(const struct ObCharsetInfo *, const char *, const char *, size_t, int *);
+
+well_formed_len_ptr select_well_formed_len() {
+#if OB_USE_MULTITARGET_CODE
+  if (oceanbase::common::is_arch_supported(oceanbase::ObTargetArch::AVX2)) {
+    return specific::avx2::ob_well_formed_len_utf8mb4;
+  } else if (oceanbase::common::is_arch_supported(oceanbase::ObTargetArch::SSE42)) {
+    return specific::sse42::ob_well_formed_len_utf8mb4;
+  } else {
+    return specific::normal::ob_well_formed_len_utf8mb4;
+  }
+#else
+  return specific::normal::ob_well_formed_len_utf8mb4;
+#endif
+}
 
 ObCharsetHandler ob_charset_utf8mb4_handler=
 {
@@ -1582,13 +1652,7 @@ ObCharsetHandler ob_charset_utf8mb4_handler=
   ob_numchars_mb,
   ob_charpos_mb,
   ob_max_bytes_charpos_mb,
-#if OB_USE_MULTITARGET_CODE
-  oceanbase::common::is_arch_supported(oceanbase::ObTargetArch::SSE42)? \
-  specific::sse42::ob_well_formed_len_utf8mb4: \
-  oceanbase::common::is_arch_supported(oceanbase::ObTargetArch::AVX2)? specific::avx2::ob_well_formed_len_utf8mb4:specific::normal::ob_well_formed_len_utf8mb4,
-#else
-  specific::normal::ob_well_formed_len_utf8mb4,
-#endif
+  select_well_formed_len(),
   ob_lengthsp_8bit,
   ob_mb_wc_utf8mb4,
   ob_wc_mb_utf8mb4,
