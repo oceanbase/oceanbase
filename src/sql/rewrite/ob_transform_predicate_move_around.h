@@ -39,6 +39,9 @@ struct ObTempTableColumnCheckContext : public ObStmtCompareContext {
   }
   int64_t first_temp_table_id_;
   int64_t second_temp_table_id_;
+
+private:
+  DISABLE_COPY_ASSIGN(ObTempTableColumnCheckContext);
 };
 
 class ObTransformPredicateMoveAround : public ObTransformRule

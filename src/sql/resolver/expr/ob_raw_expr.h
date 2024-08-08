@@ -1486,6 +1486,9 @@ struct ObExprEqualCheckContext
   bool need_check_deterministic_;
   bool ignore_param_; // only compare structure of expr
   int64_t error_code_; //error code to return
+
+private:
+  DISABLE_COPY_ASSIGN(ObExprEqualCheckContext);
 };
 
 struct ObExprParamCheckContext : ObExprEqualCheckContext
@@ -1524,6 +1527,9 @@ struct ObExprParamCheckContext : ObExprEqualCheckContext
   const ObIArray<ObHiddenColumnItem> *calculable_items_; // from query context
   const common::ObIArray<ObPCParamEqualInfo> *equal_param_constraints_;
   EqualSets *equal_sets_;
+
+private:
+  DISABLE_COPY_ASSIGN(ObExprParamCheckContext);
 };
 
 enum ObVarType

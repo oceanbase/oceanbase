@@ -34,7 +34,8 @@ enum QueryRelation
   QUERY_EQUAL,
   QUERY_UNCOMPARABLE
 };
- struct ObStmtMapInfo {
+
+struct ObStmtMapInfo {
   common::ObSEArray<common::ObSEArray<int64_t, 4>, 4> view_select_item_map_;
   common::ObSEArray<ObPCParamEqualInfo, 4> equal_param_map_;
   common::ObSEArray<int64_t, 4> table_map_;
@@ -106,6 +107,9 @@ struct StmtCompareHelper {
   ObSEArray<ObSelectStmt*, 8> similar_stmts_;
   QbNameList hint_force_stmt_set_;
   ObSelectStmt *stmt_;
+
+private:
+  DISABLE_COPY_ASSIGN(StmtCompareHelper);
 };
 
 // NOTE (link.zt) remember to de-construct the struct
@@ -172,10 +176,10 @@ struct ObStmtCompareContext : ObExprEqualCheckContext
   void init(const ObIArray<ObHiddenColumnItem> *calculable_items);
 
   // for win_magic rewrite
-  void init(const ObDMLStmt *inner,
-            const ObDMLStmt *outer,
-            const ObStmtMapInfo &map_info,
-            const ObIArray<ObHiddenColumnItem> *calculable_items);
+  int init(const ObDMLStmt *inner,
+           const ObDMLStmt *outer,
+           const ObStmtMapInfo &map_info,
+           const ObIArray<ObHiddenColumnItem> *calculable_items);
   
   int get_table_map_idx(uint64_t l_table_id, uint64_t r_table_id);
 
@@ -200,6 +204,9 @@ struct ObStmtCompareContext : ObExprEqualCheckContext
   const ObDMLStmt *outer_;
   ObStmtMapInfo map_info_;
   common::ObSEArray<ObPCParamEqualInfo, 4> equal_param_info_;
+
+private:
+  DISABLE_COPY_ASSIGN(ObStmtCompareContext);
 };
 
 class ObStmtComparer

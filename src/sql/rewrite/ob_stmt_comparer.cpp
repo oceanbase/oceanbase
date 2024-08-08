@@ -96,15 +96,20 @@ void ObStmtCompareContext::init(const ObIArray<ObHiddenColumnItem> *calculable_i
   calculable_items_ = calculable_items;
 }
 
-void ObStmtCompareContext::init(const ObDMLStmt *inner,
-                                const ObDMLStmt *outer,
-                                const ObStmtMapInfo &map_info,
-                                const ObIArray<ObHiddenColumnItem> *calculable_items)
+int ObStmtCompareContext::init(const ObDMLStmt *inner,
+                               const ObDMLStmt *outer,
+                               const ObStmtMapInfo &map_info,
+                               const ObIArray<ObHiddenColumnItem> *calculable_items)
 {
-  inner_ = inner;
-  outer_ = outer;
-  map_info_ = map_info;
-  calculable_items_ = calculable_items;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(map_info_.assign(map_info))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else {
+    inner_ = inner;
+    outer_ = outer;
+    calculable_items_ = calculable_items;
+  }
+  return ret;
 }
 
 int ObStmtCompareContext::get_table_map_idx(uint64_t l_table_id, uint64_t r_table_id)
