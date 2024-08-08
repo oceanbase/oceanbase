@@ -12632,6 +12632,7 @@ int ObPLResolver::check_local_variable_read_only(
   int ret = OB_SUCCESS;
   const ObPLVar *var = NULL;
   const ObPLSymbolTable *symbol_table = NULL;
+  bool check_trigger_const_var_assign = true;
   CK (OB_NOT_NULL(symbol_table = ns.get_symbol_table()));
   OV (OB_NOT_NULL(var = symbol_table->get_symbol(var_idx)), OB_ERR_UNEXPECTED, K(var_idx));
   if (OB_SUCC(ret)) {
@@ -12694,6 +12695,17 @@ int ObPLResolver::check_local_variable_read_only(
             } else if (0 == trg_info->get_ref_old_name().case_compare(tmp)) {
               ret = OB_ERR_TRIGGER_CANT_CHANGE_OLD_ROW;
               LOG_WARN("can not change OLD row in trigger", K(var->get_name()), K(ret));
+            }
+          } else {
+            omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+            if (OB_UNLIKELY(!tenant_config.is_valid())) {
+              check_trigger_const_var_assign = true;
+            } else {
+              check_trigger_const_var_assign = tenant_config->_enable_check_trigger_const_variables_assign;
+            }
+            if (check_trigger_const_var_assign) {
+              ret = OB_ERR_VARIABLE_IS_READONLY;
+              LOG_WARN("variable is read only", K(ret), K(var_idx), KPC(var));
             }
           }
         } else {
