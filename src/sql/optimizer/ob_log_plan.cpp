@@ -4120,10 +4120,10 @@ int ObLogPlan::add_exec_params_meta(ObIArray<ObExecParamRawExpr *> &exec_params,
     if (OB_ISNULL(exec_param)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null param", K(ret), KPC(exec_param));
-    } else if (ObOptSelectivity::calculate_expr_avg_len(table_metas,
-                                                        ctx,
-                                                        exec_param,
-                                                        avg_len)) {
+    } else if (OB_FAIL(ObOptSelectivity::calculate_expr_avg_len(table_metas,
+                                                                ctx,
+                                                                exec_param,
+                                                                avg_len))) {
       LOG_WARN("failed to calc expr avg len", K(ret), KPC(exec_param));
     } else {
       dynamic_expr_meta.set_expr(exec_param);
@@ -4155,8 +4155,8 @@ int ObLogPlan::add_query_ref_meta(ObQueryRefRawExpr *expr,
   } else if (OB_UNLIKELY(stmt->get_select_item_size() != 1)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected query ref", K(ret), KPC(stmt));
-  } else if (ObOptSelectivity::calculate_expr_avg_len(
-      child_table_metas, child_ctx, stmt->get_select_item(0).expr_, avg_len)) {
+  } else if (OB_FAIL(ObOptSelectivity::calculate_expr_avg_len(
+      child_table_metas, child_ctx, stmt->get_select_item(0).expr_, avg_len))) {
     LOG_WARN("failed to calc expr avg len", K(ret), KPC(expr));
   } else {
     dynamic_expr_meta.set_expr(expr);

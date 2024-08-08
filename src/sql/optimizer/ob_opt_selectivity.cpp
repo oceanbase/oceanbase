@@ -4463,7 +4463,9 @@ int ObOptSelectivity::calc_expr_min_max(const OptTableMetas &table_metas,
       // do nothing
     } else if (can_cmp &&
         OB_FAIL(min_value.compare(max_value, cmp_result))) {
-      LOG_WARN("failed to compare", K(ret));
+      ret = OB_SUCCESS;
+      min_value.set_min_value();
+      max_value.set_max_value();
     } else if (!can_cmp || 1 == cmp_result ||
                min_value.is_null() || max_value.is_null()) {
       min_value.set_min_value();

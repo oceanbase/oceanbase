@@ -55,17 +55,19 @@ void SimpleRange::set_false_range()
   inclusive_end_ = false;
 }
 
-int SimpleRange::compare_with_end(const SimpleRange &r) const
+int SimpleRange::compare_with_end(const SimpleRange &r, int &cmp) const
 {
-  int cmp = 0;
+  int ret = OB_SUCCESS;
+  cmp = 0;
   if (end_.is_max_value()) {
     if (!r.end_.is_max_value()) {
       cmp = 1;
     }
   } else if (r.end_.is_max_value()) {
     cmp = -1;
+  } else if (OB_FAIL(end_.compare(r.end_, cmp))) {
+    LOG_WARN("failed to compare", K(ret));
   } else {
-    cmp = end_.compare(r.end_);
     if (0 == cmp) {
       if (inclusive_end_ && !r.inclusive_end_) {
         cmp = 1;
@@ -74,20 +76,22 @@ int SimpleRange::compare_with_end(const SimpleRange &r) const
       }
     }
   }
-  return cmp;
+  return ret;
 }
 
-int SimpleRange::compare_with_start(const SimpleRange &r) const
+int SimpleRange::compare_with_start(const SimpleRange &r, int &cmp) const
 {
-  int cmp = 0;
+  int ret = OB_SUCCESS;
+  cmp = 0;
   if (start_.is_min_value()) {
     if (!r.start_.is_min_value()) {
       cmp = -1;
     }
   } else if (r.start_.is_min_value()) {
     cmp = 1;
+  } else if (OB_FAIL(start_.compare(r.start_, cmp))) {
+    LOG_WARN("failed to compare", K(ret));
   } else {
-    cmp = start_.compare(r.start_);
     if (0 == cmp) {
       if (inclusive_start_ && !r.inclusive_start_) {
         cmp = -1;
@@ -96,20 +100,27 @@ int SimpleRange::compare_with_start(const SimpleRange &r) const
       }
     }
   }
-  return cmp;
+  return ret;
 }
 
 bool SimpleRange::intersect(const SimpleRange &r)
 {
   bool bret = false;
-  if (start_.can_compare(r.start_) && end_.can_compare(r.end_)) {
+  int ret = OB_SUCCESS;
+  int cmp_start = 0;
+  int cmp_end = 0;
+  if (!start_.can_compare(r.start_) || !end_.can_compare(r.end_)) {
+    // do nothing
+  } else if (OB_FAIL(compare_with_start(r, cmp_start))) {
+    LOG_WARN("failed to compare start", K(ret));
+  } else if (OB_FAIL(compare_with_end(r, cmp_end))) {
+    LOG_WARN("failed to compare end", K(ret));
+  } else {
     bret = true;
-    int cmp_start = compare_with_start(r);
     if (cmp_start == -1) {
       start_ = r.start_;
       inclusive_start_ = r.inclusive_start_;
     }
-    int cmp_end = compare_with_end(r);
     if (cmp_end == 1) {
       end_ = r.end_;
       inclusive_end_ = r.inclusive_end_;
@@ -161,6 +172,7 @@ void SimpleRange::set_bound(ObItemType item_type, double bound)
 bool SimpleRange::is_valid_range()
 {
   bool bret = false;
+  int cmp = 0;
   if (!start_.can_compare(end_)) {
     bret = false;
   } else if (start_.is_null() && end_.is_null()) {
@@ -170,8 +182,9 @@ bool SimpleRange::is_valid_range()
     bret = false;
   } else if (start_.is_min_value() || end_.is_max_value()) {
     bret = true;
+  } else if (OB_SUCCESS != start_.compare(end_, cmp)) {
+    bret = false;
   } else {
-    int cmp = start_.compare(end_);
     if (-1 == cmp) {
       bret = true;
     } else if (1 == cmp) {
@@ -190,10 +203,17 @@ bool SimpleRange::is_valid_range()
 bool SimpleRange::is_superset(const SimpleRange &r) const
 {
   bool bret = false;
-  if (start_.can_compare(r.start_) && end_.can_compare(r.end_)) {
-    int cmp1 = compare_with_start(r);
-    int cmp2 = compare_with_end(r);
-    bret = cmp1 <= 0 && cmp2 >= 0;
+  int ret = OB_SUCCESS;
+  int cmp_start = 0;
+  int cmp_end = 0;
+  if (!start_.can_compare(r.start_) || !end_.can_compare(r.end_)) {
+    // do nothing
+  } else if (OB_FAIL(compare_with_start(r, cmp_start))) {
+    LOG_WARN("failed to compare start", K(ret));
+  } else if (OB_FAIL(compare_with_end(r, cmp_end))) {
+    LOG_WARN("failed to compare end", K(ret));
+  } else {
+    bret = cmp_start <= 0 && cmp_end >= 0;
   }
   return bret;
 }
@@ -3427,8 +3447,7 @@ int ObUniformRangeSelEstimator::get_sel(const OptTableMetas &table_metas,
   } else if (OB_UNLIKELY(!expr_min.can_compare(expr_max)) ||
              OB_UNLIKELY(!expr_min.can_compare(range_.start_)) ||
              OB_UNLIKELY(!expr_min.can_compare(range_.end_))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("obj type is not consistent", K(expr_min), K(expr_max), KPC(this));
+    // ignore
   } else if (OB_FAIL(ObOptEstObjToScalar::convert_objs_to_scalars(&expr_min, &expr_max,
                                                                   &range_.start_, &range_.end_,
                                                                   &min_scalar, &max_scalar,
