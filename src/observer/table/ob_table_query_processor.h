@@ -45,7 +45,6 @@ protected:
 private:
   int init_tb_ctx(table::ObTableApiCacheGuard &cache_guard);
   int query_and_result(table::ObTableApiScanExecutor *executor);
-  int get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids);
 
 private:
   common::ObArenaAllocator allocator_;
