@@ -1687,12 +1687,14 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
                     K(parse_tree.children_));
           }
           if (OB_SUCC(ret)) {
-            const int WHERE_USR_NAME_LENGTH = OB_MAX_USER_NAME_LENGTH + 20;
+            const int WHERE_USR_NAME_LENGTH = OB_MAX_USER_NAME_LENGTH + OB_MAX_HOST_NAME_LENGTH + 20;
             char where_user_from_jobs[WHERE_USR_NAME_LENGTH] = {};
             char where_user_from_logs[WHERE_USR_NAME_LENGTH] = {};
             if (0 != session_info_->get_user_name().case_compare("root")) {
-              snprintf(where_user_from_jobs, WHERE_USR_NAME_LENGTH, " AND T.POWNER = '%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr());
-              snprintf(where_user_from_logs, WHERE_USR_NAME_LENGTH, " AND R.OWNER = '%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr());
+              snprintf(where_user_from_jobs, WHERE_USR_NAME_LENGTH, " AND T.POWNER = '%.*s@%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+                                                                                                   session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
+              snprintf(where_user_from_logs, WHERE_USR_NAME_LENGTH, " AND R.OWNER = '%.*s@%.*s' ", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+                                                                                                  session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
             }
             show_resv_ctx.stmt_type_ = stmt::T_SHOW_OLAP_ASYNC_JOB_STATUS;
             GEN_SQL_STEP_1(ObShowSqlSet::SHOW_OLAP_ASYNC_JOB_STATUS);
@@ -3315,9 +3317,9 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_SEQUENCES_LIKE,
                        "sequence_name");
 DEFINE_SHOW_CLAUSE_SET(SHOW_OLAP_ASYNC_JOB_STATUS,
                        NULL,
-                       "(SELECT R.job_name AS 'job_id', R.database_name AS 'schema_name', CASE WHEN R.status = 'COMPLETED' AND R.message = 'SUCCESS' THEN 'FINISH' WHEN R.status = 'COMPLETED' AND R.message <> 'SUCCESS' THEN 'FAILED' ELSE R.status END as 'status', R.message as 'fail_msg', R.req_start_date as 'create_time', R.time as 'update_time', R.operation AS 'definition' FROM %s.%s R WHERE R.JOB_CLASS = 'ADB_ASYNC_JOB_CLASS' %s %s\
+                       "(SELECT R.job_name AS 'job_id', R.database_name AS 'schema_name', CASE WHEN R.status = 'COMPLETED' AND R.message = 'SUCCESS' THEN 'FINISH' WHEN R.status = 'COMPLETED' AND R.message <> 'SUCCESS' THEN 'FAILED' WHEN R.status = 'KILLED' THEN 'CANCELLED' ELSE R.status END as 'status', R.message as 'fail_msg', R.req_start_date as 'create_time', R.time as 'update_time', R.operation AS 'definition' FROM %s.%s R WHERE R.JOB_CLASS = 'OLAP_ASYNC_JOB_CLASS' %s %s\
                         UNION ALL\
-                        SELECT T.job_name AS 'job_id', T.cowner AS 'schema_name', CASE WHEN T.state IS NULL THEN 'SUBMITTED' WHEN T.state = 'SCHEDULED' THEN 'RUNNING' ELSE T.state END as 'status', NULL as fail_msg, T.start_date as 'create_time', T.gmt_modified as 'update_time', T.job_action as 'definition'  FROM %s.%s T WHERE T.JOB_CLASS = 'ADB_ASYNC_JOB_CLASS' AND T.TENANT_ID = %d AND T.JOB > 0 %s %s) %s",
+                        SELECT T.job_name AS 'job_id', T.cowner AS 'schema_name', CASE WHEN T.state IS NULL THEN 'SUBMITTED' WHEN T.state = 'SCHEDULED' THEN 'RUNNING' WHEN T.state = 'KILLED' THEN 'CANCELLED' ELSE T.state END as 'status', NULL as fail_msg, T.start_date as 'create_time', T.gmt_modified as 'update_time', T.job_action as 'definition'  FROM %s.%s T WHERE T.JOB_CLASS = 'OLAP_ASYNC_JOB_CLASS' AND T.TENANT_ID = %d AND T.JOB > 0 %s %s) %s",
                        NULL,
                        NULL);
 

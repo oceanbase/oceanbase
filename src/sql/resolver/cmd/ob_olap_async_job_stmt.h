@@ -74,16 +74,16 @@ public:
   virtual ~ObOLAPAsyncCancelJobStmt() = default;
 
   inline void set_tenant_id(const uint64_t id) { tenant_id_ = id; }
+  inline void set_user_id(const uint64_t id) { user_id_ = id; }
   inline void set_job_name(const common::ObString &job_name) {  job_name_ = job_name; }
-  inline void set_user_name(const common::ObString &user_name) {  user_name_ = user_name; }
   inline uint64_t get_tenant_id() const { return tenant_id_; }
-  inline const common::ObString &get_user_name() const { return user_name_; }
+  inline uint64_t get_user_id() const { return user_id_; }
   inline const common::ObString &get_job_name() const { return job_name_; }
   DECLARE_VIRTUAL_TO_STRING;
 private:
   // data members
   uint64_t tenant_id_;
-  common::ObString user_name_;
+  uint64_t user_id_;
   common::ObString job_name_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOLAPAsyncCancelJobStmt);

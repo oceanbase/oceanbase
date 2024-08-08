@@ -19,37 +19,33 @@ int ObOLAPAsyncCancelJobExecutor::execute(ObExecContext &ctx, ObOLAPAsyncCancelJ
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = stmt.get_tenant_id();
-  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-  const char ASYNC_JOB_CLASS[] = "ADB_ASYNC_JOB_CLASS";
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::stop_dbms_sched_job(
-      stmt.get_user_name(),
-      stmt.get_tenant_id(),
-      stmt.get_job_name(),
-      ASYNC_JOB_CLASS)
-  )) {
-    LOG_WARN("failed to stop dbms scheduler job", KR(tmp_ret));
-    if (tmp_ret == OB_NOT_SUPPORTED) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("support cancel job", KR(ret));
-    } else if (tmp_ret == OB_ERR_NO_PRIVILEGE){
-      ret = OB_ERR_NO_PRIVILEGE;
-      LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE,
-          "insufficient privalige to cancel other user job");
-    } else if (tmp_ret == OB_ENTRY_NOT_EXIST) {
-      ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("olap not running job", KR(ret));
-    }
-  }
-  //stop 失败不影响 remove
-  if (OB_SUCC(ret) && OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::remove_dbms_sched_job(
-      *GCTX.sql_proxy_,
-      stmt.get_tenant_id(),
-      stmt.get_job_name(),
-      true,
-      ASYNC_JOB_CLASS)
-  )) {
-    LOG_WARN("failed to remove dbms scheduler job", KR(ret));
+  uint64_t user_id = stmt.get_user_id();
+  const ObUserInfo *user_info = nullptr;
+  ObArenaAllocator allocator("ASYNC_JOB_TMP");
+  dbms_scheduler::ObDBMSSchedJobInfo job_info;
+  schema::ObSchemaGetterGuard schema_guard;
+  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("fail to get schema guard", K(ret), K(tenant_id));
+  } else if(OB_FAIL(schema_guard.get_user_info(tenant_id, user_id, user_info))) {
+    LOG_WARN("fail to get user id", KR(ret), K(tenant_id), K(user_id));
+  } else if (OB_ISNULL(user_info)) {
+    ret = OB_USER_NOT_EXIST;
+    LOG_WARN("user not exist", KR(ret), K(tenant_id), K(user_id));
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::get_dbms_sched_job_info(
+        *GCTX.sql_proxy_,
+        tenant_id,
+        false, // is_oracle_tenant
+        stmt.get_job_name(),
+        allocator,
+        job_info))) {
+    LOG_WARN("get job info failed", KR(ret), K(tenant_id), K(stmt.get_job_name()));
+  } else if (!job_info.is_olap_async_job_class()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("cancel not olap async job", KR(ret), K(tenant_id), K(job_info));
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::check_dbms_sched_job_priv(user_info, job_info))) {
+    LOG_WARN("check user priv failed", KR(ret), K(tenant_id), K(job_info));
+  } else if (OB_FAIL(dbms_scheduler::ObDBMSSchedJobUtils::stop_dbms_sched_job(*GCTX.sql_proxy_, job_info, true /* delete after stop */))) {
+    LOG_WARN("failed to stop dbms scheduler job", KR(ret));
   }
   return ret;
 }

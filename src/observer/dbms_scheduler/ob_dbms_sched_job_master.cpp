@@ -291,7 +291,7 @@ int64_t ObDBMSSchedJobMaster::run_job(ObDBMSSchedJobInfo &job_info, ObDBMSSchedJ
       job_key->get_job_name(),
       execute_addr,
       self_addr_,
-      job_info.is_adb_async_job_class() ? share::OBCG_OLAP_ASYNC_JOB : 0))) {
+      job_info.is_olap_async_job_class() ? share::OBCG_OLAP_ASYNC_JOB : 0))) {
     LOG_WARN("failed to run dbms sched job", K(ret), K(job_info), KPC(job_key));
     if (is_server_down_error(ret)) {
       int tmp = OB_SUCCESS;
@@ -388,6 +388,15 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
         } else {
           LOG_WARN("job is timeout, force update for end", K(job_info), K(now));
         }
+      }
+    } else if (job_info.is_killed()) {
+      free_job_key(job_key);
+      job_key = NULL;
+      int tmp = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp = table_operator_.update_for_kill(job_info))) {
+        LOG_WARN("update for stop failed", K(tmp), K(job_info));
+      } else {
+        LOG_WARN("update for stop job", K(job_info));
       }
     } else if (job_info.is_disabled()) {
       free_job_key(job_key);
@@ -658,8 +667,8 @@ int ObDBMSSchedJobMaster::check_all_tenants()
           OZ (table_operator_.purge_run_detail_histroy(tenant_ids.at(i)));
         }
         */ // not open
-        if (OB_FAIL(table_operator_.purge_adb_async_job_run_detail(tenant_ids.at(i)))) {
-          LOG_WARN("purge adb async job run detail failed", K(ret), K(tenant_ids.at(i)));
+        if (OB_FAIL(table_operator_.purge_olap_async_job_run_detail(tenant_ids.at(i)))) {
+          LOG_WARN("purge olap async job run detail failed", K(ret), K(tenant_ids.at(i)));
           ret = OB_SUCCESS; // not affect subsequent operations
         }
         OZ (check_new_jobs(tenant_ids.at(i), tenant_schema->is_oracle_tenant()));

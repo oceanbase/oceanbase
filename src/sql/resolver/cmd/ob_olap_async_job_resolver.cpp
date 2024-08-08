@@ -68,13 +68,28 @@ int ObOLAPAsyncJobResolver::resolve_submit_job_stmt(const ParseNode &parse_tree,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get session query timeout failed", KR(ret));
   } else {
-    const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
-    stmt.set_tenant_id(tenant_id);
-    stmt.set_job_definer(session_info_->get_user_name());
-    stmt.set_user_id(session_info_->get_user_id());
-    stmt.set_job_database(session_info_->get_database_name());
-    stmt.set_database_id(session_info_->get_database_id());
-    stmt.set_query_time_out_second(session_query_time_out_ts / 1000 / 1000);
+
+    const int definer_buf_size = OB_MAX_USER_NAME_LENGTH + OB_MAX_HOST_NAME_LENGTH + 2; // @ + \0
+    char *definer_buf = static_cast<char*>(allocator_->alloc(definer_buf_size));
+    if (OB_ISNULL(definer_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory", K(ret));
+    } else {
+      memset(definer_buf, 0, definer_buf_size);
+      snprintf(definer_buf, definer_buf_size, "%.*s@%.*s", session_info_->get_user_name().length(), session_info_->get_user_name().ptr(),
+                                                           session_info_->get_host_name().length(), session_info_->get_host_name().ptr());
+      stmt.set_job_definer(definer_buf);
+    }
+
+    if (OB_SUCC(ret)) {
+      const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
+      stmt.set_tenant_id(tenant_id);
+      stmt.set_user_id(session_info_->get_user_id());
+      stmt.set_job_database(session_info_->get_database_name());
+      stmt.set_database_id(session_info_->get_database_id());
+      stmt.set_query_time_out_second(session_query_time_out_ts / 1000 / 1000);
+    }
+
     if (OB_SUCC(ret)) {
       char *sql_buf = static_cast<char*>(allocator_->alloc(OB_JOB_SQL_MAX_LENGTH));
       if (OB_ISNULL(sql_buf)) {
@@ -129,7 +144,7 @@ int ObOLAPAsyncJobResolver::resolve_cancel_job_stmt(const ParseNode &parse_tree,
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = params_.session_info_->get_effective_tenant_id();
   stmt->set_tenant_id(tenant_id);
-  stmt->set_user_name(session_info_->get_user_name());
+  stmt->set_user_id(session_info_->get_user_id());
   if (parse_tree.num_child_ != 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid job name", K(ret));
@@ -174,7 +189,7 @@ int ObOLAPAsyncJobResolver::execute_submit_job(ObOLAPAsyncSubmitJobStmt &stmt)
       job_info.cowner_ = stmt.get_job_database();
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
-      job_info.job_class_ = ObString("ADB_ASYNC_JOB_CLASS");
+      job_info.job_class_ = ObString("OLAP_ASYNC_JOB_CLASS");
       job_info.what_ = stmt.get_job_action();
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;
@@ -185,7 +200,7 @@ int ObOLAPAsyncJobResolver::execute_submit_job(ObOLAPAsyncSubmitJobStmt &stmt)
       job_info.max_run_duration_ = stmt.get_query_time_out_second() + 60;
       job_info.interval_ts_ = 0;
       job_info.exec_env_ = stmt.get_exec_env();
-      job_info.comments_ = ObString("adb async job");;
+      job_info.comments_ = ObString("olap async job");
       ObMySQLTransaction trans;
       if (OB_FAIL(trans.start(GCTX.sql_proxy_, stmt.get_tenant_id()))) {
         LOG_WARN("failed to start trans", KR(ret), K(stmt.get_tenant_id()));

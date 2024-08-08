@@ -150,18 +150,15 @@ int ObDBMSSchedJobUtils::disable_dbms_sched_job(
 }
 
 int ObDBMSSchedJobUtils::stop_dbms_sched_job(
-    const ObString &user_name,
-    const uint64_t tenant_id,
-    const ObString &job_name,
-    const common::ObString &job_class)
+    common::ObISQLClient &sql_client,
+    const ObDBMSSchedJobInfo &job_info,
+    const bool is_delete_after_stop)
 {
   int ret = OB_SUCCESS;
   obrpc::ObDBMSSchedJobRpcProxy *rpc_proxy = GCTX.dbms_sched_job_rpc_proxy_;
-  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  uint64_t tenant_id = job_info.tenant_id_;
   ObSqlString sql;
   CK (OB_NOT_NULL(rpc_proxy));
-  CK (OB_NOT_NULL(sql_proxy));
-
   uint64_t data_version = 0;
   if (OB_SUCC(ret)) {
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
@@ -172,91 +169,71 @@ int ObDBMSSchedJobUtils::stop_dbms_sched_job(
       ret = OB_NOT_SUPPORTED;
     }
   }
-
-  if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version)) {
-    OZ (sql.append_fmt("select owner,job_class, svr_ip, svr_port, session_id from %s where tenant_id = %lu and job_name = \'%.*s\'",
-        OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TNAME,
-        tenant_id,
-        job_name.length(),
-        job_name.ptr()));
-  } else {
-    OZ (sql.append_fmt("select owner, svr_ip, svr_port, session_id from %s where tenant_id = %lu and job_name = \'%.*s\'",
-        OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TNAME,
-        tenant_id,
-        job_name.length(),
-        job_name.ptr()));
+  if (OB_SUCC(ret)) {
+    dbms_scheduler::ObDBMSSchedJobInfo update_job_info;
+    update_job_info.tenant_id_ = job_info.tenant_id_;
+    update_job_info.is_oracle_tenant_ = job_info.is_oracle_tenant_;
+    update_job_info.job_name_ = job_info.job_name_;
+    if (is_delete_after_stop) {
+      update_job_info.state_ = "KILLED";
+    }
+    if(OB_FAIL(update_dbms_sched_job_info(sql_client, update_job_info))) {
+      LOG_WARN("update job info failed", K(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {
-    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
-      if (OB_FAIL(sql_proxy->read(result, sql.ptr()))) {
-        LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_name));
-      } else if (OB_ISNULL(result.get_result())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("result is null", K(ret), K(sql), K(tenant_id), K(job_name));
-      } else {
-        bool result_empty = true;
-        do {
-          if (OB_FAIL(result.get_result()->next())) {
-            if (ret == OB_ITER_END) {
-              LOG_INFO("empty result", K(ret));
-            } else {
-              LOG_WARN("fail to get result", K(ret));
-            }
-          } else {
-            result_empty = false;
-            uint64_t session_id = OB_INVALID_ID;
-            ObAddr svr;
-            ObString owner;
-            ObString job_class_name;
-            ObString svr_ip;
-            int64_t svr_port = OB_INVALID_INDEX;
-            EXTRACT_VARCHAR_FIELD_MYSQL(*(result.get_result()), "owner", owner);
-            if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version)) {
-              EXTRACT_VARCHAR_FIELD_MYSQL(*(result.get_result()), "job_class", job_class_name);
-            }
-            EXTRACT_VARCHAR_FIELD_MYSQL(*(result.get_result()), "svr_ip", svr_ip);
-            EXTRACT_UINT_FIELD_MYSQL(*(result.get_result()), "session_id", session_id, uint64_t);
-            EXTRACT_INT_FIELD_MYSQL(*(result.get_result()), "svr_port", svr_port, int64_t);
-            if (OB_SUCC(ret)) {
-              if (0 != user_name.case_compare("root")
-                && 0 != user_name.case_compare(owner)) {
-                ret = OB_ERR_NO_PRIVILEGE;
-                LOG_WARN("insufficient privalige", K(ret), K(tenant_id), K(job_name), K(user_name), K(owner));
-                LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE,
-                    "insufficient privalige to stop other user job");
-              } else if (DATA_VERSION_SUPPORT_RUN_DETAIL_V2_DATABASE_NAME_AND_RUNNING_JOB_JOB_CLASS(data_version)
-                         && OB_NOT_NULL(job_class) && 0 != job_class.case_compare(job_class_name)) {
-                ret = OB_ERR_NO_PRIVILEGE;
-                LOG_WARN("insufficient privalige", K(ret), K(tenant_id), K(job_name), K(user_name), K(owner));
-                LOG_USER_ERROR(OB_ERR_NO_PRIVILEGE,
-                    "insufficient privalige to stop other user job");
-              } else if (!svr.set_ip_addr(svr_ip, svr_port)) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("set addr failed", K(svr_ip), K(svr_port));
+    if (OB_FAIL(sql.append_fmt("select svr_ip, svr_port, session_id from %s where tenant_id = %lu and job_name = \'%.*s\'",
+      OB_ALL_VIRTUAL_TENANT_SCHEDULER_RUNNING_JOB_TNAME, tenant_id, job_info.job_name_.length(),job_info.job_name_.ptr()))) {
+      LOG_WARN("append sql failed", KR(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+        if (OB_FAIL(sql_client.read(result, sql.ptr()))) {
+          LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id), K(job_info.job_name_));
+        } else if (OB_ISNULL(result.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", K(ret), K(sql), K(tenant_id), K(job_info.job_name_));
+        } else {
+          bool result_empty = true;
+          do {
+            if (OB_FAIL(result.get_result()->next())) {
+              if (ret == OB_ITER_END) {
+                //do nothing
               } else {
-                LOG_INFO("send rpc", K(tenant_id), K(job_name), K(svr), K(session_id));
-                ObString stop_job_name = ObString(job_name);
-                OZ (rpc_proxy->stop_dbms_sched_job(tenant_id,
-                  stop_job_name,
-                  svr,
-                  session_id));
+                LOG_WARN("fail to get result", K(ret));
+              }
+            } else {
+              result_empty = false;
+              uint64_t session_id = OB_INVALID_ID;
+              ObAddr svr;
+              ObString svr_ip;
+              int64_t svr_port = OB_INVALID_INDEX;
+              EXTRACT_VARCHAR_FIELD_MYSQL(*(result.get_result()), "svr_ip", svr_ip);
+              EXTRACT_UINT_FIELD_MYSQL(*(result.get_result()), "session_id", session_id, uint64_t);
+              EXTRACT_INT_FIELD_MYSQL(*(result.get_result()), "svr_port", svr_port, int64_t);
+              if (OB_SUCC(ret)) {
+                if (!svr.set_ip_addr(svr_ip, svr_port)) {
+                  ret = OB_ERR_UNEXPECTED;
+                  LOG_WARN("set addr failed", K(svr_ip), K(svr_port));
+                } else {
+                  LOG_INFO("send rpc", K(tenant_id), K(job_info.job_name_), K(svr), K(session_id));
+                  ObString stop_job_name = ObString(job_info.job_name_);
+                  OZ (rpc_proxy->stop_dbms_sched_job(tenant_id,
+                    stop_job_name,
+                    svr,
+                    session_id));
+                }
               }
             }
-          }
-        } while (OB_SUCC(ret));
-        if (OB_ITER_END == ret) {
-          if (result_empty) {
-            ret = OB_ENTRY_NOT_EXIST;
-            LOG_WARN("no running job", K(ret), K(tenant_id), K(job_name));
-          } else {
-            ret = OB_SUCCESS;
+          } while (OB_SUCC(ret));
+          if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
           }
         }
       }
     }
   }
-  LOG_INFO("stop job", K(ret), K(job_name), K(tenant_id));
+  LOG_INFO("stop job", K(ret), K(job_info.job_name_), K(tenant_id));
   return ret;
 }
 
@@ -264,8 +241,7 @@ int ObDBMSSchedJobUtils::remove_dbms_sched_job(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
     const ObString &job_name,
-    const bool if_exists,
-    const common::ObString &job_class)
+    const bool if_exists)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
@@ -277,8 +253,6 @@ int ObDBMSSchedJobUtils::remove_dbms_sched_job(
     if (OB_FAIL(dml.add_pk_column(
         "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
         || OB_FAIL(dml.add_pk_column("job_name", job_name))) {
-      LOG_WARN("add column failed", KR(ret));
-    } else if (OB_NOT_NULL(job_class) && OB_FAIL(dml.add_pk_column("job_class", job_class))) {
       LOG_WARN("add column failed", KR(ret));
     } else {
       ObDMLExecHelper exec(sql_client, exec_tenant_id);
@@ -384,111 +358,35 @@ int ObDBMSSchedJobUtils::add_dbms_sched_job(
   return ret;
 }
 
-int ObDBMSSchedJobUtils::update_dbms_sched_job(
+int ObDBMSSchedJobUtils::update_dbms_sched_job_info(
     common::ObISQLClient &sql_client,
-    const uint64_t tenant_id,
-    const ObString &job_name,
-    int is_auto_drop,
-    int is_enable,
-    int64_t start_date,
-    int64_t end_date,
-    int64_t repeat_ts,
-    const ObString &repeat_interval,
-    const ObString &definer,
-    const ObString &job_rename,
-    const ObString &comments,
-    const ObString &job_action)
+    const ObDBMSSchedJobInfo &update_job_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
+  uint64_t tenant_id = update_job_info.tenant_id_;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || update_job_info.job_name_.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(update_job_info));
   } else {
     const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
     ObDMLSqlSplicer dml;
     if (OB_FAIL(dml.add_pk_column(
         "tenant_id", ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id)))
-        || OB_FAIL(dml.add_pk_column("job_name", job_name))) {
+        || OB_FAIL(dml.add_pk_column("job_name", update_job_info.job_name_))) {
       LOG_WARN("add column failed", KR(ret));
-    } else if (!definer.empty() && OB_FAIL(dml.add_column("powner", definer))) {
-      LOG_WARN("add column failed", KR(ret), K(definer));
-    } else if (!job_rename.empty() && OB_FAIL(dml.add_column("job_name", job_rename))) {
-      LOG_WARN("add column failed", KR(ret), K(job_rename));
-    } else if (-1 != is_auto_drop && OB_FAIL(dml.add_column("auto_drop", is_auto_drop))) {
-      LOG_WARN("add column failed", KR(ret), K(is_auto_drop));
-    } else if (-1 != is_enable && OB_FAIL(dml.add_column("enabled", is_enable))) {
-      LOG_WARN("add column failed", KR(ret), K(is_enable));
-    } else if (OB_INVALID_TIMESTAMP != start_date && (OB_FAIL(dml.add_raw_time_column("start_date", start_date)
-      || OB_FAIL(dml.add_raw_time_column("next_date", start_date))
-      || OB_FAIL(dml.add_raw_time_column("end_date", end_date))
-      || OB_FAIL(dml.add_column("repeat_interval", repeat_interval))
-      || OB_FAIL(dml.add_column("interval_ts", repeat_ts))))) {
-      LOG_WARN("add column failed", KR(ret), K(start_date), K(end_date), K(repeat_interval), K(repeat_ts));
-    } else if (!comments.empty() && OB_FAIL(dml.add_column("comments", ObHexEscapeSqlStr(comments)))) {
-      LOG_WARN("add column failed", KR(ret), K(comments));
-    } else if (!job_action.empty() && (OB_FAIL(dml.add_column("job_action", job_action))
-      || OB_FAIL(dml.add_column("what", job_action)))) {
-      LOG_WARN("add column failed", KR(ret), K(job_action));
+    } else if (!update_job_info.state_.empty() && OB_FAIL(dml.add_column("state", update_job_info.state_))) {
+      LOG_WARN("add column failed", KR(ret), K(update_job_info.state_));
     } else {
       ObDMLExecHelper exec(sql_client, exec_tenant_id);
       int64_t affected_rows = 0;
       if (OB_FAIL(exec.exec_update(OB_ALL_TENANT_SCHEDULER_JOB_TNAME, dml, affected_rows))) {
         LOG_WARN("execute update failed", KR(ret));
       } else if (is_zero_row(affected_rows)) {
-        ret = OB_SUCCESS;
+        ret = OB_ENTRY_NOT_EXIST;
         LOG_WARN("not change", KR(ret), K(affected_rows));
       } else if (!is_double_row(affected_rows)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("affected_rows unexpected to be two", KR(ret), K(affected_rows));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDBMSSchedJobUtils::check_dbms_sched_job_exist_and_start_time_on_past(common::ObISQLClient &sql_client,
-                                        const uint64_t tenant_id,
-                                        const ObString &job_name,
-                                        bool &exist,
-                                        bool &start_time_on_past)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString sql;
-  exist = false;
-  start_time_on_past = false;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
-  } else {
-    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
-    if (OB_FAIL(sql.append_fmt("select TIME_TO_USEC (start_date) as time from %s where tenant_id = %ld and job_name = \'%.*s\' and job > 0",
-                                                     OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
-                                                     ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
-                                                     job_name.length(), job_name.ptr()))) {
-        LOG_WARN("failed to assign sql", K(ret));
-    } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
-          LOG_WARN("execute query failed", K(ret), K(sql));
-        } else {
-          if (res.get_result() != NULL && OB_SUCCESS == (ret = res.get_result()->next())) {
-            exist = true;
-            int64_t time_us = OB_INVALID_TIMESTAMP;
-            sqlclient::ObMySQLResult &result = *res.get_result();
-            EXTRACT_INT_FIELD_MYSQL(result, "time", time_us, uint64_t);
-            if (time_us < ObTimeUtility::current_time()) {
-              start_time_on_past = true;
-            }
-          }
-          if (OB_FAIL(ret)) {
-            if (OB_ITER_END == ret) {
-              ret = OB_SUCCESS;
-              exist = false;
-            } else {
-              LOG_WARN("next failed", K(ret));
-            }
-          }
-        }
       }
     }
   }
@@ -517,6 +415,87 @@ int ObDBMSSchedJobUtils::reserve_user_with_minimun_id(ObIArray<const ObUserInfo 
       }
     }
   }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::get_dbms_sched_job_info(common::ObISQLClient &sql_client,
+                                                 const uint64_t tenant_id,
+                                                 const bool is_oracle_tenant,
+                                                 const ObString &job_name,
+                                                 common::ObIAllocator &allocator,
+                                                 ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || job_name.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(job_name));
+  } else {
+    const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+    if (OB_FAIL(sql.append_fmt("select * from %s where tenant_id = %ld and job_name = \'%.*s\' and job > 0",
+                                                     OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                                                     ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
+                                                     job_name.length(), job_name.ptr()))) {
+        LOG_WARN("failed to assign sql", K(ret));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+          LOG_WARN("execute query failed", K(ret), K(sql));
+        } else {
+          if (res.get_result() != NULL && OB_SUCCESS == (ret = res.get_result()->next())) {
+            ObDBMSSchedTableOperator table_operator;
+            OZ (table_operator.extract_info(*(res.get_result()), tenant_id, is_oracle_tenant, allocator, job_info));
+          }
+          if (OB_FAIL(ret)) {
+            if (OB_ITER_END == ret) {
+              ret = OB_ENTRY_NOT_EXIST;
+            } else {
+              LOG_WARN("next failed", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::check_dbms_sched_job_priv(const ObUserInfo *user_info,
+                                                   const ObDBMSSchedJobInfo &job_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(user_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("user info is NULL", KR(ret));
+  } else if (is_root_user(user_info->get_user_id())) {
+    // do nothing
+  } else if (job_info.is_oracle_tenant_) {
+    //TODO 连雨
+  } else {
+    if (job_info.user_id_ != OB_INVALID_ID) { //如果 job 有 user_id 优先使用
+      if (job_info.user_id_ != user_info->get_user_id()) {
+        ret = OB_ERR_NO_PRIVILEGE;
+        LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+      }
+    } else if (0 != job_info.powner_.case_compare(user_info->get_user_name())) { // job 保存的 owner 可能是 root@% or root (旧)
+      const char *c = job_info.powner_.reverse_find('@');
+      if (OB_ISNULL(c)) {
+        ret = OB_ERR_NO_PRIVILEGE;
+        LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+      } else {
+        ObString user = job_info.powner_;
+        ObString user_name;
+        ObString host_name;
+        user_name = user.split_on(c);
+        host_name = user;
+        if (0 != user_name.case_compare(user_info->get_user_name()) || 0 != host_name.case_compare(user_info->get_host_name())) {
+          ret = OB_ERR_NO_PRIVILEGE;
+          LOG_WARN("job user id check failed", KR(ret), K(user_info), K(job_info.user_id_));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
