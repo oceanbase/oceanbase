@@ -281,20 +281,14 @@ struct EvalVectorCmp
                 K(right_format), K(res_format));
       if (is_valid_format(left_format) && is_valid_format(right_format) && is_valid_format(res_format)) {
         switch (CALC_FORMAT(left_format, right_format, res_format)) {
-          VECTOR_CMP_CASE(VEC_FIXED, VEC_FIXED, VEC_FIXED);
-          VECTOR_CMP_CASE(VEC_FIXED, VEC_UNIFORM, VEC_FIXED);
-          VECTOR_CMP_CASE(VEC_FIXED, VEC_UNIFORM_CONST, VEC_FIXED);
-
           VECTOR_CMP_CASE(VEC_DISCRETE, VEC_DISCRETE, VEC_FIXED);
           VECTOR_CMP_CASE(VEC_DISCRETE, VEC_UNIFORM, VEC_FIXED);
           VECTOR_CMP_CASE(VEC_DISCRETE, VEC_UNIFORM_CONST, VEC_FIXED);
 
-          VECTOR_CMP_CASE(VEC_UNIFORM, VEC_FIXED, VEC_FIXED);
           VECTOR_CMP_CASE(VEC_UNIFORM, VEC_DISCRETE, VEC_FIXED);
           VECTOR_CMP_CASE(VEC_UNIFORM, VEC_UNIFORM, VEC_FIXED);
           VECTOR_CMP_CASE(VEC_UNIFORM, VEC_UNIFORM_CONST, VEC_FIXED);
 
-          VECTOR_CMP_CASE(VEC_UNIFORM_CONST, VEC_FIXED, VEC_FIXED);
           VECTOR_CMP_CASE(VEC_UNIFORM_CONST, VEC_DISCRETE, VEC_FIXED);
           VECTOR_CMP_CASE(VEC_UNIFORM_CONST, VEC_UNIFORM, VEC_FIXED);
           default: {
