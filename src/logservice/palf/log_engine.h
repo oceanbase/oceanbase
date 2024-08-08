@@ -160,6 +160,7 @@ public:
   int submit_purge_throttling_task(const PurgeThrottlingType purge_type);
   int submit_fill_cache_task(const LSN &lsn, const int64_t size);
 
+  virtual int check_config_meta_size(const LogConfigMeta &config_meta) const;
   // ==================== Submit aysnc task end ==================
 
   // ====================== LogStorage start =====================

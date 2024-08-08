@@ -565,6 +565,25 @@ public:
     candidate_list_.reset();
     reg_ret_ = RegisterReturn::INVALID_REG_RET;
   }
+
+  int check_config_meta_size(const LogConfigMeta &config_meta) const
+  {
+    int ret = OB_SUCCESS;
+    LogMeta log_meta;
+    if (OB_FAIL(log_meta.update_log_config_meta(config_meta))) {
+      PALF_LOG(ERROR, "LogMeta update_log_config_meta failed", K(ret), K_(palf_id), K_(is_inited));
+    } else {
+      LogMetaEntryHeader log_meta_entry_header;
+      const int64_t log_meta_entry_header_len = log_meta_entry_header.get_serialize_size();
+      const int64_t log_meta_body_len = log_meta.get_serialize_size();
+      if (log_meta_entry_header_len + log_meta_body_len > MAX_META_ENTRY_SIZE) {
+        ret = OB_INVALID_ARGUMENT;
+        PALF_LOG(WARN, "check_config_meta_size failed", K(ret), K_(palf_id),
+            K(log_meta_entry_header_len), K(log_meta_body_len), K(config_meta));
+      }
+    }
+    return ret;
+  }
 public:
   // register_parent_resp ret
   LogLearner parent_itself_;

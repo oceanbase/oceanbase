@@ -1073,6 +1073,19 @@ int LogConfigMgr::check_config_change_args_(const LogConfigChangeArgs &args, boo
       ret = OB_INVALID_ARGUMENT;
       PALF_LOG(WARN, "can't change config, memberlist don't reach majority", KR(ret), K_(palf_id), K_(self), K(new_config_info),
           K(new_paxos_memberlist), K(new_paxos_replica_num), K(args));
+    } else {
+      // ensure that serialization size of the LogMetaEntry is smaller than MAX_META_ENTRY_SIZE
+      LogConfigMeta config_meta = log_ms_meta_;
+      const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
+      if (OB_FAIL(config_meta.generate(curr_proposal_id, config_meta.curr_, new_config_info,
+          checking_barrier_.prev_log_proposal_id_, checking_barrier_.prev_lsn_,
+          checking_barrier_.prev_mode_pid_))) {
+        PALF_LOG(WARN, "generate LogConfigMeta failed", KR(ret), K_(palf_id), K_(self), K(args));
+      } else if (FALSE_IT(config_meta.prev_.config_.learnerlist_.reset())) {
+      } else if (OB_FAIL(log_engine_->check_config_meta_size(config_meta))) {
+        PALF_LOG(WARN, "check_config_meta_size failed, too many learners", KR(ret), K_(palf_id),
+          K_(self), K(args), K(config_meta));
+      }
     }
   }
   return ret;
@@ -1574,6 +1587,9 @@ int LogConfigMgr::append_config_meta_(const int64_t curr_proposal_id,
   } else if (OB_FAIL(append_config_info_(new_config_info))) {
     PALF_LOG(WARN, "append_config_info_ failed", KR(ret), K_(palf_id), K_(self), K(new_config_info));
   } else {
+    // To reduce the serialized size of LogMeta to 4KB, we reset the previous learner_list.
+    // It's safe because the previous learner_list is useless in our design.
+    log_ms_meta_.prev_.config_.learnerlist_.reset();
     // log_ms_meta_ and reconfig_barrier_ must be updated atomically
     reconfig_barrier_ = checking_barrier_;
     // Note: can not generate committed_end_lsn while changing configs with arb.
