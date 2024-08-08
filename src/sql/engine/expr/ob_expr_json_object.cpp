@@ -12,6 +12,7 @@
  */
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "common/ob_smart_call.h"
 #include "ob_expr_json_object.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
 #include "sql/engine/ob_exec_context.h"
@@ -340,8 +341,8 @@ int ObExprJsonObject::eval_ora_json_object(const ObExpr &expr, ObEvalCtx &ctx, O
       bool is_format_json = format_type > 0;
       temp_allocator.add_baseline_size(key.length());
 
-      if (OB_FAIL(ObJsonExprHelper::eval_oracle_json_val(
-                    arg_value, ctx, &temp_allocator, j_val, is_format_json, is_strict, false, is_null_absent))) {
+      if (OB_FAIL(SMART_CALL(ObJsonExprHelper::eval_oracle_json_val(
+                    arg_value, ctx, &temp_allocator, j_val, is_format_json, is_strict, false, is_null_absent)))) {
         LOG_WARN("failed to get json value node.", K(ret), K(value_data_type), K(i));
       } else {
         bool is_key_already_exist = (j_obj.get_value(key) != nullptr);

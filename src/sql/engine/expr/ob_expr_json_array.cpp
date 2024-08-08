@@ -13,6 +13,7 @@
 
 
 #define USING_LOG_PREFIX SQL_ENG
+#include "common/ob_smart_call.h"
 #include "ob_expr_json_array.h"
 #include "share/ob_json_access_utils.h"
 #include "sql/engine/ob_exec_context.h"
@@ -198,8 +199,8 @@ int ObExprJsonArray::eval_ora_json_array(const ObExpr &expr, ObEvalCtx &ctx, ObD
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObJsonExprHelper::eval_oracle_json_val(
-                expr.args_[i], ctx, &temp_allocator, j_val, is_format_json, is_strict, false, is_null_absent))) {
+    } else if (OB_FAIL(SMART_CALL(ObJsonExprHelper::eval_oracle_json_val(
+                expr.args_[i], ctx, &temp_allocator, j_val, is_format_json, is_strict, false, is_null_absent)))) {
       LOG_WARN("failed to get json value node.", K(ret), K(val_type));
     } else if (OB_ISNULL(j_val)) {
     } else if (OB_FAIL(j_arr.append(static_cast<ObJsonNode*>(j_val)))) {
