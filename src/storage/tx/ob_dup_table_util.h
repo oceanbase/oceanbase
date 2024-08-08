@@ -350,6 +350,16 @@ public:
   TO_STRING_KV(K(is_inited_), K(dup_ls_id_set_.size()));
 
 private:
+  class CopyDupLsIdFunctor{
+  public:
+    CopyDupLsIdFunctor(common::ObArray<share::ObLSID> &ls_id_array) : ls_id_array_(ls_id_array)
+    {}
+    ~CopyDupLsIdFunctor() {};
+    int operator()(common::hash::HashSetTypes<share::ObLSID>::pair_type &kv);
+  private:
+    common::ObArray<share::ObLSID> &ls_id_array_;
+  };
+private:
   bool is_inited_;
   // SpinRWLock lock_;
   // // dup_table ls map which need to handle
