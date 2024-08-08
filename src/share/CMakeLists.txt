@@ -300,6 +300,7 @@ ob_set_subtarget(ob_share common_mixed
   throttle/ob_share_throttle_define.cpp
   throttle/ob_throttle_common.cpp
   restore/ob_restore_data_mode.cpp
+  rebuild_tablet/ob_rebuild_tablet_location.cpp
 )
 
 ob_set_subtarget(ob_share tablet
