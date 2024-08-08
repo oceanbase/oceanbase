@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner: yanmu.ztl
+#owner: shouju.zyp
 #owner group: SQL2
 # tags: optimizer
 #description: 该case是为了验证内部表是否符合规范

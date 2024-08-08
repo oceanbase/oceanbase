@@ -2,7 +2,7 @@
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
 
-#owner: yanmu.ztl
+#owner: zhaoziqian.zzq 
 #owner group: rs
 #description: test whether show create tablegroup stmt
 

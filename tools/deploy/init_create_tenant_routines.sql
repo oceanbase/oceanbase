@@ -131,17 +131,17 @@ begin
   call oceanbase.create_mysql_tenant_2c4g(tenant_name);
 end /
 
--- create_mysql_tenant_mini / create_mysql_tenant_mini_with_arg: 默认创建一个1c1g的mysql租户
+-- create_mysql_tenant_mini / create_mysql_tenant_mini_with_arg: 默认创建一个1c2g的mysql租户1G会内存不足
 drop procedure if exists create_mysql_tenant_mini;/
 create procedure create_mysql_tenant_mini(tenant_name varchar(64))
 begin
-  call oceanbase.create_mysql_tenant_1c1g(tenant_name);
+  call oceanbase.create_mysql_tenant_1c2g(tenant_name);
 end /
 
 drop procedure if exists create_mysql_tenant_mini_with_arg;/
 create procedure create_mysql_tenant_mini_with_arg(tenant_name varchar(64), arg_list varchar(64))
 begin
-  call oceanbase.create_mysql_tenant_1c1g_with_arg(tenant_name, arg_list);
+  call oceanbase.create_mysql_tenant_1c2g_with_arg(tenant_name, arg_list);
 end /
 
 -- create_mysql_tenant_1c1g / create_mysql_tenant_1c1g_with_arg: 创建一个1c1g的mysql租户
