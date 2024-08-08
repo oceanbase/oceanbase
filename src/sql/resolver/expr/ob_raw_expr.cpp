@@ -285,6 +285,7 @@ int ObRawExpr::assign(const ObRawExpr &other)
       is_deterministic_ = other.is_deterministic_;
       partition_id_calc_type_ = other.partition_id_calc_type_;
       local_session_var_id_ = other.local_session_var_id_;
+      runtime_filter_type_ = other.runtime_filter_type_;
       if (OB_FAIL(enum_set_values_.assign(other.enum_set_values_))) {
         LOG_WARN("failed to assign enum set values", K(ret));
       } else if (OB_FAIL(local_session_var_.assign(other.local_session_var_))) {
@@ -2552,6 +2553,9 @@ int ObOpRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64_t &po
       if (OB_FAIL(BUF_PRINTF("RF_IN_FILTER("))) {
         LOG_WARN("fail to BUF_PRINTF", K(ret));
       }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected runtime filter type", K(ret), K(runtime_filter_type_));
     }
     if (OB_FAIL(ret)) {
     } else {

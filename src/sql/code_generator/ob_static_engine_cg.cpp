@@ -3098,6 +3098,7 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
             reinterpret_cast<ObExpr *>(
             ObStaticEngineExprCG::get_left_value_rt_expr(*join_filter_exprs.at(i))))) {
           ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get_left_value_rt_expr");
         } else {
           rf_info.filter_expr_id_ = join_filter_expr->expr_ctx_id_;
         }
