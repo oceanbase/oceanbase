@@ -241,6 +241,7 @@ protected:
   // if row is null will alloc new memory, otherwise reuse in place if memory is
   // enough. ensure row pointer not change when an error occurs.
   int copy_to_row(const common::ObIArray<ObExpr *> &exprs, const RowMeta &row_meta,
+                  bool is_sort_key,
                   Store_Row *&row);
   int copy_to_row(Store_Row *&sk_row);
   int generate_last_ties_row(const Store_Row *orign_row);
