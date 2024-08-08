@@ -17,7 +17,7 @@ At present, the guide is composed of the following parts:
     5. [Write and run unit tests](unittest.md)
     6. [Running MySQL test](mysqltest.md)
     7. [Debug](debug.md)
-    8. Commit code and submit a pull request
+    8. [Commit code and submit a pull request](contributing.md)
 
     More information before you start a big feature developing, you should read content below and it can help you understand oceanbase better.
    
