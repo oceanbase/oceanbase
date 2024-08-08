@@ -60571,7 +60571,8 @@ SELECT
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  PROXY_USER
+  PROXY_USER,
+  CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
@@ -60623,7 +60624,8 @@ def_table_schema(
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  PROXY_USER
+  PROXY_USER,
+  CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME
     FROM SYS.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
