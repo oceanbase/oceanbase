@@ -9305,6 +9305,7 @@ void ObCreateTabletExtraInfo::reset()
 {
   need_create_empty_major_ = true;
   tenant_data_version_ = 0;
+  micro_index_clustered_ = 0;
 }
 
 int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
@@ -9312,10 +9313,11 @@ int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
   int ret = OB_SUCCESS;
   tenant_data_version_ = other.tenant_data_version_;
   need_create_empty_major_ = other.need_create_empty_major_;
+  micro_index_clustered_ = other.micro_index_clustered_;
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_);
+OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_, micro_index_clustered_);
 
 bool ObBatchCreateTabletArg::is_inited() const
 {

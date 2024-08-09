@@ -4012,7 +4012,8 @@ public:
 public:
   uint64_t tenant_data_version_;
   bool need_create_empty_major_;
-  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major));
+  bool micro_index_clustered_;
+  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major), K_(micro_index_clustered));
 };
 
 struct ObBatchCreateTabletArg
