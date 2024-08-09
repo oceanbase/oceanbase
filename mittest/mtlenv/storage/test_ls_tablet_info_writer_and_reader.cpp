@@ -205,9 +205,10 @@ TEST_F(TestLSTabletInfoWR, testTabletInfoWriterAndReader)
   ObInOutBandwidthThrottle bandwidth_throttle;
   ASSERT_EQ(OB_SUCCESS, bandwidth_throttle.init(1024 * 1024 * 60));
   LOG_INFO("test tablet info", K(tablet_metas.count()), K(backup_set_dest_));
+  const bool is_final_fuse = false;
   backup::ObExternTabletMetaWriter writer;
   backup::ObExternTabletMetaReader reader;
-  ASSERT_EQ(OB_SUCCESS, writer.init(backup_set_dest_, ObLSID(TEST_LS_ID), 1, 0, bandwidth_throttle));
+  ASSERT_EQ(OB_SUCCESS, writer.init(backup_set_dest_, ObLSID(TEST_LS_ID), 1, 0, is_final_fuse, bandwidth_throttle));
   for (int i = 0; i < tablet_metas.count(); i++) {
     blocksstable::ObSelfBufferWriter buffer_writer("TestBuff");
     blocksstable::ObBufferReader buffer_reader;
@@ -221,7 +222,7 @@ TEST_F(TestLSTabletInfoWR, testTabletInfoWriterAndReader)
     }
   }
   ASSERT_EQ(OB_SUCCESS, writer.close());
-  ASSERT_EQ(OB_SUCCESS, reader.init(backup_set_dest_, ObLSID(TEST_LS_ID)));
+  ASSERT_EQ(OB_SUCCESS, reader.init(backup_set_dest_, ObLSID(TEST_LS_ID), false/*is_final_fuse*/));
   while (OB_SUCC(ret)) {
     storage::ObMigrationTabletParam tablet_meta;
     ret = reader.get_next(tablet_meta);

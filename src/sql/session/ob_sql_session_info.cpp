@@ -626,21 +626,15 @@ bool ObSQLSessionInfo::is_spf_mlj_group_rescan_enabled() const
   return bret;
 }
 
-int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode) const
+int ObSQLSessionInfo::get_spm_mode(int64_t &spm_mode)
 {
   int ret = OB_SUCCESS;
-  spm_mode = 0;
-  int64_t tenant_id = get_effective_tenant_id();
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  if (tenant_config.is_valid()) {
-    spm_mode = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
-        tenant_config->sql_plan_management_mode.get_value_string());
-    if (0 == spm_mode) {
-      bool sysvar_use_baseline = false;
-      get_use_plan_baseline(sysvar_use_baseline);
-      if (sysvar_use_baseline) {
-        spm_mode = 1;
-      }
+  spm_mode = get_sql_plan_management_mode();
+  if (0 == spm_mode) {
+    bool sysvar_use_baseline = false;
+    get_use_plan_baseline(sysvar_use_baseline);
+    if (sysvar_use_baseline) {
+      spm_mode = 1;
     }
   }
   return ret;
@@ -915,7 +909,9 @@ int ObSQLSessionInfo::delete_from_oracle_temp_tables(const obrpc::ObDropTableArg
 //            session断开时则清理掉事务级和会话级的临时表;
 //由于oracle临时表仅仅是清理本session数据, 为避免rs拥塞,不发往rs由sql proxy执行
 //对于分布式计划, 除非ac=1否则交给master session清理, 反序列化得到的session不做事情
-int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn, const bool is_xa_trans)
+int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
+                                       const bool is_xa_trans,
+                                       const bool is_reset_connection)
 {
   int ret = OB_SUCCESS;
   bool ac = false;
@@ -930,14 +926,14 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn, const bool is_xa_t
                  || is_xa_trans)
              && (!get_is_deserialized() || ac)) {
     bool need_drop_temp_table = false;
-    //mysql: 仅直连 & sess 断开时
+    //mysql: 1. 直连 & sess 断开时  2. reset connection
     //oracle: commit; 或者 直连时的断session;
     if (!is_oracle_mode()) {
-      if (false == is_obproxy_mode() && is_sess_disconn) {
+      if ((false == is_obproxy_mode() && is_sess_disconn) || is_reset_connection) {
         need_drop_temp_table = true;
       }
     } else {
-      if (false == is_sess_disconn || false == is_obproxy_mode()) {
+      if (false == is_sess_disconn || false == is_obproxy_mode() || is_reset_connection) {
         need_drop_temp_table = true;
         //ac=1, 反序列化session断开时只是任务结束, 并不是真的sess断开, 视作trx commit
         if (is_sess_disconn && get_is_deserialized() && ac) {
@@ -956,7 +952,7 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn, const bool is_xa_t
       obrpc::ObDropTableArg drop_table_arg;
       drop_table_arg.if_exist_ = true;
       drop_table_arg.to_recyclebin_ = false;
-      if (false == is_sess_disconn) {
+      if (false == is_sess_disconn && false == is_reset_connection) {
         drop_table_arg.table_type_ = share::schema::TMP_TABLE_ORA_TRX;
       } else if (is_oracle_mode()) {
         drop_table_arg.table_type_ = share::schema::TMP_TABLE_ORA_SESS;
@@ -1288,7 +1284,7 @@ int ObSQLSessionInfo::add_prepare(const ObString &ps_name, ObPsStmtId ps_id)
   int ret = OB_SUCCESS;
   ObString stored_name;
   ObPsStmtId exist_ps_id = OB_INVALID_ID;
-  if (OB_FAIL(name_pool_.write_string(ps_name, &stored_name))) {
+  if (OB_FAIL(conn_level_name_pool_.write_string(ps_name, &stored_name))) {
     LOG_WARN("failed to copy name", K(ps_name), K(ps_id), K(ret));
   } else if (OB_FAIL(try_create_ps_name_id_map())) {
     LOG_WARN("fail create ps name id map", K(ret));
@@ -1774,7 +1770,7 @@ int ObSQLSessionInfo::check_read_only_privilege(const bool read_only,
 ObTraceEventRecorder* ObSQLSessionInfo::get_trace_buf()
 {
   if (NULL == trace_recorder_) {
-    void *ptr = name_pool_.alloc(sizeof(ObTraceEventRecorder));
+    void *ptr = sess_level_name_pool_.alloc(sizeof(ObTraceEventRecorder));
     if (NULL == ptr) {
       LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "fail to alloc trace recorder");
     } else {
@@ -1978,7 +1974,8 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
   audit_record_.request_type_ = mode;
   audit_record_.session_id_ = get_sessid();
   audit_record_.proxy_session_id_ = get_proxy_sessid();
-  audit_record_.tenant_id_ = get_priv_tenant_id();
+  // sql audit don't distinguish between two tenant IDs
+  audit_record_.tenant_id_ = get_effective_tenant_id();
   audit_record_.user_id_ = get_user_id();
   audit_record_.proxy_user_id_ = get_proxy_user_id();
   audit_record_.effective_tenant_id_ = get_effective_tenant_id();
@@ -2018,7 +2015,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     } else {
       ObString sql = get_current_query_string();
       audit_record_.sql_ = const_cast<char *>(sql.ptr());
-      audit_record_.sql_len_ = min(sql.length(), OB_MAX_SQL_LENGTH);
+      audit_record_.sql_len_ = min(sql.length(), get_tenant_query_record_size_limit());
       audit_record_.sql_cs_type_ = get_local_collation_connection();
     }
 
@@ -2049,6 +2046,7 @@ const ObAuditRecordData &ObSQLSessionInfo::get_final_audit_record(
     // do nothing
   }
   audit_record_.flt_trace_id_[pos] = '\0';
+  audit_record_.stmt_type_ = get_stmt_type();
   return audit_record_;
 }
 
@@ -3021,6 +3019,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&enable_query_response_time_stats_, tenant_config->query_response_time_stats);
       ATOMIC_STORE(&enable_user_defined_rewrite_rules_, tenant_config->enable_user_defined_rewrite_rules);
       ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
+      ATOMIC_STORE(&_query_record_size_limit_, tenant_config->_query_record_size_limit);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
         LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,
@@ -3034,6 +3033,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       px_join_skew_minfreq_ = tenant_config->_px_join_skew_minfreq;
       enable_column_store_ = tenant_config->_enable_column_store;
       enable_decimal_int_type_ = tenant_config->_enable_decimal_int_type;
+      sql_plan_management_mode_ = ObSqlPlanManagementModeChecker::get_spm_mode_by_string(
+        tenant_config->sql_plan_management_mode.get_value_string());
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
     }
@@ -3242,6 +3243,18 @@ inline int ObSQLSessionInfo::init_mem_context(uint64_t tenant_id)
     }
   }
   return ret;
+}
+
+void ObSQLSessionInfo::destory_mem_context()
+{
+  if (OB_NOT_NULL(mem_context_)) {
+    destroy_contexts_map(contexts_map_, mem_context_->get_malloc_allocator());
+    app_ctx_info_encoder_.is_changed_ = true;
+    curr_session_context_size_ = 0;
+    contexts_map_.reuse();
+    DESTROY_CONTEXT(mem_context_);
+    mem_context_ = NULL;
+  }
 }
 
 bool ObSQLSessionInfo::has_sess_info_modified() const {

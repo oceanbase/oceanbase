@@ -1569,11 +1569,15 @@ int ObLobManager::check_need_out_row(
         } else {
           // init lob data and alloc lob id(when not init)
           ObLobData *new_lob_data = new(new_lob_common->buffer_)ObLobData();
-          new_lob_data->id_.tablet_id_ = param.tablet_id_.id();
           if (param.spec_lob_id_.is_valid()) {
             new_lob_data->id_ = param.spec_lob_id_;
           } else if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
             LOG_WARN("get lob id failed.", K(ret), K(param));
+          } else if (! param.lob_meta_tablet_id_.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("lob_meta_tablet_id is invalid", K(ret), K(param));
+          } else {
+            new_lob_data->id_.tablet_id_ = param.lob_meta_tablet_id_.id();
           }
           if (OB_SUCC(ret)) {
             transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
@@ -2225,11 +2229,15 @@ int ObLobManager::prepare_for_write(
         } else {
           // init lob data and alloc lob id(when not init)
           ObLobData *new_lob_data = new(new_lob_common->buffer_)ObLobData();
-          new_lob_data->id_.tablet_id_ = param.tablet_id_.id();
           if (param.spec_lob_id_.is_valid()) {
             new_lob_data->id_ = param.spec_lob_id_;
           } else if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
             LOG_WARN("get lob id failed.", K(ret), K(param));
+          } else if (! param.lob_meta_tablet_id_.is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("lob_meta_tablet_id is invalid", K(ret), K(param));
+          } else {
+            new_lob_data->id_.tablet_id_ = param.lob_meta_tablet_id_.id();
           }
           if (OB_SUCC(ret)) {
             transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);

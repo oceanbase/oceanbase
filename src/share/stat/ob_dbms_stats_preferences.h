@@ -238,6 +238,7 @@ class ObOnlineEstimatePercentPrefs : public ObStatPrefs
     virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
     virtual const char* get_stat_pref_name() const { return "ONLINE_ESTIMATE_PERCENT"; }
     virtual const char* get_stat_pref_default_value() const { return "1";}
+    const char* get_stat_pref_for_update() const { return "100"; }
 };
 
 template <class T>
@@ -283,6 +284,8 @@ public:
   static int gen_init_global_prefs_sql(ObSqlString &init_sql,
                                        bool is_reset_prefs = false,
                                        int64_t *expect_affected_rows = NULL);
+
+  static int get_online_estimate_percent_for_upgrade(ObSqlString &sql);
 
 private:
   static int do_get_prefs(ObExecContext &ctx,

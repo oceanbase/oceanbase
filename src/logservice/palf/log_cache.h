@@ -186,7 +186,7 @@ class LogColdCache
 public:
   LogColdCache();
   ~LogColdCache();
-  int init(int64_t palf_id,
+  int init(const int64_t palf_id,
            IPalfEnvImpl *palf_env_impl,
            LogStorage *log_storage);
   void destroy();
@@ -210,7 +210,7 @@ public:
            LogIteratorInfo *iterator_info);
   int fill_cache_line(FillBuf &fill_buf);
   int alloc_kv_pair(const int64_t flashback_version, const LSN &aligned_lsn, FillBuf &fill_buf);
-  TO_STRING_KV(K(is_inited_), K(palf_id_), K(log_cache_stat_));
+  TO_STRING_KV(K_(is_inited), K_(tenant_id), K_(palf_id), K_(log_cache_stat));
 private:
   int allow_filling_cache_(LogIteratorInfo *iterator_info, bool &enable_fill_cache);
   /*
@@ -280,6 +280,7 @@ private:
     int64_t last_record_cache_read_size_;
   };
 private:
+  int64_t tenant_id_;
   int64_t palf_id_;
   IPalfEnvImpl *palf_env_impl_;
   LogReader *log_reader_;

@@ -191,12 +191,10 @@ int ObIndexBlockMicroIterator::init(
       LOG_WARN("async read block failed, ", K(ret), K(read_info), K(macro_desc));
     } else if (OB_FAIL(macro_handle_.wait())) {
       LOG_WARN("io wait failed", K(ret), K(macro_desc), K(read_info));
-    } else if (OB_ISNULL(macro_handle_.get_buffer())
-        || OB_UNLIKELY(macro_handle_.get_data_size() != read_info.size_)) {
+    } else if (OB_ISNULL(macro_handle_.get_buffer())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("buf is null or buf size is too small, ",
-          K(ret), K(macro_desc), KP(macro_handle_.get_buffer()),
-          K(macro_handle_.get_data_size()), K(read_info.size_));
+      LOG_WARN("buf is null", K(ret), K(macro_desc), KP(macro_handle_.get_buffer()),
+          K(read_info.size_));
     } else if (OB_FAIL(data_iter_.init(
         macro_handle_.get_buffer(),
         macro_handle_.get_data_size(),

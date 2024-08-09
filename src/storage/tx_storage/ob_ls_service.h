@@ -153,6 +153,7 @@ public:
   obrpc::ObStorageRpcProxy *get_storage_rpc_proxy() { return &storage_svr_rpc_proxy_; }
   storage::ObStorageRpc *get_storage_rpc() { return &storage_rpc_; }
   ObLSMap *get_ls_map() { return &ls_map_; }
+  int64_t get_ls_count() const { return ls_map_.get_ls_count(); }
   int dump_ls_info();
 
   TO_STRING_KV(K_(tenant_id), K_(is_inited));

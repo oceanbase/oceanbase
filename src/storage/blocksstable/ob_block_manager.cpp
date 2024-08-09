@@ -36,6 +36,7 @@
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
 #include "lib/worker.h"
+#include "storage/backup/ob_backup_device_wrapper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
@@ -76,6 +77,26 @@ int ObSuperBlockPreadChecker::do_check(void *read_buf, const int64_t read_size)
         LOG_WARN("get super block", K(ret), K(super_block_));
       }
     }
+  }
+  return ret;
+}
+
+/**
+ * ------------------------------------ObMacroBlockWriteInfo-------------------------------------
+ */
+
+int ObMacroBlockWriteInfo::fill_io_info_for_backup(const blocksstable::MacroBlockId &macro_id, ObIOInfo &io_info) const
+{
+  int ret = OB_SUCCESS;
+  if (!backup::ObBackupDeviceMacroBlockId::is_backup_block_file(macro_id.first_id())) {
+    // do nothing
+  } else if (!has_backup_device_handle_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("device handle should not be null", K(ret));
+  } else {
+    backup::ObBackupWrapperIODevice *device = static_cast<backup::ObBackupWrapperIODevice *>(device_handle_);
+    io_info.fd_.fd_id_ = device->simulated_fd_id();
+    io_info.fd_.slot_version_ = device->simulated_slot_version();
   }
   return ret;
 }
@@ -733,7 +754,7 @@ int ObBlockManager::inc_ref(const MacroBlockId &macro_id)
   } else if (OB_UNLIKELY(!macro_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("Invalid argument, ", K(ret), K(macro_id));
-  } else {
+  } else if (macro_id.is_local_id()) {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
     if (OB_FAIL(block_map_.get(macro_id, block_info))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -771,7 +792,7 @@ int ObBlockManager::dec_ref(const MacroBlockId &macro_id)
   } else if (OB_UNLIKELY(!macro_id.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_ERROR("Invalid argument, ", K(ret), K(macro_id));
-  } else {
+  } else if (macro_id.is_local_id()) {
     ObBucketHashWLockGuard lock_guard(bucket_lock_, macro_id.hash());
     if (OB_FAIL(block_map_.get(macro_id, block_info))) {
       LOG_ERROR("get block_info fail", K(ret), K(macro_id));
@@ -1388,6 +1409,8 @@ int ObBlockManager::mark_tablet_block(
           ret = OB_SUCCESS;
           break;
         }
+      } else if (block_info.macro_id_.is_backup_id()) {
+        // do nothing
       } else if (OB_FAIL(do_mark_tablet_block(block_info, mark_info, macro_id_set, tmp_status))) {
         LOG_WARN("fail to mark macro id", K(ret), K(block_info));
       }

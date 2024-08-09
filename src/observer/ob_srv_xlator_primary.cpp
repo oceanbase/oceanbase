@@ -168,6 +168,11 @@ void oceanbase::observer::init_srv_xlator_for_transaction(ObSrvRpcXlator *xlator
   RPC_PROCESSOR(ObTxFreeRoutePushStateP);
   // for tx state check of 4377
   RPC_PROCESSOR(ObAskTxStateFor4377P);
+  // for lock wait mgr
+  // RPC_PROCESSOR(ObLockWaitMgrDstEnqueueP);
+  // RPC_PROCESSOR(ObLockWaitMgrDstEnqueueRespP);
+  // RPC_PROCESSOR(ObLockWaitMgrLockReleaseP);
+  // RPC_PROCESSOR(ObLockWaitMgrWakeUpP);
 }
 
 void oceanbase::observer::init_srv_xlator_for_clog(ObSrvRpcXlator *xlator) {

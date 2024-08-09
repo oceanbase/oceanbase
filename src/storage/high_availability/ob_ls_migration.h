@@ -57,8 +57,8 @@ public:
   ObStorageHASrcInfo minor_src_;
   ObStorageHASrcInfo major_src_;
   ObLSMetaPackage src_ls_meta_package_;
-  ObArray<common::ObTabletID> sys_tablet_id_array_;
-  ObArray<common::ObTabletID> data_tablet_id_array_;
+  ObArray<ObLogicTabletID> sys_tablet_id_array_;
+  ObArray<ObLogicTabletID> data_tablet_id_array_;
   ObStorageHATableInfoMgr ha_table_info_mgr_;
   ObHATabletGroupMgr tablet_group_mgr_;
   int64_t check_tablet_info_cost_time_;
@@ -242,7 +242,6 @@ private:
       const common::ObAddr &member_addr, obrpc::ObCopyLSInfo &ls_info);
   int get_local_ls_checkpoint_scn_(share::SCN &local_checkpoint_scn);
   int try_remove_member_list_();
-  int get_tablet_id_array_(common::ObIArray<common::ObTabletID> &tablet_id_array);
   int check_ls_need_copy_data_(bool &need_copy);
   int check_before_ls_migrate_(const ObLSMeta &ls_meta);
   int build_ls_();
@@ -259,6 +258,7 @@ private:
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
+  common::ObMySQLProxy *sql_proxy_;
   DISALLOW_COPY_AND_ASSIGN(ObStartMigrationTask);
 };
 
@@ -481,7 +481,7 @@ public:
   virtual int generate_next_dag(share::ObIDag *&dag);
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   int init(
-      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const common::ObIArray<ObLogicTabletID> &tablet_id_array,
       share::ObIDagNet *dag_net,
       share::ObIDag *finish_dag,
       ObHATabletGroupCtx *tablet_group_ctx);
@@ -489,7 +489,7 @@ public:
   INHERIT_TO_STRING_KV("ObIMigrationDag", ObMigrationDag, KP(this));
 protected:
   bool is_inited_;
-  ObArray<common::ObTabletID> tablet_id_array_;
+  ObArray<ObLogicTabletID> tablet_id_array_;
   share::ObIDag *finish_dag_;
   ObHATabletGroupCtx *tablet_group_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletGroupMigrationDag);
@@ -501,7 +501,7 @@ public:
   ObTabletGroupMigrationTask();
   virtual ~ObTabletGroupMigrationTask();
   int init(
-      const common::ObIArray<common::ObTabletID> &tablet_id_array,
+      const common::ObIArray<ObLogicTabletID> &tablet_id_array,
       share::ObIDag *finish_dag,
       ObHATabletGroupCtx *tablet_group_ctx);
   virtual int process() override;
@@ -520,7 +520,7 @@ private:
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   storage::ObStorageRpc *storage_rpc_;
-  common::ObArray<common::ObTabletID> tablet_id_array_;
+  common::ObArray<ObLogicTabletID> tablet_id_array_;
   share::ObIDag *finish_dag_;
   ObStorageHATabletsBuilder ha_tablets_builder_;
   ObHATabletGroupCtx *tablet_group_ctx_;

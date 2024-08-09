@@ -92,6 +92,7 @@ int ObTableDirectInsertCtx::init(
         insert_mode = ObDirectLoadInsertMode::NORMAL;
       }
       ObDirectLoadMode::Type load_mode = is_insert_overwrite ? ObDirectLoadMode::INSERT_OVERWRITE : ObDirectLoadMode::INSERT_INTO;
+      bool is_heap_table = false;
       if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
         LOG_WARN("fail to get tenant handle", KR(ret), K(MTL_ID()));
       } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard,
@@ -107,6 +108,8 @@ int ObTableDirectInsertCtx::init(
                                                            table_id,
                                                            column_ids))) {
         LOG_WARN("failed to init store column idxs", KR(ret));
+      } else if(OB_FAIL(get_is_heap_table(*schema_guard, tenant_id, table_id, is_heap_table))) {
+        LOG_WARN("failed to get is heap table", KR(ret), K(tenant_id), K(table_id));
       } else {
         ObTableLoadParam param;
         param.tenant_id_ = MTL_ID();
@@ -117,7 +120,7 @@ int ObTableDirectInsertCtx::init(
         param.column_count_ = column_ids.count();
         param.px_mode_ = true;
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
-        param.need_sort_ = true;
+        param.need_sort_ = is_heap_table ? phy_plan.get_direct_load_need_sort() : true;
         param.max_error_row_count_ = 0;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE
                                                 : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
@@ -205,5 +208,23 @@ int ObTableDirectInsertCtx::get_compressor_type(const uint64_t tenant_id,
   return ret;
 }
 
+int ObTableDirectInsertCtx::get_is_heap_table(
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    bool &is_heap_table)
+{
+  int ret = OB_SUCCESS;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table schema is null", KR(ret));
+  } else {
+    is_heap_table = table_schema->is_heap_table();
+  }
+  return ret;
+}
 } // namespace sql
 } // namespace oceanbase

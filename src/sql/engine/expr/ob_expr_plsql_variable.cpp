@@ -171,7 +171,7 @@ int ObExprPLSQLVariable::check_key(const common::ObString &v)
   }
   if (!valid) {
     ret = OB_ERR_INVALID_PLSQL_CCFLAGS;
-    LOG_WARN("ORA-39962: invalid parameter for PLSQL_CCFLAGS", K(ret), K(v));
+    LOG_WARN("OBE-39962: invalid parameter for PLSQL_CCFLAGS", K(ret), K(v));
   }
   return ret;
 }
@@ -198,7 +198,7 @@ int ObExprPLSQLVariable::check_value(
     OX (val_obj.set_int32(int_val));
     if (OB_FAIL(ret)) {
       ret = OB_ERR_INVALID_PLSQL_CCFLAGS;
-      LOG_WARN("ORA-39962: invalid parameter for PLSQL_CCFLAGS", K(ret), K(v));
+      LOG_WARN("OBE-39962: invalid parameter for PLSQL_CCFLAGS", K(ret), K(v));
     }
   }
   return ret;
@@ -230,7 +230,7 @@ int ObExprPLSQLVariable::check_plsql_ccflags(
     // do nothing ...
   } else if (v1.length() > OB_TMP_BUF_SIZE_256) {
     ret = OB_ERR_PARAMETER_TOO_LONG;
-    LOG_WARN("ORA-32021: parameter value longer than string characters", K(ret), K(v));
+    LOG_WARN("OBE-32021: parameter value longer than string characters", K(ret), K(v));
     LOG_USER_ERROR(OB_ERR_PARAMETER_TOO_LONG, static_cast<int32_t>(OB_TMP_BUF_SIZE_256));
   } else {
     while (OB_SUCC(ret) && v1.length() > 0) {

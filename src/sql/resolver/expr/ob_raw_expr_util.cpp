@@ -5330,7 +5330,8 @@ int ObRawExprUtils::build_column_conv_expr(const ObSQLSessionInfo *session_info,
     ObObjTypeClass ori_tc = ob_obj_type_class(expr->get_data_type());
     ObObjTypeClass expect_tc = ob_obj_type_class(dest_type);
     if ((ObNumberTC == ori_tc || ObDecimalIntTC == ori_tc)
-        && (ObTextTC == expect_tc || ObLobTC == expect_tc)) {
+        && ((ObTextTC == expect_tc && lib::is_oracle_mode()) || ObLobTC == expect_tc)) {
+      // oracle mode can not cast number to text, but mysql mode can
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("cast to lob type not allowed", K(ret), K(expect_tc), K(ori_tc));
     } else if (ObIntTC == ori_tc && ObLongTextType == dest_type) {

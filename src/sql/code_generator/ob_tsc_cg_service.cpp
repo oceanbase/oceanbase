@@ -169,9 +169,13 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
 
   if (OB_SUCC(ret) && op.is_multivalue_index_scan()) {
     ObDASIRAuxLookupCtDef *aux_lookup_ctdef = nullptr;
-    ObExpr *doc_id_col_expr = scan_ctdef.result_output_.at(scan_ctdef.result_output_.count() - 1);
-    if (OB_FAIL(generate_doc_id_lookup_ctdef(op, tsc_ctdef, root_ctdef, doc_id_col_expr, aux_lookup_ctdef))) {
-      LOG_WARN("failed to generate text ir ctdef", K(ret));
+    ObExpr *doc_id_col_expr = nullptr;
+    if (scan_ctdef.result_output_.count() == 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to generate multivalue lookup ctdef, scan_ctdef.result_output_.count() is 0", K(ret));
+    } else if (FALSE_IT(doc_id_col_expr = scan_ctdef.result_output_.at(scan_ctdef.result_output_.count() - 1))) {
+    } else if (OB_FAIL(generate_doc_id_lookup_ctdef(op, tsc_ctdef, root_ctdef, doc_id_col_expr, aux_lookup_ctdef))) {
+      LOG_WARN("failed to generate doc id lookup ctdef", K(ret));
     } else {
       root_ctdef = aux_lookup_ctdef;
       need_attach = true;
@@ -951,7 +955,7 @@ int ObTscCgService::extract_das_output_column_ids(const ObLogTableScan &op,
     if (OB_FAIL(extract_text_ir_das_output_column_ids(op, scan_ctdef, output_cids))) {
       LOG_WARN("failed to extract text retrieval das output column ids", K(ret));
     }
-  } else if (op.get_index_back() && op.get_real_index_table_id() == table_id) {
+  } else if ((op.get_index_back() || op.is_multivalue_index_scan()) && op.get_real_index_table_id() == table_id) {
     //this situation is index lookup, and the index table scan is being processed
     //the output column id of index lookup is the rowkey of the data table
     const ObTableSchema *table_schema = nullptr;

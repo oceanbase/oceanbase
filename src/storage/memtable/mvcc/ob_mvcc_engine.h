@@ -38,6 +38,7 @@ class ObMemtableKey;
 class ObMvccRow;
 class ObTxNodeArg;
 class ObMvccWriteResult;
+class ObMvccRowAndWriteResult;
 class ObMvccReplayResult;
 class ObMvccValueIterator;
 class ObMvccScanRange;
@@ -48,6 +49,8 @@ class ObMultiVersionRowIterator;
 // class for concurrent control
 class ObMvccEngine
 {
+public:
+  using ObMvccRowAndWriteResults = common::ObSEArray<ObMvccRowAndWriteResult, 16>;
 public:
   ObMvccEngine();
   virtual ~ObMvccEngine();
@@ -90,6 +93,10 @@ public:
   // row.
   int ensure_kv(const ObMemtableKey *stored_key,
                 ObMvccRow *value);
+
+  // finish_kv is used to make tx_node visible to outer read
+  void finish_kv(ObMvccWriteResult& res);
+  void finish_kvs(ObMvccRowAndWriteResults& results);
 
   // Mvcc engine read interface
   int get(ObMvccAccessCtx &ctx,

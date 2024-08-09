@@ -68,7 +68,10 @@ public:
       escaped_cht_(),
       parallel_(1),
       file_partition_expr_(NULL),
-      buffer_size_(DEFAULT_BUFFER_SIZE)
+      buffer_size_(DEFAULT_BUFFER_SIZE),
+      is_overwrite_(false),
+      external_properties_(alloc),
+      external_partition_(alloc)
   {
     cs_type_ = ObCharset::get_system_collation();
   }
@@ -89,6 +92,9 @@ public:
   int64_t parallel_;
   sql::ObExpr* file_partition_expr_;
   int64_t buffer_size_;
+  bool is_overwrite_;
+  ObExternalFileFormat::StringData external_properties_;
+  ObExternalFileFormat::StringData external_partition_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
   static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
 };

@@ -96,6 +96,7 @@ ObDirectLoadPartitionDelLobTask::ObDirectLoadPartitionDelLobTask()
     origin_table_(nullptr),
     sstable_array_(nullptr),
     range_(nullptr),
+    insert_front_(false),
     parallel_idx_(-1),
     is_stop_(false),
     is_inited_(false)
@@ -108,7 +109,7 @@ int ObDirectLoadPartitionDelLobTask::init(
   const ObDirectLoadMergeParam &merge_param, ObDirectLoadTabletMergeCtx *merge_ctx,
   ObDirectLoadOriginTable *origin_table,
   const ObIArray<ObDirectLoadMultipleSSTable *> &sstable_array, const ObDatumRange &range,
-  int64_t parallel_idx)
+  const bool insert_front, const int64_t parallel_idx)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -125,6 +126,7 @@ int ObDirectLoadPartitionDelLobTask::init(
     origin_table_ = origin_table;
     sstable_array_ = &sstable_array;
     range_ = &range;
+    insert_front_ = insert_front;
     parallel_idx_ = parallel_idx;
     is_inited_ = true;
   }
@@ -144,20 +146,23 @@ int ObDirectLoadPartitionDelLobTask::process()
     RowIterator row_iter;
     ObMacroDataSeq block_start_seq;
     int64_t affected_rows = 0;
-    block_start_seq.set_parallel_degree(parallel_idx_);
     if (OB_UNLIKELY(is_stop_)) {
       ret = OB_CANCELED;
       LOG_WARN("merge task canceled", KR(ret));
     } else if (OB_FAIL(merge_param_->insert_table_ctx_->get_tablet_context(tablet_id,
                                                                            insert_tablet_ctx))) {
       LOG_WARN("fail to get tablet context ", KR(ret), K(tablet_id));
+    } else if (OB_FAIL(insert_tablet_ctx->get_del_lob_macro_data_seq(insert_front_, parallel_idx_,
+                                                                     block_start_seq))) {
+      LOG_WARN("fail to get del lob macro data seq", KR(ret), K(insert_front_), K(parallel_idx_));
     } else if (OB_FAIL(row_iter.init(*merge_param_, merge_ctx_, origin_table_, *sstable_array_,
                                      *range_, parallel_idx_, insert_tablet_ctx))) {
       LOG_WARN("fail to init row iter", KR(ret));
     } else if (OB_FAIL(insert_tablet_ctx->open_lob_sstable_slice(block_start_seq, slice_id))) {
       LOG_WARN("fail to construct lob sstable slice ", KR(ret), K(slice_id), K(block_start_seq));
     } else {
-      LOG_INFO("add lob meta sstable slice begin", K(tablet_id), K(parallel_idx_), K(slice_id));
+      LOG_INFO("add lob meta sstable slice begin", K(tablet_id), K(insert_front_), K(parallel_idx_),
+               K(block_start_seq), K(slice_id), KPC(range_));
       if (OB_FAIL(
             insert_tablet_ctx->fill_lob_meta_sstable_slice(slice_id, row_iter, affected_rows))) {
         LOG_WARN("fail to fill lob meta sstable slice", KR(ret));

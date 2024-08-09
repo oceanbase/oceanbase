@@ -161,19 +161,19 @@ private:
     MACRO_META
   };
 
-  int dump_sstable_macro_block(const bool is_index_block);
+  int dump_sstable_macro_block(const MicroBlockType block_type);
   int dump_bloom_filter_data_block();
   int dump_sstable_micro_block(
       const int64_t micro_idx,
-      const bool is_index_block,
+      const MicroBlockType block_type,
       ObMacroBlockRowBareIterator &macro_bare_iter);
   int dump_macro_block_meta_block(ObMacroBlockRowBareIterator &macro_bare_iter);
   int dump_sstable_micro_header(
       const ObMicroBlockData &micro_data,
       const int64_t micro_idx,
-      const MicroBlockType type);
+      const MicroBlockType block_type);
   int dump_sstable_micro_data(
-      const bool is_index_block,
+      const MicroBlockType block_type,
       ObMacroBlockRowBareIterator &macro_bare_iter);
   int dump_sstable_micro_data(const ObMicroBlockData &micro_data, const bool is_index_block);
   int dump_column_info(const int64_t col_cnt, const int64_t type_array_col_cnt);

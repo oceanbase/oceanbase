@@ -91,7 +91,7 @@ int ObAllVirtualDagWarningHistory::process_curr_tenant(ObNewRow *&row)
       break;
     case TENANT_ID:
       //tenant_id
-      cells[i].set_int(dag_warning_info_.tenant_id_);
+      cells[i].set_int(MTL_ID());
       break;
     case TASK_ID:
       //table_id

@@ -152,6 +152,13 @@ id
 select * from t where id = 1000010;
 id
 commit;
+"CASE 4.9"
+savepoint sp6;
+select * from t where id = 110;
+id
+select * from t where id = 1000010;
+id
+commit;
 "------------- 5 - change session auto_commit ----------------------"
 "CASE 5.1"
 delete from t;

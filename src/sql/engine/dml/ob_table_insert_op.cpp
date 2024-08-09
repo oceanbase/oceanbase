@@ -303,7 +303,12 @@ OB_INLINE int ObTableInsertOp::insert_row_to_das()
   }
 
   if (OB_SUCC(ret)) {
-    plan_ctx->record_last_insert_id_cur_stmt();
+    bool is_ins_val_opt = ctx_.get_sql_ctx()->is_do_insert_batch_opt();
+    if (MY_SPEC.ab_stmt_id_ != nullptr && !is_ins_val_opt) {
+      plan_ctx->record_last_insert_id_cur_stmt_for_batch();
+    } else {
+      plan_ctx->record_last_insert_id_cur_stmt();
+    }
   }
   NG_TRACE(insert_end);
   return ret;

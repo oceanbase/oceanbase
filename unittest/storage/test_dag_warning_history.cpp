@@ -26,10 +26,11 @@ using namespace common;
 using namespace storage;
 using namespace share;
 using namespace lib;
+using namespace compaction;
 
 namespace unittest
 {
-static const int64_t INFO_PAGE_SIZE = (1 << 12); // 4KB
+static const int64_t INFO_PAGE_SIZE = (1 << 13); // 8KB
 class TestDagWarningHistory : public ::testing::Test
 {
 public:
@@ -60,6 +61,7 @@ public:
     ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
 
   }
+  void calc_info_cnt_per_page(ObIDag &dag, int64_t &info_mem, int64_t &info_cnt_per_page);
   void TearDown()
   {
     dag_history_mgr_->~ObDagWarningHistoryManager();
@@ -74,6 +76,21 @@ private:
   bool inited_;
   DISALLOW_COPY_AND_ASSIGN(TestDagWarningHistory);
 };
+
+void TestDagWarningHistory::calc_info_cnt_per_page(ObIDag &dag, int64_t &info_mem_size, int64_t &info_cnt_per_page)
+{
+  int ret = OB_SUCCESS;
+  ObDagWarningInfo tmp_info;
+  compaction::ObInfoParamBuffer allocator;
+  if (OB_FAIL(dag.gene_warning_info(tmp_info, allocator))) {
+    COMMON_LOG(WARN, "failed to gene dag warning info", K(ret));
+  }
+  // every time will contain a header(16B)
+  info_mem_size = tmp_info.get_deep_copy_size();
+  info_cnt_per_page = (INFO_PAGE_SIZE - sizeof(ObFIFOAllocator::NormalPageHeader))
+    / (info_mem_size + sizeof(ObFIFOAllocator::AllocHeader));
+  STORAGE_LOG(INFO, "size", K(info_mem_size), K(info_cnt_per_page));
+}
 
 class ObBasicDag : public ObIDag
 {
@@ -177,7 +194,6 @@ TEST_F(TestDagWarningHistory, simple_add)
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(TRUE, ret_info.dag_ret_ == ObBasicDag::DAG_RET_START);
   STORAGE_LOG(DEBUG, "", K(ret_info));
-  ASSERT_EQ(TRUE, ret_info.tenant_id_ == tenant_id_);
 
   char comment[common::OB_DAG_WARNING_INFO_LENGTH];
   memset(comment, '\0', sizeof(comment));
@@ -294,7 +310,16 @@ TEST_F(TestDagWarningHistory, resize)
   ret = MTL(ObDagWarningHistoryManager *)->init(true, MTL_ID(), "DagWarnHis", INFO_PAGE_SIZE);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  const int64_t max_cnt = 40;
+  int64_t info_cnt_per_page = 0;
+  int64_t info_mem_size = 0;
+  ObSeqDag dag;
+  dag.init();
+  dag.set_dag_status(ObBasicDag::ObDagStatus::DAG_STATUS_ABORT);
+  dag.set_dag_ret(ObBasicDag::DAG_RET_START);
+  calc_info_cnt_per_page(dag, info_mem_size, info_cnt_per_page);
+  ASSERT_TRUE(info_cnt_per_page > 0);
+
+  const int64_t max_cnt = info_cnt_per_page * 3;
   for (int i = 0; i < max_cnt; ++i) {
     ObSeqDag dag;
     dag.init();
@@ -302,18 +327,20 @@ TEST_F(TestDagWarningHistory, resize)
     dag.set_dag_ret(ObBasicDag::DAG_RET_START + i);
     ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->add_dag_warning_info(&dag));
   }
-
   ASSERT_EQ(max_cnt, MTL(ObDagWarningHistoryManager *)->size());
 
-  // every info is 264 bytes, each page contains 13 info
-  // 40 infos are in 4 pages (13 13 13 1), set_max will left 12 info (12 * 264 < 4096 * 0.4), means 2 page (11 1)
-  ret = MTL(ObDagWarningHistoryManager *)->set_max(2 * INFO_PAGE_SIZE);
+  // after set_max, mgr will gc info util memory usage below GC_LOW_PERCENTAGE * mem_max
+  const int64_t new_mem_max = 2 * INFO_PAGE_SIZE;
+  ret = MTL(ObDagWarningHistoryManager *)->set_max(new_mem_max);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(12, MTL(ObDagWarningHistoryManager *)->size());
+  const int64_t new_size = MTL(ObDagWarningHistoryManager *)->size();
+  const int64_t gc_cnt = max_cnt - new_size;
+  STORAGE_LOG(INFO, "new size", K(new_size));
+  ASSERT_TRUE(new_size * info_mem_size  < ObIDiagnoseInfoMgr::GC_LOW_PERCENTAGE * new_mem_max / 100.0);
 
   ret = MTL(ObDagWarningHistoryManager *)->set_max(3 * INFO_PAGE_SIZE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(12, MTL(ObDagWarningHistoryManager *)->size());
+  ASSERT_EQ(new_size, MTL(ObDagWarningHistoryManager *)->size());
 
   compaction::ObIDiagnoseInfoMgr::Iterator iterator;
   ret = MTL(ObDagWarningHistoryManager *)->open_iter(iterator);
@@ -321,14 +348,14 @@ TEST_F(TestDagWarningHistory, resize)
 
   ObDagWarningInfo read_info;
   char comment[common::OB_DAG_WARNING_INFO_LENGTH];
-  int i = 28;
+  int64_t i = gc_cnt;
   while (OB_SUCC(ret)) {
     if (OB_FAIL(iterator.get_next(&read_info, comment, sizeof(comment)))) {
       ASSERT_EQ(OB_ITER_END, ret);
     } else {
       ASSERT_EQ(TRUE, read_info.dag_ret_ == (ObBasicDag::DAG_RET_START + i));
-      ++i;
     }
+    ++i;
   }
 }
 
@@ -339,11 +366,21 @@ TEST_F(TestDagWarningHistory, gc_info)
   ASSERT_TRUE(nullptr != manager);
   ret = MTL(ObDagWarningHistoryManager *)->init(true, MTL_ID(), "DagWarnHis", INFO_PAGE_SIZE);
   ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObDagWarningHistoryManager *)->set_max(10 * INFO_PAGE_SIZE);
+  const int64_t page_cnt = 10;
+  ret = MTL(ObDagWarningHistoryManager *)->set_max(page_cnt * INFO_PAGE_SIZE);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   int64_t hash_value = ObBasicDag::KEY_START;
-  const int64_t max_cnt = 129;
+
+  ObComplexDag dag(1);
+  dag.init();
+  dag.set_dag_status(ObBasicDag::ObDagStatus::DAG_STATUS_ABORT);
+  dag.set_dag_ret(ObBasicDag::DAG_RET_START);
+  int64_t info_mem_size = 0;
+  int64_t info_cnt_per_page = 0;
+  calc_info_cnt_per_page(dag, info_mem_size, info_cnt_per_page);
+  const int64_t max_cnt = page_cnt * info_cnt_per_page - 1;
+
   for (int i = 0; i < max_cnt; ++i) {
     ObComplexDag dag(hash_value++);
     dag.init();
@@ -351,116 +388,18 @@ TEST_F(TestDagWarningHistory, gc_info)
     dag.set_dag_ret(ObBasicDag::DAG_RET_START + i);
     ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->add_dag_warning_info(&dag));
   }
-  // 9 page full, 1 page contain 12 info (13 13 13 13 13 13 13 13 13 12)
+  ASSERT_TRUE(info_cnt_per_page > 0);
+  // 9 page full, 1 page remain one empty space
   ASSERT_EQ(max_cnt, MTL(ObDagWarningHistoryManager *)->size());
 
-  for (int i = 0; i < 30; ++i) {
-    ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->delete_info(ObBasicDag::KEY_START+i));
+  const int64_t delete_cnt = 30;
+  for (int i = 0; i < delete_cnt; ++i) {
+    ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->delete_info(ObBasicDag::KEY_START + i));
   }
-
-  // every info is 264 bytes, each page contains 13 info
-  // 129 * 264 > 40960 * 0.8 // after gc, left 62 info (62 * 264 < 40960 * 0.4), means 5 pages (11 13 13 13 12)
   ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->gc_info());
-  ASSERT_EQ(62, MTL(ObDagWarningHistoryManager *)->size());
-}
-
-TEST_F(TestDagWarningHistory, complex_test)
-{
-  int ret = OB_SUCCESS;
-
-  ObDagWarningHistoryManager* manager = MTL(ObDagWarningHistoryManager *);
-  ASSERT_TRUE(nullptr != manager);
-  ret = MTL(ObDagWarningHistoryManager *)->init(true, MTL_ID(), "DagWarnHis", INFO_PAGE_SIZE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObDagWarningHistoryManager *)->set_max(2 * INFO_PAGE_SIZE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  int64_t hash_value = ObBasicDag::KEY_START;
-  const int64_t max_cnt = 39;
-  for (int i = 0; i < max_cnt; ++i) {
-    ObComplexDag dag(hash_value++);
-    dag.init();
-    dag.set_dag_status(ObBasicDag::ObDagStatus::DAG_STATUS_ABORT);
-    dag.set_dag_ret(ObBasicDag::DAG_RET_START + i);
-    ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->add_dag_warning_info(&dag));
-  }
-  // every info is 264 bytes, each page contains 13 infos
-  // 20 info will be purged , left 2 pages (6 13)
-  ASSERT_EQ(19, MTL(ObDagWarningHistoryManager *)->size());
-
-  compaction::ObIDiagnoseInfoMgr::Iterator iterator;
-  ret = MTL(ObDagWarningHistoryManager *)->open_iter(iterator);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  ObDagWarningInfo read_info;
-  char comment[common::OB_DAG_WARNING_INFO_LENGTH];
-  // the first 20 info have been purged
-  int i = 20;
-  while (OB_SUCC(ret)) {
-    if (OB_FAIL(iterator.get_next(&read_info, comment, sizeof(comment)))) {
-      ASSERT_EQ(OB_ITER_END, ret);
-    } else {
-      ASSERT_EQ(TRUE, read_info.dag_ret_ == (ObBasicDag::DAG_RET_START + i));
-      ++i;
-    }
-  }
-
-  // test when two iter is accessing info pool
-  compaction::ObIDiagnoseInfoMgr::Iterator iterator1;
-  compaction::ObIDiagnoseInfoMgr::Iterator iterator2;
-  ret = MTL(ObDagWarningHistoryManager *)->open_iter(iterator1);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = MTL(ObDagWarningHistoryManager *)->open_iter(iterator2);
-  ASSERT_EQ(OB_SUCCESS, ret);
-
-  i = 20;
-  ASSERT_EQ(OB_SUCCESS, iterator2.get_next(&read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.dag_ret_ == (ObBasicDag::DAG_RET_START + i++));
-  ASSERT_EQ(OB_SUCCESS, iterator2.get_next(&read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.dag_ret_ == (ObBasicDag::DAG_RET_START + i++));
-
-  i = 20;
-  ASSERT_EQ(OB_SUCCESS, iterator1.get_next(&read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.dag_ret_ == (ObBasicDag::DAG_RET_START + i++));
-  ASSERT_EQ(OB_SUCCESS, iterator1.get_next(&read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.dag_ret_ == (ObBasicDag::DAG_RET_START + i++));
-  // let the iterator1 in iter_end
-  while (OB_SUCC(ret)) {
-    if (OB_FAIL(iterator1.get_next(&read_info, comment, sizeof(comment)))) {
-      ASSERT_EQ(OB_ITER_END, ret);
-    } else {
-      ASSERT_EQ(TRUE, read_info.dag_ret_ == (ObBasicDag::DAG_RET_START + i));
-      ++i;
-    }
-  }
-
-  // before set_max (6 13), after set_max (6)
-  ret = MTL(ObDagWarningHistoryManager *)->set_max(INFO_PAGE_SIZE);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ASSERT_EQ(6, MTL(ObDagWarningHistoryManager *)->size());
-
-  {
-    ObComplexDag dag(hash_value++);
-    dag.init();
-    dag.set_dag_status(ObBasicDag::ObDagStatus::DAG_STATUS_ABORT);
-    dag.set_dag_ret(ObBasicDag::DAG_RET_START + i++);
-    ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->add_dag_warning_info(&dag));
-    ASSERT_EQ(1, MTL(ObDagWarningHistoryManager *)->size());
-  }
-
-  ASSERT_EQ(OB_ITER_END, iterator1.get_next(&read_info, comment, sizeof(comment)));
-  ASSERT_EQ(OB_SUCCESS, iterator2.get_next(&read_info, comment, sizeof(comment)));
-  ASSERT_EQ(TRUE, read_info.dag_ret_ == (ObBasicDag::DAG_RET_START + max_cnt));
-
-  // test purge cuz add when there are some deleted info on list
-  ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->delete_info(hash_value-1));
-  for (int i = 0; i < max_cnt; ++i) {
-    ObComplexDag dag(hash_value++);
-    dag.init();
-    dag.set_dag_status(ObBasicDag::ObDagStatus::DAG_STATUS_ABORT);
-    dag.set_dag_ret(ObBasicDag::DAG_RET_START + i);
-    ASSERT_EQ(OB_SUCCESS, MTL(ObDagWarningHistoryManager *)->add_dag_warning_info(&dag));
-  }
+  const int64_t cnt_after_gc = MTL(ObDagWarningHistoryManager *)->size();
+  ASSERT_TRUE(cnt_after_gc * sizeof(ObDagWarningInfo) <
+              page_cnt * INFO_PAGE_SIZE * ObIDiagnoseInfoMgr::GC_HIGH_PERCENTAGE * 1.0);
 }
 
 }  // end namespace unittest

@@ -18,6 +18,7 @@
 #include "share/io/ob_io_manager.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "lib/time/ob_time_utility.h"
+#include "storage/backup/ob_backup_factory.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -664,21 +665,25 @@ void ObIOResult::finish(const ObIORetCode &ret_code, ObIORequest *req)
         }
         tenant_io_mgr_.get_ptr()->io_usage_.record_request_finish(*this);
         end_ts_ = ObTimeUtility::fast_current_time();
-        // record io error
-        if (OB_UNLIKELY(OB_IO_ERROR == ret_code_.io_ret_)) {
-          ObIOInfo detect_info;
-          detect_info.tenant_id_ = req->tenant_id_;
-          detect_info.fd_ = req->fd_;
-          detect_info.timeout_us_ = timeout_us_;
-          detect_info.buf_ = buf_;
-          detect_info.flag_ = flag_;
-          detect_info.size_ = size_;
-          detect_info.offset_ = static_cast<int64_t>(offset_);
-          OB_IO_MANAGER.get_device_health_detector().record_io_error(*this, detect_info);
-        }
-        // record timeout
-        if (OB_UNLIKELY(ObTimeUtility::current_time() > req->timeout_ts())) {
-          OB_IO_MANAGER.get_device_health_detector().record_io_timeout(*this, req);
+
+        // do not detect backup io
+        if (!req->fd_.is_backup_block_file()) {
+          // record io error
+          if (OB_UNLIKELY(OB_IO_ERROR == ret_code_.io_ret_)) {
+            ObIOInfo detect_info;
+            detect_info.tenant_id_ = req->tenant_id_;
+            detect_info.fd_ = req->fd_;
+            detect_info.timeout_us_ = timeout_us_;
+            detect_info.buf_ = buf_;
+            detect_info.flag_ = flag_;
+            detect_info.size_ = size_;
+            detect_info.offset_ = static_cast<int64_t>(offset_);
+            OB_IO_MANAGER.get_device_health_detector().record_io_error(*this, detect_info);
+          }
+          // record timeout
+          if (OB_UNLIKELY(ObTimeUtility::current_time() > req->timeout_ts())) {
+            OB_IO_MANAGER.get_device_health_detector().record_io_timeout(*this, req);
+          }
         }
       }
       if (OB_FAIL(guard.get_ret())) {
@@ -745,6 +750,7 @@ ObIORequest::ObIORequest()
     control_block_(nullptr),
     tenant_id_(OB_INVALID_TENANT_ID),
     tenant_io_mgr_(),
+    storage_accesser_(),
     fd_(),
     trace_id_()
 {
@@ -785,11 +791,22 @@ int ObIORequest::init(const ObIOInfo &info, ObIOResult *result)
     //init info and check valid
     tenant_id_ = info.tenant_id_;
     fd_ = info.fd_;
-    if (nullptr == fd_.device_handle_) {
+    if (fd_.is_backup_block_file()) {
+      backup::ObBackupWrapperIODevice *wrapper_device = nullptr;
+      if (OB_ISNULL(fd_.device_handle_)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("backup io but device handle is null", K(ret), K(tenant_id_), K(fd_));
+      } else if (FALSE_IT(wrapper_device = static_cast<backup::ObBackupWrapperIODevice *>(fd_.device_handle_))) {
+      } else if (OB_FAIL(hold_storage_accesser(fd_, *wrapper_device))) {
+        LOG_WARN("fail to hold storage accesser", K(ret), K(tenant_id_), K(fd_));
+      }
+    } else if (OB_ISNULL(fd_.device_handle_)) {
       fd_.device_handle_ = THE_IO_DEVICE; // for test
     }
+
     char *io_buf = nullptr;
-    if (OB_UNLIKELY(!is_valid())) {
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(!is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(*this));
     } else if (info.flag_.is_write() && OB_FAIL(alloc_io_buf(io_buf))) {
@@ -827,11 +844,13 @@ void ObIORequest::free()
 
 void ObIORequest::reset() //only for test, not dec resut_ref
 {
+  int ret = OB_SUCCESS;
   retry_count_ = 0;
   if (nullptr != control_block_ && nullptr != fd_.device_handle_) {
     fd_.device_handle_->free_iocb(control_block_);
     control_block_ = nullptr;
   }
+
   tenant_id_ = 0;
   free_io_buffer();
   ref_cnt_ = 0;
@@ -839,16 +858,19 @@ void ObIORequest::reset() //only for test, not dec resut_ref
   io_result_ = nullptr;
   fd_.reset();
   tenant_io_mgr_.reset();
+  storage_accesser_.reset();
   is_inited_ = false;
 }
 
 void ObIORequest::destroy()
 {
+  int ret = OB_SUCCESS;
   retry_count_ = 0;
   if (nullptr != control_block_ && nullptr != fd_.device_handle_) {
     fd_.device_handle_->free_iocb(control_block_);
     control_block_ = nullptr;
   }
+
   fd_.reset();
   tenant_id_ = 0;
   free_io_buffer();
@@ -859,6 +881,7 @@ void ObIORequest::destroy()
     io_result_ = nullptr;
   }
   tenant_io_mgr_.reset();
+  storage_accesser_.reset();
   is_inited_ = false;
 }
 
@@ -933,7 +956,7 @@ void ObIORequest::calc_io_offset_and_size(int64_t &size, int64_t &offset)
 
 const char *ObIORequest::get_io_data_buf()
 {
-  char *buf = nullptr;
+  const char *buf = nullptr;
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == raw_buf_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1033,14 +1056,11 @@ int ObIORequest::prepare(char *next_buffer, int64_t next_size, int64_t next_offs
     calc_io_offset_and_size(io_size, io_offset);
   }
   char *io_buf = next_buffer != nullptr ? next_buffer : calc_io_buf();
+  const bool is_sync = use_sync_io_channel();
 
   if (OB_ISNULL(fd_.device_handle_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("device handle is null", K(ret), K(*this));
-  } else if (OB_ISNULL(control_block_) && OB_ISNULL(control_block_ = fd_.device_handle_->alloc_iocb())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc io control block failed", K(ret), K(*this));
-  } else if (FALSE_IT(tg.click("alloc_iocb"))) {
   } else if (OB_ISNULL(io_buf) && OB_FAIL(alloc_io_buf(io_buf))) {
     // delayed alloc buffer for read request here to reduce memory usage when io request enqueue
     LOG_WARN("alloc io buffer for read failed", K(ret), K(*this));
@@ -1048,6 +1068,12 @@ int ObIORequest::prepare(char *next_buffer, int64_t next_size, int64_t next_offs
   } else if (OB_ISNULL(io_result_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("io result is null", K(ret));
+  } else if (is_sync) {
+    // only async io needs prepare io cb
+  } else if (OB_ISNULL(control_block_) && OB_ISNULL(control_block_ = fd_.device_handle_->alloc_iocb())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc io control block failed", K(ret), K(*this));
+  } else if (FALSE_IT(tg.click("alloc_iocb"))) {
   } else {
     if (io_result_->flag_.is_read()) {
       if (OB_FAIL(fd_.device_handle_->io_prepare_pread(
@@ -1192,8 +1218,8 @@ int ObIORequest::try_alloc_buf_until_timeout(char *&io_buf)
 
 bool ObIORequest::can_callback() const
 {
-  // sync_io cannot callback
-  return nullptr != io_result_ && nullptr != get_callback() && nullptr != raw_buf_;
+  // both sync_io and async_io can callback
+  return nullptr != io_result_ && nullptr != get_callback();
 }
 
 void ObIORequest::free_io_buffer()
@@ -1247,6 +1273,39 @@ void ObIORequest::dec_ref(const char *msg)
     }
   }
 }
+
+bool ObIORequest::use_sync_io_channel() const
+{
+  bool bool_ret = io_result_ != nullptr && get_flag().is_sync();
+  if (fd_.is_backup_block_file()) {
+    // For backup io, even if async is marked, still use sync_channel.
+    bool_ret = true;
+  }
+  return bool_ret;
+}
+
+bool ObIORequest::use_async_io_channel() const
+{
+  return !use_sync_io_channel();
+}
+
+int ObIORequest::hold_storage_accesser(const ObIOFd &fd, ObObjectDevice &object_device)
+{
+  int ret = OB_SUCCESS;
+  void *ctx = NULL;
+  ObStorageAccesser *storage_accesser = nullptr;
+  if (OB_FAIL(object_device.get_fd_mng().fd_to_ctx(fd, ctx))) {
+    LOG_WARN("fail to get ctx accroding fd", K(ret), K(fd));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is null", K(ret));
+  } else {
+    storage_accesser = static_cast<ObStorageAccesser *>(ctx);
+    storage_accesser_.hold(storage_accesser);
+  }
+  return ret;
+}
+
 
 /******************             IOPhyQueue              **********************/
 

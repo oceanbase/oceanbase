@@ -379,21 +379,44 @@ int ObCheckpointExecutor::calculate_recycle_scn_(const SCN max_decided_scn, SCN 
   return ret;
 }
 
+/**
+ * @brief As calculate_recycle_scn_() comments show : There is a threshold of clog recycle and the default value is 5%.
+ *But if there are too many logstreams in a single tenant, for example, 20 logstreams. And each logstream used 4.9% clog
+ *disk, then all logstreams used 98% clog disk but the clog recycling cannot be triggered. So another parameter is added
+ *: MAX_TENANT_RECYCLE_CLOG_PERCENTAGE, which used to set the max recycle clog trigger.
+ *
+ *For example, in the previous logic, if there were a total of 10 logstreams and the minimum recycle threshold for each
+ *logstream was 5%, then the total threshold would be 50%. However, in the new logic, the minimum recycle threshold for
+ *each log stream cannot reach 5% but is calculated as MAX_TENANT_RECYCLE_CLOG_PERCENTAGE (30) divided by 10, which is
+ *3%. Therefore, regardless of the number of log streams, it ensures that the clog recycling can be triggered properly.
+ *
+ */
 int ObCheckpointExecutor::calculate_min_recycle_scn_(const LSN clog_checkpoint_lsn, SCN &min_recycle_scn)
 {
-  const int64_t MIN_RECYCLE_CLOG_PERCENTAGE = 5;
+  const int64_t DEFAULT_MIN_LS_RECYCLE_CLOG_PERCENTAGE = 5;
+  const int64_t MAX_TENANT_RECYCLE_CLOG_PERCENTAGE = ObCheckPointService::NEED_FLUSH_CLOG_DISK_PERCENT;
+
   int ret = OB_SUCCESS;
   int64_t used_size = 0;
   int64_t total_size = 0;
 
-  logservice::ObLogService *log_service = nullptr;
-  if (OB_ISNULL(log_service = MTL(logservice::ObLogService *))) {
+  ObLogService *log_service = nullptr;
+  ObLSService *ls_service = nullptr;
+  if (OB_ISNULL(log_service = MTL(ObLogService *)) || OB_ISNULL(ls_service = MTL(ObLSService *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get_log_service failed", K(ret));
   } else if (OB_FAIL(log_service->get_palf_disk_usage(used_size, total_size))) {
     STORAGE_LOG(WARN, "get_disk_usage failed", K(ret), K(used_size), K(total_size));
   } else {
-    LSN min_recycle_lsn = clog_checkpoint_lsn + (total_size * MIN_RECYCLE_CLOG_PERCENTAGE / 100);
+    int64_t ls_count = ls_service->get_ls_count();
+    if (ls_count <= 0) {
+      ls_count = 1;
+    }
+
+    int64_t ls_min_recycle_clog_percentage =
+        MIN(DEFAULT_MIN_LS_RECYCLE_CLOG_PERCENTAGE, MAX_TENANT_RECYCLE_CLOG_PERCENTAGE / ls_count);
+
+    LSN min_recycle_lsn = clog_checkpoint_lsn + (total_size * ls_min_recycle_clog_percentage / 100);
     if (OB_FAIL(loghandler_->locate_by_lsn_coarsely(min_recycle_lsn, min_recycle_scn))) {
       STORAGE_LOG(WARN, "locate min_recycle_scn by lsn failed", KR(ret));
     }

@@ -52,7 +52,7 @@ int ObExprRegexpInstr::calc_result_typeN(ObExprResType &type,
   } else {
     bool is_case_sensitive = types[0].get_calc_collation_type();
     for (int i = 0; OB_SUCC(ret) && i < param_num; i++) {
-      if (!types[i].is_null() && !is_type_valid(types[i].get_type())) {
+      if (!types[i].is_null() && !is_type_valid_regexp(types[i].get_type())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("the parameter is not castable", K(ret), K(i));
       }

@@ -299,13 +299,15 @@ int ObTabletTableIterator::refresh_read_tables_from_tablet(
 
 int ObTabletTableIterator::get_mds_sstables_from_tablet(const int64_t snapshot_version)
 {
+  UNUSED(snapshot_version);
   int ret = OB_SUCCESS;
 
   if (OB_UNLIKELY(!tablet_handle_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("try to refresh tables in tablet table iter with invalid tablet handle", K(ret));
-  } else if (OB_FAIL(tablet_handle_.get_obj()->get_mds_tables(snapshot_version, table_store_iter_))) {
-    LOG_WARN("fail to get mds tables", K(ret), K(snapshot_version));
+  } else if (OB_FAIL(tablet_handle_.get_obj()->inner_get_mds_sstables(table_store_iter_))) {
+    // here we should call `inner_get_mds_sstables` rather than `get_mds_sstables` because tablet may have not been initialized
+    LOG_WARN("fail to get mds sstables", K(ret), K(snapshot_version));
   }
 
   return ret;

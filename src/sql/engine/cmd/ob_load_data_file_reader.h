@@ -37,10 +37,14 @@ public:
 public:
   ObLoadFileLocation file_location_;
   ObString filename_;
+  ObLoadCompressionFormat compression_format_;
   share::ObBackupStorageInfo access_info_;
   observer::ObIMPPacketSender *packet_handle_;
   ObSQLSessionInfo *session_;
   int64_t timeout_ts_;  // A job always has a deadline and file reading may cost a long time
+
+public:
+  static int parse_compression_format(ObString compression_name, ObString filename, ObLoadCompressionFormat &compression_format);
 };
 
 class ObFileReader
@@ -88,6 +92,12 @@ public:
    * A file reader factory
    */
   static int open(const ObFileReadParam &param, ObIAllocator &allocator, ObFileReader *& file_reader);
+
+private:
+  static int open_decompress_reader(const ObFileReadParam &param,
+                                    ObIAllocator &allocator,
+                                    ObFileReader *source_reader,
+                                    ObFileReader *&file_reader);
 
 protected:
   ObIAllocator &allocator_;
@@ -198,6 +208,99 @@ private:
   int64_t received_size_;  // All data received in bytes
   int64_t read_size_;      // All data has been read in bytes
   bool    eof_;
+};
+
+/**
+ * base class for stream decompressor
+ */
+class ObDecompressor
+{
+public:
+  explicit ObDecompressor(ObIAllocator &allocator);
+  virtual ~ObDecompressor();
+
+  virtual int  init() = 0;
+  virtual void destroy() = 0;
+  virtual int  decompress(const char *src, int64_t src_size, int64_t &consumed_size,
+                          char *dest, int64_t dest_capacity, int64_t &decompressed_size) = 0;
+
+  static int create(ObLoadCompressionFormat format, ObIAllocator &allocator, ObDecompressor *&decompressor);
+
+protected:
+  ObIAllocator &allocator_;
+};
+
+/**
+ * stream decompress file reader
+ */
+class ObDecompressFileReader : public ObStreamFileReader
+{
+public:
+  explicit ObDecompressFileReader(ObIAllocator &allocator);
+  virtual ~ObDecompressFileReader();
+
+  int open(const ObFileReadParam &param, ObFileReader *source_reader);
+
+public:
+  int read(char *buf, int64_t capability, int64_t &read_size) override;
+  int64_t get_offset() const override { return uncompressed_size_; }
+  bool eof() const override { return eof_; }
+
+private:
+  int read_compressed_data();
+
+protected:
+  ObFileReader *source_reader_ = nullptr;
+
+  char *  compressed_data_    = nullptr; /// compressed data buffer
+  int64_t compress_data_size_ = 0;       /// the valid data size in compressed data buffer
+  int64_t consumed_data_size_ = 0;       /// handled buffer size in the compressed data buffer
+  int64_t uncompressed_size_  = 0;       /// decompressed size from compressed data
+
+  bool  eof_ = false;
+
+  ObDecompressor *decompressor_ = nullptr;
+
+  static const int64_t COMPRESSED_DATA_BUFFER_SIZE;
+};
+
+/**
+ * gzip/deflate decompressor
+ */
+class ObZlibDecompressor : public ObDecompressor
+{
+public:
+  explicit ObZlibDecompressor(ObIAllocator &allocator);
+  virtual ~ObZlibDecompressor();
+
+  int  init() override;
+  void destroy() override;
+
+  int decompress(const char *src, int64_t src_size, int64_t &consumed_size,
+                 char *dest, int64_t dest_capacity, int64_t &decompressed_size) override;
+
+private:
+  void *zlib_stream_ptr_    = nullptr;
+  bool  zstream_need_reset_ = false; // the zstreamptr should be reset if we got Z_STREAM_END
+};
+
+/**
+ * zstd decompressor
+ */
+class ObZstdDecompressor : public ObDecompressor
+{
+public:
+  explicit ObZstdDecompressor(ObIAllocator &allocator);
+  virtual ~ObZstdDecompressor();
+
+  int  init() override;
+  void destroy() override;
+
+  int decompress(const char *src, int64_t src_size, int64_t &consumed_size,
+                 char *dest, int64_t dest_capacity, int64_t &decompressed_size) override;
+
+private:
+  void *zstd_stream_context_ = nullptr;
 };
 
 } // namespace sql

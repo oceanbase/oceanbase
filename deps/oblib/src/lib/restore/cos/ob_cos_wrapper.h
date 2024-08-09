@@ -16,6 +16,7 @@
 #include <string.h>
 #include "ob_singleton.h"
 #include <dirent.h>
+#include "apr_pools.h"
 
 namespace oceanbase
 {
@@ -40,7 +41,7 @@ public:
 
   ObCosEnv() : ObSingleton<ObCosEnv>(), is_inited_(false) {}
   // global init cos env resource, must and only can be called once
-  int init();
+  int init(apr_abortfunc_t abort_fn);
 
   void destroy();
 

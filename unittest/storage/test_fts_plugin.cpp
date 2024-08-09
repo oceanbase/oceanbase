@@ -703,6 +703,42 @@ TEST_F(ObTestNgramFTParseHelper, test_parse_fulltext)
   }
 }
 
+TEST_F(ObTestNgramFTParseHelper, test_parse_corner_case)
+{
+  ObFTWordMap words;
+  ASSERT_EQ(OB_SUCCESS, words.create(10, "TParseCorner"));
+  int64_t doc_length = 0;
+
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, "f", std::strlen("f"), doc_length, words));
+  ASSERT_EQ(0, words.size());
+  ASSERT_EQ(0, doc_length);
+
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, " f", std::strlen(" f"), doc_length, words));
+  ASSERT_EQ(0, words.size());
+  ASSERT_EQ(0, doc_length);
+
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, " f ", std::strlen(" f "), doc_length, words));
+  ASSERT_EQ(0, words.size());
+  ASSERT_EQ(0, doc_length);
+
+  ASSERT_EQ(OB_SUCCESS, parse_helper_.segment(cs_type_, "192.168.2.3", std::strlen("192.168.2.3"), doc_length, words));
+  ASSERT_EQ(4, words.size());
+  ASSERT_EQ(4, doc_length);
+  int64_t word_cnt = 0;
+  ObFTWord word_19(strlen("19"), "19", cs_type_);
+  ASSERT_EQ(OB_SUCCESS, words.get_refactored(word_19, word_cnt));
+  ASSERT_EQ(1, word_cnt);
+  ObFTWord word_92(strlen("92"), "92", cs_type_);
+  ASSERT_EQ(OB_SUCCESS, words.get_refactored(word_92, word_cnt));
+  ASSERT_EQ(1, word_cnt);
+  ObFTWord word_16(strlen("16"), "16", cs_type_);
+  ASSERT_EQ(OB_SUCCESS, words.get_refactored(word_16, word_cnt));
+  ASSERT_EQ(1, word_cnt);
+  ObFTWord word_68(strlen("68"), "68", cs_type_);
+  ASSERT_EQ(OB_SUCCESS, words.get_refactored(word_68, word_cnt));
+  ASSERT_EQ(1, word_cnt);
+}
+
 } // end namespace storage
 } // end namespace oceanbase
 

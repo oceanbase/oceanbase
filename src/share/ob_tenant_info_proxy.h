@@ -374,6 +374,17 @@ private:
       const ObArchiveMode &old_log_mode,
       const ObArchiveMode &new_log_mode);
 
+    /**
+     * @description: update tenant restore data mode
+     * @param[in] tenant_id
+     * @param[in] proxy
+     * @param[in] new_log_mode new log mode
+     */
+    static int update_tenant_restore_data_mode(
+      const uint64_t tenant_id,
+      ObISQLClient *proxy,
+      const ObRestoreDataMode &new_restore_data_mode);
+
 };
 }
 }

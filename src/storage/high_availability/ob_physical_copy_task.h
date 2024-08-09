@@ -60,13 +60,14 @@ struct ObPhysicalCopyCtx
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
   bool is_leader_restore_;
+  ObTabletRestoreAction::ACTION restore_action_;
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObStorageHADag *ha_dag_;
   ObSSTableIndexBuilder *sstable_index_builder_;
   ObRestoreMacroBlockIdMgr *restore_macro_block_id_mgr_;
-  bool need_sort_macro_meta_;
+  bool need_sort_macro_meta_; // not use
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   ObITable::TableKey table_key_;
@@ -80,7 +81,7 @@ struct ObPhysicalCopyTaskInitParam final
   ~ObPhysicalCopyTaskInitParam();
   void reset();
   bool is_valid() const;
-  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(src_info), KP_(sstable_param),
+  TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(src_info), KPC_(sstable_param),
       K_(sstable_macro_range_info), KP_(tablet_copy_finish_task),
       KP_(ls), K_(is_leader_restore), KP_(restore_base_info), KP_(second_meta_index_store));
 
@@ -93,10 +94,11 @@ struct ObPhysicalCopyTaskInitParam final
   ObTabletCopyFinishTask *tablet_copy_finish_task_;
   ObLS *ls_;
   bool is_leader_restore_;
+  ObTabletRestoreAction::ACTION restore_action_;
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
-  bool need_sort_macro_meta_;
+  bool need_sort_macro_meta_; // not use
   bool need_check_seq_;
   int64_t ls_rebuild_seq_;
   DISALLOW_COPY_AND_ASSIGN(ObPhysicalCopyTaskInitParam);
@@ -128,6 +130,9 @@ private:
       const ObCopyMacroBlockReaderInitParam &init_param,
       ObICopyMacroBlockReader *&reader);
   int get_macro_block_restore_reader_(
+      const ObCopyMacroBlockReaderInitParam &init_param,
+      ObICopyMacroBlockReader *&reader);
+  int get_remote_macro_block_restore_reader_(
       const ObCopyMacroBlockReaderInitParam &init_param,
       ObICopyMacroBlockReader *&reader);
   int get_macro_block_writer_(
@@ -186,7 +191,7 @@ private:
       compaction::ObMergeType &merge_type);
   int create_sstable_();
   int create_empty_sstable_();
-  int build_create_sstable_param_(
+  int build_create_empty_sstable_param_(
       ObTabletCreateSSTableParam &param);
 
   int create_sstable_with_index_builder_();
@@ -200,6 +205,12 @@ private:
   int check_sstable_meta_(
       const ObMigrationSSTableParam &src_meta,
       const ObSSTableMeta &write_meta);
+  int create_pure_remote_sstable_();
+  int build_create_pure_remote_sstable_param_(
+      ObTabletCreateSSTableParam &param);
+  int get_space_optimization_mode_(
+      const ObMigrationSSTableParam *sstable_param,
+      ObSSTableIndexBuilder::ObSpaceOptimizationMode &mode);
 
 private:
   bool is_inited_;
@@ -237,6 +248,7 @@ public:
   common::ObArenaAllocator &get_allocator() { return arena_allocator_; } // TODO: @jinzhu remove me later.
   int set_tablet_status(const ObCopyTabletStatus::STATUS &status);
   int get_tablet_status(ObCopyTabletStatus::STATUS &status);
+  int get_restore_action(ObTabletRestoreAction::ACTION &restore_action);
 
   const ObMigrationTabletParam *get_src_tablet_meta() const { return src_tablet_meta_; }
 private:

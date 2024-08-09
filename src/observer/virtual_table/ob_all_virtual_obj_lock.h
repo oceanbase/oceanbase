@@ -69,7 +69,8 @@ private:
     EXTRA_INFO,
     TIME_AFTER_CREATE,
     OBJ_TYPE,
-    OBJ_ID
+    OBJ_ID,
+    OWNER_TYPE,
   };
 private:
   common::ObAddr addr_;

@@ -121,7 +121,7 @@ public:
   }
   int init(const ObPushDownTopNFilterInfo *pd_topn_filter_info, uint64_t tenant_id,
            const ObIArray<ObSortFieldCollation> *sort_collations, ObExecContext *exec_ctx,
-           int64_t px_seq_id);
+           int64_t px_seq_id, bool is_fetch_with_ties);
   int destroy();
   int assign(const ObP2PDatahubMsgBase &src_msg) override;
   int deep_copy_msg(ObP2PDatahubMsgBase *&dest_msg) override;
@@ -174,7 +174,10 @@ private:
     if (OB_FAIL(compare(col_idx, datum, cmp_res))) {
       SQL_LOG(WARN, "fail to compare", K(ret));
     } else if (cmp_res == 0) {
-      if (col_idx == total_sk_cnt_ - 1) {
+      if (is_fetch_with_ties_) {
+        // still need output duplicate rows
+        cmp_res = -1;
+      } else if (col_idx == total_sk_cnt_ - 1) {
         // this arg is the last one of sort key, we can directly filter
         cmp_res = 1;
       } else if (col_idx == heap_top_datums_.count() - 1) {
@@ -206,6 +209,7 @@ private:
   ObFixedArray<ObDatum, common::ObIAllocator> heap_top_datums_;
   ObFixedArray<int64_t, common::ObIAllocator> cells_size_;
   int64_t data_version_;
+  bool is_fetch_with_ties_;
 };
 
 } // end namespace sql

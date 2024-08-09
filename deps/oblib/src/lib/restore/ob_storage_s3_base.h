@@ -498,7 +498,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3AppendWriter);
 };
 
-class ObStorageS3MultiPartWriter : public ObStorageS3Base, public ObIStorageMultiPartWriter
+class ObStorageS3MultiPartWriter : public ObStorageS3Writer, public ObIStorageMultiPartWriter
 {
 public:
   ObStorageS3MultiPartWriter();
@@ -542,12 +542,10 @@ private:
   int write_single_part_();
 
 protected:
-  bool is_opened_;
   char *base_buf_;
   int64_t base_buf_pos_;
   char *upload_id_;
   int partnum_;
-  int64_t file_length_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObStorageS3MultiPartWriter);

@@ -99,6 +99,7 @@ public:
   union {
     uint64_t time_model_; // phase of execution bitmap
     struct {
+      // NEED placehold
       uint64_t in_parse_          : 1;
       uint64_t in_pl_parse_       : 1;
       uint64_t in_get_plan_cache_ : 1;
@@ -110,6 +111,13 @@ public:
       uint64_t in_storage_read_   : 1;
       uint64_t in_storage_write_  : 1;
       uint64_t in_das_remote_exec_: 1;
+      uint64_t in_plsql_compilation_  : 1;
+      uint64_t in_plsql_execution_  : 1;
+      uint64_t in_filter_rows_: 1;
+      uint64_t in_rpc_encode_ : 1;
+      uint64_t in_rpc_decode_ : 1;
+      uint64_t in_connection_mgr_ : 1;
+      uint64_t in_check_row_confliction_: 1;
     };
   };
 

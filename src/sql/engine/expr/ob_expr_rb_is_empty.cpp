@@ -63,7 +63,7 @@ int ObExprRbIsEmpty::eval_rb_is_empty(const ObExpr &expr, ObEvalCtx &ctx, ObDatu
   bool is_rb_null = false;
   ObRoaringBitmap *rb = nullptr;
   ObDatum *rb_datum = nullptr;
-  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, rb_arg, rb, is_rb_null))) {
+  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap(ctx, tmp_allocator, rb_arg, rb, is_rb_null))) {
     LOG_WARN("fail to get input roaringbitmap", K(ret));
   } else if (is_rb_null) {
     res.set_null();

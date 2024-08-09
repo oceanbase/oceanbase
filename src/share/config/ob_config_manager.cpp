@@ -105,6 +105,8 @@ int ObConfigManager::reload_config()
     LOG_WARN("reload config for tde encrypt engine fail", K(ret));
   } else if (OB_FAIL(GCTX.omt_->update_hidden_sys_tenant())) {
     LOG_WARN("update hidden sys tenant failed", K(ret));
+  } else {
+    g_enable_ob_error_msg_style = GCONF.enable_ob_error_msg_style;
   }
   return ret;
 }

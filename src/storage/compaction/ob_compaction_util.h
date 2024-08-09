@@ -17,19 +17,19 @@ namespace oceanbase
 {
 namespace compaction
 {
-enum ObMergeType
+enum ObMergeType : uint8_t
 {
-  INVALID_MERGE_TYPE = -1,
-  MINOR_MERGE = 0,  // minor merge, compaction several mini sstable into one larger mini sstable
-  HISTORY_MINOR_MERGE = 1,
-  META_MAJOR_MERGE = 2,
-  MINI_MERGE = 3,  // mini merge, only flush memtable
-  MAJOR_MERGE = 4,
-  MEDIUM_MERGE = 5,
-  DDL_KV_MERGE = 6, // only use for ddl dag
-  BACKFILL_TX_MERGE = 7,
-  MDS_MINI_MERGE = 8,
-  MDS_MINOR_MERGE = 9,
+  INVALID_MERGE_TYPE = 0,
+  MINOR_MERGE,  // minor merge, compaction several mini sstable into one larger mini sstable
+  HISTORY_MINOR_MERGE,
+  META_MAJOR_MERGE,
+  MINI_MERGE,  // mini merge, only flush memtable
+  MAJOR_MERGE,
+  MEDIUM_MERGE,
+  DDL_KV_MERGE, // only use for ddl dag
+  BACKFILL_TX_MERGE,
+  MDS_MINI_MERGE,
+  MDS_MINOR_MERGE,
   // add new merge type here
   // fix merge_type_to_str & ObPartitionMergePolicy::get_merge_tables
   MERGE_TYPE_MAX

@@ -114,6 +114,7 @@ int MdsDumpKVStorageAdapter::convert_to_mds_row(
     ret = OB_INVALID_ARGUMENT;
     MDS_LOG(WARN, "invalid row", K(ret), K(row));
   } else if (OB_UNLIKELY(!meta_info_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
     MDS_LOG(WARN, "meta info is invalid", K(ret), K_(meta_info));
   } else if (OB_UNLIKELY(row.get_column_count() != ObMdsSchemaHelper::MDS_MULTI_VERSION_ROW_COLUMN_CNT)) {
     ret = OB_INVALID_ARGUMENT;

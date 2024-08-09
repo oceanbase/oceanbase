@@ -304,15 +304,23 @@ public:
   class BaseSavedValue
   {
   public:
-    BaseSavedValue()
+    BaseSavedValue() : cur_query_(NULL)
+    {
+      reset();
+    }
+    ~BaseSavedValue()
     {
       reset();
     }
     inline void reset()
     {
+      if (cur_query_ != nullptr) {
+        ob_free(cur_query_);
+      }
       cur_phy_plan_ = NULL;
-      cur_query_[0] = 0;
       cur_query_len_ = 0;
+      cur_query_buf_len_ = 0;
+      cur_query_ = NULL;
       total_stmt_tables_.reset();
       cur_stmt_tables_.reset();
       read_uncommited_ = false;
@@ -322,7 +330,6 @@ public:
   public:
     // 原StmtSavedValue的属性
     ObPhysicalPlan *cur_phy_plan_;
-    char cur_query_[MAX_QUERY_STRING_LEN];
     volatile int64_t cur_query_len_;
 //  int64_t cur_query_start_time_;          // 用于计算事务超时时间，如果在base_save_session接口中操作
                                             // 会导致start_trans报事务超时失败，不放在基类中。
@@ -332,6 +339,8 @@ public:
     bool read_uncommited_;
     bool inc_autocommit_;
     bool need_serial_exec_;
+    int64_t cur_query_buf_len_;
+    char *cur_query_;
   public:
     // 原TransSavedValue的属性
 //  transaction::ObTxDesc trans_desc_;   // 两者都有trans_desc，但执行操作完全不同，不放在基类中。
@@ -344,6 +353,10 @@ public:
   {
   public:
     StmtSavedValue()
+    {
+      reset();
+    }
+    ~StmtSavedValue()
     {
       reset();
     }
@@ -470,6 +483,7 @@ public:
   bool get_local_ob_enable_pl_cache() const;
   bool get_local_ob_enable_plan_cache() const;
   bool get_local_ob_enable_sql_audit() const;
+  bool get_local_ob_enable_parameter_anonymous_block() const;
   bool get_local_cursor_sharing_mode() const;
   ObLengthSemantics get_local_nls_length_semantics() const;
   ObLengthSemantics get_actual_nls_length_semantics() const;
@@ -972,6 +986,8 @@ public:
   int get_sys_variable_by_name(const common::ObString &var, int64_t &val) const;
   ///@}
 
+  int reset_sys_vars();
+
   /// check the existence of the system variable
   int sys_variable_exists(const common::ObString &var, bool &is_exist) const;
 
@@ -1421,6 +1437,7 @@ public:
   int get_security_version(uint64_t &security_version) const;
   int check_feature_enable(const share::ObCompatFeatureType feature_type, bool &is_enable) const;
   void trace_all_sys_vars() const;
+  void reuse_labels() { labels_.reuse(); }
 protected:
   int process_session_variable(share::ObSysVarClassType var, const common::ObObj &value,
                                const bool check_timezone_valid = true,
@@ -1683,7 +1700,8 @@ public:
         ncharacter_set_connection_(ObCharsetType::CHARSET_INVALID),
         compat_type_(share::ObCompatType::COMPAT_MYSQL57),
         compat_version_(0),
-        enable_sql_plan_monitor_(false)
+        enable_sql_plan_monitor_(false),
+        ob_enable_parameter_anonymous_block_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1749,6 +1767,7 @@ public:
       compat_type_ = share::ObCompatType::COMPAT_MYSQL57;
       compat_version_ = 0;
       enable_sql_plan_monitor_ = false;
+      ob_enable_parameter_anonymous_block_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -1798,7 +1817,8 @@ public:
             ncharacter_set_connection_ == other.ncharacter_set_connection_ &&
             default_lob_inrow_threshold_ == other.default_lob_inrow_threshold_ &&
             compat_type_ == other.compat_type_ &&
-            compat_version_ == other.compat_version_;
+            compat_version_ == other.compat_version_ &&
+            ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -1982,6 +2002,7 @@ public:
     uint64_t compat_version_;
     // No use. Placeholder.
     bool enable_sql_plan_monitor_;
+    bool ob_enable_parameter_anonymous_block_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2100,6 +2121,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(share::ObCompatType, compat_type);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, compat_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, enable_sql_plan_monitor);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_parameter_anonymous_block);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2174,6 +2196,7 @@ private:
         bool inc_compat_type_:1;
         bool inc_compat_version_:1;
         bool inc_enable_sql_plan_monitor_:1;
+        bool inc_ob_enable_parameter_anonymous_block_:1;
       };
     };
   };
@@ -2248,7 +2271,8 @@ protected:
   common::ObSmallBlockAllocator<> ps_session_info_allocator_;
   common::ObSmallBlockAllocator<> cursor_info_allocator_; // for alloc memory of PS CURSOR/SERVER REF CURSOR
   common::ObSmallBlockAllocator<> package_info_allocator_; // for alloc memory of session package state
-  common::ObStringBuf name_pool_; // for variables names and statement names
+  common::ObStringBuf sess_level_name_pool_; // will reset when disconnect session
+  common::ObStringBuf conn_level_name_pool_; // will reset when reset connection and disconnect session
   intptr_t json_pl_mngr_; // for pl json manage
   TransFlags trans_flags_;
   SqlScopeFlags sql_scope_flags_;
@@ -2433,7 +2457,7 @@ private:
 inline const common::ObString ObBasicSessionInfo::get_current_query_string() const
 {
   common::ObString str_ret;
-  str_ret.assign_ptr(const_cast<char *>(thread_data_.cur_query_), static_cast<int32_t>(thread_data_.cur_query_len_));
+  str_ret.assign_ptr(const_cast<char *>(thread_data_.cur_query_), static_cast<int64_t>(thread_data_.cur_query_len_));
   return str_ret;
 }
 
@@ -2510,6 +2534,11 @@ inline bool ObBasicSessionInfo::get_local_ob_enable_plan_cache() const
 inline bool ObBasicSessionInfo::get_local_ob_enable_sql_audit() const
 {
   return sys_vars_cache_.get_ob_enable_sql_audit();
+}
+
+inline bool ObBasicSessionInfo::get_local_ob_enable_parameter_anonymous_block() const
+{
+  return sys_vars_cache_.get_ob_enable_parameter_anonymous_block();
 }
 
 inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() const

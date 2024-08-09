@@ -125,7 +125,8 @@ ObPhysicalPlanCtx::ObPhysicalPlanCtx(common::ObIAllocator &allocator)
       hint_xa_trans_stop_check_lock_(false),
       main_xa_trans_branch_(false),
       total_memstore_read_row_count_(0),
-      total_ssstore_read_row_count_(0)
+      total_ssstore_read_row_count_(0),
+      is_direct_insert_plan_(false)
 {
 }
 
@@ -411,6 +412,7 @@ int ObPhysicalPlanCtx::switch_implicit_cursor()
     set_row_matched_count(cursor_info.matched_rows_);
     set_row_duplicated_count(cursor_info.duplicated_rows_);
     set_row_deleted_count(cursor_info.deleted_rows_);
+    set_last_insert_id_to_client(cursor_info.last_insert_id_);
     ++cur_stmt_id_;
   }
   return ret;
@@ -777,6 +779,7 @@ OB_DEF_SERIALIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_ENCODE(mview_ids_);
   OB_UNIS_ENCODE(last_refresh_scns_);
+  OB_UNIS_ENCODE(is_direct_insert_plan_);
   return ret;
 }
 
@@ -876,6 +879,7 @@ OB_DEF_SERIALIZE_SIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_ADD_LEN(mview_ids_);
   OB_UNIS_ADD_LEN(last_refresh_scns_);
+  OB_UNIS_ADD_LEN(is_direct_insert_plan_);
   return len;
 }
 
@@ -1001,6 +1005,7 @@ OB_DEF_DESERIALIZE(ObPhysicalPlanCtx)
   }
   OB_UNIS_DECODE(mview_ids_);
   OB_UNIS_DECODE(last_refresh_scns_);
+  OB_UNIS_DECODE(is_direct_insert_plan_);
   return ret;
 }
 
@@ -1021,6 +1026,17 @@ int ObPhysicalPlanCtx::get_field(const int64_t idx, ObField &field)
     field = field_array_->at(idx);
   }
   return ret;
+}
+
+bool ObPhysicalPlanCtx::is_subschema_ctx_inited()
+{
+  bool b_ret = false;
+  if (OB_NOT_NULL(phy_plan_)) {
+    b_ret = phy_plan_->get_subschema_ctx().is_inited();
+  } else {
+    b_ret = subschema_ctx_.is_inited();
+  }
+  return b_ret;
 }
 
 int ObPhysicalPlanCtx::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta)

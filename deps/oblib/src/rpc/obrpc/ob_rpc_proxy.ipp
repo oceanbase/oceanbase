@@ -73,10 +73,15 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     } else if(OB_FAIL(ObPocClientStub::check_blacklist(dst_))) {
       RPC_LOG(WARN, "check_blacklist failed", K(ret));
     } else {
+      int64_t relative_timeout = proxy_.timeout();
+      if (relative_timeout > INT64_MAX/2) {
+        RPC_LOG_RET(WARN, OB_INVALID_ARGUMENT, "rpc timeout is too large", K(relative_timeout), K(pcode_));
+        relative_timeout = INT64_MAX/2;
+      }
       const pn_pkt_t pkt = {
         pnio_req,
         pnio_req_sz,
-        start_ts + proxy_.timeout(),
+        start_ts + relative_timeout,
         static_cast<int16_t>(set.idx_of_pcode(pcode_)),
         ObSyncRespCallback::client_cb,
         &cb
@@ -218,10 +223,15 @@ int SSHandle<pcodeStruct>::abort()
     } else if(OB_FAIL(ObPocClientStub::check_blacklist(dst_))) {
       RPC_LOG(WARN, "check_blacklist failed", K(ret));
     } else {
+      int64_t relative_timeout = proxy_.timeout();
+      if (relative_timeout > INT64_MAX/2) {
+        RPC_LOG_RET(WARN, OB_INVALID_ARGUMENT, "rpc timeout is too large", K(relative_timeout), K(pcode_));
+        relative_timeout = INT64_MAX/2;
+      }
       const pn_pkt_t pkt = {
         pnio_req,
         pnio_req_sz,
-        start_ts + proxy_.timeout(),
+        start_ts + relative_timeout,
         static_cast<int16_t>(set.idx_of_pcode(pcode_)),
         ObSyncRespCallback::client_cb,
         &cb

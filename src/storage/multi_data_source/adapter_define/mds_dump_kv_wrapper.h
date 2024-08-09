@@ -39,8 +39,6 @@ public:
   MdsDumpKVStorageMetaInfo(const MdsDumpKV &mds_dump_kv);
   bool is_valid() const {
     return mds_table_id_ != UINT8_MAX &&
-           key_crc_check_number_ != UINT32_MAX &&
-           data_crc_check_number_ != UINT32_MAX &&
            writer_id_ != 0 &&
            seq_no_.is_valid() &&
            redo_scn_.is_valid() &&

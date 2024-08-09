@@ -265,16 +265,14 @@ int ObTabletMdsData::init_single_complex_addr(
       fused_data_ptr = const_cast<mds::MdsDumpKV*>(mds_table_ptr);
       ObTabletObjLoadHelper::free(allocator, base_ptr);
     }
-
-    if (OB_FAIL(ret)) {
-      fused_data_ptr = nullptr;
-      ObTabletObjLoadHelper::free(allocator, mds_table_ptr);
-      ObTabletObjLoadHelper::free(allocator, base_ptr);
-    } else {
-      fused_data.addr_.set_mem_addr(0, sizeof(mds::MdsDumpKV));
-    }
+    fused_data.addr_.set_mem_addr(0, sizeof(mds::MdsDumpKV));
   }
 
+  if (OB_FAIL(ret)) {
+    fused_data_ptr = nullptr;
+    ObTabletObjLoadHelper::free(allocator, mds_table_ptr);
+    ObTabletObjLoadHelper::free(allocator, base_ptr);
+  }
   return ret;
 }
 
@@ -305,16 +303,14 @@ int ObTabletMdsData::init_single_complex_addr(
       fused_data_ptr = const_cast<share::ObTabletAutoincSeq*>(mds_table_ptr);
       ObTabletObjLoadHelper::free(allocator, base_ptr);
     }
-
-    if (OB_FAIL(ret)) {
-      fused_data_ptr = nullptr;
-      ObTabletObjLoadHelper::free(allocator, mds_table_ptr);
-      ObTabletObjLoadHelper::free(allocator, base_ptr);
-    } else {
-      fused_data.addr_.set_mem_addr(0, sizeof(share::ObTabletAutoincSeq));
-    }
+    fused_data.addr_.set_mem_addr(0, sizeof(share::ObTabletAutoincSeq));
   }
 
+  if (OB_FAIL(ret)) {
+    fused_data_ptr = nullptr;
+    ObTabletObjLoadHelper::free(allocator, mds_table_ptr);
+    ObTabletObjLoadHelper::free(allocator, base_ptr);
+  }
   return ret;
 }
 
@@ -361,11 +357,10 @@ int ObTabletMdsData::init_single_complex_addr(
     } else {
       fused_data.addr_.set_mem_addr(0, sizeof(ObTabletDumpedMediumInfo));
     }
-
-    // always free medium info list after usage
-    ObTabletObjLoadHelper::free(allocator, mds_table_ptr);
-    ObTabletObjLoadHelper::free(allocator, base_ptr);
   }
+  // always free medium info list after usage
+  ObTabletObjLoadHelper::free(allocator, mds_table_ptr);
+  ObTabletObjLoadHelper::free(allocator, base_ptr);
 
   return ret;
 }
@@ -850,10 +845,7 @@ int ObTabletMdsData::init_single_mds_dump_kv(
   }
 
   if (OB_FAIL(ret)) {
-    if (nullptr != kv.ptr_) {
-      allocator.free(kv.ptr_);
-      kv.ptr_ = nullptr;
-    }
+    ObTabletObjLoadHelper::free(allocator, kv.ptr_);
   }
 
   return ret;
@@ -1026,9 +1018,7 @@ int ObTabletMdsData::load_mds_dump_kv(
   }
 
   if (OB_FAIL(ret)) {
-    if (nullptr != ptr) {
-      allocator.free(ptr);
-    }
+    ObTabletObjLoadHelper::free(allocator, ptr);
   } else {
     kv = ptr;
   }
@@ -1080,9 +1070,7 @@ int ObTabletMdsData::load_medium_info_list(
   }
 
   if (OB_FAIL(ret)) {
-    if (nullptr != ptr) {
-      allocator.free(ptr);
-    }
+    ObTabletObjLoadHelper::free(allocator, ptr);
   } else {
     medium_info_list = ptr;
   }
@@ -1136,9 +1124,7 @@ int ObTabletMdsData::load_auto_inc_seq(
   }
 
   if (OB_FAIL(ret)) {
-    if (nullptr != ptr) {
-      allocator.free(ptr);
-    }
+    ObTabletObjLoadHelper::free(allocator, ptr);
   } else {
     auto_inc_seq = ptr;
   }
@@ -1188,9 +1174,7 @@ int ObTabletMdsData::read_medium_info(
       }
 
       if (OB_FAIL(ret)) {
-        if (nullptr != info) {
-          allocator.free(info);
-        }
+        ObTabletObjLoadHelper::free(allocator, info);
       }
     }
   }

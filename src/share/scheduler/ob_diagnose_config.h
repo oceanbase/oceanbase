@@ -62,7 +62,7 @@ struct ObDiagnoseInfoStruct {
   const char *info_str_fmt[DIAGNOSE_INFO_STR_FMT_MAX_NUM];
 };
 
-enum ObSuspectInfoType
+enum ObSuspectInfoType : uint8_t
 {
 #define SUSPECT_INFO_TYPE_DEF(suspect_info_type, info_priority, with_comment, info_str, int_info_cnt, ...) suspect_info_type,
 #include "ob_diagnose_config.h"

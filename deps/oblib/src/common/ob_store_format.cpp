@@ -141,6 +141,40 @@ int ObTableStoreFormat::find_table_store_type(const ObString &table_store_format
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObLSStoreFormat, store_type_);
+bool ObLSStoreFormat::is_valid() const
+{
+  return store_type_ >= OB_LS_STORE_NORMAL && store_type_ < OB_LS_STORE_MAX;
+}
+
+ObLSStoreFormat &ObLSStoreFormat::operator=(const ObLSStoreFormat& rhs)
+{
+  if (&rhs != this) {
+    store_type_ = rhs.store_type_;
+  }
+  return *this;
+}
+
+const char *ObLSStoreFormat::to_str() const
+{
+  const char *str = NULL;
+  switch(store_type_) {
+    case OB_LS_STORE_NORMAL: {
+      str = "NORMAL";
+      break;
+    }
+    case OB_LS_STORE_COLUMN_ONLY: {
+      str = "COLUMN_ONLY";
+      break;
+    }
+    case OB_LS_STORE_MAX:
+    default: {
+      str = "INVALID";
+    }
+  }
+  return str;
+}
+
 }//end namespace common
 }//end namespace oceanbase
 

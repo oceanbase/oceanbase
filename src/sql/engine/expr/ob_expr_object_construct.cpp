@@ -122,39 +122,46 @@ int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id)
   ObExecContext &exec_ctx = ctx.exec_ctx_;
   ObIAllocator &alloc = ctx.exec_ctx_.get_allocator();
   pl::ObPLPackageGuard package_guard(session->get_effective_tenant_id());
-  ObSchemaGetterGuard *schema_guard = NULL;
+  ObSchemaGetterGuard *schema_guard_ptr = NULL;
+  ObSchemaGetterGuard schema_guard;
   // if called by check_default_value in ddl resolver, no sql ctx, get guard from session cache
   if (OB_ISNULL(exec_ctx.get_sql_ctx()) || OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
-    schema_guard = &session->get_cached_schema_guard_info().get_schema_guard();
+    if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(), schema_guard))) {
+      LOG_WARN("fail to get schema guard", K(ret));
+    } else {
+      schema_guard_ptr = &schema_guard;
+    }
   } else {
-    schema_guard = exec_ctx.get_sql_ctx()->schema_guard_;
-  }
-  pl::ObPLResolveCtx resolve_ctx(alloc,
-                                 *session,
-                                 *(schema_guard),
-                                 package_guard,
-                                 *(exec_ctx.get_sql_proxy()),
-                                 false);
-  pl::ObPLINS *ns = NULL;
-  if (NULL == session->get_pl_context()) {
-    OZ (package_guard.init());
-    OX (ns = &resolve_ctx);
-  } else {
-    ns = session->get_pl_context()->get_current_ctx();
+    schema_guard_ptr = exec_ctx.get_sql_ctx()->schema_guard_;
   }
   if (OB_SUCC(ret)) {
-    ObObj new_composite;
-    int64_t ptr = 0;
-    int64_t init_size = OB_INVALID_SIZE;
-    ObArenaAllocator tmp_alloc;
-    const pl::ObUserDefinedType *user_type = NULL;
-    CK (OB_NOT_NULL(ns));
-    OZ (ns->get_user_type(udt_id, user_type, &tmp_alloc));
-    CK (OB_NOT_NULL(user_type));
-    OZ (user_type->newx(alloc, ns, ptr));
-    OZ (user_type->get_size(pl::PL_TYPE_INIT_SIZE, init_size));
-    OX (new_composite.set_extend(ptr, user_type->get_type(), init_size));
-    OX (result = new_composite);
+    pl::ObPLResolveCtx resolve_ctx(alloc,
+                                  *session,
+                                  *(schema_guard_ptr),
+                                  package_guard,
+                                  *(exec_ctx.get_sql_proxy()),
+                                  false);
+    pl::ObPLINS *ns = NULL;
+    if (NULL == session->get_pl_context()) {
+      OZ (package_guard.init());
+      OX (ns = &resolve_ctx);
+    } else {
+      ns = session->get_pl_context()->get_current_ctx();
+    }
+    if (OB_SUCC(ret)) {
+      ObObj new_composite;
+      int64_t ptr = 0;
+      int64_t init_size = OB_INVALID_SIZE;
+      ObArenaAllocator tmp_alloc;
+      const pl::ObUserDefinedType *user_type = NULL;
+      CK (OB_NOT_NULL(ns));
+      OZ (ns->get_user_type(udt_id, user_type, &tmp_alloc));
+      CK (OB_NOT_NULL(user_type));
+      OZ (user_type->newx(alloc, ns, ptr));
+      OZ (user_type->get_size(pl::PL_TYPE_INIT_SIZE, init_size));
+      OX (new_composite.set_extend(ptr, user_type->get_type(), init_size));
+      OX (result = new_composite);
+    }
   }
   return ret;
 }

@@ -159,6 +159,7 @@ struct ObOptParamHint
     DEF(ENABLE_DAS_KEEP_ORDER,)           \
     DEF(SPILL_COMPRESSION_CODEC,)   \
     DEF(INLIST_REWRITE_THRESHOLD,)        \
+    DEF(PUSHDOWN_STORAGE_LEVEL,)          \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -222,7 +223,8 @@ struct ObGlobalHint {
 #define COMPAT_VERSION_4_3_0      (oceanbase::common::cal_version(4, 3, 0, 0))
 #define COMPAT_VERSION_4_3_1      (oceanbase::common::cal_version(4, 3, 1, 0))
 #define COMPAT_VERSION_4_3_2      (oceanbase::common::cal_version(4, 3, 2, 0))
-#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_2
+#define COMPAT_VERSION_4_3_3      (oceanbase::common::cal_version(4, 3, 3, 0))
+#define LASTED_COMPAT_VERSION     COMPAT_VERSION_4_3_3
   static bool is_valid_opt_features_version(uint64_t version)
   { return COMPAT_VERSION_4_0 <= version && LASTED_COMPAT_VERSION >= version; }
 
@@ -303,6 +305,7 @@ struct ObGlobalHint {
   {
     return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_replace_load_method());
   }
+  bool get_direct_load_need_sort() const;
 
   // wether should generate optimizer_statistics_operator.
   bool should_generate_osg_operator () const {
@@ -431,6 +434,8 @@ struct ObTableInHint
                 const common::ObString &table_name)
       : qb_name_(qb_name), db_name_(db_name), table_name_(table_name)
   { }
+  ObTableInHint(const TableItem& table)
+  { set_table(table); }
   int assign(const ObTableInHint &other);
   bool is_match_table_item(ObCollationType cs_type, const TableItem &table_item) const;
   bool is_match_physical_table_item(ObCollationType cs_type, const TableItem &table_item) const;

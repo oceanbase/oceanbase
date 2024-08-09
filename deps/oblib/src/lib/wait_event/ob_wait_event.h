@@ -59,7 +59,8 @@ WAIT_EVENT_DEF(NETWORK_QUEUE_WAIT, 13004, "wait for network request in queue", "
 // APPLICATION 14001-14999
 WAIT_EVENT_DEF(MT_READ_LOCK_WAIT,14001,"memstore read lock wait","lock","waiter","owner",APPLICATION,false, true)
 WAIT_EVENT_DEF(MT_WRITE_LOCK_WAIT,14002,"memstore write lock wait","lock","waiter","owner",APPLICATION,false, false)
-WAIT_EVENT_DEF(ROW_LOCK_WAIT,14003,"row lock wait","lock","waiter","owner",APPLICATION,false, false)
+WAIT_EVENT_DEF(ROW_LOCK_WAIT,14003,"row lock wait","lock holder's tx id","data seq number","hold time",APPLICATION,false, false)
+WAIT_EVENT_DEF(ROW_LOCK_RETRY, 14004, "retry wait because of row lock wait", "lock holder's tx id","data seq number","hold time", APPLICATION, false , false)
 
 // CONCURRENCY
 // condition wait has one parameter e.g. address of the condition variable
@@ -153,9 +154,18 @@ WAIT_EVENT_DEF(INNER_SESSION_IDLE_WAIT, 30001, "inner session wait to be called"
 WAIT_EVENT_DEF(WAIT_REFRESH_SCHEMA, 30100, "sleep: wait refresh schema", "sleep_interval", "schema_version", "", CONFIGURATION, true, true)
 WAIT_EVENT_DEF(PALF_THROTTLING, 30101, "palf throttling sleep", "sleep_interval", "", "", USER_IO, false, true)
 WAIT_EVENT_DEF(SLOG_NORMAL_RETRY_SLEEP, 30102, "sleep: slog has io error and retrying", "sleep_interval", "", "", USER_IO, true, true)
+WAIT_EVENT_DEF(INSUFFICIENT_PX_WORKER_RETRY_WAIT, 30103, "retry wait event because of insufficient px worker", "parallel level", "number of px workers required", "the total number of idle PX workers currently", CONFIGURATION, true, false)
 
 // sleep 31000-31999
 WAIT_EVENT_DEF(GARBAGE_COLLECTOR_SLEEP, 31000, "sleep: wait log callback sleep wait", "sleep_interval", "", "", SYSTEM_IO, true, true)
+
+// cluster 32000-32999
+WAIT_EVENT_DEF(GTS_NOT_READEY_RETRY_WAIT, 32000, "retry wait because of GTS service not ready", "error code", "ls leader addr", "ls leader port", CLUSTER, true, false)
+WAIT_EVENT_DEF(REPLICA_NOT_READABLE_RETRY_WAIT, 32001, "retry wait because of replica not readable", "ls_id", "", "", CLUSTER, true, false)
+WAIT_EVENT_DEF(SCHEMA_RETRY_WAIT, 32002, "retry wait because of schema", "error code", "table id", "table schema version", CLUSTER, true, false)
+WAIT_EVENT_DEF(LOCATION_RETRY_WAIT, 32003, "retry wait because of location", "error", "ls_id", "", CLUSTER, true, false)
+WAIT_EVENT_DEF(OTHER_RETRY_WAIT, 32004, "retry wait because of  other", "error", "", "", CLUSTER, true, false)
+
 
 // END. DO NOT MODIFY.
 WAIT_EVENT_DEF(WAIT_EVENT_DEF_END, 99999, "event end", "", "", "", OTHER, false, true)

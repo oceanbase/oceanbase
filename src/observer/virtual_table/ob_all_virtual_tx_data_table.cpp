@@ -43,6 +43,7 @@ ObAllVirtualTxDataTable::~ObAllVirtualTxDataTable()
 void ObAllVirtualTxDataTable::reset()
 {
   // release tenant resources first
+  mgr_handle_.reset();
   omt::ObMultiTenantOperator::reset();
   addr_.reset();
   ObVirtualTableScannerIterator::reset();
@@ -51,6 +52,7 @@ void ObAllVirtualTxDataTable::reset()
 void ObAllVirtualTxDataTable::release_last_tenant()
 {
   // resources related with tenant must be released by this function
+  mgr_handle_.reset();
   ls_iter_guard_.reset();
 }
 

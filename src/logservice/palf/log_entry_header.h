@@ -58,11 +58,11 @@ public:
                "data_checksum", data_checksum_,
                "flag", flag_);
 public:
-  static constexpr int16_t MAGIC = 0x4C48;  // 'LH' means LOG ENTRY HEADER
+  static const int16_t MAGIC;  // 'LH' means LOG ENTRY HEADER
   static const int64_t HEADER_SER_SIZE;
   static const int64_t PADDING_LOG_ENTRY_SIZE;
 private:
-  bool get_header_parity_check_res_() const;
+  uint16_t calculate_header_checksum_() const;
   void update_header_checksum_();
   bool check_header_checksum_() const;
   bool is_padding_log_() const;
@@ -71,9 +71,17 @@ private:
                                const int64_t base_header_len,
                                const int64_t padding_data_len,
                                const share::SCN &scn);
+  int16_t get_version_() const;
+  int64_t get_padding_mask_() const;
+  int64_t get_header_checksum_mask_() const;
+  void reset_header_checksum_();
 private:
-  static constexpr int16_t LOG_ENTRY_HEADER_VERSION = 1;
-  static constexpr int64_t PADDING_TYPE_MASK = 1 << 1;
+  static const int16_t LOG_ENTRY_HEADER_VERSION;
+  static const int64_t PADDING_TYPE_MASK;
+  static const int16_t LOG_ENTRY_HEADER_VERSION2;
+  static const int64_t PADDING_TYPE_MASK_VERSION2;
+  static const int64_t CRC16_MASK;
+  static const int64_t PARITY_MASK;
 private:
   int16_t magic_;
   int16_t version_;
@@ -81,8 +89,15 @@ private:
   share::SCN scn_;
   int64_t data_checksum_;
   // The lowest bit is used for parity check.
-  int64_t flag_;
+  // LOG_ENTRY_HEADER_VERSION
+  // | sign bit | 61 unused bit | PADDING bit | PARITY CHECKSUM bit |
+  //
+  // LOG_ENTRY_HEADER_VERSION2
+  // | sign bit | PADDING bit | 46 unused bit | 16 crc16 bit |
+  mutable int64_t flag_;
 };
+
+int16_t xxhash_16(int16_t checksum, const uint8_t* data, const int64_t data_len);
 }
 }
 #endif // OCEANBASE_LOGSERVICE_LOG_ENTRY_HEADER_

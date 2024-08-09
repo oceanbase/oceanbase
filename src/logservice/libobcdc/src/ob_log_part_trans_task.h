@@ -1343,7 +1343,7 @@ private:
       const int64_t data_len);
 
   int check_dml_redo_node_ready_and_handle_();
-  int handle_unserved_trans_();
+  int handle_unserved_trans_(bool &can_be_reverted);
   void set_unserved_() { serve_state_ = UNSERVED; }
   bool is_data_ready() const { return ATOMIC_LOAD(&is_data_ready_); }
 

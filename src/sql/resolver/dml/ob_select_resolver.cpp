@@ -6422,8 +6422,10 @@ int ObSelectResolver::check_window_exprs()
             const ObObjType &order_res_type = order_items.at(0).expr_->get_data_type();
             if (bound_expr_arr[i] != NULL) {
               if (ob_is_numeric_type(bound_expr_arr[i]->get_data_type())
-                  || ob_is_string_tc(bound_expr_arr[i]->get_data_type())) {
-                if (!ob_is_numeric_type(order_res_type) && !ob_is_datetime_tc(order_res_type)) {
+                  || ob_is_string_tc(bound_expr_arr[i]->get_data_type())
+                  || ob_is_interval_tc(bound_expr_arr[i]->get_data_type())) {
+                if (!ob_is_numeric_type(order_res_type) && !ob_is_datetime_tc(order_res_type)
+                    && !ob_is_date_tc(order_res_type) && !ob_is_otimestampe_tc(order_res_type)) {
                   ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
                   LOG_WARN("invalid datatype in order by for range clause", K(ret), K(order_res_type));
                 }

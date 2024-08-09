@@ -41,6 +41,7 @@
 #include "storage/tablet/ob_tablet.h"
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "share/deadlock/ob_deadlock_detector_mgr.h"
+#include "sql/dblink/ob_tm_service.h"
 #include "sql/engine/cmd/ob_table_direct_insert_ctx.h"
 #include "storage/memtable/ob_lock_wait_mgr.h"
 
@@ -830,7 +831,7 @@ int ObSqlTransControl::stmt_setup_snapshot_(ObSQLSessionInfo *session,
                                                    first_ls_id,
                                                    stmt_expire_ts,
                                                    snapshot))) {
-      } else if (is_single_tablet) {
+      } else if (is_single_tablet && snapshot.snapshot_ls_role_ != ObRole::FOLLOWER) {
         // performance for single tablet scenario
         local_single_ls_plan = true;
       } else {
@@ -929,6 +930,13 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
     LOG_WARN("current stmt is not allowed executed on txn tmp node", K(ret), \
              K(session->get_txn_free_route_ctx()), KPC(session));       \
   }
+
+#define CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name)                            \
+  if (OB_SUCC(ret) && (sp_name == DBLINK_DEFAULT_SAVEPOINT || sp_name == PL_DBLINK_DEFAULT_SAVEPOINT)) { \
+    ret = OB_ERR_INVALID_CHARACTER_STRING;                              \
+    LOG_WARN("this savepoint name is not allowed", K(ret), K(sp_name));             \
+  }
+
 int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
                                         const ObString &sp_name,
                                         const bool user_create)
@@ -941,6 +949,25 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
   CHECK_TXN_FREE_ROUTE_ALLOWED();
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
+  // for dblink trans
+  // create savepoint before start stmt to avoid start stmt repeatly
+  if (OB_SUCC(ret) && session->is_in_transaction()) {
+    ObTxDesc *&tx_desc = session->get_tx_desc();
+    if (OB_ISNULL(tx_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(sp_name), KP(tx_desc));
+    } else {
+      // check in dblink trans
+      const transaction::ObXATransID xid = session->get_xid();
+      const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+      if (global_tx_type == transaction::ObGlobalTxType::DBLINK_TRANS) {
+        // only check savepoint name in dblink trans
+        CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name);
+        OZ (ObTMService::tm_create_savepoint(exec_ctx, sp_name));
+      }
+    }
+  }
+
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
   OZ (txs->create_explicit_savepoint(*session->get_tx_desc(), sp_name, get_real_session_id(*session), user_create), sp_name);
@@ -1072,6 +1099,7 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
   OX (stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session));
+
   bool start_hook = false;
   OZ(start_hook_if_need_(*session, txs, start_hook));
   OZ (txs->rollback_to_explicit_savepoint(*session->get_tx_desc(), sp_name, stmt_expire_ts, get_real_session_id(*session)), sp_name);
@@ -1085,6 +1113,24 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
       ret = COVER_SUCC(tmp_ret);
     }
   }
+  // for dblink trans
+  // rollback dblink remote savepoint after rollback savepoint in tx_desc
+  // to ensure savepoint 'first create last rollback'
+  if (OB_SUCC(ret) && session->is_in_transaction()) {
+    ObTxDesc *&tx_desc = session->get_tx_desc();
+    if (OB_ISNULL(tx_desc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected error", K(sp_name), KP(tx_desc));
+    } else {
+      // check in dblink trans
+      const transaction::ObXATransID xid = session->get_xid();
+      const transaction::ObGlobalTxType global_tx_type = tx_desc->get_global_tx_type(xid);
+      if (global_tx_type == transaction::ObGlobalTxType::DBLINK_TRANS) {
+        OZ (ObTMService::tm_rollback_to_savepoint(exec_ctx, sp_name));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -1165,7 +1211,9 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   bool is_plain_select = false;
   ObTxSEQ savepoint = das_ctx.get_savepoint();
   int exec_errcode = exec_ctx.get_errcode();
+
   int64_t tx_id = 0;
+  bool need_rollback = rollback;
 
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx));
   CK (OB_NOT_NULL(plan = plan_ctx->get_phy_plan()));
@@ -1173,20 +1221,37 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
   OX (stmt_type = plan->get_stmt_type());
   OX (is_plain_select = plan->is_plain_select());
   OZ (get_tx_service(session, txs), *session);
+
+  if (!is_plain_select) {
+    // NOTE: for plain select tx_desc may be NULL
+    // because the select may be a cursor open
+    // the cursor remain open even after transaction terminated
+    // and then the closed of cursor will call end_stmt
+    CK (OB_NOT_NULL(tx_desc));
+  }
+
   // plain select stmt don't require txn descriptor
   if (OB_SUCC(ret) && !is_plain_select) {
-    CK (OB_NOT_NULL(tx_desc));
     ObTransID tx_id_before_rollback;
     OX (tx_id_before_rollback = tx_desc->get_tx_id());
     tx_id = tx_id_before_rollback.get_id();
     OX (ObTransDeadlockDetectorAdapter::maintain_deadlock_info_when_end_stmt(exec_ctx, rollback));
+
+    // if stmt is dml, record its table_id set, used by cursor verify snapshot
+    if (OB_SUCC(ret) && !rollback && plan->is_dml_write_stmt()) {
+      const int64_t tenant_id = session->get_effective_tenant_id();
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (tenant_config.is_valid() && tenant_config->_enable_enhanced_cursor_validation) {
+        OZ (tx_desc->add_modified_tables(plan->get_dml_table_ids()), plan->get_dml_table_ids());
+      }
+    }
     ObTxExecResult &tx_result = session->get_trans_result();
-    if (OB_FAIL(ret)) {
-    } else if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_sessid()) tx_result.is_incomplete()) {
+    if (OB_E(EventTable::EN_TX_RESULT_INCOMPLETE, session->get_sessid()) tx_result.is_incomplete()) {
       if (!rollback) {
         LOG_ERROR("trans result incomplete, but rollback not issued");
       }
-      OZ (txs->abort_tx(*tx_desc, ObTxAbortCause::TX_RESULT_INCOMPLETE));
+      (void) txs->abort_tx(*tx_desc, ObTxAbortCause::TX_RESULT_INCOMPLETE);
+      // overwrite ret
       ret = OB_TRANS_NEED_ROLLBACK;
       LOG_WARN("trans result incomplete, trans aborted", K(ret));
     } else if (plan->get_enable_append()
@@ -1195,18 +1260,30 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
       if (!rollback) {
         LOG_ERROR("direct load failed, but rollback not issued");
       }
-      OZ (txs->abort_tx(*tx_desc, ObTxAbortCause::TX_RESULT_INCOMPLETE));
+      (void) txs->abort_tx(*tx_desc, ObTxAbortCause::TX_RESULT_INCOMPLETE);
+      // overwrite ret
       ret = OB_TRANS_NEED_ROLLBACK;
       LOG_WARN("direct load failed, trans aborted", KR(ret));
-    } else if (rollback) {
-      int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
-      const share::ObLSArray &touched_ls = tx_result.get_touched_ls();
-      OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls, exec_errcode),
-          savepoint, stmt_expire_ts, touched_ls);
-      // prioritize returning session error code
-      if (session->is_terminate(ret)) {
-        LOG_INFO("trans has terminated when end stmt", K(ret), K(tx_id_before_rollback));
+    } else {
+      int save_ret = OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        LOG_WARN("pre step failed, will do rollback stmt", K(ret));
+        need_rollback = true;
+        save_ret = ret;
+        ret = OB_SUCCESS;
       }
+      if (need_rollback) {
+        const int64_t stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session);
+        const share::ObLSArray &touched_ls = tx_result.get_touched_ls();
+        OZ (txs->rollback_to_implicit_savepoint(*tx_desc, savepoint, stmt_expire_ts, &touched_ls, exec_errcode),
+            savepoint, stmt_expire_ts, touched_ls);
+        // prioritize returning session error code
+        if (session->is_terminate(ret)) {
+          LOG_INFO("trans has terminated when end stmt", K(ret), K(tx_id_before_rollback));
+        }
+      }
+      // use first occurred error
+      ret = save_ret != OB_SUCCESS ? save_ret : ret;
     }
     // this may happend cause tx may implicit aborted
     // (for example: first write sql of implicit started trans meet lock conflict)
@@ -1243,7 +1320,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
 #ifndef NDEBUG
   print_log = true;
 #else
-  if (OB_FAIL(ret) || rollback) { print_log = true; }
+  if (OB_FAIL(ret) || need_rollback) { print_log = true; }
 #endif
   if (print_log
       && OB_NOT_NULL(session)
@@ -1257,6 +1334,7 @@ int ObSqlTransControl::end_stmt(ObExecContext &exec_ctx, const bool rollback)
              "tx_desc", PC(session->get_tx_desc()),
              "trans_result", session->get_trans_result(),
              K(rollback),
+             K(need_rollback),
              KPC(session),
              K(exec_ctx.get_errcode()));
   }

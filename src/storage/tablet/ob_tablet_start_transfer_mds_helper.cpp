@@ -284,7 +284,7 @@ int ObTabletStartTransferOutHelper::on_register_success_(
       ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::START_TRANSFER_OUT_FIRST_REPALY_LOG_TIMESTAMP,
       ret, start_ts, start_ts, false/*is_report*/);
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_start_transfer_out",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_start_transfer_out",
                    "stage", "on_register_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_start_transfer_out_info.src_ls_id_.id(),
@@ -689,7 +689,7 @@ int ObTabletStartTransferOutCommonHelper::on_replay_success_(
       ObStorageHACostItemType::FLUENT_TIMESTAMP_TYPE, ObStorageHACostItemName::START_TRANSFER_OUT_FIRST_REPALY_LOG_TIMESTAMP,
       ret, start_ts, start_ts, false/*is_report*/);
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_start_transfer_out",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_start_transfer_out",
                    "stage", "on_replay_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_start_transfer_out_info.src_ls_id_.id(),
@@ -1102,7 +1102,7 @@ int ObTabletStartTransferInHelper::on_register_success_(
     LOG_INFO("[TRANSFER] finish tx start transfer in on_register_success_", K(tx_start_transfer_in_info),
         "cost_ts", ObTimeUtil::current_time() - start_ts);
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_start_transfer_in",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_start_transfer_in",
                    "stage", "on_register_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_start_transfer_in_info.src_ls_id_.id(),
@@ -1881,7 +1881,7 @@ int ObTabletStartTransferInHelper::check_transfer_dest_ls_restore_status_(
     LOG_WARN("ls should not be NULL", KR(ret), K(ls_id), KP(ls));
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
-  } else if (restore_status.is_in_restore()) {
+  } else if (restore_status.is_in_restoring_or_failed()) {
     if(OB_FAIL(ls->get_ls_restore_handler()->get_consistent_scn(consistent_scn))) {
       LOG_WARN("failed to get consistent scn", K(ret));
     } else if (!consistent_scn.is_valid_and_not_min()) {

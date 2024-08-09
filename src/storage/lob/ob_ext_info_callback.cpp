@@ -281,15 +281,12 @@ int ObExtInfoCbRegister::register_cb(
   } else {
     transaction::ObTxSEQ seq_no_cur = seq_no_st_;
     ObString data;
-    ObSEArray<ObExtInfoCallback*, 1> cb_array;
     int cb_cnt = 0;
     while (OB_SUCC(ret) && OB_SUCC(get_data(data))) {
       storage::ObExtInfoCallback *cb = nullptr;
       if (OB_ISNULL(cb = mvcc_ctx_->alloc_ext_info_callback())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc row callback failed", K(ret));
-      } else if (OB_FAIL(cb_array.push_back(cb))) {
-        LOG_WARN("push back cb fail", K(ret), K(cb_array));
       } else {
         cb->set(tmp_allocator_, dml_flag, seq_no_cur, data);
         seq_no_cur = seq_no_cur + 1;
@@ -308,10 +305,6 @@ int ObExtInfoCbRegister::register_cb(
       ret = OB_SUCCESS;
     }
     if (OB_FAIL(ret)) {
-      for(int i = 0; i < cb_cnt; ++i) {
-        cb_array[i]->del();
-        mvcc_ctx_->free_ext_info_callback(cb_array[i]);
-      }
     } else if (OB_FALSE_IT(seq_no_cnt_ = cb_cnt)) {
     } else if (OB_FAIL(set_index_data(index_data))) {
       LOG_WARN("set_index_data fail", K(ret));

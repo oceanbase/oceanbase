@@ -129,6 +129,7 @@ protected:
 
   int check_contain_non_onetime_expr(const ObRawExpr *expr, bool &contain);
   int check_contain_non_onetime_expr(const ObIArray<ObRawExpr *> &exprs, bool &contain);
+  int get_online_estimate_percent(double &percent);
 private:
   int get_index_part_ids(const ObInsertTableInfo& table_info, const ObTableSchema *&data_table_schema, const ObTableSchema *&index_schema, ObIArray<uint64_t> &index_part_ids);
   int generate_osg_share_info(OSGShareInfo *&info);

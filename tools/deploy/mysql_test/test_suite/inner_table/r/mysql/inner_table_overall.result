@@ -742,6 +742,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12463	__all_virtual_column_privilege_history	2	201001	1
 12464	__all_virtual_tenant_snapshot_ls_replica_history	2	201001	1
 12466	ENABLED_ROLES	2	201002	1
+12468	__all_virtual_session_ps_info	2	201001	1
 12469	__all_virtual_tracepoint_info	2	201001	1
 12473	__all_virtual_compatibility_control	2	201001	1
 12474	__all_virtual_user_proxy_info	2	201001	1
@@ -768,6 +769,10 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 20014	ENGINES	1	201002	1
 20015	ROUTINES	1	201002	1
 20016	PROFILING	1	201002	1
+20020	INNODB_FT_BEING_DELETED	1	201002	1
+20021	INNODB_FT_CONFIG	1	201002	1
+20022	INNODB_FT_DELETED	1	201002	1
+20023	INNODB_FT_INDEX_CACHE	1	201002	1
 21000	GV$SESSION_EVENT	1	201001	1
 21001	GV$SESSION_WAIT	1	201001	1
 21002	GV$SESSION_WAIT_HISTORY	1	201001	1
@@ -1161,6 +1166,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21538	DBA_MVREF_CHANGE_STATS	1	201001	1
 21539	CDB_MVREF_STMT_STATS	1	201001	1
 21540	DBA_MVREF_STMT_STATS	1	201001	1
+21541	GV$OB_SESSION_PS_INFO	1	201001	1
+21542	V$OB_SESSION_PS_INFO	1	201001	1
 21543	GV$OB_TRACEPOINT_INFO	1	201001	1
 21544	V$OB_TRACEPOINT_INFO	1	201001	1
 21545	V$OB_COMPATIBILITY_CONTROL	1	201001	1
@@ -1191,6 +1198,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21586	GV$OB_NIC_INFO	1	201001	1
 21589	DBA_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
 21590	CDB_SCHEDULER_JOB_RUN_DETAILS	1	201001	1
+21603	INNODB_SYS_FIELDS	1	201002	1
+21604	INNODB_SYS_FOREIGN	1	201002	1
+21605	INNODB_SYS_FOREIGN_COLS	1	201002	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

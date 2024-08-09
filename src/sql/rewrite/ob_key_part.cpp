@@ -1276,7 +1276,7 @@ int ObKeyPart::formalize_keypart(bool contain_row)
     lib::ob_sort(in_keypart_->in_params_.begin(),
               in_keypart_->in_params_.end(),
               [] (const InParamMeta *e1, const InParamMeta *e2) {
-                return e1->pos_.offset_ <= e2->pos_.offset_;
+                return e1->pos_.offset_ < e2->pos_.offset_;
               });
     int64_t off = -1;
     in_keypart_->is_strict_in_ = true;

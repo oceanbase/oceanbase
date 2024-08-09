@@ -13,8 +13,10 @@
 #include "lib/mysqlclient/ob_mysql_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "lib/mysqlclient/ob_mysql_connection.h"
+#include "lib/utility/ob_print_utils.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/sys_package/ob_dbms_xa.h"
+#include "pl/ob_pl_stmt.h"
 #endif
 
 namespace oceanbase
@@ -39,6 +41,7 @@ void ObDBLinkClient::reset()
     impl_ = NULL;
   }
   tx_timeout_us_ = -1;
+  savepoint_array_.reset();
   dblink_statistics_ = NULL;
   is_inited_ = false;
 }
@@ -76,6 +79,7 @@ int ObDBLinkClient::init(const uint32_t index,
 // execute xa start for dblink client
 // 1. if START, return success directly
 // 2. if IDLE, execute xa start
+//    2.1 create dblink default savepoint
 // @param[in] xid
 int ObDBLinkClient::rm_xa_start(const ObXATransID &xid, const ObTxIsolationLevel isolation)
 {
@@ -116,6 +120,12 @@ int ObDBLinkClient::rm_xa_start(const ObXATransID &xid, const ObTxIsolationLevel
     } else {
       xid_ = xid;
       state_ = ObDBLinkClientState::START;
+    }
+    // create default savepoint when xa branch start
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(rm_create_savepoint_(common::ObString(DBLINK_DEFAULT_SAVEPOINT)))) {
+        TRANS_LOG(WARN, "fail to execute create dblink default savepoint", K(ret), K(xid), K(flag), KPC(this));
+      }
     }
     TRANS_LOG(INFO, "rm xa start for dblink", K(ret), K(xid), K(isolation), K(flag));
   }
@@ -366,6 +376,136 @@ int ObDBLinkClient::rm_xa_end_()
   return ret;
 }
 
+int ObDBLinkClient::rm_create_savepoint_(const ObString &savepoint_name)
+{
+  int ret = OB_SUCCESS;
+
+  // TODO::check client state
+  if (OB_ISNULL(impl_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "query impl not init", K(ret), KPC(this));
+  } else {
+#ifdef OB_BUILD_DBLINK
+    if (ObDBLinkClientState::START == state_) {
+      const ObString *sp_name = &savepoint_name;
+      if (savepoint_name == PL_IMPLICIT_SAVEPOINT) {
+        sp_name = &PL_DBLINK_DEFAULT_SAVEPOINT;
+      } else {
+        sp_name = &savepoint_name;
+      }
+      if (OB_FAIL(create_explicit_savepoint_(*sp_name))) {
+        TRANS_LOG(WARN, "fail to exec create savepoint statement",
+                  K(ret), KPC(this), K(sp_name), K(savepoint_name));
+      } else {
+        bool hit = false;
+        ARRAY_FOREACH_X(savepoint_array_, i, cnt, !hit) {
+          if (savepoint_array_.at(i) == *sp_name) {
+            hit = true;
+          }
+        }
+        if (!hit) {
+          if (OB_FAIL(savepoint_array_.push_back(*sp_name))) {
+            TRANS_LOG(WARN, "fail to push back savepoint into savepoint array",
+                      K(ret), KPC(this), KPC(sp_name), K(savepoint_name));
+          }
+        }
+      }
+      TRANS_LOG(INFO, "rm create savepoint", K(ret), KPC(this), KPC(sp_name), K(savepoint_name));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "fail to create savepoint, dblink client in unexpected state",
+                K(ret), KPC(this), K(savepoint_name));
+    }
+#else
+  ret = OB_NOT_SUPPORTED;
+  TRANS_LOG(WARN, "fail to create savepoint", K(ret));
+#endif
+  }
+
+  return ret;
+}
+
+int ObDBLinkClient::rm_rollback_savepoint_(const ObString &savepoint_name)
+{
+  int ret = OB_SUCCESS;
+
+  // TODO::check client state
+  if (OB_ISNULL(impl_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "query impl not init", K(ret), KPC(this));
+  } else {
+#ifdef OB_BUILD_DBLINK
+    if (ObDBLinkClientState::START == state_) {
+      if (savepoint_array_.count() <=0){
+        ret = OB_ERR_UNEXPECTED;
+        TRANS_LOG(WARN, "savepoint array should not empty", K(ret), KPC(this));
+      } else {
+        const ObString *sp_name = &savepoint_name;
+        if (savepoint_name == PL_IMPLICIT_SAVEPOINT) {
+          sp_name = &PL_DBLINK_DEFAULT_SAVEPOINT;
+        } else {
+          sp_name = &savepoint_name;
+        }
+
+        bool hit = false;
+        ARRAY_FOREACH_X(savepoint_array_, i, cnt, !hit) {
+          if (savepoint_array_.at(i) == *sp_name) {
+            hit = true;
+          }
+        }
+        if (!hit) {
+          if (OB_FAIL(rollback_to_explicit_savepoint_(DBLINK_DEFAULT_SAVEPOINT))) {
+            TRANS_LOG(WARN, "fail to rollback to rm base savepoint",
+                      K(ret), KPC(this), K(savepoint_name));
+          }
+        } else {
+          if (OB_FAIL(rollback_to_explicit_savepoint_(*sp_name))) {
+            TRANS_LOG(WARN, "fail to rollback to rm savepoint",
+                      K(ret), KPC(this), K(savepoint_name));
+          }
+        }
+        TRANS_LOG(INFO, "rm rollback to savepoint", K(ret), KPC(this), KPC(sp_name), K(savepoint_name));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(WARN, "fail to rollback savepoint, dblink client in unexpected state",
+                K(ret), KPC(this), K(savepoint_name));
+    }
+#else
+  ret = OB_NOT_SUPPORTED;
+  TRANS_LOG(WARN, "fail to rollback savepoint", K(ret));
+#endif
+  }
+
+  return ret;
+}
+
+int ObDBLinkClient::rm_create_savepoint(const ObString &savepoint_name)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+
+  if (OB_FAIL(rm_create_savepoint_(savepoint_name))) {
+    TRANS_LOG(WARN, "fail to create savepoint",
+          K(ret), KPC(this), K(savepoint_name));
+  }
+
+  return ret;
+}
+
+int ObDBLinkClient::rm_rollback_savepoint(const ObString &savepoint_name)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(lock_);
+
+  if (OB_FAIL(rm_rollback_savepoint_(savepoint_name))) {
+    TRANS_LOG(WARN, "fail to rollback savepoint",
+              K(ret), KPC(this), K(savepoint_name));
+  }
+
+  return ret;
+}
+
 bool ObDBLinkClient::is_started(const ObXATransID &xid)
 {
   // TODO, check xid
@@ -443,6 +583,48 @@ int ObDBLinkClient::init_query_impl_(const ObTxIsolationLevel isolation)
       TRANS_LOG(WARN, "unexpected dblink type", K(ret), K(*this));
     }
   }
+  return ret;
+}
+
+#define CREATE_SAVEPOINT_SQL "savepoint %.*s"
+int ObDBLinkClient::create_explicit_savepoint_(const ObString &savepoint_name)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(dblink_conn_)) {
+    ObSqlString sql;
+    const uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    int64_t affect_rows = 0;
+    if (OB_FAIL(sql.assign_fmt(CREATE_SAVEPOINT_SQL,
+                               savepoint_name.length(), savepoint_name.ptr()))) {
+      TRANS_LOG(WARN,"fail to assign sql", K(ret), K(sql));
+    } else if (OB_FAIL(dblink_conn_->execute_write(tenant_id, sql.ptr(), affect_rows))) {
+      TRANS_LOG(WARN,"fail to exec create savepoint sql", K(ret), K(sql), K(savepoint_name));
+    }
+    TRANS_LOG(DEBUG, "dblink client create savepoint", K(ret), K(savepoint_name));
+  }
+
+  return ret;
+}
+
+#define ROLLBACK_SAVEPOINT_SQL "rollback to %.*s"
+int ObDBLinkClient::rollback_to_explicit_savepoint_(const ObString &savepoint_name)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(dblink_conn_)) {
+    ObSqlString sql;
+    const uint64_t tenant_id = OB_INVALID_TENANT_ID;
+    int64_t affect_rows = 0;
+    if (OB_FAIL(sql.assign_fmt(ROLLBACK_SAVEPOINT_SQL,
+                               savepoint_name.length(), savepoint_name.ptr()))) {
+      TRANS_LOG(WARN,"fail to assign sql", K(ret), K(sql));
+    } else if (OB_FAIL(dblink_conn_->execute_write(tenant_id, sql.ptr(), affect_rows))) {
+      TRANS_LOG(WARN,"fail to exec rollback savepoint sql", K(ret), K(sql), K(savepoint_name));
+    }
+    TRANS_LOG(DEBUG, "dblink client rollback savepoint", K(ret), K(savepoint_name));
+  }
+
   return ret;
 }
 

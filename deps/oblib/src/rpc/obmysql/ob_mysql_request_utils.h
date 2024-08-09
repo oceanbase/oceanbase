@@ -53,15 +53,13 @@ public:
     READ_BODY,
     READ_COMPLETE
   };
-   ObMysqlPktContext() : arena_("LibMultiPackets") { reset(); }
-   ~ObMysqlPktContext() {}
-  void reset()
+
+  void reset_parameter()
   {
     static_assert(common::OB_MYSQL_HEADER_LENGTH == 4, "OB_MYSQL_HEADER_LENGTH != 4");
     *reinterpret_cast<uint32_t *>(header_buf_) = 0;
     header_buffered_len_ = 0;
     payload_buf_alloc_len_ = 0;
-    payload_buf_ = NULL;
     payload_buffered_len_ = 0;
     payload_buffered_total_len_ = 0;
     payload_len_ = 0;
@@ -71,7 +69,30 @@ public:
     raw_pkt_.reset();
     is_multi_pkt_ = false;
     is_auth_switch_ = false;
-    arena_.reset(); //fast free memory
+  }
+
+  ObMysqlPktContext()
+  {
+    reset_parameter();
+    payload_buf_ = NULL;
+    tenant_id_ = OB_INVALID_TENANT_ID;
+  }
+
+  ~ObMysqlPktContext()
+  {
+    if (NULL != payload_buf_) {
+      ob_free(payload_buf_);
+    }
+    payload_buf_ = NULL;
+  }
+
+  void reset()
+  {
+    reset_parameter();
+    if (NULL != payload_buf_) {
+      ob_free(payload_buf_);
+    }
+    payload_buf_ = NULL;
   }
 
   int save_fragment_mysql_packet(const char *start, const int64_t len);
@@ -93,7 +114,7 @@ public:
   TO_STRING_KV(K_(header_buffered_len), K_(payload_buffered_len), K_(payload_buffered_total_len),
                K_(last_pkt_seq), K_(payload_len), K_(curr_pkt_seq), K_(payload_buf_alloc_len),
                "next_read_step", get_read_step_str(next_read_step_), K_(raw_pkt),
-               "used", arena_.used(), "total", arena_.total(), K_(is_multi_pkt), K_(is_auth_switch));
+               "total_alloc_size", payload_buf_alloc_len_, K_(is_multi_pkt), K_(is_auth_switch));
 
 public:
   char header_buf_[common::OB_MYSQL_HEADER_LENGTH];
@@ -108,10 +129,14 @@ public:
   ObMysqlPktReadStep next_read_step_;
   ObMySQLRawPacket raw_pkt_;
   bool is_multi_pkt_;
-  common::ObArenaAllocator arena_;
   bool is_auth_switch_;
+  void set_tenant_id(uint64_t tenant_id)
+  {
+    tenant_id_ = tenant_id;
+  }
 
 private:
+  uint64_t tenant_id_;
   DISALLOW_COPY_AND_ASSIGN(ObMysqlPktContext);
 };
 
@@ -173,8 +198,13 @@ public:
   uint8_t proto20_last_pkt_seq_;
   Ob20ExtraInfo extra_info_;
   common::ObArenaAllocator arena_;
-
+  void set_tenant_id(uint64_t tenant_id)
+  {
+    tenant_id_ = tenant_id;
+    arena_.set_tenant_id(tenant_id_);
+  }
 private:
+  uint64_t tenant_id_;
   DISALLOW_COPY_AND_ASSIGN(ObProto20PktContext);
 };
 

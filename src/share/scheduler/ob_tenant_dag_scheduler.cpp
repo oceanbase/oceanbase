@@ -526,7 +526,6 @@ void ObIDag::clear_task_list()
 
 void ObIDag::clear_running_info()
 {
-  add_time_ = 0;
   start_time_ = 0;
   consumer_group_id_ = USER_RESOURCE_OTHER_GROUP_ID;
   running_task_cnt_ = 0;
@@ -577,7 +576,7 @@ int ObIDag::add_task(ObITask &task)
 // Dag_B(child: Dag_E/Dag_F) will deep copy previous children of Dag_A, and join in the dag_net which contains Dag_A
 
 // ATTENTION!!! for same priority dag, cuold move child_dag from waiting_list to ready list when parent finish
-int ObIDag::add_child(ObIDag &child)
+int ObIDag::add_child(ObIDag &child, const bool check_child_dag_status/* = true*/)
 {
   int ret = OB_SUCCESS;
   ObMutexGuard guard(lock_);
@@ -587,7 +586,9 @@ int ObIDag::add_child(ObIDag &child)
   } else if (this == &child) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "can not add self loop", K(ret));
-  } else if (OB_UNLIKELY(DAG_STATUS_INITING != child.get_dag_status())) {
+  // DAG_STATUS_INITING means child have not added into scheduler, which promise child can't be scheduled before this action
+  // but can skip checking status if promise child will not be scheduled(like ObCOMergeFinishDag)
+  } else if (check_child_dag_status && OB_UNLIKELY(DAG_STATUS_INITING != child.get_dag_status())) {
     ret = OB_ERR_UNEXPECTED;
     COMMON_LOG(WARN, "dag status is not valid", K(ret), K(child));
   } else if (OB_NOT_NULL(dag_net_)) {
@@ -846,7 +847,6 @@ int ObIDag::gene_warning_info(ObDagWarningInfo &info, ObIAllocator &allocator)
   info.gmt_modified_ = ObTimeUtility::fast_current_time();
   info.location_ = error_location_;
   info.dag_type_ = type_;
-  info.tenant_id_ = MTL_ID();
   info.priority_ = static_cast<uint32_t>(ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH);
   info.gmt_create_ = info.gmt_modified_;
   info.dag_status_ = ObDagWarningInfo::ODS_WARNING;
@@ -1755,7 +1755,11 @@ void ObTenantDagWorker::run1()
       }
 
       if (OB_SUCC(ret)) {
-        ObCurTraceId::set(dag->get_dag_id());
+        ObDagId dag_id = dag->get_dag_id();
+        if (task_->get_sub_task_id() > 0) {
+          dag_id.set_sub_id(task_->get_sub_task_id());
+        }
+        ObCurTraceId::set(dag_id);
         lib::set_thread_name(dag->get_dag_type_str(dag->get_type()));
         if (OB_UNLIKELY(lib::Worker::CompatMode::INVALID == (compat_mode = dag->get_compat_mode()))) {
           ret = OB_ERR_UNEXPECTED;
@@ -1766,6 +1770,11 @@ void ObTenantDagWorker::run1()
           THIS_WORKER.set_module_type(type);
 #endif
           THIS_WORKER.set_compatibility_mode(compat_mode);
+          if (is_compaction_dag(dag->get_type())) {
+            THIS_WORKER.set_log_reduction_mode(LogReductionMode::REFINED);
+          } else {
+            THIS_WORKER.set_log_reduction_mode(LogReductionMode::NONE);
+          }
           if (OB_FAIL(set_dag_resource(dag->get_consumer_group_id()))) {
             LOG_WARN("isolate dag CPU and IOPS failed", K(ret));
           } else if (OB_FAIL(task_->do_work())) {

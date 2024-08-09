@@ -40,6 +40,19 @@ const char *const duplicate_scope_strings[] =
   "cluster"
 };
 
+enum class ObDuplicateReadConsistency : int64_t
+{
+  STRONG = 0,
+  WEAK,
+  MAX,
+};
+
+const char *const duplicate_read_consistency_strings[] =
+{
+  "STRONG",
+  "WEAK"
+};
+
 class ObDuplicateScopeChecker
 {
 public:

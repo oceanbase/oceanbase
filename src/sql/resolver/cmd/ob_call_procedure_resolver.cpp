@@ -38,7 +38,7 @@ int ObCallProcedureResolver::check_param_expr_legal(ObRawExpr *param)
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "subqueries or stored function calls here");
     } else if (T_FUN_SYS_PL_SEQ_NEXT_VALUE == param->get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ORA-06576 : not a valid function or procedure name");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "OBE-06576 : not a valid function or procedure name");
     } /* else if (T_OP_GET_PACKAGE_VAR == param->get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "PLS-221: not procedure or not defined!");
@@ -566,7 +566,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       stmt->set_dblink_routine_info(proc_info);
       if (proc_info->is_function()) {
         ret = OB_ERR_NOT_VALID_ROUTINE_NAME;
-        LOG_WARN("ORA-06576: not a valid function or procedure name", K(ret), KPC(proc_info));
+        LOG_WARN("OBE-06576: not a valid function or procedure name", K(ret), KPC(proc_info));
       }
     }
     // Step 4: cg raw expr

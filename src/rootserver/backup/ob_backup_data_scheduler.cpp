@@ -26,7 +26,7 @@
 #include "share/ob_tenant_info_proxy.h"
 #include "share/backup/ob_backup_connectivity.h"
 #include "rootserver/ob_rs_event_history_table_operator.h"
-
+#include "rootserver/restore/ob_restore_util.h"
 
 namespace oceanbase
 {
@@ -185,8 +185,7 @@ int ObBackupDataScheduler::build_task_(
   int ret = OB_SUCCESS;
   switch (ls_task.task_type_.type_)
   {
-  case ObBackupDataTaskType::Type::BACKUP_DATA_MINOR:
-  case ObBackupDataTaskType::Type::BACKUP_DATA_MAJOR: {
+  case ObBackupDataTaskType::Type::BACKUP_USER_DATA: {
     HEAP_VAR(ObBackupDataLSTask, tmp_task) {
       if (OB_FAIL(do_build_task_(job, set_task_attr, ls_task, allocator, tmp_task, task))) {
         LOG_WARN("[DATA_BACKUP]failed to do build task", K(ret), K(job), K(ls_task));
@@ -227,6 +226,14 @@ int ObBackupDataScheduler::build_task_(
     }
     break;
   }
+  case ObBackupDataTaskType::Type::BACKUP_FUSE_TABLET_META: {
+    HEAP_VAR(ObBackupDataFuseTabletMetaTask, tmp_task) {
+      if (OB_FAIL(do_build_task_(job, set_task_attr, ls_task, allocator, tmp_task, task))) {
+        LOG_WARN("[DATA_BACKUP]failed to do build task", K(ret), K(job), K(ls_task));
+      }
+    }
+    break;
+  }
   default:
     break;
   }
@@ -243,15 +250,9 @@ int ObBackupDataScheduler::do_build_task_(
     ObBackupScheduleTask *&task)
 {
   int ret = OB_SUCCESS;
-  int64_t task_deep_copy_size = 0;
-  void *raw_ptr = nullptr;
   if (OB_FAIL(tmp_task.build(job, set_task_attr, ls_task))) {
     LOG_WARN("[DATA_BACKUP]failed to build task", K(ret), K(job), K(ls_task));
-  } else if (FALSE_IT(task_deep_copy_size = tmp_task.get_deep_copy_size())) {
-  } else if (nullptr == (raw_ptr = allocator.alloc(task_deep_copy_size))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("[DATA_BACKUP]fail to allocate task", K(ret));
-  } else if (OB_FAIL(tmp_task.clone(raw_ptr, task))) {
+  } else if (OB_FAIL(tmp_task.clone(allocator, task))) {
     LOG_WARN("[DATA_BACKUP]fail to clone input task", K(ret));
   } else if (nullptr == task) {
     ret = OB_ERR_UNEXPECTED;
@@ -563,6 +564,7 @@ int ObBackupDataScheduler::start_tenant_backup_data_(const ObBackupJobAttr &job_
   ObBackupJobAttr new_job_attr;
   ObBackupPathString backup_path;
   bool is_doing = true;
+
   if (!job_attr.is_tmplate_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[DATA_BACKUP]invalid tmplate job", K(ret), K(job_attr));
@@ -709,7 +711,7 @@ int ObBackupDataScheduler::check_tenant_status(
   is_valid = false;
   ObSchemaGetterGuard schema_guard;
   const ObSimpleTenantSchema *tenant_schema = nullptr;
-
+  bool tenant_is_remote = false;
   if (OB_FAIL(schema_service.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
     LOG_WARN("[DATA_BACKUP]failed to check if tenant has been dropped", K(ret), K(tenant_id));
   } else if (is_dropped) {
@@ -722,8 +724,6 @@ int ObBackupDataScheduler::check_tenant_status(
   } else if (OB_ISNULL(tenant_schema)) {
     is_valid = false;
     LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), K(tenant_id));
-  } else if (tenant_schema->is_normal()) {
-    is_valid = true;
   } else if (tenant_schema->is_creating()) {
     is_valid = false;
     LOG_WARN("[DATA_BACKUP]tenant is creating, can't not backup now", K(tenant_id));
@@ -736,6 +736,16 @@ int ObBackupDataScheduler::check_tenant_status(
   } else if (tenant_schema->is_in_recyclebin()) {
     is_valid = false;
     LOG_WARN("[DATA_BACKUP]tenant is in recyclebin, can't not backup now", K(tenant_id));
+  } else if (tenant_schema->is_normal()) {
+    if (OB_FAIL(ObRestoreUtil::check_tenant_is_in_remote_restore_data_mode(
+                     *GCTX.sql_proxy_, tenant_id, tenant_is_remote))) {
+      LOG_WARN("fail to check tenant is in remote restore data mode", K(ret), K(tenant_id));
+    } else if (tenant_is_remote) {
+      is_valid = false;
+      LOG_WARN("[DATA_BACKUP]tenant is in remote restore mode, can not backup now", K(tenant_id));
+    } else {
+      is_valid = true;
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[DATA_BACKUP]unknown tenant status", K(tenant_id), K(tenant_schema));
@@ -807,7 +817,7 @@ int ObBackupDataScheduler::update_backup_type_if_need_(common::ObISQLClient &tra
   } else if (OB_FAIL(ObShareUtil::fetch_current_data_version(trans, tenant_id, data_version))) {
     LOG_WARN("failed to get data version", K(ret), K(tenant_id));
   } else if (data_version != pre_backup_set_desc.tenant_compatible_) {
-    ret = OB_BACKUP_CAN_NOT_START;
+    backup_type.type_ = ObBackupType::BackupType::FULL_BACKUP;
     int tmp_ret = OB_SUCCESS;
     const int64_t USER_ERROR_MSG_LEN = 128;
     char pre_compatible_buf[OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH] = "";
@@ -818,15 +828,19 @@ int ObBackupDataScheduler::update_backup_type_if_need_(common::ObISQLClient &tra
     pos = ObClusterVersion::get_instance().print_version_str(
         cur_compatible_buf, OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH, data_version);
     if (OB_TMP_FAIL(databuff_printf(user_error_msg_buf, USER_ERROR_MSG_LEN,
-        "cross compatible incremental backup is not supported, "
+        "cross compatible incremental backup is not supported, convert to full backup "
         "previous backup set compatible is %.*s, current compatible is %.*s",
         static_cast<int>(OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH), pre_compatible_buf,
         static_cast<int>(OB_INNER_TABLE_BACKUP_TASK_CLUSTER_FORMAT_LENGTH), cur_compatible_buf))) {
       LOG_WARN("failed to databuff printf", K(ret), K(tmp_ret));
     }
-    LOG_USER_ERROR(OB_BACKUP_CAN_NOT_START, user_error_msg_buf);
-    LOG_WARN("pre backup set's tenant compatible does not match, backup can't start",
-        K(ret), K(tenant_id), K(data_version), K(pre_backup_set_desc));
+    ROOTSERVICE_EVENT_ADD("backup_data", "compatible_not_match",
+                          "tenant_id", tenant_id,
+                          "backup_set_id", backup_set_id,
+                          "curr_data_version", pre_compatible_buf,
+                          "prev_data_version", cur_compatible_buf);
+    LOG_WARN("pre backup set's tenant compatible does not match, convert to full backup",
+         K(ret), K(tenant_id), K(data_version), K(pre_backup_set_desc));
   } 
   return ret;
 }
@@ -1556,7 +1570,7 @@ int ObUserTenantBackupJobMgr::fill_backup_set_desc_(
     backup_set_desc.start_replay_scn_ = SCN::min_scn();
     backup_set_desc.consistent_scn_ = SCN::min_scn();
     backup_set_desc.min_restore_scn_ = SCN::min_scn();
-    backup_set_desc.backup_compatible_ = ObBackupSetFileDesc::Compatible::COMPATIBLE_VERSION_3;
+    backup_set_desc.backup_compatible_ = ObBackupSetFileDesc::Compatible::COMPATIBLE_VERSION_4;
     backup_set_desc.tenant_compatible_ = data_version;
     backup_set_desc.cluster_version_ = cluster_version;
     backup_set_desc.plus_archivelog_ = job_attr.plus_archivelog_;

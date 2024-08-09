@@ -148,13 +148,8 @@ int ObBackupTaskSchedulerQueue::push_task(const ObBackupScheduleTask &task)
   } else if (OB_FAIL(check_push_unique_task_(task))) {
     LOG_WARN("fail to check unique task", K(ret), K(task));
   } else {
-    void *raw_ptr = nullptr;
     ObBackupScheduleTask *new_task = nullptr;
-    const int64_t task_deep_copy_size = task.get_deep_copy_size();
-    if (nullptr == (raw_ptr = (task_allocator_.alloc(task_deep_copy_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("fail to allocate task", K(ret), K(task_deep_copy_size));
-    } else if (OB_FAIL(task.clone(raw_ptr, new_task))) {
+    if (OB_FAIL(task.clone(task_allocator_, new_task))) {
       LOG_WARN("fail to clone new task", K(ret), K(task));
     } else if (OB_UNLIKELY(nullptr == new_task)) {
       ret = OB_ERR_UNEXPECTED;
@@ -199,10 +194,6 @@ int ObBackupTaskSchedulerQueue::push_task(const ObBackupScheduleTask &task)
           new_task->~ObBackupScheduleTask();
           new_task = nullptr;
         } 
-        if (nullptr != raw_ptr) {
-          task_allocator_.free(raw_ptr);
-          raw_ptr = nullptr;
-        }
       }
     }
   }
@@ -344,12 +335,7 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, com
 
     if (OB_FAIL(ret) || OB_ISNULL(task)) {
     } else {
-      void *raw_ptr = nullptr;
-      const int64_t task_deep_copy_size = task->get_deep_copy_size();
-      if (OB_ISNULL(raw_ptr = allocator.alloc(task_deep_copy_size))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate task", K(ret));
-      } else if (OB_FAIL(task->clone(raw_ptr, output_task))) {
+      if (OB_FAIL(task->clone(allocator, output_task))) {
         LOG_WARN("fail to clone input task", K(ret));
       } else if (OB_ISNULL(output_task)) {
         ret = OB_ERR_UNEXPECTED;
@@ -357,7 +343,6 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, com
       } else {
         task->set_executor_time(ObTimeUtility::current_time());
       }
-      raw_ptr = nullptr;
     }
   }
   return ret;
@@ -935,12 +920,8 @@ int ObBackupTaskSchedulerQueue::get_all_tasks(
   } else {
     ObMutexGuard guard(mutex_);
     DLIST_FOREACH_X(t, schedule_list_, OB_SUCC(ret)) {
-      void *raw_ptr = nullptr;
       ObBackupScheduleTask *task = nullptr;
-      if (nullptr == (raw_ptr = allocator.alloc(t->get_deep_copy_size()))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate task", K(ret));
-      } else if (OB_FAIL(t->clone(raw_ptr, task))) {
+      if (OB_FAIL(t->clone(allocator, task))) {
         LOG_WARN("fail to clone input task", K(ret));
       } else if (nullptr == task) {
         ret = OB_ERR_UNEXPECTED;
@@ -950,12 +931,8 @@ int ObBackupTaskSchedulerQueue::get_all_tasks(
       }
     }
     DLIST_FOREACH_X(t, wait_list_, OB_SUCC(ret)) {
-      void *raw_ptr = nullptr;
       ObBackupScheduleTask *task = nullptr;
-      if (nullptr == (raw_ptr = allocator.alloc(t->get_deep_copy_size()))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate task", K(ret));
-      } else if (OB_FAIL(t->clone(raw_ptr, task))) {
+      if (OB_FAIL(t->clone(allocator, task))) {
         LOG_WARN("fail to clone input task", K(ret));
       } else if (nullptr == task) {
         ret = OB_ERR_UNEXPECTED;
@@ -1095,12 +1072,8 @@ int ObBackupTaskSchedulerQueue::get_schedule_tasks(
   } else {
     ObMutexGuard guard(mutex_);
     DLIST_FOREACH_X(t, schedule_list_, OB_SUCC(ret)) {
-      void *raw_ptr = nullptr;
       ObBackupScheduleTask * task = nullptr;
-      if (nullptr == (raw_ptr = allocator.alloc(t->get_deep_copy_size()))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate task", K(ret));
-      } else if (OB_FAIL(t->clone(raw_ptr, task))) {
+      if (OB_FAIL(t->clone(allocator, task))) {
         LOG_WARN("fail to clone input task", K(ret));
       } else if (nullptr == task) {
         ret = OB_ERR_UNEXPECTED;

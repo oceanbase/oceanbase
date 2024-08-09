@@ -521,6 +521,8 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
   } else if (!any_all_to_aggr && (IS_SUBQUERY_COMPARISON_OP(parent_expr.get_expr_type()) &&
              (parent_expr.has_flag(IS_WITH_ANY) || parent_expr.has_flag(IS_WITH_ALL)))) {
     is_valid = false;
+  } else if (!exists_to_aggr && is_exists_op(parent_expr.get_expr_type())) {
+    is_valid = false;
   } else if (subquery->has_rollup() ||
              subquery->has_having() ||
              NULL != subquery->get_limit_percent_expr() ||
@@ -823,10 +825,9 @@ int ObTransformAggrSubquery::check_subquery_conditions(ObQueryRefRawExpr &query_
         OPT_TRACE("subquery`s condition has subquery");
       } else if (cond->is_const_expr()) {
         // filter of upper stmt
-        uint64_t opt_version = subquery.get_query_ctx()->optimizer_features_enable_version_;
-        if ((opt_version >= COMPAT_VERSION_4_2_1_BP8 && opt_version < COMPAT_VERSION_4_2_2) ||
-            (opt_version >= COMPAT_VERSION_4_2_4 && opt_version < COMPAT_VERSION_4_3_0) ||
-            opt_version >= COMPAT_VERSION_4_3_2) {
+        if (subquery.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_1_BP8, COMPAT_VERSION_4_2_2,
+                                                               COMPAT_VERSION_4_2_4, COMPAT_VERSION_4_3_0,
+                                                               COMPAT_VERSION_4_3_2)) {
           if (OB_FAIL(upper_filters.push_back(cond))) {
             LOG_WARN("failed to add upper filter", K(ret));
           }

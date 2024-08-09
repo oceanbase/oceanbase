@@ -88,6 +88,7 @@ private:
     uint64_t out_pos = 0;
 
     codec.set_uint_bytes(sizeof(T));
+    codec.set_pfor_packing_type(ctx_->meta_.get_pfor_packing_type());
 
     const char *in = reinterpret_cast<const char *>(in_arr);
     uint64_t in_len = arr_count * sizeof(T);

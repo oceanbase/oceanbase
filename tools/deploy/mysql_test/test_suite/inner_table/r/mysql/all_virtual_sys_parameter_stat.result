@@ -89,6 +89,7 @@ enable_global_background_resource_isolation
 enable_kv_ttl
 enable_major_freeze
 enable_monotonic_weak_read
+enable_ob_error_msg_style
 enable_ob_ratelimit
 enable_perf_event
 enable_rebalance
@@ -304,6 +305,7 @@ _enable_dbms_lob_partial_update
 _enable_decimal_int_type
 _enable_defensive_check
 _enable_easy_keepalive
+_enable_enhanced_cursor_validation
 _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
@@ -339,6 +341,7 @@ _enable_trace_tablet_leak
 _enable_transaction_internal_routing
 _enable_values_table_folding
 _enable_var_assign_use_das
+_enable_wait_remote_lock
 _endpoint_tenant_mapping
 _faststack_min_interval
 _faststack_req_queue_size_threshold
@@ -425,6 +428,7 @@ _px_max_message_pool_pct
 _px_max_pipeline_depth
 _px_message_compression
 _px_object_sampling
+_query_record_size_limit
 _rebuild_replica_log_lag_threshold
 _recyclebin_object_purge_frequency
 _resource_limit_max_session_num

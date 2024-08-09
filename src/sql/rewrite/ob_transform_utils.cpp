@@ -11105,12 +11105,16 @@ int ObTransformUtils::check_project_pruning_validity(ObSelectStmt &stmt, bool &i
   int ret = OB_SUCCESS;
   is_valid = false;
   bool is_const = false;
+  bool has_assign = true;
   if (stmt.has_distinct() || stmt.is_recursive_union() ||
       (stmt.is_set_stmt() && stmt.is_set_distinct()) ||
-      stmt.is_hierarchical_query() || stmt.is_contains_assignment() ||
-      stmt.is_values_table_query()) {
+      stmt.is_hierarchical_query() || stmt.is_values_table_query()) {
     // do nothing
     OPT_TRACE("stmt has distinct/assignment or is set stmt");
+  } else if (OB_FAIL(ObTransformUtils::check_has_assignment(stmt, has_assign))) {
+    LOG_WARN("check has assign failed", K(ret));
+  } else if (has_assign) {
+    //do nothing
   } else if (stmt.get_select_item_size() == 1
              && OB_FAIL(check_select_expr_is_const(&stmt, stmt.get_select_item(0).expr_, is_const))) {
     LOG_WARN("failed to check is const expr", K(ret));
@@ -12762,8 +12766,7 @@ int ObTransformUtils::get_sorted_table_hint(ObSEArray<TableItem *, 4> &tables,
     if (OB_ISNULL(table)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(table_hints.push_back(
-               ObTableInHint(table->qb_name_, table->database_name_, table->get_object_name())))) {
+    } else if (OB_FAIL(table_hints.push_back(ObTableInHint(*table)))) {
       LOG_WARN("failed to push back hint table", K(ret));
     }
   }

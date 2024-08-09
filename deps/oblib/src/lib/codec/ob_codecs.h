@@ -83,6 +83,12 @@ namespace common
 class ObCodec
 {
 public:
+  enum PFoRPackingType : uint8_t
+  {
+    CPU_ARCH_DEPENDANT = 0,           // before 4.3.3, cpu support AVX2 instruction set will generate different format
+    CPU_ARCH_INDEPENDANT_SCALAR = 1,  // after 4.3.3, use unified scalar format
+    // CPU_ARCH_INDEPENDANT_SIMD = 2,
+  };
   // get buf size which will be used to hold output data of current codec,
   // in order to make enough buf, this value is estimated to be very large.
   static OB_INLINE int64_t get_default_max_encoding_size(const int64_t orig_size)
@@ -99,7 +105,7 @@ public:
   }
 
   ObCodec()
-    : uint_bytes_(0), check_out_buf_(true), allocator_(nullptr)
+    : uint_bytes_(0), check_out_buf_(true), pfor_packing_type_(CPU_ARCH_INDEPENDANT_SCALAR), allocator_(nullptr)
   {}
 
   virtual ~ObCodec() {}
@@ -177,6 +183,11 @@ public:
 
   virtual void set_uint_bytes(const uint8_t uint_bytes) { uint_bytes_ = uint_bytes; }
   OB_INLINE uint32_t get_uint_bytes() const { return uint_bytes_; };
+  virtual void set_pfor_packing_type(const PFoRPackingType pfor_packing_type)
+  {
+    pfor_packing_type_ = pfor_packing_type;
+  }
+  OB_INLINE PFoRPackingType get_pfor_packing_type() { return pfor_packing_type_; }
 
   virtual void set_allocator(common::ObIAllocator &allocator) { allocator_ = &allocator; }
   OB_INLINE void disable_check_out_buf() { check_out_buf_ = false; }
@@ -186,6 +197,7 @@ public:
 protected:
   uint8_t uint_bytes_; // orig uint bytes width, maybe 1, 2, 4, 8 bytes
   bool check_out_buf_;
+  PFoRPackingType pfor_packing_type_; // pfor bit-packing format type
   common::ObIAllocator *allocator_;
 };
 

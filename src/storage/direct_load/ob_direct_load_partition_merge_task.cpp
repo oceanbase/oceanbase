@@ -19,6 +19,7 @@
 #include "storage/direct_load/ob_direct_load_origin_table.h"
 #include "storage/direct_load/ob_direct_load_conflict_check.h"
 #include "storage/direct_load/ob_direct_load_data_insert.h"
+#include "storage/direct_load/ob_direct_load_compare.h"
 
 namespace oceanbase
 {
@@ -85,9 +86,10 @@ int ObDirectLoadPartitionMergeTask::process()
     const ObTabletID &tablet_id = merge_ctx_->get_tablet_id();
     ObIStoreRowIterator *row_iter = nullptr;
     ObMacroDataSeq block_start_seq;
-    block_start_seq.set_parallel_degree(parallel_idx_);
-    if (OB_FAIL(
-          merge_param_->insert_table_ctx_->get_tablet_context(tablet_id, insert_tablet_ctx_))) {
+    if (OB_FAIL(block_start_seq.set_parallel_degree(parallel_idx_))) {
+      LOG_WARN("fail to set parallel degree", KR(ret), K(parallel_idx_));
+    } else if (OB_FAIL(merge_param_->insert_table_ctx_->get_tablet_context(tablet_id,
+                                                                           insert_tablet_ctx_))) {
       LOG_WARN("fail to get tablet context ", KR(ret), K(tablet_id), K(block_start_seq));
     } else if (insert_tablet_ctx_->get_online_opt_stat_gather() &&
                OB_FAIL(merge_param_->insert_table_ctx_->get_sql_statistics(sql_statistics_))) {
@@ -114,6 +116,12 @@ int ObDirectLoadPartitionMergeTask::process()
         insert_tablet_ctx_->inc_row_count(affected_rows_);
       }
       LOG_INFO("add sstable slice end", KR(ret), K(tablet_id), K(parallel_idx_), K(affected_rows_));
+    }
+    if (OB_SUCC(ret)) {
+      // finish_check里面会用到row_iter, 所以要在row_iter释放前调用
+      if (OB_FAIL(finish_check())) {
+        LOG_WARN("fail to do finish check", KR(ret));
+      }
     }
     if (OB_NOT_NULL(row_iter)) {
       row_iter->~ObIStoreRowIterator();
@@ -165,7 +173,7 @@ void ObDirectLoadPartitionMergeTask::stop()
  */
 
 ObDirectLoadPartitionRangeMergeTask::RowIterator::RowIterator()
-  : data_iter_(nullptr), rowkey_column_num_(0)
+  : data_iter_(nullptr), conflict_check_(nullptr), rowkey_column_num_(0)
 {
 }
 
@@ -221,13 +229,15 @@ int ObDirectLoadPartitionRangeMergeTask::RowIterator::init(
       } else if (merge_ctx->merge_with_conflict_check()) {
         ObDirectLoadConflictCheckParam conflict_check_param;
         conflict_check_param.tablet_id_ = merge_ctx->get_tablet_id();
-        conflict_check_param.table_data_desc_ = merge_param.table_data_desc_;
+        conflict_check_param.tablet_id_in_lob_id_ = insert_tablet_ctx->get_tablet_id_in_lob_id();
         conflict_check_param.store_column_count_ = merge_param.store_column_count_;
+        conflict_check_param.table_data_desc_ = merge_param.table_data_desc_;
         conflict_check_param.origin_table_ = origin_table;
         conflict_check_param.range_ = &range;
         conflict_check_param.col_descs_ = merge_param.col_descs_;
         conflict_check_param.lob_column_idxs_ = merge_param.lob_column_idxs_;
         conflict_check_param.datum_utils_ = merge_param.datum_utils_;
+        conflict_check_param.lob_meta_datum_utils_ = merge_param.lob_meta_datum_utils_;
         conflict_check_param.dml_row_handler_ = merge_param.dml_row_handler_;
         ObDirectLoadSSTableConflictCheck *conflict_check = nullptr;
         if (OB_FAIL(merge_ctx->get_table_builder(conflict_check_param.builder_))) {
@@ -238,6 +248,8 @@ int ObDirectLoadPartitionRangeMergeTask::RowIterator::init(
         } else if (FALSE_IT(data_iter_ = conflict_check)) {
         } else if (OB_FAIL(conflict_check->init(conflict_check_param, sstable_array))) {
           LOG_WARN("fail to init ObDirectLoadSSTableConflictCheck", K(ret));
+        } else {
+          conflict_check_ = conflict_check; // save conflict_check_
         }
       } else {
         ObDirectLoadDataInsertParam data_insert_param;
@@ -295,8 +307,17 @@ int ObDirectLoadPartitionRangeMergeTask::RowIterator::inner_get_next_row(ObDatum
   return ret;
 }
 
+ObLobId ObDirectLoadPartitionRangeMergeTask::RowIterator::get_max_del_lob_id() const
+{
+  ObLobId max_del_lob_id;
+  if (conflict_check_ != nullptr) {
+    max_del_lob_id = conflict_check_->get_max_del_lob_id();
+  }
+  return max_del_lob_id;
+}
+
 ObDirectLoadPartitionRangeMergeTask::ObDirectLoadPartitionRangeMergeTask()
-  : origin_table_(nullptr), sstable_array_(nullptr), range_(nullptr)
+  : origin_table_(nullptr), sstable_array_(nullptr), range_(nullptr), row_iter_(nullptr)
 {
 }
 
@@ -351,6 +372,7 @@ int ObDirectLoadPartitionRangeMergeTask::construct_row_iter(ObIAllocator &alloca
       LOG_WARN("fail to init row iter", KR(ret));
     } else {
       result_row_iter = row_iter;
+      row_iter_ = row_iter; // save row_iter_
     }
     if (OB_FAIL(ret)) {
       if (nullptr != row_iter) {
@@ -363,12 +385,41 @@ int ObDirectLoadPartitionRangeMergeTask::construct_row_iter(ObIAllocator &alloca
   return ret;
 }
 
+int ObDirectLoadPartitionRangeMergeTask::finish_check()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(row_iter_ == nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected row_iter_ is null", KR(ret));
+  } else {
+    const ObLobId max_del_lob_id = row_iter_->get_max_del_lob_id();
+    const ObLobId &min_insert_lob_id = insert_tablet_ctx_->get_min_insert_lob_id();
+    if (max_del_lob_id.is_valid() && min_insert_lob_id.is_valid()) {
+      ObStorageDatum max_del_lob_id_datum, min_insert_lob_id_datum;
+      ObDirectLoadSingleDatumCompare compare;
+      int cmp_ret = 0;
+      max_del_lob_id_datum.set_string(reinterpret_cast<const char *>(&max_del_lob_id), sizeof(ObLobId));
+      min_insert_lob_id_datum.set_string(reinterpret_cast<const char *>(&min_insert_lob_id), sizeof(ObLobId));
+      if (OB_FAIL(compare.init(*merge_param_->lob_meta_datum_utils_))) {
+        LOG_WARN("fail to init compare", KR(ret));
+      } else if (OB_FAIL(compare.compare(&max_del_lob_id_datum, &min_insert_lob_id_datum, cmp_ret))) {
+        LOG_WARN("fail to compare lob id", KR(ret), K(max_del_lob_id_datum), K(min_insert_lob_id_datum));
+      } else if (OB_UNLIKELY(cmp_ret >= 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected lob id", KR(ret), K(max_del_lob_id), K(max_del_lob_id_datum),
+                 K(min_insert_lob_id), K(min_insert_lob_id_datum));
+      }
+    }
+  }
+  return ret;
+}
+
 /**
  * ObDirectLoadPartitionRangeMultipleMergeTask
  */
 
 ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::RowIterator()
-  : data_iter_(nullptr), rowkey_column_num_(0)
+  : data_iter_(nullptr), conflict_check_(nullptr), rowkey_column_num_(0)
 {
 }
 
@@ -425,13 +476,15 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::init(
       } else if (merge_ctx->merge_with_conflict_check()) {
         ObDirectLoadConflictCheckParam conflict_check_param;
         conflict_check_param.tablet_id_ = merge_ctx->get_tablet_id();
-        conflict_check_param.table_data_desc_ = merge_param.table_data_desc_;
+        conflict_check_param.tablet_id_in_lob_id_ = insert_tablet_ctx->get_tablet_id_in_lob_id();
         conflict_check_param.store_column_count_ = merge_param.store_column_count_;
+        conflict_check_param.table_data_desc_ = merge_param.table_data_desc_;
         conflict_check_param.origin_table_ = origin_table;
         conflict_check_param.range_ = &range;
         conflict_check_param.col_descs_ = merge_param.col_descs_;
         conflict_check_param.lob_column_idxs_ = merge_param.lob_column_idxs_;
         conflict_check_param.datum_utils_ = merge_param.datum_utils_;
+        conflict_check_param.lob_meta_datum_utils_ = merge_param.lob_meta_datum_utils_;
         conflict_check_param.dml_row_handler_ = merge_param.dml_row_handler_;
         ObDirectLoadMultipleSSTableConflictCheck *conflict_check = nullptr;
         if (OB_FAIL(merge_ctx->get_table_builder(conflict_check_param.builder_))) {
@@ -442,6 +495,8 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::init(
         } else if (FALSE_IT(data_iter_ = conflict_check)) {
         } else if (OB_FAIL(conflict_check->init(conflict_check_param, sstable_array))) {
           LOG_WARN("fail to init ObDirectLoadMultipleSSTableConflictCheck", K(ret));
+        } else {
+          conflict_check_ = conflict_check; // save conflict_check_
         }
       } else {
         ObDirectLoadDataInsertParam data_insert_param;
@@ -501,8 +556,17 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::inner_get_next_row
   return ret;
 }
 
+ObLobId ObDirectLoadPartitionRangeMultipleMergeTask::RowIterator::get_max_del_lob_id() const
+{
+  ObLobId max_del_lob_id;
+  if (conflict_check_ != nullptr) {
+    max_del_lob_id = conflict_check_->get_max_del_lob_id();
+  }
+  return max_del_lob_id;
+}
+
 ObDirectLoadPartitionRangeMultipleMergeTask::ObDirectLoadPartitionRangeMultipleMergeTask()
-  : origin_table_(nullptr), sstable_array_(nullptr), range_(nullptr)
+  : origin_table_(nullptr), sstable_array_(nullptr), range_(nullptr), row_iter_(nullptr)
 {
 }
 
@@ -558,12 +622,42 @@ int ObDirectLoadPartitionRangeMultipleMergeTask::construct_row_iter(
       LOG_WARN("fail to init row iter", KR(ret));
     } else {
       result_row_iter = row_iter;
+      row_iter_ = row_iter; // save row_iter_
     }
     if (OB_FAIL(ret)) {
       if (nullptr != row_iter) {
         row_iter->~RowIterator();
         allocator.free(row_iter);
         row_iter = nullptr;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadPartitionRangeMultipleMergeTask::finish_check()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(row_iter_ == nullptr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected row_iter_ is null", KR(ret));
+  } else {
+    const ObLobId max_del_lob_id = row_iter_->get_max_del_lob_id();
+    const ObLobId &min_insert_lob_id = insert_tablet_ctx_->get_min_insert_lob_id();
+    if (max_del_lob_id.is_valid() && min_insert_lob_id.is_valid()) {
+      ObStorageDatum max_del_lob_id_datum, min_insert_lob_id_datum;
+      ObDirectLoadSingleDatumCompare compare;
+      int cmp_ret = 0;
+      max_del_lob_id_datum.set_string(reinterpret_cast<const char *>(&max_del_lob_id), sizeof(ObLobId));
+      min_insert_lob_id_datum.set_string(reinterpret_cast<const char *>(&min_insert_lob_id), sizeof(ObLobId));
+      if (OB_FAIL(compare.init(*merge_param_->lob_meta_datum_utils_))) {
+        LOG_WARN("fail to init compare", KR(ret));
+      } else if (OB_FAIL(compare.compare(&max_del_lob_id_datum, &min_insert_lob_id_datum, cmp_ret))) {
+        LOG_WARN("fail to compare lob id", KR(ret), K(max_del_lob_id_datum), K(min_insert_lob_id_datum));
+      } else if (OB_UNLIKELY(cmp_ret >= 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected lob id", KR(ret), K(max_del_lob_id), K(max_del_lob_id_datum),
+                 K(min_insert_lob_id), K(min_insert_lob_id_datum));
       }
     }
   }

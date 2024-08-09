@@ -93,7 +93,7 @@ int ObTabletFinishTransferUtil::can_skip_check_transfer_tablets(
     LOG_WARN("ls is NULL", K(ret), K(ls_id), K(ls_handle));
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
-  } else if (!restore_status.is_in_restore()) {
+  } else if (!restore_status.is_in_restoring_or_failed()) {
     // ls not in restore, cannot skip.
   } else if (OB_FALSE_IT(restore_handler = ls->get_ls_restore_handler())) {
   } else if (OB_FAIL(restore_handler->get_consistent_scn(consistent_scn))) {
@@ -342,7 +342,7 @@ int ObTabletFinishTransferOutHelper::on_register_success_(
       ret, start_ts, start_ts, false/*is_report*/);
   LOG_INFO("[TRANSFER] start tx finish transfer out on_register_success_", K(tx_finish_transfer_out_info));
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_finish_transfer_out",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_finish_transfer_out",
                    "stage", "on_register_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_finish_transfer_out_info.src_ls_id_.id(),
@@ -551,7 +551,7 @@ int ObTabletFinishTransferOutHelper::on_replay_success_(
       ret, start_ts, start_ts, false/*is_report*/);
   FLOG_INFO("[TRANSFER] start tx finish transfer out on_replay_success_", K(scn), K(tx_finish_transfer_out_info));
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_finish_transfer_out",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_finish_transfer_out",
                    "stage", "on_replay_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_finish_transfer_out_info.src_ls_id_.id(),
@@ -977,7 +977,7 @@ int ObTabletFinishTransferInHelper::on_register_success_(
       ret, start_ts, start_ts, false/*is_report*/);
   LOG_INFO("[TRANSFER] start tx finish transfer in on_register_success_", K(tx_finish_transfer_in_info));
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_finish_transfer_in",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_finish_transfer_in",
                    "stage", "on_register_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_finish_transfer_in_info.src_ls_id_.id(),
@@ -1217,7 +1217,7 @@ int ObTabletFinishTransferInHelper::on_replay_success_(
       ret, start_ts, start_ts, false/*is_report*/);
   LOG_INFO("[TRANSFER] start tx finish transfer in on_replay_success_", K(scn), K(tx_finish_transfer_in_info));
 #ifdef ERRSIM
-  SERVER_EVENT_ADD("transfer", "tx_finish_transfer_in",
+  SERVER_EVENT_SYNC_ADD("transfer", "tx_finish_transfer_in",
                    "stage", "on_replay_success",
                    "tenant_id", MTL_ID(),
                    "src_ls_id", tx_finish_transfer_in_info.src_ls_id_.id(),

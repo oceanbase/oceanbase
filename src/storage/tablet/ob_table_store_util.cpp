@@ -433,7 +433,8 @@ int ObSSTableArray::deserialize_table(
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to allocate memory for sstable array", K(ret));
   } else {
-    T *table = new (tmp_buf) T;
+    T *table = nullptr;
+    table = new (tmp_buf) T;
     if (OB_FAIL(table->deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("failed to deserialize sstable", K(ret));
     } else {
@@ -441,12 +442,8 @@ int ObSSTableArray::deserialize_table(
     }
 
     if (OB_FAIL(ret)) {
-      if (table != nullptr) {
-        table->~T();
-      }
-      if (tmp_buf != nullptr) {
-        allocator.free(tmp_buf);
-      }
+      table->~T();
+      allocator.free(tmp_buf);
       sstable = nullptr;
     }
   }

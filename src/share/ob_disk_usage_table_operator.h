@@ -36,6 +36,7 @@ enum class ObDiskReportFileType : uint8_t
   TENANT_CLOG_DATA = 5,
   TENANT_MAJOR_SSTABLE_DATA = 6, // shared_data in shared_storage_mode
   TENANT_MAJOR_LOCAL_DATA = 7,
+  TENANT_BACKUP_DATA = 8,
   TYPE_MAX
 };
 struct ObTenantDiskUsage;

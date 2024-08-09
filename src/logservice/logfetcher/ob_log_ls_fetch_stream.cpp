@@ -1393,6 +1393,8 @@ int FetchStream::read_log_(
       const char *buffer = nullptr;
 
       if (OB_FAIL(ls_fetch_ctx_->get_next_group_entry(group_entry, group_start_lsn, buffer))) {
+        // If failed, reset memory storage
+        ls_fetch_ctx_->reset_memory_storage();
         if (OB_ITER_END != ret) {
           LOG_ERROR("get next_group_entry failed", KR(ret), K_(ls_fetch_ctx), K(resp));
           if (OB_CHECKSUM_ERROR == ret || OB_INVALID_DATA == ret)  {

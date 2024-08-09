@@ -536,7 +536,8 @@ int ObMicroBlockCSEncoder::store_stream_offsets_(int64_t &stream_offsets_length)
     int64_t need_store_size = 0;
     ObIntegerStreamEncoderCtx enc_ctx;
     uint32_t end_offset = stream_offsets_.at(stream_offsets_.count() - 1);
-    if (OB_FAIL(enc_ctx.build_offset_array_stream_meta(end_offset, false/*force raw*/))) {
+    if (OB_FAIL(enc_ctx.build_offset_array_stream_meta(
+        end_offset, false/*force raw*/, ctx_.major_working_cluster_version_))) {
       LOG_WARN("fail to build_offset_array_stream_meta", K(ret));
     } else if(OB_FAIL(enc_ctx.build_stream_encoder_info(
                                      false/*has_null*/,

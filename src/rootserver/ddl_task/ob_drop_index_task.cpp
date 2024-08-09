@@ -28,7 +28,6 @@ using namespace oceanbase::sql;
 
 ObDropIndexTask::ObDropIndexTask()
   : ObDDLTask(DDL_DROP_INDEX),
-    wait_trans_ctx_(),
     root_service_(nullptr),
     drop_index_arg_()
 {

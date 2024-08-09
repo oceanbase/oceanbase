@@ -1270,12 +1270,16 @@ int ObXMLExprHelper::process_sql_udt_results(common::ObObj& value,
   } else {
     if (OB_ISNULL(exec_context)) {
       ret = OB_BAD_NULL_ERROR;
-    } else if (OB_ISNULL(exec_context->get_physical_plan_ctx())) {
-      // no physical plan, build new one
+    } else if (OB_ISNULL(exec_context->get_physical_plan_ctx())
+               || !exec_context->get_physical_plan_ctx()->is_subschema_ctx_inited()) {
+      // condition 1: no physical plan, build new one
+      // condition 2: tmp physical plan exists,
+      //  but subschema_ctx isn't initialized(for ps protocal in jdbc, tmp physical plan created in ObMPStmtPrexecute::execute_response)
+      //
       if (OB_ISNULL(fields)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("no fields to rebuild udt meta", K(ret), K(lbt()));
-      } else if (OB_FAIL(exec_context->create_physical_plan_ctx())) {
+      } else if (exec_context->get_physical_plan_ctx() == NULL && OB_FAIL(exec_context->create_physical_plan_ctx())) {
         LOG_WARN("failed to create physical plan ctx of subschema id", K(ret), K(lbt()));
       } else if (OB_FAIL(exec_context->get_physical_plan_ctx()->build_subschema_by_fields(fields, schema_guard))) {
         LOG_WARN("failed to rebuild_subschema by fields", K(ret), K(*fields), K(lbt()));

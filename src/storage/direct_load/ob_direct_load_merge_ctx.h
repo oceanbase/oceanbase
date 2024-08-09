@@ -147,7 +147,8 @@ public:
   int build_del_lob_task(
     const common::ObIArray<ObDirectLoadMultipleSSTable *> &multiple_sstable_array,
     ObDirectLoadMultipleMergeRangeSplitter &range_splitter,
-    const int64_t max_parallel_degree);
+    const int64_t max_parallel_degree,
+    const ObLobId &min_insert_lob_id);
   int inc_finish_count(bool &is_ready);
   int inc_rescan_finish_count(bool &is_ready);
   int inc_del_lob_finish_count(bool &is_ready);

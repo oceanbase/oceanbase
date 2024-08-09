@@ -744,7 +744,8 @@ public:
 
   OB_INLINE bool is_valid() const
   {
-    return column_cnt_ > 0 && rowkey_cnt_ >= 0;
+    return column_cnt_ > 0 && rowkey_cnt_ >= 0
+      && ObColClusterInfoMask::is_valid_offset_type((ObColClusterInfoMask::BYTES_LEN)offset_type_);
   }
 
   static const int64_t ROW_HEADER_VERSION_1 = 0;

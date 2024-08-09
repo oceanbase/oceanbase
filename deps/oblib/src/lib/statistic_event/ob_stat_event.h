@@ -268,6 +268,8 @@ STAT_EVENT_ADD_DEF(OPT_SYSTEM_STAT_CACHE_MISS, "opt system stat cache miss", ObS
 
 STAT_EVENT_ADD_DEF(LOG_KV_CACHE_HIT, "log kv cache hit", ObStatClassIds::CACHE, 50065, false, true, true)
 STAT_EVENT_ADD_DEF(LOG_KV_CACHE_MISS, "log kv cache miss", ObStatClassIds::CACHE, 50066, false, true, true)
+STAT_EVENT_ADD_DEF(DATA_BLOCK_CACHE_MISS, "data block cache miss", ObStatClassIds::CACHE, 50067, true, true, true)
+STAT_EVENT_ADD_DEF(INDEX_BLOCK_CACHE_MISS, "index block cache miss", ObStatClassIds::CACHE, 50068, true, true, true)
 
 // STORAGE
 STAT_EVENT_ADD_DEF(MEMSTORE_LOGICAL_READS, "MEMSTORE_LOGICAL_READS", STORAGE, "MEMSTORE_LOGICAL_READS", true, true, false)
@@ -541,6 +543,10 @@ STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_IDLE_WAIT_TIME, "idle wait time", ObStatClassI
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_DB_TIME, "background database time", ObStatClassIds::SYS, 200012, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_NON_IDLE_WAIT_TIME, "background database non-idle wait time", ObStatClassIds::SYS, 200013, false, true, true)
 STAT_EVENT_ADD_DEF(SYS_TIME_MODEL_BKGD_IDLE_WAIT_TIME, "background database idle wait time", ObStatClassIds::SYS, 200014, false, true, true)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_ALLOC_COUNT, "diagnostic info object allocated count", ObStatClassIds::SYS, 200015, false, true, false)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_ALLOC_FAIL_COUNT, "diagnostic info object allocate failure count", ObStatClassIds::SYS, 200016, false, true, false)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_RETURN_COUNT, "diagnostic info object returned count", ObStatClassIds::SYS, 200017, false, true, false)
+STAT_EVENT_ADD_DEF(DIAGNOSTIC_INFO_RETURN_FAIL_COUNT, "diagnostic info object return failure count", ObStatClassIds::SYS, 200018, false, true, false)
 
 // wr and ash related  (2100xx)
 STAT_EVENT_ADD_DEF(WR_SNAPSHOT_ELAPSE_TIME, "wr snapshot task elapse time", ObStatClassIds::WR, 210001, false, true, true)
@@ -582,6 +588,8 @@ STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_DDL_PREWARM_BYTES, "ss_micro_cache ddl prewarm
 STAT_EVENT_ADD_DEF(SS_TMPFILE_CACHE_HIT, "ss_tmpfile_cache hit count", ObStatClassIds::CACHE, 240017, true, true, true)
 STAT_EVENT_ADD_DEF(SS_TMPFILE_CACHE_MISS, "ss_tmpfile_cache miss count", ObStatClassIds::CACHE, 240018, true, true, true)
 STAT_EVENT_ADD_DEF(SS_MICRO_CACHE_USED_DISK_SIZE, "ss_micro_cache total used disk size", ObStatClassIds::CACHE, 240019, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MAJOR_MACRO_CACHE_HIT, "ss_major_macro_cache hit count", ObStatClassIds::CACHE, 240020, true, true, true)
+STAT_EVENT_ADD_DEF(SS_MAJOR_MACRO_CACHE_MISS, "ss_major_macro_cache miss count", ObStatClassIds::CACHE, 240021, true, true, true)
 
 //end
 STAT_EVENT_ADD_DEF(STAT_EVENT_ADD_END, "event add end", ObStatClassIds::DEBUG, 1, false, false, true)
@@ -691,6 +699,7 @@ STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_W, "ss_local_cache tmpf
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_TMPFILE_USED_DISK_SIZE_R, "ss_local_cache tmpfile read cache used disk size", ObStatClassIds::CACHE, 245007, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_META_USED_DISK_SIZE, "ss_local_cache meta file used disk size", ObStatClassIds::CACHE, 245008, false, true, true)
 STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_INCREMENTAL_DATA_USED_DISK_SIZE, "ss_local_cache incremental data used disk size", ObStatClassIds::CACHE, 245009, false, true, true)
+STAT_EVENT_SET_DEF(SS_LOCAL_CACHE_MAJOR_MACRO_USED_DISK_SIZE, "ss_local_cache major macro used disk size", ObStatClassIds::CACHE, 245010, false, true, true)
 
 
 // END

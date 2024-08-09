@@ -69,6 +69,7 @@ namespace common
 #define CM_CONST_TO_DECIMAL_INT_EQ        (1ULL << 19)
 #define CM_BY_TRANSFORMER                (1ULL << 20)
 #define CM_CONST_TO_DECIMAL_INT_UP       (1ULL << 21)
+#define CM_FAST_COLUMN_CONV              (1ULL << 22)
 // string->integer(int/uint)时默认进行round(round to nearest)，
 // 如果设置该标记，则会进行trunc(round to zero)
 // ceil(round to +inf)以及floor(round to -inf)暂时没有支持

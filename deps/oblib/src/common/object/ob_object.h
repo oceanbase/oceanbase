@@ -1541,7 +1541,6 @@ public:
   inline void set_lob(const char* ptr, const int32_t size, const ObLobScale &lob_scale);
 
   void set_val_len(const int32_t val_len);
-  void set_null_meta(const ObObjMeta meta);
 
   void set_interval_ym(const ObIntervalYMValue &value);
   void set_interval_ds(const ObIntervalDSValue &value);
@@ -1576,7 +1575,6 @@ public:
   OB_INLINE ObCollationType get_collation_type() const { return meta_.get_collation_type(); }
   OB_INLINE ObScale get_scale() const { return meta_.get_scale(); }
   inline const ObObjMeta& get_meta() const { return meta_; }
-  inline const ObObjMeta& get_null_meta() const { return null_meta_; }
 
   inline int get_tinyint(int8_t &value) const;
   inline int get_smallint(int16_t &value) const;
@@ -2129,7 +2127,6 @@ public:
     int32_t interval_fractional_; //values for intervalds type
     number::ObNumber::Desc nmb_desc_;
     ObOTimestampData::UnionTZCtx time_ctx_;
-    ObObjMeta null_meta_;
   };  // sizeof = 4
   ObObjValue v_;  // sizeof = 8
 };
@@ -3060,11 +3057,6 @@ inline int64_t ObObj::get_ext() const
 inline void ObObj::set_val_len(const int32_t val_len)
 {
   val_len_ = val_len;
-}
-
-inline void ObObj::set_null_meta(const ObObjMeta meta)
-{
-  null_meta_ = meta;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -4154,7 +4146,9 @@ public:
   OB_INLINE int32_t get_raw_text_len() const { return raw_text_len_; }
   OB_INLINE void set_param_meta()
   {
-    param_meta_ = get_meta();
+    if (param_meta_.is_null() || ObNullType != get_meta().get_type()) {
+      param_meta_ = get_meta();
+    }
     if (ob_is_numeric_type(get_type())) {
       ObPrecision default_prec =
         ObAccuracy::DDL_DEFAULT_ACCURACY2[lib::is_oracle_mode()][get_type()].get_precision();
@@ -4170,7 +4164,12 @@ public:
       if (get_precision() == PRECISION_UNKNOWN_YET) { set_precision(default_prec); }
     }
   }
-  OB_INLINE void set_param_meta(const ObObjMeta &meta) { param_meta_ = meta; }
+  OB_INLINE void set_param_meta(const ObObjMeta &meta)
+  {
+    if (param_meta_.is_null() || ObNullType != meta.get_type()) {
+      param_meta_ = meta;
+    }
+  }
   OB_INLINE const ObObjMeta &get_param_meta() const
   {
     return param_meta_;

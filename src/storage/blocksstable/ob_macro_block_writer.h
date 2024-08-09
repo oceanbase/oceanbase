@@ -136,7 +136,8 @@ public:
   virtual int open(
       const ObDataStoreDesc &data_store_desc,
       const ObMacroDataSeq &start_seq,
-      ObIMacroBlockFlushCallback *callback = nullptr);
+      ObIMacroBlockFlushCallback *callback = nullptr,
+      ObIODevice *device_handle = nullptr);
   virtual int append_macro_block(const ObMacroBlockDesc &macro_desc);
   virtual int append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc = nullptr);
   virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr);
@@ -155,6 +156,7 @@ public:
   int append_index_micro_block(ObMicroBlockDesc &micro_block_desc);
   int get_estimate_meta_block_size(const ObDataMacroBlockMeta &macro_meta, int64_t &estimate_size);
   int check_data_macro_block_need_merge(const ObMacroBlockDesc &macro_desc, bool &need_merge);
+  int check_meta_macro_block_need_rewrite(bool &need_rewrite) const;
   int close();
   void dump_block_and_writer_buffer();
   inline ObMacroBlocksWriteCtx &get_macro_block_write_ctx() { return block_write_ctx_; }
@@ -201,6 +203,7 @@ private:
   int try_active_flush_macro_block();
   int wait_io_finish(ObMacroBlockHandle &macro_handle);
   int alloc_block();
+  int alloc_block_from_device(ObMacroBlockHandle &macro_handle);
   int check_write_complete(const MacroBlockId &macro_block_id);
   int save_last_key(const ObDatumRow &row);
   int save_last_key(const ObDatumRowkey &last_key);
@@ -252,6 +255,7 @@ private:
   blocksstable::ObDatumRow *aggregated_row_;
   ObSkipIndexAggregator *data_aggregator_;
   ObIMacroBlockFlushCallback *callback_;
+  ObIODevice *device_handle_;
   ObDataIndexBlockBuilder *builder_;
   ObMicroBlockAdaptiveSplitter micro_block_adaptive_splitter_;
   ObDataBlockCachePreWarmer data_block_pre_warmer_;

@@ -515,7 +515,7 @@ int ObBackupDataStore::read_tablet_to_ls_info(const int64_t turn_id, const share
   share::ObBackupPath path;
   ObBackupPathString full_path;
   share::ObBackupDataType tmp_type;
-  type.is_major_backup() ? tmp_type.set_major_data_backup() : tmp_type.set_minor_data_backup();
+  tmp_type.set_user_data_backup();
   if (!is_init()) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupDataStore not init", K(ret));
@@ -760,6 +760,8 @@ int ObBackupDataStore::read_backup_set_info(ObExternBackupSetInfoDesc &backup_se
     LOG_WARN("fail to assign full path", K(ret));
   } else if (OB_FAIL(read_single_file(full_path, backup_set_info))) {
     LOG_WARN("failed to read single file", K(ret), K(full_path));
+  } else {
+    LOG_INFO("read backup set info", K(backup_set_info));
   }
   return ret;
 }
@@ -1279,7 +1281,8 @@ int ObBackupDataStore::read_base_tablet_list(const share::ObLSID &ls_id, ObIArra
 {
   int ret = OB_SUCCESS;
   backup::ObExternTabletMetaReader reader;
-  if (OB_FAIL(reader.init(backup_set_dest_, ls_id))) {
+  const bool is_final_fuse = false;
+  if (OB_FAIL(reader.init(backup_set_dest_, ls_id, is_final_fuse))) {
     LOG_WARN("fail to init reader", K(ret), K(backup_set_dest_), K(ls_id));
   } else {
     storage::ObMigrationTabletParam tablet_meta;
