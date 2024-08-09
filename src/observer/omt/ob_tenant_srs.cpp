@@ -266,6 +266,7 @@ int ObTenantSrs::refresh_srs(bool is_sys)
           && OB_FAIL(srs_old_snapshots_.push_back(last_snapshot))) {
         LOG_WARN("failed to push last_snapshot to recycle queue", K(ret), K(tenant_id), K(is_sys));
       } else {
+        last_snapshot->~ObSrsCacheSnapShot();
         allocator_.free(last_snapshot);
       }
     }
@@ -503,6 +504,7 @@ int ObTenantSrs::fetch_all_srs(ObSrsCacheSnapShot *&srs_snapshot, bool is_sys_sr
         } else {
           if (OB_FAIL(generate_pg_reserved_srs(snapshot))) {
             LOG_WARN("failed to geneate pg reserved srs", K(ret));
+            snapshot->~ObSrsCacheSnapShot();
             allocator_.free(snapshot);
           } else {
             snapshot->set_srs_version(srs_version);
@@ -510,6 +512,7 @@ int ObTenantSrs::fetch_all_srs(ObSrsCacheSnapShot *&srs_snapshot, bool is_sys_sr
           }
         }
       } else if (snapshot != NULL) {
+        snapshot->~ObSrsCacheSnapShot();
         allocator_.free(snapshot);
         LOG_WARN("failed to get all srs item, iter quit", K(ret));
       }
