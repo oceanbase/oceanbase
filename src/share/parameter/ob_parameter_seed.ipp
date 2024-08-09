@@ -2032,3 +2032,6 @@ DEF_BOOL(_enable_dbms_lob_partial_update, OB_TENANT_PARAMETER, "False",
 DEF_INT(_ob_pl_compile_max_concurrency, OB_CLUSTER_PARAMETER, "4", "[0,)",
         "The maximum number of threads that an observer node can compile PL concurrently.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_check_trigger_const_variables_assign, OB_TENANT_PARAMETER, "True",
+        "Used to control whether an error is reported when assigning a value to a const variable in a trigger under an Oracle tenant",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
