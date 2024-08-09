@@ -97,7 +97,7 @@ OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
 void Worker::set_group_id(int32_t group_id)
 {
   const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
-  if (OBCG_DEFAULT_GROUP_ID == group_id_ || (is_user_group(group_id_) && is_valid_resource_group(group_id))) {
+  if (OBCG_DEFAULT_GROUP_ID == group_id_ || (is_user_group(group_id_) && is_valid_resource_group(group_id)) || group_id == group_id_) {
     group_id_ = group_id;
   } else {
     LOG_ERROR_RET(OB_INNER_STAT_ERROR, "group_id is unexpected", K(group_id_), K(group_id));
