@@ -116,6 +116,15 @@ int ObPxDistTransmitOp::next_batch(const int64_t max_row_cnt)
         }
       }
     }
+    // must restire holder after sampling
+    // otherwise data ptr is not reset to frame, table scan may fail.
+    if (OB_SUCC(ret) && brs_holder_.is_saved()) {
+      if (OB_FAIL(brs_holder_.restore())) {
+        LOG_WARN("store holder failed", K(ret));
+      } else {
+        brs_holder_.reset();
+      }
+    }
   } else {
     if (brs_holder_.is_saved()) {
       OZ(brs_holder_.restore());
