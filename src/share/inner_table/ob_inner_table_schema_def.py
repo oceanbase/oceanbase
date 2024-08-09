@@ -313,9 +313,9 @@ all_table_def = dict(
       ('max_used_column_group_id', 'int', 'false', '1000'),
       ('column_store', 'int', 'false', '0'),
       ('auto_increment_cache_size', 'int', 'false', '0'),
+      ('external_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('local_session_vars', 'longtext', 'true'),
       ('duplicate_read_consistency', 'int', 'false', '0'),
-      ('external_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', '')
     ],
 )
