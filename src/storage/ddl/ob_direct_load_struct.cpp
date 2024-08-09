@@ -406,6 +406,8 @@ int ObLobMetaRowIterator::get_next_row(const blocksstable::ObDatumRow *&row)
       tmp_row_.storage_datums_[ObLobMetaUtil::SEQ_ID_COL_ID + 2].set_int(-get_seq_no());
       tmp_row_.set_trans_id(trans_id_);
       tmp_row_.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
+      tmp_row_.mvcc_row_flag_.set_compacted_multi_version_row(true);
+      tmp_row_.mvcc_row_flag_.set_first_multi_version_row(true);
       tmp_row_.mvcc_row_flag_.set_last_multi_version_row(true);
       tmp_row_.mvcc_row_flag_.set_uncommitted_row(trans_id_.is_valid());
       row = &tmp_row_;
@@ -989,7 +991,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
       } else {
         ObLobId lob_id;
         lob_id.lob_id_ = pk_seq;
-        lob_id.tablet_id_ = tablet_direct_load_mgr_->get_tablet_id().id(); // lob meta tablet id.
+        lob_id.tablet_id_ = tablet_direct_load_mgr_->get_tablet_id().id(); // lob meta tablet id. 与ObDirectLoadInsertTabletContext::tablet_id_in_lob_id_的取值保持一致
         ObLobMetaRowIterator *row_iter = nullptr;
         if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
             info.data_tablet_id_, info.trans_version_, col_types.at(i).get_type(), col_types.at(i).get_collation_type(), lob_id,
@@ -1421,7 +1423,7 @@ int ObCOSliceWriter::init(const ObStorageSchema *storage_schema, const int64_t c
     const uint64_t data_format_version = tablet_direct_load_mgr->get_data_format_version();
     ObLSID ls_id = tablet_direct_load_mgr->get_ls_id();
 
-    if (OB_FAIL(data_desc_.init(*storage_schema,
+    if (OB_FAIL(data_desc_.init(true/*is ddl*/, *storage_schema,
                                 ls_id,
                                 table_key.get_tablet_id(),
                                 compaction::ObMergeType::MAJOR_MERGE,

@@ -80,7 +80,8 @@ int ObIntDictColumnEncoder::build_integer_dict_encoder_ctx_()
       const int64_t int_min = static_cast<int64_t>(ctx_->integer_min_);
       const int64_t int_max = static_cast<int64_t>(ctx_->integer_max_);
       if (OB_FAIL(integer_dict_enc_ctx_.build_signed_stream_meta(int_min, int_max, is_replace_null,
-          null_replaced_value, precision_width_size_, is_force_raw_, dict_integer_range_))) {
+          null_replaced_value, precision_width_size_, is_force_raw_,
+          ctx_->encoding_ctx_->major_working_cluster_version_, dict_integer_range_))) {
         LOG_WARN("fail to build_signed_stream_meta", K(ret));
       }
     } else if (ObUIntSC == store_class_) {
@@ -88,7 +89,7 @@ int ObIntDictColumnEncoder::build_integer_dict_encoder_ctx_()
       const uint64_t uint_max = static_cast<uint64_t>(ctx_->integer_max_);
       if (OB_FAIL(integer_dict_enc_ctx_.build_unsigned_stream_meta(
           uint_min, uint_max, is_replace_null, null_replaced_value,
-          is_force_raw_, dict_integer_range_))) {
+          is_force_raw_, ctx_->encoding_ctx_->major_working_cluster_version_, dict_integer_range_))) {
         LOG_WARN("fail to build_unsigned_stream_meta", K(ret));
       }
     } else {

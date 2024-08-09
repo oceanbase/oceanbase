@@ -1374,6 +1374,7 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
         column_exprs_.at(i)->set_evaluated_projected(eval_ctx);
       }
     }
+    OZ (calc_exprs_for_rowid(read_count));
   }
   if (OB_SUCC(ret)) {
     state_.cur_row_group_read_row_count_ += read_count;

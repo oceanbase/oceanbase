@@ -65,7 +65,8 @@ ObLSMeta::ObLSMeta()
     transfer_scn_(SCN::min_scn()),
     rebuild_info_(),
     transfer_meta_info_(),
-    major_mv_merge_info_()
+    major_mv_merge_info_(),
+    store_format_()
 {
 }
 
@@ -89,7 +90,8 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     transfer_scn_(ls_meta.transfer_scn_),
     rebuild_info_(ls_meta.rebuild_info_),
     transfer_meta_info_(ls_meta.transfer_meta_info_),
-    major_mv_merge_info_(ls_meta.major_mv_merge_info_)
+    major_mv_merge_info_(ls_meta.major_mv_merge_info_),
+    store_format_()
 {
   all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_);
 }
@@ -152,6 +154,7 @@ ObLSMeta &ObLSMeta::operator=(const ObLSMeta &other)
     rebuild_info_ = other.rebuild_info_;
     transfer_meta_info_ = other.transfer_meta_info_;
     major_mv_merge_info_ = other.major_mv_merge_info_;
+    store_format_ = other.store_format_;
   }
   return *this;
 }
@@ -177,6 +180,7 @@ void ObLSMeta::reset()
   rebuild_info_.reset();
   transfer_meta_info_.reset();
   major_mv_merge_info_.reset();
+  store_format_.reset();
 }
 
 LSN &ObLSMeta::get_clog_base_lsn()
@@ -549,6 +553,7 @@ int ObLSMeta::update_ls_meta(
       }
       transfer_meta_info_ = src_ls_meta.transfer_meta_info_;
       major_mv_merge_info_ = src_ls_meta.major_mv_merge_info_;
+      // store format doesn't change
     }
     LOG_INFO("update ls meta", K(ret), K(tmp), K(src_ls_meta), K(*this));
   }
@@ -862,7 +867,7 @@ int ObLSMeta::get_create_type(int64_t &create_type) const
     create_type = ObLSCreateType::MIGRATE;
   } else if (restore_status_.is_in_clone()) {
     create_type = ObLSCreateType::CLONE;
-  } else if (restore_status_.is_in_restore()) {
+  } else if (restore_status_.is_in_restore_status()) {
     create_type = ObLSCreateType::RESTORE;
   } else if (ls_persistent_state_.is_ha_state()) {
     create_type = ObLSCreateType::MIGRATE;
@@ -987,7 +992,8 @@ OB_SERIALIZE_MEMBER(ObLSMeta,
                     transfer_scn_,
                     rebuild_info_,
                     transfer_meta_info_,
-                    major_mv_merge_info_);
+                    major_mv_merge_info_,
+                    store_format_);
 
 }
 }

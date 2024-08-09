@@ -202,7 +202,7 @@ int ObCOMerger::alloc_writers(
 {
   int ret = OB_SUCCESS;
 
-  if (only_use_row_table_) {
+  if (only_use_row_table_) { // use row_store to build column_store
     if (OB_FAIL(alloc_single_writer(default_row, cg_array, merge_infos, sstable))) {
       STORAGE_LOG(WARN, "Failed to allocate ObCOMergeSingleWriter", K(ret));
     }
@@ -255,8 +255,8 @@ int ObCOMerger:: alloc_row_writers(
   const bool empty_table = is_empty_table(sstable);
 
   if (ctx->should_mock_row_store_cg_schema()) {
-    if ((OB_UNLIKELY((co_sstable.is_rowkey_cg_base() && !ctx->is_build_row_store_from_rowkey_cg())
-                  || (co_sstable.is_all_cg_base() && !ctx->is_build_row_store())))) {
+    if (OB_UNLIKELY((co_sstable.is_rowkey_cg_base() && !ctx->is_build_row_store_from_rowkey_cg())
+                  || (co_sstable.is_all_cg_base() && !ctx->is_build_row_store()))) {
       ret = OB_INVALID_ARGUMENT;
       STORAGE_LOG(WARN, "invalid combination for co base type and merge type", K(ret), K(co_sstable), K(ctx->static_param_));
     } else if (OB_UNLIKELY((start_cg_idx_+1) != end_cg_idx_)) {
@@ -290,7 +290,7 @@ int ObCOMerger:: alloc_row_writers(
         STORAGE_LOG(WARN, "unexpected cg schema", K(ret), K(idx), K(co_sstable.get_cs_meta().column_group_cnt_), KPC(cg_schema_ptr), K(sstable));
       } else {
         table = &sstable;
-        add_column = true;
+        add_column = true; // for add column, will use ObDefaultRowIter
         STORAGE_LOG(INFO, "add column for cg", K(ret), K(idx), K(co_sstable.get_cs_meta().column_group_cnt_), KPC(cg_schema_ptr), K(sstable));
       }
     } else if (OB_FAIL(co_sstable.fetch_cg_sstable(idx, cg_wrapper))) {
@@ -304,15 +304,12 @@ int ObCOMerger:: alloc_row_writers(
     }
 
     if (OB_FAIL(ret)) {
-    } else if (ctx->is_build_row_store_from_rowkey_cg()) {
-      read_info = &ctx->table_read_info_;
-    } else {
-      read_info = cg_schema_ptr->is_rowkey_column_group() ?  merge_param_.cg_rowkey_read_info_ : &merge_ctx_->read_info_;
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(writer->init(default_row, merge_param_, task_idx_, read_info, *cg_schema_ptr, idx, *merge_infos[idx], table, add_column))) {
-      STORAGE_LOG(WARN, "failed to init writer", K(ret), K(default_row), K(merge_param_), KPC(table));
+    } else if (OB_FAIL(writer->init(default_row, merge_param_, task_idx_,
+                                    ctx->get_full_read_info(), *cg_schema_ptr, idx, ctx->progressive_merge_mgr_,
+                                    *merge_infos[idx], table, add_column))) {
+      // table->old major, read_info used to read old major
+      STORAGE_LOG(WARN, "failed to init writer", K(ret), K(default_row),
+                  K(merge_param_), KPC(table));
     } else if (OB_FAIL(merge_writers_.push_back(writer))) {
       STORAGE_LOG(WARN, "failed to push writer", K(ret), K(merge_writers_));
     }
@@ -322,7 +319,7 @@ int ObCOMerger:: alloc_row_writers(
       merger_arena_.free(writer);
       writer = nullptr;
     }
-  }
+  } // for
 
   return ret;
 }

@@ -56,8 +56,13 @@ static constexpr char MINICORE_SCRIPT[] = "if [ -e bin/minicore.py ]; then\n"
 "fi\n"
 "[ $(ls -1 core.*.mini 2>/dev/null | wc -l) -gt 5 ] && ls -1 core.*.mini -t | tail -n 1 | xargs rm -f";
 
-static constexpr char FASTSTACK_SCRIPT[] = "if [ -x \"$(command -v obstack)\" ]; then\n"
-"  obstack `cat $(pwd)/run/observer.pid` > stack.`cat $(pwd)/run/observer.pid`.`date +%Y%m%d%H%M%S`\n"
+static constexpr char FASTSTACK_SCRIPT[] =
+"path_to_obstack=\"bin/obstack\"\n"
+"if [ ! -x \"$path_to_obstack\" ]; then\n"
+"  path_to_obstack=$(command -v obstack)\n"
+"fi\n"
+"if [ -x \"$path_to_obstack\" ]; then\n"
+"  $path_to_obstack `cat $(pwd)/run/observer.pid` > stack.`cat $(pwd)/run/observer.pid`.`date +%Y%m%d%H%M%S`\n"
 "fi\n"
 "[ $(ls -1 stack.* 2>/dev/null | wc -l) -gt 100 ] && ls -1 stack.* -t | tail -n 1 | xargs rm -f";
 const char *const FASTSTACK_SCRIPT_ARGV[] = {"/bin/sh", "-c", FASTSTACK_SCRIPT, NULL};

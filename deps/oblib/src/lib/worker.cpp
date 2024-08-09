@@ -23,9 +23,9 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 #ifdef ERRSIM
-  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, module_type_);
+  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, module_type_, log_reduction_mode_);
 #else
-  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_);
+  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, log_reduction_mode_);
 #endif
 
 

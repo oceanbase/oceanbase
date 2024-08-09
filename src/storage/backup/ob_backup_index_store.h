@@ -20,6 +20,7 @@
 #include "storage/backup/ob_backup_index_cache.h"
 #include "share/backup/ob_backup_path.h"
 #include "storage/backup/ob_backup_data_struct.h"
+#include "storage/backup/ob_backup_index_compressor.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
 
@@ -59,13 +60,13 @@ protected:
   int pread_file_(const common::ObString &backup_path, const share::ObBackupStorageInfo *storage_info,
       const int64_t offset, const int64_t read_size, char *buf);
   int decode_headers_(blocksstable::ObBufferReader &buffer_reader, share::ObBackupCommonHeader &common_header,
-      ObBackupMultiLevelIndexHeader &index_header, int64_t &data_size);
+      ObBackupMultiLevelIndexHeader &index_header, int64_t &data_size, int64_t &data_zlength, ObCompressorType &compressor_type);
   int decode_common_header_(blocksstable::ObBufferReader &buffer_reader, share::ObBackupCommonHeader &header);
   int decode_multi_level_index_header_(
       blocksstable::ObBufferReader &buffer_reader, ObBackupMultiLevelIndexHeader &header);
   template <typename IndexType>
-  int decode_index_from_block_(
-      const int64_t end_pos, blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list);
+  int decode_index_from_block_(const int64_t data_zlength, const int64_t original_size, const ObCompressorType &compressor_type,
+      blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list);
   int fetch_block_(const ObBackupFileType &backup_file_type, const int64_t offset, const int64_t length,
       common::ObIAllocator &allocator, blocksstable::ObBufferReader &buffer_reader);
   int do_on_cache_miss_(const ObBackupFileType &backup_file_type, const int64_t offset, const int64_t length,
@@ -92,6 +93,7 @@ protected:
   share::ObBackupDataType backup_data_type_;
   ObBackupIndexKVCache *index_kv_cache_;
   ObBackupMultiLevelIndexTrailer trailer_;
+  ObBackupIndexBlockCompressor compressor_;
   DISALLOW_COPY_AND_ASSIGN(ObIBackupIndexStore);
 };
 
@@ -114,9 +116,11 @@ public:
 
 private:
   int get_tablet_meta_index_(const ObBackupMetaKey &meta_key, ObBackupMetaIndex &meta_index);
-  int decode_meta_index_from_buffer_(const int64_t end_pos, blocksstable::ObBufferReader &buffer_reader,
+  int decode_meta_index_from_buffer_(const int64_t data_zlength, const int64_t original_size,
+      const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader,
       common::ObArray<ObBackupMetaIndex> &index_list);
-  int decode_meta_index_index_from_buffer_(const int64_t end_pos, blocksstable::ObBufferReader &buffer_reader,
+  int decode_meta_index_index_from_buffer_(const int64_t data_zlength, const int64_t original_size,
+      const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader,
       common::ObArray<ObBackupMetaIndexIndex> &index_index_list);
   int find_index_lower_bound_(
       const ObBackupMetaKey &meta_key, const common::ObArray<ObBackupMetaIndex> &index_list, ObBackupMetaIndex &index);
@@ -152,9 +156,11 @@ public:
 private:
   int inner_get_macro_block_range_index_(
       const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroRangeIndex &range_index);
-  int decode_range_index_from_block_(const int64_t end_pos, blocksstable::ObBufferReader &buffer_reader,
+  int decode_range_index_from_block_(const int64_t data_zlength, const int64_t original_size,
+      const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader,
       common::ObArray<ObBackupMacroRangeIndex> &range_index);
-  int decode_range_index_index_from_block_(const int64_t end_pos, blocksstable::ObBufferReader &buffer_reader,
+  int decode_range_index_index_from_block_(const int64_t data_zlength, const int64_t original_size,
+      const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader,
       common::ObArray<ObBackupMacroRangeIndexIndex> &range_index_index);
   int find_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_macro_block_id,
       const common::ObArray<ObBackupMacroRangeIndex> &index_list, ObBackupMacroRangeIndex &index);
@@ -186,21 +192,71 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObRestoreMetaIndexStore);
 };
 
-class ObBackupIndexStoreWrapper {
+class ObIBackupIndexStoreWrapper {
 public:
-  ObBackupIndexStoreWrapper();
-  virtual ~ObBackupIndexStoreWrapper();
+  ObIBackupIndexStoreWrapper() {}
+  virtual ~ObIBackupIndexStoreWrapper() {}
 
-protected:
-  int get_type_by_idx_(const int64_t idx, share::ObBackupDataType &backup_data_type);
-  int get_idx_(const share::ObBackupDataType &backup_data_type, int64_t &idx);
-  static const int64_t ARRAY_SIZE = 3;
+public:
+  virtual int check_tenant_compatible(const int64_t tenant_compatible) = 0;
+  virtual int get_index_store_array_size(int64_t &array_size) = 0;
+  virtual int get_tenant_meta_index_turn_id(const share::ObBackupSetFileDesc &backup_set_info,
+    const share::ObBackupDataType &backup_data_type, int64_t &turn_id) = 0;
+  virtual int get_tenant_meta_index_retry_id(const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type,
+    const int64_t turn_id, const int64_t is_sec_meta, int64_t &retry_id);
+  virtual int get_idx(const share::ObBackupDataType &backup_data_type, int64_t &idx) = 0;
+  virtual int get_type_by_idx(const int64_t idx, share::ObBackupDataType &backup_data_type) = 0;
+  virtual int get_index_store(const share::ObBackupDataType &backup_data_type, ObRestoreMetaIndexStore *&index_store) = 0;
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObBackupIndexStoreWrapper);
+  DISALLOW_COPY_AND_ASSIGN(ObIBackupIndexStoreWrapper);
 };
 
-class ObBackupMetaIndexStoreWrapper final : public ObBackupIndexStoreWrapper {
+// for tenant compatible less then 4.3.2
+class ObBackupMetaIndexStoreWrapperV1 : public ObIBackupIndexStoreWrapper
+{
+public:
+  ObBackupMetaIndexStoreWrapperV1() : ObIBackupIndexStoreWrapper(), store_list_() {}
+  virtual ~ObBackupMetaIndexStoreWrapperV1() {}
+
+public:
+  virtual int check_tenant_compatible(const int64_t tenant_compatible) override;
+  virtual int get_index_store_array_size(int64_t &array_size) override;
+  virtual int get_tenant_meta_index_turn_id(const share::ObBackupSetFileDesc &backup_set_info,
+     const share::ObBackupDataType &backup_data_type, int64_t &turn_id) override;
+  virtual int get_idx(const share::ObBackupDataType &backup_data_type, int64_t &idx) override;
+  virtual int get_type_by_idx(const int64_t idx, share::ObBackupDataType &backup_data_type) override;
+  virtual int get_index_store(const share::ObBackupDataType &backup_data_type, ObRestoreMetaIndexStore *&index_store) override;
+
+private:
+  static const int64_t ARRAY_SIZE = 3;
+  ObRestoreMetaIndexStore store_list_[ARRAY_SIZE];
+  DISALLOW_COPY_AND_ASSIGN(ObBackupMetaIndexStoreWrapperV1);
+};
+
+// for tenant compatible greater or equal to 4.3.2
+class ObBackupMetaIndexStoreWrapperV2 : public ObIBackupIndexStoreWrapper
+{
+public:
+  ObBackupMetaIndexStoreWrapperV2() : ObIBackupIndexStoreWrapper(), store_list_() {}
+  virtual ~ObBackupMetaIndexStoreWrapperV2() {}
+
+public:
+  virtual int check_tenant_compatible(const int64_t tenant_compatible) override;
+  virtual int get_index_store_array_size(int64_t &array_size) override;
+  virtual int get_tenant_meta_index_turn_id(const share::ObBackupSetFileDesc &backup_set_info,
+    const share::ObBackupDataType &backup_data_type, int64_t &turn_id) override;
+  virtual int get_idx(const share::ObBackupDataType &backup_data_type, int64_t &idx) override;
+  virtual int get_type_by_idx(const int64_t idx, share::ObBackupDataType &backup_data_type) override;
+  virtual int get_index_store(const share::ObBackupDataType &backup_data_type, ObRestoreMetaIndexStore *&index_store) override;
+
+private:
+  static const int64_t ARRAY_SIZE = 2;
+  ObRestoreMetaIndexStore store_list_[ARRAY_SIZE];
+  DISALLOW_COPY_AND_ASSIGN(ObBackupMetaIndexStoreWrapperV2);
+};
+
+class ObBackupMetaIndexStoreWrapper final {
 public:
   ObBackupMetaIndexStoreWrapper();
   virtual ~ObBackupMetaIndexStoreWrapper();
@@ -210,39 +266,69 @@ public:
 
   int get_backup_meta_index(const share::ObBackupDataType &backup_data_type, const common::ObTabletID &tablet_id,
       const ObBackupMetaType &meta_type, ObBackupMetaIndex &meta_index);
+  int get_backup_meta_index_store(const share::ObBackupDataType &backup_data_type,
+      ObRestoreMetaIndexStore *&index_store);
+  TO_STRING_KV(K_(is_sec_meta));
 
 private:
+  int inner_init_(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
+    const share::ObBackupDest &backup_dest, const share::ObBackupSetFileDesc &backup_set_info, const bool is_sec_meta,
+    const bool init_sys_tablet_index_store, ObBackupIndexKVCache &index_kv_cache);
   int get_index_store_(const share::ObBackupDataType &type, ObRestoreMetaIndexStore *&index_store);
-  int get_tenant_meta_index_retry_id_(const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type,
-      const int64_t turn_id, const int64_t is_sec_meta, int64_t &retry_id);
-  int get_tenant_meta_index_retry_id_v_4_1_x_(const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type,
-      const int64_t turn_id, const int64_t is_sec_meta, int64_t &retry_id);
+  int decide_wrapper_(const uint64_t tenant_id, const int64_t tenant_compatible, ObIBackupIndexStoreWrapper *&wrapper);
 
 private:
   bool is_inited_;
   bool is_sec_meta_;
-  ObRestoreMetaIndexStore store_list_[ARRAY_SIZE];
+  ObIBackupIndexStoreWrapper *index_wrapper_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupMetaIndexStoreWrapper);
 };
 
-class ObBackupMacroBlockIndexStoreWrapper final : public ObBackupIndexStoreWrapper {
+// This class allows users to efficiently retrieve the macro block index stored in the macro_block_index file.
+// By providing a logic ID, it utilizes binary search to locate the corresponding index,
+// enabling users to quickly reuse the desired macro block.
+class ObBackupOrderedMacroBlockIndexStore final : public ObIBackupIndexStore
+{
+  struct MacroBlockIndexCompare {
+    bool operator()(const ObBackupMacroBlockIndex &left, const blocksstable::ObLogicMacroBlockId &right) const
+    {
+      return left.logic_id_ < right;
+    }
+  };
+  struct MacroBlockIndexIndexCompare {
+    bool operator()(const ObBackupMacroBlockIndexIndex &left, const blocksstable::ObLogicMacroBlockId &right) const
+    {
+      return left.end_key_.logic_id_ < right;
+    }
+  };
 public:
-  ObBackupMacroBlockIndexStoreWrapper();
-  virtual ~ObBackupMacroBlockIndexStoreWrapper();
-  // for restore
+  ObBackupOrderedMacroBlockIndexStore();
+  ~ObBackupOrderedMacroBlockIndexStore();
   int init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
-      const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc,
+      const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_info,
       ObBackupIndexKVCache &index_kv_cache);
-  int get_macro_block_index(const share::ObBackupDataType &backup_data_type,
-      const blocksstable::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index);
+  int get_macro_block_index(
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index);
 
 private:
-  int get_index_store_(const share::ObBackupDataType &type, ObBackupMacroBlockIndexStore *&index_store);
+  virtual int get_backup_file_path(share::ObBackupPath &backup_path) const override;
+  virtual int get_backup_index_cache_key(const ObBackupFileType &backup_file_type, const int64_t offset,
+      const int64_t length, ObBackupIndexCacheKey &cache_key) const override;
 
 private:
-  bool is_inited_;
-  ObBackupMacroBlockIndexStore store_list_[ARRAY_SIZE];
-  DISALLOW_COPY_AND_ASSIGN(ObBackupMacroBlockIndexStoreWrapper);
+  int decode_indexes_from_block_(const int64_t data_zlength, const int64_t original_size,
+      const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader,
+      common::ObArray<ObBackupMacroBlockIndex> &index_list);
+  int decode_index_indexes_from_block_(const int64_t data_zlength, const int64_t original_size,
+      const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader,
+      common::ObArray<ObBackupMacroBlockIndexIndex> &index_index_list);
+  int find_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_id,
+      const common::ObArray<ObBackupMacroBlockIndex> &index_list, ObBackupMacroBlockIndex &macro_index);
+  int find_index_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_id,
+      const common::ObArray<ObBackupMacroBlockIndexIndex> &index_list, ObBackupMacroBlockIndexIndex &macro_index_index);
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupOrderedMacroBlockIndexStore);
 };
 
 class ObBackupTenantIndexRetryIDGetter final

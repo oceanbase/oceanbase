@@ -774,6 +774,13 @@ public:
   bool get_injected_random_status() const { return injected_random_status_; }
   void set_injected_random_status(bool injected_random_status) { injected_random_status_ = injected_random_status; }
   void set_random_plan_seed(uint64_t seed) {rand_gen_.seed(seed);}
+  // check whether optimizer_features_enable_version_ in [v1, v2) or [v3, v4) or ... or [vn, +inf)
+  template<typename... Args>
+  bool check_opt_compat_version(uint64_t v1, uint64_t v2, Args... args) const;
+  bool check_opt_compat_version(uint64_t v1) const { return optimizer_features_enable_version_ >= v1; }
+  bool check_opt_compat_version(uint64_t v1, uint64_t v2) const {
+    return optimizer_features_enable_version_ >= v1 && optimizer_features_enable_version_ < v2;
+  }
 
 
 
@@ -845,6 +852,13 @@ public:
   bool injected_random_status_;
   ObRandom rand_gen_;
 };
+
+template<typename... Args>
+bool ObQueryCtx::check_opt_compat_version(uint64_t v1, uint64_t v2, Args... args) const
+{
+  return check_opt_compat_version(v1, v2) || check_opt_compat_version(args...);
+}
+
 } /* ns sql*/
 } /* ns oceanbase */
 #endif //OCEANBASE_SQL_CONTEXT_

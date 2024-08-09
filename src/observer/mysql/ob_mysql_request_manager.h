@@ -25,12 +25,15 @@
 #include "sql/ob_result_set.h"
 #include "ob_eliminate_task.h"
 #include "ob_ra_queue.h"
+#include "ob_dl_queue.h"
+#include "ob_construct_queue.h"
 
 namespace oceanbase
 {
 namespace conmmon
 {
   class ObConcurrentFIFOAllocator;
+  class ObDlQueue;
 }
 
 namespace obmysql
@@ -82,11 +85,13 @@ public:
   static constexpr float HIGH_LEVEL_EVICT_PERCENTAGE = 0.9; // 90%
   static constexpr float LOW_LEVEL_EVICT_PERCENTAGE = 0.8; // 80%
   //每进行一次release_old操作删除的sql_audit百分比
-  static const int64_t BATCH_RELEASE_SIZE = 50000; //5w
-  static const int64_t MINI_MODE_BATCH_RELEASE_SIZE = 5000; //5k
+  static const int64_t BATCH_RELEASE_SIZE = 64 * 1024; //32k
+  static const int64_t MINI_MODE_BATCH_RELEASE_SIZE = 4 * 1024; //4k
+  static const int64_t CONSTRUCT_EVICT_INTERVAL = 500000; //0.5s
   //启动淘汰检查的时间间隔
-  static const int64_t EVICT_INTERVAL = 1000000; //1s
-  typedef common::ObRaQueue::Ref Ref;
+  static const int64_t EVICT_INTERVAL = 500000; //1s
+  typedef common::ObDlQueue::DlRef DlRef;
+  typedef lib::ObLockGuard<common::ObRecursiveMutex> LockGuard;
 public:
   ObMySQLRequestManager();
   virtual ~ObMySQLRequestManager();
@@ -109,13 +114,15 @@ public:
 
   int record_request(const ObAuditRecordData &audit_record,
                      const bool enable_query_response_time_stats,
+                     const int64_t query_record_size_limit,
                      bool is_sensitive = false);
-
-  int64_t get_start_idx() const { return (int64_t)queue_.get_pop_idx(); }
-  int64_t get_end_idx() const { return (int64_t)queue_.get_push_idx(); }
-  int64_t get_capacity() const { return (int64_t)queue_.get_capacity(); }
-  int64_t get_size_used() const { return (int64_t)queue_.get_size(); }
-  int get(const int64_t idx, void *&record, Ref* ref)
+  int64_t get_start_idx();
+  int64_t get_end_idx();
+  int64_t get_capacity();
+  int64_t get_size_used();
+  common::ObRecursiveMutex &get_destroy_second_queue_lock() { return destroy_second_level_mutex_; }
+  common::ObDlQueue &get_queue() { return queue_; }
+  int get(const int64_t idx, void *&record, DlRef* ref)
   {
     int ret = OB_SUCCESS;
     if (NULL == (record = queue_.get(idx, ref))) {
@@ -124,7 +131,7 @@ public:
     return ret;
   }
 
-  int revert(Ref* ref)
+  int revert(DlRef* ref)
   {
     queue_.revert(ref);
     return common::OB_SUCCESS;
@@ -143,6 +150,11 @@ public:
     return common::OB_SUCCESS;
   }
 
+  int release_record(int64_t release_cnt);
+
+  int clear_leaf_queue(int64_t idx, int64_t size);
+  void freeCallback(void* ptr);
+
   void* alloc(const int64_t size)
   {
     void * ret = allocator_.alloc(size);
@@ -153,7 +165,10 @@ public:
 
   void clear_queue()
   {
-    (void)release_old(INT64_MAX);
+    while (queue_.get_pop_idx() < queue_.get_cur_idx()) {
+      (void)release_record(INT64_MAX);
+    }
+    (void)release_record(INT64_MAX);
     allocator_.purge();
   }
 
@@ -178,13 +193,16 @@ private:
   uint64_t request_id_;
   int64_t mem_limit_;
   common::ObConcurrentFIFOAllocator allocator_;//alloc mem for string buf
-  common::ObRaQueue queue_;
+  common::ObDlQueue queue_;
   ObEliminateTask task_;
 
   // tenant id of this request manager
   uint64_t tenant_id_;
   int tg_id_;
   volatile bool stop_flag_;
+  //Control concurrency when destroying the secondary queue.
+  common::ObRecursiveMutex destroy_second_level_mutex_;
+  ObConstructQueueTask construct_task_;
 };
 
 } // end of namespace obmysql

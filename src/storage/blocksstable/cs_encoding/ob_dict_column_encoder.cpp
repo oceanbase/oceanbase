@@ -110,14 +110,16 @@ int ObDictColumnEncoder::build_ref_encoder_ctx_()
     uint64_t range = 0;
     if (is_force_raw_) {
       if (OB_FAIL(ref_enc_ctx_.build_unsigned_stream_meta(
-          0, max_ref_, is_replace_null, null_replaced_value, true, range))) {
+          0, max_ref_, is_replace_null, null_replaced_value, true,
+          ctx_->encoding_ctx_->major_working_cluster_version_, range))) {
         LOG_WARN("fail to build_unsigned_stream_meta", K(ret));
       }
     } else {
       if (OB_FAIL(try_const_encoding_ref_())) {
         LOG_WARN("fail to try_use_const_ref", K(ret));
       } else if (OB_FAIL(ref_enc_ctx_.build_unsigned_stream_meta(0, ref_stream_max_value_,
-          is_replace_null, null_replaced_value, false, range))) {
+          is_replace_null, null_replaced_value, false,
+          ctx_->encoding_ctx_->major_working_cluster_version_, range))) {
         LOG_WARN("fail to build_unsigned_stream_meta", K(ret));
       }
     }

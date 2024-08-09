@@ -60,6 +60,11 @@ public:
       char *dest, const size_t dest_capacity, size_t &decompressed_size);
   static size_t compress_bound(const size_t src_size);
   static int insert_block(void *ctx, const void *block, const size_t block_size);
+
+  static int create_stream_dctx(const OB_ZSTD_customMem &ob_zstd_mem, void *&ctx);
+  static void free_stream_dctx(void *&ctx);
+  static int decompress_stream(void *ctx, const char *src, const size_t src_size, size_t &consumed_size,
+                                  char *dest, const size_t dest_capacity, size_t &decompressed_size);
 };
 
 #undef OB_PUBLIC_API

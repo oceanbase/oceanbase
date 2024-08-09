@@ -98,8 +98,8 @@ inline bool is_allow_when_drop_tenant(const obrpc::ObRpcPacketCode pcode)
 class ObRootServerRPCProcessorBase
 {
 public:
-  ObRootServerRPCProcessorBase(ObRootService &rs, const bool full_service, const bool major_freeze_done, const bool is_ddl_like, obrpc::ObDDLArg *arg)
-      : root_service_(rs), full_service_(full_service), major_freeze_done_(major_freeze_done), is_ddl_like_(is_ddl_like), ddl_arg_(arg) {}
+  ObRootServerRPCProcessorBase(ObRootService &rs, const bool full_service, const bool is_ddl_like, obrpc::ObDDLArg *arg)
+      : root_service_(rs), full_service_(full_service), is_ddl_like_(is_ddl_like), ddl_arg_(arg) {}
 protected:
   int process_(const obrpc::ObRpcPacketCode pcode) __attribute__((noinline))
   {
@@ -111,11 +111,7 @@ protected:
       if (full_service_ && !root_service_.is_full_service()) {
         ret = OB_SERVER_IS_INIT;
         RS_LOG(WARN, "RS is initializing, can not process this request",
-            K(ret), K(full_service_), K(root_service_.is_full_service()), K(pcode));
-      } else if (major_freeze_done_ && !root_service_.is_major_freeze_done()) {
-        ret = OB_SERVER_IS_INIT;
-        RS_LOG(WARN, "RS major freeze not finished, can not process ddl request",
-            K(ret), K(pcode));
+            KR(ret), K(full_service_), K(root_service_.is_full_service()), K(pcode));
       } else if (is_ddl_like_
                  && (!GCONF.enable_ddl && !is_allow_when_disable_ddl(pcode, ddl_arg_))) {
         ret = OB_OP_NOT_ALLOW;
@@ -249,7 +245,6 @@ protected:
 protected:
   ObRootService &root_service_;
   const bool full_service_;
-  const bool major_freeze_done_;
   const bool is_ddl_like_;
   const obrpc::ObDDLArg *ddl_arg_;
 };
@@ -259,8 +254,8 @@ class ObRootServerRPCProcessor
     : public obrpc::ObCommonRpcProxy::Processor<pcode>, public ObRootServerRPCProcessorBase
 {
 public:
-  ObRootServerRPCProcessor(ObRootService &rs, const bool full_service, const bool major_freeze_done, const bool is_ddl_like, obrpc::ObDDLArg *arg = NULL)
-      : ObRootServerRPCProcessorBase(rs, full_service, major_freeze_done, is_ddl_like, arg) {}
+  ObRootServerRPCProcessor(ObRootService &rs, const bool full_service, const bool is_ddl_like, obrpc::ObDDLArg *arg = NULL)
+      : ObRootServerRPCProcessorBase(rs, full_service, is_ddl_like, arg) {}
 protected:
   virtual int before_process()
   {
@@ -281,25 +276,25 @@ protected:
   }
 };
 
-#define DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, full_service, major_freeze_done, is_ddl_like, arg)         \
+#define DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, full_service, is_ddl_like, arg)         \
   class pname : public ObRootServerRPCProcessor<pcode>                                        \
   {                                                                                           \
   public:                                                                                     \
     explicit pname(ObRootService &rs)                                                         \
-      : ObRootServerRPCProcessor<pcode>(rs, full_service, major_freeze_done, is_ddl_like, arg) {}               \
+      : ObRootServerRPCProcessor<pcode>(rs, full_service, is_ddl_like, arg) {}               \
   protected:                                                                                  \
     virtual int leader_process() {                   \
       return root_service_.stmt; }                   \
   };
 
 // RPC need rs in full service status (RS restart task success)
-#define DEFINE_RS_RPC_PROCESSOR(pcode, pname, stmt) DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, true, false, false, NULL)
+#define DEFINE_RS_RPC_PROCESSOR(pcode, pname, stmt) DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, true, false, NULL)
 
 // RPC do not need full service
-#define DEFINE_LIMITED_RS_RPC_PROCESSOR(pcode, pname, stmt) DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, false, false, false, NULL)
+#define DEFINE_LIMITED_RS_RPC_PROCESSOR(pcode, pname, stmt) DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, false, false, NULL)
 
-// DDL RPC need rs in full service status and major freeze done
-#define DEFINE_DDL_RS_RPC_PROCESSOR(pcode, pname, stmt) DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, true, true, true, &arg_)
+// DDL RPC need rs in full service status
+#define DEFINE_DDL_RS_RPC_PROCESSOR(pcode, pname, stmt) DEFINE_RS_RPC_PROCESSOR_(pcode, pname, stmt, true, true, &arg_)
 
 DEFINE_LIMITED_RS_RPC_PROCESSOR(obrpc::OB_RENEW_LEASE, ObRpcRenewLeaseP, renew_lease(arg_, result_));
 DEFINE_LIMITED_RS_RPC_PROCESSOR(obrpc::OB_REPORT_SYS_LS, ObRpcReportSysLSP, report_sys_ls(arg_));
@@ -351,6 +346,7 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_TRUNCATE_TABLE_V2, ObRpcTruncateTableV2P, 
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_GENERATE_AUX_INDEX_SCHEMA, ObRpcGenerateAuxIndexSchemaP, generate_aux_index_schema(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_INDEX, ObRpcCreateIndexP, create_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_INDEX, ObRpcDropIndexP, drop_index(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_REBUILD_VEC_INDEX, ObRpcRebuildVecIndexP, rebuild_vec_index(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_MLOG, ObRpcCreateMLogP, create_mlog(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_TABLE_LIKE, ObRpcCreateTableLikeP, create_table_like(arg_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_USER, ObRpcCreateUserP, create_user(arg_, result_));
@@ -507,7 +503,7 @@ class ObForceSetLocalityP : public ObRootServerRPCProcessor<obrpc::OB_FORCE_SET_
 {
 public:
   explicit ObForceSetLocalityP(ObRootService &rs)
-    : ObRootServerRPCProcessor<obrpc::OB_FORCE_SET_LOCALITY>(rs, true, false, false, NULL) {}
+    : ObRootServerRPCProcessor<obrpc::OB_FORCE_SET_LOCALITY>(rs, true, false, NULL) {}
 protected:
   virtual int leader_process() { return root_service_.force_set_locality(arg_); }
   int before_process() {

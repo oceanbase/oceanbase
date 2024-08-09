@@ -30,6 +30,7 @@
 #include "share/scn.h"
 #include "storage/high_availability/ob_ls_transfer_info.h"
 #include "storage/mview/ob_major_mv_merge_info.h"
+#include "common/ob_store_format.h"       // ObLSStoreFormat
 
 namespace oceanbase
 {
@@ -161,7 +162,8 @@ public:
                K_(clog_checkpoint_scn), K_(clog_base_lsn),
                K_(rebuild_seq), K_(migration_status), K(gc_state_), K(offline_scn_),
                K_(restore_status), K_(replayable_point), K_(tablet_change_checkpoint_scn),
-               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info), K_(transfer_meta_info));
+               K_(all_id_meta), K_(transfer_scn), K_(rebuild_info), K_(transfer_meta_info),
+               K_(store_format));
 private:
   int check_can_update_();
 public:
@@ -204,6 +206,7 @@ private:
   ObLSRebuildInfo rebuild_info_;
   ObLSTransferMetaInfo transfer_meta_info_; //transfer_dml_ctrl_42x # placeholder
   ObMajorMVMergeInfo major_mv_merge_info_;
+  common::ObLSStoreFormat store_format_;    //not used, only as placeholder
 };
 
 }  // namespace storage

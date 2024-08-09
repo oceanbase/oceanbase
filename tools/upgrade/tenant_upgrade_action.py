@@ -19,8 +19,6 @@ def do_upgrade(conn, cur, timeout, user, pwd):
   across_version = upgrade_across_version(cur)
   if across_version:
     run_upgrade_job(conn, cur, "UPGRADE_ALL", timeout)
-  else:
-    run_upgrade_job(conn, cur, "UPGRADE_VIRTUAL_SCHEMA", timeout)
 
   run_root_inspection(cur, timeout)
 ####========******####======== actions begin ========####******========####

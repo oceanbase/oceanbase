@@ -16,9 +16,28 @@
 using namespace oceanbase;
 using namespace share;
 
+static const char *OB_RESTORE_TYPE_STR[] = {"FULL", "QUICK"};
+
 ObRestoreType::ObRestoreType(const Type &type)
   : type_(type)
 {
+}
+
+ObRestoreType::ObRestoreType(const ObString &str)
+{
+  type_ = Type::RESTORE_TYPE_MAX;
+  if (str.empty()) {
+  } else {
+    for (int64_t i = 0; i < ARRAYSIZEOF(OB_RESTORE_TYPE_STR); i++) {
+      if (0 == str.case_compare(OB_RESTORE_TYPE_STR[i])) {
+        type_ = static_cast<Type>(i);
+        break;
+      }
+    }
+  }
+  if (Type::RESTORE_TYPE_MAX <= type_) {
+     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid restore type", K_(type), K(str));
+  }
 }
 
 ObRestoreType &ObRestoreType::operator=(const ObRestoreType &restore_type)
@@ -72,4 +91,17 @@ int ObRestoreType::deserialize(const char *buf, const int64_t len, int64_t &pos)
 int64_t ObRestoreType::get_serialize_size() const
 {
   return serialization::encoded_length_i8(static_cast<int8_t>(type_));
+}
+
+const char* ObRestoreType::to_str() const
+{
+  STATIC_ASSERT(ARRAYSIZEOF(OB_RESTORE_TYPE_STR) == RESTORE_TYPE_MAX, "array size mismatch");
+  const char *str = "UNKNOWN";
+  if (OB_UNLIKELY(type_ >= ARRAYSIZEOF(OB_RESTORE_TYPE_STR)
+                  || type_ < Type::FULL)) {
+    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "fatal error, unknown restore type", K_(type));
+  } else {
+    str = OB_RESTORE_TYPE_STR[type_];
+  }
+  return str;
 }

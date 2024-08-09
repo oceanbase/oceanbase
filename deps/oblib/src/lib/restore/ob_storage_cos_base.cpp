@@ -28,7 +28,8 @@ using namespace oceanbase::common;
 /*--------------------------------GLOBAL---------------------------*/
 int init_cos_env()
 {
-  return qcloud_cos::ObCosEnv::get_instance().init();
+  ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+  return qcloud_cos::ObCosEnv::get_instance().init(ob_apr_abort_fn);
 }
 
 void fin_cos_env()
@@ -47,6 +48,7 @@ void fin_cos_env()
     flying_io_cnt = ObExternalIOCounter::get_flying_io_cnt();
   }
 
+   ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
   qcloud_cos::ObCosEnv::get_instance().destroy();
 }
 
@@ -1009,7 +1011,6 @@ int ObStorageCosAppendWriter::do_write(
     const bool is_pwrite)
 {
   int ret = OB_SUCCESS;
-
   const int64_t start_time = ObTimeUtility::current_time();
   if(NULL == buf || size < 0) {
     ret = OB_INVALID_ARGUMENT;

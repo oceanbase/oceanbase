@@ -73,13 +73,12 @@ int ObTabletMergeInfo::init(const ObBasicTabletMergeCtx &ctx, bool need_check/*t
 void ObTabletMergeInfo::build_sstable_merge_info(const ObBasicTabletMergeCtx &ctx)
 {
   const ObStaticMergeParam &static_param = ctx.static_param_;
-  sstable_merge_info_.tenant_id_ = MTL_ID();
   sstable_merge_info_.ls_id_ = ctx.get_ls_id();
   sstable_merge_info_.tablet_id_ = ctx.get_tablet_id();
   sstable_merge_info_.compaction_scn_ = static_param.get_compaction_scn();
   sstable_merge_info_.merge_type_ = ctx.get_inner_table_merge_type();
-  sstable_merge_info_.progressive_merge_round_ = static_param.progressive_merge_round_;
-  sstable_merge_info_.progressive_merge_num_ = static_param.progressive_merge_num_;
+  sstable_merge_info_.progressive_merge_round_ = ctx.get_progressive_merge_round();
+  sstable_merge_info_.progressive_merge_num_ = ctx.get_progressive_merge_num();
   sstable_merge_info_.concurrent_cnt_ = static_param.concurrent_cnt_;
   sstable_merge_info_.is_full_merge_ = static_param.is_full_merge_;
 }
@@ -272,8 +271,7 @@ int ObTabletMergeInfo::create_sstable(
       }
 
       if (OB_SUCC(ret) && !skip_to_create_empty_cg) {
-        FLOG_INFO("succeed to merge sstable", K(param), "table_key", merge_table_handle.get_table()->get_key(),
-            KPC(cg_schema), KPC(this));
+        LOG_TRACE("succeed to merge sstable", K(param), KPC(cg_schema), KPC(this));
       }
     }
   }

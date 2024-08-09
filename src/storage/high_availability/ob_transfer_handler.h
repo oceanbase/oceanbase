@@ -194,7 +194,7 @@ private:
       const SCN data_end_scn,
       const SCN transfer_scn,
       ObIArray<ObTabletID> &tablet_list,
-      ObIArray<transaction::ObTransID> &move_tx_ids,
+      ObIArray<transaction::ObTransID> *move_tx_ids,
       int64_t &move_tx_count);
   int start_trans_(
       ObTimeoutCtx &timeout_ctx,

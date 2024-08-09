@@ -363,7 +363,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
               need_sort = false;
               unit.memory_size_ = min_unsort_memory;
             } else {
-              need_sort = true;
+              need_sort = ctx_->param_.need_sort_; // allow forced non-sorting
               unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
             }
           } else {
@@ -466,19 +466,14 @@ int ObTableLoadCoordinator::pre_begin_peers(ObDirectLoadResourceApplyArg &apply_
       if (ObTableLoadUtils::is_local_addr(addr)) { // 本机
         ctx_->param_.session_count_ = arg.config_.parallel_;
         ctx_->param_.avail_memory_ = arg.avail_memory_;
-        if (OB_FAIL(ObTableLoadService::assign_memory(ctx_->param_.need_sort_, arg.avail_memory_))) {
-          LOG_WARN("fail to assign_memory", KR(ret));
+        if (OB_FAIL(ObTableLoadStore::init_ctx(ctx_, arg.partition_id_array_, arg.target_partition_id_array_))) {
+          LOG_WARN("fail to store init ctx", KR(ret));
         } else {
-          ctx_->set_assigned_memory();
-          if (OB_FAIL(ObTableLoadStore::init_ctx(ctx_, arg.partition_id_array_, arg.target_partition_id_array_))) {
-            LOG_WARN("fail to store init ctx", KR(ret));
-          } else {
-            ObTableLoadStore store(ctx_);
-            if (OB_FAIL(store.init())) {
-              LOG_WARN("fail to init store", KR(ret));
-            } else if (OB_FAIL(store.pre_begin())) {
-              LOG_WARN("fail to store pre begin", KR(ret));
-            }
+          ObTableLoadStore store(ctx_);
+          if (OB_FAIL(store.init())) {
+            LOG_WARN("fail to init store", KR(ret));
+          } else if (OB_FAIL(store.pre_begin())) {
+            LOG_WARN("fail to store pre begin", KR(ret));
           }
         }
       } else { // 对端, 发送rpc
@@ -1022,6 +1017,18 @@ int ObTableLoadCoordinator::commit_peers(ObTableLoadSqlStatistics &sql_statistic
         }
       }
     }
+    if (OB_SUCC(ret)) {
+      if (ctx_->is_assigned_resource()) {
+        int tmp_ret = OB_SUCCESS;
+        ObDirectLoadResourceReleaseArg release_arg;
+        release_arg.tenant_id_ = MTL_ID();
+        release_arg.task_key_ = ObTableLoadUniqueKey(ctx_->param_.table_id_, ctx_->ddl_param_.task_id_);
+        if (OB_TMP_FAIL(ObTableLoadService::delete_assigned_task(release_arg))) {
+          LOG_WARN("fail to delete assigned task", KR(tmp_ret), K(release_arg));
+        }
+        ctx_->reset_assigned_resource();
+      }
+    }
   }
   return ret;
 }
@@ -1477,6 +1484,7 @@ int ObTableLoadCoordinator::check_trans_commit(ObTableLoadCoordinatorTrans *tran
 {
   int ret = OB_SUCCESS;
   bool is_peers_commit = false;
+  ObTableLoadIndexLongWait wait_obj(10 * 1000, WAIT_INTERVAL_US);
   while (OB_SUCC(ret)) {
     // 确认trans状态为frozen
     if (OB_FAIL(trans->check_trans_status(ObTableLoadTransStatusType::FROZEN))) {
@@ -1486,7 +1494,7 @@ int ObTableLoadCoordinator::check_trans_commit(ObTableLoadCoordinatorTrans *tran
     else if (OB_FAIL(check_peers_trans_commit(trans, is_peers_commit))) {
       LOG_WARN("fail to check peers trans commit", KR(ret));
     } else if (!is_peers_commit) {
-      usleep(WAIT_INTERVAL_US);  // 等待1s后重试
+      wait_obj.wait();
     } else {
       break;
     }
@@ -1612,13 +1620,13 @@ int ObTableLoadCoordinator::get_trans_status(const ObTableLoadTransId &trans_id,
     ret = OB_NOT_INIT;
     LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
   } else {
-    LOG_INFO("coordinator get trans status");
     ObTableLoadTransCtx *trans_ctx = nullptr;
     if (OB_FAIL(coordinator_ctx_->get_trans_ctx(trans_id, trans_ctx))) {
       LOG_WARN("fail to get trans ctx", KR(ret), K(trans_id));
     } else {
       trans_ctx->get_trans_status(trans_status, error_code);
     }
+    LOG_INFO("coordinator get trans status", K(trans_status), K(error_code));
   }
   return ret;
 }

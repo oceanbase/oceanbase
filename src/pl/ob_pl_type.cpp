@@ -360,6 +360,12 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
       } else {
         meta.set_scale(data_type->get_accuracy().get_scale());
       }
+      if (meta.is_string_or_lob_locator_type() ||
+          meta.is_enum_or_set() ||
+          meta.is_json() ||
+          meta.is_geometry()) {
+        meta.set_collation_level(CS_LEVEL_IMPLICIT);
+      }
     }
   } else {
     ObParamExternType type = iparam->get_extern_type_flag();
@@ -2051,10 +2057,11 @@ bool ObObjAccessIdx::is_contain_object_type(const common::ObIArray<ObObjAccessId
 int ObPLCursorInfo::set_and_register_snapshot(const transaction::ObTxReadSnapshot &snapshot)
 {
   int ret = OB_SUCCESS;
-  set_need_check_snapshot(snapshot.valid_);
-  set_snapshot(snapshot);
-  OZ (MTL(transaction::ObTransService*)->register_tx_snapshot_verify(get_snapshot()));
-
+  OZ (set_snapshot(snapshot));
+  if (OB_SUCC(ret) && snapshot.is_valid()) {
+    set_need_check_snapshot(true);
+    OZ (MTL(transaction::ObTransService*)->register_tx_snapshot_verify(get_snapshot()));
+  }
   return ret;
 }
 

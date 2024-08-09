@@ -103,12 +103,12 @@ private:
   int try_resolve_boundary_on_create_memtable_for_leader_(ObITabletMemtable *last_frozen_tablet_memtable,
                                                           ObITabletMemtable *new_tablet_memtable);
   int check_boundary_memtable_(const uint32_t logstream_freeze_clock);
-  void resolve_data_memtable_boundary_(ObITabletMemtable *frozen_tablet_memtable,
-                                       ObITabletMemtable *active_tablet_memtable,
-                                       const CreateMemtableArg &arg);
-  void resolve_direct_load_memtable_boundary_(ObITabletMemtable *frozen_tablet_memtable,
-                                              ObITabletMemtable *active_tablet_memtable,
-                                              const CreateMemtableArg &arg);
+  int resolve_data_memtable_boundary_(ObITabletMemtable *frozen_tablet_memtable,
+                                      ObITabletMemtable *active_tablet_memtable,
+                                      const CreateMemtableArg &arg);
+  int resolve_direct_load_memtable_boundary_(ObITabletMemtable *frozen_tablet_memtable,
+                                             ObITabletMemtable *active_tablet_memtable,
+                                             const CreateMemtableArg &arg);
   int create_memtable_(const CreateMemtableArg &arg, const uint32_t logstream_freeze_clock, ObTimeGuard &tg);
   int acquire_tablet_memtable_(const bool for_inc_direct_load, ObTableHandleV2 &handle);
   ObITabletMemtable *get_active_memtable_();

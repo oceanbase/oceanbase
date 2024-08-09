@@ -120,15 +120,18 @@ int ObStorageHAMacroBlockWriter::process(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int64_t start_time = ObTimeUtility::current_time();
-  common::ObArenaAllocator allocator("HAMBWriter");
   blocksstable::ObBufferReader data(NULL, 0, 0);
-  blocksstable::MacroBlockId macro_id;
   blocksstable::ObMacroBlockWriteInfo write_info;
   blocksstable::ObMacroBlockHandle write_handle;
+  blocksstable::ObDataMacroBlockMeta macro_meta;
+  blocksstable::ObDatumRow macro_meta_row;
   copied_ctx.reset();
   int64_t write_count = 0;
+  int64_t reuse_count = 0;
   int64_t log_seq_num = 0;
   int64_t data_size = 0;
+  int64_t write_size = 0;
+  int64_t macro_meta_row_pos = 0;
   bool is_cancel = false;
   obrpc::ObCopyMacroBlockHeader header;
   write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
@@ -140,6 +143,9 @@ int ObStorageHAMacroBlockWriter::process(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not inited", K(ret));
+  } else if (OB_FAIL(macro_meta_row.init(OB_MAX_ROWKEY_COLUMN_NUMBER + 1))) {
+    // use max row key cnt + 1 as capacity, because meta row is kv
+    STORAGE_LOG(WARN, "failed to init macro meta row", K(ret));
   } else {
     while (OB_SUCC(ret)) {
       if (!GCTX.omt_->has_tenant(tenant_id_)) {
@@ -173,15 +179,36 @@ int ObStorageHAMacroBlockWriter::process(
           ret = OB_SUCCESS;
         }
         break;
+      } else if (!header.is_valid()
+        || (!header.is_reuse_macro_block_ && header.data_type_ != obrpc::ObCopyMacroBlockHeader::DataType::MACRO_DATA)
+        || (header.is_reuse_macro_block_ && header.data_type_ != obrpc::ObCopyMacroBlockHeader::DataType::MACRO_META_ROW)) {
+        // invalid argument, if not reuse macro block, buffer must contain whole macro block data
+        ret = OB_INVALID_ARGUMENT;
+        STORAGE_LOG(ERROR, "invalid header", K(ret), K(header));
+      } else if (header.is_reuse_macro_block_) {
+        macro_meta_row_pos = 0;
+        macro_meta_row.reuse();
+        macro_meta.reset();
+
+        if (OB_FAIL(macro_meta_row.deserialize(data.data(), header.occupy_size_, macro_meta_row_pos))) {
+          STORAGE_LOG(WARN, "failed to deserialize macro meta row", K(ret), K(data), K(header));
+        } else if (OB_FAIL(macro_meta.parse_row(macro_meta_row))) {
+          STORAGE_LOG(WARN, "failed to parse macro meta row", K(ret), K(macro_meta_row));
+        } else if (macro_meta.get_macro_id() == ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID) {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "macro id from src has been set to default", K(ret), K(macro_meta));
+        } else if (OB_FAIL(copied_ctx.add_macro_block_id(macro_meta.get_macro_id()))) {
+          STORAGE_LOG(WARN, "fail to add macro id", K(ret), K(macro_meta));
+        } else if (OB_FAIL(index_block_rebuilder_->append_macro_row(macro_meta))) {
+          STORAGE_LOG(WARN, "failed to append macro row", K(ret), K(macro_meta));
+        } else {
+          ++reuse_count;
+        }
       } else if (OB_FAIL(check_macro_block_(data))) {
         STORAGE_LOG(ERROR, "failed to check macro block, fatal error", K(ret), K(write_count), K(data));
         ret = OB_INVALID_DATA;// overwrite ret
       } else if (!write_handle.is_empty() && OB_FAIL(write_handle.wait())) {
         STORAGE_LOG(WARN, "failed to wait write handle", K(ret), K(write_info));
-      } else if (header.is_reuse_macro_block_) {
-        //TODO(muwei.ym) reuse macro block in 4.3
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("header is reuse macro block", K(ret));
       } else {
         write_info.buffer_ = data.data();
         write_info.size_ = data.upper_align_length();
@@ -192,12 +219,11 @@ int ObStorageHAMacroBlockWriter::process(
         } else if (OB_FAIL(copied_ctx.add_macro_block_id(write_handle.get_macro_id()))) {
           STORAGE_LOG(WARN, "fail to add macro id", K(ret), "macro id", write_handle.get_macro_id());
         } else if (OB_FAIL(index_block_rebuilder_->append_macro_row(data.data(), data.capacity(),
-            write_handle.get_macro_id()))) {
-          LOG_WARN("failed to append macro row", K(ret), K(write_handle));
+            write_handle.get_macro_id(), -1 /*absolute_row_offset*/))) {
+          STORAGE_LOG(WARN, "failed to append macro row", K(ret), K(write_handle));
         } else {
-          ObTaskController::get().allow_next_syslog();
-          STORAGE_LOG(INFO, "success copy macro block", K(write_count));
           ++write_count;
+          write_size += data.capacity();
         }
       }
     }
@@ -214,14 +240,18 @@ int ObStorageHAMacroBlockWriter::process(
 
     int64_t cost_time_ms = (ObTimeUtility::current_time() - start_time) / 1000;
     int64_t data_size_KB = reader_->get_data_size() / 1024;
-    int64_t speed_KB = 0;
+    int64_t write_size_KB = write_size / 1024;
+
+    int64_t rspeed_KB = 0;
+    int64_t wspeed_KB = 0;
     if (cost_time_ms > 0) {
-      speed_KB = data_size_KB * 1000 / cost_time_ms;
+      rspeed_KB = data_size_KB * 1000 / cost_time_ms;
+      wspeed_KB = write_size_KB * 1000 / cost_time_ms;
     }
     data_size += reader_->get_data_size();
     STORAGE_LOG(INFO, "finish copy macro block data", K(ret),
-                "macro_count", copied_ctx.get_macro_block_count(),
-                K(cost_time_ms), "data_size_B",  reader_->get_data_size(), K(speed_KB));
+                "macro_count", copied_ctx.get_macro_block_count(), K(write_count), K(reuse_count),
+                K(cost_time_ms), "read_size_B",  reader_->get_data_size(), K(write_size), K(rspeed_KB), K(wspeed_KB));
   }
 
   return ret;

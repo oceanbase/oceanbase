@@ -673,7 +673,7 @@ int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
       ObSSTablePrinter::print_macro_block_header(&macro_header_);
       if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.get_col_type_array_cnt()))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
-      } else if (OB_FAIL(dump_sstable_macro_block(false))) {
+      } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::DATA))) {
         LOG_WARN("Failed to dump sstable macro block", K(ret));
       }
       break;
@@ -690,12 +690,17 @@ int ObSSTableDataBlockReader::dump(const uint64_t tablet_id, const int64_t scn)
       ObSSTablePrinter::print_macro_block_header(&macro_header_);
       if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.column_count_))) {
         LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
-      } else if (OB_FAIL(dump_sstable_macro_block(true))) {
+      } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::INDEX))) {
         LOG_WARN("Failed to dump sstable macro block", K(ret));
       }
       break;
     case ObMacroBlockCommonHeader::SSTableMacroMeta:
-      // Only Dump Header
+      ObSSTablePrinter::print_macro_block_header(&macro_header_);
+      if (OB_FAIL(dump_column_info(macro_header_.fixed_header_.column_count_, macro_header_.fixed_header_.column_count_))) {
+        LOG_WARN("Failed to dump column info", K(ret), K_(macro_header));
+      } else if (OB_FAIL(dump_sstable_macro_block(MicroBlockType::MACRO_META))) {
+        LOG_WARN("Failed to dump sstable macro block", K(ret));
+      }
       break;
     default:
       ret = OB_NOT_SUPPORTED;
@@ -718,7 +723,7 @@ bool ObSSTableDataBlockReader::check_need_print(const uint64_t tablet_id, const 
   return need_print;
 }
 
-int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block)
+int ObSSTableDataBlockReader::dump_sstable_macro_block(const MicroBlockType block_type)
 {
   int ret = OB_SUCCESS;
 
@@ -732,7 +737,7 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block
     int64_t micro_idx = 0;
 
     do {
-      if (OB_FAIL(dump_sstable_micro_block(micro_idx, is_index_block, macro_iter))) {
+      if (OB_FAIL(dump_sstable_micro_block(micro_idx, block_type, macro_iter))) {
         LOG_WARN("Fail to dump sstable micro block", K(ret));
       } else {
         ++micro_idx;
@@ -742,11 +747,11 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block
     if (OB_FAIL(ret) && OB_ITER_END != ret) {
       LOG_WARN("Fail to iterate all rows in macro block", K(ret));
     } else if (FALSE_IT(ret = OB_SUCCESS)) {
-    } else if (!is_index_block) {
+    } else if (MicroBlockType::DATA == block_type) {
       // dump leaf index block
       if (OB_FAIL(macro_iter.open_leaf_index_micro_block())) {
         LOG_WARN("Fail to open leaf index micro block", K(ret));
-      } else if (OB_FAIL(dump_sstable_micro_block(0, true, macro_iter))) {
+      } else if (OB_FAIL(dump_sstable_micro_block(0, block_type, macro_iter))) {
         LOG_WARN("Fail to dump leaf index micro block", K(ret));
       } else if (OB_FAIL(dump_macro_block_meta_block(macro_iter))) {
         LOG_WARN("Fail to dump macro meta block in macro block", K(ret));
@@ -759,7 +764,7 @@ int ObSSTableDataBlockReader::dump_sstable_macro_block(const bool is_index_block
 
 int ObSSTableDataBlockReader::dump_sstable_micro_block(
     const int64_t micro_idx,
-    const bool is_index_block,
+    const MicroBlockType block_type,
     ObMacroBlockRowBareIterator &macro_iter)
 {
   int ret = OB_SUCCESS;
@@ -769,9 +774,9 @@ int ObSSTableDataBlockReader::dump_sstable_micro_block(
   } else if (OB_ISNULL(micro_data) || OB_UNLIKELY(!micro_data->is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected invalid micro block data", K(ret), KPC(micro_data));
-  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, micro_idx, is_index_block ? MicroBlockType::INDEX : MicroBlockType::DATA))) {
+  } else if (OB_FAIL(dump_sstable_micro_header(*micro_data, micro_idx, block_type))) {
     LOG_ERROR("Failed to dump sstble micro block header", K(ret));
-  } else if (OB_FAIL(dump_sstable_micro_data(is_index_block, macro_iter))) {
+  } else if (OB_FAIL(dump_sstable_micro_data(block_type, macro_iter))) {
     LOG_ERROR("Failed to dump sstble micro block data", K(ret));
   }
   return ret;
@@ -780,7 +785,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_block(
 int ObSSTableDataBlockReader::dump_sstable_micro_header(
     const ObMicroBlockData &micro_data,
     const int64_t micro_idx,
-    const MicroBlockType type)
+    const MicroBlockType block_type)
 {
   int ret = OB_SUCCESS;
   const char *micro_block_buf = micro_data.get_buf();
@@ -794,9 +799,9 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
   if (OB_FAIL(micro_block_header.deserialize(micro_block_buf, micro_block_size, pos))) {
     LOG_ERROR("Failed to deserialize sstble micro block header", K(ret), K(micro_data));
   } else {
-    if (MicroBlockType::DATA == type) {
+    if (MicroBlockType::DATA == block_type) {
       ObSSTablePrinter::print_title("Data Micro Block", micro_idx, 1);
-    } else if (MicroBlockType::INDEX == type) {
+    } else if (MicroBlockType::INDEX == block_type) {
       ObSSTablePrinter::print_title("Index Micro Block", micro_idx, 1);
     } else {
       ObSSTablePrinter::print_title("Macro Meta Micro Block", micro_idx, 1);
@@ -831,7 +836,7 @@ int ObSSTableDataBlockReader::dump_sstable_micro_header(
 }
 
 int ObSSTableDataBlockReader::dump_sstable_micro_data(
-    const bool is_index_block,
+    const MicroBlockType block_type,
     ObMacroBlockRowBareIterator &macro_bare_iter)
 {
   int ret = OB_SUCCESS;
@@ -866,10 +871,10 @@ int ObSSTableDataBlockReader::dump_sstable_micro_data(
         ObSSTablePrinter::print_store_row_hex(row, column_types_, OB_DEFAULT_MACRO_BLOCK_SIZE, hex_print_buf_);
       } else {
         ObSSTablePrinter::print_store_row(
-            row, column_types_, column_type_array_cnt_, is_index_block, is_trans_sstable_);
+            row, column_types_, column_type_array_cnt_, MicroBlockType::INDEX == block_type, is_trans_sstable_);
       }
 
-      if (is_index_block) {
+      if (MicroBlockType::INDEX == block_type) {
         idx_row_parser.reset();
         if (OB_FAIL(idx_row_parser.init(block_header->rowkey_column_count_, *row))) {
           LOG_WARN("Fail to init idx row parser", K(ret));

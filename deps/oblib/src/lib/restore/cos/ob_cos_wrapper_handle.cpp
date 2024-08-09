@@ -89,7 +89,7 @@ int ObCosWrapperHandle::init(const ObObjectStorageInfo *storage_info)
     OB_LOG(WARN, "fail to parse cos account from storage info str", K(ret));
   } else if (strlen(cos_account_.delete_mode_) > 0 && OB_FAIL(set_delete_mode(cos_account_.delete_mode_))) {
     OB_LOG(WARN, "fail to set cos delete mode", K(cos_account_.delete_mode_), K(ret));
-  } {
+  } else {
     is_inited_ = true;
   }
   return ret;
@@ -192,7 +192,11 @@ int ObCosWrapperHandle::build_bucket_and_object_name(const ObString &uri)
         if ('/' == *(uri.ptr() + bucket_end)) {
           ObString::obstr_size_t bucket_length = bucket_end - bucket_start;
           //must end with '\0'
-          if (OB_FAIL(databuff_printf(bucket_name_buff, OB_MAX_URI_LENGTH, "%.*s", bucket_length, uri.ptr() + bucket_start))) {
+          if (OB_UNLIKELY(bucket_length <= 0)) {
+            ret = OB_INVALID_ARGUMENT;
+            OB_LOG(WARN,"bucket is empty", K(ret), K(bucket_end), K(bucket_start), K(uri));
+          } else if (OB_FAIL(databuff_printf(bucket_name_buff, OB_MAX_URI_LENGTH, "%.*s",
+                                             bucket_length, uri.ptr() + bucket_start))) {
             OB_LOG(WARN, "fail to deep copy bucket", K(uri), K(bucket_start), K(bucket_length), K(ret));
           } else {
             bucket_name_.assign_ptr(bucket_name_buff, strlen(bucket_name_buff) + 1);// must include '\0'

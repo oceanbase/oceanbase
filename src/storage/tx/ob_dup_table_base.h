@@ -1443,9 +1443,10 @@ public:
   {
     redo_sync_retry_set_.destroy();
     in_thread_pool_ = false;
+    is_created_ = false;
   }
   void destroy() { reset(); }
-  int init();
+  // int init();
   int iter_tx_retry_redo_sync();
   int push_back_redo_sync_object(ObTransID tx_id, share::ObLSID ls_id);
   void clear_in_thread_pool_flag() { ATOMIC_STORE(&in_thread_pool_, false);}
@@ -1453,6 +1454,7 @@ public:
 public:
   RedoSyncRetrySet redo_sync_retry_set_;
   bool in_thread_pool_;
+  bool is_created_;
 };
 
 } // namespace transaction

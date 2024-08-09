@@ -117,4 +117,13 @@ explain select /*+ parallel(1) */ count(*) from geo_maxpt_coords_100y_2  where s
 explain select /*+ parallel(3) */ count(*) from geo_maxpt_coords_100y_2  where st_intersects(geo_maxpt_coords_100y_2.geo_pwkt, st_geomfromtext('polygon((0 0,5 0,5 5,0 5,0 0))', 0));
 
 
-
+--disable_warnings
+  DROP TABLE IF EXISTS partition_t1;
+--enable_warnings
+create table partition_t1(c1 int primary key, g geometry not null srid 0, g1 geometry srid 0) partition by hash(c1) partitions 2;
+insert into partition_t1 values (0, st_geomfromtext('point(1 1)'), st_geomfromtext('point(2 2)'));
+insert into partition_t1 values (1, st_geomfromtext('point(1 0)'), st_geomfromtext('point(2 2)'));
+select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+create spatial index idx on partition_t1 (g) local;
+select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+drop table partition_t1;

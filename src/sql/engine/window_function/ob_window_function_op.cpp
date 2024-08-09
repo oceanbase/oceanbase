@@ -461,7 +461,7 @@ int ObWindowFunctionOp::get_param_int_value(ObExpr &expr,
   } else if (result->is_null()) {
     is_null = true;
     is_valid_param = !need_check_valid;
-  } else if (need_number || expr.obj_meta_.is_number()) {
+  } else if (need_number || expr.obj_meta_.is_number() || expr.obj_meta_.is_number_float()) {
     //we restrict the bucket_num in range [0, (1<<63)-1]
     number::ObNumber result_nmb;
     number::ObCompactNumber &cnum = const_cast<number::ObCompactNumber &>(
@@ -2914,8 +2914,30 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
       } else if (OB_UNLIKELY(lib::is_mysql_mode() && is_rows && !between_value_expr->obj_meta_.is_integer_type())) {
         ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
         LOG_WARN("frame start or end is negative, NULL or of non-integral type", K(ret), K(between_value_expr->obj_meta_));
+      } else if (lib::is_oracle_mode() && between_value_expr->obj_meta_.is_interval_type()) {
+        ObDatum *interval_res = nullptr;
+        if (OB_FAIL(between_value_expr->eval(eval_ctx_, interval_res))) {
+          LOG_WARN("eval expr failed", K(ret));
+        } else if (OB_ISNULL(interval_res)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid null result datum", K(ret));
+        } else if (interval_res->is_null()) {
+          is_null = true;
+        } else if (between_value_expr->obj_meta_.is_interval_ym()) {
+          if (OB_UNLIKELY(interval_res->get_interval_ym() < 0)) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("invalid argument", K(ret), KP(interval_res));
+          }
+        } else if (OB_UNLIKELY(interval_res->get_interval_ds().is_negative())) {
+          if (OB_UNLIKELY(interval_res->get_interval_ym() < 0)) {
+            ret = OB_DATA_OUT_OF_RANGE;
+            LOG_WARN("invalid argument", K(ret), KP(interval_res));
+          }
+        }
       } else if (OB_FAIL(get_param_int_value(*between_value_expr, eval_ctx_, is_null, interval, false, lib::is_mysql_mode()))) {
         LOG_WARN("get_param_int_value failed", K(ret), KPC(between_value_expr));
+      }
+      if (OB_FAIL(ret)) {
       } else if (is_null) {
         got_null_val = true;
       } else if (interval < 0) {
@@ -2927,7 +2949,10 @@ int ObWindowFunctionOp::get_pos(RowsReader &row_reader,
     if (OB_FAIL(ret)) {
     } else if (is_rows) {
     // range or rows with expr
-      if (OB_UNLIKELY(!is_preceding && static_cast<uint64>(row_idx + interval) > INT64_MAX)) {
+      if (OB_UNLIKELY(between_value_expr->obj_meta_.is_interval_type())) {
+        ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
+        LOG_WARN("frame start or end is negative, NULL or of not supported type", K(ret));
+      } else if (OB_UNLIKELY(!is_preceding && static_cast<uint64>(row_idx + interval) > INT64_MAX)) {
         if (lib::is_mysql_mode()) {
           ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
           LOG_WARN("frame start or end is negative, NULL or of non-integral type", K(ret), K(row_idx + interval));

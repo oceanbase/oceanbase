@@ -558,7 +558,7 @@ int ObTextStringIter::reserve_data()
       uint32 reserved_char_end_pos =
         static_cast<uint32_t>(ObCharset::charpos(cs_type_, ctx_->buff_, ctx_->content_byte_len_, reserved_char_end));
       ctx_->reserved_byte_len_ = reserved_char_end_pos;
-      MEMMOVE(ctx_->buff_ + ctx_->content_byte_len_ - ctx_->reserved_byte_len_,
+      MEMMOVE(ctx_->buff_ + ctx_->buff_byte_len_ - ctx_->reserved_byte_len_,
               ctx_->buff_,
               ctx_->reserved_byte_len_);
     } else {}
@@ -580,7 +580,7 @@ int ObTextStringIter::reserve_byte_data()
     uint32 reserved_byte_start = ctx_->content_byte_len_ - ctx_->reserved_byte_len_;
     MEMMOVE(ctx_->buff_, ctx_->buff_ + reserved_byte_start, ctx_->reserved_byte_len_);
   } else if (ctx_->is_backward_) {
-    MEMMOVE(ctx_->buff_ + ctx_->content_byte_len_ - ctx_->reserved_byte_len_,
+    MEMMOVE(ctx_->buff_ + ctx_->buff_byte_len_ - ctx_->reserved_byte_len_,
             ctx_->buff_,
             ctx_->reserved_byte_len_);
   } else {}
@@ -627,7 +627,7 @@ int ObTextStringIter::get_next_block_inner(ObString &str)
         // from :[0, output_data.length_][output_data.length_, output_data.buffer_size_][reserved_part]
         // to   :[0, output_data.length_][reserved_part]
         MEMMOVE(output_data.ptr() + output_data.length(),
-                output_data.ptr() + output_data.length() + output_data.remain(),
+                ctx_->buff_ + ctx_->buff_byte_len_ - ctx_->reserved_byte_len_,
                 ctx_->reserved_byte_len_);
       }
       ctx_->content_byte_len_ = ctx_->reserved_byte_len_ + output_data.length();

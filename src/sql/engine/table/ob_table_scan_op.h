@@ -73,13 +73,19 @@ public:
       spat_rows_(nullptr),
       spat_row_index_(0),
       mbr_buffer_(nullptr),
-      obj_buffer_(nullptr)
+      obj_buffer_(nullptr),
+      geo_idx_(0),
+      cell_idx_(0),
+      mbr_idx_(0)
   {}
   ~ObSpatialIndexCache() {};
   ObDomainIndexRow *spat_rows_;
   uint8_t spat_row_index_;
   void *mbr_buffer_;
   void *obj_buffer_;
+  uint32_t geo_idx_;
+  uint32_t cell_idx_;
+  uint32_t mbr_idx_;
 };
 
 //for the oracle virtual agent table access the real table
@@ -403,11 +409,16 @@ public:
       uint64_t has_tenant_id_col_               : 1;
       uint64_t is_spatial_ddl_                  : 1;
       uint64_t is_external_table_               : 1;
-      uint64_t reserved_                        : 53;
+      uint64_t is_fts_ddl_                      : 1; // mark if ddl table is the fts index or fts doc word aux table.
+      uint64_t is_fts_index_aux_                : 1; // mark if ddl table is the fts index aux table.
+      uint64_t is_multivalue_ddl_               : 1;
+      uint64_t reserved_                        : 50;
     };
   };
   int64_t tenant_id_col_idx_;
   int64_t partition_id_calc_type_;
+
+  common::ObString parser_name_; // word segment for ddl.
 };
 
 class ObTableScanOp : public ObOperator

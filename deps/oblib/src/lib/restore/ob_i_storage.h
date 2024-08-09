@@ -53,12 +53,14 @@ int handle_listed_object(ObBaseDirEntryOperator &op,
     const char *obj_name, const int64_t obj_name_len, const int64_t obj_size);
 int handle_listed_directory(ObBaseDirEntryOperator &op,
     const char *dir_name, const int64_t dir_name_len);
+int get_storage_prefix_from_path(const common::ObString &uri, const char *&prefix);
 int build_bucket_and_object_name(ObIAllocator &allocator,
     const ObString &uri, ObString &bucket, ObString &object);
 int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     const char *fragment_name, char *name_buf, const int64_t name_buf_len);
 int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     const int64_t start, const int64_t end, char *name_buf, const int64_t name_buf_len);
+int ob_apr_abort_fn(int retcode);
 
 struct ObStorageObjectMetaBase
 {
@@ -287,6 +289,13 @@ public:
   virtual int close() = 0;
   virtual int64_t get_length() const = 0;
   virtual bool is_opened() const = 0;
+};
+
+class ObObjectStorageMallocHookGuard : public lib::ObMallocHookAttrGuard
+{
+public:
+  ObObjectStorageMallocHookGuard(const ObObjectStorageInfo *storage_info);
+  ~ObObjectStorageMallocHookGuard();
 };
 
 }//common

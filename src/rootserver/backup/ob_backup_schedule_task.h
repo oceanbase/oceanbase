@@ -197,7 +197,7 @@ public:
 
 public:
   // pure interfaces related to task cheduler
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const = 0;
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const = 0;
   virtual int64_t get_deep_copy_size() const = 0;
   // interfaces related to execution
   virtual bool can_execute_on_any_server() const = 0;
@@ -277,7 +277,7 @@ private:
 public:
   INHERIT_TO_STRING_KV("ObBackupScheduleTask", ObBackupScheduleTask, K_(incarnation_id), K_(backup_set_id),
       K_(backup_type), K_(backup_date), K_(ls_id), K_(turn_id), K_(retry_id), K_(start_scn),
-      K_(backup_user_ls_scn), K_(end_scn), K_(backup_path), K_(backup_status));
+      K_(backup_user_ls_scn), K_(end_scn), K_(backup_path), K_(backup_status), K_(fuse_turn_id));
 protected:
   int64_t incarnation_id_;
   int64_t backup_set_id_;
@@ -291,6 +291,7 @@ protected:
   share::SCN end_scn_;
   share::ObBackupPathString backup_path_;
   share::ObBackupStatus backup_status_;
+  int64_t fuse_turn_id_;
   bool is_only_calc_stat_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataBaseTask);
@@ -301,7 +302,7 @@ class ObBackupDataLSTask : public ObBackupDataBaseTask
 public:
   ObBackupDataLSTask() {}
   virtual ~ObBackupDataLSTask() {}
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
   virtual int64_t get_deep_copy_size() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
@@ -313,7 +314,7 @@ class ObBackupComplLogTask final: public ObBackupDataBaseTask
 public:
   ObBackupComplLogTask() {}
   virtual ~ObBackupComplLogTask() {}
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
   virtual int64_t get_deep_copy_size() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
   virtual int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
@@ -331,7 +332,7 @@ class ObBackupBuildIndexTask final : public ObBackupDataBaseTask
 public:
   ObBackupBuildIndexTask() {}
   virtual ~ObBackupBuildIndexTask() {}
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
   virtual int64_t get_deep_copy_size() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
@@ -344,7 +345,7 @@ class ObBackupDataLSMetaTask final : public ObBackupDataLSTask
 public:
   ObBackupDataLSMetaTask() {}
   virtual ~ObBackupDataLSMetaTask() {}
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
   virtual int64_t get_deep_copy_size() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
@@ -356,11 +357,26 @@ class ObBackupDataLSMetaFinishTask final : public ObBackupDataLSTask
 public:
   ObBackupDataLSMetaFinishTask() {}
   virtual ~ObBackupDataLSMetaFinishTask() {}
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
   virtual int64_t get_deep_copy_size() const override;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupDataLSMetaFinishTask);
+};
+
+class ObBackupDataFuseTabletMetaTask final : public ObBackupDataLSTask
+{
+public:
+  ObBackupDataFuseTabletMetaTask() {}
+  virtual ~ObBackupDataFuseTabletMetaTask() {}
+  virtual int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
+      const share::ObBackupLSTaskAttr &ls_attr) override;
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
+  virtual int64_t get_deep_copy_size() const override;
+  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
+  virtual bool execute_on_sys_server_() const { return true; } // TODO(yanfeng): only execute on sys ls when user ls is really deleted
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObBackupDataFuseTabletMetaTask);
 };
 
 class ObBackupCleanLSTask : public ObBackupScheduleTask
@@ -369,7 +385,7 @@ public:
   ObBackupCleanLSTask();
   virtual ~ObBackupCleanLSTask();
 public:
-  virtual int clone(void *input_ptr, ObBackupScheduleTask *&out_task) const override;
+  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
   virtual int64_t get_deep_copy_size() const override;
   // interfaces related to execution
   virtual bool can_execute_on_any_server() const override;

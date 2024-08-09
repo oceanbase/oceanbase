@@ -1402,23 +1402,13 @@ int ObLogicalOperator::print_used_hint(PlanText &plan_text)
 int ObLogicalOperator::print_outline_table(PlanText &plan_text, const TableItem *table_item) const
 {
   int ret = OB_SUCCESS;
-  char *buf = plan_text.buf_;
-  int64_t &buf_len = plan_text.buf_len_;
-  int64_t &pos = plan_text.pos_;
+  ObTableInHint table_hint;
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(table_item));
-  } else if (table_item->is_basic_table() && !table_item->database_name_.empty() &&
-             OB_FAIL(BUF_PRINTF("\"%.*s\".",
-                                table_item->database_name_.length(),
-                                table_item->database_name_.ptr()))) {
-    LOG_WARN("fail to print db name", K(ret), K(buf), K(buf_len), K(pos));
-  } else if (OB_FAIL(BUF_PRINTF("\"%.*s\"@\"%.*s\"",
-                                table_item->get_object_name().length(),
-                                table_item->get_object_name().ptr(),
-                                table_item->qb_name_.length(),
-                                table_item->qb_name_.ptr()))) {
-    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
+  } else if (OB_FALSE_IT(table_hint.set_table(*table_item))) {
+  } else if (OB_FAIL(table_hint.print_table_in_hint(plan_text))) {
+    LOG_WARN("failed to print table hint", K(ret));
   }
   return ret;
 }
@@ -4279,9 +4269,8 @@ int ObLogicalOperator::allocate_granule_nodes_above(AllocGIContext &ctx)
       ObLogGranuleIterator *gi_op = static_cast<ObLogGranuleIterator *>(log_op);
       if (NULL != get_parent()) {
         //check topN sort
-        if (((stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
-              stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_0) ||
-              stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_2) &&
+        if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
+                                                            COMPAT_VERSION_4_3_2) &&
             LOG_SORT == get_parent()->get_type()) {
           ObLogSort *parent = static_cast<ObLogSort*>(get_parent());
           if (parent->is_local_merge_sort() &&
@@ -6526,4 +6515,15 @@ int ObLogicalOperator::check_op_orderding_used_by_parent(bool &used)
     }
   }
   return ret;
+}
+
+bool ObLogicalOperator::is_parallel_more_than_part_cnt() const
+{
+  if (NULL == strong_sharding_) {
+    return false;
+  } else if (strong_sharding_->get_part_cnt() < 1) {
+    return false;
+  } else {
+    return get_parallel() > strong_sharding_->get_part_cnt();
+  }
 }

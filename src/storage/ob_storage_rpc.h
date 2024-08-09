@@ -50,8 +50,6 @@ class ObLogStreamService;
 namespace obrpc
 {
 
-//TODO(yanfeng) need use tenant module replace it in 4.3, currently use 509 tenant
-
 struct ObCopyMacroBlockArg
 {
   OB_UNIS_VERSION(2);
@@ -109,17 +107,21 @@ struct ObCopyMacroBlockHeader
 {
   OB_UNIS_VERSION(2);
 public:
+  enum DataType
+  {
+    MACRO_DATA = 0,
+    MACRO_META_ROW = 1,
+    MAX,
+  };
   ObCopyMacroBlockHeader();
   virtual ~ObCopyMacroBlockHeader() {}
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(K_(is_reuse_macro_block), K_(occupy_size), K_(macro_meta_row));
+  TO_STRING_KV(K_(is_reuse_macro_block), K_(occupy_size), K_(data_type));
   bool is_reuse_macro_block_;
   int64_t occupy_size_;
-
-  blocksstable::ObDatumRow macro_meta_row_; // used to get macro meta
-  common::ObArenaAllocator allocator_;
+  DataType data_type_;
 };
 
 struct ObCopyTabletInfoArg

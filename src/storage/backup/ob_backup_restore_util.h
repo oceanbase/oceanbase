@@ -27,7 +27,7 @@ namespace backup {
 class ObLSBackupRestoreUtil {
 public:
   static int read_tablet_meta(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
-      const share::ObBackupDataType &backup_data_type, const ObBackupMetaIndex &meta_index, ObBackupTabletMeta &tablet_meta);
+      const ObBackupMetaIndex &meta_index, ObBackupTabletMeta &tablet_meta);
   static int read_sstable_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,
       const ObBackupMetaIndex &meta_index, common::ObIArray<ObBackupSSTableMeta> &sstable_metas);
   static int read_macro_block_id_mapping_metas(const common::ObString &path, const share::ObBackupStorageInfo *storage_info,

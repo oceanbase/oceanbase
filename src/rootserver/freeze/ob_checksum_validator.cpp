@@ -437,7 +437,6 @@ int ObChecksumValidator::verify_tablet_replica_checksum()
           if (OB_CHECKSUM_ERROR == ret) {
             LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum", KR(ret),
                           K(curr_item), KPC(prev_item));
-            ret = OB_SUCCESS; // continue checking next checksum
             if (curr_item.ls_id_ != prev_error_ls_id || curr_item.tablet_id_ != prev_error_table_id) {
               prev_error_ls_id = curr_item.ls_id_;
               prev_error_table_id = curr_item.tablet_id_;
@@ -456,7 +455,7 @@ int ObChecksumValidator::verify_tablet_replica_checksum()
       if (OB_TMP_FAIL(ObTabletMetaTableCompactionOperator::batch_set_info_status(MTL_ID(), error_pairs, affected_rows))) {
         LOG_WARN("fail to batch set info status", KR(tmp_ret));
       } else {
-        LOG_INFO("succ to batch set info status", K(ret), K(affected_rows), K(error_pairs));
+        LOG_INFO("succ to batch set info status", K(tmp_ret), K(affected_rows), K(error_pairs));
       }
     }
   }

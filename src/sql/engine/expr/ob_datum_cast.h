@@ -159,7 +159,7 @@ int ob_datum_to_ob_time_with_date(const T &datum,
         ret = ObTimeConverter::int_to_ob_time_with_date(int_part, ob_time, date_sql_mode);
         if (OB_SUCC(ret)) {
           ob_time.parts_[DT_USEC] = (dec_part + 500) / 1000;
-          ObTimeConverter::adjust_ob_time(ob_time);
+          ObTimeConverter::adjust_ob_time(ob_time, true);
         }
       }
       break;
@@ -272,6 +272,7 @@ int ob_datum_to_ob_time_without_date(const T &datum,
             int64_t value = ObTimeConverter::ob_time_to_time(ob_time);
             if (value > time_max_val) {
               ret = OB_INVALID_DATE_VALUE;
+              SQL_ENG_LOG(WARN, "invalid date value", K(ob_time), K(value));
             }
           }
         }

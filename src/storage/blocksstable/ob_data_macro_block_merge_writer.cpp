@@ -42,8 +42,10 @@ void ObDataMacroBlockMergeWriter::reset()
 int ObDataMacroBlockMergeWriter::open(
     const ObDataStoreDesc &data_store_desc,
     const ObMacroDataSeq &start_seq,
-    ObIMacroBlockFlushCallback *callback)
+    ObIMacroBlockFlushCallback *callback,
+    ObIODevice *device_handle)
 {
+  UNUSED(device_handle);
   int ret = OB_SUCCESS;
 
   curr_macro_logic_id_.reset();

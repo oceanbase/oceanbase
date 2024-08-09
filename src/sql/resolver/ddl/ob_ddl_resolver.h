@@ -1036,6 +1036,7 @@ protected:
   int64_t auto_increment_cache_size_;
   ObExternalFileFormat::FormatType external_table_format_type_;
   common::ObBitSet<> mocked_external_table_column_ids_;
+  common::ObString index_params_;
 private:
   template <typename STMT>
   DISALLOW_COPY_AND_ASSIGN(ObDDLResolver);

@@ -645,7 +645,7 @@ int ObTabletReplicaChecksumOperator::construct_tablet_replica_checksum_item_(
   (void)GET_COL_IGNORE_NULL(res.get_int, "data_checksum", item.data_checksum_);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "b_column_checksums", column_meta_hex_str);
 
-  if (OB_FAIL(item.compaction_scn_.convert_for_inner_table_field(compaction_scn_val))) {
+  if (FAILEDx(item.compaction_scn_.convert_for_inner_table_field(compaction_scn_val))) {
     LOG_WARN("fail to convert val to SCN", KR(ret), K(compaction_scn_val));
   } else if (OB_FAIL(item.set_tenant_id((uint64_t)int_tenant_id))) {
     LOG_WARN("failed to set tenant id", KR(ret), K(int_tenant_id));

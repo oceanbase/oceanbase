@@ -58,6 +58,10 @@ struct ObMicroBlockDesc
   int64_t get_block_size() const { return buf_size_ + header_->header_size_; }
   const char *get_block_buf() const { return reinterpret_cast<const char *>(header_); }
 
+  int deep_copy(
+    common::ObIAllocator& allocator,
+    ObMicroBlockDesc& dst) const;
+
   TO_STRING_KV(
       K_(last_rowkey),
       KPC_(header),
@@ -78,7 +82,10 @@ struct ObMicroBlockDesc
       K_(has_lob_out_row),
       K_(is_last_row_last_flag),
       K_(original_size));
+
+  DISALLOW_COPY_AND_ASSIGN(ObMicroBlockDesc);
 };
+
 enum MICRO_BLOCK_MERGE_VERIFY_LEVEL
 {
   NONE = 0,

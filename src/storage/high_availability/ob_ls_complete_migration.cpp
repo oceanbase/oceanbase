@@ -1292,6 +1292,7 @@ int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
   ObLS *ls = nullptr;
   const int64_t check_all_tablet_start_ts = ObTimeUtility::current_time();
   const bool need_initial_state = false;
+  const bool need_sorted_tablet_id = false;
   bool need_wait_transfer_table_replace = false;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;
@@ -1314,7 +1315,7 @@ int ObStartCompleteMigrationTask::wait_transfer_table_replace_()
     SERVER_EVENT_ADD("storage_ha", "wait_transfer_table_replace",
                   "tenant_id", ctx_->tenant_id_,
                   "ls_id", ls->get_ls_id().id());
-    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
+    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state, need_sorted_tablet_id);
     ObTabletID tablet_id;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
       LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));
@@ -1577,7 +1578,7 @@ int ObStartCompleteMigrationTask::check_need_wait_(
     LOG_WARN("check need wait log sync get invalid argument", K(ret), KP(ls));
   } else if (OB_FAIL(ls->get_restore_status(ls_restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ctx_));
-  } else if (ls_restore_status.is_in_restore()) {
+  } else if (ls_restore_status.is_in_restoring_or_failed()) {
     need_wait = false;
   } else if (ObMigrationOpType::REBUILD_LS_OP == ctx_->arg_.type_) {
     need_wait = false;
@@ -1685,6 +1686,7 @@ int ObStartCompleteMigrationTask::check_all_tablet_ready_()
   ObLS *ls = nullptr;
   const int64_t check_all_tablet_start_ts = ObTimeUtility::current_time();
   const bool need_initial_state = false;
+  const bool need_sorted_tablet_id = false;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 10_min;
 
@@ -1699,7 +1701,7 @@ int ObStartCompleteMigrationTask::check_all_tablet_ready_()
   } else if (OB_FAIL(init_timeout_ctx_(timeout, timeout_ctx))) {
     LOG_WARN("failed to init timeout ctx", K(ret));
   } else {
-    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state);
+    ObHALSTabletIDIterator iter(ls->get_ls_id(), need_initial_state, need_sorted_tablet_id);
     ObTabletID tablet_id;
     if (OB_FAIL(ls->get_tablet_svr()->build_tablet_iter(iter))) {
       LOG_WARN("failed to build tablet iter", K(ret), KPC(ctx_));

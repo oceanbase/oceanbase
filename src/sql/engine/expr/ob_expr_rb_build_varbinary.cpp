@@ -72,7 +72,7 @@ int ObExprRbBuildVarbinary::eval_rb_build_varbinary(const ObExpr &expr,
   ObString rb_bin = nullptr;
   ObString res_rb_bin = nullptr;
 
-  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, rb_arg, rb_bin, is_rb_null))) {
+  if (OB_FAIL(ObRbExprHelper::get_input_roaringbitmap_bin(ctx, tmp_allocator, rb_arg, rb_bin, is_rb_null))) {
     LOG_WARN("fail to get input roaringbitmap", K(ret));
   } else if (is_rb_null || rb_bin == nullptr) {
     is_null_result = true;

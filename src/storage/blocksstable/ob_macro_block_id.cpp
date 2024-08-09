@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 #include "lib/utility/ob_print_utils.h"
 #include "storage/blocksstable/ob_macro_block_id.h"
+#include "storage/backup/ob_backup_data_struct.h"
 
 namespace oceanbase
 {
@@ -38,6 +39,15 @@ MacroBlockId::MacroBlockId(const MacroBlockId &id)
   first_id_ = id.first_id_;
   second_id_ = id.second_id_;
   third_id_ = id.third_id_;
+}
+
+bool MacroBlockId::is_valid() const
+{
+  return (MACRO_BLOCK_ID_VERSION == version_
+      && id_mode_ < (uint64_t)ObMacroBlockIdMode::ID_MODE_MAX
+      && second_id_ >= AUTONOMIC_BLOCK_INDEX && second_id_ < INT64_MAX
+      && 0 == third_id_)
+    || backup::ObBackupDeviceMacroBlockId::check_valid(first_id_, second_id_, third_id_);
 }
 
 int64_t MacroBlockId::to_string(char *buf, const int64_t buf_len) const
@@ -68,6 +78,7 @@ uint64_t MacroBlockId::hash() const
   uint64_t hash_val = 0;
   switch ((ObMacroBlockIdMode)id_mode_) {
   case ObMacroBlockIdMode::ID_MODE_LOCAL:
+  case ObMacroBlockIdMode::ID_MODE_BACKUP:
     hash_val = block_index_ * HASH_MAGIC_NUM;
     break;
   default:
@@ -83,6 +94,7 @@ int MacroBlockId::hash(uint64_t &hash_val) const
   hash_val = 0;
   switch ((ObMacroBlockIdMode)id_mode_) {
     case ObMacroBlockIdMode::ID_MODE_LOCAL:
+    case ObMacroBlockIdMode::ID_MODE_BACKUP:
       hash_val = block_index_ * HASH_MAGIC_NUM;
       break;
     default:

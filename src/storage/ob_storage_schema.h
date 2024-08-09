@@ -27,9 +27,6 @@ class ObStorageDatum;
 
 namespace storage
 {
-
-struct ObCreateSSTableParamExtraInfo;
-
 struct ObStorageRowkeyColumnSchema
 {
   OB_UNIS_VERSION(1);
@@ -167,7 +164,7 @@ public:
       const share::schema::ObTableSchema &input_schema,
       const lib::Worker::CompatMode compat_mode,
       const bool skip_column_info = false,
-      const int64_t compat_version = STORAGE_SCHEMA_VERSION_V3);
+      const int64_t compat_version = STORAGE_SCHEMA_VERSION_LATEST);
   int init(
       common::ObIAllocator &allocator,
       const ObStorageSchema &old_schema,
@@ -271,10 +268,11 @@ public:
   inline bool is_aux_lob_meta_table() const { return share::schema::is_aux_lob_meta_table(table_type_); }
   inline bool is_aux_lob_piece_table() const { return share::schema::is_aux_lob_piece_table(table_type_); }
   OB_INLINE bool is_user_hidden_table() const { return share::schema::TABLE_STATE_IS_HIDDEN_MASK & table_mode_.state_flag_; }
+  OB_INLINE bool is_cs_replica_compat() const { return is_cs_replica_compat_; }
 
   VIRTUAL_TO_STRING_KV(KP(this), K_(storage_schema_version), K_(version),
       K_(is_use_bloomfilter), K_(column_info_simplified), K_(compat_mode), K_(table_type), K_(index_type),
-      K_(row_store_type), K_(schema_version),
+      K_(row_store_type), K_(schema_version), K_(is_cs_replica_compat),
       K_(column_cnt), K_(store_column_cnt), K_(tablet_size), K_(pctfree), K_(block_size), K_(progressive_merge_round),
       K_(master_key_id), K_(compressor_type), K_(encryption), K_(encrypt_key),
       "rowkey_cnt", rowkey_array_.count(), K_(rowkey_array), "column_cnt", column_array_.count(), K_(column_array),
@@ -319,7 +317,7 @@ public:
   static const int32_t SS_ONE_BIT = 1;
   static const int32_t SS_HALF_BYTE = 4;
   static const int32_t SS_ONE_BYTE = 8;
-  static const int32_t SS_RESERVED_BITS = 18;
+  static const int32_t SS_RESERVED_BITS = 17;
 
   // STORAGE_SCHEMA_VERSION is for serde compatibility.
   // Currently we do not use "standard" serde function macro,
@@ -330,7 +328,7 @@ public:
   static const int64_t STORAGE_SCHEMA_VERSION = 1;
   static const int64_t STORAGE_SCHEMA_VERSION_V2 = 2; // add for store_column_cnt_
   static const int64_t STORAGE_SCHEMA_VERSION_V3 = 3; // add for cg_group
-
+  static const int64_t STORAGE_SCHEMA_VERSION_LATEST = STORAGE_SCHEMA_VERSION_V3;
   common::ObIAllocator *allocator_;
   int64_t storage_schema_version_;
 
@@ -342,6 +340,7 @@ public:
       uint32_t compat_mode_         :SS_HALF_BYTE;
       uint32_t is_use_bloomfilter_  :SS_ONE_BIT;
       uint32_t column_info_simplified_ :SS_ONE_BIT;
+      uint32_t is_cs_replica_compat_ :SS_ONE_BIT; // for storage schema on tablet
       uint32_t reserved_            :SS_RESERVED_BITS;
     };
   };
@@ -361,7 +360,7 @@ public:
   ObString encryption_; // for encryption
   ObString encrypt_key_; // for encryption
   common::ObFixedArray<ObStorageRowkeyColumnSchema, common::ObIAllocator> rowkey_array_; // rowkey column
-  common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> column_array_; // column schema
+  common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> column_array_; // column schema, including virtual column
   common::ObFixedArray<ObStorageColumnGroupSchema, common::ObIAllocator> column_group_array_; // column group schema
   common::ObFixedArray<share::schema::ObSkipIndexAttrWithId, common::ObIAllocator> skip_idx_attr_array_;
   int64_t store_column_cnt_; // NOT include virtual generated column

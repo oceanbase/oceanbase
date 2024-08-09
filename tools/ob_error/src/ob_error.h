@@ -177,10 +177,10 @@ public:
 constexpr int OB_MAX_SAME_ERROR_COUNT = 10;
 constexpr int ORACLE_SPECIAL_ERROR_CODE = 600;
 constexpr int ORACLE_MAX_ERROR_CODE = 65535;
-constexpr int ORACLE_MSG_PREFIX = 11;  // strlen("ORA-00000: ")
+constexpr int ORACLE_MSG_PREFIX = 11;  // strlen("OBE-00000: ")
 constexpr float OB_ERROR_VERSION = 1.0;
 
-static const char* facility_str[NONE] = {"ORA", "PLS", "MY"};
+static const char* facility_str[NONE] = {"OBE", "PLS", "MY"};
 
 class ObErrorInfoMgr {
 public:

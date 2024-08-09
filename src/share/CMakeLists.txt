@@ -44,6 +44,7 @@ ob_set_subtarget(ob_share backup
   backup/ob_tenant_archive_mgr.cpp
   backup/ob_tenant_archive_round.cpp
   backup/ob_backup_data_table_operator.cpp
+  backup/ob_backup_tablet_reorganize_helper.cpp
   backup/ob_backup_helper.cpp
   backup/ob_archive_persist_helper.cpp
   backup/ob_backup_serialize_provider.cpp

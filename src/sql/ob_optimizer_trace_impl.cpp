@@ -783,8 +783,11 @@ int ObOptimizerTraceImpl::append(const ObDSResultItem &ds_result)
   } else if (OB_DS_OUTPUT_STAT == ds_result.type_ &&
              OB_FAIL(append(", tpye:output"))) {
     LOG_WARN("failed to append msg", K(ret));
-  } else if (OB_DS_FILTER_OUTPUT_STAT == ds_result.type_ &&
-             OB_FAIL(append(", tpye:filter and output"))) {
+  } else if (OB_DS_INDEX_SCAN_STAT == ds_result.type_ &&
+             OB_FAIL(append(", tpye:index scan"))) {
+    LOG_WARN("failed to append msg", K(ret));
+  } else if (OB_DS_INDEX_BACK_STAT == ds_result.type_ &&
+             OB_FAIL(append(", tpye:index back"))) {
     LOG_WARN("failed to append msg", K(ret));
   } else if (OB_FALSE_IT(increase_section())) {
   } else if (OB_FAIL(new_line())) {

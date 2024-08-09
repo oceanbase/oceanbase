@@ -141,6 +141,11 @@ void ObIOManager::stop()
   io_scheduler_.stop();
 }
 
+void ObIOManager::wait()
+{
+  io_scheduler_.wait();
+}
+
 bool ObIOManager::is_stopped() const
 {
   return !is_working_;
@@ -453,9 +458,11 @@ int ObIOManager::remove_device_channel(ObIODevice *device_handle)
   return ret;
 }
 
-int ObIOManager::get_device_channel(const ObIODevice *device_handle, ObDeviceChannel *&device_channel)
+int ObIOManager::get_device_channel(const ObIORequest &req, ObDeviceChannel *&device_channel)
 {
+  // for now, different device_handle use same channel
   int ret = OB_SUCCESS;
+  ObIODevice *device_handle = req.fd_.is_backup_block_file() ? THE_IO_DEVICE : req.fd_.device_handle_;
   device_channel = nullptr;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -889,6 +896,7 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     LOG_WARN("schedule request failed", K(ret), KPC(req));
   }
   if (OB_FAIL(ret)) {
+    req->free();
     handle.reset();
   }
   return ret;
@@ -916,7 +924,7 @@ int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
   } else if (OB_FAIL(req->prepare())) {
     LOG_WARN("prepare io request failed", K(ret), K(req));
   } else if (FALSE_IT(time_guard.click("prepare_detect_req"))) {
-  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(req->fd_.device_handle_, device_channel))) {
+  } else if (OB_FAIL(OB_IO_MANAGER.get_device_channel(*req, device_channel))) {
     LOG_WARN("get device channel failed", K(ret), K(req));
   } else {
     if (OB_ISNULL(req->io_result_)) {
@@ -940,6 +948,10 @@ int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
   if (time_guard.get_diff() > 100000) {// 100ms
     //print req
     LOG_INFO("submit_detect_request cost too much time", K(ret), K(time_guard), K(req));
+  }
+  if (OB_FAIL(ret)) {
+    req->free();
+    handle.reset();
   }
   return ret;
 }
@@ -1494,6 +1506,7 @@ uint64_t ObTenantIOManager::get_usage_index(const int64_t group_id)
 
 void ObTenantIOManager::print_io_status()
 {
+  int ret = OB_SUCCESS;
   if (is_working() && is_inited_) {
     class IOStatusLog
     {
@@ -1568,19 +1581,22 @@ void ObTenantIOManager::print_io_status()
     ObIOUsage::AvgItems avg_iops;
     ObIOUsage::AvgItems avg_rt;
     io_usage_.calculate_io_usage();
-    io_usage_.get_io_usage(avg_iops, avg_size, avg_rt);
-    IOStatusLog io_status_log(this, &avg_iops, &avg_size, &avg_rt);
     bool need_print_io_status = false;
-    for (int64_t i = 0; !need_print_io_status && i < io_usage_.get_io_usage_num() && i < avg_size.count(); ++i) {
-      if (i == 0 || (i > 0 && !io_config_.group_configs_.at(i - 1).deleted_)) {
-        if (avg_size.at(i).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon() ||
-            avg_size.at(i).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
-          need_print_io_status = true;
+    if (OB_FAIL(io_usage_.get_io_usage(avg_iops, avg_size, avg_rt))) {
+      LOG_ERROR("fail to get io usage", K(ret));
+    } else {
+      IOStatusLog io_status_log(this, &avg_iops, &avg_size, &avg_rt);
+      for (int64_t i = 0; !need_print_io_status && i < io_usage_.get_io_usage_num() && i < avg_size.count(); ++i) {
+        if (i == 0 || (i > 0 && !io_config_.group_configs_.at(i - 1).deleted_)) {
+          if (avg_size.at(i).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon() ||
+              avg_size.at(i).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
+            need_print_io_status = true;
+          }
         }
       }
-    }
-    if (need_print_io_status) {
-      LOG_INFO("[IO STATUS]", K_(tenant_id), K(io_status_log));
+      if (need_print_io_status) {
+        LOG_INFO("[IO STATUS]", K_(tenant_id), K(io_status_log));
+      }
     }
 
     // MOCK SYS GROUPS
@@ -1633,40 +1649,45 @@ void ObTenantIOManager::print_io_status()
     };
     ObSysIOUsage::SysAvgItems sys_avg_iops, sys_avg_size, sys_avg_rt;
     io_backup_usage_.calculate_io_usage();
-    io_backup_usage_.get_io_usage(sys_avg_iops, sys_avg_size, sys_avg_rt);
-    IOStatusSysLog io_status_sys_log(this, &sys_avg_iops, &sys_avg_size, &sys_avg_rt);
-    bool need_print_sys_io_status = false;
-    for (int64_t j = 0; !need_print_sys_io_status && j < sys_avg_size.count(); ++j) {
-      if (sys_avg_size.at(j).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon() ||
-          sys_avg_size.at(j).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
-        need_print_sys_io_status = true;
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(io_backup_usage_.get_io_usage(sys_avg_iops, sys_avg_size, sys_avg_rt))) {
+      LOG_ERROR("fail to get io usage", K(ret));
+    } else {
+      IOStatusSysLog io_status_sys_log(this, &sys_avg_iops, &sys_avg_size, &sys_avg_rt);
+      bool need_print_sys_io_status = false;
+      for (int64_t j = 0; !need_print_sys_io_status && j < sys_avg_size.count(); ++j) {
+        if (sys_avg_size.at(j).at(static_cast<int>(ObIOMode::READ)) > std::numeric_limits<double>::epsilon() ||
+            sys_avg_size.at(j).at(static_cast<int>(ObIOMode::WRITE)) > std::numeric_limits<double>::epsilon()) {
+          need_print_sys_io_status = true;
+        }
       }
-    }
-    if (need_print_sys_io_status) {
-      LOG_INFO("[IO STATUS SYS]", K_(tenant_id), K(io_status_sys_log));
-    }
+      if (need_print_sys_io_status) {
+        LOG_INFO("[IO STATUS SYS]", K_(tenant_id), K(io_status_sys_log));
+      }
 
-    if (need_print_io_status || need_print_sys_io_status) {
-      ObArray<int64_t> queue_count_array;
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(callback_mgr_.get_queue_count(queue_count_array))) {
-        LOG_WARN("get callback queue count failed", K(ret));
-      }
-      LOG_INFO("[IO STATUS CONFIG]",
-          K_(tenant_id),
-          K_(ref_cnt),
-          K_(io_config),
-          "allocated_memory",
-          io_allocator_.get_allocated_size(),
-          "free_request_count",
-          io_request_pool_.get_free_cnt(),
+      if (need_print_io_status || need_print_sys_io_status) {
+        ObArray<int64_t> queue_count_array;
+        int ret = OB_SUCCESS;
+        if (OB_FAIL(callback_mgr_.get_queue_count(queue_count_array))) {
+          LOG_WARN("get callback queue count failed", K(ret));
+        }
+        LOG_INFO("[IO STATUS CONFIG]",
+            K_(tenant_id),
+            K_(ref_cnt),
+            K_(io_config),
+            "allocated_memory",
+            io_allocator_.get_allocated_size(),
+            "free_request_count",
+            io_request_pool_.get_free_cnt(),
           "free_result_count",
           io_result_pool_.get_free_cnt(),
-          "callback_queues",
-          queue_count_array);
+            "callback_queues",
+            queue_count_array);
     }
-    if (ATOMIC_LOAD(&io_config_.enable_io_tracer_)) {
-      io_tracer_.print_status();
+      if (ATOMIC_LOAD(&io_config_.enable_io_tracer_)) {
+        io_tracer_.print_status();
+        }
     }
   }
 }

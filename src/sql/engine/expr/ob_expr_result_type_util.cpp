@@ -692,6 +692,7 @@ int CHECK_STRING_RES_TYPE_ORACLE(const ObExprResType &type)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("incorrect charset of target type", K(ret), K(type));
   } else if (!type.is_clob() && !type.is_clob_locator() && !type.is_raw() &&
+             CS_TYPE_BINARY != type.get_collation_type() &&
              LS_CHAR != type.get_length_semantics() && LS_BYTE != type.get_length_semantics()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("incorrect length_semantics of target type", K(ret), K(type));

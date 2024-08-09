@@ -366,7 +366,7 @@ public:
 
     CHECK_USE_HASHSET_FOR_IN_OP(filter_val_cnt, row_count);
     if (use_hash_set) {
-      common::hash::ObHashSet<ValDataType> datums_val;
+      common::hash::ObHashSet<ValDataType, common::hash::NoPthreadDefendMode> datums_val;
       if (OB_FAIL(datums_val.create(filter_val_cnt))) {
         STORAGE_LOG(WARN, "fail to create hashset", KR(ret), K(filter_val_cnt));
       }
@@ -440,7 +440,7 @@ public:
 
     CHECK_USE_HASHSET_FOR_IN_OP(filter_val_cnt, row_count);
     if (use_hash_set) {
-      common::hash::ObHashSet<uint64_t> datums_val;
+      common::hash::ObHashSet<uint64_t, common::hash::NoPthreadDefendMode> datums_val;
       if (OB_FAIL(datums_val.create(filter_val_cnt))) {
         STORAGE_LOG(WARN, "fail to create hash set", KR(ret), K(filter_val_cnt));
       }
@@ -541,7 +541,7 @@ public:
   {
     int ret = OB_SUCCESS;
     const ValDataType cast_left_inclusive = *reinterpret_cast<const ValDataType *>(refs_val);
-    const ValDataType cast_right_exclusive = *reinterpret_cast<const ValDataType *>(refs_val + 1);
+    const ValDataType cast_right_inclusive = *reinterpret_cast<const ValDataType *>(refs_val + 1);
     const ValDataType *start_pos = reinterpret_cast<const ValDataType *>(dict_ref_buf);
     start_pos += row_start;
     for (int64_t i = 0; OB_SUCC(ret) && (i < row_count); ++i) {
@@ -549,7 +549,7 @@ public:
         // skip
       } else {
         ValDataType cur_val = *start_pos;
-        if ((cur_val >= cast_left_inclusive) && (cur_val < cast_right_exclusive) && (cur_val < dict_val_cnt)) {
+        if ((cur_val >= cast_left_inclusive) && (cur_val <= cast_right_inclusive) && (cur_val < dict_val_cnt)) {
           if (OB_FAIL(result_bitmap.set(i))) {
             STORAGE_LOG(WARN, "fail to set bitmap", KR(ret), K(i), K(row_start));
           }

@@ -91,6 +91,15 @@ TEST_F(TestAllocator, basic)
     sz = ((sz | reinterpret_cast<size_t>(p[0])) & ((1<<13) - 1));
   }
 
+  // test alloc_align/free_align
+  for (int i = 0; i < 10; ++i) {
+    int64_t align = 8<<i;
+    void *ptr = a.alloc_align(100, align);
+    ASSERT_EQ(0, (int64_t)ptr & (align - 1));
+    ASSERT_GT(a.used(), 0);
+    a.free_align(ptr);
+    ASSERT_EQ(a.used(), 0);
+  }
   cout << "done" << endl;
 }
 

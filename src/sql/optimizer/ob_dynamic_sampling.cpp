@@ -263,7 +263,8 @@ int ObDynamicSampling::do_add_ds_stat_item(const ObDSTableParam &param,
       break;
     }
     case ObDSResultItemType::OB_DS_OUTPUT_STAT:
-    case ObDSResultItemType::OB_DS_FILTER_OUTPUT_STAT: {
+    case ObDSResultItemType::OB_DS_INDEX_SCAN_STAT:
+    case ObDSResultItemType::OB_DS_INDEX_BACK_STAT: {
       ObString tmp_str;
       if (OB_ISNULL(ctx_->get_sql_schema_guard())) {
         ret = OB_ERR_UNEXPECTED;

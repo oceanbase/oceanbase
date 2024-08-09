@@ -181,7 +181,7 @@ int MutatorRow::parse_columns_(
         bool ignore_column = false;
         if (OB_NOT_NULL(tb_schema_info)) {
           // for normal column which is not belong to some udt, is_usr_column is true and is_udt_column is false
-          // for udt column
+          // for udt column that is not deleted
           // if is main column of group, is_usr_column is true , is_udt_column is also true.
           // if is hidden column of udt, is_usr_column is false, is_udt_column is true.
           if (! (column_schema_info->is_usr_column() || column_schema_info->is_udt_column())) {
@@ -190,6 +190,20 @@ int MutatorRow::parse_columns_(
                 K(tenant_id), K(table_id), K(column_stored_idx), K(is_parse_new_col), K(column_schema_info));
 
             ignore_column = true;
+          // when udt is fast deleted, main column is marked as hidden and is_usr_column is false, but not real delete.
+          // so need ignore all column of udt when main column of udt is_usr_column is false
+          } else if (column_schema_info->is_udt_column()) {
+            ColumnSchemaInfo *udt_main_column_schema_info = nullptr;
+            if (OB_FAIL(tb_schema_info->get_main_column_of_udt(column_schema_info->get_udt_set_id(), udt_main_column_schema_info))) {
+              LOG_ERROR("get udt main column schema fail", KR(ret), K(tenant_id), K(table_id), K(column_stored_idx),
+                  KPC(column_schema_info), KPC(tb_schema_info));
+            } else if (! udt_main_column_schema_info->is_usr_column()) {
+              ignore_column = true;
+              LOG_DEBUG("ignore udt column", K(tenant_id), K(table_id), K(column_stored_idx), KPC(column_schema_info));
+            } else {
+              ignore_column = false;
+              LOG_DEBUG("not ignore udt column", K(tenant_id), K(table_id), K(column_stored_idx), KPC(column_schema_info));
+            }
           } else {
             ignore_column = false;
           }
@@ -3589,6 +3603,7 @@ int PartTransTask::try_to_set_data_ready_status()
 int PartTransTask::handle_log_callback()
 {
   int ret = OB_SUCCESS;
+  bool can_be_reverted = false;
 
   if (OB_UNLIKELY(is_sys_ls_part_trans())) {
     LOG_ERROR("Not a dml part is unexcepted", KPC(this));
@@ -3607,10 +3622,22 @@ int PartTransTask::handle_log_callback()
         }
       }
     } else {
-      if (OB_FAIL(handle_unserved_trans_())) {
+      if (OB_FAIL(handle_unserved_trans_(can_be_reverted))) {
         LOG_ERROR("handle_unserved_trans_ fail", KR(ret), KPC(this));
       }
     }
+  }
+
+  if (OB_SUCC(ret) && can_be_reverted) {
+    IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
+    if (OB_ISNULL(resource_collector)) {
+      LOG_ERROR("resource_collector is NULL");
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(resource_collector->revert(this))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("revert PartTransTask fail", KR(ret));
+      }
+    } else {}
   }
 
   return ret;
@@ -3641,30 +3668,42 @@ int PartTransTask::check_dml_redo_node_ready_and_handle_()
 int PartTransTask::handle_unserved_trans()
 {
   int ret = OB_SUCCESS;
+  bool can_be_reverted = false;
+
   // Ensure the correctness of concurrent processing of Storager and PartTransDispatcher
-  ObByteLockGuard guard(data_ready_lock_);
+  {
+    ObByteLockGuard guard(data_ready_lock_);
 
-  // set unserved statue
-  set_unserved_();
+    // set unserved statue
+    set_unserved_();
 
-  if (OB_FAIL(handle_unserved_trans_())) {
-    LOG_ERROR("handle_unserved_trans_ fail", KR(ret), KPC(this));
+    if (OB_FAIL(handle_unserved_trans_(can_be_reverted))) {
+      LOG_ERROR("handle_unserved_trans_ fail", KR(ret), KPC(this));
+    }
+  }
+
+  if (OB_SUCC(ret) && can_be_reverted) {
+    IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
+    if (OB_ISNULL(resource_collector)) {
+      LOG_ERROR("resource_collector is NULL");
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(resource_collector->revert(this))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("revert PartTransTask fail", KR(ret));
+      }
+    } else {}
   }
 
   return ret;
 }
 
-int PartTransTask::handle_unserved_trans_()
+int PartTransTask::handle_unserved_trans_(bool &can_be_reverted)
 {
   int ret = OB_SUCCESS;
-  IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
 
   if (OB_UNLIKELY(is_sys_ls_part_trans())) {
     LOG_ERROR("Not a dml part is unexcepted", KPC(this));
     ret = OB_STATE_NOT_MATCH;
-  } else if (OB_ISNULL(resource_collector)) {
-    LOG_ERROR("resource_collector is NULL");
-    ret = OB_ERR_UNEXPECTED;
   } else if (is_data_ready()) {
     LOG_ERROR("data is already ready, not expected", KPC(this));
     ret = OB_ERR_UNEXPECTED;
@@ -3672,11 +3711,10 @@ int PartTransTask::handle_unserved_trans_()
     if (OB_FAIL(check_dml_redo_node_ready_and_handle_())) {
       LOG_ERROR("check_dml_redo_node_ready_and_handle_ fail", KR(ret), KPC(this));
     } else if (is_data_ready()) {
-      if (OB_FAIL(resource_collector->revert(this))) {
-        if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("revert PartTransTask fail", KR(ret));
-        }
-      }
+      // In handle_unserved_trans_, the part_trans_task can be reverted by ResourceCollector
+      // which is asynchronous process. If the asynchronous is fast enouth, the part_trans_task
+      // may be destructed which leads to the unlock core of ObByteLockGuard.
+      can_be_reverted = true;
     } else {}
   }
 

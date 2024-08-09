@@ -82,7 +82,7 @@ int ObIndexBlockRowHeader::fill_micro_des_meta(
 
 ObIndexBlockRowBuilder::ObIndexBlockRowBuilder()
   : allocator_(nullptr),
-    index_data_allocator_(nullptr),
+    index_data_allocator_(ObModIds::OB_BLOCK_INDEX_INTERMEDIATE, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     data_desc_(nullptr),
     row_(),
     rowkey_column_count_(0),
@@ -98,6 +98,7 @@ ObIndexBlockRowBuilder::~ObIndexBlockRowBuilder()
 
 void ObIndexBlockRowBuilder::reuse()
 {
+  index_data_allocator_.reuse();
   row_.reuse();
   data_buf_ = nullptr;
   write_pos_ = 0;
@@ -112,11 +113,11 @@ void ObIndexBlockRowBuilder::reset()
   data_buf_ = nullptr;
   write_pos_ = 0;
   header_ = nullptr;
+  index_data_allocator_.reset();
   is_inited_ = false;
 }
 
 int ObIndexBlockRowBuilder::init(ObIAllocator &allocator,
-                                 ObIAllocator &index_data_allocator,
                                  const ObDataStoreDesc &data_desc,
                                  const ObDataStoreDesc &index_desc)
 {
@@ -131,7 +132,6 @@ int ObIndexBlockRowBuilder::init(ObIAllocator &allocator,
     STORAGE_LOG(WARN, "Failed to init row", K(ret), K(index_desc.get_rowkey_column_count()));
   } else {
     allocator_ = &allocator;
-    index_data_allocator_ = &index_data_allocator;
     data_desc_ = &data_desc;
     rowkey_column_count_ = index_desc.get_rowkey_column_count();
     is_inited_ = true;
@@ -160,11 +160,11 @@ int ObIndexBlockRowBuilder::build_row(const ObIndexBlockRowDesc &desc, const ObD
   } else if (OB_FAIL(set_rowkey(desc))) {
     LOG_WARN("Fail to set rowkey", K(ret));
   } else if (nullptr != desc.aggregated_row_ && !desc.is_serialized_agg_row_
-      && OB_FAIL(agg_writer.init(data_desc_->get_agg_meta_array(), *desc.aggregated_row_, *index_data_allocator_))) {
+      && OB_FAIL(agg_writer.init(data_desc_->get_agg_meta_array(), *desc.aggregated_row_, index_data_allocator_))) {
     LOG_WARN("Fail to init aggregate row writer", K(ret), K(desc), KPC(row));
   } else if (OB_FAIL(calc_data_size(desc, agg_writer, data_size))) {
     LOG_WARN("Fail to calculate row data size", K(ret));
-  } else if (OB_ISNULL(data_buf_ = reinterpret_cast<char *>(index_data_allocator_->alloc(data_size)))) {
+  } else if (OB_ISNULL(data_buf_ = reinterpret_cast<char *>(index_data_allocator_.alloc(data_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Fail to alloc memory for data buffer", K(ret), K(data_size));
   } else if (FALSE_IT(MEMSET(data_buf_, 0, data_size))) {
@@ -205,7 +205,7 @@ int ObIndexBlockRowBuilder::set_rowkey(const ObDatumRowkey &rowkey)
     LOG_WARN("Rowkey column count mismatch", K(ret), K_(rowkey_column_count), K(rowkey));
   } else if (OB_FAIL(dest_rowkey.assign(row_.storage_datums_, rowkey_column_count_))) {
     STORAGE_LOG(WARN, "Failed to assign dest rowkey", K(ret), K(rowkey_column_count_));
-  } else if (OB_FAIL(rowkey.semi_copy(dest_rowkey, *index_data_allocator_))) {
+  } else if (OB_FAIL(rowkey.semi_copy(dest_rowkey, index_data_allocator_))) {
     STORAGE_LOG(WARN, "Failed to semi copy dest rowkey", K(ret), K(rowkey));
   }
 

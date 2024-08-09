@@ -18,6 +18,7 @@
 #include "sql/resolver/dml/ob_del_upd_stmt.h"
 #include "sql/resolver/dml/ob_hint.h"
 #include "share/backup/ob_backup_struct.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -34,6 +35,14 @@ enum class ObLoadFileLocation {
   SERVER_DISK = 0,
   CLIENT_DISK,
   OSS,
+};
+
+enum class ObLoadCompressionFormat
+{
+  NONE,
+  GZIP,
+  DEFLATE,
+  ZSTD,
 };
 
 class ObLoadFileIterator
@@ -63,7 +72,8 @@ struct ObLoadArgument
                     database_id_(OB_INVALID_INDEX_INT64),
                     table_id_(OB_INVALID_INDEX_INT64),
                     is_csv_format_(false),
-                    part_level_(share::schema::PARTITION_LEVEL_MAX)
+                    part_level_(share::schema::PARTITION_LEVEL_MAX),
+                    compression_format_(ObLoadCompressionFormat::NONE)
 
   {}
 
@@ -81,7 +91,8 @@ struct ObLoadArgument
                K_(database_id),
                K_(table_id),
                K_(is_csv_format),
-               K_(file_iter));
+               K_(file_iter),
+               K_(compression_format));
 
   void assign(const ObLoadArgument &other) {
     load_file_storage_ = other.load_file_storage_;
@@ -100,6 +111,7 @@ struct ObLoadArgument
     is_csv_format_ = other.is_csv_format_;
     part_level_ = other.part_level_;
     file_iter_.copy(other.file_iter_);
+    compression_format_ = other.compression_format_;
   }
 
   ObLoadFileLocation load_file_storage_;
@@ -118,6 +130,7 @@ struct ObLoadArgument
   bool is_csv_format_;
   share::schema::ObPartitionLevel part_level_;
   ObLoadFileIterator file_iter_;
+  ObLoadCompressionFormat compression_format_;
 };
 
 struct ObDataInFileStruct

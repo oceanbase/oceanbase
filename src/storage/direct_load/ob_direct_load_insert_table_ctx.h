@@ -103,6 +103,7 @@ public:
   OB_INLINE const common::ObTabletID &get_origin_tablet_id() const { return origin_tablet_id_; }
   OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
   OB_INLINE const common::ObTabletID &get_lob_tablet_id() const { return lob_tablet_id_; }
+  OB_INLINE const common::ObTabletID &get_tablet_id_in_lob_id() const { return tablet_id_in_lob_id_; }
 
   OB_INLINE ObDirectLoadInsertTableContext *get_table_ctx() { return table_ctx_; }
   OB_INLINE const ObDirectLoadInsertTableParam *get_param() const { return param_; }
@@ -136,6 +137,8 @@ public:
   OB_INLINE bool need_rescan() const { return nullptr != param_ ? (!param_->is_incremental_ && param_->is_column_store_) : false; }
   OB_INLINE bool need_del_lob() const { return nullptr != param_ ? (param_->is_incremental_ && param_->lob_column_count_ > 0) : false; }
 
+  const ObLobId &get_min_insert_lob_id() const { return min_insert_lob_id_; }
+
 public:
   int init(ObDirectLoadInsertTableContext *table_ctx,
            const share::ObLSID &ls_id,
@@ -163,6 +166,9 @@ public:
   int calc_range(const int64_t thread_cnt);
   int fill_column_group(const int64_t thread_cnt, const int64_t thread_id);
 
+  int get_del_lob_macro_data_seq(const bool insert_front, const int64_t parallel_idx,
+                                 blocksstable::ObMacroDataSeq &start_seq);
+
   void inc_row_count(const int64_t row_count) { ATOMIC_AAF(&row_count_, row_count); }
   int64_t get_row_count() const { return ATOMIC_LOAD(&row_count_); }
 
@@ -173,6 +179,8 @@ public:
                K_(origin_tablet_id),
                K_(tablet_id),
                K_(lob_tablet_id),
+               K_(tablet_id_in_lob_id),
+               K_(min_insert_lob_id),
                K_(start_scn),
                K_(handle),
                K_(row_count),
@@ -192,15 +200,18 @@ private:
   common::ObTabletID origin_tablet_id_;
   common::ObTabletID tablet_id_;
   common::ObTabletID lob_tablet_id_;
+  common::ObTabletID tablet_id_in_lob_id_;
   lib::ObMutex mutex_;
   blocksstable::ObMacroDataSeq start_seq_;
   blocksstable::ObMacroDataSeq lob_start_seq_;
   share::ObTabletCacheInterval pk_cache_;
   share::ObTabletCacheInterval lob_pk_cache_;
+  ObLobId min_insert_lob_id_;
   share::SCN start_scn_;
   ObTabletDirectLoadMgrHandle handle_;
   int64_t row_count_;
   int open_err_;
+  bool can_write_lob_;
   volatile bool is_open_;
   bool is_create_;
   bool is_cancel_;

@@ -32,7 +32,8 @@ public:
   virtual int open(
       const ObDataStoreDesc &data_store_desc,
       const ObMacroDataSeq &start_seq,
-      ObIMacroBlockFlushCallback *callback = nullptr) override;
+      ObIMacroBlockFlushCallback *callback = nullptr,
+      ObIODevice *device_handle = nullptr) override;
   virtual int append_row(const ObDatumRow &row, const ObMacroBlockDesc *curr_macro_desc = nullptr) override;
   virtual int append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc = nullptr) override;
   virtual int append_macro_block(const ObMacroBlockDesc &macro_desc) override;

@@ -84,6 +84,8 @@ public:
   operator Status() const { return status_; }
   static const char *get_restore_status_str(const ObLSRestoreStatus &status);
   bool is_valid() const { return is_valid_(status_); }
+
+
   bool is_restore_start() const { return Status::RESTORE_START == status_; }
   bool is_quick_restore() const { return Status::QUICK_RESTORE == status_; }
   bool is_restore_major_data() const { return Status::RESTORE_MAJOR_DATA == status_; }
@@ -98,8 +100,25 @@ public:
   bool is_wait_quick_restore() const { return Status::WAIT_QUICK_RESTORE == status_; }
   bool is_wait_restore_major_data() const { return Status::WAIT_RESTORE_MAJOR_DATA == status_; }
   bool is_quick_restore_finish() const { return Status::QUICK_RESTORE_FINISH == status_;}
-  bool is_in_restore() const { return status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_FAILED; }
-  bool is_in_restore_or_none() const { return is_none() || is_in_restore(); }
+
+
+  bool is_in_restoring() const
+  {
+    return (status_ >= Status::RESTORE_START && status_ < QUICK_RESTORE_FINISH)
+           || (status_ > QUICK_RESTORE_FINISH && status_ < Status::RESTORE_FAILED);
+  }
+  bool is_in_restoring_or_failed() const
+  {
+    return is_in_restoring() || RESTORE_FAILED == status_;
+  }
+  bool is_in_restore_status() const
+  {
+    return status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_FAILED;
+  }
+  bool is_valid_restore_status() const
+  {
+    return is_in_restore_status() || Status::NONE == status_;
+  }
   bool is_wait_status() const
   {
     return is_wait_restore_sys_tablets()
@@ -117,6 +136,8 @@ public:
     return ((status_ >= Status::RESTORE_START && status_ <= Status::RESTORE_SYS_TABLETS) ||
              status_ == Status::RESTORE_FAILED);
   }
+
+
 
   bool is_in_clone() const { return status_ >= Status::CLONE_START && status_ <= Status::CLONE_FAILED; }
   bool is_in_clone_or_none() const { return is_none() || is_in_clone(); }
@@ -153,6 +174,12 @@ public:
   bool is_before_restore_to_consistent_scn() const
   {
     return status_ >= RESTORE_START && status_ < WAIT_RESTORE_TO_CONSISTENT_SCN;
+  }
+  bool check_allow_read() const
+  {
+    // TODO(yanfeng): wait merge quick restore code
+    // add following condition || (status_ >= QUICK_RESTORE_FINISH && status_ <= WAIT_RESTORE_MAJOR_DATA)
+    return NONE == status_ || QUICK_RESTORE_FINISH == status_;
   }
   Status get_status() const { return status_; }
   int set_status(int32_t status);

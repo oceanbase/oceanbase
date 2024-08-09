@@ -31,7 +31,7 @@ connection conn1;
 drop table if exists test_multi_minor_merge_t;
 --enable_warnings
 
-create table test_multi_minor_merge_t(num int, str varchar(50), tag int);
+create table test_multi_minor_merge_t(c1 int, c2 int, c3 varchar(40960), c4 varchar(10) generated always as (substring(c3, 2, 8)) virtual);
 let $__freeze_table_name__ = 'test_multi_minor_merge_t';
 
 connection conn0;
@@ -44,7 +44,7 @@ begin;
 let $_i_ = 200;
 while ($_i_ > 120)
 {
-  eval insert into test_multi_minor_merge_t values($_i_, 'Hello OceanBase & Happy New Year', 1);
+  eval insert into test_multi_minor_merge_t(c1,c2,c3) values($_i_, $_i_, 'Hello OceanBase & Happy New Year');
   dec $_i_;
 }
 
@@ -54,7 +54,7 @@ connection conn1;
 connection conn1;
 while ($_i_ > 80)
 {
-  eval insert into test_multi_minor_merge_t values($_i_, 'Hello OceanBase & Happy New Year', 1);
+  eval insert into test_multi_minor_merge_t(c1,c2,c3) values($_i_, $_i_, 'Hello OceanBase & Happy New Year');
   dec $_i_;
 }
 
@@ -64,7 +64,7 @@ connection conn1;
 connection conn1;
 while ($_i_ > 40)
 {
-  eval insert into test_multi_minor_merge_t values($_i_, 'Hello OceanBase & Happy New Year', 1);
+  eval insert into test_multi_minor_merge_t(c1,c2,c3) values($_i_, $_i_, 'Hello OceanBase & Happy New Year');
   dec $_i_;
 }
 
@@ -81,12 +81,12 @@ select * from test_multi_minor_merge_t;
 
 connection conn1;
 #同一事务查询sstable未提交数据
-select * from test_multi_minor_merge_t where num > 190;
+select * from test_multi_minor_merge_t where c1 > 190;
 
 connection conn1;
 while ($_i_ > 0)
 {
-  eval insert into test_multi_minor_merge_t values($_i_, 'Hello OceanBase & Happy New Year', 1);
+  eval insert into test_multi_minor_merge_t(c1,c2,c3) values($_i_, $_i_, 'Hello OceanBase & Happy New Year');
   dec $_i_;
 }
 
@@ -98,7 +98,7 @@ connection conn1;
 commit;
 
 #查sstable未提交数据，但事务已提交
-select * from test_multi_minor_merge_t where num > 190;
+select * from test_multi_minor_merge_t where c1 > 190;
 
 connection conn2;
 select count(*) from test_multi_minor_merge_t;

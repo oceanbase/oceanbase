@@ -41,6 +41,8 @@ DEFINE_SERIALIZE(ObIntegerStreamMeta)
     LOG_WARN("fail to encode null_replaced_value_", K(ret));
   } else if (is_decimal_int() && OB_FAIL(serialization::encode_i8(buf, buf_len, pos, decimal_precision_width_))) {
     LOG_WARN("fail to encode decimal_precision_width_", K(ret));
+  } else if (version_ > OB_INTEGER_STREAM_META_V1 && serialization::encode_i8(buf, buf_len, pos, pfor_packing_type_)) {
+    LOG_WARN("fail to encode pfor_packing_type_", K(ret));
   }
   return ret;
 }
@@ -63,6 +65,14 @@ DEFINE_DESERIALIZE(ObIntegerStreamMeta)
   } else if (is_decimal_int() && OB_FAIL(serialization::decode_i8(buf, data_len, pos, (int8_t*)&decimal_precision_width_))) {
     LOG_WARN("fail to decode decimal_precision_width_", K(ret));
   }
+
+  if (OB_SUCC(ret) ) {
+    if (version_ == OB_INTEGER_STREAM_META_V1) {
+      pfor_packing_type_ = ObCodec::CPU_ARCH_DEPENDANT;
+    } else if (OB_FAIL(serialization::decode(buf, data_len, pos, pfor_packing_type_))) {
+      LOG_WARN("fail to decode pfor_packing_type_", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -82,13 +92,16 @@ DEFINE_GET_SERIALIZE_SIZE(ObIntegerStreamMeta)
   if (is_decimal_int()) {
     len += serialization::encoded_length_i8(decimal_precision_width_);
   }
+  if (version_ > OB_INTEGER_STREAM_META_V1) {
+    len += serialization::encoded_length(pfor_packing_type_);
+  }
   return len;
 }
 
 int ObIntegerStreamEncoderCtx::build_signed_stream_meta(
     const int64_t min, const int64_t max, const bool is_replace_null,
     const int64_t replace_value, const int64_t precision_width_size,
-    const bool force_raw, uint64_t &range)
+    const bool force_raw, const int64_t major_working_cluster_version, uint64_t &range)
 {
   int ret = OB_SUCCESS;
 
@@ -106,6 +119,12 @@ int ObIntegerStreamEncoderCtx::build_signed_stream_meta(
     }
     if (precision_width_size > 0) {
       meta_.set_precision_width_size(precision_width_size);
+    }
+
+    if (major_working_cluster_version >= DATA_VERSION_4_3_3_0) {
+      meta_.set_pfor_packing_type(ObCodec::CPU_ARCH_INDEPENDANT_SCALAR);
+    } else {
+      meta_.set_pfor_packing_type(ObCodec::CPU_ARCH_DEPENDANT);
     }
 
     if (min < 0) {
@@ -128,7 +147,7 @@ int ObIntegerStreamEncoderCtx::build_signed_stream_meta(
 
 int ObIntegerStreamEncoderCtx::build_unsigned_stream_meta(const uint64_t min,
     const uint64_t max, const bool is_replace_null, const uint64_t replace_value,
-    const bool force_raw, uint64_t &range)
+    const bool force_raw, const int64_t major_working_cluster_version, uint64_t &range)
 {
   int ret = OB_SUCCESS;
 
@@ -143,6 +162,11 @@ int ObIntegerStreamEncoderCtx::build_unsigned_stream_meta(const uint64_t min,
     if (is_replace_null) {
       meta_.set_null_replaced_value(replace_value);
     }
+    if (major_working_cluster_version >= DATA_VERSION_4_3_3_0) {
+      meta_.set_pfor_packing_type(ObCodec::CPU_ARCH_INDEPENDANT_SCALAR);
+    } else {
+      meta_.set_pfor_packing_type(ObCodec::CPU_ARCH_DEPENDANT);
+    }
     int64_t uint_max_byte_size = get_byte_packed_int_size(max);
     // not use base when there is no negative value
     if (OB_FAIL(meta_.set_uint_width_size(uint_max_byte_size))) {
@@ -153,11 +177,17 @@ int ObIntegerStreamEncoderCtx::build_unsigned_stream_meta(const uint64_t min,
   return ret;
 }
 int ObIntegerStreamEncoderCtx::build_offset_array_stream_meta(const uint64_t end_offset,
-                                                              bool force_raw)
+                                                              const bool force_raw,
+                                                              const int64_t major_working_cluster_version)
 {
   int ret = OB_SUCCESS;
   if (force_raw) {
     meta_.set_raw_encoding();
+  }
+  if (major_working_cluster_version >= DATA_VERSION_4_3_3_0) {
+    meta_.set_pfor_packing_type(ObCodec::CPU_ARCH_INDEPENDANT_SCALAR);
+  } else {
+    meta_.set_pfor_packing_type(ObCodec::CPU_ARCH_DEPENDANT);
   }
   info_.is_monotonic_inc_ = true;
   int64_t width_size = get_byte_packed_int_size(end_offset);
@@ -276,6 +306,7 @@ int ObStringStreamEncoderCtx::build_string_stream_encoder_info(
         const ObCSEncodingOpt *encoding_opt,
         const ObPreviousColumnEncoding *previous_encoding,
         const int32_t int_stream_idx,
+        const int64_t major_working_cluster_version,
         ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
@@ -284,6 +315,7 @@ int ObStringStreamEncoderCtx::build_string_stream_encoder_info(
   info_.encoding_opt_ = encoding_opt;
   info_.previous_encoding_ = previous_encoding;
   info_.int_stream_idx_ = int_stream_idx;
+  info_.major_working_cluster_version_ = major_working_cluster_version;
   info_.allocator_ = allocator;
   return ret;
 }

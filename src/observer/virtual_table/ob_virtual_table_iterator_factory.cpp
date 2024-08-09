@@ -229,6 +229,7 @@
 #include "observer/virtual_table/ob_all_virtual_tracepoint_info.h"
 #include "observer/virtual_table/ob_all_virtual_nic_info.h"
 #include "observer/virtual_table/ob_all_virtual_sys_variable_default_value.h"
+#include "observer/virtual_table/ob_all_virtual_session_ps_info.h"
 #include "observer/virtual_table/ob_information_schema_enable_roles_table.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_compatibility_control.h"
@@ -587,10 +588,10 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
           }
           case OB_ALL_VIRTUAL_CORE_META_TABLE_TID: {
             ObCoreMetaTable *core_meta_table = NULL;
-            if (!root_service_.is_major_freeze_done()) {
+            if (!root_service_.is_full_service()) {
               // Some obtest cases detect rootservice status by select this virtual table
               ret = OB_SERVER_IS_INIT;
-              RS_LOG(WARN, "RS major freeze not finished", KR(ret));
+              RS_LOG(WARN, "RS is initializing", KR(ret));
             } else if (OB_FAIL(NEW_VIRTUAL_TABLE(ObCoreMetaTable, core_meta_table))) {
               SERVER_LOG(ERROR, "ObCoreMetaTable construct failed", KR(ret));
             } else if (OB_FAIL(core_meta_table->init(root_service_.get_lst_operator(),
@@ -1077,6 +1078,19 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             } else {
               // init code
               vt_iter = static_cast<ObAllVirtualPsItemInfo *>(ps_item_info);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SESSION_PS_INFO_TID: {
+            ObAllVirtualSessionPsInfo *session_ps_info = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSessionPsInfo, session_ps_info))) {
+              SERVER_LOG(ERROR, "ObAllVirtualSessionPsInfo construct failed", K(ret));
+            } else if (OB_ISNULL(session_ps_info)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "session_ps_info init failed", K(ret));
+            } else {
+              // init code
+              vt_iter = static_cast<ObAllVirtualSessionPsInfo *>(session_ps_info);
             }
             break;
           }

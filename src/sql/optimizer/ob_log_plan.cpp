@@ -5347,7 +5347,10 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(groupby_helper.distinct_exprs_,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
-  } else if (groupby_helper.can_three_stage_pushdown_ && !is_partition_wise) {
+  } else if (groupby_helper.can_three_stage_pushdown_ &&
+            !(is_partition_wise &&
+            !(top->is_parallel_more_than_part_cnt() &&
+              get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
     OPT_TRACE("generate three stage group plan");
     if (NULL == groupby_helper.aggr_code_expr_ &&
         OB_FAIL(prepare_three_stage_info(dummy_exprs, dummy_exprs, groupby_helper))) {
@@ -5825,19 +5828,35 @@ int ObLogPlan::check_rollup_pushdown(const ObSQLSessionInfo *info,
   return ret;
 }
 
-int ObLogPlan::check_tenant_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
-                                                  bool &enable_aggr_push_down,
-                                                  bool &enable_groupby_push_down)
+int ObLogPlan::check_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
+                                           bool &enable_aggr_push_down,
+                                           bool &enable_groupby_push_down)
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = session_info.get_effective_tenant_id();
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   enable_aggr_push_down = false;
   enable_groupby_push_down = false;
-  if (tenant_config.is_valid()) {
-    enable_aggr_push_down = ObPushdownFilterUtils::is_aggregate_pushdown_enabled(tenant_config->_pushdown_storage_level);
-    enable_groupby_push_down = ObPushdownFilterUtils::is_group_by_pushdown_enabled(tenant_config->_pushdown_storage_level) &&
-                               tenant_config->_rowsets_enabled;
+  bool is_exist_hint = false;
+  bool hint_rowsets_enable = false;
+  int64_t hint_level = INT64_MAX;
+  const ObGlobalHint &global_hint = optimizer_context_.get_global_hint();
+  if (OB_FAIL(global_hint.opt_params_.get_integer_opt_param(ObOptParamHint::PUSHDOWN_STORAGE_LEVEL, hint_level))) {
+    LOG_WARN("failed to get integer opt param", K(ret));
+  } else if (OB_FAIL(global_hint.opt_params_.get_bool_opt_param(ObOptParamHint::ROWSETS_ENABLED, hint_rowsets_enable, is_exist_hint))) {
+    LOG_WARN("failed to get bool opt param", K(ret));
+  } else {
+    const bool rowsets_enabled = is_exist_hint ? hint_rowsets_enable : (tenant_config.is_valid() && tenant_config->_rowsets_enabled);
+    if (hint_level == INT64_MAX) {
+      if (tenant_config.is_valid()) {
+        enable_aggr_push_down = ObPushdownFilterUtils::is_aggregate_pushdown_enabled(tenant_config->_pushdown_storage_level);
+        enable_groupby_push_down = ObPushdownFilterUtils::is_group_by_pushdown_enabled(tenant_config->_pushdown_storage_level)
+                                  && rowsets_enabled;
+      }
+    } else {
+      enable_aggr_push_down = ObPushdownFilterUtils::is_aggregate_pushdown_enabled(hint_level);
+      enable_groupby_push_down = ObPushdownFilterUtils::is_group_by_pushdown_enabled(hint_level) && rowsets_enabled;
+    }
   }
   return ret;
 }
@@ -5862,19 +5881,19 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
       OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_tenant_aggr_pushdown_enabled(*session_info,
-                                                        enable_aggr_push_down,
-                                                        enable_groupby_push_down))) {
-    LOG_WARN("failed to check tenant enable aggr pushdown", K(ret));
+  } else if (OB_FAIL(check_aggr_pushdown_enabled(*session_info,
+                                                 enable_aggr_push_down,
+                                                 enable_groupby_push_down))) {
+    LOG_WARN("failed to check enable aggr pushdown", K(ret));
   } else if (!enable_aggr_push_down || !stmt->is_select_stmt()) {
-    OPT_TRACE("tenant disable aggregation push down");
+    OPT_TRACE("tenant or hint disable aggregation push down");
   } else if (!static_cast<const ObSelectStmt*>(stmt)->has_group_by() ||
              stmt->has_for_update() ||
              !stmt->is_single_table_stmt()) {
     /*do nothing*/
   } else if (!static_cast<const ObSelectStmt*>(stmt)->is_scala_group_by() &&
              !enable_groupby_push_down) {
-    OPT_TRACE("tenant disable groupby push down");
+    OPT_TRACE("tenant or hint disable groupby push down");
   } else if (OB_ISNULL(table_item = stmt->get_table_item(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_item));
@@ -13362,13 +13381,10 @@ int ObLogPlan::fill_join_filter_info(JoinFilterInfo &join_filter_info)
 {
   int ret = OB_SUCCESS;
   const ObDMLStmt* stmt;
-  ObString qb_name;
   const TableItem* table_item;
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(get_stmt()));
-  } else if (OB_FAIL(stmt->get_qb_name(qb_name))) {
-    LOG_WARN("failed to get qb name", K(ret));
   } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(get_update_table_metas(),
                                                     get_selectivity_ctx(),
                                                     join_filter_info.rexprs_,
@@ -13382,11 +13398,7 @@ int ObLogPlan::fill_join_filter_info(JoinFilterInfo &join_filter_info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
-    join_filter_info.pushdown_filter_table_.qb_name_ = qb_name;
-    join_filter_info.pushdown_filter_table_.table_name_ = table_item->get_object_name();
-    if (table_item->is_basic_table()) {
-      join_filter_info.pushdown_filter_table_.db_name_ = table_item->database_name_;
-    }
+    join_filter_info.pushdown_filter_table_.set_table(*table_item);
   }
   return ret;
 }
@@ -13486,10 +13498,10 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
       OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (OB_FAIL(check_tenant_aggr_pushdown_enabled(*session_info,
-                                                        dummy,
-                                                        enable_groupby_push_down))) {
-    LOG_WARN("failed to check tenant enable aggr pushdown", K(ret));
+  } else if (OB_FAIL(check_aggr_pushdown_enabled(*session_info,
+                                                 dummy,
+                                                 enable_groupby_push_down))) {
+    LOG_WARN("failed to check enable aggr pushdown", K(ret));
   } else if (!stmt->is_select_stmt()) {
     can_push = false;
   } else if (static_cast<const ObSelectStmt*>(stmt)->has_group_by() ||
@@ -13498,7 +13510,7 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
     can_push = false;
   } else if (!enable_groupby_push_down) {
     can_push = false;
-    OPT_TRACE("tenant disable groupby push down");
+    OPT_TRACE("tenant or hint disable groupby push down");
   } else if (OB_ISNULL(table_item = stmt->get_table_item(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_item));
@@ -13520,7 +13532,7 @@ int ObLogPlan::check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &disti
               table_item->table_id_ != static_cast<ObColumnRefRawExpr*>(distinct_exprs.at(0))->get_table_id()) {
     can_push = false;
   } else if (OB_FAIL(check_table_columns_can_storage_pushdown(session_info->get_effective_tenant_id(),
-                                                              table_item->ref_id_, distinct_exprs, can_push))) {
+                                                    table_item->ref_id_, distinct_exprs, can_push))) {
     LOG_WARN("failed to check table columns can storage pushdown", K(ret));
   } else if (can_push) {
     const ObIArray<ObRawExpr *> &filters = stmt->get_condition_exprs();

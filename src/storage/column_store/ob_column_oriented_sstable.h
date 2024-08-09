@@ -104,12 +104,24 @@ enum ObCOSSTableBaseType : int32_t
 enum ObCOMajorSSTableStatus: uint8_t {
   INVALID_CO_MAJOR_SSTABLE_STATUS = 0,
   COL_WITH_ALL, // all cg + normal cg
-  COL_ONLY_ALL, // all cg only
+  COL_ONLY_ALL, // all cg only (schema have all cg)
   PURE_COL, // rowkey cg + normal cg
-  PURE_COL_ONLY_ALL, // all cg only
+  PURE_COL_ONLY_ALL, // all cg only (schema do not have all cg)
   MAX_CO_MAJOR_SSTABLE_STATUS
 };
-
+/*
+  +-----------------+---------------+---------------+-------+
+  |      status     |    schema     |  last_major   |IS_SAME|
+  +-----------------+---------------+---------------+-------+
+  |  COL_WITH_ALL   |   ALL+EACH    |   ALL+EACH    |  YES  |
+  +-----------------+---------------+---------------+-------+
+  |  COL_ONLY_ALL   |   ALL+EACH    |      ALL      |   NO  |
+  +-----------------+---------------+---------------+-------+
+  |     PURE_COL    |     EACH      |      EACH     |  YES  |
+  +-----------------+---------------+---------------+-------+
+  |PURE_COL_ONLY_ALL|     EACH      |      ALL      |   NO  |
+  +-----------------+---------------+---------------+-------+
+*/
 inline bool is_valid_co_major_sstable_status(const ObCOMajorSSTableStatus& major_sstable_status)
 {
   return major_sstable_status > INVALID_CO_MAJOR_SSTABLE_STATUS && major_sstable_status < MAX_CO_MAJOR_SSTABLE_STATUS;

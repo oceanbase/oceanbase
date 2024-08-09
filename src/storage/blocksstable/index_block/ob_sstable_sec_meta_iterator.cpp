@@ -252,12 +252,13 @@ int ObSSTableSecMetaIterator::get_next(ObDataMacroBlockMeta &macro_meta)
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(micro_reader_->get_row(curr_block_idx_, row_))) {
-      LOG_WARN("Fail to get secondary meta row from block", K(ret));
+      LOG_WARN("Fail to get secondary meta row from block", K(ret), K_(curr_block_idx));
     } else if (OB_FAIL(macro_meta.parse_row(row_))) {
       LOG_WARN("Fail to parse macro meta", K(ret));
     } else {
       const ObSSTableMacroInfo &macro_info = sstable_meta_hdl_.get_sstable_meta().get_macro_info();
-      if (!macro_info.is_meta_root() && 0 == macro_info.get_other_block_count()) {
+      const int64_t data_block_count = sstable_meta_hdl_.get_sstable_meta().get_basic_meta().get_data_macro_block_count();
+      if (!macro_info.is_meta_root() && 1 == data_block_count) {
         // this means macro meta root block is larger than 16KB but read from the end of data block
         // So the macro id parsed from macro meta is empty, which actually should be same to the
         // data block id read in open_next_micro_block

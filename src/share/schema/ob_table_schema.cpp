@@ -182,6 +182,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       partition_schema_version_ = other.partition_schema_version_;
       session_id_ = other.session_id_;
       duplicate_scope_ = other.duplicate_scope_;
+      duplicate_read_consistency_ = other.duplicate_read_consistency_;
       tablespace_id_ = other.tablespace_id_;
       master_key_id_ = other.master_key_id_;
       dblink_id_ = other.dblink_id_;
@@ -321,6 +322,7 @@ void ObSimpleTableSchemaV2::reset()
   link_schema_version_ = OB_INVALID_ID;
   link_database_name_.reset();
   duplicate_scope_ = ObDuplicateScope::DUPLICATE_SCOPE_NONE;
+  duplicate_read_consistency_ = ObDuplicateReadConsistency::STRONG;
   simple_constraint_info_array_.reset();
   encryption_.reset();
   tablespace_id_ = OB_INVALID_ID;
@@ -995,7 +997,8 @@ int64_t ObSimpleTableSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(max_dependency_version),
     K_(object_status),
     K_(is_force_view),
-    K_(truncate_version)
+    K_(truncate_version),
+    K_(duplicate_read_consistency)
 );
   J_OBJ_END();
 
@@ -1445,7 +1448,8 @@ int ObSimpleTableSchemaV2::check_if_tablet_exists(const ObTabletID &tablet_id, b
 }
 
 ObTableSchema::ObTableSchema()
-    : ObSimpleTableSchemaV2()
+    : ObSimpleTableSchemaV2(),
+      local_session_vars_(get_allocator())
 {
   reset();
 }
@@ -1470,7 +1474,9 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     rls_group_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     rls_context_ids_(SCHEMA_SMALL_MALLOC_BLOCK_SIZE, ModulePageAllocator(*allocator)),
     name_generated_type_(GENERATED_TYPE_UNKNOWN),
-    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD)
+    lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
+    local_session_vars_(allocator),
+    index_params_()
 {
   reset();
 }
@@ -1569,6 +1575,8 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("deep copy external_file_format failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
         LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_properties_, external_properties_))) {
+        LOG_WARN("deep copy external_properties failed", K(ret));
       }
 
       //view schema
@@ -1576,6 +1584,8 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
         view_schema_ = src_schema.view_schema_;
         if (OB_FAIL(view_schema_.get_err_ret())) {
           LOG_WARN("fail to assign view schema", K(ret), K_(view_schema), K(src_schema.view_schema_));
+        } else if (OB_FAIL(local_session_vars_.deep_copy(src_schema.local_session_vars_))) {
+          LOG_WARN("fail to deep copy sys var info", K(ret));
         }
       }
 
@@ -1709,6 +1719,10 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
 
   if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.kv_attributes_, kv_attributes_))) {
     LOG_WARN("deep copy kv attributes failed", K(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(src_schema.index_params_, index_params_))) {
+    LOG_WARN("deep copy vector index param failed", K(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -3384,6 +3398,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += external_file_pattern_.length() + 1;
   convert_size += ttl_definition_.length() + 1;
   convert_size += kv_attributes_.length() + 1;
+  convert_size += index_params_.length() + 1;
 
   convert_size += get_hash_array_mem_size<CgIdHashArray>(column_group_cnt_);
   convert_size += get_hash_array_mem_size<CgNameHashArray>(column_group_cnt_);
@@ -3391,6 +3406,8 @@ int64_t ObTableSchema::get_convert_size() const
   for (int64_t i = 0; (i < column_group_cnt_) && OB_NOT_NULL(column_group_arr_[i]); ++i) {
     convert_size += column_group_arr_[i]->get_convert_size();
   }
+  convert_size += local_session_vars_.get_deep_copy_size();
+  convert_size += external_properties_.length() + 1;
   return convert_size;
 }
 
@@ -3472,8 +3489,10 @@ void ObTableSchema::reset()
   external_file_location_.reset();
   external_file_location_access_info_.reset();
   external_file_pattern_.reset();
+  external_properties_.reset();
   ttl_definition_.reset();
   kv_attributes_.reset();
+  index_params_.reset();
   name_generated_type_ = GENERATED_TYPE_UNKNOWN;
   lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
   auto_increment_cache_size_ = 0;
@@ -3486,6 +3505,7 @@ void ObTableSchema::reset()
   cg_id_hash_arr_ = NULL;
   cg_name_hash_arr_ = NULL;
   mlog_tid_ = OB_INVALID_ID;
+  local_session_vars_.reset();
   ObSimpleTableSchemaV2::reset();
 }
 
@@ -3796,6 +3816,8 @@ int ObTableSchema::convert_column_ids_for_ddl(const ObHashMap<uint64_t, uint64_t
   int ret = OB_SUCCESS;
   if (OB_FAIL(convert_column_udt_set_ids(column_id_map))) {
     LOG_WARN("failed to convert column udt set id", K(ret));
+  } else if (OB_FAIL(convert_geo_generated_col_ids(column_id_map))) {
+    LOG_WARN("failed to convert column id in geo generated columns", K(ret));
   } else if (OB_FAIL(convert_basic_column_ids(column_id_map))) {
     LOG_WARN("failed to convert column id in column array and id hash array", K(ret));
   } else if (OB_FAIL(convert_column_ids_in_generated_columns(column_id_map))) {
@@ -6537,7 +6559,9 @@ int64_t ObTableSchema::to_string(char *buf, const int64_t buf_len) const
     K_(column_group_cnt),
     "column_group_array", ObArrayWrap<ObColumnGroupSchema* >(column_group_arr_, column_group_cnt_),
     K_(mlog_tid),
-    K_(auto_increment_cache_size));
+    K_(auto_increment_cache_size),
+    K_(local_session_vars),
+    K_(index_params));
   J_OBJ_END();
 
   return pos;
@@ -6818,6 +6842,15 @@ OB_DEF_SERIALIZE(ObTableSchema)
 
   OB_UNIS_ENCODE(mlog_tid_);
   OB_UNIS_ENCODE(auto_increment_cache_size_);
+  OB_UNIS_ENCODE(local_session_vars_);
+  OB_UNIS_ENCODE(duplicate_read_consistency_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_ENCODE,
+                external_properties_);
+  }
+  if (OB_SUCC(ret)) {
+    OB_UNIS_ENCODE(index_params_);
+  }
   return ret;
 }
 
@@ -6978,6 +7011,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   ObString expire_info;
   ObString ttl_definition;
   ObString kv_attributes;
+  ObString index_params;
 
   LST_DO_CODE(OB_UNIS_DECODE,
               tenant_id_,
@@ -7247,6 +7281,19 @@ OB_DEF_DESERIALIZE(ObTableSchema)
 
   OB_UNIS_DECODE(mlog_tid_);
   OB_UNIS_DECODE(auto_increment_cache_size_);
+  OB_UNIS_DECODE(local_session_vars_);
+  OB_UNIS_DECODE(duplicate_read_consistency_);
+  if (OB_SUCC(ret)) {
+    LST_DO_CODE(OB_UNIS_DECODE,
+                external_properties_);
+  }
+
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(index_params);
+    if (OB_SUCC(ret) && OB_FAIL(deep_copy_str(index_params, index_params_))) {
+      LOG_WARN("deep_copy_str failed", K(ret), K(index_params));
+    }
+  }
   return ret;
 }
 
@@ -7397,6 +7444,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(max_used_column_group_id_);
   OB_UNIS_ADD_LEN(mlog_tid_);
   OB_UNIS_ADD_LEN(auto_increment_cache_size_);
+  OB_UNIS_ADD_LEN(local_session_vars_);
+  OB_UNIS_ADD_LEN(duplicate_read_consistency_);
+  OB_UNIS_ADD_LEN(external_properties_);
+  OB_UNIS_ADD_LEN(index_params_);
   return len;
 }
 
@@ -9119,6 +9170,31 @@ int ObTableSchema::convert_column_udt_set_ids(const ObHashMap<uint64_t, uint64_t
   return ret;
 }
 
+int ObTableSchema::convert_geo_generated_col_ids(const ObHashMap<uint64_t, uint64_t> &column_id_map)
+{
+  int ret = OB_SUCCESS;
+  // generate new column udt id
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt_; i++) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (OB_ISNULL(column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid column schema", K(ret));
+    } else if (column->is_spatial_generated_column()) {
+      uint64_t new_column_id = 0;
+      uint64_t old_geo_column_id = column->get_geo_col_id();
+      if (OB_FAIL(column_id_map.get_refactored(old_geo_column_id, new_column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(new_column_id));
+      } else if (OB_UNLIKELY(new_column_id < OB_APP_MIN_COLUMN_ID)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("new column id too small", K(ret), K(new_column_id));
+      } else {
+        column->set_geo_col_id(new_column_id);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::get_is_row_store(bool &is_row_store) const
 {
   int ret = OB_SUCCESS;
@@ -9263,7 +9339,8 @@ int64_t ObPrintableTableSchema::to_string(char *buf, const int64_t buf_len) cons
     K_(aux_lob_piece_tid),
     K_(is_column_store_supported),
     K_(max_used_column_group_id),
-    K_(mlog_tid)
+    K_(mlog_tid),
+    K_(duplicate_read_consistency)
   );
   J_OBJ_END();
   return pos;

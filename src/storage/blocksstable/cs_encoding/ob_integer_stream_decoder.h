@@ -139,6 +139,7 @@ private:
     uint64_t in_pos = 0;
 
     codec.set_uint_bytes(sizeof(T));
+    codec.set_pfor_packing_type(ctx.meta_.get_pfor_packing_type());
     if (OB_FAIL(codec.decode(in, in_len, in_pos, uint_count, out, out_len, out_pos))) {
       STORAGE_LOG(WARN, "fail to deocde array", K(in_len), K(uint_count), K(out_len), KR(ret));
     }

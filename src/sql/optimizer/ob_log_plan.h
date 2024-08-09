@@ -739,9 +739,9 @@ public:
   int check_storage_distinct_pushdown(const ObIArray<ObRawExpr*> &distinct_exprs,
                                       bool &can_push);
 
-  int check_tenant_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
-                                         bool &enable_aggr_push_down,
-                                         bool &enable_groupby_push_down);
+  int check_aggr_pushdown_enabled(ObSQLSessionInfo &session_info,
+                                  bool &enable_aggr_push_down,
+                                  bool &enable_groupby_push_down);
 
   int check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> &aggrs,
                                      const ObIArray<ObRawExpr *> &group_exprs,
@@ -1721,6 +1721,7 @@ public:
                                  ObLogExprValues *&out_access_path_op);
   int do_alloc_values_table_path(ValuesTablePath *values_table_path,
                                  ObLogValuesTableAccess *&out_access_path_op);
+  inline ObRawExprReplacer &gen_col_replacer() { return gen_col_replacer_; }
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

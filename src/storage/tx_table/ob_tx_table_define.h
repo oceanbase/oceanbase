@@ -344,6 +344,9 @@ public:
     DECLARE_TO_STRING;
   };
 
+  ObCommitVersionsArray(): array_() {}
+  ~ObCommitVersionsArray() { reset(); }
+
   void reset() { array_.reset(); }
 
   ObCommitVersionsArray &operator=(const ObCommitVersionsArray& rhs)

@@ -19,7 +19,8 @@ using namespace oceanbase::obmysql;
 
 ObEliminateTask::ObEliminateTask()
     :request_manager_(NULL),
-     config_mem_limit_(0)
+     config_mem_limit_(0),
+     is_tp_trigger_(false)
 {
 
 }
@@ -184,8 +185,22 @@ void ObEliminateTask::runTimerTask()
                "size_used",request_manager_->get_size_used(),
                "mem_used", allocator->allocated());
       int64_t last_time_allocated = allocator->allocated();
-      while (evict_low_mem_level < allocator->allocated()) {
-        request_manager_->release_old(release_cnt);
+      // for testing hung scene
+      int64_t code = 0;
+      code = OB_E(EventTable::EN_SQL_AUDIT_RELEASE_BACK_THREAD_STUCK) OB_SUCCESS;
+      if (OB_UNLIKELY(OB_SUCCESS != code && is_tp_trigger_)) {
+        sleep(abs(code));
+        LOG_INFO("eliminate sleep", K(abs(code)));
+        is_tp_trigger_ = false;
+      } else if (OB_SUCCESS == code) {
+        is_tp_trigger_ = true;
+      }
+
+      while (evict_low_mem_level < allocator->allocated() && OB_SUCC(ret)) {
+        if (OB_FAIL(request_manager_->release_record(release_cnt))) {
+          LOG_WARN("fail to release record", K(ret),
+            K(request_manager_->get_queue().get_pop_idx()));
+        }
         evict_batch_count++;
         if ((evict_low_mem_level < allocator->allocated()) && (last_time_allocated == allocator->allocated())) {
           LOG_INFO("release old cannot free more memory");
@@ -194,19 +209,7 @@ void ObEliminateTask::runTimerTask()
         last_time_allocated = allocator->allocated();
       }
     }
-    //按记录数淘汰
-    if (request_manager_->get_size_used() > evict_high_size_level) {
-      evict_batch_count = (request_manager_->get_size_used() - evict_low_size_level) / release_cnt;
-      LOG_INFO("sql audit evict record start",
-               K(request_manager_->get_tenant_id()),
-               K(evict_high_size_level),
-               K(evict_low_size_level),
-               "size_used",request_manager_->get_size_used(),
-               "mem_used", allocator->allocated());
-      for (int i = 0; i < evict_batch_count; i++) {
-        request_manager_->release_old(release_cnt);
-      }
-    }
+
     //如果sql_audit_memory_limit改变, 则需要将ObConcurrentFIFOAllocator中total_limit_更新;
     if (true == is_change) {
       allocator->set_total_limit(config_mem_limit_);

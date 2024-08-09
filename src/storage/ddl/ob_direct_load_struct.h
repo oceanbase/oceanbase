@@ -617,7 +617,7 @@ private:
 class ObCOSliceWriter
 {
 public:
-  ObCOSliceWriter() : is_inited_(false), cg_idx_(-1), cg_schema_(nullptr), data_desc_(true /*is ddl*/) {}
+  ObCOSliceWriter() : is_inited_(false), cg_idx_(-1), cg_schema_(nullptr), data_desc_() {}
   ~ObCOSliceWriter() {}
   int init(
       const ObStorageSchema *storage_schema,

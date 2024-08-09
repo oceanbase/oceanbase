@@ -62,6 +62,7 @@ class ObSqcTaskMgr;
 class ObPxSqcHandler;
 class ObJoinFilter;
 class ObPxCoordInfo;
+class ObDfo;
 
 // 在 PX 端描述每个 SQC 的 task
 // 通过 exec_addr 区分 SQC
@@ -185,7 +186,7 @@ public:
 struct ObQCMonitoringInfo {
   OB_UNIS_VERSION(1);
 public:
-  int init(const ObExecContext &exec_ctx);
+  int init(const ObDfo &dfo);
   int assign(const ObQCMonitoringInfo &other);
   void reset();
 public:
@@ -365,6 +366,14 @@ public:
   int64_t get_sqc_count() const { return sqc_count_;}
   void set_sqc_order_gi_tasks(bool v) { sqc_order_gi_tasks_ = v; }
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
+  inline void set_partition_random_affinitize(bool partition_random_affinitize)
+  {
+    partition_random_affinitize_ = partition_random_affinitize;
+  }
+  inline bool partition_random_affinitize() const
+  {
+    return partition_random_affinitize_;
+  }
   ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
   void set_branch_id_base(const int16_t branch_id_base) { branch_id_base_ = branch_id_base; }
@@ -447,6 +456,7 @@ private:
   ObP2PDhMapInfo p2p_dh_map_info_;
   int64_t sqc_count_;
   bool sqc_order_gi_tasks_;
+  bool partition_random_affinitize_{true}; // whether do partition random in gi task split
 };
 
 class ObDfo
@@ -509,7 +519,8 @@ public:
     need_p2p_info_(false),
     p2p_dh_map_info_(),
     coord_info_ptr_(nullptr),
-    force_bushy_(false)
+    force_bushy_(false),
+    query_sql_()
   {
   }
 
@@ -684,6 +695,16 @@ public:
   ObP2PDhMapInfo &get_p2p_dh_map_info() { return p2p_dh_map_info_;};
   bool force_bushy() { return force_bushy_; }
   void set_force_bushy(bool flag) { force_bushy_ = flag; }
+  inline void set_partition_random_affinitize(bool partition_random_affinitize)
+  {
+    partition_random_affinitize_ = partition_random_affinitize;
+  }
+  inline bool partition_random_affinitize() const
+  {
+    return partition_random_affinitize_;
+  }
+  const ObString &query_sql() const { return query_sql_; }
+  void set_query_sql(const ObString &query_sql) { query_sql_ = query_sql; }
   TO_STRING_KV(K_(execution_id),
                K_(dfo_id),
                K_(is_active),
@@ -790,6 +811,8 @@ private:
   // ---------------
   ObPxCoordInfo *coord_info_ptr_;
   bool force_bushy_;
+  bool partition_random_affinitize_{true}; // whether do partition random in gi task split
+  ObString query_sql_;
 };
 
 

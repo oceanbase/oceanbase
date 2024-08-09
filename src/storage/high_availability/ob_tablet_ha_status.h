@@ -33,6 +33,7 @@ public:
     MINOR_AND_MAJOR_META = 2,   // complete minor data with only major sst meta
     PENDING = 3,                // not sure if it is a valid tablet, need to confirm with backup media
     UNDEFINED = 4,              // invalid tablet, a placeholder
+    REMOTE = 5,
     RESTORE_STATUS_MAX
   };
 public:
@@ -45,6 +46,7 @@ public:
   static bool is_minor_and_major_meta(const ObTabletRestoreStatus::STATUS &status) { return STATUS::MINOR_AND_MAJOR_META == status; }
   static bool is_pending(const ObTabletRestoreStatus::STATUS &status) { return STATUS::PENDING == status; }
   static bool is_undefined(const ObTabletRestoreStatus::STATUS &status) { return STATUS::UNDEFINED == status; }
+  static bool is_remote(const ObTabletRestoreStatus::STATUS &status) { return STATUS::REMOTE == status; }
   static int check_can_change_status(
       const ObTabletRestoreStatus::STATUS &cur_status,
       const ObTabletRestoreStatus::STATUS &change_status,
@@ -113,6 +115,7 @@ public:
   bool is_restore_status_undefined() const { return ObTabletRestoreStatus::is_undefined(restore_status_); }
   bool is_restore_status_empty() const { return ObTabletRestoreStatus::is_empty(restore_status_); }
   bool is_restore_status_minor_and_major_meta() const { return ObTabletRestoreStatus::is_minor_and_major_meta(restore_status_); }
+  bool is_restore_status_remote() const { return ObTabletRestoreStatus::is_remote(restore_status_); }
   bool is_expected_status_normal() const { return ObTabletExpectedStatus::is_normal(expected_status_); }
   bool is_expected_status_deleted() const { return ObTabletExpectedStatus::is_deleted(expected_status_); }
 
@@ -125,6 +128,21 @@ public:
   int init_status();
   int init_status_for_ha(const ObTabletHAStatus &ha_status);
   bool is_valid_for_backup() const { return ObTabletDataStatus::is_complete(data_status_) && ObTabletRestoreStatus::is_full(restore_status_); }
+
+  inline bool check_allow_read() const
+  {
+    bool bool_ret = is_restore_status_full() || is_restore_status_remote();
+    bool_ret &= is_data_status_complete();
+    return bool_ret;
+  }
+
+  inline bool check_ready_for_transfer() const
+  {
+    return is_restore_status_full()
+           || is_restore_status_minor_and_major_meta()
+           || is_restore_status_remote()
+           || is_restore_status_undefined();
+  }
 
   TO_STRING_KV(K_(restore_status), K_(data_status), K_(expected_status), K_(reserved));
 public:

@@ -16,6 +16,7 @@
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/ls/ob_ls.h"
+#include "rootserver/ob_tenant_info_loader.h"
 
 #define USING_LOG_PREFIX STORAGE_COMPACTION
 
@@ -103,8 +104,13 @@ int ObTabletMergeChecker::check_ls_state_in_major(ObLS &ls, bool &need_merge)
 {
   int ret = OB_SUCCESS;
   need_merge = false;
+  bool is_remote_tenant = false;
   ObLSRestoreStatus restore_status;
-  if (OB_FAIL(check_ls_state(ls, need_merge))) {
+  if (OB_FAIL(check_mtl_tenant_is_remote(is_remote_tenant))) {
+    LOG_WARN("fail to check tenant is remote", K(ret));
+  } else if (is_remote_tenant) {
+    LOG_INFO("tenant restore data mode is remote, should not loop tablet to schedule", K(ret), "tenant_id", MTL_ID());
+  } else if (OB_FAIL(check_ls_state(ls, need_merge))) {
     LOG_WARN("failed to check ls state", KR(ret), "ls_id", ls.get_ls_id());
   } else if (!need_merge) {
     // do nothing
@@ -120,6 +126,24 @@ int ObTabletMergeChecker::check_ls_state_in_major(ObLS &ls, bool &need_merge)
   return ret;
 }
 
+int ObTabletMergeChecker::check_mtl_tenant_is_remote(bool &is_remote)
+{
+  int ret = OB_SUCCESS;
+  is_remote = false;
+  ObRestoreDataMode restore_data_mode;
+  rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+  if (OB_ISNULL(tenant_info_loader)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant info loader is null", K(ret));
+  } else if (OB_FAIL(tenant_info_loader->get_restore_data_mode(restore_data_mode))) {
+    if (REACH_TIME_INTERVAL(5 * 1000 * 1000)) {
+      LOG_WARN("get restore_data_mode failed", K(ret));
+    }
+  } else if (restore_data_mode.is_remote_mode()) {
+    is_remote = true;
+  }
+  return ret;
+}
 
 } // namespace compaction
 } // namespace oceanbase

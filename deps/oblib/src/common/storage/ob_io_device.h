@@ -36,26 +36,39 @@ class ObIODevice;
  */
 struct ObIOFd
 {
-  ObIOFd(ObIODevice *device_handle = nullptr, const int64_t first_id = -1, const int64_t second_id = -1);
+  ObIOFd(ObIODevice *device_handle = nullptr, const int64_t first_id = -1,
+      const int64_t second_id = -1, const int64_t third_id = -1,
+      const int64_t fd_id_ = -1, const int64_t slot_version= -1);
   bool is_super_block() const { return 0 == first_id_ && 0 == second_id_; }
   bool is_normal_file() const { return NORMAL_FILE_ID == first_id_ && second_id_ > 0; }
   bool is_block_file() const { return first_id_ != NORMAL_FILE_ID; }
+  bool is_backup_block_file() const;
   void reset();
   uint64_t hash() const;
   bool operator == (const ObIOFd& other) const
   {
-    return other.first_id_ == this->first_id_ && other.second_id_ == this->second_id_ && other.device_handle_ == this->device_handle_;
+    return other.first_id_ == this->first_id_ && other.second_id_ == this->second_id_ && other.third_id_ == this->third_id_
+        && other.fd_id_ == this->fd_id_ && other.slot_version_ == this->slot_version_
+        && other.device_handle_ == this->device_handle_;
   }
   bool operator != (const ObIOFd& other) const
   {
-    return other.first_id_ != this->first_id_ || other.second_id_ != this->second_id_ || other.device_handle_ != this->device_handle_;
+    return other.first_id_ != this->first_id_ || other.second_id_ != this->second_id_ || other.third_id_ != this->third_id_
+        || other.fd_id_ != this->fd_id_ || other.slot_version_ != this->slot_version_
+        || other.device_handle_ != this->device_handle_;
   }
   bool is_valid() const;
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K_(first_id), K_(second_id), KP_(device_handle));
+  TO_STRING_KV(K_(first_id), K_(second_id), K_(third_id), K_(fd_id), K_(slot_version), KP_(device_handle));
   static const int64_t NORMAL_FILE_ID = 0xFFFFFFFFFFFFFFFF;// all of bit is one.
+  static const int64_t BACKUP_BLOCK_ID_MODE_FIELD_MASK = 0xFF;
+  static const int64_t BACKUP_BLOCK_ID_MODE_SHIFT_SIZE= 52LL;
+  static const int64_t BACKUP_BLOCK_ID_MODE = 1LL;
   int64_t first_id_;
   int64_t second_id_;
+  int64_t third_id_;
+  int64_t fd_id_; // used for fd simulator
+  int64_t slot_version_;  // used for fd simulator
   ObIODevice *device_handle_; // no need to serialize
 };
 
@@ -318,7 +331,7 @@ public:
 class ObIODevice
 {
 public:
-  ObIODevice() : device_type_(OB_STORAGE_MAX_TYPE), media_id_(0) {}
+  ObIODevice() : device_type_(OB_STORAGE_MAX_TYPE), media_id_(0), ref_cnt_(0) {}
   virtual ~ObIODevice() {}
   virtual int init(const ObIODOpts &opts) = 0;
   virtual int reconfig(const ObIODOpts &opts) = 0;
@@ -440,9 +453,19 @@ public:
   virtual int check_space_full(const int64_t required_size) const = 0;
   virtual int check_write_limited() const = 0;
 
+  // ref cnt
+  virtual void inc_ref();
+  virtual void dec_ref();
+  virtual int64_t get_ref_cnt();
+
+  TO_STRING_KV(K_(device_type), K_(media_id), K_(ref_cnt));
+
 public:
   ObStorageType device_type_;
   int64_t media_id_;
+
+protected:
+  int64_t ref_cnt_;
 };
 
 extern ObIODevice *THE_IO_DEVICE;

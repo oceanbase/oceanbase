@@ -52,10 +52,12 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH[] = {
   CALC_VERSION(4UL, 2UL, 3UL, 0UL),  // 4.2.3.0
   CALC_VERSION(4UL, 2UL, 3UL, 1UL),  // 4.2.3.1
   CALC_VERSION(4UL, 2UL, 4UL, 0UL),  // 4.2.4.0
+  CALC_VERSION(4UL, 2UL, 5UL, 0UL),  // 4.2.5.0
   CALC_VERSION(4UL, 3UL, 0UL, 0UL),  // 4.3.0.0
   CALC_VERSION(4UL, 3UL, 0UL, 1UL),  // 4.3.0.1
   CALC_VERSION(4UL, 3UL, 1UL, 0UL),  // 4.3.1.0
   CALC_VERSION(4UL, 3UL, 2UL, 0UL),  // 4.3.2.0
+  CALC_VERSION(4UL, 3UL, 2UL, 1UL),  // 4.3.2.1
   CALC_VERSION(4UL, 3UL, 3UL, 0UL),  // 4.3.3.0
 };
 
@@ -83,15 +85,17 @@ int ObUpgradeChecker::get_data_version_by_cluster_version(
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_3_0, MOCK_DATA_VERSION_4_2_3_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_3_1, MOCK_DATA_VERSION_4_2_3_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_4_0, MOCK_DATA_VERSION_4_2_4_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(MOCK_CLUSTER_VERSION_4_2_5_0, MOCK_DATA_VERSION_4_2_5_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_0, DATA_VERSION_4_3_0_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_0_1, DATA_VERSION_4_3_0_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_1_0, DATA_VERSION_4_3_1_0)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_2_0, DATA_VERSION_4_3_2_0)
+    CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_2_1, DATA_VERSION_4_3_2_1)
     CONVERT_CLUSTER_VERSION_TO_DATA_VERSION(CLUSTER_VERSION_4_3_3_0, DATA_VERSION_4_3_3_0)
 #undef CONVERT_CLUSTER_VERSION_TO_DATA_VERSION
     default: {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("invalid cluster_version", KR(ret), K(cluster_version));
+      LOG_WARN("invalid cluster_version", KR(ret), KCV(cluster_version));
     }
   }
   return ret;
@@ -478,10 +482,7 @@ int ObUpgradeUtils::update_sys_var_(
       const ObString zone("");
       ObSysParam sys_param;
       obrpc::ObAddSysVarArg arg;
-      arg.exec_tenant_id_ = tenant_id;
-      arg.if_not_exist_ = true; // not used
-      arg.sysvar_.set_tenant_id(tenant_id);
-      arg.update_sys_var_ = is_update;
+      ObSysVarSchema sysvar;
       if (OB_FAIL(sys_param.init(tenant_id, zone, name.ptr(), type,
           value.ptr(), min.ptr(), max.ptr(), info.ptr(), flag))) {
         LOG_WARN("sys_param init failed", KR(ret), K(tenant_id), K(name),
@@ -489,8 +490,9 @@ int ObUpgradeUtils::update_sys_var_(
       } else if (!sys_param.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("sys param is invalid", KR(ret), K(tenant_id), K(sys_param));
-      } else if (OB_FAIL(ObSchemaUtils::convert_sys_param_to_sysvar_schema(sys_param, arg.sysvar_))) {
+      } else if (OB_FAIL(ObSchemaUtils::convert_sys_param_to_sysvar_schema(sys_param, sysvar))) {
         LOG_WARN("convert sys param to sysvar schema failed", KR(ret));
+      } else if (OB_FAIL(arg.init(is_update, true /* if_not_exist_ */, tenant_id, sysvar))) {
       } else if (OB_FAIL(rpc_proxy.timeout(timeout).add_system_variable(arg))) {
         LOG_WARN("add system variable failed", KR(ret), K(timeout), K(arg));
       }
@@ -630,9 +632,9 @@ int ObUpgradeProcesserSet::init(
         LOG_WARN("fail to new upgrade processor", KR(ret)); \
       } else if (OB_FAIL(processor->init(version, mode, sql_proxy, oracle_sql_proxy, rpc_proxy, common_proxy, \
                                          schema_service, check_server_provider))) { \
-        LOG_WARN("fail to init processor", KR(ret), K(version)); \
+        LOG_WARN("fail to init processor", KR(ret), KDV(version)); \
       } else if (OB_FAIL(processor_list_.push_back(processor))) { \
-        LOG_WARN("fail to push back processor", KR(ret), K(version)); \
+        LOG_WARN("fail to push back processor", KR(ret), KDV(version)); \
       } \
       if (OB_FAIL(ret)) { \
         if (OB_NOT_NULL(processor)) { \
@@ -661,10 +663,12 @@ int ObUpgradeProcesserSet::init(
     INIT_PROCESSOR_BY_VERSION(4, 2, 3, 0);
     INIT_PROCESSOR_BY_VERSION(4, 2, 3, 1);
     INIT_PROCESSOR_BY_VERSION(4, 2, 4, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 2, 5, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 0, 1);
     INIT_PROCESSOR_BY_VERSION(4, 3, 1, 0);
     INIT_PROCESSOR_BY_VERSION(4, 3, 2, 0);
+    INIT_PROCESSOR_BY_VERSION(4, 3, 2, 1);
     INIT_PROCESSOR_BY_VERSION(4, 3, 3, 0);
 #undef INIT_PROCESSOR_BY_VERSION
     inited_ = true;
@@ -716,9 +720,9 @@ int ObUpgradeProcesserSet::get_processor_by_version(
   int ret = OB_SUCCESS;
   int64_t idx = OB_INVALID_INDEX;
   if (OB_FAIL(get_processor_idx_by_version(version, idx))) {
-    LOG_WARN("fail to get processor idx by version", KR(ret), K(version));
+    LOG_WARN("fail to get processor idx by version", KR(ret), KDV(version));
   } else if (OB_FAIL(get_processor_by_idx(idx, processor))) {
-    LOG_WARN("fail to get processor by idx", KR(ret), K(version));
+    LOG_WARN("fail to get processor by idx", KR(ret), KDV(version));
   }
   return ret;
 }
@@ -737,11 +741,11 @@ int ObUpgradeProcesserSet::get_processor_idx_by_range(
     LOG_WARN("check inner stat failed", KR(ret));
   } else if (start_version <= 0 || end_version <= 0 || start_version > end_version) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid version", KR(ret), K(start_version), K(end_version));
+    LOG_WARN("invalid version", KR(ret), KDV(start_version), KDV(end_version));
   } else if (OB_FAIL(get_processor_idx_by_version(start_version, start_idx))) {
-    LOG_WARN("fail to get processor idx by version", KR(ret), K(start_version));
+    LOG_WARN("fail to get processor idx by version", KR(ret), KDV(start_version));
   } else if (OB_FAIL(get_processor_idx_by_version(end_version, end_idx))) {
-    LOG_WARN("fail to get processor idx by version", KR(ret), K(end_version));
+    LOG_WARN("fail to get processor idx by version", KR(ret), KDV(end_version));
   }
   return ret;
 }
@@ -756,7 +760,7 @@ int ObUpgradeProcesserSet::get_processor_idx_by_version(
     LOG_WARN("check inner stat failed", KR(ret));
   } else if (version <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid version", KR(ret), K(version));
+    LOG_WARN("invalid version", KR(ret), KDV(version));
   } else if (processor_list_.count() <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("processor_list cnt shoud greator than 0", KR(ret));
@@ -779,7 +783,7 @@ int ObUpgradeProcesserSet::get_processor_idx_by_version(
     }
     if (OB_SUCC(ret) && OB_INVALID_INDEX == idx) {
       ret = OB_ENTRY_NOT_EXIST;
-      LOG_WARN("fail to find processor by version", KR(ret), K(version));
+      LOG_WARN("fail to find processor by version", KR(ret), KDV(version));
     }
   }
   return ret;
@@ -1303,6 +1307,7 @@ int ObUpgradeFor4310Processor::post_upgrade_for_create_replication_role_in_oracl
   }
   return ret;
 }
+/* =========== 4310 upgrade processor end ============= */
 
 int ObUpgradeFor4320Processor::post_upgrade()
 {
@@ -1313,6 +1318,8 @@ int ObUpgradeFor4320Processor::post_upgrade()
     LOG_WARN("fail to reset compat version", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_spm())) {
     LOG_WARN("failed to post upgrade for spm", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_online_estimate_percent())) {
+    LOG_WARN("failed to post upgrade for online estimate percent", KR(ret));
   }
   return ret;
 }
@@ -1417,7 +1424,60 @@ int ObUpgradeFor4320Processor::post_upgrade_for_spm()
 
   return ret;
 }
-/* =========== 4310 upgrade processor end ============= */
+
+int ObUpgradeFor4320Processor::post_upgrade_for_online_estimate_percent()
+{
+  int ret = OB_SUCCESS;
+  int64_t start = ObTimeUtility::current_time();
+  ObSqlString raw_sql;
+  int64_t affected_rows = 0;
+  bool is_primary_tenant = false;
+  if (sql_proxy_ == NULL) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", K(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("tenant isn't primary standby, no refer to gather stats, skip", K(tenant_id_));
+  } else if (OB_FAIL(ObDbmsStatsPreferences::get_online_estimate_percent_for_upgrade(raw_sql))) {
+    LOG_WARN("failed to get extra stats perfs for upgrade", K(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, raw_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] post upgrade for online estimate failed", KR(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("[UPGRADE] post upgrade for online estimate succeed", K_(tenant_id));
+  }  return ret;
+}
+
+/* =========== 4320 upgrade processor end ============= */
+
+int ObUpgradeFor4330Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_external_table_flag())) {
+    LOG_WARN("fail to alter log external table flag", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4330Processor::post_upgrade_for_external_table_flag()
+{
+  int ret = OB_SUCCESS;
+  if (tenant_id_ != OB_SYS_TENANT_ID) {
+    // do nothing
+  } else if (OB_ISNULL(GCTX.root_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rootservice is null", KR(ret));
+  } else if (OB_FAIL(GCTX.root_service_->schedule_alter_log_external_table_task())) {
+    LOG_WARN("schedule alter log external table task failed", KR(ret));
+  }
+  return ret;
+}
+/* =========== 4330 upgrade processor end ============= */
 
 /* =========== special upgrade processor end   ============= */
 } // end share

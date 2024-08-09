@@ -66,10 +66,14 @@ OB_DEF_SERIALIZE(ObPxCoordSpec)
               px_expected_worker_count_,
               qc_id_,
               batch_op_info_,
-              table_locations_,
-              sort_exprs_,
-              sort_collations_,
-              sort_cmp_funs_);
+              table_locations_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  LST_DO_CODE(OB_UNIS_ENCODE,
+              sort_exprs,
+              sort_collations,
+              sort_cmp_funs);
   return ret;
 }
 
@@ -92,9 +96,12 @@ OB_DEF_DESERIALIZE(ObPxCoordSpec)
       }
     }
   }
-  OB_UNIS_DECODE(sort_exprs_);
-  OB_UNIS_DECODE(sort_collations_);
-  OB_UNIS_DECODE(sort_cmp_funs_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  OB_UNIS_DECODE(sort_exprs);
+  OB_UNIS_DECODE(sort_collations);
+  OB_UNIS_DECODE(sort_cmp_funs);
   return ret;
 }
 
@@ -106,10 +113,14 @@ OB_DEF_SERIALIZE_SIZE(ObPxCoordSpec)
               px_expected_worker_count_,
               qc_id_,
               batch_op_info_,
-              table_locations_,
-              sort_exprs_,
-              sort_collations_,
-              sort_cmp_funs_);
+              table_locations_);
+  ExprFixedArray sort_exprs;
+  ObSortCollations sort_collations;
+  ObSortFuncs sort_cmp_funs;
+  LST_DO_CODE(OB_UNIS_ADD_LEN,
+              sort_exprs,
+              sort_collations,
+              sort_cmp_funs);
   return len;
 }
 
@@ -137,7 +148,8 @@ ObPxCoordOp::ObPxCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInpu
   time_recorder_(0),
   batch_rescan_param_version_(0),
   server_alive_checker_(coord_info_.dfo_mgr_, exec_ctx.get_my_session()->get_process_query_time()),
-  last_px_batch_rescan_size_(0)
+  last_px_batch_rescan_size_(0),
+  query_sql_()
 {}
 
 
@@ -298,7 +310,17 @@ int ObPxCoordOp::inner_open()
 {
   int ret = OB_SUCCESS;
   ObDfo *root_dfo = NULL;
-  if (OB_FAIL(ObPxReceiveOp::inner_open())) {
+  ObString cur_query_str = ctx_.get_my_session()->get_current_query_string();
+  char *buf = reinterpret_cast<char*>(ctx_.get_allocator().alloc(cur_query_str.length() + 1));
+  if (OB_ISNULL(buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for query string", K(cur_query_str.length()));
+  } else {
+    MEMCPY(buf, cur_query_str.ptr(), cur_query_str.length());
+    query_sql_.assign_ptr(buf, cur_query_str.length());
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObPxReceiveOp::inner_open())) {
   } else if (!is_valid_server_id(GCTX.server_id_)) {
     ret = OB_SERVER_IS_INIT;
     LOG_WARN("Server is initializing", K(ret), K(GCTX.server_id_));

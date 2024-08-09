@@ -95,7 +95,8 @@ int ObIBackupIndexStore::pread_file_(const common::ObString &path, const share::
 }
 
 int ObIBackupIndexStore::decode_headers_(blocksstable::ObBufferReader &buffer_reader,
-    ObBackupCommonHeader &common_header, ObBackupMultiLevelIndexHeader &index_header, int64_t &data_size)
+    ObBackupCommonHeader &common_header, ObBackupMultiLevelIndexHeader &index_header,
+    int64_t &data_length, int64_t &data_zlength, ObCompressorType &compressor_type)
 {
   int ret = OB_SUCCESS;
   if (!buffer_reader.is_valid()) {
@@ -108,7 +109,9 @@ int ObIBackupIndexStore::decode_headers_(blocksstable::ObBufferReader &buffer_re
     if (OB_FAIL(decode_multi_level_index_header_(buffer_reader, index_header))) {
       LOG_WARN("failed to decode multi level index header", K(ret), K(buffer_reader));
     } else {
-      data_size = common_header.data_length_ - (buffer_reader.pos() - pos);
+      data_length = common_header.data_length_ - (buffer_reader.pos() - pos);
+      data_zlength = common_header.data_zlength_ - (buffer_reader.pos() - pos);
+      compressor_type = static_cast<ObCompressorType>(common_header.compressor_type_);
     }
   }
   return ret;
@@ -129,10 +132,10 @@ int ObIBackupIndexStore::decode_common_header_(
     LOG_WARN("common header is null", K(ret));
   } else if (OB_FAIL(common_header->check_valid())) {
     LOG_WARN("common header is not valid", K(ret), K(*common_header));
-  } else if (common_header->data_length_ > buffer_reader.remain()) {
+  } else if (common_header->data_zlength_ > buffer_reader.remain()) {
     ret = OB_BUF_NOT_ENOUGH;
     LOG_WARN("buffer read not enough", K(ret), K(*common_header), K(buffer_reader));
-  } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_length_))) {
+  } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
     LOG_WARN("failed to check data checksum", K(ret), K(common_header));
   } else {
     header = *common_header;
@@ -154,17 +157,31 @@ int ObIBackupIndexStore::decode_multi_level_index_header_(
 }
 
 template <typename IndexType>
-int ObIBackupIndexStore::decode_index_from_block_(
-    const int64_t end_pos, blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list)
+int ObIBackupIndexStore::decode_index_from_block_(const int64_t data_zlength, const int64_t original_size,
+    const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list)
 {
   int ret = OB_SUCCESS;
   index_list.reset();
-  for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
-    IndexType index;
-    if (OB_FAIL(buffer_reader.read_serialize(index))) {
-      LOG_WARN("failed to read serialize meta index", K(ret), K(i), K(buffer_reader), K(end_pos));
-    } else if (OB_FAIL(index_list.push_back(index))) {
-      LOG_WARN("failed to push back", K(ret), K(index));
+  const char *out = NULL;
+  int64_t out_size = 0;
+  ObBackupIndexBlockCompressor compressor;
+  const int64_t block_size = OB_BACKUP_COMPRESS_BLOCK_SIZE;
+  if (OB_FAIL(compressor.init(block_size, compressor_type))) {
+    LOG_WARN("failed to init compressor", K(ret));
+  } else if (OB_FAIL(compressor.decompress(buffer_reader.current(), data_zlength, original_size, out, out_size))) {
+    LOG_WARN("failed to decompress", K(ret), K(buffer_reader), K(data_zlength), K(original_size), K(compressor_type));
+  } else {
+    ObBufferReader new_buffer_reader(out, out_size);
+    while (OB_SUCC(ret) && new_buffer_reader.remain() > 0) {
+      IndexType index;
+      if (OB_FAIL(new_buffer_reader.read_serialize(index))) {
+        LOG_WARN("failed to read serialize meta index", K(ret), K(original_size), K(out_size),
+            K(compressor_type), K(new_buffer_reader), K(data_zlength), K(index_list));
+      } else if (OB_FAIL(index_list.push_back(index))) {
+        LOG_WARN("failed to push back", K(ret), K(index));
+      } else {
+        LOG_DEBUG("decode index", K(index), K(index_list));
+      }
     }
   }
   return ret;
@@ -397,13 +414,12 @@ int ObBackupMetaIndexStore::get_backup_file_path(share::ObBackupPath &backup_pat
           K_(retry_id));
     }
   } else {
-    if (OB_FAIL(share::ObBackupPathUtil::get_ls_meta_index_backup_path(backup_dest_,
+    if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_ls_meta_index_backup_path(backup_dest_,
             backup_set_desc_,
             ls_id_,
             backup_data_type_,
             turn_id_,
             retry_id_,
-            is_sec_meta_,
             backup_path))) {
       LOG_WARN("failed to get log stream meta index backup path",
           K(ret),
@@ -465,16 +481,18 @@ int ObBackupMetaIndexStore::get_tablet_meta_index_(const ObBackupMetaKey &meta_k
       buffer_reader.assign(NULL, 0);
       ObBackupCommonHeader common_header;
       ObBackupMultiLevelIndexHeader index_header;
-      int64_t data_size = 0;
+      int64_t data_length = 0;
+      int64_t data_zlength = 0;
+      ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR;
       if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, buffer_reader))) {
         LOG_WARN("failed to get block from cache", K(ret), K(backup_file_type), K(offset), K(length));
-      } else if (OB_FAIL(decode_headers_(buffer_reader, common_header, index_header, data_size))) {
+      } else if (OB_FAIL(decode_headers_(buffer_reader, common_header,
+          index_header, data_length, data_zlength, compressor_type))) {
         LOG_WARN("failed to decode headers", K(ret), K(offset), K(length), K(buffer_reader));
       } else {
-        const int64_t end_pos = buffer_reader.pos() + data_size;
         if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL == index_header.index_level_) {
-          if (OB_FAIL(decode_meta_index_from_buffer_(end_pos, buffer_reader, index_list))) {
-            LOG_WARN("failed to decode range index from block", K(ret), K(end_pos), K(buffer_reader));
+          if (OB_FAIL(decode_meta_index_from_buffer_(data_zlength, data_length, compressor_type, buffer_reader, index_list))) {
+            LOG_WARN("failed to decode range index from block", K(ret), K(data_zlength), K(buffer_reader));
           } else if (OB_FAIL(find_index_lower_bound_(meta_key, index_list, index))) {
             LOG_WARN("failed to find lower bound", K(ret), K(index_header), K(meta_key), K(index_list));
           } else {
@@ -483,8 +501,8 @@ int ObBackupMetaIndexStore::get_tablet_meta_index_(const ObBackupMetaKey &meta_k
             break;
           }
         } else {
-          if (OB_FAIL(decode_meta_index_index_from_buffer_(end_pos, buffer_reader, index_index_list))) {
-            LOG_WARN("failed to decode range index from block", K(ret), K(end_pos), K(buffer_reader));
+          if (OB_FAIL(decode_meta_index_index_from_buffer_(data_zlength, data_length, compressor_type, buffer_reader, index_index_list))) {
+            LOG_WARN("failed to decode range index from block", K(ret), K(data_zlength), K(buffer_reader));
           } else if (OB_FAIL(find_index_index_lower_bound_(meta_key, index_index_list, index_index))) {
             LOG_WARN("failed to find lower bound", K(ret), K(meta_key), K(index_index_list));
           } else {
@@ -549,16 +567,16 @@ int ObBackupMetaIndexStore::find_index_index_lower_bound_(const ObBackupMetaKey 
   return ret;
 }
 
-int ObBackupMetaIndexStore::decode_meta_index_from_buffer_(
-    const int64_t end_pos, blocksstable::ObBufferReader &buffer, common::ObArray<ObBackupMetaIndex> &index_list)
+int ObBackupMetaIndexStore::decode_meta_index_from_buffer_(const int64_t data_zlength, const int64_t original_size,
+    const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer, common::ObArray<ObBackupMetaIndex> &index_list)
 {
-  return decode_index_from_block_<ObBackupMetaIndex>(end_pos, buffer, index_list);
+  return decode_index_from_block_<ObBackupMetaIndex>(data_zlength, original_size, compressor_type, buffer, index_list);
 }
 
-int ObBackupMetaIndexStore::decode_meta_index_index_from_buffer_(const int64_t end_pos,
-    blocksstable::ObBufferReader &buffer, common::ObArray<ObBackupMetaIndexIndex> &index_index_list)
+int ObBackupMetaIndexStore::decode_meta_index_index_from_buffer_(const int64_t data_zlength, const int64_t original_size,
+    const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer, common::ObArray<ObBackupMetaIndexIndex> &index_index_list)
 {
-  return decode_index_from_block_<ObBackupMetaIndexIndex>(end_pos, buffer, index_index_list);
+  return decode_index_from_block_<ObBackupMetaIndexIndex>(data_zlength, original_size, compressor_type, buffer, index_index_list);
 }
 
 /* ObBackupMacroBlockIndexStore */
@@ -754,16 +772,17 @@ int ObBackupMacroBlockIndexStore::inner_get_macro_block_range_index_(
       buffer_reader.assign(NULL, 0);
       ObBackupCommonHeader common_header;
       ObBackupMultiLevelIndexHeader index_header;
-      int64_t data_size = 0;
+      int64_t data_length = 0;
+      int64_t data_zlength = 0;
+      ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR;
       if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, buffer_reader))) {
         LOG_WARN("failed to fetch block", K(ret), K(offset), K(length));
-      } else if (OB_FAIL(decode_headers_(buffer_reader, common_header, index_header, data_size))) {
+      } else if (OB_FAIL(decode_headers_(buffer_reader, common_header, index_header, data_length, data_zlength, compressor_type))) {
         LOG_WARN("failed to decode header", K(ret), K(offset), K(length), K(buffer_reader));
       } else {
-        const int64_t end_pos = buffer_reader.pos() + data_size;
         if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL == index_header.index_level_) {
-          if (OB_FAIL(decode_range_index_from_block_(end_pos, buffer_reader, index_list))) {
-            LOG_WARN("failed to decode range index index from block", K(ret), K(end_pos), K(common_header));
+          if (OB_FAIL(decode_range_index_from_block_(data_zlength, data_length, compressor_type, buffer_reader, index_list))) {
+            LOG_WARN("failed to decode range index index from block", K(ret), K(data_zlength), K(common_header));
           } else if (OB_FAIL(find_index_lower_bound_(logic_id, index_list, range_index))) {
             LOG_WARN("failed to find index lower bound", K(ret), K(logic_id), K(index_list));
           } else {
@@ -771,8 +790,8 @@ int ObBackupMacroBlockIndexStore::inner_get_macro_block_range_index_(
             break;
           }
         } else {
-          if (OB_FAIL(decode_range_index_index_from_block_(end_pos, buffer_reader, index_index_list))) {
-            LOG_WARN("failed to decode index index from block", K(ret), K(end_pos), K(common_header));
+          if (OB_FAIL(decode_range_index_index_from_block_(data_zlength, data_length, compressor_type, buffer_reader, index_index_list))) {
+            LOG_WARN("failed to decode index index from block", K(ret), K(data_zlength), K(common_header));
           } else if (OB_FAIL(find_index_index_lower_bound_(logic_id, index_index_list, index_index))) {
             LOG_WARN("failed to find lower bound", K(ret), K(logic_id), K(index_index_list));
           } else {
@@ -787,16 +806,16 @@ int ObBackupMacroBlockIndexStore::inner_get_macro_block_range_index_(
   return ret;
 }
 
-int ObBackupMacroBlockIndexStore::decode_range_index_from_block_(const int64_t end_pos,
-    blocksstable::ObBufferReader &buffer_reader, common::ObArray<ObBackupMacroRangeIndex> &index_list)
+int ObBackupMacroBlockIndexStore::decode_range_index_from_block_(const int64_t data_zlength, const int64_t original_size,
+    const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader, common::ObArray<ObBackupMacroRangeIndex> &index_list)
 {
-  return decode_index_from_block_<ObBackupMacroRangeIndex>(end_pos, buffer_reader, index_list);
+  return decode_index_from_block_<ObBackupMacroRangeIndex>(data_zlength, original_size, compressor_type, buffer_reader, index_list);
 }
 
-int ObBackupMacroBlockIndexStore::decode_range_index_index_from_block_(const int64_t end_pos,
-    blocksstable::ObBufferReader &buffer_reader, common::ObArray<ObBackupMacroRangeIndexIndex> &index_index_list)
+int ObBackupMacroBlockIndexStore::decode_range_index_index_from_block_(const int64_t data_zlength, const int64_t original_size,
+    const ObCompressorType &compressor_type, blocksstable::ObBufferReader &buffer_reader, common::ObArray<ObBackupMacroRangeIndexIndex> &index_index_list)
 {
-  return decode_index_from_block_<ObBackupMacroRangeIndexIndex>(end_pos, buffer_reader, index_index_list);
+  return decode_index_from_block_<ObBackupMacroRangeIndexIndex>(data_zlength, original_size, compressor_type, buffer_reader, index_index_list);
 }
 
 int ObBackupMacroBlockIndexStore::find_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_id,
@@ -851,7 +870,7 @@ int ObBackupMacroBlockIndexStore::get_macro_block_backup_path_(
     LOG_WARN("get invalid args", K(ret), K(range_index));
   } else if (OB_FAIL(get_backup_set_desc_(range_index, backup_set_desc))) {
     LOG_WARN("failed to get backup set desc", K(ret), K(range_index));
-  } else if (OB_FAIL(share::ObBackupPathUtil::get_macro_block_backup_path(backup_dest_,
+  } else if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_macro_block_backup_path(backup_dest_,
                  backup_set_desc,
                  range_index.ls_id_,
                  backup_data_type_,
@@ -992,46 +1011,6 @@ int ObBackupMacroBlockIndexStore::fill_backup_set_descs_(
   return ret;
 }
 
-/* ObBackupIndexStoreWrapper */
-
-ObBackupIndexStoreWrapper::ObBackupIndexStoreWrapper()
-{}
-
-ObBackupIndexStoreWrapper::~ObBackupIndexStoreWrapper()
-{}
-
-int ObBackupIndexStoreWrapper::get_type_by_idx_(const int64_t idx, share::ObBackupDataType &backup_data_type)
-{
-  int ret = OB_SUCCESS;
-  if (0 == idx) {
-    backup_data_type.set_sys_data_backup();
-  } else if (1 == idx) {
-    backup_data_type.set_minor_data_backup();
-  } else if (2 == idx) {
-    backup_data_type.set_major_data_backup();
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup data type not valid", K(ret), K(backup_data_type));
-  }
-  return ret;
-}
-
-int ObBackupIndexStoreWrapper::get_idx_(const share::ObBackupDataType &backup_data_type, int64_t &idx)
-{
-  int ret = OB_SUCCESS;
-  if (backup_data_type.is_sys_backup()) {
-    idx = 0;
-  } else if (backup_data_type.is_minor_backup()) {
-    idx = 1;
-  } else if (backup_data_type.is_major_backup()) {
-    idx = 2;
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("backup data type not valid", K(ret), K(backup_data_type));
-  }
-  return ret;
-}
-
 /*ObRestoreMetaIndexStore*/
 
 int ObRestoreMetaIndexStore::init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
@@ -1087,10 +1066,18 @@ int ObRestoreMetaIndexStore::get_backup_file_path(share::ObBackupPath &backup_pa
           K_(turn_id));
     }
   } else {
-    if (OB_FAIL(share::ObBackupPathUtil::get_ls_meta_index_backup_path(backup_dest_, ls_id_, backup_data_type_,
-        turn_id_, retry_id_, is_sec_meta_, backup_path))) {
-      LOG_WARN("failed to get log stream meta index backup path", K(ret), K_(backup_dest), K_(ls_id),
-          K_(backup_data_type));
+    if (DATA_VERSION_4_3_3_0 <= data_version_) {
+      if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_ls_meta_index_backup_path(
+          backup_dest_, ls_id_, backup_data_type_, turn_id_, retry_id_, backup_path))) {
+        LOG_WARN("failed to get log stream meta index backup path", K(ret), K_(backup_dest), K_(ls_id),
+            K_(backup_data_type));
+      }
+    } else {
+      if (OB_FAIL(share::ObBackupPathUtil::get_ls_meta_index_backup_path(backup_dest_, ls_id_, backup_data_type_,
+          turn_id_, retry_id_, is_sec_meta_, backup_path))) {
+        LOG_WARN("failed to get log stream meta index backup path", K(ret), K_(backup_dest), K_(ls_id),
+            K_(backup_data_type));
+      }
     }
   }
   return ret;
@@ -1099,85 +1086,29 @@ int ObRestoreMetaIndexStore::get_backup_file_path(share::ObBackupPath &backup_pa
 /* ObBackupMetaIndexStoreWrapper */
 
 ObBackupMetaIndexStoreWrapper::ObBackupMetaIndexStoreWrapper()
-    : ObBackupIndexStoreWrapper(), is_inited_(false), is_sec_meta_(false), store_list_()
+    : is_inited_(false),
+      is_sec_meta_(false),
+      index_wrapper_(NULL)
 {}
 
 ObBackupMetaIndexStoreWrapper::~ObBackupMetaIndexStoreWrapper()
-{}
+{
+  OB_DELETE(ObIBackupIndexStoreWrapper, ObModIds::BACKUP, index_wrapper_);
+}
 
 int ObBackupMetaIndexStoreWrapper::init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
     const share::ObBackupDest &backup_dest, const share::ObBackupSetFileDesc &backup_set_info, const bool is_sec_meta,
     const bool init_sys_tablet_index_store, ObBackupIndexKVCache &index_kv_cache)
 {
   int ret = OB_SUCCESS;
-  share::ObBackupSetDesc backup_set_desc;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("index store init twice", K(ret));
+  } else if (OB_FAIL(inner_init_(mode, param, backup_dest, backup_set_info,
+      is_sec_meta, init_sys_tablet_index_store, index_kv_cache)))  {
+    LOG_WARN("failed to inner init", K(ret));
   } else {
-    backup_set_desc.backup_set_id_ = backup_set_info.backup_set_id_;
-    backup_set_desc.backup_type_ = backup_set_info.backup_type_;
-    ObBackupIndexStoreParam share_param = param;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAY_SIZE; ++i) {
-      ObBackupDataType backup_data_type;
-      ObRestoreMetaIndexStore *store = NULL;
-      int64_t retry_id = 0;
-      if (OB_FAIL(get_type_by_idx_(i, backup_data_type))) {
-        LOG_WARN("failed to get type by idx", K(ret), K(i));
-      } else if (backup_data_type.is_sys_backup() && !init_sys_tablet_index_store) {
-        continue;
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (backup_set_info.tenant_compatible_ < DATA_VERSION_4_2_0_0) {
-        // In 4.1.x, sys tablet only has 1 backup turn.
-        // minor and major both use the data turn id.
-        if (backup_data_type.is_sys_backup() && OB_FALSE_IT(share_param.turn_id_ = 1)) {
-        } else if (!backup_data_type.is_sys_backup() && OB_FALSE_IT(share_param.turn_id_ = backup_set_info.data_turn_id_)) {
-        }
-      } else if (backup_data_type.is_minor_backup() && OB_FALSE_IT(share_param.turn_id_ = backup_set_info.minor_turn_id_)) {
-      } else if (backup_data_type.is_major_backup() && OB_FALSE_IT(share_param.turn_id_ = backup_set_info.major_turn_id_)) {
-      }
-
-      if (OB_SUCC(ret) && !backup_data_type.is_sys_backup()) {
-        if (backup_set_info.tenant_compatible_ < DATA_VERSION_4_2_0_0) {
-          if (OB_FAIL(get_tenant_meta_index_retry_id_v_4_1_x_(
-              backup_dest, backup_data_type, share_param.turn_id_, is_sec_meta, retry_id))) {
-            LOG_WARN("failed to get tenant meta index retry id", K(ret));
-          }
-        } else if (OB_FAIL(get_tenant_meta_index_retry_id_(
-            backup_dest, backup_data_type, share_param.turn_id_, is_sec_meta, retry_id))) {
-          LOG_WARN("failed to get tenant meta index retry id", K(ret));
-        }
-
-        if (OB_SUCC(ret)) {
-          share_param.retry_id_ = retry_id;
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(get_index_store_(backup_data_type, store))) {
-        LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
-      } else if (OB_ISNULL(store)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
-      } else {
-        share_param.backup_data_type_ = backup_data_type;
-        share_param.is_tenant_level_ = backup_data_type.is_sys_backup() ? false : true;
-        if (OB_FAIL(store->init(mode,
-                                share_param,
-                                backup_dest,
-                                backup_set_desc,
-                                is_sec_meta,
-                                backup_set_info.tenant_compatible_,
-                                index_kv_cache))) {
-          LOG_WARN("failed to init store", K(ret), K(i));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      is_inited_ = true;
-    }
+   is_inited_ = true;
   }
   return ret;
 }
@@ -1190,153 +1121,107 @@ int ObBackupMetaIndexStoreWrapper::get_backup_meta_index(const share::ObBackupDa
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("index store not init", K(ret));
-  } else if (OB_FAIL(get_index_store_(backup_data_type, index_store))) {
-    LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
-  } else if (OB_ISNULL(index_store)) {
+  } else if (OB_ISNULL(index_wrapper_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index store should not be null", K(ret));
+  } else if (OB_FAIL(index_wrapper_->get_index_store(backup_data_type, index_store))) {
+    LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
   } else if (OB_FAIL(index_store->get_backup_meta_index(tablet_id, meta_type, meta_index))) {
-    LOG_WARN("failed to get macro block index", K(ret));
+    LOG_WARN("failed to get macro block index", K(ret), K(backup_data_type), K(tablet_id), K(meta_type));
   } else {
     LOG_INFO("get meta index", K(tablet_id), K(meta_index));
   }
   return ret;
 }
 
-int ObBackupMetaIndexStoreWrapper::get_index_store_(
+int ObBackupMetaIndexStoreWrapper::get_backup_meta_index_store(
     const share::ObBackupDataType &backup_data_type, ObRestoreMetaIndexStore *&index_store)
 {
   int ret = OB_SUCCESS;
-  index_store = NULL;
-  int64_t idx = 0;
-  if (OB_FAIL(get_idx_(backup_data_type, idx))) {
-    LOG_WARN("failed to get idx", K(ret), K(backup_data_type));
-  } else if (idx < 0 || idx >= ARRAY_SIZE) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("idx is not valid", K(ret), K(idx));
-  } else {
-    index_store = &store_list_[idx];
-  }
-  return ret;
-}
-
-int ObBackupMetaIndexStoreWrapper::get_tenant_meta_index_retry_id_(
-    const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type,
-    const int64_t turn_id, const int64_t is_sec_meta, int64_t &retry_id)
-{
-  int ret = OB_SUCCESS;
-  ObBackupTenantIndexRetryIDGetter retry_id_getter;
-  const bool is_restore = true;
-  const bool is_macro_index = false;
-  if (!backup_dest.is_valid() || !backup_data_type.is_valid() || turn_id <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(backup_dest), K(backup_data_type), K(turn_id));
-  } else if (OB_FAIL(retry_id_getter.init(backup_dest, backup_data_type,
-      turn_id, is_restore, is_macro_index, is_sec_meta))) {
-    LOG_WARN("failed to init retry id getter", K(ret), K(backup_dest), K(backup_data_type), K(turn_id));
-  } else if (OB_FAIL(retry_id_getter.get_max_retry_id(retry_id))) {
-    LOG_WARN("failed to get max retry id", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupMetaIndexStoreWrapper::get_tenant_meta_index_retry_id_v_4_1_x_(
-    const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type,
-    const int64_t turn_id, const int64_t is_sec_meta, int64_t &retry_id)
-{
-  int ret = OB_SUCCESS;
-  ObBackupTenantIndexRetryIDGetter retry_id_getter;
-  const bool is_restore = true;
-  const bool is_macro_index = false;
-  if (!backup_dest.is_valid() || !backup_data_type.is_valid() || turn_id <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid args", K(ret), K(backup_dest), K(backup_data_type), K(turn_id));
-  } else if (OB_FAIL(retry_id_getter.init(backup_dest, backup_data_type,
-      turn_id, is_restore, is_macro_index, is_sec_meta))) {
-    LOG_WARN("failed to init retry id getter", K(ret), K(backup_dest), K(backup_data_type), K(turn_id));
-  } else if (OB_FAIL(retry_id_getter.get_max_retry_id_v_4_1_x(retry_id))) {
-    LOG_WARN("failed to get max retry id", K(ret));
-  }
-  return ret;
-}
-
-/* ObBackupMacroBlockIndexStoreWrapper */
-
-ObBackupMacroBlockIndexStoreWrapper::ObBackupMacroBlockIndexStoreWrapper()
-    : ObBackupIndexStoreWrapper(), is_inited_(false), store_list_()
-{}
-
-ObBackupMacroBlockIndexStoreWrapper::~ObBackupMacroBlockIndexStoreWrapper()
-{}
-
-int ObBackupMacroBlockIndexStoreWrapper::init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
-    const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc,
-    ObBackupIndexKVCache &index_kv_cache)
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("index store init twice", K(ret));
-  } else {
-    ObBackupIndexStoreParam share_param = param;
-    for (int64_t i = 0; OB_SUCC(ret) && i < ARRAY_SIZE; ++i) {
-      ObBackupDataType backup_data_type;
-      ObBackupMacroBlockIndexStore *store = NULL;
-      if (OB_FAIL(get_type_by_idx_(i, backup_data_type))) {
-        LOG_WARN("failed to get type by idx", K(ret), K(i));
-      } else if (OB_FAIL(get_index_store_(backup_data_type, store))) {
-        LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
-      } else if (OB_ISNULL(store)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
-      } else {
-        share_param.backup_data_type_ = backup_data_type;
-        if (OB_FAIL(store->init(mode, share_param, backup_dest, backup_set_desc, index_kv_cache))) {
-          LOG_WARN("failed to init store", K(ret), K(i));
-        }
-      }
-    }
-    if (OB_SUCC(ret)) {
-      is_inited_ = true;
-    }
-  }
-  return ret;
-}
-
-int ObBackupMacroBlockIndexStoreWrapper::get_macro_block_index(const share::ObBackupDataType &backup_data_type,
-    const blocksstable::ObLogicMacroBlockId &macro_id, ObBackupMacroBlockIndex &macro_index)
-{
-  int ret = OB_SUCCESS;
-  ObBackupMacroBlockIndexStore *index_store = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("index store not init", K(ret));
-  } else if (OB_FAIL(get_index_store_(backup_data_type, index_store))) {
-    LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
-  } else if (OB_ISNULL(index_store)) {
+  } else if (OB_ISNULL(index_wrapper_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("index store should not be null", K(ret));
-  } else if (OB_FAIL(index_store->get_macro_block_index(macro_id, macro_index))) {
-    LOG_WARN("failed to get macro block index", K(ret));
-  } else {
-    LOG_INFO("get macro block index", K(backup_data_type), K(macro_id), K(macro_index));
+    LOG_WARN("index wrapper should not be null", K(ret));
+  }else if (OB_FAIL(index_wrapper_->get_index_store(backup_data_type, index_store))) {
+    LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
   }
   return ret;
 }
 
-int ObBackupMacroBlockIndexStoreWrapper::get_index_store_(
-    const share::ObBackupDataType &backup_data_type, ObBackupMacroBlockIndexStore *&index_store)
+int ObBackupMetaIndexStoreWrapper::decide_wrapper_(const uint64_t tenant_id,
+    const int64_t tenant_compatible, ObIBackupIndexStoreWrapper *&wrapper)
 {
   int ret = OB_SUCCESS;
-  index_store = NULL;
-  int64_t idx = 0;
-  if (OB_FAIL(get_idx_(backup_data_type, idx))) {
-    LOG_WARN("failed to get idx", K(ret), K(backup_data_type));
-  } else if (idx < 0 || idx >= ARRAY_SIZE) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("idx is not valid", K(ret), K(idx));
+  wrapper = NULL;
+  lib::ObMemAttr attr(tenant_id, ObModIds::BACKUP);
+  if (tenant_compatible <= DATA_VERSION_4_2_0_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("do not support restore from data version less than 4.2.0", K(ret), K(tenant_compatible));
+  } else if (tenant_compatible < DATA_VERSION_4_3_3_0) {
+    wrapper = OB_NEW(ObBackupMetaIndexStoreWrapperV1, attr);
   } else {
-    index_store = &store_list_[idx];
+    wrapper = OB_NEW(ObBackupMetaIndexStoreWrapperV2, attr);
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(wrapper)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate wrapper", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupMetaIndexStoreWrapper::inner_init_(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
+    const share::ObBackupDest &backup_dest, const share::ObBackupSetFileDesc &backup_set_info, const bool is_sec_meta,
+    const bool init_sys_tablet_index_store, ObBackupIndexKVCache &index_kv_cache)
+{
+  int ret = OB_SUCCESS;
+  int64_t array_size = 0;
+  int64_t tenant_compatible = backup_set_info.tenant_compatible_;
+  ObIBackupIndexStoreWrapper *wrapper = NULL;
+  share::ObBackupSetDesc backup_set_desc;
+  backup_set_desc.backup_set_id_ = backup_set_info.backup_set_id_;
+  backup_set_desc.backup_type_ = backup_set_info.backup_type_;
+  if (OB_FAIL(decide_wrapper_(param.tenant_id_, tenant_compatible, wrapper))) {
+    LOG_WARN("failed to decide wrapper", K(ret), K(param), K(backup_set_info));
+  } else if (OB_ISNULL(index_wrapper_ = wrapper)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("wrapper should not be null", K(ret));
+  } else if (OB_FAIL(wrapper->check_tenant_compatible(tenant_compatible))) {
+    LOG_WARN("failed to check tenant compatible", K(ret), K(tenant_compatible));
+  } else if (OB_FAIL(wrapper->get_index_store_array_size(array_size))) {
+    LOG_WARN("failed to get index store array size", K(ret));
+  } else {
+    ObBackupIndexStoreParam share_param = param;
+    for (int64_t i = 0; OB_SUCC(ret) && i < array_size; ++i) {
+      ObBackupDataType backup_data_type;
+      ObRestoreMetaIndexStore *store = NULL;
+      if (OB_FAIL(wrapper->get_type_by_idx(i, backup_data_type))) {
+        LOG_WARN("failed to get type by idx", K(ret), K(i));
+      } else if (backup_data_type.is_sys_backup() && !init_sys_tablet_index_store) {
+        continue;
+      } else if (!backup_data_type.is_sys_backup() && OB_FAIL(wrapper->get_tenant_meta_index_turn_id(
+          backup_set_info, backup_data_type, share_param.turn_id_))) {
+        LOG_WARN("failed to get tenant meta index turn id", K(ret), K(backup_set_info), K(backup_data_type));
+      } else if (!backup_data_type.is_sys_backup() && OB_FAIL(wrapper->get_tenant_meta_index_retry_id(
+          backup_dest, backup_data_type, share_param.turn_id_, is_sec_meta, share_param.retry_id_))) {
+        LOG_WARN("failed to get tenant meta index retry id", K(ret), K(backup_dest), K(backup_data_type));
+      } else if (OB_FAIL(wrapper->get_index_store(backup_data_type, store))) {
+        LOG_WARN("failed to get index store", K(ret), K(backup_data_type));
+      } else {
+        share_param.backup_data_type_ = backup_data_type;
+        share_param.is_tenant_level_ = backup_data_type.is_sys_backup() ? false : true;
+        if (OB_FAIL(store->init(mode,
+                                share_param,
+                                backup_dest,
+                                backup_set_desc,
+                                is_sec_meta,
+                                backup_set_info.tenant_compatible_,
+                                index_kv_cache))) {
+          LOG_WARN("failed to init store", K(ret), K(i), K(share_param));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1471,15 +1356,19 @@ int ObBackupTenantIndexRetryIDGetter::get_ls_info_data_info_dir_path_(ObBackupPa
 {
   int ret = OB_SUCCESS;
   backup_path.reset();
+  ObBackupDataType backup_data_type = backup_data_type_;
+  if (backup_data_type.is_user_backup()) {
+    backup_data_type.set_major_data_backup();
+  }
   if (is_restore_) {
     if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
-        backup_dest_, backup_data_type_, turn_id_, backup_path))) {
+        backup_dest_, backup_data_type, turn_id_, backup_path))) {
       LOG_WARN("failed to get ls info data info dir path",
           K(ret), K_(backup_dest), K_(backup_data_type), K_(backup_set_desc), K_(turn_id));
     }
   } else {
     if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
-        backup_dest_, backup_set_desc_, backup_data_type_, turn_id_, backup_path))) {
+        backup_dest_, backup_set_desc_, backup_data_type, turn_id_, backup_path))) {
       LOG_WARN("failed to get ls info data info dir path",
           K(ret), K_(backup_dest), K_(backup_set_desc), K_(backup_data_type), K_(turn_id));
     }
@@ -1501,9 +1390,9 @@ int ObBackupTenantIndexRetryIDGetter::get_tenant_index_file_name_(const char *&f
         file_name = OB_STR_TENANT_MINOR_META_INDEX;
       }
     }
-  } else if (backup_data_type_.is_major_backup()) {
+  } else if (backup_data_type_.is_major_backup() || backup_data_type_.is_user_backup()) {
     if (is_macro_index_) {
-      file_name = OB_STR_TENANT_MAJOR_MACRO_INDEX;
+      file_name = OB_STR_TENANT_MAJOR_MACRO_BLOCK_INDEX;
     } else {
       if (is_sec_meta_) {
         file_name = OB_STR_TENANT_MAJOR_SEC_META_INDEX;
@@ -1560,6 +1449,412 @@ int ObBackupTenantIndexRetryIDGetter::find_largest_id_(const common::ObIArray<in
       largest_id = tmp_largest_id;
       LOG_INFO("get largest id", K_(backup_dest), K_(backup_data_type), K_(turn_id), K(largest_id));
     }
+  }
+  return ret;
+}
+
+// ObBackupOrderedMacroBlockIndexStore
+
+ObBackupOrderedMacroBlockIndexStore::ObBackupOrderedMacroBlockIndexStore()
+  : ObIBackupIndexStore()
+{
+}
+
+ObBackupOrderedMacroBlockIndexStore::~ObBackupOrderedMacroBlockIndexStore()
+{
+}
+
+int ObBackupOrderedMacroBlockIndexStore::init(const ObBackupRestoreMode &mode, const ObBackupIndexStoreParam &param,
+    const share::ObBackupDest &backup_dest, const share::ObBackupSetDesc &backup_set_desc,
+    ObBackupIndexKVCache &index_kv_cache)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backup ordered macro block index store init twice", K(ret));
+  } else if (!param.is_valid() || !backup_dest.is_valid() || !backup_set_desc.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(param), K(backup_dest), K(backup_set_desc));
+  } else if (OB_FAIL(backup_dest_.deep_copy(backup_dest))) {
+    LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));
+  } else {
+    mode_ = mode;
+    is_tenant_level_ = param.is_tenant_level_;
+    index_level_ = param.index_level_;
+    tenant_id_ = param.tenant_id_;
+    ls_id_ = param.ls_id_;
+    turn_id_ = param.turn_id_;
+    retry_id_ = param.retry_id_;
+    backup_set_desc_ = backup_set_desc;
+    backup_data_type_ = param.backup_data_type_;
+    index_kv_cache_ = &index_kv_cache;
+    ObBackupPath backup_path;
+    if (OB_FAIL(get_backup_file_path(backup_path))) {
+      LOG_WARN("failed to get backup file path", K(ret));
+    } else if (OB_FAIL(read_file_trailer_(backup_path.get_obstr(), backup_dest_.get_storage_info()))) {
+      LOG_WARN("failed to read file trailer", K(ret), K(backup_path), K(backup_dest_.get_storage_info()));
+    } else {
+      is_inited_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObBackupOrderedMacroBlockIndexStore::get_macro_block_index(
+    const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &result)
+{
+  int ret = OB_SUCCESS;
+  ObBackupMacroBlockIndex index;
+  ObBackupMacroBlockIndexIndex index_index;
+  ObArray<ObBackupMacroBlockIndex> index_list;
+  ObArray<ObBackupMacroBlockIndexIndex> index_index_list;
+  int64_t offset = trailer_.last_block_offset_;
+  int64_t length = trailer_.last_block_length_;
+  ObBackupFileType backup_file_type = BACKUP_MACRO_BLOCK_INDEX_FILE;
+  ObArenaAllocator allocator;
+  blocksstable::ObBufferReader buffer_reader;
+  if (OB_UNLIKELY(!logic_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(logic_id));
+  } else if (trailer_.is_empty_index()) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("macro block index not exist", K(ret), K_(trailer), K(logic_id));
+  } else {
+    ObBackupCommonHeader common_header;
+    ObBackupMultiLevelIndexHeader index_header;
+    while (OB_SUCC(ret)) {
+      index.reset();
+      index_index.reset();
+      index_list.reset();
+      index_index_list.reset();
+      buffer_reader.assign(NULL, 0);
+      common_header.reset();
+      index_header.reset();
+      int64_t data_length = 0;
+      int64_t data_zlength = 0;
+      ObCompressorType compressor_type = ObCompressorType::INVALID_COMPRESSOR;
+      if (OB_FAIL(fetch_block_(backup_file_type, offset, length, allocator, buffer_reader))) {
+        LOG_WARN("failed to fetch block", K(ret), K_(trailer));
+      } else if (OB_FAIL(decode_headers_(buffer_reader, common_header,
+          index_header, data_length, data_zlength, compressor_type))) {
+        LOG_WARN("failed to decode headers", K(ret), K(offset), K(length));
+      } else {
+        if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL == index_header.index_level_) {
+          if (OB_FAIL(decode_indexes_from_block_(data_zlength, data_length, compressor_type, buffer_reader, index_list))) {
+            LOG_WARN("failed to decode indexes from block", K(ret), K(data_zlength), K(data_length), K(compressor_type), K(buffer_reader), K(common_header));
+          } else if (OB_FAIL(find_index_lower_bound_(logic_id, index_list, index))) {
+            LOG_WARN("failed to find index lower bound", K(ret), K(logic_id), K(index_list));
+          } else {
+            result = index;
+            break;
+          }
+        } else {
+          if (OB_FAIL(decode_index_indexes_from_block_(data_zlength, data_length, compressor_type, buffer_reader, index_index_list))) {
+            LOG_WARN("failed to decode index indexes from block", K(ret), K(data_zlength), K(data_length), K(compressor_type), K(buffer_reader), K(common_header));
+          } else if (OB_FAIL(find_index_index_lower_bound_(logic_id, index_index_list, index_index))) {
+            LOG_WARN("failed to find index index lower bound", K(ret), K(logic_id), K(index_index_list));
+          } else {
+            offset = index_index.offset_;
+            length = index_index.length_;
+            allocator.reuse();
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObBackupOrderedMacroBlockIndexStore::get_backup_file_path(share::ObBackupPath &backup_path) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupDataType backup_data_type = backup_data_type_;
+  if (backup_data_type.is_user_backup()) {
+    backup_data_type.set_major_data_backup();
+  }
+  if (is_tenant_level_) {
+    if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_tenant_macro_block_index_backup_path(
+            backup_dest_, backup_set_desc_, backup_data_type, turn_id_, retry_id_, backup_path))) {
+      LOG_WARN("failed to get tenant macro block index file path", K(ret));
+    }
+  } else {
+    if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_ls_macro_block_index_backup_path(
+            backup_dest_, backup_set_desc_, ls_id_, backup_data_type, turn_id_, retry_id_, backup_path))) {
+      LOG_WARN("failed to get log stream macro block index backup path", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObBackupOrderedMacroBlockIndexStore::get_backup_index_cache_key(
+    const ObBackupFileType &backup_file_type, const int64_t offset,
+    const int64_t length, ObBackupIndexCacheKey &cache_key) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t file_id = OB_DEFAULT_BACKUP_INDEX_FILE_ID;
+  ObBackupBlockDesc block_desc;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("index store do not init", K(ret));
+  } else if (offset < 0 || length <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(offset), K(length));
+  } else if (OB_FAIL(block_desc.set(turn_id_, retry_id_, backup_file_type, file_id, offset, length))) {
+    LOG_WARN("failed to set block desc", K(ret), K_(turn_id), K(backup_file_type), K(offset), K(length));
+  } else if (OB_FAIL(cache_key.set(mode_,
+                                   tenant_id_,
+                                   backup_set_desc_.backup_set_id_,
+                                   ls_id_,
+                                   backup_data_type_,
+                                   block_desc))) {
+    LOG_WARN("failed to set cache key", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupOrderedMacroBlockIndexStore::find_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_id,
+    const common::ObArray<ObBackupMacroBlockIndex> &index_list, ObBackupMacroBlockIndex &macro_index)
+{
+  int ret = OB_SUCCESS;
+  MacroBlockIndexCompare compare;
+  typedef common::ObArray<ObBackupMacroBlockIndex>::const_iterator Iterator;
+  Iterator iter = std::lower_bound(index_list.begin(),
+                                   index_list.end(),
+                                   logic_id,
+                                   compare);
+  if (iter != index_list.end()) {
+    if (iter->logic_id_ != logic_id) {
+      ret = OB_ENTRY_NOT_EXIST;
+      LOG_WARN("logic id do not exist", K(logic_id), K(index_list));
+    } else {
+      macro_index = *iter;
+      LOG_INFO("success to find key", K(logic_id), K(index_list), K(macro_index));
+    }
+  } else {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("can not found entry", K(ret), K(logic_id));
+  }
+  return ret;
+}
+
+
+int ObBackupOrderedMacroBlockIndexStore::find_index_index_lower_bound_(const blocksstable::ObLogicMacroBlockId &logic_id,
+    const common::ObArray<ObBackupMacroBlockIndexIndex> &index_index_list, ObBackupMacroBlockIndexIndex &macro_index_index)
+{
+  int ret = OB_SUCCESS;
+  MacroBlockIndexIndexCompare compare;
+  typedef common::ObArray<ObBackupMacroBlockIndexIndex>::const_iterator Iterator;
+  Iterator iter = std::lower_bound(index_index_list.begin(),
+                                   index_index_list.end(),
+                                   logic_id,
+                                   compare);
+  if (iter != index_index_list.end()) {
+    macro_index_index = *iter;
+  } else {
+    ret = OB_ENTRY_NOT_EXIST;
+  }
+  return ret;
+}
+
+int ObBackupOrderedMacroBlockIndexStore::decode_indexes_from_block_(
+    const int64_t data_zlength, const int64_t original_size, const ObCompressorType &compressor_type,
+    blocksstable::ObBufferReader &buffer_reader, common::ObArray<ObBackupMacroBlockIndex> &index_list)
+{
+  return decode_index_from_block_<ObBackupMacroBlockIndex>(data_zlength, original_size, compressor_type, buffer_reader, index_list);
+}
+
+int ObBackupOrderedMacroBlockIndexStore::decode_index_indexes_from_block_(
+    const int64_t data_zlength, const int64_t original_size, const ObCompressorType &compressor_type,
+    blocksstable::ObBufferReader &buffer_reader, common::ObArray<ObBackupMacroBlockIndexIndex> &index_list)
+{
+  return decode_index_from_block_<ObBackupMacroBlockIndexIndex>(data_zlength, original_size, compressor_type, buffer_reader, index_list);
+}
+
+// get_index_store_array_size
+
+int ObBackupMetaIndexStoreWrapperV1::get_index_store_array_size(int64_t &array_size)
+{
+  int ret = OB_SUCCESS;
+  array_size = 3;
+  return ret;
+}
+
+int ObBackupMetaIndexStoreWrapperV2::get_index_store_array_size(int64_t &array_size)
+{
+  int ret = OB_SUCCESS;
+  array_size = 2;
+  return ret;
+}
+
+// check_tenant_compatible
+
+int ObBackupMetaIndexStoreWrapperV1::check_tenant_compatible(const int64_t tenant_compatible)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_compatible < DATA_VERSION_4_2_0_0 || tenant_compatible >= DATA_VERSION_4_3_3_0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant compatible not match", K(ret), K(tenant_compatible));
+  }
+  return ret;
+}
+
+int ObBackupMetaIndexStoreWrapperV2::check_tenant_compatible(const int64_t tenant_compatible)
+{
+  int ret = OB_SUCCESS;
+  if (tenant_compatible < DATA_VERSION_4_3_3_0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant compatible not match", K(ret), K(tenant_compatible));
+  }
+  return ret;
+}
+
+// get_tenant_meta_index_turn_id
+
+int ObBackupMetaIndexStoreWrapperV1::get_tenant_meta_index_turn_id(const share::ObBackupSetFileDesc &backup_set_info,
+    const share::ObBackupDataType &backup_data_type, int64_t &turn_id)
+{
+  int ret = OB_SUCCESS;
+  if (backup_data_type.is_sys_backup()) {
+    // do nothing
+  } else if (backup_data_type.is_minor_backup()) {
+    turn_id = backup_set_info.minor_turn_id_;
+  } else if (backup_data_type.is_major_backup()) {
+    turn_id = backup_set_info.major_turn_id_;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get sys turn id", K(ret));
+  }
+  return ret;
+}
+
+int ObBackupMetaIndexStoreWrapperV2::get_tenant_meta_index_turn_id(const share::ObBackupSetFileDesc &backup_set_info,
+    const share::ObBackupDataType &backup_data_type, int64_t &turn_id)
+{
+  int ret = OB_SUCCESS;
+  turn_id = backup_set_info.major_turn_id_;
+  return ret;
+}
+
+// get_tenant_meta_index_retry_id
+
+int ObIBackupIndexStoreWrapper::get_tenant_meta_index_retry_id(
+    const share::ObBackupDest &backup_dest, const share::ObBackupDataType &backup_data_type,
+    const int64_t turn_id, const int64_t is_sec_meta, int64_t &retry_id)
+{
+  int ret = OB_SUCCESS;
+  ObBackupTenantIndexRetryIDGetter retry_id_getter;
+  const bool is_restore = true;
+  const bool is_macro_index = false;
+  if (!backup_dest.is_valid() || !backup_data_type.is_valid() || turn_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(backup_dest), K(backup_data_type), K(turn_id));
+  } else if (OB_FAIL(retry_id_getter.init(backup_dest, backup_data_type,
+      turn_id, is_restore, is_macro_index, is_sec_meta))) {
+    LOG_WARN("failed to init retry id getter", K(ret), K(backup_dest), K(backup_data_type), K(turn_id));
+  } else if (OB_FAIL(retry_id_getter.get_max_retry_id(retry_id))) {
+    LOG_WARN("failed to get max retry id", K(ret));
+  }
+  return ret;
+}
+
+// get_idx
+
+int ObBackupMetaIndexStoreWrapperV1::get_idx(const share::ObBackupDataType &backup_data_type, int64_t &idx)
+{
+  int ret = OB_SUCCESS;
+  if (backup_data_type.is_sys_backup()) {
+    idx = 0;
+  } else if (backup_data_type.is_minor_backup()) {
+    idx = 1;
+  } else if (backup_data_type.is_major_backup()) {
+    idx = 2;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup data type not valid", K(ret), K(backup_data_type));
+  }
+  return ret;
+}
+
+int ObBackupMetaIndexStoreWrapperV2::get_idx(const share::ObBackupDataType &backup_data_type, int64_t &idx)
+{
+  int ret = OB_SUCCESS;
+  if (backup_data_type.is_sys_backup()) {
+    idx = 0;
+  } else if (backup_data_type.is_minor_backup() || backup_data_type.is_major_backup() || backup_data_type.is_user_backup()) {
+    idx = 1;
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup data type not valid", K(ret), K(backup_data_type));
+  }
+  return ret;
+}
+
+// get_type_by_idx
+
+int ObBackupMetaIndexStoreWrapperV1::get_type_by_idx(const int64_t idx, share::ObBackupDataType &backup_data_type)
+{
+  int ret = OB_SUCCESS;
+  if (0 == idx) {
+    backup_data_type.set_sys_data_backup();
+  } else if (1 == idx) {
+    backup_data_type.set_minor_data_backup();
+  } else if (2 == idx) {
+    backup_data_type.set_major_data_backup();
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup data type not valid", K(ret), K(backup_data_type));
+  }
+  return ret;
+}
+
+int ObBackupMetaIndexStoreWrapperV2::get_type_by_idx(const int64_t idx, share::ObBackupDataType &backup_data_type)
+{
+  int ret = OB_SUCCESS;
+  if (0 == idx) {
+    backup_data_type.set_sys_data_backup();
+  } else if (1 == idx) {
+    backup_data_type.set_major_data_backup();
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("backup data type not valid", K(ret), K(backup_data_type));
+  }
+  return ret;
+}
+
+// get_index_store
+
+int ObBackupMetaIndexStoreWrapperV1::get_index_store(const share::ObBackupDataType &backup_data_type, ObRestoreMetaIndexStore *&index_store)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = -1;
+  int64_t array_size = 0;
+  if (OB_FAIL(get_idx(backup_data_type, idx))) {
+    LOG_WARN("failed to get idx", K(ret), K(backup_data_type));
+  } else if (OB_FAIL(get_index_store_array_size(array_size))) {
+    LOG_WARN("failed to get index store array size", K(ret));
+  } else if (idx < 0 || idx >= array_size) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idx is not valid", K(ret), K(idx), K(array_size));
+  } else {
+    index_store = &store_list_[idx];
+  }
+  return ret;
+}
+
+int ObBackupMetaIndexStoreWrapperV2::get_index_store(const share::ObBackupDataType &backup_data_type, ObRestoreMetaIndexStore *&index_store)
+{
+  int ret = OB_SUCCESS;
+  int64_t idx = -1;
+  int64_t array_size = 0;
+  if (OB_FAIL(get_idx(backup_data_type, idx))) {
+    LOG_WARN("failed to get idx", K(ret), K(backup_data_type));
+  } else if (OB_FAIL(get_index_store_array_size(array_size))) {
+    LOG_WARN("failed to get index store array size", K(ret));
+  } else if (idx < 0 || idx >= array_size) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idx is not valid", K(ret), K(idx), K(array_size));
+  } else {
+    index_store = &store_list_[idx];
   }
   return ret;
 }

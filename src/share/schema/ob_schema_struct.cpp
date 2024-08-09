@@ -8025,6 +8025,9 @@ int ObPartitionUtils::check_interval_partition_table(
   return ret;
 }
 
+OB_SERIALIZE_MEMBER(ObVectorIndexRefreshInfo,
+                    exec_env_);
+
 OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     refresh_method_,
     refresh_mode_,

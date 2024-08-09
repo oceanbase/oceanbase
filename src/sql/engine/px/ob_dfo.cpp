@@ -67,7 +67,8 @@ OB_SERIALIZE_MEMBER(ObPxSqcMeta,
                     p2p_dh_map_info_,
                     sqc_count_,
                     monitoring_info_,
-                    branch_id_base_);
+                    branch_id_base_,
+                    partition_random_affinitize_);
 OB_SERIALIZE_MEMBER(ObPxTask,
                     qc_id_,
                     dfo_id_,
@@ -99,12 +100,10 @@ OB_SERIALIZE_MEMBER(ObSqcTableLocationKey,
 OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResInfo, ch_total_info_, sqc_id_, task_count_);
 OB_SERIALIZE_MEMBER(ObPxCleanDtlIntermResArgs, info_, batch_size_);
 
-int ObQCMonitoringInfo::init(const ObExecContext &exec_ctx) {
+int ObQCMonitoringInfo::init(const ObDfo &dfo) {
   int ret = OB_SUCCESS;
   qc_tid_ = GETTID();
-  if (OB_NOT_NULL(exec_ctx.get_my_session())) {
-    cur_sql_ = exec_ctx.get_my_session()->get_current_query_string();
-  }
+  cur_sql_ = dfo.query_sql();
   if (cur_sql_.length() > OB_TINY_SQL_LENGTH) {
     cur_sql_.assign(cur_sql_.ptr(), OB_TINY_SQL_LENGTH);
   }
@@ -186,6 +185,7 @@ int ObPxSqcMeta::assign(const ObPxSqcMeta &other)
     px_detectable_ids_ = other.px_detectable_ids_;
     interrupt_by_dm_ = other.interrupt_by_dm_;
     sqc_count_ = other.sqc_count_;
+    partition_random_affinitize_ = other.partition_random_affinitize_;
   }
   access_external_table_files_.reuse();
   for (int i = 0; OB_SUCC(ret) && i < other.access_external_table_files_.count(); i++) {

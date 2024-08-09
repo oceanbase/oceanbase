@@ -348,6 +348,12 @@ bool ObTxLSStateMgr::is_resume_leader_pending() const
   return is_resume_leader_pending_(ls_state_container);
 }
 
+bool ObTxLSStateMgr::is_follower_swl_pending() const
+{
+  LOAD_CUR_STATE_CONTAINER
+  return is_follower_swl_pending_(ls_state_container);
+}
+
 bool ObTxLSStateMgr::is_stopped() const
 {
   LOAD_CUR_STATE_CONTAINER
@@ -402,6 +408,11 @@ bool ObTxLSStateMgr::is_resume_leader_pending_(const TxLSStateContainer &ls_stat
   return ls_state_container.state_val_.state_ == TxLSState::R_SYNC_PENDING
          || ls_state_container.state_val_.state_ == TxLSState::R_SYNC_FAILED
          || ls_state_container.state_val_.state_ == TxLSState::R_APPLY_PENDING;
+}
+
+bool ObTxLSStateMgr::is_follower_swl_pending_(const TxLSStateContainer & ls_state_container)
+{
+  return ls_state_container.state_val_.state_ == TxLSState::F_SWL_PENDING;
 }
 
 } // namespace transaction

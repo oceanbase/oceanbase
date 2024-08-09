@@ -51,6 +51,8 @@ OB_DEF_SERIALIZE(ObTableReplaceSpec)
   }
   OB_UNIS_ENCODE(only_one_unique_key_);
   OB_UNIS_ENCODE(conflict_checker_ctdef_);
+  OB_UNIS_ENCODE(has_global_unique_index_);
+  OB_UNIS_ENCODE(all_saved_exprs_);
   return ret;
 }
 
@@ -73,6 +75,8 @@ OB_DEF_DESERIALIZE(ObTableReplaceSpec)
   }
   OB_UNIS_DECODE(only_one_unique_key_);
   OB_UNIS_DECODE(conflict_checker_ctdef_);
+  OB_UNIS_DECODE(has_global_unique_index_);
+  OB_UNIS_DECODE(all_saved_exprs_);
   return ret;
 }
 
@@ -92,6 +96,8 @@ OB_DEF_SERIALIZE_SIZE(ObTableReplaceSpec)
   }
   OB_UNIS_ADD_LEN(only_one_unique_key_);
   OB_UNIS_ADD_LEN(conflict_checker_ctdef_);
+  OB_UNIS_ADD_LEN(has_global_unique_index_);
+  OB_UNIS_ADD_LEN(all_saved_exprs_);
   return len;
 }
 

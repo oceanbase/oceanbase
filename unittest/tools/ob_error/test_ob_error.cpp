@@ -110,7 +110,7 @@ TEST_F(TestObError, test_parser)
   EXPECT_EQ(NONE, facility);
 
   facility = NONE;
-  parse_facility("ORa", facility);
+  parse_facility("OBE", facility);
   EXPECT_EQ(ORA, facility);
 
   facility = NONE;
@@ -122,6 +122,7 @@ TEST_F(TestObError, test_parser)
 
 int main(int argc, char** argv)
 {
+  g_enable_ob_error_msg_style = 1;
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

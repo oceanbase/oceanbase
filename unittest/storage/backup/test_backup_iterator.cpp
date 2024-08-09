@@ -152,7 +152,7 @@ void TestBackupIndexIterator::inner_init_()
   job_desc_.task_id_ = 1;
   backup_set_desc_.backup_set_id_ = 1;
   backup_set_desc_.backup_type_.type_ = ObBackupType::FULL_BACKUP;
-  backup_data_type_.set_major_data_backup();
+  backup_data_type_.set_user_data_backup();
   incarnation_ = 1;
   tenant_id_ = 1;
   dest_id_ = 1;
@@ -253,91 +253,6 @@ TEST_F(TestBackupIndexIterator, test_extract_backup_file_id)
   ObIBackupIndexIterator::extract_backup_file_id_(file_name4, prefix, tmp_file_id, file_match);
   ASSERT_EQ(true, file_match);
   ASSERT_EQ(10, tmp_file_id);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_921_KB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 20;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_1_8_MB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 40;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_2_8_MB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 60;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_3_7_MB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 80;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
-}
-
-TEST_F(TestBackupIndexIterator, test_backup_macro_range_index_iterator_4_6_MB)
-{
-  int ret = OB_SUCCESS;
-  clean_env_();
-  ObFakeBackupMacroIndexMerger merger;
-  const int64_t file_count = 100;
-  const int64_t per_file_item_count = 1024;
-  fake_init_macro_index_merger_(file_count, per_file_item_count, merger);
-  ret = merger.merge_index();
-  ASSERT_EQ(OB_SUCCESS, ret);
-  const int64_t start_id = 1;
-  const int64_t end_id = file_count * per_file_item_count;
-  ObBackupMacroRangeIndexIterator range_index_iterator;
-  init_macro_range_index_iterator(range_index_iterator);
-  iterate_macro_range_index_iterator(start_id, end_id, range_index_iterator);
 }
 
 }  // namespace backup

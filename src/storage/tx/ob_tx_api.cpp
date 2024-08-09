@@ -126,6 +126,8 @@ int ObTransService::finalize_tx_(ObTxDesc &tx)
     } else if (tx.is_committing()) {
       TRANS_LOG(WARN, "release tx when tx is committing", KPC(this), K(tx));
     }
+    // invalid registered snapshot
+    invalid_registered_snapshot_(tx);
     tx.cancel_commit_cb();
     if (tx.tx_id_.is_valid()) {
       tx_desc_mgr_.remove(tx);
@@ -887,8 +889,6 @@ int ObTransService::register_tx_snapshot_verify(ObTxReadSnapshot &snapshot)
       sp.init(&snapshot);
       ObSpinLockGuard guard(tx->lock_);
       if (OB_FAIL(tx_sanity_check_(*tx))) {
-      } else if (!tx->is_in_tx()) {
-        // skip register if txn not active
       } else if (OB_FAIL(tx->savepoints_.push_back(sp))) {
         TRANS_LOG(WARN, "push back snapshot fail", K(ret),
                   K(snapshot), KPC(tx));
@@ -1415,7 +1415,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
     }
     if (!sp_scn.is_valid()) {
       ret = OB_SAVEPOINT_NOT_EXIST;
-      TRANS_LOG(WARN, "savepoint not exist", K(ret), K(savepoint), K_(tx.savepoints));
+      TRANS_LOG(WARN, "savepoint not exist", K(ret), K(session_id), K(savepoint), K_(tx.savepoints));
     }
   }
   if (OB_SUCC(ret)) {
@@ -1438,7 +1438,7 @@ int ObTransService::rollback_to_explicit_savepoint(ObTxDesc &tx,
     // rollback savepoints > sp (note, current savepoint with sp won't be released)
     ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
       ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
-      if (it.scn_ > sp_scn) {
+      if (it.scn_ > sp_scn && it.session_id_ == session_id) {
         it.rollback();
       }
     }
@@ -2029,6 +2029,11 @@ int ObTransService::start_epoch_(ObTxDesc &tx)
 int ObTransService::release_tx_ref(ObTxDesc &tx)
 {
   return tx_desc_mgr_.release_tx_ref(&tx);
+}
+
+int ObTransService::tx_sanity_check(ObTxDesc &tx)
+{
+  return tx_sanity_check_(tx);
 }
 
 OB_INLINE int ObTransService::tx_sanity_check_(ObTxDesc &tx)

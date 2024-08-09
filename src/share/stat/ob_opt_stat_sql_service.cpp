@@ -350,7 +350,8 @@ int ObOptStatSqlService::fetch_table_stat(const uint64_t tenant_id,
                                       "macro_blk_cnt as macro_block_num, "
                                       "micro_blk_cnt as micro_block_num, "
                                       "stattype_locked as stattype_locked,"
-                                      "last_analyzed FROM %s ", share::OB_ALL_TABLE_STAT_TNAME))) {
+                                      "last_analyzed,"
+                                      "spare1 as sample_size FROM %s ", share::OB_ALL_TABLE_STAT_TNAME))) {
       LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
     } else if (OB_FAIL(sql.append_fmt(" WHERE TENANT_ID = %ld AND TABLE_ID=%ld",
                                       ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id),
@@ -410,7 +411,8 @@ int ObOptStatSqlService::batch_fetch_table_stats(sqlclient::ObISQLConnection *co
                                         "macro_blk_cnt as macro_block_num, "
                                         "micro_blk_cnt as micro_block_num, "
                                         "stattype_locked as stattype_locked,"
-                                        "last_analyzed FROM %s", share::OB_ALL_TABLE_STAT_TNAME))) {
+                                        "last_analyzed,"
+                                        "spare1 as sample_size FROM %s", share::OB_ALL_TABLE_STAT_TNAME))) {
         LOG_WARN("fail to append SQL stmt string.", K(sql), K(ret));
       } else if (OB_FAIL(generate_in_list(part_ids, part_list))) {
         LOG_WARN("failed to generate in list", K(ret));
@@ -1189,6 +1191,7 @@ int ObOptStatSqlService::fill_table_stat(common::sqlclient::ObMySQLResult &resul
         stat.set_stat_expired_time(ObTimeUtility::current_time() + ObOptStatMonitorCheckTask::CHECK_INTERVAL);
       }
     }
+    EXTRACT_INT_FIELD_TO_CLASS_MYSQL_SKIP_RET(result, sample_size, stat, int64_t);
   }
   return ret;
 }
@@ -1412,15 +1415,21 @@ int ObOptStatSqlService::fill_column_stat(ObIAllocator &allocator,
             ObHistBucket bkt;
             ObString str;
             EXTRACT_INT_FIELD_MYSQL(result, "endpoint_num", bkt.endpoint_num_, int64_t);
-            EXTRACT_INT_FIELD_MYSQL(result, "endpoint_repeat_cnt", bkt.endpoint_repeat_count_, int64_t);
-            EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_endpoint_value", str);
-            if (OB_SUCC(ret)) {
-              if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
-                LOG_WARN("deserialize object value failed.", K(stat), K(ret));
-              } else if (OB_FAIL(hist.add_bucket(bkt))) {
-                LOG_WARN("failed to push back buckets", K(ret));
-              } else {
-                dst_key_col_stat.only_histogram_stat_ = true;
+            if (OB_ERR_NULL_VALUE == ret) {
+              LOG_WARN("failed to get endpoint num", K(ret));
+              hist.reset();
+              ret = OB_SUCCESS;
+            } else {
+              EXTRACT_INT_FIELD_MYSQL(result, "endpoint_repeat_cnt", bkt.endpoint_repeat_count_, int64_t);
+              EXTRACT_VARCHAR_FIELD_MYSQL(result, "b_endpoint_value", str);
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(hex_str_to_obj(str.ptr(), str.length(), allocator, bkt.endpoint_value_))) {
+                  LOG_WARN("deserialize object value failed.", K(stat), K(ret));
+                } else if (OB_FAIL(hist.add_bucket(bkt))) {
+                  LOG_WARN("failed to push back buckets", K(ret));
+                } else {
+                  dst_key_col_stat.only_histogram_stat_ = true;
+                }
               }
             }
           }

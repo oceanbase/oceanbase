@@ -59,13 +59,13 @@ const int64_t TZ_PART_BASE[DATETIME_PART_CNT] = { 100, 12, -1, 24, 60, 60, 10000
 const int64_t TZ_PART_MIN[DATETIME_PART_CNT]  = {   1,  1,  1,  0,  0,  0, 0};
 const int64_t TZ_PART_MAX[DATETIME_PART_CNT]  = {9999, 12, 31, 23, 59, 59, 1000000000};
 const int     TZ_PART_ERR[DATETIME_PART_CNT] = {
-  /*DT_YEAR*/   OB_ERR_INVALID_YEAR_VALUE,      //ORA-01841: (full) year must be between -4713 and +9999, and not be 0
-  /*DT_MON*/    OB_ERR_INVALID_MONTH,           //ORA-01843: not a valid month
-  /*DT_MDAY*/   OB_ERR_DAY_OF_MONTH_RANGE,      //ORA-01847: day of month must be between 1 and last day of month
-  /*DT_HOUR*/   OB_ERR_INVALID_HOUR24_VALUE,    //ORA-01850: hour must be between 0 and 23
-  /*DT_MIN*/    OB_ERR_INVALID_MINUTES_VALUE,   //ORA-01851: minutes must be between 0 and 59
-  /*DT_SEC*/    OB_ERR_INVALID_SECONDS_VALUE,   //ORA-01852: seconds must be between 0 and 59
-  /*DT_USEC*/   OB_ERR_THE_LEADING_PRECISION_OF_THE_INTERVAL_IS_TOO_SMALL,           //ORA-01873: the leading precision of the interval is too small
+  /*DT_YEAR*/   OB_ERR_INVALID_YEAR_VALUE,      //OBE-01841: (full) year must be between -4713 and +9999, and not be 0
+  /*DT_MON*/    OB_ERR_INVALID_MONTH,           //OBE-01843: not a valid month
+  /*DT_MDAY*/   OB_ERR_DAY_OF_MONTH_RANGE,      //OBE-01847: day of month must be between 1 and last day of month
+  /*DT_HOUR*/   OB_ERR_INVALID_HOUR24_VALUE,    //OBE-01850: hour must be between 0 and 23
+  /*DT_MIN*/    OB_ERR_INVALID_MINUTES_VALUE,   //OBE-01851: minutes must be between 0 and 59
+  /*DT_SEC*/    OB_ERR_INVALID_SECONDS_VALUE,   //OBE-01852: seconds must be between 0 and 59
+  /*DT_USEC*/   OB_ERR_THE_LEADING_PRECISION_OF_THE_INTERVAL_IS_TOO_SMALL,           //OBE-01873: the leading precision of the interval is too small
 };
 
 static const int8_t DAYS_PER_MON[2][12 + 1] = {
@@ -259,9 +259,9 @@ const ObString ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT("YYYY-MM-DD HH24:MI:S
 const ObString ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT("YYYY-MM-DD HH24:MI:SS.FF");
 const ObString ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT("YYYY-MM-DD HH24:MI:SS.FF TZR TZD");
 
-const ObOracleTimeLimiter ObIntervalLimit::YEAR               = {0, static_cast<int32_t>(power_of_10[9] - 1), OB_ERR_INTERVAL_INVALID}; // ORA-01873: the leading precision of the interval is too small
+const ObOracleTimeLimiter ObIntervalLimit::YEAR               = {0, static_cast<int32_t>(power_of_10[9] - 1), OB_ERR_INTERVAL_INVALID}; // OBE-01873: the leading precision of the interval is too small
 const ObOracleTimeLimiter ObIntervalLimit::MONTH              = {0, 11,                 OB_ERR_INVALID_MONTH};
-const ObOracleTimeLimiter ObIntervalLimit::DAY                = {0, static_cast<int32_t>(power_of_10[9] - 1), OB_ERR_INTERVAL_INVALID}; // ORA-01873: the leading precision of the interval is too small
+const ObOracleTimeLimiter ObIntervalLimit::DAY                = {0, static_cast<int32_t>(power_of_10[9] - 1), OB_ERR_INTERVAL_INVALID}; // OBE-01873: the leading precision of the interval is too small
 const ObOracleTimeLimiter ObIntervalLimit::HOUR               = {0, 23,                 OB_ERR_INTERVAL_INVALID};
 const ObOracleTimeLimiter ObIntervalLimit::MINUTE             = {0, 59,                 OB_ERR_INTERVAL_INVALID};
 const ObOracleTimeLimiter ObIntervalLimit::SECOND             = {0, 59,                 OB_ERR_INTERVAL_INVALID};
@@ -719,19 +719,19 @@ int ObTimeConverter::get_oracle_err_when_datetime_parts_conflict(int64_t part_id
       ret = OB_ERR_UNEXPECTED;//never goes here for now
       break;
     case DT_MON:
-      ret = OB_ERR_MONTH_CONFLICTS_WITH_JULIAN_DATE;//ORA-01833: month conflicts with Julian date
+      ret = OB_ERR_MONTH_CONFLICTS_WITH_JULIAN_DATE;//OBE-01833: month conflicts with Julian date
       break;
     case DT_MDAY:
-      ret = OB_ERR_DAY_OF_MONTH_CONFLICTS_WITH_JULIAN_DATE;//ORA-01834: day of month conflicts with Julian date
+      ret = OB_ERR_DAY_OF_MONTH_CONFLICTS_WITH_JULIAN_DATE;//OBE-01834: day of month conflicts with Julian date
       break;
     case DT_HOUR:
-      ret = OB_ERR_HOUR_CONFLICTS_WITH_SECONDS_IN_DAY;//ORA-01836: hour conflicts with seconds in day
+      ret = OB_ERR_HOUR_CONFLICTS_WITH_SECONDS_IN_DAY;//OBE-01836: hour conflicts with seconds in day
       break;
     case DT_MIN:
-      ret = OB_ERR_MINUTES_OF_HOUR_CONFLICTS_WITH_SECONDS_IN_DAY;//ORA-01837: minutes of hour conflicts with seconds in day
+      ret = OB_ERR_MINUTES_OF_HOUR_CONFLICTS_WITH_SECONDS_IN_DAY;//OBE-01837: minutes of hour conflicts with seconds in day
       break;
     case DT_SEC:
-      ret = OB_ERR_SECONDS_OF_MINUTE_CONFLICTS_WITH_SECONDS_IN_DAY;//ORA-01838: seconds of minute conflicts with seconds in day
+      ret = OB_ERR_SECONDS_OF_MINUTE_CONFLICTS_WITH_SECONDS_IN_DAY;//OBE-01838: seconds of minute conflicts with seconds in day
       break;
     default:
       ret = OB_ERR_UNEXPECTED;
@@ -1802,8 +1802,8 @@ int ObTimeConverter::int_to_ob_time_without_date(int64_t time_second, ObTime &ob
   } else {
     parts[DT_HOUR] = TIME_MAX_HOUR + 1;
   }
-  if (OB_SUCC(ret)) {
-    adjust_ob_time(ob_time);
+  if (OB_SUCC(ret) && OB_FAIL(adjust_ob_time(ob_time, false))) {
+    LOG_WARN("adjust ob time failed", K(ret));
   }
   UNUSED(mode);
   return ret;
@@ -1992,8 +1992,9 @@ int ObTimeConverter::str_to_ob_time_with_date(const ObString &str, ObTime &ob_ti
       // OK, it seems like a valid format, now we need check its value.
       LOG_WARN("datetime is invalid or out of range",
                K(ret), K(str), K(ob_time), K(date_sql_mode), KCSTRING(lbt()));
+    } else if (OB_FAIL(adjust_ob_time(ob_time, true))) {
+      LOG_WARN("adjust ob time failed", K(ret));
     } else {
-      adjust_ob_time(ob_time);
       ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
     }
     if (NULL != scale) {
@@ -2158,8 +2159,8 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
           LOG_WARN("time value is invalid or out of range", K(ret), K(str));
         }
       }
-      if (OB_SUCC(ret)) {
-        adjust_ob_time(ob_time);
+      if (OB_SUCC(ret) && OB_FAIL(adjust_ob_time(ob_time, false))) {
+        LOG_WARN("adjust ob time failed", K(ret));
       }
     }
   }
@@ -3134,24 +3135,42 @@ int ObTimeConverter::data_fmt_s(char *buffer, int64_t buf_len, int64_t &pos, con
   return ret;
 }
 
-void ObTimeConverter::adjust_ob_time(ObTime &ob_time)
+int ObTimeConverter::adjust_ob_time(ObTime &ob_time, const bool has_date)
 {
   // '2:59:59.9999995' ---> '03:00:00.000000'
-  for (int i = DATETIME_PART_CNT - 1; i > DT_MDAY; i--) {
-    if (ob_time.parts_[i] == DT_PART_BASE[i]) {
-      ob_time.parts_[i] -= DT_PART_BASE[i];
-      ob_time.parts_[i - 1]++;
+  int ret = OB_SUCCESS;
+  LOG_TRACE("adjust_ob_time", K(ob_time));
+  if (ob_time.parts_[DT_USEC] == DT_PART_BASE[DT_USEC]) {
+    if (has_date) {
+      int32_t days = DAYS_PER_MON[IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])][ob_time.parts_[DT_MON]];
+      if (ob_time.parts_[DT_MDAY] > days) {
+        ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+        LOG_WARN("truncate incorrect datetime value", K(ret), K(ob_time));
+      }
+      for (int i = DATETIME_PART_CNT - 1; i > DT_MDAY; i--) {
+        if (ob_time.parts_[i] == DT_PART_BASE[i]) {
+          ob_time.parts_[i] -= DT_PART_BASE[i];
+          ob_time.parts_[i - 1]++;
+        }
+      }
+      if (ob_time.parts_[DT_MDAY] > days) {
+        ob_time.parts_[DT_MDAY] -= days;
+        ob_time.parts_[DT_MON]++;
+      }
+      if (ob_time.parts_[DT_MON] > 12) {
+        ob_time.parts_[DT_MON] -= 12;
+        ob_time.parts_[DT_YEAR]++;
+      }
+    } else {
+      for (int i = DATETIME_PART_CNT - 1; i > DT_HOUR; i--) {
+        if (ob_time.parts_[i] == DT_PART_BASE[i]) {
+          ob_time.parts_[i] -= DT_PART_BASE[i];
+          ob_time.parts_[i - 1]++;
+        }
+      }
     }
   }
-  int32_t days = DAYS_PER_MON[IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])][ob_time.parts_[DT_MON]];
-  if (ob_time.parts_[DT_MDAY] > days) {
-    ob_time.parts_[DT_MDAY] -= days;
-    ob_time.parts_[DT_MON]++;
-  }
-  if (ob_time.parts_[DT_MON] > 12) {
-    ob_time.parts_[DT_MON] -= 12;
-    ob_time.parts_[DT_YEAR]++;
-  }
+  return ret;
 }
 
 /**

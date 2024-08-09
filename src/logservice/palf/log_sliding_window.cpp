@@ -857,7 +857,8 @@ int LogSlidingWindow::try_push_log_to_paxos_follower_(const int64_t curr_proposa
   ObMemberList dst_member_list;
   int64_t replica_num = 0;
   const bool need_send_log = (state_mgr_->is_leader_active()) ? true : false;
-  const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size());
+  const bool is_fetch_log = false;
+  const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size(), is_fetch_log);
   if (false == need_send_log) {
     // no need send log to paxos follower
   } else if (OB_FAIL(mm_->get_log_sync_member_list(dst_member_list, replica_num))) {
@@ -884,7 +885,8 @@ int LogSlidingWindow::try_push_log_to_children_(const int64_t curr_proposal_id,
   LogLearnerList children_list;
   common::GlobalLearnerList degraded_learner_list;
   const bool need_presend_log = (state_mgr_->is_leader_active()) ? true : false;
-  const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size());
+  const bool is_fetch_log = false;
+  const bool need_batch_push = need_use_batch_rpc_(log_write_buf.get_total_size(), is_fetch_log);
   if (OB_FAIL(mm_->get_log_sync_children_list(children_list))) {
     PALF_LOG(WARN, "get_children_list failed", K(ret), K_(palf_id));
   } else if (children_list.is_valid()
@@ -1433,6 +1435,7 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
   const int64_t log_id = flush_cb_ctx.log_id_;
   const LSN log_end_lsn = flush_cb_ctx.lsn_ + flush_cb_ctx.total_len_;
   const int64_t cb_begin_ts = ObTimeUtility::current_time();
+  bool is_fetch_log = false;
   PALF_LOG(TRACE, "after_flush_log begin", K_(palf_id), K_(self), K(flush_cb_ctx));
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1468,6 +1471,7 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
         can_exec_cb = true;
         // update log_task's flushed_ts
         log_task->set_flushed_ts(cb_begin_ts);
+        is_fetch_log = log_task->is_fetch_log_type();
       }
       log_task->unlock();
     }
@@ -1480,6 +1484,7 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
       PALF_LOG(WARN, "get_log_task failed", K(ret), K(log_id), K_(palf_id), K_(self));
     } else {
       log_task->set_flushed_ts(cb_begin_ts);
+      is_fetch_log = log_task->is_fetch_log_type();
     }
   }
 
@@ -1512,7 +1517,7 @@ int LogSlidingWindow::after_flush_log(const FlushLogCbCtx &flush_cb_ctx)
           PALF_LOG(INFO, "migrating replicas do not send responses", K(ret), K_(palf_id), K_(self),
               K(log_end_lsn), K(leader));
         }
-      } else if (OB_FAIL(submit_push_log_resp_(leader, flush_cb_ctx.curr_proposal_id_, log_end_lsn))) {
+      } else if (OB_FAIL(submit_push_log_resp_(leader, flush_cb_ctx.curr_proposal_id_, log_end_lsn, is_fetch_log))) {
         PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(leader), K(flush_cb_ctx));
       } else {}
     } else {}
@@ -1929,16 +1934,21 @@ bool LogSlidingWindow::need_execute_fetch_(const FetchTriggerType &fetch_trigger
   return bool_ret;
 }
 
-bool LogSlidingWindow::need_use_batch_rpc_(const int64_t buf_size) const
+bool LogSlidingWindow::need_use_batch_rpc_(const int64_t buf_size,
+                                           const bool is_fetch_log) const
 {
   constexpr int64_t BATCH_PUSH_LOG_THRESHOLD = 4 * 1024;
   // only use batch rpc when access mode is raw write and log size is smaller than BATCH_PUSH_LOG_THRESHOLD
   // NB: BATCH_PUSH_LOG_THRESHOLD must be smaller than 256 * 1024 because of the buffer size of ObBatchRpc is 256 * 1024.
-  const bool need_batch_push = (mode_mgr_->can_raw_write()
-                                && buf_size < BATCH_PUSH_LOG_THRESHOLD
-                                && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2)
-                                ? true : false;
-  return need_batch_push;
+  const bool need_batch_push_for_raw_write =
+    (mode_mgr_->can_raw_write()
+    && buf_size < BATCH_PUSH_LOG_THRESHOLD
+    && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_2_1_2)
+    ? true : false;
+  const bool need_batch_push_for_fetch_log =
+    (is_fetch_log && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0)
+    ? true : false;
+  return need_batch_push_for_raw_write || need_batch_push_for_fetch_log;
 }
 
 int LogSlidingWindow::try_fetch_log(const FetchTriggerType &fetch_log_type,
@@ -3296,7 +3306,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
         } else if (need_send_ack) {
           // This log matches with msg and it has been flushed, just sending ack directly.
           const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
-          if (OB_FAIL(submit_push_log_resp_(src_server, curr_proposal_id, log_end_lsn))) {
+          if (OB_FAIL(submit_push_log_resp_(src_server, curr_proposal_id, log_end_lsn, PushLogType::FETCH_LOG_RESP == push_log_type))) {
             PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(src_server));
           } else {
             PALF_LOG(INFO, "submit_push_log_resp succ", K(ret), K_(palf_id), K_(self), K(src_server), K(curr_proposal_id),
@@ -3352,6 +3362,7 @@ int LogSlidingWindow::receive_log(const common::ObAddr &src_server,
             log_task->set_group_log_checksum(group_log_data_checksum);
             (void) log_task->set_freezed();
             log_task->set_freeze_ts(ObTimeUtility::current_time());
+            log_task->set_push_log_type(push_log_type);
           }
           log_task->unlock();
         }
@@ -3409,17 +3420,19 @@ int LogSlidingWindow::submit_push_log_resp(const common::ObAddr &server)
     const int64_t curr_proposal_id = state_mgr_->get_proposal_id();
     LSN committed_end_lsn;
     get_committed_end_lsn_(committed_end_lsn);
-    ret = submit_push_log_resp_(server, curr_proposal_id, committed_end_lsn);
+    const bool is_fetch_log = false;
+    ret = submit_push_log_resp_(server, curr_proposal_id, committed_end_lsn, is_fetch_log);
   }
   return ret;
 }
 
 int LogSlidingWindow::submit_push_log_resp_(const common::ObAddr &server,
                                             const int64_t &msg_proposal_id,
-                                            const LSN &log_end_lsn)
+                                            const LSN &log_end_lsn,
+                                            const bool &is_fetch_log)
 {
   int ret = OB_SUCCESS;
-  const bool is_need_batch = need_use_batch_rpc_(0);
+  const bool is_need_batch = need_use_batch_rpc_(0, is_fetch_log);
   if (state_mgr_->is_allow_vote() &&
       OB_FAIL(log_engine_->submit_push_log_resp(server, msg_proposal_id, log_end_lsn, is_need_batch))) {
     PALF_LOG(WARN, "submit_push_log_resp failed", K(ret), K_(palf_id), K_(self), K(server), K(log_end_lsn));

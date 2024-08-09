@@ -1990,11 +1990,8 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
                                                                           col_ref->get_column_id()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpect null column item", K(ret));
-        } else if (OB_FAIL(get_map_table_id(subquery,
-                                            coalesce_query,
-                                            map_info,
-                                            col_ref->get_table_id(),
-                                            table_id))) {
+        } else if (OB_FAIL(ObStmtComparer::get_map_table(map_info, subquery, coalesce_query,
+                                                         col_ref->get_table_id(), table_id))) {
           LOG_WARN("failed to get map table id", K(ret));
         } else if (OB_FALSE_IT(column_item->table_id_ = table_id)) {
         } else if (OB_FALSE_IT(col_ref->set_table_id(table_id))) {
@@ -2070,57 +2067,6 @@ int ObTransformSubqueryCoalesce::inner_coalesce_subquery(ObSelectStmt *subquery,
       }
     }
   } // end smart var
-  return ret;
-}
-
-int ObTransformSubqueryCoalesce::get_map_table_id(ObSelectStmt *subquery,
-                                            ObSelectStmt *coalesce_subquery,
-                                            ObStmtMapInfo& map_info,
-                                            const uint64_t &subquery_table_id,
-                                            uint64_t &table_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(subquery) || OB_ISNULL(coalesce_subquery)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null stmt", K(ret));
-  }
-  bool find = false;
-  int64_t idx = OB_INVALID_ID;
-  for (int64_t i = 0; OB_SUCC(ret) && !find && i < subquery->get_table_size(); ++i) {
-    TableItem *table = subquery->get_table_item(i);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else if (subquery_table_id == table->table_id_) {
-      find =  true;
-      idx = i;
-    }
-  }
-  if (OB_SUCC(ret) && (!find || OB_INVALID_ID == idx)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table shoud be found in subquery" ,K(subquery_table_id), K(ret));
-  }
-  find = false;
-  for (int64_t i = 0; OB_SUCC(ret) && !find && i < map_info.table_map_.count(); ++i) {
-    if (idx == map_info.table_map_.at(i)) {
-      idx = i;
-      find = true;
-    }
-  }
-  if (OB_SUCC(ret) && (!find || OB_INVALID_ID == idx || 
-      idx < 0 || idx > coalesce_subquery->get_table_size())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("incorrect table idx" ,K(idx), K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    TableItem *table = coalesce_subquery->get_table_item(idx);
-    if (OB_ISNULL(table)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null table item", K(ret));
-    } else {
-      table_id = table->table_id_;
-    }
-  }
   return ret;
 }
 

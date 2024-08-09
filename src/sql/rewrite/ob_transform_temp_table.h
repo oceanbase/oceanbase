@@ -183,13 +183,20 @@ public:
                       TableItem *view_table,
                       ObSelectStmt *temp_table_query,
                       ObStmtMapInfo& map_info);
-
-  int get_map_table_id(ObSelectStmt *view,
-                      ObSelectStmt *temp_table_query,
-                      ObStmtMapInfo& map_info,
-                      const uint64_t &view_table_id,
-                      uint64_t &table_id);
-
+  int apply_temp_table_columns(ObStmtCompareContext &context,
+                               const ObStmtMapInfo& map_info,
+                               ObSelectStmt *temp_table_query,
+                               ObSelectStmt *view,
+                               ObIArray<ObRawExpr *> &old_view_columns,
+                               ObIArray<ObRawExpr *> &new_view_columns);
+  int apply_temp_table_select_list(ObStmtCompareContext &context,
+                                   const ObStmtMapInfo& map_info,
+                                   ObSelectStmt *parent_stmt,
+                                   ObSelectStmt *temp_table_query,
+                                   ObSelectStmt *view,
+                                   TableItem *view_table,
+                                   ObIArray<ObRawExpr *> &old_view_columns,
+                                   ObIArray<ObRawExpr *> &new_temp_columns);
   int project_pruning(ObIArray<ObDMLStmt::TempTableInfo> &temp_table_info,
                       bool &trans_happened);
 

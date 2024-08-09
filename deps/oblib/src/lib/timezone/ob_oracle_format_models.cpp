@@ -101,8 +101,8 @@ const ObOracleTimeLimiter ObDFMLimit::HOUR24                     = {0, 23,     O
 const ObOracleTimeLimiter ObDFMLimit::MINUTE                     = {0, 59,     OB_ERR_INVALID_MINUTES_VALUE};
 const ObOracleTimeLimiter ObDFMLimit::SECOND                     = {0, 59,     OB_ERR_INVALID_SECONDS_VALUE};
 const ObOracleTimeLimiter ObDFMLimit::SECS_PAST_MIDNIGHT         = {0, 86399,  OB_ERR_INVALID_SECONDS_IN_DAY_VALUE};
-const ObOracleTimeLimiter ObDFMLimit::TIMEZONE_HOUR_ABS          = {0, 15,     OB_INVALID_DATE_VALUE}; //ORA-01874: time zone hour must be between -15 and 15
-const ObOracleTimeLimiter ObDFMLimit::TIMEZONE_MIN_ABS           = {0, 59,     OB_INVALID_DATE_VALUE}; //ORA-01875: time zone minute must be between -59 and 59
+const ObOracleTimeLimiter ObDFMLimit::TIMEZONE_HOUR_ABS          = {0, 15,     OB_INVALID_DATE_VALUE}; //OBE-01874: time zone hour must be between -15 and 15
+const ObOracleTimeLimiter ObDFMLimit::TIMEZONE_MIN_ABS           = {0, 59,     OB_INVALID_DATE_VALUE}; //OBE-01875: time zone minute must be between -59 and 59
 const ObOracleTimeLimiter ObDFMLimit::JULIAN_DATE                = {1, 5373484,OB_ERR_INVALID_JULIAN_DATE_VALUE}; // -4712-01-01 ~ 9999-12-31
 
 
@@ -139,7 +139,7 @@ int ObDFMUtil::match_int_value_with_comma(ObDFMParseCtx &ctx,
         stop_flag = true;
       } else {
         if (OB_UNLIKELY(!isdigit(cur_char))) {
-          ret = OB_ERR_NON_NUMERIC_CHARACTER_VALUE; //ORA-01858: a non-numeric character was found where a numeric was expected
+          ret = OB_ERR_NON_NUMERIC_CHARACTER_VALUE; //OBE-01858: a non-numeric character was found where a numeric was expected
           LOG_WARN("failed to match int value", K(ret));
         } else {
           temp_value *= 10;
@@ -238,7 +238,7 @@ int ObDFMUtil::match_int_value(ObDFMParseCtx &ctx,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ctx), K(expected_len), K(value_sign));
   } else if (!isdigit(ctx.cur_ch_[0])) {  //check the first char
-    ret = OB_ERR_NON_NUMERIC_CHARACTER_VALUE; //ORA-01858: a non-numeric character was found where a numeric was expected
+    ret = OB_ERR_NON_NUMERIC_CHARACTER_VALUE; //OBE-01858: a non-numeric character was found where a numeric was expected
   }
 
   int64_t date_max_len = std::min(ctx.remain_len_, expected_len);
@@ -483,7 +483,7 @@ int ObDFMUtil::check_semantic(const ObDFMElemArr &elements, ObFixedBitSet<OB_DEF
     //check no duplicate elem first
     if (OB_SUCC(ret)) {
       if (OB_UNLIKELY(flag_bitmap.has_member(flag))) {
-        ret = OB_ERR_FORMAT_CODE_APPEARS_TWICE; //ORA-01810: format code appears twice
+        ret = OB_ERR_FORMAT_CODE_APPEARS_TWICE; //OBE-01810: format code appears twice
         LOG_WARN("datetime format model check failed", K(ret), "flag", ObString(ObDFMFlag::PATTERN[flag].ptr_));
       } else if (OB_FAIL(flag_bitmap.add_member(flag))) {
         LOG_WARN("failed to add bitmap", K(ret), "flag", ObString(ObDFMFlag::PATTERN[flag].ptr_));

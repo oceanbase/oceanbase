@@ -133,6 +133,7 @@ int ObStorageTableGuard::refresh_and_protect_table(ObRelativeTable &relative_tab
         tablet_id,
         ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US,
         store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
+        store_ctx_.mvcc_acc_ctx_.get_snapshot_version().get_val_for_tx(),
         iter,
         relative_table.allow_not_ready()))) {
       TRANS_LOG(WARN, "fail to get", K(store_ctx_.mvcc_acc_ctx_.tx_id_), K(ret));

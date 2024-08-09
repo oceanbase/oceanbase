@@ -354,7 +354,7 @@ int ObTransService::get_gts_(
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "invalid ts_mgr", KR(ret), K(ts_mgr_));
   } else {
-    const int64_t GET_GTS_AHEAD_INTERVAL = GCONF._ob_get_gts_ahead_interval;
+    const int64_t GET_GTS_AHEAD_INTERVAL = 0; // GCONF._ob_get_gts_ahead_interval;
     const MonotonicTs stc_ahead = (request_ts - MonotonicTs(GET_GTS_AHEAD_INTERVAL));
     do {
       if (ObClockGenerator::getClock() >= trans_expired_time) {

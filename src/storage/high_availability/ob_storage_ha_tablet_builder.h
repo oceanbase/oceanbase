@@ -18,6 +18,7 @@
 #include "storage/tx_storage/ob_ls_service.h"
 #include "ob_storage_restore_struct.h"
 #include "ob_storage_ha_reader.h"
+#include "storage/backup/ob_backup_data_struct.h"
 
 namespace oceanbase
 {
@@ -74,8 +75,8 @@ public:
   int create_all_tablets(
       const bool need_check_tablet_limit,
       ObICopyLSViewInfoReader *reader,
-      common::ObIArray<common::ObTabletID> &sys_tablet_id_list,
-      common::ObIArray<common::ObTabletID> &data_tablet_id_list,
+      common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
+      common::ObIArray<ObLogicTabletID> &data_tablet_id_list,
       CopyTabletSimpleInfoMap &simple_info_map);
   // Restore PENDING tablets meta. PENDING tablets will be exist at restore phase RESTORE_SYS_TABLETS,
   // RESTORE_TO_CONSISTENT_SCN, or QUICK_RESTORE. Leader gets the meta from backup, follower gets it from leader.
@@ -84,7 +85,9 @@ public:
   int update_pending_tablets_with_remote();
   int build_tablets_sstable_info();
   int create_all_tablets_with_4_1_rpc(
-      CopyTabletSimpleInfoMap &simple_info_map);
+      CopyTabletSimpleInfoMap &simple_info_map,
+      common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
+      common::ObIArray<ObLogicTabletID> &data_tablet_id_list);
 private:
   int get_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
   int get_tablet_info_restore_reader_(ObICopyTabletInfoReader *&reader);
@@ -225,8 +228,8 @@ struct ObStorageHACopySSTableParam final
   int assign(const ObStorageHACopySSTableParam &param);
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(copy_table_key_array),
-      K_(src_info), K_(local_rebuild_seq), K_(need_check_seq),
-      KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
+      K_(src_info), K_(local_rebuild_seq), K_(need_check_seq), K_(is_leader_restore),
+      K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -237,6 +240,7 @@ struct ObStorageHACopySSTableParam final
   int64_t local_rebuild_seq_;
   bool need_check_seq_;
   bool is_leader_restore_;
+  ObTabletRestoreAction::ACTION restore_action_;
 
   common::ObInOutBandwidthThrottle *bandwidth_throttle_;
   obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
@@ -284,7 +288,8 @@ public:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const bool need_replace_remote_sstable);
   static int build_table_with_minor_tables(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
@@ -301,13 +306,15 @@ private:
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const bool need_replace_remote_sstable);
   // for column store
   static int build_tablet_for_column_store_(
       ObLS *ls,
       const common::ObTabletID &tablet_id,
       const ObTablesHandleArray &major_tables,
-      const ObStorageSchema &storage_schema);
+      const ObStorageSchema &storage_schema,
+      const bool need_replace_remote_sstable);
 
   static int get_tablet_(
       const common::ObTabletID &tablet_id,
@@ -320,6 +327,7 @@ private:
   static int inner_update_tablet_table_store_with_major_(
       const int64_t multi_version_start,
       const ObTableHandleV2 &table_handle,
+      const bool need_replace_remote_sstable,
       ObLS *ls,
       ObTablet *tablet,
       const ObStorageSchema &storage_schema,
@@ -329,11 +337,8 @@ private:
       ObTablet *tablet,
       const bool &need_tablet_meta_merge,
       const ObMigrationTabletParam *src_tablet_meta,
-      const ObTablesHandleArray &tables_handle);
-  static int check_need_merge_tablet_meta_(
-      const ObMigrationTabletParam *src_tablet_meta,
-      ObTablet *tablet,
-      bool &need_merge);
+      const ObTablesHandleArray &tables_handle,
+      const bool is_replace_remote);
   static int assemble_column_oriented_sstable_(
       const ObTablesHandleArray &mixed_tables,
       ObTablesHandleArray &co_tables);
@@ -346,7 +351,8 @@ private:
       ObTablet *tablet,
       const ObStorageSchema &storage_schema,
       const int64_t multi_version_start,
-      const ObTablesHandleArray &co_tables);
+      const ObTablesHandleArray &co_tables,
+      const bool need_replace_remote_sstable);
   static int append_sstable_array_(ObTablesHandleArray &dest_array, const ObTablesHandleArray &src_array);
 };
 

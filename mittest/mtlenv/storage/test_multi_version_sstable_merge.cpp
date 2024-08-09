@@ -2947,7 +2947,7 @@ TEST_F(TestMultiVersionMerge, test_major_range_cross_macro)
   int ret = OB_SUCCESS;
   fake_freeze_info();
   ObTabletMergeDagParam param;
-  ObTabletMergeCtx merge_context(param, allocator_);
+  ObTabletMajorMergeCtx merge_context(param, allocator_);
   ObPartitionMajorMerger merger(local_arena_, merge_context.static_param_);
 
   ObTableHandleV2 handle1;

@@ -14,9 +14,8 @@
 #define OCEANBASE_LOGSERVICE_LOG_GROUP_ENTRY_HEADER_
 
 #include "lib/ob_define.h"                      // Serialization
-#include "lib/ob_name_def.h"
 #include "lib/utility/ob_print_utils.h"         // Print*
-#include "share/scn.h"                                // SCN
+#include "share/scn.h"                          // SCN
 #include "lsn.h"                                // LSN
 
 namespace oceanbase
@@ -89,6 +88,7 @@ public:
                const share::SCN &cut_scn,
                const int64_t pre_accum_checksum);
 
+  bool check_compatibility() const;
   NEED_SERIALIZE_AND_DESERIALIZE;
 
   TO_STRING_KV("magic", magic_,
@@ -109,17 +109,28 @@ private:
                               int64_t &data_checksum);
   bool check_header_checksum_() const;
   bool check_log_checksum_(const char *buf, const int64_t data_len, int64_t &group_log_checksum) const;
-  bool get_header_parity_check_res_() const;
+  uint16_t calculate_header_checksum_() const;
+  int16_t get_version_() const;
+  int64_t get_padding_mask_() const;
+  int64_t get_raw_write_mask_() const;
+  int64_t get_header_checksum_mask_() const;
+  void reset_header_checksum_();
 public:
   // Update this variable when modifying header's member
   static const int64_t HEADER_SER_SIZE;
   //GR means record
-  static constexpr int16_t MAGIC = 0x4752;
+  static const int16_t MAGIC;
 private:
-  static constexpr int16_t LOG_GROUP_ENTRY_HEADER_VERSION = 1;
-  static constexpr int64_t PADDING_TYPE_MASK = 1 << 1;
-  static constexpr int64_t RAW_WRITE_MASK = 1 << 2;
-  static constexpr int64_t PADDING_LOG_DATA_CHECKSUM = 0;  // padding log的data_checksum为0
+  static const int16_t LOG_GROUP_ENTRY_HEADER_VERSION;
+  static const int64_t PADDING_TYPE_MASK;
+  static const int64_t RAW_WRITE_MASK;
+  static const int64_t PADDING_LOG_DATA_CHECKSUM;
+
+  static const int16_t LOG_GROUP_ENTRY_HEADER_VERSION2;
+  static const int64_t PADDING_TYPE_MASK_VERSION2;
+  static const int64_t RAW_WRITE_MASK_VERSION2;
+  static const int64_t CRC16_MASK;
+  static const int64_t PARITY_MASK;
 private:
   // Binary visualization, for LogGroupEntryHeader, its' magic number
   // is 0x4752, means GR(group header)
@@ -140,10 +151,16 @@ private:
   // The log id of this log, this field just only used for
   // sliding window
   int64_t log_id_;
+
+  // LOG_GROUP_ENTRY_HEADER_VERSION
+  // | sign bit | 60 unused bit | RAW WRITE bit | PADDING bit | PARITY CHECKSUM bit |
   // The lowest bit is used for parity check.
   // The second bit from last is used for padding type flag.
   // The third bit from last is used for checking whether is RAW_WRITE
-  int64_t flag_;
+  //
+  // LOG_GROUP_ENTRY_HEADER_VERSION2
+  // | sign bit | PADDING bit | RAW WRITE BIT | 45 unused bit | 16 crc16 bit|
+  mutable int64_t flag_;
 };
 
 } // end namespace palf

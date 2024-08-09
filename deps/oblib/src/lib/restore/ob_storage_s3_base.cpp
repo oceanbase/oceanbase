@@ -63,10 +63,15 @@ void ObS3Logger::Log(Logging::LogLevel logLevel, const char* tag, const char* fo
     switch (logLevel) {
       case Logging::LogLevel::Fatal:
       case Logging::LogLevel::Error:
-      case Logging::LogLevel::Warn:
-        ret = OB_S3_ERROR;
-        _OB_LOG(WARN, new_format, tag, arg_buf);
+      case Logging::LogLevel::Warn: {
+        if (OB_NOT_NULL(STRSTR(arg_buf, "HTTP response code: 404"))) {
+          // skip NO_SUCH_KEY error
+        } else {
+          ret = OB_S3_ERROR;
+          _OB_LOG(WARN, new_format, tag, arg_buf);
+        }
         break;
+      }
       case Logging::LogLevel::Info:
         _OB_LOG(INFO, new_format, tag, arg_buf);
         break;
@@ -576,6 +581,7 @@ void ObS3Env::stop()
 
 const int S3_BAD_REQUEST = 400;
 const int S3_ITEM_NOT_EXIST = 404;
+const int S3_SLOW_DOWN = 503;
 
 static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
 {
@@ -605,8 +611,16 @@ static void convert_http_error(const Aws::S3::S3Error &s3_err, int &ob_errcode)
       }
       break;
     }
+    case S3_SLOW_DOWN: {
+      ob_errcode = OB_IO_LIMIT;
+      break;
+    }
     default: {
-      ob_errcode = OB_S3_ERROR;
+      if (err_msg.find("curlCode: 28") != std::string::npos) {
+        ob_errcode = OB_TIMEOUT;
+      } else {
+        ob_errcode = OB_S3_ERROR;
+      }
       break;
     }
   }
@@ -646,6 +660,13 @@ template<typename OutcomeType>
 static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
 {
   const char *request_id = outcome.GetResult().GetRequestId().c_str();
+  if (outcome.GetResult().GetRequestId().empty()) {
+    const Aws::Http::HeaderValueCollection &headers = outcome.GetError().GetResponseHeaders();
+    Aws::Http::HeaderValueCollection::const_iterator it = headers.find("x-amz-request-id");
+    if (it != headers.end()) {
+      request_id = it->second.c_str();
+    }
+  }
   const int code = static_cast<int>(outcome.GetError().GetResponseCode());
   const char *exception = outcome.GetError().GetExceptionName().c_str();
   const char *err_msg = outcome.GetError().GetMessage().c_str();
@@ -1001,11 +1022,10 @@ int ObStorageS3Base::get_s3_file_meta_(S3ObjectMeta &meta)
     if (OB_FAIL(s3_client_->head_object(request, outcome))) {
       OB_LOG(WARN, "failed to head s3 object", K(ret));
     } else if (!outcome.IsSuccess()) {
-      convert_io_error(outcome.GetError(), ret);
+      handle_s3_outcome(outcome, ret);
       if (OB_BACKUP_FILE_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
-        log_s3_status(outcome, ret);
         OB_LOG(WARN, "failed to head s3 object", K(ret), K_(bucket), K_(object));
       }
     } else {
@@ -1928,12 +1948,10 @@ int64_t ObStorageS3AppendWriter::get_length() const
 
 /*--------------------------------ObStorageS3MultiPartWriter--------------------------------*/
 ObStorageS3MultiPartWriter::ObStorageS3MultiPartWriter()
-    : ObStorageS3Base(),
-      is_opened_(false),
+    : ObStorageS3Writer(),
       base_buf_(NULL), base_buf_pos_(-1),
       upload_id_(NULL),
-      partnum_(0),
-      file_length_(-1)
+      partnum_(0)
 {}
 
 ObStorageS3MultiPartWriter::~ObStorageS3MultiPartWriter()
@@ -1957,7 +1975,7 @@ int ObStorageS3MultiPartWriter::open_(const ObString &uri, ObObjectStorageInfo *
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_S3_ERROR;
     OB_LOG(WARN, "s3 multipart writer already opened, cannot open again", K(ret), K(uri));
-  } else if (OB_FAIL(ObStorageS3Base::open(uri, storage_info))) {
+  } else if (OB_FAIL(ObStorageS3Writer::open(uri, storage_info))) {
     OB_LOG(WARN, "failed to open in s3 base", K(ret), K(uri));
   } else {
     Aws::S3::Model::CreateMultipartUploadRequest request;
@@ -2111,8 +2129,11 @@ int ObStorageS3MultiPartWriter::complete_()
     } else if (OB_UNLIKELY(part_num == 0)) {
       // If 'complete' without uploading any data, S3 will return the error
       // 'InvalidRequest，You must specify at least one part'
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(part_num), K_(upload_id));
+      // write an empty object instead
+      if (OB_FAIL(write_obj_(object_.ptr(), "", 0))) {
+        OB_LOG(WARN, "complete an empty multipart upload, but fail to write an empty object",
+            K(ret), K(part_num), K_(upload_id));
+      }
     } else if (OB_FAIL(s3_client_->complete_multipart_upload(complete_multipart_upload_request,
                                                              complete_multipart_upload_outcome))) {
       OB_LOG(WARN, "failed to complete s3 multipart upload", K(ret));

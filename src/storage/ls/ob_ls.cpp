@@ -2057,7 +2057,7 @@ void ObLS::record_async_freeze_tablet_(const ObTabletID &tablet_id, const int64_
   (void)ls_freezer_.record_async_freeze_tablet(tablet_info);
 }
 
-int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tennat_freeze)
+int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout_ts, const bool is_tenant_freeze)
 {
   int ret = OB_SUCCESS;
   int64_t read_lock = LSLOCKALL;
@@ -2067,7 +2067,7 @@ int ObLS::advance_checkpoint_by_flush(SCN recycle_scn, const int64_t abs_timeout
     ret = OB_TIMEOUT;
     LOG_WARN("lock failed, please retry later", K(ret), K(ls_meta_));
   } else {
-    if (is_tennat_freeze) {
+    if (is_tenant_freeze) {
       ObDataCheckpoint::set_tenant_freeze();
       LOG_INFO("set tenant_freeze", K(ls_meta_.ls_id_));
     }
@@ -2099,12 +2099,13 @@ int ObLS::flush_to_recycle_clog()
 }
 
 int ObLS::get_ls_meta_package_and_tablet_ids(const bool check_archive,
+    const bool need_sorted_tablet_id,
     ObLSMetaPackage &meta_package,
     common::ObIArray<common::ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   const bool need_initial_state = false;
-  ObHALSTabletIDIterator iter(ls_meta_.ls_id_, need_initial_state);
+  ObHALSTabletIDIterator iter(ls_meta_.ls_id_, need_initial_state, need_sorted_tablet_id);
   RDLockGuard guard(meta_rwlock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -2139,6 +2140,7 @@ int ObLS::get_ls_meta_package_and_tablet_ids(const bool check_archive,
 int ObLS::get_ls_meta_package_and_tablet_metas(
     const bool check_archive,
     const HandleLSMetaFunc &handle_ls_meta_f,
+    const bool need_sorted_tablet_id,
     const ObLSTabletService::HandleTabletMetaFunc &handle_tablet_meta_f)
 {
   int ret = OB_SUCCESS;
@@ -2158,7 +2160,7 @@ int ObLS::get_ls_meta_package_and_tablet_metas(
       LOG_WARN("failed to get ls meta package", K(ret), K_(ls_meta));
     } else if (OB_FAIL(handle_ls_meta_f(meta_package))) {
       LOG_WARN("failed to handle ls meta", K(ret), K_(ls_meta), K(meta_package));
-    } else if (OB_FAIL(ls_tablet_svr_.ha_scan_all_tablets(handle_tablet_meta_f))) {
+    } else if (OB_FAIL(ls_tablet_svr_.ha_scan_all_tablets(handle_tablet_meta_f, need_sorted_tablet_id))) {
       LOG_WARN("failed to scan all tablets", K(ret), K_(ls_meta));
     }
 
@@ -2548,7 +2550,6 @@ void ObLS::clear_delay_resource_recycle()
   need_delay_resource_recycle_ = false;
   LOG_INFO("clear delay resource recycle", KPC(this));
 }
-}
 
 int ObLS::check_allow_read(bool &allow_to_read)
 {
@@ -2576,8 +2577,8 @@ int ObLS::inner_check_allow_read_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inner check allow read get invalid argument", K(ret), K(migration_status), K(restore_status));
   }  else if ((ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status
-      || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status)
-    && restore_status.is_none()) {
+          || ObMigrationStatus::OB_MIGRATION_STATUS_HOLD == migration_status)
+              && restore_status.check_allow_read()) {
     allow_read = true;
   } else {
     allow_read = false;
@@ -2585,4 +2586,24 @@ int ObLS::inner_check_allow_read_(
   return ret;
 }
 
+int ObLS::set_ls_allow_to_read()
+{
+  int ret = OB_SUCCESS;
+  bool allow_to_read = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls is not inited", K(ret));
+  } else if (OB_FAIL(check_allow_read(allow_to_read))) {
+    LOG_WARN("failed to check ls allow read", K(ret));
+  } else if (allow_to_read) {
+    ls_tablet_svr_.enable_to_read();
+    LOG_INFO("set ls allow to read", "ls_id", get_ls_id());
+  } else {
+    ls_tablet_svr_.disable_to_read();
+    LOG_INFO("set ls not allow to read", "ls_id", get_ls_id());
+  }
+  return ret;
+}
+
+}
 }

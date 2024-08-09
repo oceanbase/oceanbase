@@ -487,7 +487,9 @@ void ObResourceGroup::check_worker_count()
       token = std::min(token, max_worker_cnt());
       token = std::max(token, target_min);
     } else {
-      target_min = std::min(req_queue_.size(), min_worker_cnt());
+      if (req_queue_.size() > 0) {
+        target_min = std::min(req_queue_.size() + workers_.get_size(), min_worker_cnt());
+      }
       if (blocking_cnt == 0 && req_queue_.size() == 0) {
         token = 0;
       } else {

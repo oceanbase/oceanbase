@@ -2773,7 +2773,8 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
     if (OB_SUCC(ret)
         && expr.lower_.is_nmb_literal_
         && expr.lower_.interval_expr_ != NULL
-        && !expr.lower_.interval_expr_->get_result_type().is_numeric_type()) {
+        && !(expr.lower_.interval_expr_->get_result_type().is_numeric_type()
+             || expr.lower_.interval_expr_->get_result_type().is_interval_type())) {// cast interval to number is forbidden, just do
       if (is_oracle_mode()) {
         ObSysFunRawExpr *cast_expr = NULL;
         if (OB_ISNULL(expr_factory_)) {
@@ -2796,7 +2797,8 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
     if (OB_SUCC(ret)
         && expr.upper_.is_nmb_literal_
         && expr.upper_.interval_expr_ != NULL
-        && !expr.upper_.interval_expr_->get_result_type().is_numeric_type()) {
+        && !(expr.upper_.interval_expr_->get_result_type().is_numeric_type()
+             || expr.upper_.interval_expr_->get_result_type().is_interval_type())) {
       if (is_oracle_mode()) {
         ObSysFunRawExpr *cast_expr = NULL;
         if (OB_ISNULL(expr_factory_)) {
@@ -2869,8 +2871,10 @@ int ObRawExprDeduceType::visit(ObWinFunRawExpr &expr)
         /*do nothing*/
       } else if (lib::is_oracle_mode()) {
         if (ob_is_numeric_type(bound_expr_arr[i]->get_data_type())
-            || ob_is_string_tc(bound_expr_arr[i]->get_data_type())) {
-          if (!ob_is_numeric_type(order_res_type) && !ob_is_datetime_tc(order_res_type)) {
+            || ob_is_string_tc(bound_expr_arr[i]->get_data_type())
+            || ob_is_interval_tc(bound_expr_arr[i]->get_data_type())) {
+          if (!ob_is_numeric_type(order_res_type) && !ob_is_datetime_tc(order_res_type)
+              && !ob_is_date_tc(order_res_type) && !ob_is_otimestampe_tc(order_res_type)) {
             ret = OB_ERR_INVALID_WINDOW_FUNC_USE;
             LOG_WARN("invalid datatype in order by for range clause", K(ret), K(order_res_type));
           }
@@ -3721,7 +3725,8 @@ int ObRawExprDeduceType::try_add_cast_expr(RawExprType &parent,
       ObObjTypeClass expect_tc = ob_obj_type_class(input_type.get_calc_type());
       if (T_FUN_UDF == parent.get_expr_type()
           && ObNumberTC == ori_tc
-          && (ObTextTC == expect_tc || ObLobTC == expect_tc)) {
+          && ((ObTextTC == expect_tc && lib::is_oracle_mode()) || ObLobTC == expect_tc)) {
+        // oracle mode can not cast number to text, but mysql mode can
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_WARN("cast to lob type not allowed", K(ret));
       }

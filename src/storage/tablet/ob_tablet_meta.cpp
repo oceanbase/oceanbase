@@ -243,7 +243,7 @@ int ObTabletMeta::init(
     ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
     max_sync_storage_schema_version_ = old_tablet_meta.max_sync_storage_schema_version_;
     max_serialized_medium_scn_ = old_tablet_meta.max_serialized_medium_scn_;
-    mds_checkpoint_scn_ = flush_scn;
+    mds_checkpoint_scn_ = SCN::max(flush_scn, old_tablet_meta.mds_checkpoint_scn_);
     transfer_info_ = old_tablet_meta.transfer_info_;
     extra_medium_info_ = old_tablet_meta.extra_medium_info_;
     space_usage_ = old_tablet_meta.space_usage_;
@@ -399,12 +399,6 @@ int ObTabletMeta::init(
     LOG_WARN("invalid args", K(ret), K(old_tablet_meta));
   } else if (OB_FAIL(inner_check_(old_tablet_meta, tablet_meta))) {
     LOG_WARN("failed to do inner check", K(ret), K(old_tablet_meta), KP(tablet_meta));
-  } else if (OB_NOT_NULL(tablet_meta) && old_tablet_meta.clog_checkpoint_scn_ >= tablet_meta->clog_checkpoint_scn_) {
-    if (OB_FAIL(assign(old_tablet_meta))) {
-      LOG_WARN("failed to assign tablet meta", K(ret), K(old_tablet_meta));
-    } else {
-      mds_checkpoint_scn_ = MAX(old_tablet_meta.mds_checkpoint_scn_, tablet_meta->mds_checkpoint_scn_);
-    }
   } else {
     const int64_t snapshot_version = OB_ISNULL(tablet_meta) ?
         old_tablet_meta.snapshot_version_ : MAX(old_tablet_meta.snapshot_version_, tablet_meta->snapshot_version_);
@@ -1390,7 +1384,7 @@ int ObMigrationTabletParam::deserialize(const char *buf, const int64_t len, int6
     } else {
       pos = new_pos;
 
-      FLOG_INFO("succeed to deserialize migration tablet param", K(ret), KPC(this));
+      LOG_TRACE("succeed to deserialize migration tablet param", K(ret), KPC(this));
     }
   }
 
@@ -1593,7 +1587,7 @@ int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
   storage_schema.rowkey_array_.set_allocator(&allocator);
   storage_schema.column_array_.set_allocator(&allocator);
 
-  storage_schema.storage_schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_V3;
+  storage_schema.storage_schema_version_ = ObStorageSchema::STORAGE_SCHEMA_VERSION_LATEST;
   storage_schema.is_use_bloomfilter_ = false;
   storage_schema.table_type_ = ObTableType::USER_TABLE;
   //storage_schema.table_mode_
@@ -1609,6 +1603,7 @@ int ObMigrationTabletParam::construct_placeholder_storage_schema_and_medium(
   storage_schema.progressive_merge_num_ = 0;
   storage_schema.master_key_id_ = OB_INVALID_ID;
   storage_schema.compat_mode_ = static_cast<uint32_t>(lib::Worker::get_compatibility_mode());
+  storage_schema.is_cs_replica_compat_ = false;
 
   ObStorageRowkeyColumnSchema rowkey_schema;
   rowkey_schema.meta_type_.set_tinyint();

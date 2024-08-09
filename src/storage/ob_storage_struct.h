@@ -320,7 +320,7 @@ struct ObGetMergeTablesResult
   int assign(const ObGetMergeTablesResult &src);
   int copy_basic_info(const ObGetMergeTablesResult &src);
   share::SCN get_merge_scn() const;
-  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version),
+  TO_STRING_KV(K_(version_range), K_(scn_range), K_(merge_version), K_(is_simplified),
       K_(handle), K_(update_tablet_directly), K_(schedule_major), K_(is_backfill), K_(backfill_scn));
 };
 
@@ -402,7 +402,8 @@ struct ObUpdateTableStoreParam
                K_(need_report), KPC_(storage_schema), K_(rebuild_seq), K_(update_with_major_flag),
                K_(need_check_sstable), K_(ddl_info), K_(allow_duplicate_sstable),
                "merge_type", merge_type_to_str(merge_type_),
-               K_(need_check_transfer_seq), K_(transfer_seq), K_(upper_trans_param));
+               K_(need_check_transfer_seq), K_(transfer_seq), K_(upper_trans_param),
+               K_(need_replace_remote_sstable));
 
   const blocksstable::ObSSTable *sstable_;
   int64_t snapshot_version_;
@@ -419,6 +420,7 @@ struct ObUpdateTableStoreParam
   int64_t transfer_seq_;
   compaction::ObMergeType merge_type_; // set merge_type only when update tablet in compaction
   UpdateUpperTransParam upper_trans_param_; // set upper_trans_param_ only when update upper_trans_version
+  bool need_replace_remote_sstable_; // only true for restore replace sstable.
 };
 
 struct ObBatchUpdateTableStoreParam final
@@ -431,7 +433,7 @@ struct ObBatchUpdateTableStoreParam final
   int get_max_clog_checkpoint_scn(share::SCN &clog_checkpoint_scn) const;
 
   TO_STRING_KV(K_(tables_handle), K_(rebuild_seq), K_(is_transfer_replace),
-      K_(start_scn), KP_(tablet_meta), K_(restore_status));
+      K_(start_scn), KP_(tablet_meta), K_(restore_status), K_(need_replace_remote_sstable));
 
   ObTablesHandleArray tables_handle_;
 #ifdef ERRSIM
@@ -442,6 +444,7 @@ struct ObBatchUpdateTableStoreParam final
   share::SCN start_scn_;
   const ObMigrationTabletParam *tablet_meta_;
   ObTabletRestoreStatus::STATUS restore_status_;
+  bool need_replace_remote_sstable_;
 
   DISALLOW_COPY_AND_ASSIGN(ObBatchUpdateTableStoreParam);
 };

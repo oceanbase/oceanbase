@@ -27,6 +27,8 @@ namespace lib
 {
 using common::ObIAllocator;
 
+enum class LogReductionMode {NONE = 0, REFINED, COMPRESSED};
+
 class Worker
 {
 public:
@@ -114,6 +116,8 @@ public:
 public:
   static void set_compatibility_mode(CompatMode mode);
   static CompatMode get_compatibility_mode();
+  static LogReductionMode get_log_reduction_mode();
+  static void set_log_reduction_mode(const LogReductionMode log_reduction_mode);
   static Worker& self();
   static void set_worker_to_thread_local(Worker *worker);
 
@@ -220,6 +224,7 @@ private:
   Worker::CompatMode last_compat_mode_;
 };
 
+
 #ifdef ERRSIM
 //set current errsim module in code snippet and set last errsim module when guard destructor
 class ErrsimModuleGuard final
@@ -249,12 +254,14 @@ class ObRuntimeContext
   OB_UNIS_VERSION(1);
 public:
   ObRuntimeContext()
-      : compat_mode_(Worker::CompatMode::MYSQL)
+      : compat_mode_(Worker::CompatMode::MYSQL),
+        log_reduction_mode_(LogReductionMode::NONE)
   {}
   Worker::CompatMode compat_mode_;
 #ifdef ERRSIM
   ObErrsimModuleType module_type_;
 #endif
+  LogReductionMode log_reduction_mode_;
 };
 
 inline ObRuntimeContext &get_ob_runtime_context()
@@ -291,6 +298,23 @@ OB_INLINE Worker::CompatMode Worker::get_compatibility_mode()
 {
   return get_compat_mode();
 }
+
+OB_INLINE bool is_log_reduction() { return get_ob_runtime_context().log_reduction_mode_ != LogReductionMode::NONE; }
+
+OB_INLINE LogReductionMode get_log_reduction() { return get_ob_runtime_context().log_reduction_mode_; }
+
+OB_INLINE void set_log_reduction(const LogReductionMode log_reduction_mode)
+{
+  get_ob_runtime_context().log_reduction_mode_ = log_reduction_mode;
+}
+
+OB_INLINE LogReductionMode Worker::get_log_reduction_mode() { return get_log_reduction(); }
+
+OB_INLINE void Worker::set_log_reduction_mode(const LogReductionMode log_reduction_mode)
+{
+  set_log_reduction(log_reduction_mode);
+}
+
 
 #ifdef ERRSIM
 OB_INLINE void Worker::set_module_type(const ObErrsimModuleType &module_type)

@@ -48,6 +48,13 @@ class ObTiredCodec : public ObCodec
     codec2_.set_uint_bytes(uint_bytes);
   }
 
+  virtual void set_pfor_packing_type(const PFoRPackingType pfor_packing_type) override
+  {
+    ObCodec::set_pfor_packing_type(pfor_packing_type);
+    codec1_.set_pfor_packing_type(pfor_packing_type);
+    codec2_.set_pfor_packing_type(pfor_packing_type);
+  }
+
   virtual int do_encode(const char *in,
                         const uint64_t in_len,
                         char *out,

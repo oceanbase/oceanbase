@@ -30,12 +30,10 @@ namespace oceanbase
 namespace sql
 {
 
-int ObRbExprHelper::get_input_roaringbitmap_bin(ObEvalCtx &ctx, ObExpr *rb_arg,  ObString &rb_bin, bool &is_rb_null)
+int ObRbExprHelper::get_input_roaringbitmap_bin(ObEvalCtx &ctx, ObIAllocator &allocator, ObExpr *rb_arg,  ObString &rb_bin, bool &is_rb_null)
 {
   INIT_SUCC(ret);
   ObDatum *rb_datum;
-  ObEvalCtx::TempAllocGuard ctx_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = ctx_alloc_g.get_allocator();
   if (OB_FAIL(rb_arg->eval(ctx, rb_datum))) {
     LOG_WARN("eval roaringbitmap args failed", K(ret));
   } else if (rb_datum->is_null()) {
@@ -55,13 +53,11 @@ int ObRbExprHelper::get_input_roaringbitmap_bin(ObEvalCtx &ctx, ObExpr *rb_arg, 
   return ret;
 }
 
-int ObRbExprHelper::get_input_roaringbitmap(ObEvalCtx &ctx, ObExpr *rb_arg, ObRoaringBitmap *&rb, bool &is_rb_null)
+int ObRbExprHelper::get_input_roaringbitmap(ObEvalCtx &ctx, ObIAllocator &allocator, ObExpr *rb_arg, ObRoaringBitmap *&rb, bool &is_rb_null)
 {
   INIT_SUCC(ret);
   ObString rb_bin = nullptr;
-  ObEvalCtx::TempAllocGuard ctx_alloc_g(ctx);
-  common::ObArenaAllocator &allocator = ctx_alloc_g.get_allocator();
-  if (OB_FAIL(get_input_roaringbitmap_bin(ctx, rb_arg, rb_bin, is_rb_null))) {
+  if (OB_FAIL(get_input_roaringbitmap_bin(ctx, allocator, rb_arg, rb_bin, is_rb_null))) {
     LOG_WARN("failed to get input roaringbitmap binary", K(ret));
   } else if (!is_rb_null && OB_FAIL(ObRbUtils::rb_deserialize(allocator, rb_bin, rb))) {
     LOG_WARN("failed to deserialize roaringbitmap", K(ret));

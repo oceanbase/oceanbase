@@ -1035,6 +1035,8 @@ public:
   virtual void set_duplicate_scope(const share::ObDuplicateScope duplicate_scope) override { duplicate_scope_ = duplicate_scope; }
   virtual void set_duplicate_scope(const int64_t duplicate_scope) override { duplicate_scope_ = static_cast<share::ObDuplicateScope>(duplicate_scope); }
 
+  inline void set_duplicate_read_consistency(const share::ObDuplicateReadConsistency duplicate_read_consistency) { duplicate_read_consistency_ = duplicate_read_consistency; }
+  inline share::ObDuplicateReadConsistency get_duplicate_read_consistency() const { return duplicate_read_consistency_; }
   // for encrypt
   int set_encryption_str(const common::ObString &str) { return deep_copy_str(str, encryption_); }
   virtual const common::ObString &get_encryption_str() const override { return encryption_; }
@@ -1079,6 +1081,7 @@ protected:
   // Only the type of index is valid in oracle mode, which means the original index name without prefix (__idx__table_id_)
   common::ObString origin_index_name_;
   share::ObDuplicateScope duplicate_scope_;
+  share::ObDuplicateReadConsistency duplicate_read_consistency_;
   common::ObString encryption_;
   uint64_t tablespace_id_;
   common::ObString encrypt_key_;
@@ -1249,6 +1252,7 @@ public:
   int set_external_file_location_access_info(const common::ObString &access_info) { return deep_copy_str(access_info, external_file_location_access_info_); }
   int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
+  int set_external_properties(const common::ObString &format) { return deep_copy_str(format, external_properties_); }
   void set_external_table_auto_refresh(const int64_t flag) { table_flags_ |= (flag << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET); }
   inline void set_user_specified_partition_for_external_table() { table_flags_ |= EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG; }
   template<typename ColumnType>
@@ -1283,6 +1287,7 @@ public:
   void clear_constraint();
   int set_ttl_definition(const common::ObString &ttl_definition) { return deep_copy_str(ttl_definition, ttl_definition_); }
   int set_kv_attributes(const common::ObString &kv_attributes) { return deep_copy_str(kv_attributes, kv_attributes_); }
+  int set_index_params(const common::ObString &index_params) { return deep_copy_str(index_params, index_params_); }
   void set_lob_inrow_threshold(const int64_t lob_inrow_threshold) { lob_inrow_threshold_ = lob_inrow_threshold;}
   inline void set_auto_increment_cache_size(const int64_t auto_increment_cache_size)
   { auto_increment_cache_size_ = auto_increment_cache_size; }
@@ -1375,6 +1380,7 @@ public:
   inline const ObViewSchema &get_view_schema() const { return view_schema_; }
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
   inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
+  inline const common::ObString &get_index_params() const { return index_params_; }
   inline int64_t get_lob_inrow_threshold() const { return lob_inrow_threshold_; }
   inline int64_t get_auto_increment_cache_size() const { return auto_increment_cache_size_; }
   bool has_check_constraint() const;
@@ -1392,6 +1398,7 @@ public:
   const ObString &get_external_file_location_access_info() const { return external_file_location_access_info_; }
   const ObString &get_external_file_format() const { return external_file_format_; }
   const ObString &get_external_file_pattern() const { return external_file_pattern_; }
+  const ObString &get_external_properties() const { return external_properties_; }
   int64_t get_external_table_auto_refresh() const { return (table_flags_ >> EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET) & ((1 << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_BITS) - 1); }
   bool is_external_table_immediate_refresh() const { return get_external_table_auto_refresh() == 1; }
   bool is_external_table_interval_refresh() const { return get_external_table_auto_refresh() == 2; }
@@ -1402,6 +1409,7 @@ public:
   inline ObNameGeneratedType get_name_generated_type() const { return name_generated_type_; }
   bool is_sys_generated_name(bool check_unknown) const;
   inline bool is_user_specified_partition_for_external_table() const { return (table_flags_ & EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG) != 0; }
+  inline bool is_odps_external_table() const { return !external_properties_.empty(); }
   inline bool is_index_visible() const
   {
     return 0 == (index_attributes_set_ & ((uint64_t)(1) << INDEX_VISIBILITY));
@@ -1789,6 +1797,8 @@ public:
   }
   void set_mlog_tid(const uint64_t& table_id) { mlog_tid_ = table_id; }
   uint64_t get_mlog_tid() const { return mlog_tid_; }
+  inline ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
+  inline const ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -1859,6 +1869,8 @@ private:
   int convert_column_ids_in_constraint(
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map);
   int convert_column_udt_set_ids(
+      const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map);
+  int convert_geo_generated_col_ids(
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map);
   static int convert_column_ids_in_info(
       const common::hash::ObHashMap<uint64_t, uint64_t> &column_id_map,
@@ -1968,6 +1980,7 @@ protected:
   common::ObString external_file_location_;
   common::ObString external_file_location_access_info_;
   common::ObString external_file_pattern_;
+  common::ObString external_properties_;
 
   // table ttl
   common::ObString ttl_definition_;
@@ -1987,6 +2000,9 @@ protected:
   CgIdHashArray *cg_id_hash_arr_;
   CgNameHashArray *cg_name_hash_arr_;
   uint64_t mlog_tid_;
+  ObLocalSessionVar local_session_vars_;
+  // vector index
+  common::ObString index_params_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

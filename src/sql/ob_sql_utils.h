@@ -581,7 +581,15 @@ public:
                                  const ObExecuteMode exec_mode,
                                  ObSQLSessionInfo &session,
                                  bool is_sensitive = false);
-
+  static int64_t get_query_record_size_limit(uint64_t tenant_id)
+  {
+    int64_t thredhold = OB_MAX_SQL_LENGTH;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      thredhold = tenant_config->_query_record_size_limit;
+    }
+    return thredhold;
+  }
   // convert escape char from '\\' to '\\\\';
   static int convert_escape_char(common::ObIAllocator &allocator,
                                  const ObString &in,
@@ -1006,7 +1014,8 @@ public:
     found_rows_(0),
     matched_rows_(0),
     duplicated_rows_(0),
-    deleted_rows_(0) {}
+    deleted_rows_(0),
+    last_insert_id_(0) {}
 
   int merge_cursor(const ObImplicitCursorInfo &other);
   TO_STRING_KV(K_(stmt_id),
@@ -1014,7 +1023,8 @@ public:
                K_(found_rows),
                K_(matched_rows),
                K_(duplicated_rows),
-               K_(deleted_rows));
+               K_(deleted_rows),
+               K_(last_insert_id));
 
   int64_t stmt_id_;
   int64_t affected_rows_;
@@ -1022,6 +1032,7 @@ public:
   int64_t matched_rows_;
   int64_t duplicated_rows_;
   int64_t deleted_rows_;
+  uint64_t last_insert_id_;
 };
 
 

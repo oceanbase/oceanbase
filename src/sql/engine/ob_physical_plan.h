@@ -451,6 +451,7 @@ public:
   inline bool is_insert_select() const { return is_insert_select_; }
   inline void set_is_plain_insert(bool v) { is_plain_insert_ = v; }
   inline bool is_plain_insert() const { return is_plain_insert_; }
+  inline bool is_dml_write_stmt() const { return ObStmt::is_dml_write_stmt(stmt_type_); }
   inline bool should_add_baseline() const {
     return (ObStmt::is_dml_stmt(stmt_type_)
             && (stmt::T_INSERT != stmt_type_ || is_insert_select_)
@@ -520,6 +521,13 @@ public:
   ObIArray<ObLocalSessionVar> & get_all_local_session_vars() { return all_local_session_vars_; }
   inline const ObIArray<uint64_t> &get_mview_ids() const { return mview_ids_; }
   int set_mview_ids(const ObIArray<uint64_t> &mview_ids) { return mview_ids_.assign(mview_ids); }
+  ObFixedArray<uint64_t, common::ObIAllocator> &get_dml_table_ids() { return dml_table_ids_; }
+  const ObIArray<uint64_t> &get_dml_table_ids() const { return dml_table_ids_; }
+  void set_direct_load_need_sort(const bool direct_load_need_sort)
+  {
+    direct_load_need_sort_ = direct_load_need_sort;
+  }
+  bool get_direct_load_need_sort() const { return direct_load_need_sort_; }
 public:
   static const int64_t MAX_PRINTABLE_SIZE = 2 * 1024 * 1024;
 private:
@@ -711,6 +719,13 @@ private:
   double online_sample_percent_; // for incremental direct load
   std::atomic<bool> can_set_feedback_info_;
   bool need_switch_to_table_lock_worker_; // for table lock switch worker thread
+  bool data_complement_gen_doc_id_;
+private:
+  // used to record transaction modified tables and
+  // further cursor stmt will check agains
+  // to decide whether it read uncommitted data
+  common::ObFixedArray<uint64_t, common::ObIAllocator> dml_table_ids_;
+  bool direct_load_need_sort_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)

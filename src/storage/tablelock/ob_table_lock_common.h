@@ -32,6 +32,22 @@ namespace transaction
 {
 namespace tablelock
 {
+struct ObObjLockPriorityTaskID
+{
+    explicit ObObjLockPriorityTaskID(const int64_t trans_id_value)
+          : trans_id_value_(trans_id_value) {}
+      TO_STRING_KV(K_(trans_id_value));
+        int64_t trans_id_value_;
+};
+
+enum class ObTableLockPriority : int8_t
+{
+  INVALID = -1,
+  HIGH1 = 0,
+  HIGH2 = 10,
+  NORMAL = 20,
+  LOW = 30,
+};
 
 // Lock compatibility matrix:
 //
@@ -641,6 +657,41 @@ public:
   TO_STRING_KV(K_(table_lock_ops), K_(max_durable_scn));
   ObTableLockOpArray table_lock_ops_;
   share::SCN max_durable_scn_;
+};
+
+struct ObTableLockPrioOp
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableLockPrioOp()
+    : lock_op_(), priority_(ObTableLockPriority::INVALID)
+  {}
+  ObTableLockPrioOp(const ObTableLockPriority priority, const ObTableLockOp &lock_op)
+    : lock_op_(lock_op), priority_(priority)
+  {}
+  bool is_valid() const
+  { return ObTableLockPriority::INVALID != priority_ && lock_op_.is_valid(); }
+public:
+  TO_STRING_KV(K_(lock_op), K_(priority));
+public:
+  ObTableLockOp lock_op_;
+  ObTableLockPriority priority_;
+};
+
+typedef common::ObSEArray<ObTableLockPrioOp, 10, TransModulePageAllocator> ObTableLockPrioOpArray;
+
+struct ObTableLockPrioArg
+{
+public:
+  ObTableLockPrioArg()
+    : priority_(ObTableLockPriority::INVALID) {}
+  explicit ObTableLockPrioArg(const ObTableLockPriority &priority)
+    : priority_(priority) {}
+  bool is_valid() const { return ObTableLockPriority::INVALID != priority_; }
+public:
+  TO_STRING_KV(K_(priority));
+public:
+  ObTableLockPriority priority_;
 };
 
 static inline

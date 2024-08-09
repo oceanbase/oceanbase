@@ -42,7 +42,7 @@ using namespace omt;
  */
 
 ObLoadDataDirectImpl::DataAccessParam::DataAccessParam()
-  : file_column_num_(0), file_cs_type_(CS_TYPE_INVALID)
+  : file_column_num_(0), file_cs_type_(CS_TYPE_INVALID), compression_format_(ObLoadCompressionFormat::NONE)
 {
 }
 
@@ -498,12 +498,13 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       end_offset_ = data_desc.end_;
 
       ObFileReadParam file_read_param;
-      file_read_param.file_location_ = data_access_param.file_location_;
-      file_read_param.filename_      = data_desc.filename_;
-      file_read_param.access_info_   = data_access_param.access_info_;
-      file_read_param.packet_handle_ = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
-      file_read_param.session_       = execute_ctx.exec_ctx_.get_session_info();
-      file_read_param.timeout_ts_    = THIS_WORKER.get_timeout_ts();
+      file_read_param.file_location_      = data_access_param.file_location_;
+      file_read_param.filename_           = data_desc.filename_;
+      file_read_param.compression_format_ = data_access_param.compression_format_;
+      file_read_param.access_info_        = data_access_param.access_info_;
+      file_read_param.packet_handle_      = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
+      file_read_param.session_            = execute_ctx.exec_ctx_.get_session_info();
+      file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
       if (OB_FAIL(ObFileReader::open(file_read_param, allocator_, file_reader_))) {
         LOG_WARN("failed to open file", KR(ret), K(data_desc));
@@ -810,7 +811,8 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
                                            data_access_param.file_cs_type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected data format", KR(ret), K(data_access_param));
-  } else if (1 == count || (ObLoadFileLocation::CLIENT_DISK == data_access_param.file_location_)) {
+  } else if (1 == count || (ObLoadFileLocation::CLIENT_DISK == data_access_param.file_location_)
+             || data_access_param.compression_format_ != ObLoadCompressionFormat::NONE) {
     if (OB_FAIL(data_desc_iter.add_data_desc(data_desc))) {
       LOG_WARN("fail to push back", KR(ret));
     }
@@ -821,12 +823,13 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     int64_t end_offset = data_desc.end_;
 
     ObFileReadParam file_read_param;
-    file_read_param.file_location_ = data_access_param.file_location_;
-    file_read_param.filename_      = data_desc.filename_;
-    file_read_param.access_info_   = data_access_param.access_info_;
-    file_read_param.packet_handle_ = NULL;
-    file_read_param.session_       = NULL;
-    file_read_param.timeout_ts_    = THIS_WORKER.get_timeout_ts();
+    file_read_param.file_location_      = data_access_param.file_location_;
+    file_read_param.filename_           = data_desc.filename_;
+    file_read_param.access_info_        = data_access_param.access_info_;
+    file_read_param.compression_format_ = data_access_param.compression_format_;
+    file_read_param.packet_handle_      = NULL;
+    file_read_param.session_            = NULL;
+    file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
     ObFileReader *file_reader = NULL;
     if (OB_FAIL(ObFileReader::open(file_read_param, allocator, file_reader))) {
@@ -2412,6 +2415,7 @@ int ObLoadDataDirectImpl::init_execute_param()
     data_access_param.file_format_ = load_stmt_->get_data_struct_in_file();
     data_access_param.file_cs_type_ = load_args.file_cs_type_;
     data_access_param.access_info_ = load_args.access_info_;
+    data_access_param.compression_format_ = load_args.compression_format_;
   }
   // column_ids_
   if (OB_SUCC(ret)) {
@@ -2473,20 +2477,33 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.method_ = execute_param_.method_;
   load_param.insert_mode_ = execute_param_.insert_mode_;
   load_param.load_mode_ = ObDirectLoadMode::LOAD_DATA;
-  if (OB_FAIL(ObTableLoadSchema::get_table_compressor_type(
-        execute_param_.tenant_id_, execute_param_.table_id_, table_compressor_type))) {
-    LOG_WARN("fail to get table compressor type", KR(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
-               table_compressor_type, execute_param_.parallel_, load_param.compressor_type_))) {
-    LOG_WARN("fail to get tmp store compressor type", KR(ret));
-  } else if (OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*ctx_,
-                                                                       load_param.online_sample_percent_))) {
-    LOG_WARN("fail to get sys online estimate percent", KR(ret));
-  } else if (OB_FAIL(direct_loader_.init(load_param, execute_param_.column_ids_,
-                                         &execute_ctx_.exec_ctx_))) {
-    LOG_WARN("fail to init direct loader", KR(ret));
-  } else if (OB_FAIL(init_logger())) {
-    LOG_WARN("fail to init logger", KR(ret));
+
+  double online_sample_percent = 100.;
+  if (OB_SUCC(ret)) {
+    if (execute_param_.online_opt_stat_gather_ &&
+               OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*ctx_,
+                                                                         execute_param_.tenant_id_,
+                                                                         execute_param_.table_id_,
+                                                                         online_sample_percent))) {
+      LOG_WARN("failed to get sys online sample percent", K(ret));
+    } else {
+      load_param.online_sample_percent_ = online_sample_percent;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObTableLoadSchema::get_table_compressor_type(
+          execute_param_.tenant_id_, execute_param_.table_id_, table_compressor_type))) {
+      LOG_WARN("fail to get table compressor type", KR(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
+                 table_compressor_type, execute_param_.parallel_, load_param.compressor_type_))) {
+      LOG_WARN("fail to get tmp store compressor type", KR(ret));
+    } else if (OB_FAIL(direct_loader_.init(load_param, execute_param_.column_ids_,
+                                           &execute_ctx_.exec_ctx_))) {
+      LOG_WARN("fail to init direct loader", KR(ret));
+    } else if (OB_FAIL(init_logger())) {
+      LOG_WARN("fail to init logger", KR(ret));
+    }
   }
   if (OB_SUCC(ret)) {
     execute_ctx_.direct_loader_ = &direct_loader_;

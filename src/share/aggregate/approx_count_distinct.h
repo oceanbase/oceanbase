@@ -34,7 +34,7 @@ public:
 public:
   ApproxCountDistinct() {}
   template <typename ColumnFmt>
-  inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;
@@ -44,7 +44,7 @@ public:
       int32_t len = 0;
       columns.get_payload(row_num, payload, len);
       if (OB_UNLIKELY(len != LLC_NUM_BUCKETS)) {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_INVALID_ARGUMENT;
         SQL_LOG(WARN, "unexpected length of input", K(ret), K(len));
       } else if (OB_ISNULL(llc_bitmap_buf)) {
         // not calculated before, copy from payload
@@ -89,7 +89,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  inline int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                        const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;
@@ -407,7 +407,7 @@ public:
   }
   TO_STRING_KV("aggregate", "approx_count_distinct", K(in_tc), K(out_tc), K(agg_func));
 private:
-  int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size)
+  OB_INLINE int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size)
   {
     // copy from `ObAggregateProcessor::llv_add_value`
     int ret = OB_SUCCESS;

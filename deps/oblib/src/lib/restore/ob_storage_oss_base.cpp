@@ -28,6 +28,9 @@ using namespace common;
 namespace common
 {
 
+static apr_allocator_t *OSS_GLOBAL_APR_ALLOCATOR = nullptr;
+static apr_pool_t *OSS_GLOBAL_APR_POOL = nullptr;
+
 int init_oss_env()
 {
   return ObOssEnvIniter::get_instance().global_init();
@@ -144,7 +147,10 @@ int get_bucket_object_name(const ObString &uri, ObString &bucket, ObString &obje
       for (bucket_end = bucket_start; OB_SUCC(ret) && bucket_end < uri.length(); ++bucket_end) {
         if ('/' == *(uri.ptr() + bucket_end)) {
           ObString::obstr_size_t bucket_length = bucket_end - bucket_start;
-          if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(OB_MAX_URI_LENGTH)))) {
+          if (OB_UNLIKELY(bucket_length <= 0)) {
+            ret = OB_INVALID_ARGUMENT;
+            OB_LOG(WARN,"bucket is empty", K(ret), K(bucket_end), K(bucket_start), K(uri));
+          } else if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator.alloc(OB_MAX_URI_LENGTH)))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
             OB_LOG(WARN,"allocate memory error", K(OB_MAX_URI_LENGTH), K(ret));
           } else {
@@ -298,8 +304,11 @@ int ObOssEnvIniter::global_init()
 {
   int ret = OB_SUCCESS;
   int aos_ret = AOSE_OK;
+  const int64_t MAX_OSS_APR_HOLD_SIZE = 10LL * 1024LL * 1024LL; // 10MB
 
   common::SpinWLockGuard guard(lock_);
+  apr_thread_mutex_t *mutex = nullptr;
+  ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
 
   if (is_global_inited_) {
     ret = OB_INIT_TWICE;
@@ -308,7 +317,48 @@ int ObOssEnvIniter::global_init()
     ret = OB_OSS_ERROR;
     OB_LOG(WARN, "fail to init aos", K(aos_ret));
   } else {
-    is_global_inited_ = true;
+    int apr_ret = APR_SUCCESS;
+    if (APR_SUCCESS != (apr_ret = apr_allocator_create(&OSS_GLOBAL_APR_ALLOCATOR))
+        || OB_ISNULL(OSS_GLOBAL_APR_ALLOCATOR)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to create global apr allocator",
+          K(ret), K(apr_ret), KP(OSS_GLOBAL_APR_ALLOCATOR));
+    } else if (APR_SUCCESS != (apr_ret = apr_pool_create_ex(&OSS_GLOBAL_APR_POOL,
+                                                            nullptr/*parent*/,
+                                                            ob_apr_abort_fn,
+                                                            OSS_GLOBAL_APR_ALLOCATOR))
+        || OB_ISNULL(OSS_GLOBAL_APR_POOL)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to create global apr pool", K(ret), K(apr_ret), KP(OSS_GLOBAL_APR_POOL));
+    } else if (APR_SUCCESS != (apr_ret = apr_thread_mutex_create(&mutex, APR_THREAD_MUTEX_DEFAULT,
+                                                                 OSS_GLOBAL_APR_POOL))
+        || OB_ISNULL(mutex)) {
+      ret = OB_OSS_ERROR;
+      OB_LOG(WARN, "fail to create apr thread mutex", K(ret), K(apr_ret), KP(mutex));
+    } else {
+      apr_allocator_max_free_set(OSS_GLOBAL_APR_ALLOCATOR, MAX_OSS_APR_HOLD_SIZE);
+      apr_allocator_mutex_set(OSS_GLOBAL_APR_ALLOCATOR, mutex);
+      apr_allocator_owner_set(OSS_GLOBAL_APR_ALLOCATOR, OSS_GLOBAL_APR_POOL);
+      is_global_inited_ = true;
+    }
+
+    if (OB_FAIL(ret)) {
+      // The owner of OSS_GLOBAL_APR_ALLOCATOR will only be set to OSS_GLOBAL_APR_POOL
+      // if the initialization succeeds.
+      // Therefore, if an error occurs during initialization,
+      // destroying OSS_GLOBAL_APR_POOL won't automatically free OSS_GLOBAL_APR_ALLOCATOR.
+      // apr_thread_mutex_t allocates memory based on apr_allocator_t.
+      // When the corresponding allocator is destroyed,
+      // the memory allocated for the mutex is automatically released.
+      if (OB_NOT_NULL(OSS_GLOBAL_APR_POOL)) {
+        apr_pool_destroy(OSS_GLOBAL_APR_POOL);
+        OSS_GLOBAL_APR_POOL = nullptr;
+      }
+      if (OB_NOT_NULL(OSS_GLOBAL_APR_ALLOCATOR)) {
+        apr_allocator_destroy(OSS_GLOBAL_APR_ALLOCATOR);
+        OSS_GLOBAL_APR_ALLOCATOR = nullptr;
+      }
+    }
   }
   return ret;
 }
@@ -317,6 +367,15 @@ void ObOssEnvIniter::global_destroy()
 {
   common::SpinWLockGuard guard(lock_);
   if (is_global_inited_) {
+    ObObjectStorageMallocHookGuard malloc_hook_guard(nullptr/*storage_info*/);
+    if (OB_NOT_NULL(OSS_GLOBAL_APR_POOL)) {
+      // After successful initialization,
+      // the owner of OSS_GLOBAL_APR_ALLOCATOR is set to OSS_GLOBAL_APR_POOL.
+      // Thus, destroying OSS_GLOBAL_APR_POOL will also free OSS_GLOBAL_APR_ALLOCATOR.
+      apr_pool_destroy(OSS_GLOBAL_APR_POOL);
+      OSS_GLOBAL_APR_POOL = nullptr;
+      OSS_GLOBAL_APR_ALLOCATOR = nullptr;
+    }
     aos_http_io_deinitialize();
     is_global_inited_ = false;
   }
@@ -505,7 +564,7 @@ int ObStorageOssBase::init_oss_options(aos_pool_t *&aos_pool, oss_request_option
 {
   int ret = OB_SUCCESS;
   int apr_ret = APR_SUCCESS;
-  if (APR_SUCCESS != (apr_ret = aos_pool_create(&aos_pool, NULL)) || NULL == aos_pool) {
+  if (APR_SUCCESS != (apr_ret = aos_pool_create(&aos_pool, OSS_GLOBAL_APR_POOL)) || OB_ISNULL(aos_pool)) {
     ret = OB_OSS_ERROR;
     OB_LOG(WARN, "fail to create apr pool", K(apr_ret), K(aos_pool), K(ret));
   } else if (OB_ISNULL(oss_option = oss_request_options_create(aos_pool))) {
@@ -979,10 +1038,7 @@ int ObStorageOssMultiPartWriter::complete()
 
     //complete multipart upload
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(total_parts == 0)) {
-      // If 'complete' without uploading any data, OSS will create an object with a size of 0
-      ret = OB_ERR_UNEXPECTED;
-      OB_LOG(WARN, "no parts have been uploaded!", K(ret), K(total_parts), K(upload_id_.data));
+    //  If 'complete' without uploading any data (total_parts == 0), OSS will create an object with a size of 0
     } else {
       if (OB_ISNULL(aos_ret = oss_complete_multipart_upload(oss_option_, &bucket, &object, &upload_id_,
           &complete_part_list, complete_headers, &resp_headers)) || !aos_status_is_ok(aos_ret)) {

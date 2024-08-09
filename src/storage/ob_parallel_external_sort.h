@@ -31,6 +31,17 @@ namespace oceanbase
 namespace storage
 {
 
+template<typename T>
+void destruct_vector_list(common::ObVector<T *> &vec)
+{
+  for (int64_t i = 0; i < vec.size(); ++i) {
+    if (nullptr != vec[i]) {
+      vec[i]->~T();
+      vec[i] = nullptr;
+    }
+  }
+}
+
 struct ObExternalSortConstant
 {
   static const int64_t BUF_HEADER_LENGTH = sizeof(int64_t); //serialization::encoded_length_i64(0);
@@ -394,6 +405,7 @@ template<typename T>
 int ObMacroBufferReader<T>::read_item(T &item)
 {
   int ret = common::OB_SUCCESS;
+  item.reset();
   if (0 == buf_len_) {
     if (OB_FAIL(deserialize_header())) {
       STORAGE_LOG(WARN, "fail to deserialize header");
@@ -1521,6 +1533,12 @@ int ObMemorySortRound<T, Compare>::add_item(const T &item)
       STORAGE_LOG(WARN, "fail to deep copy item", K(ret));
     } else if (OB_FAIL(item_list_.push_back(new_item))) {
       STORAGE_LOG(WARN, "fail to push back new item", K(ret));
+    } else {
+      new_item = NULL;
+    }
+    if (OB_NOT_NULL(new_item)) {
+      new_item->~T();
+      new_item = NULL;
     }
   }
   return ret;
@@ -1556,6 +1574,7 @@ int ObMemorySortRound<T, Compare>::build_fragment()
       } else {
         const int64_t write_fragment_time = common::ObTimeUtility::current_time() - start;
         STORAGE_LOG(INFO, "ObMemorySortRound", K(write_fragment_time));
+        destruct_vector_list(item_list_);
         item_list_.reset();
         allocator_.reuse();
       }
@@ -1588,6 +1607,7 @@ int ObMemorySortRound<T, Compare>::finish()
     } else if (OB_FAIL(next_round_->finish_write())) {
       STORAGE_LOG(WARN, "fail to do next round finish write", K(ret));
     } else {
+      destruct_vector_list(item_list_);
       item_list_.reset();
       allocator_.reset();
     }
@@ -1649,8 +1669,9 @@ void ObMemorySortRound<T, Compare>::reset()
   buf_mem_limit_ = 0;
   expire_timestamp_ = 0;
   next_round_ = NULL;
-  allocator_.reset();
+  destruct_vector_list(item_list_);
   item_list_.reset();
+  allocator_.reset();
   compare_ = NULL;
   iter_ = NULL;
 }

@@ -23,7 +23,6 @@ namespace oceanbase
 namespace storage {
 struct ObSSTableMergeInfo;
 struct ObStorageColumnGroupSchema;
-struct ObSSTableMergeInfo;
 }
 namespace share
 {
@@ -49,9 +48,10 @@ struct ObSSTableBasicMeta;
 struct ObStaticDataStoreDesc
 {
 public:
-  ObStaticDataStoreDesc(const bool is_ddl = false);
+  ObStaticDataStoreDesc();
   ~ObStaticDataStoreDesc() { reset(); }
   int init(
+    const bool is_ddl,
     const share::schema::ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
     const common::ObTabletID tablet_id,
@@ -77,15 +77,17 @@ public:
       K_(encrypt_id),
       K_(master_key_id),
       KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(major_working_cluster_version));
+      K_(major_working_cluster_version),
+      K_(progressive_merge_round));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
   static const int64_t DEFAULT_RESERVE_PERCENT = 90;
   static const int64_t MIN_RESERVED_SIZE = 1024; //1KB;
   static const ObCompressorType DEFAULT_MINOR_COMPRESSOR_TYPE = ObCompressorType::LZ4_COMPRESSOR;
+  bool operator==(const ObStaticDataStoreDesc &other) const; // for unittest
 public:
-  bool is_ddl_;
+  bool is_ddl_; // only used to print ERROR or WARN log
   compaction::ObMergeType merge_type_;
   ObCompressorType compressor_type_;
   share::ObLSID ls_id_;
@@ -306,8 +308,8 @@ private:
 
 struct ObWholeDataStoreDesc
 {
-  ObWholeDataStoreDesc(bool is_ddl = false)
-    : static_desc_(is_ddl),
+  ObWholeDataStoreDesc()
+    : static_desc_(),
       col_desc_(),
       desc_()
   {}
@@ -324,6 +326,7 @@ struct ObWholeDataStoreDesc
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0);
   int init(
+    const bool is_ddl,
     const share::schema::ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
     const common::ObTabletID tablet_id,

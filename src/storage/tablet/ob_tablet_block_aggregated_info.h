@@ -100,13 +100,15 @@ public:
   typedef typename TabletMacroMap::const_iterator MapIterator;
 public:
   ObBlockInfoSet()
-    : meta_block_info_set_(), data_block_info_set_(), shared_meta_block_info_set_(), shared_data_block_info_map_()
+    : meta_block_info_set_(), data_block_info_set_(), backup_block_info_set_(),
+    shared_meta_block_info_set_(), shared_data_block_info_map_()
   {
   }
   ~ObBlockInfoSet()
   {
     meta_block_info_set_.reuse();
     data_block_info_set_.reuse();
+    backup_block_info_set_.reuse();
     shared_meta_block_info_set_.reuse();
     shared_data_block_info_map_.reuse();
   }
@@ -119,6 +121,7 @@ public:
 public:
   TabletMacroSet meta_block_info_set_;
   TabletMacroSet data_block_info_set_;
+  TabletMacroSet backup_block_info_set_;
   TabletMacroSet shared_meta_block_info_set_;
   TabletMacroMap shared_data_block_info_map_;
 };

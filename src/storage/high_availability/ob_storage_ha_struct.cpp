@@ -451,7 +451,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
     //do nothing
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
-  } else if (restore_status.is_in_restore()) {
+  } else if (restore_status.is_in_restoring_or_failed()) {
     allow_gc = true;
     LOG_INFO("ls ls in restore status, allow gc", K(ret), K(restore_status), K(ls_id));
   } else if (OB_FAIL(check_ls_with_transfer_task_(*ls, need_check_allow_gc, need_wait_dest_ls_replay))) {
@@ -1861,6 +1861,56 @@ int ObBackfillTabletsTableMgr::get_local_rebuild_seq(int64_t &local_rebuild_seq)
   return ret;
 }
 
+ObLogicTabletID::ObLogicTabletID()
+  : tablet_id_(),
+    transfer_seq_(-1)
+{
+}
+
+int ObLogicTabletID::init(
+    const common::ObTabletID &tablet_id,
+    const int64_t transfer_seq)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_valid() || transfer_seq < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init logic tablet id get invalid argument", K(ret), K(tablet_id), K(transfer_seq));
+  } else {
+    tablet_id_ = tablet_id;
+    transfer_seq_ = transfer_seq;
+  }
+  return ret;
+}
+
+void ObLogicTabletID::reset()
+{
+  tablet_id_.reset();
+  transfer_seq_ = -1;
+}
+
+bool ObLogicTabletID::is_valid() const
+{
+  return tablet_id_.is_valid() && transfer_seq_ >= 0;
+}
+
+bool ObLogicTabletID::operator == (const ObLogicTabletID &other) const
+{
+  bool is_same = true;
+  if (this == &other) {
+    // same
+  } else if (tablet_id_ != other.tablet_id_
+      || transfer_seq_ != other.transfer_seq_) {
+    is_same = false;
+  } else {
+    is_same = true;
+  }
+  return is_same;
+}
+
+bool ObLogicTabletID::operator != (const ObLogicTabletID &other) const
+{
+  return !(*this == other);
+}
 
 }
 }

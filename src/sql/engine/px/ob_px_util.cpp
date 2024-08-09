@@ -523,7 +523,8 @@ int ObPXServerAddrUtil::build_dfo_sqc(ObExecContext &ctx,
         sqc.set_qc_server_id(dfo.get_qc_server_id());
         sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
         sqc.set_single_tsc_leaf_dfo(dfo.is_single_tsc_leaf_dfo());
-        sqc.get_monitoring_info().init(ctx);
+        sqc.get_monitoring_info().init(dfo);
+        sqc.set_partition_random_affinitize(dfo.partition_random_affinitize());
         if (OB_SUCC(ret)) {
           if (!dfo.get_p2p_dh_map_info().is_empty()) {
             if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(dfo.get_p2p_dh_map_info()))) {
@@ -639,7 +640,8 @@ int ObPXServerAddrUtil::alloc_by_temp_child_distribution_inner(ObExecContext &ex
         sqc.set_fulltree(child.is_fulltree());
         sqc.set_qc_server_id(child.get_qc_server_id());
         sqc.set_parent_dfo_id(child.get_parent_dfo_id());
-        sqc.get_monitoring_info().init(exec_ctx);
+        sqc.get_monitoring_info().init(child);
+        sqc.set_partition_random_affinitize(child.partition_random_affinitize());
         if (OB_SUCC(ret)) {
           if (!child.get_p2p_dh_map_info().is_empty()) {
             if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(child.get_p2p_dh_map_info()))) {
@@ -728,6 +730,7 @@ int ObPXServerAddrUtil::alloc_by_child_distribution(const ObDfo &child, ObDfo &p
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
         sqc.get_monitoring_info().assign(child_sqc.get_monitoring_info());
+        sqc.set_partition_random_affinitize(child.partition_random_affinitize());
         if (!parent.get_p2p_dh_map_info().is_empty()) {
           if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(parent.get_p2p_dh_map_info()))) {
             LOG_WARN("fail to assign p2p dh map info", K(ret));
@@ -822,7 +825,8 @@ int ObPXServerAddrUtil::alloc_by_random_distribution(ObExecContext &exec_ctx,
         sqc.set_fulltree(parent.is_fulltree());
         sqc.set_qc_server_id(parent.get_qc_server_id());
         sqc.set_parent_dfo_id(parent.get_parent_dfo_id());
-        sqc.get_monitoring_info().init(exec_ctx);
+        sqc.get_monitoring_info().init(parent);
+        sqc.set_partition_random_affinitize(parent.partition_random_affinitize());
         if (OB_SUCC(ret)) {
           if (!parent.get_p2p_dh_map_info().is_empty()) {
             if (OB_FAIL(sqc.get_p2p_dh_map_info().assign(parent.get_p2p_dh_map_info()))) {
@@ -871,7 +875,8 @@ int ObPXServerAddrUtil::alloc_by_local_distribution(ObExecContext &exec_ctx,
       sqc.set_fulltree(dfo.is_fulltree());
       sqc.set_parent_dfo_id(dfo.get_parent_dfo_id());
       sqc.set_qc_server_id(dfo.get_qc_server_id());
-      sqc.get_monitoring_info().init(exec_ctx);
+      sqc.get_monitoring_info().init(dfo);
+      sqc.set_partition_random_affinitize(dfo.partition_random_affinitize());
       if (!dfo.get_p2p_dh_map_info().is_empty()) {
         OZ(sqc.get_p2p_dh_map_info().assign(dfo.get_p2p_dh_map_info()));
       }
@@ -2745,12 +2750,16 @@ int ObPxAffinityByRandom::do_random(bool use_partition_info, uint64_t tenant_id)
       }
     }
 
+    if (partition_random_affinitize_) {
     // 先打乱所有的序
     auto compare_fun = [](TabletHashValue a, TabletHashValue b) -> bool { return a.hash_value_ > b.hash_value_; };
     lib::ob_sort(tablet_hash_values_.begin(),
               tablet_hash_values_.end(),
               compare_fun);
     LOG_TRACE("after sort partition_hash_values randomly", K(tablet_hash_values_), K(this), K(order_partitions_));
+    } else {
+      // donoting
+    }
 
     // 如果没有partition的统计信息则将它们round放置
     if (!use_partition_info) {
@@ -3472,7 +3481,8 @@ int ObSlaveMapUtil::build_ppwj_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDf
     ARRAY_FOREACH_X(sqcs, idx, cnt, OB_SUCC(ret)) {
       // 所有的affinitize计算都是SQC局部，不是全局的。
       ObPxSqcMeta &sqc = *sqcs.at(idx);
-      ObPxAffinityByRandom affinitize_rule(sqc.sqc_order_gi_tasks());
+      ObPxAffinityByRandom affinitize_rule(sqc.sqc_order_gi_tasks(),
+                                           sqc.partition_random_affinitize());
       LOG_TRACE("build ppwj_ch_mn_map", K(sqc));
       ObPxTabletInfo partition_row_info;
       locations.reset();

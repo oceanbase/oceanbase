@@ -301,8 +301,10 @@ int ObDatumRow::reserve(const int64_t capacity, const bool keep_data)
   void *buf = nullptr;
 
   if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObDatumRow is not inited", K(ret), K(*this));
   } else if (OB_UNLIKELY(capacity <= 0 || capacity > 2 * OB_USER_ROW_MAX_COLUMNS_COUNT)) {
+    ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to reserve datum row", K(ret), K(capacity));
   } else if (capacity <= get_capacity()) {
     // skip
@@ -468,10 +470,14 @@ OB_DEF_DESERIALIZE(ObDatumRow)
               snapshot_version_);
   OB_UNIS_DECODE(count_);
   if (OB_FAIL(ret)) {
-  } else if (get_capacity() < count_) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "ObDatumRow has not keep enough datums for deserialize", K(ret), K_(datum_buffer), K_(count));
-  } else {
+  } else if (OB_NOT_NULL(storage_datums_) && get_capacity() < count_) {
+    if (OB_FAIL(datum_buffer_.reserve(count_))) {
+      LOG_WARN("fail to reserve memory for datum buffer", K(ret), K_(count));
+    }
+  } else if (OB_ISNULL(storage_datums_) && OB_FAIL(init(count_))) {
+    LOG_WARN("fail to init datum row", K(ret), K_(count));
+  }
+  if (OB_SUCC(ret)) {
     OB_UNIS_DECODE_ARRAY(storage_datums_, count_);
     fast_filter_skipped_ = false;
     have_uncommited_row_ = false;

@@ -255,10 +255,10 @@ int ObAdminDumpBackupDataUtil::get_common_header(
     STORAGE_LOG(WARN, "common header is null", K(ret));
   } else if (OB_FAIL(common_header->check_valid())) {
     STORAGE_LOG(WARN, "common header is not valid", K(ret));
-  } else if (common_header->data_length_ > buffer_reader.remain()) {
+  } else if (common_header->data_zlength_ > buffer_reader.remain()) {
     ret = OB_BUF_NOT_ENOUGH;
     STORAGE_LOG(WARN, "buffer reader not enough", K(ret));
-  } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_length_))) {
+  } else if (OB_FAIL(common_header->check_data_checksum(buffer_reader.current(), common_header->data_zlength_))) {
     STORAGE_LOG(WARN, "failed to check data checksum", K(ret), K(buffer_reader));
   }
   return ret;
@@ -276,17 +276,16 @@ int ObAdminDumpBackupDataUtil::parse_from_index_blocks(blocksstable::ObBufferRea
     common_header = NULL;
     index_list.reset();
     int64_t start_pos = buffer_reader.pos();
+    int64_t data_zlength = 0;
     if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
       STORAGE_LOG(WARN, "failed to get common header", K(ret));
     } else {
-      int64_t end_pos = buffer_reader.pos() + common_header->data_length_;
-      for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
-        IndexType index;
-        if (OB_FAIL(buffer_reader.read_serialize(index))) {
-          STORAGE_LOG(WARN, "failed to read serialize", K(ret));
-        } else if (OB_FAIL(index_list.push_back(index))) {
-          STORAGE_LOG(WARN, "failed to push back", K(ret), K(index));
-        }
+      data_zlength = common_header->data_zlength_;
+      const int64_t original_size = common_header->data_length_;
+      const ObCompressorType &compressor_type = static_cast<ObCompressorType>(common_header->compressor_type_);
+      ObBufferReader new_buffer_reader(buffer_reader.data(), data_zlength);
+      if (OB_FAIL(uncompress_and_decode_block(compressor_type, data_zlength, original_size, new_buffer_reader, index_list))) {
+        STORAGE_LOG(WARN,  "failed to uncompress and decode block", K(ret), K(compressor_type), K(data_zlength), K(original_size));
       }
       if (OB_FAIL(ret)) {
         // do nothing
@@ -296,8 +295,8 @@ int ObAdminDumpBackupDataUtil::parse_from_index_blocks(blocksstable::ObBufferRea
         STORAGE_LOG(WARN, "failed to print func 2", K(ret), K(index_list));
       }
     }
-    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
-      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(buffer_reader.advance(data_zlength + common_header->align_length_))) {
         STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
       }
     }
@@ -306,7 +305,7 @@ int ObAdminDumpBackupDataUtil::parse_from_index_blocks(blocksstable::ObBufferRea
 }
 
 template <class IndexType>
-int ObAdminDumpBackupDataUtil::parse_from_index_blocks(
+int ObAdminDumpBackupDataUtil::parse_from_data_file_index_blocks(
     blocksstable::ObBufferReader &buffer_reader, common::ObIArray<IndexType> &index_list)
 {
   int ret = OB_SUCCESS;
@@ -351,20 +350,23 @@ int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBuf
     index_list.reset();
     int64_t start_pos = buffer_reader.pos();
     backup::ObBackupMultiLevelIndexHeader index_header;
+    int64_t data_zlength = 0;
     if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
       STORAGE_LOG(WARN, "failed to get common header", K(ret));
-    } else if (OB_FAIL(buffer_reader.read_serialize(index_header))) {
-      STORAGE_LOG(WARN, "failed to read serialize", K(ret));
     } else {
-      int64_t end_pos = buffer_reader.pos() + common_header->data_length_;
-      for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
-        IndexType index;
-        if (OB_FAIL(buffer_reader.read_serialize(index))) {
-          STORAGE_LOG(WARN, "failed to read serialize", K(ret));
-        } else if (OB_FAIL(index_list.push_back(index))) {
-          STORAGE_LOG(WARN, "failed to push back", K(ret), K(index));
+      const int64_t pos = buffer_reader.pos();
+      if (OB_FAIL(buffer_reader.read_serialize(index_header))) {
+        STORAGE_LOG(WARN,  "failed to read serialize", K(ret), K(buffer_reader));
+      } else {
+        data_zlength = common_header->data_zlength_ - (buffer_reader.pos() - pos);
+        const int64_t original_size = common_header->data_length_ - (buffer_reader.pos() - pos);
+        const ObCompressorType &compressor_type = static_cast<ObCompressorType>(common_header->compressor_type_);
+        ObBufferReader new_buffer_reader(buffer_reader.data() + buffer_reader.pos(), data_zlength);
+        if (OB_FAIL(uncompress_and_decode_block(compressor_type, data_zlength, original_size, new_buffer_reader, index_list))) {
+          STORAGE_LOG(WARN,  "failed to uncompress and decode block", K(ret), K(compressor_type), K(data_zlength), K(original_size));
         }
       }
+
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(print_func1(*common_header))) {
@@ -377,8 +379,8 @@ int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBuf
         index_list.reset();
       }
     }
-    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
-      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(buffer_reader.advance(data_zlength + common_header->align_length_))) {
         STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
       } else {
         STORAGE_LOG(WARN, "failed to advance", KPC(common_header));
@@ -404,34 +406,29 @@ int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBuf
     index_list.reset();
     int64_t start_pos = buffer_reader.pos();
     backup::ObBackupMultiLevelIndexHeader index_header;
+    int64_t data_zlength = 0;
     if (OB_FAIL(ObAdminDumpBackupDataUtil::get_common_header(buffer_reader, common_header))) {
       STORAGE_LOG(WARN, "failed to get common header", K(ret), K(start_pos), K(buffer_reader));
     } else {
-      int64_t data_size = 0;
       const int64_t pos = buffer_reader.pos();
       if (OB_FAIL(buffer_reader.read_serialize(index_header))) {
-        STORAGE_LOG(WARN, "failed to read serialize", K(ret));
+        STORAGE_LOG(WARN,  "failed to read serialize", K(ret), K(buffer_reader));
       } else {
-        data_size = common_header->data_zlength_ - (buffer_reader.pos() - pos);
-      }
-      int64_t end_pos = buffer_reader.pos() + data_size;
-      for (int64_t i = 0; OB_SUCC(ret) && buffer_reader.pos() < end_pos; ++i) {
+        data_zlength = common_header->data_zlength_ - (buffer_reader.pos() - pos);
+        const int64_t original_size = common_header->data_length_ - (buffer_reader.pos() - pos);
+        const ObCompressorType &compressor_type = static_cast<ObCompressorType>(common_header->compressor_type_);
+        ObBufferReader new_buffer_reader(buffer_reader.data() + buffer_reader.pos(), data_zlength);
         if (OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL == index_header.index_level_) {
-          IndexType index;
-          if (OB_FAIL(buffer_reader.read_serialize(index))) {
-            STORAGE_LOG(WARN, "failed to read serialize", K(ret));
-          } else if (OB_FAIL(index_list.push_back(index))) {
-            STORAGE_LOG(WARN, "failed to push back", K(ret), K(index));
+          if (OB_FAIL(uncompress_and_decode_block(compressor_type, data_zlength, original_size, new_buffer_reader, index_list))) {
+            STORAGE_LOG(WARN,  "failed to uncompress and decode block", K(ret), K(compressor_type), K(data_zlength), K(original_size));
           }
         } else {
-          IndexIndexType index_index;
-          if (OB_FAIL(buffer_reader.read_serialize(index_index))) {
-            STORAGE_LOG(WARN, "failed to read serialize", K(ret));
-          } else if (OB_FAIL(index_index_list.push_back(index_index))) {
-            STORAGE_LOG(WARN, "failed to push back", K(ret), K(index_index));
+          if (OB_FAIL(uncompress_and_decode_block(compressor_type, data_zlength, original_size, new_buffer_reader, index_index_list))) {
+            STORAGE_LOG(WARN,  "failed to uncompress and decode block", K(ret), K(compressor_type), K(data_zlength), K(original_size));
           }
         }
       }
+
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (OB_FAIL(print_func1(*common_header))) {
@@ -454,8 +451,8 @@ int ObAdminDumpBackupDataUtil::parse_from_index_index_blocks(blocksstable::ObBuf
         }
       }
     }
-    if (OB_SUCC(ret) && common_header->align_length_ > 0) {
-      if (OB_FAIL(buffer_reader.advance(common_header->align_length_))) {
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(buffer_reader.advance(data_zlength + common_header->align_length_))) {
         STORAGE_LOG(WARN, "buffer reader buf not enough", K(ret), KPC(common_header));
       } else {
         STORAGE_LOG(WARN, "failed to advance", KPC(common_header));
@@ -502,6 +499,36 @@ int ObAdminDumpBackupDataUtil::read_backup_info_file(const common::ObString &bac
     STORAGE_LOG(WARN, "failed to deserialize.", K(ret), K(backup_path), K(file_length));
   } else {
     STORAGE_LOG(INFO, "succeed to read single file.", K(backup_path), K(file_info));
+  }
+  return ret;
+}
+
+template <class IndexType>
+int ObAdminDumpBackupDataUtil::uncompress_and_decode_block(
+    const ObCompressorType &compressor_type, const int64_t data_zlength, const int64_t original_size,
+    ObBufferReader &buffer_reader, ObIArray<IndexType> &index_list)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIndexBlockCompressor compressor;
+  const int64_t block_size = OB_BACKUP_COMPRESS_BLOCK_SIZE;
+  const char *out_buf = NULL;
+  int64_t out_size = 0;
+  if (OB_FAIL(compressor.init(block_size, compressor_type))) {
+    STORAGE_LOG(WARN,  "failed to init compressor", K(ret));
+  } else if (OB_FAIL(compressor.decompress(buffer_reader.data(),
+      data_zlength, original_size, out_buf, out_size))) {
+    STORAGE_LOG(WARN,  "failed to decompress data", K(ret), K(data_zlength), K(original_size));
+  } else {
+    ObBufferReader new_buffer_reader(out_buf, out_size);
+    IndexType index;
+    while (OB_SUCC(ret) && new_buffer_reader.remain() > 0) {
+      index.reset();
+      if (OB_FAIL(new_buffer_reader.read_serialize(index))) {
+        STORAGE_LOG(WARN,  "failed to read serialize", K(ret), K(buffer_reader));
+      } else if (OB_FAIL(index_list.push_back(index))) {
+        STORAGE_LOG(WARN,  "failed to push back", K(ret), K(index));
+      }
+    }
   }
   return ret;
 }
@@ -726,6 +753,12 @@ int ObAdminDumpBackupDataExecutor::do_execute_()
     case backup::ObBackupFileType::BACKUP_META_INDEX_FILE: {
       if (OB_FAIL(print_meta_index_file())) {
         STORAGE_LOG(WARN, "failed to print meta index file", K(ret));
+      }
+      break;
+    }
+    case backup::ObBackupFileType::BACKUP_MACRO_BLOCK_INDEX_FILE: {
+      if (OB_FAIL(print_macro_block_index_file())) {
+        STORAGE_LOG(WARN, "failed to print macro block index file", K(ret));
       }
       break;
     }
@@ -1041,7 +1074,7 @@ int ObAdminDumpBackupDataExecutor::print_backup_data_file_()
         STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
       } else {
         ObBufferReader buffer_reader(buf, length);
-        if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_blocks<backup::ObBackupMacroBlockIndex>(
+        if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_data_file_index_blocks<backup::ObBackupMacroBlockIndex>(
                 buffer_reader, macro_index_list))) {
           STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
         } else {
@@ -1068,7 +1101,7 @@ int ObAdminDumpBackupDataExecutor::print_backup_data_file_()
         STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
       } else {
         ObBufferReader buffer_reader(buf, length);
-        if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_index_blocks<backup::ObBackupMetaIndex>(
+        if (OB_FAIL(ObAdminDumpBackupDataUtil::parse_from_data_file_index_blocks<backup::ObBackupMetaIndex>(
                 buffer_reader, meta_index_list))) {
           STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
         } else {
@@ -1182,6 +1215,58 @@ int ObAdminDumpBackupDataExecutor::print_meta_index_file()
         std::bind(&ObAdminDumpBackupDataExecutor::dump_meta_index_index_list_, this, std::placeholders::_1);
     auto ParseFunc = ObAdminDumpBackupDataUtil::parse_from_index_index_blocks<backup::ObBackupMetaIndex,
         backup::ObBackupMetaIndexIndex>;
+    if (OB_FAIL(ParseFunc(buffer_reader, print_func1, print_func2, print_func3, print_func4))) {
+      STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
+    } else if (OB_FAIL(dump_index_file_trailer_(index_trailer))) {
+      STORAGE_LOG(WARN, "failed to print index file trailer", K(ret), K(index_trailer));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::print_macro_block_index_file()
+{
+  int ret = OB_SUCCESS;
+  const common::ObString backup_path(backup_path_);
+  const common::ObString storage_info(storage_info_);
+  const int64_t offset = 0;
+  int64_t length = 0;
+  char *buf = NULL;
+  backup::ObBackupMultiLevelIndexTrailer index_trailer;
+  if (OB_FAIL(print_backup_file_header_())) {
+    STORAGE_LOG(WARN, "failed to print backup file header", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::get_backup_file_length(backup_path, storage_info, length))) {
+    STORAGE_LOG(WARN, "failed to get backup file length", K(ret), K(backup_path), K(storage_info));
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(length)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(length));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::pread_file(backup_path, storage_info, offset, length, buf))) {
+    STORAGE_LOG(WARN, "failed to pread file", K(ret), K(backup_path));
+  } else if (OB_FAIL(ObAdminDumpBackupDataUtil::read_index_file_trailer(backup_path, storage_info, index_trailer))) {
+    STORAGE_LOG(WARN, "failed to read index file trailer", K(ret), K(backup_path));
+  } else {
+    const int64_t header_size = DIO_READ_ALIGN_SIZE;
+    const int64_t trailer_size = sizeof(backup::ObBackupMultiLevelIndexTrailer);
+    buf += header_size;
+    ObBufferReader buffer_reader(buf, length - header_size - trailer_size);
+
+    std::function<int(const share::ObBackupCommonHeader &)> print_func1 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_common_header_, this, std::placeholders::_1);
+    std::function<int(const backup::ObBackupMultiLevelIndexHeader &)> print_func2 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_multi_level_index_header_, this, std::placeholders::_1);
+    std::function<int(const common::ObIArray<backup::ObBackupMacroBlockIndex> &)> print_func3 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_block_index_list_, this, std::placeholders::_1);
+    std::function<int(const common::ObIArray<backup::ObBackupMacroBlockIndexIndex> &)> print_func4 =
+        std::bind(&ObAdminDumpBackupDataExecutor::dump_macro_block_index_index_list_, this, std::placeholders::_1);
+
+    typedef int(*ParseFuncType)(blocksstable::ObBufferReader &,
+                                const std::function<int(const share::ObBackupCommonHeader &)> &,
+                                const std::function<int(const backup::ObBackupMultiLevelIndexHeader &)> &,
+                                const std::function<int(const common::ObIArray<backup::ObBackupMacroBlockIndex> &)> &,
+                                const std::function<int(const common::ObIArray<backup::ObBackupMacroBlockIndexIndex> &)> &);
+
+    ParseFuncType ParseFunc = ObAdminDumpBackupDataUtil::parse_from_index_index_blocks<backup::ObBackupMacroBlockIndex, backup::ObBackupMacroBlockIndexIndex>;
+
     if (OB_FAIL(ParseFunc(buffer_reader, print_func1, print_func2, print_func3, print_func4))) {
       STORAGE_LOG(WARN, "failed to parse from index block", K(ret), K(backup_path));
     } else if (OB_FAIL(dump_index_file_trailer_(index_trailer))) {
@@ -2089,6 +2174,7 @@ int ObAdminDumpBackupDataExecutor::dump_macro_block_index_(const backup::ObBacku
   PrintHelper::print_dump_line("file_id", index.file_id_);
   PrintHelper::print_dump_line("offset", index.offset_);
   PrintHelper::print_dump_line("length", index.length_);
+  PrintHelper::print_dump_line("reusable", index.reusable_);
   PrintHelper::print_end_line();
   return ret;
 }
@@ -2100,6 +2186,35 @@ int ObAdminDumpBackupDataExecutor::dump_macro_block_index_list_(
   for (int64_t i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
     const backup::ObBackupMacroBlockIndex &index = index_list.at(i);
     if (OB_FAIL(dump_macro_block_index_(index))) {
+      STORAGE_LOG(WARN, "failed to print macro block index", K(ret), K_(backup_path));
+    }
+  }
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_macro_block_index_index_(const backup::ObBackupMacroBlockIndexIndex &index)
+{
+  int ret = OB_SUCCESS;
+  PrintHelper::print_dump_title("Backup Macro Block Index Index");
+  PrintHelper::print_dump_line("logic_id", to_cstring(index.end_key_.logic_id_));
+  PrintHelper::print_dump_line("backup_set_id", index.end_key_.backup_set_id_);
+  PrintHelper::print_dump_line("ls_id", index.end_key_.ls_id_.id());
+  PrintHelper::print_dump_line("turn_id", index.end_key_.turn_id_);
+  PrintHelper::print_dump_line("retry_id", index.end_key_.retry_id_);
+  PrintHelper::print_dump_line("file_id", index.end_key_.file_id_);
+  PrintHelper::print_dump_line("offset", index.offset_);
+  PrintHelper::print_dump_line("length", index.length_);
+  PrintHelper::print_end_line();
+  return ret;
+}
+
+int ObAdminDumpBackupDataExecutor::dump_macro_block_index_index_list_(
+    const common::ObIArray<ObBackupMacroBlockIndexIndex> &index_list)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < index_list.count(); ++i) {
+    const backup::ObBackupMacroBlockIndexIndex &index = index_list.at(i);
+    if (OB_FAIL(dump_macro_block_index_index_(index))) {
       STORAGE_LOG(WARN, "failed to print macro block index", K(ret), K_(backup_path));
     }
   }
@@ -2296,7 +2411,7 @@ int ObAdminDumpBackupDataExecutor::dump_backup_macro_block_id_mapping_meta_(
       PrintHelper::print_dump_line("table_key", to_cstring(table_key));
       PrintHelper::print_dump_line("num_of_entries", num_of_entries);
       for (int64_t j = 0; OB_SUCC(ret) && j < num_of_entries; ++j) {
-        const ObBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
+        const ObCompatBackupMacroBlockIDPair &pair = item.id_pair_list_.at(j);
         const blocksstable::ObLogicMacroBlockId &logic_id = pair.logic_id_;
         const ObBackupPhysicalID &physical_id = pair.physical_id_;
         PrintHelper::print_dump_line("logic_id", to_cstring(logic_id));

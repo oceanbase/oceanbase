@@ -113,8 +113,8 @@ void PartTableInfo::fill_info(char *buf, const int64_t buf_len) const
 /*
  * ObSSTableMergeInfo func
  * */
-ObSSTableMergeInfo::ObSSTableMergeInfo()
-    : compaction::ObIDiagnoseInfo(),
+ObSSTableMergeInfo::ObSSTableMergeInfo(const bool need_free_param)
+    : compaction::ObIDiagnoseInfo(need_free_param),
       ls_id_(),
       tablet_id_(),
       is_fake_(false),
@@ -158,7 +158,7 @@ ObSSTableMergeInfo::ObSSTableMergeInfo()
 bool ObSSTableMergeInfo::is_valid() const
 {
   bool bret = true;
-  if (OB_UNLIKELY(tenant_id_ <= 0 || !ls_id_.is_valid() || !tablet_id_.is_valid() || compaction_scn_ <= 0)) {
+  if (OB_UNLIKELY(!ls_id_.is_valid() || !tablet_id_.is_valid() || compaction_scn_ <= 0)) {
     bret = false;
   }
   return bret;
@@ -195,7 +195,6 @@ int ObSSTableMergeInfo::add(const ObSSTableMergeInfo &other)
 
 void ObSSTableMergeInfo::reset()
 {
-  tenant_id_ = 0;
   ls_id_.reset();
   tablet_id_.reset();
   is_fake_ = false;
@@ -237,18 +236,6 @@ void ObSSTableMergeInfo::reset()
   merge_level_ = MERGE_LEVEL_MAX;
 }
 
-void ObSSTableMergeInfo::dump_info(const char *msg)
-{
-  int64_t output_row_per_s = 0;
-  int64_t new_macro_KB_per_s = 0;
-  if (merge_finish_time_ > merge_start_time_) {
-    const int64_t merge_cost_time = merge_finish_time_ - merge_start_time_;
-    output_row_per_s = (incremental_row_count_ * 1000 * 1000) / merge_cost_time;
-    new_macro_KB_per_s = (macro_block_count_ - multiplexed_macro_block_count_) * 2 * 1024 * 1000 * 1000 / merge_cost_time;
-  }
-  FLOG_INFO("dump merge info", K(msg), K(output_row_per_s), K(new_macro_KB_per_s), K(*this));
-}
-
 int ObSSTableMergeInfo::fill_comment(char *buf, const int64_t buf_len, const char* other_info) const
 {
   int ret = OB_SUCCESS;
@@ -283,7 +270,6 @@ void ObSSTableMergeInfo::shallow_copy(ObIDiagnoseInfo *other)
 {
   ObSSTableMergeInfo *info = nullptr;
   if (OB_NOT_NULL(other) && OB_NOT_NULL(info = dynamic_cast<ObSSTableMergeInfo *>(other))) {
-    tenant_id_ = info->tenant_id_;
     priority_ = info->priority_;
     ls_id_ = info->ls_id_;
     tablet_id_ = info->tablet_id_;

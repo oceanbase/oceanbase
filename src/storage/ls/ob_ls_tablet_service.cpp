@@ -275,7 +275,7 @@ int ObLSTabletService::prepare_for_safe_destroy()
     LOG_WARN("fail to delete all tablets", K(ret));
   }
 #ifdef ERRSIM
-  if (!ls_->get_ls_id().is_sys_ls()) {
+  if (OB_NOT_NULL(ls_) && !ls_->get_ls_id().is_sys_ls()) {
     SERVER_EVENT_SYNC_ADD("ls_tablet_service", "after_delete_all_tablets",
                           "tenant_id", MTL_ID(),
                           "ls_id", ls_->get_ls_id().id());
@@ -2377,7 +2377,10 @@ int ObLSTabletService::check_allow_to_read()
 int ObLSTabletService::get_read_tables(
     const common::ObTabletID tablet_id,
     const int64_t timeout_us,
-    const int64_t snapshot_version,
+    // snapshot used for get tablet for mds
+    const int64_t snapshot_version_for_tablet,
+    // snapshot used for filter tables in table_store
+    const int64_t snapshot_version_for_tables,
     ObTabletTableIterator &iter,
     const bool allow_no_ready_read)
 {
@@ -2391,9 +2394,12 @@ int ObLSTabletService::get_read_tables(
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_UNLIKELY(!tablet_id.is_valid() || snapshot_version < 0)) {
+  } else if (OB_UNLIKELY(!tablet_id.is_valid() ||
+                         snapshot_version_for_tables < 0 ||
+                         snapshot_version_for_tablet < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(snapshot_version));
+    LOG_WARN("invalid arguments", K(ret), K(tablet_id), K(snapshot_version_for_tablet),
+             K(snapshot_version_for_tables));
   } else if (FALSE_IT(allow_to_read_mgr_.load_allow_to_read_info(allow_to_read))) {
   } else if (!allow_to_read) {
     ret = OB_REPLICA_NOT_READABLE;
@@ -2402,16 +2408,18 @@ int ObLSTabletService::get_read_tables(
   } else if (OB_FAIL(ObTabletCreateDeleteHelper::check_and_get_tablet(key, handle,
       timeout_us,
       ObMDSGetTabletMode::READ_READABLE_COMMITED,
-      snapshot_version))) {
+      snapshot_version_for_tablet))) {
     if (OB_TABLET_NOT_EXIST != ret) {
-      LOG_WARN("fail to check and get tablet", K(ret), K(key), K(timeout_us), K(snapshot_version));
+      LOG_WARN("fail to check and get tablet", K(ret), K(key), K(timeout_us),
+               K(snapshot_version_for_tablet), K(snapshot_version_for_tables));
     }
   } else if (OB_UNLIKELY(!handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, invalid tablet handle", K(ret), K(handle));
-  } else if (OB_FAIL(handle.get_obj()->get_read_tables(snapshot_version, iter, allow_no_ready_read))) {
-    LOG_WARN("fail to get read tables", K(ret), K(handle), K(tablet_id), K(snapshot_version),
-        K(iter), K(allow_no_ready_read));
+  } else if (OB_FAIL(handle.get_obj()->get_read_tables(snapshot_version_for_tables, iter, allow_no_ready_read))) {
+    LOG_WARN("fail to get read tables", K(ret), K(handle), K(tablet_id),
+             K(snapshot_version_for_tablet), K(snapshot_version_for_tables),
+             K(iter), K(allow_no_ready_read));
   }
   return ret;
 }
@@ -2582,6 +2590,7 @@ int ObLSTabletService::build_create_sstable_param_for_migration(
     MEMCPY(param.encrypt_key_, mig_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
     param.root_block_addr_.set_none_addr();
     param.data_block_macro_meta_addr_.set_none_addr();;
+    param.table_flag_                    = mig_param.basic_meta_.table_flag_;
     if (OB_FAIL(param.column_checksums_.assign(mig_param.column_checksums_))) {
       LOG_WARN("fail to assign column checksums", K(ret), K(mig_param));
     }
@@ -4569,7 +4578,9 @@ int ObLSTabletService::process_lob_row(
           // get new lob locator
           ObString new_lob_str = (new_obj.is_null() || new_obj.is_nop_value())
                                  ? ObString(0, nullptr) : new_obj.get_string();
-          ObLobLocatorV2 new_lob(new_lob_str, new_obj.has_lob_header());
+          // for not strict sql mode, will insert empty string without lob header
+          bool has_lob_header = new_obj.has_lob_header() && new_lob_str.length() > 0;
+          ObLobLocatorV2 new_lob(new_lob_str, has_lob_header);
           if (OB_FAIL(ret)) {
           } else if (new_obj.is_null() ||
                      new_obj.is_nop_value() ||
@@ -5892,7 +5903,7 @@ int ObLSTabletService::get_multi_ranges_cost(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_read_tables(tablet_id, timeout_us, max_snapshot_version, iter))) {
+  } else if (OB_FAIL(get_read_tables(tablet_id, timeout_us, max_snapshot_version, max_snapshot_version, iter))) {
     LOG_WARN("fail to get all read tables", K(ret), K(tablet_id), K(max_snapshot_version));
   } else {
     ObPartitionMultiRangeSpliter spliter;
@@ -5922,7 +5933,7 @@ int ObLSTabletService::split_multi_ranges(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else if (OB_FAIL(get_read_tables(tablet_id, timeout_us, max_snapshot_version, iter))) {
+  } else if (OB_FAIL(get_read_tables(tablet_id, timeout_us, max_snapshot_version, max_snapshot_version, iter))) {
     LOG_WARN("fail to get all read tables", K(ret), K(tablet_id), K(max_snapshot_version));
   } else {
     ObPartitionMultiRangeSpliter spliter;
@@ -5963,7 +5974,7 @@ int ObLSTabletService::estimate_row_count(
   } else {
     const int64_t snapshot_version = -1 == param.frozen_version_ ?
         GET_BATCH_ROWS_READ_SNAPSHOT_VERSION : param.frozen_version_;
-    if (OB_FAIL(get_read_tables(param.tablet_id_, timeout_us, snapshot_version, tablet_iter, false))) {
+    if (OB_FAIL(get_read_tables(param.tablet_id_, timeout_us, snapshot_version, snapshot_version, tablet_iter, false))) {
       if (OB_TABLET_NOT_EXIST != ret) {
         LOG_WARN("failed to get tablet_iter", K(ret), K(snapshot_version), K(param));
       }
@@ -6028,7 +6039,7 @@ int ObLSTabletService::estimate_block_count_and_row_count(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_read_tables(tablet_id, timeout_us, INT64_MAX, tablet_iter, false/*allow_no_ready_read*/))) {
+  } else if (OB_FAIL(get_read_tables(tablet_id, timeout_us, INT64_MAX, INT64_MAX, tablet_iter, false/*allow_no_ready_read*/))) {
     LOG_WARN("failed to get read tables", K(ret));
   }
 
@@ -6229,6 +6240,8 @@ int ObLSTabletService::build_tablet_iter(ObHALSTabletIDIterator &iter)
   } else if (OB_UNLIKELY(!iter.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("iter is invalid", K(ret), K(iter));
+  } else if (OB_FAIL(iter.sort_tablet_ids_if_need())) {
+    LOG_WARN("failed to sort tablet ids if need", K(ret), K(iter));
   }
 
   if (OB_FAIL(ret)) {
@@ -6292,6 +6305,7 @@ int ObLSTabletService::set_allow_to_read_(ObLS *ls)
       FLOG_INFO("set ls do not allow to read", KPC(ls));
     } else {
       allow_to_read_mgr_.enable_to_read();
+      FLOG_INFO("set ls allow to read", KPC(ls));
     }
   }
   return ret;
@@ -6435,14 +6449,16 @@ int ObLSTabletService::set_frozen_for_all_memtables()
   return ret;
 }
 
-int ObLSTabletService::ha_scan_all_tablets(const HandleTabletMetaFunc &handle_tablet_meta_f)
+int ObLSTabletService::ha_scan_all_tablets(
+    const HandleTabletMetaFunc &handle_tablet_meta_f,
+    const bool need_sorted_tablet_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
   } else {
-    ObHALSTabletIterator iterator(ls_->get_ls_id(), false/* need_initial_state */);
+    ObHALSTabletIterator iterator(ls_->get_ls_id(), false/* need_initial_state */, need_sorted_tablet_id);
     if (OB_FAIL(build_tablet_iter(iterator))) {
       LOG_WARN("fail to build tablet iterator", K(ret), KPC(this));
     } else {

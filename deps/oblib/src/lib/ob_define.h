@@ -102,6 +102,7 @@ const int64_t MAX_LONG_OPS_MESSAGE_LENGTH = 512;
 const int64_t MAX_LS_STATE_LENGTH = 16;
 const int64_t MAX_LOCK_ID_BUF_LENGTH = 64;
 const int64_t MAX_LOCK_ROWKEY_BUF_LENGTH = 512;
+const int64_t MAX_LOCK_REMOTE_ADDR_BUF_LENGTH = 64;
 const int64_t MAX_LOCK_MODE_BUF_LENGTH = 8;
 const int64_t MAX_LOCK_OBJ_TYPE_BUF_LENGTH = 16;
 const int64_t MAX_LOCK_OP_TYPE_BUF_LENGTH = 32;
@@ -422,7 +423,7 @@ const int64_t OB_SCHEMA_START_VERSION = 100;
 const int64_t OB_SYS_PARAM_ROW_KEY_LENGTH = 192;
 const int64_t OB_MAX_SYS_PARAM_NAME_LENGTH = 128;
 const int64_t OB_MAX_SYS_PARAM_VALUE_LENGTH = 1024;
-const int64_t OB_MAX_SYS_PARAM_NUM = 500;
+const int64_t OB_MAX_SYS_PARAM_NUM = 600;
 const int64_t OB_MAX_PREPARE_STMT_NUM_PER_SESSION = 512;
 const uint32_t INVALID_SESSID = UINT32_MAX;
 const int64_t OB_MAX_VAR_NUM_PER_SESSION = 1024;
@@ -1724,6 +1725,7 @@ const int64_t OB_OLD_MAX_VARCHAR_LENGTH = 64 * 1024; // for compatible purpose
 // For compatibility we set max default value as 256K bytes/64K chars.
 // Otherwise inner core tables schema would changes that hard to upgrade.
 const int64_t OB_MAX_DEFAULT_VALUE_LENGTH = 256 * 1024L;
+const int64_t OB_MAX_INDEX_PARAMS_LENGTH = 256;
 const int64_t OB_MAX_BINARY_LENGTH = 255;
 const int64_t OB_MAX_VARBINARY_LENGTH = 64 * 1024L;
 const int64_t OB_MAX_EXTENDED_TYPE_INFO_LENGTH = OB_MAX_VARBINARY_LENGTH;//TODO(yts): large object
@@ -2350,8 +2352,8 @@ const uint64_t OB_LISTENER_GID = 0;
 #define DATABUFFER_SERIALIZE_INFO \
   data_buffer_.get_data(), data_buffer_.get_capacity(), data_buffer_.get_position()
 
-#define DIO_ALIGN_SIZE 4096
-#define DIO_READ_ALIGN_SIZE 4096
+#define DIO_ALIGN_SIZE 4096LL
+#define DIO_READ_ALIGN_SIZE 4096LL
 #define DIO_ALLOCATOR_CACHE_BLOCK_SIZE (OB_DEFAULT_MACRO_BLOCK_SIZE + DIO_READ_ALIGN_SIZE)
 #define MALLOC_INIT_PRIORITY 128
 #define NORMAL_INIT_PRIORITY (MALLOC_INIT_PRIORITY + 1)

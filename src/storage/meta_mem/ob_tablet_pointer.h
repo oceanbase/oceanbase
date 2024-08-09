@@ -37,14 +37,15 @@ public:
      ha_status_(0),
      occupy_bytes_(0),
      required_bytes_(0),
-     tablet_meta_bytes_(0)
+     tablet_meta_bytes_(0),
+     backup_bytes_(0)
     {}
   ~ObTabletAttr() { reset(); }
-  void reset() { v_ = 0; ha_status_ = 0; occupy_bytes_ = 0; required_bytes_ = 0; tablet_meta_bytes_ = 0; }
+  void reset() { v_ = 0; ha_status_ = 0; occupy_bytes_ = 0; required_bytes_ = 0; tablet_meta_bytes_ = 0; backup_bytes_ = 0;}
   bool is_valid() const { return valid_; }
   TO_STRING_KV(K_(valid), K_(is_empty_shell), K_(has_transfer_table),
       K_(has_next_tablet), K_(has_nested_table), K_(ha_status),
-      K_(occupy_bytes), K_(required_bytes), K_(tablet_meta_bytes));
+      K_(occupy_bytes), K_(required_bytes), K_(tablet_meta_bytes), K_(backup_bytes));
 public:
   union {
     int64_t v_;
@@ -61,6 +62,7 @@ public:
   int64_t occupy_bytes_;
   int64_t required_bytes_;
   int64_t tablet_meta_bytes_;
+  int64_t backup_bytes_;
 };
 
 class ObTabletPointer final
@@ -169,6 +171,7 @@ public:
   int64_t get_required_size() const { return attr_.required_bytes_; }
   int64_t get_occupy_size() const { return attr_.occupy_bytes_; }
   int64_t get_meta_size() const { return attr_.tablet_meta_bytes_; }
+  int64_t get_backup_size() const { return attr_.backup_bytes_; }
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(tablet_addr), K_(attr));
 public:
   const ObTabletAttr &attr_;

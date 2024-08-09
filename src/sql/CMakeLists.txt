@@ -764,6 +764,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_rb_calc.cpp
   engine/expr/ob_expr_rb_to_string.cpp
   engine/expr/ob_expr_rb_from_string.cpp
+  engine/expr/ob_expr_decode_trace_id.cpp
   engine/expr/ob_expr_st_intersections.cpp
 )
 
@@ -782,6 +783,7 @@ ob_set_subtarget(ob_sql engine_join
   engine/join/ob_join_op.cpp
   engine/join/ob_merge_join_op.cpp
   engine/join/ob_nested_loop_join_op.cpp
+  engine/join/ob_join_filter_material_control_info.cpp
 )
 
 ob_set_subtarget(ob_sql engine_pdml

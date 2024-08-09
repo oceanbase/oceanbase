@@ -165,6 +165,7 @@
 #endif
 #include "sql/optimizer/ob_log_values_table_access.h"
 #include "sql/engine/basic/ob_values_table_access_op.h"
+#include "sql/engine/cmd/ob_table_direct_insert_service.h"
 
 namespace oceanbase
 {
@@ -1185,8 +1186,9 @@ int ObStaticEngineCG::generate_spec(ObLogLimit &op, ObLimitVecSpec &spec, const 
   return ret;
 }
 
-int ObStaticEngineCG::generate_spec(
-  ObLogDistinct &op, ObMergeDistinctSpec &spec, const bool in_root_job)
+template<typename MergeDistinctSpecType>
+int ObStaticEngineCG::generate_merge_distinct_spec(
+  ObLogDistinct &op, MergeDistinctSpecType &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
   UNUSED(in_root_job);
@@ -1236,53 +1238,15 @@ int ObStaticEngineCG::generate_spec(
 }
 
 int ObStaticEngineCG::generate_spec(
+  ObLogDistinct &op, ObMergeDistinctSpec &spec, const bool in_root_job)
+{
+  return generate_merge_distinct_spec<ObMergeDistinctSpec> (op, spec, in_root_job);
+}
+
+int ObStaticEngineCG::generate_spec(
   ObLogDistinct &op, ObMergeDistinctVecSpec &spec, const bool in_root_job)
 {
-  int ret = OB_SUCCESS;
-  UNUSED(in_root_job);
-  spec.by_pass_enabled_ = false;
-  if (op.get_block_mode()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("merge distinct has no block mode", K(op.get_algo()), K(op.get_block_mode()), K(ret));
-  } else if (OB_FAIL(spec.cmp_funcs_.init(op.get_distinct_exprs().count()))) {
-    LOG_WARN("failed to init sort functions", K(ret));
-  } else if (OB_FAIL(spec.distinct_exprs_.init(op.get_distinct_exprs().count()))) {
-    LOG_WARN("failed to init distinct exprs", K(ret));
-  } else {
-    ObExpr *expr = nullptr;
-    ARRAY_FOREACH(op.get_distinct_exprs(), i) {
-      const ObRawExpr* raw_expr = op.get_distinct_exprs().at(i);
-      if (OB_ISNULL(raw_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("null pointer", K(ret));
-      } else if (is_oracle_mode() && OB_UNLIKELY(ObLongTextType == raw_expr->get_data_type()
-                                                 || ObLobType == raw_expr->get_data_type())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("select distinct lob not allowed", K(ret));
-      } else if (is_oracle_mode() && OB_UNLIKELY(ObJsonType == raw_expr->get_data_type())) {
-        ret = OB_ERR_INVALID_CMP_OP;
-        LOG_WARN("select distinct json not allowed", K(ret));
-      } else if (OB_UNLIKELY(ObRoaringBitmapType == raw_expr->get_data_type())) {
-        ret = OB_ERR_INVALID_TYPE_FOR_OP;
-        LOG_WARN("select distinct roaringbitmap not allowed", K(ret));
-      } else if (raw_expr->is_const_expr()) {
-          // distinct const value, 这里需要注意：distinct 1被跳过了，
-          // 但ObMergeDistinct中，如果没有distinct列，则默认所有值都相等，这个语义正好是符合预期的。
-          continue;
-      } else if (OB_FAIL(generate_rt_expr(*raw_expr, expr))) {
-        LOG_WARN("failed to generate rt expr", K(ret));
-      } else if (OB_FAIL(spec.distinct_exprs_.push_back(expr))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else {
-        ObCmpFunc cmp_func;
-        // no matter null first or null last.
-        cmp_func.cmp_func_ = expr->basic_funcs_->null_last_cmp_;
-        CK(NULL != cmp_func.cmp_func_);
-        OZ(spec.cmp_funcs_.push_back(cmp_func));
-      }
-    }
-  }
-  return ret;
+  return generate_merge_distinct_spec<ObMergeDistinctVecSpec> (op, spec, in_root_job);
 }
 
 void ObStaticEngineCG::set_murmur_hash_func(
@@ -1814,6 +1778,9 @@ int ObStaticEngineCG::generate_hash_set_spec(ObLogSet &op, ObHashSetSpec &spec)
         // other udt types not supported, xmltype does not have order or map member function
         ret = OB_ERR_NO_ORDER_MAP_SQL;
         LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+      } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid operation for roaringbitmap", K(ret));
       } else if (OB_FAIL(spec.sort_collations_.push_back(field_collation))) {
         LOG_WARN("failed to push back sort collation", K(ret));
       } else {
@@ -1992,6 +1959,9 @@ int ObStaticEngineCG::generate_merge_set_spec(ObLogSet &op, ObMergeSetSpec &spec
           // other udt types not supported, xmltype does not have order or map member function
           ret = OB_ERR_NO_ORDER_MAP_SQL;
           LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid operation for roaringbitmap", K(ret));
         } else {
           ObSortCmpFunc cmp_func;
           cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(expr->datum_meta_.type_,
@@ -2234,6 +2204,9 @@ int ObStaticEngineCG::check_not_support_cmp_type(
       // other udt types not supported, xmltype does not have order or map member function
       ret = OB_ERR_NO_ORDER_MAP_SQL;
       LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+    } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid operation for roaringbitmap", K(ret));
     }
   }
   return ret;
@@ -3843,6 +3816,7 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
             reinterpret_cast<ObExpr *>(
             ObStaticEngineExprCG::get_left_value_rt_expr(*join_filter_exprs.at(i))))) {
           ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get_left_value_rt_expr");
         } else {
           rf_info.filter_expr_id_ = join_filter_expr->expr_ctx_id_;
         }
@@ -4521,40 +4495,11 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxReduceTransmitSpec &s
   return ret;
 }
 
-// dynamic sample use data hub model and px coord is the hub.
-// so generate spec for dynamic sample if need
-int ObStaticEngineCG::generate_dynamic_sample_spec_if_need(ObLogExchange &op, ObPxCoordSpec &spec)
-{
-  int ret = OB_SUCCESS;
-  if (op.get_sort_keys().count() > 0) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < op.get_sort_keys().count(); ++i) {
-      if (OB_FAIL(mark_expr_self_produced(op.get_sort_keys().at(i).expr_))) {
-        LOG_WARN("mark self produced expr failed", K(ret), K(i));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      ObArray<OrderItem> sort_keys;
-      if (OB_FAIL(filter_sort_keys(op, op.get_sort_keys(), sort_keys))) {
-        LOG_WARN("filter out expr of partition id failed", K(ret));
-      } else if (OB_FAIL(spec.sort_exprs_.init(sort_keys.count()))) {
-        LOG_WARN("failed to init dynamic sample exprs", K(ret));
-      } else if (OB_FAIL(fill_sort_info(sort_keys, spec.sort_collations_, spec.sort_exprs_))) {
-        LOG_WARN("failed to fill sort info", K(ret));
-      } else if (OB_FAIL(fill_sort_funcs(spec.sort_collations_, spec.sort_cmp_funs_, spec.sort_exprs_))) {
-        LOG_WARN("failed to fill sort funcs", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxFifoCoordSpec &spec, const bool in_root_job)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(generate_basic_receive_spec(op, spec, in_root_job))) {
     LOG_WARN("failed to generate basic transmit spec", K(ret));
-  } else if (OB_FAIL(generate_dynamic_sample_spec_if_need(op, spec))) {
-    LOG_WARN("generate px_coord_spec for dynamic sample failed", K(ret));
   }
   return ret;
 }
@@ -4564,8 +4509,6 @@ int ObStaticEngineCG::generate_spec(ObLogExchange &op, ObPxOrderedCoordSpec &spe
   int ret = OB_SUCCESS;
   if (OB_FAIL(generate_basic_receive_spec(op, spec, in_root_job))) {
     LOG_WARN("failed to generate basic transmit spec", K(ret));
-  } else if (OB_FAIL(generate_dynamic_sample_spec_if_need(op, spec))) {
-    LOG_WARN("generate px_coord_spec for dynamic sample failed", K(ret));
   } else {
     spec.use_rich_format_ = false;
     const_cast<ObOpSpec *> (spec.get_left())->use_rich_format_ = false;
@@ -5370,6 +5313,21 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   return ret;
 }
 
+int ObStaticEngineCG::get_pushdown_storage_level(ObOptimizerContext &optimizer_context, const int64_t tenant_pd_level, int64_t &pd_level)
+{
+  int ret = OB_SUCCESS;
+  int64_t hint_pd_level = INT64_MAX;
+  const ObGlobalHint &global_hint = optimizer_context.get_global_hint();
+  if (OB_FAIL(global_hint.opt_params_.get_integer_opt_param(ObOptParamHint::PUSHDOWN_STORAGE_LEVEL, hint_pd_level))) {
+    LOG_WARN("failed to get integer opt param", K(ret));
+  } else if (hint_pd_level == INT64_MAX) {
+    pd_level = tenant_pd_level;
+  } else {
+    pd_level = hint_pd_level;
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &spec)
 {
   int ret = OB_SUCCESS;
@@ -5387,10 +5345,12 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
   } else {
     uint64_t tenant_id = session_info->get_effective_tenant_id();
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    int64_t pd_level = 0;
     if (OB_UNLIKELY(!tenant_config.is_valid())) {
       LOG_WARN("failed to init tenant config", K(tenant_id));
+    } else if (OB_FAIL(get_pushdown_storage_level(log_plan->get_optimizer_context(), tenant_config->_pushdown_storage_level, pd_level))) {
+      LOG_WARN("failed to get hint pushdown storage level", K(ret));
     } else {
-      const int64_t pd_level = tenant_config->_pushdown_storage_level;
       const int64_t io_read_batch_size = tenant_config->_io_read_batch_size;
       const int64_t io_read_gap_size = io_read_batch_size * tenant_config->_io_read_redundant_limit_percentage / 100;
       pd_blockscan = ObPushdownFilterUtils::is_blockscan_pushdown_enabled(pd_level);
@@ -5407,7 +5367,7 @@ int ObStaticEngineCG::generate_tsc_flags(ObLogTableScan &op, ObTableScanSpec &sp
       scan_ctdef.table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
       if (nullptr != lookup_ctdef) {
         lookup_ctdef->pd_expr_spec_.pd_storage_flag_.set_flags(pd_blockscan, pd_filter, enable_skip_index,
-                                                               enable_column_store, enable_prefetch_limit);
+                                                              enable_column_store, enable_prefetch_limit);
         lookup_ctdef->table_scan_opt_.io_read_batch_size_ = io_read_batch_size;
         lookup_ctdef->table_scan_opt_.io_read_gap_size_ = io_read_gap_size;
         lookup_ctdef->table_scan_opt_.storage_rowsets_size_ = tenant_config->storage_rowsets_size;
@@ -5599,6 +5559,9 @@ int ObStaticEngineCG::generate_pump_exprs(ObLogJoin &op, ObNLConnectBySpecBase &
           // other udt types not supported, xmltype does not have order or map member function
           ret = OB_ERR_NO_ORDER_MAP_SQL;
           LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("invalid operation for roaringbitmap", K(ret));
         } else {
           cmp_func.cmp_func_ = ObDatumFuncs::get_nullsafe_cmp_func(
                                 expr->datum_meta_.type_,
@@ -6804,12 +6767,22 @@ int ObStaticEngineCG::generate_spec(ObLogInsert &op,
       spec.plan_->set_online_sample_percent(op.get_plan()->get_optimizer_context()
                                                            .get_exec_ctx()->get_table_direct_insert_ctx()
                                                            .get_online_sample_percent());
+      spec.plan_->set_direct_load_need_sort(global_hint.get_direct_load_need_sort());
       // check is insert overwrite
       bool is_insert_overwrite = false;
+      ObExecContext *exec_ctx = NULL;
+      ObPhysicalPlanCtx *plan_ctx = NULL;
       if (OB_FAIL(check_is_insert_overwrite_stmt(log_plan, is_insert_overwrite))) {
         LOG_WARN("check is insert overwrite failed", K(ret));
-      } else if (is_insert_overwrite) {
-        spec.plan_->set_is_insert_overwrite(true);
+      } else if (OB_FALSE_IT(spec.plan_->set_is_insert_overwrite(is_insert_overwrite))) {
+      } else if (OB_ISNULL(exec_ctx = log_plan->get_optimizer_context().get_exec_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexcepted null exec ctx", KR(ret), KP(exec_ctx));
+      } else if (OB_ISNULL(plan_ctx = exec_ctx->get_physical_plan_ctx())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null plan ctx", KR(ret), KP(plan_ctx));
+      } else {
+        plan_ctx->set_is_direct_insert_plan(ObTableDirectInsertService::is_direct_insert(*(spec.plan_)));
       }
     }
     int64_t partition_expr_idx = OB_INVALID_INDEX;
@@ -7167,6 +7140,9 @@ int ObStaticEngineCG::fill_aggr_info(ObAggFunRawExpr &raw_expr,
             // other udt types not supported, xmltype does not have order or map member function
             ret = OB_ERR_NO_ORDER_MAP_SQL;
             LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+          } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+            ret = OB_ERR_INVALID_TYPE_FOR_OP;
+            LOG_WARN("invalid operation for roaringbitmap", K(ret));
           } else {
             ObSortFieldCollation field_collation(i, expr->datum_meta_.cs_type_, is_ascending, null_pos);
             ObSortCmpFunc cmp_func;
@@ -7846,6 +7822,9 @@ int ObStaticEngineCG::fil_sort_info(const ObIArray<OrderItem> &sort_keys,
         // other udt types not supported, xmltype does not have order or map member function
         ret = OB_ERR_NO_ORDER_MAP_SQL;
         LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+      } else if (ob_is_roaringbitmap(expr->datum_meta_.type_)) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("invalid operation for roaringbitmap", K(ret));
       } else if (sort_exprs != NULL && OB_FAIL(sort_exprs->push_back(expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       } else if (has_exist_in_array(all_exprs, expr, &idx)) {
@@ -8712,6 +8691,29 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
       phy_plan_->set_has_link_udf(log_plan.get_stmt()->get_query_ctx()->has_dblink_udf_);
     }
   }
+
+  // remember DML's table id set for cursor validation
+  // for more details refer to `phy_plan.dml_table_ids_`
+  if (OB_SUCC(ret) && log_plan.get_stmt()->is_dml_write_stmt()) {
+    const int64_t tenant_id = my_session->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid() && tenant_config->_enable_enhanced_cursor_validation) {
+      const ObDelUpdStmt *dml_stmt = static_cast<const ObDelUpdStmt*>(log_plan.get_stmt());
+      ObSEArray<const ObDmlTableInfo*, 1> table_infos;
+      if (OB_FAIL(dml_stmt->get_dml_table_infos(table_infos))) {
+        LOG_WARN("get dml table infos failed", K(ret));
+      } else {
+        phy_plan.get_dml_table_ids().set_capacity(table_infos.count());
+        ARRAY_FOREACH(table_infos, i) {
+          if (OB_FAIL(phy_plan.get_dml_table_ids().push_back(table_infos[i]->ref_table_id_))) {
+            LOG_WARN("push dml table id failed", K(ret));
+          }
+        }
+      }
+      LOG_TRACE("record dml table ids for cursor validation", K(phy_plan.get_dml_table_ids()));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();
   }

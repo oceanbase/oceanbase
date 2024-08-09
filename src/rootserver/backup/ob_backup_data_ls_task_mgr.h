@@ -54,6 +54,7 @@ private:
   int gen_and_add_backup_meta_task_();
   int gen_and_add_backup_compl_log_();
   int gen_and_add_build_index_task_();
+  int gen_and_add_backup_fuse_tablet_meta_task_();
   int finish_(int64_t &finish_cnt);
   int advance_status_(const share::ObBackupTaskStatus &next_status);
 private:

@@ -21,6 +21,7 @@
 #include "observer/mysql/ob_sync_cmd_driver.h"
 #include "sql/engine/cmd/ob_variable_set_executor.h"
 #include "sql/resolver/cmd/ob_call_procedure_stmt.h"
+#include "observer/mysql/obmp_stmt_execute.h"
 
 namespace oceanbase
 {
@@ -176,6 +177,16 @@ int ObExecuteExecutor::execute(ObExecContext &ctx, ObExecuteStmt &stmt)
         }
       }
     }
+    char *tmp_ptr = NULL;
+    int64_t tmp_len = 0;
+    OZ (ObMPStmtExecute::store_params_value_to_str(ctx.get_allocator(),
+                                                   *ctx.get_my_session(),
+                                                   &params_array,
+                                                   tmp_ptr,
+                                                   tmp_len));
+    ObAuditRecordData &audit_record = ctx.get_my_session()->get_raw_audit_record();
+    OX (audit_record.params_value_ = tmp_ptr);
+    OX (audit_record.params_value_len_ = tmp_len);
   }
   return ret;
 }

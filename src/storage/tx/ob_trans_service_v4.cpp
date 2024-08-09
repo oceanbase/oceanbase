@@ -1425,7 +1425,8 @@ int ObTransService::validate_snapshot_version_(const SCN snapshot,
       snapshot <= ls_weak_read_ts) {
   } else {
     SCN gts;
-    const MonotonicTs stc_ahead = get_req_receive_mts_() - MonotonicTs(GCONF._ob_get_gts_ahead_interval);
+    const int64_t GET_GTS_AHEAD_INTERVAL = 0;
+    const MonotonicTs stc_ahead = get_req_receive_mts_() - MonotonicTs(GET_GTS_AHEAD_INTERVAL);
     MonotonicTs tmp_receive_gts_ts(0);
     do {
       ret = ts_mgr_->get_gts(tenant_id_, stc_ahead, NULL, gts, tmp_receive_gts_ts);
@@ -1775,10 +1776,11 @@ int ObTransService::sync_acquire_global_snapshot_(ObTxDesc &tx,
 {
   int ret = OB_SUCCESS;
   uint64_t op_sn = tx.op_sn_;
+  const int64_t GET_GTS_AHEAD_INTERVAL = 0;
   tx.flags_.BLOCK_ = true;
   tx.lock_.unlock();
   ret = acquire_global_snapshot__(expire_ts,
-                                  GCONF._ob_get_gts_ahead_interval,
+                                  GET_GTS_AHEAD_INTERVAL,
                                   snapshot,
                                   uncertain_bound);
   tx.lock_.lock();
@@ -2876,6 +2878,19 @@ int ObTransService::update_user_savepoint(ObTxDesc &tx, const ObTxSavePointList 
   tx.lock_.lock();
   ret = update_user_savepoint_(tx, savepoints);
   tx.lock_.unlock();
+  return ret;
+}
+
+int ObTransService::update_savepoint_with_sessid(ObTxDesc &tx, const uint32_t session_id)
+{
+  int ret = OB_SUCCESS;
+  ObSpinLockGuard guard(tx.lock_);
+  ARRAY_FOREACH_N(tx.savepoints_, i, cnt) {
+    ObTxSavePoint &it = tx.savepoints_.at(cnt - 1 - i);
+    if (it.is_savepoint()) {
+      it.session_id_ = session_id;
+    }
+  }
   return ret;
 }
 

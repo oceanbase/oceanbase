@@ -159,7 +159,7 @@ int ObExprObjAccess::assign(const ObExprOperator &other)
       } else if (obj.is_null()) { \
         if (!skip_check_error) {  \
           ret = OB_ERR_NUMERIC_OR_VALUE_ERROR; \
-          LOG_WARN("ORA-06502: PL/SQL: numeric or value error: NULL index table key value",\
+          LOG_WARN("OBE-06502: PL/SQL: numeric or value error: NULL index table key value",\
                  K(ret), K(obj), K(i)); \
         } else {  \
           param_value = OB_INVALID_INDEX; \

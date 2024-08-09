@@ -306,6 +306,10 @@ OB_SERIALIZE_MEMBER(ObTableLockInfo,
                     table_lock_ops_,
                     max_durable_scn_);
 
+OB_SERIALIZE_MEMBER(ObTableLockPrioOp,
+                    lock_op_,
+                    priority_);
+
 } // tablelock
 } // transaction
 } // oceanbase

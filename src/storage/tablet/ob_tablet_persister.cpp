@@ -25,6 +25,7 @@
 #include "storage/tablet/ob_tablet_block_header.h"
 #include "storage/tablet/ob_tablet_slog_helper.h"
 #include "storage/tablet/ob_tablet_macro_info_iterator.h"
+#include "storage/backup/ob_backup_data_struct.h"
 
 using namespace std::placeholders;
 using namespace oceanbase::common;
@@ -569,32 +570,59 @@ int ObTabletPersister::persist_and_fill_tablet(
     LOG_WARN("fail to acquire tablet", K(ret), K(key), K(type));
   } else if (OB_FAIL(transform(arg, new_handle.get_buf(), new_handle.get_buf_len()))) {
     LOG_WARN("fail to transform old tablet", K(ret), K(arg), K(new_handle), K(type));
+  } else if (FALSE_IT(time_stats->click("transform"))) {
+  } else if (OB_FAIL(calc_tablet_space_usage_(block_info_set, new_handle, shared_meta_id_arr, space_usage))) {
+    LOG_WARN("fail to calc tablet_space_usage");
   } else {
-    time_stats->click("transform");
-    space_usage.data_size_ = block_info_set.data_block_info_set_.size() * DEFAULT_MACRO_BLOCK_SIZE;
-    space_usage.meta_size_ = block_info_set.meta_block_info_set_.size() * DEFAULT_MACRO_BLOCK_SIZE;
-    int64_t shared_data_size = 0;
-    for (ObBlockInfoSet::MapIterator iter = block_info_set.shared_data_block_info_map_.begin();
-        iter != block_info_set.shared_data_block_info_map_.end();
-        ++iter) {
-      shared_data_size += iter->second;
-    }
-    for (ObBlockInfoSet::SetIterator iter = block_info_set.shared_meta_block_info_set_.begin();
-        OB_SUCC(ret) && iter != block_info_set.shared_meta_block_info_set_.end();
-        ++iter) {
-      if (OB_FAIL(shared_meta_id_arr.push_back(iter->first))) {
-        LOG_WARN("fail to push back macro id", K(ret), K(iter->first));
-      }
-    }
-    space_usage.shared_data_size_ = shared_data_size;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(new_handle.get_obj()->calc_sstable_occupy_size(space_usage.occupy_bytes_))) {
-      LOG_WARN("failed to calc tablet occupy_size", K(ret), KPC(new_handle.get_obj()));
-    } else {
-      new_handle.get_obj()->set_space_usage_(space_usage);
-    }
+    time_stats->click("calc tablet space_usage");
   }
 
+  return ret;
+}
+
+int ObTabletPersister::calc_tablet_space_usage_(
+    ObBlockInfoSet &block_info_set,
+    ObTabletHandle &new_tablet_hdl,
+    ObIArray<MacroBlockId> &shared_meta_id_arr,
+    ObTabletSpaceUsage &space_usage)
+{
+  int ret = OB_SUCCESS;
+  backup::ObBackupDeviceMacroBlockId tmp_back_block_id;
+  int64_t shared_data_size = 0;
+  int64_t backup_block_size = 0; // for sstable has backup_block and local_block;
+  int64_t pure_backup_sstable_size = 0; // for sstable has no local_block
+  for (ObBlockInfoSet::SetIterator iter = block_info_set.backup_block_info_set_.begin();
+      OB_SUCC(ret) && iter != block_info_set.backup_block_info_set_.end();
+      ++iter) {
+    if (OB_FAIL(tmp_back_block_id.set(iter->first))) {
+      LOG_WARN("failed to get backup block_id");
+    } else {
+      backup_block_size += tmp_back_block_id.get_length();
+    }
+  }
+  for (ObBlockInfoSet::MapIterator iter = block_info_set.shared_data_block_info_map_.begin();
+      OB_SUCC(ret) && iter != block_info_set.shared_data_block_info_map_.end();
+      ++iter) {
+    shared_data_size += iter->second;
+  }
+  for (ObBlockInfoSet::SetIterator iter = block_info_set.shared_meta_block_info_set_.begin();
+      OB_SUCC(ret) && iter != block_info_set.shared_meta_block_info_set_.end();
+      ++iter) {
+    if (OB_FAIL(shared_meta_id_arr.push_back(iter->first))) {
+      LOG_WARN("fail to push back macro id", K(ret), K(iter->first));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(new_tablet_hdl.get_obj()->calc_sstable_occupy_size(space_usage.occupy_bytes_, pure_backup_sstable_size))) {
+    LOG_WARN("failed to calc tablet occupy_size", K(ret), KPC(new_tablet_hdl.get_obj()));
+  } else {
+    space_usage.backup_bytes_ = backup_block_size + pure_backup_sstable_size;
+    space_usage.shared_data_size_ = shared_data_size;
+    space_usage.meta_size_ = block_info_set.meta_block_info_set_.size() * DEFAULT_MACRO_BLOCK_SIZE;
+    // data_size_ of tablet should add the remote_size of backup (quick_restore)
+    space_usage.data_size_ = block_info_set.data_block_info_set_.size() * DEFAULT_MACRO_BLOCK_SIZE + space_usage.backup_bytes_;
+    new_tablet_hdl.get_obj()->set_space_usage_(space_usage);
+  }
   return ret;
 }
 
@@ -1252,7 +1280,8 @@ int ObTabletPersister::copy_sstable_macro_info(const ObSSTable &sstable,
   } else if (sstable.is_small_sstable() && OB_FAIL(copy_shared_macro_info(
       meta_handle.get_sstable_meta().get_macro_info(),
       shared_macro_map,
-      block_info_set.meta_block_info_set_))) {
+      block_info_set.meta_block_info_set_,
+      block_info_set.backup_block_info_set_))) {
     LOG_WARN("fail to copy shared macro's info", K(ret), K(meta_handle.get_sstable_meta().get_macro_info()));
   } else if (!sstable.is_small_sstable()
       && OB_FAIL(copy_data_macro_ids(meta_handle.get_sstable_meta().get_macro_info(), block_info_set))) {
@@ -1264,7 +1293,8 @@ int ObTabletPersister::copy_sstable_macro_info(const ObSSTable &sstable,
 int ObTabletPersister::copy_shared_macro_info(
     const blocksstable::ObSSTableMacroInfo &macro_info,
     SharedMacroMap &shared_macro_map,
-    ObBlockInfoSet::TabletMacroSet &meta_id_set)
+    ObBlockInfoSet::TabletMacroSet &meta_id_set,
+    ObBlockInfoSet::TabletMacroSet &backup_id_set)
 {
   int ret = OB_SUCCESS;
   ObMacroIdIterator iter;
@@ -1288,7 +1318,7 @@ int ObTabletPersister::copy_shared_macro_info(
     // do nothing
   } else if (OB_FAIL(macro_info.get_other_block_iter(iter))) {
     LOG_WARN("fail to get other block iterator", K(ret));
-  } else if (OB_FAIL(do_copy_ids(iter, meta_id_set))) {
+  } else if (OB_FAIL(do_copy_ids(iter, meta_id_set, backup_id_set))) {
     LOG_WARN("fail to copy other block ids", K(ret));
   }
   return ret;
@@ -1304,17 +1334,17 @@ int ObTabletPersister::copy_data_macro_ids(
 
   if (OB_FAIL(macro_info.get_data_block_iter(iter))) {
     LOG_WARN("fail to get data block iterator", K(ret));
-  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.data_block_info_set_))) {
+  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.data_block_info_set_, block_info_set.backup_block_info_set_))) {
     LOG_WARN("fail to copy data block ids", K(ret), K(iter));
   } else if (FALSE_IT(iter.reset())) {
   } else if (OB_FAIL(macro_info.get_other_block_iter(iter))) {
     LOG_WARN("fail to get other block iterator", K(ret));
-  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.meta_block_info_set_))) {
+  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.meta_block_info_set_, block_info_set.backup_block_info_set_))) {
     LOG_WARN("fail to copy other block ids", K(ret), K(iter));
   } else if (FALSE_IT(iter.reset())) {
   } else if (OB_FAIL(macro_info.get_linked_block_iter(iter))) {
     LOG_WARN("fail to get linked block iterator", K(ret));
-  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.meta_block_info_set_))) {
+  } else if (OB_FAIL(do_copy_ids(iter, block_info_set.meta_block_info_set_, block_info_set.backup_block_info_set_))) {
     LOG_WARN("fail to copy linked block ids", K(ret), K(iter));
   }
   return ret;
@@ -1322,7 +1352,8 @@ int ObTabletPersister::copy_data_macro_ids(
 
 int ObTabletPersister::do_copy_ids(
     blocksstable::ObMacroIdIterator &iter,
-    ObBlockInfoSet::TabletMacroSet &id_set)
+    ObBlockInfoSet::TabletMacroSet &id_set,
+    ObBlockInfoSet::TabletMacroSet &backup_id_set)
 {
   int ret = OB_SUCCESS;
   MacroBlockId macro_id;
@@ -1331,11 +1362,24 @@ int ObTabletPersister::do_copy_ids(
       if (OB_UNLIKELY(OB_ITER_END != ret)) {
         LOG_WARN("fail to get next macro id", K(ret), K(macro_id));
       }
-    } else if (OB_FAIL(id_set.set_refactored(macro_id, 0 /*whether to overwrite*/))) {
-      if (OB_HASH_EXIST != ret) {
-        LOG_WARN("fail to push macro id into set", K(ret), K(macro_id));
-      } else {
-        ret = OB_SUCCESS;
+    } else if (!macro_id.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected block_id", K(ret), K(macro_id));
+    } else if (macro_id.is_backup_id()) {
+      if (OB_FAIL(backup_id_set.set_refactored(macro_id, 0 /*whether to overwrite*/))) {
+        if (OB_HASH_EXIST != ret) {
+          LOG_WARN("fail to push macro id into set", K(ret), K(macro_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      }
+    } else {
+      if (OB_FAIL(id_set.set_refactored(macro_id, 0 /*whether to overwrite*/))) {
+        if (OB_HASH_EXIST != ret) {
+          LOG_WARN("fail to push macro id into set", K(ret), K(macro_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
       }
     }
   }

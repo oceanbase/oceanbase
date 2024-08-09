@@ -107,16 +107,6 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
       // and so fail to pass the check. We must bypass the case.
       } else if (write_flag.is_table_api()) {
         // bypass the case
-      // Case 6: For the case of deleting rows during building the unique index
-      // concurrently, it may exist that two rows of the main table point to one
-      // row of the newly created index, which means the unique index will abort
-      // itself during consistency check. While because of the feature of the
-      // online ddl, the concurrent delete will start to operate on the newly
-      // created index, which causes these two delete operations and fail to pass
-      // the check. So we need bypass this case.
-      } else if (blocksstable::ObDmlFlag::DF_DELETE == writer_dml_flag
-                 && blocksstable::ObDmlFlag::DF_DELETE == locker_dml_flag) {
-        // bypass the case
       // Case 7: For the case of batch dml operation, it may operate the same row
       // concurrently if the first operation has no effects.(SQL layer will check
       // the modification of the row before the second operation, and report the
@@ -133,6 +123,16 @@ int check_sequence_set_violation(const concurrent_control::ObWriteFlag write_fla
         // same row more than once. It may have no chance to batch the same row.
         // So we need bypass this case.
       } else if (write_flag.is_insert_up()) {
+        // bypass the case
+      // Case 6: For the case of deleting rows during building the unique index
+      // concurrently, it may exist that two rows of the main table point to one
+      // row of the newly created index, which means the unique index will abort
+      // itself during consistency check. While because of the feature of the
+      // online ddl, the concurrent delete will start to operate on the newly
+      // created index, which causes these two delete operations and fail to pass
+      // the check. So we need bypass this case.
+      } else if (blocksstable::ObDmlFlag::DF_DELETE == writer_dml_flag
+                 && blocksstable::ObDmlFlag::DF_DELETE == locker_dml_flag) {
         // bypass the case
       // Case 9: For the case of the write only index, it may operate the same
       // row more than once under the case that main table has two rows pointing

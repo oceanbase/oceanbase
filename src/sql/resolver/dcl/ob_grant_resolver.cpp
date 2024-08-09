@@ -927,7 +927,7 @@ int ObGrantResolver::check_user_dup(
     } else if (OB_FAIL(guard->get_user_info(tenant_id, user_name, host_name, user_info))) {
       LOG_WARN("failed to get user info", K(ret), K(tenant_id), K(user_name), K(host_name));
     } else if (OB_ISNULL(user_info)) {
-      ret = OB_USER_NOT_EXIST;
+      ret = OB_ERR_USER_NOT_EXIST;
       LOG_WARN("user is not exist", K(ret), K(tenant_id), K(user_name), K(host_name));
     } else {
       contain_role |= user_info->is_role();

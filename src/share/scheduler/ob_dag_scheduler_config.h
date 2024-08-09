@@ -56,13 +56,14 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_CO_MERGE_FINISH, ObDagPrio::DAG_PRIO_COMPACT
     false, 3, {"ls_id", "tablet_id", "compaction_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TX_TABLE_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::SPECIAL_TABLE_MERGE_TASK, "TX_TABLE_MERGE", "COMPACTION",
     false, 3, {"ls_id", "tablet_id", "compaction_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_WRITE_CKPT, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::WRITE_CKPT_TASK, "WRITE_CKPT", "COMPACTION",
-    false, 2, {"ls_id", "tablet_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_MINI_MERGE, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::MDS_MINI_MERGE_TASK, "MDS_MINI_MERGE", "COMPACTION",
     false, 3, {"ls_id", "tablet_id", "flush_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BATCH_FREEZE_TABLETS, ObDagPrio::DAG_PRIO_COMPACTION_HIGH, ObSysTaskType::BATCH_FREEZE_TABLET_TASK, "BATCH_FREEZE", "COMPACTION",
     false, 2, {"ls_id", "tablet_count"})
-// NOTICE: if you add/delete a compaction dag type here, remember to alter function is_compaction_dag and get_diagnose_tablet_type in ob_tenant_dag_scheduler.h
+/*
+ * NOTICE: if you add/delete a compaction dag type here, remember to alter function is_compaction_dag and get_diagnose_tablet_type in ob_tenant_dag_scheduler.h
+ * AND update check_ls_compaction_dag_exist_with_cancel
+*/
 
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_DDL, ObDagPrio::DAG_PRIO_DDL, ObSysTaskType::DDL_TASK, "DDL_COMPLEMENT", "DDL",
     true, 7, {"ls_id", "source_tablet_id", "dest_tablet_id", "data_table_id", "target_table_id", "schema_version", "snapshot_version"})
@@ -127,6 +128,14 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_INDEX_REBUILD, ObDagPrio::DAG_PRIO_HA
     false, 6, {"tenant_id", "backup_set_id", "backup_data_type", "ls_id", "turn_id", "retry_id"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_COMPLEMENT_LOG, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_COMPLEMENT_LOG", "BACKUP",
     false, 3, {"tenant_id", "backup_set_id", "ls_id"})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_BACKUP_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "INITIAL_BACKUP_FUSE", "BACKUP",
+    false, 0, {})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_START_BACKUP_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "START_BACKUP_FUSE", "BACKUP",
+    false, 0, {})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_TABLET_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "BACKUP_TABLET_FUSE", "BACKUP",
+    false, 0, {})
+DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_FINISH_BACKUP_FUSE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "FINISH_BACKUP_FUSE", "BACKUP",
+    false, 0, {})
 // DAG_TYPE_BACKUP END
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_BACKUPSET, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_BACKUPSET_TASK, "BACKUP_BACKUPSET", "BACKUP",
     false, 0, {})
@@ -260,7 +269,7 @@ struct ObDagTypeStruct
 
 struct ObDagType
 {
-  enum ObDagTypeEnum
+  enum ObDagTypeEnum : uint8_t
   {
 #define DAG_SCHEDULER_DAG_TYPE_DEF(dag_type, init_dag_prio, sys_task_type, dag_type_str, dag_module_str, diagnose_with_comment, diagnose_priority, diagnose_int_info_cnt, ...) dag_type,
 #include "ob_dag_scheduler_config.h"

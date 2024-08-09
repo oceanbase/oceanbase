@@ -167,7 +167,7 @@ public:
       total_len = datums->count() * fixed_len;
     }
     ctx.build_string_stream_meta(fixed_len, is_use_zero_len_as_null, total_len);
-    ctx.build_string_stream_encoder_info(type, false, &encoding_opt, nullptr, -1, &allocator_);
+    ctx.build_string_stream_encoder_info(type, false, &encoding_opt, nullptr, -1, DATA_VERSION_4_3_2_1, &allocator_);
     int64_t bitmap_size = pad8(size);
     char *bitmap = new char[bitmap_size];
     memset(bitmap, 0, bitmap_size);

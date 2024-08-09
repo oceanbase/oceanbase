@@ -220,7 +220,16 @@ int calc_sqrt_expr_oracle_number(const ObExpr &expr, ObEvalCtx &ctx,
     number::ObNumber res_nmb;
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     if (OB_FAIL(arg_nmb.sqrt(res_nmb, alloc_guard.get_allocator()))) {
-      LOG_WARN("calc sqrt failed", K(ret), K(arg_nmb), K(res_nmb));
+      // The input of the sqrt rewritten by stddev will not be negative. If it is negative, it
+      // means that the parameter has overflowed. Since the precision of ob is very large and the
+      // absolute value of the parameter is very small, the result can be directly corrected to 0
+      if (OB_UNLIKELY(arg_nmb.is_negative() && expr.extra_ == T_FUN_STDDEV)) {
+        res_nmb.set_zero();
+        res_datum.set_number(res_nmb);
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("calc sqrt failed", K(ret), K(arg_nmb), K(res_nmb));
+      }
     } else {
       res_datum.set_number(res_nmb);
     }
@@ -251,7 +260,17 @@ int calc_sqrt_expr_oracle_number_in_batch(const ObExpr &expr,
         } else {
           arg_nmb = arg_datums.at(i)->get_number();
           if (OB_FAIL(arg_nmb.sqrt(res_nmb, temp_allocator))) {
-            LOG_WARN("calc sqrt failed", K(ret), K(arg_nmb), K(res_nmb));
+            // The input of the sqrt rewritten by stddev will not be negative. If it is negative, it
+            // means that the parameter has overflowed. Since the precision of ob is very large and
+            // the absolute value of the parameter is very small, the result can be directly
+            // corrected to 0
+            if (OB_UNLIKELY(arg_nmb.is_negative() && expr.extra_ == T_FUN_STDDEV)) {
+              res_nmb.set_zero();
+              res_datums[i].set_number(res_nmb);
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("calc sqrt failed", K(ret), K(arg_nmb), K(res_nmb));
+            }
           } else {
             res_datums[i].set_number(res_nmb);
           }
@@ -269,7 +288,7 @@ int ObExprSqrt::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
 {
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
-  UNUSED(raw_expr);
+  rt_expr.extra_ = raw_expr.get_extra();
   if (OB_UNLIKELY(1 != rt_expr.arg_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid arg_cnt_ of expr", K(ret), K(rt_expr));

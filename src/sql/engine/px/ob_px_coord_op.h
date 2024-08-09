@@ -90,6 +90,7 @@ public:
       ObExecContext &ctx, ObDfo &parent, dtl::ObDtlChTotalInfo &ch_info) override;
   virtual int notify_peers_mock_eof(
       ObDfo *dfo, int64_t timeout_ts, common::ObAddr addr) const;
+  const ObString &query_sql() { return query_sql_; }
 protected:
   virtual int free_allocator() { return common::OB_SUCCESS; }
   /* destroy all channel */
@@ -155,6 +156,7 @@ protected:
   int64_t batch_rescan_param_version_;
   ObExtraServerAliveCheck server_alive_checker_;
   int64_t last_px_batch_rescan_size_;
+  ObString query_sql_;
 };
 
 class ObPxCoordSpec : public ObPxReceiveSpec
@@ -166,10 +168,7 @@ public:
     px_expected_worker_count_(0),
     qc_id_(common::OB_INVALID_ID),
     batch_op_info_(),
-    table_locations_(alloc),
-    sort_exprs_(alloc),
-    sort_collations_(alloc),
-    sort_cmp_funs_(alloc)
+    table_locations_(alloc)
   {}
   ~ObPxCoordSpec() {}
 
@@ -195,10 +194,6 @@ public:
   ObPxCoordOp::ObPxBatchOpInfo batch_op_info_;
   // 对于有条件下推的table_location, 需要序列化
   TableLocationFixedArray table_locations_;
-  // dynamic sample related
-  ExprFixedArray sort_exprs_;
-  ObSortCollations sort_collations_;
-  ObSortFuncs sort_cmp_funs_;
 };
 
 } // end namespace sql

@@ -332,6 +332,13 @@ DEF_TO_STRING(ObCommitVersionsArray)
 {
   int64_t pos = 0;
   J_KV(KP(this), K(array_.count()));
+  int64_t cnt = array_.count();
+  for (int64_t i = 0; i < cnt && i < 5; i++) {
+    J_KV("idx", i, "node", array_.at(i));
+  }
+  for (int64_t i = cnt - 5; i >= 5 && i < cnt; i++) {
+    J_KV("idx", i, "node", array_.at(i));
+  }
   return pos;
 }
 
@@ -441,6 +448,7 @@ bool ObCommitVersionsArray::is_valid()
   for (int i = 0; i < array_.count() - 1; i++) {
     if (!array_.at(i).start_scn_.is_valid() ||
         !array_.at(i).commit_version_.is_valid() ||
+        array_.at(i).commit_version_.is_max() ||
         array_.at(i).start_scn_ > array_.at(i + 1).start_scn_ ||
         array_.at(i).start_scn_ > array_.at(i).commit_version_) {
       bool_ret = false;
@@ -448,6 +456,13 @@ bool ObCommitVersionsArray::is_valid()
                   K(array_.at(i + 1)));
     }
   }
+
+  int64_t last_node_idx = array_.count() - 1;
+  if (!array_.at(last_node_idx).start_scn_.is_max() && array_.at(last_node_idx).commit_version_.is_max()) {
+    bool_ret = false;
+    STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "this commit version array is invalid", K(array_.at(last_node_idx)));
+  }
+
   return bool_ret;
 }
 

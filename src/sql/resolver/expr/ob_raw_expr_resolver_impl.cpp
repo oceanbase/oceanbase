@@ -1691,7 +1691,7 @@ int ObRawExprResolverImpl::process_dblink_udf_node(const ParseNode *node, ObRawE
     if (0 == column_ref.access_idents_.at(acc_cnt - 1).access_name_.case_compare("NEXTVAL")
         || 0 == column_ref.access_idents_.at(acc_cnt - 1).access_name_.case_compare("CURRVAL")) {
       ret = OB_ERR_SEQ_NOT_ALLOWED_HERE;
-      LOG_WARN("ORA-02287: sequence number not allowed here", K(ret), K(column_ref));
+      LOG_WARN("OBE-02287: sequence number not allowed here", K(ret), K(column_ref));
     }
   }
   OV (column_ref.access_idents_.count() >= 1);
@@ -2608,11 +2608,11 @@ int ObRawExprResolverImpl::resolve_right_node_of_obj_access_idents(const ParseNo
       CK (2 == right_node.num_child_);
       CK (OB_NOT_NULL(right_node.children_[0]));
       CK (OB_NOT_NULL(right_node.children_[1]));
-      OZ (resolve_right_node_of_obj_access_idents(*(right_node.children_[0]), q_name));
-      OZ (resolve_obj_access_idents(*(right_node.children_[1]), q_name));
+      OZ (SMART_CALL(resolve_right_node_of_obj_access_idents(*(right_node.children_[0]), q_name)));
+      OZ (SMART_CALL(resolve_obj_access_idents(*(right_node.children_[1]), q_name)));
     } else {
       // example: a(1).b(1), here, we resolve '.b(1)'
-      OZ (resolve_obj_access_idents(right_node, q_name), K(q_name));
+      OZ (SMART_CALL(resolve_obj_access_idents(right_node, q_name)), K(q_name));
     }
   } else {
     // example: a(1)(2) here, we resolve '(2)'
@@ -2654,7 +2654,7 @@ int ObRawExprResolverImpl::resolve_obj_access_idents(const ParseNode &node, ObQu
     LOG_WARN("failed to resolve left node of obj access", K(ret), K(q_name));
   }
   if (OB_SUCC(ret) && OB_NOT_NULL(node.children_[1])) {
-    if (OB_FAIL(resolve_right_node_of_obj_access_idents(*(node.children_[1]), q_name))) {
+    if (OB_FAIL(SMART_CALL(resolve_right_node_of_obj_access_idents(*(node.children_[1]), q_name)))) {
       LOG_WARN("failed to resolve right node of obj access", K(ret));
     }
   }
@@ -3041,13 +3041,10 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             }
 #endif
           } else {
-            if (ObNullType == param.get_type() &&
-                T_QUESTIONMARK == c_expr->get_expr_type() &&
-                ObDateTimeType == param.get_null_meta().get_type()) {
-              c_expr->set_meta_type(param.get_null_meta());
+            if (ObNullType == param.get_type()) {
+              c_expr->set_meta_type(param.get_param_meta());
             } else {
-              c_expr->set_meta_type(ObSQLUtils::is_oracle_empty_string(param)
-                                  ? param.get_param_meta() : param.get_meta());
+              c_expr->set_meta_type(param.get_meta());
             }
             c_expr->set_expr_obj_meta(param.get_param_meta());
             c_expr->set_accuracy(param.get_accuracy());
@@ -3061,6 +3058,11 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
               } else if (result_type.is_char() || result_type.is_nchar()) {
                 result_type.set_length(OB_MAX_ORACLE_CHAR_LENGTH_BYTE);
               }
+            }
+            if (-1 == result_type.get_length_semantics() &&
+              ObNullType == param.get_type() &&
+              ob_is_string_tc(param.get_param_meta().get_type())) {
+              result_type.set_length_semantics(session_info->get_actual_nls_length_semantics());
             }
             c_expr->set_result_type(result_type);
           }
