@@ -1969,7 +1969,6 @@ int ObLobManager::build_lob_param(ObLobAccessParam& param,
         bool is_remote = false;
         if (OB_FAIL(lob.get_extern_header(extern_header))) {
           LOG_WARN("failed to get extern header", K(ret), K(lob));
-          LOG_WARN("failed to get tx info", K(ret), K(lob));
         } else if (OB_FAIL(lob.get_location_info(location_info))) {
           LOG_WARN("failed to get location info", K(ret), K(lob));
         } else if (OB_FALSE_IT(param.ls_id_ = share::ObLSID(location_info->ls_id_))) {
