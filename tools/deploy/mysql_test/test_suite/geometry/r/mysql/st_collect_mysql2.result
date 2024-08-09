@@ -1,0 +1,73 @@
+# ----------------------------------------------------------------------
+# Test of GEOMETRY ST_COLLECT aggregation function2.
+# ----------------------------------------------------------------------
+USE test;
+DROP TABLE IF EXISTS product;
+CREATE TABLE product (
+year INTEGER,
+product VARCHAR(256),
+location Geometry
+);
+INSERT INTO product
+(year,  product,     location) VALUES
+(2000, "Calculator", ST_GeomFromText('point(60 -24)', 4326)),
+(2000, "Computer"  , ST_GeomFromText('point(28 -77)', 4326)),
+(2000, "Abacus"    , ST_GeomFromText('point(28 -77)', 4326)),
+(2000, "TV"        , ST_GeomFromText('point(38  60)', 4326)),
+(2001, "Calculator", ST_GeomFromText('point(60 -24)', 4326)),
+(2001, "Computer"  , ST_GeomFromText('point(28 -77)', 4326));
+# test normal situation
+SELECT ST_AsText(ST_Collect(location)) AS result FROM product;
+result
+MULTIPOINT((60 -24),(28 -77),(28 -77),(38 60),(60 -24),(28 -77))
+# test with distinct AND group_by
+SELECT year, ST_AsText(ST_Collect(DISTINCT location)) AS result FROM product GROUP BY year;
+year   result
+2000   MULTIPOINT((60 -24),(28 -77),(38 60))
+2001   MULTIPOINT((60 -24),(28 -77))
+# result is null
+SELECT ST_Collect(location) AS result FROM product WHERE year = 1999;
+# test with OVER_Claude
+SELECT ST_AsText(ST_Collect(location)
+OVER (ORDER BY year, product ROWS BETWEEN 1 PRECEDING AND CURRENT ROW))
+AS result
+FROM product;
+result
+MULTIPOINT((28 -77))
+MULTIPOINT((28 -77),(60 -24))
+MULTIPOINT((60 -24),(28 -77))
+MULTIPOINT((28 -77),(38 60))
+MULTIPOINT((38 60),(60 -24))
+MULTIPOINT((60 -24),(28 -77))
+DROP TABLE product;
+DROP TABLE IF EXISTS simple_table;
+CREATE TABLE simple_table ( running_number INTEGER NOT NULL AUTO_INCREMENT ,
+geo GEOMETRY, PRIMARY KEY ( RUNNING_NUMBER));
+INSERT INTO simple_table ( geo) VALUES
+(ST_GEOMFROMTEXT('POINT(0 0)')),
+(ST_GEOMFROMTEXT('LINESTRING(1 0, 1 1)')),
+(ST_GEOMFROMTEXT('LINESTRING(2 0, 2 1)')),
+(ST_GEOMFROMTEXT('POLYGON((3 0, 0 0, 0 3, 3 3, 3 0))')),
+(ST_GEOMFROMTEXT('POLYGON((4 0, 0 0, 0 4, 4 4, 4 0))')),
+(ST_GEOMFROMTEXT('MULTIPOINT(5 0)')),
+(ST_GEOMFROMTEXT('MULTIPOINT(6 0)')),
+(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION EMPTY')),
+(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION EMPTY'));
+SELECT ST_ASTEXT(ST_COLLECT(geo)) FROM simple_table GROUP BY geo WITH ROLLUP;
+ST_ASTEXT(ST_COLLECT(geo))
+MULTIPOINT((0 0))
+MULTILINESTRING((2 0,2 1))
+MULTILINESTRING((1 0,1 1))
+MULTIPOLYGON(((3 0,0 0,0 3,3 3,3 0)))
+MULTIPOLYGON(((4 0,0 0,0 4,4 4,4 0)))
+GEOMETRYCOLLECTION(MULTIPOINT((5 0)))
+GEOMETRYCOLLECTION(MULTIPOINT((6 0)))
+GEOMETRYCOLLECTION(GEOMETRYCOLLECTION EMPTY,GEOMETRYCOLLECTION EMPTY)
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(2 0,2 1),LINESTRING(1 0,1 1),POLYGON((3 0,0 0,0 3,3 3,3 0)),POLYGON((4 0,0 0,0 4,4 4,4 0)),MULTIPOINT((5 0)),MULTIPOINT((6 0)),GEOMETRYCOLLECTION EMPTY,GEOMETRYCOLLECTION EMPTY)
+SELECT ST_ASTEXT(ST_COLLECT(geo)) FROM simple_table;
+ST_ASTEXT(ST_COLLECT(geo))
+GEOMETRYCOLLECTION(POINT(0 0),LINESTRING(1 0,1 1),LINESTRING(2 0,2 1),POLYGON((3 0,0 0,0 3,3 3,3 0)),POLYGON((4 0,0 0,0 4,4 4,4 0)),MULTIPOINT((5 0)),MULTIPOINT((6 0)),GEOMETRYCOLLECTION EMPTY,GEOMETRYCOLLECTION EMPTY)
+SELECT CAST(ST_COLLECT(geo) AS DECIMAL ) FROM simple_table;
+CAST(ST_COLLECT(geo) AS DECIMAL )
+0
+DROP TABLE simple_table;

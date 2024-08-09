@@ -8527,7 +8527,8 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
             LOG_WARN("fail to narrow_st_collect_result", K(ret));
           }
         }
-        
+        // todo using reverse_coordinate to fix the bug of narrow when srid != 0 
+        // maybe similiar to st_astext?
         if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*narrow_gc, *aggr_info.expr_, 
                                                ctx, srs, res_wkb))) {
           LOG_WARN("failed to write geometry to wkb", K(ret));

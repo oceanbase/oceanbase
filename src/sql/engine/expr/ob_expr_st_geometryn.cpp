@@ -17,8 +17,6 @@
 #include "ob_expr_st_geometryn.h"
 #include "lib/geo/ob_srs_info.h"
 #include "observer/omt/ob_tenant_srs.h"
-#include "sql/engine/expr/ob_geo_expr_utils.h"
-
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -94,7 +92,6 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
   } else {
     ObString wkb = gis_datum->get_string();
     uint32_t srid = 0;
-    bool is_geog = false;
 
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_alloc, *gis_datum,
               expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
@@ -121,7 +118,8 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
         ret = OB_ERR_BAD_FIELD_ERROR;
         // todo LOG
       } else { 
-        is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
+        bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
+        bool need_reverse = (is_geog && srs->is_lat_long_order());
 
         switch (src_geo->type()) {
           case common::ObGeoType::MULTIPOINT:{
@@ -168,7 +166,7 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
             break;
         } // end switch
 
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && is_geog && need_reverse) {
           if (src_geo->type() == common::ObGeoType::MULTIPOINT) {
             tmp_geo = dest_geo;
           } else {
@@ -186,10 +184,10 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
       if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*tmp_geo, expr, ctx, 
                                              srs, res_wkb, srid))){
         LOG_WARN("failed to write geometry to wkb", K(ret));
-      } 
-      res.set_string(res_wkb);
+      } else
+        res.set_string(res_wkb);
     } else {
-      LOG_WARN("failed to get N-Geometry from Collection", K(ret));
+      LOG_WARN("failed to get Nth-Geometry from Collection", K(ret));
     }
   }
   return ret;
