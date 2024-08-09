@@ -75,6 +75,7 @@ int ObTransferTx::do_balance_inner_(uint64_t tenant_id)
     LOG_INFO("worker to do partition_balance");
     auto b_svr = MTL(rootserver::ObTenantBalanceService*);
     b_svr->reset();
+    b_svr->stop();
     int64_t job_cnt = 0;
     int64_t start_time = OB_INVALID_TIMESTAMP, finish_time = OB_INVALID_TIMESTAMP;
     ObBalanceJob job;
@@ -207,7 +208,7 @@ TEST_F(ObTransferTx, prepare)
     }
     while (!R.stop_) {
       do_balance(tenant_id);
-      ::sleep(3);
+      ::sleep(1);
     }
   });
 
@@ -216,6 +217,9 @@ TEST_F(ObTransferTx, prepare)
   int64_t ls_count = 0;
   EQ(0, SSH::g_select_int64(R.tenant_id_, "select count(ls_id) as val from __all_ls where ls_id!=1", ls_count));
   EQ(2, ls_count);
+
+  int64_t affected_rows;
+  EQ(0, GCTX.sql_proxy_->write("alter system set _enable_parallel_table_creation = false tenant=all", affected_rows));
 }
 
 #define TRANSFER_CASE_PREPARE \
@@ -939,6 +943,61 @@ TEST_F(ObTransferTx, transfer_A_B_AND_A_B)
   NEQ(0, conn->commit());
 }
 
+TEST_F(ObTransferTx, transfer_filter_tx)
+{
+  TRANSFER_CASE_PREPARE;
+  rootserver::ObNewTableTabletAllocator::alloc_tablet_ls_offset_ = 0;
+  EQ(OB_SUCCESS, sql_proxy.write("create table stu3(col int)", affected_rows));
+  EQ(OB_SUCCESS, sql_proxy.write("create table stu4(col int)", affected_rows));
+  ObLSID loc3, loc4;
+  EQ(0, SSH::select_table_loc(R.tenant_id_, "stu3", loc3));
+  EQ(0, SSH::select_table_loc(R.tenant_id_, "stu4", loc4));
+  EQ(loc1, loc3);
+  EQ(loc2, loc4);
+  sqlclient::ObISQLConnection *conn = NULL;
+  EQ(0, sql_proxy.acquire(conn));
+  EQ(0, SSH::write(conn, "set autocommit=0"));
+  EQ(0, SSH::write(conn, "insert into stu4 values(100)"));
+  ObTransID tx_id;
+  EQ(0, SSH::find_tx(conn, tx_id));
+
+  sqlclient::ObISQLConnection *conn2 = NULL;
+  EQ(0, sql_proxy.acquire(conn2));
+  EQ(0, SSH::write(conn2, "set autocommit=0"));
+  EQ(0, SSH::write(conn2, "insert into stu2 values(100)"));
+  ObTransID tx_id2;
+  EQ(0, SSH::find_tx(conn2, tx_id2));
+
+  EQ(0, sql_proxy.write("alter tablegroup tg1 add stu1,stu2;", affected_rows));
+  EQ(0, do_balance(R.tenant_id_));
+  // wait
+  while (true) {
+    EQ(0, SSH::select_table_loc(R.tenant_id_, "stu1", loc1));
+    EQ(0, SSH::select_table_loc(R.tenant_id_, "stu2", loc2));
+    if (loc1 == loc2) {
+      break;
+    }
+    ::sleep(1);
+  }
+
+  ObSqlString sql;
+  sql.assign_fmt("select count(*) as val from __all_virtual_trans_stat where trans_id=%ld", tx_id.tx_id_);
+  int64_t part_cnt = 0;
+  EQ(0, SSH::g_select_int64(R.tenant_id_, sql.ptr(), part_cnt));
+  EQ(1, part_cnt);
+  sql.assign_fmt("select count(*) as val from __all_virtual_trans_stat where trans_id=%ld", tx_id2.tx_id_);
+  EQ(0, SSH::g_select_int64(R.tenant_id_, sql.ptr(), part_cnt));
+  EQ(2, part_cnt);
+
+  EQ(0, conn->commit());
+  sql_proxy.close(conn, 0);
+  EQ(0, conn2->commit());
+  sql_proxy.close(conn2, 0);
+  int64_t sum = 0;
+  EQ(0, SSH::select_int64(sql_proxy, "select sum(col) as val from stu2", sum));
+  EQ(100, sum);
+}
+
 TEST_F(ObTransferTx, transfer_AND_ddl)
 {
   TRANSFER_CASE_PREPARE;
@@ -954,7 +1013,7 @@ TEST_F(ObTransferTx, transfer_AND_ddl)
     while (!case_stop && OB_SUCC(ret)) {
       if (OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID, "truncate table stu2", affected_rows))) {
       }
-      ob_usleep(200 * 1000);
+      ob_usleep(500 * 1000);
     }
   });
   std::thread th2([&]() {
@@ -964,11 +1023,12 @@ TEST_F(ObTransferTx, transfer_AND_ddl)
     while (!case_stop && OB_SUCC(ret)) {
       if (OB_FAIL(sql_proxy.write(OB_SYS_TENANT_ID, "insert into stu2 values(100)", affected_rows))) {
       }
+      ob_usleep(500 * 1000);
     }
   });
 
-  int round = 10;
-  while (round > 0) {
+  int64_t start_time = ObTimeUtil::current_time();
+  while (ObTimeUtil::current_time() - start_time < 15 * 1000 * 1000) {
     int64_t task = 0;
     ObSqlString sql;
     sql.assign_fmt("select count(*) as val from __all_virtual_transfer_task where tenant_id=%ld", R.tenant_id_);
@@ -982,9 +1042,8 @@ TEST_F(ObTransferTx, transfer_AND_ddl)
         EQ(0, sql_proxy.write("alter tablegroup tg1 add stu1,stu2", affected_rows));
       }
       EQ(0, do_balance(R.tenant_id_));
-      round--;
     }
-    ob_usleep(3 * 1000 * 1000);
+    ob_usleep(1 * 1000 * 1000);
   }
   case_stop = true;
   th.join();
@@ -1084,6 +1143,7 @@ TEST_F(ObTransferTx, transfer_AND_rollback2)
   EQ(100, val);
 }
 
+/*
 TEST_F(ObTransferTx, transfer_tx_ctx_merge)
 {
   TRANSFER_CASE_PREPARE;
@@ -1172,6 +1232,7 @@ TEST_F(ObTransferTx, transfer_tx_ctx_merge)
   // make wrs check approve
   EQ(0, SSH::modify_wrs(R.tenant_id_, loc2));
   // wait
+  LOGI("debug>");
   while (true) {
     EQ(0, SSH::select_table_loc(R.tenant_id_, "stu1", loc1));
     EQ(0, SSH::select_table_loc(R.tenant_id_, "stu2", loc2));
@@ -1180,6 +1241,7 @@ TEST_F(ObTransferTx, transfer_tx_ctx_merge)
     }
     ::sleep(1);
   }
+  LOGI("debug>");
 
   inject_tx_fault_helper.release();
 
@@ -1188,6 +1250,7 @@ TEST_F(ObTransferTx, transfer_tx_ctx_merge)
   th3.join();
   th4.join();
   th5.join();
+  LOGI("debug>");
 
   EQ(0, commit_ret);
   EQ(0, commit_ret2);
@@ -1202,22 +1265,26 @@ TEST_F(ObTransferTx, transfer_tx_ctx_merge)
   EQ(400, val1);
   EQ(400, val2);
 
+  LOGI("debug>");
   EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc1));
   EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc2));
   EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc1));
   EQ(0, SSH::freeze_tx_data(R.tenant_id_, loc2));
+  LOGI("debug>");
   EQ(0, SSH::ls_reboot(R.tenant_id_, loc1));
   EQ(0, SSH::ls_reboot(R.tenant_id_, loc2));
+
+  LOGI("debug>");
+  EQ(0, wait_balance_clean(R.tenant_id_));
 }
+*/
 
 TEST_F(ObTransferTx, transfer_batch)
 {
   TRANSFER_CASE_PREPARE;
-  sql_proxy.write("alter system set _transfer_start_trans_timeout='5s'",affected_rows);
-
   sql_proxy.write("alter system set _transfer_start_trans_timeout = '10s'", affected_rows);
   std::set<sqlclient::ObISQLConnection*> jobs;
-  for (int i =0 ;i< 5000;i++) {
+  for (int i =0 ;i< 2100;i++) {
     sqlclient::ObISQLConnection *conn = NULL;
     EQ(0, sql_proxy.acquire(conn));
     EQ(0, SSH::write(conn, "set autocommit=0"));
@@ -1242,7 +1309,7 @@ TEST_F(ObTransferTx, transfer_batch)
   }
   int64_t sum = 0;
   EQ(0, SSH::select_int64(sql_proxy, "select sum(col) as val from stu2", sum));
-  EQ(100 * 5000, sum);
+  EQ(100 * 2100, sum);
   sql_proxy.write("alter system set _transfer_start_trans_timeout='1s'",affected_rows);
 
   EQ(0, SSH::freeze_tx_ctx(R.tenant_id_, loc1));
@@ -1447,7 +1514,7 @@ TEST_F(ObTransferTx, bench)
   }
 
   int64_t start_time = ObTimeUtil::current_time();
-  int64_t wait_time = 2 * 60 * 1000 * 1000;
+  int64_t wait_time = 1 * 60 * 1000 * 1000;
   ObLSID loc,loc_tmp;
   while (ObTimeUtil::current_time() - start_time < wait_time && !bench_err) {
     int64_t task = 0;

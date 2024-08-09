@@ -6634,16 +6634,20 @@ int ObRelationalExprOperator::row_cmp(
         --i;
         break;
       }
-    } else if (left->is_null()) {
-      cnt_row_null = true;
     } else if (OB_FAIL(r_row[i]->eval(r_ctx, right))) {
       if (OB_FAIL(try_get_inner_row_cmp_ret<false>(ret, first_nonequal_cmp_ret))) {
-        LOG_WARN("failed to eval right in row cmp", K(ret));
+        if (left->is_null()) {
+          // override ret if left input is null due to short-circuit calculation
+          ret = OB_SUCCESS;
+          cnt_row_null = true;
+        } else {
+          LOG_WARN("failed to eval right in row cmp", K(ret));
+        }
       } else {
         --i;
         break;
       }
-    } else if (right->is_null()) {
+    } else if (left->is_null() || right->is_null()) {
       cnt_row_null = true;
     } else if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[i])(*left, *right, first_nonequal_cmp_ret))) {
       LOG_WARN("failed to cmp", K(ret));

@@ -49,8 +49,22 @@ public:
 public:
   ObTableLockOp lock_op_;
 };
-
 typedef common::ObDList<ObMemCtxLockOpLinkNode> ObLockNodeList;
+
+class ObMemCtxLockPrioOpLinkNode : public common::ObDLinkBase<ObMemCtxLockPrioOpLinkNode>
+{
+public:
+  ObMemCtxLockPrioOpLinkNode()
+    : prio_op_()
+  {}
+  int init(const ObTableLockOp &op_info, const ObTableLockPriority priority);
+  bool is_valid() const { return prio_op_.is_valid(); }
+  TO_STRING_KV(K_(prio_op));
+public:
+  ObTableLockPrioOp prio_op_;
+};
+typedef common::ObDList<ObMemCtxLockPrioOpLinkNode> ObPrioLockNodeList;
+
 class ObLockMemCtx
 {
   using RWLock = common::SpinRWLock;

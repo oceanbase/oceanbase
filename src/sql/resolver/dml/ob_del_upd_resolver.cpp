@@ -342,6 +342,17 @@ int ObDelUpdResolver::resolve_column_and_values(const ParseNode &assign_list,
               OX (const_cast<ObObjParam &>(
               params_.param_list_->at(param_idx)).set_need_to_check_type(true));
             } else {
+              const ObObjType col_type = col_expr->get_result_type().get_type();
+              bool tmp = (ObDateTimeType<=col_type && ObYearType>=col_type) ||
+                         (ObTimestampTZType<=col_type && ObTimestampNanoType>=col_type);
+              const ObObjType var_type = c_expr->get_result_type().get_type();
+              int64_t param_idx = c_expr->get_value().get_unknown();
+              CK (OB_NOT_NULL(params_.param_list_));
+              bool is_nullptr_str = param_idx < params_.param_list_->count() && !params_.param_list_->at(param_idx).get_string_ptr();
+              if ((ObVarcharType==var_type || ObCharType==var_type) && tmp && is_nullptr_str && session_info_->get_pl_context()) {
+                ret = OB_ERR_INPUT_VALUE_NOT_LONG_ENOUGH;
+                LOG_WARN("failed to assign '' to date time", K(ret));
+              }
               OZ (c_expr->add_flag(IS_TABLE_ASSIGN));
               OX (c_expr->set_result_type(col_expr->get_result_type()));
             }
@@ -3561,6 +3572,8 @@ int ObDelUpdResolver::resolve_insert_values(const ParseNode *node,
         if (OB_FAIL(build_row_for_empty_brackets(value_row, table_info))) {
           LOG_WARN( "fail to build row for empty brackets", K(ret));
         }
+      } else if (OB_FAIL(check_column_value_type(&value_row, table_info, params_.param_list_))) {
+           LOG_WARN("fail to check column value type", K(ret));
       } else {}
       if (OB_SUCC(ret)) {
         if (OB_FAIL(add_new_value_for_oracle_temp_table(value_row))) {
@@ -3613,6 +3626,35 @@ int ObDelUpdResolver::check_column_value_pair(ObArray<ObRawExpr*> *value_row,
   return ret;
 }
 
+int ObDelUpdResolver::check_column_value_type(ObArray<ObRawExpr*> *value_row,
+                                              ObInsertTableInfo& table_info,
+                                              const ParamStore * params)
+{
+  int ret = OB_SUCCESS;
+  //  if value type is char or varchar but v_.string is nullptr,it can
+  // not be assigned to date time type.
+  CK (table_info.values_desc_.count() == value_row->count());
+  for (int64_t i = 0;i < table_info.values_desc_.count() && OB_SUCCESS == ret; ++i) {
+    bool is_nullptr_str = false;
+    ObRawExpr *tmp = value_row->at(i);
+    bool isfrom_char_type = (ObCharType == tmp->get_result_type().get_type() ||
+                         ObVarcharType == tmp->get_result_type().get_type());
+    if (T_QUESTIONMARK == tmp->get_expr_type()) {
+      ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(tmp);
+      int64_t param_idx = c_expr->get_value().get_unknown();
+      is_nullptr_str = param_idx < params->count() && !params->at(param_idx).get_string_ptr();
+    }
+    ObObjType col_type = table_info.values_desc_.at(i)->get_result_type().get_type();
+    bool isto_date_type = (ObDateTimeType<=col_type && ObYearType>=col_type) ||
+        (ObTimestampTZType<=col_type && ObTimestampNanoType>=col_type);
+    if (isfrom_char_type && is_nullptr_str && isto_date_type &&
+        session_info_->get_pl_context() != NULL) {
+      ret = OB_ERR_INPUT_VALUE_NOT_LONG_ENOUGH;
+      LOG_USER_ERROR(OB_ERR_INPUT_VALUE_NOT_LONG_ENOUGH);
+    }
+  }
+  return ret;
+}
 
 //如果values后面跟的是空括号的话，需要根据stmt语句中column列表的顺序加入default value;
 //特例，如果stmt中没有指定column列表的话，则会在resolve_insert_column时加入全部的列

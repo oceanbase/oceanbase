@@ -131,6 +131,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define CLUSTER_VERSION_4_3_0_1 (oceanbase::common::cal_version(4, 3, 0, 1))
 #define CLUSTER_VERSION_4_3_1_0 (oceanbase::common::cal_version(4, 3, 1, 0))
 #define CLUSTER_VERSION_4_3_2_0 (oceanbase::common::cal_version(4, 3, 2, 0))
+#define CLUSTER_VERSION_4_3_2_1 (oceanbase::common::cal_version(4, 3, 2, 1))
 #define CLUSTER_VERSION_4_3_3_0 (oceanbase::common::cal_version(4, 3, 3, 0))
 //!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 //TODO: If you update the above version, please update CLUSTER_CURRENT_VERSION.
@@ -164,6 +165,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define DATA_VERSION_4_3_0_1 (oceanbase::common::cal_version(4, 3, 0, 1))
 #define DATA_VERSION_4_3_1_0 (oceanbase::common::cal_version(4, 3, 1, 0))
 #define DATA_VERSION_4_3_2_0 (oceanbase::common::cal_version(4, 3, 2, 0))
+#define DATA_VERSION_4_3_2_1 (oceanbase::common::cal_version(4, 3, 2, 1))
 #define DATA_VERSION_4_3_3_0 (oceanbase::common::cal_version(4, 3, 3, 0))
 #define DATA_CURRENT_VERSION DATA_VERSION_4_3_3_0
 // ATTENSION !!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -177,7 +179,24 @@ public:
   static int64_t print_version_str(char *buf, const int64_t buf_len, uint64_t version);
 };
 
+class ObVersionPrinter
+{
+public:
+  ObVersionPrinter(const uint64_t version);
+  TO_STRING_KV(K_(version_str), K_(version_val));
+private:
+  uint64_t version_val_;
+  char version_str_[OB_SERVER_VERSION_LENGTH];
+};
+
 } // namespace common
 } // namespace oceanbase
 
+#define VP(version) (::oceanbase::common::ObVersionPrinter(version))
+#define DVP(version) VP(version)
+#define CVP(version) VP(version)
+// print data version in human readable way
+#define KDV(x) #x, DVP(x)
+// print cluster version in human readable way
+#define KCV(x) #x, CVP(x)
 #endif

@@ -35,7 +35,7 @@ int internal_calc_result_length(ObExprResType &type, ObExprResType &text)
   if (ob_is_text_tc(param_type) && lib::is_oracle_mode()) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "RAW", ob_obj_type_str(param_type));
-    LOG_WARN("ORA-00932: inconsistent datatypes: expected - got LOB", K(ret));
+    LOG_WARN("OBE-00932: inconsistent datatypes: expected - got LOB", K(ret));
   } else if (ob_is_string_type(param_type) || ob_is_raw(param_type)) {
     length = 2 * text.get_length();
     if (text.get_length_semantics() == LS_CHAR) {

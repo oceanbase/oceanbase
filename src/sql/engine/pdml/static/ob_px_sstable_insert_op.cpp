@@ -254,6 +254,10 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
       LOG_INFO("all partitions is end", K(notify_idx), K(participants_));
     }
   }
+  if (OB_FAIL(ret) && OB_EAGAIN == ret) {
+    LOG_WARN("replace eagain into error unexpected, px not allow eagain", K(ret));
+    ret = OB_TIMEOUT;
+  }
   return ret;
 }
 

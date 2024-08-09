@@ -1532,15 +1532,19 @@ int ObDictColumnDecoder::sorted_between_for_ref(
                   }
                   return cmp_ret > 0;}) - begin_it;
 
+  // Since ref of dict is always continuous integer, exclusive right boundary ref minus 1 make it inclusive right boundary
+  const int64_t right_ref_inclusive = (0 == right_ref_exclusive) ? 0 : (right_ref_exclusive - 1);
   const uint32_t ref_width_size = ctx.ref_ctx_->meta_.get_uint_width_size();
   const int64_t row_cnt = pd_filter_info.count_;
   const int64_t row_start = pd_filter_info.start_;
-  int64_t refs_val[2] = {left_ref_inclusive, right_ref_exclusive};
+  int64_t refs_val[2] = {left_ref_inclusive, right_ref_inclusive};
   if (OB_FAIL(ret)) {
+  } else if (right_ref_exclusive <= left_ref_inclusive) {
+    // all false
   } else if (OB_FAIL(ObCSFilterFunctionFactory::instance().dict_ref_sort_bt_tranverse(ctx.ref_data_, dict_val_cnt, refs_val,
           row_start, row_cnt, parent, ref_width_size, result_bitmap))) {
     LOG_WARN("fail to exe dict_ref_sort_bt_tranverse", KR(ret), K(ref_width_size), K(dict_val_cnt), K(left_ref_inclusive),
-        K(right_ref_exclusive));
+        K(right_ref_inclusive));
   }
 
 

@@ -21,6 +21,45 @@ namespace oceanbase
 namespace common
 {
 using lib::ObMemAttr;
+class ObAllocAlign
+{
+public:
+  struct Header
+  {
+    static const uint32_t MAGIC_CODE = 0XAA22CCE1;
+    bool check_magic_code() const { return MAGIC_CODE == magic_code_; }
+    void mark_unused() { magic_code_ &= ~0x1; }
+    uint32_t magic_code_;
+    uint32_t offset_;
+  };
+  template<typename alloc_func, typename... Args>
+  static void *alloc_align(const int64_t size, const int64_t align, alloc_func &&alloc, const Args&... args)
+  {
+    void *ptr = NULL;
+    int64_t real_align = lib::align_up2(align, 16);
+    int64_t real_size = real_align + size + sizeof(Header);
+    char *tmp_ptr = (char*)alloc(real_size, args...);
+    if (NULL != tmp_ptr) {
+      ptr = (void*)lib::align_up2((int64_t)tmp_ptr + sizeof(Header), real_align);
+      Header *header = (Header*)ptr - 1;
+      header->magic_code_ = Header::MAGIC_CODE;
+      header->offset_ = (char*)header - tmp_ptr;
+    }
+    return ptr;
+  }
+
+  template<typename free_func>
+  static void free_align(void *ptr, free_func &&free)
+  {
+    if (NULL != ptr) {
+      Header *header = (Header*)ptr - 1;
+      abort_unless(header->check_magic_code());
+      header->mark_unused();
+      char *orig_ptr = (char*)header - header->offset_;
+      free(orig_ptr);
+    }
+  }
+};
 class ObIAllocator
 {
 public:
@@ -46,6 +85,20 @@ public:
     return nullptr;
   }
   virtual void free(void *ptr) = 0;
+  virtual void *alloc_align(const int64_t size, const int64_t align) final
+  {
+    return ObAllocAlign::alloc_align(size, align,
+        [this](const int64_t size) { return this->alloc(size); });
+  }
+  virtual void *alloc_align(const int64_t size, const int64_t align, const ObMemAttr &attr) final
+  {
+    return ObAllocAlign::alloc_align(size, align,
+        [this](const int64_t size, const ObMemAttr &attr) { return this->alloc(size, attr); }, attr);
+  }
+  virtual void free_align(void *ptr) final
+  {
+    ObAllocAlign::free_align(ptr, [this](void *ptr){ this->free(ptr); });
+  }
   virtual int64_t total() const
   {
     return 0;

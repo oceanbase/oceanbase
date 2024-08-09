@@ -309,6 +309,7 @@ public:
   bool is_leader_takeover_pending() const;
   bool is_switch_leader_pending() const;
   bool is_resume_leader_pending() const;
+  bool is_follower_swl_pending() const;
   bool is_stopped() const;
 
   TO_STRING_KV(K(ls_id_),
@@ -323,6 +324,7 @@ private:
 
   static bool is_switch_leader_pending_(const TxLSStateContainer &ls_state_container);
   static bool is_resume_leader_pending_(const TxLSStateContainer &ls_state_container);
+  static bool is_follower_swl_pending_(const TxLSStateContainer &ls_state_container);
 
 private:
   share::ObLSID ls_id_;

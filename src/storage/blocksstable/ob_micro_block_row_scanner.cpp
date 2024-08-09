@@ -1060,7 +1060,7 @@ int ObIMicroBlockRowScanner::read_reference(
   return ret;
 }
 
-////////////////////////////////// ObMicroBlockRowScannerV2 ////////////////////////////////////////////
+////////////////////////////////// ObMicroBlockRowScanner ////////////////////////////////////////////
 int ObMicroBlockRowScanner::init(
     const storage::ObTableIterParam &param,
     storage::ObTableAccessContext &context,

@@ -85,6 +85,9 @@ int ObAsyncCmdDriver::response_result(ObMySQLResultSet &result)
         LOG_WARN("send error packet fail", K(sret), K(ret));
       }
     }
+  } else if (result.is_with_rows()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("async end trans should not have rows", K(ret));
   } else {
     //what if begin;select 1; select 2; commit; commit;
     //we should still have to respond a packet to client in terms of the last commit

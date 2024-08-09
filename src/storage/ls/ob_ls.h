@@ -490,6 +490,7 @@ public:
   // @param [out] meta_package
   // @param [out] tablet_ids
   int get_ls_meta_package_and_tablet_ids(const bool check_archive,
+                                         const bool need_sorted_tablet_id,
                                          ObLSMetaPackage &meta_package,
                                          common::ObIArray<common::ObTabletID> &tablet_ids);
   DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
@@ -506,6 +507,7 @@ public:
   int get_ls_meta_package_and_tablet_metas(
       const bool check_archive,
       const HandleLSMetaFunc &handle_ls_meta_f,
+      const bool need_sorted_tablet_id,
       const ObLSTabletService::HandleTabletMetaFunc &handle_tablet_meta_f);
 
   // ObLSTabletService interface:
@@ -955,6 +957,7 @@ public:
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
       bool &allow_read);
+  int set_ls_allow_to_read();
 
 private:
   void record_async_freeze_tablets_(const ObIArray<ObTabletID> &tablet_ids, const int64_t epoch);

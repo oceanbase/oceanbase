@@ -327,7 +327,7 @@ int SimpleServerHelper::freeze(uint64_t tenant_id, ObLSID ls_id, ObTabletID tabl
     const bool is_sync = true;
     const bool abs_timeout_ts = ObClockGenerator::getClock() + 60LL * 1000LL * 1000LL;
     if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-    } else if (OB_FAIL(ls_handle.get_ls()->tablet_freeze(tablet_id, need_rewrite_meta, is_sync, abs_timeout_ts))) {
+    } else if (OB_FAIL(ls_handle.get_ls()->tablet_freeze(tablet_id, is_sync, abs_timeout_ts, need_rewrite_meta))) {
     }
   }
   return ret;
@@ -352,7 +352,7 @@ int SimpleServerHelper::freeze_tx_data(uint64_t tenant_id, ObLSID ls_id)
       } else if (OB_FAIL(tx_data_memtable_mgr->flush(share::SCN::max_scn(),
               checkpoint::INVALID_TRACE_ID))) {
       } else {
-        usleep(10 * 1000 * 1000);
+        usleep(1 * 1000 * 1000);
       }
     }
   }
@@ -377,7 +377,7 @@ int SimpleServerHelper::freeze_tx_ctx(uint64_t tenant_id, ObLSID ls_id)
         LOG_WARN("checkpoint obj is null", KR(ret));
       } else if (OB_FAIL(tx_ctx_memtable->flush(share::SCN::max_scn(), 0))) {
       } else {
-        usleep(10 * 1000 * 1000);
+        usleep(1 * 1000 * 1000);
       }
     }
   }

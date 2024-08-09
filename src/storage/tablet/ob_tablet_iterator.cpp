@@ -151,11 +151,13 @@ int ObLSTabletIterator::get_tablet_ids(ObIArray<ObTabletID> &ids) const
 
 ObHALSTabletIDIterator::ObHALSTabletIDIterator(
     const share::ObLSID &ls_id,
-    const bool need_initial_state)
+    const bool need_initial_state,
+    const bool need_sorted_tablet_id)
   : ls_id_(ls_id),
     tablet_ids_(),
     idx_(0),
-    need_initial_state_(need_initial_state)
+    need_initial_state_(need_initial_state),
+    need_sorted_tablet_id_(need_sorted_tablet_id)
 {
 }
 
@@ -174,6 +176,21 @@ void ObHALSTabletIDIterator::reset()
   ls_id_.reset();
   tablet_ids_.reset();
   idx_ = 0;
+}
+
+int ObHALSTabletIDIterator::sort_tablet_ids_if_need()
+{
+  int ret = OB_SUCCESS;
+  if (!need_sorted_tablet_id_) {
+    // do nothing
+  } else if (OB_UNLIKELY(0 != idx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get next tablet id before sort", K(ret), K_(idx));
+  } else {
+    std::sort(tablet_ids_.begin(), tablet_ids_.end());
+    LOG_INFO("sort tablet ids if need");
+  }
+  return ret;
 }
 
 int ObHALSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
@@ -214,9 +231,10 @@ int ObHALSTabletIDIterator::get_next_tablet_id(common::ObTabletID &tablet_id)
 
 ObHALSTabletIterator::ObHALSTabletIterator(
     const share::ObLSID &ls_id,
-    const bool need_initial_state)
+    const bool need_initial_state,
+    const bool need_sorted_tablet_id)
   : ls_tablet_service_(nullptr),
-    tablet_id_iter_(ls_id, need_initial_state)
+    tablet_id_iter_(ls_id, need_initial_state, need_sorted_tablet_id)
 {}
 
 

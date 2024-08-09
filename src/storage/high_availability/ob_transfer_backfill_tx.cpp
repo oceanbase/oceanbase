@@ -176,6 +176,7 @@ int ObTransferWorkerMgr::get_need_backfill_tx_tablets_(ObTransferBackfillTXParam
                                                            true/* need reset tranfser flag */))) {
           LOG_WARN("fail to set empty", K(ret), KPC(tablet));
         } else {
+          ObTransferUtils::transfer_tablet_restore_stat(tenant_id_, tablet->get_tablet_meta().transfer_info_.ls_id_, dest_ls_->get_ls_id());
           dest_ls_->get_ls_restore_handler()->try_record_one_tablet_to_restore(tablet->get_tablet_meta().tablet_id_);
           LOG_INFO("[TRANSFER_BACKFILL]direct set tablet EMPTY if source tablet is UNDEFINED.",
                    "tablet_meta", tablet->get_tablet_meta());
@@ -312,9 +313,7 @@ int ObTransferWorkerMgr::check_source_tablet_ready_(
              "dest transfer info", transfer_info);
   } else {
     ha_status = tablet->get_tablet_meta().ha_status_;
-    if (ha_status.is_restore_status_minor_and_major_meta()
-        || ha_status.is_restore_status_full()
-        || ha_status.is_restore_status_undefined()) {
+    if (ha_status.check_ready_for_transfer()) {
       is_ready = true;
       LOG_INFO("[TRANSFER_BACKFILL]source tablet is ready", K(ls_id), K(tablet_id), K(ha_status));
     } else {
@@ -1671,6 +1670,13 @@ int ObTransferReplaceTableTask::transfer_replace_tables_(
     } else {
       LOG_INFO("[TRANSFER_BACKFILL]succ transfer replace tables", K(ret), K(param), K(tablet_info), KPC_(ctx));
     }
+
+    // report restore stat
+    if (OB_FAIL(ret)) {
+    } else if (ObTabletRestoreStatus::is_minor_and_major_meta(param.restore_status_)
+               || ObTabletRestoreStatus::is_remote(param.restore_status_)) {
+      ObTransferUtils::transfer_tablet_restore_stat(ctx_->tenant_id_, ctx_->src_ls_id_, ctx_->dest_ls_id_);
+    }
 #ifdef ERRSIM
     SERVER_EVENT_SYNC_ADD("TRANSFER", "AFTER_TRANSFER_DUMP_MDS_TABLE");
 #endif
@@ -2005,5 +2011,65 @@ void ObTransferReplaceTableTask::process_transfer_perf_diagnose_(
   ObTransferUtils::add_transfer_perf_diagnose_in_backfill(params, log_sync_scn, ret, timestamp, start_ts, is_report);
 }
 
+void ObTransferReplaceTableTask::transfer_tablet_restore_stat_() const
+{
+  int ret = OB_SUCCESS;
+  common::ObMySQLTransaction trans;
+  ObLSService *ls_service = nullptr;
+  ObLSHandle src_ls_handle;
+  ObLSHandle dest_ls_handle;
+  ObLS *src_ls = nullptr;
+  ObLS *dest_ls = nullptr;
+  common::ObMySQLProxy *sql_proxy = nullptr;
+  if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->dest_ls_id_, dest_ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(dest_ls = dest_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dest ls should not be NULL", K(ret), KP(dest_ls), KPC(ctx_));
+  } else if (OB_FAIL(ls_service->get_ls(ctx_->src_ls_id_, src_ls_handle, ObLSGetMod::HA_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(src_ls = src_ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("src ls should not be NULL", K(ret), KP(src_ls), KPC(ctx_));
+  } else if (OB_ISNULL(sql_proxy = GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql prxoy must not be null", K(ret));
+  } else if (OB_FAIL(trans.start(sql_proxy, gen_meta_tenant_id(ctx_->tenant_id_)))) {
+    LOG_WARN("fail to start trans", K(ret), KPC(ctx_));
+  } else {
+    ObLSRestoreJobPersistKey dest_ls_key;
+    ObRestorePersistHelper helper;
+    dest_ls_key.tenant_id_ = ctx_->tenant_id_;
+    dest_ls_key.job_id_ = dest_ls->get_ls_restore_handler()->get_restore_ctx().job_id_;
+    dest_ls_key.ls_id_ = ctx_->dest_ls_id_;
+    dest_ls_key.addr_ = GCTX.self_addr();
+
+    ObLSRestoreJobPersistKey src_ls_key = dest_ls_key;
+    src_ls_key.ls_id_ = ctx_->src_ls_id_;
+    if (OB_FAIL(helper.init(ctx_->tenant_id_, share::OBCG_STORAGE))) {
+      LOG_WARN("fail to init restore table helper", K(ret), KPC(ctx_));
+    } else if (OB_FAIL(helper.transfer_tablet(trans, src_ls_key, dest_ls_key))) {
+      LOG_WARN("fail to transfer tablet restore stat", K(ret), KPC(ctx_));
+    }
+
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit trans", K(ret), K(tmp_ret));
+        ret = OB_SUCC(ret) ? tmp_ret : ret;
+      }
+    }
+
+    if (FAILEDx(dest_ls->get_ls_restore_handler()->restore_stat().inc_total_tablet_cnt())) {
+      LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(dest_ls_key));
+    } else if (OB_FAIL(src_ls->get_ls_restore_handler()->restore_stat().dec_total_tablet_cnt())) {
+      LOG_WARN("fail to inc dest ls total tablet cnt", K(ret), K(src_ls_key));
+    }
+  }
+
+}
 }
 }

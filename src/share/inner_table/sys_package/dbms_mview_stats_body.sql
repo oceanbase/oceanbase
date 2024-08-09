@@ -33,7 +33,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview_stats IS
   parameter         VARCHAR2(128) := 'COLLECTION_LEVEL';
   BEGIN
     IF parameter_name IS NOT NULL AND NLS_UPPER(parameter_name) <> parameter THEN
-      RAISE_APPLICATION_ERROR(-20000, 'ORA-13916: Invalid value "' || parameter_name || '" specified for parameter "' || parameter ||'"');
+      RAISE_APPLICATION_ERROR(-20000, 'OBE-13916: Invalid value "' || parameter_name || '" specified for parameter "' || parameter ||'"');
     END IF;
     do_set_system_default(parameter, value, NULL);
   END;
@@ -45,7 +45,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview_stats IS
   parameter         VARCHAR2(128) := 'RETENTION_PERIOD';
   BEGIN
     IF parameter_name IS NOT NULL AND NLS_UPPER(parameter_name) <> parameter THEN
-      RAISE_APPLICATION_ERROR(-20000, 'ORA-13916: Invalid value "' || parameter_name || '" specified for parameter "' || parameter ||'"');
+      RAISE_APPLICATION_ERROR(-20000, 'OBE-13916: Invalid value "' || parameter_name || '" specified for parameter "' || parameter ||'"');
     END IF;
     do_set_system_default(parameter, NULL, value);
   END;

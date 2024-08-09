@@ -431,7 +431,8 @@ ObTableScanSpec::ObTableScanSpec(ObIAllocator &alloc, const ObPhyOperatorType ty
     agent_vt_meta_(alloc),
     flags_(0),
     tenant_id_col_idx_(0),
-    partition_id_calc_type_(0)
+    partition_id_calc_type_(0),
+    parser_name_()
 {
 }
 
@@ -456,7 +457,8 @@ OB_SERIALIZE_MEMBER((ObTableScanSpec, ObOpSpec),
                     agent_vt_meta_,
                     ddl_output_cids_,
                     tenant_id_col_idx_,
-                    partition_id_calc_type_);
+                    partition_id_calc_type_,
+                    parser_name_);
 
 DEF_TO_STRING(ObTableScanSpec)
 {
@@ -481,7 +483,8 @@ DEF_TO_STRING(ObTableScanSpec)
        K(report_col_checksum_),
        K_(agent_vt_meta),
        K_(ddl_output_cids),
-       K_(tenant_id_col_idx));
+       K_(tenant_id_col_idx),
+       K_(parser_name));
   J_OBJ_END();
   return pos;
 }

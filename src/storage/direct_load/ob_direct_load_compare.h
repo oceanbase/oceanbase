@@ -47,6 +47,23 @@ public:
   int result_code_;
 };
 
+class ObDirectLoadSingleDatumCompare
+{
+public:
+  ObDirectLoadSingleDatumCompare() : result_code_(common::OB_SUCCESS), is_inited_(false) {}
+  int init(const blocksstable::ObStorageDatumUtils &datum_utils);
+  int compare(const blocksstable::ObStorageDatum *lhs, const blocksstable::ObStorageDatum *rhs,
+              int &cmp_ret);
+  bool operator()(const blocksstable::ObStorageDatum *lhs, const blocksstable::ObStorageDatum *rhs);
+  int get_error_code() const { return result_code_; }
+private:
+  blocksstable::ObDatumRowkey lhs_rowkey_;
+  blocksstable::ObDatumRowkey rhs_rowkey_;
+  ObDirectLoadDatumRowkeyCompare rowkey_compare_;
+  int result_code_;
+  bool is_inited_;
+};
+
 class ObDirectLoadDatumRowCompare
 {
 public:

@@ -109,7 +109,7 @@ int ObTriggerResolver::resolve_sp_definer(const ParseNode *parse_node,
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to get_user_info", K(ret));
           } else if (OB_ISNULL(user_info)) {
-            LOG_USER_WARN(OB_ERR_USER_NOT_EXIST);
+            LOG_USER_WARN(OB_ERR_USER_NOT_EXIST, 0, "");
             pl::ObPL::insert_error_msg(OB_ERR_USER_NOT_EXIST);
             ret = OB_SUCCESS;
           }
@@ -1044,7 +1044,7 @@ int ObTriggerResolver::resolve_order_clause(const ParseNode *parse_node, ObCreat
           if (OB_SUCC(ret) && (trg_info.get_database_id() == ref_db_id)
               && (trg_info.get_trigger_name() == ref_trg_name)) {
             ret = OB_ERR_REF_CYCLIC_IN_TRG;
-            LOG_WARN("ORA-25023: cyclic trigger dependency is not allowed", K(ret));
+            LOG_WARN("OBE-25023: cyclic trigger dependency is not allowed", K(ret));
           }
         }
         OZ (schema_checker_->get_trigger_info(trg_info.get_tenant_id(), ref_trg_db_name, ref_trg_name, ref_trg_info));
@@ -1071,7 +1071,7 @@ int ObTriggerResolver::resolve_order_clause(const ParseNode *parse_node, ObCreat
           if (is_oracle_mode) {
             if (trg_info.get_base_object_id() != ref_trg_info->get_base_object_id()) {
               ret = OB_ERR_REF_ANOTHER_TABLE_IN_TRG;
-              LOG_WARN("ORA-25021: cannot reference a trigger defined on another table", K(ret));
+              LOG_WARN("OBE-25021: cannot reference a trigger defined on another table", K(ret));
             } else if (trg_info.is_simple_dml_type() && !ref_trg_info->is_compound_dml_type()) {
               if (!(trg_info.is_row_level_before_trigger() && ref_trg_info->is_row_level_before_trigger())
                   && !(trg_info.is_row_level_after_trigger() && ref_trg_info->is_row_level_after_trigger())

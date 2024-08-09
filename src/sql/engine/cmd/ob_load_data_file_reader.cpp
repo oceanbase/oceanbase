@@ -18,21 +18,55 @@
 #include "rpc/obmysql/ob_i_cs_mem_pool.h"
 #include "rpc/obmysql/ob_mysql_packet.h"
 #include "rpc/obmysql/packet/ompk_local_infile.h"
+#include "lib/compress/zstd_1_3_8/ob_zstd_wrapper.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
+const ObLabel MEMORY_LABEL = ObLabel("LoadDataReader");
+
+#define MEMORY_ATTR ObMemAttr(MTL_ID(), MEMORY_LABEL)
+
 /**
  * ObFileReadParam
  */
 
 ObFileReadParam::ObFileReadParam()
-    : packet_handle_(NULL),
+    : compression_format_(ObLoadCompressionFormat::NONE),
+      packet_handle_(NULL),
       session_(NULL),
       timeout_ts_(-1)
 {
+}
+
+int ObFileReadParam::parse_compression_format(ObString compression_name, ObString filename, ObLoadCompressionFormat &compression_format)
+{
+  int ret = OB_SUCCESS;
+  if (compression_name.length() == 0 ||
+      0 == compression_name.case_compare("none")) {
+    compression_format = ObLoadCompressionFormat::NONE;
+  } else if (0 == compression_name.case_compare("gzip")) {
+    compression_format = ObLoadCompressionFormat::GZIP;
+  } else if (0 == compression_name.case_compare("deflate")) {
+    compression_format = ObLoadCompressionFormat::DEFLATE;
+  } else if (0 == compression_name.case_compare("zstd")) {
+    compression_format = ObLoadCompressionFormat::ZSTD;
+  } else if (0 == compression_name.case_compare("auto")) {
+    if (filename.suffix_match_ci(".gz")) {
+      compression_format = ObLoadCompressionFormat::GZIP;
+    } else if (filename.suffix_match_ci(".deflate")) {
+      compression_format = ObLoadCompressionFormat::DEFLATE;
+    } else if (filename.suffix_match_ci(".zst") || filename.suffix_match_ci(".zstd")) {
+      compression_format = ObLoadCompressionFormat::ZSTD;
+    } else {
+      ret = OB_INVALID_ARGUMENT;
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+  }
+  return ret;
 }
 
 /**
@@ -45,26 +79,24 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
   file_reader = nullptr;
 
   if (param.file_location_ == ObLoadFileLocation::SERVER_DISK) {
-    ObRandomFileReader *tmp_reader = OB_NEWx(ObRandomFileReader, &allocator, allocator);
+    ObRandomFileReader *tmp_reader = OB_NEW(ObRandomFileReader, MEMORY_ATTR, allocator);
     if (OB_ISNULL(tmp_reader)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create ObRandomFileReader", K(ret));
     } else if (OB_FAIL(tmp_reader->open(param.filename_))) {
       LOG_WARN("fail to open random file reader", KR(ret), K(param.filename_));
-      tmp_reader->~ObRandomFileReader();
-      allocator.free(tmp_reader);
+      OB_DELETE(ObRandomFileReader, MEMORY_ATTR, tmp_reader);
     } else {
       file_reader = tmp_reader;
     }
   } else if (param.file_location_ == ObLoadFileLocation::OSS) {
-    ObRandomOSSReader *tmp_reader = OB_NEWx(ObRandomOSSReader, &allocator, allocator);
+    ObRandomOSSReader *tmp_reader = OB_NEW(ObRandomOSSReader, MEMORY_ATTR, allocator);
     if (OB_ISNULL(tmp_reader)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to create RandomOSSReader", K(ret));
     } else if (OB_FAIL(tmp_reader->open(param.access_info_, param.filename_))) {
       LOG_WARN("fail to open random oss reader", KR(ret), K(param.filename_));
-      tmp_reader->~ObRandomOSSReader();
-      allocator.free(tmp_reader);
+      OB_DELETE(ObRandomOSSReader, MEMORY_ATTR, tmp_reader);
     } else {
       file_reader = tmp_reader;
     }
@@ -73,14 +105,13 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cannot create packet stream file reader while the packet handle is null", K(ret));
     } else {
-      ObPacketStreamFileReader *tmp_reader = OB_NEWx(ObPacketStreamFileReader, &allocator, allocator);
+      ObPacketStreamFileReader *tmp_reader = OB_NEW(ObPacketStreamFileReader, MEMORY_ATTR, allocator);
       if (OB_ISNULL(tmp_reader)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to create ObPacketStreamFileReader", K(ret));
       } else if (OB_FAIL(tmp_reader->open(param.filename_, *param.packet_handle_, param.session_, param.timeout_ts_))) {
         LOG_WARN("failed to open packet stream file reader", KR(ret), K(param.filename_));
-        tmp_reader->~ObPacketStreamFileReader();
-        allocator.free(tmp_reader);
+        OB_DELETE(ObPacketStreamFileReader, MEMORY_ATTR, tmp_reader);
       } else {
         file_reader = tmp_reader;
       }
@@ -90,6 +121,36 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
     LOG_WARN("not supported load file location", KR(ret), K(param.file_location_));
   }
 
+  if (OB_SUCC(ret)) {
+    ObFileReader *decompress_reader = nullptr;
+    ret = open_decompress_reader(param, allocator, file_reader, decompress_reader);
+    if (OB_SUCC(ret) && OB_NOT_NULL(decompress_reader)) {
+      file_reader = decompress_reader;
+    }
+  }
+
+  return ret;
+}
+
+int ObFileReader::open_decompress_reader(const ObFileReadParam &param,
+                                         ObIAllocator &allocator,
+                                         ObFileReader *source_reader,
+                                         ObFileReader *&file_reader)
+{
+  int ret = OB_SUCCESS;
+  if (param.compression_format_ == ObLoadCompressionFormat::NONE) {
+    file_reader = source_reader;
+  } else {
+    ObDecompressFileReader *tmp_reader = OB_NEW(ObDecompressFileReader, MEMORY_ATTR, allocator);
+    if (OB_ISNULL(tmp_reader)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+    } else if (OB_FAIL(tmp_reader->open(param, source_reader))) {
+      LOG_WARN("failed to open decompress file reader");
+      OB_DELETE(ObDecompressFileReader, MEMORY_ATTR, tmp_reader);
+    } else {
+      file_reader = tmp_reader;
+    }
+  }
   return ret;
 }
 
@@ -469,6 +530,379 @@ bool ObPacketStreamFileReader::is_timeout() const
 bool ObPacketStreamFileReader::is_killed() const
 {
   return NULL != session_ && (session_->is_query_killed() || session_->is_zombie());
+}
+
+/**
+ * ObDecompressor
+ */
+ObDecompressor::ObDecompressor(ObIAllocator &allocator)
+    : allocator_(allocator)
+{}
+
+ObDecompressor::~ObDecompressor()
+{
+}
+
+int ObDecompressor::create(ObLoadCompressionFormat format, ObIAllocator &allocator, ObDecompressor *&decompressor)
+{
+  int ret = OB_SUCCESS;
+
+  decompressor = nullptr;
+
+  switch (format) {
+    case ObLoadCompressionFormat::NONE: {
+      ret = OB_INVALID_ARGUMENT;
+    } break;
+
+    case ObLoadCompressionFormat::GZIP:
+    case ObLoadCompressionFormat::DEFLATE: {
+      decompressor = OB_NEW(ObZlibDecompressor, MEMORY_ATTR, allocator);
+    } break;
+
+    case ObLoadCompressionFormat::ZSTD: {
+      decompressor = OB_NEW(ObZstdDecompressor, MEMORY_ATTR, allocator);
+    } break;
+
+    default: {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("unsupported compression format", K(format));
+    } break;
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(decompressor)) {
+    if (OB_FAIL(decompressor->init())) {
+      LOG_WARN("failed to init decompressor", KR(ret));
+      decompressor->destroy();
+      OB_DELETE(ObDecompressor, MEMORY_ATTR, decompressor);
+    }
+  }
+
+  return ret;
+}
+
+/**
+ * ObDecompressFileReader
+ */
+const int64_t ObDecompressFileReader::COMPRESSED_DATA_BUFFER_SIZE = 2 * 1024 * 1024;
+
+ObDecompressFileReader::ObDecompressFileReader(ObIAllocator &allocator)
+    : ObStreamFileReader(allocator)
+{}
+
+ObDecompressFileReader::~ObDecompressFileReader()
+{
+  if (OB_NOT_NULL(source_reader_)) {
+    OB_DELETE(ObFileReader, MEMORY_ATTR, source_reader_);
+  }
+
+  if (OB_NOT_NULL(decompressor_)) {
+    OB_DELETE(ObDecompressor, MEMORY_ATTR, decompressor_);
+  }
+
+  if (OB_NOT_NULL(compressed_data_)) {
+    allocator_.free(compressed_data_);
+    compressed_data_ = nullptr;
+  }
+}
+
+int ObDecompressFileReader::open(const ObFileReadParam &param, ObFileReader *source_reader)
+{
+  int ret = OB_SUCCESS;
+
+  if (param.compression_format_ == ObLoadCompressionFormat::NONE) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(ObDecompressor::create(param.compression_format_, allocator_, decompressor_))) {
+    LOG_WARN("failed to create decompressor", K(param.compression_format_), K(ret));
+  } else if (OB_ISNULL(compressed_data_ = (char *)allocator_.alloc(COMPRESSED_DATA_BUFFER_SIZE))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate buffer.", K(COMPRESSED_DATA_BUFFER_SIZE));
+  } else if (FALSE_IT(source_reader_ = source_reader)) {
+  }
+
+  return ret;
+}
+
+int ObDecompressFileReader::read(char *buf, int64_t capacity, int64_t &read_size)
+{
+  int ret = OB_SUCCESS;
+
+  read_size = 0;
+
+  if (OB_ISNULL(source_reader_)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(buf) || capacity <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(buf), K(capacity));
+  } else if (consumed_data_size_ >= compress_data_size_) {
+    if (!source_reader_->eof()) {
+      ret = read_compressed_data();
+    } else {
+      eof_ = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && compress_data_size_ > consumed_data_size_) {
+    int64_t consumed_size = 0;
+    ret = decompressor_->decompress(compressed_data_ + consumed_data_size_,
+                                    compress_data_size_ - consumed_data_size_,
+                                    consumed_size,
+                                    buf,
+                                    capacity,
+                                    read_size);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to decompress", K(ret));
+    } else {
+      consumed_data_size_ += consumed_size;
+      uncompressed_size_  += read_size;
+    }
+  }
+
+  return ret;
+}
+
+int ObDecompressFileReader::read_compressed_data()
+{
+  int ret = OB_SUCCESS;
+  char *read_buffer = compressed_data_;
+  if (OB_ISNULL(source_reader_)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(consumed_data_size_ < compress_data_size_)) {
+    // backup data
+    const int64_t last_data_size = compress_data_size_ - consumed_data_size_;
+    MEMMOVE(compressed_data_, compressed_data_ + consumed_data_size_, last_data_size);
+    read_buffer = compressed_data_ + last_data_size;
+    consumed_data_size_ = 0;
+    compress_data_size_ = last_data_size;
+  } else if (consumed_data_size_ == compress_data_size_) {
+    consumed_data_size_ = 0;
+    compress_data_size_ = 0;
+  }
+
+  if (OB_SUCC(ret)) {
+    // read data from source reader
+    int64_t read_size = 0;
+    int64_t capability = COMPRESSED_DATA_BUFFER_SIZE - compress_data_size_;
+    ret = source_reader_->read(read_buffer, capability, read_size);
+    if (OB_SUCC(ret)) {
+      compress_data_size_ += read_size;
+    }
+  }
+  return ret;
+}
+
+/**
+ * ObZlibDecompressor
+ */
+voidpf zlib_alloc(voidpf opaque, uInt items, uInt size)
+{
+  voidpf ret = NULL;
+  ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
+  if (OB_ISNULL(allocator)) {
+  } else {
+    ret = allocator->alloc(items * size);
+  }
+  return ret;
+}
+
+void zlib_free(voidpf opaque, voidpf address)
+{
+  ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
+  if (OB_ISNULL(allocator)) {
+    free(address);
+  } else {
+    allocator->free(address);
+  }
+}
+
+ObZlibDecompressor::ObZlibDecompressor(ObIAllocator &allocator)
+    : ObDecompressor(allocator)
+{}
+
+ObZlibDecompressor::~ObZlibDecompressor()
+{
+  this->destroy();
+}
+
+void ObZlibDecompressor::destroy()
+{
+  if (OB_NOT_NULL(zlib_stream_ptr_)) {
+    z_streamp zstream_ptr = static_cast<z_streamp>(zlib_stream_ptr_);
+    inflateEnd(zstream_ptr);
+    zlib_stream_ptr_ = nullptr;
+  }
+}
+
+int ObZlibDecompressor::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(zlib_stream_ptr_)) {
+    ret = OB_INIT_TWICE;
+  } else if (OB_ISNULL(zlib_stream_ptr_ = allocator_.alloc(sizeof(z_stream)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed: zlib stream object.", K(sizeof(z_stream)));
+  } else {
+    z_streamp zstream_ptr = static_cast<z_streamp>(zlib_stream_ptr_);
+    zstream_ptr->zalloc   = zlib_alloc;
+    zstream_ptr->zfree    = zlib_free;
+    zstream_ptr->opaque   = static_cast<voidpf>(&allocator_);
+    zstream_ptr->avail_in = 0;
+    zstream_ptr->next_in  = Z_NULL;
+
+    int zlib_ret = inflateInit2(zstream_ptr, 32 + MAX_WBITS);
+    if (Z_OK != zlib_ret) {
+      ret = OB_ERROR;
+      LIB_LOG(WARN, "failed to inflateInit2", K(zlib_ret));
+    }
+  }
+  return ret;
+}
+
+int ObZlibDecompressor::decompress(const char *src, int64_t src_size, int64_t &consumed_size,
+                                   char *dest, int64_t dest_capacity, int64_t &decompressed_size)
+{
+  int ret = OB_SUCCESS;
+  int zlib_ret = Z_OK;
+  z_streamp zstream_ptr = nullptr;
+
+  if (OB_ISNULL(zlib_stream_ptr_)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(src) || src_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(src), K(src_size));
+  } else if (OB_ISNULL(dest) || dest_capacity <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(dest), K(dest_capacity));
+  } else if (FALSE_IT(zstream_ptr = static_cast<z_streamp>(zlib_stream_ptr_))) {
+  } else if (zstream_need_reset_) {
+    if (Z_OK != (zlib_ret = inflateReset(zstream_ptr))) {
+      ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
+      LOG_WARN("failed to reset zlib stream", K(zlib_ret));
+    } else {
+      zstream_need_reset_ = false;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    zstream_ptr->avail_in = src_size;
+    zstream_ptr->next_in  = (Bytef *)src;
+
+    int64_t last_avail_in  = zstream_ptr->avail_in;
+    int64_t last_total_out = zstream_ptr->total_out;
+    zstream_ptr->next_out  = reinterpret_cast<Bytef *>(dest);
+    zstream_ptr->avail_out = dest_capacity;
+
+    zlib_ret = inflate(zstream_ptr, Z_NO_FLUSH);
+    if (Z_OK == zlib_ret || Z_STREAM_END == zlib_ret) {
+      LOG_TRACE("inflate success",
+                K(last_avail_in - zstream_ptr->avail_in),
+                K(zstream_ptr->total_out  - last_total_out));
+
+      consumed_size     = last_avail_in - zstream_ptr->avail_in;
+      decompressed_size = zstream_ptr->total_out  - last_total_out;
+
+      if (Z_STREAM_END == zlib_ret) {
+        LOG_DEBUG("got Z_STREAM_END");
+        zstream_need_reset_ = true;
+      }
+    } else {
+      ret = OB_ERR_COMPRESS_DECOMPRESS_DATA;
+      LOG_WARN("failed to decompress", K(zlib_ret));
+    }
+  }
+
+  return ret;
+}
+
+/**
+ * ObZstdDecompressor
+ */
+void *zstd_alloc(void* opaque, size_t size)
+{
+  void *ret = nullptr;
+  if (OB_ISNULL(opaque)) {
+  } else {
+    ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
+    ret = allocator->alloc(size);
+  }
+  return ret;
+}
+
+void zstd_free(void *opaque, void *address)
+{
+  if (OB_ISNULL(opaque)) {
+  } else {
+    ObIAllocator *allocator = static_cast<ObIAllocator *>(opaque);
+    allocator->free(address);
+  }
+}
+
+ObZstdDecompressor::ObZstdDecompressor(ObIAllocator &allocator)
+    : ObDecompressor(allocator)
+{}
+
+ObZstdDecompressor::~ObZstdDecompressor()
+{
+  this->destroy();
+}
+
+void ObZstdDecompressor::destroy()
+{
+  using ObZstdWrapper = oceanbase::common::zstd_1_3_8::ObZstdWrapper;
+
+  if (OB_NOT_NULL(zstd_stream_context_)) {
+    ObZstdWrapper::free_stream_dctx(zstd_stream_context_);
+    zstd_stream_context_ = nullptr;
+  }
+}
+
+int ObZstdDecompressor::init()
+{
+  using OB_ZSTD_customMem = oceanbase::common::zstd_1_3_8::OB_ZSTD_customMem;
+  using ObZstdWrapper = oceanbase::common::zstd_1_3_8::ObZstdWrapper;
+
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(zstd_stream_context_)) {
+    ret = OB_INIT_TWICE;
+  } else {
+    OB_ZSTD_customMem allocator;
+    allocator.customAlloc = zstd_alloc;
+    allocator.customFree  = zstd_free;
+    allocator.opaque      = &allocator_;
+
+    ret = ObZstdWrapper::create_stream_dctx(allocator, zstd_stream_context_);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to create zstd stream context", K(ret));
+    }
+  }
+
+  return ret;
+}
+
+int ObZstdDecompressor::decompress(const char *src, int64_t src_size, int64_t &consumed_size,
+                                   char *dest, int64_t dest_capacity, int64_t &decompressed_size)
+{
+  using ObZstdWrapper = oceanbase::common::zstd_1_3_8::ObZstdWrapper;
+
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(zstd_stream_context_)) {
+    ret = OB_NOT_INIT;
+  } else if (OB_ISNULL(src) || src_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(src), K(src_size));
+  } else if (OB_ISNULL(dest) || dest_capacity <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KP(dest), K(dest_capacity));
+  } else {
+    size_t tmp_consumed_size = 0;
+    size_t tmp_decompressed_size = 0;
+    ret = ObZstdWrapper::decompress_stream(zstd_stream_context_,
+                                           src, src_size, tmp_consumed_size,
+                                           dest, dest_capacity, tmp_decompressed_size);
+    consumed_size = static_cast<int64_t>(tmp_consumed_size);
+    decompressed_size = static_cast<int64_t>(tmp_decompressed_size);
+  }
+  return ret;
 }
 
 } // namespace sql

@@ -741,7 +741,8 @@ int ObDirectLoadTabletMergeCtx::build_rescan_task(int64_t thread_count)
 int ObDirectLoadTabletMergeCtx::build_del_lob_task(
     const common::ObIArray<ObDirectLoadMultipleSSTable *> &multiple_sstable_array,
     ObDirectLoadMultipleMergeRangeSplitter &range_splitter,
-    const int64_t max_parallel_degree)
+    const int64_t max_parallel_degree,
+    const ObLobId &min_insert_lob_id)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -751,6 +752,7 @@ int ObDirectLoadTabletMergeCtx::build_del_lob_task(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(max_parallel_degree));
   } else {
+    int64_t first_no_insert_front_idx = -1;
     if (OB_FAIL(del_lob_multiple_sstable_array_.assign(multiple_sstable_array))) {
       LOG_WARN("fail to assign multiple sstable array", KR(ret));
     } else if (OB_FAIL(range_splitter.split_range(tablet_id_,
@@ -762,11 +764,55 @@ int ObDirectLoadTabletMergeCtx::build_del_lob_task(
     } else if (OB_UNLIKELY(del_lob_range_array_.count() > max_parallel_degree)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected range count", KR(ret), K(max_parallel_degree), K(del_lob_range_array_.count()));
+    } else if (min_insert_lob_id.is_valid()) {
+      int cmp_ret = 0;
+      ObStorageDatum min_insert_lob_id_datum;
+      ObDatumRowkey tmp_min_insert_lob_id_rowkey;
+      ObDatumRowkey min_insert_lob_id_rowkey;
+      min_insert_lob_id_datum.set_string(reinterpret_cast<const char*>(&min_insert_lob_id), sizeof(ObLobId));
+      if (OB_FAIL(tmp_min_insert_lob_id_rowkey.assign(&min_insert_lob_id_datum, 1))) {
+        LOG_WARN("fail to assign min insert lob id rowkey", KR(ret));
+      } else if (OB_FAIL(tmp_min_insert_lob_id_rowkey.deep_copy(min_insert_lob_id_rowkey, allocator_))) {
+        LOG_WARN("fail to deep copy rowkey", KR(ret), K(tmp_min_insert_lob_id_rowkey));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < del_lob_range_array_.count(); ++i) {
+        ObDatumRange &range = del_lob_range_array_.at(i);
+        const ObDatumRowkey &end_key = range.get_end_key();
+        if (OB_FAIL(end_key.compare(min_insert_lob_id_rowkey, *param_.lob_meta_datum_utils_, cmp_ret))) {
+          LOG_WARN("fail to compare lob id", KR(ret), K(end_key), K(min_insert_lob_id_rowkey));
+        } else if (cmp_ret > 0) {
+          // 将当前range拆分成2个range: range, new_range
+          ObDatumRange new_range = range;
+          range.end_key_ = min_insert_lob_id_rowkey;
+          range.set_right_closed();
+          new_range.start_key_ = min_insert_lob_id_rowkey;
+          new_range.set_left_open();
+          if (OB_FAIL(del_lob_range_array_.push_back(new_range))) {
+            LOG_WARN("fail to push back", KR(ret));
+          } else if (i < del_lob_range_array_.count() - 1) {
+            // 拆分的不是最后一个range, 需要把后面的range都后移
+            for (int64_t j = del_lob_range_array_.count() - 1; j > i; --j) {
+              del_lob_range_array_[j] = del_lob_range_array_[j - 1];
+            }
+            del_lob_range_array_[i + 1] = new_range;
+          }
+          first_no_insert_front_idx = i + 1;
+          break;
+        }
+      }
+      LOG_INFO("split range by min insert lob id", KR(ret), K(min_insert_lob_id),
+               K(min_insert_lob_id_datum), K(del_lob_range_array_), K(first_no_insert_front_idx));
     }
     // construct task per range
+    bool insert_front = true;
+    int64_t parallel_idx = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < del_lob_range_array_.count(); ++i) {
       const ObDatumRange &range = del_lob_range_array_.at(i);
       ObDirectLoadPartitionDelLobTask *del_lob_task = nullptr;
+      if (i == first_no_insert_front_idx) {
+        insert_front = false;
+        parallel_idx = 0;
+      }
       if (OB_ISNULL(del_lob_task =
                       OB_NEWx(ObDirectLoadPartitionDelLobTask, (&allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -776,7 +822,8 @@ int ObDirectLoadTabletMergeCtx::build_del_lob_task(
                                             &lob_meta_origin_table_,
                                             del_lob_multiple_sstable_array_,
                                             range,
-                                            i))) {
+                                            insert_front,
+                                            parallel_idx++))) {
         LOG_WARN("fail to init del lob task", KR(ret));
       } else if (OB_FAIL(del_lob_task_array_.push_back(del_lob_task))) {
         LOG_WARN("fail to push back del lob task", KR(ret));

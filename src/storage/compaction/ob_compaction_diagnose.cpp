@@ -779,7 +779,7 @@ int ObCompactionDiagnoseMgr::get_suspect_info(
   return ret;
 }
 
-int ObCompactionDiagnoseMgr::diagnose_tenant(
+int ObCompactionDiagnoseMgr::diagnose_tenant( //TODO(mingqiao): check tenant restore data mode and add into diagnose info
     bool &diagnose_major_flag,
     ObTenantTabletScheduler *scheduler,
     int64_t &compaction_scn)

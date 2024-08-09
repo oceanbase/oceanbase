@@ -154,5 +154,10 @@ int LogGroupEntry::get_log_min_scn(SCN &min_scn) const
   }
   return ret;
 }
+
+bool LogGroupEntry::check_compatibility() const
+{
+  return header_.check_compatibility();
+}
 } // end namespace palf
 } // end namespace oceanbase

@@ -321,7 +321,8 @@ ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
     data_format_version_(0/*for compatibility*/),
     end_row_id_(-1),
     type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
-    trans_id_()
+    trans_id_(),
+    with_cs_replica_(false)
 {
 }
 
@@ -336,6 +337,7 @@ void ObDDLMacroBlockRedoInfo::reset()
   end_row_id_ = -1;
   type_ = ObDirectLoadType::DIRECT_LOAD_INVALID;
   trans_id_.reset();
+  with_cs_replica_ = false;
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
@@ -360,7 +362,8 @@ OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo,
                     data_format_version_,
                     end_row_id_,
                     type_,
-                    trans_id_);
+                    trans_id_,
+                    with_cs_replica_);
 
 ObTabletDirectLoadMgrHandle::ObTabletDirectLoadMgrHandle()
   : tablet_mgr_(nullptr)

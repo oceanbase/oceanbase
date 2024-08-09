@@ -386,7 +386,7 @@ void TestCOMerge::prepare_co_sstable(
     ObCOMergeProjector *row_project = nullptr;
     ObTableHandleV2 *table_handle = nullptr;
 
-    OK(data_store_desc.init(table_schema,
+    OK(data_store_desc.init(false/*is_ddl*/, table_schema,
                           ObLSID(ls_id_),
                           ObTabletID(tablet_id_),
                           merge_type,
@@ -493,6 +493,7 @@ void TestCOMerge::prepare_merge_context(const ObMergeType &merge_type,
                                         ObCOTabletMergeCtx &merge_context)
 {
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
+  merge_context.static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_COLUMN_STORE_MERGE;
   merge_context.static_param_.data_version_ = DATA_VERSION_4_3_0_0;
   merge_context.static_param_.dag_param_.merge_version_ = trans_version_range.snapshot_version_;
   ASSERT_EQ(OB_SUCCESS, merge_context.cal_merge_param());

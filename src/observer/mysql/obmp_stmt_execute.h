@@ -83,6 +83,24 @@ public:
     LOG_WARN("memory access out of bounds", K(ret));       \
   } else
 
+struct ObPsSessionInfoParamsCleaner
+{
+public:
+  ObPsSessionInfoParamsCleaner(): ret_(OB_SUCCESS) {}
+  void operator() (common::hash::HashMapPair<uint64_t, ObPsSessionInfo *> &entry);
+  int ret_;
+};
+
+struct ObPsSessionInfoParamsAssignment
+{
+public:
+  ObPsSessionInfoParamsAssignment(sql::ParamTypeArray &param_types):
+    ret_(OB_SUCCESS), param_types_(param_types) {}
+  void operator() (common::hash::HashMapPair<uint64_t, ObPsSessionInfo *> &entry);
+  int ret_;
+  sql::ParamTypeArray &param_types_;
+};
+
 class ObMPStmtExecute : public ObMPBase
 {
 public:

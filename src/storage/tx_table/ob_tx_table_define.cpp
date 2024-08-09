@@ -332,6 +332,13 @@ DEF_TO_STRING(ObCommitVersionsArray)
 {
   int64_t pos = 0;
   J_KV(KP(this), K(array_.count()));
+  int64_t cnt = array_.count();
+  for (int64_t i = 0; i < cnt && i < 5; i++) {
+    J_KV("idx", i, "node", array_.at(i));
+  }
+  for (int64_t i = cnt - 5; i >= 5 && i < cnt; i++) {
+    J_KV("idx", i, "node", array_.at(i));
+  }
   return pos;
 }
 

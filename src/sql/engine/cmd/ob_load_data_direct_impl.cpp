@@ -42,7 +42,7 @@ using namespace omt;
  */
 
 ObLoadDataDirectImpl::DataAccessParam::DataAccessParam()
-  : file_column_num_(0), file_cs_type_(CS_TYPE_INVALID)
+  : file_column_num_(0), file_cs_type_(CS_TYPE_INVALID), compression_format_(ObLoadCompressionFormat::NONE)
 {
 }
 
@@ -498,12 +498,13 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       end_offset_ = data_desc.end_;
 
       ObFileReadParam file_read_param;
-      file_read_param.file_location_ = data_access_param.file_location_;
-      file_read_param.filename_      = data_desc.filename_;
-      file_read_param.access_info_   = data_access_param.access_info_;
-      file_read_param.packet_handle_ = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
-      file_read_param.session_       = execute_ctx.exec_ctx_.get_session_info();
-      file_read_param.timeout_ts_    = THIS_WORKER.get_timeout_ts();
+      file_read_param.file_location_      = data_access_param.file_location_;
+      file_read_param.filename_           = data_desc.filename_;
+      file_read_param.compression_format_ = data_access_param.compression_format_;
+      file_read_param.access_info_        = data_access_param.access_info_;
+      file_read_param.packet_handle_      = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
+      file_read_param.session_            = execute_ctx.exec_ctx_.get_session_info();
+      file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
       if (OB_FAIL(ObFileReader::open(file_read_param, allocator_, file_reader_))) {
         LOG_WARN("failed to open file", KR(ret), K(data_desc));
@@ -810,7 +811,8 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
                                            data_access_param.file_cs_type_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected data format", KR(ret), K(data_access_param));
-  } else if (1 == count || (ObLoadFileLocation::CLIENT_DISK == data_access_param.file_location_)) {
+  } else if (1 == count || (ObLoadFileLocation::CLIENT_DISK == data_access_param.file_location_)
+             || data_access_param.compression_format_ != ObLoadCompressionFormat::NONE) {
     if (OB_FAIL(data_desc_iter.add_data_desc(data_desc))) {
       LOG_WARN("fail to push back", KR(ret));
     }
@@ -821,12 +823,13 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     int64_t end_offset = data_desc.end_;
 
     ObFileReadParam file_read_param;
-    file_read_param.file_location_ = data_access_param.file_location_;
-    file_read_param.filename_      = data_desc.filename_;
-    file_read_param.access_info_   = data_access_param.access_info_;
-    file_read_param.packet_handle_ = NULL;
-    file_read_param.session_       = NULL;
-    file_read_param.timeout_ts_    = THIS_WORKER.get_timeout_ts();
+    file_read_param.file_location_      = data_access_param.file_location_;
+    file_read_param.filename_           = data_desc.filename_;
+    file_read_param.access_info_        = data_access_param.access_info_;
+    file_read_param.compression_format_ = data_access_param.compression_format_;
+    file_read_param.packet_handle_      = NULL;
+    file_read_param.session_            = NULL;
+    file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
     ObFileReader *file_reader = NULL;
     if (OB_FAIL(ObFileReader::open(file_read_param, allocator, file_reader))) {
@@ -2412,6 +2415,7 @@ int ObLoadDataDirectImpl::init_execute_param()
     data_access_param.file_format_ = load_stmt_->get_data_struct_in_file();
     data_access_param.file_cs_type_ = load_args.file_cs_type_;
     data_access_param.access_info_ = load_args.access_info_;
+    data_access_param.compression_format_ = load_args.compression_format_;
   }
   // column_ids_
   if (OB_SUCC(ret)) {

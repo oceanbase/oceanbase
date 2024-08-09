@@ -131,7 +131,8 @@ int ObTxOpVector::try_extend_space(int64_t count, ObIAllocator &allocator)
     // do nothing
   } else {
     ObTxOp *tx_op_ptr = nullptr;
-    if (OB_ISNULL(tx_op_ptr = (ObTxOp*)allocator.alloc((count_ + count) * sizeof(ObTxOp)))) {
+    int64_t new_capacity = count_ + count;
+    if (OB_ISNULL(tx_op_ptr = (ObTxOp*)allocator.alloc(new_capacity * sizeof(ObTxOp)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
     } else {
       if (count_ > 0) {
@@ -141,7 +142,7 @@ int ObTxOpVector::try_extend_space(int64_t count, ObIAllocator &allocator)
         allocator.free(tx_op_);
       }
       tx_op_ = tx_op_ptr;
-      capacity_ = count_ + count;
+      capacity_ = new_capacity;
     }
   }
   return ret;

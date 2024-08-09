@@ -24,6 +24,7 @@
 #include "storage/meta_mem/ob_tablet_handle.h"
 #include "share/ob_rs_mgr.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 namespace oceanbase {
 
@@ -43,7 +44,8 @@ static const int64_t OB_BACKUP_MULTI_LEVEL_INDEX_BASE_LEVEL = 0;
 static const int64_t OB_BACKUP_READ_BLOCK_SIZE = 2 << 20;  // 2 MB
 static const int64_t OB_DEFAULT_BACKUP_BATCH_COUNT = 1024;
 static const int64_t OB_INITIAL_BACKUP_MAX_FILE_ID = -1;
-
+static const int64_t OB_BACKUP_COMPRESS_BLOCK_SIZE = 2 << 20;
+static const ObCompressorType OB_DEFAULT_BACKUP_INDEX_COMPRESSOR_TYPE = ObCompressorType::ZSTD_1_3_8_COMPRESSOR;
 
 enum ObLSBackupStage {
   LOG_STREAM_BACKUP_SYS = 0,
@@ -118,7 +120,7 @@ struct ObBackupIndexMergeParam {
   bool is_valid() const;
   int assign(const ObBackupIndexMergeParam &param);
   TO_STRING_KV(K_(task_id), K_(backup_dest), K_(tenant_id), K_(dest_id), K_(backup_set_desc), K_(backup_data_type), K_(index_level),
-      K_(ls_id), K_(turn_id), K_(retry_id));
+      K_(ls_id), K_(turn_id), K_(retry_id), K_(compressor_type));
 
   int64_t task_id_;
   share::ObBackupDest backup_dest_;
@@ -130,6 +132,7 @@ struct ObBackupIndexMergeParam {
   share::ObLSID ls_id_;
   int64_t turn_id_;
   int64_t retry_id_;
+  common::ObCompressorType compressor_type_;
 };
 
 enum ObBackupDataVersion {
@@ -195,19 +198,21 @@ struct ObBackupDataFileTrailer {
 struct ObBackupMacroBlockId {
   ObBackupMacroBlockId();
   bool is_valid() const;
+  int assign(const ObBackupMacroBlockId &other);
   void reset();
-  TO_STRING_KV(K_(logic_id), K_(macro_block_id), K_(nested_offset), K_(nested_size));
+  TO_STRING_KV(K_(table_key), K_(logic_id), K_(macro_block_id), K_(nested_offset), K_(nested_size), K_(absolute_row_offset));
+  storage::ObITable::TableKey table_key_;
   blocksstable::ObLogicMacroBlockId logic_id_;
   blocksstable::MacroBlockId macro_block_id_;
   int64_t nested_offset_;
   int64_t nested_size_;
+  int64_t absolute_row_offset_;
 };
 
 struct ObBackupMacroBlockIndex;
 
 struct ObBackupPhysicalID final {
   ObBackupPhysicalID();
-  ObBackupPhysicalID(const ObBackupPhysicalID &id);
   ~ObBackupPhysicalID() = default;
   void reset();
   bool is_valid() const;
@@ -266,6 +271,8 @@ public:
   };
 };
 
+struct ObBackupDeviceMacroBlockId;
+
 struct ObBackupMacroBlockIndex {
   OB_UNIS_VERSION(1);
 
@@ -273,16 +280,36 @@ public:
   ObBackupMacroBlockIndex();
   void reset();
   bool is_valid() const;
+  int64_t get_deep_copy_size() const;
+  int deep_copy(const ObBackupMacroBlockIndex &src, char *buf, int64_t len, int64_t &pos);
   int get_backup_physical_id(ObBackupPhysicalID &physical_id) const;
+  int get_backup_physical_id(
+      const share::ObBackupDataType &backup_data_type,
+      ObBackupDeviceMacroBlockId &physical_id) const;
   bool operator==(const ObBackupMacroBlockIndex &other) const;
+  bool is_ls_inner_tablet_macro_index() const { return ObTabletID(logic_id_.tablet_id_).is_ls_inner_tablet(); }
   TO_STRING_KV(
-      K_(logic_id), K_(backup_set_id), K_(ls_id), K_(turn_id), K_(retry_id), K_(file_id), K_(offset), K_(length));
+      K_(logic_id), K_(backup_set_id), K_(ls_id), K_(turn_id), K_(retry_id), K_(file_id), K_(offset), K_(length), K_(reusable));
   blocksstable::ObLogicMacroBlockId logic_id_;
   int64_t backup_set_id_;
   share::ObLSID ls_id_;
   int64_t turn_id_;
   int64_t retry_id_;
   int64_t file_id_;
+  int64_t offset_;
+  int64_t length_;
+  bool reusable_;
+};
+
+// used when build multi level index
+struct ObBackupMacroBlockIndexIndex
+{
+  OB_UNIS_VERSION(1);
+public:
+  void reset();
+  bool is_valid() const;
+  TO_STRING_KV(K_(end_key), K_(offset), K_(length));
+  ObBackupMacroBlockIndex end_key_;
   int64_t offset_;
   int64_t length_;
 };
@@ -429,6 +456,109 @@ public:
   storage::ObMigrationTabletParam tablet_meta_;
 };
 
+struct ObBackupDeviceMacroBlockId final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum BlockType
+  {
+    DATA_BLOCK = 0,
+    INDEX_TREE_BLOCK = 1,
+    META_TREE_BLOCK = 2,
+    BLOCK_TYPE_MAX
+  };
+
+public:
+  ObBackupDeviceMacroBlockId();
+  ~ObBackupDeviceMacroBlockId();
+  int get_backup_macro_block_index(const share::ObBackupDataType &backup_data_type,
+      const blocksstable::ObLogicMacroBlockId &logic_id, ObBackupMacroBlockIndex &macro_index) const;
+  int set(const int64_t backup_set_id, const int64_t ls_id, const int64_t dir_id,
+      const int64_t turn_id, const int64_t retry_id, const int64_t file_id,
+      const int64_t offset, const int64_t length, const BlockType &block_type);
+  blocksstable::MacroBlockId get_macro_id() const;
+  int set(const blocksstable::MacroBlockId &macro_id);
+  static bool check_valid(const int64_t first_id,
+      const int64_t second_id, const int64_t third_id);
+  static bool is_backup_block_file(const int64_t first_id);
+  void reset();
+  void reuse();
+  bool is_valid() const;
+  int64_t get_backupset_id() const { return backup_set_id_; }
+  int64_t get_ls_id() const { return ls_id_; }
+  int64_t get_data_type() const { return data_type_; }
+  int64_t get_turn_id() const { return turn_id_; }
+  int64_t get_retry_id() const { return retry_id_; }
+  int64_t get_file_id() const { return file_id_; }
+  int64_t get_offset() const { return offset_ * DIO_READ_ALIGN_SIZE; }
+  int64_t get_length() const { return length_ * DIO_READ_ALIGN_SIZE; }
+  int64_t get_block_type() const { return block_type_; }
+  bool is_index_block() const { return block_type_ == INDEX_TREE_BLOCK || block_type_ == META_TREE_BLOCK; }
+  bool is_data_block() const { return block_type_ == DATA_BLOCK; }
+  int64_t get_id_mode() const { return id_mode_; }
+  int64_t get_version() const { return version_; }
+  int64_t first_id() const { return first_id_; }
+  int64_t second_id() const { return second_id_; }
+  int64_t third_id() const { return third_id_; }
+  static const ObBackupDeviceMacroBlockId get_default();
+  ObBackupDeviceMacroBlockId &operator=(const ObBackupDeviceMacroBlockId &other);
+  bool operator==(const ObBackupDeviceMacroBlockId &other) const;
+  bool operator!=(const ObBackupDeviceMacroBlockId &other) const;
+  int get_intermediate_tree_type(share::ObBackupIntermediateTreeType &tree_type) const;
+  TO_STRING_KV(K_(backup_set_id), K_(ls_id), K_(data_type), K_(turn_id), K_(retry_id),
+      K_(file_id), K_(offset), K_(length), K_(block_type), K_(id_mode), K_(version), K_(reserved));
+
+public:
+  static const int64_t BACKUP_MACRO_BLOCK_ID_VERSION = 0;
+  static const int64_t BACKUP_RESERVED_BIT = 6;
+  static const int64_t BACKUP_BLOCK_TYPE_BIT = 2;
+  static const int64_t BACKUP_SET_ID_BIT = 24;
+  static const int64_t BACKUP_LS_ID_BIT = 64;
+  static const int64_t BACKUP_DATA_TYPE_BIT = 2;
+  static const int64_t BACKUP_TURN_ID_BIT = 12;
+  static const int64_t BACKUP_RETRY_ID_BIT = 8;
+  static const int64_t BACKUP_FILE_ID_BIT = 22;
+  static const int64_t BACKUP_OFFSET_BIT = 26;
+  static const int64_t BACKUP_LENGTH_BIT = 14;
+  static constexpr const int64_t MAX_BACKUP_LS_ID = INT64_MAX;
+  static constexpr const int64_t MAX_BACKUP_SET_ID = (1 << BACKUP_SET_ID_BIT) - 1;
+  static constexpr const int64_t MAX_BACKUP_DATA_TYPE = (1 << BACKUP_DATA_TYPE_BIT) - 1;
+  static constexpr const int64_t MAX_BACKUP_TURN_ID = (1 << BACKUP_TURN_ID_BIT) - 1;
+  static constexpr const int64_t MAX_BACKUP_RETRY_ID = (1 << BACKUP_RETRY_ID_BIT) - 1;
+  static constexpr const int64_t MAX_BACKUP_FILE_ID = (1 << BACKUP_FILE_ID_BIT) - 1;
+  static constexpr const int64_t MAX_BACKUP_FILE_SIZE = (1 << BACKUP_OFFSET_BIT) - 1;
+  static constexpr const int64_t MAX_BACKUP_BLOCK_SIZE = (1 << BACKUP_LENGTH_BIT) - 1;
+
+public:
+  union {
+    int64_t first_id_;
+    struct {
+      uint64_t turn_id_   : BACKUP_TURN_ID_BIT;
+      uint64_t length_    : BACKUP_LENGTH_BIT;
+      uint64_t offset_    : BACKUP_OFFSET_BIT;
+      uint64_t id_mode_   : blocksstable::MacroBlockId::SF_BIT_ID_MODE; // same bit as MacroBlockId
+      uint64_t version_   : blocksstable::MacroBlockId::SF_BIT_VERSION; // same bit as MacroBlockId
+    };
+  };
+  union {
+    int64_t second_id_;
+    struct {
+      int64_t ls_id_ : BACKUP_LS_ID_BIT;
+    };
+  };
+  union {
+    int64_t third_id_;
+    struct {
+      uint64_t backup_set_id_ : BACKUP_SET_ID_BIT;
+      uint64_t data_type_     : BACKUP_DATA_TYPE_BIT;
+      uint64_t retry_id_      : BACKUP_RETRY_ID_BIT;
+      uint64_t file_id_       : BACKUP_FILE_ID_BIT;
+      uint64_t block_type_    : BACKUP_BLOCK_TYPE_BIT;
+      uint64_t reserved_      : BACKUP_RESERVED_BIT;
+    };
+  };
+};
+
 struct ObBackupSSTableMeta {
   OB_UNIS_VERSION(1);
 
@@ -457,10 +587,25 @@ public:
   bool is_valid() const;
   TO_STRING_KV(K_(logic_id), K_(physical_id));
   blocksstable::ObLogicMacroBlockId logic_id_;
+  ObBackupDeviceMacroBlockId physical_id_;
+};
+
+// older than 4.3.2
+struct ObCompatBackupMacroBlockIDPair final
+{
+  static const uint64_t VERSION = 1;
+  OB_UNIS_VERSION(VERSION);
+public:
+  ObCompatBackupMacroBlockIDPair();
+  ~ObCompatBackupMacroBlockIDPair();
+  bool operator<(const ObCompatBackupMacroBlockIDPair &other) const;
+  void reset();
+  bool is_valid() const;
+  TO_STRING_KV(K_(logic_id), K_(physical_id));
+  blocksstable::ObLogicMacroBlockId logic_id_;
   ObBackupPhysicalID physical_id_;
 };
 
-// TODO(yangyi.yyy): separate array and map to different data structure in 4.1
 struct ObBackupMacroBlockIDMapping final {
   ObBackupMacroBlockIDMapping();
   ~ObBackupMacroBlockIDMapping();
@@ -469,7 +614,7 @@ struct ObBackupMacroBlockIDMapping final {
       const storage::ObITable::TableKey &table_key, const common::ObIArray<blocksstable::ObLogicMacroBlockId> &list);
   TO_STRING_KV(K_(table_key), K_(id_pair_list));
   storage::ObITable::TableKey table_key_;
-  common::ObArray<ObBackupMacroBlockIDPair> id_pair_list_;
+  common::ObArray<ObCompatBackupMacroBlockIDPair> id_pair_list_;
 
 private:
   friend class ObBackupTabletCtx;
@@ -591,6 +736,8 @@ struct ObBackupRetryDesc {
   ObBackupRetryDesc();
   void reset();
   bool is_valid() const;
+  int set(const share::ObLSID &ls_id, const int64_t turn_id,
+      const int64_t retry_id, const int64_t last_file_id);
   TO_STRING_KV(K_(ls_id), K_(turn_id), K_(retry_id), K_(last_file_id));
   share::ObLSID ls_id_;
   int64_t turn_id_;
@@ -615,7 +762,8 @@ struct ObLSBackupDataParam {
   ~ObLSBackupDataParam();
   bool is_valid() const;
   int convert_to(const ObLSBackupStage &stage, ObLSBackupDagInitParam &dag_param);
-  int convert_to(const ObBackupIndexLevel &index_level, ObBackupIndexMergeParam &merge_param);
+  int convert_to(const ObBackupIndexLevel &index_level, const ObCompressorType &compressor_type,
+      ObBackupIndexMergeParam &merge_param);
   int assign(const ObLSBackupDataParam &other);
   TO_STRING_KV(K_(job_desc), K_(backup_stage), K_(backup_dest), K_(tenant_id), K_(dest_id), K_(backup_set_desc), K_(ls_id),
       K_(backup_data_type), K_(turn_id), K_(retry_id));
@@ -640,8 +788,8 @@ static bool is_aligned(uint64_t x)
 
 int build_backup_file_header_buffer(const ObBackupFileHeader &file_header, const int64_t buf_len, char *buf,
     blocksstable::ObBufferReader &buffer_reader);
-int build_common_header(const int64_t data_type, const int64_t data_length, const int64_t align_length,
-    share::ObBackupCommonHeader *&common_header);
+int build_common_header(const int64_t data_type, const int64_t data_length, const int64_t data_zlength,
+    const int64_t align_length, const ObCompressorType &compressor_type, share::ObBackupCommonHeader *&common_header);
 int build_multi_level_index_header(
     const int64_t index_type, const int64_t index_level, ObBackupMultiLevelIndexHeader &header);
 

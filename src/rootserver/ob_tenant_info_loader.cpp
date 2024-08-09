@@ -569,6 +569,21 @@ int ObTenantInfoLoader::get_recovery_until_scn(share::SCN &recovery_until_scn)
   return ret;
 }
 
+int ObTenantInfoLoader::get_restore_data_mode(share::ObRestoreDataMode &restore_data_mode)
+{
+  int ret = OB_SUCCESS;
+  share::ObAllTenantInfo tenant_info;
+  restore_data_mode.set_invalid();
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    restore_data_mode = NORMAL_RESTORE_DATA_MODE;
+  } else if (OB_FAIL(get_tenant_info(tenant_info))) {
+    LOG_WARN("failed to get tenant info", KR(ret));
+  } else {
+    restore_data_mode = tenant_info.get_restore_data_mode();
+  }
+  return ret;
+}
+
 int ObTenantInfoLoader::get_tenant_info(share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;

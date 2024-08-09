@@ -139,9 +139,6 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
         case SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->sessid_);
           break;
-        case HOLDER_SESSION_ID:
-          cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
-          break;
         case BLOCK_SESSION_ID:
           cur_row_.cells_[i].set_int(node_iter_->block_sessid_);
           break;
@@ -206,7 +203,7 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
           // If the waiter is waitting on the row, we need to get the
           // real holder from the hash_holder, instead of the holder_tx_id
           // on the ObLockWaitNode.
-          if (type == 2) {
+          if (type == 1) {
             // TODO(yangyifei.yyf): rowkey holder is unstable now, so we use
             // tmp ret to catch error code here. We we fix it in the future.
             if (OB_TMP_FAIL(get_rowkey_holder(node_iter_->hash_, holder_tx_id))) {
@@ -216,6 +213,42 @@ int ObAllVirtualLockWaitStat::process_curr_tenant(ObNewRow *&row)
             }
           }
           cur_row_.cells_[i].set_int(holder_tx_id.get_id());
+          break;
+        }
+        case HOLDER_SESSION_ID:
+          cur_row_.cells_[i].set_int(node_iter_->holder_sessid_);
+          break;
+        case LS_ID: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case ASSOC_SESS_ID: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case WAIT_TIMEOUT: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case TX_ACTIVE_TS: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case NODE_ID: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case NODE_TYPE: {
+          cur_row_.cells_[i].set_int(0);
+          break;
+        }
+        case REMTOE_ADDR: {
+          cur_row_.cells_[i].set_varchar("0.0.0.0");
+          cur_row_.cells_[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          break;
+        }
+        case IS_PLACEHOLDER: {
+          cur_row_.cells_[i].set_int(0);
           break;
         }
         default:

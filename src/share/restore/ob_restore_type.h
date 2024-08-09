@@ -27,31 +27,35 @@ public:
   enum Type : uint8_t
   {
     // restore whole data, default retore type
-    NORMAL_RESTORE = 0,
+    FULL = 0,
     // just restore minor and clog, major macro blocks are in remote reference state
-    QUICK_RESTORE = 1,
+    QUICK = 1,
     RESTORE_TYPE_MAX
   };
 
 public:
-  ObRestoreType() : type_(NORMAL_RESTORE) {}
+  ObRestoreType() : type_(FULL) {}
   ~ObRestoreType() = default;
   explicit ObRestoreType(const Type &type);
+  explicit ObRestoreType(const ObString &str);
   ObRestoreType &operator=(const ObRestoreType &restore_type);
   ObRestoreType &operator=(const Type &type);
   constexpr operator Type() const { return type_; }
-  constexpr bool is_valid() const { return type_ >= Type::NORMAL_RESTORE && type_ < Type::RESTORE_TYPE_MAX;}
-  bool is_quick_restore() const { return Type::QUICK_RESTORE == type_; }
-  bool is_normal_restore() const { return Type::NORMAL_RESTORE == type_; }
+  constexpr bool is_valid() const { return type_ >= Type::FULL && type_ < Type::RESTORE_TYPE_MAX;}
+  bool is_quick_restore() const { return Type::QUICK == type_; }
+  bool is_full_restore() const { return Type::FULL == type_; }
   int serialize(char *buf, const int64_t len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t len, int64_t &pos);
   int64_t get_serialize_size() const;
-  TO_STRING_KV(K_(type));
+  const char *to_str() const;
+  TO_STRING_KV("restore_type", to_str());
 
 private:
   Type type_;
 };
 
+static const ObRestoreType FULL_RESTORE_TYPE(ObRestoreType::Type::FULL);
+static const ObRestoreType QUICK_RESTORE_TYPE(ObRestoreType::Type::QUICK);
 
 }
 }

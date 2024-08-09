@@ -29,6 +29,7 @@
 
 #include "common/ob_member_list.h"
 #include "common/ob_zone.h"
+#include "common/ob_tenant_data_version_mgr.h"
 #include "share/ob_version.h"
 
 #include "share/ob_version.h"
@@ -695,10 +696,8 @@ int ObService::backup_ls_data(const obrpc::ObBackupDataArg &arg)
     const char *backup_event_str = NULL;
     if (backup_data_type.is_sys_backup()) {
       backup_event_str = "schedule_backup_ls_sys_data";
-    } else if (backup_data_type.is_minor_backup()) {
-      backup_event_str = "schedule_backup_ls_minor_data";
-    } else if (backup_data_type.is_major_backup()) {
-      backup_event_str = "schedule_backup_ls_major_data";
+    } else if (backup_data_type.is_user_backup()) {
+      backup_event_str = "schedule_backup_ls_user_data";
     } else {
       backup_event_str = "unknown";
     }
@@ -826,6 +825,47 @@ int ObService::backup_meta(const obrpc::ObBackupMetaArg &arg)
       "retry_id", arg.retry_id_,
       "trace_id", arg.trace_id_);
     LOG_INFO("success recevied backup ls meta rpc", K(arg));
+  }
+  return ret;
+}
+
+int ObService::backup_fuse_tablet_meta(const obrpc::ObBackupFuseTabletMetaArg &arg)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("[BACKUP] receive backup fuse tablet meta rpc", K(arg));
+  ObBackupJobDesc job_desc;
+  job_desc.job_id_ = arg.job_id_;
+  job_desc.task_id_ = arg.task_id_;
+  job_desc.trace_id_ = arg.trace_id_;
+  share::ObBackupDest backup_dest;
+  uint64_t tenant_id = arg.tenant_id_;
+  ObBackupSetDesc backup_set_desc;
+  backup_set_desc.backup_set_id_ = arg.backup_set_id_;
+  backup_set_desc.backup_type_.type_ = arg.backup_type_;
+  const ObLSID &ls_id = arg.ls_id_;
+  const int64_t turn_id = arg.turn_id_;
+  const int64_t retry_id = arg.retry_id_;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  if (!arg.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", KR(ret), K(arg));
+  } else if (OB_ISNULL(sql_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy should not be null", K(ret), KP(sql_proxy));
+  } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest(*sql_proxy, tenant_id, arg.backup_path_, backup_dest))) {
+    LOG_WARN("failed to get backup dest", K(ret), K(arg));
+  } else if (OB_FAIL(ObBackupHandler::schedule_backup_fuse_tablet_meta_dag(
+      job_desc, backup_dest, tenant_id, backup_set_desc, ls_id, turn_id, retry_id))) {
+    LOG_WARN("failed to schedule backup data dag", KR(ret), K(arg));
+  } else {
+    SERVER_EVENT_ADD("backup_data", "schedule_backup_fuse_tablet_meta",
+      "tenant_id", arg.tenant_id_,
+      "backup_set_id", arg.backup_set_id_,
+      "ls_id", arg.ls_id_.id(),
+      "turn_id", arg.turn_id_,
+      "retry_id", arg.retry_id_,
+      "trace_id", arg.trace_id_);
+    LOG_INFO("success received backup merge tablet meta rpc", K(arg));
   }
   return ret;
 }
@@ -1001,13 +1041,15 @@ int ObService::handle_ls_freeze_req_(const obrpc::ObMinorFreezeArg &arg)
   if (1 != arg.tenant_ids_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only one tenant is needed", K(ret), K(arg.tenant_ids_), K(arg.tablet_id_));
-  } else if (OB_FAIL(ls_freeze_(arg.tenant_ids_.at(0), arg.ls_id_, arg.tablet_id_))) {
+  } else if (OB_FAIL(handle_ls_freeze_req_(arg.tenant_ids_.at(0), arg.ls_id_, arg.tablet_id_))) {
     LOG_WARN("fail to freeze tablet", K(ret), K(arg));
   }
   return ret;
 }
 
-int ObService::ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id)
+int ObService::handle_ls_freeze_req_(const uint64_t tenant_id,
+                                     const share::ObLSID &ls_id,
+                                     const common::ObTabletID &tablet_id)
 {
   int ret = OB_SUCCESS;
 
@@ -1021,7 +1063,8 @@ int ObService::ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, 
         LOG_WARN("ObTenantFreezer shouldn't be null", K(ret), K(tenant_id));
       } else if (tablet_id.is_valid()) {
         // tablet freeze
-        if (OB_FAIL(freezer->tablet_freeze(ls_id, tablet_id))) {
+        const bool is_sync = true;
+        if (OB_FAIL(freezer->tablet_freeze(ls_id, tablet_id, is_sync, 0 /*max_retry_time_us*/, false))) {
           if (OB_EAGAIN == ret) {
             ret = OB_SUCCESS;
           } else {
@@ -1032,7 +1075,7 @@ int ObService::ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, 
         }
       } else {
         // logstream freeze
-        if (OB_FAIL(freezer->ls_freeze(ls_id))) {
+        if (OB_FAIL(freezer->ls_freeze_all_unit(ls_id))) {
           if (OB_EAGAIN == ret) {
             ret = OB_SUCCESS;
           } else {
@@ -1303,7 +1346,7 @@ int ObService::switch_schema(
     obrpc::ObSwitchSchemaResult &result)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("start to switch schema", K(arg));
+  FLOG_INFO("start to switch schema", K(arg));
   const ObRefreshSchemaInfo &schema_info = arg.schema_info_;
   const int64_t schema_version = schema_info.get_schema_version();
   const uint64_t tenant_id = schema_info.get_tenant_id();
@@ -1373,7 +1416,7 @@ int ObService::switch_schema(
       }
     }
   }
-  LOG_INFO("switch schema", K(ret), K(schema_info));
+  FLOG_INFO("switch schema", KR(ret), K(schema_info));
   //SERVER_EVENT_ADD("schema", "switch_schema", K(ret), K(schema_info));
   result.set_ret(ret);
   return ret;
@@ -1940,6 +1983,13 @@ int ObService::check_server_empty(bool &is_empty)
       }
     }
 #endif
+    if (is_empty) {
+      if (ODV_MGR.get_file_exists_when_loading()) {
+        // ignore ret
+        FLOG_WARN("[CHECK_SERVER_EMPTY] data_version file exists");
+        is_empty = false;
+      }
+    }
   }
   return ret;
 }

@@ -1378,7 +1378,7 @@ int ObResultSet::ExternalRetrieveInfo::check_into_exprs(ObStmt &stmt,
         if (basic_types.count() > select_stmt.get_select_item_size()
             || into_exprs_.count() > select_stmt.get_select_item_size()) {
           ret = OB_ERR_TOO_MANY_VALUES;
-          LOG_WARN("ORA-00913: too many values",
+          LOG_WARN("OBE-00913: too many values",
                    K(ret), K(basic_types.count()), K(select_stmt.get_select_item_size()));
         } else if (basic_types.count() < select_stmt.get_select_item_size()
                    || into_exprs_.count() < select_stmt.get_select_item_size()) {
@@ -1392,7 +1392,7 @@ int ObResultSet::ExternalRetrieveInfo::check_into_exprs(ObStmt &stmt,
       const ObIArray<ObRawExpr*> &returning_exprs = dml_stmt.get_returning_exprs();
       if (basic_types.count() > returning_exprs.count()) {
         ret = OB_ERR_TOO_MANY_VALUES;
-        LOG_WARN("ORA-00913: too many values",
+        LOG_WARN("OBE-00913: too many values",
                  K(ret), K(basic_types.count()), K(returning_exprs.count()));
       } else if (basic_types.count() < returning_exprs.count()) {
         ret = OB_ERR_NOT_ENOUGH_VALUES;
@@ -1932,6 +1932,7 @@ int ObResultSet::switch_implicit_cursor(int64_t &affected_rows)
     }
   } else {
     affected_rows = plan_ctx->get_affected_rows();
+    set_last_insert_id_to_client(plan_ctx->get_last_insert_id_to_client());
     memset(message_, 0, sizeof(message_));
     if (OB_FAIL(set_mysql_info())) {
       LOG_WARN("set mysql info failed", K(ret));

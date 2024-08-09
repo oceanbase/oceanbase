@@ -133,7 +133,7 @@ void TestLogStreamBackup::SetUp()
   backup_set_desc_.backup_set_id_ = 1;
   backup_set_desc_.backup_type_.type_ = ObBackupType::FULL_BACKUP;
   backup_set_desc_.backup_date_ = 20211231;
-  backup_data_type_.set_major_data_backup();
+  backup_data_type_.set_user_data_backup();
   incarnation_ = 1;
   tenant_id_ = 1;
   ls_id_ = ObLSID(1);
@@ -696,7 +696,7 @@ TEST_F(TestLogStreamBackup, test_build_tenant_level_full_index)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObBackupDataType major_backup_type;
-  major_backup_type.set_major_data_backup();
+  major_backup_type.set_user_data_backup();
   ret = ObBackupHandler::schedule_build_tenant_level_index_dag(
       job_desc_, backup_dest_, tenant_id_, full_backup_set_desc_, turn_id_, major_backup_type);
   ASSERT_EQ(OB_SUCCESS, ret);
@@ -745,7 +745,7 @@ TEST_F(TestLogStreamBackup, test_build_tenant_level_inc_index)
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObBackupDataType major_backup_type;
-  major_backup_type.set_major_data_backup();
+  major_backup_type.set_user_data_backup();
   ret = ObBackupHandler::schedule_build_tenant_level_index_dag(
       job_desc_, backup_dest_, tenant_id_, inc_backup_set_desc_, turn_id_, major_backup_type);
   ASSERT_EQ(OB_SUCCESS, ret);

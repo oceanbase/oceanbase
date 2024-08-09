@@ -1161,6 +1161,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
       add_event_info(real_new_status, dst_tenant_id_);
       task_status_ = real_new_status;
       delay_schedule_time_ = 0; // when status changed, schedule immediately
+      clear_old_status_context();
       LOG_INFO("ddl_scheduler switch status", K(ret), "ddl_event_info", ObDDLEventInfo(), K(task_status_));
     }
 
@@ -1825,6 +1826,7 @@ int ObDDLWaitTransEndCtx::init(
         || table_id <= 0
         || !is_wait_trans_type_valid(wait_trans_type)
         || wait_version <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(ddl_task_id), K(table_id), K(wait_trans_type), K(wait_version));
   } else if (OB_FALSE_IT(tablet_ids_.reset())) {
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, table_id, tablet_ids_))) {
@@ -3847,6 +3849,11 @@ int ObDDLTask::remove_sql_exec_addr(const common::ObAddr &addr)
     }
   }
   return ret;
+}
+
+void ObDDLTask::clear_old_status_context()
+{
+  wait_trans_ctx_.reset();
 }
 
 } // end namespace rootserver

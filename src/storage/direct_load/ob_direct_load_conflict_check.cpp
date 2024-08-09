@@ -12,6 +12,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/direct_load/ob_direct_load_conflict_check.h"
+#include "storage/direct_load/ob_direct_load_compare.h"
 
 namespace oceanbase
 {
@@ -34,6 +35,7 @@ ObDirectLoadConflictCheckParam::ObDirectLoadConflictCheckParam()
     lob_column_idxs_(nullptr),
     builder_(nullptr),
     datum_utils_(nullptr),
+    lob_meta_datum_utils_(nullptr),
     dml_row_handler_(nullptr)
 {
 }
@@ -47,7 +49,9 @@ bool ObDirectLoadConflictCheckParam::is_valid() const
   return tablet_id_.is_valid() && store_column_count_ > 0 && table_data_desc_.is_valid() &&
          nullptr != origin_table_ && nullptr != range_ && range_->is_valid() &&
          nullptr != col_descs_ && nullptr != lob_column_idxs_ &&  nullptr != builder_ &&
-         nullptr != datum_utils_ && nullptr != dml_row_handler_;
+         nullptr != datum_utils_ && lob_meta_datum_utils_ != nullptr &&
+         nullptr != dml_row_handler_ &&
+         (lob_column_idxs_->empty() || tablet_id_in_lob_id_.is_valid());
 }
 
 /**
@@ -242,10 +246,40 @@ int ObDirectLoadConflictCheck::handle_old_row(const ObDatumRow *old_row)
       append_row_.storage_datums_[0].set_string(reinterpret_cast<const char*>(&lob_id), sizeof(ObLobId));
       if (OB_FAIL(param_.builder_->append_row(param_.tablet_id_, 0/*seq_no*/, append_row_))) {
         LOG_WARN("fail to append row", KR(ret));
+      } else if (OB_FAIL(update_max_del_lob_id(lob_id))) {
+        LOG_WARN("fail to update max del lob id", KR(ret), K(lob_id));
       }
     }
   }
 
+  return ret;
+}
+
+int ObDirectLoadConflictCheck::update_max_del_lob_id(const ObLobId &lob_id)
+{
+  int ret = OB_SUCCESS;
+  if (lob_id.tablet_id_ != param_.tablet_id_in_lob_id_.id()) {
+    // do nothing
+  } else if (!max_del_lob_id_.is_valid()) {
+    max_del_lob_id_ = lob_id;
+  } else {
+    ObStorageDatum max_del_lob_id_datum, lob_id_datum;
+    ObDirectLoadSingleDatumCompare compare;
+    int cmp_ret = 0;
+    max_del_lob_id_datum.set_string(reinterpret_cast<const char *>(&max_del_lob_id_), sizeof(ObLobId));
+    lob_id_datum.set_string(reinterpret_cast<const char *>(&lob_id), sizeof(ObLobId));
+    if (OB_FAIL(compare.init(*param_.lob_meta_datum_utils_))) {
+      LOG_WARN("fail to init compare", KR(ret));
+    } else if (OB_FAIL(compare.compare(&max_del_lob_id_datum, &lob_id_datum, cmp_ret))) {
+      LOG_WARN("fail to compare lob id", KR(ret), K(max_del_lob_id_datum), K(lob_id_datum));
+    } else if (OB_UNLIKELY(cmp_ret == 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected lob id is same", KR(ret), K(max_del_lob_id_), K(lob_id),
+               K(max_del_lob_id_datum), K(lob_id_datum));
+    } else if (cmp_ret < 0) {
+      max_del_lob_id_ = lob_id;
+    }
+  }
   return ret;
 }
 

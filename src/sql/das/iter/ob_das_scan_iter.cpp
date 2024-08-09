@@ -70,10 +70,12 @@ int ObDASScanIter::inner_release()
 int ObDASScanIter::do_table_scan()
 {
   int ret = OB_SUCCESS;
-  result_ = nullptr;
   if (OB_ISNULL(scan_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected nullptr scan param", K(ret));
+  } else if (OB_UNLIKELY(nullptr != result_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not null result iter ptr before do table scan", K(ret), KP_(result));
   } else if (OB_FAIL(tsc_service_->table_scan(*scan_param_, result_))) {
     if (OB_SNAPSHOT_DISCARDED == ret && scan_param_->fb_snapshot_.is_valid()) {
       ret = OB_INVALID_QUERY_TIMESTAMP;

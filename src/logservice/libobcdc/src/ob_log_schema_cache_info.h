@@ -116,8 +116,13 @@ public:
 
   inline void set_sub_data_type(const uint64_t sub_data_type) { sub_type_ = sub_data_type; }
   inline uint64_t get_sub_data_type() const { return sub_type_; }
-  inline bool is_udt_hidden_column() const { return is_udt_column() && is_hidden(); }
-  inline bool is_udt_main_column() const { return is_udt_column() && ! is_hidden(); }
+
+  // When fast column deletion occurs, the xml is marked as a hidden column instead of a true many deletion,
+  // and it is not possible to determine whether it is a udt main column based on is_hidden
+  // and currently, only xmltype is a udt type
+  // so it must be the udt main column when it is xmltype, whether it's a hidden column or not
+  // and there is no other udt type, so only need to determine whether it is a main column based on xmltype
+  inline bool is_udt_main_column() const { return is_xmltype(); }
   inline bool is_xmltype() const {
     return is_udt_column()
         && (((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)

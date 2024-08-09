@@ -1562,12 +1562,9 @@ int ObBackupTaskOperator::update_turn_id(common::ObISQLClient &proxy, share::ObB
   } else if (backup_status == ObBackupStatus::BACKUP_USER_META
       && OB_FAIL(dml.add_column(OB_STR_META_TURN_ID, turn_id))) {
     LOG_WARN("failed to add column", K(ret));
-  } else if (backup_status == ObBackupStatus::BACKUP_DATA_MINOR
-    && OB_FAIL(dml.add_column(OB_STR_MINOR_TURN_ID, turn_id))) {
-      LOG_WARN("failed to add column", K(ret));
-  } else if (backup_status == ObBackupStatus::BACKUP_DATA_MAJOR
-    && OB_FAIL(dml.add_column(OB_STR_MAJOR_TURN_ID, turn_id))) {
-      LOG_WARN("failed to add column", K(ret));
+  } else if (backup_status == ObBackupStatus::BACKUP_USER_DATA
+      && OB_FAIL(dml.add_column(OB_STR_MAJOR_TURN_ID, turn_id))) {
+    LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_BACKUP_TASK_TNAME, sql))) {
     LOG_WARN("failed to splice_update_sql", K(ret));
   } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {

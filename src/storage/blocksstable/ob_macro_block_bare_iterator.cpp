@@ -18,6 +18,7 @@
 #include "ob_macro_block_bare_iterator.h"
 #include "ob_micro_block_reader.h"
 #include "ob_datum_rowkey.h"
+#include "ob_data_store_desc.h"
 
 namespace oceanbase
 {
@@ -88,9 +89,10 @@ int ObMicroBlockBareIterator::open(
   } else if (OB_FAIL(common_header_.check_integrity())) {
     LOG_ERROR("Invalid common header", K(ret), K_(common_header));
   } else if (OB_UNLIKELY(!common_header_.is_sstable_data_block()
-      && !common_header_.is_sstable_index_block())) {
+      && !common_header_.is_sstable_index_block()
+      && !common_header_.is_sstable_macro_meta_block())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Macro block type not supported for data iterator", K(ret));
+    LOG_WARN("Macro block type not supported for data iterator", K(ret), K(common_header_));
   } else if (need_check_data_integrity && OB_FAIL(check_macro_block_data_integrity(
       macro_block_buf + read_pos_, common_header_.get_payload_size()))) {
     LOG_WARN("Invalid macro block payload data", K(ret));
@@ -281,6 +283,113 @@ int ObMicroBlockBareIterator::get_next_micro_block_desc(
     micro_block_desc.row_count_delta_ = micro_index_info.get_row_count_delta();
     micro_block_desc.can_mark_deletion_ = micro_index_info.is_deleted();
     micro_block_desc.contain_uncommitted_row_ = micro_index_info.contain_uncommitted_row();
+  }
+  return ret;
+}
+
+int ObMicroBlockBareIterator::get_next_micro_block_desc(
+    ObMicroBlockDesc &micro_block_desc,
+    const ObDataStoreDesc &data_store_desc,
+    ObIAllocator &allocator,
+    const bool need_check_sum)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Not inited", K(ret));
+  } else if (iter_idx_ > end_idx_) {
+    ret = OB_ITER_END;
+  } else {
+    micro_block_desc.reset();
+    ObMicroBlockHeader *header = nullptr;
+    const char *micro_buf = macro_block_buf_ + read_pos_;
+    int64_t pos = 0;
+    int64_t micro_buf_size = 0;
+    bool is_compressed = false;
+    ObDatumRow last_row;
+    ObDatumRowkey rowkey;
+    ObMicroBlockData micro_block;
+    if (OB_ISNULL(header = static_cast<ObMicroBlockHeader *>(allocator.alloc(sizeof(ObMicroBlockHeader))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc micro header", K(ret));
+    } else if (OB_FAIL(header->deserialize(micro_buf, macro_block_buf_size_ - read_pos_, pos))) {
+      LOG_WARN("Fail to deserialize record header", K(ret), K_(read_pos), K_(common_header), K(macro_block_header_));
+    } else if (FALSE_IT(micro_buf_size = header->header_size_ + header->data_zlength_)) {
+    } else if (OB_FAIL(header->check_record(micro_buf, micro_buf_size, MICRO_BLOCK_HEADER_MAGIC))) {
+      LOG_WARN("Fail to check record header", K(ret), K(header));
+    } else if (OB_FAIL(macro_reader_.decrypt_and_decompress_data(
+        macro_block_header_,
+        micro_buf,
+        micro_buf_size,
+        micro_block.get_buf(),
+        micro_block.get_buf_size(),
+        is_compressed))) {
+      LOG_WARN("Fail to decrypt and decompress micro block data", K(ret), K(macro_block_header_));
+    } else if (OB_FAIL(last_row.init(allocator, index_rowkey_cnt_ + 1))) {
+      STORAGE_LOG(WARN, "Fail to init last row", K(ret));
+    } else if (OB_UNLIKELY(!micro_block.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid micro block data", K(ret), K(micro_block));
+    } else if (OB_FAIL(set_reader(static_cast<ObRowStoreType>(micro_block.get_store_type())))) {
+      STORAGE_LOG(WARN, "Fail to set micro reader by store type",
+        K(ret), K(micro_block.get_store_type()));
+    } else if (OB_FAIL(reader_->init(micro_block, nullptr))) {
+      STORAGE_LOG(WARN, "Fail to init micro reader", K(ret));
+    } else if (OB_FAIL(reader_->get_row(header->row_count_ - 1, last_row))) {
+      STORAGE_LOG(WARN, "Fail to get last row", K(ret), K(header->row_count_ - 1));
+    } else if (OB_FAIL(rowkey.assign(last_row.storage_datums_, index_rowkey_cnt_))) {
+      STORAGE_LOG(WARN, "Fail to get last rowkey", K(ret));
+    } else if (OB_FAIL(rowkey.deep_copy(micro_block_desc.last_rowkey_, allocator))) {
+      STORAGE_LOG(WARN, "Fail to deep copy last rowkey", K(ret));
+    } else if (need_check_sum) {
+      // TODO(luhaopeng.lhp): check it
+      ObMicroBlockChecksumHelper checksum_helper;
+      if (OB_FAIL(checksum_helper.init(&data_store_desc.get_col_desc_array(), data_store_desc.contain_full_col_descs()))) {
+        STORAGE_LOG(WARN, "Failed to init checksum helper", K(ret), K(data_store_desc));
+      }
+      for (int64_t it = 0; OB_SUCC(ret) && it != reader_->row_count(); ++it) {
+        last_row.reuse();
+        if (OB_FAIL(reader_->get_row(it, last_row))) {
+          STORAGE_LOG(WARN, "get_row failed", K(ret), K(it));
+        } else if (OB_FAIL(checksum_helper.cal_row_checksum(last_row.storage_datums_, last_row.get_column_count()))) {
+          STORAGE_LOG(WARN, "failed to cal row checksum", K(ret));
+        }
+      }
+      micro_block_desc.block_checksum_ = checksum_helper.get_row_checksum();
+    }
+
+    if (OB_FAIL(ret)) {
+      if (OB_NOT_NULL(header)) {
+        allocator.free(header);
+        header = nullptr;
+      }
+    } else {
+      micro_block_desc.header_ = header;
+      if (need_check_sum) {
+        // use decompress
+        micro_block_desc.buf_ = micro_block.get_buf() + header->header_size_;
+        micro_block_desc.buf_size_ = micro_block.get_buf_size() - header->header_size_;
+        micro_block_desc.data_size_ = micro_block_desc.buf_size_;
+      } else {
+        micro_block_desc.block_offset_ = read_pos_;
+        micro_block_desc.buf_ = micro_buf + header->header_size_;
+        micro_block_desc.buf_size_ = header->data_zlength_;
+        micro_block_desc.data_size_ = header->data_length_;
+      }
+      micro_block_desc.row_count_ = header->row_count_;
+      micro_block_desc.column_count_ = header->column_count_;
+      micro_block_desc.row_count_delta_ = 0;
+      micro_block_desc.can_mark_deletion_ = false;
+      micro_block_desc.max_merged_trans_version_ = header->max_merged_trans_version_;
+      micro_block_desc.contain_uncommitted_row_ = header->contain_uncommitted_rows();
+      micro_block_desc.has_string_out_row_ = header->has_string_out_row();
+      micro_block_desc.has_lob_out_row_ = header->has_lob_out_row();
+      micro_block_desc.original_size_ = header->original_length_;
+      micro_block_desc.is_last_row_last_flag_ = header->is_last_row_last_flag();
+      //micro_block_desc.aggregated_row_ = nullptr;
+      ++iter_idx_;
+      read_pos_ += micro_buf_size;
+    }
   }
   return ret;
 }

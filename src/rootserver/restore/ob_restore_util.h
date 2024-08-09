@@ -84,6 +84,7 @@ public:
   static int check_physical_restore_finish(common::ObISQLClient &proxy, const int64_t job_id, bool &is_finish, bool &is_failed);
   static int get_restore_job_comment(common::ObISQLClient &proxy, const int64_t job_id, char *buf, const int64_t buf_size);
   static int get_restore_tenant_cpu_count(common::ObMySQLProxy &proxy, const uint64_t tenant_id, double &cpu_count);
+  static int check_tenant_is_in_remote_restore_data_mode(common::ObISQLClient &proxy, const uint64_t tenant_id, bool &is_remote);
   static int fill_restore_scn(
       const share::SCN &src_scn,
       const ObString &timestamp,
@@ -218,6 +219,7 @@ private:
              const share::ObBackupSetPath & backup_set_path,
              share::ObPhysicalRestoreJob &job);
   static int check_backup_set_version_match_(share::ObBackupSetFileDesc &backup_file_desc);
+  static int check_backup_set_compatible_(const share::ObRestoreType &restore_type, const share::ObBackupSetFileDesc &backup_file_desc);
   static int get_backup_sys_time_zone_(
       const ObIArray<ObString> &tenant_path_array,
       common::ObTimeZoneInfoWrap &time_zone_wrap);

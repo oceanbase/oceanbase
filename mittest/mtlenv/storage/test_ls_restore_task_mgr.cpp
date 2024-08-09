@@ -56,7 +56,7 @@ int ObLSRestoreHandler::fill_restore_arg_()
   info.backup_set_desc_.backup_set_id_ = 1;
   info.backup_set_desc_.backup_type_.type_ = share::ObBackupType::FULL_BACKUP;
   ls_restore_arg_.job_id_ = 1;
-  ls_restore_arg_.restore_type_ = share::ObRestoreType::NORMAL_RESTORE;
+  ls_restore_arg_.restore_type_ = share::ObRestoreType::FULL;
   ls_restore_arg_.tenant_id_ = MTL_ID();
   ls_restore_arg_.restore_scn_.convert_for_logservice(10000000000);
   ls_restore_arg_.backup_cluster_version_ = 10;

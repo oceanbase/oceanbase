@@ -62,7 +62,7 @@ public:
   SumAggregate() {}
 
   template <typename ColumnFmt>
-  int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
               const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     UNUSED(tmp_res);
@@ -88,7 +88,7 @@ public:
   }
 
   template<typename ColumnFmt>
-  int sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
               const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;
@@ -106,7 +106,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                        const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;
@@ -123,7 +123,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;
@@ -379,7 +379,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int64_t row_num,
+  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int64_t row_num,
               const int32_t agg_col_id, char *agg_cell, void *tmp_res_ptr, int64_t &calc_info)
   {
     OB_ASSERT(tmp_res_ptr != NULL);
@@ -425,7 +425,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int64_t row_num,
+  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int64_t row_num,
                        const int32_t agg_col_id, char *agg_cell, void *tmp_res_ptr,
                        int64_t &calc_info)
   {
@@ -444,7 +444,7 @@ public:
   }
 
   template<typename ColumnFmt>
-  int sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;
@@ -498,7 +498,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_or_sub_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;

@@ -160,6 +160,12 @@ public:
   int increase_column_by_one(
       common::ObISQLClient &proxy, const ObIInnerTableKey &key, 
       const char *column_name, int64_t &affected_rows) const;
+
+  // Set column value to old_value - 1.
+  // Only column with type of int value can do this.
+  int decrease_column_by_one(
+      common::ObISQLClient &proxy, const ObIInnerTableKey &key,
+      const char *column_name, int64_t &affected_rows) const;
   
   // assignments: "c1=v1, c2=v2"
   int update_column(

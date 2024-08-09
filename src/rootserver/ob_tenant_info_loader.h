@@ -174,6 +174,15 @@ public:
   */
  int get_recovery_until_scn(share::SCN &recovery_until_scn);
 
+   /**
+  * @description:
+  *    get tenant restore_data_mode.
+  *       for SYS/META tenant: return normal restore data mode
+  *       for user tenant: get restore_data_mode from __all_tenant_info cache
+  * @param[out] restore_data_mode
+  */
+ int get_restore_data_mode(share::ObRestoreDataMode &restore_data_mode);
+
  /**
   * @description:
   *    get tenant is_standby_normal_status

@@ -115,7 +115,7 @@ int ObAnonymousBlockResolver::resolve_anonymous_block(
                               p_param_list);
     for (int64_t i = 0; OB_SUCC(ret) && i < params_.query_ctx_->question_marks_count_; ++i) {
       ObObjParam param = ObObjParam(ObObj(ObNullType));
-      const_cast<ObObjMeta&>(param.get_null_meta()).reset();
+      const_cast<ObObjMeta&>(param.get_param_meta()).reset();
       OZ (param_list.push_back(param));
     }
     OZ (package_guard.init());

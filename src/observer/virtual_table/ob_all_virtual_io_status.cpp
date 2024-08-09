@@ -356,37 +356,40 @@ int ObAllVirtualIOQuota::record_user_group(const uint64_t tenant_id, ObIOUsage &
   } else {
     ObIOUsage::AvgItems avg_iops, avg_size, avg_rt;
     io_usage.calculate_io_usage();
-    io_usage.get_io_usage(avg_iops, avg_size, avg_rt);
-    for (int64_t i = 0; i < io_config.group_num_ && i < avg_size.count() && i < avg_iops.count() && i < avg_rt.count(); ++i) {
-      if (io_config.group_configs_.at(i).deleted_ || io_config.group_configs_.at(i).cleared_) {
-        continue;
-      }
-      for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
-        if (avg_size.at(i+1).at(j) > std::numeric_limits<double>::epsilon()) {
-          QuotaInfo item;
-          item.tenant_id_ = tenant_id;
-          item.mode_ = static_cast<ObIOMode>(j);
-          item.group_id_ = io_config.group_ids_.at(i);
-          item.size_ = avg_size.at(i+1).at(j);
-          item.real_iops_ = avg_iops.at(i+1).at(j);
-          int64_t group_min_iops = 0, group_max_iops = 0, group_iops_weight = 0;
-          double iops_scale = 0;
-          bool is_io_ability_valid = true;
-          if (OB_FAIL(io_config.get_group_config(i,
-                                                  group_min_iops,
-                                                  group_max_iops,
-                                                  group_iops_weight))) {
-            LOG_WARN("get group config failed", K(ret), K(i));
-          } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(j),
-                                                                            avg_size.at(i+1).at(j),
-                                                                            iops_scale,
-                                                                            is_io_ability_valid))) {
-            LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(j)));
-          } else {
-            item.min_iops_ = group_min_iops * iops_scale;
-            item.max_iops_ = group_max_iops * iops_scale;
-            if (OB_FAIL(quota_infos_.push_back(item))) {
-              LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
+    if (OB_FAIL(io_usage.get_io_usage(avg_iops, avg_size, avg_rt))) {
+      LOG_ERROR("fail to get io usage", K(ret));
+    } else {
+      for (int64_t i = 0; i < io_config.group_num_ && i < avg_size.count() && i < avg_iops.count() && i < avg_rt.count(); ++i) {
+        if (io_config.group_configs_.at(i).deleted_ || io_config.group_configs_.at(i).cleared_) {
+          continue;
+        }
+        for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
+          if (avg_size.at(i+1).at(j) > std::numeric_limits<double>::epsilon()) {
+            QuotaInfo item;
+            item.tenant_id_ = tenant_id;
+            item.mode_ = static_cast<ObIOMode>(j);
+            item.group_id_ = io_config.group_ids_.at(i);
+            item.size_ = avg_size.at(i+1).at(j);
+            item.real_iops_ = avg_iops.at(i+1).at(j);
+            int64_t group_min_iops = 0, group_max_iops = 0, group_iops_weight = 0;
+            double iops_scale = 0;
+            bool is_io_ability_valid = true;
+            if (OB_FAIL(io_config.get_group_config(i,
+                                                    group_min_iops,
+                                                    group_max_iops,
+                                                    group_iops_weight))) {
+              LOG_WARN("get group config failed", K(ret), K(i));
+            } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(j),
+                                                                              avg_size.at(i+1).at(j),
+                                                                              iops_scale,
+                                                                              is_io_ability_valid))) {
+              LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(j)));
+            } else {
+              item.min_iops_ = group_min_iops * iops_scale;
+              item.max_iops_ = group_max_iops * iops_scale;
+              if (OB_FAIL(quota_infos_.push_back(item))) {
+                LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
+              }
             }
           }
         }
@@ -394,32 +397,36 @@ int ObAllVirtualIOQuota::record_user_group(const uint64_t tenant_id, ObIOUsage &
     }
     if (OB_SUCC(ret)) {
       // OTHER_GROUPS
-      for (int64_t k = 0; OB_SUCC(ret) && k < static_cast<int>(ObIOMode::MAX_MODE); ++k) {
-        if (avg_size.at(0).at(k) > std::numeric_limits<double>::epsilon()) {
-          QuotaInfo item;
-          item.tenant_id_ = tenant_id;
-          item.mode_ = static_cast<ObIOMode>(k);
-          item.group_id_ = 0;
-          item.size_ = avg_size.at(0).at(k);
-          item.real_iops_ = avg_iops.at(0).at(k);
-          int64_t group_min_iops = 0, group_max_iops = 0, group_iops_weight = 0;
-          double iops_scale = 0;
-          bool is_io_ability_valid = true;
-          if (OB_FAIL(io_config.get_group_config(INT64_MAX,
-                                                  group_min_iops,
-                                                  group_max_iops,
-                                                  group_iops_weight))) {
-            LOG_WARN("get other group config failed", K(ret), "gruop_info", io_config.other_group_config_);
-          } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(k),
-                                                                            avg_size.at(0).at(k),
-                                                                            iops_scale,
-                                                                            is_io_ability_valid))) {
-            LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(k)));
-          } else {
-            item.min_iops_ = group_min_iops * iops_scale;
-            item.max_iops_ = group_max_iops * iops_scale;
-            if (OB_FAIL(quota_infos_.push_back(item))) {
-              LOG_WARN("push back other group item failed", K(k), K(ret), K(item));
+      if (0 == avg_size.count() && 0 == avg_iops.count() && 0 == avg_rt.count()) {
+        // do nothing
+      } else {
+        for (int64_t k = 0; OB_SUCC(ret) && k < static_cast<int>(ObIOMode::MAX_MODE); ++k) {
+          if (avg_size.at(0).at(k) > std::numeric_limits<double>::epsilon()) {
+            QuotaInfo item;
+            item.tenant_id_ = tenant_id;
+            item.mode_ = static_cast<ObIOMode>(k);
+            item.group_id_ = 0;
+            item.size_ = avg_size.at(0).at(k);
+            item.real_iops_ = avg_iops.at(0).at(k);
+            int64_t group_min_iops = 0, group_max_iops = 0, group_iops_weight = 0;
+            double iops_scale = 0;
+            bool is_io_ability_valid = true;
+            if (OB_FAIL(io_config.get_group_config(INT64_MAX,
+                                                    group_min_iops,
+                                                    group_max_iops,
+                                                    group_iops_weight))) {
+              LOG_WARN("get other group config failed", K(ret), "gruop_info", io_config.other_group_config_);
+            } else if (OB_FAIL(ObIOCalibration::get_instance().get_iops_scale(static_cast<ObIOMode>(k),
+                                                                              avg_size.at(0).at(k),
+                                                                              iops_scale,
+                                                                              is_io_ability_valid))) {
+              LOG_WARN("get iops scale failed", K(ret), "mode", get_io_mode_string(static_cast<ObIOMode>(k)));
+            } else {
+              item.min_iops_ = group_min_iops * iops_scale;
+              item.max_iops_ = group_max_iops * iops_scale;
+              if (OB_FAIL(quota_infos_.push_back(item))) {
+                LOG_WARN("push back other group item failed", K(k), K(ret), K(item));
+              }
             }
           }
         }
@@ -438,23 +445,26 @@ int ObAllVirtualIOQuota::record_sys_group(const uint64_t tenant_id, ObSysIOUsage
   } else {
     ObSysIOUsage::SysAvgItems sys_avg_iops, sys_avg_size, sys_avg_rt;
     sys_io_usage.calculate_io_usage();
-    sys_io_usage.get_io_usage(sys_avg_iops, sys_avg_size, sys_avg_rt);
-    for (int64_t i = 0; i < sys_avg_size.count(); ++i) {
-      if (i >= sys_avg_size.count() || i >= sys_avg_iops.count() || i >= sys_avg_rt.count()) {
-        //ignore
-      } else {
-        for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
-          if (sys_avg_size.at(i).at(j) > std::numeric_limits<double>::epsilon()) {
-            QuotaInfo item;
-            item.tenant_id_ = tenant_id;
-            item.mode_ = static_cast<ObIOMode>(j);
-            item.group_id_ = SYS_RESOURCE_GROUP_START_ID + i;
-            item.size_ = sys_avg_size.at(i).at(j);
-            item.real_iops_ = sys_avg_iops.at(i).at(j);
-            item.min_iops_ = 0;
-            item.max_iops_ = 0;
-            if (OB_FAIL(quota_infos_.push_back(item))) {
-              LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
+    if (OB_FAIL(sys_io_usage.get_io_usage(sys_avg_iops, sys_avg_size, sys_avg_rt))) {
+      LOG_ERROR("fail to get sys io usage", K(ret));
+    } else {
+      for (int64_t i = 0; i < sys_avg_size.count(); ++i) {
+        if (i >= sys_avg_size.count() || i >= sys_avg_iops.count() || i >= sys_avg_rt.count()) {
+          //ignore
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int>(ObIOMode::MAX_MODE); ++j) {
+            if (sys_avg_size.at(i).at(j) > std::numeric_limits<double>::epsilon()) {
+              QuotaInfo item;
+              item.tenant_id_ = tenant_id;
+              item.mode_ = static_cast<ObIOMode>(j);
+              item.group_id_ = SYS_RESOURCE_GROUP_START_ID + i;
+              item.size_ = sys_avg_size.at(i).at(j);
+              item.real_iops_ = sys_avg_iops.at(i).at(j);
+              item.min_iops_ = 0;
+              item.max_iops_ = 0;
+              if (OB_FAIL(quota_infos_.push_back(item))) {
+                LOG_WARN("push back io group item failed", K(j), K(ret), K(item));
+              }
             }
           }
         }

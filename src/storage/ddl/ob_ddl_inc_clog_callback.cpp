@@ -211,6 +211,10 @@ int ObDDLIncCommitClogCb::on_success()
     if (log_basic_.get_lob_meta_tablet_id().is_valid()) {
       (void)ls->tablet_freeze(log_basic_.get_lob_meta_tablet_id(), is_sync);
     }
+    FLOG_INFO("Commit Async Tablet Freeze Task by DDL Commit Log",
+              K(ls_id_),
+              K(log_basic_.get_tablet_id()),
+              K(log_basic_.get_lob_meta_tablet_id()));
   }
 
   status_.set_ret_code(ret);

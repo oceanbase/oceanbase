@@ -598,11 +598,15 @@ int ObTTLUtil::move_task_to_history_table(uint64_t tenant_id, uint64_t task_id,
   ObSqlString sql;
   int64_t insert_rows = 0;
   int64_t delete_rows = 0;
-  if (OB_FAIL(sql.assign_fmt("replace into %s select gmt_create, gmt_modified,"
+  if (OB_FAIL(sql.assign_fmt("replace into %s (gmt_create, gmt_modified,"
               " tenant_id, task_id, table_id, tablet_id, task_start_time,"
-              " task_update_time, trigger_type, if(status=4, 4, 3) as status,"
+              " task_update_time, trigger_type, status, ttl_del_cnt,"
+              " max_version_del_cnt, scan_cnt, row_key, ret_code)"
+              " select gmt_create, gmt_modified, tenant_id, task_id,"
+              " table_id, tablet_id, task_start_time, task_update_time,"
+              " trigger_type, if(status=4, 4, 3) as status,"
               " ttl_del_cnt, max_version_del_cnt, scan_cnt, row_key, ret_code from %s"
-              " where task_id = %ld and tablet_id != -1  and table_id != -1"
+              " where task_id = %ld and tablet_id != -1 and table_id != -1"
               " order by tenant_id, task_id, table_id, tablet_id LIMIT %ld",
               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
               share::OB_ALL_KV_TTL_TASK_TNAME,
@@ -634,8 +638,13 @@ int ObTTLUtil::move_tenant_task_to_history_table(uint64_t tenant_id, uint64_t ta
   ObSqlString sql;
   int64_t insert_rows = 0;
   int64_t delete_rows = 0;
-  if (OB_FAIL(sql.assign_fmt("insert into %s select * from %s "
-              " where task_id = %ld and tablet_id = %ld",
+  if (OB_FAIL(sql.assign_fmt("insert into %s (gmt_create, gmt_modified, tenant_id,"
+              " table_id, tablet_id, task_id, task_start_time, task_update_time,"
+              " trigger_type, status, ttl_del_cnt, max_version_del_cnt, scan_cnt,"
+              " ret_code, row_key) select gmt_create, gmt_modified, tenant_id, table_id,"
+              " tablet_id, task_id, task_start_time, task_update_time, trigger_type,"
+              " status, ttl_del_cnt, max_version_del_cnt, scan_cnt, ret_code, row_key"
+              " from %s where task_id = %ld and tablet_id = %ld",
               share::OB_ALL_KV_TTL_TASK_HISTORY_TNAME,
               share::OB_ALL_KV_TTL_TASK_TNAME,
               task_id, TTL_TENNAT_TASK_TABLET_ID))) {

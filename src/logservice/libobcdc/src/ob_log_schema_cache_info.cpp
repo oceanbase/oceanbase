@@ -878,7 +878,7 @@ int TableSchemaInfo::add_udt_column_(ColumnSchemaInfo *column_info)
 
     // add
     if (OB_SUCC(ret) && OB_NOT_NULL(udt_schema_info)) {
-      if (column_info->is_hidden()) {
+      if (! column_info->is_udt_main_column()) {
         if (OB_FAIL(udt_schema_info->add_hidden_column(column_info))) {
           LOG_ERROR("add hidden column info fail", KR(ret), K(column_info));
         }
@@ -938,6 +938,9 @@ int TableSchemaInfo::get_main_column_of_udt(
     LOG_ERROR("get udt column schema fail", KR(ret), K(udt_set_id));
   } else if (OB_FAIL(udt_schema_info->get_main_column(column_schema_info))) {
     LOG_ERROR("get main column of udt fail", KR(ret), K(udt_set_id));
+  } else if (OB_ISNULL(column_schema_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("main column is null", KR(ret), K(udt_set_id));
   }
   return ret;
 }

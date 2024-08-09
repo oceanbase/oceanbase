@@ -37,6 +37,8 @@ class ObDirectLoadOriginTable;
 class ObDirectLoadExternalTable;
 class ObDirectLoadMultipleSSTable;
 class ObDirectLoadMultipleHeapTable;
+class ObDirectLoadSSTableConflictCheck;
+class ObDirectLoadMultipleSSTableConflictCheck;
 
 class ObDirectLoadPartitionMergeTask : public common::ObDLinkBase<ObDirectLoadPartitionMergeTask>
 {
@@ -50,6 +52,7 @@ public:
 protected:
   virtual int construct_row_iter(common::ObIAllocator &allocator,
                                  ObIStoreRowIterator *&row_iter) = 0;
+  virtual int finish_check() { return OB_SUCCESS; }
 protected:
   observer::ObTableLoadTableCtx *ctx_;
   const ObDirectLoadMergeParam *merge_param_;
@@ -78,6 +81,7 @@ public:
            int64_t parallel_idx);
 protected:
   int construct_row_iter(common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter) override;
+  int finish_check() override;
 private:
   class RowIterator : public ObDirectLoadInsertTableRowIterator
   {
@@ -93,8 +97,10 @@ private:
              const blocksstable::ObDatumRange &range,
              ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
+    ObLobId get_max_del_lob_id() const;
   private:
     ObIStoreRowIterator *data_iter_;
+    ObDirectLoadSSTableConflictCheck *conflict_check_;
     blocksstable::ObDatumRow datum_row_;
     int64_t rowkey_column_num_;
   };
@@ -102,6 +108,7 @@ private:
   ObDirectLoadOriginTable *origin_table_;
   const ObIArray<ObDirectLoadSSTable *> *sstable_array_;
   const blocksstable::ObDatumRange *range_;
+  RowIterator *row_iter_;
 };
 
 class ObDirectLoadPartitionRangeMultipleMergeTask : public ObDirectLoadPartitionMergeTask
@@ -118,6 +125,7 @@ public:
            int64_t parallel_idx);
 protected:
   int construct_row_iter(common::ObIAllocator &allocator, ObIStoreRowIterator *&row_iter) override;
+  int finish_check() override;
 private:
   class RowIterator : public ObDirectLoadInsertTableRowIterator
   {
@@ -133,8 +141,10 @@ private:
              const blocksstable::ObDatumRange &range,
              ObDirectLoadInsertTabletContext *insert_tablet_ctx);
     int inner_get_next_row(blocksstable::ObDatumRow *&datum_row) override;
+    ObLobId get_max_del_lob_id() const;
   private:
     ObIStoreRowIterator *data_iter_;
+    ObDirectLoadMultipleSSTableConflictCheck *conflict_check_;
     blocksstable::ObDatumRow datum_row_;
     int64_t rowkey_column_num_;
   };
@@ -142,6 +152,7 @@ private:
   ObDirectLoadOriginTable *origin_table_;
   const ObIArray<ObDirectLoadMultipleSSTable *> *sstable_array_;
   const blocksstable::ObDatumRange *range_;
+  RowIterator *row_iter_;
 };
 
 class ObDirectLoadPartitionHeapTableMergeTask : public ObDirectLoadPartitionMergeTask

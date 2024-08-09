@@ -18,6 +18,7 @@
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
 #include "storage/tablet/ob_tablet_iterator.h"
 #include "storage/tablet/ob_tablet.h"
+#include "observer/ob_server_event_history_table_operator.h"
 
 namespace oceanbase
 {
@@ -174,7 +175,8 @@ int ObLSMemberListService::get_max_tablet_transfer_scn(share::SCN &transfer_scn)
 {
   int ret = OB_SUCCESS;
   const bool need_initial_state = false;
-  ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state);
+  const bool need_sorted_tablet_id = false;
+  ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state, need_sorted_tablet_id);
   share::SCN max_transfer_scn = share::SCN::min_scn();
   static const int64_t LOCK_TIMEOUT = 100_ms; // 100ms
   if (OB_UNLIKELY(!is_inited_)) {

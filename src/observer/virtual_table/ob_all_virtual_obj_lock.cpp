@@ -415,6 +415,10 @@ int ObAllVirtualObjLock::process_curr_tenant(ObNewRow *&row)
           cur_row_.cells_[i].set_int(lock_op.lock_id_.obj_id_);
           break;
         }
+        case OWNER_TYPE: {
+          // TODO: set the column with real data
+          break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

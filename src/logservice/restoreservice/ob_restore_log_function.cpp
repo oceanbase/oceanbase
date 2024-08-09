@@ -109,6 +109,11 @@ int ObRestoreLogFunction::handle_group_entry(
         || NULL == buffer)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(id), K(proposal_id), K(group_start_lsn), K(group_entry), K(buffer));
+  } else if (!group_entry.check_compatibility()) {
+    ret = OB_EAGAIN;
+    if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+      LOG_ERROR("data version is not new enough to recover clog", KR(ret));
+    }
   } else if (OB_FAIL(process_(id, proposal_id, group_start_lsn, group_entry.get_scn(),
           buffer, group_entry.get_serialize_size(), stop_flag))) {
     CLOG_LOG(WARN, "process failed", K(id), K(group_start_lsn), K(group_entry), K(buffer));
