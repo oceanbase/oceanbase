@@ -181,7 +181,7 @@ int ObLSRestoreTaskMgr::remove_restored_tablets(ObIArray<common::ObTabletID> &re
 {
   int ret = OB_SUCCESS;
   restored_tablets.reset();
-
+  bool is_sys_tablets_restored = false;
   ObLS *ls = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -208,6 +208,11 @@ int ObLSRestoreTaskMgr::remove_restored_tablets(ObIArray<common::ObTabletID> &re
         const ToRestoreTabletGroup &restored_tg = iter->second;
         LOG_INFO("task is finished", "task_id", iter->first, K_(ls_id), K(restored_tg), KP(&high_pri_wait_tablet_set_), KP(&wait_tablet_set_));
         if (!restored_tg.is_tablet_group_task()) {
+          if (OB_FAIL(check_is_ls_restore_task_finished_(is_sys_tablets_restored))) {
+            LOG_WARN("fail to check sys tablets restored", K(ret), KPC(ls));
+          } else if (!is_sys_tablets_restored) {
+            restore_state_handler_->set_retry_flag();
+          }
         } else if (OB_FAIL(handle_task_finish_(ls,
                                                restored_tg,
                                                restored_tablets,
@@ -228,6 +233,32 @@ int ObLSRestoreTaskMgr::remove_restored_tablets(ObIArray<common::ObTabletID> &re
       remove_finished_task_(finish_task);
       LOG_INFO("succeed remove restored tablets", K_(ls_id), K(high_pri_tablet_need_redo), K(wait_tablet_need_redo), K(restored_tablets));
     }
+  }
+  return ret;
+}
+
+int ObLSRestoreTaskMgr::check_is_ls_restore_task_finished_(bool &is_restored)
+{
+  int ret = OB_SUCCESS;
+  is_restored = false;
+  ObLS *ls = nullptr;
+  ObLSTabletService *ls_tablet_svr = nullptr;
+  ObTabletHandle tablet_handle;
+  if (OB_ISNULL(ls = restore_state_handler_->get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", K(ret));
+  } else if (OB_ISNULL(ls_tablet_svr = ls->get_tablet_svr())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls_tablet_svr is nullptr", K(ret), KPC(ls));
+  // sys tablets are scheduled in one dag, if one is restored, then others are all restored
+  } else if (OB_FAIL(ls_tablet_svr->get_tablet(LS_LOCK_TABLET, tablet_handle))) {
+    LOG_WARN("fail to check ls has lock tablet", K(ret), KPC(ls));
+    if (OB_TABLET_NOT_EXIST == ret) {
+      is_restored = false;
+      ret = OB_SUCCESS;
+    }
+  } else {
+    is_restored = true;
   }
   return ret;
 }

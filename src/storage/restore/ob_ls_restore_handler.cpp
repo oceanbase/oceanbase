@@ -1397,18 +1397,24 @@ int ObILSRestoreState::schedule_tablet_group_restore_dag_net_(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_SKIP_RESTORE_SYS_TABLETS_DAG_NET);
 int ObILSRestoreState::schedule_ls_restore_(
     const ObLSRestoreArg &arg,
     const share::ObTaskId &task_id)
 {
   int ret = OB_SUCCESS;
   bool reach_limit = false;
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("LS restore state do not init", K(ret));
   } else if (!arg.is_valid() || task_id.is_invalid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("schedule ls restore get invalid argument", K(ret), K(arg), K(task_id));
+#ifdef ERRSIM
+  } else if (OB_SUCCESS != EN_SKIP_RESTORE_SYS_TABLETS_DAG_NET) {
+    LOG_ERROR("errsim EN_SKIP_RESTORE_SYS_TABLETS_DAG_NET");
+#endif
   } else if (OB_FAIL(check_restore_concurrency_limit_(reach_limit))) {
     LOG_WARN("failed to check restore concurrency limit", K(ret), K(arg), K(task_id));
   } else if (reach_limit) { // wait next schedule.
