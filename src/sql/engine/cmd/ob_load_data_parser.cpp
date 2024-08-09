@@ -98,7 +98,7 @@ int ObODPSGeneralFormat::encrypt_str(common::ObString &src, common::ObString &ds
     } else if (OB_FAIL(deep_copy_str(ObString(hex_buff), dst))) {
       LOG_WARN("failed to deep copy encrypted_string", K(ret));
     } else {
-      LOG_TRACE("succ to encrypt src", K(src), K(dst));
+      LOG_TRACE("succ to encrypt src", K(ret));
     }
   }
 #endif
@@ -139,7 +139,7 @@ int ObODPSGeneralFormat::decrypt_str(common::ObString &src, common::ObString &ds
     } else if (OB_FAIL(deep_copy_str(ObString(plain_string_len, plain_string), dst))) {
       LOG_WARN("failed to deep copy plain_string", K(ret));
     } else {
-      LOG_TRACE("succ to decrypt src", K(plain_string_len), K(src), K(dst));
+      LOG_TRACE("succ to decrypt src", K(ret));
     }
   }
 #endif

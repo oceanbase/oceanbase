@@ -2722,12 +2722,10 @@ int ObDDLResolver::resolve_file_format(const ParseNode *node, ObExternalFileForm
       }
       case ObItemType::T_ACCESSKEY: {
         format.odps_format_.access_key_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        LOG_WARN("lcqlogxx0", K(format.odps_format_.access_key_), K(format.odps_format_.sts_token_), K(T_STSTOKEN), K(T_ACCESSKEY), K(ret));
         break;
       }
       case ObItemType::T_STSTOKEN: {
         format.odps_format_.sts_token_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
-        LOG_WARN("lcqlogxx1", K(format.odps_format_.access_key_), K(format.odps_format_.sts_token_), K(T_STSTOKEN), K(T_ACCESSKEY), K(ret));
         break;
       }
       case ObItemType::T_ENDPOINT: {

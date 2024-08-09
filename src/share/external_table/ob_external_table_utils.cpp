@@ -708,8 +708,9 @@ int ObExternalTableUtils::collect_external_file_list(
       LOG_WARN("failed to pull partition info", K(ret));
     } else if (odps_driver.is_part_table()) {
       if (!is_partitioned_table) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("odps table is partitioned table, but ob odps external table is not", K(ret));
+        ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+        LOG_WARN("remote odps table is partitioned table, but local odps external table is not partitioned table", K(ret));
+        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "remote odps table is partitioned table, but local odps external table is not partitioned table");
       }
       ObIArray<sql::ObODPSTableRowIterator::OdpsPartition>& part_list_info = odps_driver.get_partition_info();
       for (int64_t i = 0; OB_SUCC(ret) && i < part_list_info.count(); ++i) {
@@ -728,8 +729,9 @@ int ObExternalTableUtils::collect_external_file_list(
     } else {
       ObIArray<sql::ObODPSTableRowIterator::OdpsPartition>& part_list_info = odps_driver.get_partition_info();
       if (is_partitioned_table) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("odps table is not partitioned table, but ob odps external table is", K(ret));
+        ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
+        LOG_WARN("remote odps table is not partitioned table, but local odps external table is partitioned table", K(ret));
+        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "remote odps table is not partitioned table, but local odps external table is partitioned table");
       } else if (1 != part_list_info.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected count of partition info", K(ret), K(part_list_info.count()));

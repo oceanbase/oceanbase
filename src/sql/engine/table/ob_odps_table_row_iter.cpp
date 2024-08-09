@@ -58,7 +58,7 @@ int ObODPSTableRowIterator::init_tunnel(const sql::ObODPSGeneralFormat &odps_for
     } else if (OB_FAIL(odps_format_.decrypt())) {
       LOG_WARN("failed to decrypt odps format", K(ret));
     } else {
-      LOG_TRACE("init tunnel format", K(ret), K(odps_format_), K(odps_format));
+      LOG_TRACE("init tunnel format", K(ret));
       if (0 == odps_format_.access_type_.case_compare("aliyun") ||
           odps_format_.access_type_.empty()) {
         account_ = apsara::odps::sdk::Account(std::string(apsara::odps::sdk::ACCOUNT_ALIYUN),
@@ -387,11 +387,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       case apsara::odps::sdk::ODPS_TINYINT:
       case apsara::odps::sdk::ODPS_BOOLEAN:
       {
-        if (ObTinyIntType == ob_type ||
-            ObSmallIntType == ob_type ||
-            ObMediumIntType == ob_type ||
-            ObInt32Type == ob_type ||
-            ObIntType == ob_type) {
+        if (ObTinyIntType == ob_type) {
           // odps_type to ob_type is valid
         } else {
           ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -402,10 +398,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       }
       case apsara::odps::sdk::ODPS_SMALLINT:
       {
-        if (ObSmallIntType == ob_type ||
-            ObMediumIntType == ob_type ||
-            ObInt32Type == ob_type ||
-            ObIntType == ob_type) {
+        if (ObSmallIntType == ob_type) {
           // odps_type to ob_type is valid
         } else {
           ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -416,8 +409,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       }
       case apsara::odps::sdk::ODPS_INTEGER:
       {
-        if (ObInt32Type == ob_type ||
-            ObIntType == ob_type) {
+        if (ObInt32Type == ob_type) {
           // odps_type to ob_type is valid
         } else {
           ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
@@ -464,9 +456,8 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
         if (ObDecimalIntType == ob_type ||
             ObNumberType == ob_type) {
           // odps_type to ob_type is valid
-          if (ob_type_length < odps_type_precision || // in ObExpr, max_length_ is decimal type's precision
-              ob_type_scale < odps_type_scale ||
-              (ob_type_length - ob_type_scale) < (odps_type_precision - odps_type_scale)) {
+          if (ob_type_length != odps_type_precision || // in ObExpr, max_length_ is decimal type's precision
+              ob_type_scale != odps_type_scale) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
             LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
                                                               K(ob_type_length),
@@ -487,7 +478,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       {
         if (ObCharType == ob_type) {
           // odps_type to ob_type is valid
-          if (ob_type_length < odps_type_length) {
+          if (ob_type_length != odps_type_length) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
             LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
                                                               K(ob_type_length),
@@ -509,7 +500,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
       {
         if (ObVarcharType == ob_type) {
           // odps_type to ob_type is valid
-          if (ob_type_length < odps_type_length) {
+          if (ob_type_length != odps_type_length) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
             LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
                                                               K(ob_type_length),
@@ -644,7 +635,7 @@ int ObODPSTableRowIterator::prepare_expr()
                       (target_idx < 0 || target_idx >= column_list_.count()))) {
         ret = OB_EXTERNAL_ODPS_UNEXPECTED_ERROR;
         LOG_WARN("unexcepted target_idx", K(ret), K(target_idx), K(column_list_.count()));
-        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "wrong column index point to odps, please check the index of external$tablecol[index] you set");
+        LOG_USER_ERROR(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, "wrong column index point to odps, please check the index of external$tablecol[index] and metadata$partition_list_col[index]");
       } else if (OB_FAIL(target_column_id_list_.push_back(target_idx))) {
         LOG_WARN("failed to keep target_idx", K(ret));
       } else if (cur_expr->type_ == T_PSEUDO_EXTERNAL_FILE_COL &&

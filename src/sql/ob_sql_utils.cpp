@@ -53,6 +53,7 @@
 #include "lib/charset/ob_charset.h"
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -1400,6 +1401,21 @@ int ObSQLUtils::extract_odps_part_spec(const ObString &all_part_spec, ObIArray<O
       }
       ++start;
     }
+  }
+  return ret;
+}
+
+int ObSQLUtils::is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps)
+{
+  int ret = OB_SUCCESS;
+  is_odps = false;
+  ObExternalFileFormat format;
+  if (properties.empty()) {
+    // do nothing
+  } else if (OB_FAIL(format.load_from_string(properties, allocator))) {
+    LOG_WARN("fail to load from properties string", K(ret), K(properties));
+  } else {
+    is_odps = ObExternalFileFormat::FormatType::ODPS_FORMAT == format.format_type_;
   }
   return ret;
 }
