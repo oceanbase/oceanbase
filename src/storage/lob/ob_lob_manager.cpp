@@ -701,14 +701,20 @@ int ObLobManager::lob_refresh_location(ObLobAccessParam &param, ObAddr &dst_addr
     loc_meta.ref_table_id_ = extern_header->table_id_;
     ObDASTabletLoc tablet_loc;
     ObMemLobRetryInfo *retry_info = nullptr;
+    ObMemLobLocationInfo *location_info = nullptr;
     if (last_err == OB_TABLET_NOT_EXIST && OB_FAIL(lob_check_tablet_not_exist(param, extern_header->table_id_))) {
       LOG_WARN("fail to check tablet not exist", K(ret), K(extern_header->table_id_));
     } else if (OB_FAIL(lob_locator->get_retry_info(retry_info))) {
       LOG_WARN("fail to get retry info", K(ret), KPC(lob_locator));
+    } else if (OB_FAIL(lob_locator->get_location_info(location_info))) {
+      LOG_WARN("failed to get location info", K(ret), KPC(lob_locator), K(last_err), K(retry_cnt));
     } else if (OB_FALSE_IT(loc_meta.select_leader_ = retry_info->is_select_leader_)) {
        // use main tablet id to get location, for lob meta tablet is same location as main tablet
     } else if (OB_FAIL(router.get_tablet_loc(loc_meta, param.tablet_id_, tablet_loc))) {
       LOG_WARN("fail to refresh location", K(ret));
+    } else if (param.tablet_id_ != tablet_loc.tablet_id_ || location_info->tablet_id_ != tablet_loc.tablet_id_.id()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet id is changed", K(ret), K(tablet_loc), K(param), KPC(location_info));
     } else {
       dst_addr = tablet_loc.server_;
       remote_bret = (dst_addr != self_addr);
@@ -716,6 +722,7 @@ int ObLobManager::lob_refresh_location(ObLobAccessParam &param, ObAddr &dst_addr
         LOG_INFO("[LOB RETRY] lob retry find tablet ls id is changed",
                  K(param.tablet_id_), K(param.ls_id_), K(tablet_loc.ls_id_));
         param.ls_id_ = tablet_loc.ls_id_;
+        location_info->ls_id_ = tablet_loc.ls_id_.id();
       }
     }
   }
