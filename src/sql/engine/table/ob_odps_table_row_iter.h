@@ -17,40 +17,36 @@ public:
   static const int64_t READER_HASH_MAP_BUCKET_NUM = 1 << 7;
   static const int64_t ODPS_BLOCK_DOWNLOAD_SIZE = 1 << 18;
 public:
-  struct OdpsTask {
-    OdpsTask() :
-      part_spec_(""),
-      download_handle_(NULL),
-      download_id_(""),
-      part_id_(OB_INVALID_ID),
+  struct StateValues {
+    StateValues() :
+      task_idx_(-1),
+      part_id_(0),
       start_(0),
       step_(0),
-      part_val_()
-    {
-    }
-    OdpsTask(const ObString &part_spec,
-             apsara::odps::sdk::IDownloadPtr download_handle,
-             const std::string download_id,
-             int64_t &part_id,
-             int64_t &start,
-             int64_t &record_count) :
-      part_spec_(part_spec.ptr(), part_spec.length()),
-      download_handle_(download_handle),
-      download_id_(download_id),
-      part_id_(OB_INVALID_ID),
-      start_(start),
-      step_(record_count),
-      part_val_()
-    {
-    }
-    TO_STRING_KV(K(ObString(part_spec_.c_str())), K(step_));
-    std::string part_spec_;
-    apsara::odps::sdk::IDownloadPtr download_handle_;
-    std::string download_id_;
+      count_(0),
+      is_batch_interface_(false),
+      download_handle_(NULL),
+      record_reader_handle_(NULL) {}
+    int reuse();
+    TO_STRING_KV(K(task_idx_),
+                 K(part_id_),
+                 K(start_),
+                 K(step_),
+                 K(count_),
+                 K(is_batch_interface_),
+                 K(ObString(part_spec_.c_str())),
+                 K(ObString(download_id_.c_str())));
+    int64_t task_idx_;
     int64_t part_id_;
     int64_t start_;
     int64_t step_;
-    ObNewRow part_val_;
+    int64_t count_;
+    bool is_batch_interface_;
+    apsara::odps::sdk::IDownloadPtr download_handle_;
+    apsara::odps::sdk::IRecordReaderPtr record_reader_handle_;
+    std::string part_spec_;
+    std::string download_id_;
+    ObNewRow part_list_val_;
   };
   struct OdpsPartition {
     OdpsPartition() :
@@ -107,17 +103,14 @@ public:
     tunnel_(),
     odps_(NULL),
     table_handle_(NULL),
-    record_reader_handle_(NULL),
+    state_(),
     is_part_table_(false),
-    task_idx_(-1),
-    read_count_(0),
     total_count_(0),
-    expected_record_count_(0),
     bit_vector_cache_(NULL),
-    records_(NULL),
     record_(NULL),
-    records_num_(0),
-    records_created_(false)
+    records_(NULL),
+    batch_size_(-1),
+    get_next_task_(false)
   {
     mem_attr_ = ObMemAttr(MTL_ID(), "odpsrowiter");
     malloc_alloc_.set_attr(mem_attr_);
@@ -126,16 +119,16 @@ public:
     if (NULL != bit_vector_cache_) {
       malloc_alloc_.free(bit_vector_cache_);
     }
-    for (int64_t i = 0; i < records_num_; ++i) {
+    for (int64_t i = 0; i < batch_size_; ++i) {
       records_[i].reset();
     }
     if (NULL != records_) {
       malloc_alloc_.free(records_);
     }
-    records_ = NULL;
-    records_created_ = false;
-    records_num_ = 0;
     record_.reset();
+    records_ = NULL;
+    batch_size_ = -1;
+    get_next_task_ = false;
     reset();
   }
   virtual int init(const storage::ObTableScanParam *scan_param) override;
@@ -151,7 +144,6 @@ public:
   int pull_partition_info();
   inline ObIArray<OdpsPartition>& get_partition_info() { return partition_list_; }
   inline bool is_part_table() { return is_part_table_; }
-  inline int64_t get_expected_row_cnt() { return expected_record_count_; }
   static int check_type_static(const apsara::odps::sdk::ODPSColumnType odps_type,
                                 const int32_t odps_type_length,
                                 const int32_t odps_type_precision,
@@ -161,9 +153,10 @@ public:
                                 const int32_t ob_type_precision,
                                 const int32_t ob_type_scale);
 private:
+  int inner_get_next_row();
   int prepare_expr();
   int pull_column();
-  int read_task();
+  int next_task();
   int print_type_map_user_info(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info,
                                 const ObExpr *ob_type_expr);
   int check_type_static(apsara::odps::sdk::ODPSColumnTypeInfo odps_type_info,
@@ -188,21 +181,17 @@ private:
   apsara::odps::sdk::OdpsTunnel tunnel_;
   apsara::odps::sdk::IODPSPtr odps_;
   apsara::odps::sdk::IODPSTablePtr table_handle_;
-  apsara::odps::sdk::IRecordReaderPtr record_reader_handle_;
   ObSEArray<OdpsPartition, 8> partition_list_;
   ObSEArray<OdpsColumn, 8> column_list_;
-  ObSEArray<OdpsTask, 8> task_list_;
   ObSEArray<int64_t, 8> target_column_id_list_;
+  StateValues state_;
   bool is_part_table_;
-  int64_t task_idx_;
-  int64_t read_count_;
   int64_t total_count_;
-  int64_t expected_record_count_;
   ObBitVector *bit_vector_cache_;
-  apsara::odps::sdk::ODPSTableRecordPtr *records_;
   apsara::odps::sdk::ODPSTableRecordPtr record_;
-  int64_t records_num_;
-  bool records_created_;
+  apsara::odps::sdk::ODPSTableRecordPtr *records_;
+  int64_t batch_size_; // -1 means not inited, 0 means call get_next_row(), > 0 means call get_next_rows()
+  bool get_next_task_; // only used for get next task and recall inner_get_next_row() when curren task was iter end.
   common::ObMalloc malloc_alloc_;
   common::ObArenaAllocator arena_alloc_;
   common::ObMemAttr mem_attr_;
@@ -256,6 +245,7 @@ public:
                         apsara::odps::sdk::IRecordWriterPtr &record_writer);
   int commit_upload();
   int reset();
+  OB_INLINE bool is_download_mgr_inited() { return inited_ && is_download_; }
   inline int64_t inc_ref()
   {
     return ATOMIC_FAA(&ref_, 1);

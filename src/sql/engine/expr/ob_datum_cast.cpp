@@ -1774,17 +1774,109 @@ static int common_string_string(const ObExpr &expr,
   return ret;
 }
 
-int ObOdpsDataTypeCastUtil::common_string_string_wrap(const ObExpr &expr,
-                                                const ObObjType in_type,
-                                                const ObCollationType in_cs_type,
-                                                const ObObjType out_type,
-                                                const ObCollationType out_cs_type,
-                                                const ObString &in_str,
-                                                ObEvalCtx &ctx,
-                                                ObDatum &res_datum,
-                                                bool& has_set_res)
+int ObOdpsDataTypeCastUtil::common_check_convert_string(const ObExpr &expr,
+                                                        ObEvalCtx &ctx,
+                                                        const ObString &in_str,
+                                                        ObObjType in_type,
+                                                        ObCollationType in_cs_type,
+                                                        ObDatum &res_datum,
+                                                        bool &has_set_res)
 {
-  return common_string_string(expr, in_type, in_cs_type, out_type, out_cs_type, in_str, ctx, res_datum, has_set_res);
+  int ret = OB_SUCCESS;
+  ObObjType out_type = expr.datum_meta_.type_;
+  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  if (lib::is_oracle_mode() &&
+      (ob_is_blob(out_type, out_cs_type) || ob_is_blob_locator(out_type, out_cs_type)) &&
+      !(ob_is_blob(in_type, in_cs_type) || ob_is_blob_locator(in_type, in_cs_type)
+        || ob_is_raw(in_type))) {
+    // !blob -> blob
+    if (ObCharType == in_type || ObVarcharType == in_type) {
+      if (OB_FAIL(ObDatumHexUtils::hextoraw_string(expr, in_str, ctx, res_datum, has_set_res))) {
+        LOG_WARN("fail to hextoraw_string for blob", K(ret), K(in_str));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_ERROR("invalid use of blob type", K(ret), K(in_str), K(out_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cast to blob type");
+    }
+  } else {
+    // When convert blob/binary/varbinary to other charset, need to align to mbminlen of destination charset
+    // by add '\0' prefix in mysql mode. (see mysql String::copy)
+    const ObCharsetInfo *cs = NULL;
+    int64_t align_offset = 0;
+    if (CS_TYPE_BINARY == in_cs_type && lib::is_mysql_mode()
+        && (NULL != (cs = ObCharset::get_charset(out_cs_type)))) {
+      if (cs->mbminlen > 0 && in_str.length() % cs->mbminlen != 0) {
+        align_offset = cs->mbminlen - in_str.length() % cs->mbminlen;
+      }
+    }
+    if (OB_FAIL(common_copy_string_zf(expr, in_str, ctx, res_datum, align_offset))) {
+      LOG_WARN("common_copy_string_zf failed", K(ret), K(in_str));
+    }
+  }
+  return ret;
+}
+
+int ObOdpsDataTypeCastUtil::common_string_string_wrap(const ObExpr &expr,
+                                const ObObjType in_type,
+                                const ObCollationType in_cs_type,
+                                const ObObjType out_type,
+                                const ObCollationType out_cs_type,
+                                const ObString &in_str,
+                                ObEvalCtx &ctx,
+                                ObDatum &res_datum,
+                                bool& has_set_res)
+{
+  int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode()
+      && ob_is_clob(in_type, in_cs_type)
+      && (0 == in_str.length())
+      && !ob_is_clob(out_type, out_cs_type)) {
+    // oracle 模式下的 empty_clob 被 cast 成其他类型时结果是 NULL
+    res_datum.set_null();
+  } else if (CS_TYPE_BINARY != in_cs_type &&
+      CS_TYPE_BINARY != out_cs_type &&
+      (ObCharset::charset_type_by_coll(in_cs_type) !=
+      ObCharset::charset_type_by_coll(out_cs_type))) {
+    // handle !blob->!blob
+    char *buf = NULL;
+    //latin1 1bytes,utf8mb4 4bytes,the factor should be 4
+    int64_t buf_len = in_str.length() * ObCharset::CharConvertFactorNum;
+    uint32_t result_len = 0;
+    buf = expr.get_str_res_mem(ctx, buf_len);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc memory failed", K(ret));
+    } else if (OB_FAIL(ObCharset::charset_convert(in_cs_type, in_str.ptr(),
+                                                  in_str.length(), out_cs_type, buf,
+                                                  buf_len, result_len, lib::is_mysql_mode(),
+                                                  !CM_IS_IGNORE_CHARSET_CONVERT_ERR(expr.extra_) && CM_IS_IMPLICIT_CAST(expr.extra_),
+                                                  ObCharset::is_cs_unicode(out_cs_type) ? 0xFFFD : '?'))) {
+      LOG_WARN("charset convert failed", K(ret));
+    } else {
+      res_datum.set_string(buf, result_len);
+    }
+  } else {
+    if (CS_TYPE_BINARY == in_cs_type || CS_TYPE_BINARY == out_cs_type) {
+      // just copy string when in_cs_type or out_cs_type is binary
+      if (OB_FAIL(ObOdpsDataTypeCastUtil::common_check_convert_string(expr, ctx, in_str, in_type, in_cs_type, res_datum, has_set_res))) {
+        LOG_WARN("fail to common_check_convert_string", K(ret), K(in_str));
+      }
+    } else if (lib::is_oracle_mode()
+                && ob_is_clob(in_type, in_cs_type)) {
+      res_datum.set_string(in_str.ptr(), in_str.length());
+    } else if (lib::is_oracle_mode()
+                && ob_is_clob(out_type, out_cs_type)) {
+      res_datum.set_string(in_str.ptr(), in_str.length());
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("same charset should not be here, just use cast_eval_arg", K(ret),
+          K(in_type), K(out_type), K(in_cs_type), K(out_cs_type));
+    }
+  }
+  LOG_DEBUG("string_string cast", K(ret), K(in_str),
+              K(ObString(res_datum.len_, res_datum.ptr_)));
+  return ret;
 }
 
 static int common_string_otimestamp(const ObExpr &expr,
@@ -2116,7 +2208,7 @@ int ObOdpsDataTypeCastUtil::common_string_text_wrap(const ObExpr &expr,
                                     != ObCharset::charset_type_by_coll(out_cs_type));
   OB_ASSERT(ob_is_text_tc(out_type));
   if (is_different_charset_type) {
-    if (OB_FAIL(common_string_string(expr, in_type, in_cs_type, out_type,
+    if (OB_FAIL(ObOdpsDataTypeCastUtil::common_string_string_wrap(expr, in_type, in_cs_type, out_type,
                                      out_cs_type, in_str, ctx, res_datum, is_final_res))) {
       LOG_WARN("Lob: fail to cast string to longtext", K(ret), K(in_str), K(expr));
     } else if (res_datum.is_null()) {

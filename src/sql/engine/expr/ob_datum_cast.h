@@ -62,6 +62,13 @@ public:
                                     ObDatum &res_datum,
                                     ObObjType &in_type,
                                     ObCollationType &in_cs_type);
+  static int common_check_convert_string(const ObExpr &expr,
+                                        ObEvalCtx &ctx,
+                                        const ObString &in_str,
+                                        ObObjType in_type,
+                                        ObCollationType in_cs_type,
+                                        ObDatum &res_datum,
+                                        bool &has_set_res);
 };
 
 // extract accuracy info from %expr and call datum_accuracy_check() below.

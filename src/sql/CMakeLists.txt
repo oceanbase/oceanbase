@@ -1392,6 +1392,11 @@ add_library(ob_sql_static
   STATIC
   EXCLUDE_FROM_ALL)
 
+if(OB_BUILD_OPENSOURCE)
+target_link_libraries(ob_sql_static
+  PUBLIC ob_sql
+  ob_sql_server_parser_static)
+else()
 target_link_libraries(ob_sql_static
   PUBLIC ob_sql
   ob_sql_server_parser_static
@@ -1404,6 +1409,7 @@ target_link_libraries(ob_sql_static
   ${DEP_DIR}/lib64/libodps_sdk_tunnel_static.a
   ${DEP_DIR}/lib64/libodps_sdk_common_static.a
   ${DEP_DIR}/lib64/libodps_sdk_core_static.a)
+endif()
 
 execute_process(
   COMMAND bash gen_parser.sh

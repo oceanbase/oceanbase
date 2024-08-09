@@ -126,6 +126,7 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
         uint64_t block_cnt = (external_info.file_size_ + sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE - 1)
                              / sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE;
         uint64_t start_idx = 0;
+        block_cnt = (0 == block_cnt ? 1 : block_cnt); // one odps table partition should have at least one task, even it's empty
         for (int64_t j = 0; OB_SUCC(ret) && j < block_cnt; ++j) {
           ObNewRange new_range;
           int64_t start = start_idx + (sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE * j);
@@ -134,6 +135,8 @@ int ObGranuleUtil::split_granule_for_external_table(ObIAllocator &allocator,
                                                     external_info.file_id_,
                                                     external_info.part_id_,
                                                     start_idx + (sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE * j),
+                                                    j == block_cnt -1 ?
+                                                    INT64_MAX :
                                                     sql::ObODPSTableRowIterator::ODPS_BLOCK_DOWNLOAD_SIZE,
                                                     allocator,
                                                     new_range))) {

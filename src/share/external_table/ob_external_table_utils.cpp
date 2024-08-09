@@ -711,8 +711,9 @@ int ObExternalTableUtils::collect_external_file_list(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("odps table is partitioned table, but ob odps external table is not", K(ret));
       }
-      for (int64_t i = 0; OB_SUCC(ret) && i < odps_driver.get_partition_info().count(); ++i) {
-        const char *part_spec_src = odps_driver.get_partition_info().at(i).name_.c_str();
+      ObIArray<sql::ObODPSTableRowIterator::OdpsPartition>& part_list_info = odps_driver.get_partition_info();
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_list_info.count(); ++i) {
+        const char *part_spec_src = part_list_info.at(i).name_.c_str();
         int64_t part_spec_src_len = STRLEN(part_spec_src);
         char *part_spec = NULL;
         if (OB_ISNULL(part_spec = reinterpret_cast<char *>(allocator.alloc(part_spec_src_len)))) {
@@ -720,16 +721,20 @@ int ObExternalTableUtils::collect_external_file_list(
           LOG_WARN("failed to alloc mem", K(part_spec_src_len), K(ret));
         } else {
           MEMCPY(part_spec, part_spec_src, part_spec_src_len);
-          OZ(file_sizes.push_back(odps_driver.get_partition_info().at(i).record_count_));
+          OZ(file_sizes.push_back(part_list_info.at(i).record_count_));
           OZ (file_urls.push_back(ObString(part_spec_src_len, part_spec)));
         }
       }
     } else {
+      ObIArray<sql::ObODPSTableRowIterator::OdpsPartition>& part_list_info = odps_driver.get_partition_info();
       if (is_partitioned_table) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("odps table is not partitioned table, but ob odps external table is", K(ret));
+      } else if (1 != part_list_info.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected count of partition info", K(ret), K(part_list_info.count()));
       }
-      OZ(file_sizes.push_back(odps_driver.get_expected_row_cnt()));
+      OZ(file_sizes.push_back(part_list_info.at(0).record_count_));
       OZ (file_urls.push_back(ObString("")));
     }
 #else
