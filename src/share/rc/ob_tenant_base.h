@@ -26,6 +26,7 @@
 #include "lib/oracleclient/ob_oci_environment.h"
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
 #endif
+#include "observer/mysql/ob_query_response_time.h"
 namespace oceanbase
 {
 namespace common {
@@ -175,6 +176,7 @@ namespace observer
   class ObTableLoadService;
   class ObTableLoadResourceService;
   class ObTableQueryASyncMgr;
+  class ObTenantQueryRespTimeCollector;
 }
 
 // for ObTenantSwitchGuard 临时使用>>>>>>>>
@@ -351,7 +353,8 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       sql::ObAuditLogger*,                          \
       sql::ObAuditLogUpdater*,                      \
       share::ObWorkloadRepositoryContext*,          \
-      observer::ObTableQueryASyncMgr*              \
+      observer::ObTableQueryASyncMgr*,              \
+      observer::ObTenantQueryRespTimeCollector*     \
   )
 
 

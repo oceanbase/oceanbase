@@ -120,6 +120,38 @@ int ObTableQueryAndMutateP::before_process()
   return ParentType::before_process();
 }
 
+int32_t ObTableQueryAndMutateP::get_process_type(bool is_hkv, ObTableOperationType::Type type)
+{
+  int32_t process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
+  if (is_hkv) {
+    switch (type) {
+      case ObTableOperationType::DEL: {
+        process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_DELETE;
+        break;
+      }
+      case ObTableOperationType::INSERT_OR_UPDATE: {
+        process_type = ObTableProccessType::TABLE_API_HBASE_CHECK_AND_PUT;
+        break;
+      }
+      case ObTableOperationType::INCREMENT: {
+        process_type = ObTableProccessType::TABLE_API_HBASE_INCREMENT;
+        break;
+      }
+      case ObTableOperationType::APPEND: {
+        process_type = ObTableProccessType::TABLE_API_HBASE_APPEND;
+        break;
+      }
+      default: {
+        process_type = ObTableProccessType::TABLE_API_PROCESS_TYPE_MAX;
+        break;
+      }
+    }
+  } else { // tableapi
+    process_type = ObTableProccessType::TABLE_API_QUERY_AND_MUTATE;
+  }
+  return process_type;
+}
+
 int ObTableQueryAndMutateP::try_process()
 {
   int ret = OB_SUCCESS;
@@ -133,6 +165,7 @@ int ObTableQueryAndMutateP::try_process()
   ObLSID ls_id;
   bool exist_global_index = false;
   table_id_ = arg_.table_id_;
+  stat_event_type_ = get_process_type(is_hkv, arg_.query_and_mutate_.get_mutations().at(0).type());
 
   if (OB_FAIL(init_schema_info(arg_.table_name_))) {
     LOG_WARN("fail to init schema info", K(ret), K(arg_.table_name_));

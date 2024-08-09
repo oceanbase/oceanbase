@@ -1320,6 +1320,7 @@ public:
   static int all_virtual_service_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_resource_limit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_resource_limit_detail_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_query_response_time_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_scheduler_job_run_detail_v2_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
@@ -1774,6 +1775,8 @@ public:
   static int role_column_grants_schema(share::schema::ObTableSchema &table_schema);
   static int role_routine_grants_schema(share::schema::ObTableSchema &table_schema);
   static int func_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_query_response_time_histogram_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_query_response_time_histogram_schema(share::schema::ObTableSchema &table_schema);
   static int dba_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
   static int innodb_sys_fields_schema(share::schema::ObTableSchema &table_schema);
@@ -2238,6 +2241,8 @@ public:
   static int v_ob_tenant_resource_limit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tenant_resource_limit_detail_ora_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_tenant_resource_limit_detail_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int gv_ob_query_response_time_histogram_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int v_ob_query_response_time_histogram_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -4025,6 +4030,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_service_ora_schema,
   ObInnerTableSchema::all_virtual_tenant_resource_limit_ora_schema,
   ObInnerTableSchema::all_virtual_tenant_resource_limit_detail_ora_schema,
+  ObInnerTableSchema::all_virtual_query_response_time_ora_schema,
   ObInnerTableSchema::all_virtual_scheduler_job_run_detail_v2_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_data_table_id_real_agent_schema,
   ObInnerTableSchema::all_virtual_table_real_agent_ora_idx_db_tb_name_real_agent_schema,
@@ -4566,6 +4572,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::role_column_grants_schema,
   ObInnerTableSchema::role_routine_grants_schema,
   ObInnerTableSchema::func_schema,
+  ObInnerTableSchema::gv_ob_query_response_time_histogram_schema,
+  ObInnerTableSchema::v_ob_query_response_time_histogram_schema,
   ObInnerTableSchema::dba_scheduler_job_run_details_schema,
   ObInnerTableSchema::cdb_scheduler_job_run_details_schema,
   ObInnerTableSchema::innodb_sys_fields_schema,
@@ -5030,6 +5038,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_tenant_resource_limit_ora_schema,
   ObInnerTableSchema::gv_ob_tenant_resource_limit_detail_ora_schema,
   ObInnerTableSchema::v_ob_tenant_resource_limit_detail_ora_schema,
+  ObInnerTableSchema::gv_ob_query_response_time_histogram_ora_schema,
+  ObInnerTableSchema::v_ob_query_response_time_histogram_ora_schema,
   NULL,};
 
 const schema_create_func core_index_table_schema_creators [] = {
@@ -5907,6 +5917,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_SERVICE_ORA_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_ORA_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID,
+  OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_ORA_TID,
   OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
@@ -6246,6 +6257,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ROLE_COLUMN_GRANTS_TID,
   OB_ROLE_ROUTINE_GRANTS_TID,
   OB_FUNC_TID,
+  OB_GV_OB_QUERY_RESPONSE_TIME_HISTOGRAM_TID,
+  OB_V_OB_QUERY_RESPONSE_TIME_HISTOGRAM_TID,
   OB_DBA_SCHEDULER_JOB_RUN_DETAILS_TID,
   OB_INNODB_SYS_FIELDS_TID,
   OB_INNODB_SYS_FOREIGN_TID,
@@ -6709,6 +6722,8 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_TENANT_RESOURCE_LIMIT_ORA_TID,
   OB_GV_OB_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID,
   OB_V_OB_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID,
+  OB_GV_OB_QUERY_RESPONSE_TIME_HISTOGRAM_ORA_TID,
+  OB_V_OB_QUERY_RESPONSE_TIME_HISTOGRAM_ORA_TID,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TID,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TID,
   OB_ALL_TABLE_IDX_TB_NAME_TID,
@@ -7558,7 +7573,8 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_TID,
   OB_ALL_VIRTUAL_SERVICE_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_TID,
-  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID,  };
+  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_TID,
+  OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_TID,  };
 
 const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID
 ,  OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID
@@ -7712,6 +7728,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_SERVICE_ORA_TID
 ,  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_ORA_TID
 ,  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID
+,  OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_ORA_TID
 ,  };
 
 /* start/end_pos is start/end postition for column with tenant id */
@@ -8483,6 +8500,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_SERVICE_ORA_TNAME,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_ORA_TNAME,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TNAME,
+  OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_ORA_TNAME,
   OB_ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
@@ -8822,6 +8840,8 @@ const char* const tenant_space_table_names [] = {
   OB_ROLE_COLUMN_GRANTS_TNAME,
   OB_ROLE_ROUTINE_GRANTS_TNAME,
   OB_FUNC_TNAME,
+  OB_GV_OB_QUERY_RESPONSE_TIME_HISTOGRAM_TNAME,
+  OB_V_OB_QUERY_RESPONSE_TIME_HISTOGRAM_TNAME,
   OB_DBA_SCHEDULER_JOB_RUN_DETAILS_TNAME,
   OB_INNODB_SYS_FIELDS_TNAME,
   OB_INNODB_SYS_FOREIGN_TNAME,
@@ -9285,6 +9305,8 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_TENANT_RESOURCE_LIMIT_ORA_TNAME,
   OB_GV_OB_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TNAME,
   OB_V_OB_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TNAME,
+  OB_GV_OB_QUERY_RESPONSE_TIME_HISTOGRAM_ORA_TNAME,
+  OB_V_OB_QUERY_RESPONSE_TIME_HISTOGRAM_ORA_TNAME,
   OB_ALL_TABLE_IDX_DATA_TABLE_ID_TNAME,
   OB_ALL_TABLE_IDX_DB_TB_NAME_TNAME,
   OB_ALL_TABLE_IDX_TB_NAME_TNAME,
@@ -10210,7 +10232,8 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TID,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_ORA_TID,
-  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID,  };
+  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID,
+  OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_ORA_TID,  };
 
 const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
@@ -10347,7 +10370,8 @@ const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_USER_PROXY_ROLE_INFO_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_SERVICE_ORA_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_ORA_TID,
-  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID  };
+  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_DETAIL_ORA_TID,
+  OB_ALL_VIRTUAL_QUERY_RESPONSE_TIME_ORA_TID  };
 
 
 static inline bool is_restrict_access_virtual_table(const uint64_t tid)
@@ -12804,11 +12828,11 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 281;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 803;
-const int64_t OB_SYS_VIEW_COUNT = 917;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2006;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 804;
+const int64_t OB_SYS_VIEW_COUNT = 921;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2011;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2009;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2014;
 
 } // end namespace share
 } // end namespace oceanbase

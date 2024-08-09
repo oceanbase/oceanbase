@@ -12516,9 +12516,10 @@ def_table_schema(
     ('tenant_id', 'int', 'false'),
     ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'false'),
     ('svr_port', 'int'),
-    ('response_time', 'bigint:14', 'false', '0'),
-    ('count',  'bigint:14', 'false', '0'),
-    ('total',  'bigint:14', 'false', '0')
+    ('response_time', 'bigint', 'false', '0'),
+    ('count',  'bigint', 'false', '0'),
+    ('total',  'bigint', 'false', '0'),
+    ('sql_type', 'varchar:128', 'false', '')
   ],
   partition_columns=['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -14601,6 +14602,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15449'
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450', all_def_keywords['__all_virtual_tenant_resource_limit'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451', all_def_keywords['__all_virtual_tenant_resource_limit_detail'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15457', all_def_keywords['__all_virtual_query_response_time'])))
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15458', all_def_keywords['__all_scheduler_job_run_detail_v2']))
 #
 # 余留位置（此行之前占位）
@@ -27208,11 +27210,15 @@ def_table_schema(
   rowkey_columns=[],
   normal_columns=[],
   in_tenant_space=True,
-  view_definition="""select response_time as RESPONSE_TIME,
-                   count as COUNT,
-                   total as TOTAL
+  view_definition="""select
+                   svr_ip as SVR_IP,
+                   svr_port as SVR_PORT,
+                   response_time as RESPONSE_TIME,
+                   sum(count) as COUNT,
+                   sum(total) as TOTAL
                    from oceanbase.__all_virtual_query_response_time
                    where tenant_id = effective_tenant_id()
+                   group by svr_ip, svr_port, response_time
 """.replace("\n", " "),
 )
 
@@ -35086,6 +35092,52 @@ def_table_schema(
     SELECT name, ret, dl, type
     FROM oceanbase.__all_func
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'jiajingzhe.jjz',
+  table_name      = 'GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM',
+  table_id        = '21587',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    svr_ip as SVR_IP,
+    svr_port as SVR_PORT,
+    tenant_id as TENANT_ID,
+    sql_type as SQL_TYPE,
+    cast ((response_time/1000000 ) as decimal(24,6)) as RESPONSE_TIME,
+    count as COUNT,
+    cast ((total/1000000)  as decimal(24,6))  as TOTAL
+  FROM oceanbase.__all_virtual_query_response_time
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'jiajingzhe.jjz',
+  table_name      = 'V$OB_QUERY_RESPONSE_TIME_HISTOGRAM',
+  table_id        = '21588',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    SVR_IP,
+    SVR_PORT,
+    TENANT_ID,
+    SQL_TYPE,
+    RESPONSE_TIME,
+    COUNT,
+    TOTAL
+  FROM
+    oceanbase.GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+  WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
 )
 
 def_table_schema(
@@ -62542,6 +62594,58 @@ WHERE
 AND
     SVR_PORT=RPC_PORT()
 """.replace("\n", " ")
+)
+def_table_schema(
+    owner = 'jiajingzhe.jjz',
+    table_name     = 'GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28232',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+
+    SELECT
+      SVR_IP AS SVR_IP,
+      SVR_PORT AS SVR_PORT,
+      TENANT_ID AS TENANT_ID,
+      SQL_TYPE AS SQL_TYPE,
+      RESPONSE_TIME / 1000000 AS RESPONSE_TIME,
+      COUNT AS COUNT,
+      TOTAL / 1000000 AS TOTAL
+    FROM SYS.ALL_VIRTUAL_QUERY_RESPONSE_TIME
+""".replace("\n", " "),
+    normal_columns = [
+    ],
+)
+
+def_table_schema(
+    owner = 'jiajingzhe.jjz',
+    table_name     = 'V$OB_QUERY_RESPONSE_TIME_HISTOGRAM',
+    name_postfix    = '_ORA',
+    database_id     = 'OB_ORA_SYS_DATABASE_ID',
+    table_id       = '28233',
+    table_type = 'SYSTEM_VIEW',
+    gm_columns = [],
+    in_tenant_space = True,
+    rowkey_columns = [],
+    view_definition = """
+    SELECT
+      SVR_IP,
+      SVR_PORT,
+      TENANT_ID,
+      SQL_TYPE,
+      RESPONSE_TIME,
+      COUNT,
+      TOTAL
+    FROM SYS.GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM WHERE SVR_IP =HOST_IP() AND SVR_PORT = RPC_PORT()
+""".replace("\n", " "),
+
+
+    normal_columns = [
+    ],
 )
 
 # 余留位置（此行之前占位）

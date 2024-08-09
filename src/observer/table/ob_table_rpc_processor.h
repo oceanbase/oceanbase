@@ -163,6 +163,7 @@ protected:
   observer::ObReqTimeGuard req_timeinfo_guard_; // 引用cache资源必须加ObReqTimeGuard
   table::ObKvSchemaCacheGuard schema_cache_guard_;
   int32_t stat_event_type_;
+  bool enable_query_response_time_stats_;
   int64_t stat_row_count_;
   ObTableRetryPolicy retry_policy_;
   bool need_retry_in_queue_;

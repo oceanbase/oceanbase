@@ -46,6 +46,8 @@ protected:
   virtual table::ObTableEntityType get_entity_type() override { return arg_.entity_type_; }
   virtual bool is_kv_processor() override { return true; }
 private:
+  int32_t get_process_type(bool is_hkv, table::ObTableOperationType::Type type);
+private:
   common::ObArenaAllocator allocator_;
   table::ObTableCtx tb_ctx_;
   table::ObTableEntityFactory<table::ObTableEntity> default_entity_factory_;

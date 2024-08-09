@@ -367,7 +367,7 @@ int ObInnerTableSchema::query_response_time_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(select response_time as RESPONSE_TIME,                    count as COUNT,                    total as TOTAL                    from oceanbase.__all_virtual_query_response_time                    where tenant_id = effective_tenant_id() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(select                     svr_ip as SVR_IP,                    svr_port as SVR_PORT,                    response_time as RESPONSE_TIME,                    sum(count) as COUNT,                    sum(total) as TOTAL                    from oceanbase.__all_virtual_query_response_time                    where tenant_id = effective_tenant_id()                    group by svr_ip, svr_port, response_time )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

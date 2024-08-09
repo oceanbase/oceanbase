@@ -153,6 +153,7 @@
 #include "sql/audit/ob_audit_log_mgr.h"
 #endif
 #include "observer/table/ob_table_query_async_processor.h"
+#include "observer/mysql/ob_query_response_time.h" //ObTenantQueryRespTimeCollector
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -568,6 +569,7 @@ int ObMultiTenant::init(ObAddr myaddr,
 #endif
     MTL_BIND2(mtl_new_default, ObWorkloadRepositoryContext::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, observer::ObTableQueryASyncMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, observer::ObTenantQueryRespTimeCollector::mtl_init, nullptr, nullptr, nullptr, observer::ObTenantQueryRespTimeCollector::mtl_destroy);
   }
 
   if (OB_SUCC(ret)) {
@@ -1318,6 +1320,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_throttle_config_(tenant_id))) {
         LOG_WARN("update throttle config failed", K(ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_tenant_query_response_time_flush_config())) {
+        LOG_WARN("failed to update tenant query response time flush config", K(tmp_ret), K(tenant_id));
+      }
     }
   }
   LOG_INFO("update_tenant_config success", K(tenant_id));
@@ -1409,6 +1414,61 @@ int ObMultiTenant::update_throttle_config_(const uint64_t tenant_id)
       LOG_ERROR("share mem alloc mgr should not be null", K(ret));
     } else {
       (void)share_mem_alloc_mgr->update_throttle_config();
+    }
+  }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_query_response_time_flush_config()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else {
+    int64_t flush_version = 0;
+    SMART_VAR(ObMySQLProxy::MySQLResult, result) {
+      uint64_t tenant_id = MTL_ID();
+      ObSqlString sql;
+      if (OB_FAIL(sql.assign_fmt("select max(config_version) from %s where tenant_id = '%lu' and name = 'query_response_time_flush' ",
+                                  OB_ALL_VIRTUAL_TENANT_PARAMETER_TNAME, tenant_id))) {
+        LOG_WARN("fail to generate sql", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(GCTX.sql_proxy_->read(result, OB_SYS_TENANT_ID, sql.ptr()))) {
+        LOG_WARN("read config from all_virtual_tenant_parameter_tname failed",
+                KR(ret), K(tenant_id), K(OB_SYS_TENANT_ID), K(sql));
+      } else if (NULL == result.get_result()) {
+        LOG_DEBUG("config result is null", K(tenant_id), K(ret));
+      } else if (OB_FAIL(result.get_result()->next())) {
+        LOG_WARN("get result next failed", K(tenant_id), K(ret));
+      } else if (OB_FAIL(result.get_result()->get_int(0L, flush_version))) {
+        if (OB_ERR_NULL_VALUE != ret) {
+          LOG_WARN("get config_version failed", K(tenant_id), K(ret));
+        } else {
+          LOG_INFO("tenant has no config", K(tenant_id));
+          ret = OB_SUCCESS;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      observer::ObTenantQueryRespTimeCollector *t_query_resp_time_collector = MTL(observer::ObTenantQueryRespTimeCollector *);
+      if (OB_FAIL(ret)) {
+        // do nothing
+      } else if (OB_ISNULL(t_query_resp_time_collector)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("t_query_resp_time_collector should not be null", K(ret));
+      } else if (flush_version > t_query_resp_time_collector->get_flush_config_version()) {
+        omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+        if (!tenant_config.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tenant config is invalid",K(ret), K(MTL_ID()));
+        } else if (tenant_config->query_response_time_flush) {
+          if (OB_FAIL(t_query_resp_time_collector->flush())) {
+            LOG_WARN("failed to refresh tenant query response time", K(ret));
+          } else {
+            t_query_resp_time_collector->set_flush_config_version(flush_version);
+          }
+        }
+      }
     }
   }
   return ret;
