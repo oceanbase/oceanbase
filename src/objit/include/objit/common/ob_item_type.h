@@ -2639,7 +2639,8 @@ typedef enum ObOutlineType
     || ((op) == T_FUN_SYS_PRIV_ST_EQUALS) \
     || ((op) == T_FUN_SYS_PRIV_ST_TOUCHES) \
     || ((op) == T_FUN_SYS_ST_CROSSES) \
-    || ((op) == T_FUN_SYS_ST_OVERLAPS)) \
+    || ((op) == T_FUN_SYS_ST_OVERLAPS) \
+    || ((op) == T_FUN_SYS_ST_DISJOINT)) \
 
 //in oracle mode, only lists exprs can accept bool(tinyint) param
 #define ALLOW_BOOL_INPUT(op) \
