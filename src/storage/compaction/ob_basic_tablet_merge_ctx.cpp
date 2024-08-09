@@ -719,7 +719,7 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
   }
 
   ObInfoParamBuffer info_allocator;
-  if (OB_SUCCESS == MTL(ObDagWarningHistoryManager *)->get_with_param(hash, &warning_info, info_allocator)) {
+  if (OB_SUCCESS == MTL(ObDagWarningHistoryManager *)->get_with_param(hash, warning_info, info_allocator)) {
     sstable_merge_info.dag_ret_ = warning_info.dag_ret_;
     sstable_merge_info.task_id_ = warning_info.task_id_;
     sstable_merge_info.retry_cnt_ = warning_info.retry_cnt_;
@@ -730,7 +730,7 @@ void ObBasicTabletMergeCtx::add_sstable_merge_info(
 
   ObScheduleSuspectInfo ret_info;
   info_allocator.reuse();
-  if (OB_SUCCESS == MTL(compaction::ObScheduleSuspectInfoMgr *)->get_with_param(hash, &ret_info, info_allocator)) {
+  if (OB_SUCCESS == MTL(compaction::ObScheduleSuspectInfoMgr *)->get_with_param(hash, ret_info, info_allocator)) {
     sstable_merge_info.suspect_add_time_ = ret_info.add_time_;
     sstable_merge_info.info_param_ = ret_info.info_param_;
     if (OB_TMP_FAIL(MTL(compaction::ObScheduleSuspectInfoMgr *)->delete_info(hash))) {
