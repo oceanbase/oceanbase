@@ -2148,6 +2148,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_PARAM_OUT_OF_RANGE, -7435, -1, "42000", "value is out
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_VECTOR_DIM, -7600, -1, "22000", "Invalid dimension for vector.", "inconsistent dimension: expected %u got %u", 932, "inconsistent dimension", "inconsistent dimension: expected %u got %u");
 DEFINE_ERROR_EXT(OB_ERR_BAD_VEC_INDEX_COLUMN, -7601, -1, "HY000", "Column cannot be part of VECTOR index", "Column '%.*s' cannot be part of VECTOR index");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_ARRAY_TYPE_MISMATCH, -7602, -1, "22000", "array type mismatch found between definition and data", "array type mismatch found between definition(%.*s) and data(%.*s)", 932, "array type mismatch found between definition and data", "array type mismatch found between definition(%.*s) and data(%.*s)");
+DEFINE_ERROR_EXT(OB_ERR_VSAG_MEM_LIMIT_EXCEEDED, -7603, -1, "22000", "Vector index memory usage exceeds user defined limit.", "Vector index memory usage exceeds user defined limit '%d'M.");
+DEFINE_ERROR_EXT(OB_ERR_VSAG_RETURN_ERROR, -7604, -1, "22000", "Using the vsag interface returns an error", "Using the vsag interface returns an error");
 
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

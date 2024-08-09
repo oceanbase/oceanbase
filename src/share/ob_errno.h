@@ -1503,6 +1503,8 @@ constexpr int OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD = -7433;
 constexpr int OB_ERR_CONVERSION_OF_UNIT = -7434;
 constexpr int OB_ERR_PARAM_OUT_OF_RANGE = -7435;
 constexpr int OB_ERR_BAD_VEC_INDEX_COLUMN = -7601;
+constexpr int OB_ERR_VSAG_MEM_LIMIT_EXCEEDED = -7603;
+constexpr int OB_ERR_VSAG_RETURN_ERROR = -7604;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -3756,6 +3758,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_VECTOR_DIM__USER_ERROR_MSG "inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__USER_ERROR_MSG "Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__USER_ERROR_MSG "array type mismatch found between definition(%.*s) and data(%.*s)"
+#define OB_ERR_VSAG_MEM_LIMIT_EXCEEDED__USER_ERROR_MSG "Vector index memory usage exceeds user defined limit '%d'M."
+#define OB_ERR_VSAG_RETURN_ERROR__USER_ERROR_MSG "Using the vsag interface returns an error"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -7918,6 +7922,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7601, Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-00932: array type mismatch found between definition(%.*s) and data(%.*s)"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__OBE_USER_ERROR_MSG "OBE-00932: array type mismatch found between definition(%.*s) and data(%.*s)"
+#define OB_ERR_VSAG_MEM_LIMIT_EXCEEDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7603, Vector index memory usage exceeds user defined limit '%d'M."
+#define OB_ERR_VSAG_MEM_LIMIT_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7603, Vector index memory usage exceeds user defined limit '%d'M."
+#define OB_ERR_VSAG_RETURN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7604, Using the vsag interface returns an error"
+#define OB_ERR_VSAG_RETURN_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7604, Using the vsag interface returns an error"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_INIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
@@ -8899,7 +8907,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2323];
+extern int g_all_ob_errnos[2325];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
