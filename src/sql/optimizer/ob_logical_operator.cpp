@@ -2640,6 +2640,8 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
           // not add to constraints for das
         } else if (OB_INVALID_ID != log_scan_op->get_dblink_id()) {
           // dblink table, execute at other cluster
+        } else if (EXTERNAL_TABLE == log_scan_op->get_table_type()) {
+          // do not add constraints for external table
         } else if (OB_FAIL(get_tbl_loc_cons_for_scan(loc_cons))) {
           LOG_WARN("failed to get location constraint for table scan op", K(ret));
         } else if (OB_FAIL(get_dup_replica_cons_for_scan(dup_rep_cons, found_dup_con))) {
