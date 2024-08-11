@@ -8157,14 +8157,23 @@ TYPE COMP_EQ STRING_VALUE
 | ACCESSID COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ACCESSID, 1, $3);
+  $3->stmt_loc_.first_column_ = @3.first_column - 1;
+  $3->stmt_loc_.last_column_ = @3.last_column - 1;
+  result->contain_sensitive_data_ = true;
 }
 | ACCESSKEY COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_ACCESSKEY, 1, $3);
+  $3->stmt_loc_.first_column_ = @3.first_column - 1;
+  $3->stmt_loc_.last_column_ = @3.last_column - 1;
+  result->contain_sensitive_data_ = true;
 }
 | STSTOKEN COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_STSTOKEN, 1, $3);
+   $3->stmt_loc_.first_column_ = @3.first_column - 1;
+  $3->stmt_loc_.last_column_ = @3.last_column - 1;
+  result->contain_sensitive_data_ = true;
 }
 | ENDPOINT COMP_EQ STRING_VALUE
 {

@@ -952,6 +952,7 @@ protected:
                                                   share::schema::ObTableSchema &table_schema);
 
   int resolve_file_format(const ParseNode *node, ObExternalFileFormat &format);
+  int mask_properties_sensitive_info(const ParseNode *node, ObString &ddl_sql, ObString &masked_sql);
 
   int check_format_valid(const ObExternalFileFormat &format, bool &is_valid);
 

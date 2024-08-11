@@ -2454,7 +2454,9 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "format");
             }
             // 2. resolve other format value
+            ObString masked_sql = params_.session_info_->get_current_query_string(); // that's create table operation stmt which has properties
             for (int i = 0; OB_SUCC(ret) && i < option_node->num_child_; ++i) {
+              ObString temp_masked_sql;
               if (OB_ISNULL(option_node->children_[i])) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(option_node->num_child_));
@@ -2462,6 +2464,10 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                          T_CHARSET == option_node->children_[i]->type_) {
               } else if (OB_FAIL(resolve_file_format(option_node->children_[i], format))) {
                 LOG_WARN("fail to resolve file format", K(ret));
+              } else if (OB_FAIL(mask_properties_sensitive_info(option_node->children_[i], masked_sql, temp_masked_sql))) {
+                LOG_WARN("failed to mask properties sensitive info", K(ret), K(i), K(option_node->num_child_));
+              } else if (!temp_masked_sql.empty()) {
+                masked_sql = temp_masked_sql;
               }
             }
             if (OB_SUCC(ret)) {
@@ -2488,7 +2494,15 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                 } while (OB_SUCC(ret) && pos >= buf_len);
                 if (OB_SUCC(ret)) {
                   if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
-                    arg.schema_.set_external_properties(ObString(pos, buf));
+                    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+                    if (OB_ISNULL(create_table_stmt)) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("unexcepted null ptr", K(ret));
+                    } else {
+                      create_table_stmt->set_masked_sql(masked_sql);
+                      arg.schema_.set_external_properties(ObString(pos, buf));
+                    }
+
                   } else {
                     arg.schema_.set_external_file_format(ObString(pos, buf));
                     LOG_DEBUG("debug external file format",
@@ -2894,6 +2908,31 @@ int ObDDLResolver::resolve_file_format(const ParseNode *node, ObExternalFileForm
   return ret;
 }
 
+int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node, ObString &ddl_sql, ObString &masked_sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0]) ||
+      OB_ISNULL(params_.session_info_) || OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", K(ret));
+  } else {
+    switch (node->type_) {
+      case ObItemType::T_ENDPOINT:
+      case ObItemType::T_STSTOKEN:
+      case ObItemType::T_ACCESSKEY:
+      case ObItemType::T_ACCESSID: {
+        if (OB_FAIL(ObDCLResolver::mask_password_for_passwd_node(params_.allocator_, ddl_sql, node->children_[0], masked_sql, true))) {
+          LOG_WARN("fail to gen masked sql", K(ret));
+        }
+        break;
+      }
+      default: {
+        // do nothing
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDDLResolver::resolve_column_definition_ref(ObColumnSchemaV2 &column,
                                                   ParseNode *node /* column_definition_def */,

@@ -24,7 +24,7 @@ public:
       start_(0),
       step_(0),
       count_(0),
-      is_batch_interface_(false),
+      is_from_gi_pump_(false),
       download_handle_(NULL),
       record_reader_handle_(NULL) {}
     int reuse();
@@ -33,7 +33,7 @@ public:
                  K(start_),
                  K(step_),
                  K(count_),
-                 K(is_batch_interface_),
+                 K(is_from_gi_pump_),
                  K(ObString(part_spec_.c_str())),
                  K(ObString(download_id_.c_str())));
     int64_t task_idx_;
@@ -41,7 +41,7 @@ public:
     int64_t start_;
     int64_t step_;
     int64_t count_;
-    bool is_batch_interface_;
+    bool is_from_gi_pump_;
     apsara::odps::sdk::IDownloadPtr download_handle_;
     apsara::odps::sdk::IRecordReaderPtr record_reader_handle_;
     std::string part_spec_;

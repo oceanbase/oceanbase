@@ -269,7 +269,7 @@ int ObODPSTableRowIterator::next_task()
           state_.start_ = start;
           state_.step_ = step;
           state_.count_ = 0;
-          state_.is_batch_interface_ = eval_ctx.max_batch_size_ > 0;
+          state_.is_from_gi_pump_ = OB_NOT_NULL(sqc) && sqc->get_sqc_ctx().gi_pump_.is_odps_downloader_inited();
           state_.download_id_ = state_.download_handle_->GetDownloadId();
           state_.part_spec_ = std_part_spec;
           // what if error occur after this line, how to close state_.record_reader_handle_?
@@ -380,8 +380,8 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
     const int32_t odps_type_scale = odps_type_info.mScale;
     const ObObjType ob_type = ob_type_expr->obj_meta_.get_type();
     const int32_t ob_type_length = ob_type_expr->max_length_;
-    const int32_t ob_type_precision = ob_type_expr->obj_meta_.get_stored_precision();
-    const int32_t ob_type_scale = ob_type_expr->obj_meta_.get_scale();
+    const int32_t ob_type_precision = ob_type_expr->datum_meta_.precision_;
+    const int32_t ob_type_scale = ob_type_expr->datum_meta_.scale_;
     switch(odps_type)
     {
       case apsara::odps::sdk::ODPS_TINYINT:
@@ -456,7 +456,7 @@ int ObODPSTableRowIterator::check_type_static(apsara::odps::sdk::ODPSColumnTypeI
         if (ObDecimalIntType == ob_type ||
             ObNumberType == ob_type) {
           // odps_type to ob_type is valid
-          if (ob_type_length != odps_type_precision || // in ObExpr, max_length_ is decimal type's precision
+          if (ob_type_precision != odps_type_precision || // in ObExpr, max_length_ is decimal type's precision
               ob_type_scale != odps_type_scale) {
             ret = OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH;
             LOG_WARN("invalid precision or scale or length", K(ret), K(odps_type), K(ob_type),
@@ -818,7 +818,7 @@ int ObODPSTableRowIterator::StateValues::reuse()
     } else {
       record_reader_handle_->Close();
       record_reader_handle_.reset();
-      if (!is_batch_interface_) {
+      if (!is_from_gi_pump_) {
         download_handle_->Complete();
       }
       download_handle_.reset();
@@ -849,7 +849,7 @@ int ObODPSTableRowIterator::StateValues::reuse()
   part_spec_.clear();
   download_id_.clear();
   part_list_val_.reset();
-  is_batch_interface_ = false;
+  is_from_gi_pump_ = false;
   return ret;
 }
 
