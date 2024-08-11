@@ -168,6 +168,11 @@ int ObOLAPAsyncJobResolver::resolve_cancel_job_stmt(const ParseNode &parse_tree,
   return ret;
 }
 
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(ERRSIM_SUBMIT_ERR_JOB_NAME);
+ERRSIM_POINT_DEF(ERRSIM_SUBMIT_ERR_JOB_START_TIME);
+#endif
+
 int ObOLAPAsyncJobResolver::execute_submit_job(ObOLAPAsyncSubmitJobStmt &stmt)
 {
   int ret = OB_SUCCESS;
@@ -201,6 +206,16 @@ int ObOLAPAsyncJobResolver::execute_submit_job(ObOLAPAsyncSubmitJobStmt &stmt)
       job_info.interval_ts_ = 0;
       job_info.exec_env_ = stmt.get_exec_env();
       job_info.comments_ = ObString("olap async job");
+
+      #ifdef ERRSIM
+      if (OB_SUCCESS != ERRSIM_SUBMIT_ERR_JOB_NAME) { //注入一个错误的JOB NAME
+        job_info.job_name_ = "ERRSIM_JOB";
+      }
+      if (OB_SUCCESS != ERRSIM_SUBMIT_ERR_JOB_START_TIME) { //注入一个错误的开始时间
+        job_info.start_date_ = 64060560000000000;
+      }
+      #endif
+
       ObMySQLTransaction trans;
       if (OB_FAIL(trans.start(GCTX.sql_proxy_, stmt.get_tenant_id()))) {
         LOG_WARN("failed to start trans", KR(ret), K(stmt.get_tenant_id()));
