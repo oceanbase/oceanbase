@@ -2581,6 +2581,9 @@ typedef enum ObItemType
   // Parquet related
   T_PER_ROW_GROUP_SIZE = 4729,
   T_COMPRESSION_ALGORITHM = 4730,
+
+  // Erase micro cache
+  T_FLUSH_SS_MICRO_CACHE = 4731,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
