@@ -381,7 +381,7 @@ int ObMvccEngine::build_tx_node_(const ObTxNodeArg &arg,
     // SSTable check might fail, potentially causing data that is in an
     // incomplete state to be seen. Therefore, we use the INCOMPLETE state
     // to prevent such data from being erroneously visible.
-    if (!node->scn_.is_valid()) {
+    if (node->scn_.is_max()) {  // leader write
       node->set_incomplete();
     }
   }
