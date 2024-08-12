@@ -47,8 +47,10 @@ public:
   int64_t dec_ref_count() { return ATOMIC_AAF(&ref_count_, -1); }
   bool is_assigned_resource() const { return is_assigned_resource_; }
   void set_assigned_resource() { is_assigned_resource_ = true; }
+  void reset_assigned_resource() { is_assigned_resource_ = false; }
   bool is_assigned_memory() const { return is_assigned_memory_; }
   void set_assigned_memory() { is_assigned_memory_ = true; }
+  void reset_assigned_memory() { is_assigned_memory_ = false; }
   bool is_dirty() const { return is_dirty_; }
   void set_dirty() { is_dirty_ = true; }
   bool is_mark_delete() const { return mark_delete_; }

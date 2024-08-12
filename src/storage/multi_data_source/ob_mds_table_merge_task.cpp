@@ -125,16 +125,16 @@ int ObMdsTableMergeTask::process()
       LOG_WARN("fail to get mds table", K(ret), K(ls_id), K(tablet_id));
     } else if (OB_UNLIKELY(!mds_table.get_mds_table_ptr()->is_construct_sequence_matched(mds_construct_sequence))) {
       ret = OB_NO_NEED_MERGE;
-      LOG_WARN("construct sequence does not match with current mds table", K(ret), K(ls_id), K(tablet_id), K(mds_construct_sequence));
-    } else if (ctx.get_tablet()->get_mds_checkpoint_scn() >= flush_scn) {
+      LOG_WARN("construct sequence does not match current mds table, no need to merge", K(ret), K(ls_id), K(tablet_id), K(mds_construct_sequence));
+    } else if (tablet->get_mds_checkpoint_scn() >= flush_scn) {
       need_schedule_mds_minor = false;
       FLOG_INFO("flush scn smaller than mds ckpt scn, only flush nodes of mds table and do not generate mds mini",
           K(ret), K(ls_id), K(tablet_id), K(flush_scn),
-          "mds_checkpoint_scn", ctx.get_tablet()->get_mds_checkpoint_scn(),
+          "mds_checkpoint_scn", tablet->get_mds_checkpoint_scn(),
           KPC(mds_merge_dag_));
       ctx.time_guard_click(ObStorageCompactionTimeGuard::EXECUTE);
       share::dag_yield();
-    } else if (FALSE_IT(ctx.static_param_.scn_range_.start_scn_ = ctx.get_tablet()->get_mds_checkpoint_scn())) {
+    } else if (FALSE_IT(ctx.static_param_.scn_range_.start_scn_ = tablet->get_mds_checkpoint_scn())) {
     } else if (MDS_FAIL(build_mds_sstable(ctx, mds_construct_sequence, table_handle))) {
       LOG_WARN("fail to build mds sstable", K(ret), K(ls_id), K(tablet_id), KPC(mds_merge_dag_));
     } else if (MDS_FAIL(ls->build_new_tablet_from_mds_table(

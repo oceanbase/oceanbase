@@ -798,9 +798,17 @@ protected:
                           const uint16_t selector[],
                           const int64_t size);
   bool use_compact_store() { return use_compact_format_ || compress_type_ != NONE_COMPRESSOR; }
+  template<typename ArrayType>
+  int prepare_bucket_array(ArrayType *&buckets, uint64_t bucket_num);
   DISALLOW_COPY_AND_ASSIGN(ObSortOpImpl);
 
 protected:
+  using BucketArray = common::ObSegmentArray<PartHashNode *,
+                                             OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                             common::ModulePageAllocator>;
+  using BucketNodeArray = common::ObSegmentArray<PartHashNode,
+                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                                 common::ModulePageAllocator>;
   typedef common::ObBinaryHeap<ObChunkDatumStore::StoredRow **, Compare, 16> IMMSHeap;
   typedef common::ObBinaryHeap<ObSortOpChunk *, Compare, MAX_MERGE_WAYS> EMSHeap;
   //typedef common::ObBinaryHeap<ObChunkDatumStore::StoredRow *, Compare> TopnHeap;
@@ -815,6 +823,7 @@ protected:
   bool got_first_row_;
   bool sorted_;
   bool enable_encode_sortkey_;
+  ModulePageAllocator page_allocator_;
   lib::MemoryContext mem_context_;
   MemEntifyFreeGuard mem_entify_guard_;
   int64_t tenant_id_;
@@ -847,9 +856,9 @@ protected:
   ObChunkDatumStore::StoredRow **stored_rows_;
   ObIOEventObserver *io_event_observer_;
   // for window function partition sort
-  PartHashNode **buckets_;
   uint64_t max_bucket_cnt_;
-  PartHashNode *part_hash_nodes_;
+  BucketArray *buckets_;
+  BucketNodeArray *part_hash_nodes_;
   uint64_t max_node_cnt_;
   int64_t part_cnt_;
   // for limit topn sort change to simple sort

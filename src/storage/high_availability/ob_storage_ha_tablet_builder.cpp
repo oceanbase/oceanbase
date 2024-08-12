@@ -584,6 +584,9 @@ int ObStorageHATabletsBuilder::build_tablets_sstable_info()
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls));
   } else if (OB_FAIL(hold_local_tablet_(tablet_handle_array))) {
     LOG_WARN("failed to hold local tablet", K(ret), KP(ls));
+  } else if (tablet_handle_array.empty()) {
+    ret = OB_EAGAIN;
+    LOG_WARN("all tablets has been gc, try again", K(ret), K(param_));
   } else if (OB_FAIL(get_tablets_sstable_reader_(tablet_handle_array, reader))) {
     LOG_WARN("failed to get tablets sstable reader", K(ret), K(param_));
   } else {

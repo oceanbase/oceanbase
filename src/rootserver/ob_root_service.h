@@ -357,6 +357,24 @@ public:
     ObRootService &root_service_;
   };
 
+  class ObAlterLogExternalTableTask : public common::ObAsyncTimerTask
+  {
+  public:
+    ObAlterLogExternalTableTask(ObRootService &root_service);
+    virtual ~ObAlterLogExternalTableTask() {}
+    int init(const uint64_t &data_version);
+  public:
+    virtual int process() override;
+    virtual int64_t get_deep_copy_size() const override { return sizeof(*this); }
+    virtual ObAsyncTask *deep_copy(char *buf, const int64_t buf_size) const override;
+  private:
+    int alter_log_external_table_();
+  private:
+    ObRootService &root_service_;
+    uint64_t pre_data_version_;
+    DISALLOW_COPY_AND_ASSIGN(ObAlterLogExternalTableTask);
+  };
+
 public:
   ObRootService();
   virtual ~ObRootService();
@@ -809,6 +827,7 @@ public:
 
   int schedule_load_ddl_task();
   int schedule_refresh_io_calibration_task();
+  int schedule_alter_log_external_table_task();
   // ob_admin command, must be called in ddl thread
   int force_create_sys_table(const obrpc::ObForceCreateSysTableArg &arg);
   int force_set_locality(const obrpc::ObForceSetLocalityArg &arg);
@@ -1057,6 +1076,7 @@ private:
   ObDRTaskMgr disaster_recovery_task_mgr_;
   // application context
   ObTenantGlobalContextCleanTimerTask global_ctx_task_;
+  ObAlterLogExternalTableTask alter_log_external_table_task_; // repeat to succeed & no retry
 private:
   DISALLOW_COPY_AND_ASSIGN(ObRootService);
 };

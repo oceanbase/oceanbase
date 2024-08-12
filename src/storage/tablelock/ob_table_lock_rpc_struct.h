@@ -75,7 +75,8 @@ public:
       expired_time_(0),
       schema_version_(-1),
       is_for_replace_(false),
-      lock_priority_(ObTableLockPriority::NORMAL)
+      lock_priority_(ObTableLockPriority::NORMAL),
+      is_two_phase_lock_(false)
   {}
   virtual ~ObLockParam() { reset(); }
   void reset();
@@ -108,6 +109,7 @@ public:
   int64_t schema_version_;
   bool is_for_replace_;
   ObTableLockPriority lock_priority_;
+  bool is_two_phase_lock_;
 };
 
 struct ObLockRequest

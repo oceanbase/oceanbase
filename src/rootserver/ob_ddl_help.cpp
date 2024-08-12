@@ -57,7 +57,8 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
     LOG_WARN("tablegroup_id is invalid", KR(ret), K(tablegroup_id));
   } else if (is_sys_tablegroup_id(tablegroup_id)) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("can not handle with sys tablegroup", KR(ret), K(tablegroup_id));
+    LOG_WARN("user table cannot add to sys tablegroup", KR(ret), K(tablegroup_id));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user table add to sys tablegroup");
   } else if (OB_ISNULL(ddl_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl_service is null", KR(ret));
@@ -130,8 +131,6 @@ int ObTableGroupHelp::add_tables_to_tablegroup(ObMySQLTransaction &trans,
                                           table_item.table_name_.length(),
                                           table_item.table_name_.ptr()))) {
           LOG_WARN("failed to append sql", KR(ret));
-        } else if (OB_FAIL(ddl_service_->check_tablegroup_in_single_database(schema_guard, new_table_schema))) {
-          LOG_WARN("fail to check tablegroup in single database", KR(ret));
         } else {
           ObString sql_str = sql.string();
           if (OB_FAIL(ddl_operator.alter_tablegroup(schema_guard, new_table_schema, trans, &sql_str))) {
@@ -166,6 +165,7 @@ int ObTableGroupHelp::check_table_alter_tablegroup(
     LOG_WARN("cann't alter table's tablegroup", KR(ret),
              "src_tg_id", orig_table_schema.get_tablegroup_id(),
              "dst_tg_id", new_table_schema.get_tablegroup_id());
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user table add to sys tablegroup");
   } else if (OB_INVALID_ID == new_table_schema.get_tablegroup_id()) {
     // skip
   } else {

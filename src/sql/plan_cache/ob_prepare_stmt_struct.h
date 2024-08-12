@@ -193,6 +193,10 @@ public:
   inline const ObPsSqlMeta &get_ps_sql_meta() const { return ps_sql_meta_; }
   inline bool can_direct_use_param() const { return can_direct_use_param_; }
   inline void set_can_direct_use_param(bool v) { can_direct_use_param_ = v; }
+
+  inline bool get_is_prexecute() const { return is_prexecute_; }
+  inline void set_is_prexecute(bool v) { is_prexecute_ = v; }
+
   inline void set_ps_stmt_checksum(uint64_t ps_checksum) { ps_stmt_checksum_ = ps_checksum; }
   inline uint64_t get_ps_stmt_checksum() const { return ps_stmt_checksum_; }
 
@@ -266,6 +270,7 @@ private:
 
   // for call procedure
   bool can_direct_use_param_;
+  bool is_prexecute_;
   int64_t item_and_info_size_; // mem_used_;
   int64_t last_closed_timestamp_; //引用计数上次减到1时的时间;
   ObSchemaObjVersion *dep_objs_;

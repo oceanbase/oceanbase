@@ -1802,8 +1802,8 @@ int ObTimeConverter::int_to_ob_time_without_date(int64_t time_second, ObTime &ob
   } else {
     parts[DT_HOUR] = TIME_MAX_HOUR + 1;
   }
-  if (OB_SUCC(ret)) {
-    adjust_ob_time(ob_time);
+  if (OB_SUCC(ret) && OB_FAIL(adjust_ob_time(ob_time, false))) {
+    LOG_WARN("adjust ob time failed", K(ret));
   }
   UNUSED(mode);
   return ret;
@@ -1992,8 +1992,9 @@ int ObTimeConverter::str_to_ob_time_with_date(const ObString &str, ObTime &ob_ti
       // OK, it seems like a valid format, now we need check its value.
       LOG_WARN("datetime is invalid or out of range",
                K(ret), K(str), K(ob_time), K(date_sql_mode), KCSTRING(lbt()));
+    } else if (OB_FAIL(adjust_ob_time(ob_time, true))) {
+      LOG_WARN("adjust ob time failed", K(ret));
     } else {
-      adjust_ob_time(ob_time);
       ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
     }
     if (NULL != scale) {
@@ -2158,8 +2159,8 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
           LOG_WARN("time value is invalid or out of range", K(ret), K(str));
         }
       }
-      if (OB_SUCC(ret)) {
-        adjust_ob_time(ob_time);
+      if (OB_SUCC(ret) && OB_FAIL(adjust_ob_time(ob_time, false))) {
+        LOG_WARN("adjust ob time failed", K(ret));
       }
     }
   }
@@ -3134,24 +3135,42 @@ int ObTimeConverter::data_fmt_s(char *buffer, int64_t buf_len, int64_t &pos, con
   return ret;
 }
 
-void ObTimeConverter::adjust_ob_time(ObTime &ob_time)
+int ObTimeConverter::adjust_ob_time(ObTime &ob_time, const bool has_date)
 {
   // '2:59:59.9999995' ---> '03:00:00.000000'
-  for (int i = DATETIME_PART_CNT - 1; i > DT_MDAY; i--) {
-    if (ob_time.parts_[i] == DT_PART_BASE[i]) {
-      ob_time.parts_[i] -= DT_PART_BASE[i];
-      ob_time.parts_[i - 1]++;
+  int ret = OB_SUCCESS;
+  LOG_TRACE("adjust_ob_time", K(ob_time));
+  if (ob_time.parts_[DT_USEC] == DT_PART_BASE[DT_USEC]) {
+    if (has_date) {
+      int32_t days = DAYS_PER_MON[IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])][ob_time.parts_[DT_MON]];
+      if (ob_time.parts_[DT_MDAY] > days) {
+        ret = OB_ERR_TRUNCATED_WRONG_VALUE;
+        LOG_WARN("truncate incorrect datetime value", K(ret), K(ob_time));
+      }
+      for (int i = DATETIME_PART_CNT - 1; i > DT_MDAY; i--) {
+        if (ob_time.parts_[i] == DT_PART_BASE[i]) {
+          ob_time.parts_[i] -= DT_PART_BASE[i];
+          ob_time.parts_[i - 1]++;
+        }
+      }
+      if (ob_time.parts_[DT_MDAY] > days) {
+        ob_time.parts_[DT_MDAY] -= days;
+        ob_time.parts_[DT_MON]++;
+      }
+      if (ob_time.parts_[DT_MON] > 12) {
+        ob_time.parts_[DT_MON] -= 12;
+        ob_time.parts_[DT_YEAR]++;
+      }
+    } else {
+      for (int i = DATETIME_PART_CNT - 1; i > DT_HOUR; i--) {
+        if (ob_time.parts_[i] == DT_PART_BASE[i]) {
+          ob_time.parts_[i] -= DT_PART_BASE[i];
+          ob_time.parts_[i - 1]++;
+        }
+      }
     }
   }
-  int32_t days = DAYS_PER_MON[IS_LEAP_YEAR(ob_time.parts_[DT_YEAR])][ob_time.parts_[DT_MON]];
-  if (ob_time.parts_[DT_MDAY] > days) {
-    ob_time.parts_[DT_MDAY] -= days;
-    ob_time.parts_[DT_MON]++;
-  }
-  if (ob_time.parts_[DT_MON] > 12) {
-    ob_time.parts_[DT_MON] -= 12;
-    ob_time.parts_[DT_YEAR]++;
-  }
+  return ret;
 }
 
 /**

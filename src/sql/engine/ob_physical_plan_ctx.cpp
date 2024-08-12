@@ -411,6 +411,7 @@ int ObPhysicalPlanCtx::switch_implicit_cursor()
     set_row_matched_count(cursor_info.matched_rows_);
     set_row_duplicated_count(cursor_info.duplicated_rows_);
     set_row_deleted_count(cursor_info.deleted_rows_);
+    set_last_insert_id_to_client(cursor_info.last_insert_id_);
     ++cur_stmt_id_;
   }
   return ret;

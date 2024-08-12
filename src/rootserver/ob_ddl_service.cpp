@@ -2921,39 +2921,6 @@ int ObDDLService::create_index_or_mlog_table_in_trans(
   return ret;
 }
 
-int ObDDLService::check_tablegroup_in_single_database(
-    share::schema::ObSchemaGetterGuard &schema_guard,
-    const share::schema::ObTableSchema &table_schema)
-{
-  int ret = OB_SUCCESS;
-  ObArray<const ObSimpleTableSchemaV2 *> table_schemas;
-  const ObSimpleTableSchemaV2 *sample_table = NULL;
-  if (OB_INVALID_ID == table_schema.get_tablegroup_id()) {
-    // skip
-  } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(
-          table_schema.get_tenant_id(), table_schema.get_tablegroup_id(), table_schemas))) {
-    LOG_WARN("fail to get table schemas in tablegroup", K(ret),
-             "tenant_id", table_schema.get_tenant_id(),
-             "tablegroup_id", table_schema.get_tablegroup_id());
-  } else if (OB_FAIL(get_sample_table_schema(table_schemas, sample_table))) {
-    LOG_WARN("fail to get sample table schema", K(ret));
-  } else if (NULL == sample_table) {
-    // empty tablegroup, good
-  } else {
-    if (sample_table->get_database_id() != table_schema.get_database_id()) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("tables in one tablegroup across more than one schema", K(ret),
-               "sample_table_id", sample_table->get_table_id(),
-               "sample_database_id", sample_table->get_database_id(),
-               "tablegroup_id", table_schema.get_tablegroup_id(),
-               "table_id", table_schema.get_table_id(),
-               "table_database_id", table_schema.get_database_id());
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "tables in one tablegroup across more than one schema");
-    } else {} // good
-  }
-  return ret;
-}
-
 int ObDDLService::set_new_table_options(
     const obrpc::ObAlterTableArg &alter_table_arg,
     const share::schema::AlterTableSchema &alter_table_schema,
@@ -3005,9 +2972,7 @@ int ObDDLService::set_new_table_options(
     if (OB_SUCC(ret)
         && alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TABLEGROUP_NAME)) {
       ObTableGroupHelp helper(*this, *schema_service_, *sql_proxy_);
-      if (OB_FAIL(check_tablegroup_in_single_database(schema_guard, new_table_schema))) {
-        LOG_WARN("fail to check tablegroup in single database", K(ret));
-      } else if (OB_FAIL(helper.check_table_alter_tablegroup(
+      if (OB_FAIL(helper.check_table_alter_tablegroup(
                          schema_guard, NULL, orig_table_schema, new_table_schema))) {
         LOG_WARN("fail to check table schema in tablegroup", K(ret));
       } else {} // good
@@ -5062,11 +5027,16 @@ int ObDDLService::check_can_drop_primary_key(const ObTableSchema &origin_table_s
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
   const ObIArray<ObForeignKeyInfo> &fk_infos = origin_table_schema.get_foreign_key_infos();
+  ObPartitionFuncType part_func_type = origin_table_schema.get_part_option().get_part_func_type();
+  // disallow to drop pk if the table is implicit key partition table.
   if (origin_table_schema.is_heap_table()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), K(origin_table_schema));
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, pk_name.length(), pk_name.ptr());
+  } else if (share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type) {
+    ret = OB_ERR_FIELD_NOT_FOUND_PART;
+    LOG_WARN("can't drop primary key if table is implicit key partition table to be compatible with mysql mode", K(ret));
   } else if (fk_infos.empty()) {
     // allowed to drop primary key.
   } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -14070,6 +14040,7 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
 
 int ObDDLService::add_not_null_column_to_table_schema(
     obrpc::ObAlterTableArg &alter_table_arg,
+    const uint64_t tenant_data_version,
     const ObTableSchema &origin_table_schema,
     ObTableSchema &new_table_schema,
     ObSchemaGetterGuard &schema_guard,
@@ -14154,7 +14125,7 @@ int ObDDLService::add_not_null_column_to_table_schema(
       ObArray<ObTabletID> new_tablet_ids;
       if (OB_FAIL(new_table_schema.get_tablet_ids(new_tablet_ids))) {
         LOG_WARN("failed to get tablet ids", K(ret));
-      } else if (OB_FAIL(build_single_table_rw_defensive(tenant_id, new_tablet_ids, new_table_schema.get_schema_version(), trans))) {
+      } else if (OB_FAIL(build_single_table_rw_defensive_(tenant_id, tenant_data_version, new_tablet_ids, new_table_schema.get_schema_version(), trans))) {
         LOG_WARN("failed to build rw defensive", K(ret));
       }
     }
@@ -14164,6 +14135,7 @@ int ObDDLService::add_not_null_column_to_table_schema(
 
 int ObDDLService::add_not_null_column_default_null_to_table_schema(
     obrpc::ObAlterTableArg &alter_table_arg,
+    const uint64_t tenant_data_version,
     const ObTableSchema &origin_table_schema,
     ObTableSchema &new_table_schema,
     ObSchemaGetterGuard &schema_guard,
@@ -14190,6 +14162,7 @@ int ObDDLService::add_not_null_column_default_null_to_table_schema(
     ret = OB_ERR_TABLE_ADD_NOT_NULL_COLUMN_NOT_EMPTY;
     LOG_WARN("table add not null column to is not empty", K(ret), K(tenant_id), K(origin_table_schema.get_table_id()));
   } else if (OB_FAIL(add_not_null_column_to_table_schema(alter_table_arg,
+                                                         tenant_data_version,
                                                          origin_table_schema,
                                                          new_table_schema,
                                                          schema_guard,
@@ -14202,6 +14175,7 @@ int ObDDLService::add_not_null_column_default_null_to_table_schema(
 
 int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
                                                          ObSchemaGetterGuard &schema_guard,
+                                                         const uint64_t tenant_data_version,
                                                          const bool is_default_value_null)
 {
   int ret = OB_SUCCESS;
@@ -14246,6 +14220,7 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
           if (is_default_value_null) {
             if (OB_FAIL(add_not_null_column_default_null_to_table_schema(
                           alter_table_arg,
+                          tenant_data_version,
                           *origin_table_schema,
                           new_table_schema,
                           schema_guard,
@@ -14254,6 +14229,7 @@ int ObDDLService::do_oracle_add_column_not_null_in_trans(obrpc::ObAlterTableArg 
               LOG_WARN("failed to add default value null column to table schema", K(ret));
             }
           } else if (OB_FAIL(add_not_null_column_to_table_schema(alter_table_arg,
+                                                                tenant_data_version,
                                                                 *origin_table_schema,
                                                                 new_table_schema,
                                                                 schema_guard,
@@ -16005,6 +15981,7 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
       } else if (is_oracle_mode_add_column_not_null_ddl) {
         if (OB_FAIL(do_oracle_add_column_not_null_in_trans(alter_table_arg,
                                                            schema_guard,
+                                                           data_version,
                                                            is_default_value_null))) {
           LOG_WARN("add column not null failed", K(ret));
         } else {
@@ -19625,39 +19602,6 @@ int ObDDLService::write_ddl_barrier(
       } else if (OB_FAIL(trans.register_tx_data(tenant_id, logs[i].ls_id_, transaction::ObTxDataSourceType::DDL_BARRIER, buf, pos))) {
         LOG_WARN("failed to register tx data", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObDDLService::build_single_table_rw_defensive(
-    const uint64_t tenant_id,
-    const ObArray<ObTabletID> &tablet_ids,
-    const int64_t schema_version,
-    ObDDLSQLTransaction &trans)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObBatchUnbindTabletArg> args;
-  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || tablet_ids.empty() || schema_version <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", K(ret), K(tenant_id), K(tablet_ids), K(schema_version));
-  } else if (OB_FAIL(build_modify_tablet_binding_args(
-      tenant_id, tablet_ids, true/*is_hidden_tablets*/, schema_version, args, trans))) {
-    LOG_WARN("failed to build reuse index args", K(ret));
-  }
-  ObArenaAllocator allocator("DDLRWDefens");
-  for (int64_t i = 0; OB_SUCC(ret) && i < args.count(); i++) {
-    int64_t pos = 0;
-    int64_t size = args[i].get_serialize_size();
-    char *buf = nullptr;
-    allocator.reuse();
-    if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate", K(ret));
-    } else if (OB_FAIL(args[i].serialize(buf, size, pos))) {
-      LOG_WARN("failed to serialize arg", K(ret));
-    } else if (OB_FAIL(trans.register_tx_data(args[i].tenant_id_, args[i].ls_id_, transaction::ObTxDataSourceType::UNBIND_TABLET_NEW_MDS, buf, pos))) {
-      LOG_WARN("failed to register tx data", K(ret));
     }
   }
   return ret;
@@ -25133,6 +25077,24 @@ int ObDDLService::create_system_table_(
   return ret;
 }
 
+int ObDDLService::check_add_system_table_column_(const ObColumnSchemaV2 &column, bool &can_add)
+{
+  int ret = OB_SUCCESS;
+  can_add = false;
+  // the newly added column of system table should satisfy one of the following requirements
+  // 1. the column is nullable
+  // 2. the column is not nullable and the default value is not null
+  if (!column.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("column is invalid", KR(ret), K(column));
+  } else if (column.is_nullable()) {
+    can_add = true;
+  } else if (!column.is_nullable() && !column.get_cur_default_value().is_null()) {
+    can_add = true;
+  }
+  return ret;
+}
+
 int ObDDLService::alter_system_table_column_(
     ObSchemaGetterGuard &schema_guard,
     const ObTableSchema &hard_code_schema)
@@ -25169,9 +25131,19 @@ int ObDDLService::alter_system_table_column_(
       const ObColumnSchemaV2 *hard_code_column = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < add_column_ids.count(); i++) {
         const uint64_t column_id = add_column_ids.at(i);
+        bool can_add = false;
         if (OB_ISNULL(hard_code_column = hard_code_schema.get_column_schema(column_id))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("fail to get column schema", KR(ret), K(tenant_id), K(table_id), K(column_id));
+        } else if (OB_FAIL(check_add_system_table_column_(*hard_code_column, can_add))) {
+          LOG_WARN("fail check add system table column", KR(ret), K(tenant_id), K(table_id), K(column_id));
+        } else if (!can_add) {
+          ret = OB_OP_NOT_ALLOW;
+          LOG_WARN("the column of system table is not allowed to add", KR(ret),
+              "table_name", hard_code_schema.get_table_name(),
+              "column_name", hard_code_column->get_column_name(),
+              KPC(hard_code_column));
+          LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Adding column not satisfied with requirements to inner table is");
         } else if (OB_FAIL(new_table_schema.add_column(*hard_code_column))) {
           LOG_WARN("fail to add column", KR(ret), KPC(hard_code_column));
         }
@@ -36946,12 +36918,12 @@ int ObDDLService::try_check_and_set_table_schema_in_tablegroup(
         && !is_inner_table(schema.get_table_id())) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("user table cannot add to sys tablegroup", KR(ret), K(schema.get_table_id()));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user table cannot add to sys tablegroup");
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "user table add to sys tablegroup");
     } else if (!is_sys_tablegroup_id(tablegroup_id)
                && is_inner_table(schema.get_table_id())) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("inner table cannot add to user tablegroup", KR(ret), K(schema.get_table_id()));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "inner table cannot add to user tablegroup");
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "inner table add to user tablegroup");
     } else if (!is_sys_tablegroup_id(tablegroup_id)) {
       ObTableGroupHelp helper(*this, *schema_service_, *sql_proxy_);
       if (OB_FAIL(helper.check_table_partition_in_tablegroup(NULL, schema, schema_guard))) {

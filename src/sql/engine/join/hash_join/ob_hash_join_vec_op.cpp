@@ -124,7 +124,8 @@ OB_SERIALIZE_MEMBER((ObHashJoinVecSpec, ObJoinVecSpec),
                     is_naaj_,
                     is_sna_,
                     is_shared_ht_,
-                    is_ns_equal_cond_);
+                    is_ns_equal_cond_,
+                    jf_material_control_info_);
 
 ObHashJoinVecOp::ObHashJoinVecOp(ObExecContext &ctx_, const ObOpSpec &spec, ObOpInput *input)
   : ObJoinVecOp(ctx_, spec, input),

@@ -5347,7 +5347,10 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(groupby_helper.distinct_exprs_,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
-  } else if (groupby_helper.can_three_stage_pushdown_ && !is_partition_wise) {
+  } else if (groupby_helper.can_three_stage_pushdown_ &&
+            !(is_partition_wise &&
+            !(top->is_parallel_more_than_part_cnt() &&
+              get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
     OPT_TRACE("generate three stage group plan");
     if (NULL == groupby_helper.aggr_code_expr_ &&
         OB_FAIL(prepare_three_stage_info(dummy_exprs, dummy_exprs, groupby_helper))) {

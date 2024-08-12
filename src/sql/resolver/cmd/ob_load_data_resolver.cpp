@@ -694,6 +694,10 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
                 } else if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, path_len, "%.*s",
                                                    dir_path.length(), dir_path.ptr()))) {
                   LOG_WARN("fail to fill path", K(ret), K(path_len));
+                } else if (!exist_wildcard(pattern)) {
+                  if (OB_FAIL(file_list.push_back(pattern))) {
+                    LOG_WARN("fail to push back", K(ret));
+                  }
                 } else if (OB_FAIL(adapter.list_files(ObString(path_len, path), &load_args.access_info_, op))) {
                   LOG_WARN("fail to list files", K(ret));
                 }

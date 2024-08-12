@@ -147,7 +147,7 @@ public:
     const static uint64_t RATE_BASE100 = 10000000;
     k_ = 0;
     if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_2_0) {
-      uint64_t rate = static_cast<uint64_t>(ceil(sample_rate * RATE_BASE));
+      uint64_t rate = static_cast<uint64_t>(floor(sample_rate * RATE_BASE));
       uint64_t divisor = gcd(rate, RATE_BASE100);
       sample_rate_ = rate / divisor;
       sample_step_ = RATE_BASE100 / divisor;

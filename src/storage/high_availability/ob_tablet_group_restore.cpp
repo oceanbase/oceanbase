@@ -1371,6 +1371,18 @@ int ObStartTabletGroupRestoreTask::generate_tablet_restore_dag_()
 int ObStartTabletGroupRestoreTask::create_tablets_sstable_()
 {
   int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  if (ctx_->arg_.ls_id_.is_user_ls()) {
+    SERVER_EVENT_SYNC_ADD("storage_ha", "before_restore_create_tablets_sstable",
+      "tenant_id", ctx_->arg_.tenant_id_,
+      "ls_id", ctx_->arg_.ls_id_.id(),
+      "action", ObTabletRestoreAction::get_action_str(ctx_->arg_.action_),
+      "is_leader", ctx_->arg_.is_leader_);
+    DEBUG_SYNC(BEFORE_RESTORE_CREATE_TABLETS_SSTABLE);
+  }
+#endif
+
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start tablet group restore task do not init", K(ret), KPC(ctx_));

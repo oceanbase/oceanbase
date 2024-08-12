@@ -14,6 +14,7 @@
 #include "sql/engine/basic/ob_topk_op.h"
 #include "sql/engine/basic/ob_limit_op.h"
 #include "sql/engine/sort/ob_sort_op.h"
+#include "sql/engine/sort/ob_sort_vec_op.h"
 #include "sql/engine/basic/ob_material_op.h"
 #include "sql/engine/aggregate/ob_hash_groupby_op.h"
 #include "sql/engine/basic/ob_material_vec_op.h"
@@ -110,6 +111,11 @@ int ObTopKOp::get_topk_final_count()
     switch (op_type) {
       case PHY_SORT: {
         ObSortOp *sort_op = static_cast<ObSortOp *>(child_);
+        row_count = sort_op->get_sort_row_count();
+        break;
+      }
+      case PHY_VEC_SORT: {
+        ObSortVecOp *sort_op = static_cast<ObSortVecOp *>(child_);
         row_count = sort_op->get_sort_row_count();
         break;
       }

@@ -361,7 +361,7 @@ public:
   ObString encryption_; // for encryption
   ObString encrypt_key_; // for encryption
   common::ObFixedArray<ObStorageRowkeyColumnSchema, common::ObIAllocator> rowkey_array_; // rowkey column
-  common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> column_array_; // column schema
+  common::ObFixedArray<ObStorageColumnSchema, common::ObIAllocator> column_array_; // column schema, including virtual column
   common::ObFixedArray<ObStorageColumnGroupSchema, common::ObIAllocator> column_group_array_; // column group schema
   common::ObFixedArray<share::schema::ObSkipIndexAttrWithId, common::ObIAllocator> skip_idx_attr_array_;
   int64_t store_column_cnt_; // NOT include virtual generated column

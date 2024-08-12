@@ -47,7 +47,8 @@ class ObSortVecOpImpl : public ObISortVecOpImpl
 public:
   explicit ObSortVecOpImpl(ObMonitorNode &op_monitor_info, lib::MemoryContext &mem_context) :
     ObISortVecOpImpl(op_monitor_info, mem_context), flag_(0), tenant_id_(OB_INVALID_ID),
-    allocator_(mem_context->get_malloc_allocator()), sk_collations_(nullptr),
+    allocator_(mem_context->get_malloc_allocator()),
+    page_allocator_("PartSortBucket", MTL_ID(), ObCtxIds::WORK_AREA), sk_collations_(nullptr),
     addon_collations_(nullptr), cmp_sort_collations_(nullptr), sk_row_meta_(nullptr),
     addon_row_meta_(nullptr), sk_exprs_(nullptr), addon_exprs_(nullptr), cmp_sk_exprs_(nullptr),
     all_exprs_(allocator_), sk_vec_ptrs_(allocator_), addon_vec_ptrs_(allocator_),
@@ -365,10 +366,41 @@ protected:
 
     return ret;
   }
+  template <typename ArrayType>
+  int prepare_bucket_array(ArrayType *&buckets, uint64_t bucket_num)
+  {
+    int ret = OB_SUCCESS;
+    if (nullptr == buckets) {
+      void *buckets_buf = nullptr;
+      ObIAllocator &allocator = mem_context_->get_malloc_allocator();
+      if (OB_ISNULL(buckets_buf = allocator.alloc(sizeof(ArrayType)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_ENG_LOG(WARN, "failed to allocate memory", K(ret));
+      } else if (FALSE_IT(buckets = new (buckets_buf) ArrayType(page_allocator_))) {
+      } else if (OB_FAIL(buckets->init(bucket_num))) {
+        SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
+      }
+    } else {
+      int64_t max_bucket_cnt = buckets->get_capacity();
+      if (max_bucket_cnt < bucket_num) {
+        buckets->reuse();
+        if (OB_FAIL(buckets->init(bucket_num))) {
+          LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
+        }
+      }
+    }
+    return ret;
+  }
 
   DISALLOW_COPY_AND_ASSIGN(ObSortVecOpImpl);
 
 protected:
+  using BucketArray = common::ObSegmentArray<PartHashNode *,
+                                             OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                             common::ModulePageAllocator>;
+  using BucketNodeArray = common::ObSegmentArray<PartHashNode,
+                                                 OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                                 common::ModulePageAllocator>;
   static const int64_t MAX_ROW_CNT = 268435456; // (2G / 8)
   static const int64_t EXTEND_MULTIPLE = 2;
   static const int64_t MAX_MERGE_WAYS = 256;
@@ -394,6 +426,7 @@ protected:
   };
   int64_t tenant_id_;
   ObIAllocator &allocator_;
+  ModulePageAllocator page_allocator_;
   const ObIArray<ObSortFieldCollation> *sk_collations_;
   const ObIArray<ObSortFieldCollation> *addon_collations_;
   const ObIArray<ObSortFieldCollation> *cmp_sort_collations_;
@@ -423,9 +456,9 @@ protected:
   ObExecContext *exec_ctx_;
   Store_Row **sk_rows_;
   Store_Row **addon_rows_;
-  PartHashNode **buckets_;
+  BucketArray *buckets_;
   uint64_t max_bucket_cnt_;
-  PartHashNode *part_hash_nodes_;
+  BucketNodeArray *part_hash_nodes_;
   uint64_t max_node_cnt_;
   int64_t part_cnt_;
   // for limit topn sort change to simple sort

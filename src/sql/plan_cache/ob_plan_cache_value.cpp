@@ -2157,21 +2157,36 @@ int ObPlanCacheValue::get_all_dep_schema(ObSchemaGetterGuard &schema_guard,
   int ret = OB_SUCCESS;
   schema_array.reset();
   const ObSimpleTableSchemaV2 *table_schema = nullptr;
+  const ObSimpleSynonymSchema *synonym_schema = nullptr;
   PCVSchemaObj tmp_schema_obj;
 
   for (int64_t i = 0; OB_SUCC(ret) && i < dep_schema_objs.count(); i++) {
     if (TABLE_SCHEMA != dep_schema_objs.at(i).get_schema_type()) {
-      if (OB_FAIL(tmp_schema_obj.init_with_version_obj(dep_schema_objs.at(i)))) {
+      if (SYNONYM_SCHEMA == dep_schema_objs.at(i).get_schema_type()) {
+        synonym_schema = nullptr;
+        if (OB_FAIL(schema_guard.get_simple_synonym_info(
+              MTL_ID(), dep_schema_objs.at(i).get_object_id(), synonym_schema))) {
+          LOG_WARN("failed to get synonym schema", K(ret), K(dep_schema_objs.at(i)));
+        } else if (nullptr == synonym_schema) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get an unexpected null synonym schema", K(ret));
+        } else {
+          tmp_schema_obj.database_id_ = synonym_schema->get_database_id();
+          tmp_schema_obj.schema_version_ = synonym_schema->get_schema_version();
+          tmp_schema_obj.schema_id_ = synonym_schema->get_synonym_id();
+          tmp_schema_obj.schema_type_ = SYNONYM_SCHEMA;
+        }
+      } else if (OB_FAIL(tmp_schema_obj.init_with_version_obj(dep_schema_objs.at(i)))) {
         LOG_WARN("failed to init pcv schema obj", K(ret));
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(schema_array.push_back(tmp_schema_obj))) {
         LOG_WARN("failed to push back pcv schema obj", K(ret));
       } else {
         tmp_schema_obj.reset();
       }
     } else if (OB_FAIL(schema_guard.get_simple_table_schema(
-                                     MTL_ID(),
-                                     dep_schema_objs.at(i).get_object_id(),
-                                     table_schema))) {
+                 MTL_ID(), dep_schema_objs.at(i).get_object_id(), table_schema))) {
       LOG_WARN("failed to get table schema",
                K(ret), K(dep_schema_objs.at(i)));
     } else if (nullptr == table_schema) {

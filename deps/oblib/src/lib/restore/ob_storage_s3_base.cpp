@@ -63,10 +63,15 @@ void ObS3Logger::Log(Logging::LogLevel logLevel, const char* tag, const char* fo
     switch (logLevel) {
       case Logging::LogLevel::Fatal:
       case Logging::LogLevel::Error:
-      case Logging::LogLevel::Warn:
-        ret = OB_S3_ERROR;
-        _OB_LOG(WARN, new_format, tag, arg_buf);
+      case Logging::LogLevel::Warn: {
+        if (OB_NOT_NULL(STRSTR(arg_buf, "HTTP response code: 404"))) {
+          // skip NO_SUCH_KEY error
+        } else {
+          ret = OB_S3_ERROR;
+          _OB_LOG(WARN, new_format, tag, arg_buf);
+        }
         break;
+      }
       case Logging::LogLevel::Info:
         _OB_LOG(INFO, new_format, tag, arg_buf);
         break;
@@ -655,6 +660,13 @@ template<typename OutcomeType>
 static void log_s3_status(OutcomeType &outcome, const int ob_errcode)
 {
   const char *request_id = outcome.GetResult().GetRequestId().c_str();
+  if (outcome.GetResult().GetRequestId().empty()) {
+    const Aws::Http::HeaderValueCollection &headers = outcome.GetError().GetResponseHeaders();
+    Aws::Http::HeaderValueCollection::const_iterator it = headers.find("x-amz-request-id");
+    if (it != headers.end()) {
+      request_id = it->second.c_str();
+    }
+  }
   const int code = static_cast<int>(outcome.GetError().GetResponseCode());
   const char *exception = outcome.GetError().GetExceptionName().c_str();
   const char *err_msg = outcome.GetError().GetMessage().c_str();
@@ -1010,11 +1022,10 @@ int ObStorageS3Base::get_s3_file_meta_(S3ObjectMeta &meta)
     if (OB_FAIL(s3_client_->head_object(request, outcome))) {
       OB_LOG(WARN, "failed to head s3 object", K(ret));
     } else if (!outcome.IsSuccess()) {
-      convert_io_error(outcome.GetError(), ret);
+      handle_s3_outcome(outcome, ret);
       if (OB_BACKUP_FILE_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
       } else {
-        log_s3_status(outcome, ret);
         OB_LOG(WARN, "failed to head s3 object", K(ret), K_(bucket), K_(object));
       }
     } else {

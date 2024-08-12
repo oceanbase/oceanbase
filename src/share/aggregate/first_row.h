@@ -174,7 +174,7 @@ public:
   }
 
   template<typename ColumnFmt>
-  inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     UNUSEDx(agg_ctx, columns, row_num, agg_col_id, agg_cell, tmp_res, calc_info);
@@ -183,7 +183,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  inline int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                               const int32_t agg_col_id, char *agg_cell, void *tmp_res,
                               int64_t &calc_info)
   {

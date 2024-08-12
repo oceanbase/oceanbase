@@ -369,8 +369,9 @@ LATCH_DEF(SQL_AUDIT, 335, "sql audit release second level queue lock", LATCH_FIF
 LATCH_DEF(S2_PHY_BLOCK_LOCK, 336, "s2 phy block lock", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(S2_MEM_BLOCK_LOCK, 337, "s2 mem block lock", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(TENANT_MGR_TENANT_BUCKET_LOCK, 338, "tenant mgr tenant bucket lock", LATCH_READ_PREFER, INT64_MAX, 0, false)
+LATCH_DEF(SEQUENCE_VALUE_FETCH_LOCK, 339, "sequence value fetch lock", LATCH_FIFO, 2000, 0, true)
 
-LATCH_DEF(LATCH_END, 339, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 340, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

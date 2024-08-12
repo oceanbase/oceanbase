@@ -290,7 +290,8 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
   TestSchemaPrepare::prepare_schema(table_schema);
   ASSERT_EQ(OB_SUCCESS, storage_schema1.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
   ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
-  storage_schema2.store_column_cnt_ += 1;
+  storage_schema2.column_cnt_ += 1;
+  storage_schema2.column_info_simplified_ = true;
   storage_schema2.schema_version_ += 100;
 
   // schema 2 have large store column cnt

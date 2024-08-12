@@ -243,7 +243,7 @@ int ObTabletMeta::init(
     ddl_snapshot_version_ = old_tablet_meta.ddl_snapshot_version_;
     max_sync_storage_schema_version_ = old_tablet_meta.max_sync_storage_schema_version_;
     max_serialized_medium_scn_ = old_tablet_meta.max_serialized_medium_scn_;
-    mds_checkpoint_scn_ = flush_scn;
+    mds_checkpoint_scn_ = SCN::max(flush_scn, old_tablet_meta.mds_checkpoint_scn_);
     transfer_info_ = old_tablet_meta.transfer_info_;
     extra_medium_info_ = old_tablet_meta.extra_medium_info_;
     space_usage_ = old_tablet_meta.space_usage_;

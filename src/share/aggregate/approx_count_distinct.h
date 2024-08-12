@@ -34,7 +34,7 @@ public:
 public:
   ApproxCountDistinct() {}
   template <typename ColumnFmt>
-  inline int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                      const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;
@@ -89,7 +89,7 @@ public:
   }
 
   template <typename ColumnFmt>
-  inline int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
+  OB_INLINE int add_nullable_row(RuntimeContext &agg_ctx, ColumnFmt &columns, const int32_t row_num,
                        const int32_t agg_col_id, char *agg_cell, void *tmp_res, int64_t &calc_info)
   {
     int ret = OB_SUCCESS;
@@ -407,7 +407,7 @@ public:
   }
   TO_STRING_KV("aggregate", "approx_count_distinct", K(in_tc), K(out_tc), K(agg_func));
 private:
-  int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size)
+  OB_INLINE int llc_add_value(const uint64_t value, char *llc_bitmap_buf, int64_t size)
   {
     // copy from `ObAggregateProcessor::llv_add_value`
     int ret = OB_SUCCESS;

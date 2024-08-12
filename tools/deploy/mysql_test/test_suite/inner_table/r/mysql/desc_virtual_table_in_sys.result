@@ -955,6 +955,7 @@ lob_inrow_threshold	bigint(20)	NO		4096
 max_used_column_group_id	bigint(20)	NO		1000	
 column_store	bigint(20)	NO		0	
 auto_increment_cache_size	bigint(20)	NO		0	
+local_session_vars	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2691,6 +2692,7 @@ lob_inrow_threshold	bigint(20)	NO		4096
 max_used_column_group_id	bigint(20)	NO		1000	
 column_store	bigint(20)	NO		0	
 auto_increment_cache_size	bigint(20)	NO		0	
+local_session_vars	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -2781,6 +2783,7 @@ lob_inrow_threshold	bigint(20)	YES		4096
 max_used_column_group_id	bigint(20)	YES		1000	
 column_store	bigint(20)	YES		0	
 auto_increment_cache_size	bigint(20)	YES		0	
+local_session_vars	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6462,6 +6465,7 @@ rebuild_seq	bigint(20)	NO		NULL
 tablet_change_checkpoint_scn	bigint(20) unsigned	NO		NULL	
 transfer_scn	bigint(20) unsigned	NO		NULL	
 tx_blocked	bigint(20)	NO		NULL	
+required_size	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_info;
 IF(count(*) >= 0, 1, 0)
 1
@@ -6512,6 +6516,7 @@ extra_info	varchar(256)	NO		NULL
 time_after_create	bigint(20)	NO		NULL	
 obj_type	varchar(16)	NO		NULL	
 obj_id	bigint(20)	NO		NULL	
+owner_type	bigint(20)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_obj_lock;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9595,7 +9600,7 @@ log_date	timestamp(6)	YES		NULL
 owner	varchar(128)	YES		NULL	
 job_subname	varchar(128)	YES		NULL	
 job_class	varchar(128)	YES		NULL	
-operation	varchar(128)	YES		NULL	
+operation	varchar(65536)	YES		NULL	
 status	varchar(128)	YES		NULL	
 code	bigint(20)	YES		0	
 req_start_date	timestamp(6)	YES		NULL	

@@ -9363,6 +9363,33 @@ GMT_MODIFIED	timestamp(6)	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_SCHEDULER_JOB_RUN_DETAILS limit 1);
 cnt
 1
+desc information_schema.INNODB_SYS_FIELDS;
+Field	Type	Null	Key	Default	Extra
+INDEX_ID	bigint(0) unsigned	NO			
+NAME	varchar(0)	NO			
+POS	bigint(0) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FIELDS limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_FOREIGN;
+Field	Type	Null	Key	Default	Extra
+ID	varchar(0)	NO			
+FOR_NAME	varchar(0)	NO			
+REF_NAME	varchar(0)	NO			
+N_COLS	bigint(0) unsigned	NO			
+TYPE	bigint(0) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FOREIGN limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_FOREIGN_COLS;
+Field	Type	Null	Key	Default	Extra
+ID	varchar(0)	NO			
+FOR_COL_NAME	varchar(0)	NO			
+REF_COL_NAME	varchar(0)	NO			
+POS	bigint(0) unsigned	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FOREIGN_COLS limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

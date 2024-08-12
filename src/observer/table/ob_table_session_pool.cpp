@@ -670,6 +670,12 @@ int ObTableApiSessNode::init()
       last_active_ts_ = ObTimeUtility::fast_current_time();
       is_inited_ = true;
     }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(mem_ctx_)) {
+      DESTROY_CONTEXT(mem_ctx_);
+      mem_ctx_ = nullptr;
+    }
+
   }
 
   return ret;

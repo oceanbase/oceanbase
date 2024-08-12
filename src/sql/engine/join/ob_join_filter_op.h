@@ -27,6 +27,7 @@
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_vec_msg.h"
 #include "share/detect/ob_detectable_id.h"
 #include "sql/engine/px/p2p_datahub/ob_runtime_filter_query_range.h"
+#include "sql/engine/join/ob_join_filter_material_control_info.h"
 
 
 namespace oceanbase
@@ -36,6 +37,19 @@ namespace sql
 
 class ObPxSQCProxy;
 
+class SharedJoinFilterConstructor
+{
+public:
+  inline bool snatch_the_leader() { return !ATOMIC_CAS(&leader_snatched_, false, true); }
+  int init();
+  int wait_bloom_filter_init(ObOperator *join_filter_op, ObRFBloomFilterMsg *bf_msg);
+  int notify_bloom_filter_inited();
+private:
+  static constexpr uint64_t COND_WAIT_TIME_USEC = 10; // 10 us
+  ObThreadCond cond_;
+  bool leader_snatched_{false};
+  bool is_shared_bloom_filter_inited_{false};
+} CACHE_ALIGNED;
 
 struct ObJoinFilterShareInfo
 {
@@ -48,6 +62,10 @@ struct ObJoinFilterShareInfo
   uint64_t release_ref_ptr_; // 释放内存引用计数, 初始值为worker个数.
   uint64_t filter_ptr_;   //此指针将作为PX JOIN FILTER CREATE算子共享内存.
   uint64_t shared_msgs_;  //sqc-shared dh msgs
+  union {
+    SharedJoinFilterConstructor *shared_jf_constructor_;
+    uint64_t ser_shared_jf_constructor_;
+  };
   OB_UNIS_VERSION_V(1);
 public:
   TO_STRING_KV(KP(unfinished_count_ptr_), KP(ch_provider_ptr_), KP(release_ref_ptr_), KP(filter_ptr_), K(shared_msgs_));
@@ -214,6 +232,10 @@ public:
   ObPxQueryRangeInfo px_query_range_info_;
   int64_t bloom_filter_ratio_;
   int64_t send_bloom_filter_size_; // how many KB a piece bloom filter has
+  ObJoinFilterMaterialControlInfo jf_material_control_info_;
+  ObJoinType join_type_ {UNKNOWN_JOIN};
+  ExprFixedArray full_hash_join_keys_;
+  common::ObFixedArray<bool, common::ObIAllocator> hash_join_is_ns_equal_cond_;
 };
 
 class ObJoinFilterOp : public ObOperator

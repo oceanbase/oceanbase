@@ -71,5 +71,14 @@ int64_t VersionUtil::print_version_str(char *buf, const int64_t buf_len, uint64_
   return pos;
 }
 
+ObVersionPrinter::ObVersionPrinter(const uint64_t version)
+    : version_val_(version), version_str_{0}
+{
+  if (OB_INVALID_INDEX ==
+      VersionUtil::print_version_str(version_str_, OB_SERVER_VERSION_LENGTH, version)) {
+    MEMSET(version_str_, 0, OB_SERVER_VERSION_LENGTH);
+  }
+}
+
 } // namespace common
 } // namespace oceanbase

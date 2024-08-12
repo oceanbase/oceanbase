@@ -9256,7 +9256,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
     if (OB_NOT_NULL(stmt)) {
       if (OB_FAIL(add_synonym_obj_id(synonym_checker, is_db_explicit /* is_db_expilicit */))) {
         LOG_WARN("add_synonym_obj_id failed", K(ret));
-      } else if (is_public_synonym) {
+      } else {
         /**
         * create table oms_test.tab_a (id int, value int);
         * create PUBLIC SYNONYM tab_b for oms_test.tab_a;
@@ -9267,7 +9267,7 @@ int ObDMLResolver::resolve_table_relation_factor_normal(const ParseNode *node,
         * other is the oms_test.tab_a table. However, when planning matching, the database_id on the
         * session and the table name of the cache will be used for matching. As a result, an error
         * will be reported that the table does not exist, resulting in the failure to hit the plan.
-        * For this scenario, if it is a public synonym, the is_db_explicit of the table should be set
+        * For this scenario, if it is a synonym, the is_db_explicit of the table should be set
         * to true, and table_id should be used directly for matching.
         */
         is_db_explicit = true;

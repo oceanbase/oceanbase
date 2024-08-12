@@ -174,7 +174,7 @@ public:
              const uint64_t cluster_version,
              uint64_t &data_version);
 public:
-  static const int64_t DATA_VERSION_NUM = 19;
+  static const int64_t DATA_VERSION_NUM = 20;
   static const uint64_t UPGRADE_PATH[];
 };
 
@@ -260,7 +260,18 @@ private:
   int post_upgrade_for_online_estimate_percent();
 };
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 3, 0)
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 2, 1)
+
+class ObUpgradeFor4330Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4330Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4330Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+private:
+  int post_upgrade_for_external_table_flag();
+};
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */
