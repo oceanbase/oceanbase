@@ -1276,7 +1276,7 @@ int ObTabletMergeFinishTask::add_sstable_for_merge(ObTabletMergeCtx &ctx)
                                   tablet->get_tablet_meta().transfer_info_.transfer_seq_,
                                   is_major_merge_type(merge_type)/*need_report*/,
                                   clog_checkpoint_scn,
-                                  is_minor_merge(ctx.param_.merge_type_)/*need_check_sstable*/,
+                                  is_minor_merge(ctx.param_.merge_type_) || is_history_minor_merge(ctx.param_.merge_type_)/*need_check_sstable*/,
                                   false/*allow_duplicate_sstable*/,
                                   ctx.param_.get_merge_type());
     ObTabletHandle new_tablet_handle;

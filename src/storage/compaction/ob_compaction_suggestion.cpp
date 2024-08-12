@@ -42,7 +42,7 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
   int64_t *scan_row_array = nullptr;
   const int64_t buf_len = OB_DIAGNOSE_INFO_LENGTH;
   ObSSTableMergeInfo merge_info = tablet_merge_info.get_sstable_merge_info();
-  if (1 != merge_info.concurrent_cnt_ && progress.is_inited()) { // parallel compaction
+  if (1 != merge_info.concurrent_cnt_ && progress.is_inited() && merge_info.total_row_count_ >= ROW_COUNT_TO_CHECK_PARALLEL_EVEN) { // parallel compaction
     ObParalleMergeInfo &paral_info = merge_info.parallel_merge_info_;
     if (paral_info.info_[ObParalleMergeInfo::SCAN_UNITS].max_value_
         > paral_info.info_[ObParalleMergeInfo::SCAN_UNITS].min_value_ * SCAN_AVERAGE_PARAM) {
