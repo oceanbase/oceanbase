@@ -1251,25 +1251,25 @@ int ObIOSender::enqueue_request(ObIORequest &req)
               if (OB_NOT_NULL(req.io_result_)) {
                 req.io_result_->time_log_.enqueue_ts_ = ObTimeUtility::fast_current_time();
               }
+            }
+            int tmp_ret = OB_SUCCESS;
+            if (OB_SUCC(ret)) {
               //calc ts_
               if (OB_NOT_NULL(req.tenant_io_mgr_.get_ptr())) {
                 ObTenantIOClock *io_clock = static_cast<ObTenantIOClock *>(req.tenant_io_mgr_.get_ptr()->get_io_clock());
                 //phy_queue from idle to active and reach max_clock_adjust_wait_ts
-                int tmp_ret = OB_SUCCESS;
                 if (tmp_phy_queue->reach_adjust_interval()) {
                   tmp_ret = io_clock->sync_tenant_clock(io_clock);
                 }
-                if (OB_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, req))) {
+                if (OB_TMP_FAIL(io_clock->calc_phyqueue_clock(tmp_phy_queue, req))) {
                   LOG_WARN("calc phyqueue clock failed", K(ret), K(tmp_phy_queue->queue_index_));
                 } else if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
                   LOG_WARN("sync tenant clock failed", K(tmp_ret));
                 }
               }
             }
-            int tmp_ret = io_queue_->push_phyqueue(tmp_phy_queue);
-            if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
-              LOG_WARN("re_into heap failed", K(tmp_ret));
-              abort();
+            if (OB_UNLIKELY(OB_TMP_FAIL(io_queue_->push_phyqueue(tmp_phy_queue)))) {
+              LOG_ERROR("re_into heap failed", K(tmp_ret));
             }
           }
         } else {
