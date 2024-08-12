@@ -9487,6 +9487,37 @@ IS_MANDATORY	varchar(1024)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from information_schema.ENABLED_ROLES;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_ls_replica_task_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+ls_id	bigint(20)	NO	PRI	NULL	
+task_type	varchar(64)	NO	PRI	NULL	
+task_id	varchar(200)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+task_status	varchar(2048)	YES		NULL	
+priority	bigint(20)	NO		1	
+target_replica_svr_ip	varchar(46)	YES		NULL	
+target_replica_svr_port	bigint(20)	YES		NULL	
+target_paxos_replica_number	bigint(20)	YES		NULL	
+target_replica_type	varchar(16)	YES		NULL	
+source_replica_svr_ip	varchar(46)	YES		NULL	
+source_replica_svr_port	bigint(20)	YES		NULL	
+source_paxos_replica_number	bigint(20)	YES		NULL	
+source_replica_type	varchar(16)	YES		NULL	
+data_source_svr_ip	varchar(46)	YES		NULL	
+data_source_svr_port	bigint(20)	YES		NULL	
+is_manual	tinyint(4)	YES		0	
+task_exec_svr_ip	varchar(46)	YES		NULL	
+task_exec_svr_port	bigint(20)	YES		NULL	
+generate_time	timestamp(6)	NO		CURRENT_TIMESTAMP(6)	
+schedule_time	timestamp(6)	NO		CURRENT_TIMESTAMP(6)	
+finish_time	timestamp(6)	NO		CURRENT_TIMESTAMP(6)	
+execute_result	varchar(2048)	YES		NULL	
+comment	varchar(2048)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_ls_replica_task_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_session_ps_info;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

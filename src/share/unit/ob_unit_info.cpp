@@ -13,6 +13,7 @@
 #include <cmath>
 
 #include "ob_unit_info.h"
+#include "share/ob_errno.h"
 
 namespace oceanbase
 {

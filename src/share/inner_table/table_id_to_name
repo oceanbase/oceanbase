@@ -348,6 +348,7 @@
 # 506: __all_column_privilege_history
 # 506: __all_column_privilege  # BASE_TABLE_NAME
 # 507: __all_tenant_snapshot_ls_replica_history
+# 508: __all_ls_replica_task_history
 # 512: __all_user_proxy_info
 # 513: __all_user_proxy_info_history
 # 513: __all_user_proxy_info  # BASE_TABLE_NAME
@@ -1105,6 +1106,8 @@
 # 12464: __all_virtual_tenant_snapshot_ls_replica_history
 # 12464: __all_tenant_snapshot_ls_replica_history  # BASE_TABLE_NAME
 # 12466: ENABLED_ROLES
+# 12467: __all_virtual_ls_replica_task_history
+# 12467: __all_ls_replica_task_history  # BASE_TABLE_NAME
 # 12468: __all_virtual_session_ps_info
 # 12469: __all_virtual_tracepoint_info
 # 12473: __all_virtual_compatibility_control
@@ -1712,6 +1715,9 @@
 # 15439: __all_virtual_ls_snapshot  # BASE_TABLE_NAME
 # 15440: ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT
 # 15440: __all_index_usage_info  # BASE_TABLE_NAME
+# 15443: ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
+# 15443: __all_ls_replica_task_history  # BASE_TABLE_NAME
+# 15443: __all_virtual_ls_replica_task_history  # BASE_TABLE_NAME1
 # 15444: ALL_VIRTUAL_SESSION_PS_INFO
 # 15444: __all_virtual_session_ps_info  # BASE_TABLE_NAME
 # 15445: ALL_VIRTUAL_TRACEPOINT_INFO
@@ -2126,6 +2132,8 @@
 # 21517: GV$OB_LS_SNAPSHOTS
 # 21518: V$OB_LS_SNAPSHOTS
 # 21519: DBA_OB_CLONE_HISTORY
+# 21523: DBA_OB_LS_REPLICA_TASK_HISTORY
+# 21524: CDB_OB_LS_REPLICA_TASK_HISTORY
 # 21525: CDB_MVIEW_LOGS
 # 21526: DBA_MVIEW_LOGS
 # 21527: CDB_MVIEWS
@@ -2434,6 +2442,7 @@
 # 25275: DBA_OB_TRANSFER_PARTITION_TASKS
 # 25276: DBA_OB_TRANSFER_PARTITION_TASK_HISTORY
 # 25278: USER_USERS
+# 25279: DBA_OB_LS_REPLICA_TASK_HISTORY
 # 25283: DBA_MVIEW_LOGS
 # 25284: ALL_MVIEW_LOGS
 # 25285: USER_MVIEW_LOGS

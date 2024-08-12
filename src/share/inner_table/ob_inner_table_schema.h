@@ -621,6 +621,7 @@ public:
   static int all_column_privilege_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_privilege_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_snapshot_ls_replica_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ls_replica_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_info_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_role_info_schema(share::schema::ObTableSchema &table_schema);
@@ -1070,6 +1071,7 @@ public:
   static int all_virtual_column_privilege_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_snapshot_ls_replica_history_schema(share::schema::ObTableSchema &table_schema);
   static int enabled_roles_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ls_replica_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_session_ps_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tracepoint_info_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_compatibility_control_schema(share::schema::ObTableSchema &table_schema);
@@ -1347,6 +1349,7 @@ public:
   static int all_virtual_transfer_partition_task_history_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_ls_snapshot_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_index_usage_info_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_ls_replica_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_session_ps_info_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tracepoint_info_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_user_proxy_info_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1752,6 +1755,8 @@ public:
   static int gv_ob_ls_snapshots_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_ls_snapshots_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_clone_history_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ls_replica_task_history_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_ob_ls_replica_task_history_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_mview_logs_schema(share::schema::ObTableSchema &table_schema);
   static int dba_mview_logs_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_mviews_schema(share::schema::ObTableSchema &table_schema);
@@ -2060,6 +2065,7 @@ public:
   static int dba_ob_transfer_partition_tasks_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_transfer_partition_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_users_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_ob_ls_replica_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_mview_logs_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_mview_logs_ora_schema(share::schema::ObTableSchema &table_schema);
   static int user_mview_logs_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2561,6 +2567,7 @@ public:
   static int all_column_privilege_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_privilege_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_snapshot_ls_replica_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ls_replica_task_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_info_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_role_info_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -2860,6 +2867,7 @@ public:
   static int all_column_privilege_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_privilege_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_tenant_snapshot_ls_replica_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_ls_replica_task_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_info_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_user_proxy_role_info_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3378,6 +3386,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_column_privilege_schema,
   ObInnerTableSchema::all_column_privilege_history_schema,
   ObInnerTableSchema::all_tenant_snapshot_ls_replica_history_schema,
+  ObInnerTableSchema::all_ls_replica_task_history_schema,
   ObInnerTableSchema::all_user_proxy_info_schema,
   ObInnerTableSchema::all_user_proxy_info_history_schema,
   ObInnerTableSchema::all_user_proxy_role_info_schema,
@@ -3830,6 +3839,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_column_privilege_history_schema,
   ObInnerTableSchema::all_virtual_tenant_snapshot_ls_replica_history_schema,
   ObInnerTableSchema::enabled_roles_schema,
+  ObInnerTableSchema::all_virtual_ls_replica_task_history_schema,
   ObInnerTableSchema::all_virtual_session_ps_info_schema,
   ObInnerTableSchema::all_virtual_tracepoint_info_schema,
   ObInnerTableSchema::all_virtual_compatibility_control_schema,
@@ -4117,6 +4127,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_transfer_partition_task_history_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_ls_snapshot_ora_schema,
   ObInnerTableSchema::all_virtual_index_usage_info_real_agent_ora_schema,
+  ObInnerTableSchema::all_virtual_ls_replica_task_history_ora_schema,
   ObInnerTableSchema::all_virtual_session_ps_info_ora_schema,
   ObInnerTableSchema::all_virtual_tracepoint_info_ora_schema,
   ObInnerTableSchema::all_virtual_user_proxy_info_real_agent_ora_schema,
@@ -4609,6 +4620,8 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::gv_ob_ls_snapshots_schema,
   ObInnerTableSchema::v_ob_ls_snapshots_schema,
   ObInnerTableSchema::dba_ob_clone_history_schema,
+  ObInnerTableSchema::dba_ob_ls_replica_task_history_schema,
+  ObInnerTableSchema::cdb_ob_ls_replica_task_history_schema,
   ObInnerTableSchema::cdb_mview_logs_schema,
   ObInnerTableSchema::dba_mview_logs_schema,
   ObInnerTableSchema::cdb_mviews_schema,
@@ -4917,6 +4930,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_transfer_partition_tasks_ora_schema,
   ObInnerTableSchema::dba_ob_transfer_partition_task_history_ora_schema,
   ObInnerTableSchema::user_users_schema,
+  ObInnerTableSchema::dba_ob_ls_replica_task_history_ora_schema,
   ObInnerTableSchema::dba_mview_logs_ora_schema,
   ObInnerTableSchema::all_mview_logs_ora_schema,
   ObInnerTableSchema::user_mview_logs_ora_schema,
@@ -5520,6 +5534,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_COLUMN_PRIVILEGE_TID,
   OB_ALL_COLUMN_PRIVILEGE_HISTORY_TID,
   OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TID,
+  OB_ALL_LS_REPLICA_TASK_HISTORY_TID,
   OB_ALL_USER_PROXY_INFO_TID,
   OB_ALL_USER_PROXY_INFO_HISTORY_TID,
   OB_ALL_USER_PROXY_ROLE_INFO_TID,
@@ -5753,6 +5768,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_LS_SNAPSHOT_TID,
   OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TID,
   OB_ENABLED_ROLES_TID,
+  OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_TID,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_TID,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_TID,
   OB_ALL_VIRTUAL_COMPATIBILITY_CONTROL_TID,
@@ -6033,6 +6049,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_ORA_TID,
   OB_ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORA_TID,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TID,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TID,
   OB_ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT_ORA_TID,
@@ -6327,6 +6344,7 @@ const uint64_t tenant_space_tables [] = {
   OB_COLUMNS_PRIV_TID,
   OB_GV_OB_LS_SNAPSHOTS_TID,
   OB_V_OB_LS_SNAPSHOTS_TID,
+  OB_DBA_OB_LS_REPLICA_TASK_HISTORY_TID,
   OB_DBA_MVIEW_LOGS_TID,
   OB_DBA_MVIEWS_TID,
   OB_DBA_MVREF_STATS_SYS_DEFAULTS_TID,
@@ -6626,6 +6644,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_TRANSFER_PARTITION_TASKS_ORA_TID,
   OB_DBA_OB_TRANSFER_PARTITION_TASK_HISTORY_ORA_TID,
   OB_USER_USERS_TID,
+  OB_DBA_OB_LS_REPLICA_TASK_HISTORY_ORA_TID,
   OB_DBA_MVIEW_LOGS_ORA_TID,
   OB_ALL_MVIEW_LOGS_ORA_TID,
   OB_USER_MVIEW_LOGS_ORA_TID,
@@ -7282,6 +7301,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_COLUMN_PRIVILEGE_AUX_LOB_META_TID,
   OB_ALL_COLUMN_PRIVILEGE_HISTORY_AUX_LOB_META_TID,
   OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_LS_REPLICA_TASK_HISTORY_AUX_LOB_META_TID,
   OB_ALL_USER_PROXY_INFO_AUX_LOB_META_TID,
   OB_ALL_USER_PROXY_INFO_HISTORY_AUX_LOB_META_TID,
   OB_ALL_USER_PROXY_ROLE_INFO_AUX_LOB_META_TID,
@@ -7557,6 +7577,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_COLUMN_PRIVILEGE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_LS_REPLICA_TASK_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_USER_PROXY_INFO_AUX_LOB_PIECE_TID,
   OB_ALL_USER_PROXY_INFO_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_USER_PROXY_ROLE_INFO_AUX_LOB_PIECE_TID,
@@ -7706,6 +7727,7 @@ const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_CGROUP_CONFIG_TID,
   OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_TID,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_TID,
+  OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_TID,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_TID,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_TID,
   OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_TID,
@@ -7853,6 +7875,7 @@ const uint64_t all_ora_mapping_virtual_tables [] = {  OB_ALL_VIRTUAL_SQL_AUDIT_O
 ,  OB_ALL_VIRTUAL_CGROUP_CONFIG_ORA_TID
 ,  OB_ALL_VIRTUAL_SYS_VARIABLE_DEFAULT_VALUE_ORA_TID
 ,  OB_ALL_VIRTUAL_LS_SNAPSHOT_ORA_TID
+,  OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORA_TID
 ,  OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TID
 ,  OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TID
 ,  OB_ALL_VIRTUAL_TENANT_RESOURCE_LIMIT_ORA_TID
@@ -8142,6 +8165,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_COLUMN_PRIVILEGE_TNAME,
   OB_ALL_COLUMN_PRIVILEGE_HISTORY_TNAME,
   OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TNAME,
+  OB_ALL_LS_REPLICA_TASK_HISTORY_TNAME,
   OB_ALL_USER_PROXY_INFO_TNAME,
   OB_ALL_USER_PROXY_INFO_HISTORY_TNAME,
   OB_ALL_USER_PROXY_ROLE_INFO_TNAME,
@@ -8375,6 +8399,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_LS_SNAPSHOT_TNAME,
   OB_ALL_VIRTUAL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_TNAME,
   OB_ENABLED_ROLES_TNAME,
+  OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_TNAME,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_TNAME,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_TNAME,
   OB_ALL_VIRTUAL_COMPATIBILITY_CONTROL_TNAME,
@@ -8655,6 +8680,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_ORA_TNAME,
   OB_ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT_ORA_TNAME,
+  OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORA_TNAME,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TNAME,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TNAME,
   OB_ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT_ORA_TNAME,
@@ -8949,6 +8975,7 @@ const char* const tenant_space_table_names [] = {
   OB_COLUMNS_PRIV_TNAME,
   OB_GV_OB_LS_SNAPSHOTS_TNAME,
   OB_V_OB_LS_SNAPSHOTS_TNAME,
+  OB_DBA_OB_LS_REPLICA_TASK_HISTORY_TNAME,
   OB_DBA_MVIEW_LOGS_TNAME,
   OB_DBA_MVIEWS_TNAME,
   OB_DBA_MVREF_STATS_SYS_DEFAULTS_TNAME,
@@ -9248,6 +9275,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_TRANSFER_PARTITION_TASKS_ORA_TNAME,
   OB_DBA_OB_TRANSFER_PARTITION_TASK_HISTORY_ORA_TNAME,
   OB_USER_USERS_TNAME,
+  OB_DBA_OB_LS_REPLICA_TASK_HISTORY_ORA_TNAME,
   OB_DBA_MVIEW_LOGS_ORA_TNAME,
   OB_ALL_MVIEW_LOGS_ORA_TNAME,
   OB_USER_MVIEW_LOGS_ORA_TNAME,
@@ -9904,6 +9932,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_COLUMN_PRIVILEGE_AUX_LOB_META_TNAME,
   OB_ALL_COLUMN_PRIVILEGE_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_LS_REPLICA_TASK_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_USER_PROXY_INFO_AUX_LOB_META_TNAME,
   OB_ALL_USER_PROXY_INFO_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_USER_PROXY_ROLE_INFO_AUX_LOB_META_TNAME,
@@ -10179,6 +10208,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_COLUMN_PRIVILEGE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_PRIVILEGE_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_TENANT_SNAPSHOT_LS_REPLICA_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_LS_REPLICA_TASK_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_USER_PROXY_INFO_AUX_LOB_PIECE_TNAME,
   OB_ALL_USER_PROXY_INFO_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_USER_PROXY_ROLE_INFO_AUX_LOB_PIECE_TNAME,
@@ -10542,6 +10572,7 @@ const uint64_t restrict_access_virtual_tables[] = {
   OB_ALL_VIRTUAL_TRANSFER_PARTITION_TASK_HISTORY_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_LS_SNAPSHOT_ORA_TID,
   OB_ALL_VIRTUAL_INDEX_USAGE_INFO_REAL_AGENT_ORA_TID,
+  OB_ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY_ORA_TID,
   OB_ALL_VIRTUAL_SESSION_PS_INFO_ORA_TID,
   OB_ALL_VIRTUAL_TRACEPOINT_INFO_ORA_TID,
   OB_ALL_VIRTUAL_USER_PROXY_INFO_REAL_AGENT_ORA_TID,
@@ -13041,6 +13072,14 @@ LOBMapping const lob_aux_table_mappings [] = {
   },
 
   {
+    OB_ALL_LS_REPLICA_TASK_HISTORY_TID,
+    OB_ALL_LS_REPLICA_TASK_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_LS_REPLICA_TASK_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_ls_replica_task_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_ls_replica_task_history_aux_lob_piece_schema
+  },
+
+  {
     OB_ALL_USER_PROXY_INFO_TID,
     OB_ALL_USER_PROXY_INFO_AUX_LOB_META_TID,
     OB_ALL_USER_PROXY_INFO_AUX_LOB_PIECE_TID,
@@ -13125,12 +13164,12 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 }
 
 const int64_t OB_CORE_TABLE_COUNT = 4;
-const int64_t OB_SYS_TABLE_COUNT = 296;
-const int64_t OB_VIRTUAL_TABLE_COUNT = 823;
-const int64_t OB_SYS_VIEW_COUNT = 912;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2036;
+const int64_t OB_SYS_TABLE_COUNT = 297;
+const int64_t OB_VIRTUAL_TABLE_COUNT = 825;
+const int64_t OB_SYS_VIEW_COUNT = 915;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2042;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2039;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2045;
 
 } // end namespace share
 } // end namespace oceanbase

@@ -7189,6 +7189,45 @@ all_tenant_snapshot_ls_replica_history_def = dict(
 )
 def_table_schema(**all_tenant_snapshot_ls_replica_history_def)
 
+def_table_schema(
+  owner = 'jinqian.zzy',
+  table_name    = '__all_ls_replica_task_history',
+  table_id = '508',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('task_type', 'varchar:MAX_DISASTER_RECOVERY_TASK_TYPE_LENGTH'),
+    ('task_id', 'varchar:OB_TRACE_STAT_BUFFER_SIZE'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+  normal_columns = [
+    ('task_status', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+    ('priority', 'int', 'false', 1),
+    ('target_replica_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('target_replica_svr_port', 'int', 'true'),
+    ('target_paxos_replica_number', 'int', 'true'),
+    ('target_replica_type', 'varchar:MAX_REPLICA_TYPE_LENGTH', 'true'),
+    ('source_replica_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('source_replica_svr_port', 'int', 'true'),
+    ('source_paxos_replica_number', 'int', 'true'),
+    ('source_replica_type', 'varchar:MAX_REPLICA_TYPE_LENGTH', 'true'),
+    ('data_source_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('data_source_svr_port', 'int', 'true'),
+    ('is_manual', 'bool', 'true', '0'),
+    ('task_exec_svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('task_exec_svr_port', 'int', 'true'),
+    ('generate_time', 'timestamp:6', 'false', 0),
+    ('schedule_time', 'timestamp:6', 'false', 0),
+    ('finish_time', 'timestamp:6', 'false', 0),
+    ('execute_result', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+    ('comment', 'varchar:MAX_COLUMN_COMMENT_LENGTH', 'true'),
+  ],
+)
+
 all_user_proxy_info_def = dict(
     owner = 'mingye.swj',
     table_name    = '__all_user_proxy_info',
@@ -14419,7 +14458,12 @@ def_table_schema(
   ],
 )
 
-# 12467: __all_virtual_ls_replica_task_history
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12467',
+  table_name = '__all_virtual_ls_replica_task_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_ls_replica_task_history']))
+
 def_table_schema(
   owner = 'gongyusen.gys',
   table_name     = '__all_virtual_session_ps_info',
@@ -15074,13 +15118,12 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15438: abandoned
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15439', all_def_keywords['__all_virtual_ls_snapshot'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15440', all_def_keywords['__all_index_usage_info'])))
-def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15444', all_def_keywords['__all_virtual_session_ps_info'])))
 # 余留位置
 
 # 15441: __all_virtual_shared_storage_quota
 # 15442: __all_virtual_column_group
-# 15443: __all_virtual_ls_replica_task_history
-# 15444: __all_virtual_session_ps_info
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15443', all_def_keywords['__all_virtual_ls_replica_task_history'])))
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15444', all_def_keywords['__all_virtual_session_ps_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15445', all_def_keywords['__all_virtual_tracepoint_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15446', all_def_keywords['__all_user_proxy_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15447', all_def_keywords['__all_user_proxy_role_info'])))
@@ -28545,6 +28588,14 @@ def_table_schema(
          (CASE SOURCE_REPLICA_TYPE
               WHEN "" THEN NULL
               ELSE SOURCE_REPLICA_TYPE END) AS SOURCE_REPLICA_TYPE,
+         (CASE DATA_SOURCE_SVR_IP
+              WHEN "" THEN NULL
+              ELSE DATA_SOURCE_SVR_IP END) AS DATA_SOURCE_SVR_IP,
+         DATA_SOURCE_SVR_PORT,
+         CAST(CASE IS_MANUAL
+              WHEN 0 THEN 'FALSE'
+              WHEN 1 THEN 'TRUE'
+              ELSE NULL END AS CHAR(6)) AS IS_MANUAL,
          TASK_EXEC_SVR_IP,
          TASK_EXEC_SVR_PORT,
          CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
@@ -28590,6 +28641,14 @@ def_table_schema(
          (CASE SOURCE_REPLICA_TYPE
               WHEN "" THEN NULL
               ELSE SOURCE_REPLICA_TYPE END) AS SOURCE_REPLICA_TYPE,
+         (CASE DATA_SOURCE_SVR_IP
+              WHEN "" THEN NULL
+              ELSE DATA_SOURCE_SVR_IP END) AS DATA_SOURCE_SVR_IP,
+         DATA_SOURCE_SVR_PORT,
+         CAST(CASE IS_MANUAL
+              WHEN 0 THEN 'FALSE'
+              WHEN 1 THEN 'TRUE'
+              ELSE NULL END AS CHAR(6)) AS IS_MANUAL,
          TASK_EXEC_SVR_IP,
          TASK_EXEC_SVR_PORT,
          CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
@@ -33777,8 +33836,117 @@ FROM oceanbase.__all_clone_job_history ORDER BY CLONE_START_TIME
 #21520: GV$OB_SHARED_STORAGE_QUOTA
 #21521: V$OB_SHARED_STORAGE_QUOTA
 #21522: CDB_UNUSED_COL_TABS
-#21523: DBA_OB_LS_REPLICA_TASK_HISTORY
-#21524: CDB_OB_LS_REPLICA_TASK_HISTORY
+
+def_table_schema(
+  owner           = 'jinqian.zzy',
+  table_name      = 'DBA_OB_LS_REPLICA_TASK_HISTORY',
+  table_id        = '21523',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  (
+  SELECT LS_ID,
+         TASK_TYPE,
+         TASK_ID,
+         TASK_STATUS,
+         CAST(CASE PRIORITY
+              WHEN 0 THEN 'HIGH'
+              WHEN 1 THEN 'LOW'
+              ELSE NULL END AS CHAR(5)) AS PRIORITY,
+         TARGET_REPLICA_SVR_IP,
+         TARGET_REPLICA_SVR_PORT,
+         TARGET_PAXOS_REPLICA_NUMBER,
+         TARGET_REPLICA_TYPE,
+         (CASE SOURCE_REPLICA_SVR_IP
+              WHEN "" THEN NULL
+              ELSE SOURCE_REPLICA_SVR_IP END) AS SOURCE_REPLICA_SVR_IP,
+         SOURCE_REPLICA_SVR_PORT,
+         SOURCE_PAXOS_REPLICA_NUMBER,
+         (CASE SOURCE_REPLICA_TYPE
+              WHEN "" THEN NULL
+              ELSE SOURCE_REPLICA_TYPE END) AS SOURCE_REPLICA_TYPE,
+         (CASE DATA_SOURCE_SVR_IP
+              WHEN "" THEN NULL
+              ELSE DATA_SOURCE_SVR_IP END) AS DATA_SOURCE_SVR_IP,
+         DATA_SOURCE_SVR_PORT,
+         CAST(CASE IS_MANUAL
+              WHEN 0 THEN 'FALSE'
+              WHEN 1 THEN 'TRUE'
+              ELSE NULL END AS CHAR(6)) AS IS_MANUAL,
+         TASK_EXEC_SVR_IP,
+         TASK_EXEC_SVR_PORT,
+         CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
+         CAST(SCHEDULE_TIME AS DATETIME) AS START_TIME,
+         CAST(GMT_MODIFIED AS DATETIME) AS MODIFY_TIME,
+         CAST(FINISH_TIME AS DATETIME) AS FINISH_TIME,
+         (CASE EXECUTE_RESULT
+              WHEN "" THEN NULL
+              ELSE EXECUTE_RESULT END) AS EXECUTE_RESULT,
+         COMMENT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+  )
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'jinqian.zzy',
+  table_name      = 'CDB_OB_LS_REPLICA_TASK_HISTORY',
+  table_id        = '21524',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  (
+  SELECT TENANT_ID,
+         LS_ID,
+         TASK_TYPE,
+         TASK_ID,
+         TASK_STATUS,
+         CAST(CASE PRIORITY
+              WHEN 0 THEN 'HIGH'
+              WHEN 1 THEN 'LOW'
+              ELSE NULL END AS CHAR(5)) AS PRIORITY,
+         TARGET_REPLICA_SVR_IP,
+         TARGET_REPLICA_SVR_PORT,
+         TARGET_PAXOS_REPLICA_NUMBER,
+         TARGET_REPLICA_TYPE,
+         (CASE SOURCE_REPLICA_SVR_IP
+              WHEN "" THEN NULL
+              ELSE SOURCE_REPLICA_SVR_IP END) AS SOURCE_REPLICA_SVR_IP,
+         SOURCE_REPLICA_SVR_PORT,
+         SOURCE_PAXOS_REPLICA_NUMBER,
+         (CASE SOURCE_REPLICA_TYPE
+              WHEN "" THEN NULL
+              ELSE SOURCE_REPLICA_TYPE END) AS SOURCE_REPLICA_TYPE,
+         (CASE DATA_SOURCE_SVR_IP
+              WHEN "" THEN NULL
+              ELSE DATA_SOURCE_SVR_IP END) AS DATA_SOURCE_SVR_IP,
+         DATA_SOURCE_SVR_PORT,
+         CAST(CASE IS_MANUAL
+              WHEN 0 THEN 'FALSE'
+              WHEN 1 THEN 'TRUE'
+              ELSE NULL END AS CHAR(6)) AS IS_MANUAL,
+         TASK_EXEC_SVR_IP,
+         TASK_EXEC_SVR_PORT,
+         CAST(GMT_CREATE AS DATETIME) AS CREATE_TIME,
+         CAST(SCHEDULE_TIME AS DATETIME) AS START_TIME,
+         CAST(GMT_MODIFIED AS DATETIME) AS MODIFY_TIME,
+         CAST(FINISH_TIME AS DATETIME) AS FINISH_TIME,
+         (CASE EXECUTE_RESULT
+              WHEN "" THEN NULL
+              ELSE EXECUTE_RESULT END) AS EXECUTE_RESULT,
+         COMMENT
+  FROM OCEANBASE.__ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
+  )
+  """.replace("\n", " "),
+)
 
 def_table_schema(
     owner           = 'suzhi.yt',
@@ -52363,8 +52531,8 @@ def_table_schema(
          TASK_ID,
          TASK_STATUS,
          CAST(CASE PRIORITY
-              WHEN 1 THEN 'HIGH'
-              WHEN 2 THEN 'LOW'
+              WHEN 0 THEN 'HIGH'
+              WHEN 1 THEN 'LOW'
               ELSE NULL END AS CHAR(5)) AS PRIORITY,
          TARGET_REPLICA_SVR_IP,
          TARGET_REPLICA_SVR_PORT,
@@ -52378,6 +52546,14 @@ def_table_schema(
          CASE SOURCE_REPLICA_TYPE
               WHEN '' THEN NULL
               ELSE SOURCE_REPLICA_TYPE END AS SOURCE_REPLICA_TYPE,
+         CASE DATA_SOURCE_SVR_IP
+              WHEN '' THEN NULL
+              ELSE DATA_SOURCE_SVR_IP END AS DATA_SOURCE_SVR_IP,
+         DATA_SOURCE_SVR_PORT,
+         CAST(CASE IS_MANUAL
+              WHEN 0 THEN 'FALSE'
+              WHEN 1 THEN 'TRUE'
+              ELSE NULL END AS CHAR(6)) AS IS_MANUAL,
          TASK_EXEC_SVR_IP,
          TASK_EXEC_SVR_PORT,
          CAST(GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,
@@ -54796,7 +54972,66 @@ def_table_schema(
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
-# 25279: DBA_OB_LS_REPLICA_TASK_HISTORY
+
+def_table_schema(
+  owner           = 'jinqian.zzy',
+  table_name      = 'DBA_OB_LS_REPLICA_TASK_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25279',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  (
+  SELECT LS_ID,
+         TASK_TYPE,
+         TASK_ID,
+         TASK_STATUS,
+         CAST(CASE PRIORITY
+              WHEN 0 THEN 'HIGH'
+              WHEN 1 THEN 'LOW'
+              ELSE NULL END AS CHAR(5)) AS PRIORITY,
+         TARGET_REPLICA_SVR_IP,
+         TARGET_REPLICA_SVR_PORT,
+         TARGET_PAXOS_REPLICA_NUMBER,
+         TARGET_REPLICA_TYPE,
+         CASE SOURCE_REPLICA_SVR_IP
+              WHEN '' THEN NULL
+              ELSE SOURCE_REPLICA_SVR_IP END AS SOURCE_REPLICA_SVR_IP,
+         SOURCE_REPLICA_SVR_PORT,
+         SOURCE_PAXOS_REPLICA_NUMBER,
+         CASE SOURCE_REPLICA_TYPE
+              WHEN '' THEN NULL
+              ELSE SOURCE_REPLICA_TYPE END AS SOURCE_REPLICA_TYPE,
+         CASE DATA_SOURCE_SVR_IP
+              WHEN '' THEN NULL
+              ELSE DATA_SOURCE_SVR_IP END AS DATA_SOURCE_SVR_IP,
+         DATA_SOURCE_SVR_PORT,
+         CAST(CASE IS_MANUAL
+              WHEN 0 THEN 'FALSE'
+              WHEN 1 THEN 'TRUE'
+              ELSE NULL END AS CHAR(6)) AS IS_MANUAL,
+         TASK_EXEC_SVR_IP,
+         TASK_EXEC_SVR_PORT,
+         CAST(GMT_CREATE AS TIMESTAMP(6)) AS CREATE_TIME,
+         CAST(SCHEDULE_TIME AS TIMESTAMP(6)) AS START_TIME,
+         CAST(GMT_MODIFIED AS TIMESTAMP(6)) AS MODIFY_TIME,
+         CAST(FINISH_TIME AS TIMESTAMP(6)) AS FINISH_TIME,
+         CASE EXECUTE_RESULT
+              WHEN '' THEN NULL
+              ELSE EXECUTE_RESULT END AS EXECUTE_RESULT,
+         "COMMENT"
+  FROM SYS.ALL_VIRTUAL_LS_REPLICA_TASK_HISTORY
+  WHERE
+    TENANT_ID = EFFECTIVE_TENANT_ID()
+  )
+  """.replace("\n", " "),
+)
+
 # 25280: ALL_UNUSED_COL_TABS
 # 25281: DBA_UNUSED_COL_TABS
 # 25282: USER_UNUSED_COL_TABS

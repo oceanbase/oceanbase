@@ -141,6 +141,31 @@ int ObRpcCheckBackupSchuedulerWorkingP::process()
   return ret;
 }
 
+int ObRpcLSCancelReplicaP::process()
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  uint64_t tenant_id = arg_.get_tenant_id();
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  if (tenant_id != MTL_ID()) {
+    if (OB_FAIL(guard.switch_to(tenant_id))) {
+      LOG_WARN("failed to switch to tenant", K(ret), K(tenant_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObStorageHACancelDagNetUtils::cancel_task(arg_.get_ls_id(), arg_.get_task_id()))) {
+      LOG_WARN("failed to cancel task", K(ret), K(arg_));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "cancel storage ha task failed",
+                     "tenant_id", tenant_id,
+                     "ls_id", arg_.get_ls_id().id(),
+                     "task_id", arg_.get_task_id(),
+                     "result", ret);
+  }
+  return ret;
+}
 
 int ObRpcLSMigrateReplicaP::process()
 {

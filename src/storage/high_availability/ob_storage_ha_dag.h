@@ -197,7 +197,13 @@ private:
 
 };
 
-
+class ObStorageHACancelDagNetUtils
+{
+public:
+  static int cancel_task(const share::ObLSID &ls_id, const share::ObTaskId &task_id);
+private:
+  static int cancel_migration_task_(const share::ObTaskId &task_id, const ObLSHandle &ls_handle, bool &is_exist);
+};
 }
 }
 #endif

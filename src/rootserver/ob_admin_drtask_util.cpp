@@ -517,7 +517,7 @@ int ObAdminDRTaskUtil::execute_remove_nonpaxos_task_(
   }
   if (OB_SUCC(ret)) {
     // rpc is send, log task start, task finish will be recorded later
-    ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_PAXOS_REPLICA_STR,
+    ROOTSERVICE_EVENT_ADD("disaster_recovery", drtasklog::START_REMOVE_LS_NON_PAXOS_REPLICA_STR,
                           "tenant_id", remove_non_paxos_arg.tenant_id_,
                           "ls_id", remove_non_paxos_arg.ls_id_.id(),
                           "task_id", ObCurTraceId::get_trace_id_str(),
