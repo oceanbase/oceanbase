@@ -3352,7 +3352,7 @@ DEF_TO_STRING(ObDropIndexArg) {
        K_(is_in_recyclebin),
        K_(is_hidden),
        K_(is_inner),
-       K_(is_rebuild_drop));
+       K_(is_vec_inner_drop));
   J_OBJ_END();
   return pos;
 }
@@ -3367,7 +3367,7 @@ OB_SERIALIZE_MEMBER((ObDropIndexArg, ObIndexArg),
                     is_in_recyclebin_,
                     is_hidden_,
                     is_inner_,
-                    is_rebuild_drop_);
+                    is_vec_inner_drop_);
 
 OB_SERIALIZE_MEMBER(ObDropIndexRes, tenant_id_, index_table_id_, schema_version_, task_id_);
 
