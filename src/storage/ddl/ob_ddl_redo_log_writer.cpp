@@ -1608,6 +1608,12 @@ int ObDDLRedoLogWriterCallback::write(ObMacroBlockHandle &macro_handle,
     redo_info_.start_scn_ = start_scn_;
     redo_info_.data_format_version_ = data_format_version_;
     redo_info_.type_ = direct_load_type_;
+
+    redo_info_.parallel_cnt_ = 0; // TODO @zhuoran.zzr, place holder for shared storage
+    redo_info_.cg_cnt_ = 0;
+
+    redo_info_.macro_block_id_ = MacroBlockId::mock_valid_macro_id();
+
     if (is_column_group_info_valid()) {
       redo_info_.end_row_id_ = row_id_offset_ + row_count - 1;
       row_id_offset_ += row_count;

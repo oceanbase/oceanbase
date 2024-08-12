@@ -322,7 +322,10 @@ ObDDLMacroBlockRedoInfo::ObDDLMacroBlockRedoInfo()
     end_row_id_(-1),
     type_(ObDirectLoadType::DIRECT_LOAD_INVALID),
     trans_id_(),
-    with_cs_replica_(false)
+    with_cs_replica_(false),
+    macro_block_id_(),
+    parallel_cnt_(0),
+    cg_cnt_(0)
 {
 }
 
@@ -338,6 +341,9 @@ void ObDDLMacroBlockRedoInfo::reset()
   type_ = ObDirectLoadType::DIRECT_LOAD_INVALID;
   trans_id_.reset();
   with_cs_replica_ = false;
+  macro_block_id_.reset();
+  parallel_cnt_ = 0;
+  cg_cnt_ = 0;
 }
 
 bool ObDDLMacroBlockRedoInfo::is_valid() const
@@ -363,7 +369,10 @@ OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo,
                     end_row_id_,
                     type_,
                     trans_id_,
-                    with_cs_replica_);
+                    with_cs_replica_,
+                    macro_block_id_,
+                    parallel_cnt_,
+                    cg_cnt_);
 
 ObTabletDirectLoadMgrHandle::ObTabletDirectLoadMgrHandle()
   : tablet_mgr_(nullptr)
