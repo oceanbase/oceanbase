@@ -2577,6 +2577,10 @@ typedef enum ObItemType
   T_REBUILD_TABLET = 4727,
 
   T_MICRO_INDEX_CLUSTERED = 4728,
+
+  // Parquet related
+  T_PER_ROW_GROUP_SIZE = 4729,
+  T_COMPRESSION_ALGORITHM = 4730,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
