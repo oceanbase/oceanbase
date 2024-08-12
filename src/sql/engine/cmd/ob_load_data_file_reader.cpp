@@ -132,6 +132,13 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
   return ret;
 }
 
+void ObFileReader::destroy(ObFileReader *file_reader)
+{
+  if (OB_NOT_NULL(file_reader)) {
+    OB_DELETE(ObFileReader, MEMORY_ATTR, file_reader);
+  }
+}
+
 int ObFileReader::open_decompress_reader(const ObFileReadParam &param,
                                          ObIAllocator &allocator,
                                          ObFileReader *source_reader,

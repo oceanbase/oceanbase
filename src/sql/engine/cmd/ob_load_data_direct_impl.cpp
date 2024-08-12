@@ -466,7 +466,7 @@ ObLoadDataDirectImpl::DataReader::DataReader()
 ObLoadDataDirectImpl::DataReader::~DataReader()
 {
   if (OB_NOT_NULL(file_reader_)) {
-    file_reader_->~ObFileReader();
+    ObFileReader::destroy(file_reader_);
     file_reader_ = nullptr;
   }
 }
@@ -502,7 +502,10 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       file_read_param.filename_           = data_desc.filename_;
       file_read_param.compression_format_ = data_access_param.compression_format_;
       file_read_param.access_info_        = data_access_param.access_info_;
-      file_read_param.packet_handle_      = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
+      file_read_param.packet_handle_      = nullptr;
+      if (OB_NOT_NULL(execute_ctx.exec_ctx_.get_session_info()) && OB_NOT_NULL(execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender())) {
+        file_read_param.packet_handle_ = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
+      }
       file_read_param.session_            = execute_ctx.exec_ctx_.get_session_info();
       file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 

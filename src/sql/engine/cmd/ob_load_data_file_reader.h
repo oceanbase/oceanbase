@@ -92,6 +92,7 @@ public:
    * A file reader factory
    */
   static int open(const ObFileReadParam &param, ObIAllocator &allocator, ObFileReader *& file_reader);
+  static void destroy(ObFileReader *file_reader);
 
 private:
   static int open_decompress_reader(const ObFileReadParam &param,
