@@ -14477,6 +14477,13 @@ int ObDMLResolver::resolve_transform_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_SEGMENTED_LIMIT_PUSHDOWN:
+    case T_NO_SEGMENTED_LIMIT_PUSHDOWN: {
+      if (OB_FAIL(resolve_segmented_limit_pushdown_hint(hint_node, trans_hint))) {
+        LOG_WARN("fail to resovle segmented limit pushdown hint", K(ret));
+      }
+      break;
+    }
     case T_COALESCE_AGGR:
     case T_NO_COALESCE_AGGR: {
       if (OB_FAIL(resolve_coalesce_aggr_hint(hint_node, trans_hint))) {
@@ -15470,6 +15477,28 @@ int ObDMLResolver::resolve_mv_rewrite_hint(const ParseNode &hint_node,
     mv_rewrite_hint->set_qb_name(qb_name);
     hint = mv_rewrite_hint;
     LOG_DEBUG("show mv_rewrite_hint hint", KPC(mv_rewrite_hint));
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_segmented_limit_pushdown_hint(const ParseNode &hint_node,
+                                                         ObTransHint *&hint)
+{
+  int ret = OB_SUCCESS;
+  hint = NULL;
+  ObSegmentedLimitPushdownHint *segmented_limit_pushdown_hint = NULL;
+  ObString qb_name;
+  if (OB_UNLIKELY(1 != hint_node.num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected mv segmented limit pushdown hint", K(ret), K(hint_node.num_child_));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, segmented_limit_pushdown_hint))) {
+    LOG_WARN("failed to create segmented limit pushdown hint", K(ret));
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+    LOG_WARN("Failed to resolve qb name node", K(ret));
+  } else {
+    segmented_limit_pushdown_hint->set_qb_name(qb_name);
+    hint = segmented_limit_pushdown_hint;
+    LOG_DEBUG("show segmented limit pushdown hint", KPC(segmented_limit_pushdown_hint));
   }
   return ret;
 }

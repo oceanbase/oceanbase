@@ -515,6 +515,7 @@ public:
       HINT_WIN_MAGIC,
       HINT_COALESCE_AGGR,
       HINT_MV_REWRITE,
+      HINT_SEGMENTED_LIMIT_PUSHDOWN,
       // optimize hint below
       HINT_OPTIMIZE,    // normal optimize hint
       HINT_ACCESS_PATH,
@@ -939,6 +940,16 @@ public:
 
 private:
   common::ObSEArray<ObTableInHint, 1, common::ModulePageAllocator, true> mv_list_;
+};
+
+class ObSegmentedLimitPushdownHint : public ObTransHint
+{
+public:
+  ObSegmentedLimitPushdownHint(ObItemType hint_type)
+          : ObTransHint(hint_type)
+  {
+    set_hint_class(HINT_SEGMENTED_LIMIT_PUSHDOWN);
+  }
 };
 
 class ObIndexHint : public ObOptHint

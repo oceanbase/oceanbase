@@ -182,6 +182,7 @@ enum TRANSFORM_TYPE {
   DECORRELATE                   ,
   CONDITIONAL_AGGR_COALESCE     ,
   MV_REWRITE                    ,
+  SEGMENTED_LIMIT_PUSHDOWN   ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -288,7 +289,8 @@ public:
       (1L << GROUPBY_PULLUP) |
       (1L << SUBQUERY_COALESCE) |
       (1L << SEMI_TO_INNER) |
-      (1L << MV_REWRITE);
+      (1L << MV_REWRITE) |
+      (1L << SEGMENTED_LIMIT_PUSHDOWN);
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,

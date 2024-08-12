@@ -41,6 +41,7 @@
 #include "sql/rewrite/ob_transform_predicate_move_around.h"
 #include "sql/rewrite/ob_transform_semi_to_inner.h"
 #include "sql/rewrite/ob_transform_join_limit_pushdown.h"
+#include "sql/rewrite/ob_transform_segmented_limit_pushdown.h"
 #include "sql/rewrite/ob_transform_temp_table.h"
 #include "sql/rewrite/ob_transform_const_propagate.h"
 #include "sql/rewrite/ob_transform_left_join_to_anti.h"
@@ -449,6 +450,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(ELIMINATE_OJ, ObTransformEliminateOuterJoin);
     APPLY_RULE_IF_NEEDED(JOIN_ELIMINATION, ObTransformJoinElimination);
     APPLY_RULE_IF_NEEDED(JOIN_LIMIT_PUSHDOWN, ObTransformJoinLimitPushDown);
+    APPLY_RULE_IF_NEEDED(SEGMENTED_LIMIT_PUSHDOWN, ObTransformSegmentedLimitPushdown);
     APPLY_RULE_IF_NEEDED(LEFT_JOIN_TO_ANTI, ObTransformLeftJoinToAnti);
     APPLY_RULE_IF_NEEDED(AGGR_SUBQUERY, ObTransformAggrSubquery);
     APPLY_RULE_IF_NEEDED(WIN_MAGIC, ObTransformWinMagic);
@@ -556,6 +558,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       ObTransformRule::add_trans_type(dblink_enable_list, ELIMINATE_OJ);
       ObTransformRule::add_trans_type(dblink_enable_list, JOIN_ELIMINATION);
       ObTransformRule::add_trans_type(dblink_enable_list, JOIN_LIMIT_PUSHDOWN);
+      ObTransformRule::add_trans_type(dblink_enable_list, SEGMENTED_LIMIT_PUSHDOWN);
       ObTransformRule::add_trans_type(dblink_enable_list, LEFT_JOIN_TO_ANTI);
       ObTransformRule::add_trans_type(dblink_enable_list, AGGR_SUBQUERY);
       ObTransformRule::add_trans_type(dblink_enable_list, FASTMINMAX);
@@ -565,6 +568,7 @@ int ObTransformerImpl::choose_rewrite_rules(ObDMLStmt *stmt, uint64_t &need_type
       // json table ban group by pushdown && join limit pushdown && left join pushdown
       ObTransformRule::add_trans_type(disable_list, GROUPBY_PUSHDOWN);
       ObTransformRule::add_trans_type(disable_list, JOIN_LIMIT_PUSHDOWN);
+      ObTransformRule::add_trans_type(disable_list, SEGMENTED_LIMIT_PUSHDOWN);
       ObTransformRule::add_trans_type(disable_list, LEFT_JOIN_TO_ANTI);
     }
     //dblink trace point

@@ -2710,6 +2710,7 @@ int ObOptimizerUtil::extract_column_ids(const ObIArray<ObRawExpr*> &exprs,
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 16> ids;
   for (int64_t i = 0; OB_SUCC(ret) && i < exprs.count(); ++i) {
+    ids.reset();
     if (OB_FAIL(extract_column_ids(exprs.at(i), table_id, ids))) {
       LOG_WARN("failed to extract column ids", K(exprs.at(i)), K(table_id), K(ret));
     } else if (OB_FAIL(append(column_ids, ids))) {
