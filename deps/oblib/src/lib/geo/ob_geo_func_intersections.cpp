@@ -70,7 +70,7 @@ static int remove_overlapping(MPt const &mpt, MLs const &mls, MPy const &mpy,
         LOG_WARN("failed to add MultiLinestring to result", K(ret));
       }
 
-      if (!mpy.is_empty()) {
+      if (OB_SUCC(ret) && !mpy.is_empty()) {
         MPy *mpy_res = OB_NEWx(MPy, allocator,
                                srid, *allocator);
         if (OB_ISNULL(mpy_res)) {
@@ -104,14 +104,14 @@ static int remove_overlapping_cart(ObCartesianMultipoint const &mpt, ObCartesian
     }
   }
 
-  if (!mpt.is_empty()) {
+  if (OB_SUCC(ret) && !mpt.is_empty()) {
     ObCartesianMultipoint *tmp_mpt = OB_NEWx(ObCartesianMultipoint, allocator,
                                              mpt.get_srid(), *allocator);
     if (OB_ISNULL(tmp_mpt)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
-      boost::geometry:difference(mpt, mls, *tmp_mpt);
+      boost::geometry::difference(mpt, mls, *tmp_mpt);
     }
 
     if (!OB_ISNULL(tmp_mpt) && !tmp_mpt->is_empty()) {
@@ -142,7 +142,7 @@ static int remove_overlapping_geog(ObGeographMultipoint const &mpt, ObGeographMu
     }
   }
 
-  if (!mpt.is_empty()) {
+  if (OB_SUCC(ret) && !mpt.is_empty()) {
     ObGeographMultipoint *tmp_mpt = OB_NEWx(ObGeographMultipoint, allocator,
                                             mpt.get_srid(), *allocator);
     if (OB_ISNULL(tmp_mpt)) {
