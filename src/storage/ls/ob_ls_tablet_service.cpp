@@ -6685,7 +6685,10 @@ int ObLSTabletService::offline_gc_tablet_for_create_or_transfer_in_abort_()
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; OB_SUCC(ret) && i < deleted_tablets.count(); ++i) {
       const common::ObTabletID &tablet_id = deleted_tablets.at(i);
-      if (OB_FAIL(do_remove_tablet(ls_id, tablet_id))) {
+      DestroyMemtableAndMemberAndMdsTableOperator clean_mem_op(this);
+      if (OB_FAIL(clean_mem_op(tablet_id))) {
+        LOG_WARN("failed to clean mem", KR(ret));
+      } else if (OB_FAIL(do_remove_tablet(ls_id, tablet_id))) {
         LOG_WARN("failed to remove tablet", K(ret), K(ls_id), K(tablet_id));
       } else {
         LOG_INFO("gc tablet finish", K(ret), K(ls_id), K(tablet_id));
