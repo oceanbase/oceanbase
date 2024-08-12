@@ -1914,11 +1914,15 @@ bool ObMemtable::ready_for_flush_()
         TRANS_LOG(WARN, "fail to get current right boundary", K(ret));
       }
       if ((bool_ret = (current_right_boundary >= get_max_end_scn()))) {
+        int tmp_ret = OB_SUCCESS;
         resolve_right_boundary();
         if (!get_resolved_active_memtable_left_boundary()) {
-          resolve_left_boundary_for_active_memtable_();
+          if (OB_TMP_FAIL(resolve_left_boundary_for_active_memtable_())) {
+            TRANS_LOG(WARN, "fail to resolve left boundary for active memtable",
+                      K(tmp_ret), KPC(this));
+          }
         }
-        bool_ret = (is_empty() || get_resolved_active_memtable_left_boundary());
+        bool_ret = get_resolved_active_memtable_left_boundary();
       }
       if (bool_ret) {
         set_freeze_state(TabletMemtableFreezeState::READY_FOR_FLUSH);
