@@ -224,6 +224,8 @@ public:
 
 class ObStatTopKHist : public ObStatColItem
 {
+  const static int64_t MIN_BUCKET_SIZE = 256;
+  const static int64_t MAX_BUCKET_SIZE = 2048;
 public:
   ObStatTopKHist() : ObStatColItem(), tab_stat_(NULL), max_disuse_cnt_(0) {}
   ObStatTopKHist(const ObColumnStatParam *param,
@@ -259,6 +261,8 @@ public:
   // const bucket_size = 256;
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
   virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
+  static int64_t get_window_size(int64_t bucket_num) {
+    return 1000 * (bucket_num < MIN_BUCKET_SIZE ? 1 : bucket_num / MIN_BUCKET_SIZE); }
 protected:
   ObOptTableStat *tab_stat_;
   int64_t max_disuse_cnt_;

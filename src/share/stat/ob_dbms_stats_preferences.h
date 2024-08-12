@@ -227,6 +227,32 @@ class ObBlockSamplePrefs : public ObStatPrefs
     virtual const char* get_stat_pref_default_value() const { return "FALSE"; }
 };
 
+class ObHistEstPercentPrefs : public ObStatPrefs
+{
+  public:
+    ObHistEstPercentPrefs() : ObStatPrefs() {}
+    ObHistEstPercentPrefs(ObIAllocator *alloc,
+                           ObSQLSessionInfo *session_info,
+                           const ObString &pvalue) :
+      ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "HIST_EST_PERCENT"; }
+    virtual const char* get_stat_pref_default_value() const { return "DBMS_STATS.AUTO_SAMPLE_SIZE";}
+};
+
+class ObHistBlockSamplePrefs : public ObStatPrefs
+{
+  public:
+    ObHistBlockSamplePrefs() : ObStatPrefs() {}
+    ObHistBlockSamplePrefs(ObIAllocator *alloc,
+                           ObSQLSessionInfo *session_info,
+                           const ObString &pvalue) :
+    ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "HIST_BLOCK_SAMPLE"; }
+    virtual const char* get_stat_pref_default_value() const { return "FALSE"; }
+};
+
 template <class T>
 static int new_stat_prefs(ObIAllocator &allocator, ObSQLSessionInfo *session_info,
                           const ObString &opt_value, T *&src)

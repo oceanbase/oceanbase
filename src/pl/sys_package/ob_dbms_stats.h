@@ -333,6 +333,8 @@ public:
                                        const ObObjParam &cascade,
                                        const ObObjParam &no_invalidate,
                                        const ObObjParam &force,
+                                       const ObObjParam *hist_est_percent,
+                                       const ObObjParam *hist_block_sample,
                                        ObTableStatParam &param);
 
   static int use_default_gather_stat_options(ObExecContext &ctx,
