@@ -50,13 +50,9 @@ int ObExprSTSimplify::calc_result_type2(ObExprResType &type,
     ret = OB_ERR_GIS_INVALID_DATA;
     LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, get_name());
   }
-
-  if (OB_SUCC(ret)) {
-    if (ob_is_null(type_dist)) {
-      // do nothing
-    } else {
-      type2.set_calc_type(ObDoubleType);
-    }
+  
+  if (OB_SUCC(ret) && !ob_is_null(type_dist)) {
+    type2.set_calc_type(ObDoubleType);
   }
   type.set_geometry();
   type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());

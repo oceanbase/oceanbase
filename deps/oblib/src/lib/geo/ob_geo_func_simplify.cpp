@@ -59,8 +59,6 @@ private:
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
       double max_dist = context.get_val_arg(0)->double_;
-      // const GeometryInType *src_geo = reinterpret_cast<const GeometryInType *>(g->val());
-
       // Change src_geo's type from bin to tree, to fit the bg::simplify
       ObGeoToTreeVisitor tree_visitor(alloc);
       if (OB_FAIL(const_cast<ObGeometry *>(g)->do_visit(tree_visitor))) {
@@ -108,7 +106,7 @@ private:
           ret = eval_wkb_unary(sub_geo, context, sub_res);
           if (OB_SUCC(ret)) {
             if (OB_ISNULL(sub_res) || sub_res->is_empty()){
-              continue;
+              // do nothing
             } else if (OB_FAIL(dest_geo->push_back(*sub_res))) {
               LOG_WARN("failed to push back to geo", K(ret));
             }
@@ -126,7 +124,6 @@ private:
 
 OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncSimplifyImpl, ObWkbGeomCollection, ObGeometry * )
 {
-  UNUSED(context);
   return eval_simplify_gc<ObWkbGeomCollection, ObCartesianGeometrycollection>(g, context, result);
 } OB_GEO_FUNC_END;
 
@@ -145,8 +142,9 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncSimplifyImpl, ObWkbGeomLineString, ObGeometry *
   INIT_SUCC(ret);
   ret = eval_simplify_without_strategy<ObWkbGeomLineString, ObCartesianLineString>(g, context, result);
   if (OB_SUCC(ret)) {
+    const int fliter_num = 2;   // for LineString's size of point
     ObCartesianLineString* tmp = static_cast<ObCartesianLineString*>(result);
-    if (tmp->size() < 2) {
+    if (tmp->size() < fliter_num) {
       tmp->clear();
     }
   }
@@ -165,8 +163,9 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncSimplifyImpl, ObWkbGeomMultiLineString, ObGeome
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
+      const int fliter_num = 2;   // for LineString's size of point
       for (int i = 0; i < tmp->size(); ++i) {
-        if ((*tmp)[i].size() >= 2) {
+        if ((*tmp)[i].size() >= fliter_num) {
           res->push_back((*tmp)[i]);
         }
       }
@@ -183,7 +182,8 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncSimplifyImpl, ObWkbGeomPolygon, ObGeometry *)
   ret = eval_simplify_without_strategy<ObWkbGeomPolygon, ObCartesianPolygon>(g, context, result);
   if (OB_SUCC(ret)) {
     ObCartesianPolygon *tmp = static_cast<ObCartesianPolygon *>(result);
-    if (tmp->exterior_ring().size() < 4) {
+    const int fliter_num = 4;   // for Polygon's size of exterior_ring
+    if (tmp->exterior_ring().size() < fliter_num) {
       context.get_allocator()->free(tmp);
       result = OB_NEWx(ObCartesianPolygon, context.get_allocator());
     }
@@ -203,8 +203,9 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncSimplifyImpl, ObWkbGeomMultiPolygon, ObGeometry
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
+      const int fliter_num = 4;  // for Polygon's size of exterior_ring
       for (int i = 0; i < tmp->size(); ++i) {
-        if ((*tmp)[i].exterior_ring().size() >= 4) {
+        if ((*tmp)[i].exterior_ring().size() >= fliter_num) {
           res->push_back((*tmp)[i]);
         }
       }
