@@ -401,15 +401,19 @@ int LogBlockHandler::inner_write_once_(const offset_t offset,
         K(offset), K(buf_len));
   } else {
     dio_aligned_buf_.truncate_buf();
-    total_write_size_ += buf_len;
-    total_write_size_after_dio_ += aligned_buf_len;
-    count_++;
+    const int64_t total_write_size = ATOMIC_AAF(&total_write_size_, buf_len);
+    const int64_t total_write_size_after_dio = ATOMIC_AAF(&total_write_size_after_dio_, aligned_buf_len);
+    const int64_t count = ATOMIC_AAF(&count_, 1);
+    const int64_t ob_pwrite_used_ts = ATOMIC_LOAD(&ob_pwrite_used_ts_);
     if (palf_reach_time_interval(PALF_IO_STAT_PRINT_INTERVAL_US, trace_time_)) {
-      const int64_t each_pwrite_cost = ob_pwrite_used_ts_ / count_;
+      const int64_t each_pwrite_cost = ob_pwrite_used_ts / count;
       PALF_LOG(INFO, "[PALF STAT WRITE LOG INFO TO DISK]", K(ret), K(offset), KPC(this), K(aligned_buf_len),
-          K(aligned_block_offset), K(buf_len), K(total_write_size_),
-          K(total_write_size_after_dio_), K_(ob_pwrite_used_ts), K_(count), K(each_pwrite_cost));
-      total_write_size_ = total_write_size_after_dio_ = count_ = ob_pwrite_used_ts_ = 0;
+          K(aligned_block_offset), K(buf_len), K(total_write_size),
+          K(total_write_size_after_dio), K(ob_pwrite_used_ts), K(count), K(each_pwrite_cost));
+      ATOMIC_STORE(&total_write_size_, 0);
+      ATOMIC_STORE(&total_write_size_after_dio_, 0);
+      ATOMIC_STORE(&count_, 0);
+      ATOMIC_STORE(&ob_pwrite_used_ts_, 0);
     }
   }
   return ret;
@@ -460,7 +464,7 @@ int LogBlockHandler::inner_write_impl_(const int fd, const char *buf, const int6
   EVENT_TENANT_INC(ObStatEventIds::PALF_WRITE_IO_COUNT, MTL_ID());
   EVENT_ADD(ObStatEventIds::PALF_WRITE_SIZE, count);
   EVENT_ADD(ObStatEventIds::PALF_WRITE_TIME, cost_ts);
-  ob_pwrite_used_ts_ += cost_ts;
+  ATOMIC_AAF(&ob_pwrite_used_ts_, cost_ts);
   return ret;
 }
 } // end of logservice
