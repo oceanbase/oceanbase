@@ -655,17 +655,19 @@ int ObTransformOrExpansion::get_joined_table_pushdown_conditions(const TableItem
         LOG_WARN("failed to get table rel ids", K(ret));
       }
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < trans_stmt->get_condition_exprs().count(); i++) {
-      ObRawExpr *cond = NULL;
-      if (OB_ISNULL(cond = trans_stmt->get_condition_exprs().at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (!cond->get_relation_ids().is_subset(table_set) ||
-                 cond->has_flag(CNT_SUB_QUERY)) {
-        /* do not push down */
-      } else if (OB_FAIL(pushdown_conds.push_back(cond))) {
-        LOG_WARN("failed to push cond", K(ret));
-      } else { /* do nothing */ }
+    if (OB_SUCC(ret) && !table_set.is_empty()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < trans_stmt->get_condition_exprs().count(); i++) {
+        ObRawExpr *cond = NULL;
+        if (OB_ISNULL(cond = trans_stmt->get_condition_exprs().at(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (!cond->get_relation_ids().is_subset(table_set) ||
+                  cond->has_flag(CNT_SUB_QUERY)) {
+          /* do not push down */
+        } else if (OB_FAIL(pushdown_conds.push_back(cond))) {
+          LOG_WARN("failed to push cond", K(ret));
+        } else { /* do nothing */ }
+      }
     }
   }
   return ret;
