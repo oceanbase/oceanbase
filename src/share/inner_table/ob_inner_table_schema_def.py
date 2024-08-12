@@ -7310,6 +7310,7 @@ def_table_schema(
 # 524 : __all_pkg_coll_type
 # 525: __wr_sql_plan
 # 526: __wr_res_mgr_sysstat
+# 527: __all_kv_redis_table
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -14613,6 +14614,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12500: __all_virtual_kv_client_info
 # 12501: __all_virtual_wr_sql_plan
 # 12502: __all_virtual_wr_res_mgr_sysstat
+# 12503: __all_virtual_kv_redis_table
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -35746,6 +35748,8 @@ def_table_schema(
 # 21615: CDB_WR_RES_MGR_SYSSTAT
 # 21616: DBA_OB_SPM_EVO_RESULT
 # 21617: CDB_OB_SPM_EVO_RESULT
+# 21618: DBA_OB_KV_REDIS_TABLE
+# 21619: CDB_OB_KV_REDIS_TABLE
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
