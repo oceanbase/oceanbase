@@ -35,8 +35,9 @@ static int remove_overlapping(MPt const &mpt, MLs const &mls, MPy const &mpy,
   if (OB_ISNULL(mpt_mls_difference)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create geo by type", K(ret));
-  } else
+  } else {
     boost::geometry::difference(mpt, mls, *mpt_mls_difference);
+  }
   
   MPt *mpt_mls_mpy_difference = nullptr;
   if (OB_SUCC(ret)) {
@@ -48,8 +49,9 @@ static int remove_overlapping(MPt const &mpt, MLs const &mls, MPy const &mpy,
     } else {
       boost::geometry::difference(*mpt_mls_difference, mpy, *mpt_mls_mpy_difference);
 
-      if (!mpt_mls_mpy_difference->is_empty()) {
-        result.push_back(*mpt_mls_mpy_difference);
+      if (!mpt_mls_mpy_difference->is_empty() && 
+          OB_FAIL(result.push_back(*mpt_mls_mpy_difference))) {
+        LOG_WARN("failed to add MultiPoint to result", K(ret));
       }
     }
   }
@@ -63,8 +65,9 @@ static int remove_overlapping(MPt const &mpt, MLs const &mls, MPy const &mpy,
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
       boost::geometry::difference(mls, mpy, *mls_mpy_difference);
-      if (!mls_mpy_difference->is_empty()) {
-        result.push_back(*mls_mpy_difference);
+      if (!mls_mpy_difference->is_empty() &&
+          OB_FAIL(result.push_back(*mls_mpy_difference))) {
+        LOG_WARN("failed to add MultiLinestring to result", K(ret));
       }
 
       if (!mpy.is_empty()) {
@@ -76,10 +79,12 @@ static int remove_overlapping(MPt const &mpt, MLs const &mls, MPy const &mpy,
         }
         for (int i = 0; OB_SUCC(ret) && i < mpy.size(); ++i) {
           if (OB_FAIL(mpy_res->push_back(mpy[i]))) {
-            LOG_WARN("failed to add point to multipoint", K(ret));
+            LOG_WARN("failed to add Polygon to MultiPolygon", K(ret));
           }
         }
-        result.push_back(*mpy_res);
+        if (OB_SUCC(ret) && OB_FAIL(result.push_back(*mpy_res))) {
+          LOG_WARN("failed to add MultiPolygon to result", K(ret));
+        }
       }
     }
   }
@@ -92,8 +97,10 @@ static int remove_overlapping_cart(ObCartesianMultipoint const &mpt, ObCartesian
   ObIAllocator *allocator = context.get_allocator();
 
   if (!mls.is_empty()) {
-    for (int i = 0; i < mls.size(); ++i) {
-      result.push_back(mls[i]);
+    for (int i = 0; OB_SUCC(ret) && i < mls.size(); ++i) {
+      if (OB_FAIL(result.push_back(mls[i]))) {
+        LOG_WARN("failed to add Linestring to result", K(ret));
+      }
     }
   }
 
@@ -103,15 +110,18 @@ static int remove_overlapping_cart(ObCartesianMultipoint const &mpt, ObCartesian
     if (OB_ISNULL(tmp_mpt)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create geo by type", K(ret));
-    } else
-      boost::geometry::difference(mpt, mls, *tmp_mpt);
+    } else {
+      boost::geometry:difference(mpt, mls, *tmp_mpt);
+    }
 
     if (!OB_ISNULL(tmp_mpt) && !tmp_mpt->is_empty()) {
-      for (int i = 0; i < tmp_mpt->size(); ++i) {
+      for (int i = 0; OB_SUCC(ret) && i < tmp_mpt->size(); ++i) {
         ObWkbGeomInnerPoint *ptr = &(*tmp_mpt)[i];
         ObCartesianPoint *pt = OB_NEWx(ObCartesianPoint, allocator, ptr->get<0>(),
                                        ptr->get<1>(), mpt.get_srid(), allocator);
-        result.push_back(*pt);
+        if (OB_FAIL(result.push_back(*pt))) {
+          LOG_WARN("failed to add Point to result", K(ret));
+        }
       }
       allocator->free(tmp_mpt);
     }
@@ -125,8 +135,10 @@ static int remove_overlapping_geog(ObGeographMultipoint const &mpt, ObGeographMu
   ObIAllocator *allocator = context.get_allocator();
 
   if (!mls.is_empty()) {
-    for (int i = 0; i < mls.size(); ++i) {
-      result.push_back(mls[i]);
+    for (int i = 0; OB_SUCC(ret) && i < mls.size(); ++i) {
+      if (OB_FAIL(result.push_back(mls[i]))) {
+        LOG_WARN("failed to add Linestring to result", K(ret));
+      }
     }
   }
 
@@ -136,15 +148,18 @@ static int remove_overlapping_geog(ObGeographMultipoint const &mpt, ObGeographMu
     if (OB_ISNULL(tmp_mpt)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to create geo by type", K(ret));
-    } else
+    } else {
       boost::geometry::difference(mpt, mls, *tmp_mpt);
+    }
 
     if (!OB_ISNULL(tmp_mpt) && !tmp_mpt->is_empty()) {
-      for (int i = 0; i < tmp_mpt->size(); ++i) {
+      for (int i = 0; OB_SUCC(ret) && i < tmp_mpt->size(); ++i) {
         ObWkbGeogInnerPoint *ptr = &(*tmp_mpt)[i];
         ObGeographPoint *pt = OB_NEWx(ObGeographPoint, allocator, ptr->get<0>(),
                                       ptr->get<1>(), mpt.get_srid(), allocator);
-        result.push_back(*pt);
+        if (OB_FAIL(result.push_back(*pt))) {
+          LOG_WARN("failed to add Point to result", K(ret));
+        }
       }
       allocator->free(tmp_mpt);
     }
@@ -179,12 +194,10 @@ static int apply_bg_intersections(
       LOG_WARN("wrong geometry type", K(ret));
     } else {
       std::tuple<MPt, MLs, MPy> bg_result;
-      
       boost::geometry::intersection(*geo1, *geo2, bg_result);
 
       remove_overlapping(std::get<0>(bg_result), std::get<1>(bg_result),
                          std::get<2>(bg_result), context, g1->get_srid(), *res);
-
       result = res;
     }
   }
@@ -225,7 +238,6 @@ static int apply_bg_intersections_with_strategy(
       LOG_WARN("wrong geometry type", K(ret));
     } else {
       std::tuple<MPt, MLs, MPy> bg_result;
-
       boost::geometry::intersection(*geo1, *geo2, bg_result, cur_strategy);
 
       remove_overlapping(std::get<0>(bg_result), std::get<1>(bg_result),
@@ -286,8 +298,9 @@ static int apply_brute_force_intersections_cart(const ObGeometry *g1, const ObGe
       if (OB_SUCC(ret)) {
         if (OB_FAIL(remove_overlapping_cart(*tmp_res_mpt, *tmp_res_ml, context, *res))){
           LOG_WARN("fail to remove overlapping geometry", K(ret));
-        } else
+        } else {
           result = res;
+        }
       }
     }
   }
@@ -354,8 +367,9 @@ static int apply_brute_force_intersections_geog(const ObGeometry *g1, const ObGe
       if (OB_SUCC(ret)) {
         if (OB_FAIL(remove_overlapping_geog(*tmp_res_mpt, *tmp_res_ml, context, *res))){
           LOG_WARN("fail to remove overlapping geometry", K(ret));
-        } else
+        } else {
           result = res;
+        }
       }
     }
   }

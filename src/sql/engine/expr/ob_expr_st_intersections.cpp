@@ -14,7 +14,6 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "lib/geo/ob_geo_func_register.h"
-// #include "lib/geo/ob_geo_ibin.h"
 #include "sql/engine/ob_exec_context.h"
 #include "observer/omt/ob_tenant_srs.h"
 #include "ob_expr_st_intersections.h"
@@ -157,7 +156,7 @@ int ObExprSTIntersections::eval_st_intersections(const ObExpr &expr, ObEvalCtx &
     bool is_3d_geo1 = ObGeoTypeUtil::is_3d_geo_type(geo1_3d->type());
     bool is_3d_geo2 = ObGeoTypeUtil::is_3d_geo_type(geo2_3d->type());
 
-    if (is_3d_geo1 ^ is_3d_geo2) {
+    if ((is_3d_geo1 && !is_3d_geo2) || (!is_3d_geo1 && is_3d_geo2)) {
       ret = OB_ERR_GIS_INVALID_DATA;
       LOG_WARN("mixed dimension geometries", K(ret), K(is_3d_geo1), K(is_3d_geo2));
     } else if (is_3d_geo1 && is_3d_geo2) {
