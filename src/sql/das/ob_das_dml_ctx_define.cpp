@@ -147,13 +147,16 @@ int ObDASDMLIterator::get_next_spatial_index_row(ObNewRow *&row)
         int64_t geo_idx = -1;
         ObString geo_wkb;
         ObObjMeta geo_meta;
-        bool has_old_row = !main_ctdef_->old_row_projector_.empty();
         for (uint64_t i = 0; OB_SUCC(ret) && i < main_ctdef_->column_ids_.count() && geo_idx == -1; i++) {
-          int64_t projector_idx = has_old_row ? main_ctdef_->old_row_projector_.at(i) : i;
-          if (geo_col_id == main_ctdef_->column_ids_.at(i)) {
+          int64_t projector_idx = 0;
+          if (i >= main_ctdef_->new_row_projector_.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid new_row_projector_ for sr", K(ret), KPC(sr), K(i), K(main_ctdef_->new_row_projector_));
+          } else if (FALSE_IT(projector_idx = main_ctdef_->new_row_projector_.at(i))) {
+          } else if (geo_col_id == main_ctdef_->column_ids_.at(i)) {
             if (projector_idx >= sr->cnt_) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid index for sr", K(ret), KPC(sr), K(i), K(main_ctdef_->old_row_projector_));
+              LOG_WARN("invalid index for sr", K(ret), KPC(sr), K(i), K(main_ctdef_->new_row_projector_));
             } else {
               geo_idx = projector_idx;
               geo_wkb = sr->cells()[projector_idx].get_string();
