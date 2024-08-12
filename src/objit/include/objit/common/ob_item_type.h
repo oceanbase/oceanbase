@@ -2584,6 +2584,10 @@ typedef enum ObItemType
 
   // Erase micro cache
   T_FLUSH_SS_MICRO_CACHE = 4731,
+
+  //restore sts
+  T_RESTORE_WITH_CONFIG_LIST = 4732,
+  T_STS_CREDENTIAL = 4733,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
