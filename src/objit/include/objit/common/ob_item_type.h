@@ -2573,6 +2573,11 @@ typedef enum ObItemType
   T_QUOTA = 4724,
   T_TABLE = 4725,
   T_EXTERNAL_TABLE_PARTITION = 4726,
+
+  //Rebuild Tablet
+  T_REBUILD_TABLET = 4727,
+
+  T_MICRO_INDEX_CLUSTERED = 4728,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

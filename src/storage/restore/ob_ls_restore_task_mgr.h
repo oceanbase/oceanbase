@@ -208,6 +208,7 @@ private:
 
   void unset_force_reload_();
   void set_noneed_redo_failed_tablets_();
+  int check_is_ls_restore_task_finished_(bool &is_restored);
 
 private:
   bool is_inited_;

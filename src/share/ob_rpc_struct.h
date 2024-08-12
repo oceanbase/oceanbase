@@ -4012,7 +4012,8 @@ public:
 public:
   uint64_t tenant_data_version_;
   bool need_create_empty_major_;
-  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major));
+  bool micro_index_clustered_;
+  TO_STRING_KV(K_(tenant_data_version), K_(need_create_empty_major), K_(micro_index_clustered));
 };
 
 struct ObBatchCreateTabletArg
@@ -6050,6 +6051,7 @@ public:
   common::ObString restore_timestamp_;
   uint64_t initiator_job_id_;
   uint64_t initiator_tenant_id_;
+  common::ObString sts_credential_;
 };
 
 struct ObServerZoneArg
@@ -7752,12 +7754,13 @@ struct ObBootstrapArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObBootstrapArg() : server_list_(), cluster_role_(common::PRIMARY_CLUSTER) {}
+  ObBootstrapArg() : server_list_(), cluster_role_(common::PRIMARY_CLUSTER), shared_storage_info_() {}
   ~ObBootstrapArg() {}
-  TO_STRING_KV(K_(server_list), K_(cluster_role));
+  TO_STRING_KV(K_(server_list), K_(cluster_role), K_(shared_storage_info));
   int assign(const ObBootstrapArg &arg);
   ObServerInfoList server_list_;
   common::ObClusterRole cluster_role_;
+  ObString shared_storage_info_;
 };
 
 struct ObForceSetLSAsSingleReplicaArg

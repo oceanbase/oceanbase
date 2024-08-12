@@ -31,32 +31,38 @@ public:
 
   void free_row_store(const RowMeta &sk_row_meta, Store_Row *&sk_row)
   {
-    sql_mem_processor_.alloc(-1 * sk_row->get_max_size(sk_row_meta));
-    inmem_row_size_ -= sk_row->get_max_size(sk_row_meta);
-    allocator_.free(sk_row);
-    sk_row = nullptr;
+    if (OB_NOT_NULL(sk_row)) {
+      sql_mem_processor_.alloc(-1 * sk_row->get_max_size(sk_row_meta));
+      inmem_row_size_ -= sk_row->get_max_size(sk_row_meta);
+      allocator_.free(sk_row);
+      sk_row = nullptr;
+    }
   }
 
   void free_row_store(Store_Row *&sk_row)
   {
-    if (has_addon) {
-      Store_Row *addon_row = sk_row->get_addon_ptr(*sk_row_meta_);
-      free_row_store(*addon_row_meta_, addon_row);
+    if (OB_NOT_NULL(sk_row)) {
+      if (has_addon) {
+        Store_Row *addon_row = sk_row->get_addon_ptr(*sk_row_meta_);
+        free_row_store(*addon_row_meta_, addon_row);
+      }
+      free_row_store(*sk_row_meta_, sk_row);
     }
-    free_row_store(*sk_row_meta_, sk_row);
   }
 
-  int copy_row(const RowMeta *sk_row_meta, const Store_Row *src_row, Store_Row *&reuse_row)
+  int copy_row(const RowMeta *sk_row_meta, const Store_Row *src_row, bool is_sort_key, Store_Row *&reuse_row)
   {
     int ret = OB_SUCCESS;
     int64_t buffer_len = 0;
     int64_t row_size = src_row->get_row_size();
     Store_Row *dst_row = nullptr;
+    Store_Row *reclaim_row = nullptr;
     // check to see whether this old row's space is adequate for new one
     if (nullptr != reuse_row && reuse_row->get_max_size(*sk_row_meta) >= row_size) {
       dst_row = reuse_row;
       buffer_len = reuse_row->get_max_size(*sk_row_meta);
     } else {
+      reclaim_row = reuse_row;
       char *buf = nullptr;
       if (topn_cnt_ < 256) {
         buffer_len = row_size > 256 ? row_size * 4 : 1024;
@@ -71,12 +77,6 @@ public:
         sql_mem_processor_.alloc(buffer_len);
         dst_row = new (buf) Store_Row();
         inmem_row_size_ += buffer_len;
-        // release reuse row
-        if (OB_NOT_NULL(reuse_row)) {
-          sql_mem_processor_.alloc(-1 * (reuse_row->get_max_size(*sk_row_meta)));
-          inmem_row_size_ -= reuse_row->get_max_size(*sk_row_meta);
-          free_row_store(*sk_row_meta, reuse_row);
-        }
         reuse_row = dst_row;
       }
     }
@@ -84,7 +84,19 @@ public:
             *reinterpret_cast<const ObCompactRow *>(src_row)))) {
       LOG_WARN("stored row assign failed", K(ret));
     } else {
+      if (has_addon && is_sort_key) {
+        reuse_row->set_addon_ptr(nullptr, *sk_row_meta);
+      }
       reuse_row->set_max_size(buffer_len, *sk_row_meta);
+    }
+    if (OB_NOT_NULL(reclaim_row)) {
+      sql_mem_processor_.alloc(-1 * (reclaim_row->get_max_size(*sk_row_meta)));
+      inmem_row_size_ -= reclaim_row->get_max_size(*sk_row_meta);
+      free_row_store(*sk_row_meta, reclaim_row);
+      reclaim_row = nullptr;
+    }
+    if (OB_FAIL(ret)) {
+      reuse_row = nullptr;
     }
     return ret;
   }
@@ -95,21 +107,41 @@ public:
     int ret = OB_SUCCESS;
     Store_Row *reuse_addon_row = nullptr;
     Store_Row *ori_addon_row = nullptr;
+    Store_Row *reclaim_addon_row = nullptr;
+    Store_Row *reclaim_reuse_row = reuse_row;
     if (has_addon) {
       if (OB_NOT_NULL(reuse_row)) {
         reuse_addon_row = reuse_row->get_addon_ptr(*sk_row_meta_);
+        reclaim_addon_row = reuse_row->get_addon_ptr(*sk_row_meta_);
       }
       ori_addon_row = const_cast<Store_Row *>(src_row)->get_addon_ptr(*sk_row_meta_);
     }
 
-    if (OB_FAIL(copy_row(sk_row_meta_, src_row, reuse_row))) {
+    if (OB_FAIL(copy_row(sk_row_meta_, src_row, true, reuse_row))) {
       LOG_WARN("failed to copy sort key row", K(ret));
     } else if (has_addon) {
-      if (OB_FAIL(copy_row(addon_row_meta_, ori_addon_row, reuse_addon_row))) {
-        free_row_store(*sk_row_meta_, reuse_row);
+      if (OB_FAIL(copy_row(addon_row_meta_, ori_addon_row, false, reuse_addon_row))) {
         LOG_WARN("failed to copy addon row", K(ret));
       } else {
         reuse_row->set_addon_ptr(reuse_addon_row, *sk_row_meta_);
+      }
+    }
+    if (OB_FAIL(ret)) {
+      if (reuse_row == reclaim_reuse_row) {
+        free_row_store(*sk_row_meta_, reuse_row);
+        reuse_row = nullptr;
+      }
+      if (has_addon && reuse_addon_row == reclaim_addon_row) {
+        free_row_store(*addon_row_meta_, reuse_addon_row);
+        reuse_addon_row = nullptr;
+      }
+      if (reuse_row != nullptr) {
+        free_row_store(*sk_row_meta_, reuse_row);
+        reuse_row = nullptr;
+      }
+      if (has_addon && reuse_addon_row != nullptr) {
+        free_row_store(*addon_row_meta_, reuse_addon_row);
+        reuse_addon_row = nullptr;
       }
     }
     return ret;

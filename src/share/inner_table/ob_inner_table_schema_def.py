@@ -313,9 +313,9 @@ all_table_def = dict(
       ('max_used_column_group_id', 'int', 'false', '1000'),
       ('column_store', 'int', 'false', '0'),
       ('auto_increment_cache_size', 'int', 'false', '0'),
+      ('external_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('local_session_vars', 'longtext', 'true'),
       ('duplicate_read_consistency', 'int', 'false', '0'),
-      ('external_properties', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'true'),
       ('index_params', 'varchar:OB_MAX_INDEX_PARAMS_LENGTH', 'false', '')
     ],
 )
@@ -60571,7 +60571,8 @@ SELECT
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  PROXY_USER
+  PROXY_USER,
+  CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
@@ -60623,7 +60624,8 @@ def_table_schema(
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  PROXY_USER
+  PROXY_USER,
+  CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME
     FROM SYS.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -63660,10 +63662,10 @@ left join
 """.replace("\n", " ")
 )
 #
-# 28235 - 28237 placeholder by gaishun.gs
-# 28235: DBA_OB_SERVER_SPACE_USAGE_ORA
-# 28236: DBA_OB_SPACE_USAGE_ORA
-# 28237: DBA_OB_TABLE_SPACE_USAGE_ORA
+# 28235 - 28237 placeholder by gaishun.gs for oracle
+# 28235: DBA_OB_SERVER_SPACE_USAGE
+# 28236: DBA_OB_SPACE_USAGE
+# 28237: DBA_OB_TABLE_SPACE_USAGE
 # 28238: GV$OB_LOG_TRANSPORT_DEST_STAT
 # 28239: V$OB_LOG_TRANSPORT_DEST_STAT
 # 28240: GV$OB_SS_LOCAL_CACHE
