@@ -6888,6 +6888,21 @@ int ObInnerTableSchema::all_table_history_schema(ObTableSchema &table_schema)
   }
 
   if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("external_properties", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_BINARY, //column_collation_type
+      OB_MAX_VARCHAR_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
     ADD_COLUMN_SCHEMA("local_session_vars", //column_name
       ++column_id, //column_id
       0, //rowkey_id
@@ -6919,21 +6934,6 @@ int ObInnerTableSchema::all_table_history_schema(ObTableSchema &table_schema)
       false, //is_autoincrement
       duplicate_read_consistency_default,
       duplicate_read_consistency_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("external_properties", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObVarcharType, //column_type
-      CS_TYPE_BINARY, //column_collation_type
-      OB_MAX_VARCHAR_LENGTH, //column_length
-      -1, //column_precision
-      -1, //column_scale
-      true, //is_nullable
-      false); //is_autoincrement
   }
 
   if (OB_SUCC(ret)) {

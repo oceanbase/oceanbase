@@ -3093,7 +3093,7 @@ int ObDagPrioScheduler::diagnose_dag(
     } else if (OB_ISNULL(stored_dag)) {
       ret = OB_ERR_SYS;
       LOG_WARN("dag is null", K(ret));
-    } else if (stored_dag->get_priority() != dag.get_priority()) {
+    } else if (OB_UNLIKELY(stored_dag->get_priority() != dag.get_priority())) {
       ret = OB_ERR_UNEXPECTED;
       COMMON_LOG(WARN, "unexpected priority value", K(ret), K(stored_dag->get_priority()), K(dag.get_priority()));
     } else if (OB_FAIL(stored_dag->diagnose_compaction_info(progress))) {

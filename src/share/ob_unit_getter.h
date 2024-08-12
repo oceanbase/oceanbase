@@ -100,6 +100,8 @@ public:
     int64_t create_timestamp_;
     bool has_memstore_;  // make if the unit contains replicas have memstore(Logonly replicas have no memstore)
     bool is_removed_;
+    int64_t hidden_sys_data_disk_config_size_;  // In shared storage mode, the value set hidden_sys_memory in sys tenant config.
+                                                // Shared nothing ignore this value and Other tenant ignore this value.
   };
 
   struct ObServerConfig

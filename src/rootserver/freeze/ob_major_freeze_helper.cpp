@@ -343,7 +343,7 @@ int ObMajorFreezeHelper::do_one_tenant_major_freeze(
     const int64_t launch_start_time = ObTimeUtility::current_time();
     obrpc::ObMajorFreezeRpcProxy proxy;
     ObAddr leader;
-    obrpc::ObMajorFreezeRequest req(freeze_info);
+    obrpc::ObMajorFreezeRequest req(freeze_info, MF_DAILY_MERGE/*placeholder*/); // right logic is on SS feature
     obrpc::ObMajorFreezeResponse resp;
     uint64_t tenant_id = freeze_info.tenant_id_;
 

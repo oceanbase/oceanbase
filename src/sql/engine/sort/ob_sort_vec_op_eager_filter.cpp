@@ -82,12 +82,16 @@ int ObSortVecOpEagerFilter<Compare, Store_Row, has_addon>::update_filter(
     Store_Row *reuse_row = nullptr;
     if (bucket_heap_->count() < bucket_num_) {
       if (OB_FAIL(store_row_factory_.copy_to_row(bucket_head_row, reuse_row))) {
+        bucket_heap_->top() = reuse_row;
         LOG_WARN("failed to generate new row", K(ret));
       } else {
+        int64_t topn_heap_size = bucket_heap_->count();
         if (OB_FAIL(bucket_heap_->push(reuse_row))) {
           ret = OB_ERR_UNEXPECTED;
-          store_row_factory_.free_row_store(reuse_row);
           LOG_WARN("failed to push back row", K(ret));
+          if (bucket_heap_->count() == topn_heap_size) {
+            store_row_factory_.free_row_store(reuse_row);
+          }
         }
       }
       updated = true;
@@ -117,8 +121,10 @@ template <typename Compare, typename Store_Row, bool has_addon>
 void ObSortVecOpEagerFilter<Compare, Store_Row, has_addon>::reset() {
   if (nullptr != bucket_heap_) {
     for (int64_t i = 0; i < bucket_heap_->count(); i++) {
-      store_row_factory_.free_row_store(bucket_heap_->at(i));
-      bucket_heap_->at(i) = nullptr;
+      if (OB_NOT_NULL(bucket_heap_->at(i))) {
+        store_row_factory_.free_row_store(bucket_heap_->at(i));
+        bucket_heap_->at(i) = nullptr;
+      }
     }
     bucket_heap_->reset();
     bucket_heap_->~BucketHeap();

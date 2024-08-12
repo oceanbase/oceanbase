@@ -247,6 +247,7 @@ public:
   static const int64_t TOO_MANY_FAILED_COUNT = 20;
   static const int64_t SCAN_AVERAGE_RAITO = 4; // 2 * 2
   static const int64_t INC_ROW_CNT_PARAM = 5 * 1000 * 1000; // 5 Million
+  static const int64_t ROW_COUNT_TO_CHECK_PARALLEL_EVEN = 1 * 1000 * 1000; // 1 Million
   static const int64_t SINGLE_PARTITION_MACRO_CNT_PARAM = 256 * 1024; // single partition size 500G
   static const int64_t MACRO_CNT_PARAM = 5 * 1000; // 5 k
 

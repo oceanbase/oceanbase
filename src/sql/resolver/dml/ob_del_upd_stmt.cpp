@@ -424,6 +424,7 @@ int ObDelUpdStmt::deep_copy_stmt_struct(ObIAllocator &allocator,
     ignore_ = other.ignore_;
     has_global_index_ = other.has_global_index_;
     has_instead_of_trigger_ = other.has_instead_of_trigger_;
+    dml_source_from_join_ = other.dml_source_from_join_;
     pdml_disabled_ = other.pdml_disabled_;
   }
   return ret;
@@ -449,6 +450,7 @@ int ObDelUpdStmt::assign(const ObDelUpdStmt &other)
     has_global_index_ = other.has_global_index_;
     has_instead_of_trigger_ = other.has_instead_of_trigger_;
     ab_stmt_id_expr_ = other.ab_stmt_id_expr_;
+    dml_source_from_join_ = other.dml_source_from_join_;
     pdml_disabled_ = other.pdml_disabled_;
   }
   return ret;

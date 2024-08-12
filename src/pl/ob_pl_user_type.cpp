@@ -313,7 +313,7 @@ int ObUserDefinedType::deep_copy_obj(
   return ret;
 }
 
-int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
+int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session, bool keep_allocator)
 {
   int ret = OB_SUCCESS;
 
@@ -364,7 +364,9 @@ int ObUserDefinedType::destruct_obj(ObObj &src, ObSQLSessionInfo *session)
           } else {
             ObPLAssocArray *assoc = NULL;
             collection_allocator->reset();
-            collection->set_allocator(NULL);
+            if (!keep_allocator) {
+              collection->set_allocator(NULL);
+            }
             collection->set_data(NULL);
             collection->set_count(-1);
             collection->set_first(OB_INVALID_INDEX);
@@ -3654,11 +3656,11 @@ int ObPLComposite::copy_element(const ObObj &src,
                                    ignore_del_element));
       CK (OB_NOT_NULL(dest_composite));
       uint8_t extend_type = src.get_meta().get_extend_type();
-      if (src.get_ext() == dest.get_ext()) {
+      if (OB_SUCC(ret) && src.get_ext() == dest.get_ext()) {
         OX (dest.set_extend(reinterpret_cast<int64_t>(src_composite),
                             extend_type,
                             src.get_val_len()));
-        OZ (ObUserDefinedType::destruct_obj(dest, session));
+        OZ (ObUserDefinedType::destruct_obj(dest, session, true));
         OZ (ObUserDefinedType::alloc_for_second_level_composite(dest, allocator));
         OZ (ObPLComposite::deep_copy(*dest_composite,
                                      src_composite,
@@ -3667,10 +3669,11 @@ int ObPLComposite::copy_element(const ObObj &src,
                                      session,
                                      need_new_allocator,
                                      ignore_del_element));
-        OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),
-                            extend_type,
-                            src.get_val_len()));
-        OZ (ObUserDefinedType::destruct_obj(dest, session));
+        ObObj tmp;
+        tmp.set_extend(reinterpret_cast<int64_t>(dest_composite),
+                        extend_type,
+                        src.get_val_len());
+        ObUserDefinedType::destruct_obj(tmp, session);
         OX (dest_composite = src_composite);
       }
       OX (dest.set_extend(reinterpret_cast<int64_t>(dest_composite),

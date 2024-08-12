@@ -42,7 +42,7 @@ struct ObTenantTabletSchedulerTaskMgr
       virtual void runTimerTask() override;                                      \
     };
   DEFINE_TIMER_TASK(MergeLoopTask);
-  DEFINE_TIMER_TASK(SSTableGCTask);
+  DEFINE_TIMER_TASK_WITHOUT_TIMEOUT_CHECK(SSTableGCTask);
   DEFINE_TIMER_TASK(InfoPoolResizeTask);
   DEFINE_TIMER_TASK(TabletUpdaterRefreshTask);
   DEFINE_TIMER_TASK_WITHOUT_TIMEOUT_CHECK(MediumLoopTask);
