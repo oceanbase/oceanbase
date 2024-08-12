@@ -1038,6 +1038,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>NO_REWRITE { return NO_REWRITE; }
 <hint>MV_REWRITE { return MV_REWRITE; }
 <hint>NO_MV_REWRITE { return NO_MV_REWRITE; }
+<hint>SEGMENTED_LIMIT_PUSHDOWN {return SEGMENTED_LIMIT_PUSHDOWN; }
+<hint>NO_SEGMENTED_LIMIT_PUSHDOWN {return NO_SEGMENTED_LIMIT_PUSHDOWN; }
 <hint>FULL  { return FULL_HINT; }
 <hint>USE_MERGE  { return USE_MERGE; }
 <hint>NO_USE_MERGE  { return NO_USE_MERGE; }

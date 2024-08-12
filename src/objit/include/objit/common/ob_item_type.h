@@ -2577,6 +2577,8 @@ typedef enum ObItemType
   T_REBUILD_TABLET = 4727,
 
   T_MICRO_INDEX_CLUSTERED = 4728,
+  T_SEGMENTED_LIMIT_PUSHDOWN = 4729,
+  T_NO_SEGMENTED_LIMIT_PUSHDOWN = 4730,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

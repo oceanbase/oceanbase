@@ -1316,6 +1316,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_left_join_to_anti.cpp
   rewrite/ob_transform_or_expansion.cpp
   rewrite/ob_transform_join_limit_pushdown.cpp
+  rewrite/ob_transform_segmented_limit_pushdown.cpp
   rewrite/ob_transform_pre_process.cpp
   rewrite/ob_transform_predicate_move_around.cpp
   rewrite/ob_transform_project_pruning.cpp

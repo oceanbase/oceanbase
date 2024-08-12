@@ -1028,6 +1028,7 @@ ObItemType ObHint::get_hint_type(ObItemType type)
     case T_NO_DECORRELATE :       return T_DECORRELATE;
     case T_NO_COALESCE_AGGR:      return T_COALESCE_AGGR;
     case T_MV_NO_REWRITE:       return T_MV_REWRITE;
+    case T_NO_SEGMENTED_LIMIT_PUSHDOWN: return  T_SEGMENTED_LIMIT_PUSHDOWN;
 
     // optimize hint
     case T_NO_USE_DAS_HINT:     return T_USE_DAS_HINT;
@@ -1087,6 +1088,7 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_DECORRELATE :        return is_enable_hint ? "DECORRELATE" : "NO_DECORRELATE";
     case T_COALESCE_AGGR:       return is_enable_hint ? "COALESCE_AGGR" : "NO_COALESCE_AGGR";
     case T_MV_REWRITE:          return is_enable_hint ? "MV_REWRITE" : "NO_MV_REWRITE";
+    case T_SEGMENTED_LIMIT_PUSHDOWN:    return is_enable_hint ? "SEGMENTED_LIMIT_PUSHDOWN" : "NO_SEGMENTED_LIMIT_PUSHDOWN";
     // optimize hint
     case T_INDEX_HINT:          return "INDEX";
     case T_FULL_HINT:           return "FULL";
