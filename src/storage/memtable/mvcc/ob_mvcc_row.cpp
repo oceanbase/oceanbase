@@ -630,13 +630,9 @@ int ObMvccRow::elr(const ObTransID &tx_id,
     // TODO shanyan.g
     if (NULL != key) {
       wakeup_waiter(tablet_id, *key);
+      MTL(ObLockWaitMgr*)->reset_hash_holder(tablet_id, *key, tx_id);
     } else {
-      ObLockWaitMgr *lwm = NULL;
-      if (OB_ISNULL(lwm = MTL(ObLockWaitMgr*))) {
-        TRANS_LOG(WARN, "MTL(LockWaitMgr) is null", K(ret), KPC(this));
-      } else {
-        lwm->wakeup(tx_id);
-      }
+      MTL(ObLockWaitMgr*)->wakeup(tx_id);
     }
   }
   return ret;
