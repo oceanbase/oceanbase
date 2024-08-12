@@ -36,7 +36,6 @@ int ObDeviceManager::init_devices_env()
     //init device manager
     for (int i = 0; i < MAX_DEVICE_INSTANCE; i++ ) {
       device_ins_[i].device_ = NULL;
-      device_ins_[i].ref_cnt_ = 0;
       device_ins_[i].storage_info_[0] = '\0';
     }
     if (OB_FAIL(device_map_.create(MAX_DEVICE_INSTANCE*2, "DeviceMng", "DeviceMng"))) {
@@ -158,10 +157,10 @@ int ObDeviceManager::alloc_device(ObDeviceInsInfo*& device_info,
   } else {
     //find a device slot
     for (int i = 0; i < MAX_DEVICE_INSTANCE; i++) {
-      if (0 == device_ins_[i].ref_cnt_ && NULL == device_ins_[i].device_) {
+      if (NULL == device_ins_[i].device_) {
         avai_idx = i;
         break;
-      } else if (0 == device_ins_[i].ref_cnt_ && NULL != device_ins_[i].device_) {
+      } else if ((NULL != device_ins_[i].device_) && (0 == device_ins_[i].device_->get_ref_cnt())) {
         last_no_ref_idx = i;
       }
     }
@@ -220,7 +219,6 @@ int ObDeviceManager::alloc_device(ObDeviceInsInfo*& device_info,
     device_info = NULL;
   } else {
     device_ins_[avai_idx].device_ = device_handle;
-    device_ins_[avai_idx].ref_cnt_ = 0;
     device_count_++;
     OB_LOG(INFO, "alloc a new device!", KP(storage_info.ptr()),
         K(storage_type_prefix), K(avai_idx), K(device_count_), K(device_handle));
@@ -271,8 +269,13 @@ int ObDeviceManager::get_device(const common::ObString& storage_info,
   }
 
   if (NULL != dev_info) {
-    dev_info->ref_cnt_++;
-    device_handle = dev_info->device_;
+    if (OB_ISNULL(dev_info->device_)) {
+      ret = OB_ERR_UNEXPECTED;
+      OB_LOG(WARN, "device should not be null", K(ret));
+    } else {
+      dev_info->device_->inc_ref();
+      device_handle = dev_info->device_;
+    }
   }
   return ret;
 }
@@ -297,21 +300,21 @@ int ObDeviceManager::release_device(ObIODevice*& device_handle)
   }
 
   if (OB_SUCCESS == ret) {
-    if (OB_ISNULL(device_info)) {
+    if (OB_ISNULL(device_info) || OB_ISNULL(device_info->device_)) {
       ret = OB_ERR_UNEXPECTED;
       OB_LOG(WARN, "Exception: get a null device handle!", K(device_handle));
     } else {
-      if (0 >= device_info->ref_cnt_) {
+      if (0 >= device_info->device_->get_ref_cnt()) {
         OB_LOG(WARN, "the device ref is 0/small 0, maybe a invalid release!", K(device_info->device_));
         ret = OB_INVALID_ARGUMENT;
       } else {
         abort_unless(device_count_ > 0);
-        abort_unless(device_info->ref_cnt_ > 0);
-        device_info->ref_cnt_--;
-        if (0 == device_info->ref_cnt_) {
+        abort_unless(device_info->device_->get_ref_cnt() > 0);
+        device_info->device_->dec_ref();
+        if (0 == device_info->device_->get_ref_cnt()) {
           OB_LOG(DEBUG, "A Device has no others ref", K(device_info->device_), KP(device_info->storage_info_));
         } else {
-          OB_LOG(DEBUG, "released dev info", K(device_info->device_), K(device_info->ref_cnt_));
+          OB_LOG(DEBUG, "released dev info", K(device_info->device_), K(device_info->device_->get_ref_cnt()));
         }
         device_handle = NULL;
       }

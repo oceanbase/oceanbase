@@ -26,27 +26,6 @@ using namespace oceanbase::backup;
 namespace oceanbase {
 namespace backup {
 
-static int make_random_mapping_meta(ObBackupMacroBlockIDMappingsMeta &mapping_meta)
-{
-  int ret = OB_SUCCESS;
-  const int64_t sstable_count = random(1, MAX_SSTABLE_CNT_IN_STORAGE);
-  mapping_meta.version_ = ObBackupMacroBlockIDMappingsMeta::MAPPING_META_VERSION_V1;
-  ret = mapping_meta.prepare_id_mappings(sstable_count);
-  EXPECT_EQ(OB_SUCCESS, ret);
-  for (int64_t i = 0; OB_SUCC(ret) && i < sstable_count; ++i) {
-    ObBackupMacroBlockIDMapping &mapping = *mapping_meta.id_map_list_[i];
-    make_random_table_key(mapping.table_key_);
-    const int64_t pair_count = random(1, 10000);
-    for (int64_t j = 0; OB_SUCC(ret) && j < pair_count; ++j) {
-      ObBackupMacroBlockIDPair pair;
-      make_random_pair(pair);
-      ret = mapping.id_pair_list_.push_back(pair);
-      EXPECT_EQ(OB_SUCCESS, ret);
-    }
-  }
-  return ret;
-}
-
 static bool meta_is_equal(const ObBackupMacroBlockIDMappingsMeta &lhs, const ObBackupMacroBlockIDMappingsMeta &rhs)
 {
   bool bret = true;
@@ -64,8 +43,8 @@ static bool meta_is_equal(const ObBackupMacroBlockIDMappingsMeta &lhs, const ObB
         break;
       } else {
         for (int64_t j = 0; j < lhs_map.id_pair_list_.count(); ++j) {
-          const ObBackupMacroBlockIDPair &lhs_pair = lhs_map.id_pair_list_.at(j);
-          const ObBackupMacroBlockIDPair &rhs_pair = rhs_map.id_pair_list_.at(j);
+          const ObCompatBackupMacroBlockIDPair &lhs_pair = lhs_map.id_pair_list_.at(j);
+          const ObCompatBackupMacroBlockIDPair &rhs_pair = rhs_map.id_pair_list_.at(j);
           if (lhs_pair.logic_id_ != rhs_pair.logic_id_ || lhs_pair.physical_id_ != rhs_pair.physical_id_) {
             bret = false;
             break;
@@ -109,20 +88,6 @@ TEST(TestBackupDataStruct, BackupPhysicalID)
   actual_macro_index.offset_ = 2393243648LL;
   actual_macro_index.length_ = 2015232LL;
   ASSERT_EQ(macro_index, actual_macro_index);
-}
-
-TEST(TestBackupDataStruct, BackupMacroBlockIDMappingsMeta)
-{
-  ObBackupMacroBlockIDMappingsMeta write_meta;
-  ObBackupMacroBlockIDMappingsMeta read_meta;
-  make_random_mapping_meta(write_meta);
-  const int64_t buf_len = write_meta.get_serialize_size();
-  char *buf = static_cast<char *>(malloc(buf_len));
-  int64_t pos = 0;
-  write_meta.serialize(buf, buf_len, pos);
-  pos = 0;
-  read_meta.deserialize(buf, buf_len, pos);
-  ASSERT_TRUE(meta_is_equal(write_meta, read_meta));
 }
 
 TEST(TestBackupDataStruct, BackupMetaKeyCompare)

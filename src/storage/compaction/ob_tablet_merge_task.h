@@ -284,6 +284,7 @@ public:
   int init(const int64_t idx, ObBasicTabletMergeCtx &ctx);
   virtual int process() override;
   virtual int generate_next_task(ObITask *&next_task) override;
+  virtual int64_t get_sub_task_id() const override { return idx_; }
 private:
   compaction::ObLocalArena allocator_;
   int64_t idx_;

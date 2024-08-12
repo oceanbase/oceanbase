@@ -679,6 +679,14 @@ TEST_F(TestMigrationSSTableParam, test_empty_sstable_serialize_and_deserialize)
     ASSERT_EQ(OB_SUCCESS, mig_param.column_checksums_.push_back(sstable_meta_.get_col_checksum()[i]));
   }
   mig_param.table_key_ = table_key_;
+  char str[15] ="test serialize";
+  mig_param.root_block_addr_.set_mem_addr(0, 15);
+  mig_param.root_block_buf_ = str;
+  MacroBlockId block_id(4096,0,0);
+  mig_param.data_block_macro_meta_addr_.set_block_addr(block_id, 1024, 2048, ObMetaDiskAddr::DiskType::BLOCK);
+  ASSERT_EQ(nullptr, mig_param.data_block_macro_meta_buf_);
+  mig_param.is_meta_root_ = true;
+
   ASSERT_TRUE(mig_param.is_valid());
   ASSERT_TRUE(mig_param.basic_meta_.is_valid());
   ASSERT_TRUE(mig_param.column_checksums_.count() > 0);
@@ -706,6 +714,11 @@ TEST_F(TestMigrationSSTableParam, test_empty_sstable_serialize_and_deserialize)
   ASSERT_EQ(tmp_param.basic_meta_, mig_param.basic_meta_);
   ASSERT_EQ(tmp_param.table_key_, mig_param.table_key_);
   ASSERT_EQ(tmp_param.column_checksums_.count(), mig_param.column_checksums_.count());
+  ASSERT_EQ(tmp_param.root_block_addr_, mig_param.root_block_addr_);
+  ASSERT_EQ(0, strcmp(tmp_param.root_block_buf_, mig_param.root_block_buf_));
+  ASSERT_EQ(tmp_param.data_block_macro_meta_addr_, mig_param.data_block_macro_meta_addr_);
+  ASSERT_EQ(nullptr, tmp_param.data_block_macro_meta_buf_);
+  ASSERT_EQ(tmp_param.is_meta_root_, mig_param.is_meta_root_);
 }
 
 TEST_F(TestMigrationSSTableParam, test_migrate_sstable)

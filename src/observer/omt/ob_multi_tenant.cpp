@@ -165,6 +165,7 @@
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/restore/ob_tenant_restore_info_mgr.h"
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -585,6 +586,7 @@ int ObMultiTenant::init(ObAddr myaddr,
 #ifdef OB_BUILD_DBLINK
     MTL_BIND2(common::sqlclient::ObTenantDblinkKeeper::mtl_new, common::sqlclient::ObTenantDblinkKeeper::mtl_init, nullptr, nullptr, nullptr, common::sqlclient::ObTenantDblinkKeeper::mtl_destroy);
 #endif
+    MTL_BIND2(mtl_new_default, storage::ObTenantRestoreInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObGlobalIteratorPool::mtl_init, nullptr, nullptr, nullptr, ObGlobalIteratorPool::mtl_destroy);
   }
 

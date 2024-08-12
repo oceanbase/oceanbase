@@ -575,8 +575,12 @@ int ObMysqlPktContext::save_fragment_mysql_packet(const char *start, const int64
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(ERROR, "invalid alloc size", K(alloc_size), K(ret));
       } else {
+        ObMemAttr attr;
+        attr.label_ = "LibMultiPackets";
+        attr.ctx_id_ = ObCtxIds::DEFAULT_CTX_ID;
+        attr.tenant_id_ = tenant_id_;
         alloc_size += payload_buffered_total_len_;
-        char *tmp_buffer = reinterpret_cast<char *>(arena_.alloc(alloc_size));
+        char *tmp_buffer = reinterpret_cast<char *>(ob_malloc(alloc_size, attr));
         if (OB_ISNULL(tmp_buffer)) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "fail to alloc memory", K(alloc_size), K(ret));
@@ -585,6 +589,9 @@ int ObMysqlPktContext::save_fragment_mysql_packet(const char *start, const int64
             MEMCPY(tmp_buffer, payload_buf_, payload_buffered_total_len_);
           }
           payload_buf_alloc_len_ = alloc_size;
+          if (OB_NOT_NULL(payload_buf_)) {
+            ob_free(payload_buf_);
+          }
           payload_buf_ = tmp_buffer;
         }
       }

@@ -236,18 +236,6 @@ void ObSSTableMergeInfo::reset()
   merge_level_ = MERGE_LEVEL_MAX;
 }
 
-void ObSSTableMergeInfo::dump_info(const char *msg)
-{
-  int64_t output_row_per_s = 0;
-  int64_t new_macro_KB_per_s = 0;
-  if (merge_finish_time_ > merge_start_time_) {
-    const int64_t merge_cost_time = merge_finish_time_ - merge_start_time_;
-    output_row_per_s = (incremental_row_count_ * 1000 * 1000) / merge_cost_time;
-    new_macro_KB_per_s = (macro_block_count_ - multiplexed_macro_block_count_) * 2 * 1024 * 1000 * 1000 / merge_cost_time;
-  }
-  FLOG_INFO("dump merge info", K(msg), K(output_row_per_s), K(new_macro_KB_per_s), K(*this));
-}
-
 int ObSSTableMergeInfo::fill_comment(char *buf, const int64_t buf_len, const char* other_info) const
 {
   int ret = OB_SUCCESS;

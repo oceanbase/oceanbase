@@ -412,6 +412,7 @@ extern bool parsenode_equal(const ParseNode *node1, const ParseNode *node2, int 
 
 extern int64_t get_question_mark(ObQuestionMarkCtx *ctx, void *malloc_pool, const char *name);
 extern int64_t get_question_mark_by_defined_name(ObQuestionMarkCtx *ctx, const char *name);
+extern ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, ParseNode *table_node);
 
 // compare ParseNode str_value_ to pattern
 // @param [in] node        ParseNode

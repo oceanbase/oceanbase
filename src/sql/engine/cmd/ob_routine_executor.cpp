@@ -583,7 +583,7 @@ int ObAnonymousBlockExecutor::execute(ObExecContext &ctx, ObAnonymousBlockStmt &
             field.length_ = field.accuracy_.get_length();
             if (value.is_ref_cursor_type()) {
               OZ (ob_write_string(ctx.get_allocator(), ObString("SYS_REFCURSOR"), field.type_name_));
-            } else if (value.get_udt_id() != OB_INVALID_ID) {
+            } else if (value.get_udt_id() != OB_INVALID_ID && extract_package_id(value.get_udt_id()) != OB_INVALID_ID) {
               OZ (fill_field_with_udt_id(ctx, value.get_udt_id(), field));
             } else if (value.is_pl_extend()
                        && pl::PL_NESTED_TABLE_TYPE == value.get_meta().get_extend_type()) {

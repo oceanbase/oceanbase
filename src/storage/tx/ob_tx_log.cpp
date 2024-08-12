@@ -300,7 +300,8 @@ OB_TX_SERIALIZE_MEMBER(ObTxActiveInfoLog,
                        /* 17 */ max_submitted_seq_no_,
                        /* 18 */ xid_,
                        /* 19 */ serial_final_seq_no_,
-                       /* 20 */ associated_session_id_);
+                       /* 20 */ associated_session_id_,
+                       /* 21 */ prio_op_array_);
 
 OB_TX_SERIALIZE_MEMBER(ObTxCommitInfoLog,
                        compat_bytes_,
@@ -365,7 +366,7 @@ int ObTxActiveInfoLog::before_serialize()
       TRANS_LOG(WARN, "reset all compat_bytes_ valid failed", K(ret));
     }
   } else {
-    if (OB_FAIL(compat_bytes_.init(19))) {
+    if (OB_FAIL(compat_bytes_.init(21))) {
       TRANS_LOG(WARN, "init compat_bytes_ failed", K(ret));
     }
   }
@@ -390,6 +391,8 @@ int ObTxActiveInfoLog::before_serialize()
     TX_NO_NEED_SER(!max_submitted_seq_no_.is_valid(), 17, compat_bytes_);
     TX_NO_NEED_SER(xid_.empty(), 18, compat_bytes_);
     TX_NO_NEED_SER(!serial_final_seq_no_.is_valid(), 19, compat_bytes_);
+    TX_NO_NEED_SER(associated_session_id_ == 0, 20, compat_bytes_);
+    TX_NO_NEED_SER(prio_op_array_.empty(), 21, compat_bytes_);
   }
 
   return ret;

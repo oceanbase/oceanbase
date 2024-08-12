@@ -120,7 +120,8 @@ ObDDLResolver::ObDDLResolver(ObResolverParams &params)
     lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
     auto_increment_cache_size_(0),
     external_table_format_type_(ObExternalFileFormat::INVALID_FORMAT),
-    mocked_external_table_column_ids_()
+    mocked_external_table_column_ids_(),
+    index_params_()
 {
   table_mode_.reset();
 }

@@ -110,5 +110,29 @@ ObFreezeTimeGuard::~ObFreezeTimeGuard()
   }
 }
 
+const char * ObMajorFreezeReasonStr[] = {
+  "DAILY_MERGE",
+  "USER_REQUEST",
+  "MAJOR_COMPACT_TRIGGER"
+};
+const char *major_freeze_reason_to_str(const int64_t freeze_reason)
+{
+  STATIC_ASSERT(static_cast<int64_t>(MF_REASON_MAX) == ARRAYSIZEOF(ObMajorFreezeReasonStr),
+                "major freeze reason str len is mismatch");
+  const char *str = "";
+  if (OB_UNLIKELY(!is_valid_major_freeze_reason((ObMajorFreezeReason)freeze_reason))) {
+    str = "invalid_freeze_reason";
+  } else {
+    str = ObMajorFreezeReasonStr[freeze_reason];
+  }
+  return str;
+}
+
+bool is_valid_major_freeze_reason(const ObMajorFreezeReason &freeze_reason)
+{
+  return freeze_reason >= ObMajorFreezeReason::MF_DAILY_MERGE
+    && freeze_reason < ObMajorFreezeReason::MF_REASON_MAX;
+}
+
 } // end namespace rootserver
 } // end namespace oceanbase

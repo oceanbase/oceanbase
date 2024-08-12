@@ -130,6 +130,8 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define MULTIVALUE_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 23) // for multivalue index
 #define MULTIVALUE_INDEX_GENERATED_ARRAY_COLUMN_FLAG (INT64_C(1) << 24) // for multivalue index
 #define GENERATED_FTS_WORD_SEGMENT_COLUMN_FLAG (INT64_C(1) << 25) // word segment column for full-text search flag
+#define GENERATED_VEC_VID_COLUMN_FLAG (INT64_C(1) << 26)
+#define GENERATED_VEC_VECTOR_COLUMN_FLAG (INT64_C(1) << 27)
 
 //the high 32-bit flag isn't stored in __all_column
 #define GENERATED_DEPS_CASCADE_FLAG (INT64_C(1) << 32)
@@ -141,6 +143,11 @@ static const uint64_t OB_MIN_ID  = 0;//used for lower_bound
 #define TABLE_PART_KEY_COLUMN_ORG_FLAG (INT64_C(1) << 37) //column is part key, or column is depened by part key(gc col)
 #define SPATIAL_INDEX_GENERATED_COLUMN_FLAG (INT64_C(1) << 38) // for spatial index
 #define GENERATED_FTS_DOC_LENGTH_COLUMN_FLAG (INT64_C(1) << 39) // doc length column for full-text search index
+/* vector index hidden column */
+#define GENERATED_VEC_TYPE_COLUMN_FLAG (INT64_C(1) << 40)
+#define GENERATED_VEC_SCN_COLUMN_FLAG (INT64_C(1) << 41)
+#define GENERATED_VEC_KEY_COLUMN_FLAG (INT64_C(1) << 42)
+#define GENERATED_VEC_DATA_COLUMN_FLAG (INT64_C(1) << 43)
 #define SPATIAL_COLUMN_SRID_MASK (0xffffffffffffffe0L)
 
 #define STORED_COLUMN_FLAGS_MASK 0xFFFFFFFF
@@ -3482,6 +3489,23 @@ enum class ObMVRefreshStatsCollectionLevel : int64_t
   TYPICAL = 1,
   ADVANCED = 2,
   MAX
+};
+
+struct ObVectorIndexRefreshInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObString exec_env_;
+  // TODO:(@wangmiao) more infos for complete refresh (aka. rebuild)
+  ObVectorIndexRefreshInfo():
+  exec_env_() {}
+  void reset() {
+    exec_env_.reset();
+  }
+  bool operator == (const ObVectorIndexRefreshInfo &other) const {
+    return exec_env_ == other.exec_env_;
+  }
+  TO_STRING_KV(K_(exec_env));
 };
 
 struct ObMVRefreshInfo

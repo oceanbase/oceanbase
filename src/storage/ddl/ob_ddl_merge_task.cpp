@@ -734,14 +734,15 @@ int ObTabletDDLUtil::prepare_index_data_desc(ObTablet &tablet,
       LOG_WARN("unexpected table key is minor sstable", K(ret), K(table_key));
     } else {
       const ObStorageColumnGroupSchema &cur_cg_schema = cg_schemas.at(cg_idx);
-      if (OB_FAIL(data_desc.init(*storage_schema, ls_id, tablet_id,
+      if (OB_FAIL(data_desc.init(true/*is_ddl*/, *storage_schema, ls_id, tablet_id,
               compaction::ObMergeType::MAJOR_MERGE, snapshot_version, data_format_version, end_scn, &cur_cg_schema, cg_idx))) {
         LOG_WARN("init data desc for cg failed", K(ret));
       } else {
         LOG_DEBUG("get data desc from column group schema", K(ret), K(tablet_id), K(cg_idx), K(data_desc), K(cur_cg_schema));
       }
     }
-  } else if (OB_FAIL(data_desc.init(*storage_schema,
+  } else if (OB_FAIL(data_desc.init(true/*is_ddl*/,
+                                    *storage_schema,
                                     ls_id,
                                     tablet_id,
                                     table_key.is_minor_sstable() ? compaction::MINOR_MERGE : compaction::MAJOR_MERGE,
@@ -780,7 +781,7 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
   int ret = OB_SUCCESS;
   HEAP_VAR(ObSSTableIndexBuilder, sstable_index_builder) {
     ObIndexBlockRebuilder index_block_rebuilder;
-    ObWholeDataStoreDesc data_desc(true/*is_ddl*/);
+    ObWholeDataStoreDesc data_desc;
     int64_t macro_block_column_count = 0;
     if (OB_UNLIKELY(!ddl_param.is_valid() || OB_ISNULL(storage_schema))) {
       ret = OB_INVALID_ARGUMENT;
@@ -802,16 +803,15 @@ int ObTabletDDLUtil::create_ddl_sstable(ObTablet &tablet,
                                                    ddl_param.table_key_.is_major_sstable() ? ObSSTableIndexBuilder::ENABLE : ObSSTableIndexBuilder::DISABLE))) {
       LOG_WARN("init sstable index builder failed", K(ret), K(data_desc));
     } else if (OB_FAIL(index_block_rebuilder.init(sstable_index_builder,
-            false/*need_sort*/,
             nullptr/*task_idx*/,
-            ddl_param.table_key_.is_ddl_merge_sstable()/*use_absolute_offset*/))) {
+            ddl_param.table_key_.is_ddl_merge_sstable()/*is_ddl_merge*/))) {
       LOG_WARN("fail to alloc index builder", K(ret));
     } else if (meta_array.empty()) {
       // do nothing
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < meta_array.count(); ++i) {
         if (OB_FAIL(index_block_rebuilder.append_macro_row(*meta_array.at(i).block_meta_))) {
-          LOG_WARN("append block meta failed", K(ret), K(i));
+          LOG_WARN("append block meta failed", K(ret), K(i), KPC(meta_array.at(i).block_meta_));
         }
       }
     }

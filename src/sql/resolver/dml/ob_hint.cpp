@@ -597,6 +597,18 @@ void ObGlobalHint::merge_osg_hint(int8_t flag) {
   osg_hint_.flags_ |= flag;
 }
 
+bool ObGlobalHint::get_direct_load_need_sort() const
+{
+  bool need_sort = false;
+  if (has_direct_load()) {
+    // if direct(need_sort, max_allowed_error_rows) hint is provided,
+    // use its need_sort param, otherwise need_sort = true
+    need_sort = direct_load_hint_.is_enable() ?
+                    direct_load_hint_.need_sort() : true;
+  }
+  return need_sort;
+}
+
 int ObOptimizerStatisticsGatheringHint::print_osg_hint(PlanText &plan_text) const
 {
   int ret = OB_SUCCESS;
@@ -854,9 +866,14 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
         }
         is_valid = exist_valid_codec;
       }
+      break;
     }
     case INLIST_REWRITE_THRESHOLD: {
       is_valid = val.is_int() && (0 < val.get_int());
+      break;
+    }
+    case PUSHDOWN_STORAGE_LEVEL: {
+      is_valid = val.is_int() && (0 <= val.get_int() && val.get_int() <= 4);
       break;
     }
     default:
@@ -1221,8 +1238,7 @@ int ObHint::create_push_down_hint(ObIAllocator *allocator,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected null", K(ret));
         } else if (all_tables.at(i)->is_match_table_item(cs_type, source_table)) {
-          all_tables.at(i)->db_name_ = target_table.database_name_;
-          all_tables.at(i)->table_name_ = target_table.get_object_name();
+          all_tables.at(i)->set_table(target_table);
         }
       }
       if (OB_SUCC(ret)) {
@@ -2711,7 +2727,7 @@ int ObTableInHint::print_table_in_hint(PlanText &plan_text,
 bool ObTableInHint::is_match_table_item(ObCollationType cs_type, const TableItem &table_item) const
 {
   return 0 == ObCharset::strcmp(cs_type, table_name_, table_item.get_object_name()) &&
-         (db_name_.empty() || 0 == ObCharset::strcmp(cs_type, db_name_, table_item.database_name_));
+         (db_name_.empty() || 0 == ObCharset::strcmp(cs_type, db_name_, table_item.get_object_db_name()));
 }
 
 bool ObTableInHint::is_match_physical_table_item(ObCollationType cs_type, const TableItem &table_item) const
@@ -2797,6 +2813,7 @@ bool ObTableInHint::is_match_table_items(ObCollationType cs_type,
 void ObTableInHint::set_table(const TableItem& table)
 {
   qb_name_.assign_ptr(table.qb_name_.ptr(), table.qb_name_.length());
+  db_name_.reset(); // for alias table or generated table, db_name_ should be empty
   if (!table.alias_name_.empty()) {
     table_name_.assign_ptr(table.alias_name_.ptr(), table.alias_name_.length());
   } else if (table.is_synonym()) {

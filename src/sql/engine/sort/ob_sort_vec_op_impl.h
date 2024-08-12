@@ -241,6 +241,7 @@ protected:
   // if row is null will alloc new memory, otherwise reuse in place if memory is
   // enough. ensure row pointer not change when an error occurs.
   int copy_to_row(const common::ObIArray<ObExpr *> &exprs, const RowMeta &row_meta,
+                  bool is_sort_key,
                   Store_Row *&row);
   int copy_to_row(Store_Row *&sk_row);
   int generate_last_ties_row(const Store_Row *orign_row);
@@ -381,12 +382,9 @@ protected:
         SQL_ENG_LOG(WARN, "failed to init bucket", K(ret), K(bucket_num));
       }
     } else {
-      int64_t max_bucket_cnt = buckets->get_capacity();
-      if (max_bucket_cnt < bucket_num) {
-        buckets->reuse();
-        if (OB_FAIL(buckets->init(bucket_num))) {
-          LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
-        }
+      buckets->reuse();
+      if (OB_FAIL(buckets->init(bucket_num))) {
+        LOG_WARN("failed to init bucket array", K(ret), K(bucket_num));
       }
     }
     return ret;

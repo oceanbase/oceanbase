@@ -157,6 +157,11 @@ int ObMPStmtSendLongData::process()
                && OB_FAIL(session.update_sys_variable(SYS_VAR_OB_TRACE_INFO,
                                                       pkt.get_trace_info()))) {
       LOG_WARN("fail to update trace info", K(ret));
+    } else if (FALSE_IT(session.set_txn_free_route(pkt.txn_free_route()))) {
+    } else if (OB_FAIL(process_extra_info(session, pkt, need_response_error))) {
+      LOG_WARN("fail get process extra info, will disconnect", K(ret));
+      need_disconnect_ = true;
+    } else if (FALSE_IT(session.post_sync_session_info())) {
     } else {
       THIS_WORKER.set_timeout_ts(get_receive_timestamp() + query_timeout);
       session.partition_hit().reset();

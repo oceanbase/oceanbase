@@ -159,6 +159,7 @@ struct ObOptParamHint
     DEF(ENABLE_DAS_KEEP_ORDER,)           \
     DEF(SPILL_COMPRESSION_CODEC,)   \
     DEF(INLIST_REWRITE_THRESHOLD,)        \
+    DEF(PUSHDOWN_STORAGE_LEVEL,)          \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
@@ -304,6 +305,7 @@ struct ObGlobalHint {
   {
     return (direct_load_hint_.is_enable() && direct_load_hint_.is_inc_replace_load_method());
   }
+  bool get_direct_load_need_sort() const;
 
   // wether should generate optimizer_statistics_operator.
   bool should_generate_osg_operator () const {
@@ -432,6 +434,8 @@ struct ObTableInHint
                 const common::ObString &table_name)
       : qb_name_(qb_name), db_name_(db_name), table_name_(table_name)
   { }
+  ObTableInHint(const TableItem& table)
+  { set_table(table); }
   int assign(const ObTableInHint &other);
   bool is_match_table_item(ObCollationType cs_type, const TableItem &table_item) const;
   bool is_match_physical_table_item(ObCollationType cs_type, const TableItem &table_item) const;

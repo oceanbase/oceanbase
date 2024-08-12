@@ -71,6 +71,7 @@ private:
     int64_t file_column_num_; // number of column in file
     ObDataInFileStruct file_format_;
     common::ObCollationType file_cs_type_;
+    ObLoadCompressionFormat compression_format_;
   };
 
   struct LoadExecuteParam

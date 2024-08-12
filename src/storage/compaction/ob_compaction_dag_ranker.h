@@ -21,7 +21,6 @@ namespace oceanbase
 
 namespace compaction
 {
-enum ObMergeType;
 struct ObCompactionParam;
 class ObTabletMergeDag;
 

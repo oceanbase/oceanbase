@@ -154,7 +154,7 @@ void TestBackupCtx::inner_init_()
   job_desc_.task_id_ = 1;
   backup_set_desc_.backup_set_id_ = 1;
   backup_set_desc_.backup_type_.type_ = ObBackupType::FULL_BACKUP;
-  backup_data_type_.set_major_data_backup();
+  backup_data_type_.set_user_data_backup();
   incarnation_ = 1;
   tenant_id_ = 1002;
   ls_id_ = ObLSID(1001);

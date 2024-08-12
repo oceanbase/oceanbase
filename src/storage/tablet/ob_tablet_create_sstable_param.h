@@ -78,6 +78,10 @@ public:
 
   // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
   int init_for_ha(const blocksstable::ObMigrationSSTableParam &migration_param);
+
+  // Without checking the validity of the input parameters, necessary to ensure the correctness of the method call.
+  // This is used to create remote sstable
+  int init_for_remote(const blocksstable::ObMigrationSSTableParam &migration_param);
   int init_for_mds(const compaction::ObBasicTabletMergeCtx &ctx,
                    const blocksstable::ObSSTableMergeRes &res,
                    const ObStorageSchema &mds_schema);
@@ -124,6 +128,7 @@ public:
       K_(nested_offset),
       K_(nested_size),
       KPHEX_(encrypt_key, sizeof(encrypt_key_)),
+      K_(table_flag),
       K_(uncommitted_tx_id));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
@@ -174,6 +179,7 @@ public:
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> data_block_ids_;
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> other_block_ids_;
+  storage::ObTableFlag table_flag_;
   int64_t uncommitted_tx_id_;
 };
 

@@ -363,7 +363,7 @@ int ObTableLoadCoordinator::gen_apply_arg(ObDirectLoadResourceApplyArg &apply_ar
               need_sort = false;
               unit.memory_size_ = min_unsort_memory;
             } else {
-              need_sort = true;
+              need_sort = ctx_->param_.need_sort_; // allow forced non-sorting
               unit.memory_size_ = MIN(ObTableLoadAssignedMemoryManager::MIN_SORT_MEMORY_PER_TASK, memory_limit);
             }
           } else {

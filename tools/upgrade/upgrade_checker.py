@@ -10,6 +10,7 @@ import logging
 import getopt
 import time
 import re
+import ctypes
 
 if sys.version_info.major == 3:
     def cmp(a, b):
@@ -784,6 +785,157 @@ def set_query_timeout(query_cur, timeout):
     sql = """set @@session.ob_query_timeout = {0}""".format(timeout * 1000 * 1000)
     query_cur.exec_sql(sql)
 
+# Run assembly in python with mmaped byte-code
+class ASM:
+  def __init__(self, restype=None, argtypes=(), machine_code=[]):
+    self.restype = restype
+    self.argtypes = argtypes
+    self.machine_code = machine_code
+    self.prochandle = None
+    self.mm = None
+    self.func = None
+    self.address = None
+    self.size = 0
+
+  def compile(self):
+    machine_code = bytes.join(b'', self.machine_code)
+    self.size = ctypes.c_size_t(len(machine_code))
+    from mmap import mmap, MAP_PRIVATE, MAP_ANONYMOUS, PROT_WRITE, PROT_READ, PROT_EXEC
+
+    # Allocate a private and executable memory segment the size of the machine code
+    machine_code = bytes.join(b'', self.machine_code)
+    self.size = len(machine_code)
+    self.mm = mmap(-1, self.size, flags=MAP_PRIVATE | MAP_ANONYMOUS, prot=PROT_WRITE | PROT_READ | PROT_EXEC)
+
+    # Copy the machine code into the memory segment
+    self.mm.write(machine_code)
+    self.address = ctypes.addressof(ctypes.c_int.from_buffer(self.mm))
+
+    # Cast the memory segment into a function
+    functype = ctypes.CFUNCTYPE(self.restype, *self.argtypes)
+    self.func = functype(self.address)
+
+  def run(self):
+    # Call the machine code like a function
+    retval = self.func()
+
+    return retval
+
+  def free(self):
+    # Free the function memory segment
+    self.mm.close()
+    self.prochandle = None
+    self.mm = None
+    self.func = None
+    self.address = None
+    self.size = 0
+
+def run_asm(*machine_code):
+  asm = ASM(ctypes.c_uint32, (), machine_code)
+  asm.compile()
+  retval = asm.run()
+  asm.free()
+  return retval
+
+def is_bit_set(reg, bit):
+  mask = 1 << bit
+  is_set = reg & mask > 0
+  return is_set
+
+def get_max_extension_support():
+  # Check for extension support
+  max_extension_support = run_asm(
+    b"\xB8\x00\x00\x00\x80" # mov ax,0x80000000
+    b"\x0f\xa2"             # cpuid
+    b"\xC3"                 # ret
+  )
+  return max_extension_support
+
+def arch_support_avx2():
+  bret = False
+  if (is_x86_arch() and get_max_extension_support() >= 7):
+    ebx = run_asm(
+      b"\x31\xC9",            # xor ecx,ecx
+      b"\xB8\x07\x00\x00\x00" # mov eax,7
+      b"\x0f\xa2"             # cpuid
+      b"\x89\xD8"             # mov ax,bx
+      b"\xC3"                 # ret
+    )
+    bret = is_bit_set(ebx, 5)
+  return bret
+
+def is_x86_arch():
+  import platform
+  arch_string_raw = platform.machine().lower()
+  bret = False
+  if re.match(r'^i\d86$|^x86$|^x86_32$|^i86pc$|^ia32$|^ia-32$|^bepc$', arch_string_raw):
+    # x86_32
+    bret = True
+  elif re.match(r'^x64$|^x86_64$|^x86_64t$|^i686-64$|^amd64$|^ia64$|^ia-64$', arch_string_raw):
+    # x86_64
+    bret=True
+  return bret
+
+# 检查cs_encoding格式是否兼容，对小于4.3.3版本的cpu不支持avx2指令集的集群，我们要求升级前schema上不存在cs_encoding的存储格式
+# 注意：这里对混布集群 / schema上row_format进行了ddl变更的场景无法做到完全的防御
+def check_cs_encoding_arch_dependency_compatiblity(query_cur):
+  can_upgrade = True
+  need_check_schema = False
+  sql = """select distinct value from GV$OB_PARAMETERS where name='min_observer_version'"""
+  (desc, results) = query_cur.exec_query(sql)
+  if len(results) != 1:
+    fail_list.append('min_observer_version is not sync')
+  elif len(results[0]) != 1:
+    fail_list.append('column cnt not match')
+  else:
+    min_cluster_version = get_version(results[0][0])
+    if min_cluster_version < get_version("4.3.3.0"):
+      if (arch_support_avx2()):
+        logging.info("current cpu support avx2 inst, no need to check cs_encoding format")
+      else:
+        get_data_version_sql = """select distinct value from oceanbase.__all_virtual_tenant_parameter_info where name='compatible'"""
+        (desc, results) = query_cur.exec_query(sql)
+        if len(results) != 1:
+          fail_list.append('compatible is not sync')
+        elif len(results[0]) != 1:
+          fail_list.append('column cnt not match')
+        else:
+          data_version = get_version(results[0][0])
+          if (data_version < get_version("4.3.0.0")):
+            logging.info("no need to check cs encoding arch compatibility for data version before version 4.3.0")
+          else:
+            logging.info("cpu not support avx2 instruction set, check cs_encoding format in schema")
+            need_check_schema = True
+    else:
+      logging.info("no need to check cs encoding arch compatibility for cluster version after version 4.3.3")
+
+  if need_check_schema and can_upgrade:
+    ck_all_tbl_sql = """select count(1) from __all_virtual_table where row_store_type = 'cs_encoding_row_store'"""
+    (desc, results) = query_cur.exec_query(ck_all_tbl_sql)
+    if len(results) != 1:
+      fail_list.append("all table query row count not match");
+    elif len(results[0]) != 1:
+      fail_list.append("all table query column count not match")
+    elif results[0][0] != 0:
+      can_upgrade = False
+      fail_list.append("exist table with row_format cs_encoding_row_store for observer not support avx2 instruction set, table count = {0}".format(results[0][0]));
+
+  if need_check_schema and can_upgrade:
+    ck_all_cg_sql = """select count(distinct table_id) from __all_virtual_column_group where row_store_type = 3"""
+    (desc, results) = query_cur.exec_query(ck_all_cg_sql)
+    if len(results) != 1:
+      fail_list.append("all column group query row count not match");
+    elif len(results[0]) != 1:
+      fail_list.append("all column group query column count not match")
+    elif results[0][0] != 0:
+      can_upgrade = False
+      fail_list.append("exist column group with row_format cs_encoding_row_store for observer not support avx2 instruction set, table count = {0}".format(results[0][0]));
+
+  if can_upgrade:
+    logging.info("check upgrade for arch-dependant cs_encoding format success")
+  else:
+    logging.info("check upgrade for arch-dependant cs_encoding format failed")
+
 # 开始升级前的检查
 def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
   try:
@@ -823,6 +975,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_variable_binlog_row_image(query_cur)
       check_oracle_standby_replication_exist(query_cur)
       check_disk_space_for_mds_sstable_compat(query_cur)
+      check_cs_encoding_arch_dependency_compatiblity(query_cur)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)

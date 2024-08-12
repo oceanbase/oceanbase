@@ -783,6 +783,7 @@ int ObIMicroBlockCache::get_cache_block(
         STORAGE_LOG(WARN, "Fail to get micro block from block cache, ", K(ret));
       }
       EVENT_INC(ObStatEventIds::BLOCK_CACHE_MISS);
+      inc_cache_miss();
     } else {
       EVENT_INC(ObStatEventIds::BLOCK_CACHE_HIT);
     }

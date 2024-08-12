@@ -54,6 +54,7 @@ int ObRestoreUtil::fill_physical_restore_job(
     job.set_tenant_name(arg.tenant_name_);
     job.set_initiator_job_id(arg.initiator_job_id_);
     job.set_initiator_tenant_id(arg.initiator_tenant_id_);
+    job.set_restore_type(FULL_RESTORE_TYPE);
     if (OB_FAIL(job.set_description(arg.description_))) {
       LOG_WARN("fail to set description", K(ret));
     }
@@ -157,6 +158,7 @@ int ObRestoreUtil::insert_user_tenant_restore_job(
       job_info.set_status(share::PHYSICAL_RESTORE_PRE);
       job_info.set_initiator_job_id(job_info.get_job_id());
       job_info.set_initiator_tenant_id(OB_SYS_TENANT_ID);
+      job_info.set_restore_type(initaitor_job_info.get_restore_type());
       ObPhysicalRestoreTableOperator user_restore_op;
       ObRestorePersistHelper restore_persist_op;
       ObRestoreProgressPersistInfo persist_info;
@@ -1619,6 +1621,8 @@ int ObRestoreUtil::do_fill_backup_info_(
       LOG_WARN("failed to read ls attr info", K(ret), K(backup_set_info));
     } else if (OB_FAIL(check_backup_set_version_match_(backup_set_info.backup_set_file_))) {
       LOG_WARN("failed to check backup set version match", K(ret));
+    } else if (OB_FAIL(check_backup_set_compatible_(job.get_restore_type(), backup_set_info.backup_set_file_))) {
+      LOG_WARN("failed to check backup compatible", K(ret));
     } else if (OB_FAIL(job.set_backup_tenant_name(locality_info.tenant_name_.ptr()))) {
       LOG_WARN("fail to set backup tenant name", K(ret), "tenant name", locality_info.tenant_name_);
     } else if (OB_FAIL(job.set_backup_cluster_name(locality_info.cluster_name_.ptr()))) {
@@ -1628,6 +1632,7 @@ int ObRestoreUtil::do_fill_backup_info_(
       job.set_source_cluster_version(backup_set_info.backup_set_file_.cluster_version_);
       job.set_compat_mode(locality_info.compat_mode_);
       job.set_backup_tenant_id(backup_set_info.backup_set_file_.tenant_id_);
+      job.set_backup_compatible(backup_set_info.backup_set_file_.backup_compatible_);
       // becuase of no consistent scn in 4.1.x backup set, using ls_info.backup_scn to set the restore consisitent scn
       // ls_info.backup_scn is the default replayable scn when create restore tenant,
       // so using it as the consistet scn can also make recovery service work normally
@@ -1684,6 +1689,18 @@ int ObRestoreUtil::check_backup_set_version_match_(share::ObBackupSetFileDesc &b
   return ret;
 }
 
+int ObRestoreUtil::check_backup_set_compatible_(const share::ObRestoreType &restore_type, const share::ObBackupSetFileDesc &backup_file_desc)
+{
+  int ret = OB_SUCCESS;
+  if (restore_type.is_quick_restore() && backup_file_desc.is_backup_set_not_support_quick_restore()) {
+    // old compatible backup set cannot lauch quick restore
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("quick restore from old compatible backup set is not allowed", K(ret), "compatible", backup_file_desc.backup_compatible_);
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "quick restore from old compatible backup set is");
+  }
+  return ret;
+}
+
 int ObRestoreUtil::recycle_restore_job(const uint64_t tenant_id,
                                common::ObMySQLProxy &sql_proxy,
                                const ObPhysicalRestoreJob &job_info)
@@ -1699,27 +1716,33 @@ int ObRestoreUtil::recycle_restore_job(const uint64_t tenant_id,
     LOG_WARN("failed to start trans", KR(ret), K(exec_tenant_id));
   } else {
     ObPhysicalRestoreTableOperator restore_op;
+    ObRestorePersistHelper persist_helper;
     if (OB_FAIL(restore_op.init(&trans, tenant_id, share::OBCG_STORAGE /*group_id*/))) {
       LOG_WARN("failed to init restore op", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(persist_helper.init(tenant_id, share::OBCG_STORAGE /*group_id*/))) {
+      LOG_WARN("failed to init persist helper", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(persist_helper.record_restore_info(trans))) {
+      LOG_WARN("failed to record restore info", KR(ret), K(tenant_id));
     } else if (OB_FAIL(restore_op.remove_job(job_id))) {
       LOG_WARN("failed to remove job", KR(ret), K(tenant_id), K(job_id));
     } else {
       ObHisRestoreJobPersistInfo history_info;
       ObRestoreProgressPersistInfo restore_progress;
-      ObRestorePersistHelper persist_helper;
       ObRestoreJobPersistKey key;
       common::ObArray<share::ObLSRestoreProgressPersistInfo> ls_restore_progress_infos;
       key.tenant_id_ = tenant_id;
       key.job_id_ = job_info.get_job_id();
-      if (OB_FAIL(persist_helper.init(tenant_id, share::OBCG_STORAGE /*group_id*/))) {
-        LOG_WARN("failed to init persist helper", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(persist_helper.get_restore_process(
+      if (OB_FAIL(persist_helper.get_restore_process(
                      trans, key, restore_progress))) {
         LOG_WARN("failed to get restore progress", KR(ret), K(key));
       } else if (OB_FAIL(history_info.init_with_job_process(
                      job_info, restore_progress))) {
         LOG_WARN("failed to init history", KR(ret), K(job_info), K(restore_progress));
       } else if (history_info.is_restore_success()) { // restore succeed, no need to record comment
+        // move ls restore progress to history.
+        if (OB_FAIL(persist_helper.move_ls_restore_progress_to_history(trans))) {
+          LOG_WARN("failed to move ls restore progress to history", K(ret));
+        }
       } else if (OB_FAIL(persist_helper.get_all_ls_restore_progress(trans, ls_restore_progress_infos))) {
         LOG_WARN("failed to get ls restore progress", K(ret));
       } else {
@@ -2021,6 +2044,21 @@ int ObRestoreUtil::get_multi_path_backup_sys_time_zone_(
         break;
       }
     }
+  }
+  return ret;
+}
+
+int ObRestoreUtil::check_tenant_is_in_remote_restore_data_mode(
+    common::ObISQLClient &proxy, const uint64_t tenant_id, bool &is_remote)
+{
+  int ret = OB_SUCCESS;
+  ObAllTenantInfo all_tenant_info;
+  is_remote = false;
+  if (OB_FAIL(ObAllTenantInfoProxy::load_tenant_info(
+              tenant_id, &proxy, false/*for_update*/, all_tenant_info))) {
+    LOG_WARN("fail to load tenant info", K(ret), K(tenant_id));
+  } else {
+    is_remote = all_tenant_info.get_restore_data_mode().is_remote_mode();
   }
   return ret;
 }

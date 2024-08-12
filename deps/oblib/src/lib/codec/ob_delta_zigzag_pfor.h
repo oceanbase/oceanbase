@@ -42,6 +42,7 @@ OB_INLINE static void encode_one(const UIntT *ip, const uint32_t idx, UIntT &sta
 
 template<typename UIntT>
 /*OB_INLINE*/ static int encode(
+    const ObCodec::PFoRPackingType pfor_packing_type,
     UIntT *&lp,
     const char *in,
     uint64_t in_len,
@@ -64,7 +65,7 @@ template<typename UIntT>
       encode_one(ip, 3, start, p);
     }
 
-    if (OB_FAIL(ObSIMDFixedPFor::__encode_array<UIntT>(lp, BSIZE, out, out_buf_len, out_pos))) {
+    if (OB_FAIL(ObSIMDFixedPFor::__encode_array<UIntT>(pfor_packing_type, lp, BSIZE, out, out_buf_len, out_pos))) {
       LIB_LOG(WARN, "fail to encode array", K(ret), K(out_buf_len), K(out_pos));
     } else {
       DO_PREFETCH(ip + 512);
@@ -99,6 +100,7 @@ OB_INLINE static void deocde_one(UIntT *op, const uint32_t idx, UIntT &start, UI
 
 template<typename UIntT>
 OB_INLINE static void decode(
+    const ObCodec::PFoRPackingType pfor_packing_type,
     UIntT *&lp,
     const char *in,
     const uint64_t in_len,
@@ -122,7 +124,7 @@ OB_INLINE static void decode(
     DO_PREFETCH(in + pos + 512);
 
     tmp_out_pos = 0;
-    ObSIMDFixedPFor::__decode_array<UIntT>(in, in_len, pos, BSIZE, tmp_out, tmp_out_len, tmp_out_pos);
+    ObSIMDFixedPFor::__decode_array<UIntT>(pfor_packing_type, in, in_len, pos, BSIZE, tmp_out, tmp_out_len, tmp_out_pos);
     p = lp;
 
     for(; p != (lp + BSIZE); p+=4,op+=4) {
@@ -164,25 +166,26 @@ public:
                         uint64_t &out_pos) override
   {
     int ret = OB_SUCCESS;
+    const ObCodec::PFoRPackingType pfor_ptype = get_pfor_packing_type();
     switch (get_uint_bytes()) {
       case 1 : {
         uint8_t *t_lp = reinterpret_cast<uint8_t *>(lp);
-        ret = ObDeltaZigzagFixedPfor::encode<uint8_t>(t_lp, in, in_len, out, out_len, out_pos, 0);
+        ret = ObDeltaZigzagFixedPfor::encode<uint8_t>(pfor_ptype, t_lp, in, in_len, out, out_len, out_pos, 0);
         break;
       }
       case 2 : {
         uint16_t *t_lp = reinterpret_cast<uint16_t *>(lp);
-        ret = ObDeltaZigzagFixedPfor::encode<uint16_t>(t_lp, in, in_len, out, out_len, out_pos, 0);
+        ret = ObDeltaZigzagFixedPfor::encode<uint16_t>(pfor_ptype, t_lp, in, in_len, out, out_len, out_pos, 0);
         break;
       }
       case 4 : {
         uint32_t *t_lp = reinterpret_cast<uint32_t *>(lp);
-        ret = ObDeltaZigzagFixedPfor::encode<uint32_t>(t_lp, in, in_len, out, out_len, out_pos, 0);
+        ret = ObDeltaZigzagFixedPfor::encode<uint32_t>(pfor_ptype, t_lp, in, in_len, out, out_len, out_pos, 0);
         break;
       }
       case 8 : {
         uint64_t *t_lp = reinterpret_cast<uint64_t *>(lp);
-        ret = ObDeltaZigzagFixedPfor::encode<uint64_t>(t_lp, in, in_len, out, out_len, out_pos, 0);
+        ret = ObDeltaZigzagFixedPfor::encode<uint64_t>(pfor_ptype, t_lp, in, in_len, out, out_len, out_pos, 0);
         break;
       }
       default : {
@@ -205,25 +208,26 @@ public:
                         uint64_t &out_pos) override
   {
     int ret = OB_SUCCESS;
+    const ObCodec::PFoRPackingType pfor_ptype = get_pfor_packing_type();
     switch (get_uint_bytes())  {
       case 1 : {
         uint8_t *t_lp = reinterpret_cast<uint8_t *>(lp);
-        ObDeltaZigzagFixedPfor::decode<uint8_t>(t_lp, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
+        ObDeltaZigzagFixedPfor::decode<uint8_t>(pfor_ptype, t_lp, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
         break;
       }
       case 2 : {
         uint16_t *t_lp = reinterpret_cast<uint16_t *>(lp);
-        ObDeltaZigzagFixedPfor::decode<uint16_t>(t_lp, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
+        ObDeltaZigzagFixedPfor::decode<uint16_t>(pfor_ptype, t_lp, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
         break;
       }
       case 4 : {
         uint32_t *t_lp = reinterpret_cast<uint32_t *>(lp);
-        ObDeltaZigzagFixedPfor::decode<uint32_t>(t_lp, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
+        ObDeltaZigzagFixedPfor::decode<uint32_t>(pfor_ptype, t_lp, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
         break;
       }
       case 8 : {
         uint64_t *t_lp = reinterpret_cast<uint64_t *>(lp);
-        ObDeltaZigzagFixedPfor::decode<uint64_t>(t_lp, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
+        ObDeltaZigzagFixedPfor::decode<uint64_t>(pfor_ptype, t_lp, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
         break;
       }
       default : {

@@ -1173,9 +1173,15 @@ int ObExprOperator::aggregate_result_type_for_merge(
         ret = OB_INVALID_ARGUMENT; // not compatible input
         LOG_WARN("invalid argument. wrong type for merge", K(i), K(types[i].get_type()), K(ret));
       } else if (is_oracle_all_same_number) {
-        is_oracle_all_same_number = types[i].get_type() == types[i-1].get_type() &&
-          types[i].get_precision() == types[i-1].get_precision() &&
-          types[i].get_scale() == types[i-1].get_scale();
+        if (types[i].is_null() && types[0].is_decimal_int()) {
+          // optimization for decimal_int type, when the parameter has null, try not to affect
+          // the result type, otherwise the parameter may be cast to number and result type will
+          // also be number.
+        } else {
+          is_oracle_all_same_number = types[i].get_type() == types[i-1].get_type() &&
+            types[i].get_precision() == types[i-1].get_precision() &&
+            types[i].get_scale() == types[i-1].get_scale();
+        }
       }
     }
     if (OB_SUCC(ret)) {
@@ -2207,12 +2213,10 @@ int ObExprOperator::calc_cmp_type3(ObExprResType &type,
     || type3.is_blob() || type3.is_blob_locator())) {
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, ob_obj_type_str(type1.get_type()), ob_obj_type_str(type2.get_type()));
-  } else if (OB_SUCC(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
-                                                            type2.get_type(),
-                                                            cmp_type))) {
-    if (OB_SUCC(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type,
-                                                              cmp_type,
-                                                              type3.get_type()))) {
+  } else if (OB_SUCC(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, type2.get_type(), cmp_type))) {
+    if (OB_UNLIKELY(ObMaxType == cmp_type)) {
+      ret = OB_INVALID_ARGUMENT; // not compatible input
+    } else if (OB_SUCC(ObExprResultTypeUtil::get_relational_cmp_type(cmp_type, cmp_type, type3.get_type()))) {
       if (OB_UNLIKELY(ObMaxType == cmp_type)) {
         ret = OB_INVALID_ARGUMENT; // not compatible input
       }
@@ -5912,13 +5916,36 @@ int ObLocationExprOperator::calc_(const ObExpr &expr, const ObExpr &sub_arg,
   if (OB_SUCC(ret) && !has_result && 3 == expr.arg_cnt_) {
     if (OB_FAIL(expr.args_[2]->eval(ctx, pos))) {
       LOG_WARN("eval arg 2 failed", K(ret));
-    } else if (pos->is_null()) {
-      res_datum.set_int(0);
-      has_result = true;
-    } else {
+    } else if (!pos->is_null()) {
       // TODO: 验证MySQL下uint64超过int64值域范围，隐式cast的结果
       //
       pos_int = pos->get_int();
+    } else if (lib::is_oracle_mode()) {
+      res_datum.set_int(0);
+      has_result = true;
+    } else {
+      has_result = true;
+      ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+      const ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+      uint64_t compat_version = 0;
+      ObCompatType compat_type = COMPAT_MYSQL57;
+      bool is_enable = false;
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session info is null", K(ret));
+      } else if (OB_FAIL(helper.get_compat_version(compat_version))) {
+        LOG_WARN("failed to get compat version", K(ret));
+      } else if (OB_FAIL(ObCompatControl::check_feature_enable(compat_version,
+                                                               ObCompatFeatureType::FUNC_LOCATE_NULL,
+                                                               is_enable))) {
+        LOG_WARN("failed to check feature enable", K(ret));
+      } else if (OB_FAIL(session->get_compatibility_control(compat_type))) {
+        LOG_WARN("failed to get compat type", K(ret));
+      } else if (is_enable && COMPAT_MYSQL8 == compat_type) {
+        res_datum.set_null();
+      } else {
+        res_datum.set_int(0);
+      }
     }
   }
 
@@ -6634,16 +6661,20 @@ int ObRelationalExprOperator::row_cmp(
         --i;
         break;
       }
-    } else if (left->is_null()) {
-      cnt_row_null = true;
     } else if (OB_FAIL(r_row[i]->eval(r_ctx, right))) {
       if (OB_FAIL(try_get_inner_row_cmp_ret<false>(ret, first_nonequal_cmp_ret))) {
-        LOG_WARN("failed to eval right in row cmp", K(ret));
+        if (left->is_null()) {
+          // override ret if left input is null due to short-circuit calculation
+          ret = OB_SUCCESS;
+          cnt_row_null = true;
+        } else {
+          LOG_WARN("failed to eval right in row cmp", K(ret));
+        }
       } else {
         --i;
         break;
       }
-    } else if (right->is_null()) {
+    } else if (left->is_null() || right->is_null()) {
       cnt_row_null = true;
     } else if (OB_FAIL(((DatumCmpFunc)expr.inner_functions_[i])(*left, *right, first_nonequal_cmp_ret))) {
       LOG_WARN("failed to cmp", K(ret));

@@ -46,6 +46,7 @@ OB_DEF_SERIALIZE(ObTableInsertUpSpec)
   }
   OB_UNIS_ENCODE(conflict_checker_ctdef_);
   OB_UNIS_ENCODE(all_saved_exprs_);
+  OB_UNIS_ENCODE(has_global_unique_index_);
   return ret;
 }
 
@@ -67,6 +68,7 @@ OB_DEF_DESERIALIZE(ObTableInsertUpSpec)
   }
   OB_UNIS_DECODE(conflict_checker_ctdef_);
   OB_UNIS_DECODE(all_saved_exprs_);
+  OB_UNIS_DECODE(has_global_unique_index_);
   return ret;
 }
 
@@ -86,6 +88,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableInsertUpSpec)
   }
   OB_UNIS_ADD_LEN(conflict_checker_ctdef_);
   OB_UNIS_ADD_LEN(all_saved_exprs_);
+  OB_UNIS_ADD_LEN(has_global_unique_index_);
   return len;
 }
 

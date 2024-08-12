@@ -238,6 +238,11 @@ int ObRemoteLogWriter::submit_entries_(ObFetchLogTask &task)
     } else if (OB_UNLIKELY(! entry.check_integrity())) {
       ret = OB_INVALID_DATA;
       LOG_WARN("entry is invalid", K(entry), K(lsn), K(task));
+    } else if (! entry.check_compatibility()) {
+      ret = OB_EAGAIN;
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+        LOG_ERROR("data version is not new enough to recover clog", KR(ret));
+      }
     } else if (task.cur_lsn_ > lsn) {
       LOG_INFO("repeated log, just skip", K(lsn), K(entry), K(task));
     } else if (FALSE_IT(entry_size = entry.get_serialize_size())) {

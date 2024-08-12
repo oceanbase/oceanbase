@@ -111,7 +111,7 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
         if (udf_package_id_ == T_OBJ_XML
             && types[i].is_xml_sql_type() && params_type_.at(i).is_string_type()) {
             ret = OB_ERR_WRONG_FUNC_ARGUMENTS_TYPE;
-            LOG_WARN("ORA-06553:PLS-306:wrong number or types of arguments in call procedure",
+            LOG_WARN("OBE-06553:PLS-306:wrong number or types of arguments in call procedure",
                      K(i), K(udf_package_id_), K(udf_id_), K(types[i]), K(params_type_.at(i)));
         } else {
           types[i].set_calc_accuracy(params_type_.at(i).get_accuracy());
@@ -512,9 +512,10 @@ int ObExprUDF::is_child_of(ObObj &parent, ObObj &child, bool &is_child)
       case pl::PL_VARRAY_TYPE: {
         pl::ObPLCollection* coll = reinterpret_cast<pl::ObPLCollection*>(parent.get_ext());
         CK (OB_NOT_NULL(coll));
-        CK (coll->get_data());
         for (int64_t i = 0; OB_SUCC(ret) && i < coll->get_count(); ++i) {
-          if (!(coll->get_data()[i]).is_ext()) {
+          CK (OB_NOT_NULL(coll->get_data()));
+          if (OB_FAIL(ret)) {
+          } else if (!(coll->get_data()[i]).is_ext()) {
             ObObj tmp;
             tmp.set_ext(reinterpret_cast<int64_t>(&(coll->get_data()[i])));
             OZ (SMART_CALL(is_child_of(tmp, child, is_child)));

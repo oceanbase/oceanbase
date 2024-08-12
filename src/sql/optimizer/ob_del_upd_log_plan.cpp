@@ -1800,6 +1800,11 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
         if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
           LOG_WARN("add related index ids failed", K(ret));
         }
+      } else if (primary_dml_info.is_update_part_key_ && index_schema->is_fts_index()) {
+        // If part key is updated and it is fts index, need to be added into the related index ids.
+        if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
+          LOG_WARN("add related index ids failed", K(ret));
+        }
       } else {
         bool found_col = false;
         //in update clause, need to check this local index whether been updated

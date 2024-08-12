@@ -24,6 +24,7 @@
 #include "storage/ob_sstable_struct.h"
 #include "storage/compaction/ob_tenant_freeze_info_mgr.h"
 #include "storage/ob_sstable_struct.h"
+#include "storage/backup/ob_backup_data_struct.h"
 #include "index_block/ob_index_block_row_struct.h"
 #include "ob_macro_block_struct.h"
 #include "ob_macro_block_handle.h"
@@ -344,7 +345,8 @@ int ObMacroBlock::write_index_micro_block(
 }
 
 int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
-                        ObMacroBlocksWriteCtx &block_write_ctx)
+                        ObMacroBlocksWriteCtx &block_write_ctx,
+                        ObIODevice *device_handle)
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
@@ -372,10 +374,16 @@ int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
   } else {
     ObMacroBlockWriteInfo write_info;
     write_info.buffer_ = data_.data();
-    write_info.size_ = data_.upper_align_length();
+    if (backup::ObBackupDeviceMacroBlockId::is_backup_block_file(macro_handle.get_macro_id().first_id())) {
+      write_info.size_ = data_.capacity();
+    } else {
+      write_info.size_ = data_.upper_align_length();
+    }
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
     write_info.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
     write_info.io_desc_.set_sys_module_id(ObIOModule::SSTABLE_MACRO_BLOCK_WRITE_IO);
+    write_info.device_handle_ = device_handle;
+    write_info.has_backup_device_handle_ = OB_NOT_NULL(device_handle);
     write_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
     if (OB_FAIL(macro_handle.async_write(write_info))) {
       STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(macro_handle), K(write_info));

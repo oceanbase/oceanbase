@@ -55,7 +55,7 @@ public:
   virtual void update_and_analyze_progress() override;
   virtual int create_sstable(const blocksstable::ObSSTable *&new_sstable) override;
   virtual int collect_running_info() override;
-  INHERIT_TO_STRING_KV("ObBasicTabletMergeCtx", ObBasicTabletMergeCtx, K_(merged_table_handle), K_(merge_info));
+  INHERIT_TO_STRING_KV("ObBasicTabletMergeCtx", ObBasicTabletMergeCtx, K_(merge_info));
   storage::ObTableHandleV2 merged_table_handle_;
   ObTabletMergeInfo merge_info_;
 };
@@ -97,7 +97,10 @@ protected:
   virtual int prepare_schema() override;
   virtual int try_swap_tablet(ObGetMergeTablesResult &get_merge_table_result) override
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
-  virtual int cal_merge_param() override { return static_param_.cal_major_merge_param(); }
+  virtual int cal_merge_param() override {
+    return static_param_.cal_major_merge_param(false /*force_full_merge*/,
+                                               progressive_merge_mgr_);
+  }
 };
 
 } // namespace compaction

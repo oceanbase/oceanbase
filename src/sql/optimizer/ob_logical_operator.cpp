@@ -1402,23 +1402,13 @@ int ObLogicalOperator::print_used_hint(PlanText &plan_text)
 int ObLogicalOperator::print_outline_table(PlanText &plan_text, const TableItem *table_item) const
 {
   int ret = OB_SUCCESS;
-  char *buf = plan_text.buf_;
-  int64_t &buf_len = plan_text.buf_len_;
-  int64_t &pos = plan_text.pos_;
+  ObTableInHint table_hint;
   if (OB_ISNULL(table_item)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(table_item));
-  } else if (table_item->is_basic_table() && !table_item->database_name_.empty() &&
-             OB_FAIL(BUF_PRINTF("\"%.*s\".",
-                                table_item->database_name_.length(),
-                                table_item->database_name_.ptr()))) {
-    LOG_WARN("fail to print db name", K(ret), K(buf), K(buf_len), K(pos));
-  } else if (OB_FAIL(BUF_PRINTF("\"%.*s\"@\"%.*s\"",
-                                table_item->get_object_name().length(),
-                                table_item->get_object_name().ptr(),
-                                table_item->qb_name_.length(),
-                                table_item->qb_name_.ptr()))) {
-    LOG_WARN("fail to print buffer", K(ret), K(buf), K(buf_len), K(pos));
+  } else if (OB_FALSE_IT(table_hint.set_table(*table_item))) {
+  } else if (OB_FAIL(table_hint.print_table_in_hint(plan_text))) {
+    LOG_WARN("failed to print table hint", K(ret));
   }
   return ret;
 }

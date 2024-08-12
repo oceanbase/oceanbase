@@ -135,7 +135,7 @@ int ObDirectLoadTableGuard::acquire_memtable_once_()
       }
 
       if (OB_FAIL(ret)) {
-        if ((OB_ALLOCATE_MEMORY_FAILED == ret || OB_MINOR_FREEZE_NOT_ALLOW == ret) &&
+        if ((OB_EAGAIN == ret || OB_ALLOCATE_MEMORY_FAILED == ret || OB_MINOR_FREEZE_NOT_ALLOW == ret) &&
             (ObClockGenerator::getClock() - start_time < MAX_RETRY_CREATE_MEMTABLE_TIME)) {
           ret = OB_SUCCESS;
           need_create_new_memtable = true;

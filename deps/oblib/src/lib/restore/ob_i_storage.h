@@ -60,6 +60,7 @@ int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     const char *fragment_name, char *name_buf, const int64_t name_buf_len);
 int construct_fragment_full_name(const ObString &logical_appendable_object_name,
     const int64_t start, const int64_t end, char *name_buf, const int64_t name_buf_len);
+int ob_apr_abort_fn(int retcode);
 
 struct ObStorageObjectMetaBase
 {
@@ -288,6 +289,13 @@ public:
   virtual int close() = 0;
   virtual int64_t get_length() const = 0;
   virtual bool is_opened() const = 0;
+};
+
+class ObObjectStorageMallocHookGuard : public lib::ObMallocHookAttrGuard
+{
+public:
+  ObObjectStorageMallocHookGuard(const ObObjectStorageInfo *storage_info);
+  ~ObObjectStorageMallocHookGuard();
 };
 
 }//common

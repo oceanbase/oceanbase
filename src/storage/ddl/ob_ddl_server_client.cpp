@@ -91,7 +91,7 @@ int ObDDLServerClient::create_hidden_table(
     LOG_WARN("failed to set register task id", K(ret), K(res));
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(wait_task_reach_pending(arg.tenant_id_, res.task_id_, snapshot_version, data_format_version, *GCTX.sql_proxy_))) {
+    if (OB_FAIL(wait_task_reach_pending(arg.get_tenant_id(), res.task_id_, snapshot_version, data_format_version, *GCTX.sql_proxy_))) {
       LOG_WARN("failed to wait table lock. remove register task id and abort redef table task.", K(ret), K(arg), K(res));
     }
 #ifdef ERRSIM
@@ -104,7 +104,7 @@ int ObDDLServerClient::create_hidden_table(
       int tmp_ret = OB_SUCCESS;
       obrpc::ObAbortRedefTableArg abort_redef_table_arg;
       abort_redef_table_arg.task_id_ = res.task_id_;
-      abort_redef_table_arg.tenant_id_ = arg.tenant_id_;
+      abort_redef_table_arg.tenant_id_ = arg.get_tenant_id();
       if (OB_TMP_FAIL(abort_redef_table(abort_redef_table_arg, &session))) {
         LOG_WARN("failed to abort redef table", K(tmp_ret), K(abort_redef_table_arg));
       }
@@ -113,7 +113,7 @@ int ObDDLServerClient::create_hidden_table(
   }
   char tenant_id_buffer[256];
   snprintf(tenant_id_buffer, sizeof(tenant_id_buffer), "tenant_id:%ld, dest_tenant_id:%ld",
-            arg.tenant_id_, arg.dest_tenant_id_);
+            arg.get_tenant_id(), arg.get_dest_tenant_id());
   SERVER_EVENT_ADD("ddl", "create hidden table",
     "tenant_id", tenant_id_buffer,
     "ret", ret,

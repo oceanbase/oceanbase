@@ -942,11 +942,20 @@ int XmlTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx &ctx, ObEvalCtx &eval_
   ObString j_str;
   bool is_null = false;
   ObIMulModeBase *input_node = NULL;
+  ObDatum *t_datum = nullptr;
 
   if (doc_type == ObNullType) {
     ret = OB_ITER_END;
   } else if (ctx.is_xml_table_func()) {
-    if (!doc_obj_datum.is_xml_sql_type() && !ob_is_string_type(doc_type)) {
+    if (ob_is_extend(doc_type)) {
+      if (OB_FAIL(ctx.spec_ptr_->value_expr_->eval(eval_ctx, t_datum))) {
+        LOG_WARN("eval xml arg failed", K(ret));
+      } else if (t_datum->is_null()) {
+        ret = OB_ITER_END;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (!doc_obj_datum.is_xml_sql_type() && !ob_is_string_type(doc_type)) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_WARN("inconsistent datatypes", K(ret), K(ob_obj_type_str(doc_type)));
     } else {

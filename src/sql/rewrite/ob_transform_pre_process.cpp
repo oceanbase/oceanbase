@@ -6575,9 +6575,9 @@ int ObTransformPreProcess::replace_inner_row_cmp_val_recursively(ObRawExprFactor
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (T_OP_LT == root_expr->get_expr_type() || T_OP_GT == root_expr->get_expr_type()) {
-    // For row comparisons that are T_OP_LT/ or T_OP_GT expressions, need to check whether the
-    // range may be expanded. If so, change it to the corresponding inner expression.
+  } else if (T_OP_LE <= root_expr->get_expr_type() && T_OP_GT >= root_expr->get_expr_type()) {
+    // For row comparisons that are T_OP_LT/T_OP_LE or T_OP_GT/T_OP_GE expressions, need to check
+    // whether the range may be expanded. If so, change it to the corresponding inner expression.
     int row_dim = -1;
     if (OB_FAIL(ObRelationalExprOperator::is_row_cmp(*root_expr, row_dim))) {
       LOG_WARN("failed to get row dimension", K(ret));
@@ -6587,7 +6587,7 @@ int ObTransformPreProcess::replace_inner_row_cmp_val_recursively(ObRawExprFactor
         LOG_WARN("failed to check and transform", K(ret));
       }
     }
-  } else if (T_OP_SQ_LT == root_expr->get_expr_type() || T_OP_SQ_GT == root_expr->get_expr_type()) {
+  } else if (T_OP_SQ_LE <= root_expr->get_expr_type() && T_OP_SQ_GT >= root_expr->get_expr_type()) {
     // We also need to handle the comparison of subqueries, only focus on the op_row part of
     // the subquery comparison.
     if (OB_UNLIKELY(2 != root_expr->get_param_count())) {
@@ -6623,8 +6623,8 @@ int ObTransformPreProcess::check_and_transform_inner_row_cmp_val(ObRawExprFactor
              OB_ISNULL(right = row_cmp_expr->get_param_expr(1))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid null params", K(ret), KP(left), KP(right));
-  } else if (T_OP_LT != op_type && T_OP_GT != op_type &&
-             T_OP_SQ_LT != op_type && T_OP_SQ_GT != op_type) {
+  } else if (!((T_OP_LE <= op_type && T_OP_GT >= op_type) ||
+               (T_OP_SQ_LE <= op_type && T_OP_SQ_GT >= op_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid op type", K(ret), K(op_type));
   } else if (T_OP_ROW != left->get_expr_type() && T_OP_ROW != right->get_expr_type()) {
@@ -6662,6 +6662,41 @@ int ObTransformPreProcess::check_and_transform_inner_row_cmp_val(ObRawExprFactor
 }
 
 template<bool IS_LEFT>
+static int get_error_ret(const ObItemType op_type)
+{
+  int error_ret = OB_SUCCESS;
+  switch (op_type) {
+    case T_OP_LT:
+    case T_OP_SQ_LT: {
+      // (c1, c2) < (cast_expr, cast_expr) => (c1, c2) < (cast_up(expr), cast_up(expr))
+      error_ret = IS_LEFT ? OB_ERR_MAX_VALUE : OB_ERR_MIN_VALUE;
+      break;
+    }
+    case T_OP_GT:
+    case T_OP_SQ_GT: {
+      // (c1, c2) > (cast_expr, cast_expr) => (c1, c2) > (cast_down(expr), cast_down(expr))
+      error_ret = IS_LEFT ? OB_ERR_MIN_VALUE : OB_ERR_MAX_VALUE;
+      break;
+    }
+    case T_OP_LE:
+    case T_OP_SQ_LE: {
+      // (c1, c2) <= (case_expr, cast_expr) => (c1, c2) <= (cast_down(expr), cast_down(expr))
+      error_ret = IS_LEFT ? OB_ERR_MIN_VALUE : OB_ERR_MAX_VALUE;
+      break;
+    }
+    case T_OP_GE:
+    case T_OP_SQ_GE: {
+      // (c1, c2) >= (cast_expr, cast_expr) => (c1, c2) < (cast_up(expr), cast_up(expr))
+      error_ret = IS_LEFT ? OB_ERR_MAX_VALUE : OB_ERR_MIN_VALUE;
+      break;
+    }
+    default:
+      break;
+  }
+  return error_ret;
+}
+
+template<bool IS_LEFT>
 int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session,
@@ -6676,10 +6711,7 @@ int ObTransformPreProcess::transform_inner_op_row_cmp_for_decimal_int(
   // if the input expr is on the left and it is greater than the value of the column,
   // OB_ERR_MIN_VALUE should be returned at this time, otherwise it is the opposite.
   const ObItemType op_type = row_cmp_expr->get_expr_type();
-  const bool is_err_min_val =
-    (IS_LEFT && (op_type == T_OP_GT || op_type == T_OP_SQ_GT)) ||  // (cast_expr, cast_expr) > (c1, c2)
-      (!IS_LEFT && (op_type == T_OP_LT || op_type == T_OP_SQ_LT)); // (c1, c2) < (cast_expr, cast_expr)
-  const int error_ret = is_err_min_val ? -OB_ERR_MIN_VALUE : -OB_ERR_MAX_VALUE;
+  const int error_ret = -get_error_ret<IS_LEFT>(op_type);
   // save the error code in the extra field of the expression to pass information
   const uint64_t extra = static_cast<uint64_t>(error_ret);
   const int64_t row_count = row_expr->get_param_count();

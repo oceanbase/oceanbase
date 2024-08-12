@@ -21,13 +21,22 @@
 #include "lib/container/ob_heap.h"
 #include "lib/container/ob_array_iterator.h"
 #include "lib/container/ob_array_wrap.h"
+#include "lib/restore/ob_storage.h"
 #include "common/storage/ob_io_device.h"
 #include "share/resource_manager/ob_resource_plan_info.h"
 
 namespace oceanbase
 {
+namespace backup
+{
+class ObBackupDeviceHelper;
+}
+
 namespace common
 {
+
+class ObObjectDevice;
+
 //the timestamp adjustment will not adjust until the queue is idle for more than this time
 static constexpr int64_t CLOCK_IDLE_THRESHOLD_US = 3L * 1000L * 1000L; // 3s
 static constexpr int64_t DEFAULT_IO_WAIT_TIME_MS = 5000L; // 5s
@@ -47,8 +56,8 @@ const char *get_io_mode_string(const ObIOMode mode);
 ObIOMode get_io_mode_enum(const char *mode_string);
 
 enum ObIOModule {
-  SYS_RESOURCE_GROUP_START_ID = 0,
-  SLOG_IO = SYS_RESOURCE_GROUP_START_ID,
+  SYS_MODULE_START_ID = 1,
+  SLOG_IO = SYS_MODULE_START_ID,
   CALIBRATION_IO,
   DETECT_IO,
   DIRECT_LOAD_IO,
@@ -69,30 +78,13 @@ enum ObIOModule {
   HA_MACRO_BLOCK_WRITER_IO,
   TMP_TENANT_MEM_BLOCK_IO,
   SSTABLE_MACRO_BLOCK_WRITE_IO,
-  SYS_RESOURCE_GROUP_END_ID
+
+  // end
+  SYS_MODULE_END_ID
 };
 
-const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
-const int64_t SYS_RESOURCE_GROUP_CNT = SYS_RESOURCE_GROUP_END_ID - SYS_RESOURCE_GROUP_START_ID;
-const uint64_t USER_RESOURCE_OTHER_GROUP_ID = 0;
-const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
+const int64_t SYS_MODULE_CNT = SYS_MODULE_END_ID - SYS_MODULE_START_ID;
 static constexpr char BACKGROUND_CGROUP[] = "background";
-
-OB_INLINE bool is_valid_group(const uint64_t group_id)
-{
-  return group_id >= USER_RESOURCE_OTHER_GROUP_ID && group_id != OB_INVALID_GROUP_ID;
-}
-
-OB_INLINE bool is_user_group(const uint64_t group_id)
-{
-  return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
-}
-
-OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
-{
-  //other group or user group
-  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_user_group(group_id);
-}
 
 const char *get_io_sys_group_name(ObIOModule module);
 struct ObIOFlag final
@@ -332,6 +324,7 @@ private:
   friend class ObAsyncIOChannel;
   friend class ObSyncIOChannel;
   friend class ObIORunner;
+  friend class backup::ObBackupDeviceHelper;
   bool is_inited_;
   bool is_finished_;
   bool is_canceled_;
@@ -388,10 +381,14 @@ public:
   void free_io_buffer();
   void inc_ref(const char *msg = nullptr);
   void dec_ref(const char *msg = nullptr);
+  bool use_sync_io_channel() const;
+  bool use_async_io_channel() const;
 
   TO_STRING_KV(K(is_inited_), K(tenant_id_), KP(control_block_), K(ref_cnt_), KP(raw_buf_), K(fd_),
-               K(trace_id_), K(retry_count_), K(tenant_io_mgr_), KPC(io_result_));
+               K(trace_id_), K(retry_count_), K(tenant_io_mgr_), K_(storage_accesser), KPC(io_result_));
 private:
+  friend class ObDeviceChannel;
+  friend class ObIOManager;
   friend class ObIOResult;
   friend class ObIOSender;
   friend class ObIORunner;
@@ -403,8 +400,10 @@ private:
   friend class ObIOUsage;
   friend class ObSysIOUsage;
   friend class ObIOScheduler;
+  friend class backup::ObBackupDeviceHelper;
   const char *get_io_data_buf(); //get data buf for MEMCPY before io_buf recycle
   int alloc_aligned_io_buf(char *&io_buf);
+  int hold_storage_accesser(const ObIOFd &fd, ObObjectDevice &object_device);
 
 public:
   ObIOResult *io_result_;
@@ -416,6 +415,7 @@ private:
   ObIOCB *control_block_;
   uint64_t tenant_id_;
   ObRefHolder<ObTenantIOManager> tenant_io_mgr_;
+  ObRefHolder<ObStorageAccesser> storage_accesser_;
   ObIOFd fd_;
   ObCurTraceId::TraceId trace_id_;
 };

@@ -482,10 +482,7 @@ int ObUpgradeUtils::update_sys_var_(
       const ObString zone("");
       ObSysParam sys_param;
       obrpc::ObAddSysVarArg arg;
-      arg.exec_tenant_id_ = tenant_id;
-      arg.if_not_exist_ = true; // not used
-      arg.sysvar_.set_tenant_id(tenant_id);
-      arg.update_sys_var_ = is_update;
+      ObSysVarSchema sysvar;
       if (OB_FAIL(sys_param.init(tenant_id, zone, name.ptr(), type,
           value.ptr(), min.ptr(), max.ptr(), info.ptr(), flag))) {
         LOG_WARN("sys_param init failed", KR(ret), K(tenant_id), K(name),
@@ -493,8 +490,9 @@ int ObUpgradeUtils::update_sys_var_(
       } else if (!sys_param.is_valid()) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("sys param is invalid", KR(ret), K(tenant_id), K(sys_param));
-      } else if (OB_FAIL(ObSchemaUtils::convert_sys_param_to_sysvar_schema(sys_param, arg.sysvar_))) {
+      } else if (OB_FAIL(ObSchemaUtils::convert_sys_param_to_sysvar_schema(sys_param, sysvar))) {
         LOG_WARN("convert sys param to sysvar schema failed", KR(ret));
+      } else if (OB_FAIL(arg.init(is_update, true /* if_not_exist_ */, tenant_id, sysvar))) {
       } else if (OB_FAIL(rpc_proxy.timeout(timeout).add_system_variable(arg))) {
         LOG_WARN("add system variable failed", KR(ret), K(timeout), K(arg));
       }

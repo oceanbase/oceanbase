@@ -144,7 +144,6 @@ private:
   int64_t drop_index_task_id_;
   bool drop_index_task_submitted_;
   ObRootService *root_service_;
-  ObDDLWaitTransEndCtx wait_trans_ctx_;
   obrpc::ObCreateIndexArg create_index_arg_;
   common::hash::ObHashMap<uint64_t, DependTaskStatus> dependent_task_result_map_;
 };

@@ -113,7 +113,6 @@ struct ObIDiagnoseInfo : public common::ObDLinkBase<ObIDiagnoseInfo> {
   }
   virtual void shallow_copy(ObIDiagnoseInfo *other) = 0;
   virtual void update(ObIDiagnoseInfo *other) {}
-  virtual int64_t get_add_time() const { return INT_MAX64; }
   virtual int64_t get_hash() const { return 0; }
   template<typename T>
   int deep_copy(ObIAllocator &allocator, T *&out_info);
@@ -173,7 +172,6 @@ struct ObScheduleSuspectInfo : public ObIDiagnoseInfo, public ObMergeDagHash
   int64_t hash() const;
   bool is_valid() const;
   virtual void shallow_copy(ObIDiagnoseInfo *other) override;
-  virtual int64_t get_add_time() const override;
   virtual int64_t get_hash() const override;
   TO_STRING_KV("merge_type", merge_type_to_str(merge_type_), K_(ls_id), K_(tablet_id), K_(add_time), K_(hash));
 
@@ -248,7 +246,7 @@ public:
 
   template<typename T>
   int alloc_and_add(const int64_t key, T *input_info);
-  int get_with_param(const int64_t key, ObIDiagnoseInfo *out_info, ObIAllocator &allocator);
+  int get_with_param(const int64_t key, ObIDiagnoseInfo &out_info, ObIAllocator &allocator);
   int delete_info(const int64_t key);
 
   int set_max(const int64_t size);
@@ -332,6 +330,10 @@ int ObIDiagnoseInfoMgr::alloc_and_add(const int64_t key, T *input_info)
   return ret;
 }
 
+/*
+  ObScheduleSuspectInfoMgr only provide add func, will purge suspect_info when alloc_mem_fail,
+  so there may have remain suspect info after compaction finish
+*/
 class ObScheduleSuspectInfoMgr : public ObIDiagnoseInfoMgr {
 public:
   static int mtl_init(ObScheduleSuspectInfoMgr *&schedule_suspect_info);
@@ -554,7 +556,6 @@ public:
   typedef common::hash::ObHashMap<ObLSID, ObLSCheckStatus> LSStatusMap;
 private:
   static const int64_t NS_TIME = 1000L * 1000L * 1000L;
-  static const int64_t TOLERATE_DAG_NET_HANG_INTERVAL = 1000L * 1000L * 60L * 10; // 10hour
   static const int64_t WAIT_MEDIUM_SCHEDULE_INTERVAL = NS_TIME * 60L * 5; // 5min // ns
   static const int64_t TOLERATE_MEDIUM_SCHEDULE_INTERVAL = NS_TIME * 60L * 60L * 36; // 36 hour
   static const int64_t DIAGNOSE_TABELT_MAX_COUNT = 10; // same type diagnose tablet max count
@@ -798,6 +799,9 @@ ADD_SUSPECT_INFO(merge_type, diagnose_type, UNKNOW_LS_ID, UNKNOW_TABLET_ID, info
     return ret;                                                                                \
   }
 
+/*
+  the input 'INFO_PARAM_INT##n_int, LOG_PARAMETER_KV##n' should match the ObSuspectInfoType in SUSPECT_INFO_TYPE_DEF
+*/
 #define DEFINE_SUSPECT_INFO_ADD_EXTRA(n, n_int)                                                  \
   template <typename T = int64_t, LOG_TYPENAME_TN##n>                                            \
   int ADD_SUSPECT_INFO(compaction::ObMergeType type, share::ObDiagnoseTabletType diagnose_type,     \

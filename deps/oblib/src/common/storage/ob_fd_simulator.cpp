@@ -142,8 +142,8 @@ int try_get_fd_inner(ObFdSimulator::FirstArray* first_array, int32_t second_arra
       ob_sim_fd_id sim_fd;
       sim_fd.sim_id_.first_pos_ = i;
       sim_fd.sim_id_.second_pos_ = free_id;
-      fd.first_id_ = sim_fd.fd_id_;
-      fd.second_id_ = second_array_p[free_id].slot_version;
+      fd.fd_id_ = sim_fd.fd_id_;
+      fd.slot_version_ = second_array_p[free_id].slot_version;
 
       second_array_p[free_id].pointer.ctx_pointer = ctx;
       first_array[i].second_array_free_hd = next_free_id;
@@ -159,8 +159,8 @@ int try_get_fd_inner(ObFdSimulator::FirstArray* first_array, int32_t second_arra
 }
 
 /*
-For object device, the fd(first_id_) is used to locate the ctx,
-the fd(second_id_) is used to record the version(validate the fd)
+For object device, the fd(fd_id_) is used to locate the ctx,
+the fd(slot_version_) is used to record the version(validate the fd)
 */
 int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIOFd &fd)
 {
@@ -185,7 +185,7 @@ int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIO
 
   if (OB_SUCCESS == ret && validate_fd(fd, true)) {
     //format some info into first fd
-    OB_LOG(DEBUG, "success get fd!", K(fd.first_id_), K(fd.second_id_), K(ctx));
+    OB_LOG(DEBUG, "success get fd!", K(fd), K(ctx));
     set_fd_device_type(fd, device_type);
     set_fd_flag(fd, flag);
     used_fd_cnt_++;
@@ -201,37 +201,37 @@ int ObFdSimulator::get_fd(void* ctx, const int device_type, const int flag, ObIO
 void ObFdSimulator::set_fd_device_type(ObIOFd& fd, int device_type)
 {
   ob_sim_fd_id fd_sim;
-  fd_sim.fd_id_ = fd.first_id_;
+  fd_sim.fd_id_ = fd.fd_id_;
   fd_sim.sim_id_.device_type_ = device_type;
-  fd.first_id_ = fd_sim.fd_id_;
+  fd.fd_id_ = fd_sim.fd_id_;
 }
 
 void ObFdSimulator::get_fd_device_type(const ObIOFd& fd, int &device_type)
 {
   ob_sim_fd_id fd_sim;
-  fd_sim.fd_id_ = fd.first_id_;
+  fd_sim.fd_id_ = fd.fd_id_;
   device_type = fd_sim.sim_id_.device_type_;
 }
 
 void ObFdSimulator::set_fd_flag(ObIOFd& fd, int flag)
 {
   ob_sim_fd_id fd_sim;
-  fd_sim.fd_id_ = fd.first_id_;
+  fd_sim.fd_id_ = fd.fd_id_;
   fd_sim.sim_id_.op_type_ = flag;
-  fd.first_id_ = fd_sim.fd_id_;
+  fd.fd_id_ = fd_sim.fd_id_;
 }
 
 void ObFdSimulator::get_fd_flag(const ObIOFd& fd, int &flag)
 {
   ob_sim_fd_id fd_sim;
-  fd_sim.fd_id_ = fd.first_id_;
+  fd_sim.fd_id_ = fd.fd_id_;
   flag = fd_sim.sim_id_.op_type_;
 }
 
 void ObFdSimulator::get_fd_slot_id(const ObIOFd& fd, int64_t& first_id, int64_t& second_id)
 {
   ob_sim_fd_id fd_sim;
-  fd_sim.fd_id_ = fd.first_id_;
+  fd_sim.fd_id_ = fd.fd_id_;
   first_id = fd_sim.sim_id_.first_pos_;
   second_id = fd_sim.sim_id_.second_pos_;
 }
@@ -253,9 +253,9 @@ bool ObFdSimulator::validate_fd(const ObIOFd& fd, bool expect)
     if (OB_ISNULL(second_array)) {
       // ignore ret
       OB_LOG(WARN, "fd maybe wrong, second fd array is null!", K(first_id), K(second_id), K(total_fd_cnt_), K(used_fd_cnt_));
-    } else if (second_array[second_id].slot_version != fd.second_id_) {
+    } else if (second_array[second_id].slot_version != fd.slot_version_){
       // ignore ret
-      OB_LOG(WARN, "fd slot_version is invalid, maybe double free!", K(first_id), K(fd.second_id_),
+      OB_LOG(WARN, "fd slot_version is invalid, maybe double free!", K(first_id), K(fd.slot_version_),
                     K(second_array[second_id].slot_version));
     } else {
       valid = true;

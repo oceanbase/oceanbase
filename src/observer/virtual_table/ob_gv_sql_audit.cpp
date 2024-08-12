@@ -57,7 +57,7 @@ ObGvSqlAudit::~ObGvSqlAudit() {
 void ObGvSqlAudit::reset()
 {
   if (with_tenant_ctx_ != nullptr && allocator_ != nullptr) {
-    if (cur_mysql_req_mgr_ != nullptr && ref_.idx_ != -1) {
+    if (cur_mysql_req_mgr_ != nullptr && ref_.is_not_null()) {
       cur_mysql_req_mgr_->revert(&ref_);
     }
     with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -211,7 +211,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
           // inc ref count by 1
           if (with_tenant_ctx_ != nullptr) { // free old memory
             // before freeing tenant ctx, we must release ref_ if possible
-            if (nullptr != prev_req_mgr && ref_.idx_ != -1) {
+            if (nullptr != prev_req_mgr && ref_.is_not_null()) {
               prev_req_mgr->revert(&ref_);
             }
             with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -275,7 +275,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
       if (OB_ITER_END == ret) {
         // release last tenant's ctx
         if (with_tenant_ctx_ != nullptr) {
-          if (prev_req_mgr != nullptr && ref_.idx_ != -1) {
+          if (prev_req_mgr != nullptr && ref_.is_not_null()) {
             prev_req_mgr->revert(&ref_);
           }
           with_tenant_ctx_->~ObTenantSpaceFetcher();
@@ -288,7 +288,7 @@ int ObGvSqlAudit::inner_get_next_row(common::ObNewRow *&row)
 
   if (OB_SUCC(ret)) {
     void *rec = NULL;
-    if (ref_.idx_ != -1) {
+    if (ref_.is_not_null()) {
       cur_mysql_req_mgr_->revert(&ref_);
     }
     do {
@@ -688,7 +688,7 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
         case QUERY_SQL: {
           ObCollationType src_cs_type = ObCharset::is_valid_collation(record.data_.sql_cs_type_) ?
                 record.data_.sql_cs_type_ : ObCharset::get_system_collation();
-          ObString src_string(static_cast<int32_t>(record.data_.sql_len_), record.data_.sql_);
+          ObString src_string(static_cast<int64_t>(record.data_.sql_len_), record.data_.sql_);
           ObString dst_string;
           if (OB_FAIL(ObCharset::charset_convert(row_calc_buf_,
                                                         src_string,
@@ -1066,7 +1066,14 @@ int ObGvSqlAudit::fill_cells(obmysql::ObMySQLRequestRecord &record)
           cells[cell_idx].set_null();
         } break;
         case STMT_TYPE: {
-          cells[cell_idx].set_null();
+          ObString stmt_type_name;
+          ObString tmp_type_name = ObResolverUtils::get_stmt_type_string(record.data_.stmt_type_);
+          if (!tmp_type_name.empty()) {
+            stmt_type_name = tmp_type_name.make_string(tmp_type_name.ptr() + 2);
+          } else {
+            stmt_type_name = tmp_type_name;
+          }
+          cells[cell_idx].set_varchar(stmt_type_name);
           cells[cell_idx].set_default_collation_type();
         } break;
         case SEQ_NUM: {

@@ -42,9 +42,9 @@ OB_INLINE static void do_encode_one_batch(const uint32_t idx, UIntT &start, cons
 
 template<typename UIntT>
 /*OB_INLINE*/ static int encode(
+    const ObCodec::PFoRPackingType pfor_ptype,
     const char *in, uint64_t in_len,
-    char *out, const uint64_t out_buf_len, uint64_t &out_pos,
-    UIntT start)
+    char *out, const uint64_t out_buf_len, uint64_t &out_pos, UIntT start)
 {
   // performance critical, do not check param(outer has already checked)
   int ret = OB_SUCCESS;
@@ -78,7 +78,7 @@ template<typename UIntT>
     } else {
       *(out + out_pos) = b;
       out_pos++;
-      if (OB_FAIL(ObSIMDFixedPFor::__encode_array<UIntT>(v, BSIZE, out, out_buf_len, out_pos))) {
+      if (OB_FAIL(ObSIMDFixedPFor::__encode_array<UIntT>(pfor_ptype, v, BSIZE, out, out_buf_len, out_pos))) {
         LIB_LOG(WARN, "fail to encode array", K(ret), K(out_buf_len), K(out_pos));
       } else {
         DO_PREFETCH(ip + 512);
@@ -131,6 +131,7 @@ OB_INLINE static void do_decode_one_batch(const uint32_t idx, UIntT &start, UInt
 
 template<typename UIntT>
 /*OB_INLINE*/ static void decode(
+    const ObCodec::PFoRPackingType pfor_ptype,
     const char *in,
     const uint64_t in_len,
     uint64_t &pos,
@@ -154,7 +155,7 @@ template<typename UIntT>
     uint8_t b = *(in + pos);
     pos++;
     tmp_out_pos = 0;
-    ObSIMDFixedPFor::__decode_array<UIntT>(in, in_len, pos, BSIZE, tmp_out, tmp_out_len, tmp_out_pos);
+    ObSIMDFixedPFor::__decode_array<UIntT>(pfor_ptype, in, in_len, pos, BSIZE, tmp_out, tmp_out_len, tmp_out_pos);
 
     for(tv = v; tv != &v[BSIZE]; tv+=4,op+=4) {
       do_decode_one_batch<UIntT>(0, start, op, tv, b);
@@ -199,21 +200,22 @@ public:
                         uint64_t &out_pos) override
   {
     int ret = OB_SUCCESS;
+    const PFoRPackingType pfor_ptype = get_pfor_packing_type();
     switch (get_uint_bytes())  {
       case 1 : {
-        ret = ObXorFixedPforInner::encode<uint8_t>(in, in_len, out, out_len, out_pos, 0);
+        ret = ObXorFixedPforInner::encode<uint8_t>(pfor_ptype, in, in_len, out, out_len, out_pos, 0);
         break;
       }
       case 2 : {
-        ret = ObXorFixedPforInner::encode<uint16_t>(in, in_len, out, out_len, out_pos, 0);
+        ret = ObXorFixedPforInner::encode<uint16_t>(pfor_ptype, in, in_len, out, out_len, out_pos, 0);
         break;
       }
       case 4 : {
-        ret = ObXorFixedPforInner::encode<uint32_t>(in, in_len, out, out_len, out_pos, 0);
+        ret = ObXorFixedPforInner::encode<uint32_t>(pfor_ptype, in, in_len, out, out_len, out_pos, 0);
         break;
       }
       case 8 : {
-        ret = ObXorFixedPforInner::encode<uint64_t>(in, in_len, out, out_len, out_pos, 0);
+        ret = ObXorFixedPforInner::encode<uint64_t>(pfor_ptype, in, in_len, out, out_len, out_pos, 0);
         break;
       }
       default : {
@@ -236,21 +238,22 @@ public:
                         uint64_t &out_pos) override
   {
     int ret = OB_SUCCESS;
+    const PFoRPackingType pfor_ptype = get_pfor_packing_type();
     switch (get_uint_bytes())  {
       case 1 : {
-        ObXorFixedPforInner::decode<uint8_t>(in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
+        ObXorFixedPforInner::decode<uint8_t>(pfor_ptype, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
         break;
       }
       case 2 : {
-        ObXorFixedPforInner::decode<uint16_t>(in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
+        ObXorFixedPforInner::decode<uint16_t>(pfor_ptype, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
         break;
       }
       case 4 : {
-        ObXorFixedPforInner::decode<uint32_t>(in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
+        ObXorFixedPforInner::decode<uint32_t>(pfor_ptype, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
         break;
       }
       case 8 : {
-        ObXorFixedPforInner::decode<uint64_t>(in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
+        ObXorFixedPforInner::decode<uint64_t>(pfor_ptype, in, in_len, in_pos, uint_count, out, out_len, out_pos, 0);
         break;
       }
       default : {

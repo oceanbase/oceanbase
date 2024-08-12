@@ -2028,6 +2028,7 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
     ObExprResType res_type(alloc);
     ObKeyPart *tmp_key_part = NULL;
     int64_t normal_key_cnt = 0;
+    bool use_ori_cmp_type = false;
     for (int i = 0; OB_SUCC(ret) && !b_flag && i < num; ++i) {
       res_type.set_calc_meta(result_type.get_row_calc_cmp_types().at(i));
       tmp_key_part = NULL;
@@ -2035,9 +2036,14 @@ int ObQueryRange::get_row_key_part(const ObRawExpr *l_expr,
       const ObRawExpr *l_expr = l_row->get_param_expr(i);
       const ObRawExpr *r_expr = r_row->get_param_expr(i);
       ObItemType real_cmp_type = i < num - 1 ? c_type : cmp_type;
-      bool use_ori_cmp_type = false;
       query_range_ctx_->is_oracle_char_gt_varchar_ = false;
-      if ((i < num - 1 && (T_OP_LT == cmp_type || T_OP_GT == cmp_type)) &&
+      if (use_ori_cmp_type && (T_OP_LE == cmp_type || T_OP_GE == cmp_type)) {
+        // For the row LE/GE comparison of decimal int, the range is reduced due to the one-sided
+        // cast. If the previous result is use_ori_cmp_type, it means that the comparison has been
+        // terminated early, so we exit the range extraction directly.
+        b_flag = true;
+      } else if (FALSE_IT(use_ori_cmp_type = false)) {
+      } else if ((i < num - 1 && (T_OP_LE <= cmp_type && T_OP_GT >= cmp_type)) &&
             OB_FAIL(check_inner_row_cmp_type(l_row->get_param_expr(i + 1),
                                              r_row->get_param_expr(i + 1),
                                              use_ori_cmp_type))) {

@@ -20,6 +20,7 @@
 #include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
 #include "share/scn.h"
 #include "storage/tablet/ob_table_store_util.h"
+#include "storage/blocksstable/ob_table_flag.h"
 
 namespace oceanbase
 {
@@ -139,7 +140,7 @@ public:
       K(ddl_scn_), K(filled_tx_scn_),
       K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
       K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(latest_row_store_type));
+      K_(latest_row_store_type), K_(table_flag));
 
 public:
   int32_t version_;
@@ -178,6 +179,7 @@ public:
   int16_t sstable_logic_seq_;
   common::ObRowStoreType latest_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
+  storage::ObTableFlag table_flag_;
   //Add new variable need consider ObSSTableMetaChecker
 };
 
@@ -269,6 +271,7 @@ public:
   OB_INLINE int64_t get_progressive_merge_step() const { return basic_meta_.progressive_merge_step_; }
   OB_INLINE const ObRootBlockInfo &get_root_info() const { return data_root_info_; }
   OB_INLINE const ObSSTableMacroInfo &get_macro_info() const { return macro_info_; }
+  OB_INLINE const ObTableFlag &get_table_flag() const { return basic_meta_.table_flag_; }
   int load_root_block_data(common::ObArenaAllocator &allocator); //TODO:@jinzhu remove me after using kv cache.
   inline int transform_root_block_extra_buf(common::ObArenaAllocator &allocator)
   {
@@ -335,9 +338,27 @@ public:
   bool is_valid() const;
   void reset();
   int assign(const ObMigrationSSTableParam &param);
-  TO_STRING_KV(K_(basic_meta), K(column_checksums_.count()), K(column_default_checksums_.count()), K_(column_checksums),
-               K_(column_default_checksums), K_(table_key), K_(column_group_cnt), K_(co_base_type));
+  int get_merge_res(blocksstable::ObSSTableMergeRes &res) const;
+  TO_STRING_KV(K_(basic_meta),
+               K(column_checksums_.count()),
+               K_(column_checksums),
+               K_(table_key),
+               K(column_default_checksums_.count()),
+               K_(column_default_checksums),
+               K_(is_small_sstable),
+               K_(is_empty_cg_sstables),
+               K_(column_group_cnt),
+               K_(full_column_cnt),
+               K_(co_base_type),
+               K_(root_block_addr),
+               KP_(root_block_buf),
+               K_(data_block_macro_meta_addr),
+               KP_(data_block_macro_meta_buf),
+               K_(is_meta_root));
 private:
+  int addr_serialize(const ObMetaDiskAddr &addr, const char *addr_buf, char *buf, const int64_t buf_len, int64_t &pos) const;
+  int addr_deserialize(const char *buf, const int64_t data_len, int64_t &pos, ObMetaDiskAddr &addr, char *&root__buf);
+  int64_t addr_get_serialize_size(const ObMetaDiskAddr &addr) const;
   static const int64_t MIGRATION_SSTABLE_PARAM_VERSION = 1;
   typedef common::ObSEArray<int64_t, common::OB_ROW_DEFAULT_COLUMNS_COUNT> ColChecksumArray;
 public:
@@ -352,6 +373,12 @@ public:
   int32_t column_group_cnt_;
   int32_t full_column_cnt_;
   int32_t co_base_type_;
+  // for back up
+  ObMetaDiskAddr root_block_addr_;
+  char *root_block_buf_;
+  ObMetaDiskAddr data_block_macro_meta_addr_;
+  char *data_block_macro_meta_buf_;
+  bool is_meta_root_;
   OB_UNIS_VERSION(MIGRATION_SSTABLE_PARAM_VERSION);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMigrationSSTableParam);
@@ -370,10 +397,10 @@ public:
   static int check_sstable_meta(
       const ObMigrationSSTableParam &migration_param,
       const ObSSTableMeta &new_sstable_meta);
-private:
-  static int check_sstable_basic_meta_(
+  static int check_sstable_basic_meta(
       const ObSSTableBasicMeta &old_sstable_basic_meta,
       const ObSSTableBasicMeta &new_sstable_basic_meta);
+private:
   static int check_sstable_column_checksum_(
       const int64_t *old_column_checksum,
       const int64_t old_column_count,

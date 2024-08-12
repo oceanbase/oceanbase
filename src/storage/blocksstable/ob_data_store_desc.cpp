@@ -20,25 +20,9 @@ namespace blocksstable
  * -------------------------------------------------------------------ObStaticDataStoreDesc-------------------------------------------------------------------
  */
 const ObCompressorType ObStaticDataStoreDesc::DEFAULT_MINOR_COMPRESSOR_TYPE;
-ObStaticDataStoreDesc::ObStaticDataStoreDesc(const bool is_ddl)
-  : is_ddl_(is_ddl),
-    merge_type_(compaction::INVALID_MERGE_TYPE),
-    compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
-    ls_id_(),
-    tablet_id_(),
-    macro_block_size_(0),
-    macro_store_size_(0),
-    micro_block_size_limit_(0),
-    schema_version_(0),
-    snapshot_version_(0),
-    end_scn_(),
-    progressive_merge_round_(0),
-    major_working_cluster_version_(0),
-    encrypt_id_(0),
-    master_key_id_(0)
+ObStaticDataStoreDesc::ObStaticDataStoreDesc()
 {
-  end_scn_.set_min();
-  MEMSET(encrypt_key_, 0, sizeof(encrypt_key_));
+  reset();
 }
 
 bool ObStaticDataStoreDesc::is_valid() const
@@ -52,21 +36,7 @@ bool ObStaticDataStoreDesc::is_valid() const
 
 void ObStaticDataStoreDesc::reset()
 {
-  merge_type_ = compaction::INVALID_MERGE_TYPE;
-  compressor_type_ = ObCompressorType::INVALID_COMPRESSOR;
-  ls_id_.reset();
-  tablet_id_.reset();
-  macro_block_size_ = 0;
-  macro_store_size_ = 0;
-  micro_block_size_limit_ = 0;
-  schema_version_ = 0;
-  snapshot_version_ = 0;
-  end_scn_.set_min();
-  progressive_merge_round_ = 0;
-  major_working_cluster_version_ = 0;
-  encrypt_id_ = 0;
-  master_key_id_ = 0;
-  MEMSET(encrypt_key_, 0, sizeof(encrypt_key_));
+  MEMSET(this, 0, sizeof(*this));
 }
 
 int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
@@ -83,6 +53,7 @@ int ObStaticDataStoreDesc::assign(const ObStaticDataStoreDesc &desc)
   schema_version_ = desc.schema_version_;
   snapshot_version_ = desc.snapshot_version_;
   end_scn_ = desc.end_scn_;
+  progressive_merge_round_ = desc.progressive_merge_round_;
   major_working_cluster_version_ = desc.major_working_cluster_version_;
   encrypt_id_ = desc.encrypt_id_;
   master_key_id_ = desc.master_key_id_;
@@ -126,6 +97,7 @@ void ObStaticDataStoreDesc::init_block_size(const ObMergeSchema &merge_schema)
 }
 
 int ObStaticDataStoreDesc::init(
+    const bool is_ddl,
     const ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
     const common::ObTabletID tablet_id,
@@ -142,6 +114,7 @@ int ObStaticDataStoreDesc::init(
     STORAGE_LOG(WARN, "arguments is invalid", K(ret), K(merge_schema), K(snapshot_version), K(end_scn));
   } else {
     reset();
+    is_ddl_ = is_ddl;
     merge_type_ = merge_type;
     ls_id_ = ls_id;
     tablet_id_ = tablet_id;
@@ -178,6 +151,11 @@ int ObStaticDataStoreDesc::init(
     }
   }
   return ret;
+}
+
+bool ObStaticDataStoreDesc::operator==(const ObStaticDataStoreDesc &other) const
+{
+  return (0 == MEMCMP(this, &other, sizeof(*this)));
 }
 
 /**
@@ -291,7 +269,7 @@ int ObColDataStoreDesc::init(
         col_desc_array_, schema_rowkey_col_cnt_, is_oracle_mode, allocator_))) {
       STORAGE_LOG(WARN, "Failed to init datum utils", K(ret));
     } else {
-      STORAGE_LOG(INFO, "success to init data desc", K(ret), KPC(this), K(merge_schema), K(table_cg_idx),
+      STORAGE_LOG(TRACE, "success to init col data desc", K(ret), KPC(this), K(merge_schema), K(table_cg_idx),
         K(is_oracle_mode), K(col_desc_array_));
     }
   }
@@ -870,12 +848,13 @@ int ObWholeDataStoreDesc::init(
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));
   } else {
-    STORAGE_LOG(INFO, "success to init data store desc", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx), KPC(this));
+    STORAGE_LOG(INFO, "success to init data store desc", KR(ret), K(cg_schema), K(table_cg_idx), KPC(this));
   }
   return ret;
 }
 
 int ObWholeDataStoreDesc::init(
+    const bool is_ddl,
     const ObMergeSchema &merge_schema,
     const share::ObLSID &ls_id,
     const common::ObTabletID tablet_id,
@@ -888,7 +867,7 @@ int ObWholeDataStoreDesc::init(
 {
   int ret = OB_SUCCESS;
   reset();
-  if (OB_FAIL(static_desc_.init(merge_schema, ls_id, tablet_id, merge_type, snapshot_version, end_scn, cluster_version))) {
+  if (OB_FAIL(static_desc_.init(is_ddl, merge_schema, ls_id, tablet_id, merge_type, snapshot_version, end_scn, cluster_version))) {
     STORAGE_LOG(WARN, "failed to init static desc", KR(ret));
   } else if (OB_FAIL(inner_init(merge_schema, cg_schema, table_cg_idx))) {
     STORAGE_LOG(WARN, "failed to init", KR(ret), K(merge_schema), K(cg_schema), K(table_cg_idx));

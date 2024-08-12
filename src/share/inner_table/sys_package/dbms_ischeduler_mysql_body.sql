@@ -38,7 +38,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_ischeduler
             AND job != (SELECT MAX(job) FROM OCEANBASE.__ALL_TENANT_SCHEDULER_JOB);
   -- EXCEPTION
   --   WHEN NO_DATA_FOUND THEN
-  --     RAISE_APPLICATION_ERROR(-20000, 'ORA-23421: job ' || job_name || ' is not a job in the job queue');
+  --     RAISE_APPLICATION_ERROR(-20000, 'OBE-23421: job ' || job_name || ' is not a job in the job queue');
   END;
 
   PROCEDURE do_create_job( IN job                BIGINT,

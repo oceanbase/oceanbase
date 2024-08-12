@@ -383,6 +383,26 @@ public:
     return match;
   }
 
+  inline bool suffix_match_ci(const ObString &obstr) const
+  {
+    bool match = false;
+    if (data_length_ < obstr.data_length_) {
+    } else if (0 == STRNCASECMP(ptr_ + data_length_ - obstr.data_length_, obstr.ptr_, obstr.data_length_)) {
+      match = true;
+    }
+    return match;
+  }
+
+  inline bool suffix_match_ci(const char *str) const
+  {
+    bool match = false;
+    if (OB_NOT_NULL(str)) {
+      ObString obstr(str);
+      match = suffix_match_ci(obstr);
+    }
+    return match;
+  }
+
   inline bool prefix_match(const char *str) const
   {
     obstr_size_t len = 0;

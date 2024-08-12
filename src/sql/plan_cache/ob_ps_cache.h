@@ -44,9 +44,9 @@ public:
   {
     session_info_.set_is_varparams_sql_prepare(old_value_);
   }
-  void is_varparams_sql_prepare(bool is_from_pl, bool with_template)
+  void is_varparams_sql_prepare(bool with_template)
   {
-    if (!is_from_pl && with_template) {
+    if (with_template) {
       session_info_.set_is_varparams_sql_prepare(true);
     }
   }

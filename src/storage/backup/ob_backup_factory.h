@@ -17,6 +17,8 @@
 #include "storage/backup/ob_backup_iterator.h"
 #include "storage/backup/ob_backup_reader.h"
 #include "storage/backup/ob_backup_utils.h"
+#include "storage/backup/ob_backup_sstable_sec_meta_iterator.h"
+#include "storage/backup/ob_backup_device_wrapper.h"
 
 namespace oceanbase {
 namespace backup {
@@ -32,6 +34,10 @@ public:
   static ObIBackupTabletProvider *get_backup_tablet_provider(const ObBackupTabletProviderType &type, const uint64_t tenant_id);
   static ObIBackupMacroBlockIndexFuser *get_backup_macro_index_fuser(const ObBackupMacroIndexFuserType &type, const uint64_t tenant_id);
   static ObBackupTabletCtx *get_backup_tablet_ctx(const uint64_t tenant_id);
+  static ObBackupSSTableSecMetaIterator *get_backup_sstable_sec_meta_iterator(const uint64_t tenant_id);
+  static ObBackupWrapperIODevice *get_backup_wrapper_io_device(const uint64_t tenant_id);
+  static ObExternBackupTabletMetaIterator *get_extern_backup_tablet_meta_iterator(const uint64_t tenant_id);
+  static ObBackupTabletMetaIndexIterator *get_backup_tablet_meta_index_iterator(const uint64_t tenant_id);
 
   static void free(ObILSTabletIdReader *&reader);
   static void free(ObITabletLogicMacroIdReader *&reader);
@@ -46,6 +52,9 @@ public:
   static void free(ObBackupTabletProvider *&provider);
   static void free(ObIBackupMacroBlockIndexFuser *&fuser);
   static void free(ObBackupTabletCtx *&ctx);
+  static void free(ObBackupSSTableSecMetaIterator *&iterator);
+  static void free(ObBackupWrapperIODevice *device);
+  static void free(ObIBackupTabletMetaIterator *device);
 
 private:
   template <class IT>

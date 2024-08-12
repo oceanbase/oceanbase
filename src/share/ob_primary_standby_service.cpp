@@ -180,8 +180,12 @@ int ObPrimaryStandbyService::failover_to_primary(const uint64_t tenant_id,
     LOG_WARN("failed to get tenant status", KR(ret), K(tenant_id));
   } else if (is_tenant_normal(tenant_status)) {
     ObTenantRoleTransitionService role_transition_service(tenant_id, sql_proxy_, GCTX.srv_rpc_proxy_, switch_optype);
-    if (OB_FAIL(role_transition_service.failover_to_primary())) {
-      LOG_WARN("failed to failover to primary", KR(ret), K(tenant_id));
+    if (tenant_info.get_restore_data_mode().is_remote_mode()) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("tenant restore data mode is remote, failover is not allowed", KR(ret), K(tenant_id), K(tenant_info));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Tenant restore data mode is remote. Operation is");
+    } else if (OB_FAIL(role_transition_service.failover_to_primary())) {
+        LOG_WARN("failed to failover to primary", KR(ret), K(tenant_id));
     }
   } else {
     ret = OB_OP_NOT_ALLOW;

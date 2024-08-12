@@ -303,6 +303,18 @@ TEST_F(TestStorageSchema, test_update_tablet_store_schema)
   ASSERT_EQ(result_storage_schema->is_column_info_simplified(), true);
   ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
 
+  // mock schema with virtual column, same column_cnt & store_column_cnt, simplified = false
+  storage_schema2.reset();
+  ASSERT_EQ(OB_SUCCESS, storage_schema2.init(allocator_, table_schema, lib::Worker::CompatMode::MYSQL));
+  storage_schema1.store_column_cnt_ -= 1;
+  storage_schema2.store_column_cnt_ -= 1;
+  ret = ObStorageSchemaUtil::update_tablet_storage_schema(ObTabletID(1), allocator_, storage_schema1, storage_schema2, result_storage_schema);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(result_storage_schema->schema_version_, storage_schema2.schema_version_);
+  ASSERT_EQ(result_storage_schema->store_column_cnt_, storage_schema2.store_column_cnt_);
+  ASSERT_EQ(result_storage_schema->is_column_info_simplified(), false);
+  ObStorageSchemaUtil::free_storage_schema(allocator_, result_storage_schema);
+
   // schema_on_tablet and schema1 have same store column cnt, but storage_schema1 have full column info
   ObStorageSchema schema_on_tablet;
   ASSERT_EQ(OB_SUCCESS, schema_on_tablet.init(allocator_, storage_schema1, true/*skip_column_info*/));

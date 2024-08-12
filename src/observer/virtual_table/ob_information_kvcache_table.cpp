@@ -175,8 +175,10 @@ int ObInfoSchemaKvCacheTable::set_diagnose_info(ObKVCacheInst *inst, ObDiagnoseT
   } else if (nullptr == inst->status_.config_) {
     ret = OB_ERR_UNEXPECTED;
     SERVER_LOG(WARN, "Unexpected null cache inst config", KP(inst->status_.config_));
+  } else if (0 == strcmp(inst->status_.config_->cache_name_,"index_block_cache")) {
+    inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::INDEX_BLOCK_CACHE_MISS);
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"user_block_cache")) {
-    inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::BLOCK_CACHE_MISS);
+    inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::DATA_BLOCK_CACHE_MISS);
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"user_row_cache")) {
     inst->status_.total_miss_cnt_ = GLOBAL_EVENT_GET(ObStatEventIds::ROW_CACHE_MISS);
   } else if (0 == strcmp(inst->status_.config_->cache_name_,"bf_cache")) {

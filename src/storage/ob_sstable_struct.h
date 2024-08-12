@@ -116,7 +116,6 @@ public:
   bool is_valid() const;
   int add(const ObSSTableMergeInfo &other);
   OB_INLINE bool is_major_merge_type() const { return compaction::is_major_merge_type(merge_type_); }
-  void dump_info(const char *msg);
   void reset();
   TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(compaction_scn),
               "merge_type", merge_type_to_str(merge_type_), "merge_cost_time", merge_finish_time_ - merge_start_time_,

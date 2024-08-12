@@ -600,7 +600,7 @@ int ObInnerSQLConnection::process_audit_record(sql::ObResultSet &result_set,
     audit_record.ps_inner_stmt_id_ = ps_stmt_id;
     if (ps_sql.length() != 0) {
       audit_record.sql_ = const_cast<char *>(ps_sql.ptr());
-      audit_record.sql_len_ = min(ps_sql.length(), OB_MAX_SQL_LENGTH);
+      audit_record.sql_len_ = min(ps_sql.length(), session.get_tenant_query_record_size_limit());
     }
     MEMCPY(audit_record.sql_id_, sql_ctx.sql_id_, (int32_t)sizeof(audit_record.sql_id_));
     audit_record.affected_rows_ = result_set.get_affected_rows();
@@ -1586,7 +1586,7 @@ int ObInnerSQLConnection::execute_write_inner(const uint64_t tenant_id, const Ob
     }
 #ifndef NDEBUG
     if (tenant_id < OB_MAX_RESERVED_TENANT_ID) {  //only print log for sys table
-      LOG_INFO("execute write sql", K(ret), K(tenant_id), K(affected_rows), K(sql));
+      LOG_INFO("execute write sql", K(ret), K(tenant_id), K(affected_rows), K(sql), K(get_session().get_sessid()));
     }
 #endif
   }

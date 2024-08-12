@@ -23,9 +23,9 @@ using namespace oceanbase::common;
 using namespace oceanbase::lib;
 
 #ifdef ERRSIM
-  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, module_type_);
+  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, module_type_, log_reduction_mode_);
 #else
-  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_);
+  OB_SERIALIZE_MEMBER(ObRuntimeContext, compat_mode_, log_reduction_mode_);
 #endif
 
 
@@ -85,23 +85,8 @@ Worker::Status Worker::check_wait()
   return ret_status;
 }
 
-const uint64_t OBCG_DEFAULT_GROUP_ID = 0;
-const uint64_t USER_RESOURCE_GROUP_START_ID = 10000;
-const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
-OB_INLINE bool is_user_group(const uint64_t group_id)
-{
-  return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
-}
-
-OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
-{
-  // other group or user group
-  return group_id == OBCG_DEFAULT_GROUP_ID || is_user_group(group_id);
-}
-
 void Worker::set_group_id(int32_t group_id)
 {
-  const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
   if (OBCG_DEFAULT_GROUP_ID == group_id_ || (is_user_group(group_id_) && is_valid_resource_group(group_id))) {
     group_id_ = group_id;
   } else {

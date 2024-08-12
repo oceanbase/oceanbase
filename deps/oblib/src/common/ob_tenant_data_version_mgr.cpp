@@ -39,6 +39,7 @@ int ObTenantDataVersionMgr::init(bool enable_compatible_monotonic)
     is_inited_ = true;
     mock_data_version_ = 0;
     enable_compatible_monotonic_ = enable_compatible_monotonic;
+    file_exists_when_loading_ = false;
   }
 
   return ret;
@@ -175,6 +176,7 @@ int ObTenantDataVersionMgr::load_from_file()
     char *load_buf = NULL;
     int64_t buf_size = TENANT_DATA_VERSION_FILE_MAX_SIZE;
     PageArena<> pa;
+    set_file_exists_when_loading_();
 
     if (OB_ISNULL(load_buf = pa.alloc(buf_size))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

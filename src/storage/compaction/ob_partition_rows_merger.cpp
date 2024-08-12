@@ -595,7 +595,7 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
         //TODO(COLUMN_STORE) tmp code, use specific cg sstable according to the ctx of sub merge task
       } else if (table->is_sstable() && sstable->get_data_macro_block_count() <= 0) {
         // do nothing. don't need to construct iter for empty sstable
-        FLOG_INFO("table is empty, need not create iter", K(i), KPC(sstable));
+        FLOG_INFO("table is empty, need not create iter", K(i), "sstable_key", sstable->get_key());
         continue;
       } else if (OB_ISNULL(merge_iter = alloc_merge_iter(merge_param, 0 == i, table->is_sstable() && sstable->is_small_sstable(), table))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -604,7 +604,7 @@ int ObPartitionMergeHelper::init_merge_iters(const ObMergeParameter &merge_param
         if (OB_UNLIKELY(OB_BEYOND_THE_RANGE != ret)) {
           STORAGE_LOG(WARN, "Failed to init merge iter", K(ret));
         } else {
-          FLOG_INFO("Ignore sstable beyond the range", K(i), K(merge_param.merge_range_), KPC(table));
+          FLOG_INFO("Ignore sstable beyond the range", K(i), K(merge_param.merge_range_), "sstable_key", sstable->get_key());
           ret = OB_SUCCESS;
         }
       } else if (OB_FAIL(merge_iters_.push_back(merge_iter))) {
@@ -817,7 +817,9 @@ int ObPartitionMergeHelper::build_rows_merger()
         item.iter_ = iter;
         item.iter_idx_ = i;
         if (OB_FAIL(rows_merger_->push(item))) {
-          STORAGE_LOG(WARN, "failed to push item", K(ret), K(i), KPC(rows_merger_));
+          if (OB_BLOCK_SWITCHED != ret) {
+            STORAGE_LOG(WARN, "failed to push item", K(ret), K(i), KPC(rows_merger_));
+          }
         }
       }
     } // end for
@@ -893,7 +895,7 @@ void ObPartitionMergeHelper::reset()
     if (OB_NOT_NULL(iter = merge_iters_.at(i))) {
       if (OB_NOT_NULL(table = iter->get_table())) {
         FLOG_INFO("partition merge iter row count", K(i), "row_count", iter->get_iter_row_count(),
-            "ghost_row_count", iter->get_ghost_row_count(), "pkey", table->get_key(), KPC(table), KPC(iter));
+            "ghost_row_count", iter->get_ghost_row_count(), "table_key", table->get_key());
       }
       iter->~ObPartitionMergeIter();
       iter = nullptr;
@@ -982,19 +984,22 @@ ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(const ObMerg
       && static_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {
     ObSSTableMetaHandle meta_handle;
     bool reuse_uncommit_row = false;
-    if (!transaction::ObTransID(static_param.tx_id_).is_valid() || !static_cast<const ObSSTable *>(table)->contain_uncommitted_row()) {
-      reuse_uncommit_row = false;
-    }else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(meta_handle))) {
-      STORAGE_LOG(ERROR, "fail to get meta", K(ret), KPC(table));
-    } else if (meta_handle.get_sstable_meta().get_tx_id_count() > 0) {
-      const int64_t tx_id = meta_handle.get_sstable_meta().get_tx_ids(0);
-      if (OB_UNLIKELY(meta_handle.get_sstable_meta().get_tx_id_count() != 1)) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(ERROR, "unexpected tx id count", K(ret), KPC(table), KPC(meta_handle.meta_));
-      } else {
-        reuse_uncommit_row = tx_id == static_param.tx_id_;
-      }
-    }
+    //we only have the tx_id on sstable meta, without seq_no, the tuples in the macro block could still be abort
+    //open this flag when we support open empty macro block during reuse/rewrite processing
+
+    //if (!transaction::ObTransID(static_param.tx_id_).is_valid() || !static_cast<const ObSSTable *>(table)->contain_uncommitted_row()) {
+      //reuse_uncommit_row = false;
+    //} else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(meta_handle))) {
+      //STORAGE_LOG(ERROR, "fail to get meta", K(ret), KPC(table));
+    //} else if (meta_handle.get_sstable_meta().get_tx_id_count() > 0) {
+      //const int64_t tx_id = meta_handle.get_sstable_meta().get_tx_ids(0);
+      //if (OB_UNLIKELY(meta_handle.get_sstable_meta().get_tx_id_count() != 1)) {
+        //ret = OB_ERR_UNEXPECTED;
+        //STORAGE_LOG(ERROR, "unexpected tx id count", K(ret), KPC(table), KPC(meta_handle.meta_));
+      //} else {
+        //reuse_uncommit_row = tx_id == static_param.tx_id_;
+      //}
+    //}
     merge_iter = alloc_helper<ObPartitionMinorMacroMergeIter>(allocator_, allocator_, reuse_uncommit_row);
   } else {
     merge_iter = alloc_helper<ObPartitionMinorRowMergeIter>(allocator_, allocator_);

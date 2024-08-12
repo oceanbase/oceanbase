@@ -314,10 +314,22 @@ int ObAllVirtualTableMgr::process_curr_tenant(common::ObNewRow *&row)
           cur_row_.cells_[i].set_int(data_checksum);
           break;
         }
-        case TABLE_FLAG:
-          // TODO(yanfeng): only for place holder purpose, need change when auto_split branch merge
-          cur_row_.cells_[i].set_int(0);
+        case TABLE_FLAG: {
+          ObTableFlag table_flag;
+          if (OB_ISNULL(table)) {
+            ret = OB_ERR_UNEXPECTED;
+            SERVER_LOG(WARN, "table should not be null", K(ret), KP(table));
+          } else if (table->is_sstable()) {
+            blocksstable::ObSSTableMetaHandle sst_meta_hdl;
+            if (OB_FAIL(static_cast<blocksstable::ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+              SERVER_LOG(WARN, "fail to get sstable meta handle", K(ret));
+            } else {
+              table_flag = sst_meta_hdl.get_sstable_meta().get_table_flag();
+            }
+          }
+          cur_row_.cells_[i].set_int(table_flag.flag_);
           break;
+        }
         default:
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid col_id", K(ret), K(col_id));

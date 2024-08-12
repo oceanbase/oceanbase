@@ -335,7 +335,7 @@ int ObDbmsInfo::define_column(int64_t col_idx, ObObjType col_type,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("define column position is invalid", K(col_idx), K(fields_), K(col_type), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "ORA-06562: type of out argument must match type of column or bind variable");
+                   "OBE-06562: type of out argument must match type of column or bind variable");
   } else {
     #define ENABLE_RECOVER_EXIST 1
     OZ (define_columns_.set_refactored(col_idx, col_size, ENABLE_RECOVER_EXIST));
@@ -364,7 +364,7 @@ int ObDbmsInfo::define_array(int64_t col_idx,
       LOG_WARN("define column position is invalid",
                K(col_idx), K(fields_), K(id),K(elem_type), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                     "ORA-06562: type of out argument must match type of column or bind variable");
+                     "OBE-06562: type of out argument must match type of column or bind variable");
   } else {
     #define ENABLE_RECOVER_EXIST 1
     ArrayDesc desc(id, cnt, lower_bnd, elem_type);
@@ -967,9 +967,9 @@ int ObPLDbmsSql::define_column(ObExecContext &exec_ctx, ParamStore &params, ObOb
   OV (params.at(1).is_number(), OB_INVALID_ARGUMENT, params);
   OV (params.at(1).get_number().is_valid_int64(column_pos), OB_INVALID_ARGUMENT, params.at(1));
   OX (column_type =
-      params.at(2).is_null() ? params.at(2).get_null_meta().get_type() : params.at(2).get_type());
+      params.at(2).is_null() ? params.at(2).get_param_meta().get_type() : params.at(2).get_type());
   OX (column_cs_type = params.at(2).is_null()
-                       ? params.at(2).get_null_meta().get_collation_type()
+                       ? params.at(2).get_param_meta().get_collation_type()
                        : params.at(2).get_collation_type());
   if (OB_SUCC(ret)) {
     if (ob_is_accuracy_length_valid_tc(column_type)) {
@@ -983,7 +983,7 @@ int ObPLDbmsSql::define_column(ObExecContext &exec_ctx, ParamStore &params, ObOb
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("column size cannot be used for this type", K(column_type), K(column_size), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                     "ORA-06562: type of out argument must match type of column or bind variable");
+                     "OBE-06562: type of out argument must match type of column or bind variable");
     }
   }
 
@@ -1261,7 +1261,7 @@ int ObPLDbmsSql::column_value(ObExecContext &exec_ctx, ParamStore &params, ObObj
   OV (params.at(1).is_number(), OB_INVALID_ARGUMENT, params);
   OV (params.at(1).get_number().is_valid_int64(column_pos), OB_INVALID_ARGUMENT, params.at(1));
   OX (result_type.set_meta(params.at(2).is_null()
-      ? params.at(2).get_null_meta() : params.at(2).get_meta()));
+      ? params.at(2).get_param_meta() : params.at(2).get_meta()));
   OX (result_type.set_accuracy(params.at(2).get_accuracy()));
 
   OZ (get_cursor(exec_ctx, params, cursor));
@@ -1289,7 +1289,7 @@ int ObPLDbmsSql::variable_value(ObExecContext &exec_ctx, ParamStore &params, ObO
   OV (params.at(1).is_varchar(), OB_INVALID_ARGUMENT, params);
   OZ (params.at(1).get_string(name));
   OX (result_type.set_meta(params.at(2).is_null()
-      ? params.at(2).get_null_meta() : params.at(2).get_meta()));
+      ? params.at(2).get_param_meta() : params.at(2).get_meta()));
   OX (result_type.set_accuracy(params.at(2).get_accuracy()));
   OZ (get_cursor(exec_ctx, params, cursor));
   CK (OB_NOT_NULL(cursor));
@@ -1353,7 +1353,7 @@ int ObPLDbmsSql::do_describe(ObExecContext &exec_ctx, ParamStore &params, Descri
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("Only select statement can be described", K(cursor->get_stmt_type()), K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "ORA-00900: invalid SQL statement, only select statement can be described");
+                   "OBE-00900: invalid SQL statement, only select statement can be described");
   }
 
   OV (3 == params.count(), OB_INVALID_ARGUMENT, params);

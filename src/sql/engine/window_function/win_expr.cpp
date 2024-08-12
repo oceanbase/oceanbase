@@ -1409,7 +1409,10 @@ int eval_bound_exprs(WinExprEvalCtx &ctx, const int64_t row_start, const int64_t
   if (OB_FAIL(ret)) {
   } else if (is_finished) {
   } else if (is_rows) {
-    if (OB_FAIL(calc_borders_for_rows_between(ctx, row_start, batch_size, *eval_skip,
+    if (OB_UNLIKELY(between_value_expr->obj_meta_.is_interval_type())) {
+      ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
+      LOG_WARN("frame start or end is negative, NULL or of not supported type", K(ret));
+    } else if (OB_FAIL(calc_borders_for_rows_between(ctx, row_start, batch_size, *eval_skip,
                                               between_value_expr, is_preceding, is_upper, pos_arr))) {
       LOG_WARN("calculate borders for `rows between ... and ...` failed", K(ret));
     }
@@ -1581,17 +1584,24 @@ static int _check_betweenn_value(const ObExpr *expr, ObEvalCtx &ctx, const ObBit
   int64_t value = 0;
   for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
     if (skip.at(i) || columns->is_null(i)) { continue; }
-    columns->get_payload(i, payload, len);
-    ret = int_trunc<vec_tc>::get(payload, len, expr->datum_meta_, value);
-    if (OB_FAIL(ret)) {
-      LOG_WARN("truncate integer failed", K(ret));
-    } else if (OB_UNLIKELY(value < 0)) {
-      if (lib::is_mysql_mode()) {
-        ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
-        LOG_WARN("rame start or end is negative, NULL or of non-integral type", K(ret), K(value));
-      } else {
+    if (vec_tc == VEC_TC_INTERVAL_DS) {
+      if (OB_UNLIKELY(columns->get_interval_ds(i).is_negative())) {
         ret = OB_DATA_OUT_OF_RANGE;
-        LOG_WARN("invaid argument", K(ret), K(value));
+        LOG_WARN("invalid argument", K(ret));
+      }
+    } else {
+      columns->get_payload(i, payload, len);
+      ret = int_trunc<vec_tc>::get(payload, len, expr->datum_meta_, value);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("truncate integer failed", K(ret));
+      } else if (OB_UNLIKELY(value < 0)) {
+        if (lib::is_mysql_mode()) {
+          ret = OB_ERR_WINDOW_FRAME_ILLEGAL;
+          LOG_WARN("rame start or end is negative, NULL or of non-integral type", K(ret), K(value));
+        } else {
+          ret = OB_DATA_OUT_OF_RANGE;
+          LOG_WARN("invaid argument", K(ret), K(value));
+        }
       }
     }
   }
@@ -1710,8 +1720,8 @@ int eval_and_check_between_literal(winfunc::WinExprEvalCtx &ctx, ObBitVector &ev
       case common::VEC_FIXED: {
         switch (vec_tc) {
           LST_DO_CODE(CHECK_BTW_FIXED_VAL, VEC_TC_INTEGER, VEC_TC_UINTEGER, VEC_TC_FLOAT,
-                      VEC_TC_DOUBLE, VEC_TC_FIXED_DOUBLE, VEC_TC_BIT, VEC_TC_DEC_INT32,
-                      VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256, VEC_TC_DEC_INT512);
+                      VEC_TC_DOUBLE, VEC_TC_FIXED_DOUBLE, VEC_TC_BIT, VEC_TC_INTERVAL_YM, VEC_TC_INTERVAL_DS,
+                      VEC_TC_DEC_INT32, VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256, VEC_TC_DEC_INT512);
           default: {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("not supported vec type class", K(vec_tc));
@@ -1722,8 +1732,8 @@ int eval_and_check_between_literal(winfunc::WinExprEvalCtx &ctx, ObBitVector &ev
       case common::VEC_UNIFORM: {
         switch (vec_tc) {
           LST_DO_CODE(CHECK_BTW_UNI_VAL, VEC_TC_NUMBER, VEC_TC_INTEGER, VEC_TC_UINTEGER,
-                      VEC_TC_FLOAT, VEC_TC_DOUBLE, VEC_TC_FIXED_DOUBLE, VEC_TC_BIT,
-                      VEC_TC_DEC_INT32, VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256,
+                      VEC_TC_FLOAT, VEC_TC_DOUBLE, VEC_TC_FIXED_DOUBLE, VEC_TC_BIT, VEC_TC_INTERVAL_YM,
+                      VEC_TC_INTERVAL_DS, VEC_TC_DEC_INT32, VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256,
                       VEC_TC_DEC_INT512);
         default: {
           ret = OB_ERR_UNEXPECTED;
@@ -1736,8 +1746,8 @@ int eval_and_check_between_literal(winfunc::WinExprEvalCtx &ctx, ObBitVector &ev
         switch (vec_tc) {
           LST_DO_CODE(CHECK_BTW_CONST_VAL, VEC_TC_NUMBER, VEC_TC_INTEGER, VEC_TC_UINTEGER,
                       VEC_TC_FLOAT, VEC_TC_DOUBLE, VEC_TC_FIXED_DOUBLE, VEC_TC_BIT,
-                      VEC_TC_DEC_INT32, VEC_TC_DEC_INT64, VEC_TC_DEC_INT128, VEC_TC_DEC_INT256,
-                      VEC_TC_DEC_INT512);
+                      VEC_TC_INTERVAL_YM, VEC_TC_INTERVAL_DS, VEC_TC_DEC_INT32, VEC_TC_DEC_INT64,
+                      VEC_TC_DEC_INT128, VEC_TC_DEC_INT256, VEC_TC_DEC_INT512);
         default: {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("not supported vec type class", K(vec_tc));
@@ -2397,6 +2407,9 @@ struct int_trunc<VEC_TC_INTEGER>
     return ret;
   }
 };
+
+template<>
+struct int_trunc<VEC_TC_INTERVAL_YM>: public int_trunc<VEC_TC_INTEGER> {};
 
 template <>
 struct int_trunc<VEC_TC_UINTEGER>

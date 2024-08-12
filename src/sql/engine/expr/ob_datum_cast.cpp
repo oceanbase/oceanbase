@@ -1375,6 +1375,14 @@ static int common_string_decimalint(const ObExpr &expr, const ObString &in_str,
       } else {
         res_val.from(decint, int_bytes);
       }
+    } else {
+      // set to default zero value
+      const ObDecimalInt *tmp_decint = nullptr;
+      if (OB_FAIL(wide::ObDecimalIntConstValue::get_zero_value_byte_precision(out_prec, tmp_decint, int_bytes))) {
+        LOG_WARN("get zero value failed", K(ret));
+      } else {
+        res_val.from(tmp_decint, int_bytes);
+      }
     }
     if (OB_SUCC(ret)) {
       const ObCastMode cast_mode = expr.extra_;
@@ -7049,7 +7057,7 @@ CAST_FUNC_NAME(time, double)
     ObObjType out_type = expr.datum_meta_.type_;
     if (OB_FAIL(ObTimeConverter::time_to_double(in_val, out_val))) {
       LOG_WARN("time_to_int failed", K(ret), K(in_val));
-    } else if (ObUFloatType == out_type && CAST_FAIL(numeric_negative_check(out_val))) {
+    } else if (ObUDoubleType == out_type && CAST_FAIL(numeric_negative_check(out_val))) {
       LOG_WARN("int_range_check failed", K(ret), K(out_val));
     } else {
       res_datum.set_double(out_val);
@@ -7075,6 +7083,8 @@ CAST_FUNC_NAME(time, number)
       LOG_WARN("time_to_str failed", K(ret), K(in_val));
     } else if (CAST_FAIL(number.from(buf, len, tmp_alloc, &res_precision, &res_scale))) {
       LOG_WARN("number.from failed", K(ret));
+    } else if (ObUNumberType == expr.datum_meta_.type_ && CAST_FAIL(numeric_negative_check(number))) {
+      LOG_WARN("numeric_negative_check failed", K(ret));
     } else {
       res_datum.set_number(number);
     }
@@ -9072,7 +9082,7 @@ int cast_to_udt_not_support(const sql::ObExpr &expr, sql::ObEvalCtx &ctx, sql::O
       K(out_obj_meta.get_subschema_id()), K(expr.extra_));
   } else {
     // other udts
-    // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
+    // OBE-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
     // currently other types to udt not supported
     ret = OB_ERR_INVALID_CAST_UDT;
     LOG_WARN_RET(ret, "invalid CAST to a type that is not a nested table or VARRAY");
@@ -9110,7 +9120,7 @@ int cast_udt_to_other_not_support(const sql::ObExpr &expr, sql::ObEvalCtx &ctx, 
     }
   } else {
     // other udts
-    // ORA-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
+    // OBE-00932: inconsistent datatypes: expected PLSQL INDEX TABLE got NUMBER
     // currently other types to udt not supported
     ret = OB_ERR_INVALID_TYPE_FOR_OP;
     LOG_WARN_RET(ret, "not expected obj type convert", K(in_obj_meta), K(out_obj_meta),

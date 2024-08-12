@@ -22,7 +22,7 @@ namespace obrpc
 
 OB_SERIALIZE_MEMBER(ObSimpleFreezeInfo, tenant_id_);
 
-OB_SERIALIZE_MEMBER(ObMajorFreezeRequest, info_);
+OB_SERIALIZE_MEMBER(ObMajorFreezeRequest, info_, freeze_reason_);
 
 OB_SERIALIZE_MEMBER(ObMajorFreezeResponse, err_code_);
 

@@ -138,6 +138,7 @@ public:
   int backup_ls_data(const obrpc::ObBackupDataArg &arg);
   int backup_completing_log(const obrpc::ObBackupComplLogArg &arg);
   int backup_build_index(const obrpc::ObBackupBuildIdxArg &arg);
+  int backup_fuse_tablet_meta(const obrpc::ObBackupFuseTabletMetaArg &arg);
   int check_backup_dest_connectivity(const obrpc::ObCheckBackupConnectivityArg &arg);
   int backup_meta(const obrpc::ObBackupMetaArg &arg);
   int check_backup_task_exist(const obrpc::ObBackupCheckTaskArg &arg, bool &res);
@@ -285,7 +286,7 @@ private:
   int handle_tenant_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
   int handle_ls_freeze_req_(const obrpc::ObMinorFreezeArg &arg);
   int tenant_freeze_(const uint64_t tenant_id);
-  int ls_freeze_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
+  int handle_ls_freeze_req_(const uint64_t tenant_id, const share::ObLSID &ls_id, const common::ObTabletID &tablet_id);
   int generate_master_rs_ls_info_(
       const share::ObLSReplica &cur_leader,
       share::ObLSInfo &ls_info);

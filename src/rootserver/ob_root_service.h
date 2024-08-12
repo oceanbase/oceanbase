@@ -406,7 +406,6 @@ public:
   bool need_do_restart() const;
   int set_rs_status(const share::status::ObRootServiceStatus status);
   virtual bool is_full_service() const;
-  virtual bool is_major_freeze_done() const { return is_full_service(); }
   virtual bool is_ddl_allowed() const { return is_full_service(); }
   bool can_start_service() const;
   bool is_stopping() const;
@@ -530,6 +529,7 @@ public:
   int drop_index(const obrpc::ObDropIndexArg &arg, obrpc::ObDropIndexRes &res);
   int create_mlog(const obrpc::ObCreateMLogArg &arg, obrpc::ObCreateMLogRes &res);
   int rebuild_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
+  int rebuild_vec_index(const obrpc::ObRebuildIndexArg &arg, obrpc::ObAlterTableRes &res);
   int clone_tenant(const obrpc::ObCloneTenantArg &arg, obrpc::ObCloneTenantRes &res);
   //the interface only for switchover: execute skip check enable_ddl
   int flashback_index(const obrpc::ObFlashBackIndexArg &arg);

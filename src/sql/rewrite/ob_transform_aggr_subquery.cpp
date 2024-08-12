@@ -521,6 +521,8 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
   } else if (!any_all_to_aggr && (IS_SUBQUERY_COMPARISON_OP(parent_expr.get_expr_type()) &&
              (parent_expr.has_flag(IS_WITH_ANY) || parent_expr.has_flag(IS_WITH_ALL)))) {
     is_valid = false;
+  } else if (!exists_to_aggr && is_exists_op(parent_expr.get_expr_type())) {
+    is_valid = false;
   } else if (subquery->has_rollup() ||
              subquery->has_having() ||
              NULL != subquery->get_limit_percent_expr() ||

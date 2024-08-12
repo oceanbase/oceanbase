@@ -13331,6 +13331,7 @@ int ObDDLService::alter_table_in_trans(obrpc::ObAlterTableArg &alter_table_arg,
     }
     }
   }
+  DEBUG_SYNC(AFTER_CREATE_SPLIT_TASK);
   return ret;
 }
 
@@ -14272,8 +14273,8 @@ int ObDDLService::create_hidden_table(
 {
   int ret = OB_SUCCESS;
   uint64_t tenant_data_version = 0;
-  const uint64_t tenant_id = create_hidden_table_arg.tenant_id_;
-  const int64_t table_id = create_hidden_table_arg.table_id_;
+  const uint64_t tenant_id = create_hidden_table_arg.get_tenant_id();
+  const int64_t table_id = create_hidden_table_arg.get_table_id();
   const uint64_t dest_tenant_id = tenant_id;
   ObRootService *root_service = GCTX.root_service_;
   bool bind_tablets = true;
@@ -14331,6 +14332,9 @@ int ObDDLService::create_hidden_table(
                                                            owner_id,
                                                            trans))) {
           LOG_WARN("failed to lock ddl lock", K(ret));
+        } else if (OB_UNLIKELY(orig_table_schema->is_offline_ddl_table())) {
+          ret = OB_SCHEMA_EAGAIN;
+          LOG_WARN("table in offline ddl or direct load, retry", K(ret), K(orig_table_schema->get_table_id()), K(orig_table_schema->get_table_mode()));
         } else if (OB_FAIL(create_user_hidden_table(
                   *orig_table_schema,
                   new_table_schema,
@@ -14349,29 +14353,29 @@ int ObDDLService::create_hidden_table(
         if (OB_SUCC(ret)) {
           HEAP_VAR(obrpc::ObAlterTableArg, alter_table_arg) {
             ObPrepareAlterTableArgParam param;
-            if (OB_FAIL(param.init(create_hidden_table_arg.consumer_group_id_,
-                                  create_hidden_table_arg.session_id_,
-                                  create_hidden_table_arg.sql_mode_,
-                                  create_hidden_table_arg.ddl_stmt_str_,
-                                  orig_table_schema->get_table_name_str(),
-                                  orig_database_schema->get_database_name_str(),
-                                  orig_database_schema->get_database_name_str(),
-                                  create_hidden_table_arg.tz_info_,
-                                  create_hidden_table_arg.tz_info_wrap_,
-                                  create_hidden_table_arg.nls_formats_))) {
+            if (OB_FAIL(param.init(create_hidden_table_arg.get_consumer_group_id(),
+                                   create_hidden_table_arg.get_session_id(),
+                                   create_hidden_table_arg.get_sql_mode(),
+                                   create_hidden_table_arg.get_ddl_stmt_str(),
+                                   orig_table_schema->get_table_name_str(),
+                                   orig_database_schema->get_database_name_str(),
+                                   orig_database_schema->get_database_name_str(),
+                                   create_hidden_table_arg.get_tz_info(),
+                                   create_hidden_table_arg.get_tz_info_wrap(),
+                                   create_hidden_table_arg.get_nls_formats()))) {
               LOG_WARN("param init failed", K(ret));
             } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
               LOG_WARN("prepare alter table arg fail", K(ret));
             } else {
               LOG_DEBUG("alter table arg preparation complete!", K(ret), K(alter_table_arg));
               ObCreateDDLTaskParam param(tenant_id,
-                                        create_hidden_table_arg.ddl_type_,
+                                        create_hidden_table_arg.get_ddl_type(),
                                         orig_table_schema,
                                         &new_table_schema,
                                         table_id,
                                         orig_table_schema->get_schema_version(),
-                                        create_hidden_table_arg.parallelism_,
-                                        create_hidden_table_arg.consumer_group_id_,
+                                        create_hidden_table_arg.get_parallelism(),
+                                        create_hidden_table_arg.get_consumer_group_id(),
                                         &allocator_for_redef,
                                         &alter_table_arg,
                                         0,
@@ -14379,9 +14383,6 @@ int ObDDLService::create_hidden_table(
               param.tenant_data_version_ = tenant_data_version;
               if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
                 LOG_WARN("submit ddl task failed", K(ret));
-              } else if (orig_table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_OFFLINE_DDL) {
-                ret = OB_OP_NOT_ALLOW;
-                LOG_WARN("offline ddl is being executed, other ddl operations are not allowed, create hidden table fail", K(ret), K(create_hidden_table_arg));
               } else {
                 res.tenant_id_ = tenant_id;
                 res.table_id_ = table_id;
@@ -29161,14 +29162,14 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
   const ObSysVarSchema *old_schema = NULL;
   const ObTenantSchema *tenant_info = NULL;
   const ObSysVariableSchema *sys_variable_schema = NULL;
-  const ObString var_name = arg.sysvar_.get_name();
-  const uint64_t tenant_id = arg.sysvar_.get_tenant_id();
+  const ObString var_name = arg.get_sysvar().get_name();
+  const uint64_t tenant_id = arg.get_sysvar().get_tenant_id();
   bool execute = true;
   ObSysVarSchema new_sys_var;
   int64_t refreshed_schema_version = 0;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("check inner stat failed", KR(ret), K(arg));
-  } else if (OB_FAIL(new_sys_var.assign(arg.sysvar_))) {
+  } else if (OB_FAIL(new_sys_var.assign(arg.get_sysvar()))) {
     LOG_WARN("fail to assign sysvar", KR(ret), K(arg));
   } else if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
     LOG_WARN("fail to get schema guard with version in inner table", KR(ret), K(tenant_id));
@@ -29182,7 +29183,7 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
   }
   // check sys var schema
   if (FAILEDx(sys_variable_schema->get_sysvar_schema(var_name, old_schema))) {
-    if (!arg.update_sys_var_ && OB_ERR_SYS_VARIABLE_UNKNOWN == ret) {
+    if (!arg.get_update_sys_var() && OB_ERR_SYS_VARIABLE_UNKNOWN == ret) {
       // add sys var, sys var should not exist
       ret = OB_SUCCESS;
     } else {
@@ -29191,7 +29192,7 @@ int ObDDLService::add_system_variable(const ObAddSysVarArg &arg)
   } else if (OB_ISNULL(old_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sys var schema is null", KR(ret), K(arg));
-  } else if (!arg.update_sys_var_) {
+  } else if (!arg.get_update_sys_var()) {
     // case 1. add sys var, and sys var exist
     if (new_sys_var.is_equal_for_add(*old_schema)) {
       // new sys var will be mocked by schema when upgrade,
@@ -29995,7 +29996,7 @@ int ObDDLService::refresh_schema(uint64_t tenant_id, int64_t *publish_schema_ver
         ++refresh_count;
         LOG_WARN("refresh schema failed", KR(ret), K(tenant_id), K(refresh_count),
                                           "refresh_schema_interval", static_cast<int64_t>(REFRESH_SCHEMA_INTERVAL_US));
-        if (refresh_count > 2 && REACH_TIME_INTERVAL(10 * 60 * 1000 * 1000L)) { // 10 min
+        if (refresh_count > 2 && REACH_TIME_INTERVAL_NO_INSTANT(10 * 60 * 1000 * 1000L)) { // 10 min
           LOG_DBA_ERROR(OB_ERR_REFRESH_SCHEMA_TOO_LONG,
                         "msg", "refresh schema failed", KR(ret), K(refresh_count));
         }
@@ -30183,7 +30184,7 @@ int ObDDLService::notify_refresh_schema(const ObAddrIArray &addrs)
     }
   }
   LOG_INFO("notify switch schema finished", KR(ret),
-      K(schema_version), K(schema_info), K(arg), K(addrs));
+      K(schema_version), K(schema_info), K(arg), K(addrs), K(server_list));
   return ret;
 }
 
@@ -38803,7 +38804,7 @@ int ObDDLService::recursive_check_trigger_ref_cyclic(share::schema::ObSchemaGett
         if (0 == trg_info->get_ref_trg_name().case_compare(ref_trigger_info.get_trigger_name())) {
           if (0 == trg_info->get_trigger_name().case_compare(generate_cyclic_name)) {
             ret = OB_ERR_REF_CYCLIC_IN_TRG;
-            LOG_WARN("ORA-25023: cyclic trigger dependency is not allowed", K(ret),
+            LOG_WARN("OBE-25023: cyclic trigger dependency is not allowed", K(ret),
                      K(generate_cyclic_name), KPC(trg_info));
           }
           OZ (SMART_CALL(recursive_check_trigger_ref_cyclic(schema_guard, *trg_info, trigger_list,

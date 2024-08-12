@@ -168,6 +168,18 @@ public:
   {
     return ATOMIC_LOAD(&flag_) & F_DELAYED_CLEANOUT;
   }
+  OB_INLINE void set_incomplete()
+  {
+    ATOMIC_ADD_TAG(F_INCOMPLETE_STATE);
+  }
+  OB_INLINE void set_complete()
+  {
+    ATOMIC_SUB_TAG(F_INCOMPLETE_STATE);
+  }
+  OB_INLINE bool is_incomplete() const
+  {
+    return ATOMIC_LOAD(&flag_) & F_INCOMPLETE_STATE;
+  }
 
   // ===================== ObMvccTransNode Setter/Getter =====================
   blocksstable::ObDmlFlag get_dml_flag() const;
@@ -199,7 +211,7 @@ private:
   static const uint8_t F_ELR;
   static const uint8_t F_ABORTED;
   static const uint8_t F_DELAYED_CLEANOUT;
-  static const uint8_t F_MUTEX;
+  static const uint8_t F_INCOMPLETE_STATE;
 
 public:
   // the snapshot flag of the snapshot version barrier

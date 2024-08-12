@@ -709,6 +709,7 @@ DEFINE_ERROR(OB_SERVICE_NAME_NOT_FOUND, -4780, -1, "HY000", "This service_name i
 DEFINE_ERROR(OB_SERVICE_NOT_FULLY_STARTED, -4781, -1, "HY000", "The service has not started on all servers");
 DEFINE_ERROR(OB_NOT_PRIMARY_TENANT, -4782, -1, "HY000", "The tenant is not PRIMARY");
 DEFINE_ERROR(OB_SERVICE_STOPPED, -4783, -1, "HY000", "The service has stopped");
+DEFINE_ERROR(OB_SERVER_CONNECTION_ERROR, -4784, -1, "HY000", "Server '%s' connection error");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
@@ -757,7 +758,7 @@ DEFINE_ORACLE_ERROR_EXT(OB_ERR_INSERT_NULL_ROWKEY, -5030, ER_PRIMARY_CANT_HAVE_N
 DEFINE_ERROR_DEP(OB_ERR_COLUMN_NOT_FOUND, -5031, -1, "HY000", "Column not found");
 DEFINE_ERROR(OB_ERR_DELETE_NULL_ROWKEY, -5032, -1, "23000", "Delete null rowkey");
 DEFINE_ERROR(OB_ERR_USER_EMPTY, -5034, -1, "01007", "No user");
-DEFINE_ERROR(OB_ERR_USER_NOT_EXIST, -5035, ER_NO_SUCH_USER, "HY000", "User not exist");
+DEFINE_ORACLE_ERROR_EXT(OB_ERR_USER_NOT_EXIST, -5035, ER_NO_SUCH_USER, "HY000", "User not exist", "User %.*snot exist", 1918, "user does not exist", "user '%.*s' does not exist");
 DEFINE_ERROR_EXT(OB_ERR_NO_PRIVILEGE, -5036, ER_SPECIFIC_ACCESS_DENIED_ERROR, "42501", "Access denied", "Access denied; you need (at least one of) the %s privilege(s) for this operation");
 DEFINE_ERROR(OB_ERR_NO_AVAILABLE_PRIVILEGE_ENTRY, -5037, -1, "HY000", "No privilege entry");
 DEFINE_ERROR(OB_ERR_WRONG_PASSWORD, -5038, ER_PASSWORD_NO_MATCH, "42000", "Incorrect password");
@@ -2147,6 +2148,8 @@ DEFINE_ORACLE_ERROR(OB_ERR_PARAM_OUT_OF_RANGE, -7435, -1, "42000", "value is out
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_INVALID_VECTOR_DIM, -7600, -1, "22000", "Invalid dimension for vector.", "inconsistent dimension: expected %u got %u", 932, "inconsistent dimension", "inconsistent dimension: expected %u got %u");
 DEFINE_ERROR_EXT(OB_ERR_BAD_VEC_INDEX_COLUMN, -7601, -1, "HY000", "Column cannot be part of VECTOR index", "Column '%.*s' cannot be part of VECTOR index");
 DEFINE_ORACLE_ERROR_EXT_DEP(OB_ERR_ARRAY_TYPE_MISMATCH, -7602, -1, "22000", "array type mismatch found between definition and data", "array type mismatch found between definition(%.*s) and data(%.*s)", 932, "array type mismatch found between definition and data", "array type mismatch found between definition(%.*s) and data(%.*s)");
+DEFINE_ERROR_EXT(OB_ERR_VSAG_MEM_LIMIT_EXCEEDED, -7603, -1, "22000", "Vector index memory usage exceeds user defined limit.", "Vector index memory usage exceeds user defined limit '%d'M.");
+DEFINE_ERROR_EXT(OB_ERR_VSAG_RETURN_ERROR, -7604, -1, "22000", "Using the vsag interface returns an error", "Using the vsag interface returns an error");
 
 // 余留位置
 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2321,7 +2324,10 @@ DEFINE_ERROR_DEP(OB_S2_REUSE_VERSION_MISMATCH, -9121, -1, "HY000", "reuse_versio
 DEFINE_ERROR_DEP(OB_S2_ENTRY_NOT_EXIST, -9122, -1, "HY000", "entry not exist in s2 micro_cache");
 DEFINE_ERROR(OB_TABLET_IS_SPLIT_SRC, -9123, -1, "HY000", "cannot access split src tablet");
 
-
+DEFINE_ERROR_DEP(OB_ALLOCATE_TMP_FILE_PAGE_FAILED, -9124, -1, "HY000", "fail to allocate a tmp file page");
+DEFINE_ERROR_DEP(OB_SS_MICRO_CACHE_DISABLED, -9125, -1, "HY000", "ss_micro_cache is disabled");
+DEFINE_ERROR_DEP(OB_SS_CACHE_REACH_MEM_LIMIT, -9126, -1, "HY000", "ss_micro_cache has reached memory limit");
+DEFINE_ERROR(OB_TABLET_STATUS_NO_NEED_TO_SPLIT, -9127, -1, "HY000", "no need to split due to current tablet status");
 // 余留位置，在该行之前继续添加storage错误码
 
 ////////////////////////////////////////////////////////////////
@@ -2745,7 +2751,9 @@ DEFINE_ERROR_EXT(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH, -11046, -1, "HY000", "Inv
 DEFINE_ERROR_EXT(OB_EXTERNAL_FILE_COLUMN_TYPE_MISMATCH, -11047, -1, "HY000", "Column type mismatch between the file and the table", "Column type mismatch between the file and the table: FileColumnType=%s TableColumnType=%s");
 DEFINE_ERROR(OB_ERR_DDL_RESOURCE_NOT_ENOUGH, -11048, -1, "HY000", "The tenant ddl resource is not enough, please retry");
 DEFINE_ERROR_EXT(OB_EXCEED_QUERY_MEM_LIMIT, -11049, -1, "HY000", "Exceed query memory limit", "Exceed query memory limit (mem_limit=%ld, mem_hold=%ld),  please check whether the query_memory_limit_percentage configuration item is reasonable.");
-
+DEFINE_ERROR_EXT(OB_ODPS_ERROR, -11050, -1, "HY000", "Odps driver throw exception", "Odps driver throw exception: ExceptionMsg=%s")
+DEFINE_ERROR_EXT(OB_EXTERNAL_ODPS_COLUMN_TYPE_MISMATCH, -11051, -1, "HY000", "Column type mismatch between the ODPS table and the OceanBase table", "Column type mismatch between the ODPS table and the OceanBase table: OdpsColumnType=%s TableColumnType=%s")
+DEFINE_ERROR_EXT(OB_EXTERNAL_ODPS_UNEXPECTED_ERROR, -11052, -1, "HY000", "unexpected error for exteran odps table", "unexpected error for exteran odps table:%s")
 
 // 余留位置
 ////////////////////////////////////////////////////////////////

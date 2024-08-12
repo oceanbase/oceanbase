@@ -62,7 +62,7 @@ bool ObScheduleSuspectInfo::is_valid() const
 void ObScheduleSuspectInfo::shallow_copy(ObIDiagnoseInfo *other)
 {
   ObScheduleSuspectInfo *info = nullptr;
-  if (OB_NOT_NULL(other) && OB_NOT_NULL(info = dynamic_cast<ObScheduleSuspectInfo *>(other))) {
+  if (OB_NOT_NULL(other) && OB_NOT_NULL(info = static_cast<ObScheduleSuspectInfo *>(other))) {
     merge_type_ = info->merge_type_;
     ls_id_ = info->ls_id_;
     tablet_id_ = info->tablet_id_;
@@ -70,11 +70,6 @@ void ObScheduleSuspectInfo::shallow_copy(ObIDiagnoseInfo *other)
     add_time_ = info->add_time_;
     hash_ = info->hash_;
   }
-}
-
-int64_t ObScheduleSuspectInfo::get_add_time() const
-{
-  return add_time_;
 }
 
 int64_t ObScheduleSuspectInfo::get_hash() const
@@ -274,15 +269,12 @@ int ObIDiagnoseInfoMgr::size()
   return info_list_.get_size();
 }
 
-int ObIDiagnoseInfoMgr::get_with_param(const int64_t key, ObIDiagnoseInfo *out_info, ObIAllocator &allocator)
+int ObIDiagnoseInfoMgr::get_with_param(const int64_t key, ObIDiagnoseInfo &out_info, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObIDiagnoseInfoMgr is not init", K(ret));
-  } else if (OB_ISNULL(out_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(out_info));
   } else {
     common::SpinWLockGuard guard(lock_);
     ObIDiagnoseInfo *info = NULL;
@@ -294,8 +286,8 @@ int ObIDiagnoseInfoMgr::get_with_param(const int64_t key, ObIDiagnoseInfo *out_i
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "info_param is null", K(ret), K(info));
     } else {
-      out_info->shallow_copy(info/*src*/);
-      if (OB_FAIL(info->info_param_->deep_copy(allocator, out_info->info_param_/*dst*/))) {
+      out_info.shallow_copy(info/*src*/);
+      if (OB_FAIL(info->info_param_->deep_copy(allocator, out_info.info_param_/*dst*/))) {
         STORAGE_LOG(WARN, "failed to deep copy info param", K(ret));
       }
     }
@@ -766,7 +758,7 @@ int ObCompactionDiagnoseMgr::get_suspect_info(
   input_info.ls_id_ = ls_id;
   input_info.tablet_id_ = tablet_id;
   ObInfoParamBuffer allocator; // info_param_ will be invalid after return
-  if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->get_with_param(input_info.hash(), &ret_info, allocator))) {
+  if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->get_with_param(input_info.hash(), ret_info, allocator))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get suspect info", K(ret), K(input_info));
     }
@@ -779,7 +771,7 @@ int ObCompactionDiagnoseMgr::get_suspect_info(
   return ret;
 }
 
-int ObCompactionDiagnoseMgr::diagnose_tenant(
+int ObCompactionDiagnoseMgr::diagnose_tenant( //TODO(mingqiao): check tenant restore data mode and add into diagnose info
     bool &diagnose_major_flag,
     ObTenantTabletScheduler *scheduler,
     int64_t &compaction_scn)
@@ -828,7 +820,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant(
                     ObTimeUtility::fast_current_time(),
                     "error_code", ret,
                     "freeze_info is invalid, merged_version", merged_version))) {
-        LOG_WARN("failed to add dignose info about freeze_info", K(ret), K(merged_version));
+        LOG_WARN("failed to add dignose info about freeze_info", K(tmp_ret), K(merged_version));
       }
     } else {
       compaction_scn = freeze_info.frozen_scn_.get_val_for_tx();
@@ -1566,7 +1558,7 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
   dag_hash.merge_type_ = merge_type;
   dag_hash.ls_id_ = ls_id;
   dag_hash.tablet_id_ = tablet_id;
-  if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->get_with_param(dag_hash.inner_hash(), &info, allocator))) {
+  if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->get_with_param(dag_hash.inner_hash(), info, allocator))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get suspect info", K(ret), K(dag_hash));
     } else { // no schedule suspect info
@@ -1575,7 +1567,7 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
       allocator.reuse();
       char tmp_str[common::OB_DAG_WARNING_INFO_LENGTH] = "\0";
       if (OB_FAIL(MTL(ObDagWarningHistoryManager *)->get_with_param(
-                    dag_key, &warning_info, allocator))) {
+                    dag_key, warning_info, allocator))) {
         // check __all_virtual_dag_warning_history
         if (OB_HASH_NOT_EXIST != ret) {
           LOG_WARN("failed to get dag warning info", K(ret), K(dag_hash));

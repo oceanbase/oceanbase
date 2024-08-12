@@ -1111,54 +1111,57 @@ int ObSubPlanFilterOp::inner_get_next_batch(const int64_t max_row_cnt)
       } else if (child_brs->end_) {
         iter_end_ = true;
       }
-      ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
-      guard.set_batch_size(child_brs->size_);
-      brs_.size_ = child_brs->size_;
-      bool all_filtered = true;
-      brs_.skip_->deep_copy(*child_brs->skip_, child_brs->size_);
-      clear_evaluated_flag();
 
-      for (int64_t l_idx = 0; OB_SUCC(ret) && l_idx < child_brs->size_; l_idx++) {
-        if (child_brs->skip_->exist(l_idx)) { continue; }
-        guard.set_batch_idx(l_idx);
-        if (OB_FAIL(prepare_rescan_params(false, params_size))) {
-          LOG_WARN("prepare rescan params failed", K(ret));
-        } else {
-          if (need_init_before_get_row_) {
-            for (int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
-              Iterator *&iter = subplan_iters_.at(i - 1);
-              if (MY_SPEC.init_plan_idxs_.has_member(i)) {
-                OZ(iter->prepare_init_plan());
-              }
-            }
-            need_init_before_get_row_ = false;
-          }
-        }
-        if (OB_SUCC(ret))  {
-          bool filtered = false;
-          if (OB_FAIL(filter_row(eval_ctx_, MY_SPEC.filter_exprs_, filtered))) {
-            LOG_WARN("fail to filter row", K(ret));
-          } else if (filtered) {
-            brs_.skip_->set(l_idx);
+      if (OB_SUCC(ret)) {
+        ObEvalCtx::BatchInfoScopeGuard guard(eval_ctx_);
+        guard.set_batch_size(child_brs->size_);
+        brs_.size_ = child_brs->size_;
+        bool all_filtered = true;
+        brs_.skip_->deep_copy(*child_brs->skip_, child_brs->size_);
+        clear_evaluated_flag();
+
+        for (int64_t l_idx = 0; OB_SUCC(ret) && l_idx < child_brs->size_; l_idx++) {
+          if (child_brs->skip_->exist(l_idx)) { continue; }
+          guard.set_batch_idx(l_idx);
+          if (OB_FAIL(prepare_rescan_params(false, params_size))) {
+            LOG_WARN("prepare rescan params failed", K(ret));
           } else {
-            all_filtered = false;
-            ObDatum *datum = NULL;
-            FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
-              if (OB_FAIL((*e)->eval(eval_ctx_, datum))) {
-                LOG_WARN("expr evaluate failed", K(ret), K(*e));
+            if (need_init_before_get_row_) {
+              for (int32_t i = 1; OB_SUCC(ret) && i < child_cnt_; ++i) {
+                Iterator *&iter = subplan_iters_.at(i - 1);
+                if (MY_SPEC.init_plan_idxs_.has_member(i)) {
+                  OZ(iter->prepare_init_plan());
+                }
+              }
+              need_init_before_get_row_ = false;
+            }
+          }
+          if (OB_SUCC(ret))  {
+            bool filtered = false;
+            if (OB_FAIL(filter_row(eval_ctx_, MY_SPEC.filter_exprs_, filtered))) {
+              LOG_WARN("fail to filter row", K(ret));
+            } else if (filtered) {
+              brs_.skip_->set(l_idx);
+            } else {
+              all_filtered = false;
+              ObDatum *datum = NULL;
+              FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
+                if (OB_FAIL((*e)->eval(eval_ctx_, datum))) {
+                  LOG_WARN("expr evaluate failed", K(ret), K(*e));
+                }
               }
             }
           }
+        } // for end
+        if (OB_SUCC(ret) && all_filtered) {
+          reset_batchrows();
+          continue;
         }
-      } // for end
-      if (OB_SUCC(ret) && all_filtered) {
-        reset_batchrows();
-        continue;
+        FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
+          (*e)->get_eval_info(eval_ctx_).projected_ = true;
+        }
+        break;
       }
-      FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
-        (*e)->get_eval_info(eval_ctx_).projected_ = true;
-      }
-      break;
     }
   }
 

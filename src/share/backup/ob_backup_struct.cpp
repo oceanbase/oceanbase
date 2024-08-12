@@ -2921,11 +2921,11 @@ const char* ObBackupStatus::get_str() const
     "BACKUP_SYS_META",
     "BACKUP_USER_META",
     "BACKUP_META_FINISH",
-    "BACKUP_DATA_SYS",
-    "BACKUP_DATA_MINOR",
-    "BACKUP_DATA_MAJOR",
+    "BACKUP_SYS_DATA",
+    "BACKUP_USER_DATA",
     "BEFORE_BACKUP_LOG",
     "BACKUP_LOG",
+    "BACKUP_FUSE_TABLET_META",
   };
 
   STATIC_ASSERT(MAX_STATUS == ARRAYSIZEOF(status_strs), "status count mismatch");
@@ -2951,11 +2951,11 @@ int ObBackupStatus::set_status(const char *str)
     "BACKUP_SYS_META",
     "BACKUP_USER_META",
     "BACKUP_META_FINISH",
-    "BACKUP_DATA_SYS",
-    "BACKUP_DATA_MINOR",
-    "BACKUP_DATA_MAJOR",
+    "BACKUP_SYS_DATA",
+    "BACKUP_USER_DATA",
     "BEFORE_BACKUP_LOG",
     "BACKUP_LOG",
+    "BACKUP_FUSE_TABLET_META",
   };
   const int64_t count = ARRAYSIZEOF(status_strs);
   if (s.empty()) {
@@ -2977,10 +2977,8 @@ int ObBackupStatus::get_backup_data_type(share::ObBackupDataType &backup_data_ty
   int ret = OB_SUCCESS;
   if (BACKUP_USER_META == status_) {
     backup_data_type.set_sys_data_backup();
-  } else if (BACKUP_DATA_MINOR == status_) {
-    backup_data_type.set_minor_data_backup();
-  } else if (BACKUP_DATA_MAJOR == status_) {
-    backup_data_type.set_major_data_backup();
+  } else if (BACKUP_USER_DATA == status_) {
+    backup_data_type.set_user_data_backup();
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("status not expected", K(ret), K_(status));
@@ -3416,11 +3414,11 @@ const char* ObBackupDataTaskType::get_str() const
   const char *type_strs[] = {
     "BACKUP_META",
     "BACKUP_META_FINISH",
-    "BACKUP_DATA_MINOR",
-    "BACKUP_DATA_MAJOR",
+    "BACKUP_USER_DATA",
     "BEFORE_PLUS_ARCHIVE_LOG",
     "PLUS_ARCHIVE_LOG",
-    "BUILD_INDEX"
+    "BUILD_INDEX",
+    "BACKUP_FUSE_TABLET_META",
   };
   if (type_ < Type::BACKUP_META || type_ >= Type::BACKUP_MAX) {
     LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid compressor type", K(type_));
@@ -3437,11 +3435,11 @@ int ObBackupDataTaskType::set_type(const char *buf)
   const char *type_strs[] = {
     "BACKUP_META",
     "BACKUP_META_FINISH",
-    "BACKUP_DATA_MINOR",
-    "BACKUP_DATA_MAJOR",
+    "BACKUP_USER_DATA",
     "BEFORE_PLUS_ARCHIVE_LOG",
     "PLUS_ARCHIVE_LOG",
     "BUILD_INDEX",
+    "BACKUP_FUSE_TABLET_META",
   };
   const int64_t count = ARRAYSIZEOF(type_strs);
   if (s.empty()) {
@@ -3465,10 +3463,10 @@ int ObBackupDataTaskType::get_backup_data_type(share::ObBackupDataType &backup_d
     LOG_WARN("not suitable backup type", K(ret));
   } else if (BACKUP_META == type_) {
     backup_data_type.set_sys_data_backup();
-  } else if (BACKUP_DATA_MINOR == type_) {
-    backup_data_type.set_minor_data_backup();
+  } else if (BACKUP_USER_DATA == type_) {
+    backup_data_type.set_user_data_backup();
   } else {
-    backup_data_type.set_major_data_backup();
+    ret = OB_ERR_UNEXPECTED;
   }
   return ret;
 }
@@ -4389,6 +4387,10 @@ const char *ObBackupSkippedType::str() const
     str = "TRANSFER";
     break;
   }
+  case REORGANIZED: {
+    str = "REORGANIZED";
+    break;
+  }
   default: {
     str = "INVALID_TYPE";
   }
@@ -4403,6 +4405,8 @@ int ObBackupSkippedType::parse_from_str(const ObString &str)
     type_ = DELETED;
   } else if (0 == str.case_compare("TRANSFER")) {
     type_ = TRANSFER;
+  } else if (0 == str.case_compare("REORGANIZED")) {
+    type_ = REORGANIZED;
   } else {
     type_ = MAX_TYPE;
     ret = OB_INVALID_ARGUMENT;

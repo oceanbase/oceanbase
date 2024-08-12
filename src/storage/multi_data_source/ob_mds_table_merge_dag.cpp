@@ -29,6 +29,7 @@ namespace storage
 {
 namespace mds
 {
+ERRSIM_POINT_DEF(EN_SKIP_MERGE_MDS_TABEL);
 ObMdsTableMergeDag::ObMdsTableMergeDag()
   : ObTabletMergeDag(ObDagType::DAG_TYPE_MDS_MINI_MERGE),
     is_inited_(false),
@@ -73,7 +74,18 @@ int ObMdsTableMergeDag::create_first_task()
 {
   int ret = OB_SUCCESS;
   ObMdsTableMergeTask *task = nullptr;
-  if (OB_FAIL(create_task(nullptr/*parent*/, task))) {
+  bool need_create_task = true;
+#ifdef ERRSIM
+      ret = EN_SKIP_MERGE_MDS_TABEL ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        need_create_task = false;
+        ret = OB_SUCCESS;
+      }
+#endif
+
+  if (!need_create_task) {
+    FLOG_INFO("skip create mds table merge dag first task");
+  } else if (OB_FAIL(create_task(nullptr/*parent*/, task))) {
     STORAGE_LOG(WARN, "fail to alloc mds merge task", K(ret));
   }
   return ret;

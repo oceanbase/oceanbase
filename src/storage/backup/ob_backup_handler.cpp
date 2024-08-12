@@ -17,6 +17,7 @@
 #include "storage/backup/ob_backup_task.h"
 #include "storage/backup/ob_backup_handler.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "storage/backup/ob_backup_fuse_tablet_dag.h"
 
 using namespace oceanbase::share;
 using namespace oceanbase::storage;
@@ -230,6 +231,48 @@ int ObBackupHandler::schedule_backup_complement_log_dag(const ObBackupJobDesc &j
       LOG_WARN("failed to create log stream backup dag net", K(ret), K(param));
     } else {
       FLOG_INFO("success to create log stream backup dag net", K(ret), K(param));
+    }
+  }
+  return ret;
+}
+
+int ObBackupHandler::schedule_backup_fuse_tablet_meta_dag(const ObBackupJobDesc &job_desc, const share::ObBackupDest &backup_dest,
+    const uint64_t tenant_id, const share::ObBackupSetDesc &backup_set_desc, const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id)
+{
+  int ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObBackupReportCtx report_ctx;
+  report_ctx.location_service_ = GCTX.location_service_;
+  report_ctx.sql_proxy_ = GCTX.sql_proxy_;
+  report_ctx.rpc_proxy_ = GCTX.srv_rpc_proxy_;
+  ObTenantDagScheduler *dag_scheduler = NULL;
+  ObMySQLProxy *sql_proxy = GCTX.sql_proxy_;
+  if (OB_ISNULL(sql_proxy) || !job_desc.is_valid() || !backup_dest.is_valid() || OB_INVALID_ID == tenant_id
+      || !backup_set_desc.is_valid() || turn_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(job_desc), K(backup_dest), K(tenant_id), K(backup_set_desc), K(turn_id));
+  } else if (OB_FAIL(guard.switch_to(tenant_id))) {
+    LOG_WARN("failed to switch to tenant", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag scheduler must not be NULL", K(ret));
+  } else {
+    ObLSBackupDagNetInitParam param;
+    param.job_desc_ = job_desc;
+    param.tenant_id_ = tenant_id;
+    param.backup_set_desc_ = backup_set_desc;
+    param.ls_id_ = ls_id;
+    param.turn_id_ = turn_id;
+    param.retry_id_ = retry_id;
+    param.report_ctx_ = report_ctx;
+    if (OB_FAIL(param.backup_dest_.deep_copy(backup_dest))) {
+      LOG_WARN("failed to deep copy backup dest", K(ret), K(backup_dest));
+    } else if (OB_FAIL(ObBackupStorageInfoOperator::get_dest_id(*sql_proxy, tenant_id, backup_dest, param.dest_id_))) {
+      LOG_WARN("failed to get dest id", K(ret), K(backup_dest));
+    } else if (OB_FAIL(dag_scheduler->create_and_add_dag_net<ObBackupTabletFuseDagNet>(&param))) {
+      LOG_WARN("failed to create backup tablet fuse dag net", K(ret), K(param));
+    } else {
+      FLOG_INFO("success to create backup tablet fuse dag net", K(ret), K(param));
     }
   }
   return ret;

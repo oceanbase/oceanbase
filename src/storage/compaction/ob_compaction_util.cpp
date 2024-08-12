@@ -18,6 +18,7 @@ namespace compaction
 {
 
 const static char * ObMergeTypeStr[] = {
+    "INVALID_MERGE_TYPE",
     "MINOR_MERGE",
     "HISTORY_MINOR_MERGE",
     "META_MAJOR_MERGE",

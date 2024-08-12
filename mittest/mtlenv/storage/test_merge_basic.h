@@ -47,7 +47,7 @@ public:
     OK(table_merge_schema_.init(allocator_, table_schema_, lib::Worker::CompatMode::MYSQL));
     static_param.schema_version_ = table_schema_.get_schema_version();
     static_param.schema_ = &table_merge_schema_;
-
+    static_param.data_version_ = DATA_CURRENT_VERSION;
     static_param.is_full_merge_ = is_full_merge;
     static_param.merge_level_ = MACRO_BLOCK_MERGE_LEVEL;
     static_param.dag_param_.merge_type_ = merge_type;
@@ -56,13 +56,11 @@ public:
     static_param.dag_param_.tablet_id_ = tablet_id_;
     static_param.version_range_ = trans_version_range;
     static_param.report_ = &rs_reporter_;
-    static_param.progressive_merge_num_ = 0;
     const int64_t tables_count = static_param.tables_handle_.get_count();
     static_param.scn_range_.start_scn_ = static_param.tables_handle_.get_table(0)->get_start_scn();
     static_param.scn_range_.end_scn_ = static_param.tables_handle_.get_table(tables_count - 1)->get_end_scn();
     static_param.merge_scn_ = static_param.scn_range_.end_scn_;
   }
-
   ObStorageSchema table_merge_schema_;
 };
 

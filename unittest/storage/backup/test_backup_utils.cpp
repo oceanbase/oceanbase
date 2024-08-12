@@ -117,6 +117,8 @@ int ObFakeBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupPr
   int ret = OB_SUCCESS;
   items.reset();
   lib::ObMutexGuard guard(mutex_);
+  ObBackupDataType backup_data_type;
+  backup_data_type.set_user_data_backup();
   if (supplied_item_count_ >= total_item_count_) {
     ret = OB_ITER_END;
   } else {
@@ -131,7 +133,7 @@ int ObFakeBackupTabletProvider::get_next_batch_items(common::ObIArray<ObBackupPr
       ObBackupMacroBlockId backup_macro_id;
       backup_macro_id.macro_block_id_ = fake_macro_block_id;
       backup_macro_id.logic_id_ = fake_logic_id;
-      if (OB_FAIL(item.set(PROVIDER_ITEM_TABLET_META, backup_macro_id, fake_table_key, tablet_id))) {
+      if (OB_FAIL(item.set(PROVIDER_ITEM_TABLET_AND_SSTABLE_META, backup_data_type, backup_macro_id, fake_table_key, tablet_id))) {
         LOG_WARN("failed to set item", K(ret));
       } else if (OB_FAIL(items.push_back(item))) {
         LOG_WARN("failed to push back", K(ret), K(item));
@@ -231,61 +233,6 @@ void make_macro_block_id_array(const int64_t tablet_id, const int64_t logic_vers
   }
 }
 
-TEST(TestBackupUtils, test_check_macro_block_reuse)
-{
-  int ret = OB_SUCCESS;
-  ObBackupTabletProvider provider;
-  bool need_skip = false;
-  const int64_t tablet_id = 200001;
-  const int64_t logic_version_1 = 100;
-  common::ObArray<int64_t> data_seq_list;
-  ret = data_seq_list.push_back(0);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = data_seq_list.push_back(1);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = data_seq_list.push_back(2);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = data_seq_list.push_back(3);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  ret = data_seq_list.push_back(5);
-  ASSERT_EQ(OB_SUCCESS, ret);
-  common::ObArray<ObBackupMacroBlockIDPair> id_pair_list_1;
-
-  make_macro_block_id_array(tablet_id, logic_version_1, data_seq_list, id_pair_list_1);
-
-  blocksstable::ObLogicMacroBlockId logic_id_1(0/*data_seq*/, 100/*logic_version*/, tablet_id);
-  provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
-  ASSERT_TRUE(need_skip);
-
-  logic_id_1 = ObLogicMacroBlockId(1/*data_seq*/, 100/*logic_version*/, tablet_id);
-  provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
-  ASSERT_TRUE(need_skip);
-
-  logic_id_1 = ObLogicMacroBlockId(2/*data_seq*/, 100/*logic_version*/, tablet_id);
-  provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
-  ASSERT_TRUE(need_skip);
-
-  logic_id_1 = ObLogicMacroBlockId(3/*data_seq*/, 100/*logic_version*/, tablet_id);
-  provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
-  ASSERT_TRUE(need_skip);
-
-  logic_id_1 = ObLogicMacroBlockId(4/*data_seq*/, 100/*logic_version*/, tablet_id);
-  provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
-  ASSERT_FALSE(need_skip);
-
-  logic_id_1 = ObLogicMacroBlockId(5/*data_seq*/, 100/*logic_version*/, tablet_id);
-  provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
-  ASSERT_TRUE(need_skip);
-
-  logic_id_1 = ObLogicMacroBlockId(6/*data_seq*/, 100/*logic_version*/, tablet_id);
-  provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
-  ASSERT_FALSE(need_skip);
-
-  logic_id_1 = ObLogicMacroBlockId(0/*data_seq*/, 200/*logic_version*/, tablet_id);
-  provider.inner_check_macro_block_need_skip_(logic_id_1, id_pair_list_1, need_skip);
-  ASSERT_FALSE(need_skip);
-}
-
 class TestBackupExternalSort : public blocksstable::TestDataFilePrepare
 {
 public:
@@ -368,6 +315,8 @@ int TestBackupExternalSort::generate_items(const int64_t min_count, common::ObIA
   int ret = OB_SUCCESS;
   ObBackupProviderItem *item = NULL;
   items.reset();
+  ObBackupDataType backup_data_type;
+  backup_data_type.set_user_data_backup();
   if (min_count < 0) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid argument", K(ret), K(min_count));
@@ -375,7 +324,7 @@ int TestBackupExternalSort::generate_items(const int64_t min_count, common::ObIA
     void *buf = NULL;
     ObTabletID tablet_id;
     for (int64_t i = 0; OB_SUCC(ret) && i < min_count; ++i) {
-      ObBackupProviderItemType item_type = PROVIDER_ITEM_TABLET_META;
+      ObBackupProviderItemType item_type = PROVIDER_ITEM_TABLET_AND_SSTABLE_META;
       make_random_tablet_id(tablet_id);
       if (OB_ISNULL(buf = allocator.alloc(sizeof(ObBackupProviderItem)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -383,7 +332,7 @@ int TestBackupExternalSort::generate_items(const int64_t min_count, common::ObIA
       } else if (OB_ISNULL(item = new (buf) ObBackupProviderItem())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to placement new item", K(ret));
-      } else if (OB_FAIL(item->set_with_fake(item_type, tablet_id))) {
+      } else if (OB_FAIL(item->set_with_fake(item_type, tablet_id, backup_data_type))) {
         LOG_WARN("failed to set item", K(ret), K(tablet_id));
       } else if (OB_FAIL(items.push_back(item))) {
         LOG_WARN("failed to push back item", K(ret));
@@ -391,40 +340,6 @@ int TestBackupExternalSort::generate_items(const int64_t min_count, common::ObIA
     }
   }
   return ret;
-}
-
-TEST_F(TestBackupExternalSort, test_sort)
-{
-  int ret = OB_SUCCESS;
-  int64_t buf_mem_limit = ObExternalSortConstant::MIN_MEMORY_LIMIT;
-  int64_t file_buf_size = 2 << 20;
-  int64_t expire_timestamp = 0;
-  const uint64_t tenant_id = OB_SYS_TENANT_ID;
-  typedef storage::ObExternalSort<ObBackupProviderItem, ObBackupProviderItemCompare> ExternalSort;
-  ExternalSort external_sort;
-  ObBackupProviderItemCompare backup_item_cmp(ret);
-  ObBackupDataType backup_data_type;
-  backup_data_type.set_major_data_backup();
-  backup_item_cmp.set_backup_data_type(backup_data_type);
-
-  ObArenaAllocator allocator;
-  const int64_t min_count = calculate_min_item_count();
-  ObVector<ObBackupProviderItem *> total_items;
-
-  ret = generate_items(min_count, allocator, total_items);
-  EXPECT_EQ(OB_SUCCESS, ret);
-
-  ret = external_sort.init(buf_mem_limit, file_buf_size, expire_timestamp, tenant_id, &backup_item_cmp);
-  EXPECT_EQ(OB_SUCCESS, ret);
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < total_items.size(); ++i) {
-    const ObBackupProviderItem *item = total_items.at(i);
-    ret = external_sort.add_item(*item);
-    EXPECT_EQ(OB_SUCCESS, ret);
-  }
-
-  ret = external_sort.do_sort(true /*final_merge*/);
-  EXPECT_EQ(OB_SUCCESS, ret);
 }
 
 }  // namespace backup

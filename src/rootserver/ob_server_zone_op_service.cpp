@@ -21,6 +21,7 @@
 #include "lib/utility/ob_tracepoint.h" // ERRSIM
 #include "rootserver/ob_root_service.h" // callback
 #include "share/ob_all_server_tracer.h"
+#include "share/ob_errno.h"
 #include "rootserver/ob_server_manager.h"
 
 namespace oceanbase

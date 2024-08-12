@@ -141,7 +141,8 @@ TXN_FREE_ROUTE_MEMBERS(dynamic, PRE_ENCODE_DYNAMIC_FOR_VERIFY, PRE_DYNAMIC_DECOD
                        can_elr_,
                        flags_.for_serialize_v_);
 TXN_FREE_ROUTE_MEMBERS(parts,,,,
-                       parts_);
+                       parts_,
+                       modified_tables_);
 // the fields 'dup with static' are required when preceding of txn is of query like
 // savepoint or read only stmt with isolation of SERIALIZABLE / REPEATABLE READ
 // because such type of query caused the txn into 'start' in perspective of proxy
@@ -152,7 +153,8 @@ TXN_FREE_ROUTE_MEMBERS(extra, PRE_ENCODE_EXTRA_FOR_VERIFY, PRE_EXTRA_DECODE, POS
                        isolation_,  // dup with static
                        snapshot_version_,
                        snapshot_scn_,
-                       seq_base_);
+                       seq_base_,
+                       tx_consistency_type_);
 
 #undef TXN_FREE_ROUTE_MEMBERS
 int64_t ObTxDesc::estimate_state_size()

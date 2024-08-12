@@ -57,18 +57,17 @@ int ObStorageSchemaUtil::update_tablet_storage_schema(
     const ObStorageSchema *input_schema = tablet_schema_stored_col_cnt > param_schema_stored_col_cnt
                         ? &old_schema_on_tablet
                         : &param_schema;
-
+    const int64_t result_schema_column_cnt = MAX(old_schema_on_tablet.get_column_count(), param_schema.get_column_count());
+    const bool column_info_simplified = input_schema->get_store_column_schemas().count() != result_schema_column_cnt;
     if (OB_FAIL(alloc_storage_schema(allocator, new_storage_schema_ptr))) {
       LOG_WARN("failed to alloc mem for tmp storage schema", K(ret), K(param_schema), K(old_schema_on_tablet));
-    } else if (OB_FAIL(new_storage_schema_ptr->init(allocator, *input_schema, false/*skip_solumn_info*/, column_group_schema))) {
+    } else if (OB_FAIL(new_storage_schema_ptr->init(allocator, *input_schema, column_info_simplified, column_group_schema))) {
       // use param_schema as default base schema to init
       LOG_WARN("fail to init new storage schema", K(ret), K(input_schema));
     } else {
-      new_storage_schema_ptr->column_cnt_ = MAX(old_schema_on_tablet.get_column_count(), param_schema.get_column_count());
+      new_storage_schema_ptr->column_cnt_ = result_schema_column_cnt;
       new_storage_schema_ptr->store_column_cnt_ = MAX(tablet_schema_stored_col_cnt, param_schema_stored_col_cnt);
       new_storage_schema_ptr->schema_version_ = MAX(tablet_schema_version, param_schema_version);
-      new_storage_schema_ptr->column_info_simplified_ =
-        (new_storage_schema_ptr->column_cnt_ != new_storage_schema_ptr->get_store_column_schemas().count());
       if (OB_UNLIKELY(!new_storage_schema_ptr->is_valid())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("generated schema is invalid", KR(ret), KPC(new_storage_schema_ptr), K(old_schema_on_tablet), K(param_schema));

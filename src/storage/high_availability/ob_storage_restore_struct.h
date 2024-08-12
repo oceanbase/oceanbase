@@ -25,6 +25,8 @@
 #include "storage/backup/ob_backup_restore_util.h"
 #include "storage/backup/ob_backup_data_struct.h"
 #include "storage/blocksstable/ob_logic_macro_id.h"
+#include "storage/blocksstable/index_block/ob_sstable_sec_meta_iterator.h"
+#include "storage/backup/ob_backup_sstable_sec_meta_iterator.h"
 
 namespace oceanbase
 {
@@ -41,16 +43,19 @@ struct ObRestoreBaseInfo
   int assign(const ObRestoreBaseInfo &restore_base_info);
   int copy_from(const ObTenantRestoreCtx &restore_arg);
   int get_restore_backup_set_dest(const int64_t backup_set_id, share::ObRestoreBackupSetBriefInfo &backup_set_dest) const;
+  int get_last_backup_set_desc(share::ObBackupSetDesc &backup_set_desc) const;
   VIRTUAL_TO_STRING_KV(
       K_(restore_scn),
       K_(backup_cluster_version),
       K_(backup_data_version),
+      K_(backup_compatible),
       K_(backup_dest),
       K_(backup_set_list));
 
   share::SCN restore_scn_;
   uint64_t backup_cluster_version_;
   uint64_t backup_data_version_;
+  share::ObBackupSetFileDesc::Compatible backup_compatible_;
   share::ObBackupDest backup_dest_;
   common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
 };
@@ -59,11 +64,13 @@ struct ObTabletRestoreAction
 {
   enum ACTION
   {
-    RESTORE_ALL = 0,
+    RESTORE_ALL = 0,  // restore MINOR + MAJOR
     RESTORE_TABLET_META = 1,
     RESTORE_MINOR = 2,
     RESTORE_MAJOR = 3,
     RESTORE_NONE = 4,
+    RESTORE_REMOTE_SSTABLE = 5, // restore remote sstable
+    RESTORE_REPLACE_REMOTE_SSTABLE = 6, // replace remote sstable with local sstable
     MAX,
   };
   static const char *get_action_str(const ACTION &action);
@@ -73,8 +80,17 @@ struct ObTabletRestoreAction
   static bool is_restore_none(const ACTION &action);
   static bool is_restore_all(const ACTION &action);
   static bool is_restore_tablet_meta(const ACTION &action);
+  static bool is_restore_remote_sstable(const ACTION &action);
+  static bool is_restore_replace_remote_sstable(const ACTION &action);
   static int trans_restore_action_to_restore_status(
       const ACTION &action, ObTabletRestoreStatus::STATUS &status);
+
+  static bool need_restore_mds_sstable(const ACTION &action);
+  static bool need_restore_minor_sstable(const ACTION &action);
+  static bool need_restore_ddl_sstable(const ACTION &action);
+  static bool need_restore_major_sstable(const ACTION &action);
+  static bool need_verify_table_store(const ACTION &action);
+  static bool disallow_remote_table_exist(const ACTION &action);
 };
 
 struct ObRestoreUtils
@@ -161,13 +177,15 @@ struct ObRestoreMacroBlockId final
   ~ObRestoreMacroBlockId() = default;
   void reset();
   bool is_valid() const;
-
+  int set(const blocksstable::ObLogicMacroBlockId &logic_id,
+      const backup::ObBackupDeviceMacroBlockId &macro_id);
   TO_STRING_KV(
       K_(logic_block_id),
-      K_(backup_physic_block_id));
+      K_(macro_id));
 
   blocksstable::ObLogicMacroBlockId logic_block_id_;
   backup::ObBackupPhysicalID backup_physic_block_id_;
+  backup::ObBackupDeviceMacroBlockId macro_id_;
 };
 
 class ObRestoreMacroBlockIdMgr
@@ -177,6 +195,7 @@ public:
   virtual ~ObRestoreMacroBlockIdMgr();
   int init(
       const common::ObTabletID &tablet_id,
+      const ObTabletHandle &tablet_handle,
       const ObITable::TableKey &table_key,
       const ObRestoreBaseInfo &restore_base_info,
       backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
@@ -185,6 +204,11 @@ public:
       const int64_t block_id_index,
       blocksstable::ObLogicMacroBlockId &logic_block_id,
       backup::ObBackupPhysicalID &physic_block_id);
+  // for v_4_4
+  int get_macro_block_id(
+      const int64_t block_id_index,
+      blocksstable::ObLogicMacroBlockId &logic_block_id,
+      backup::ObBackupDeviceMacroBlockId &macro_id);
   int get_block_id_index(
       const blocksstable::ObLogicMacroBlockId &logic_block_id,
       int64_t &block_id_index);
@@ -192,17 +216,39 @@ public:
       common::ObIArray<ObRestoreMacroBlockId> &block_id_array);
 
 private:
-  int inner_init_(
+  // for version smaller than 4.3.2
+  int inner_init_v1_(
       const common::ObTabletID &tablet_id,
       const ObITable::TableKey &table_key,
       const ObRestoreBaseInfo &restore_base_info,
       backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
       backup::ObBackupMetaIndexStoreWrapper &second_meta_index_store);
   int sort_block_id_array(common::ObIArray<blocksstable::ObLogicMacroBlockId> &logic_id_list);
+  int inner_init_v2_(
+      const common::ObTabletID &tablet_id,
+      const ObTabletHandle &tablet_handle,
+      const ObITable::TableKey &table_key,
+      const ObRestoreBaseInfo &restore_base_info,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store);
+
+private:
+  int prepare_backup_sstable_sec_meta_iterator_(
+      const common::ObTabletID &tablet_id,
+      const storage::ObTabletHandle &tablet_handle,
+      const ObITable::TableKey &table_key,
+      const ObRestoreBaseInfo &restore_base_info,
+      common::ObIAllocator &allocator,
+      backup::ObBackupMetaIndexStoreWrapper &meta_index_store,
+      backup::ObBackupSSTableSecMetaIterator *&sstable_sec_meta_iterator);
+  int get_macro_block_index_list_from_iter_(
+      backup::ObBackupSSTableSecMetaIterator &sstable_sec_meta_iterator,
+      common::ObIArray<ObRestoreMacroBlockId> &macro_id_list);
+
 private:
   bool is_inited_;
   ObITable::TableKey table_key_;
   ObArray<ObRestoreMacroBlockId> block_id_array_;
+  share::ObBackupSetFileDesc::Compatible backup_compatible_;
   DISALLOW_COPY_AND_ASSIGN(ObRestoreMacroBlockIdMgr);
 };
 

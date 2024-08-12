@@ -38,6 +38,7 @@ private:
   ObMySQLRequestManager *request_manager_;
   int64_t config_mem_limit_;
   sql::ObFLTSpanMgr* flt_mgr_;
+  bool is_tp_trigger_;
 };
 
 } // end of namespace obmysql
