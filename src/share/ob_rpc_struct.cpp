@@ -5400,7 +5400,8 @@ OB_SERIALIZE_MEMBER((ObPhysicalRestoreTenantArg, ObCmdArg),
                     kms_encrypt_key_,
                     restore_timestamp_,
                     initiator_job_id_,
-                    initiator_tenant_id_);
+                    initiator_tenant_id_,
+                    sts_credential_);
 
 ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
   : ObCmdArg(),
@@ -5419,7 +5420,8 @@ ObPhysicalRestoreTenantArg::ObPhysicalRestoreTenantArg()
     kms_encrypt_key_(),
     restore_timestamp_(),
     initiator_job_id_(0),
-    initiator_tenant_id_(OB_INVALID_TENANT_ID)
+    initiator_tenant_id_(OB_INVALID_TENANT_ID),
+    sts_credential_()
 {
 }
 
@@ -5445,6 +5447,7 @@ int ObPhysicalRestoreTenantArg::assign(const ObPhysicalRestoreTenantArg &other)
     restore_timestamp_ = other.restore_timestamp_;
     initiator_job_id_ = other.initiator_job_id_;
     initiator_tenant_id_ = other.initiator_tenant_id_;
+    sts_credential_ = other.sts_credential_;
   }
   return ret;
 }
@@ -6686,7 +6689,7 @@ bool ObTablespaceDDLArg::is_valid() const
       && (CREATE_TABLESPACE == type_ || DROP_TABLESPACE == type_ || ALTER_TABLESPACE == type_);
 }
 
-OB_SERIALIZE_MEMBER(ObBootstrapArg, server_list_, cluster_role_);
+OB_SERIALIZE_MEMBER(ObBootstrapArg, server_list_, cluster_role_, shared_storage_info_);
 
 int ObBootstrapArg::assign(const ObBootstrapArg &arg)
 {
@@ -6694,6 +6697,7 @@ int ObBootstrapArg::assign(const ObBootstrapArg &arg)
   if (OB_FAIL(server_list_.assign(arg.server_list_))) {
     LOG_WARN("fail to assign", KR(ret), K(arg));
   } else {
+    shared_storage_info_ = arg.shared_storage_info_;
     cluster_role_ = arg.cluster_role_;
   }
   return ret;
@@ -9301,6 +9305,7 @@ void ObCreateTabletExtraInfo::reset()
 {
   need_create_empty_major_ = true;
   tenant_data_version_ = 0;
+  micro_index_clustered_ = 0;
 }
 
 int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
@@ -9308,10 +9313,11 @@ int ObCreateTabletExtraInfo::assign(const ObCreateTabletExtraInfo &other)
   int ret = OB_SUCCESS;
   tenant_data_version_ = other.tenant_data_version_;
   need_create_empty_major_ = other.need_create_empty_major_;
+  micro_index_clustered_ = other.micro_index_clustered_;
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_);
+OB_SERIALIZE_MEMBER(ObCreateTabletExtraInfo, tenant_data_version_, need_create_empty_major_, micro_index_clustered_);
 
 bool ObBatchCreateTabletArg::is_inited() const
 {

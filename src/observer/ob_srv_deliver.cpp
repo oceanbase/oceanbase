@@ -509,7 +509,16 @@ int ObSrvDeliver::deliver_rpc_request(ObRequest &req)
   ObTenant *tenant = NULL;
   const obrpc::ObRpcPacket &pkt
       = reinterpret_cast<const obrpc::ObRpcPacket &>(req.get_packet());
-  req.set_group_id(pkt.get_group_id());
+
+  if (is_virtual_tenant_id(pkt.get_tenant_id()) && is_user_group(pkt.get_group_id())) {
+    if(REACH_TIME_INTERVAL(10 * 1000 * 1000L)) { // 10s
+      LOG_ERROR("unexpected group id of virtual tenant", K(pkt.get_group_id()), K(pkt.get_tenant_id()));
+    }
+    req.set_group_id(OBCG_DEFAULT);
+  } else {
+    req.set_group_id(pkt.get_group_id());
+  }
+
   const int64_t now = ObTimeUtility::current_time();
 
   const bool need_update_stat = !req.is_retry_on_lock();

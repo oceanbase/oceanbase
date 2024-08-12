@@ -56,8 +56,8 @@ const char *get_io_mode_string(const ObIOMode mode);
 ObIOMode get_io_mode_enum(const char *mode_string);
 
 enum ObIOModule {
-  SYS_RESOURCE_GROUP_START_ID = 0,
-  SLOG_IO = SYS_RESOURCE_GROUP_START_ID,
+  SYS_MODULE_START_ID = 1,
+  SLOG_IO = SYS_MODULE_START_ID,
   CALIBRATION_IO,
   DETECT_IO,
   DIRECT_LOAD_IO,
@@ -78,30 +78,13 @@ enum ObIOModule {
   HA_MACRO_BLOCK_WRITER_IO,
   TMP_TENANT_MEM_BLOCK_IO,
   SSTABLE_MACRO_BLOCK_WRITE_IO,
-  SYS_RESOURCE_GROUP_END_ID
+
+  // end
+  SYS_MODULE_END_ID
 };
 
-const int64_t USER_RESOURCE_GROUP_START_ID = 10000;
-const int64_t SYS_RESOURCE_GROUP_CNT = SYS_RESOURCE_GROUP_END_ID - SYS_RESOURCE_GROUP_START_ID;
-const uint64_t USER_RESOURCE_OTHER_GROUP_ID = 0;
-const uint64_t OB_INVALID_GROUP_ID = UINT64_MAX;
+const int64_t SYS_MODULE_CNT = SYS_MODULE_END_ID - SYS_MODULE_START_ID;
 static constexpr char BACKGROUND_CGROUP[] = "background";
-
-OB_INLINE bool is_valid_group(const uint64_t group_id)
-{
-  return group_id >= USER_RESOURCE_OTHER_GROUP_ID && group_id != OB_INVALID_GROUP_ID;
-}
-
-OB_INLINE bool is_user_group(const uint64_t group_id)
-{
-  return group_id >= USER_RESOURCE_GROUP_START_ID && group_id != OB_INVALID_GROUP_ID;
-}
-
-OB_INLINE bool is_valid_resource_group(const uint64_t group_id)
-{
-  //other group or user group
-  return group_id == USER_RESOURCE_OTHER_GROUP_ID || is_user_group(group_id);
-}
 
 const char *get_io_sys_group_name(ObIOModule module);
 struct ObIOFlag final

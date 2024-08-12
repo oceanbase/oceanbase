@@ -476,6 +476,7 @@ constexpr int OB_SERVICE_NAME_NOT_FOUND = -4780;
 constexpr int OB_SERVICE_NOT_FULLY_STARTED = -4781;
 constexpr int OB_NOT_PRIMARY_TENANT = -4782;
 constexpr int OB_SERVICE_STOPPED = -4783;
+constexpr int OB_SERVER_CONNECTION_ERROR = -4784;
 constexpr int OB_ERR_PARSER_INIT = -5000;
 constexpr int OB_ERR_PARSE_SQL = -5001;
 constexpr int OB_ERR_RESOLVE_SQL = -5002;
@@ -1502,6 +1503,8 @@ constexpr int OB_ERR_XML_PARENT_ALREADY_CONTAINS_CHILD = -7433;
 constexpr int OB_ERR_CONVERSION_OF_UNIT = -7434;
 constexpr int OB_ERR_PARAM_OUT_OF_RANGE = -7435;
 constexpr int OB_ERR_BAD_VEC_INDEX_COLUMN = -7601;
+constexpr int OB_ERR_VSAG_MEM_LIMIT_EXCEEDED = -7603;
+constexpr int OB_ERR_VSAG_RETURN_ERROR = -7604;
 constexpr int OB_SERVER_IS_INIT = -8001;
 constexpr int OB_SERVER_IS_STOPPING = -8002;
 constexpr int OB_PACKET_CHECKSUM_ERROR = -8003;
@@ -1583,6 +1586,7 @@ constexpr int OB_TOO_MANY_OPEN_FILES = -9103;
 constexpr int OB_DIRECT_LOAD_COMMIT_ERROR = -9104;
 constexpr int OB_STORAGE_DEST_NOT_CONNECT = -9115;
 constexpr int OB_TABLET_IS_SPLIT_SRC = -9123;
+constexpr int OB_TABLET_STATUS_NO_NEED_TO_SPLIT = -9127;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -2497,6 +2501,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SERVICE_NOT_FULLY_STARTED__USER_ERROR_MSG "The service has not started on all servers"
 #define OB_NOT_PRIMARY_TENANT__USER_ERROR_MSG "The tenant is not PRIMARY"
 #define OB_SERVICE_STOPPED__USER_ERROR_MSG "The service has stopped"
+#define OB_SERVER_CONNECTION_ERROR__USER_ERROR_MSG "Server '%s' connection error"
 #define OB_ERR_PARSER_INIT__USER_ERROR_MSG "Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__USER_ERROR_MSG "%s near \'%.*s\' at line %d"
 #define OB_ERR_RESOLVE_SQL__USER_ERROR_MSG "Resolve error"
@@ -3753,6 +3758,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_VECTOR_DIM__USER_ERROR_MSG "inconsistent dimension: expected %u got %u"
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__USER_ERROR_MSG "Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__USER_ERROR_MSG "array type mismatch found between definition(%.*s) and data(%.*s)"
+#define OB_ERR_VSAG_MEM_LIMIT_EXCEEDED__USER_ERROR_MSG "Vector index memory usage exceeds user defined limit '%d'M."
+#define OB_ERR_VSAG_RETURN_ERROR__USER_ERROR_MSG "Using the vsag interface returns an error"
 #define OB_SERVER_IS_INIT__USER_ERROR_MSG "Server is initializing"
 #define OB_SERVER_IS_STOPPING__USER_ERROR_MSG "Server is stopping"
 #define OB_PACKET_CHECKSUM_ERROR__USER_ERROR_MSG "Packet checksum error"
@@ -3879,6 +3886,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ALLOCATE_TMP_FILE_PAGE_FAILED__USER_ERROR_MSG "fail to allocate a tmp file page"
 #define OB_SS_MICRO_CACHE_DISABLED__USER_ERROR_MSG "ss_micro_cache is disabled"
 #define OB_SS_CACHE_REACH_MEM_LIMIT__USER_ERROR_MSG "ss_micro_cache has reached memory limit"
+#define OB_TABLET_STATUS_NO_NEED_TO_SPLIT__USER_ERROR_MSG "no need to split due to current tablet status"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -5400,6 +5408,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_NOT_PRIMARY_TENANT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4782, The tenant is not PRIMARY"
 #define OB_SERVICE_STOPPED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4783, The service has stopped"
 #define OB_SERVICE_STOPPED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4783, The service has stopped"
+#define OB_SERVER_CONNECTION_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4784, Server '%s' connection error"
+#define OB_SERVER_CONNECTION_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4784, Server '%s' connection error"
 #define OB_ERR_PARSER_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSER_INIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -5000, Failed to init SQL parser"
 #define OB_ERR_PARSE_SQL__ORA_USER_ERROR_MSG "ORA-00900: %s near \'%.*s\' at line %d"
@@ -7912,6 +7922,10 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_BAD_VEC_INDEX_COLUMN__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7601, Column '%.*s' cannot be part of VECTOR index"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__ORA_USER_ERROR_MSG "ORA-00932: array type mismatch found between definition(%.*s) and data(%.*s)"
 #define OB_ERR_ARRAY_TYPE_MISMATCH__OBE_USER_ERROR_MSG "OBE-00932: array type mismatch found between definition(%.*s) and data(%.*s)"
+#define OB_ERR_VSAG_MEM_LIMIT_EXCEEDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7603, Vector index memory usage exceeds user defined limit '%d'M."
+#define OB_ERR_VSAG_MEM_LIMIT_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7603, Vector index memory usage exceeds user defined limit '%d'M."
+#define OB_ERR_VSAG_RETURN_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7604, Using the vsag interface returns an error"
+#define OB_ERR_VSAG_RETURN_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7604, Using the vsag interface returns an error"
 #define OB_SERVER_IS_INIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_INIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -8001, Server is initializing"
 #define OB_SERVER_IS_STOPPING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -8002, Server is stopping"
@@ -8164,6 +8178,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SS_MICRO_CACHE_DISABLED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9125, ss_micro_cache is disabled"
 #define OB_SS_CACHE_REACH_MEM_LIMIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9126, ss_micro_cache has reached memory limit"
 #define OB_SS_CACHE_REACH_MEM_LIMIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9126, ss_micro_cache has reached memory limit"
+#define OB_TABLET_STATUS_NO_NEED_TO_SPLIT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9127, no need to split due to current tablet status"
+#define OB_TABLET_STATUS_NO_NEED_TO_SPLIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9127, no need to split due to current tablet status"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -8891,7 +8907,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2321];
+extern int g_all_ob_errnos[2325];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

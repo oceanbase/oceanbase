@@ -27,6 +27,9 @@ public:
                                 ObExprResType *types_array,
                                 int64_t param_num,
                                 common::ObExprTypeCtx &type_ctx) const;
+
+  DECLARE_SET_LOCAL_SESSION_VARS;
+
 private:
   static const int8_t PARAM_NUM_TWO = 2;
   static const int8_t PARAM_NUM_THREE = 3;

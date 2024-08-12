@@ -152,6 +152,41 @@ TEST(TestLogMeta, test_log_meta_generate)
   EXPECT_EQ(meta1.log_snapshot_meta_.base_lsn_, base_info.curr_lsn_);
   EXPECT_EQ(meta1.log_snapshot_meta_.prev_log_info_, base_info.prev_log_info_);
 }
+
+TEST(TestLogMeta, test_max_length_learner_list)
+{
+  const int64_t init_log_proposal_id(0);
+  LogConfigMeta log_config_meta;
+  LogConfigInfoV2 init_config_info;
+  LogConfigVersion init_config_version;
+  EXPECT_EQ(OB_SUCCESS, init_config_version.generate(init_log_proposal_id, 0));
+  EXPECT_EQ(OB_SUCCESS, init_config_info.generate(init_config_version));
+  log_config_meta.version_ = LogConfigMeta::LOG_CONFIG_META_VERSION_INC;
+  log_config_meta.proposal_id_ = init_log_proposal_id;
+  log_config_meta.curr_ = init_config_info;
+  log_config_meta.prev_ = init_config_info;
+  LogMeta log_meta1;
+  EXPECT_EQ(OB_SUCCESS, log_meta1.update_log_config_meta(log_config_meta));
+
+  ObAddr::VER ip_type = ObAddr::IPV4;
+  const char* addr_str = "255.255.255.255";
+  const int32_t port = INT32_MAX;
+
+  for (int i = 0; i < OB_MAX_MEMBER_NUMBER; i++) {
+    log_meta1.log_config_meta_.curr_.config_.log_sync_memberlist_.add_member(ObMember(ObAddr(ip_type, addr_str, port - i), INT64_MAX));
+    log_meta1.log_config_meta_.prev_.config_.log_sync_memberlist_.add_member(ObMember(ObAddr(ip_type, addr_str, port - i), INT64_MAX));
+    log_meta1.log_config_meta_.curr_.config_.arbitration_member_ = ObMember(ObAddr(ip_type, addr_str, port - i), INT64_MAX);
+    log_meta1.log_config_meta_.prev_.config_.arbitration_member_ = ObMember(ObAddr(ip_type, addr_str, port - i), INT64_MAX);
+  }
+  PALF_LOG(INFO, "IPV4 base serialize size",  "size", log_meta1.get_serialize_size());
+
+  for (int i = 0; i < 60; i++) {
+    log_meta1.log_config_meta_.curr_.config_.learnerlist_.add_server(ObAddr(ip_type, addr_str, port - i));
+  }
+  const int64_t member_serialize_size = ObMember(ObAddr(ObAddr::IPV4, addr_str, port), INT64_MAX).get_serialize_size();
+  const int64_t addr_serialize_size = ObAddr(ObAddr::IPV4, addr_str, port).get_serialize_size();
+  PALF_LOG(INFO, "60 IPV4 serialize size",  "size", log_meta1.get_serialize_size(), K(member_serialize_size), K(addr_serialize_size));
+}
 }
 }
 

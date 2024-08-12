@@ -69,8 +69,7 @@ int ObDiagnoseTabletMgr::add_diagnose_tablet(
     LOG_WARN("ObDiagnoseTabletMgr is not init", K(ret));
   } else {
     if (!ls_id.is_valid() || !tablet_id.is_valid()
-        || share::ObDiagnoseTabletType::TYPE_SPECIAL > type
-        || share::ObDiagnoseTabletType::TYPE_DIAGNOSE_TABLET_MAX <= type) {
+        || !is_valid_diagnose_tablet_type(type)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(type));
     } else {
@@ -128,8 +127,7 @@ int ObDiagnoseTabletMgr::delete_diagnose_tablet(
    LOG_WARN("ObDiagnoseTabletMgr is not init", K(ret));
   } else {
     if (!ls_id.is_valid() || !tablet_id.is_valid()
-        || share::ObDiagnoseTabletType::TYPE_SPECIAL > type
-        || share::ObDiagnoseTabletType::TYPE_DIAGNOSE_TABLET_MAX <= type) {
+        || !is_valid_diagnose_tablet_type(type)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(ls_id), K(tablet_id), K(type));
     } else {
@@ -146,7 +144,7 @@ int ObDiagnoseTabletMgr::delete_diagnose_tablet(
           if (OB_FAIL(diagnose_tablet_map_.erase_refactored(diagnose_tablet))) {
             LOG_WARN("fail to delete diagnose tablet", K(ret), K(diagnose_tablet));
           }
-        } else if (OB_FAIL(diagnose_tablet_map_.set_refactored(diagnose_tablet, flag, 1))) {
+        } else if (OB_FAIL(diagnose_tablet_map_.set_refactored(diagnose_tablet, flag, 1/*overwrite*/))) {
           LOG_WARN("fail to add diagnose tablet into map", K(ret), K(diagnose_tablet), K(flag));
         }
       }

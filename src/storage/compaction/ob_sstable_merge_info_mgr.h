@@ -34,7 +34,6 @@ public:
   static int get_next_info(compaction::ObIDiagnoseInfoMgr::Iterator &major_iter,
       compaction::ObIDiagnoseInfoMgr::Iterator &minor_iter,
       ObSSTableMergeInfo &info, char *buf, const int64_t buf_len);
-  // TODO need init memory limit with tenant config
   ObTenantSSTableMergeInfoMgr();
   virtual ~ObTenantSSTableMergeInfoMgr();
   int init(const int64_t page_size=compaction::ObIDiagnoseInfoMgr::INFO_PAGE_SIZE);

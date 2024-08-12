@@ -61,7 +61,7 @@ ObDagWarningInfo::~ObDagWarningInfo()
 void ObDagWarningInfo::shallow_copy(ObIDiagnoseInfo *other)
 {
   ObDagWarningInfo *info = nullptr;
-  if (OB_NOT_NULL(other) && OB_NOT_NULL(info = dynamic_cast<ObDagWarningInfo *>(other))) {
+  if (OB_NOT_NULL(other) && OB_NOT_NULL(info = static_cast<ObDagWarningInfo *>(other))) {
     priority_ = info->priority_;
     task_id_ = info->task_id_;
     dag_type_ = info->dag_type_;

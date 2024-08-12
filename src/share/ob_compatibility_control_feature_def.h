@@ -33,4 +33,9 @@ DEF_COMPAT_CONTROL_FEATURE(VAR_NAME_LENGTH,
     "MySQL will limit the length of user-defined variable names to within 64 characters",
     MOCK_CLUSTER_VERSION_4_2_3_0, CLUSTER_VERSION_4_3_0_0,
     CLUSTER_VERSION_4_3_2_0)
+
+DEF_COMPAT_CONTROL_FEATURE(FUNC_LOCATE_NULL,
+    "The result of REPLACE('x', 'abc', null) is different in MySQL 5.7 and 8.0",
+    MOCK_CLUSTER_VERSION_4_2_5_0, CLUSTER_VERSION_4_3_0_0,
+    CLUSTER_VERSION_4_3_3_0)
 #endif

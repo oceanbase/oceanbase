@@ -30,7 +30,8 @@ OB_SERIALIZE_MEMBER(ObUnitInfoGetter::ObTenantConfig,
                     mode_,
                     create_timestamp_,
                     has_memstore_,
-                    is_removed_);
+                    is_removed_,
+                    hidden_sys_data_disk_config_size_);
 
 const char* ObUnitInfoGetter::unit_status_strs_[] = {
     "NORMAL",
@@ -50,7 +51,8 @@ ObUnitInfoGetter::ObTenantConfig::ObTenantConfig()
     mode_(lib::Worker::CompatMode::INVALID),
     create_timestamp_(0),
     has_memstore_(true),
-    is_removed_(false)
+    is_removed_(false),
+    hidden_sys_data_disk_config_size_(0)
 {}
 
 int ObUnitInfoGetter::ObTenantConfig::init(
