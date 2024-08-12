@@ -687,7 +687,13 @@ int ObPLADTService::get_seg_pointer_array(jit::ObLLVMType &type)
     } else if (OB_FAIL(get_memory_context(memory_context))) {
       LOG_WARN("failed to get memory_context", K(ret));
     } else if (OB_FAIL(ObLLVMHelper::get_array_type(int64_type,
-                                                    common::OB_BLOCK_POINTER_ARRAY_SIZE,
+                                                    // typedef Ob2DArray<ObObjParam, OB_MALLOC_BIG_BLOCK_SIZE,
+                                                    //                           ObWrapperAllocator,false,
+                                                    //                           ObSEArray<ObObjParam *, 1, ObWrapperAllocator, false>
+                                                    //                           > ParamStore;
+                                                    // whose BlockPointerArrayT = ObSEArray<ObObjParam *, 1, ObWrapperAllocator, false>
+                                                    // so LOCAL_ARRAY_SIZE is 1
+                                                    1,
                                                     local_data_buf))) {
       LOG_WARN("failed to get_llvm_type", K(ret));
     } else if (OB_FAIL(local_data_buf.get_pointer_to(pointer_carray_pointer))) {

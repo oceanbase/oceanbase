@@ -119,6 +119,13 @@ class OptSelectivityCtx
            opt_ctx_.get_query_ctx()->optimizer_features_enable_version_;
   }
 
+  template<typename... Args>
+  bool check_opt_compat_version(Args... args) const
+  {
+    return OB_ISNULL(get_opt_ctx().get_query_ctx()) ? false :
+           get_opt_ctx().get_query_ctx()->check_opt_compat_version(args...);
+  }
+
   void init_op_ctx(const EqualSets *equal_sets, const double current_rows,
                    FilterDependencyType dependency_type = FilterDependencyType::INDEPENDENT)
   {

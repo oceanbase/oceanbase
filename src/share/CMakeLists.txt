@@ -1,14 +1,18 @@
 ob_set_subtarget(ob_share ALONE
-  ob_rpc_struct.cpp
-  ob_tenant_mgr.cpp
-  datum/ob_datum_funcs.cpp
-  schema/ob_schema_service_sql_impl.cpp
-  parameter/ob_parameter_attr.cpp
-  vector/expr_cmp_func.cpp
-  aggregate/sum.cpp
+  aggregate/approx_count_distinct.cpp
+  aggregate/count.cpp
+  aggregate/iaggregate.cpp
+  aggregate/min_max.cpp
   aggregate/processor.cpp
   aggregate/single_row.cpp
-  aggregate/approx_count_distinct.cpp
+  aggregate/sum.cpp
+  aggregate/sys_bit.cpp
+  datum/ob_datum_funcs.cpp
+  ob_rpc_struct.cpp
+  ob_tenant_mgr.cpp
+  parameter/ob_parameter_attr.cpp
+  schema/ob_schema_service_sql_impl.cpp
+  vector/expr_cmp_func.cpp
 )
 
 file(GLOB SCHEMA_CPPS "inner_table/ob_inner_table_schema.*.cpp")
@@ -44,6 +48,7 @@ ob_set_subtarget(ob_share backup
   backup/ob_tenant_archive_mgr.cpp
   backup/ob_tenant_archive_round.cpp
   backup/ob_backup_data_table_operator.cpp
+  backup/ob_backup_tablet_reorganize_helper.cpp
   backup/ob_backup_helper.cpp
   backup/ob_archive_persist_helper.cpp
   backup/ob_backup_serialize_provider.cpp
@@ -295,6 +300,7 @@ ob_set_subtarget(ob_share common_mixed
   throttle/ob_share_throttle_define.cpp
   throttle/ob_throttle_common.cpp
   restore/ob_restore_data_mode.cpp
+  rebuild_tablet/ob_rebuild_tablet_location.cpp
 )
 
 ob_set_subtarget(ob_share tablet
@@ -564,13 +570,6 @@ ob_set_subtarget(ob_share vector
   vector/ob_fixed_length_base.cpp
   vector/ob_discrete_base.cpp
   vector/ob_continuous_base.cpp
-)
-
-ob_set_subtarget(ob_share aggregate
-  aggregate/iaggregate.cpp
-  aggregate/count.cpp
-  aggregate/min_max.cpp
-  aggregate/sys_bit.cpp
 )
 
 ob_add_new_object_target(ob_share ob_share)

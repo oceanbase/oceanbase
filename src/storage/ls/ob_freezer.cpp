@@ -1042,7 +1042,13 @@ int ObFreezer::decide_real_snapshot_version_(const ObTabletID &tablet_id,
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
              && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
     //do nothing
-  } else if (user_data.transfer_scn_.is_valid()) {
+  } else if (user_data.transfer_scn_.is_valid()
+             // transfer's status and transfer_scn may not be synced because
+             // transfer_out_prepare log changes the status and transfer_out log
+             // changes the transfer_scn, while we can use origin freeze
+             // snapshot version because the transfer_out log which decides the
+             // transfer_scn has not been synced or replayed
+             && share::SCN::min_scn() != user_data.transfer_scn_) {
     transfer_scn = user_data.transfer_scn_;
   }
 
@@ -1953,7 +1959,7 @@ void ObFreezer::PendTenantReplayHelper::restore_tenant_replay_()
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(ERROR, "[ObFreezer] invalid ls handle", KR(ret), KPC(ls));
     } else if (OB_FAIL(ls->get_freezer()->restore_ls_replay())) {
-      STORAGE_LOG(ERROR, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
+      STORAGE_LOG(WARN, "[ObFreezer] restore replay failed", KR(ret), KPC(ls));
     }
   }
   host_.unset_tenant_replay_is_pending();

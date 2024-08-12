@@ -74,6 +74,8 @@ private:
   int merge_ls_meta_infos_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks);
   int do_backup_root_key_();
   int backup_data_();
+  int backup_fuse_tablet_meta_();
+  int do_backup_fuse_tablet_meta_(ObArray<ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int do_backup_data_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt, 
       share::ObBackupLSTaskAttr *& build_index_attr);
   int backup_data_finish_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks,
@@ -97,6 +99,8 @@ private:
   int do_get_change_turn_tablets_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
       const common::hash::ObHashSet<ObBackupSkipTabletAttr> &skip_tablets,
       ObIArray<storage::ObBackupDataTabletToLSInfo> &tablet_to_ls);
+  int deduplicate_array_(const common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObIArray<common::ObTabletID> &deduplicated_ids);
   int construct_cur_ls_set_(const ObIArray<share::ObBackupLSTaskAttr> &ls_tasks, 
       common::hash::ObHashSet<share::ObLSID> &ls_id_set);
   int get_change_turn_ls_(const ObIArray<share::ObBackupLSTaskAttr> &ls_task,

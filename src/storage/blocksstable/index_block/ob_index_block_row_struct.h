@@ -593,7 +593,7 @@ public:
   void reuse();
   void reset();
 
-  int init(ObIAllocator &allocator, ObIAllocator &index_data_allocator,
+  int init(ObIAllocator &allocator,
            const ObDataStoreDesc &data_desc, const ObDataStoreDesc &index_desc);
   int build_row(const ObIndexBlockRowDesc &desc, const ObDatumRow *&row);
 private:
@@ -609,7 +609,7 @@ private:
 private:
   // This class does not hold allocator separately as a util class
   common::ObIAllocator *allocator_;
-  common::ObIAllocator *index_data_allocator_;
+  common::ObArenaAllocator index_data_allocator_;
   const ObDataStoreDesc *data_desc_;
   ObDatumRow row_;
   int64_t rowkey_column_count_;

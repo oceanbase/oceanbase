@@ -293,6 +293,8 @@ int ObTenantStorageCheckpointWriter::close(blocksstable::MacroBlockId &ls_meta_e
 int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &tablet_meta_entry, share::SCN &clog_max_scn)
 {
   int ret = OB_SUCCESS;
+  const int64_t total_tablet_cnt = ls.get_tablet_svr()->get_tablet_count();
+  int64_t processed_cnt = 0;
   ObMetaDiskAddr addr;
   ObLSTabletIterator tablet_iter(ObMDSGetTabletMode::READ_READABLE_COMMITED);
   ObTabletMapKey tablet_key;
@@ -328,6 +330,12 @@ int ObTenantStorageCheckpointWriter::record_tablet_meta(ObLS &ls, MacroBlockId &
           LOG_WARN("fail to persist and copy tablet", K(ret), K(tablet_key), K(addr));
         }
       } while (OB_SERVER_OUTOF_DISK_SPACE == ret);
+      if (OB_SUCC(ret)) {
+        ++processed_cnt;
+        if (processed_cnt % 1000 == 0) {
+          FLOG_INFO("print compat processing procedure", K(ret), "ls_id", ls.get_ls_id(), K(processed_cnt), K(total_tablet_cnt));
+        }
+      }
     } else if (ObTenantStorageMetaType::SNAPSHOT == meta_type_ && OB_FAIL(copy_tablet(tablet_key, slog_buf, clog_max_scn))) {
       LOG_WARN("fail to copy tablet", K(ret), K(tablet_key));
     }

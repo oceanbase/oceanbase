@@ -138,7 +138,16 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
 
     if ((OB_SUCC(ret) && local_schema_version != query_tenant_begin_schema_version)
         || ret == OB_TENANT_NOT_EXIST || ret == OB_SCHEMA_ERROR || ret == OB_SCHEMA_EAGAIN) {
-      code = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+      bool overwrite_error_code = true;
+      ObPhysicalPlanCtx *plan_ctx = exec_ctx->get_physical_plan_ctx();
+      if (OB_NOT_NULL(plan_ctx) && plan_ctx->get_is_direct_insert_plan()
+          && (OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR == code)) {
+        // overwriting error code would cause retry for direct load
+        overwrite_error_code = false;
+      }
+      if (overwrite_error_code) {
+        code = OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+      }
     }
 
     // overwrite to make sure sql will retry
@@ -147,7 +156,7 @@ void ObInterruptUtil::update_schema_error_code(ObExecContext *exec_ctx, int &cod
       code = OB_ERR_REMOTE_SCHEMA_NOT_FULL;
     }
 
-    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(tenant_id), K(local_schema_version),
+    LOG_TRACE("update_schema_error_code, exec_ctx is not null", K(ret), K(code), K(tenant_id), K(local_schema_version),
               K(exec_ctx->get_task_exec_ctx().get_query_tenant_begin_schema_version()), K(lbt()));
   } else {
     LOG_TRACE("update_schema_error_code, exec_ctx is null", K(lbt()));

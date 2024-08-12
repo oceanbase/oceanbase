@@ -28,6 +28,7 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/backup/ob_backup_struct.h"
 #include "lib/restore/ob_storage_info.h"
+#include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include <glob.h>
 
 namespace oceanbase
@@ -43,6 +44,7 @@ LOAD DATA [LOW_PRIORITY | CONCURRENT] [LOCAL] INFILE 'file_name'
     [REPLACE | IGNORE]
     INTO TABLE tbl_name
     [PARTITION (partition_name [, partition_name] ...)]
+    [COMPRESSION [=] compression_format]
     [CHARACTER SET charset_name]
     [{FIELDS | COLUMNS}
         [TERMINATED BY 'string']
@@ -212,6 +214,30 @@ int ObLoadDataResolver::resolve(const ParseNode &parse_tree)
         load_args.combined_name_.assign_ptr(buf, pos);
       }
       LOG_DEBUG("resolve table info result", K(tenant_id), K(database_name), K(table_name));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    /* opt_compression */
+    ObLoadArgument &load_args = load_stmt->get_load_arguments();
+    const ParseNode *child_node = node->children_[ENUM_OPT_COMPRESSION];
+    if (NULL != child_node) {
+      if (OB_UNLIKELY(1 != child_node->num_child_)
+          || OB_ISNULL(child_node->children_)
+          || OB_ISNULL(child_node->children_[0])
+          || T_COMPRESSION != child_node->type_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid child node", K(child_node->num_child_));
+      } else {
+        ObString compression_name(static_cast<int32_t>(child_node->children_[0]->str_len_),
+                                  child_node->children_[0]->str_value_);
+        ret = ObFileReadParam::parse_compression_format(compression_name, load_args.file_name_, load_args.compression_format_);
+        if (OB_FAIL(ret)) {
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "unknown compression format or cannot detect compression format by filename");
+        } else {
+          LOG_TRACE("load data with compression format", K(load_args.compression_format_));
+        }
+      }
     }
   }
 
@@ -694,6 +720,10 @@ int ObLoadDataResolver::resolve_filename(ObLoadDataStmt *load_stmt, ParseNode *n
                 } else if (OB_FAIL(databuff_printf(path, MAX_PATH_SIZE, path_len, "%.*s",
                                                    dir_path.length(), dir_path.ptr()))) {
                   LOG_WARN("fail to fill path", K(ret), K(path_len));
+                } else if (!exist_wildcard(pattern)) {
+                  if (OB_FAIL(file_list.push_back(pattern))) {
+                    LOG_WARN("fail to push back", K(ret));
+                  }
                 } else if (OB_FAIL(adapter.list_files(ObString(path_len, path), &load_args.access_info_, op))) {
                   LOG_WARN("fail to list files", K(ret));
                 }

@@ -678,7 +678,8 @@ int ObTabletGCHandler::get_max_tablet_transfer_scn(
 {
   int ret = OB_SUCCESS;
   const bool need_initial_state = false;
-  ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state);
+  const bool need_sorted_tablet_id = false;
+  ObHALSTabletIDIterator iter(ls_->get_ls_id(), need_initial_state, need_sorted_tablet_id);
   share::SCN max_transfer_scn = share::SCN::min_scn();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;

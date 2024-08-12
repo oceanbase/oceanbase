@@ -631,9 +631,8 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
     path->is_local_order_ = false;
   } else if (get_plan()->get_optimizer_context().is_online_ddl()) {
     path->is_local_order_ = true;
-  } else if (((stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3 &&
-              stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_0) ||
-              stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_2) &&
+  } else if (stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
+                                                             COMPAT_VERSION_4_3_2) &&
             path->table_partition_info_->get_phy_tbl_location_info().get_phy_part_loc_info_list().count() == 1 &&
             !is_virtual_table(path->ref_table_id_)) {
     path->is_range_order_ = true;
@@ -1941,7 +1940,6 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
     FilterCompare filter_compare(get_plan()->get_predicate_selectivities());
     lib::ob_sort(est_cost_info.table_filters_.begin(), est_cost_info.table_filters_.end(), filter_compare);
     ObSqlBitSet<> used_column_ids;
-    est_cost_info.use_column_store_ = true;
     est_cost_info.index_back_with_column_store_ = !index_back_will_use_row_store;
     const OptTableMetas& table_opt_meta = get_plan()->get_basic_table_metas();
     ObIArray<ObCostColumnGroupInfo> &index_scan_column_group_infos = est_cost_info.index_scan_column_group_infos_;
@@ -1997,6 +1995,12 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
                                                                   table_opt_meta,
                                                                   used_column_ids))) {
       LOG_WARN("failed to init column store est info with other column", K(ret));
+    } else if (index_scan_column_group_infos.empty()) {
+      //add dummy column group cost info for nil access exprs
+      ObCostColumnGroupInfo cg_info;
+      if (OB_FAIL(index_scan_column_group_infos.push_back(cg_info))) {
+        LOG_WARN("failed to push back column group info", K(ret));
+      }
     }
   }
   return ret;
@@ -2501,7 +2505,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                                          *allocator_,
                                                          contain_always_false))) {
           LOG_WARN("add query range dimension failed", K(ret));
-        } else if (OPT_CTX.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3
+        } else if (OPT_CTX.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3)
                   && OB_FAIL(index_dim.add_sharding_info_dim(index_info_entry->get_sharding_info(), *allocator_))) {
           LOG_WARN("add partition num dimension failed");
         }
@@ -12503,7 +12507,6 @@ int ObJoinOrder::compute_table_meta_info(const uint64_t table_id,
     LOG_WARN("null table schema", K(ret));
   } else {
     table_meta_info_.ref_table_id_ = ref_table_id;
-    table_meta_info_.table_type_ = table_schema->get_table_type();
     table_meta_info_.table_rowkey_count_ = table_schema->get_rowkey_info().get_size();
     table_meta_info_.table_column_count_ = table_schema->get_column_count();
     table_meta_info_.micro_block_size_ = table_schema->get_block_size();

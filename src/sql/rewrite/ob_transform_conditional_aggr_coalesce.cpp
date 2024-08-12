@@ -48,9 +48,8 @@ int ObTransformConditionalAggrCoalesce::transform_one_stmt(
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param has null", K(ret), K(stmt), K(ctx_));
-  } else if (stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_2_3 ||
-             (stmt->get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_0 &&
-              stmt->get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_2)) {
+  } else if (!stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_3, COMPAT_VERSION_4_3_0,
+                                                              COMPAT_VERSION_4_3_2)) {
     // do nothing
   } else if (OB_FAIL(check_hint_valid(*stmt,
                                       force_trans_wo_pullup,

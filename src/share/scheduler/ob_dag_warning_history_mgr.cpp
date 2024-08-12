@@ -39,8 +39,8 @@ const char * ObDagWarningInfo::get_dag_status_str(enum ObDagStatus status)
   return str;
 }
 
-ObDagWarningInfo::ObDagWarningInfo() :
-    compaction::ObIDiagnoseInfo(),
+ObDagWarningInfo::ObDagWarningInfo(const bool need_free_param) :
+    compaction::ObIDiagnoseInfo(need_free_param),
     task_id_(),
     dag_type_(share::ObDagType::DAG_TYPE_MAX),
     dag_ret_(OB_SUCCESS),
@@ -61,8 +61,7 @@ ObDagWarningInfo::~ObDagWarningInfo()
 void ObDagWarningInfo::shallow_copy(ObIDiagnoseInfo *other)
 {
   ObDagWarningInfo *info = nullptr;
-  if (OB_NOT_NULL(other) && OB_NOT_NULL(info = dynamic_cast<ObDagWarningInfo *>(other))) {
-    tenant_id_ = info->tenant_id_;
+  if (OB_NOT_NULL(other) && OB_NOT_NULL(info = static_cast<ObDagWarningInfo *>(other))) {
     priority_ = info->priority_;
     task_id_ = info->task_id_;
     dag_type_ = info->dag_type_;

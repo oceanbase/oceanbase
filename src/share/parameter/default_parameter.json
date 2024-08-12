@@ -102,6 +102,16 @@
           "comment": "default to column format for AP"
         },
         {
+          "name": "_io_read_batch_size",
+          "value": "128K",
+          "comment": "Maximum batch size in one read io request"
+        },
+        {
+          "name": "_io_read_redundant_limit_percentage",
+          "value": "50",
+          "comment": "Maximum percentage of redundant size in one read io request, redundant data means blocks in the middle of the batch that hit in cache or filtered by skipping index but must be read"
+        },
+        {
           "name": "_rowsets_max_rows",
           "value": 256,
           "comment": "for classic OLAP workloads, rowset 256 is adequate"

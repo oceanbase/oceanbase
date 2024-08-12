@@ -373,3 +373,15 @@ Outputs & filters:
       MAX,MAX), (1154047404513689600,MIN,MIN ; 1154047404513689600,MAX,MAX), (1157425104234217472,MIN,MIN ; 1157425104234217472,MAX,MAX), (1170935903116328960,
       MIN,MIN ; 1170935903116328960,MAX,MAX), (1224979098644774912,MIN,MIN ; 1224979098644774912,MAX,MAX), (1441151880758558720,MIN,MIN ; 1441151880758558720,
       MAX,MAX), (1152921504606846976,MIN,MIN ; 1152921504606846976,MAX,MAX), (1152921504606846977,MIN,MIN ; 1152921504606846983,MAX,MAX)
+DROP TABLE IF EXISTS partition_t1;
+create table partition_t1(c1 int primary key, g geometry not null srid 0, g1 geometry srid 0) partition by hash(c1) partitions 2;
+insert into partition_t1 values (0, st_geomfromtext('point(1 1)'), st_geomfromtext('point(2 2)'));
+insert into partition_t1 values (1, st_geomfromtext('point(1 0)'), st_geomfromtext('point(2 2)'));
+select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+st_astext(g)
+POINT(1 1)
+create spatial index idx on partition_t1 (g) local;
+select /*+index(partition_t1 idx)*/ st_astext(g) from partition_t1 where st_intersects(g, st_geomfromtext('point(1 1)'));
+st_astext(g)
+POINT(1 1)
+drop table partition_t1;

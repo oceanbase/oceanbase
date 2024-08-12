@@ -527,12 +527,11 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*>
         // 1. insert into t partition (p0) select * from t partition (p1).
         //    tablet_id equals to tablet id of p1 but the map only contains tablet id of p0.
         // 2. insert into t and truncate t concurrently. truncate t will make t maps to a new group of tablets.
-        // It's hard to distinct these two scenarios, so we report OB_SCHEMA_ERROR
-        //    and record error msg of OB_NO_PARTITION_FOR_GIVEN_VALUE.
+        // It's hard to distinct these two scenarios, so we report OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR.
+        // The retry policy of OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR is same as OB_SCHEMA_ERROR.
         // As a result, if schema has changed, this query will be retried.
-        // Otherwise, error msg of OB_NO_PARTITION_FOR_GIVEN_VALUE will be reported to the client.
-        ret = OB_SCHEMA_ERROR;
-        LOG_USER_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE);
+        // Otherwise, an error will be reported to the client.
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR;
       }
       LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(slice_idx_array.at(0)), K(repart_type_));
     }
@@ -562,8 +561,7 @@ int ObSlaveMapPkeyRandomIdxCalc::get_slice_idx_batch_inner(const ObIArray<ObExpr
           if (tablet_ids_[i] <= 0) {
             ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
           } else {
-            ret = OB_SCHEMA_ERROR;
-            LOG_USER_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE);
+            ret = OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR;
           }
           LOG_WARN("can't get the right partition", K(ret), K(tablet_ids_[i]), K(repart_type_));
         }
@@ -1534,8 +1532,7 @@ int ObSlaveMapPkeyHashIdxCalc::get_slice_indexes_inner(const ObIArray<ObExpr*> &
       if (tablet_id <= 0) {
         ret = OB_NO_PARTITION_FOR_GIVEN_VALUE;
       } else {
-        ret = OB_SCHEMA_ERROR;
-        LOG_USER_ERROR(OB_NO_PARTITION_FOR_GIVEN_VALUE);
+        ret = OB_NO_PARTITION_FOR_GIVEN_VALUE_SCHEMA_ERROR;
       }
       LOG_WARN("can't get the right partition", K(ret), K(tablet_id), K(repart_type_));
     }

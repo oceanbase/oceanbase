@@ -143,7 +143,8 @@ int ObImportTableTaskGenerator::gen_one_db_import_tasks_(
     table_item.mode_ = db_item.mode_;
     table_item.database_name_ = db_item.name_;
     table_item.table_name_ = table_schema->get_table_name_str();
-    if (!table_schema->is_user_table()) {
+    if (!table_schema->is_user_table() || table_schema->is_user_hidden_table()) {
+      LOG_INFO("current table does not participate in table recovery", K(table_item));
     } else if (OB_FAIL(fill_import_task_from_import_db_(import_job, guard, db_item, table_item, *table_schema, import_task))) {
       LOG_WARN("failed to fill import task", K(ret), K(import_job), K(db_item), K(table_item));
     } else if (OB_FAIL(import_tasks.push_back(import_task))) {

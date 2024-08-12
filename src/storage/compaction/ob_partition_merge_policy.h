@@ -206,7 +206,7 @@ public:
                                 storage::ObLS &ls,
                                 const storage::ObTablet &,
                                 storage::ObGetMergeTablesResult&);
-  static GetMergeTables get_merge_tables[compaction::ObMergeType::MERGE_TYPE_MAX];
+  static GetMergeTables get_merge_tables[];
 };
 
 struct ObMinorExecuteRangeMgr
@@ -244,7 +244,7 @@ public:
     FREQUENT_WRITE = 4,
     TENANT_MAJOR = 5,
     USER_REQUEST = 6,
-    REBUILD_COLUMN_GROUP = 7,
+    REBUILD_COLUMN_GROUP = 7, // use row_store to rebuild column_store(when column store have error)
     CRAZY_MEDIUM_FOR_TEST = 8,
     INVALID_REASON
   };
@@ -312,6 +312,20 @@ public:
   static constexpr int64_t MEDIUM_COOLING_TIME_THRESHOLD_NS = 600_s * 1000; // 1000: set precision from us to ns
 };
 
+/*
+  SCHEMA_TYPE
+  1) ALL+EACH
+  ALL+EACH --(BUILD_ROW_STORE_MERGE)--> ALL --(USE_RS_BUILD_SCHEMA_MATCH_MERGE)--> ALL+EACH
+  ALL+EACH --(BUILD_COLUMN_STORE_MERGE)--> ALL+EACH
+  2) EACH
+  EACH --(BUILD_ROW_STORE_MERGE)--> ALL --(USE_RS_BUILD_SCHEMA_MATCH_MERGE)--> EACH
+  EACH --(BUILD_COLUMN_STORE_MERGE)--> EACH
+
+  BUILD_COLUMN_STORE_MERGE vs. USE_RS_BUILD_SCHEMA_MATCH_MERGE
+  SAME : output a major sstable match schema
+  DIFF : BUILD_COLUMN_STORE_MERGE could reuse CG macro from old major, USE_RS_BUILD_SCHEMA_MATCH_MERGE can't reuse macro
+*/
+
 class ObCOMajorMergePolicy
 {
 public:
@@ -320,7 +334,7 @@ public:
     INVALID_CO_MAJOR_MERGE_TYPE = 0,
     BUILD_COLUMN_STORE_MERGE = 1,
     BUILD_ROW_STORE_MERGE = 2,
-    REBUILD_COLUMN_STORE_MERGE = 3,
+    USE_RS_BUILD_SCHEMA_MATCH_MERGE = 3,
     MAX_CO_MAJOR_MERGE_TYPE = 4
   };
   static const char *co_major_merge_type_to_str(const ObCOMajorMergeType co_merge_type);
@@ -336,20 +350,14 @@ public:
   {
     return BUILD_ROW_STORE_MERGE == major_merge_type;
   }
-  static inline bool is_rebuild_column_store_merge(const ObCOMajorMergeType &major_merge_type)
+  static inline bool is_use_rs_build_schema_match_merge(const ObCOMajorMergeType &major_merge_type)
   {
-    return REBUILD_COLUMN_STORE_MERGE == major_merge_type;
+    return USE_RS_BUILD_SCHEMA_MATCH_MERGE == major_merge_type;
   }
   static int decide_co_major_sstable_status(
       const ObCOSSTableV2 &co_sstable,
       const ObStorageSchema &storage_schema,
       ObCOMajorSSTableStatus &major_sstable_status);
-  static int estimate_row_cnt_for_major_merge(
-      const uint64_t table_id,
-      const ObIArray<ObITable *> &tables,
-      const ObStorageSchema &storage_schema,
-      const ObTabletHandle &tablet_handle,
-      int64_t &estimate_row_cnt);
   static bool whether_to_build_row_store(
       const int64_t &estimate_row_cnt,
       const int64_t &column_cnt);
@@ -357,11 +365,13 @@ public:
       const ObCOMajorSSTableStatus &major_sstable_status,
       const int64_t &estimate_row_cnt,
       const int64_t &column_cnt);
+  static int accumulate_physical_row_cnt(
+      const ObIArray<ObITable *> &tables,
+      int64_t &physical_row_cnt);
   static int decide_co_major_merge_type(
       const ObCOSSTableV2 &co_sstable,
       const ObIArray<ObITable *> &tables,
       const ObStorageSchema &storage_schema,
-      const ObTabletHandle &tablet_handle,
       ObCOMajorMergeType &major_merge_type);
 
 private:

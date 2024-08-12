@@ -2836,9 +2836,15 @@ int ObAggregateProcessor::prepare_aggr_result(const ObChunkDatumStore::StoredRow
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("curr_row_results count is not 1", K(stored_row));
         } else if (!stored_row.cells()[0].is_null()) {
-          ret = clone_aggr_cell(aggr_cell,
-                           stored_row.cells()[0],
-                           aggr_info.is_number());
+          if (aggr_fun == T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE) {
+            if (OB_UNLIKELY(stored_row.cells()[0].len_ < get_llc_size())) {
+              ret = OB_INVALID_ARGUMENT;
+              LOG_WARN("invalid argument length", K(ret), K(stored_row.cells()[0].len_));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            ret = clone_aggr_cell(aggr_cell, stored_row.cells()[0], aggr_info.is_number());
+          }
         }
         break;
       }

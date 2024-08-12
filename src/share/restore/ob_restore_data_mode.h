@@ -41,6 +41,7 @@ public:
   ObRestoreDataMode &operator=(const ObRestoreDataMode &restore_mode);
   ObRestoreDataMode &operator=(const Mode &mode);
   constexpr bool is_valid() const { return mode_ >= Mode::NORMAL && mode_ < Mode::RESTORE_DATA_MODE_MAX;}
+  void set_invalid() { mode_ = Mode::RESTORE_DATA_MODE_MAX; }
   bool is_remote_mode() const { return Mode::REMOTE == mode_; }
   bool is_normal_mode() const { return Mode::NORMAL == mode_; }
   bool is_same_mode(const ObRestoreDataMode &other) const { return mode_ == other.mode_; }

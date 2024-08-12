@@ -480,21 +480,6 @@ int ObExprInOrNotIn::calc_result_typeN(ObExprResType &type,
 {
   int ret = ObVectorExprOperator::calc_result_typeN(type, types, param_num, type_ctx);
   if (OB_SUCC(ret)) {
-    if (ob_is_double_type(types[0].get_calc_type())) {
-      common::ObScale double_scale = 0;
-      int calc_scale_done = false;
-      for (int64_t i = 0; i < param_num && !calc_scale_done; ++i) {
-        if (types[i].get_calc_scale() == -1) {
-          double_scale = -1;
-          calc_scale_done = true;
-        } else if (types[i].get_calc_scale() > double_scale) {
-          double_scale = types[i].get_calc_scale();
-        }
-      }
-      for (int64_t i = 0; i < param_num; ++i) {
-        types[i].set_calc_scale(double_scale);
-      }
-    }
     type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
     type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
   }

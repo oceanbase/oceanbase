@@ -310,24 +310,44 @@ int ObCgroupCtrl::get_group_path(
     } else {
       const char *group_name;
       share::ObGroupName g_name;
-      if (group_id < OBCG_MAXNUM) {
-        // if group is system group
-        ObCgSet &set = ObCgSet::instance();
-        group_name = set.name_of_id(group_id);
-      } else if (OB_FAIL(get_group_info_by_group_id(tenant_id, group_id, g_name))) {
-        LOG_WARN("get group_name by id failed", K(group_id), K(ret));
-      } else {
+      int tmp_ret = OB_SUCCESS;
+      const int WARN_LOG_INTERVAL = 10 * 1000 * 1000L;
+      ObCgSet &set = ObCgSet::instance();
+
+      if (is_user_group(group_id)) {
         // if group is resource group
-        group_name = g_name.get_value().ptr();
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_ISNULL(group_name)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("group name is null", K(ret), K(tenant_id), K(group_id));
+        if (OB_TMP_FAIL(get_group_info_by_group_id(tenant_id, group_id, g_name))) {
+          if (REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {
+            LOG_WARN("fail to get group_name", K(tmp_ret), K(tenant_id), K(group_id), K(lbt()));
+          }
         } else {
-          snprintf(group_name_path, path_bufsize, "%s", group_name);
+          group_name = g_name.get_value().ptr();
+        }
+      } else if (group_id >= OBCG_MAXNUM) {
+        // impossible
+        tmp_ret = OB_INVALID_CONFIG;
+        if (REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {
+          LOG_WARN("group_id is invalid", K(tmp_ret), K(tenant_id), K(group_id), K(lbt()));
         }
       }
+
+      if (OB_SUCCESS != tmp_ret) {
+        group_id = OBCG_DEFAULT;
+      }
+
+      if (group_id < OBCG_MAXNUM) {
+        group_name = set.name_of_id(group_id);
+      }
+
+      if (OB_ISNULL(group_name)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        group_name = "OBCG_DEFAULT";
+        if (REACH_TIME_INTERVAL(WARN_LOG_INTERVAL)) {
+          LOG_WARN("group_name is null", K(tmp_ret), K(tenant_id), K(group_id), K(group_name), K(lbt()));
+        }
+      }
+
+      snprintf(group_name_path, path_bufsize, "%s", group_name);
     }
   }
   if (OB_SUCC(ret)) {

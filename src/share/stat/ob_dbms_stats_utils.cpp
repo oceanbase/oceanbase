@@ -1381,7 +1381,9 @@ int ObDbmsStatsUtils::scale_col_stats(const uint64_t tenant_id,
 }
 
 int ObDbmsStatsUtils::get_sys_online_estimate_percent(sql::ObExecContext &ctx,
-                                                    double &percent)
+                                                      const uint64_t tenant_id,
+                                                      const uint64_t table_id,
+                                                      double &percent)
 {
   int ret = OB_SUCCESS;
   ObTableStatParam stat_param;
@@ -1389,6 +1391,8 @@ int ObDbmsStatsUtils::get_sys_online_estimate_percent(sql::ObExecContext &ctx,
   ObSEArray<ObStatPrefs*, 4> stat_prefs;
   ObOnlineEstimatePercentPrefs *tmp_pref = NULL;
   stat_param.allocator_ = &tmp_alloc;
+  stat_param.tenant_id_ = tenant_id;
+  stat_param.table_id_ = table_id;
   if (OB_FAIL(new_stat_prefs(*stat_param.allocator_, ctx.get_my_session(), ObString(), tmp_pref))) {
     LOG_WARN("failed to new stat prefs", K(ret));
   } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {

@@ -378,13 +378,12 @@ int ObDataDictService::get_snapshot_scn_(share::SCN &snapshot_scn)
   int ret = OB_SUCCESS;
   static const int64_t gts_get_timeout_ns = 4 * _SEC_ * NS_CONVERSION;
   SCN gts_scn;
-  const transaction::MonotonicTs stc_ahead = transaction::MonotonicTs::current_time() -
-                                             transaction::MonotonicTs(GCONF._ob_get_gts_ahead_interval);
+  const transaction::MonotonicTs stc = transaction::MonotonicTs::current_time();
   transaction::MonotonicTs tmp_receive_gts_ts(0);
   const int64_t expire_ts_ns = get_timestamp_ns() + gts_get_timeout_ns;
 
   do{
-    if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, stc_ahead, NULL, gts_scn, tmp_receive_gts_ts))) {
+    if (OB_FAIL(OB_TS_MGR.get_gts(tenant_id_, stc, NULL, gts_scn, tmp_receive_gts_ts))) {
       if (OB_EAGAIN == ret) {
         if (expire_ts_ns < get_timestamp_ns()) {
           ret = OB_TIMEOUT;

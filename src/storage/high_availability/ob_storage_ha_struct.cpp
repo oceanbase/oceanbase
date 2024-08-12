@@ -451,7 +451,7 @@ int ObMigrationStatusHelper::check_ls_transfer_tablet_(
     //do nothing
   } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), KPC(ls));
-  } else if (restore_status.is_in_restore()) {
+  } else if (restore_status.is_in_restoring_or_failed()) {
     allow_gc = true;
     LOG_INFO("ls ls in restore status, allow gc", K(ret), K(restore_status), K(ls_id));
   } else if (OB_FAIL(check_ls_with_transfer_task_(*ls, need_check_allow_gc, need_wait_dest_ls_replay))) {
@@ -1397,10 +1397,114 @@ int ObLSRebuildType::set_type(int32_t type)
 
 OB_SERIALIZE_MEMBER(ObLSRebuildType, type_);
 
+/******************ObRebuildTabletIDArray*********************/
+ObRebuildTabletIDArray::ObRebuildTabletIDArray()
+  : count_(0)
+{
+}
+
+ObRebuildTabletIDArray::~ObRebuildTabletIDArray()
+{
+}
+
+OB_DEF_SERIALIZE(ObRebuildTabletIDArray)
+{
+  int ret = OB_SUCCESS;
+  OB_UNIS_ENCODE_ARRAY(id_array_, count_);
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObRebuildTabletIDArray)
+{
+  int64_t len = 0;
+  OB_UNIS_ADD_LEN_ARRAY(id_array_, count_);
+  return len;
+}
+
+OB_DEF_DESERIALIZE(ObRebuildTabletIDArray)
+{
+  int ret = OB_SUCCESS;
+  int64_t count = 0;
+
+  OB_UNIS_DECODE(count);
+  if (OB_SUCC(ret)) {
+    count_ = count;
+  }
+  OB_UNIS_DECODE_ARRAY(id_array_, count_);
+  return ret;
+}
+
+int ObRebuildTabletIDArray::push_back(const common::ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet id is invalid", K(ret), K(tablet_id));
+  } else if (count_ >= MAX_TABLET_COUNT) {
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("rebuild tablet id array is size overflow", K(ret), K(count_));
+  } else {
+    id_array_[count_] = tablet_id;
+    count_++;
+  }
+  return ret;
+}
+
+int ObRebuildTabletIDArray::assign(const common::ObIArray<common::ObTabletID> &tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+  if (tablet_id_array.count() > MAX_TABLET_COUNT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot assign tablet id array", K(ret), K(tablet_id_array));
+  } else {
+    count_ = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
+      const common::ObTabletID &tablet_id = tablet_id_array.at(i);
+      if (OB_FAIL(push_back(tablet_id))) {
+        LOG_WARN("failed to push tablet id into array", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRebuildTabletIDArray::assign(const ObRebuildTabletIDArray &tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+  if (tablet_id_array.count() > MAX_TABLET_COUNT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cannot assign tablet id array", K(ret), K(tablet_id_array));
+  } else {
+    count_ = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_id_array.count(); ++i) {
+      const common::ObTabletID &tablet_id = tablet_id_array.at(i);
+      if (OB_FAIL(push_back(tablet_id))) {
+        LOG_WARN("failed to push tablet id into array", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRebuildTabletIDArray::get_tablet_id_array(
+    common::ObIArray<common::ObTabletID> &tablet_id_array)
+{
+  int ret = OB_SUCCESS;
+  tablet_id_array.reset();
+  for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
+    if (OB_FAIL(tablet_id_array.push_back(id_array_[i]))) {
+      LOG_WARN("failed to push tablet id into array", K(ret), K(count_), K(i));
+    }
+  }
+  return ret;
+}
+
 /******************ObLSRebuildInfo*********************/
 ObLSRebuildInfo::ObLSRebuildInfo()
   : status_(),
-    type_()
+    type_(),
+    tablet_id_array_(),
+    src_()
 {
 }
 
@@ -1408,6 +1512,8 @@ void ObLSRebuildInfo::reset()
 {
   status_.reset();
   type_.reset();
+  tablet_id_array_.reset();
+  src_.reset();
 }
 
 bool ObLSRebuildInfo::is_valid() const
@@ -1429,7 +1535,23 @@ bool ObLSRebuildInfo::operator ==(const ObLSRebuildInfo &other) const
       && type_ == other.type_;
 }
 
-OB_SERIALIZE_MEMBER(ObLSRebuildInfo, status_, type_);
+int ObLSRebuildInfo::assign(const ObLSRebuildInfo &info)
+{
+  int ret = OB_SUCCESS;
+  if (!info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("assign ls rebuild info get invalid argument", K(ret), K(info));
+  } else if (OB_FAIL(tablet_id_array_.assign(info.tablet_id_array_))) {
+    LOG_WARN("failed to assign tablet id array", K(ret), K(info));
+  } else {
+    status_ = info.status_;
+    type_ = info.type_;
+    src_ = info.src_;
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER(ObLSRebuildInfo, status_, type_, tablet_id_array_, src_);
 
 ObTabletBackfillInfo::ObTabletBackfillInfo()
   : tablet_id_(),
@@ -1861,6 +1983,56 @@ int ObBackfillTabletsTableMgr::get_local_rebuild_seq(int64_t &local_rebuild_seq)
   return ret;
 }
 
+ObLogicTabletID::ObLogicTabletID()
+  : tablet_id_(),
+    transfer_seq_(-1)
+{
+}
+
+int ObLogicTabletID::init(
+    const common::ObTabletID &tablet_id,
+    const int64_t transfer_seq)
+{
+  int ret = OB_SUCCESS;
+  if (!tablet_id.is_valid() || transfer_seq < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init logic tablet id get invalid argument", K(ret), K(tablet_id), K(transfer_seq));
+  } else {
+    tablet_id_ = tablet_id;
+    transfer_seq_ = transfer_seq;
+  }
+  return ret;
+}
+
+void ObLogicTabletID::reset()
+{
+  tablet_id_.reset();
+  transfer_seq_ = -1;
+}
+
+bool ObLogicTabletID::is_valid() const
+{
+  return tablet_id_.is_valid() && transfer_seq_ >= 0;
+}
+
+bool ObLogicTabletID::operator == (const ObLogicTabletID &other) const
+{
+  bool is_same = true;
+  if (this == &other) {
+    // same
+  } else if (tablet_id_ != other.tablet_id_
+      || transfer_seq_ != other.transfer_seq_) {
+    is_same = false;
+  } else {
+    is_same = true;
+  }
+  return is_same;
+}
+
+bool ObLogicTabletID::operator != (const ObLogicTabletID &other) const
+{
+  return !(*this == other);
+}
 
 }
 }

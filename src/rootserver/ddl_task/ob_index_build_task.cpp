@@ -71,6 +71,7 @@ int ObIndexSSTableBuildTask::set_addition_info(const share::ObLSID &ls_id, const
 int ObIndexSSTableBuildTask::process()
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator arena("index_sst_build");
   ObTraceIdGuard trace_id_guard(trace_id_);
   ObSqlString sql_string;
   ObSchemaGetterGuard schema_guard;
@@ -111,9 +112,9 @@ int ObIndexSSTableBuildTask::process()
     LOG_WARN("error unexpected, index schema must not be nullptr", K(ret), K(tenant_id_), K(dest_table_id_));
   } else {
     if (is_partitioned_local_index_task()) {
-      if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id_, data_table_id_, dest_table_id_, addition_info_.partition_ids_, allocator_, batch_partition_names))) {
+      if (OB_FAIL(ObDDLUtil::get_index_table_batch_partition_names(tenant_id_, data_table_id_, dest_table_id_, addition_info_.partition_ids_, arena, batch_partition_names))) {
         LOG_WARN("fail to get index table batch partition names", K(ret), K(tenant_id_), K(data_table_id_), K(dest_table_id_), K(addition_info_.partition_ids_), K(batch_partition_names));
-      } else if (OB_FAIL(ObDDLUtil::generate_partition_names(batch_partition_names, allocator_, partition_names))) {
+      } else if (OB_FAIL(ObDDLUtil::generate_partition_names(batch_partition_names, arena, partition_names))) {
         LOG_WARN("fail to generate partition names", K(ret), K(batch_partition_names), K(partition_names));
       }
     }
@@ -970,6 +971,7 @@ int ObIndexBuildTask::wait_and_send_single_partition_replica_task(bool &state_fi
     } else if (OB_UNLIKELY(ret == OB_ITER_END)) {
       LOG_WARN("schedule queue is null", K(ret), K(parallelism), K(execution_id), K(tablets));
       ret = OB_SUCCESS;
+      sstable_complete_ts_ = ObTimeUtility::current_time();
       state_finished = true;
     } else {
       LOG_WARN("fail to get next batch tablets", K(ret), K(parallelism), K(execution_id), K(tablets));
@@ -1357,7 +1359,7 @@ int ObIndexBuildTask::verify_checksum()
     }
   }
 
-  if (state_finished) {
+  if (state_finished || OB_FAIL(ret)) {
     (void)switch_status(ObDDLTaskStatus::TAKE_EFFECT, true, ret);
     LOG_INFO("verify checksum finished", K(ret), K(*this));
   }

@@ -625,6 +625,8 @@ int ObLSService::post_create_ls_(const int64_t create_type,
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ls->set_start_ha_state())) {
         LOG_ERROR("ls set start ha state failed", KR(ret), KPC(ls));
+      } else if (OB_FAIL(ls->set_ls_allow_to_read())) {
+        LOG_ERROR("failed to set ls allow to read", KR(ret), KPC(ls));
       }
       break;
     }

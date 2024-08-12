@@ -423,6 +423,7 @@ ObMacroBlockWriter::ObMacroBlockWriter(const bool is_need_macro_buffer)
     aggregated_row_(nullptr),
     data_aggregator_(nullptr),
     callback_(nullptr),
+    device_handle_(nullptr),
     builder_(NULL),
     data_block_pre_warmer_(),
     io_buf_(nullptr)
@@ -461,6 +462,7 @@ void ObMacroBlockWriter::reset()
   is_macro_or_micro_block_reused_ = false;
   micro_rowkey_hashs_.reset();
   datum_row_.reset();
+  device_handle_ = nullptr;
   if (OB_NOT_NULL(builder_)) {
     builder_->~ObDataIndexBlockBuilder();
     builder_ = nullptr;
@@ -477,7 +479,8 @@ void ObMacroBlockWriter::reset()
 int ObMacroBlockWriter::open(
     const ObDataStoreDesc &data_store_desc,
     const ObMacroDataSeq &start_seq,
-    ObIMacroBlockFlushCallback *callback)
+    ObIMacroBlockFlushCallback *callback,
+    ObIODevice *device_handle)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -488,6 +491,7 @@ int ObMacroBlockWriter::open(
     STORAGE_LOG(DEBUG, "open macro block writer: ", K(data_store_desc), K(start_seq));
     ObSSTableIndexBuilder *sstable_index_builder = data_store_desc.sstable_index_builder_;
     callback_ = callback;
+    device_handle_ = device_handle;
     data_store_desc_ = &data_store_desc;
     merge_info_ = data_store_desc_->merge_info_;
     const int64_t task_idx = start_seq.get_parallel_idx();
@@ -601,8 +605,7 @@ int ObMacroBlockWriter::append(const ObDataMacroBlockMeta &macro_meta)
       merge_info_->multiplexed_macro_block_count_++;
       merge_info_->macro_block_count_++;
       merge_info_->total_row_count_ += macro_meta.val_.row_count_;
-      merge_info_->occupy_size_
-          += macro_meta.val_.occupy_size_;
+      merge_info_->occupy_size_ += macro_meta.val_.occupy_size_;
     }
   }
 
@@ -780,6 +783,19 @@ int ObMacroBlockWriter::check_data_macro_block_need_merge(const ObMacroBlockDesc
       need_merge = true;
   }
 
+  return ret;
+}
+
+int ObMacroBlockWriter::check_meta_macro_block_need_rewrite(bool &need_rewrite) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(builder_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "invalid meta block writer", K(ret));
+  } else {
+    need_rewrite = get_macro_data_size()
+      < data_store_desc_->get_macro_block_size() * DEFAULT_MACRO_BLOCK_REWRTIE_THRESHOLD / 100;
+  }
   return ret;
 }
 
@@ -988,7 +1004,9 @@ int ObMacroBlockWriter::init_data_pre_warmer(const ObMacroDataSeq &start_seq)
       ObTabletStatAnalyzer tablet_analyzer;
       if (OB_TMP_FAIL(MTL(ObTenantTabletStatMgr *)->get_tablet_analyzer(
               data_store_desc_->get_ls_id(), tablet_id, tablet_analyzer))) {
-        STORAGE_LOG(WARN, "Failed to get tablet stat analyzer", K(tmp_ret));
+        if (OB_HASH_NOT_EXIST != tmp_ret) {
+          STORAGE_LOG(WARN, "Failed to get tablet stat analyzer", K(tmp_ret));
+        }
       } else {
         need_pre_warm = true;
       }
@@ -1404,7 +1422,7 @@ int ObMacroBlockWriter::flush_macro_block(ObMacroBlock &macro_block)
   } else if (OB_NOT_NULL(builder_)
       && OB_FAIL(builder_->generate_macro_row(macro_block, macro_handle.get_macro_id(), ddl_start_row_offset))) {
     STORAGE_LOG(WARN, "fail to generate macro row", K(ret), K_(current_macro_seq));
-  } else if (OB_FAIL(macro_block.flush(macro_handle, block_write_ctx_))) {
+  } else if (OB_FAIL(macro_block.flush(macro_handle, block_write_ctx_, device_handle_))) {
     STORAGE_LOG(WARN, "macro block writer fail to flush macro block.", K(ret));
   } else if (OB_NOT_NULL(callback_) && OB_FAIL(callback_->write(macro_handle,
                                                                 cur_logic_id,
@@ -1482,7 +1500,7 @@ int ObMacroBlockWriter::check_write_complete(const MacroBlockId &macro_block_id)
   } else if (OB_FAIL(read_handle.wait())) {
     STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(read_info));
   } else if (OB_FAIL(ObSSTableMacroBlockChecker::check(
-      read_info.buf_,
+      read_handle.get_buffer(),
       read_handle.get_data_size(),
       CHECK_LEVEL_PHYSICAL))) {
     STORAGE_LOG(WARN, "fail to verity macro block", K(ret), K(macro_block_id));
@@ -1497,6 +1515,8 @@ int ObMacroBlockWriter::wait_io_finish(ObMacroBlockHandle &macro_handle)
   const bool is_normal_cg = data_store_desc_->is_cg();
   if (OB_FAIL(macro_handle.wait())) {
     STORAGE_LOG(WARN, "macro block writer fail to wait io finish", K(ret));
+  } else if (OB_NOT_NULL(device_handle_)) {
+    macro_handle.reset();
   } else {
     if (!macro_handle.is_empty()) {
       FLOG_INFO("wait io finish", K(macro_handle.get_macro_id()), K(data_store_desc_->get_table_cg_idx()), K(is_normal_cg));
@@ -1528,9 +1548,37 @@ int ObMacroBlockWriter::alloc_block()
     STORAGE_LOG(WARN, "fail to wait io finish", K(ret), K(macro_handle));
   } else if (OB_UNLIKELY(macro_handle.is_valid())) {
     STORAGE_LOG(INFO, "block maybe wrong", K(macro_handle));
+  } else if (OB_NOT_NULL(device_handle_)) {
+    if (OB_FAIL(alloc_block_from_device(macro_handle))) {
+      STORAGE_LOG(WARN, "Fail to pre-alloc block for new macro block from device",
+          K(ret), K_(current_index), K_(current_macro_seq));
+    }
   } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.alloc_block(macro_handle))) {
     STORAGE_LOG(WARN, "Fail to pre-alloc block for new macro block",
         K(ret), K_(current_index), K_(current_macro_seq));
+  }
+  return ret;
+}
+
+int ObMacroBlockWriter::alloc_block_from_device(ObMacroBlockHandle &macro_handle)
+{
+  int ret = OB_SUCCESS;
+  MacroBlockId macro_id;
+  ObIOFd io_fd;
+  ObIODOpts opts;
+  if (OB_ISNULL(device_handle_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected null device handle", K(ret), KP_(device_handle));
+  } else if (OB_FAIL(device_handle_->alloc_block(&opts, io_fd))) {
+    LOG_ERROR("Failed to alloc block from device handle", K(ret));
+  } else {
+    macro_id.reset();
+    macro_id.set_from_io_fd(io_fd);
+    if (OB_FAIL(macro_handle.set_macro_block_id(macro_id))) {
+      LOG_ERROR("Failed to set macro block id", K(ret), K(macro_id));
+    } else {
+      FLOG_INFO("successfully alloc block from device", K(macro_id));
+    }
   }
   return ret;
 }

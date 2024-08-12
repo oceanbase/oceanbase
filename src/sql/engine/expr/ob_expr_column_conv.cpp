@@ -475,7 +475,9 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
             && OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, false, datum, cast_mode, *val))) {
           LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr), K(*val));
         }
-        LOG_DEBUG("after column convert", K(expr), K(datum), K(cast_mode));
+        if (OB_SUCC(ret)) {
+          LOG_DEBUG("after column convert", K(expr), K(datum), K(cast_mode));
+        }
       } else if (is_lob_storage(out_type) && expr.args_[4]->obj_meta_.is_user_defined_sql_type()) {
         // udt types can only insert to lob columns by rewrite.
         // but before rewrite, column convert type deducing may happen

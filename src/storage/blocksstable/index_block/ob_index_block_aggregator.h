@@ -179,29 +179,20 @@ private:
   bool is_inited_;
 };
 
-class ObIndexBlockAggregator final
+struct ObAggregateInfo final
 {
 public:
-  ObIndexBlockAggregator();
-  ~ObIndexBlockAggregator() {}
+  ObAggregateInfo();
+  ~ObAggregateInfo();
   void reset();
-  void reuse();
+  void eval(const ObIndexBlockRowDesc &row_desc);
+  void get_agg_result(ObIndexBlockRowDesc &row_desc) const;
 
-  int init(const ObDataStoreDesc &store_desc, ObIAllocator &allocator);
-  int eval(const ObIndexBlockRowDesc &row_desc);
-  int get_index_agg_result(ObIndexBlockRowDesc &row_desc);
-  inline int64_t get_max_agg_size() { return skip_index_aggregator_.get_max_agg_size(); }
-  inline int64_t get_row_count() const { return row_count_; }
-  inline bool contain_uncommitted_row() const { return contain_uncommitted_row_; }
-  inline bool is_last_row_last_flag() const { return is_last_row_last_flag_; }
-  inline int64_t get_max_merged_trans_version() const { return max_merged_trans_version_; }
-  TO_STRING_KV(K_(skip_index_aggregator), K_(aggregated_row), K_(row_count), K_(row_count_delta),
-      K_(max_merged_trans_version), K_(macro_block_count), K_(micro_block_count),
-      K_(can_mark_deletion), K_(contain_uncommitted_row), K_(has_string_out_row), K_(has_lob_out_row),
-      K_(is_last_row_last_flag), K_(need_data_aggregate), K_(is_inited));
-private:
-  ObSkipIndexAggregator skip_index_aggregator_;
-  ObDatumRow aggregated_row_;
+  TO_STRING_KV(K_(row_count), K_(row_count_delta), K_(max_merged_trans_version),
+      K_(macro_block_count), K_(micro_block_count), K_(can_mark_deletion),
+      K_(contain_uncommitted_row), K_(has_string_out_row), K_(has_lob_out_row),
+      K_(is_last_row_last_flag));
+public:
   int64_t row_count_;
   int64_t row_count_delta_;
   int64_t max_merged_trans_version_;
@@ -212,6 +203,48 @@ private:
   bool has_string_out_row_;
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
+};
+
+
+struct ObIndexRowAggInfo final
+{
+public:
+  ObIndexRowAggInfo();
+  ~ObIndexRowAggInfo();
+  void reset();
+  bool is_valid() const { return (need_data_aggregate_ && aggregated_row_.is_valid()) || (!need_data_aggregate_ && !aggregated_row_.is_valid()); }
+  TO_STRING_KV(K_(aggregated_row), K_(aggregate_info), K_(need_data_aggregate));
+public:
+  ObDatumRow aggregated_row_;
+  ObAggregateInfo aggregate_info_;
+  bool need_data_aggregate_;
+  DISALLOW_COPY_AND_ASSIGN(ObIndexRowAggInfo);
+};
+
+class ObIndexBlockAggregator final
+{
+public:
+  ObIndexBlockAggregator();
+  ~ObIndexBlockAggregator() {}
+  void reset();
+  void reuse();
+  int init(const ObDataStoreDesc &store_desc, ObIAllocator &allocator);
+  int eval(const ObIndexBlockRowDesc &row_desc);
+  int get_index_agg_result(ObIndexBlockRowDesc &row_desc);
+  int get_index_row_agg_info(ObIndexRowAggInfo &index_row_agg_info, ObIAllocator &allocator);
+  inline bool need_data_aggregate() const { return need_data_aggregate_; };
+  inline const ObDatumRow& get_aggregated_row() const { return aggregated_row_; };
+  inline int64_t get_max_agg_size() { return skip_index_aggregator_.get_max_agg_size(); }
+  inline int64_t get_row_count() const { return aggregate_info_.row_count_; }
+  inline bool contain_uncommitted_row() const { return aggregate_info_.contain_uncommitted_row_; }
+  inline bool is_last_row_last_flag() const { return aggregate_info_.is_last_row_last_flag_; }
+  inline int64_t get_max_merged_trans_version() const { return aggregate_info_.max_merged_trans_version_; }
+  TO_STRING_KV(K_(skip_index_aggregator), K_(aggregated_row), K_(aggregate_info),
+      K_(need_data_aggregate), K_(is_inited));
+private:
+  ObSkipIndexAggregator skip_index_aggregator_;
+  ObDatumRow aggregated_row_;
+  ObAggregateInfo aggregate_info_;
   bool need_data_aggregate_;
   bool is_inited_;
 };

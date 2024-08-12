@@ -893,7 +893,7 @@ int ObReplayStatus::is_replay_done(const LSN &end_lsn,
     LSN min_unreplayed_lsn;
     if (!is_enabled_) {
       is_done = false;
-      CLOG_LOG(INFO, "repaly is not enabled", K(end_lsn));
+      CLOG_LOG(INFO, "replay is not enabled", K(end_lsn));
     } else if (OB_FAIL(get_min_unreplayed_lsn(min_unreplayed_lsn))) {
       CLOG_LOG(ERROR, "get_min_unreplayed_lsn failed", K(this), K(ret), K(min_unreplayed_lsn));
     } else if (!min_unreplayed_lsn.is_valid()) {

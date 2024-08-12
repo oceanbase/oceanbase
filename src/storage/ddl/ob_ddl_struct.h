@@ -185,7 +185,8 @@ public:
                K_(data_format_version),
                K_(end_row_id),
                K_(type),
-               K_(trans_id));
+               K_(trans_id),
+               K_(with_cs_replica));
 public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
@@ -196,6 +197,7 @@ public:
   int64_t end_row_id_;
   storage::ObDirectLoadType type_;
   transaction::ObTransID trans_id_; // for incremental direct load only
+  bool with_cs_replica_;
 };
 
 class ObTabletDirectLoadMgr;

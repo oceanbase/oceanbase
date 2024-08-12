@@ -98,6 +98,9 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
             filter.get_filter_bool_mask().set_always_false();
           } else if (dynamic_filter.is_pass_all_data()) {
             filter.get_filter_bool_mask().set_always_true();
+          } else if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
+              obj_meta, dynamic_filter, allocator))) {
+            LOG_WARN("Failed to filter on min_max for dynamic filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_white_node()) {
           sql::ObWhiteFilterExecutor &white_filter =

@@ -461,7 +461,10 @@ private:
                                      int64_t &log_id,
                                      int64_t &log_proposal_id);
   int leader_broadcast_committed_info_(const LSN &committed_end_lsn);
-  int submit_push_log_resp_(const common::ObAddr &server, const int64_t &msg_proposal_id, const LSN &lsn);
+  int submit_push_log_resp_(const common::ObAddr &server,
+                            const int64_t &msg_proposal_id,
+                            const LSN &lsn,
+                            const bool &is_fetch_log);
   inline int try_push_log_to_paxos_follower_(const int64_t curr_proposal_id,
                                              const int64_t prev_log_pid,
                                              const LSN &prev_lsn,
@@ -473,7 +476,8 @@ private:
                                 const LSN &lsn,
                                 const LogWriteBuf &log_write_buf);
   bool need_execute_fetch_(const FetchTriggerType &fetch_trigger_type);
-  bool need_use_batch_rpc_(const int64_t buf_size) const;
+  bool need_use_batch_rpc_(const int64_t buf_size,
+                           const bool is_fetch_log) const;
 public:
   typedef common::ObLinearHashMap<common::ObAddr, LsnTsInfo> SvrMatchOffsetMap;
   static const int64_t TMP_HEADER_SER_BUF_LEN = 256; // log header序列化的临时buffer大小

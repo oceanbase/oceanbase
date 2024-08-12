@@ -1678,6 +1678,10 @@ int ObDmlCgService::check_del_need_all_columns(ObLogDelUpd &op,
   } else if (table_schema->is_mlog_table()) {
     need_all_columns = true;
     LOG_TRACE("delete from materialized view log, need all columns", K(table_schema->is_mlog_table()));
+  } else if (table_schema->is_multivalue_index_aux()) {
+    // as multivalue need calc is need save rowkey, the save-rowkey policy is dynamic made, need project all columns
+    need_all_columns = true;
+    LOG_TRACE("delete from multivalue index table, need all columns", K(table_schema->is_multivalue_index_aux()));
   } else if (table_schema->is_heap_table()) {
     if (OB_FAIL(table_schema->has_not_null_unique_key(*schema_guard, has_not_null_uk))) {
       LOG_WARN("fail to check whether has not null unique key", K(ret), K(table_schema->get_table_name_str()));

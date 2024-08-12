@@ -127,6 +127,8 @@ public:
   { return get_group_idx_col_index() != common::OB_INVALID_INDEX; }
   OB_INLINE int64_t get_ss_rowkey_prefix_cnt() const
   { return ss_rowkey_prefix_cnt_; }
+  OB_INLINE bool is_skip_scan() const
+  { return ss_rowkey_prefix_cnt_ > 0; }
   OB_INLINE void disable_blockscan()
   { pd_storage_flag_.set_blockscan_pushdown(false); }
   OB_INLINE bool enable_pd_blockscan() const

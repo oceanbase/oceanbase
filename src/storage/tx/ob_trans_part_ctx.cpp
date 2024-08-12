@@ -1279,7 +1279,7 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
       } else {
         TRANS_LOG(ERROR, "unexpected sub state", K(*this));
       }
-      const int64_t GET_GTS_AHEAD_INTERVAL = GCONF._ob_get_gts_ahead_interval;
+      const int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
       set_trans_need_wait_wrap_(receive_gts_ts, GET_GTS_AHEAD_INTERVAL);
       // the same as before prepare
       mt_ctx_.set_trans_version(gts);
@@ -1338,7 +1338,7 @@ int ObPartTransCtx::get_gts_callback(const MonotonicTs srr,
     // before revert self
     if (OB_FAIL(ret)) {
       if (OB_EAGAIN == ret) {
-        TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback - retry gts task by TsMgr", KR(ret), K(*this),
+        TRANS_LOG(DEBUG, "ObPartTransCtx::get_gts_callback - retry gts task by TsMgr", KR(ret), K(*this),
                   K(gts));
       } else {
         TRANS_LOG(WARN, "ObPartTransCtx::get_gts_callback", KR(ret), K(*this), K(gts));
@@ -3028,7 +3028,7 @@ int ObPartTransCtx::get_gts_(SCN &gts)
 {
   int ret = OB_SUCCESS;
   MonotonicTs receive_gts_ts;
-  const int64_t GET_GTS_AHEAD_INTERVAL = GCONF._ob_get_gts_ahead_interval;
+  const int64_t GET_GTS_AHEAD_INTERVAL = 0; //GCONF._ob_get_gts_ahead_interval;
   const MonotonicTs stc_ahead = get_stc_() - MonotonicTs(GET_GTS_AHEAD_INTERVAL);
   ObITsMgr *ts_mgr = trans_service_->get_ts_mgr();
 
@@ -3390,6 +3390,7 @@ int ObPartTransCtx::submit_redo_active_info_log_()
   ObTxLogBlock log_block;
   bool has_redo = false;
   ObRedoLogSubmitHelper helper;
+  ObTableLockPrioOpArray prio_op_array;
   if (OB_FAIL(submit_redo_if_parallel_logging_())) {
   } else if (OB_FAIL(init_log_block_(log_block))) {
     TRANS_LOG(WARN, "init log block failed", KR(ret), K(*this));
@@ -3416,7 +3417,8 @@ int ObPartTransCtx::submit_redo_active_info_log_()
                                       last_scn_, exec_info_.max_submitted_seq_no_,
                                       cluster_version_,
                                       exec_info_.xid_,
-                                      exec_info_.serial_final_seq_no_);
+                                      exec_info_.serial_final_seq_no_,
+                                      prio_op_array);
     ObTxLogCb *log_cb = nullptr;
     if (OB_FAIL(prepare_log_cb_(!NEED_FINAL_CB, log_cb))) {
       TRANS_LOG(WARN, "get log cb failed", KR(ret), KP(log_cb), K(*this));
@@ -3934,7 +3936,7 @@ int ObPartTransCtx::submit_abort_log_()
     if (OB_UNLIKELY(OB_TX_NOLOGCB != ret)) {
       TRANS_LOG(WARN, "get log cb failed", KR(ret), K(*this));
     }
-  } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(1))) {
+  } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(mds_cache_.count() + 1/*promise tx_op pre_alloc safe*/))) {
     TRANS_LOG(WARN, "reserve tx_op space failed", KR(ret), KPC(this));
     return_log_cb_(log_cb);
     log_cb = NULL;
@@ -4071,7 +4073,7 @@ int ObPartTransCtx::submit_direct_load_inc_log_(
     if (ret == OB_TX_NOLOGCB) {
       if (REACH_COUNT_PER_SEC(10) && REACH_TIME_INTERVAL(100 * 1000)) {
         TRANS_LOG(INFO, "no log cb with dli log", KR(ret), K(dli_log_type), K(batch_key),
-                  KPC(busy_cbs_.get_first()));
+                  "busy_cbs.first", PC(busy_cbs_.is_empty() ? NULL : busy_cbs_.get_first()));
       }
     } else {
       TRANS_LOG(WARN, "try to submit direct load inc log failed", K(ret), KPC(this));
@@ -4532,7 +4534,7 @@ void ObPartTransCtx::handle_submit_log_err_(const ObTxLogType log_type, int &ret
   if (OB_TX_NOLOGCB == ret) {
     if (REACH_COUNT_PER_SEC(10) && REACH_TIME_INTERVAL(100 * 1000)) {
       TRANS_LOG(INFO, "can not get log_cb when submit_log", KR(ret), K(log_type),
-                KPC(busy_cbs_.get_first()));
+                "busy_cbs.first", PC(busy_cbs_.is_empty() ? NULL : busy_cbs_.get_first()));
     }
     if (ObTxLogType::TX_PREPARE_LOG == log_type || ObTxLogType::TX_COMMIT_LOG == log_type
         || ObTxLogType::TX_COMMIT_INFO_LOG == log_type) {
@@ -6230,6 +6232,8 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
     } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT, timestamp, true,
                                            mds_cache_.get_final_notify_array()))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(abort_log));
+    } else if (!ctx_tx_data_.is_read_only() && OB_FAIL(ctx_tx_data_.add_abort_op(timestamp))) {
+      TRANS_LOG(WARN, "add tx data abort_op failed", K(ret), KPC(this));
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else {
@@ -7411,7 +7415,7 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
       } else if (OB_SUCCESS != ret && OB_EAGAIN != ret) {
         TRANS_LOG(WARN, "fill MDS log failed", K(ret));
       } else if (OB_FAIL(exec_info_.multi_data_source_.reserve(
-                     exec_info_.multi_data_source_.count() + log_cb->get_mds_range().count()))) {
+                     exec_info_.multi_data_source_.count() + mds_cache_.count()))) {
         TRANS_LOG(WARN, "reserve mds space failed", K(ret));
       } else if (OB_FAIL(log_block.add_new_log(log, &big_segment_info_.segment_buf_))) {
         // do not handle ret code OB_BUF_NOT_ENOUGH, one log entry should be
@@ -7432,7 +7436,12 @@ int ObPartTransCtx::submit_multi_data_source_(ObTxLogBlock &log_block)
       } else if (log_block.get_cb_arg_array().count() == 0) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "cb arg array is empty", K(ret), K(log_block));
-      } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(log_cb->get_mds_range().count()))) {
+      // when mds_op concurrent submit log, we must promise tx_op pre_alloc safe
+      // for example: submit_mds1(tx_op_count=10)--->submit_mds2(tx_op_count=50)-->mds1_log_cb_apply()-->mds2_log_cb_apply()
+      // we need pre_alloc tx_op_count=60 for log_cb apply not to alloc memory
+      // reserve tx_op count equals unsubmit log mds_op (mds_cache)
+      // this depend insert tx op and move from mds_cache process when mds redo log callback
+      } else if (OB_FAIL(ctx_tx_data_.reserve_tx_op_space(mds_cache_.count()))) {
         TRANS_LOG(WARN, "reserve tx_op space failed", KR(ret), KPC(this));
       } else if (OB_FAIL(ls_tx_ctx_mgr_->get_tx_table()->alloc_tx_data(log_cb->get_tx_data_guard(), true, INT64_MAX))) {
         TRANS_LOG(WARN, "alloc tx_data failed", KR(ret), KPC(this));
@@ -8125,7 +8134,8 @@ int ObPartTransCtx::dup_table_before_preapre_(
 
   if (get_downstream_state() != ObTxState::REDO_COMPLETE
       || (!after_redo_completed && get_upstream_state() != ObTxState::REDO_COMPLETE)
-      || (after_redo_completed && get_upstream_state() > ObTxState::PREPARE)
+      || (after_redo_completed && get_upstream_state() > ObTxState::PREPARE
+          && get_upstream_state() != ObTxState::ABORT)
       || !exec_info_.is_dup_tx_) {
     ret = OB_STATE_NOT_MATCH;
     TRANS_LOG(WARN, "unexpected dup trx state", K(ret), KPC(this));

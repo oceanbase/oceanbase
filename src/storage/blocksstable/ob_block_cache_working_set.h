@@ -47,6 +47,7 @@ public:
       ObKVCachePair *&kvpair, ObKVCacheHandle &handle, ObKVCacheInstHandle &inst_handle) override;
 private:
   int create_working_set_if_need();
+  OB_INLINE void inc_cache_miss() override { /*do nothing*/ }
   static const int64_t USE_WORKING_SET_THRESHOLD = 1024 * 1024 * 1024 * 1024LL; // disable working set
   bool inited_;
   uint64_t tenant_id_;

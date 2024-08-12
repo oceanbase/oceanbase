@@ -316,6 +316,7 @@ public:
   inline bool &get_enable_lob_locator_v2() { return enable_lob_locator_v2_; }
   inline bool has_virtual_column() const { return has_virtual_column_; }
   inline int64_t get_rowid_version() const { return rowid_version_; }
+  inline bool is_column_replica_table() const { return is_column_replica_table_; }
   inline const common::ObIArray<int32_t> &get_rowid_projector() const { return rowid_projector_; }
   inline const common::ObIArray<int32_t> &get_output_projector() const { return output_projector_; }
   inline const common::ObIArray<int32_t> &get_aggregate_projector() const { return aggregate_projector_; }
@@ -404,6 +405,7 @@ private:
   bool is_spatial_index_;
   bool is_fts_index_;
   bool is_multivalue_index_;
+  bool is_column_replica_table_;
 };
 } //namespace schema
 } //namespace share

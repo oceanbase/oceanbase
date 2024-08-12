@@ -1170,7 +1170,7 @@ private:
 };
 
 ObTabletDirectLoadBuildCtx::ObTabletDirectLoadBuildCtx()
-  : allocator_(), slice_writer_allocator_(), build_param_(), slice_mgr_map_(), data_block_desc_(true/*is ddl*/), index_builder_(nullptr),
+  : allocator_(), slice_writer_allocator_(), build_param_(), slice_mgr_map_(), data_block_desc_(), index_builder_(nullptr),
     column_stat_array_(), sorted_slice_writers_(), sorted_slices_idx_(), is_task_end_(false), task_finish_count_(0), fill_column_group_finish_count_(0),
     commit_scn_(), schema_allocator_("TDL_schema", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), storage_schema_(nullptr)
 {
@@ -2260,10 +2260,10 @@ int ObTabletDirectLoadMgr::fill_aggregated_column_group(
 int ObTabletDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  ObWholeDataStoreDesc index_block_desc(true/*is ddl*/);
+  ObWholeDataStoreDesc index_block_desc;
   if (sqc_build_ctx_.index_builder_ != nullptr) {
     LOG_INFO("index builder is already prepared");
-  } else if (OB_FAIL(index_block_desc.init(table_schema, ls_id_, tablet_id_,
+  } else if (OB_FAIL(index_block_desc.init(true/*is ddl*/, table_schema, ls_id_, tablet_id_,
           is_full_direct_load(direct_load_type_) ? compaction::ObMergeType::MAJOR_MERGE : compaction::ObMergeType::MINOR_MERGE,
           is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : 1L,
           data_format_version_,
@@ -2283,7 +2283,7 @@ int ObTabletDirectLoadMgr::prepare_index_builder_if_need(const ObTableSchema &ta
             nullptr, // macro block flush callback
             ObSSTableIndexBuilder::DISABLE))) {
       LOG_WARN("failed to init index builder", K(ret), K(index_block_desc));
-    } else if (OB_FAIL(sqc_build_ctx_.data_block_desc_.init(table_schema, ls_id_, tablet_id_,
+    } else if (OB_FAIL(sqc_build_ctx_.data_block_desc_.init(true/*is ddl*/, table_schema, ls_id_, tablet_id_,
             is_full_direct_load(direct_load_type_) ? compaction::ObMergeType::MAJOR_MERGE : compaction::ObMergeType::MINOR_MERGE,
             is_full_direct_load(direct_load_type_) ? table_key_.get_snapshot_version() : 1L,
             data_format_version_,
@@ -2528,6 +2528,7 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
   } else {
     uint32_t lock_tid = 0;
     ObDDLRedoLogWriter redo_writer;
+    DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
     if (OB_FAIL(wrlock(TRY_LOCK_TIMEOUT, lock_tid))) {
       LOG_WARN("failed to wrlock", K(ret), KPC(this));
     } else if (FALSE_IT(sstable_already_created = sqc_build_ctx_.is_task_end_)) {
@@ -2538,7 +2539,6 @@ int ObTabletFullDirectLoadMgr::close(const int64_t execution_id, const SCN &star
     } else if (OB_FAIL(redo_writer.init(ls_id_, tablet_id_))) {
       LOG_WARN("init redo writer failed", K(ret), K(ls_id_), K(tablet_id_));
     } else {
-      DEBUG_SYNC(AFTER_REMOTE_WRITE_DDL_PREPARE_LOG);
       ObTabletDirectLoadMgrHandle direct_load_mgr_handle;
       if (OB_FAIL(direct_load_mgr_handle.set_obj(this))) {
         LOG_WARN("set direct load mgr handle failed", K(ret));

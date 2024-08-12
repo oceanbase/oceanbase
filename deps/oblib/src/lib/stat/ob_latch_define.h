@@ -351,7 +351,7 @@ LATCH_DEF(DEVICE_MANIFEST_RW_LOCK, 320, "device manifest rw lock", LATCH_READ_PR
 LATCH_DEF(MANIFEST_TASK_LOCK, 321, "manifest task lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(OB_DEVICE_CREDENTIAL_MGR_LOCK, 322, "device credential mgr rw lock", LATCH_READ_PREFER, 2000, 0, false)
 LATCH_DEF(DISK_SPACE_MANAGER_LOCK, 323, "share storage disk space manager lock", LATCH_FIFO, INT64_MAX, 0, false)
-LATCH_DEF(TIERED_SUPER_BLOCK_LOCK, 324, "tiered super block lock", LATCH_FIFO, 2000, 0, false)
+LATCH_DEF(MC_PREWARM_LOCK, 324, "major compaction prewarm lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(TSLOG_PROCESSING_MUTEX, 325, "tslog processing mutex", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(TSLOG_CKPT_LOCK, 326, "tslog checkpoint lock", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(FILE_MANAGER_LOCK, 327, "ile manager lock", LATCH_FIFO, INT64_MAX, 0, false)
@@ -369,8 +369,12 @@ LATCH_DEF(SQL_AUDIT, 335, "sql audit release second level queue lock", LATCH_FIF
 LATCH_DEF(S2_PHY_BLOCK_LOCK, 336, "s2 phy block lock", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(S2_MEM_BLOCK_LOCK, 337, "s2 mem block lock", LATCH_FIFO, INT64_MAX, 0, false)
 LATCH_DEF(TENANT_MGR_TENANT_BUCKET_LOCK, 338, "tenant mgr tenant bucket lock", LATCH_READ_PREFER, INT64_MAX, 0, false)
+LATCH_DEF(SEQUENCE_VALUE_FETCH_LOCK, 339, "sequence value fetch lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DI_SUMMARY_LOCK, 340, "diagnostic info summary lock", LATCH_FIFO, 2000, 0, false)
+LATCH_DEF(DI_ALLOCATE_LOCK, 341, "diagnostic info allocator lock", LATCH_FIFO, 2000, 0, false)
+LATCH_DEF(DI_COLLECTOR_LOCK, 342, "diagnostic info collector lock", LATCH_FIFO, 2000, 0, false)
 
-LATCH_DEF(LATCH_END, 339, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 343, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

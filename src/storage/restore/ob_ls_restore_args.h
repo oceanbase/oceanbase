@@ -51,6 +51,7 @@ struct ObTenantRestoreCtx
       K_(tenant_id), 
       K_(backup_cluster_version),
       K_(backup_data_version),
+      K_(backup_compatible),
       K_(backup_set_list), 
       K_(backup_piece_list));
   
@@ -61,6 +62,7 @@ struct ObTenantRestoreCtx
   uint64_t tenant_id_;
   uint64_t backup_cluster_version_;
   uint64_t backup_data_version_;
+  share::ObBackupSetFileDesc::Compatible backup_compatible_;
   // every set path is integral.
   common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
   // every piece path is integral.

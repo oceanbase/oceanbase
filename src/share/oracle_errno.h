@@ -28,7 +28,7 @@
 //Action: Remove the recursive SQL, possibly a recursive trigger.
 #define OER_RECURSIVE_SQL_LEVELS_EXCEEDED 36
 
-//ORA-00054: resource busy and acquire with NOWAIT specified or timeout expired
+//OBE-00054: resource busy and acquire with NOWAIT specified or timeout expired
 //Cause: Interested resource is busy.
 //Action: Retry if necessary or increase timeout.
 #define OER_RESOURCE_BUSY_AND_ACQUIRE_WITH_NOWAIT  54

@@ -74,6 +74,7 @@ public:
     const int64_t count,
     const int64_t schema_rowkey_cnt,
     ObIAllocator &allocator);
+  int init_and_assign(const ObIArray<int32_t> &other, ObIAllocator &allocator);
   int32_t at(int64_t idx) const
   {
     return (*at_func_)(schema_rowkey_cnt_, column_cnt_, idx, array_);
@@ -83,7 +84,6 @@ public:
   {
     return (*count_func_)(column_cnt_, array_);
   }
-
   int64_t get_deep_copy_size() const;
   int deep_copy(
     char *dst_buf,
@@ -274,7 +274,8 @@ public:
    * storage_cols_index: access column store index in storage file row
    * cols_param: access column params
    */
-  virtual int init(
+  // could used for query memtable/sstable
+  int init(
       common::ObIAllocator &allocator,
       const int64_t schema_column_count,
       const int64_t schema_rowkey_cnt,
@@ -286,6 +287,15 @@ public:
       const common::ObIArray<ObColExtend> *cols_extend = nullptr,
       const bool has_all_column_group = true,
       const bool is_cg_sstable = false);
+  int mock_for_sstable_query(
+    common::ObIAllocator &allocator,
+    const int64_t schema_column_count,
+    const int64_t schema_rowkey_cnt,
+    const bool is_oracle_mode,
+    const common::ObIArray<ObColDesc> &cols_desc,
+    const common::ObIArray<int32_t> &storage_cols_index,
+    const common::ObIArray<ObColumnParam *> &cols_param,
+    const common::ObIArray<int32_t> &cg_idxs);
   virtual OB_INLINE bool is_valid() const override
   {
     return ObReadInfoStruct::is_valid()
@@ -307,7 +317,11 @@ public:
   { return cg_idxs_.count() > 0 ? &cg_idxs_ : nullptr; }
   OB_INLINE bool is_access_rowkey_only() const override
   { return max_col_index_ < rowkey_cnt_; }
-
+  OB_INLINE virtual const ObColumnIndexArray &get_memtable_columns_index() const override
+  {
+    OB_ASSERT_MSG(!mock_sstable_query_, "ObTableReadInfo dose not promise memtable columns index");
+    return memtable_cols_index_;
+  }
   OB_INLINE virtual const common::ObIArray<ObColExtend> *get_columns_extend() const override
   {
     return &cols_extend_;
@@ -333,7 +347,19 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableReadInfo);
   int init_datum_utils(common::ObIAllocator &allocator, const bool is_cg_sstable);
-
+  int init_pre_check(
+      const int64_t schema_column_count,
+      const int64_t schema_rowkey_cnt,
+      const common::ObIArray<ObColDesc> &cols_desc,
+      const common::ObIArray<int32_t> *storage_cols_index,
+      const common::ObIArray<ObColumnParam *> *cols_param = nullptr,
+      const common::ObIArray<int32_t> *cg_idxs = nullptr,
+      const common::ObIArray<ObColExtend> *cols_extend = nullptr);
+  void inner_gene_cols_index_by_col_descs(
+    const int64_t schema_rowkey_cnt,
+    const common::ObIArray<ObColDesc> &cols_desc,
+    const common::ObIArray<int32_t> *storage_cols_index,
+    const bool is_cg_sstable);
 private:
   // distinguish schema changed by schema column count
   int64_t trans_col_index_;
@@ -345,6 +371,7 @@ private:
   CGIndex cg_idxs_;
   ColExtendArray cols_extend_;
   bool has_all_column_group_;
+  bool mock_sstable_query_;
 };
 
 class ObRowkeyReadInfo final : public ObReadInfoStruct
@@ -477,6 +504,7 @@ protected:
   ColExtendArray cols_extend_;
 };
 
+// bind the ObRowkeyReadInfo on tablet, and only read rowkey columns
 class ObCGRowkeyReadInfo : public ObITableReadInfo
 {
 public:

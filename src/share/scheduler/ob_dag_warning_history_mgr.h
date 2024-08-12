@@ -40,14 +40,18 @@ public:
 
   static const char *get_dag_status_str(enum ObDagStatus status);
 
-  ObDagWarningInfo();
+  ObDagWarningInfo(const bool need_free_param = true);
   ~ObDagWarningInfo();
   OB_INLINE void reset();
-  TO_STRING_KV(K_(tenant_id), K_(task_id), K_(dag_type), K_(dag_ret), K_(dag_status),
+  TO_STRING_KV(K_(task_id), K_(dag_type), K_(dag_ret), K_(dag_status),
       K_(gmt_create), K_(gmt_modified), K_(retry_cnt), K_(hash), K_(location));
   virtual void shallow_copy(ObIDiagnoseInfo *other) override;
   virtual void update(ObIDiagnoseInfo *other) override;
   virtual int64_t get_hash() const override;
+  int64_t get_deep_copy_size() const
+  { // for unittest
+    return sizeof(ObDagWarningInfo) + (OB_NOT_NULL(info_param_) ? info_param_->get_deep_copy_size() : 0);
+  }
 public:
   share::ObDagId task_id_;
   share::ObDagType::ObDagTypeEnum dag_type_;
@@ -62,7 +66,6 @@ public:
 
 OB_INLINE void ObDagWarningInfo::reset()
 {
-  tenant_id_ = 0;
   task_id_.reset();
   dag_type_ = share::ObDagType::DAG_TYPE_MAX;
   info_param_ = NULL;

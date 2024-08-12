@@ -59,7 +59,7 @@ int ObCompactionHistogramStat::add_value(const int64_t time, const bool failed)
 {
   int ret = OB_SUCCESS;
   int64_t index = ObCompactionHistogramBucketUtil::get_index(time);
-  if (ObCompactionHistogramBucketUtil::BUCKET_MAX_COUNT < index || 0 > index) {
+  if (OB_UNLIKELY(ObCompactionHistogramBucketUtil::BUCKET_MAX_COUNT < index || 0 > index)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "get unexpected index", K(ret), K(index));
   } else {
@@ -250,7 +250,7 @@ void ObCompactionDagStatus::update_finish_cnt(
 int64_t ObCompactionDagStatus::get_cost_long_time(const int64_t prio)
 {
   int64_t ret_time = INT64_MAX;
-  if (0 < prio && COMPACTION_PRIORITY_MAX > prio) {
+  if (0 <= prio && COMPACTION_PRIORITY_MAX > prio) {
     ret_time = COST_LONG_TIME[prio];
   }
   return ret_time;
@@ -532,7 +532,7 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
               "concurrent_cnt", merge_info.concurrent_cnt_);
         need_suggestion = true;
       }
-      if (1 != merge_info.concurrent_cnt_) { // parallel compaction
+      if (1 != merge_info.concurrent_cnt_ && merge_info.total_row_count_ >= ROW_COUNT_TO_CHECK_PARALLEL_EVEN) { // parallel compaction
         const ObParalleMergeInfo &paral_info = merge_info.parallel_merge_info_;
         const int64_t count = paral_info.info_[ObParalleMergeInfo::SCAN_UNITS].count_;
         if (0 < count) {
@@ -556,7 +556,6 @@ int ObCompactionSuggestionMgr::analyze_merge_info(
 
     if (strlen(buf) > 0) {
       suggestion.merge_type_ = merge_info.merge_type_;
-      suggestion.tenant_id_ = merge_info.tenant_id_;
       suggestion.ls_id_ = merge_info.ls_id_.id();
       suggestion.tablet_id_ = merge_info.tablet_id_.id();
       suggestion.merge_start_time_ = merge_info.merge_start_time_;

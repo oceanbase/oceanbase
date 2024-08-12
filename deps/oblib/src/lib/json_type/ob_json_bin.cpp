@@ -14,6 +14,7 @@
 #include "ob_json_bin.h"
 #include "ob_json_tree.h"
 #include "ob_json_diff.h"
+#include "common/ob_smart_call.h"
 
 namespace oceanbase {
 namespace common {
@@ -536,7 +537,7 @@ int ObJsonBinSerializer::serialize_json_object(ObJsonObject *object, ObJsonBuffe
         int64_t delta_size = real_obj_size - obj_size;
         object->set_serialize_delta_size(delta_size);
         result.set_length(start_pos);
-        ret = serialize_json_object(object, result, depth + 1);
+        ret = SMART_CALL(serialize_json_object(object, result, depth + 1));
       }
     } else if (OB_FAIL(obj_bin.set_obj_size(real_obj_size))) {
       LOG_WARN("set_obj_size fail", K(ret));
@@ -601,7 +602,7 @@ int ObJsonBinSerializer::serialize_json_array(ObJsonArray *array, ObJsonBuffer &
         int64_t delta_size = real_array_size - array_size;
         array->set_serialize_delta_size(delta_size);
         result.set_length(start_pos);
-        ret = serialize_json_array(array, result, depth + 1);
+        ret = SMART_CALL(serialize_json_array(array, result, depth + 1));
       }
     } else if (OB_FAIL(array_bin.set_obj_size(real_array_size))) {
       LOG_WARN("set_obj_size fail", K(ret));
@@ -737,14 +738,14 @@ int ObJsonBinSerializer::serialize_json_value(ObJsonNode *json_tree, ObJsonBuffe
     }
     case ObJsonNodeType::J_OBJECT: {
       ObJsonObject *object = static_cast<ObJsonObject*>(json_tree);
-      if (OB_FAIL(serialize_json_object(object, result))) {
+      if (OB_FAIL(SMART_CALL(serialize_json_object(object, result)))) {
         LOG_WARN("failed to append object json obj", K(ret));
       }
       break;
     }
     case ObJsonNodeType::J_ARRAY: {
       ObJsonArray *array = static_cast<ObJsonArray*>(json_tree);
-      if (OB_FAIL(serialize_json_array(array, result))) {
+      if (OB_FAIL(SMART_CALL(serialize_json_array(array, result)))) {
         LOG_WARN("failed to append array json obj", K(ret));
       }
       break;
@@ -994,7 +995,7 @@ int ObJsonBin::to_tree(ObJsonNode *&json_tree)
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("fail to deserialize with NULL alloctor.", K(ret));
-  } else if (OB_FAIL(deserialize_json_value(json_tree))) {
+  } else if (OB_FAIL(SMART_CALL(deserialize_json_value(json_tree)))) {
     LOG_WARN("deserialize failed", K(ret), K(pos_), K(get_type()));
   }
   return ret;
@@ -1183,7 +1184,7 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
         LOG_WARN("fail to alloc memory for obj json node", K(ret));
       } else {
         ObJsonObject *node = new(buf)ObJsonObject(allocator_);
-        ret = deserialize_json_object(node);
+        ret = SMART_CALL(deserialize_json_object(node));
         if (OB_SUCC(ret)) {
           json_tree = static_cast<ObJsonNode*>(node);
         } else {
@@ -1200,7 +1201,7 @@ int ObJsonBin::deserialize_json_value(ObJsonNode *&json_tree)
         LOG_WARN("fail to alloc memory for array json node", K(ret));
       } else {
         ObJsonArray *node = new(buf)ObJsonArray(allocator_);
-        ret = deserialize_json_array(node);
+        ret = SMART_CALL(deserialize_json_array(node));
         if (OB_SUCC(ret)) {
           json_tree = static_cast<ObJsonNode*>(node);
         } else {
@@ -1457,7 +1458,7 @@ int ObJsonBin::deserialize_json_object_v0(ObJsonObject *object)
       LOG_WARN("ob_write_string fail", K(ret), K(i), K(ori_key));
     } else if (OB_FAIL(get_value(i, child_bin))) {
       LOG_WARN("get child value fail", K(ret));
-    } else if (OB_FAIL(child_bin.deserialize_json_value(node))) {
+    } else if (OB_FAIL(SMART_CALL(child_bin.deserialize_json_value(node)))) {
       LOG_WARN("deserialize child node fail", K(ret), K(i), K(child_bin));
     } else if (OB_FAIL(object->add(key, node, false, true, false, is_schema_))) {
       LOG_WARN("add node to obj fail", K(ret), K(i));
@@ -1494,7 +1495,7 @@ int ObJsonBin::deserialize_json_array_v0(ObJsonArray *array)
     ObJsonNode *node = nullptr;
     if (OB_FAIL(get_value(i, child_bin))) {
       LOG_WARN("get_value fail", K(ret), K(i));
-    } else if (OB_FAIL(child_bin.deserialize_json_value(node))) {
+    } else if (OB_FAIL(SMART_CALL(child_bin.deserialize_json_value(node)))) {
       LOG_WARN("failed to deserialize child node", K(ret), K(i), K(child_bin));
     } else if (OB_FAIL(array->append(node))) {
       LOG_WARN("failed to append node to array", K(ret), K(i));

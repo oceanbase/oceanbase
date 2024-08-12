@@ -124,6 +124,9 @@ typedef void (*ser_eval_vector_function)(ObEvalVectorFuncTag &);
   OB_SFA_SQL_EXPR_ABS_EVAL_VEC,                  \
   OB_SFA_VECTOR_CAST,                            \
   OB_SFA_VECTOR_EVAL_ARG_CAST,                   \
+  OB_SFA_COLLECTION_EXPR_EVAL,                   \
+  OB_SFA_COLLECTION_EXPR_EVAL_BATCH,             \
+  OB_SFA_COLLECTION_EXPR_EVAL_VEC,               \
   OB_SFA_MAX
 
 enum ObSerFuncArrayID {

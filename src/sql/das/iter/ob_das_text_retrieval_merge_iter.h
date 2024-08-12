@@ -156,6 +156,7 @@ private:
   int64_t input_row_cnt_;
   int64_t output_row_cnt_;
   bool doc_cnt_calculated_;
+  bool doc_cnt_iter_acquired_;
   bool is_inited_;
 };
 

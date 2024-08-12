@@ -10,6 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
+//SUSPECT_INFO_TYPE_DEF(suspect_info_type, info_priority, with_comment, info_str, int_info_cnt, ...)
 #ifdef SUSPECT_INFO_TYPE_DEF
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MEMTABLE_CANT_MINOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "memtable can not minor merge",
     2, {"memtable end_scn", "memtable timestamp"})
@@ -62,7 +63,7 @@ struct ObDiagnoseInfoStruct {
   const char *info_str_fmt[DIAGNOSE_INFO_STR_FMT_MAX_NUM];
 };
 
-enum ObSuspectInfoType
+enum ObSuspectInfoType : uint8_t
 {
 #define SUSPECT_INFO_TYPE_DEF(suspect_info_type, info_priority, with_comment, info_str, int_info_cnt, ...) suspect_info_type,
 #include "ob_diagnose_config.h"
@@ -81,6 +82,11 @@ enum ObDiagnoseTabletType {
   TYPE_BATCH_FREEZE,
   TYPE_DIAGNOSE_TABLET_MAX
 };
+
+static bool is_valid_diagnose_tablet_type(const ObDiagnoseTabletType type)
+{
+  return type >= TYPE_SPECIAL && type < TYPE_DIAGNOSE_TABLET_MAX;
+}
 
 static constexpr ObDiagnoseInfoStruct OB_SUSPECT_INFO_TYPES[] = {
   #define SUSPECT_INFO_TYPE_DEF(suspect_info_type, info_priority, with_comment, info_str, int_info_cnt, ...) \

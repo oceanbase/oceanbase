@@ -2001,6 +2001,33 @@ TEST_F(TestLogConfigMgr, test_init_by_default_config_meta)
       mock_mode_mgr_, mock_reconfirm_, mock_plugins_));
 }
 
+TEST_F(TestLogConfigMgr, test_too_many_learners)
+{
+  ObMemberList init_member_list;
+  init_member_list.add_server(addr1);
+  init_member_list.add_server(addr2);
+  init_member_list.add_server(addr3);
+  LogConfigInfoV2 config_info;
+  GlobalLearnerList learner_list;
+  LogConfigVersion init_config_version;
+  init_config_version.generate(1, 1);
+  EXPECT_EQ(OB_SUCCESS, config_info.generate(init_member_list, 3, learner_list, init_config_version));
+  LogConfigMgr cm;
+  init_test_log_config_env(addr1, config_info, cm, LEADER);
+
+  ObAddr::VER ip_type = ObAddr::IPV4;
+  const char* addr_str = "255.255.255.255";
+  const int32_t port = INT32_MAX;
+  for (int i = 0; i < 200; i++) {
+    EXPECT_EQ(OB_SUCCESS, cm.log_ms_meta_.curr_.config_.learnerlist_.add_server(ObAddr(ip_type, addr_str, port - i)));
+  }
+
+  // test add_learner
+  LogConfigChangeArgs args(ObMember(addr4, -1), 0, ADD_LEARNER);
+  bool unused_bool = false;
+  EXPECT_EQ(OB_INVALID_ARGUMENT, cm.check_config_change_args_(args, unused_bool));
+}
+
 } // end namespace unittest
 } // end namespace oceanbase
 

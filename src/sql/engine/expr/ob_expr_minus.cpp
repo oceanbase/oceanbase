@@ -98,6 +98,7 @@ int ObExprMinus::calc_result_type2(ObExprResType &type,
         int64_t inter_part_length2 = type2.get_precision() - type2.get_scale();
         precision = static_cast<ObPrecision>(MAX(inter_part_length1, inter_part_length2)
                                             + CARRY_OFFSET + scale);
+        precision = MIN(OB_MAX_DECIMAL_POSSIBLE_PRECISION, precision);
       }
     }
     type.set_scale(scale);

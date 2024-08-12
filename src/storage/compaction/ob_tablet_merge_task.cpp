@@ -140,7 +140,7 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
-    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), KPC(this));
+    FLOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(merge_scn), K_(merge_version_range), K_(merge_rowid_range));
   }
   return ret;
 }
@@ -527,7 +527,7 @@ void ObTabletMergeDag::fill_compaction_progress(
   progress.dag_id_ = get_dag_id();
   progress.create_time_ = add_time_;
   progress.start_time_ = start_time_;
-  progress.progressive_merge_round_ = ctx.static_param_.progressive_merge_round_;
+  progress.progressive_merge_round_ = ctx.get_progressive_merge_round();
   progress.estimated_finish_time_ = ObTimeUtility::fast_current_time() + ObCompactionProgress::EXTRA_TIME;
   progress.start_cg_idx_ = start_cg_idx;
   progress.end_cg_idx_ = end_cg_idx;
@@ -667,7 +667,7 @@ int ObTabletMergeExecuteDag::prepare_init(
       && !is_meta_major_merge(param.merge_type_) && !is_mds_minor_merge(param.merge_type_))
       || !result.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("result is invalid", K(ret), K(result));
+    LOG_WARN("merge type or result is invalid", K(ret), K(result), K(param));
   } else {
     param_ = param;
     merge_type_ = param.merge_type_;
@@ -842,7 +842,7 @@ int ObTabletMergePrepareTask::process()
   if (OB_FAIL(ret)) {
     FLOG_WARN("sstable merge failed", K(ret), KPC(ctx), "task", *(static_cast<ObITask *>(this)));
   } else {
-    FLOG_INFO("succeed to build merge ctx", "tablet_id", ctx->get_tablet_id(), K(finish_flag), KPC(ctx));
+    FLOG_INFO("succeed to build merge ctx", "tablet_id", ctx->get_tablet_id(), K(finish_flag), "ctx", *static_cast<ObBasicTabletMergeCtx *>(ctx));
   }
   return ret;
 }
@@ -1366,13 +1366,16 @@ int ObBatchFreezeTabletsTask::process()
     ObTablet *tablet = nullptr;
     const bool is_sync = true;
     const bool need_rewrite_meta = true;
+    // just try tablet freeze for one second
+    const int64_t max_retry_time_us = 1LL * 1000LL * 1000LL/* 1 second */;
 
     if (OB_UNLIKELY(!cur_pair.is_valid())) {
       tmp_ret = OB_ERR_UNEXPECTED;
       LOG_WARN_RET(tmp_ret, "get invalid tablet pair", K(cur_pair));
     } else if (cur_pair.schedule_merge_scn_ > weak_read_ts) {
       // no need to force freeze
-    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)->tablet_freeze(cur_pair.tablet_id_, need_rewrite_meta, is_sync))) {
+    } else if (OB_TMP_FAIL(MTL(ObTenantFreezer *)
+                               ->tablet_freeze(cur_pair.tablet_id_, is_sync, max_retry_time_us, need_rewrite_meta))) {
       LOG_WARN_RET(tmp_ret, "failed to force freeze tablet", K(param), K(cur_pair));
       ++fail_freeze_cnt;
     } else if (!MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {

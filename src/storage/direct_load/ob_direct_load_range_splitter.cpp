@@ -683,10 +683,10 @@ int ObDirectLoadMultipleMergeRangeSplitter::init(
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObDirectLoadMultipleMergeRangeSplitter init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(sstable_array.empty() || !table_data_desc.is_valid() ||
+  } else if (OB_UNLIKELY(!table_data_desc.is_valid() ||
                          nullptr == datum_utils)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(sstable_array), K(table_data_desc), KP(datum_utils));
+    LOG_WARN("invalid args", KR(ret), K(table_data_desc), KP(datum_utils));
   } else {
     if (OB_FAIL(construct_rowkey_iters(sstable_array, table_data_desc, datum_utils))) {
       LOG_WARN("fail to construct sstable rowkey itres", KR(ret));

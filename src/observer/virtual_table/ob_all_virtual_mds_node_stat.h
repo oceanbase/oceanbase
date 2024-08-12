@@ -31,8 +31,15 @@ struct MdsNodeInfoForVirtualTable;
 namespace observer
 {
 
+class ApplyOnTabletOp;
+class ApplyOnLSOp;
+class ApplyOnTenantOp;
+
 class ObAllVirtualMdsNodeStat : public common::ObVirtualTableScannerIterator
 {
+  friend class ApplyOnTabletOp;
+  friend class ApplyOnLSOp;
+  friend class ApplyOnTenantOp;
   static constexpr int64_t IP_BUFFER_SIZE = 64;
 public:
   explicit ObAllVirtualMdsNodeStat(omt::ObMultiTenant *omt) : omt_(omt) {}
@@ -57,6 +64,9 @@ private:
     return in_range;
   }
   bool in_selected_points_(common::ObTabletID tablet_id);
+  int get_mds_table_handle_(ObTablet &tablet,
+                            mds::MdsTableHandle &handle,
+                            const bool create_if_not_exist);
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualMdsNodeStat);
   omt::ObMultiTenant *omt_;
   char ip_buffer_[IP_BUFFER_SIZE];

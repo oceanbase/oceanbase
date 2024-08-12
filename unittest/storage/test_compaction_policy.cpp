@@ -233,7 +233,6 @@ void TestCompactionPolicy::TearDownTestCase()
   ret = MTL(ObLSService*)->remove_ls(ObLSID(TEST_LS_ID));
   ASSERT_EQ(OB_SUCCESS, ret);
   ObTenantMetaMemMgr *t3m = MTL(ObTenantMetaMemMgr*);
-  ASSERT_EQ(OB_SUCCESS, ret);
 
   ObLSID ls_id = ObLSID(TEST_LS_ID);
   ObTabletID tablet_id = ObTabletID(TEST_TABLET_ID);
@@ -688,6 +687,7 @@ public:
     ls_meta_.tenant_id_ = 1001;
     ls_meta_.ls_id_ = ObLSID(100);
   }
+  ~FakeLS() {}
   int64_t get_min_reserved_snapshot() { return 10; }
 };
 

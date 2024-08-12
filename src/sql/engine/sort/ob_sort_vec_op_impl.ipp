@@ -65,10 +65,12 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
       addon_rows_ = nullptr;
     }
     if (nullptr != buckets_) {
+      buckets_->destroy();
       mem_context_->get_malloc_allocator().free(buckets_);
       buckets_ = nullptr;
     }
     if (nullptr != part_hash_nodes_) {
+      part_hash_nodes_->destroy();
       mem_context_->get_malloc_allocator().free(part_hash_nodes_);
       part_hash_nodes_ = nullptr;
     }
@@ -79,8 +81,10 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
     }
     if (nullptr != topn_heap_) {
       for (int64_t i = 0; i < topn_heap_->count(); ++i) {
-        store_row_factory_.free_row_store(topn_heap_->at(i));
-        topn_heap_->at(i) = nullptr;
+        if (OB_NOT_NULL(topn_heap_->at(i))) {
+          store_row_factory_.free_row_store(topn_heap_->at(i));
+          topn_heap_->at(i) = nullptr;
+        }
       }
       topn_heap_->~TopnHeap();
       mem_context_->get_malloc_allocator().free(topn_heap_);
@@ -99,6 +103,7 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reset()
     // can not destroy mem_entify here, the memory may hold by %iter_ or
     // %datum_store_
   }
+  page_allocator_.set_allocator(nullptr);
   sk_store_.reset();
   addon_store_.reset();
   inited_ = false;
@@ -140,8 +145,10 @@ void ObSortVecOpImpl<Compare, Store_Row, has_addon>::reuse()
   }
   if (nullptr != topn_heap_) {
     for (int64_t i = 0; i < topn_heap_->count(); ++i) {
-      store_row_factory_.free_row_store(topn_heap_->at(i));
-      topn_heap_->at(i) = nullptr;
+      if (OB_NOT_NULL(topn_heap_->at(i))) {
+        store_row_factory_.free_row_store(topn_heap_->at(i));
+        topn_heap_->at(i) = nullptr;
+      }
     }
     topn_heap_->reset();
   }
@@ -278,6 +285,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
     use_heap_sort_ = is_topn_sort();
     is_fetch_with_ties_ = ctx.is_fetch_with_ties_;
     compress_type_ = ctx.compress_type_;
+    page_allocator_.set_allocator(&mem_context_->get_malloc_allocator());
     int64_t batch_size = eval_ctx_->max_batch_size_;
     if (OB_FAIL(merge_sk_addon_exprs(sk_exprs_, addon_exprs_))) {
       SQL_ENG_LOG(WARN, "failed to merge sort key and addon exprs", K(ret));
@@ -570,6 +578,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_topn_row(Store_Row *
   int ret = OB_SUCCESS;
   Store_Row *top_row = topn_heap_->top();
   if (OB_FAIL(copy_to_row(top_row))) {
+    topn_heap_->top() = top_row;
     SQL_ENG_LOG(WARN, "failed to copy to row", K(ret));
   } else {
     new_row = top_row;
@@ -684,17 +693,38 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_row(Store_Row *&sk_r
 {
   int ret = OB_SUCCESS;
   Store_Row *addon_row = nullptr;
+  Store_Row *reclaim_addon_row = nullptr;
+  Store_Row *reclaim_reuse_row = sk_row;
   if (nullptr != sk_row && has_addon) {
     addon_row = sk_row->get_addon_ptr(*sk_row_meta_);
+    reclaim_addon_row = sk_row->get_addon_ptr(*sk_row_meta_);
   }
-  if (OB_FAIL(copy_to_row(*sk_exprs_, *sk_row_meta_, sk_row))) {
+  if (OB_FAIL(copy_to_row(*sk_exprs_, *sk_row_meta_, true, sk_row))) {
     SQL_ENG_LOG(WARN, "failed to copy to row", K(ret));
   } else if (has_addon) {
-    if (OB_FAIL(copy_to_row(*addon_exprs_, *addon_row_meta_, addon_row))) {
+    if (OB_FAIL(copy_to_row(*addon_exprs_, *addon_row_meta_, false, addon_row))) {
       store_row_factory_.free_row_store(*sk_row_meta_, sk_row);
       SQL_ENG_LOG(WARN, "failed to copy to row", K(ret));
     } else {
       sk_row->set_addon_ptr(addon_row, *sk_row_meta_);
+    }
+  }
+  if (OB_FAIL(ret)) {
+    if (sk_row == reclaim_reuse_row) {
+      store_row_factory_.free_row_store(*sk_row_meta_, sk_row);
+      sk_row = nullptr;
+    }
+    if (has_addon && reclaim_addon_row == addon_row) {
+      store_row_factory_.free_row_store(*addon_row_meta_, addon_row);
+      addon_row = nullptr;
+    }
+    if (sk_row != nullptr) {
+      store_row_factory_.free_row_store(*sk_row_meta_, sk_row);
+      sk_row = nullptr;
+    }
+    if (has_addon && addon_row != nullptr) {
+      store_row_factory_.free_row_store(*addon_row_meta_, addon_row);
+      addon_row = nullptr;
     }
   }
   return ret;
@@ -863,7 +893,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::add_sort_batch_row(const uin
 // if row space is enough reuse the space, else use the alloc get new space.
 template <typename Compare, typename Store_Row, bool has_addon>
 int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_row(
-  const common::ObIArray<ObExpr *> &exprs, const RowMeta &row_meta, Store_Row *&row)
+  const common::ObIArray<ObExpr *> &exprs, const RowMeta &row_meta, bool is_sort_key, Store_Row *&row)
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
@@ -903,6 +933,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_row(
       }
     } else {
       row = dst;
+      if (has_addon && is_sort_key) {
+        row->set_addon_ptr(nullptr, row_meta);
+      }
       row->set_max_size(buffer_len, row_meta);
     }
   }
@@ -911,6 +944,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::copy_to_row(
     inmem_row_size_ -= reclaim_row->get_max_size(row_meta);
     allocator_.free(reclaim_row);
     reclaim_row = nullptr;
+  }
+  if (OB_FAIL(ret)) {
+    row = nullptr;
   }
   return ret;
 }
@@ -1300,45 +1336,17 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
     } else if (rows_begin < 0 || rows_end > rows.count()) {
       ret = OB_INVALID_ARGUMENT;
       SQL_ENG_LOG(WARN, "invalid argument", K(rows_begin), K(rows_end), K(rows.count()), K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret)) {
-    if (max_bucket_cnt_ < bucket_cnt) {
-      if (nullptr != buckets_) {
-        allocator_.free(buckets_);
-        buckets_ = nullptr;
-        max_bucket_cnt_ = 0;
-      }
-      buckets_ = (PartHashNode **)allocator_.alloc(sizeof(PartHashNode *) * bucket_cnt);
-      if (OB_ISNULL(buckets_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SQL_ENG_LOG(WARN, "failed to alloc memory", K(ret));
-      } else {
-        max_bucket_cnt_ = bucket_cnt;
-        MEMSET(buckets_, 0, sizeof(PartHashNode *) * bucket_cnt);
-      }
+    } else if (OB_FAIL(prepare_bucket_array<BucketArray>(buckets_, bucket_cnt))) {
+      LOG_WARN("failed to create bucket array", K(ret));
+    } else if (OB_FAIL(prepare_bucket_array<BucketNodeArray>(part_hash_nodes_, node_cnt))) {
+      LOG_WARN("failed to create bucket node array", K(ret));
     } else {
-      MEMSET(buckets_, 0, sizeof(PartHashNode *) * bucket_cnt);
+      buckets_->set_all(nullptr);
+      max_bucket_cnt_ = bucket_cnt;
+      max_node_cnt_ = node_cnt;
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (max_node_cnt_ < node_cnt) {
-      if (nullptr != part_hash_nodes_) {
-        allocator_.free(part_hash_nodes_);
-        part_hash_nodes_ = nullptr;
-        max_node_cnt_ = 0;
-      }
-      part_hash_nodes_ = (PartHashNode *)allocator_.alloc(sizeof(PartHashNode) * node_cnt);
-      if (OB_ISNULL(part_hash_nodes_)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        SQL_ENG_LOG(WARN, "failed to alloc memory", K(ret));
-      } else {
-        max_node_cnt_ = node_cnt;
-      }
-    }
-  }
   for (int64_t i = rows_begin; OB_SUCC(ret) && i < rows_end; ++i) {
     if (OB_ISNULL(rows.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1348,8 +1356,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
       const uint64_t hash_value =
         *(reinterpret_cast<const uint64_t *>(rows.at(i)->get_cell_payload(row_meta, hash_idx)));
       uint64_t pos = hash_value >> shift_right; // high n bit
-      PartHashNode &insert_node = part_hash_nodes_[i - rows_begin];
-      PartHashNode *&bucket = buckets_[pos];
+      PartHashNode &insert_node = part_hash_nodes_->at(i - rows_begin);
+      PartHashNode *&bucket = buckets_->at(pos);
       insert_node.store_row_ = rows.at(i);
       PartHashNode *exist = bucket;
       bool equal = false;
@@ -1383,7 +1391,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_partition_sort(
   }
   for (int64_t bucket_idx = 0; OB_SUCC(ret) && bucket_idx < bucket_cnt; ++bucket_idx) {
     int64_t bucket_part_cnt = 0;
-    PartHashNode *bucket_node = buckets_[bucket_idx];
+    PartHashNode *bucket_node = buckets_->at(bucket_idx);
     if (nullptr == bucket_node) {
       continue; // no rows add here
     }
@@ -1600,8 +1608,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_dump()
     if (OB_SUCC(ret) && use_heap_sort_) {
       if (nullptr != mem_context_ && nullptr != topn_heap_) {
         for (int64_t i = 0; i < topn_heap_->count(); ++i) {
-          store_row_factory_.free_row_store(topn_heap_->at(i));
-          topn_heap_->at(i) = nullptr;
+          if (OB_NOT_NULL(topn_heap_->at(i))) {
+            store_row_factory_.free_row_store(topn_heap_->at(i));
+            topn_heap_->at(i) = nullptr;
+          }
         }
         topn_heap_->~TopnHeap();
         mem_context_->get_malloc_allocator().free(topn_heap_);

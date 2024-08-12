@@ -57,6 +57,9 @@ const int COS_SERVICE_UNAVAILABLE = 503;
 
 const int64_t OB_STORAGE_LIST_MAX_NUM = 1000;
 
+static apr_allocator_t *COS_GLOBAL_APR_ALLOCATOR = nullptr;
+static apr_pool_t *COS_GLOBAL_APR_POOL = nullptr;
+
 //datetime formate : Tue, 09 Apr 2019 06:24:00 GMT
 //time unit is second
 static int64_t ob_strtotime(const char *date_time)
@@ -205,10 +208,12 @@ int ObCosAccount::parse_from(const char *storage_info, uint32_t size)
   return ret;
 }
 
-int ObCosEnv::init()
+int ObCosEnv::init(apr_abortfunc_t abort_fn)
 {
   int ret = OB_SUCCESS;
   int cos_ret = COSE_OK;
+  const int64_t MAX_COS_APR_HOLD_SIZE = 10LL * 1024LL * 1024LL; // 10MB
+  apr_thread_mutex_t *mutex = nullptr;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -217,7 +222,52 @@ int ObCosEnv::init()
     ret = OB_COS_ERROR;
     cos_warn_log("[COS]fail to init cos env, cos_ret=%d, ret=%d\n", cos_ret, ret);
   } else {
-    is_inited_ = true;
+    int apr_ret = APR_SUCCESS;
+    if (APR_SUCCESS != (apr_ret = apr_allocator_create(&COS_GLOBAL_APR_ALLOCATOR))
+        || nullptr == COS_GLOBAL_APR_ALLOCATOR) {
+      ret = OB_COS_ERROR;
+      cos_warn_log("[COS]fail to create global apr allocator, ret=%d, apr_ret=%d, allocator=%p\n",
+          ret, apr_ret, COS_GLOBAL_APR_ALLOCATOR);
+    } else if (APR_SUCCESS != (apr_ret = apr_pool_create_ex(&COS_GLOBAL_APR_POOL,
+                                                            nullptr/*parent*/,
+                                                            // It is OK to pass a null pointer. If a null pointer is passed,
+                                                            // COS_GLOBAL_APR_POOL will automatically use the global_pool's abort_fn in the APR library.
+                                                            abort_fn,
+                                                            COS_GLOBAL_APR_ALLOCATOR))
+        || nullptr == COS_GLOBAL_APR_POOL) {
+      ret = OB_COS_ERROR;
+      cos_warn_log("[COS]fail to create apr pool, ret=%d, apr_ret=%d, apr_pool=%p\n",
+          ret, apr_ret, COS_GLOBAL_APR_POOL);
+    } else if (APR_SUCCESS != (apr_ret = apr_thread_mutex_create(&mutex, APR_THREAD_MUTEX_DEFAULT,
+                                                                 COS_GLOBAL_APR_POOL))
+        || nullptr == mutex) {
+      ret = OB_COS_ERROR;
+      cos_warn_log("[COS]fail to create apr thread mutex, ret=%d, apr_ret=%d, mutex=%p\n",
+          ret, apr_ret, mutex);
+    } else {
+      apr_allocator_max_free_set(COS_GLOBAL_APR_ALLOCATOR, MAX_COS_APR_HOLD_SIZE);
+      apr_allocator_mutex_set(COS_GLOBAL_APR_ALLOCATOR, mutex);
+      apr_allocator_owner_set(COS_GLOBAL_APR_ALLOCATOR, COS_GLOBAL_APR_POOL);
+      is_inited_ = true;
+    }
+
+    if (OB_SUCCESS != ret) {
+      // The owner of COS_GLOBAL_APR_ALLOCATOR will only be set to COS_GLOBAL_APR_POOL
+      // if the initialization succeeds.
+      // Therefore, if an error occurs during initialization,
+      // destroying COS_GLOBAL_APR_POOL won't automatically free COS_GLOBAL_APR_ALLOCATOR.
+      // apr_thread_mutex_t allocates memory based on apr_allocator_t.
+      // When the corresponding allocator is destroyed,
+      // the memory allocated for the mutex is automatically released.
+      if (nullptr != COS_GLOBAL_APR_POOL) {
+        apr_pool_destroy(COS_GLOBAL_APR_POOL);
+        COS_GLOBAL_APR_POOL = nullptr;
+      }
+      if (nullptr != COS_GLOBAL_APR_ALLOCATOR) {
+        apr_allocator_destroy(COS_GLOBAL_APR_ALLOCATOR);
+        COS_GLOBAL_APR_ALLOCATOR = nullptr;
+      }
+    }
   }
   return ret;
 }
@@ -225,6 +275,14 @@ int ObCosEnv::init()
 void ObCosEnv::destroy()
 {
   if (is_inited_) {
+    if (nullptr != COS_GLOBAL_APR_POOL) {
+      // After successful initialization,
+      // the owner of COS_GLOBAL_APR_ALLOCATOR is set to COS_GLOBAL_APR_POOL.
+      // Thus, destroying COS_GLOBAL_APR_POOL will also free COS_GLOBAL_APR_ALLOCATOR.
+      apr_pool_destroy(COS_GLOBAL_APR_POOL);
+      COS_GLOBAL_APR_POOL = nullptr;
+      COS_GLOBAL_APR_ALLOCATOR = nullptr;
+    }
     cos_http_io_deinitialize();
     is_inited_ = false;
   }
@@ -311,7 +369,7 @@ int ObCosWrapper::create_cos_handle(
     cos_warn_log("[COS]fail to allocate cos context memory, ret=%d\n", ret);
   } else {
     ctx = new(ctx) CosContext(custom_mem);
-    if (APR_SUCCESS != (apr_ret = cos_pool_create(&ctx->mem_pool, NULL)) || NULL == ctx->mem_pool) {
+    if (APR_SUCCESS != (apr_ret = cos_pool_create(&ctx->mem_pool, COS_GLOBAL_APR_POOL)) || NULL == ctx->mem_pool) {
       custom_mem.customFree(custom_mem.opaque, ctx);
       ret = OB_ALLOCATE_MEMORY_FAILED;
       cos_warn_log("[COS]fail to create cos memory pool, apr_ret=%d, ret=%d\n", apr_ret, ret);
@@ -1647,8 +1705,12 @@ int ObCosWrapper::complete_multipart_upload(
         if (total_parts == 0) {
           // If 'complete' without uploading any data, COS will return the error
           // 'MalformedXML, The XML you provided was not well-formed or did not validate against our published schema'
-          ret = OB_ERR_UNEXPECTED;
-          cos_warn_log("[COS]no parts have been uploaded, ret=%d, upload_id=%s\n", ret, upload_id.data);
+          // write an empty object instead
+          ret = put(h, bucket_name, object_name, "", 0);
+          if (OB_SUCCESS != ret) {
+            cos_warn_log("[COS]complete an empty multipart upload, but fail to write an empty object, ret=%d, upload_id=%s\n",
+                ret, upload_id.data);
+          }
         } else if (NULL == (cos_ret = cos_complete_multipart_upload(ctx->options, &bucket, &object,
                                                                     &upload_id, &complete_part_list,
                                                                     NULL, &resp_headers))

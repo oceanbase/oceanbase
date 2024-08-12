@@ -30,7 +30,8 @@ OB_SERIALIZE_MEMBER(ObSelectIntoOpInput, task_id_, sqc_id_);
 OB_SERIALIZE_MEMBER((ObSelectIntoSpec, ObOpSpec), into_type_, user_vars_, outfile_name_,
     field_str_, // FARM COMPAT WHITELIST FOR filed_str_: renamed
     line_str_, closed_cht_, is_optional_, select_exprs_, is_single_, max_file_size_,
-    escaped_cht_, cs_type_, parallel_, file_partition_expr_, buffer_size_);
+    escaped_cht_, cs_type_, parallel_, file_partition_expr_, buffer_size_, is_overwrite_,
+    external_properties_, external_partition_);
 
 
 int ObSelectIntoOp::inner_open()

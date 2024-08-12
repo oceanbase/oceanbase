@@ -452,6 +452,7 @@
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
+#include "sql/engine/expr/ob_expr_decode_trace_id.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
 
@@ -1116,6 +1117,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbToString);
     REG_OP(ObExprRbFromString);
     REG_OP(ObExprGetPath);
+    REG_OP(ObExprDecodeTraceId);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
@@ -1443,6 +1445,7 @@ void ObExprOperatorFactory::register_expr_operators()
   // REG_OP_ORCL(ObExprTopNFilter);
   REG_OP_ORCL(ObExprSdoRelate);
   REG_OP_ORCL(ObExprGetPath);
+  REG_OP_ORCL(ObExprDecodeTraceId);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

@@ -434,7 +434,7 @@ int ObStorageSchema::init(
     const ObTableSchema &input_schema,
     const lib::Worker::CompatMode compat_mode,
     const bool skip_column_info/* = false*/,
-    const int64_t compat_version/* = STORAGE_SCHEMA_VERSION_V3*/)
+    const int64_t compat_version/* = STORAGE_SCHEMA_VERSION_LATEST*/)
 {
   int ret = OB_SUCCESS;
 
@@ -502,6 +502,7 @@ int ObStorageSchema::init(
     storage_schema_version_ = old_schema.storage_schema_version_;
     copy_from(old_schema);
     compat_mode_ = old_schema.compat_mode_;
+    is_cs_replica_compat_ = old_schema.is_cs_replica_compat_;
     compressor_type_ = old_schema.compressor_type_;
     column_cnt_ = old_schema.column_cnt_;
     store_column_cnt_ = old_schema.store_column_cnt_;
@@ -1052,6 +1053,11 @@ int ObStorageSchema::mock_row_store_cg(ObStorageColumnGroupSchema &mocked_row_st
   return ret;
 }
 
+/*
+ * base_cg of column store schema can only be ROWKEY_CG OR ALL_CG
+ * "with column group(all columns, each column)" -> ALL_CG + each_cg
+ * "with column group(each column)" -> ROWKEY_CG + each_cg
+*/
 int ObStorageSchema::get_base_rowkey_column_group_index(int32_t &cg_idx) const
 {
   int ret = OB_SUCCESS;

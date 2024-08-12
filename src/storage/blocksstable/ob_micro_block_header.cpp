@@ -133,7 +133,7 @@ int ObMicroBlockHeader::check_payload_checksum(const char *buf, const int64_t le
       || (0 == len && (0 != data_zlength_ || 0 != data_length_ || 0 != data_checksum_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), KP(buf), K(len), K(data_zlength_),
-        K(data_length_), K(data_checksum_));
+        K(data_length_), K(data_checksum_), KPC(this));
   } else {
     const int64_t data_checksum = ob_crc64_sse42(buf, len);
     if (data_checksum != data_checksum_) {
@@ -200,7 +200,7 @@ int ObMicroBlockHeader::check_and_get_record(
       payload_ptr = ptr;
       payload_size = size;
       if (OB_FAIL(check_payload_checksum(ptr + header_size, size - header_size))) {
-        LOG_WARN("fail to check payload checksum", K(ret));
+        LOG_WARN("fail to check payload checksum", K(ret), K(size), K(header_size));
       }
     }
   }
@@ -240,11 +240,12 @@ int ObMicroBlockHeader::deep_copy(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == buf
+              || this == reinterpret_cast<ObMicroBlockHeader *>(buf)
               || buf_len < pos + COLUMN_CHECKSUM_PTR_OFFSET
               || buf_len < pos + header_size_
               || !is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len), K(pos), KPC(this));
+    LOG_WARN("invalid arguments", K(ret), KP(buf), K(buf_len), K(pos), KP(this), KPC(this));
   } else {
     buf += pos;
     int64_t new_pos = 0;

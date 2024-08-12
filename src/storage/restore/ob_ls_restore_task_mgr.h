@@ -198,7 +198,8 @@ private:
       const ToRestoreTabletGroup &restored_tg,
       ObIArray<common::ObTabletID> &restored_tablets,
       ObIArray<common::ObTabletID> &high_pri_tablet_need_redo,
-      ObIArray<common::ObTabletID> &wait_tablet_need_redo);
+      ObIArray<common::ObTabletID> &wait_tablet_need_redo,
+      int64_t &finished_tablet_cnt);
 
   int redo_failed_tablets_(
       ObIArray<common::ObTabletID> &high_pri_tablet_need_redo,
@@ -207,6 +208,7 @@ private:
 
   void unset_force_reload_();
   void set_noneed_redo_failed_tablets_();
+  int check_is_ls_restore_task_finished_(bool &is_restored);
 
 private:
   bool is_inited_;
@@ -229,9 +231,6 @@ private:
   // 'final_reload_' is marked as True when no tablets to restore are found after reload. Then,
   // reload is forbidden while no tablets in wait or doing set.
   bool final_reload_;
-  // Follower can reload tablets only if leader has been restored. This is
-  // true for restore status of RESTORE_TABLETS_META and RESTORE_MAJOR_DATA.
-  bool has_checked_leader_done_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreTaskMgr);
 };
 

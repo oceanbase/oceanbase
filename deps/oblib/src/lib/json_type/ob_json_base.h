@@ -65,6 +65,8 @@ enum class ObJsonNodeType
   J_OTIMESTAMPTZ = 27, // timestamptz string
   J_ODAYSECOND = 28, // daySecondInterval string
   J_OYEARMONTH = 29, // yearMonthInterval string
+  J_MYSQL_DATE = 30, // mysql date
+  J_MYSQL_DATETIME = 31, // mysql datetime
   J_MAX_TYPE,
 
   J_ERROR = 200 // 14

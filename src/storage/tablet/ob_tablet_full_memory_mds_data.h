@@ -44,7 +44,7 @@ public:
   int init(common::ObArenaAllocator &allocator, const ObTabletMdsData &mds_data);
   void reset();
   int assign(const ObTabletFullMemoryMdsData &other, common::ObIAllocator &allocator);
-  int scan_all_mds_data_with_op(ObMdsMiniMergeOperator &op) const;
+  int scan_all_mds_data_with_op(const share::SCN &mds_ckpt_scn, ObMdsMiniMergeOperator &op) const;
 public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t data_len, int64_t &pos);
@@ -73,12 +73,12 @@ private:
   static int mock_convert_auto_inc_seq_to_mds_dump_kv(
       common::ObArenaAllocator &allocator,
       const share::ObTabletAutoincSeq &auto_inc_seq,
-      const share::SCN tablet_status_create_commit_scn,
+      const share::SCN mds_ckpt_scn,
       mds::MdsDumpKV &dump_kv);
   static int mock_convert_medium_info_to_mds_dump_kv(
       common::ObArenaAllocator &allocator,
       const compaction::ObMediumCompactionInfo& medium_info,
-      const share::SCN tablet_status_create_commit_scn,
+      const share::SCN mds_ckpt_scn,
       mds::MdsDumpKV &dump_kv);
 private:
   static const int64_t MEDIUM_LIST_VERSION = 1;

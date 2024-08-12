@@ -277,7 +277,7 @@ bool ObTenantFreezer::memstore_remain_memory_is_exhausting()
   return memstore_remain_memory_is_exhausting_cache_.value_;
 }
 
-int ObTenantFreezer::ls_freeze_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts)
+int ObTenantFreezer::ls_freeze_data_(ObLS *ls, const bool is_sync, const int64_t abs_timeout_ts)
 {
   int ret = OB_SUCCESS;
   const int64_t SLEEP_TS = 1000 * 1000; // 1s
@@ -319,7 +319,7 @@ int ObTenantFreezer::ls_freeze_all_unit_(ObLS *ls, const int64_t abs_timeout_ts)
   do {
     need_retry = false;
     retry_times++;
-    if (OB_SUCC(ls->advance_checkpoint_by_flush(SCN::max_scn(), abs_timeout_ts, true /* is_tennat_freeze */))) {
+    if (OB_SUCC(ls->advance_checkpoint_by_flush(SCN::max_scn(), abs_timeout_ts, true /* is_tenant_freeze */))) {
     } else {
       current_ts = ObTimeUtil::current_time();
       is_timeout = (current_ts >= abs_timeout_ts);
@@ -374,13 +374,10 @@ int ObTenantFreezer::tablet_freeze_(ObLS *ls,
       LOG_WARN_RET(OB_ERR_TOO_MUCH_TIME, "wait ls freeze finished cost too much time", K(retry_times));
     }
   } while (need_retry);
-  if (OB_NOT_RUNNING == ret) {
-    ret = OB_SUCCESS;
-  }
   return ret;
 }
 
-int ObTenantFreezer::tenant_freeze_()
+int ObTenantFreezer::tenant_freeze_data_()
 {
   int ret = OB_SUCCESS;
   int first_fail_ret = OB_SUCCESS;
@@ -399,7 +396,7 @@ int ObTenantFreezer::tenant_freeze_()
       // of this ls freeze stuck.
       const bool is_sync = true;
       const int64_t abs_timeout_ts = 0;
-      if (OB_FAIL(ls_freeze_(ls, is_sync, abs_timeout_ts))) {
+      if (OB_FAIL(ls_freeze_data_(ls, is_sync, abs_timeout_ts))) {
         if (OB_SUCCESS == first_fail_ret) {
           first_fail_ret = ret;
         }
@@ -465,13 +462,12 @@ int ObTenantFreezer::tenant_freeze()
   return ret;
 }
 
-int ObTenantFreezer::ls_freeze(const share::ObLSID &ls_id)
+int ObTenantFreezer::ls_freeze_all_unit(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
   ObLSService *ls_srv = MTL(ObLSService *);
   ObLSHandle handle;
   ObLS *ls = nullptr;
-  const bool is_sync = false;
   const bool need_rewrite_tablet_meta = false;
   int64_t abs_timeout_ts = 0;
 
@@ -486,7 +482,7 @@ int ObTenantFreezer::ls_freeze(const share::ObLSID &ls_id)
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
-  } else if (OB_FAIL(ls_freeze_(ls, is_sync, abs_timeout_ts))) {
+  } else if (OB_FAIL(ls_freeze_all_unit_(ls, abs_timeout_ts))) {
     LOG_WARN("[TenantFreezer] logstream freeze failed", KR(ret), K(ls_id));
   }
 
@@ -494,33 +490,30 @@ int ObTenantFreezer::ls_freeze(const share::ObLSID &ls_id)
 }
 
 int ObTenantFreezer::tablet_freeze(const common::ObTabletID &tablet_id,
-                                   const bool need_rewrite_tablet_meta,
-                                   const bool is_sync)
+                                   const bool is_sync,
+                                   const int64_t max_retry_time_us,
+                                   const bool need_rewrite_tablet_meta)
 {
-  return tablet_freeze(ObLSID(ObLSID::INVALID_LS_ID),
-                       tablet_id,
-                       need_rewrite_tablet_meta,
-                       is_sync);
+  return tablet_freeze(ObLSID(ObLSID::INVALID_LS_ID), tablet_id, is_sync, max_retry_time_us, need_rewrite_tablet_meta);
 }
 
 int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
                                    const common::ObTabletID &tablet_id,
-                                   const bool need_rewrite_tablet_meta,
-                                   const bool is_sync)
+                                   const bool is_sync,
+                                   const int64_t max_retry_time_us,
+                                   const bool need_rewrite_tablet_meta)
 {
   int ret = OB_SUCCESS;
   bool is_cache_hit = false;
   ObLSService *ls_srv = MTL(ObLSService *);
   ObLSHandle handle;
   ObLS *ls = nullptr;
-  int64_t abs_timeout_ts = INT64_MAX;
+  // 0 as default timeout ts
+  const int64_t abs_timeout_ts = (0 == max_retry_time_us) ? 0 : ObClockGenerator::getClock() + max_retry_time_us;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[TenantFreezer] tenant freezer not inited", KR(ret));
-  } else if (OB_FAIL(ObShareUtil::get_abs_timeout(MAX_FREEZE_TIMEOUT_US/* default timeout */,
-                                                  abs_timeout_ts))) {
-    LOG_WARN("get timeout ts failed", KR(ret));
   } else if (!ls_id.is_valid()) {
     // if ls_id is invalid, get ls id by tablet id
     if (OB_FAIL(GCTX.location_service_->get(tenant_info_.tenant_id_, tablet_id, INT64_MAX, is_cache_hit, ls_id))) {
@@ -542,12 +535,11 @@ int ObTenantFreezer::tablet_freeze(share::ObLSID ls_id,
   } else if (OB_ISNULL(ls = handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("[TenantFreezer] ls is null", KR(ret), K(ls_id));
-  } else if (OB_FAIL(tablet_freeze_(ls,
-                                    tablet_id,
-                                    need_rewrite_tablet_meta,
-                                    is_sync,
-                                    abs_timeout_ts))) {
+  } else if (OB_FAIL(ls->tablet_freeze(tablet_id, is_sync, abs_timeout_ts, need_rewrite_tablet_meta))) {
     LOG_WARN("[TenantFreezer] fail to freeze tablet", KR(ret), K(ls_id), K(tablet_id));
+    if (OB_NOT_RUNNING == ret) {
+      ret = OB_SUCCESS;
+    }
   }
 
   return ret;
@@ -579,7 +571,7 @@ int ObTenantFreezer::check_and_freeze_normal_data_(ObTenantFreezeCtx &ctx)
       LOG_WARN("[TenantFreezer] fail to do major freeze", K(tmp_ret));
     }
     if (need_freeze) {
-      if (OB_TMP_FAIL(do_minor_freeze_(ctx))) {
+      if (OB_TMP_FAIL(do_minor_freeze_data_(ctx))) {
         LOG_WARN("[TenantFreezer] fail to do minor freeze", K(tmp_ret));
       }
     }
@@ -1620,7 +1612,7 @@ bool ObTenantFreezer::is_major_freeze_turn_()
   return (major_compact_trigger != 0 && freeze_cnt >= major_compact_trigger);
 }
 
-int ObTenantFreezer::do_minor_freeze_(const ObTenantFreezeCtx &ctx)
+int ObTenantFreezer::do_minor_freeze_data_(const ObTenantFreezeCtx &ctx)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1639,7 +1631,7 @@ int ObTenantFreezer::do_minor_freeze_(const ObTenantFreezeCtx &ctx)
   if (OB_FAIL(set_tenant_freezing_())) {
   } else {
     bool rollback_freeze_cnt = false;
-    if (OB_FAIL(tenant_freeze_())) {
+    if (OB_FAIL(tenant_freeze_data_())) {
       rollback_freeze_cnt = true;
       LOG_WARN("fail to minor freeze", K(ret));
     } else {

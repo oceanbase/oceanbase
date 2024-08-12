@@ -40,7 +40,7 @@ OceanBase:
     Solution: Contact OceanBase Support
 
 Oracle:
-    Oracle Error Code: ORA-04001
+    Oracle Error Code: OBE-04001
     Message: sequence parameter must be an integer
     Related OceanBase Error Code:
         OB_ERR_SEQ_OPTION_MUST_BE_INTEGER(-4317)
@@ -78,7 +78,7 @@ When the facility is `ora` or `pls`, you will get the error info of Oracle mode(
 $ob_error ora 51
 
 Oracle:
-    Oracle Error Code: ORA-00051
+    Oracle Error Code: OBE-00051
     Message: timeout occurred while waiting for a resource
     Related OceanBase Error Code:
         OB_ERR_TIMEOUT_ON_RESOURCE(-5848)
@@ -96,13 +96,13 @@ OceanBase:
     Solution: Contact OceanBase Support
 
 Oracle:
-    Oracle Error Code: ORA-00600
+    Oracle Error Code: OBE-00600
     Message: internal error code, arguments: -5727, SQL request should be rerouted
     Related OceanBase Error Code:
         OB_ERR_PROXY_REROUTE(-5727)
 ```
 
-> **NOTE**: `-a` option helps to find `ORA-00600` error which has `arguments` (those Oracle internal errors).
+> **NOTE**: `-a` option helps to find `OBE-00600` error which has `arguments` (those Oracle internal errors).
 
 You can find more test examples in [expect_result](test/expect_result.result).
 

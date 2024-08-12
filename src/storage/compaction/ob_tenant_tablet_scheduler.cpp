@@ -497,7 +497,7 @@ int ObTenantTabletScheduler::try_update_upper_trans_version_and_gc_sstable(
     } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
     } else if (FALSE_IT(tablet_id = tablet->get_tablet_meta().tablet_id_)) {
     } else if (tablet_id.is_special_merge_tablet()) {
-    } else if (!tablet->get_tablet_meta().ha_status_.is_none()) {
+    } else if (!tablet->get_tablet_meta().ha_status_.check_allow_read()) {
     } else if (OB_FAIL(ls.check_ls_migration_status(ls_is_migration, rebuild_seq))) {
       LOG_WARN("failed to check ls migration status", K(ret), K(ls_id));
     } else if (ls_is_migration) {
@@ -2030,21 +2030,9 @@ int ObTenantTabletScheduler::schedule_all_tablets_medium()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantTabletScheduler has not been inited", K(ret));
-  } else if (OB_FAIL(get_min_data_version(compat_version))) {
-    LOG_WARN("failed to get min data version", KR(ret));
-  } else if (compat_version < DATA_VERSION_4_1_0_0) {
-    // do nothing, should not loop tablets
-    if (REACH_TENANT_TIME_INTERVAL(PRINT_LOG_INVERVAL)) {
-      LOG_INFO("compat_version is smaller than DATA_VERSION_4_1_0_0, cannot schedule medium", K(compat_version));
-      if (OB_TMP_FAIL(ADD_COMMON_SUSPECT_INFO(MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
-              ObSuspectInfoType::SUSPECT_INVALID_DATA_VERSION, compat_version, DATA_VERSION_4_1_0_0))) {
-        LOG_WARN("failed to add suspect info", K(tmp_ret));
-      }
-    }
   } else if (OB_FAIL(medium_ls_tablet_iter_.build_iter(get_schedule_batch_size()))) {
     LOG_WARN("failed to init ls iterator", K(ret));
   } else {
@@ -2172,7 +2160,6 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  uint64_t compat_version = 0;
   ObLSHandle ls_handle;
   ObTabletHandle tablet_handle;
   bool can_merge = false;
@@ -2190,11 +2177,6 @@ int ObTenantTabletScheduler::try_schedule_tablet_medium_merge(
   } else if (OB_UNLIKELY(tablet_id.is_ls_inner_tablet())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported to schedule medium for ls inner tablet", K(ret), K(tablet_id));
-  } else if (OB_FAIL(get_min_data_version(compat_version))) {
-    LOG_WARN("failed to get min data version", KR(ret));
-  } else if (compat_version < DATA_VERSION_4_1_0_0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("in compat, can't schedule medium", K(ret), K(compat_version), K(tablet_id));
   } else if (OB_TMP_FAIL(ObMediumCompactionScheduleFunc::is_election_leader(ls_id, is_election_leader))) {
     if (OB_LS_NOT_EXIST == tmp_ret) {
       ret = tmp_ret;

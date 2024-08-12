@@ -46,7 +46,8 @@ int ObLobMetaScanIter::open(ObLobAccessParam &param, ObILobApator* lob_adatper)
 ObLobMetaScanIter::ObLobMetaScanIter()
   : lob_adatper_(nullptr), meta_iter_(nullptr),
     byte_size_(0), offset_(0), len_(0), coll_type_(ObCollationType::CS_TYPE_INVALID), scan_backward_(false),
-    allocator_(nullptr), access_ctx_(nullptr), scan_param_(), cur_pos_(0), cur_byte_pos_(0) {}
+    allocator_(nullptr), access_ctx_(nullptr), scan_param_(), cur_pos_(0), cur_byte_pos_(0), not_calc_char_len_(false),
+    not_need_last_info_(false) {}
 
 int ObLobMetaScanIter::get_next_row(ObLobMetaInfo &row)
 {
@@ -629,14 +630,15 @@ int ObLobMetaWriteIter::open(ObLobAccessParam &param,
   ObString remain_buf;
   ObString seq_id_st;
   ObString seq_id_end;
+  // must be set before to avoid reset not free iter
+  read_param_ = read_param;
+  iter_ = iter;
+  lob_common_ = param.lob_common_;
   if (OB_ISNULL(iter) || OB_ISNULL(read_param)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null query iter", K(ret));
   } else if (OB_FAIL(open(param, iter, read_buf, 0/*padding_size*/, post_data, remain_buf, seq_id_st, seq_id_end, nullptr))) {
     LOG_WARN("open fail", K(ret), K(param), KP(read_param));
-  } else {
-    read_param_ = read_param;
-    lob_common_ = param.lob_common_;
   }
   return ret;
 }

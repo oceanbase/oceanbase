@@ -136,3 +136,7 @@ oblib_addtest(codec/test_bitpacking.cpp)
 oblib_addtest(codec/test_codec_performance.cpp)
 oblib_addtest(codec/test_bitpacking_performance.cpp)
 oblib_addtest(compress/test_compressor_pool.cpp)
+
+if (NOT OB_BUILD_OPENSOURCE)
+  add_subdirectory(allocator_new)
+endif()

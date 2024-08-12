@@ -825,3 +825,27 @@ extern bool nodename_is_sdo_geometry_type(const ParseNode *node)
   }
   return result;
 }
+
+ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, ParseNode *table_node)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_ISNULL(error_code)) {
+    (void)fprintf(stderr, "ERROR parser error code is NULL\n");
+  } else if (OB_ISNULL(inner_join) || OB_ISNULL(table_node)) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else if (table_node->type_ == T_JOINED_TABLE && table_node->value_ != 1) {
+    // table_node is a join table and without a parenthese.
+    table_node->children_[1] = adjust_inner_join_inner(error_code, inner_join, table_node->children_[1]);
+    if (OB_PARSER_SUCCESS != *error_code) {
+      /* do nothing */
+    } else if (OB_ISNULL(table_node->children_[1])) {
+      *error_code = OB_PARSER_ERR_UNEXPECTED;
+    } else {
+      ret_node = table_node;
+    }
+  } else {
+    inner_join->children_[2] = table_node;
+    ret_node = inner_join;
+  }
+  return ret_node;
+}

@@ -304,7 +304,6 @@ public:
   OB_INLINE uint64_t get_udt_set_id() const { return udt_set_id_; }
   OB_INLINE uint64_t get_sub_data_type() const { return sub_type_; }
   OB_INLINE bool is_udt_column() const { return udt_set_id_ > 0 && OB_INVALID_ID != udt_set_id_; }
-  OB_INLINE bool is_udt_hidden_column() const { return is_udt_column() && is_hidden(); }
   OB_INLINE bool is_xmltype() const {
     return is_udt_column()
         && (((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
@@ -431,6 +430,10 @@ public:
   OB_INLINE bool is_global_normal_index_table() const { return share::schema::INDEX_TYPE_NORMAL_GLOBAL == index_type_; }
   OB_INLINE bool is_global_unique_index_table() const { return share::schema::INDEX_TYPE_UNIQUE_GLOBAL == index_type_; }
   OB_INLINE bool is_global_index_table() const { return is_global_normal_index_table() || is_global_unique_index_table(); }
+  OB_INLINE bool is_ddl_table_ignored_to_sync_cdc() const
+  {
+    return share::schema::DONT_SYNC_LOG_FOR_CDC == table_mode_.ddl_table_ignore_sync_cdc_flag_;
+  }
   OB_INLINE uint64_t get_data_table_id() const { return data_table_id_; }
   OB_INLINE int64_t get_index_tid_count() const { return unique_index_tid_arr_.count(); } // NOTICE: only return unique_index_table count.
   OB_INLINE const ObIArray<uint64_t> &get_unique_index_table_id_arr() const { return unique_index_tid_arr_; }

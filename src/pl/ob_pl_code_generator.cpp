@@ -35,6 +35,7 @@ namespace pl
 int ObPLCodeGenerateVisitor::generate(const ObPLStmt &s)
 {
   int ret = OB_SUCCESS;
+  OZ (ObPL::check_session_alive(generator_.get_session_info()));
   OZ (generator_.restart_cg_when_goto_dest(s));
   OZ (s.accept(*this));
   return ret;
@@ -90,6 +91,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLStmtBlock &s)
       if (OB_ISNULL(stmt)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("stmt in block is NULL", K(i), K(s.get_stmts()), K(ret));
+      } else if (OB_FAIL(ObPL::check_session_alive(generator_.get_session_info()))) {
+        LOG_WARN("query or session is killed, stop CG now", K(ret));
       } else if (OB_FAIL(SMART_CALL(generate(*stmt)))) {
         LOG_WARN("failed to generate", K(i), K(ret));
       } else { /*do nothing*/ }
@@ -221,9 +224,12 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
     ObLLVMType ir_type;
     ObLLVMValue value;
     bool is_complex_type_var = false;
+    ObLLVMValue stack;
+    OZ (generator_.get_helper().stack_save(stack));
     for (int64_t i = 0; OB_SUCC(ret) && i < s.get_index().count(); ++i) {
       const ObPLVar *var = s.get_var(i);
       CK (OB_NOT_NULL(var));
+      OZ (ObPL::check_session_alive(generator_.get_session_info()));
       if (OB_SUCC(ret)) {
         if (var->get_type().is_obj_type()) {
           OZ (var->get_type().generate_construct(generator_, *s.get_namespace(), value, &s));
@@ -387,6 +393,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareVarStmt &s)
     }
 
     OZ (generator_.generate_spi_pl_profiler_after_record(s));
+    OZ (generator_.get_helper().stack_restore(stack));
   }
   return ret;
 }
@@ -2091,6 +2098,8 @@ int ObPLCodeGenerateVisitor::visit(const ObPLDeclareHandlerStmt &s)
         if (OB_ISNULL(s.get_handler(i).get_desc())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("handler is NULL", K(i), K(s.get_handler(i)), K(ret));
+        } else if (OB_FAIL(ObPL::check_session_alive(generator_.get_session_info()))) {
+          LOG_WARN("query or session is killed, stop CG now", K(ret));
         } else {
           ObSqlString const_name;
           for (int64_t j = 0; OB_SUCC(ret) && j < s.get_handler(i).get_desc()->get_conditions().count(); ++j) {
@@ -2712,17 +2721,25 @@ int ObPLCodeGenerateVisitor::visit(const ObPLCallStmt &s)
                                                              generator_.CTX_IDX),
                                                          s.get_out_index(i),
                                                          p_result_obj));
-          } else if (!s.get_param_expr(i)->is_obj_access_expr()
-              || !(static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i)))->for_write()) {
+          } else if ((!s.get_param_expr(i)->is_obj_access_expr() && !(s.get_param_expr(i)->get_result_type().is_ext() && s.is_out(i)))
+                      || (s.get_param_expr(i)->is_obj_access_expr() && !(static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i)))->for_write())) {
             OZ (generator_.generate_expr(s.get_param(i), s, OB_INVALID_INDEX, p_result_obj));
           } else {
             ObLLVMValue address;
             ObPLDataType final_type;
             bool is_no_copy_param = s.get_nocopy_params().count() > 0 && OB_INVALID_INDEX != s.get_nocopy_params().at(i);
-            const ObObjAccessRawExpr *obj_access
-              = static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i));
-            CK (OB_NOT_NULL(obj_access));
-            OZ (obj_access->get_final_type(final_type));
+            if (s.get_param_expr(i)->is_obj_access_expr()) {
+              const ObObjAccessRawExpr *obj_access = static_cast<const ObObjAccessRawExpr *>(s.get_param_expr(i));
+              CK (OB_NOT_NULL(obj_access));
+              OZ (obj_access->get_final_type(final_type));
+            } else {
+              uint64_t udt_id = s.get_param_expr(i)->get_result_type().get_udt_id();
+              const ObUserDefinedType *user_type = NULL;
+              user_type = generator_.get_ast().get_user_type_table().get_type(udt_id);
+              user_type = NULL == user_type ? generator_.get_ast().get_user_type_table().get_external_type(udt_id) : user_type;
+              CK (OB_NOT_NULL(user_type));
+              OX (final_type = *user_type);
+            }
             OZ (generator_.generate_expr(s.get_param(i),
                                          s,
                                          OB_INVALID_INDEX,
@@ -7342,7 +7359,10 @@ int ObPLCodeGenerator::check_success(jit::ObLLVMValue &ret_err, int64_t stmt_id,
                                      bool in_notfound, bool in_warning, bool signal)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(helper_.set_insert_point(get_current()))) {
+
+  if (OB_FAIL(ObPL::check_session_alive(session_info_))) {
+    LOG_WARN("query or session is killed, stop CG now", K(ret));
+  } else if (OB_FAIL(helper_.set_insert_point(get_current()))) {
     LOG_WARN("failed to set insert point", K(ret));
   } else if (OB_FAIL(helper_.create_store(ret_err, vars_.at(RET_IDX)))) {
     LOG_WARN("failed to create_store", K(ret));

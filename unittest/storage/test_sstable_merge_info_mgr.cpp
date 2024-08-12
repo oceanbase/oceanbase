@@ -90,7 +90,6 @@ TEST_F(TestSSTableMergeInfoMgr, normal)
   ret = MTL(ObTenantSSTableMergeInfoMgr*)->add_sstable_merge_info(merge_info);
   ASSERT_NE(OB_SUCCESS, ret);
 
-  merge_info.tenant_id_ = 1;
   merge_info.ls_id_ = 1;
   merge_info.tablet_id_ = 2;
   merge_info.compaction_scn_ = 100;
@@ -119,7 +118,6 @@ TEST_F(TestSSTableMergeInfoMgr, iterator)
   merge_info.info_param_ = &info_param;
 
   const uint64_t tenant_id = 1001;
-  merge_info.tenant_id_ = 1;
   merge_info.ls_id_ = 1;
   merge_info.tablet_id_ = 3;
   merge_info.compaction_scn_ = 100;
@@ -201,7 +199,6 @@ TEST_F(TestSSTableMergeInfoMgr, resize)
   merge_info.info_param_ = &info_param;
 
   const uint64_t tenant_id = 1001;
-  merge_info.tenant_id_ = tenant_id;
   merge_info.ls_id_ = 1;
   merge_info.compaction_scn_ = 100;
   merge_info.merge_type_ = ObMergeType::MINOR_MERGE;

@@ -45,9 +45,7 @@ namespace compaction
  * */
 int64_t ObScheduleSuspectInfo::hash() const
 {
-  int64_t hash_value = ObMergeDagHash::inner_hash();
-  hash_value = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_value);
-  return hash_value;
+  return ObMergeDagHash::inner_hash();
 }
 
 bool ObScheduleSuspectInfo::is_valid() const
@@ -61,30 +59,17 @@ bool ObScheduleSuspectInfo::is_valid() const
   return bret;
 }
 
-int64_t ObScheduleSuspectInfo::gen_hash(int64_t tenant_id, int64_t dag_hash)
-{
-  int64_t hash_value = dag_hash;
-  hash_value = common::murmurhash(&tenant_id, sizeof(tenant_id), hash_value);
-  return hash_value;
-}
-
 void ObScheduleSuspectInfo::shallow_copy(ObIDiagnoseInfo *other)
 {
   ObScheduleSuspectInfo *info = nullptr;
-  if (OB_NOT_NULL(other) && OB_NOT_NULL(info = dynamic_cast<ObScheduleSuspectInfo *>(other))) {
+  if (OB_NOT_NULL(other) && OB_NOT_NULL(info = static_cast<ObScheduleSuspectInfo *>(other))) {
     merge_type_ = info->merge_type_;
     ls_id_ = info->ls_id_;
     tablet_id_ = info->tablet_id_;
-    tenant_id_ = info->tenant_id_;
     priority_ = info->priority_;
     add_time_ = info->add_time_;
     hash_ = info->hash_;
   }
-}
-
-int64_t ObScheduleSuspectInfo::get_add_time() const
-{
-  return add_time_;
 }
 
 int64_t ObScheduleSuspectInfo::get_hash() const
@@ -211,7 +196,7 @@ int ObIDiagnoseInfoMgr::init(bool with_map,
     page_size_ = std::max(page_size, static_cast<int64_t>(INFO_PAGE_SIZE_LIMIT));
     max_size = upper_align(max_size, page_size_);
     if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(),
-                                    page_size,
+                                    page_size_,
                                     lib::ObMemAttr(tenant_id, pool_label_),
                                     0,
                                     max_size,
@@ -284,15 +269,12 @@ int ObIDiagnoseInfoMgr::size()
   return info_list_.get_size();
 }
 
-int ObIDiagnoseInfoMgr::get_with_param(const int64_t key, ObIDiagnoseInfo *out_info, ObIAllocator &allocator)
+int ObIDiagnoseInfoMgr::get_with_param(const int64_t key, ObIDiagnoseInfo &out_info, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObIDiagnoseInfoMgr is not init", K(ret));
-  } else if (OB_ISNULL(out_info)) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid argument", K(ret), K(out_info));
   } else {
     common::SpinWLockGuard guard(lock_);
     ObIDiagnoseInfo *info = NULL;
@@ -304,8 +286,8 @@ int ObIDiagnoseInfoMgr::get_with_param(const int64_t key, ObIDiagnoseInfo *out_i
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "info_param is null", K(ret), K(info));
     } else {
-      out_info->shallow_copy(info);
-      if (OB_FAIL(info->info_param_->deep_copy(allocator, out_info->info_param_))) {
+      out_info.shallow_copy(info/*src*/);
+      if (OB_FAIL(info->info_param_->deep_copy(allocator, out_info.info_param_/*dst*/))) {
         STORAGE_LOG(WARN, "failed to deep copy info param", K(ret));
       }
     }
@@ -492,7 +474,7 @@ int ObIDiagnoseInfoMgr::purge_with_rw_lock(bool batch_purge)
 
   if (OB_SUCC(ret)) {
     STORAGE_LOG(INFO, "success to purge", K(ret), K(batch_purge), K(batch_size), "max_size", allocator_.get_max(),
-      "used_size", allocator_.used(), "total_size", allocator_.total(), K(purge_count));
+      "used_size", allocator_.used(), "total_size", allocator_.total(), K(purge_count), K(info_list_.get_size()));
   }
   ++version_;
   return ret;
@@ -533,7 +515,7 @@ int ObScheduleSuspectInfoMgr::add_suspect_info(const int64_t key, ObScheduleSusp
  * */
 
 #define ADD_DIAGNOSE_INFO(merge_type, ls_id, tablet_id, status, time, ...) \
-SET_DIAGNOSE_INFO(info_array_[idx_++], merge_type, MTL_ID(), ls_id, tablet_id, status, time, __VA_ARGS__)
+SET_DIAGNOSE_INFO(info_array_[idx_++], merge_type, ls_id, tablet_id, status, time, __VA_ARGS__)
 #define ADD_DIAGNOSE_INFO_FOR_TABLET(merge_type, status, time, ...) \
 ADD_DIAGNOSE_INFO(merge_type, ls_id, tablet_id, status, time, __VA_ARGS__)
 #define ADD_COMMON_DIAGNOSE_INFO(merge_type, status, time, ...) \
@@ -772,12 +754,11 @@ int ObCompactionDiagnoseMgr::get_suspect_info(
   int ret = OB_SUCCESS;
   suspect_info_type = share::ObSuspectInfoType::SUSPECT_INFO_TYPE_MAX;
   ObScheduleSuspectInfo input_info;
-  input_info.tenant_id_ = MTL_ID();
   input_info.merge_type_ = merge_type;
   input_info.ls_id_ = ls_id;
   input_info.tablet_id_ = tablet_id;
   ObInfoParamBuffer allocator; // info_param_ will be invalid after return
-  if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->get_with_param(input_info.hash(), &ret_info, allocator))) {
+  if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->get_with_param(input_info.hash(), ret_info, allocator))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get suspect info", K(ret), K(input_info));
     }
@@ -790,7 +771,7 @@ int ObCompactionDiagnoseMgr::get_suspect_info(
   return ret;
 }
 
-int ObCompactionDiagnoseMgr::diagnose_tenant(
+int ObCompactionDiagnoseMgr::diagnose_tenant( //TODO(mingqiao): check tenant restore data mode and add into diagnose info
     bool &diagnose_major_flag,
     ObTenantTabletScheduler *scheduler,
     int64_t &compaction_scn)
@@ -839,7 +820,7 @@ int ObCompactionDiagnoseMgr::diagnose_tenant(
                     ObTimeUtility::fast_current_time(),
                     "error_code", ret,
                     "freeze_info is invalid, merged_version", merged_version))) {
-        LOG_WARN("failed to add dignose info about freeze_info", K(ret), K(merged_version));
+        LOG_WARN("failed to add dignose info about freeze_info", K(tmp_ret), K(merged_version));
       }
     } else {
       compaction_scn = freeze_info.frozen_scn_.get_val_for_tx();
@@ -1577,7 +1558,7 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
   dag_hash.merge_type_ = merge_type;
   dag_hash.ls_id_ = ls_id;
   dag_hash.tablet_id_ = tablet_id;
-  if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->get_with_param(ObScheduleSuspectInfo::gen_hash(MTL_ID(), dag_hash.inner_hash()), &info, allocator))) {
+  if (OB_FAIL(MTL(ObScheduleSuspectInfoMgr *)->get_with_param(dag_hash.inner_hash(), info, allocator))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("failed to get suspect info", K(ret), K(dag_hash));
     } else { // no schedule suspect info
@@ -1586,7 +1567,7 @@ int ObCompactionDiagnoseMgr::get_suspect_and_warning_info(
       allocator.reuse();
       char tmp_str[common::OB_DAG_WARNING_INFO_LENGTH] = "\0";
       if (OB_FAIL(MTL(ObDagWarningHistoryManager *)->get_with_param(
-                    dag_key, &warning_info, allocator))) {
+                    dag_key, warning_info, allocator))) {
         // check __all_virtual_dag_warning_history
         if (OB_HASH_NOT_EXIST != ret) {
           LOG_WARN("failed to get dag warning info", K(ret), K(dag_hash));

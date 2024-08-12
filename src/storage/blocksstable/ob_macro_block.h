@@ -67,7 +67,9 @@ public:
       const bool is_leaf_index_block,
       int64_t &data_offset);
   int get_macro_block_meta(ObDataMacroBlockMeta &macro_meta);
-  int flush(ObMacroBlockHandle &macro_handle, ObMacroBlocksWriteCtx &block_write_ctx);
+  int flush(ObMacroBlockHandle &macro_handle,
+            ObMacroBlocksWriteCtx &block_write_ctx,
+            ObIODevice *device_handle = nullptr);
   void reset();
   void reuse();
   OB_INLINE bool is_dirty() const { return is_dirty_; }

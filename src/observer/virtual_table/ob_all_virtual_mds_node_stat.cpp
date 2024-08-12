@@ -33,63 +33,104 @@ using namespace omt;
 namespace observer
 {
 
+static constexpr int64_t BUFFER_SIZE = 32_MB;
+
+struct ApplyOnTabletOp {
+  ApplyOnTabletOp(ObAllVirtualMdsNodeStat *table, char *temp_buffer) : table_(table), temp_buffer_(temp_buffer) {}
+  int operator()(ObTablet &tablet) {
+    int ret = OB_SUCCESS;
+    MdsNodeInfoForVirtualTable mds_info;
+    mds::MdsTableHandle mds_table_handle;
+    ObArray<MdsNodeInfoForVirtualTable> row_array;
+    if (OB_FAIL(table_->get_mds_table_handle_(tablet, mds_table_handle, false))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        MDS_LOG(WARN, "failed to get_mds_table_handle_", K(ret), K(*table_));
+      }
+    } else if (OB_FAIL(mds_table_handle.fill_virtual_info(row_array))) {
+      MDS_LOG(WARN, "failed to fill_virtual_info from mds_table", K(ret), K(*table_));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(tablet.fill_virtual_info(row_array))) {
+        MDS_LOG(WARN, "failed to fill_virtual_info from tablet", K(ret), K(*table_));
+      } else {
+        for (int64_t idx = 0; idx < row_array.count() && OB_SUCC(ret); ++idx) {
+          if (OB_FAIL(table_->convert_node_info_to_row_(row_array[idx], temp_buffer_, BUFFER_SIZE, table_->cur_row_))) {
+            MDS_LOG(WARN, "failed to convert_node_info_to_row_", K(ret), K(*table_));
+          } else if (OB_FAIL(table_->scanner_.add_row(table_->cur_row_))) {
+            MDS_LOG(WARN, "fail to add_row to scanner_", K(MTL_ID()), K(*table_));
+          }
+        }
+      }
+    }
+    return ret;
+  }
+  ObAllVirtualMdsNodeStat *table_;
+  char *temp_buffer_;
+};
+
+struct ApplyOnLSOp {
+  ApplyOnLSOp(ObAllVirtualMdsNodeStat *table, ApplyOnTabletOp &apply_on_tablet_op)
+  : table_(table),
+  apply_on_tablet_op_(apply_on_tablet_op) {}
+  int operator()(ObLS &ls) {
+    int ret = OB_SUCCESS;
+    if (table_->judege_in_ranges(ls.get_ls_id(), table_->ls_ranges_)) {
+      (void) table_->get_tablet_info_(ls, apply_on_tablet_op_);
+    } else {
+      MDS_LOG(TRACE, "not in ranges", K(ret), K(*table_));
+    }
+    return OB_SUCCESS;
+  }
+  ObAllVirtualMdsNodeStat *table_;
+  ApplyOnTabletOp &apply_on_tablet_op_;
+};
+
+struct ApplyOnTenantOp {
+  ApplyOnTenantOp(ObAllVirtualMdsNodeStat *table, ApplyOnLSOp &op) : table_(table), op_(op) {}
+  int operator()() {
+    int ret = OB_SUCCESS;
+    if (table_->judege_in_ranges(MTL_ID(), table_->tenant_ranges_)) {
+      if (OB_FAIL(ObTenantMdsService::for_each_ls_in_tenant(op_))) {
+        MDS_LOG(WARN, "failed to do for_each_ls_in_tenant", K(ret));
+        ret = OB_SUCCESS;
+      }
+    } else {
+      MDS_LOG(TRACE, "not in ranges", K(ret), K(*table_));
+    }
+    return ret;
+  }
+  ObAllVirtualMdsNodeStat *table_;
+  ApplyOnLSOp &op_;
+};
+
+int ObAllVirtualMdsNodeStat::get_mds_table_handle_(ObTablet &tablet,
+                                                   mds::MdsTableHandle &handle,
+                                                   const bool create_if_not_exist)
+{
+  return tablet.get_mds_table_handle_(handle, create_if_not_exist);
+}
+
 int ObAllVirtualMdsNodeStat::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
   if (false == start_to_read_) {
     if (OB_FAIL(get_primary_key_ranges_())) {
       MDS_LOG(WARN, "fail to get index scan ranges", KR(ret), K(MTL_ID()), K(*this));
+    } else if (tablet_points_.empty()) {
+      ret = OB_NOT_SUPPORTED;
+      MDS_LOG(WARN, "tenant_id/ls_id/tablet_id must be specified", KR(ret), K(MTL_ID()), K(*this));
     } else {
       char *temp_buffer = nullptr;
-      char *to_string_buffer = nullptr;
-      constexpr int64_t BUFFER_SIZE = 32_MB;
       if (OB_ISNULL(temp_buffer = (char *)mtl_malloc(BUFFER_SIZE, "VirMdsStat"))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         MDS_LOG(WARN, "fail to alloc buffer", K(MTL_ID()), K(*this));
       } else {
-        auto apply_on_tablet_op = [this, temp_buffer](ObTablet &tablet) -> int {
-          int ret = OB_SUCCESS;
-          MdsNodeInfoForVirtualTable mds_info;
-          mds::MdsTableHandle mds_table_handle;
-          ObArray<MdsNodeInfoForVirtualTable> row_array;
-          if (OB_FAIL(tablet.get_mds_table_handle_(mds_table_handle, false))) {
-            if (OB_ENTRY_NOT_EXIST == ret) {
-              ret = OB_SUCCESS;
-            } else {
-              MDS_LOG(WARN, "failed to get_mds_table_handle_", K(ret), K(*this));
-            }
-          } else if (OB_FAIL(mds_table_handle.fill_virtual_info(row_array))) {
-            MDS_LOG(WARN, "failed to fill_virtual_info from mds_table", K(ret), K(*this));
-          }
-          if (OB_SUCC(ret)) {
-            if (OB_FAIL(tablet.fill_virtual_info(row_array))) {
-              MDS_LOG(WARN, "failed to fill_virtual_info from tablet", K(ret), K(*this));
-            } else {
-              for (int64_t idx = 0; idx < row_array.count() && OB_SUCC(ret); ++idx) {
-                if (OB_FAIL(convert_node_info_to_row_(row_array[idx], temp_buffer, BUFFER_SIZE, cur_row_))) {
-                  MDS_LOG(WARN, "failed to convert_node_info_to_row_", K(ret), K(*this));
-                } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
-                  MDS_LOG(WARN, "fail to add_row to scanner_", K(MTL_ID()), K(*this));
-                }
-              }
-            }
-          }
-          return ret;
-        };
-        auto func_iterate_tenant = [&apply_on_tablet_op, this]() -> int
-        {
-          int ret = OB_SUCCESS;
-          if (judege_in_ranges(MTL_ID(), tenant_ranges_)) {
-            if (OB_FAIL(ObTenantMdsService::for_each_ls_in_tenant([&ret, &apply_on_tablet_op, this](ObLS &ls) {
-              if (judege_in_ranges(ls.get_ls_id(), ls_ranges_)) {
-                ret = get_tablet_info_(ls, apply_on_tablet_op);
-              } else { MDS_LOG(TRACE, "not in ranges", K(ret), K(*this)); }
-              return ret;
-            }))) {}
-          } else { MDS_LOG(TRACE, "not in ranges", K(ret), K(*this)); }
-          return ret;
-        };
-        if (OB_FAIL(omt_->operate_each_tenant_for_sys_or_self(func_iterate_tenant))) {
+        ApplyOnTabletOp apply_on_table_op(this, temp_buffer);
+        ApplyOnLSOp apply_on_ls_op(this, apply_on_table_op);
+        ApplyOnTenantOp apply_on_tenant_op(this, apply_on_ls_op);
+        if (OB_FAIL(omt_->operate_each_tenant_for_sys_or_self(apply_on_tenant_op))) {
           MDS_LOG(WARN, "ObMultiTenant operate_each_tenant_for_sys_or_self failed", K(ret), K(*this));
         } else {
           scanner_it_ = scanner_.begin();
@@ -294,22 +335,16 @@ int ObAllVirtualMdsNodeStat::get_tablet_info_(ObLS &ls, const ObFunction<int(ObT
     ret = OB_INVALID_ARGUMENT;
     MDS_LOG(ERROR, "invalid ob function", KR(ret), K(key_ranges_), K(*this));
   } else {
-    if (!tablet_ranges_.empty()) {// scan
-      ret = OB_NOT_SUPPORTED;
-    } else if (!tablet_points_.empty()) {// point select
-      for (int64_t idx = 0; idx < tablet_points_.count() && OB_SUCC(ret); ++idx) {
-        ObTabletHandle tablet_handle;
-        if (OB_FAIL(ls.get_tablet(tablet_points_[idx], tablet_handle, 0, storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
-          MDS_LOG(WARN, "fail to get tablet", KR(ret), K(key_ranges_), K(*this));
-        } else if (OB_ISNULL(tablet_handle.get_obj())) {
-          ret = OB_ERR_UNEXPECTED;
-          MDS_LOG(ERROR, "get null tablet ptr", KR(ret), K(key_ranges_), K(*this));
-        } else if (OB_FAIL(apply_on_tablet_op(*tablet_handle.get_obj()))) {
-          MDS_LOG(WARN, "fail to apply op on tablet", KR(ret), K(key_ranges_), K(*this));
-        }
+    for (int64_t idx = 0; idx < tablet_points_.count() && OB_SUCC(ret); ++idx) {
+      ObTabletHandle tablet_handle;
+      if (OB_FAIL(ls.get_tablet(tablet_points_[idx], tablet_handle, 0, storage::ObMDSGetTabletMode::READ_WITHOUT_CHECK))) {
+        MDS_LOG(WARN, "fail to get tablet", KR(ret), K(key_ranges_), K(*this));
+      } else if (OB_ISNULL(tablet_handle.get_obj())) {
+        ret = OB_ERR_UNEXPECTED;
+        MDS_LOG(ERROR, "get null tablet ptr", KR(ret), K(key_ranges_), K(*this));
+      } else if (OB_FAIL(apply_on_tablet_op(*tablet_handle.get_obj()))) {
+        MDS_LOG(WARN, "fail to apply op on tablet", KR(ret), K(key_ranges_), K(*this));
       }
-    } else {
-      MDS_LOG(ERROR, "not do scan", KR(ret), K(key_ranges_), K(*this));
     }
   }
   MDS_LOG(INFO, "get_tablet_info_", KR(ret), K(key_ranges_), K(*this));

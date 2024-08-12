@@ -79,6 +79,7 @@ private:
     ENUM_OPT_SET_FIELD,
     ENUM_OPT_HINT,
     ENUM_OPT_EXTENDED_OPTIONS,
+    ENUM_OPT_COMPRESSION,
     ENUM_TOTAL_COUNT
   };
   ObStmtScope current_scope_;

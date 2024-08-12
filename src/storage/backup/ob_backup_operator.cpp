@@ -336,6 +336,106 @@ int ObLSBackupOperator::report_tablet_skipped(
   return ret;
 }
 
+int ObLSBackupOperator::check_tablet_skipped_by_reorganize(common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id, const common::ObTabletID &tablet_id, bool &has_skipped)
+{
+  int ret = OB_SUCCESS;
+  has_skipped = false;
+  ObSqlString sql;
+  ObBackupSkippedType skipped_type(ObBackupSkippedType::TYPE::REORGANIZED);
+  if (OB_INVALID_TENANT_ID == tenant_id || !tablet_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tablet_id));
+  } else {
+    HEAP_VAR(ObMySQLProxy::ReadResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(sql.assign_fmt(
+        "select * from %s where tenant_id = %lu and tablet_id = %ld and skipped_type = '%s'",
+        OB_ALL_BACKUP_SKIPPED_TABLET_TNAME, tenant_id, tablet_id.id(), skipped_type.str()))) {
+        LOG_WARN("failed to assign sql", K(ret), K(sql), K(tenant_id), K(tablet_id));
+      } else if (OB_FAIL(sql_proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+        LOG_WARN("failed to exec sql", K(ret), K(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", K(ret), K(sql));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          has_skipped = false;
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get next row", K(ret), K(sql));
+        }
+      } else {
+        has_skipped = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupOperator::get_tablet_to_ls_info(common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id, const common::ObTabletID &tablet_id, int64_t &tablet_count, int64_t &tmp_ls_id)
+{
+  int ret = OB_SUCCESS;
+  common::ObSqlString sql;
+  tablet_count = 0;
+  tmp_ls_id = 0;
+  HEAP_VAR(ObMySQLProxy::ReadResult, res)
+  {
+    common::sqlclient::ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql.assign_fmt(
+            "select count(*) as count, ls_id from %s where tablet_id = %ld",
+            OB_ALL_TABLET_TO_LS_TNAME, tablet_id.id()))) {
+      LOG_WARN("failed to assign sql", K(ret), K(tablet_id));
+    } else if (OB_FAIL(sql_proxy.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("failed to execute sql", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is NULL", KR(ret), K(sql));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("failed to get next result", KR(ret), K(sql));
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "count", tablet_count, int64_t);
+      EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "ls_id", tmp_ls_id, int64_t);
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupOperator::check_ls_has_sys_data(common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id, const int64_t task_id, const share::ObLSID &ls_id, bool &has_sys_data)
+{
+  int ret = OB_SUCCESS;
+  has_sys_data = false;
+  common::ObSqlString sql;
+  int64_t task_count = 0;
+  ObBackupDataType sys_data_type;
+  sys_data_type.set_sys_data_backup();
+  HEAP_VAR(ObMySQLProxy::ReadResult, res)
+  {
+    common::sqlclient::ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql.assign_fmt(
+            "select count(*) as count from %s where tenant_id = %lu and task_id = %ld and"
+            " ls_id = %ld and data_type = %ld",
+            OB_ALL_BACKUP_LS_TASK_INFO_TNAME, tenant_id, task_id, ls_id.id(), static_cast<int64_t>(sys_data_type.type_)))) {
+      LOG_WARN("failed to assign sql", K(ret), K(tenant_id), K(task_id), K(ls_id));
+    } else if (OB_FAIL(sql_proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
+      LOG_WARN("failed to execute sql", KR(ret), K(tenant_id), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is NULL", KR(ret), K(sql));
+    } else if (OB_FAIL(result->next())) {
+      LOG_WARN("failed to get next result", KR(ret), K(sql));
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "count", task_count, int64_t);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    has_sys_data = 0 != task_count;
+  }
+  return ret;
+}
+
 int ObLSBackupOperator::fill_ls_task_info_(const ObBackupLSTaskInfo &task_info, share::ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;

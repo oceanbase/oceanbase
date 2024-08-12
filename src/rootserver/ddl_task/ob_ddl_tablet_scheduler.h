@@ -61,7 +61,6 @@ private:
   int64_t snapshot_version_;
   common::ObCurTraceId::TraceId trace_id_;
   common::TCRWLock lock_; // this lock is used to protect read and write operations of class members: running_task_ls_ids_before_、 all_ls_to_tablets_map_、 running_ls_to_tablets_map_、 running_ls_to_execution_id_, to avoid conflicts between ddl_builder task and ddl_scheduler task.
-  common::ObArenaAllocator allocator_;
   ObRootService *root_service_;
   ObArray<ObTabletID> all_tablets_;
   ObArray<share::ObLSID> running_task_ls_ids_before_; // this is the used lsid array where the tablets is located when init ObDDLTabletScheduler;

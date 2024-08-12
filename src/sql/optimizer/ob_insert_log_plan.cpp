@@ -102,9 +102,7 @@ int ObInsertLogPlan::generate_normal_raw_plan()
         if (OB_FAIL(check_need_online_stats_gather(tmp_need_osg))) {
           LOG_WARN("fail to check wether we need optimizer stats gathering operator", K(ret));
         } else if (tmp_need_osg &&
-                   get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_2 &&
-                   OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*get_optimizer_context().get_exec_ctx(),
-                                                                             online_sample_percent))) {
+                   OB_FAIL(get_online_estimate_percent(online_sample_percent))) {
           LOG_WARN("failed to get sys online sample percent", K(ret));
         } else {
           if (is_direct_insert()) {
@@ -1752,6 +1750,28 @@ int ObInsertLogPlan::candi_allocate_optimizer_stats_merge(OSGShareInfo *osg_info
   }
   if (OB_SUCC(ret) && OB_FAIL(prune_and_keep_best_plans(stats_gathering_plan))) {
     LOG_WARN("failed to prune and keep best plans", K(ret));
+  }
+  return ret;
+}
+
+int ObInsertLogPlan::get_online_estimate_percent(double &percent)
+{
+  int ret = OB_SUCCESS;
+  percent = 100.;
+  const ObSQLSessionInfo *session_info = NULL;
+  if (OB_ISNULL(get_optimizer_context().get_exec_ctx()) ||
+      OB_ISNULL(session_info = get_optimizer_context().get_session_info()) ||
+      OB_ISNULL(get_stmt()) ||
+      OB_ISNULL(get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_2) {
+    // do nothing
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_sys_online_estimate_percent(*get_optimizer_context().get_exec_ctx(),
+                                                                       session_info->get_effective_tenant_id(),
+                                                                       get_stmt()->get_insert_table_info().ref_table_id_,
+                                                                       percent))) {
+    LOG_WARN("failed to get sys online estimate percent", K(ret));
   }
   return ret;
 }
