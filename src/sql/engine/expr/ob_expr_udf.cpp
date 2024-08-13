@@ -256,9 +256,16 @@ int ObExprUDF::process_in_params(const ObObj *objs_stack,
       objs_stack[i].copy_value_or_obj(param, true);
     } else {
       if (params_type.at(i).get_type() == ObExtendType) {
-        param.set_extend(objs_stack[i].get_ext(),
-                         objs_stack[i].get_meta().get_extend_type(), objs_stack[i].get_val_len());
-        param.set_param_meta();
+        if (params_desc.at(i).is_obj_access_pure_out()) {
+          OZ (pl::ObUserDefinedType::deep_copy_obj(allocator, objs_stack[i], param));
+          if (OB_NOT_NULL(deep_in_objs)) {
+            OZ (deep_in_objs->push_back(param));
+          }
+        } else {
+          param.set_extend(objs_stack[i].get_ext(),
+                          objs_stack[i].get_meta().get_extend_type(), objs_stack[i].get_val_len());
+          param.set_param_meta();
+        }
       } else {
         void *ptr = NULL;
         ObObj *obj = NULL;
@@ -429,6 +436,13 @@ int ObExprUDF::process_singal_out_param(int64_t i,
     OX (result.copy_value_or_obj(*obj, true));
     OX (result.set_param_meta());
     OX (dones.at(i) = true);
+  } else if (params_desc.at(i).is_obj_access_pure_out()) { // objaccess complex type pure out sence
+    ObObj &obj = iparams.at(i);
+    ObObj dst = objs_stack[i];
+    if (obj.is_ext() && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+      OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, obj, dst, true));
+    }
+    OX (dones.at(i) = true);
   }
   return ret;
 }
@@ -449,7 +463,7 @@ int ObExprUDF::process_package_out_param(int64_t idx,
   for (int64_t i = idx + 1; OB_SUCC(ret) && i < iparams.count(); ++i) {
     if (!dones.at(i) && iparams.at(i).is_ext()) {
       bool is_child = false;
-      OZ (is_child_of(iparams.at(idx), iparams.at(i), is_child));
+      OZ (is_child_of(objs_stack[idx], objs_stack[i], is_child));
       if (OB_SUCC(ret) && is_child) {
         OZ (SMART_CALL(process_singal_out_param(
           i, dones, objs_stack, param_num, iparams, alloc, exec_ctx, nocopy_params, params_desc, params_type)));
@@ -480,11 +494,12 @@ int ObExprUDF::process_package_out_param(int64_t idx,
     OX (result.set_param_meta());
   } else {
     ObObj &obj = iparams.at(idx);
+    ObObj dst = objs_stack[idx];
     if (OB_SUCC(ret) && nullptr != pkg_allocator) {
       if (obj.is_ext() && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
-        OZ (pl::ObUserDefinedType::deep_copy_obj(*pkg_allocator, obj, obj, true));
+        OZ (pl::ObUserDefinedType::deep_copy_obj(*pkg_allocator, obj, dst, true));
       } else {
-        OZ (deep_copy_obj(*pkg_allocator, obj, obj));
+        OZ (deep_copy_obj(*pkg_allocator, obj, dst));
       }
     }
     if (OB_FAIL(ret)) {
@@ -500,7 +515,7 @@ int ObExprUDF::process_package_out_param(int64_t idx,
   return ret;
 }
 
-int ObExprUDF::is_child_of(ObObj &parent, ObObj &child, bool &is_child)
+int ObExprUDF::is_child_of(const ObObj &parent, const ObObj &child, bool &is_child)
 {
   int ret = OB_SUCCESS;
   if (parent.is_ext() && child.is_ext() && parent.get_ext() == child.get_ext()) {
