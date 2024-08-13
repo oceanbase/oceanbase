@@ -80,8 +80,6 @@ public:
                              common::ObIArray<size_t> &byte_offset);
   // 将double round到小数点后或者小数点前指定位置
   static double round_double(double val, int64_t dec);
-  // 将double round到小数点后指定位置，.5 -> 1 而不是0
-  static double round_double_nearest(double val, int64_t dec);
   static uint64_t round_uint64(uint64_t val, int64_t dec);
   // 将double trunc到小数点后或者小数点前指定位置
   static double trunc_double(double val, int64_t dec);
