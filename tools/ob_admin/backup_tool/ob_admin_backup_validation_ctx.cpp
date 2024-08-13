@@ -1,0 +1,754 @@
+/**
+ * Copyright (c) 2024 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the
+ * Mulan PubL v2. You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. See the
+ * Mulan PubL v2 for more details.
+ */
+#include "ob_admin_backup_validation_ctx.h"
+#define CLEAR_LINE "\033[1K\033[0G"
+namespace oceanbase
+{
+namespace tools
+{
+ObAdminTabletAttr::ObAdminTabletAttr()
+    : ls_id_(), data_type_(), sstable_meta_index_(nullptr), tablet_meta_index_(nullptr),
+      macro_block_id_mappings_meta_index_(nullptr), id_mappings_meta_(nullptr)
+{
+}
+ObAdminTabletAttr::~ObAdminTabletAttr()
+{
+  if (OB_NOT_NULL(sstable_meta_index_)) {
+    sstable_meta_index_->~ObBackupMetaIndex();
+    sstable_meta_index_ = nullptr;
+  }
+  if (OB_NOT_NULL(tablet_meta_index_)) {
+    tablet_meta_index_->~ObBackupMetaIndex();
+    tablet_meta_index_ = nullptr;
+  }
+  if (OB_NOT_NULL(macro_block_id_mappings_meta_index_)) {
+    macro_block_id_mappings_meta_index_->~ObBackupMetaIndex();
+    macro_block_id_mappings_meta_index_ = nullptr;
+  }
+  if (OB_NOT_NULL(id_mappings_meta_)) {
+    id_mappings_meta_->~ObBackupMacroBlockIDMappingsMeta();
+    id_mappings_meta_ = nullptr;
+  }
+}
+ObAdminLSAttr::ObAdminLSAttr()
+    : ls_type_(INVALID), ls_meta_package_(), single_ls_info_desc_(nullptr)
+{
+  sys_tablet_map_.create(4, ObModIds::BACKUP);
+}
+ObAdminLSAttr::~ObAdminLSAttr()
+{
+  FOREACH(iter, sys_tablet_map_)
+  {
+    iter->second->~ObAdminTabletAttr();
+    iter->second = nullptr;
+  }
+  sys_tablet_map_.destroy();
+  if (OB_NOT_NULL(single_ls_info_desc_)) {
+    single_ls_info_desc_->~ObSingleLSInfoDesc();
+    single_ls_info_desc_ = nullptr;
+  }
+}
+ObAdminBackupSetAttr::ObAdminBackupSetAttr()
+    : backup_set_store_(nullptr), backup_set_info_desc_(nullptr), ls_inner_tablet_done_(false),
+      minor_tablet_pos_(0), major_tablet_pos_(0), lock_(ObLatchIds::BACKUP_LOCK)
+{
+  ls_map_.create(100, ObModIds::BACKUP);
+  minor_tablet_map_.create(10000, ObModIds::BACKUP);
+  major_tablet_map_.create(10000, ObModIds::BACKUP);
+}
+ObAdminBackupSetAttr::~ObAdminBackupSetAttr()
+{
+  if (OB_NOT_NULL(backup_set_store_)) {
+    backup_set_store_->~ObBackupDataStore();
+    backup_set_store_ = nullptr;
+  }
+  if (OB_NOT_NULL(backup_set_info_desc_)) {
+    backup_set_info_desc_->~ObExternBackupSetInfoDesc();
+    backup_set_info_desc_ = nullptr;
+  }
+  FOREACH(iter, ls_map_)
+  {
+    iter->second->~ObAdminLSAttr();
+    iter->second = nullptr;
+  }
+  ls_map_.destroy();
+  FOREACH(iter, minor_tablet_map_)
+  {
+    iter->second->~ObAdminTabletAttr();
+    iter->second = nullptr;
+  }
+  minor_tablet_map_.destroy();
+  FOREACH(iter, major_tablet_map_)
+  {
+    iter->second->~ObAdminTabletAttr();
+    iter->second = nullptr;
+  }
+  major_tablet_map_.destroy();
+}
+int ObAdminBackupSetAttr::fetch_next_tablet_group(
+    common::ObArray<common::ObArray<ObAdminTabletAttr *>> &tablet_group, int64_t &scheduled_cnt)
+{
+  ObSpinLockGuard guard(lock_);
+  tablet_group.reset();
+  int ret = OB_SUCCESS;
+  scheduled_cnt = 0;
+  if (ls_inner_tablet_done_ && minor_tablet_pos_ >= minor_tablet_id_.count()
+      && major_tablet_pos_ >= major_tablet_id_.count()) {
+    STORAGE_LOG(INFO, "all tablet done", K(ret));
+    ret = OB_ITER_END;
+  } else {
+    common::ObArray<ObAdminTabletAttr *> inner_group;
+    if (!ls_inner_tablet_done_) {
+      FOREACH_X(ls_map_iter, ls_map_, OB_SUCC(ret))
+      {
+        inner_group.reuse();
+        if (OB_ISNULL(ls_map_iter->second)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "ls map iter is null", K(ret));
+        } else if (ls_map_iter->second->ls_type_ != ObAdminLSAttr::NORMAL) {
+          STORAGE_LOG(INFO, "abnormal ls detected, maybe post-construct, skip inner tablet",
+                      K(ls_map_iter->second->ls_meta_package_));
+        } else {
+          FOREACH_X(sys_tablet_map_iter, ls_map_iter->second->sys_tablet_map_, OB_SUCC(ret))
+          {
+            if (OB_FAIL(inner_group.push_back(sys_tablet_map_iter->second))) {
+              STORAGE_LOG(WARN, "failed to push back tablet attr", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(tablet_group.push_back(inner_group))) {
+              STORAGE_LOG(WARN, "failed to push back tablet group", K(ret));
+            } else {
+              scheduled_cnt += inner_group.count();
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        ls_inner_tablet_done_ = true;
+      }
+    }
+    while (OB_SUCC(ret)
+           && scheduled_cnt + 2 <= ObAdminBackupValidationExecutor::MAX_TABLET_BATCH_COUNT
+           && minor_tablet_pos_ < minor_tablet_id_.count()
+           && major_tablet_pos_ < major_tablet_id_.count()) {
+      ObAdminTabletAttr *minor_tablet_attr = nullptr;
+      ObAdminTabletAttr *major_tablet_attr = nullptr;
+      inner_group.reuse();
+      if (OB_FAIL(minor_tablet_map_.get_refactored(minor_tablet_id_.at(minor_tablet_pos_),
+                                                   minor_tablet_attr))) {
+        STORAGE_LOG(WARN, "failed to get tablet attr", K(ret),
+                    K(minor_tablet_id_.at(minor_tablet_pos_)));
+      } else if (OB_FAIL(major_tablet_map_.get_refactored(major_tablet_id_.at(major_tablet_pos_),
+                                                          major_tablet_attr))) {
+        STORAGE_LOG(WARN, "failed to get tablet attr", K(ret),
+                    K(major_tablet_id_.at(major_tablet_pos_)));
+      } else if (OB_ISNULL(minor_tablet_attr->tablet_meta_index_)
+                 || OB_ISNULL(major_tablet_attr->tablet_meta_index_)) {
+        // incompelete tablet, skip validation
+        ++minor_tablet_pos_;
+        ++major_tablet_pos_;
+        continue;
+      } else if (OB_FAIL(inner_group.push_back(minor_tablet_attr))) {
+        STORAGE_LOG(WARN, "failed to push back tablet attr", K(ret));
+      } else if (OB_FAIL(inner_group.push_back(major_tablet_attr))) {
+        STORAGE_LOG(WARN, "failed to push back tablet attr", K(ret));
+      } else if (OB_FAIL(tablet_group.push_back(inner_group))) {
+        STORAGE_LOG(WARN, "failed to push back tablet group", K(ret));
+      } else {
+        scheduled_cnt += inner_group.count();
+        ++minor_tablet_pos_;
+        ++major_tablet_pos_;
+      }
+    }
+
+    if (OB_SUCC(ret) && ls_inner_tablet_done_ && minor_tablet_pos_ >= minor_tablet_id_.count()
+        && major_tablet_pos_ >= major_tablet_id_.count()) {
+      ret = OB_ITER_END;
+      STORAGE_LOG(INFO, "all tablet done", K(ret));
+    }
+    STORAGE_LOG(INFO, "succeed to fetch next tablet group", K(ret), K(ls_inner_tablet_done_),
+                K(minor_tablet_pos_), K(major_tablet_pos_), K(minor_tablet_id_.count()),
+                K(major_tablet_id_.count()));
+  }
+  return ret;
+}
+bool ObAdminBackupSetAttr::is_all_tablet_done()
+{
+  ObSpinLockGuard guard(lock_);
+  return ls_inner_tablet_done_ && minor_tablet_pos_ >= minor_tablet_id_.count()
+         && major_tablet_pos_ >= major_tablet_id_.count();
+}
+ObAdminBackupPieceAttr::ObAdminBackupPieceAttr() : backup_piece_store_(nullptr)
+{
+  ls_map_.create(100, ObModIds::BACKUP);
+}
+ObAdminBackupPieceAttr::~ObAdminBackupPieceAttr()
+{
+  if (OB_NOT_NULL(backup_piece_store_)) {
+    backup_piece_store_->~ObArchiveStore();
+    backup_piece_store_ = nullptr;
+  }
+  if (OB_NOT_NULL(backup_piece_info_desc_)) {
+    backup_piece_info_desc_->~ObSinglePieceDesc();
+    backup_piece_info_desc_ = nullptr;
+  }
+  FOREACH(iter, ls_map_)
+  {
+    iter->second->~ObAdminLSAttr();
+    iter->second = nullptr;
+  }
+}
+int ObAdminBackupPieceAttr::split_lsn_range(
+    ObArray<std::pair<share::ObLSID, std::pair<palf::LSN, palf::LSN>>> &lsn_range_array)
+{
+  int ret = OB_SUCCESS;
+  if (backup_piece_info_desc_->piece_.is_active()) {
+    // TODO: active piece not have single ls info desc, should further fix
+  } else {
+    FOREACH_X(ls_map_iter, ls_map_, OB_SUCC(ret))
+    {
+      const share::ObLSID ls_id = ls_map_iter->second->single_ls_info_desc_->ls_id_;
+      palf::LSN start_lsn(ls_map_iter->second->single_ls_info_desc_->min_lsn_);
+      const palf::LSN end_lsn(ls_map_iter->second->single_ls_info_desc_->max_lsn_);
+      while (OB_SUCC(ret) && start_lsn < end_lsn) {
+        palf::LSN partial_lsn = start_lsn + palf::PALF_BLOCK_SIZE;
+        if (partial_lsn > end_lsn) {
+          partial_lsn = end_lsn;
+        }
+        if (OB_FAIL(lsn_range_array.push_back(
+                std::make_pair(ls_id, std::make_pair(start_lsn, partial_lsn))))) {
+          STORAGE_LOG(WARN, "failed to push back lsn range", K(ret));
+        } else {
+          start_lsn = partial_lsn;
+        }
+      }
+    }
+  }
+
+  return ret;
+}
+ObAdminBackupValidationCtx::ObAdminBackupValidationCtx(ObArenaAllocator &arena)
+    : aborted_(false), sql_proxy_(nullptr), global_stat_(), allocator_(arena), throttle_(),
+      states_icon_pos_(0)
+{
+  backup_set_map_.create(10, ObModIds::BACKUP);
+  backup_piece_map_.create(100, ObModIds::BACKUP);
+  throttle_.init(INT64_MAX /*default io_bandwidth*/);
+}
+ObAdminBackupValidationCtx::~ObAdminBackupValidationCtx()
+{
+  if (OB_NOT_NULL(log_archive_dest_)) {
+    log_archive_dest_->~ObBackupDest();
+    log_archive_dest_ = nullptr;
+  }
+  if (OB_NOT_NULL(data_backup_dest_)) {
+    data_backup_dest_->~ObBackupDest();
+    data_backup_dest_ = nullptr;
+  }
+  for (int64_t i = 0; i < backup_piece_path_array_.count(); i++) {
+    backup_piece_path_array_.at(i)->~ObBackupDest();
+    backup_piece_path_array_.at(i) = nullptr;
+  }
+  for (int64_t i = 0; i < backup_set_path_array_.count(); i++) {
+    backup_set_path_array_.at(i)->~ObBackupDest();
+    backup_set_path_array_.at(i) = nullptr;
+  }
+  FOREACH(iter, backup_set_map_)
+  {
+    iter->second->~ObAdminBackupSetAttr();
+    iter->second = nullptr;
+  }
+  backup_set_map_.destroy();
+  FOREACH(iter, backup_piece_map_)
+  {
+    iter->second->~ObAdminBackupPieceAttr();
+    iter->second = nullptr;
+  }
+  backup_piece_map_.destroy();
+  throttle_.destroy();
+  if (OB_NOT_NULL(fail_file_)) {
+    delete fail_file_;
+    fail_file_ = nullptr;
+  }
+  if (OB_NOT_NULL(fail_reason_)) {
+    delete fail_reason_;
+    fail_file_ = nullptr;
+  }
+}
+int ObAdminBackupValidationCtx::limit_and_sleep(const int64_t bytes)
+{
+  int64_t sleep_us = 0;
+  throttle_.limit_and_sleep(bytes, last_active_time_, INT64_MAX, sleep_us);
+  ATOMIC_SET(&last_active_time_, ObTimeUtility::current_time());
+  return OB_SUCCESS;
+}
+int ObAdminBackupValidationCtx::set_io_bandwidth(const int64_t bandwidth)
+{
+  return throttle_.set_rate(bandwidth * 1000 * 1000 / 8);
+}
+void ObAdminBackupValidationCtx::print_log_archive_validation_status()
+{
+  obsys::ObRLockGuard guard(lock_);
+  if (!aborted_) {
+    if (global_stat_.scheduled_lsn_range_count_ == 0) {
+      printf(CLEAR_LINE);
+      printf("%c Validating Meta info of Backup pieces", states_icon_[states_icon_pos_]);
+    } else {
+      printf(CLEAR_LINE);
+      printf("%c Total Pieces(Scheduled/Succeed): %ld/%ld, Total LSN "
+             "Range(Scheduled/Succeed): %ld/%ld",
+             states_icon_[states_icon_pos_], global_stat_.scheduled_piece_count_,
+             global_stat_.succeed_piece_count_, global_stat_.scheduled_lsn_range_count_,
+             global_stat_.succeed_lsn_range_count_);
+    }
+  } else {
+    printf(CLEAR_LINE);
+    printf("%c Corrupted File Found: %s, Maybe due to %s", states_icon_[states_icon_pos_],
+           fail_file_, fail_reason_);
+  }
+  states_icon_pos_ = (states_icon_pos_ + 1) % sizeof(states_icon_);
+  fflush(stdout);
+}
+void ObAdminBackupValidationCtx::print_data_backup_validation_status()
+{
+  obsys::ObRLockGuard guard(lock_);
+  if (!aborted_) {
+    if (global_stat_.scheduled_macro_block_count_ == 0) {
+      printf(CLEAR_LINE);
+      printf("%c Validating Meta info of Backup sets", states_icon_[states_icon_pos_]);
+    } else {
+      printf(CLEAR_LINE);
+      printf("%c Total Tablets(Scheduled/Succeed): %ld/%ld, Total Marco "
+             "Blocks(Scheduled/Succeed): %ld/%ld",
+             states_icon_[states_icon_pos_], global_stat_.scheduled_tablet_count_,
+             global_stat_.succeed_tablet_count_, global_stat_.scheduled_macro_block_count_,
+             global_stat_.succeed_macro_block_count_);
+    }
+  } else {
+    printf(CLEAR_LINE);
+    printf("%c Corrupted File Found: %s, Maybe due to %s", states_icon_[states_icon_pos_],
+           fail_file_, fail_reason_);
+  }
+  states_icon_pos_ = (states_icon_pos_ + 1) % sizeof(states_icon_);
+  fflush(stdout);
+}
+int ObAdminBackupValidationCtx::go_abort(const char *fail_file, const char *fail_reason)
+{
+  obsys::ObWLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  if (!aborted_) {
+    aborted_ = true;
+    if (OB_ISNULL(fail_file_ = static_cast<char *>(allocator_.alloc(strlen(fail_file) + 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+    } else if (OB_ISNULL(fail_reason_
+                         = static_cast<char *>(allocator_.alloc(strlen(fail_reason) + 1)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+    } else {
+      MEMCPY(fail_file_, fail_file, strlen(fail_file) + 1);
+      MEMCPY(fail_reason_, fail_reason, strlen(fail_reason) + 1);
+    }
+  }
+  return ret;
+}
+int ObAdminBackupValidationCtx::add_backup_set(int64_t backup_set_id)
+{
+  obsys::ObWLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  void *alc_ptr = nullptr;
+  ObAdminBackupSetAttr *backup_set_attr = nullptr;
+  if (OB_FAIL(backup_set_map_.get_refactored(backup_set_id, backup_set_attr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      // not exist, it's good
+      if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(ObAdminBackupSetAttr)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+      } else if (FALSE_IT(backup_set_attr = new (alc_ptr) ObAdminBackupSetAttr())) {
+      } else if (OB_FAIL(backup_set_map_.set_refactored(backup_set_id, backup_set_attr))) {
+        STORAGE_LOG(WARN, "fail to set backup set id", K(ret), K(backup_set_id));
+      } else if (OB_FAIL(processing_backup_set_id_array_.push_back(backup_set_id))) {
+        STORAGE_LOG(WARN, "fail to push back backup set id", K(ret), K(backup_set_id));
+      } else {
+        backup_set_attr = nullptr; // moved success
+        STORAGE_LOG(INFO, "succeed to add backup set id", K(ret), K(backup_set_id));
+      }
+      if (OB_NOT_NULL(backup_set_attr)) {
+        backup_set_attr->~ObAdminBackupSetAttr();
+        backup_set_attr = nullptr;
+      }
+    }
+  } else {
+    ret = OB_HASH_EXIST;
+  }
+  return ret;
+}
+int ObAdminBackupValidationCtx::get_backup_set_attr(int64_t backup_set_id,
+                                                    ObAdminBackupSetAttr *&backup_set_attr)
+{
+  obsys::ObRLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(backup_set_map_.get_refactored(backup_set_id, backup_set_attr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      STORAGE_LOG(WARN, "unexpected fail to get backup set id", K(ret), K(backup_set_id));
+    }
+  } else if (nullptr == backup_set_attr) {
+    STORAGE_LOG(WARN, "unexpected null backup set attr", K(ret), K(backup_set_id));
+    ret = OB_ERR_NULL_VALUE;
+  }
+  return ret;
+}
+int ObAdminBackupValidationCtx::add_ls(int64_t backup_set_id, const share::ObLSID &ls_id)
+{
+  obsys::ObWLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  void *alc_ptr = nullptr;
+  ObAdminBackupSetAttr *backup_set_attr = nullptr;
+  ObAdminLSAttr *ls_attr = nullptr;
+  if (OB_FAIL(get_backup_set_attr(backup_set_id, backup_set_attr))) {
+  } else if (OB_FAIL(backup_set_attr->ls_map_.get_refactored(ls_id, ls_attr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      // not exist, it's good
+      if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(ObAdminLSAttr)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+      } else if (FALSE_IT(ls_attr = new (alc_ptr) ObAdminLSAttr())) {
+      } else if (OB_FAIL(backup_set_attr->ls_map_.set_refactored(ls_id, ls_attr))) {
+        STORAGE_LOG(WARN, "fail to set ls id", K(ret), K(ls_id));
+      } else {
+        ls_attr = nullptr;
+        STORAGE_LOG(INFO, "succeed to add ls id", K(ret), K(ls_id));
+      }
+      if (OB_NOT_NULL(ls_attr)) {
+        ls_attr->~ObAdminLSAttr();
+        ls_attr = nullptr;
+      }
+    } else {
+      STORAGE_LOG(WARN, "unexpected fail to get ls id", K(ret), K(ls_id));
+    }
+  } else {
+    ret = OB_HASH_EXIST;
+  }
+  return ret;
+}
+int ObAdminBackupValidationCtx::get_ls_attr(int64_t backup_set_id, const share::ObLSID &ls_id,
+                                            ObAdminLSAttr *&ls_attr)
+{
+  obsys::ObRLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  ObAdminBackupSetAttr *backup_set_attr = nullptr;
+  if (OB_FAIL(get_backup_set_attr(backup_set_id, backup_set_attr))) {
+    STORAGE_LOG(WARN, "unexpected fail to get backup set id", K(ret), K(backup_set_id));
+  } else if (OB_FAIL(backup_set_attr->ls_map_.get_refactored(ls_id, ls_attr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ENTRY_NOT_EXIST;
+      STORAGE_LOG(WARN, "fail to get ls attr", K(ret), K(backup_set_id), K(ls_id));
+    } else {
+      STORAGE_LOG(WARN, "unexpected fail to get ls id", K(ret), K(ls_id));
+    }
+  } else if (nullptr == ls_attr) {
+    STORAGE_LOG(WARN, "unexpected null ls attr", K(ret), K(backup_set_id), K(ls_id));
+    ret = OB_ERR_NULL_VALUE;
+  }
+  return ret;
+}
+int ObAdminBackupValidationCtx::add_tablet(int64_t backup_set_id, const share::ObLSID &ls_id,
+                                           const share::ObBackupDataType &data_type,
+                                           const common::ObTabletID &tablet_id)
+{
+  obsys::ObWLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  void *alc_ptr = nullptr;
+  ObAdminBackupSetAttr *backup_set_attr = nullptr;
+  ObAdminLSAttr *ls_attr = nullptr;
+  ObAdminTabletAttr *tablet_attr = nullptr;
+  if (OB_FAIL(get_backup_set_attr(backup_set_id, backup_set_attr))) {
+    STORAGE_LOG(WARN, "unexpected fail to get backup set attr", K(ret), K(backup_set_id));
+  } else if (OB_FAIL(get_ls_attr(backup_set_id, ls_id, ls_attr))) {
+    STORAGE_LOG(WARN, "unexpected fail to get ls attr", K(ret), K(backup_set_id), K(ls_id));
+  } else if (ls_attr->ls_type_ == ObAdminLSAttr::DELETED) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls should not be deleted", K(ret), K(backup_set_id), K(ls_id));
+  } else {
+    switch (data_type.type_) {
+    case share::ObBackupDataType::BACKUP_SYS: {
+      if (OB_FAIL(ls_attr->sys_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          // not exist, it's
+          // good
+          if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(ObAdminTabletAttr)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+          } else if (FALSE_IT(tablet_attr = new (alc_ptr) ObAdminTabletAttr())) {
+          } else if (FALSE_IT(tablet_attr->ls_id_ = ls_id)) {
+          } else if (FALSE_IT(tablet_attr->data_type_ = data_type)) {
+          } else if (OB_FAIL(ls_attr->sys_tablet_map_.set_refactored(tablet_id, tablet_attr))) {
+            STORAGE_LOG(WARN, "fail to set tablet attr", K(ret), K(tablet_id));
+          } else if (OB_FAIL(global_stat_.add_scheduled_tablet_count_(1))) {
+            STORAGE_LOG(WARN, "fail to add scheduled tablet count", K(ret));
+          } else if (OB_FAIL(backup_set_attr->stat_.add_scheduled_tablet_count_(1))) {
+            STORAGE_LOG(WARN, "fail to add scheduled tablet count", K(ret));
+          } else {
+            tablet_attr = nullptr;
+            STORAGE_LOG(DEBUG, "succeed to add tablet", K(ret), K(tablet_id));
+          }
+          if (OB_NOT_NULL(tablet_attr)) {
+            tablet_attr->~ObAdminTabletAttr();
+            tablet_attr = nullptr;
+          }
+        } else {
+          STORAGE_LOG(WARN, "unexpected fail to get tablet attr", K(ret), K(tablet_id));
+        }
+      } else {
+        ret = OB_HASH_EXIST;
+      }
+      break;
+    }
+    case share::ObBackupDataType::BACKUP_MINOR: {
+      if (OB_FAIL(backup_set_attr->minor_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          // not exist, it's good
+          if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(ObAdminTabletAttr)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+          } else if (FALSE_IT(tablet_attr = new (alc_ptr) ObAdminTabletAttr())) {
+          } else if (FALSE_IT(tablet_attr->ls_id_ = ls_id)) {
+          } else if (FALSE_IT(tablet_attr->data_type_ = data_type)) {
+          } else if (OB_FAIL(backup_set_attr->minor_tablet_map_.set_refactored(tablet_id,
+                                                                               tablet_attr))) {
+            STORAGE_LOG(WARN, "fail to set tablet attr", K(ret), K(tablet_id));
+          } else if (OB_FAIL(backup_set_attr->minor_tablet_id_.push_back(tablet_id))) {
+            STORAGE_LOG(WARN, "fail to push back tablet id", K(ret), K(tablet_id));
+          } else if (OB_FAIL(global_stat_.add_scheduled_tablet_count_(1))) {
+            STORAGE_LOG(WARN, "fail to add scheduled tablet count", K(ret));
+          } else if (OB_FAIL(backup_set_attr->stat_.add_scheduled_tablet_count_(1))) {
+            STORAGE_LOG(WARN, "fail to add scheduled tablet count", K(ret));
+          } else {
+            tablet_attr = nullptr;
+            STORAGE_LOG(DEBUG, "succeed to add tablet id", K(ret), K(tablet_id));
+          }
+        } else {
+          STORAGE_LOG(WARN, "unexpected fail to get tablet id", K(ret), K(tablet_id));
+        }
+      } else {
+        ret = OB_HASH_EXIST;
+      }
+      break;
+    }
+    case share::ObBackupDataType::BACKUP_MAJOR: {
+      if (OB_FAIL(backup_set_attr->major_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          // not exist, it's good
+          if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(ObAdminTabletAttr)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+          } else if (FALSE_IT(tablet_attr = new (alc_ptr) ObAdminTabletAttr())) {
+          } else if (FALSE_IT(tablet_attr->ls_id_ = ls_id)) {
+          } else if (FALSE_IT(tablet_attr->data_type_ = data_type)) {
+          } else if (OB_FAIL(backup_set_attr->major_tablet_map_.set_refactored(tablet_id,
+                                                                               tablet_attr))) {
+            STORAGE_LOG(WARN, "fail to set tablet id", K(ret), K(tablet_id));
+          } else if (OB_FAIL(backup_set_attr->major_tablet_id_.push_back(tablet_id))) {
+            STORAGE_LOG(WARN, "fail to push back tablet id", K(ret), K(tablet_id));
+          } else if (OB_FAIL(global_stat_.add_scheduled_tablet_count_(1))) {
+            STORAGE_LOG(WARN, "fail to add scheduled tablet count", K(ret));
+          } else if (OB_FAIL(backup_set_attr->stat_.add_scheduled_tablet_count_(1))) {
+            STORAGE_LOG(WARN, "fail to add scheduled tablet count", K(ret));
+          } else {
+            tablet_attr = nullptr;
+            STORAGE_LOG(DEBUG, "succeed to add tablet id", K(ret), K(tablet_id));
+          }
+        } else {
+          STORAGE_LOG(WARN, "unexpected fail to get tablet id", K(ret), K(tablet_id));
+        }
+      } else {
+        ret = OB_HASH_EXIST;
+      }
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      break;
+    }
+  }
+
+  return ret;
+}
+int ObAdminBackupValidationCtx::get_tablet_attr(int64_t backup_set_id, const share::ObLSID &ls_id,
+                                                const share::ObBackupDataType &data_type,
+                                                const common::ObTabletID &tablet_id,
+                                                ObAdminTabletAttr *&tablet_attr)
+{
+  obsys::ObRLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  ObAdminBackupSetAttr *backup_set_attr = nullptr;
+  ObAdminLSAttr *ls_attr = nullptr;
+  if (OB_FAIL(get_backup_set_attr(backup_set_id, backup_set_attr))) {
+    STORAGE_LOG(WARN, "unexpected fail to get backup set attr", K(ret), K(backup_set_id));
+  } else if (OB_FAIL(get_ls_attr(backup_set_id, ls_id, ls_attr))) {
+    STORAGE_LOG(WARN, "unexpected fail to get ls attr", K(ret), K(backup_set_id), K(ls_id));
+  } else {
+    switch (data_type.type_) {
+    case share::ObBackupDataType::BACKUP_SYS: {
+      if (OB_FAIL(ls_attr->sys_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          STORAGE_LOG(WARN, "unexpected fail to get tablet attr", K(ret), K(tablet_id));
+        }
+      } else if (nullptr == tablet_attr) {
+        ret = OB_ERR_NULL_VALUE;
+      }
+      break;
+    }
+    case share::ObBackupDataType::BACKUP_MINOR: {
+      if (OB_FAIL(backup_set_attr->minor_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          STORAGE_LOG(WARN, "unexpected fail to get tablet attr", K(ret), K(tablet_id));
+        }
+      } else if (nullptr == tablet_attr) {
+        ret = OB_ERR_NULL_VALUE;
+      } else if (tablet_attr->ls_id_ != ls_id) {
+        // transfer detected
+        STORAGE_LOG(WARN, "unmatched ls id maybe transfered", K(ret), K(ls_id));
+        ret = OB_SUCCESS;
+      }
+      break;
+    }
+    case share::ObBackupDataType::BACKUP_MAJOR: {
+      if (OB_FAIL(backup_set_attr->major_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_ENTRY_NOT_EXIST;
+        } else {
+          STORAGE_LOG(WARN, "unexpected fail to get tablet attr", K(ret), K(tablet_id));
+        }
+      } else if (nullptr == tablet_attr) {
+        ret = OB_ERR_NULL_VALUE;
+      } else if (tablet_attr->ls_id_ != ls_id) {
+        // transfer detected
+        STORAGE_LOG(WARN, "unmatched ls id maybe transfered", K(ret), K(ls_id));
+        ret = OB_SUCCESS;
+      }
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      break;
+    }
+  }
+
+  return ret;
+}
+int ObAdminBackupValidationCtx::add_backup_piece(const share::ObPieceKey &backup_piece_key)
+{
+  obsys::ObWLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  void *alc_ptr = nullptr;
+  ObAdminBackupPieceAttr *backup_piece_attr = nullptr;
+  if (OB_FAIL(backup_piece_map_.get_refactored(backup_piece_key, backup_piece_attr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      // not exist, it's good
+      if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(ObAdminBackupPieceAttr)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+      } else if (FALSE_IT(backup_piece_attr = new (alc_ptr) ObAdminBackupPieceAttr())) {
+      } else if (OB_FAIL(backup_piece_map_.set_refactored(backup_piece_key, backup_piece_attr))) {
+        STORAGE_LOG(WARN, "fail to set backup piece key", K(ret), K(backup_piece_key));
+      } else if (OB_FAIL(processing_backup_piece_key_array_.push_back(backup_piece_key))) {
+        STORAGE_LOG(WARN, "fail to push back backup piece key", K(ret), K(backup_piece_key));
+      } else if (OB_FAIL(global_stat_.add_scheduled_piece_count_(1))) {
+        STORAGE_LOG(WARN, "fail to add scheduled piece count", K(ret));
+      } else {
+        backup_piece_attr = nullptr;
+        STORAGE_LOG(INFO, "succeed to add backup piece key", K(ret), K(backup_piece_key));
+      }
+      if (OB_NOT_NULL(backup_piece_attr)) {
+        backup_piece_attr->~ObAdminBackupPieceAttr();
+      }
+    }
+  } else {
+    ret = OB_HASH_EXIST;
+  }
+  return ret;
+}
+int ObAdminBackupValidationCtx::get_backup_piece_attr(const share::ObPieceKey &backup_piece_key,
+                                                      ObAdminBackupPieceAttr *&backup_piece_attr)
+{
+  obsys::ObRLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(backup_piece_map_.get_refactored(backup_piece_key, backup_piece_attr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      STORAGE_LOG(WARN, "unexpected fail to get backup piece attr", K(ret), K(backup_piece_key));
+    }
+  } else if (nullptr == backup_piece_attr) {
+    return OB_ERR_NULL_VALUE;
+  }
+  return ret;
+}
+int ObAdminBackupValidationCtx::add_ls(const share::ObPieceKey &backup_piece_key,
+                                       const share::ObLSID &ls_id)
+{
+  obsys::ObWLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  void *alc_ptr = nullptr;
+  ObAdminBackupPieceAttr *backup_piece_attr = nullptr;
+  ObAdminLSAttr *ls_attr = nullptr;
+  if (OB_FAIL(get_backup_piece_attr(backup_piece_key, backup_piece_attr))) {
+  } else if (OB_FAIL(backup_piece_attr->ls_map_.get_refactored(ls_id, ls_attr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      // not exist, it's good
+      if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(ObAdminLSAttr)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
+      } else if (FALSE_IT(ls_attr = new (alc_ptr) ObAdminLSAttr())) {
+      } else if (OB_FAIL(backup_piece_attr->ls_map_.set_refactored(ls_id, ls_attr))) {
+        STORAGE_LOG(WARN, "fail to set ls id", K(ret), K(ls_id));
+      } else {
+        ls_attr = nullptr;
+        STORAGE_LOG(INFO, "succeed to add ls id", K(ret), K(ls_id));
+      }
+      if (OB_NOT_NULL(ls_attr)) {
+        ls_attr->~ObAdminLSAttr();
+      }
+    }
+  } else {
+    ret = OB_HASH_EXIST;
+  }
+  return ret;
+}
+int ObAdminBackupValidationCtx::get_ls_attr(const share::ObPieceKey &backup_piece_key,
+                                            const share::ObLSID &ls_id, ObAdminLSAttr *&ls_attr)
+{
+  obsys::ObRLockGuard guard(lock_);
+  int ret = OB_SUCCESS;
+  ObAdminBackupPieceAttr *backup_piece_attr = nullptr;
+  if (OB_FAIL(get_backup_piece_attr(backup_piece_key, backup_piece_attr))) {
+  } else if (OB_FAIL(backup_piece_attr->ls_map_.get_refactored(ls_id, ls_attr))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else {
+      STORAGE_LOG(WARN, "unexpected fail to get ls attr", K(ret), K(ls_id));
+    }
+  } else if (nullptr == ls_attr) {
+    return OB_ERR_NULL_VALUE;
+  }
+  return ret;
+}
+}; // namespace tools
+}; // namespace oceanbase

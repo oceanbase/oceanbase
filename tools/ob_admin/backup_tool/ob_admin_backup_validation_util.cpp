@@ -1,0 +1,344 @@
+/**
+ * Copyright (c) 2024 OceanBase
+ * OceanBase CE is licensed under Mulan PubL v2.
+ * You can use this software according to the terms and conditions of the Mulan
+ * PubL v2. You may obtain a copy of Mulan PubL v2 at:
+ *          http://license.coscl.org.cn/MulanPubL-2.0
+ * THIS SOFTWARE IS PROVIDED ON AN "AS IS" BASIS, WITHOUT WARRANTIES OF ANY
+ * KIND, EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
+ * NON-INFRINGEMENT, MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE. See the
+ * Mulan PubL v2 for more details.
+ */
+
+#include "ob_admin_backup_validation_util.h"
+#include "storage/backup/ob_backup_index_store.h"
+#include "storage/backup/ob_backup_iterator.h"
+#include "storage/backup/ob_backup_restore_util.h"
+
+namespace oceanbase
+{
+namespace tools
+{
+// static functions
+// read helper
+int ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
+    const char *str, common::ObArray<common::ObString> &str_array)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(str) || strlen(str) == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(str));
+  } else {
+    int start_pos = 0;
+    int end_pos = strlen(str) - 1;
+    while (start_pos <= end_pos) {
+      int item_start_pos = start_pos;
+      // Find the position of the comma or the end of the content part
+      while (start_pos <= end_pos && str[start_pos] != ',') {
+        start_pos++;
+      }
+      int item_end_pos = start_pos - 1;
+      if (item_start_pos <= item_end_pos) {
+        common::ObString item(item_end_pos - item_start_pos + 1, str + item_start_pos);
+        if (OB_FAIL(str_array.push_back(item))) {
+          STORAGE_LOG(WARN, "failed to push back item", K(ret));
+          break;
+        }
+      }
+      // Move to the next item, skip the comma
+      start_pos++;
+    }
+  }
+
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::check_dir_exist(const char *full_path,
+                                                 const share::ObBackupStorageInfo *storage_info,
+                                                 bool &is_empty_dir)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  return util.is_empty_directory(full_path, storage_info, is_empty_dir);
+}
+int ObAdminBackupValidationUtil::check_file_exist(const char *full_path,
+                                                  const share::ObBackupStorageInfo *storage_info,
+                                                  bool &exist)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  return util.adaptively_is_exist(full_path, storage_info, exist);
+}
+int ObAdminBackupValidationUtil::get_file_length(const char *full_path,
+                                                 const share::ObBackupStorageInfo *storage_info,
+                                                 int64_t &file_length)
+{
+  common::ObBackupIoAdapter util;
+  return util.adaptively_get_file_length(full_path, storage_info, file_length);
+}
+int ObAdminBackupValidationUtil::get_backup_common_header(
+    blocksstable::ObBufferReader &buffer_reader, share::ObBackupCommonHeader &header)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(buffer_reader.read(header))) {
+    STORAGE_LOG(WARN, "failed to read common header", K(ret));
+  } else if (OB_FAIL(header.check_valid())) {
+    STORAGE_LOG(WARN, "common header is not valid", K(ret));
+  } else if (common::ObCompressorType::NONE_COMPRESSOR != header.compressor_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "compression is currently not supported", K(ret));
+  } else if (header.data_length_ > buffer_reader.remain()) {
+    ret = OB_BUF_NOT_ENOUGH;
+    STORAGE_LOG(WARN, "buffer reader not enough", K(ret));
+  } else if (OB_FAIL(header.check_data_checksum(buffer_reader.current(), header.data_length_))) {
+    STORAGE_LOG(WARN, "failed to check data checksum", K(ret), K(buffer_reader));
+  }
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::get_tenant_meta_index_retry_id(
+    const share::ObBackupDest &backup_set_dest, const share::ObBackupDataType &backup_data_type,
+    const backup::ObBackupFileType &backup_file_type, const int64_t turn_id, int64_t &retry_id)
+{
+  int ret = OB_SUCCESS;
+  retry_id = 0;
+  ObArray<int64_t> id_list;
+  const char *file_name_prefix = nullptr;
+  share::ObBackupPath full_path;
+  common::ObBackupIoAdapter util;
+  if (OB_FAIL(get_tenant_index_file_name_prefix_(backup_data_type, backup_file_type,
+                                                 file_name_prefix))) {
+  } else if (OB_SUCC(ret)) {
+    backup::ObBackupDataFileRangeOp file_range_op(file_name_prefix);
+    if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
+            backup_set_dest, backup_data_type, turn_id, full_path))) {
+    } else if (OB_FAIL(util.list_files(full_path.get_obstr(), backup_set_dest.get_storage_info(),
+                                       file_range_op))) {
+      STORAGE_LOG(WARN, "failed to list files", K(ret), K(full_path), K(file_name_prefix));
+    } else if (OB_FAIL(file_range_op.get_file_list(id_list))) {
+      STORAGE_LOG(WARN, "failed to get file list", K(ret), K(full_path), K(file_name_prefix));
+    } else if (id_list.empty()) {
+      ret = OB_ENTRY_NOT_EXIST;
+      STORAGE_LOG(WARN, "id_list is empty", K(ret), K(full_path), K(file_name_prefix));
+    } else {
+      int64_t largest_retry_id = -1;
+      FOREACH_CNT_X(tmp_id, id_list, OB_SUCC(ret))
+      {
+        if (OB_ISNULL(tmp_id)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "tmp_id is null", K(ret));
+        } else if (*tmp_id > largest_retry_id) {
+          largest_retry_id = *tmp_id;
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (-1 == largest_retry_id) {
+          ret = OB_ENTRY_NOT_EXIST;
+          STORAGE_LOG(WARN, "largest_retry_id should not be -1", K(ret), K(full_path),
+                      K(file_name_prefix));
+        } else {
+          retry_id = largest_retry_id;
+          STORAGE_LOG(INFO, "succeed to get max tenant index retry id", K(full_path),
+                      K(largest_retry_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::get_tenant_index_file_name_prefix_(
+    const share::ObBackupDataType &backup_data_type,
+    const backup::ObBackupFileType &backup_file_type, const char *&file_name_prefix)
+{
+  int ret = OB_SUCCESS;
+  file_name_prefix = nullptr;
+  if (backup_data_type.is_minor_backup()) {
+    switch (backup_file_type) {
+    case backup::ObBackupFileType::BACKUP_MACRO_RANGE_INDEX_FILE:
+      file_name_prefix = share::OB_STR_TENANT_MINOR_MACRO_INDEX;
+      break;
+    case backup::ObBackupFileType::BACKUP_META_INDEX_FILE:
+      file_name_prefix = share::OB_STR_TENANT_MINOR_META_INDEX;
+      break;
+    case backup::ObBackupFileType::BACKUP_SEC_META_INDEX_FILE:
+      file_name_prefix = share::OB_STR_TENANT_MINOR_SEC_META_INDEX;
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "backup file type not correct", K(ret), K(backup_file_type));
+    }
+  } else if (backup_data_type.is_major_backup()) {
+    switch (backup_file_type) {
+    case backup::ObBackupFileType::BACKUP_MACRO_RANGE_INDEX_FILE:
+      file_name_prefix = share::OB_STR_TENANT_MAJOR_MACRO_INDEX;
+      break;
+    case backup::ObBackupFileType::BACKUP_META_INDEX_FILE:
+      file_name_prefix = share::OB_STR_TENANT_MAJOR_META_INDEX;
+      break;
+    case backup::ObBackupFileType::BACKUP_SEC_META_INDEX_FILE:
+      file_name_prefix = share::OB_STR_TENANT_MAJOR_SEC_META_INDEX;
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "backup file type not correct", K(ret), K(backup_file_type));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup data type not correct", K(ret), K(backup_data_type));
+  }
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::read_tablet_meta(const share::ObBackupDest &backup_set_dest,
+                                                  const backup::ObBackupMetaIndex &meta_index,
+                                                  const share::ObBackupDataType &backup_data_type,
+                                                  backup::ObBackupTabletMeta &tablet_meta,
+                                                  ObAdminBackupValidationCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath full_path;
+
+  if (!meta_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(meta_index));
+  } else if (backup::BACKUP_TABLET_META != meta_index.meta_key_.meta_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "meta type do not match", K(meta_index));
+  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(
+                 backup_set_dest, meta_index.ls_id_, backup_data_type, meta_index.turn_id_,
+                 meta_index.retry_id_, meta_index.file_id_, full_path))) {
+    STORAGE_LOG(WARN, "failed to get macro block backup path", K(ret), K(backup_set_dest),
+                K(meta_index));
+  } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(meta_index.length_))) {
+  } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_tablet_meta(
+                 full_path.get_obstr(), backup_set_dest.get_storage_info(), backup_data_type,
+                 meta_index, tablet_meta))) {
+    STORAGE_LOG(WARN, "failed to read tablet meta", K(ret), K(full_path));
+  } else {
+    STORAGE_LOG(DEBUG, "succeed to read tablet meta", K(ret), K(full_path),
+                K(meta_index.meta_key_.tablet_id_));
+  }
+
+  if (OB_NOT_NULL(ctx) && OB_FAIL(ret)) {
+    ctx->go_abort(full_path.get_ptr(), "File not exist or physical corrputed");
+  }
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::read_sstable_metas(
+    const share::ObBackupDest &backup_set_dest, const backup::ObBackupMetaIndex &meta_index,
+    const share::ObBackupDataType &backup_data_type,
+    common::ObArray<backup::ObBackupSSTableMeta> &sstable_metas, ObAdminBackupValidationCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath full_path;
+
+  if (!meta_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(meta_index));
+  } else if (backup::BACKUP_SSTABLE_META != meta_index.meta_key_.meta_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "meta type do not match", K(meta_index));
+  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(
+                 backup_set_dest, meta_index.ls_id_, backup_data_type, meta_index.turn_id_,
+                 meta_index.retry_id_, meta_index.file_id_, full_path))) {
+    STORAGE_LOG(WARN, "failed to get macro block backup path", K(ret), K(backup_set_dest),
+                K(meta_index));
+  } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(meta_index.length_))) {
+  } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(
+                 full_path.get_obstr(), backup_set_dest.get_storage_info(), meta_index,
+                 sstable_metas))) {
+    STORAGE_LOG(WARN, "failed to read sstable metas", K(ret), K(full_path));
+  } else {
+    STORAGE_LOG(DEBUG, "succeed to read sstable meta", K(ret), K(full_path),
+                K(meta_index.meta_key_.tablet_id_), K(sstable_metas.count()));
+  }
+  if (OB_NOT_NULL(ctx) && OB_FAIL(ret)) {
+    ctx->go_abort(full_path.get_ptr(), "File not exist or physical corrputed");
+  }
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::read_macro_block_id_mappings_meta(
+    const share::ObBackupDest &backup_set_dest, const backup::ObBackupMetaIndex &meta_index,
+    const share::ObBackupDataType &backup_data_type,
+    backup::ObBackupMacroBlockIDMappingsMeta &id_mappings_meta, ObAdminBackupValidationCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  share::ObBackupPath full_path;
+
+  if (!meta_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(meta_index));
+  } else if (backup::BACKUP_MACRO_BLOCK_ID_MAPPING_META != meta_index.meta_key_.meta_type_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "meta type do not match", K(meta_index));
+  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(
+                 backup_set_dest, meta_index.ls_id_, backup_data_type, meta_index.turn_id_,
+                 meta_index.retry_id_, meta_index.file_id_, full_path))) {
+    STORAGE_LOG(WARN, "failed to get macro block backup path", K(ret), K(backup_set_dest),
+                K(meta_index));
+  } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(meta_index.length_))) {
+  } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_id_mapping_metas(
+                 full_path.get_obstr(), backup_set_dest.get_storage_info(), meta_index,
+                 id_mappings_meta))) {
+    STORAGE_LOG(WARN, "failed to read sstable metas", K(ret), K(full_path));
+  } else {
+    STORAGE_LOG(DEBUG, "succeed to read id_mappings_meta", K(ret), K(full_path),
+                K(meta_index.meta_key_.tablet_id_));
+  }
+  if (OB_NOT_NULL(ctx) && OB_FAIL(ret)) {
+    ctx->go_abort(full_path.get_ptr(), "File not exist or physical corrputed");
+  }
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::read_macro_block_data(
+    const share::ObBackupDest &backup_set_dest, const backup::ObBackupMacroBlockIndex &macro_index,
+    const share::ObBackupDataType &backup_data_type, blocksstable::ObBufferReader &data_buffer,
+    ObAdminBackupValidationCtx *ctx, const int64_t align_size)
+{
+  int ret = OB_SUCCESS;
+  char *buf = nullptr;
+  share::ObBackupPath full_path;
+  common::ObBackupIoAdapter util;
+  common::ObArenaAllocator tmp_allocator;
+  blocksstable::ObBufferReader buffer_reader;
+  int64_t read_size = -1;
+
+  if (align_size <= 0 || !common::is_io_aligned(macro_index.length_)
+      || !common::is_io_aligned(align_size)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(ret), K(macro_index), K(align_size));
+  } else if (!macro_index.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(macro_index));
+  } else if (OB_FAIL(ObBackupPathUtil::get_macro_block_backup_path(
+                 backup_set_dest, macro_index.ls_id_, backup_data_type, macro_index.turn_id_,
+                 macro_index.retry_id_, macro_index.file_id_, full_path))) {
+    STORAGE_LOG(WARN, "failed to get macro block backup path", K(ret), K(backup_set_dest),
+                K(macro_index));
+  } else if (OB_ISNULL(buf = reinterpret_cast<char *>(tmp_allocator.alloc(macro_index.length_)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc buffer", K(ret), K(macro_index));
+  } else {
+    blocksstable::ObBufferReader buffer_reader(buf, macro_index.length_);
+    if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(macro_index.length_))) {
+    } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_data(
+                   full_path.get_obstr(), backup_set_dest.get_storage_info(), macro_index,
+                   DIO_READ_ALIGN_SIZE /*align_size*/, buffer_reader, data_buffer))) {
+      STORAGE_LOG(WARN, "failed to read macro blocks", K(ret), K(full_path));
+    } else {
+      STORAGE_LOG(DEBUG, "succeed to read macro data", K(ret), K(full_path),
+                  K(macro_index.logic_id_));
+    }
+  }
+  if (OB_NOT_NULL(ctx) && OB_FAIL(ret)) {
+    ctx->go_abort(full_path.get_ptr(), "File not exist or physical corrputed");
+  }
+  return ret;
+}
+}; // namespace tools
+}; // namespace oceanbase

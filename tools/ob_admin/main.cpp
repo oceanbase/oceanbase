@@ -22,6 +22,7 @@
 #include "io_bench/ob_admin_io_executor.h"
 #include "server_tool/ob_admin_server_executor.h"
 #include "backup_tool/ob_admin_dump_backup_data_executor.h"
+#include "backup_tool/ob_admin_backup_validation_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "tools/ob_admin/dump_key/ob_admin_dump_key_executor.h"
 #endif
@@ -50,7 +51,10 @@ void print_usage()
          "       ob_admin -h127.0.0.1 -p2883 xxx\n"
          "       ob_admin -h127.0.0.1 -p2883 (-sintl/-ssm -mbkmi/-mlocal) [command]\n"
          "              ## The options in parentheses take effect when ssl enabled.\n"
-         "       ob_admin -S unix_domain_socket_path xxx");
+         "       ob_admin -S unix_domain_socket_path xxx\n"
+         "       ob_admin validate_database\n"
+         "       ob_admin validate_backuppiece\n"
+         "       ob_admin validate_backupset\n");
 }
 
 int get_log_base_directory(char *log_file_name, const int64_t log_file_name_len,
@@ -75,8 +79,10 @@ int get_log_base_directory(char *log_file_name, const int64_t log_file_name_len,
       fprintf(stderr, "\nThe OB_ADMIN_LOG_DIR environment variable not found, we will not generate ob_admin.log\n"
                       "If log files are required, please notice that log files should not be outputted to\n"
                       "OceanBase's clog directory.(for example, export OB_ADMIN_LOG_DIR=/tmp)\n");
-      ret = OB_ENTRY_NOT_EXIST;
-    } else if (FALSE_IT(ob_admin_log_dir_len = strlen(ob_admin_log_dir))) {
+      fprintf(stderr, "\nBy default, OB_ADMIN_LOG_DIR will be set to current directory\n");
+      ob_admin_log_dir = ".";
+    }
+    if (FALSE_IT(ob_admin_log_dir_len = strlen(ob_admin_log_dir))) {
     } else if (OB_FAIL(FileDirectoryUtils::is_directory(ob_admin_log_dir, is_directory))) {
       fprintf(stderr, "\nCheck is_directory failed, we will not generate ob_admin.log(errno:%d)\n", ret);
     } else if (!is_directory) {
@@ -149,6 +155,12 @@ int main(int argc, char *argv[])
       executor = new ObAdminIOAdapterBenchmarkExecutor();
     } else if (0 == strcmp("test_io_device", argv[1])) {
       executor = new ObAdminTestIODeviceExecutor();
+    } else if (0 == strcmp("validate_database", argv[1])) {
+      executor = new ObAdminBackupValidationExecutor(ObAdminBackupValidationType::DATABASE_VALIDATION);
+    } else if (0 == strcmp("validate_backupset", argv[1])) {
+      executor = new ObAdminBackupValidationExecutor(ObAdminBackupValidationType::BACKUPSET_VALIDATION);
+    } else if (0 == strcmp("validate_backuppiece", argv[1])) {
+      executor = new ObAdminBackupValidationExecutor(ObAdminBackupValidationType::BACKUPPIECE_VALIDATION);
     } else if (0 == strncmp("-h", argv[1], 2) || 0 == strncmp("-S", argv[1], 2)) {
       executor = new ObAdminServerExecutor();
     } else {
