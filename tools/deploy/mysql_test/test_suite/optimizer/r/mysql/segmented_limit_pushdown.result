@@ -1,0 +1,2045 @@
+drop table if exists t1;
+drop table if exists t2;
+drop procedure if exists InsertTestData;
+create table t1(c1 int, c2 int, c3 int);
+create table t2(c1 int, c2 int, c3 int);
+create index i12 on t1(c1, c2);
+CREATE PROCEDURE InsertTestData()
+BEGIN
+DECLARE i INT DEFAULT 1;
+DECLARE j INT DEFAULT 1;
+WHILE i <= 10 DO
+SET j = 0;
+WHILE j <= 1000 DO
+INSERT INTO t1 VALUES (i, 3, j);
+SET j = j + 1;
+END WHILE;
+SET i = i + 1;
+END WHILE;
+END //
+CALL InsertTestData();
+insert into t2(select * from t1);
+insert into t1 values(1, 2, 1);
+insert into t1 values(2, 1, 1);
+insert into t1 values(3, 0, 1);
+call dbms_stats.gather_table_stats(NULL, 't1');
+call dbms_stats.gather_table_stats(NULL, 't2');
+select count(*) from t1;
+count(*)
+10013
+select count(*) from t2;
+count(*)
+10010
+select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=====================================================================
+|ID|OPERATOR                          |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TOP-N SORT                        |       |2       |104         |
+|1 |└─NESTED-LOOP JOIN                |       |8       |104         |
+|2 |  ├─VALUES TABLE ACCESS           |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                  |VIEW1  |2       |26          |
+|4 |    └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  4 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=====================================================================
+|ID|OPERATOR                          |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TOP-N SORT                        |       |2       |104         |
+|1 |└─NESTED-LOOP JOIN                |       |8       |104         |
+|2 |  ├─VALUES TABLE ACCESS           |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                  |VIEW1  |2       |26          |
+|4 |    └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  4 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=================================================================
+|ID|OPERATOR                      |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |LIMIT                         |       |2       |40          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN  |       |2       |40          |
+|2 |  ├─SUBPLAN SCAN              |VIEW3  |1       |40          |
+|3 |  │ └─LIMIT                   |       |1       |40          |
+|4 |  │   └─MERGE DISTINCT        |       |1       |40          |
+|5 |  │     └─SORT                |       |1       |40          |
+|6 |  │       └─UNION ALL         |       |8       |39          |
+|7 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|8 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|9 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|10|  │         └─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|11|  └─MATERIAL                  |       |2       |3           |
+|12|    └─SUBPLAN SCAN            |VIEW2  |2       |3           |
+|13|      └─TABLE FULL SCAN       |t2     |2       |3           |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])])
+  5 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC])
+  6 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+  7 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+  9 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+ 10 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+ 11 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+ 12 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 13 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select t1.c1, t1.c2 from t1 where t1.c1 in (1, 2, 3, 4, 5) order by t1.c2 limit 2;
+c1	c2
+3	0
+2	1
+select /*+segmented_limit_pushdown*/ t1.c1, t1.c2 from t1 where t1.c1 in (1, 2, 3, 4, 5) order by t1.c2 limit 2;
+c1	c2
+3	0
+2	1
+select /*+no_segmented_limit_pushdown*/ t1.c1, t1.c2 from t1 where t1.c1 in (1, 2, 3, 4, 5) order by t1.c2 limit 2;
+c1	c2
+3	0
+2	1
+explain select t1.c1, t1.c3 from t1 where t1.c1 in (1, 2, 3, 4, 5) order by t1.c2 limit 2;
+Query Plan
+=====================================================================
+|ID|OPERATOR                          |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TOP-N SORT                        |       |2       |130         |
+|1 |└─NESTED-LOOP JOIN                |       |10      |130         |
+|2 |  ├─VALUES TABLE ACCESS           |VIEW2  |5       |1           |
+|3 |  └─SUBPLAN SCAN                  |VIEW1  |2       |26          |
+|4 |    └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  4 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |LIMIT                                   |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN CARTESIAN            |       |2       |105         |
+|2 |  ├─SUBPLAN SCAN                        |VIEW1  |1       |104         |
+|3 |  │ └─TOP-N SORT                        |       |1       |104         |
+|4 |  │   └─NESTED-LOOP JOIN                |       |8       |104         |
+|5 |  │     ├─VALUES TABLE ACCESS           |VIEW4  |4       |1           |
+|6 |  │     └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|7 |  │       └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+|8 |  └─MATERIAL                            |       |2       |3           |
+|9 |    └─SUBPLAN SCAN                      |VIEW2  |2       |3           |
+|10|      └─TABLE FULL SCAN                 |t2     |2       |3           |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  3 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW4.column_0(:0)]), use_batch=false
+  5 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=================================================================
+|ID|OPERATOR                      |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |LIMIT                         |       |2       |40          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN  |       |2       |40          |
+|2 |  ├─SUBPLAN SCAN              |VIEW3  |1       |40          |
+|3 |  │ └─LIMIT                   |       |1       |40          |
+|4 |  │   └─MERGE DISTINCT        |       |1       |40          |
+|5 |  │     └─SORT                |       |1       |40          |
+|6 |  │       └─UNION ALL         |       |8       |39          |
+|7 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|8 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|9 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|10|  │         └─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|11|  └─MATERIAL                  |       |2       |3           |
+|12|    └─SUBPLAN SCAN            |VIEW2  |2       |3           |
+|13|      └─TABLE FULL SCAN       |t2     |2       |3           |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])])
+  5 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC])
+  6 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+  7 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+  9 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+ 10 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+ 11 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+ 12 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 13 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	1	3	0
+3	0	1	1	3	1
+select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	1	3	0
+3	0	1	1	3	1
+select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	1	3	0
+3	0	1	1	3	1
+explain select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |LIMIT                                   |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN CARTESIAN            |       |2       |105         |
+|2 |  ├─SUBPLAN SCAN                        |VIEW1  |1       |104         |
+|3 |  │ └─TOP-N SORT                        |       |1       |104         |
+|4 |  │   └─NESTED-LOOP JOIN                |       |8       |104         |
+|5 |  │     ├─VALUES TABLE ACCESS           |VIEW4  |4       |1           |
+|6 |  │     └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|7 |  │       └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+|8 |  └─MATERIAL                            |       |2       |3           |
+|9 |    └─SUBPLAN SCAN                      |VIEW2  |2       |3           |
+|10|      └─TABLE FULL SCAN                 |t2     |2       |3           |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  3 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW4.column_0(:0)]), use_batch=false
+  5 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |LIMIT                                   |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN CARTESIAN            |       |2       |105         |
+|2 |  ├─SUBPLAN SCAN                        |VIEW1  |1       |104         |
+|3 |  │ └─TOP-N SORT                        |       |1       |104         |
+|4 |  │   └─NESTED-LOOP JOIN                |       |8       |104         |
+|5 |  │     ├─VALUES TABLE ACCESS           |VIEW4  |4       |1           |
+|6 |  │     └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|7 |  │       └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+|8 |  └─MATERIAL                            |       |2       |3           |
+|9 |    └─SUBPLAN SCAN                      |VIEW2  |2       |3           |
+|10|      └─TABLE FULL SCAN                 |t2     |2       |3           |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  3 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW4.column_0(:0)]), use_batch=false
+  5 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=================================================================
+|ID|OPERATOR                      |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |LIMIT                         |       |2       |40          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN  |       |2       |40          |
+|2 |  ├─SUBPLAN SCAN              |VIEW3  |1       |40          |
+|3 |  │ └─LIMIT                   |       |1       |40          |
+|4 |  │   └─MERGE DISTINCT        |       |1       |40          |
+|5 |  │     └─SORT                |       |1       |40          |
+|6 |  │       └─UNION ALL         |       |8       |39          |
+|7 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|8 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|9 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|10|  │         └─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|11|  └─MATERIAL                  |       |2       |3           |
+|12|    └─SUBPLAN SCAN            |VIEW2  |2       |3           |
+|13|      └─TABLE FULL SCAN       |t2     |2       |3           |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])])
+  5 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC])
+  6 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+  7 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+  9 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+ 10 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+ 11 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+ 12 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 13 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 left join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	1
+3	0	1	3	3	0
+select /*+segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	1
+3	0	1	3	3	0
+select /*+no_segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	1
+3	0	1	3	3	0
+explain select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |LIMIT                                   |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN CARTESIAN            |       |2       |105         |
+|2 |  ├─SUBPLAN SCAN                        |VIEW1  |1       |104         |
+|3 |  │ └─TOP-N SORT                        |       |1       |104         |
+|4 |  │   └─NESTED-LOOP JOIN                |       |8       |104         |
+|5 |  │     ├─VALUES TABLE ACCESS           |VIEW4  |4       |1           |
+|6 |  │     └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|7 |  │       └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+|8 |  └─MATERIAL                            |       |2       |3           |
+|9 |    └─SUBPLAN SCAN                      |VIEW2  |2       |3           |
+|10|      └─TABLE FULL SCAN                 |t2     |2       |3           |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  3 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW4.column_0(:0)]), use_batch=false
+  5 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |LIMIT                                   |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN CARTESIAN            |       |2       |105         |
+|2 |  ├─SUBPLAN SCAN                        |VIEW1  |1       |104         |
+|3 |  │ └─TOP-N SORT                        |       |1       |104         |
+|4 |  │   └─NESTED-LOOP JOIN                |       |8       |104         |
+|5 |  │     ├─VALUES TABLE ACCESS           |VIEW4  |4       |1           |
+|6 |  │     └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|7 |  │       └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+|8 |  └─MATERIAL                            |       |2       |3           |
+|9 |    └─SUBPLAN SCAN                      |VIEW2  |2       |3           |
+|10|      └─TABLE FULL SCAN                 |t2     |2       |3           |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  3 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW4.column_0(:0)]), use_batch=false
+  5 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=================================================================
+|ID|OPERATOR                      |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |LIMIT                         |       |2       |40          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN  |       |2       |40          |
+|2 |  ├─SUBPLAN SCAN              |VIEW3  |1       |40          |
+|3 |  │ └─LIMIT                   |       |1       |40          |
+|4 |  │   └─MERGE DISTINCT        |       |1       |40          |
+|5 |  │     └─SORT                |       |1       |40          |
+|6 |  │       └─UNION ALL         |       |8       |39          |
+|7 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|8 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|9 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|10|  │         └─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|11|  └─MATERIAL                  |       |2       |3           |
+|12|    └─SUBPLAN SCAN            |VIEW2  |2       |3           |
+|13|      └─TABLE FULL SCAN       |t2     |2       |3           |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  1 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])])
+  5 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC])
+  6 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+  7 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+  9 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+ 10 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+ 11 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+ 12 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 13 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	1
+3	0	1	3	3	0
+select /*+segmented_limit_pushdown*/ * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	1
+3	0	1	3	3	0
+select /*+no_segmented_limit_pushdown*/ * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	0
+3	0	1	3	3	1
+explain select * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |TOP-N SORT                              |       |2       |95          |
+|1 |└─NESTED-LOOP JOIN                      |       |8       |94          |
+|2 |  ├─VALUES TABLE ACCESS                 |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                        |VIEW1  |2       |23          |
+|4 |    └─LIMIT                             |       |2       |23          |
+|5 |      └─NESTED-LOOP JOIN CARTESIAN      |       |2       |23          |
+|6 |        ├─SUBPLAN SCAN                  |VIEW3  |1       |23          |
+|7 |        │ └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|1       |23          |
+|8 |        └─MATERIAL                      |       |2       |475         |
+|9 |          └─SUBPLAN SCAN                |VIEW4  |2       |475         |
+|10|            └─TABLE FULL SCAN           |t2     |2       |475         |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3])
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  5 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      access([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter([t2.c1 = :0]), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+segmented_limit_pushdown*/ * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |TOP-N SORT                              |       |2       |95          |
+|1 |└─NESTED-LOOP JOIN                      |       |8       |94          |
+|2 |  ├─VALUES TABLE ACCESS                 |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                        |VIEW1  |2       |23          |
+|4 |    └─LIMIT                             |       |2       |23          |
+|5 |      └─NESTED-LOOP JOIN CARTESIAN      |       |2       |23          |
+|6 |        ├─SUBPLAN SCAN                  |VIEW3  |1       |23          |
+|7 |        │ └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|1       |23          |
+|8 |        └─MATERIAL                      |       |2       |475         |
+|9 |          └─SUBPLAN SCAN                |VIEW4  |2       |475         |
+|10|            └─TABLE FULL SCAN           |t2     |2       |475         |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3])
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  5 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      access([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter([t2.c1 = :0]), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+==========================================================================
+|ID|OPERATOR                               |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |SUBPLAN SCAN                           |VIEW1  |2       |31          |
+|1 |└─LIMIT                                |       |2       |31          |
+|2 |  └─MERGE DISTINCT                     |       |2       |31          |
+|3 |    └─SORT                             |       |2       |31          |
+|4 |      └─UNION ALL                      |       |8       |28          |
+|5 |        ├─LIMIT                        |       |2       |7           |
+|6 |        │ └─NESTED-LOOP JOIN CARTESIAN |       |2       |7           |
+|7 |        │   ├─SUBPLAN SCAN             |VIEW3  |1       |7           |
+|8 |        │   │ └─TABLE RANGE SCAN       |t1(i12)|1       |7           |
+|9 |        │   └─MATERIAL                 |       |2       |498         |
+|10|        │     └─SUBPLAN SCAN           |VIEW2  |2       |498         |
+|11|        │       └─TABLE FULL SCAN      |t2     |2       |498         |
+|12|        ├─LIMIT                        |       |2       |7           |
+|13|        │ └─NESTED-LOOP JOIN CARTESIAN |       |2       |7           |
+|14|        │   ├─SUBPLAN SCAN             |VIEW5  |1       |7           |
+|15|        │   │ └─TABLE RANGE SCAN       |t1(i12)|1       |7           |
+|16|        │   └─MATERIAL                 |       |2       |498         |
+|17|        │     └─SUBPLAN SCAN           |VIEW4  |2       |498         |
+|18|        │       └─TABLE FULL SCAN      |t2     |2       |498         |
+|19|        ├─LIMIT                        |       |2       |7           |
+|20|        │ └─NESTED-LOOP JOIN CARTESIAN |       |2       |7           |
+|21|        │   ├─SUBPLAN SCAN             |VIEW7  |1       |7           |
+|22|        │   │ └─TABLE RANGE SCAN       |t1(i12)|1       |7           |
+|23|        │   └─MATERIAL                 |       |2       |498         |
+|24|        │     └─SUBPLAN SCAN           |VIEW6  |2       |498         |
+|25|        │       └─TABLE FULL SCAN      |t2     |2       |498         |
+|26|        └─LIMIT                        |       |2       |7           |
+|27|          └─NESTED-LOOP JOIN CARTESIAN |       |2       |7           |
+|28|            ├─SUBPLAN SCAN             |VIEW9  |1       |7           |
+|29|            │ └─TABLE RANGE SCAN       |t1(i12)|1       |7           |
+|30|            └─MATERIAL                 |       |2       |498         |
+|31|              └─SUBPLAN SCAN           |VIEW8  |2       |498         |
+|32|                └─TABLE FULL SCAN      |t2     |2       |498         |
+==========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3])
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC], [UNION([5]), ASC], [UNION([6]), ASC], [UNION([7]), ASC], [UNION([8]),
+       ASC])
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil), rowset=16
+  5 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3], [VIEW2.t2.__pk_increment], [VIEW3.t1.__pk_increment]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3], [VIEW2.t2.__pk_increment], [VIEW3.t1.__pk_increment]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  7 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW3.t1.__pk_increment]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW3.t1.__pk_increment])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  9 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3], [VIEW2.t2.__pk_increment]), filter(nil), rowset=16
+ 10 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3], [VIEW2.t2.__pk_increment]), filter(nil), rowset=16
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3], [VIEW2.t2.__pk_increment])
+ 11 - output([t2.c1], [t2.c2], [t2.c3], [t2.__pk_increment]), filter([1 = t2.c1]), rowset=16
+      access([t2.__pk_increment], [t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 12 - output([VIEW5.t1.c2], [VIEW5.t1.c1], [VIEW5.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3], [VIEW4.t2.__pk_increment], [VIEW5.t1.__pk_increment]), filter(nil), rowset=16
+      limit(2), offset(nil)
+ 13 - output([VIEW5.t1.c2], [VIEW5.t1.c1], [VIEW5.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3], [VIEW4.t2.__pk_increment], [VIEW5.t1.__pk_increment]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+ 14 - output([VIEW5.t1.c2], [VIEW5.t1.c1], [VIEW5.t1.c3], [VIEW5.t1.__pk_increment]), filter(nil), rowset=16
+      access([VIEW5.t1.c2], [VIEW5.t1.c1], [VIEW5.t1.c3], [VIEW5.t1.__pk_increment])
+ 15 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+ 16 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3], [VIEW4.t2.__pk_increment]), filter(nil), rowset=16
+ 17 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3], [VIEW4.t2.__pk_increment]), filter(nil), rowset=16
+      access([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3], [VIEW4.t2.__pk_increment])
+ 18 - output([t2.c1], [t2.c2], [t2.c3], [t2.__pk_increment]), filter([2 = t2.c1]), rowset=16
+      access([t2.__pk_increment], [t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 19 - output([VIEW7.t1.c2], [VIEW7.t1.c1], [VIEW7.t1.c3], [VIEW6.t2.c1], [VIEW6.t2.c2], [VIEW6.t2.c3], [VIEW6.t2.__pk_increment], [VIEW7.t1.__pk_increment]), filter(nil), rowset=16
+      limit(2), offset(nil)
+ 20 - output([VIEW7.t1.c2], [VIEW7.t1.c1], [VIEW7.t1.c3], [VIEW6.t2.c1], [VIEW6.t2.c2], [VIEW6.t2.c3], [VIEW6.t2.__pk_increment], [VIEW7.t1.__pk_increment]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+ 21 - output([VIEW7.t1.c2], [VIEW7.t1.c1], [VIEW7.t1.c3], [VIEW7.t1.__pk_increment]), filter(nil), rowset=16
+      access([VIEW7.t1.c2], [VIEW7.t1.c1], [VIEW7.t1.c3], [VIEW7.t1.__pk_increment])
+ 22 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+ 23 - output([VIEW6.t2.c1], [VIEW6.t2.c2], [VIEW6.t2.c3], [VIEW6.t2.__pk_increment]), filter(nil), rowset=16
+ 24 - output([VIEW6.t2.c1], [VIEW6.t2.c2], [VIEW6.t2.c3], [VIEW6.t2.__pk_increment]), filter(nil), rowset=16
+      access([VIEW6.t2.c1], [VIEW6.t2.c2], [VIEW6.t2.c3], [VIEW6.t2.__pk_increment])
+ 25 - output([t2.c1], [t2.c2], [t2.c3], [t2.__pk_increment]), filter([3 = t2.c1]), rowset=16
+      access([t2.__pk_increment], [t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 26 - output([VIEW9.t1.c2], [VIEW9.t1.c1], [VIEW9.t1.c3], [VIEW8.t2.c1], [VIEW8.t2.c2], [VIEW8.t2.c3], [VIEW8.t2.__pk_increment], [VIEW9.t1.__pk_increment]), filter(nil), rowset=16
+      limit(2), offset(nil)
+ 27 - output([VIEW9.t1.c2], [VIEW9.t1.c1], [VIEW9.t1.c3], [VIEW8.t2.c1], [VIEW8.t2.c2], [VIEW8.t2.c3], [VIEW8.t2.__pk_increment], [VIEW9.t1.__pk_increment]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+ 28 - output([VIEW9.t1.c2], [VIEW9.t1.c1], [VIEW9.t1.c3], [VIEW9.t1.__pk_increment]), filter(nil), rowset=16
+      access([VIEW9.t1.c2], [VIEW9.t1.c1], [VIEW9.t1.c3], [VIEW9.t1.__pk_increment])
+ 29 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+ 30 - output([VIEW8.t2.c1], [VIEW8.t2.c2], [VIEW8.t2.c3], [VIEW8.t2.__pk_increment]), filter(nil), rowset=16
+ 31 - output([VIEW8.t2.c1], [VIEW8.t2.c2], [VIEW8.t2.c3], [VIEW8.t2.__pk_increment]), filter(nil), rowset=16
+      access([VIEW8.t2.c1], [VIEW8.t2.c2], [VIEW8.t2.c3], [VIEW8.t2.__pk_increment])
+ 32 - output([t2.c1], [t2.c2], [t2.c3], [t2.__pk_increment]), filter([4 = t2.c1]), rowset=16
+      access([t2.__pk_increment], [t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	1
+3	0	1	3	3	0
+select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	1
+3	0	1	3	3	0
+select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	0
+3	0	1	3	3	1
+explain select * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |TOP-N SORT                              |       |2       |95          |
+|1 |└─NESTED-LOOP JOIN                      |       |8       |94          |
+|2 |  ├─VALUES TABLE ACCESS                 |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                        |VIEW1  |2       |23          |
+|4 |    └─LIMIT                             |       |2       |23          |
+|5 |      └─NESTED-LOOP JOIN CARTESIAN      |       |2       |23          |
+|6 |        ├─SUBPLAN SCAN                  |VIEW3  |1       |23          |
+|7 |        │ └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|1       |23          |
+|8 |        └─MATERIAL                      |       |2       |475         |
+|9 |          └─SUBPLAN SCAN                |VIEW4  |2       |475         |
+|10|            └─TABLE FULL SCAN           |t2     |2       |475         |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3])
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  5 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      access([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter([t2.c1 = :0]), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |TOP-N SORT                              |       |2       |95          |
+|1 |└─NESTED-LOOP JOIN                      |       |8       |94          |
+|2 |  ├─VALUES TABLE ACCESS                 |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                        |VIEW1  |2       |23          |
+|4 |    └─LIMIT                             |       |2       |23          |
+|5 |      └─NESTED-LOOP JOIN CARTESIAN      |       |2       |23          |
+|6 |        ├─SUBPLAN SCAN                  |VIEW3  |1       |23          |
+|7 |        │ └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|1       |23          |
+|8 |        └─MATERIAL                      |       |2       |475         |
+|9 |          └─SUBPLAN SCAN                |VIEW4  |2       |475         |
+|10|            └─TABLE FULL SCAN           |t2     |2       |475         |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3])
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  5 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+  9 - output([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3]), filter(nil), rowset=16
+      access([VIEW4.t2.c1], [VIEW4.t2.c2], [VIEW4.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter([t2.c1 = :0]), rowset=16
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+==========================================================================
+|ID|OPERATOR                               |NAME   |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------------
+|0 |SUBPLAN SCAN                           |VIEW1  |2       |31          |
+|1 |└─LIMIT                                |       |2       |31          |
+|2 |  └─MERGE DISTINCT                     |       |2       |31          |
+|3 |    └─SORT                             |       |2       |31          |
+|4 |      └─UNION ALL                      |       |8       |28          |
+|5 |        ├─LIMIT                        |       |2       |7           |
+|6 |        │ └─NESTED-LOOP JOIN CARTESIAN |       |2       |7           |
+|7 |        │   ├─SUBPLAN SCAN             |VIEW2  |1       |7           |
+|8 |        │   │ └─TABLE RANGE SCAN       |t1(i12)|1       |7           |
+|9 |        │   └─MATERIAL                 |       |2       |498         |
+|10|        │     └─SUBPLAN SCAN           |VIEW3  |2       |498         |
+|11|        │       └─TABLE FULL SCAN      |t2     |2       |498         |
+|12|        ├─LIMIT                        |       |2       |7           |
+|13|        │ └─NESTED-LOOP JOIN CARTESIAN |       |2       |7           |
+|14|        │   ├─SUBPLAN SCAN             |VIEW4  |1       |7           |
+|15|        │   │ └─TABLE RANGE SCAN       |t1(i12)|1       |7           |
+|16|        │   └─MATERIAL                 |       |2       |498         |
+|17|        │     └─SUBPLAN SCAN           |VIEW5  |2       |498         |
+|18|        │       └─TABLE FULL SCAN      |t2     |2       |498         |
+|19|        ├─LIMIT                        |       |2       |7           |
+|20|        │ └─NESTED-LOOP JOIN CARTESIAN |       |2       |7           |
+|21|        │   ├─SUBPLAN SCAN             |VIEW6  |1       |7           |
+|22|        │   │ └─TABLE RANGE SCAN       |t1(i12)|1       |7           |
+|23|        │   └─MATERIAL                 |       |2       |498         |
+|24|        │     └─SUBPLAN SCAN           |VIEW7  |2       |498         |
+|25|        │       └─TABLE FULL SCAN      |t2     |2       |498         |
+|26|        └─LIMIT                        |       |2       |7           |
+|27|          └─NESTED-LOOP JOIN CARTESIAN |       |2       |7           |
+|28|            ├─SUBPLAN SCAN             |VIEW8  |1       |7           |
+|29|            │ └─TABLE RANGE SCAN       |t1(i12)|1       |7           |
+|30|            └─MATERIAL                 |       |2       |498         |
+|31|              └─SUBPLAN SCAN           |VIEW9  |2       |498         |
+|32|                └─TABLE FULL SCAN      |t2     |2       |498         |
+==========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW1.t2.c1], [VIEW1.t2.c2], [VIEW1.t2.c3])
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC], [UNION([5]), ASC], [UNION([6]), ASC], [UNION([7]), ASC], [UNION([8]),
+       ASC])
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])], [UNION([5])], [UNION([6])], [UNION([7])], [UNION([8])]), filter(nil), rowset=16
+  5 - output([VIEW2.t1.c2], [VIEW2.t1.c1], [VIEW2.t1.c3], [VIEW3.t2.c1], [VIEW3.t2.c2], [VIEW3.t2.c3], [VIEW2.t1.__pk_increment], [VIEW3.t2.__pk_increment]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  6 - output([VIEW2.t1.c2], [VIEW2.t1.c1], [VIEW2.t1.c3], [VIEW3.t2.c1], [VIEW3.t2.c2], [VIEW3.t2.c3], [VIEW2.t1.__pk_increment], [VIEW3.t2.__pk_increment]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+  7 - output([VIEW2.t1.c2], [VIEW2.t1.c1], [VIEW2.t1.c3], [VIEW2.t1.__pk_increment]), filter(nil), rowset=16
+      access([VIEW2.t1.c2], [VIEW2.t1.c1], [VIEW2.t1.c3], [VIEW2.t1.__pk_increment])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  9 - output([VIEW3.t2.c1], [VIEW3.t2.c2], [VIEW3.t2.c3], [VIEW3.t2.__pk_increment]), filter(nil), rowset=16
+ 10 - output([VIEW3.t2.c1], [VIEW3.t2.c2], [VIEW3.t2.c3], [VIEW3.t2.__pk_increment]), filter(nil), rowset=16
+      access([VIEW3.t2.c1], [VIEW3.t2.c2], [VIEW3.t2.c3], [VIEW3.t2.__pk_increment])
+ 11 - output([t2.c1], [t2.c2], [t2.c3], [t2.__pk_increment]), filter([1 = t2.c1]), rowset=16
+      access([t2.__pk_increment], [t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 12 - output([VIEW4.t1.c2], [VIEW4.t1.c1], [VIEW4.t1.c3], [VIEW5.t2.c1], [VIEW5.t2.c2], [VIEW5.t2.c3], [VIEW4.t1.__pk_increment], [VIEW5.t2.__pk_increment]), filter(nil), rowset=16
+      limit(2), offset(nil)
+ 13 - output([VIEW4.t1.c2], [VIEW4.t1.c1], [VIEW4.t1.c3], [VIEW5.t2.c1], [VIEW5.t2.c2], [VIEW5.t2.c3], [VIEW4.t1.__pk_increment], [VIEW5.t2.__pk_increment]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+ 14 - output([VIEW4.t1.c2], [VIEW4.t1.c1], [VIEW4.t1.c3], [VIEW4.t1.__pk_increment]), filter(nil), rowset=16
+      access([VIEW4.t1.c2], [VIEW4.t1.c1], [VIEW4.t1.c3], [VIEW4.t1.__pk_increment])
+ 15 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+ 16 - output([VIEW5.t2.c1], [VIEW5.t2.c2], [VIEW5.t2.c3], [VIEW5.t2.__pk_increment]), filter(nil), rowset=16
+ 17 - output([VIEW5.t2.c1], [VIEW5.t2.c2], [VIEW5.t2.c3], [VIEW5.t2.__pk_increment]), filter(nil), rowset=16
+      access([VIEW5.t2.c1], [VIEW5.t2.c2], [VIEW5.t2.c3], [VIEW5.t2.__pk_increment])
+ 18 - output([t2.c1], [t2.c2], [t2.c3], [t2.__pk_increment]), filter([2 = t2.c1]), rowset=16
+      access([t2.__pk_increment], [t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 19 - output([VIEW6.t1.c2], [VIEW6.t1.c1], [VIEW6.t1.c3], [VIEW7.t2.c1], [VIEW7.t2.c2], [VIEW7.t2.c3], [VIEW6.t1.__pk_increment], [VIEW7.t2.__pk_increment]), filter(nil), rowset=16
+      limit(2), offset(nil)
+ 20 - output([VIEW6.t1.c2], [VIEW6.t1.c1], [VIEW6.t1.c3], [VIEW7.t2.c1], [VIEW7.t2.c2], [VIEW7.t2.c3], [VIEW6.t1.__pk_increment], [VIEW7.t2.__pk_increment]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+ 21 - output([VIEW6.t1.c2], [VIEW6.t1.c1], [VIEW6.t1.c3], [VIEW6.t1.__pk_increment]), filter(nil), rowset=16
+      access([VIEW6.t1.c2], [VIEW6.t1.c1], [VIEW6.t1.c3], [VIEW6.t1.__pk_increment])
+ 22 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+ 23 - output([VIEW7.t2.c1], [VIEW7.t2.c2], [VIEW7.t2.c3], [VIEW7.t2.__pk_increment]), filter(nil), rowset=16
+ 24 - output([VIEW7.t2.c1], [VIEW7.t2.c2], [VIEW7.t2.c3], [VIEW7.t2.__pk_increment]), filter(nil), rowset=16
+      access([VIEW7.t2.c1], [VIEW7.t2.c2], [VIEW7.t2.c3], [VIEW7.t2.__pk_increment])
+ 25 - output([t2.c1], [t2.c2], [t2.c3], [t2.__pk_increment]), filter([3 = t2.c1]), rowset=16
+      access([t2.__pk_increment], [t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+ 26 - output([VIEW8.t1.c2], [VIEW8.t1.c1], [VIEW8.t1.c3], [VIEW9.t2.c1], [VIEW9.t2.c2], [VIEW9.t2.c3], [VIEW8.t1.__pk_increment], [VIEW9.t2.__pk_increment]), filter(nil), rowset=16
+      limit(2), offset(nil)
+ 27 - output([VIEW8.t1.c2], [VIEW8.t1.c1], [VIEW8.t1.c3], [VIEW9.t2.c1], [VIEW9.t2.c2], [VIEW9.t2.c3], [VIEW8.t1.__pk_increment], [VIEW9.t2.__pk_increment]), filter(nil), rowset=16
+      conds(nil), nl_params_(nil), use_batch=false
+ 28 - output([VIEW8.t1.c2], [VIEW8.t1.c1], [VIEW8.t1.c3], [VIEW8.t1.__pk_increment]), filter(nil), rowset=16
+      access([VIEW8.t1.c2], [VIEW8.t1.c1], [VIEW8.t1.c3], [VIEW8.t1.__pk_increment])
+ 29 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+ 30 - output([VIEW9.t2.c1], [VIEW9.t2.c2], [VIEW9.t2.c3], [VIEW9.t2.__pk_increment]), filter(nil), rowset=16
+ 31 - output([VIEW9.t2.c1], [VIEW9.t2.c2], [VIEW9.t2.c3], [VIEW9.t2.__pk_increment]), filter(nil), rowset=16
+      access([VIEW9.t2.c1], [VIEW9.t2.c2], [VIEW9.t2.c3], [VIEW9.t2.__pk_increment])
+ 32 - output([t2.c1], [t2.c2], [t2.c3], [t2.__pk_increment]), filter([4 = t2.c1]), rowset=16
+      access([t2.__pk_increment], [t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+c1	c2	c3
+1	3	6
+1	3	7
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+c1	c2	c3
+1	3	6
+1	3	7
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+c1	c2	c3
+1	3	6
+1	3	7
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+Query Plan
+=====================================================================
+|ID|OPERATOR                          |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TOP-N SORT                        |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN                |       |8       |105         |
+|2 |  ├─VALUES TABLE ACCESS           |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                  |VIEW1  |2       |26          |
+|4 |    └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  4 - output([t1.c2], [t1.c1], [t1.c3]), filter([t1.c3 > 5]), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, filter_before_indexback[false], 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+Query Plan
+=====================================================================
+|ID|OPERATOR                          |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TOP-N SORT                        |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN                |       |8       |105         |
+|2 |  ├─VALUES TABLE ACCESS           |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                  |VIEW1  |2       |26          |
+|4 |    └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  4 - output([t1.c2], [t1.c1], [t1.c3]), filter([t1.c3 > 5]), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, filter_before_indexback[false], 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+Query Plan
+=============================================================
+|ID|OPERATOR                  |NAME   |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |SUBPLAN SCAN              |VIEW1  |2       |41          |
+|1 |└─LIMIT                   |       |2       |41          |
+|2 |  └─MERGE DISTINCT        |       |2       |41          |
+|3 |    └─SORT                |       |2       |41          |
+|4 |      └─UNION ALL         |       |8       |40          |
+|5 |        ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|6 |        ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|7 |        ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|8 |        └─TABLE RANGE SCAN|t1(i12)|2       |10          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC])
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+  5 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter([t1.c3 > 5]), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  6 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter([t1.c3 > 5]), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+  7 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter([t1.c3 > 5]), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter([t1.c3 > 5]), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+select * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+explain select * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TOP-N SORT       |    |2       |587         |
+|1 |└─TABLE FULL SCAN|t1  |10      |587         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      sort_keys([t1.c2, ASC]), topn(2)
+  1 - output([t1.c1], [t1.c3], [t1.c2]), filter([t1.c3 IN (1, 2, 3)], [t1.c1 IN (1, 2, 3)], [TOPN_FILTER(t1.c2)]), rowset=16
+      access([t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+Query Plan
+====================================================================
+|ID|OPERATOR                           |NAME |EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------------------
+|0 |TOP-N SORT                         |     |2       |1779        |
+|1 |└─NESTED-LOOP JOIN                 |     |6       |1779        |
+|2 |  ├─VALUES TABLE ACCESS            |VIEW2|3       |1           |
+|3 |  └─SUBPLAN SCAN                   |VIEW1|2       |592         |
+|4 |    └─TOP-N SORT                   |     |2       |592         |
+|5 |      └─DISTRIBUTED TABLE FULL SCAN|t1   |3       |592         |
+====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  4 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      sort_keys([t1.c2, ASC]), topn(2)
+  5 - output([t1.c1], [t1.c3], [t1.c2]), filter([t1.c1 = :0], [t1.c3 IN (1, 2, 3)]), rowset=16
+      access([t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+Query Plan
+=================================================
+|ID|OPERATOR         |NAME|EST.ROWS|EST.TIME(us)|
+-------------------------------------------------
+|0 |TOP-N SORT       |    |2       |587         |
+|1 |└─TABLE FULL SCAN|t1  |10      |587         |
+=================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      sort_keys([t1.c2, ASC]), topn(2)
+  1 - output([t1.c1], [t1.c3], [t1.c2]), filter([t1.c3 IN (1, 2, 3)], [t1.c1 IN (1, 2, 3)], [TOPN_FILTER(t1.c2)]), rowset=16
+      access([t1.c1], [t1.c3], [t1.c2]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+c1	c2	c3
+2	1	1
+1	2	1
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+c1	c2	c3
+2	1	1
+1	2	1
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+c1	c2	c3
+2	1	1
+1	2	1
+explain select * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |TOP-N SORT                              |       |2       |237         |
+|1 |└─NESTED-LOOP JOIN                      |       |6       |237         |
+|2 |  ├─VALUES TABLE ACCESS                 |VIEW2  |3       |1           |
+|3 |  └─SUBPLAN SCAN                        |VIEW1  |2       |79          |
+|4 |    └─TOP-N SORT                        |       |2       |79          |
+|5 |      └─NESTED-LOOP JOIN                |       |6       |78          |
+|6 |        ├─VALUES TABLE ACCESS           |VIEW4  |3       |1           |
+|7 |        └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|8 |          └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  5 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW4.column_0(:1)]), use_batch=false
+  6 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  7 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  8 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0], [t1.c2 = :1])
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |TOP-N SORT                              |       |2       |237         |
+|1 |└─NESTED-LOOP JOIN                      |       |6       |237         |
+|2 |  ├─VALUES TABLE ACCESS                 |VIEW2  |3       |1           |
+|3 |  └─SUBPLAN SCAN                        |VIEW1  |2       |79          |
+|4 |    └─TOP-N SORT                        |       |2       |79          |
+|5 |      └─NESTED-LOOP JOIN                |       |6       |78          |
+|6 |        ├─VALUES TABLE ACCESS           |VIEW4  |3       |1           |
+|7 |        └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|8 |          └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  5 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW4.column_0(:1)]), use_batch=false
+  6 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  7 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=16
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  8 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0], [t1.c2 = :1])
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+Query Plan
+=============================================================
+|ID|OPERATOR                  |NAME   |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |SUBPLAN SCAN              |VIEW1  |2       |55          |
+|1 |└─LIMIT                   |       |2       |55          |
+|2 |  └─MERGE DISTINCT        |       |2       |55          |
+|3 |    └─SORT                |       |2       |55          |
+|4 |      └─UNION ALL         |       |6       |54          |
+|5 |        ├─TABLE RANGE SCAN|t1(i12)|2       |18          |
+|6 |        ├─TABLE RANGE SCAN|t1(i12)|2       |18          |
+|7 |        └─TABLE RANGE SCAN|t1(i12)|2       |18          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      limit(2), offset(nil)
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC])
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+  5 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,1,MIN ; 1,1,MAX), (1,2,MIN ; 1,2,MAX), (1,3,MIN ; 1,3,MAX), 
+      range_cond([t1.c2 IN (1, 2, 3)], [t1.c1 = 1])
+  6 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,1,MIN ; 2,1,MAX), (2,2,MIN ; 2,2,MAX), (2,3,MIN ; 2,3,MAX), 
+      range_cond([t1.c2 IN (1, 2, 3)], [t1.c1 = 2])
+  7 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,1,MIN ; 3,1,MAX), (3,2,MIN ; 3,2,MAX), (3,3,MIN ; 3,3,MAX), 
+      range_cond([t1.c2 IN (1, 2, 3)], [t1.c1 = 3])
+select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+c1	c2	c3
+1	2	1
+1	3	0
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+c1	c2	c3
+1	2	1
+1	3	0
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+c1	c2	c3
+1	2	1
+1	3	0
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+Query Plan
+===================================================
+|ID|OPERATOR        |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(i12)|2       |22          |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), (4,MIN,MIN ; 4,MAX,
+      MAX), 
+      range_cond([t1.c1 IN (1, 2, 3, 4)])
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+Query Plan
+=====================================================================
+|ID|OPERATOR                          |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------
+|0 |TOP-N SORT                        |       |2       |104         |
+|1 |└─NESTED-LOOP JOIN                |       |8       |104         |
+|2 |  ├─VALUES TABLE ACCESS           |VIEW2  |4       |1           |
+|3 |  └─SUBPLAN SCAN                  |VIEW1  |2       |26          |
+|4 |    └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+=====================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c1, ASC], [VIEW1.t1.c2, ASC]), topn(2)
+  1 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  2 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  3 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3])
+  4 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+Query Plan
+===================================================
+|ID|OPERATOR        |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------
+|0 |TABLE RANGE SCAN|t1(i12)|2       |22          |
+===================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), (4,MIN,MIN ; 4,MAX,
+      MAX), 
+      range_cond([t1.c1 IN (1, 2, 3, 4)])
+select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+c1	c2	c3
+1	3	0
+1	2	1
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+c1	c2	c3
+1	3	0
+1	2	1
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+c1	c2	c3
+1	3	0
+1	2	1
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+Query Plan
+=====================================================
+|ID|OPERATOR          |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |TOP-N SORT        |       |2       |11528       |
+|1 |└─TABLE RANGE SCAN|t1(i12)|4443    |11516       |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t1.c3, ASC]), topn(2), prefix_pos(1)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), (4,MIN,MIN ; 4,MAX,
+      MAX), 
+      range_cond([t1.c1 IN (1, 2, 3, 4)])
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+Query Plan
+=====================================================
+|ID|OPERATOR          |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |TOP-N SORT        |       |2       |11528       |
+|1 |└─TABLE RANGE SCAN|t1(i12)|4443    |11516       |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t1.c3, ASC]), topn(2), prefix_pos(1)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), (4,MIN,MIN ; 4,MAX,
+      MAX), 
+      range_cond([t1.c1 IN (1, 2, 3, 4)])
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+Query Plan
+=====================================================
+|ID|OPERATOR          |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |TOP-N SORT        |       |2       |11528       |
+|1 |└─TABLE RANGE SCAN|t1(i12)|4443    |11516       |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      sort_keys([t1.c1, ASC], [t1.c3, ASC]), topn(2), prefix_pos(1)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), (4,MIN,MIN ; 4,MAX,
+      MAX), 
+      range_cond([t1.c1 IN (1, 2, 3, 4)])
+select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	1	3	0
+3	0	1	1	3	1
+select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	1	3	0
+3	0	1	1	3	1
+select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	1	3	0
+3	0	1	1	3	1
+explain select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |TOP-N SORT                              |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN CARTESIAN            |       |4       |105         |
+|2 |  ├─SUBPLAN SCAN                        |VIEW1  |2       |104         |
+|3 |  │ └─TOP-N SORT                        |       |2       |104         |
+|4 |  │   └─NESTED-LOOP JOIN                |       |8       |104         |
+|5 |  │     ├─VALUES TABLE ACCESS           |VIEW4  |4       |1           |
+|6 |  │     └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|7 |  │       └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+|8 |  └─MATERIAL                            |       |2       |836         |
+|9 |    └─SUBPLAN SCAN                      |VIEW2  |2       |836         |
+|10|      └─TOP-N SORT                      |       |2       |836         |
+|11|        └─TABLE FULL SCAN               |t2     |10015   |724         |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      sort_keys([VIEW1.t1.c2, ASC], [VIEW2.t2.c1, ASC]), topn(2), prefix_pos(1)
+  1 - output([VIEW1.t1.c2], [VIEW2.t2.c1], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=256
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  3 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=256
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_([VIEW4.column_0(:0)]), use_batch=false
+  5 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=256
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+  9 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      sort_keys([t2.c1, ASC]), topn(2)
+ 11 - output([t2.c1], [t2.c2], [t2.c3]), filter([TOPN_FILTER(t2.c1)]), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+Query Plan
+===========================================================================
+|ID|OPERATOR                                |NAME   |EST.ROWS|EST.TIME(us)|
+---------------------------------------------------------------------------
+|0 |TOP-N SORT                              |       |2       |105         |
+|1 |└─NESTED-LOOP JOIN CARTESIAN            |       |4       |105         |
+|2 |  ├─SUBPLAN SCAN                        |VIEW1  |2       |104         |
+|3 |  │ └─TOP-N SORT                        |       |2       |104         |
+|4 |  │   └─NESTED-LOOP JOIN                |       |8       |104         |
+|5 |  │     ├─VALUES TABLE ACCESS           |VIEW4  |4       |1           |
+|6 |  │     └─SUBPLAN SCAN                  |VIEW3  |2       |26          |
+|7 |  │       └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+|8 |  └─MATERIAL                            |       |2       |836         |
+|9 |    └─SUBPLAN SCAN                      |VIEW2  |2       |836         |
+|10|      └─TOP-N SORT                      |       |2       |836         |
+|11|        └─TABLE FULL SCAN               |t2     |10015   |724         |
+===========================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      sort_keys([VIEW1.t1.c2, ASC], [VIEW2.t2.c1, ASC]), topn(2), prefix_pos(1)
+  1 - output([VIEW1.t1.c2], [VIEW2.t2.c1], [VIEW1.t1.c1], [VIEW1.t1.c3], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=256
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  3 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=256
+      sort_keys([VIEW3.t1.c2, ASC]), topn(2)
+  4 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_([VIEW4.column_0(:0)]), use_batch=false
+  5 - output([VIEW4.column_0]), filter(nil)
+      access([VIEW4.column_0])
+  6 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=256
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  7 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+  8 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+  9 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 10 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      sort_keys([t2.c1, ASC]), topn(2)
+ 11 - output([t2.c1], [t2.c2], [t2.c3]), filter([TOPN_FILTER(t2.c1)]), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+Query Plan
+=================================================================
+|ID|OPERATOR                      |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------
+|0 |TOP-N SORT                    |       |2       |41          |
+|1 |└─NESTED-LOOP JOIN CARTESIAN  |       |4       |40          |
+|2 |  ├─SUBPLAN SCAN              |VIEW3  |2       |40          |
+|3 |  │ └─LIMIT                   |       |2       |40          |
+|4 |  │   └─MERGE DISTINCT        |       |2       |40          |
+|5 |  │     └─SORT                |       |2       |40          |
+|6 |  │       └─UNION ALL         |       |8       |39          |
+|7 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|8 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|9 |  │         ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|10|  │         └─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|11|  └─MATERIAL                  |       |2       |836         |
+|12|    └─SUBPLAN SCAN            |VIEW2  |2       |836         |
+|13|      └─TOP-N SORT            |       |2       |836         |
+|14|        └─TABLE FULL SCAN     |t2     |10015   |724         |
+=================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW3.t1.c1], [VIEW3.t1.c2], [VIEW3.t1.c3], [VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      sort_keys([VIEW3.t1.c2, ASC], [VIEW2.t2.c1, ASC]), topn(2), prefix_pos(1)
+  1 - output([VIEW3.t1.c2], [VIEW2.t2.c1], [VIEW3.t1.c1], [VIEW3.t1.c3], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      conds(nil), nl_params_(nil), use_batch=false
+  2 - output([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3]), filter(nil), rowset=256
+      access([VIEW3.t1.c2], [VIEW3.t1.c1], [VIEW3.t1.c3])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=256
+      limit(2), offset(nil)
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=256
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])])
+  5 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=256
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC])
+  6 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=256
+  7 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+  9 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+ 10 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=256
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(2), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+ 11 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+ 12 - output([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3]), filter(nil), rowset=256
+      access([VIEW2.t2.c1], [VIEW2.t2.c2], [VIEW2.t2.c3])
+ 13 - output([t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      sort_keys([t2.c1, ASC]), topn(2)
+ 14 - output([t2.c1], [t2.c2], [t2.c3]), filter([TOPN_FILTER(t2.c1)]), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	999
+3	0	1	3	3	1000
+select /*+segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	999
+3	0	1	3	3	1000
+select /*+no_segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+c1	c2	c3	c1	c2	c3
+3	0	1	3	3	999
+3	0	1	3	3	1000
+explain select * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+Query Plan
+========================================================
+|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |TOP-N SORT              |    |2       |192864      |
+|1 |└─HASH RIGHT OUTER JOIN |    |4449665 |139587      |
+|2 |  ├─TABLE FULL SCAN     |t2  |4006    |624         |
+|3 |  └─TABLE FULL SCAN     |t1  |4443    |654         |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC], [t2.c1, ASC]), topn(2)
+  1 - output([t1.c2], [t2.c1], [t1.c1], [t1.c3], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  2 - output([t2.c1], [t2.c2], [t2.c3]), filter([t2.c1 IN (1, 2, 3, 4)]), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 IN (1, 2, 3, 4)], [TOPN_FILTER(t1.c2)]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+Query Plan
+========================================================
+|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |TOP-N SORT              |    |2       |192864      |
+|1 |└─HASH RIGHT OUTER JOIN |    |4449665 |139587      |
+|2 |  ├─TABLE FULL SCAN     |t2  |4006    |624         |
+|3 |  └─TABLE FULL SCAN     |t1  |4443    |654         |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC], [t2.c1, ASC]), topn(2)
+  1 - output([t1.c2], [t2.c1], [t1.c1], [t1.c3], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  2 - output([t2.c1], [t2.c2], [t2.c3]), filter([t2.c1 IN (1, 2, 3, 4)]), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 IN (1, 2, 3, 4)], [TOPN_FILTER(t1.c2)]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+Query Plan
+========================================================
+|ID|OPERATOR                |NAME|EST.ROWS|EST.TIME(us)|
+--------------------------------------------------------
+|0 |TOP-N SORT              |    |2       |192864      |
+|1 |└─HASH RIGHT OUTER JOIN |    |4449665 |139587      |
+|2 |  ├─TABLE FULL SCAN     |t2  |4006    |624         |
+|3 |  └─TABLE FULL SCAN     |t1  |4443    |654         |
+========================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3], [t2.c1], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC], [t2.c1, ASC]), topn(2)
+  1 - output([t1.c2], [t2.c1], [t1.c1], [t1.c3], [t2.c2], [t2.c3]), filter(nil), rowset=256
+      equal_conds([t1.c1 = t2.c1]), other_conds(nil)
+  2 - output([t2.c1], [t2.c2], [t2.c3]), filter([t2.c1 IN (1, 2, 3, 4)]), rowset=256
+      access([t2.c1], [t2.c2], [t2.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t2.__pk_increment]), range(MIN ; MAX)always true
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 IN (1, 2, 3, 4)], [TOPN_FILTER(t1.c2)]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false,false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+c1	c2	c3
+2	1	1
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+c1	c2	c3
+2	1	1
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+c1	c2	c3
+2	1	1
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+Query Plan
+=======================================================================
+|ID|OPERATOR                            |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |LIMIT                               |       |1       |104         |
+|1 |└─TOP-N SORT                        |       |2       |104         |
+|2 |  └─NESTED-LOOP JOIN                |       |8       |104         |
+|3 |    ├─VALUES TABLE ACCESS           |VIEW2  |4       |1           |
+|4 |    └─SUBPLAN SCAN                  |VIEW1  |2       |26          |
+|5 |      └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      limit(1), offset(1)
+  1 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(1 + 1)
+  2 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  3 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  4 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  5 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(1 + 1), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+Query Plan
+=======================================================================
+|ID|OPERATOR                            |NAME   |EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------------------------
+|0 |LIMIT                               |       |1       |104         |
+|1 |└─TOP-N SORT                        |       |2       |104         |
+|2 |  └─NESTED-LOOP JOIN                |       |8       |104         |
+|3 |    ├─VALUES TABLE ACCESS           |VIEW2  |4       |1           |
+|4 |    └─SUBPLAN SCAN                  |VIEW1  |2       |26          |
+|5 |      └─DISTRIBUTED TABLE RANGE SCAN|t1(i12)|2       |26          |
+=======================================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      limit(1), offset(1)
+  1 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      sort_keys([VIEW1.t1.c2, ASC]), topn(1 + 1)
+  2 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      conds(nil), nl_params_([VIEW2.column_0(:0)]), use_batch=false
+  3 - output([VIEW2.column_0]), filter(nil)
+      access([VIEW2.column_0])
+  4 - output([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  5 - output([t1.c2], [t1.c1], [t1.c3]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(1 + 1), offset(nil), is_index_back=true, is_global_index=false, keep_ordering=true, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(MIN,MIN,MIN ; MAX,MAX,MAX)always true, 
+      range_cond([t1.c1 = :0])
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+Query Plan
+=============================================================
+|ID|OPERATOR                  |NAME   |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------------
+|0 |SUBPLAN SCAN              |VIEW1  |1       |40          |
+|1 |└─LIMIT                   |       |1       |40          |
+|2 |  └─MERGE DISTINCT        |       |2       |40          |
+|3 |    └─SORT                |       |2       |40          |
+|4 |      └─UNION ALL         |       |8       |39          |
+|5 |        ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|6 |        ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|7 |        ├─TABLE RANGE SCAN|t1(i12)|2       |10          |
+|8 |        └─TABLE RANGE SCAN|t1(i12)|2       |10          |
+=============================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.t1.c3]), filter(nil), rowset=16
+      access([VIEW1.t1.c2], [VIEW1.t1.c1], [VIEW1.t1.c3])
+  1 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      limit(1), offset(1)
+  2 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      distinct([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])])
+  3 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+      sort_keys([UNION([1]), ASC], [UNION([2]), ASC], [UNION([3]), ASC], [UNION([4]), ASC])
+  4 - output([UNION([1])], [UNION([2])], [UNION([3])], [UNION([4])]), filter(nil), rowset=16
+  5 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(1 + 1), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), 
+      range_cond([t1.c1 = 1])
+  6 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(1 + 1), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(2,MIN,MIN ; 2,MAX,MAX), 
+      range_cond([t1.c1 = 2])
+  7 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(1 + 1), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(3,MIN,MIN ; 3,MAX,MAX), 
+      range_cond([t1.c1 = 3])
+  8 - output([t1.c2], [t1.c1], [t1.c3], [t1.__pk_increment]), filter(nil), rowset=16
+      access([t1.__pk_increment], [t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      limit(1 + 1), offset(nil), is_index_back=true, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(4,MIN,MIN ; 4,MAX,MAX), 
+      range_cond([t1.c1 = 4])
+select count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+count(*)
+4007
+select /*+segmented_limit_pushdown*/ count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+count(*)
+4007
+select /*+no_segmented_limit_pushdown*/ count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+count(*)
+4007
+explain select count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME   |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |LIMIT               |       |1       |307         |
+|1 |└─SCALAR GROUP BY   |       |1       |307         |
+|2 |  └─TABLE RANGE SCAN|t1(i12)|4443    |226         |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
+      limit(2), offset(nil)
+  1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  2 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), (4,MIN,MIN ; 4,MAX,
+      MAX), 
+      range_cond([t1.c1 IN (1, 2, 3, 4)])
+explain select /*+segmented_limit_pushdown*/ count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME   |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |LIMIT               |       |1       |307         |
+|1 |└─SCALAR GROUP BY   |       |1       |307         |
+|2 |  └─TABLE RANGE SCAN|t1(i12)|4443    |226         |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
+      limit(2), offset(nil)
+  1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  2 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), (4,MIN,MIN ; 4,MAX,
+      MAX), 
+      range_cond([t1.c1 IN (1, 2, 3, 4)])
+explain select /*+no_segmented_limit_pushdown*/ count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=======================================================
+|ID|OPERATOR            |NAME   |EST.ROWS|EST.TIME(us)|
+-------------------------------------------------------
+|0 |LIMIT               |       |1       |307         |
+|1 |└─SCALAR GROUP BY   |       |1       |307         |
+|2 |  └─TABLE RANGE SCAN|t1(i12)|4443    |226         |
+=======================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
+      limit(2), offset(nil)
+  1 - output([T_FUN_COUNT(*)]), filter(nil), rowset=256
+      group(nil), agg_func([T_FUN_COUNT(*)])
+  2 - output(nil), filter(nil), rowset=256
+      access(nil), partitions(p0)
+      is_index_back=false, is_global_index=false, 
+      range_key([t1.c1], [t1.c2], [t1.__pk_increment]), range(1,MIN,MIN ; 1,MAX,MAX), (2,MIN,MIN ; 2,MAX,MAX), (3,MIN,MIN ; 3,MAX,MAX), (4,MIN,MIN ; 4,MAX,
+      MAX), 
+      range_cond([t1.c1 IN (1, 2, 3, 4)])
+select distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+select /*+segmented_limit_pushdown*/ distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+select /*+no_segmented_limit_pushdown*/ distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+c1	c2	c3
+3	0	1
+2	1	1
+explain select distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |LIMIT                |    |2       |1855        |
+|1 |└─MERGE DISTINCT     |    |2       |1855        |
+|2 |  └─SORT             |    |2       |1854        |
+|3 |    └─TABLE FULL SCAN|t1  |4443    |654         |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      limit(2), offset(nil)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      distinct([t1.c2], [t1.c1], [t1.c3])
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC], [t1.c1, ASC], [t1.c3, ASC])
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 IN (1, 2, 3, 4)]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+segmented_limit_pushdown*/ distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |LIMIT                |    |2       |1855        |
+|1 |└─MERGE DISTINCT     |    |2       |1855        |
+|2 |  └─SORT             |    |2       |1854        |
+|3 |    └─TABLE FULL SCAN|t1  |4443    |654         |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      limit(2), offset(nil)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      distinct([t1.c2], [t1.c1], [t1.c3])
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC], [t1.c1, ASC], [t1.c3, ASC])
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 IN (1, 2, 3, 4)]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true
+explain select /*+no_segmented_limit_pushdown*/ distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+Query Plan
+=====================================================
+|ID|OPERATOR             |NAME|EST.ROWS|EST.TIME(us)|
+-----------------------------------------------------
+|0 |LIMIT                |    |2       |1855        |
+|1 |└─MERGE DISTINCT     |    |2       |1855        |
+|2 |  └─SORT             |    |2       |1854        |
+|3 |    └─TABLE FULL SCAN|t1  |4443    |654         |
+=====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      limit(2), offset(nil)
+  1 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      distinct([t1.c2], [t1.c1], [t1.c3])
+  2 - output([t1.c1], [t1.c2], [t1.c3]), filter(nil), rowset=256
+      sort_keys([t1.c2, ASC], [t1.c1, ASC], [t1.c3, ASC])
+  3 - output([t1.c1], [t1.c2], [t1.c3]), filter([t1.c1 IN (1, 2, 3, 4)]), rowset=256
+      access([t1.c1], [t1.c2], [t1.c3]), partitions(p0)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([t1.__pk_increment]), range(MIN ; MAX)always true

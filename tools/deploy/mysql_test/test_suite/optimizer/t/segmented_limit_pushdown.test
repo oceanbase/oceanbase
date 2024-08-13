@@ -1,0 +1,167 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+#owner: yichuanwei
+#owner group: sql1
+#tags:
+#description: 本case用于测试OrderBy Limit Pushdown改写规则的正确性
+##
+--disable_warnings
+drop table if exists t1;
+drop table if exists t2;
+drop procedure if exists InsertTestData;
+--enable_warnings
+create table t1(c1 int, c2 int, c3 int);
+create table t2(c1 int, c2 int, c3 int);
+create index i12 on t1(c1, c2);
+DELIMITER //;
+CREATE PROCEDURE InsertTestData()
+BEGIN
+    DECLARE i INT DEFAULT 1;
+    DECLARE j INT DEFAULT 1;
+    WHILE i <= 10 DO
+      SET j = 0;
+      WHILE j <= 1000 DO
+          INSERT INTO t1 VALUES (i, 3, j);
+          SET j = j + 1;
+      END WHILE;
+      SET i = i + 1;
+    END WHILE;
+END //
+DELIMITER ;//
+CALL InsertTestData();
+insert into t2(select * from t1);
+insert into t1 values(1, 2, 1);
+insert into t1 values(2, 1, 1);
+insert into t1 values(3, 0, 1);
+call dbms_stats.gather_table_stats(NULL, 't1');
+call dbms_stats.gather_table_stats(NULL, 't2');
+select count(*) from t1;
+select count(*) from t2;
+#Case1: 基础场景
+select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+
+#Case2: 输出部分投影列
+select t1.c1, t1.c2 from t1 where t1.c1 in (1, 2, 3, 4, 5) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ t1.c1, t1.c2 from t1 where t1.c1 in (1, 2, 3, 4, 5) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ t1.c1, t1.c2 from t1 where t1.c1 in (1, 2, 3, 4, 5) order by t1.c2 limit 2;
+explain select t1.c1, t1.c3 from t1 where t1.c1 in (1, 2, 3, 4, 5) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+
+#Case3: 笛卡尔积
+select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+
+#Case4: 左外连接
+select * from t1 left join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+
+#Case5: 右外连接
+select * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1 right join t2 on t1.c1=t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+
+#Case6: 内连接
+select * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1=t2.c1 and t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+
+#Case7: 包含多个where条件
+select * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) and t1.c3 > 5 order by t1.c2 limit 2;
+
+#Case8: 包含多个where条件，且包含多个IN表达式，t1.c1在索引上，t1.c3不在索引上
+select * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+explain select * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c3 in (1, 2, 3) order by t1.c2 limit 2;
+
+#Case8: 包含多个where条件，且包含多个IN表达式，t1.c1在索引上，t1.c2都在索引上
+select * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+explain select * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3) and t1.c2 in (1, 2, 3) order by t1.c2 limit 2;
+
+#Case9: 包含两个order by表达式，order by列均在索引(c1, c2)上，代价评估通过后可以进行改写
+select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c2 limit 2;
+
+#Case10: 包含两个order by表达式，order by表达式中的列(c1, c3)不和任意索引匹配，无法进行改写
+select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c1,t1.c3 limit 2;
+
+#Case11: 有笛卡尔连接，包含两个order by表达式且属于不同表，这时join limit pushdown可以将order by列分别下推到两个单表查询的子句中，此时本改写规则可以对子句进行改写
+select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+explain select * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1, t2 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+
+#Case12: 左外连接，包含两个order by表达式且属于不同表，此时不允许改写
+select * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+select /*+segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+select /*+no_segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+explain select * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+explain select /*+segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ * from t1 left join t2 on t1.c1 = t2.c1 where t1.c1 in (1, 2, 3, 4) order by t1.c2, t2.c1 limit 2;
+
+#Case13: 包含offset表达式
+select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+explain select * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+explain select /*+segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+explain select /*+no_segmented_limit_pushdown*/ * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 1 offset 1;
+
+#Case14: 存在聚合函数，无法改写
+select count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ count(*) from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+
+#Case15: 存在distinct，禁止改写
+select distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+segmented_limit_pushdown*/ distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+select /*+no_segmented_limit_pushdown*/ distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+segmented_limit_pushdown*/ distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
+explain select /*+no_segmented_limit_pushdown*/ distinct * from t1 where t1.c1 in (1, 2, 3, 4) order by t1.c2 limit 2;
