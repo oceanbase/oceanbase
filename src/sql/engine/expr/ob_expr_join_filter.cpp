@@ -120,7 +120,7 @@ int ObExprJoinFilter::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
     }
     default: {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected raw expr type", K(ret));
+      LOG_WARN("unexpected runtime filter type", K(ret), K(raw_expr.get_runtime_filter_type()));
     }
   }
 

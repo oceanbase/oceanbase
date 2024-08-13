@@ -1743,6 +1743,7 @@ public:
                                                  ObIArray<ObRelIds> &connect_infos,
                                                  ObIArray<ObRelIds> &single_table_ids,
                                                  ObIArray<ObRawExpr*> &redundancy_quals);
+  inline ObRawExprReplacer &gen_col_replacer() { return gen_col_replacer_; }
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable
