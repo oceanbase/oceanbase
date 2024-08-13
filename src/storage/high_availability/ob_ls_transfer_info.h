@@ -101,7 +101,7 @@ public:
     return pos;
   }
 private:
-  static const int64_t MAX_TABLET_COUNT = 200;
+  static const int64_t MAX_TABLET_COUNT = 230; //TODO(wangzhennan.wzn) FIX IT
   int64_t count_;
   common::ObTabletID id_array_[MAX_TABLET_COUNT];
 };
