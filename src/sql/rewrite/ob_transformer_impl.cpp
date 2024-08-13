@@ -450,7 +450,6 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(ELIMINATE_OJ, ObTransformEliminateOuterJoin);
     APPLY_RULE_IF_NEEDED(JOIN_ELIMINATION, ObTransformJoinElimination);
     APPLY_RULE_IF_NEEDED(JOIN_LIMIT_PUSHDOWN, ObTransformJoinLimitPushDown);
-    APPLY_RULE_IF_NEEDED(SEGMENTED_LIMIT_PUSHDOWN, ObTransformSegmentedLimitPushdown);
     APPLY_RULE_IF_NEEDED(LEFT_JOIN_TO_ANTI, ObTransformLeftJoinToAnti);
     APPLY_RULE_IF_NEEDED(AGGR_SUBQUERY, ObTransformAggrSubquery);
     APPLY_RULE_IF_NEEDED(WIN_MAGIC, ObTransformWinMagic);
@@ -459,6 +458,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(CONDITIONAL_AGGR_COALESCE, ObTransformConditionalAggrCoalesce);
     APPLY_RULE_IF_NEEDED(FASTMINMAX, ObTransformMinMax);
     APPLY_RULE_IF_NEEDED(PREDICATE_MOVE_AROUND, ObTransformPredicateMoveAround);
+    APPLY_RULE_IF_NEEDED(SEGMENTED_LIMIT_PUSHDOWN, ObTransformSegmentedLimitPushdown);
     APPLY_RULE_IF_NEEDED(OR_EXPANSION, ObTransformOrExpansion);
   }
   return ret;
