@@ -8,7 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
- * This file contains implementation for eval_st_intersects.
+ * This file contains implementation for eval_st_disjoint.
  */
 
 #define USING_LOG_PREFIX SQL_ENG

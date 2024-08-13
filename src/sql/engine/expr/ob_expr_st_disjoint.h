@@ -8,7 +8,7 @@
  * EITHER EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO NON-INFRINGEMENT,
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
- * This file contains implementation for eval_st_intersects.
+ * This file contains implementation for eval_st_disjoint.
  */
 
 #ifndef OCEANBASE_SQL_OB_EXPR_ST_DISJOINT_H_
