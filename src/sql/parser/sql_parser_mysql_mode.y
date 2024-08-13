@@ -9386,8 +9386,9 @@ insert_with_opt_hint opt_priority opt_ignore opt_into single_table_insert opt_on
   }
 
   ParseNode *overwrite_node;
-  malloc_terminal_node(overwrite_node, result->malloc_pool_, T_BOOL);
+  malloc_terminal_node(overwrite_node, result->malloc_pool_, T_INT);
   overwrite_node->value_ = 1;
+  overwrite_node->is_hidden_const_ = 1;
 
   $5->children_[2] = NULL; /*duplicate key node is null*/
   malloc_non_terminal_node($$, result->malloc_pool_, T_INSERT, 5,
