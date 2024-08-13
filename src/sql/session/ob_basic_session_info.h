@@ -801,7 +801,9 @@ public:
   obmysql::ObMySQLCmd get_mysql_cmd() const { return thread_data_.mysql_cmd_; }
   char const *get_mysql_cmd_str() const { return obmysql::get_mysql_cmd_str(thread_data_.mysql_cmd_); }
   int store_query_string(const common::ObString &stmt);
+  int store_top_query_string(const common::ObString &stmt);
   void reset_query_string();
+  void reset_top_query_string();
   void set_session_sleep();
   // for SQL entry point
   int set_session_active(const ObString &sql,
@@ -812,6 +814,7 @@ public:
   int set_session_active(const ObString &label,
                          obmysql::ObMySQLCmd cmd);
   const common::ObString get_current_query_string() const;
+  const common::ObString get_top_query_string() const;
   uint64_t get_current_statement_id() const { return thread_data_.cur_statement_id_; }
   int update_session_timeout();
   int is_timeout(bool &is_timeout);
@@ -1402,6 +1405,7 @@ private:
   int deep_copy_trace_id_var(const common::ObObj &src_val,
                              common::ObObj *dest_val_ptr);
   inline int store_query_string_(const ObString &stmt);
+  inline int store_query_string_(const ObString &stmt, int64_t& buf_len, char *& query, volatile int64_t& query_len);
   inline int set_session_state_(ObSQLSessionState state);
   //写入系统变量的默认值, deserialized scene need use base_value as baseline.
   int init_system_variables(const bool print_info_log, const bool is_sys_tenant, bool is_deserialized = false);
@@ -1421,6 +1425,9 @@ protected:
                          cur_query_buf_len_(0),
                          cur_query_(nullptr),
                          cur_query_len_(0),
+                         top_query_buf_len_(0),
+                         top_query_(nullptr),
+                         top_query_len_(0),
                          cur_statement_id_(0),
                          last_active_time_(0),
                          dis_state_(CLIENT_FORCE_DISCONNECT),
@@ -1457,7 +1464,11 @@ protected:
       if (cur_query_ != nullptr) {
         cur_query_[0] = '\0';
       }
+      if (top_query_ != nullptr) {
+        top_query_[0] = '\0';
+      }
       cur_query_len_ = 0;
+      top_query_len_ = 0;
       cur_statement_id_ = 0;
       last_active_time_ = 0;
       dis_state_ = CLIENT_FORCE_DISCONNECT;
@@ -1494,6 +1505,9 @@ protected:
     int64_t cur_query_buf_len_;
     char *cur_query_;
     volatile int64_t cur_query_len_;
+    int64_t top_query_buf_len_;
+    char *top_query_;
+    volatile int64_t top_query_len_;
     uint64_t cur_statement_id_;
     int64_t last_active_time_;
     ObDisconnectState dis_state_;
@@ -2286,6 +2300,13 @@ inline const common::ObString ObBasicSessionInfo::get_current_query_string() con
 {
   common::ObString str_ret;
   str_ret.assign_ptr(const_cast<char *>(thread_data_.cur_query_), static_cast<int32_t>(thread_data_.cur_query_len_));
+  return str_ret;
+}
+
+inline const common::ObString ObBasicSessionInfo::get_top_query_string() const
+{
+  common::ObString str_ret;
+  str_ret.assign_ptr(const_cast<char *>(thread_data_.top_query_), static_cast<int32_t>(thread_data_.top_query_len_));
   return str_ret;
 }
 

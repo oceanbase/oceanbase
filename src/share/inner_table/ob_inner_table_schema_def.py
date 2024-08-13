@@ -6648,6 +6648,7 @@ def_table_schema(
   ('proxy_user', 'varchar:OB_MAX_USER_NAME_LENGTH_STORE', 'true'),
   ('service_name', 'varchar:64', 'true'),
   ('total_cpu_time', 'double', 'false'),
+  ('top_info', 'varchar:MAX_COLUMN_VARCHAR_LENGTH', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -21494,7 +21495,8 @@ SELECT
   LB_VPORT,
   IN_BYTES,
   OUT_BYTES,
-  cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME
+  cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
+  TOP_INFO
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
 )
@@ -21543,7 +21545,8 @@ def_table_schema(
     LB_VPORT,
     IN_BYTES,
     OUT_BYTES,
-    cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME
+    cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
+    TOP_INFO
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
 """.replace("\n", " ")
@@ -53616,7 +53619,8 @@ SELECT
   LB_VPORT,
   IN_BYTES,
   OUT_BYTES,
-  CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME
+  CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME,
+  TOP_INFO
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
 """.replace("\n", " ")
 )
