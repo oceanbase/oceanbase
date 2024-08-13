@@ -3421,7 +3421,8 @@ int ObSPIService::spi_dynamic_open(ObPLExecCtx *ctx,
 
 int ObSPIService::dbms_dynamic_open(ObPLExecCtx *pl_ctx,
                                     ObDbmsCursorInfo &cursor,
-                                    bool is_dbms_sql)
+                                    bool is_dbms_sql,
+                                    int64_t orc_max_ret_rows)
 {
   int ret = OB_SUCCESS;
   // ObString &sql_stmt = cursor.get_sql_stmt();
@@ -3435,7 +3436,9 @@ int ObSPIService::dbms_dynamic_open(ObPLExecCtx *pl_ctx,
   OV (OB_NOT_NULL(pl_ctx->exec_ctx_->get_my_session()));
   if (ObStmt::is_select_stmt(stmt_type)
       || cursor.get_into_names().count() > 0) { // NOTICE: DML Returning also use cursor impl.
-    OZ (dbms_cursor_open(pl_ctx, cursor, ps_sql, stmt_type, for_update, hidden_rowid), cursor);
+    OZ (dbms_cursor_open(
+            pl_ctx, cursor, ps_sql, stmt_type, for_update, hidden_rowid, orc_max_ret_rows),
+        cursor);
   } else {
     OZ (dbms_cursor_execute(pl_ctx, ps_sql, stmt_type, cursor, is_dbms_sql), cursor);
     OX (cursor.set_affected_rows(pl_ctx->exec_ctx_->get_my_session()->get_affected_rows()));
@@ -3895,7 +3898,8 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                                    const ObString &ps_sql,
                                    int64_t stmt_type,
                                    bool for_update,
-                                   bool hidden_rowid)
+                                   bool hidden_rowid,
+                                   int64_t orc_max_ret_rows)
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
@@ -4121,7 +4125,10 @@ int ObSPIService::dbms_cursor_open(ObPLExecCtx *ctx,
                 cursor.set_packed(plan->is_packed());
               }
             }
-            OZ (fill_cursor(*spi_result.get_result_set(), spi_cursor, new_query_start_time));
+            OZ (fill_cursor(*spi_result.get_result_set(),
+                            spi_cursor,
+                            new_query_start_time,
+                            orc_max_ret_rows));
             if (OB_FAIL(ret) && OB_NOT_NULL(spi_result.get_result_set())) {
               int cli_ret = OB_SUCCESS;
               retry_ctrl.test_and_save_retry_state(GCTX,
@@ -8216,8 +8223,10 @@ int ObSPIService::store_datum(int64_t &current_addr, const ObObj &obj, ObSQLSess
   return ret;
 }
 
-int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time)
-{
+int ObSPIService::fill_cursor(ObResultSet &result_set,
+                              ObSPICursor *cursor,
+                              int64_t new_query_start_time,
+                              int64_t orc_max_ret_rows) {
   int ret = OB_SUCCESS;
   int64_t old_time_out_ts = THIS_WORKER.get_timeout_ts();
   if (OB_ISNULL(cursor) || OB_ISNULL(cursor->allocator_)) {
@@ -8247,9 +8256,14 @@ int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int6
                  K(ret));
       }
     }
-    while (OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < orc_max_ret_rows; i++) {
       if (OB_FAIL(result_set.get_next_row(row))) {
-        //break
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("read result error", K(ret));
+        }
+        break;
       } else if (OB_ISNULL(row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get a invalud row", K(ret));
@@ -8271,11 +8285,6 @@ int ObSPIService::fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int6
           LOG_WARN("failed to add row to row store", K(ret));
         }
       }
-    }
-    if (OB_ITER_END == ret) {
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("read result error", K(ret));
     }
   }
   THIS_WORKER.set_timeout_ts(old_time_out_ts);

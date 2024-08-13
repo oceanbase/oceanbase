@@ -151,6 +151,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_ob_px_slave_mapping_threshold",
   "_optimizer_gather_stats_on_load",
   "_optimizer_null_aware_antijoin",
+  "_oracle_sql_select_limit",
   "_px_broadcast_fudge_factor",
   "_px_dist_agg_partial_rollup_pushdown",
   "_px_min_granules_per_slave",
@@ -391,6 +392,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__OB_PX_SLAVE_MAPPING_THRESHOLD,
   SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD,
   SYS_VAR__OPTIMIZER_NULL_AWARE_ANTIJOIN,
+  SYS_VAR__ORACLE_SQL_SELECT_LIMIT,
   SYS_VAR__PX_BROADCAST_FUDGE_FACTOR,
   SYS_VAR__PX_DIST_AGG_PARTIAL_ROLLUP_PUSHDOWN,
   SYS_VAR__PX_MIN_GRANULES_PER_SLAVE,
@@ -847,6 +849,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "_ob_proxy_weakread_feedback",
   "ncharacter_set_connection",
   "ob_default_lob_inrow_threshold",
+  "_oracle_sql_select_limit",
   "ob_kv_mode"
 };
 
@@ -1252,6 +1255,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObProxyWeakreadFeedback)
         + sizeof(ObSysVarNcharacterSetConnection)
         + sizeof(ObSysVarObDefaultLobInrowThreshold)
+        + sizeof(ObSysVarOracleSqlSelectLimit)
         + sizeof(ObSysVarObKvMode)
         ;
     void *ptr = NULL;
@@ -3383,6 +3387,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObDefaultLobInrowThreshold));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOracleSqlSelectLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOracleSqlSelectLimit", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__ORACLE_SQL_SELECT_LIMIT))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarOracleSqlSelectLimit));
       }
     }
     if (OB_SUCC(ret)) {
@@ -5997,6 +6010,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObDefaultLobInrowThreshold())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObDefaultLobInrowThreshold", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__ORACLE_SQL_SELECT_LIMIT: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarOracleSqlSelectLimit)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarOracleSqlSelectLimit)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarOracleSqlSelectLimit())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarOracleSqlSelectLimit", K(ret));
       }
       break;
     }

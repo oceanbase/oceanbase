@@ -3338,17 +3338,32 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[236].default_value_ = "0" ;
-      ObSysVars[236].info_ = "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode." ;
-      ObSysVars[236].name_ = "ob_kv_mode" ;
+      ObSysVars[236].default_value_ = "9223372036854775807" ;
+      ObSysVars[236].info_ = "used by JDBC setMaxRows() interface to specify limitation of row number in ResultSet" ;
+      ObSysVars[236].name_ = "_oracle_sql_select_limit" ;
       ObSysVars[236].data_type_ = ObIntType ;
-      ObSysVars[236].enum_names_ = "[u'ALL', u'TABLEAPI', u'HBASE', u'REDIS', u'NONE']" ;
-      ObSysVars[236].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
-      ObSysVars[236].id_ = SYS_VAR_OB_KV_MODE ;
+      ObSysVars[236].min_val_ = "0" ;
+      ObSysVars[236].max_val_ = "9223372036854775807" ;
+      ObSysVars[236].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INVISIBLE | ObSysVarFlag::ORACLE_ONLY ;
+      ObSysVars[236].id_ = SYS_VAR__ORACLE_SQL_SELECT_LIMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__ORACLE_SQL_SELECT_LIMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__ORACLE_SQL_SELECT_LIMIT] = 236 ;
+      ObSysVars[236].base_value_ = "9223372036854775807" ;
+    ObSysVars[236].alias_ = "OB_SV__ORACLE_SQL_SELECT_LIMIT" ;
+    }();
+
+    [&] (){
+      ObSysVars[237].default_value_ = "0" ;
+      ObSysVars[237].info_ = "Use this variable to select the interface mode for the OBKV tenant. You can select one of 'ALL, TABLEAPI, HBASE, REDIS, NONE', where 'ALL' is the default and 'NONE' represents the non-OBKV interface mode." ;
+      ObSysVars[237].name_ = "ob_kv_mode" ;
+      ObSysVars[237].data_type_ = ObIntType ;
+      ObSysVars[237].enum_names_ = "[u'ALL', u'TABLEAPI', u'HBASE', u'REDIS', u'NONE']" ;
+      ObSysVars[237].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::READONLY ;
+      ObSysVars[237].id_ = SYS_VAR_OB_KV_MODE ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_KV_MODE)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_KV_MODE] = 236 ;
-      ObSysVars[236].base_value_ = "0" ;
-    ObSysVars[236].alias_ = "OB_SV_KV_MODE" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_KV_MODE] = 237 ;
+      ObSysVars[237].base_value_ = "0" ;
+    ObSysVars[237].alias_ = "OB_SV_KV_MODE" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -3357,7 +3372,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 237;
+static int64_t var_amount = 238;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

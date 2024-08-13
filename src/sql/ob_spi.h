@@ -511,7 +511,8 @@ public:
                               const ObString &ps_sql,
                               int64_t stmt_type,
                               bool for_update,
-                              bool has_hidden_rowid);
+                              bool has_hidden_rowid,
+                              int64_t orc_max_ret_rows = INT64_MAX);
   static int spi_dynamic_open(pl::ObPLExecCtx *ctx,
                               const ObSqlExpression *sql,
                               const ObSqlExpression **sql_param_exprs,
@@ -521,7 +522,8 @@ public:
                               int64_t cursor_index);
   static int dbms_dynamic_open(pl::ObPLExecCtx *ctx,
                                pl::ObDbmsCursorInfo &cursor,
-                               bool is_dbms_sql = false);
+                               bool is_dbms_sql = false,
+                               int64_t orc_max_ret_rows = INT64_MAX);
   static int dbms_cursor_fetch(pl::ObPLExecCtx *ctx,
                               pl::ObDbmsCursorInfo &cursor,
                               bool is_server_cursor = false);
@@ -740,7 +742,10 @@ public:
                         ObSPIOutParams &out_params);
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
-  static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time);
+  static int fill_cursor(ObResultSet &result_set,
+                         ObSPICursor *cursor,
+                         int64_t new_query_start_time,
+                         int64_t orc_max_ret_rows = INT64_MAX);
 
 #ifdef OB_BUILD_ORACLE_PL
   static int spi_execute_dblink(pl::ObPLExecCtx *ctx,

@@ -583,6 +583,11 @@ public:
     sql_select_limit = sys_vars_cache_.get_sql_select_limit();
     return common::OB_SUCCESS;
   }
+  int get_oracle_sql_select_limit(int64_t &oracle_sql_select_limit) const
+  {
+    oracle_sql_select_limit = sys_vars_cache_.get_oracle_sql_select_limit();
+    return common::OB_SUCCESS;
+  }
   // session保留compatible mode，主要用于传递mode，方便后续进行guard切换，如inner sql connection等
   // 其他需要用mode地方请尽量使用线程上的is_oracle|mysql_mode
   // 同时可以使用check_compatibility_mode来检查线程与session上的mode是否一致
@@ -1523,6 +1528,7 @@ public:
         sql_throttle_current_priority_(100),
         ob_last_schema_version_(0),
         sql_select_limit_(0),
+        oracle_sql_select_limit_(0),
         auto_increment_offset_(0),
         last_insert_id_(0),
         binlog_row_image_(2),
@@ -1580,6 +1586,7 @@ public:
       sql_throttle_current_priority_ = 100;
       ob_last_schema_version_ = 0;
       sql_select_limit_ = 0;
+      oracle_sql_select_limit_ = 0;
       auto_increment_offset_ = 0;
       last_insert_id_ = 0;
       binlog_row_image_ = 2;
@@ -1634,6 +1641,7 @@ public:
             sql_throttle_current_priority_ == other.sql_throttle_current_priority_ &&
             ob_last_schema_version_ == other.ob_last_schema_version_ &&
             sql_select_limit_ == other.sql_select_limit_ &&
+            oracle_sql_select_limit_ == other.oracle_sql_select_limit_ &&
             auto_increment_offset_ == other.auto_increment_offset_ &&
             last_insert_id_ == other.last_insert_id_ &&
             binlog_row_image_ == other.binlog_row_image_ &&
@@ -1784,7 +1792,7 @@ public:
                  K(ob_org_cluster_id_), K(ob_query_timeout_), K(ob_trx_timeout_), K(collation_connection_),
                  K(sql_mode_), K(nls_formats_[0]), K(nls_formats_[1]), K(nls_formats_[2]),
                  K(ob_trx_idle_timeout_), K(ob_trx_lock_timeout_), K(nls_collation_), K(nls_nation_collation_),
-                 K_(sql_throttle_current_priority), K_(ob_last_schema_version), K_(sql_select_limit),
+                 K_(sql_throttle_current_priority), K_(ob_last_schema_version), K_(sql_select_limit), K_(oracle_sql_select_limit),
                  K_(optimizer_use_sql_plan_baselines), K_(optimizer_capture_sql_plan_baselines),
                  K_(is_result_accurate), K_(character_set_results),
                  K_(character_set_connection), K_(ob_pl_block_timeout), K_(ob_plsql_ccflags),
@@ -1797,6 +1805,7 @@ public:
     int64_t sql_throttle_current_priority_;
     int64_t ob_last_schema_version_;
     int64_t sql_select_limit_;
+    int64_t oracle_sql_select_limit_;
     uint64_t auto_increment_offset_;
     uint64_t last_insert_id_;
     int64_t binlog_row_image_;
@@ -1918,6 +1927,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, sql_throttle_current_priority);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, ob_last_schema_version);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, sql_select_limit);
+    DEF_SYS_VAR_CACHE_FUNCS(int64_t, oracle_sql_select_limit);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, auto_increment_offset);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, last_insert_id);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, binlog_row_image);
@@ -1987,6 +1997,7 @@ private:
         bool inc_sql_throttle_current_priority_:1;
         bool inc_ob_last_schema_version_:1;
         bool inc_sql_select_limit_:1;
+        bool inc_oracle_sql_select_limit_:1;
         bool inc_auto_increment_offset_:1;
         bool inc_last_insert_id_:1;
         bool inc_binlog_row_image_:1;

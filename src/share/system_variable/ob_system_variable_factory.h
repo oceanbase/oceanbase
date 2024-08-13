@@ -1705,6 +1705,13 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_DEFAULT_LOB_INROW_THRESHOLD; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(235); }
 };
+class ObSysVarOracleSqlSelectLimit : public ObIntSysVar
+{
+public:
+  ObSysVarOracleSqlSelectLimit() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR__ORACLE_SQL_SELECT_LIMIT; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(236); }
+};
 class ObSysVarObKvMode : public ObEnumSysVar
 {
 public:
@@ -1712,7 +1719,7 @@ public:
 public:
   ObSysVarObKvMode() : ObEnumSysVar(OB_KV_MODE_NAMES, NULL, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_KV_MODE; }
-  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(236); }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(237); }
 };
 
 
@@ -1734,7 +1741,7 @@ public:
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
 
   const static int64_t MYSQL_SYS_VARS_COUNT = 97;
-  const static int64_t OB_SYS_VARS_COUNT = 140;
+  const static int64_t OB_SYS_VARS_COUNT = 141;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;
 
