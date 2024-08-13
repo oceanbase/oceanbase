@@ -234,7 +234,12 @@ public:
     }
   }
   OB_INLINE common::ObIAllocator *get_allocator() { return allocator_; }
-  OB_INLINE int init_evaluated_datums() { return OB_SUCCESS; }
+  OB_INLINE int init_evaluated_datums(common::ObIAllocator *allocator, bool &need_convert)
+  {
+    UNUSED(allocator);
+    need_convert = false;
+    return OB_SUCCESS;
+  }
   TO_STRING_KV(K_(is_inited), K_(is_reverse_scan), K_(row_num), K_(interval_infos),
                K_(percent), K_(seed), K_(pd_row_range), K_(block_row_range),
                K_(index_tree_height), K_(index_prefetch_depth), K_(data_prefetch_depth),
