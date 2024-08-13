@@ -32,6 +32,9 @@ struct ObQuestionmarkEqualCtx : public ObExprEqualCheckContext
                      const ObConstRawExpr &right);
 
   ObSEArray<ObPCParamEqualInfo, 4> equal_pairs_;
+
+private:
+  DISABLE_COPY_ASSIGN(ObQuestionmarkEqualCtx);
 };
 
 struct ObRawExprEntry
