@@ -147,16 +147,18 @@ int ObDASDMLIterator::get_next_spatial_index_row(ObNewRow *&row)
         int64_t geo_idx = -1;
         ObString geo_wkb;
         ObObjMeta geo_meta;
+        const IntFixedArray &row_projector = main_ctdef_->op_type_ == DAS_OP_TABLE_DELETE ?
+          main_ctdef_->old_row_projector_ : main_ctdef_->new_row_projector_;
         for (uint64_t i = 0; OB_SUCC(ret) && i < main_ctdef_->column_ids_.count() && geo_idx == -1; i++) {
           int64_t projector_idx = 0;
-          if (i >= main_ctdef_->new_row_projector_.count()) {
+          if (i >= row_projector.count()) {
             ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("invalid new_row_projector_ for sr", K(ret), KPC(sr), K(i), K(main_ctdef_->new_row_projector_));
-          } else if (FALSE_IT(projector_idx = main_ctdef_->new_row_projector_.at(i))) {
+            LOG_WARN("invalid new_row_projector_ for sr", K(ret), KPC(sr), K(i), K(row_projector));
+          } else if (FALSE_IT(projector_idx = row_projector.at(i))) {
           } else if (geo_col_id == main_ctdef_->column_ids_.at(i)) {
             if (projector_idx >= sr->cnt_) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid index for sr", K(ret), KPC(sr), K(i), K(main_ctdef_->new_row_projector_));
+              LOG_WARN("invalid index for sr", K(ret), KPC(sr), K(i), K(row_projector));
             } else {
               geo_idx = projector_idx;
               geo_wkb = sr->cells()[projector_idx].get_string();
