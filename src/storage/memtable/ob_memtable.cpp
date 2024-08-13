@@ -430,18 +430,6 @@ int ObMemtable::multi_set(
     if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
       TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
     }
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    if (param.is_non_unique_local_index_) {
-      // no need to detect deadlock for non-unique local index table
-    } else {
-      for (int64_t idx = 0; idx < mtk_generator.count(); ++idx) {
-        MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                             mtk_generator[idx],
-                                             context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-      }
-    }
-    /***********************/
   }
   return ret;
 }
@@ -595,17 +583,6 @@ int ObMemtable::set(
     if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
       TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
     }
-
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    if (param.is_non_unique_local_index_) {
-      // no need to detect deadlock for non-unique local index table
-    } else {
-       MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                            mtk_generator[0],
-                                            context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    }
-    /***********************/
   }
   return ret;
 }
@@ -667,16 +644,6 @@ int ObMemtable::set(
     if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
       TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
     }
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    if (param.is_non_unique_local_index_) {
-      // no need to detect deadlock for local index table
-    } else {
-      MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                           mtk_generator[0],
-                                           context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    }
-    /***********************/
   }
   return ret;
 }
@@ -725,15 +692,6 @@ int ObMemtable::lock(
   if (OB_FAIL(ret) && (OB_TRY_LOCK_ROW_CONFLICT != ret)) {
     TRANS_LOG(WARN, "lock fail", K(ret), K(row), K(mtk));
   }
-
-  if (OB_SUCC(ret)) {
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                         mtk,
-                                         context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    /***********************/
-  }
   return ret;
 }
 
@@ -776,15 +734,6 @@ int ObMemtable::lock(
 
   if (OB_FAIL(ret) && (OB_TRY_LOCK_ROW_CONFLICT != ret) && (OB_TRANSACTION_SET_VIOLATION != ret)) {
     TRANS_LOG(WARN, "lock fail", K(ret), K(rowkey));
-  }
-
-  if (OB_SUCC(ret)) {
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                         mtk,
-                                         context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    /***********************/
   }
   return ret;
 }
@@ -2667,6 +2616,18 @@ int ObMemtable::multi_set_(
 
   if (OB_SUCC(ret)) {
     mvcc_engine_.finish_kvs(mvcc_rows);
+    /*****[for deadlock]*****/
+    // recored this row is hold by this trans for deadlock detector
+    if (param.is_non_unique_local_index_) {
+      // no need to detect deadlock for non-unique local index table
+    } else {
+      for (int64_t idx = 0; idx < memtable_keys.count(); ++idx) {
+        MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                             memtable_keys[idx],
+                                             context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
+      }
+    }
+    /***********************/
   }
 
   if (OB_TRANSACTION_SET_VIOLATION == ret) {
@@ -2957,6 +2918,16 @@ int ObMemtable::mvcc_write_(
     TRANS_LOG(WARN, "register row commit failed", K(ret));
   } else if (nullptr == mvcc_row && res.has_insert()) {
     (void)mvcc_engine_.finish_kv(res);
+    /*****[for deadlock]*****/
+    // recored this row is hold by this trans for deadlock detector
+    if (param.is_non_unique_local_index_) {
+      // no need to detect deadlock for non-unique local index table
+    } else {
+      MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                            *key,
+                                            context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
+    }
+    /***********************/
   }
 
   // cannot be serializable when transaction set violation
