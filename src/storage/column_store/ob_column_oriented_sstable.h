@@ -92,7 +92,6 @@ public:
   uint32_t full_column_cnt_;
 };
 
-
 enum ObCOSSTableBaseType : int32_t
 {
   INVALID_TYPE = 0,

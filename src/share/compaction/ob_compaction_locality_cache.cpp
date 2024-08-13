@@ -94,11 +94,8 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
     LOG_WARN("failed to get zone list", K(ret), K_(tenant_id));
   } else if (zone_list.empty()) {
     LOG_INFO("zone list is empty, skip get ls locality", K(ret), K_(tenant_id));
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(UNKNOW_LS_ID, UNKNOW_TABLET_ID,
-        share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE))) {
-      LOG_WARN("failed to add diagnose tablet for locality cache", K(ret));
-    }
+    (void) MTL(compaction::ObDiagnoseTabletMgr *)->add_diagnose_tablet(UNKNOW_LS_ID, UNKNOW_TABLET_ID,
+        share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
   }
   if (OB_SUCC(ret)) {
     // 1. clear ls_infos cached in memory
@@ -121,6 +118,10 @@ int ObCompactionLocalityCache::inner_refresh_ls_locality()
           LOG_WARN("fail to refresh by zone", K(ret), K(ls_info), K_(tenant_id), K(zone_list));
         }
       }
+    }
+    if (OB_SUCC(ret)) {
+      (void) MTL(compaction::ObDiagnoseTabletMgr *)->delete_diagnose_tablet(UNKNOW_LS_ID, UNKNOW_TABLET_ID,
+        share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
     }
     cost_ts = ObTimeUtility::fast_current_time() - cost_ts;
     LOG_INFO("finish to refresh ls locality cache", KR(ret), K_(tenant_id), K(cost_ts), K(zone_list));

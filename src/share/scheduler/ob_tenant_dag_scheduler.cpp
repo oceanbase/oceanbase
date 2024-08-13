@@ -866,6 +866,9 @@ int ObIDag::reset_status_for_retry()
   }
   if (OB_FAIL(inner_reset_status_for_retry())) { // will call alloc_task()
     COMMON_LOG(WARN, "failed to inner reset status", K(ret));
+  } else if (OB_UNLIKELY(!is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "dag after retry is invalid", K(ret), KPC(this));
   } else {
     set_dag_status(ObIDag::DAG_STATUS_RETRY);
     start_time_ = ObTimeUtility::fast_current_time();
