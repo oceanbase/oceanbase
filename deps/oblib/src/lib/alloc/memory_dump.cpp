@@ -132,18 +132,16 @@ int ObMemoryDump::init()
       array_ = pre_mem->array_buf_;
       tenant_ids_ = (uint64_t*)pre_mem->tenant_ids_buf_;
       log_buf_ = pre_mem->log_buf_;
-      if (OB_FAIL(lmap_.create(1000, "MemDumpMap"))) {
+      if (OB_FAIL(lmap_.create(1000, ObMemAttr(OB_SERVER_TENANT_ID, "MemDumpMap", ObCtxIds::DEFAULT_CTX_ID, OB_HIGH_ALLOC)))) {
         LOG_WARN("create map failed", K(ret));
       } else {
         r_stat_ = new (pre_mem->stats_buf_) Stat();
         w_stat_ = new (r_stat_ + 1) Stat();
         dump_context_ = context;
         is_inited_ = true;
-        if (OB_FAIL(r_stat_->malloc_sample_map_.create(1000, "MallocInfoMap",
-                                                       "MallocInfoMap"))) {
+        if (OB_FAIL(r_stat_->malloc_sample_map_.create(1000, ObMemAttr(OB_SERVER_TENANT_ID, "MallocInfoMap", ObCtxIds::DEFAULT_CTX_ID, OB_HIGH_ALLOC)))) {
           LOG_WARN("create memory info map for reading failed", K(ret));
-        } else if (OB_FAIL(w_stat_->malloc_sample_map_.create(1000, "MallocInfoMap",
-                                                              "MallocInfoMap"))) {
+        } else if (OB_FAIL(w_stat_->malloc_sample_map_.create(1000, ObMemAttr(OB_SERVER_TENANT_ID, "MallocInfoMap", ObCtxIds::DEFAULT_CTX_ID, OB_HIGH_ALLOC)))) {
           LOG_WARN("create memory info map for writing failed", K(ret));
         }
       }
