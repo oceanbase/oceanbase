@@ -10971,6 +10971,52 @@ int ObPLResolver::resolve_inner_call(
   return ret;
 }
 
+int ObPLResolver::resolve_obj_access_node(ParseNode *node,
+                                          common::ObIAllocator &allocator,
+                                          sql::ObRawExprFactory &expr_factory,
+                                          sql::ObSQLSessionInfo &session_info,
+                                          share::schema::ObSchemaGetterGuard &schema_guard,
+                                          common::ObMySQLProxy *sql_proxy,
+                                          pl::ObPLBlockNS *ns,
+                                          ObArray<pl::ObObjAccessIdx> &access_idxs)
+{
+  int ret = OB_SUCCESS;
+  pl::ObPLPackageGuard dummy_pkg_guard(sql::PACKAGE_RESV_HANDLE);
+  pl::ObPLResolver pl_resolver(allocator,
+                               session_info,
+                               schema_guard,
+                               NULL == ns ? dummy_pkg_guard
+                                        : ns->get_external_ns()->get_resolve_ctx().package_guard_,
+                               NULL == sql_proxy
+                                          ? (NULL == ns ? *GCTX.sql_proxy_
+                                                        : ns->get_external_ns()
+                                                            ->get_resolve_ctx().sql_proxy_)
+                                          : *sql_proxy,
+                               expr_factory,
+                               NULL == ns ? NULL : ns->get_external_ns()->get_parent_ns(),
+                               false/*not prepare*/,
+                               false/*check mode*/,
+                               NULL == ns ? true : false,
+                               NULL/*param store*/,
+                               NULL);
+  HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
+    ObArray<ObObjAccessIdent> obj_access_idents;
+    OZ (pl_resolver.init(func_ast));
+    OX (pl_resolver.get_current_namespace() = ns!=NULL ? *ns : pl_resolver.get_current_namespace());
+    CK (OB_NOT_NULL(node));
+    OZ (pl_resolver.resolve_obj_access_idents(*node, obj_access_idents, func_ast));
+    for (int64_t i = 0; OB_SUCC(ret) && i < obj_access_idents.count(); ++i) {
+      OZ (pl_resolver.resolve_access_ident(obj_access_idents.at(i),
+                                           pl_resolver.get_current_namespace(),
+                                           expr_factory,
+                                           &session_info,
+                                           access_idxs,
+                                           func_ast));
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::resolve_obj_access_node(const ParseNode &node,
                                           ObSQLSessionInfo &session_info,
                                           ObRawExprFactory &expr_factory,
