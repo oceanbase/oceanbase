@@ -5439,8 +5439,12 @@ int ObWinFunRawExpr::inner_deep_copy(ObIRawExprCopier &copier)
   } else if (OB_FAIL(lower_.inner_deep_copy(copier))) {
     LOG_WARN("failed to copy lower bound", K(ret));
   } else if (NULL != agg_expr_) {
-    if (OB_FAIL(copier.do_copy_expr(agg_expr_, new_agg_expr))) {
-      LOG_WARN("failed to create and copy expr", K(ret), K(agg_expr_));
+    if (OB_FAIL(copier.get_expr_factory().create_raw_expr(agg_expr_->get_expr_class(),
+                                                          agg_expr_->get_expr_type(),
+                                                          new_agg_expr))) {
+      LOG_WARN("failed to create new aggr expr", K(ret));
+    } else if (OB_FAIL(new_agg_expr->deep_copy(copier, *agg_expr_))) {
+      LOG_WARN("failed to deep copy aggr fun", K(ret));
     } else if (OB_ISNULL(new_agg_expr) || OB_UNLIKELY(!new_agg_expr->is_aggr_expr())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new aggregation expr is invalid", K(ret), K(new_agg_expr));
