@@ -506,6 +506,7 @@ public:
   // for common
   OB_INLINE void set_init_flag(bool is_init) { is_init_ = is_init; }
   OB_INLINE void set_expr_info(ObExprFrameInfo *expr_info) { expr_info_ = expr_info; }
+  OB_INLINE void set_credential(table::ObTableApiCredential *credential) { credential_ = credential; }
   OB_INLINE void set_sess_guard(ObTableApiSessGuard *sess_guard) { sess_guard_ = sess_guard; }
   OB_INLINE void set_schema_guard(ObSchemaGetterGuard *schema_guard) { schema_guard_ = schema_guard; }
   OB_INLINE void set_table_schema(const ObTableSchema *table_schema) { table_schema_ = table_schema; }
@@ -515,6 +516,7 @@ public:
   OB_INLINE void set_audit_ctx(ObTableAuditCtx *ctx) { audit_ctx_ = ctx; }
   // for scan
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
+  OB_INLINE void set_scan_order(const common::ObQueryFlag::ScanOrder scan_order) {  scan_order_ = scan_order; }
   OB_INLINE void set_limit(const int64_t &limit) { limit_ = limit; }
   OB_INLINE void set_read_latest(bool read_latest) { read_latest_ = read_latest; }
   // for dml
