@@ -341,7 +341,6 @@ public:
                               ObRawExpr *expr,
                               ObRawExpr *&new_expr);
 
-
   int add_sequence_id_to_stmt(uint64_t sequence_id, bool is_currval = false);
   int add_object_version_to_dependency(share::schema::ObDependencyTableType table_type,
                                        share::schema::ObSchemaType schema_type,
@@ -357,7 +356,6 @@ public:
   ObDMLStmt *get_stmt();
   void set_upper_insert_resolver(ObInsertResolver *insert_resolver) {
     upper_insert_resolver_ = insert_resolver; }
-  int estimate_values_table_stats(ObValuesTableDef &table_def);
 protected:
   int generate_pl_data_type(ObRawExpr *expr, pl::ObPLDataType &pl_data_type);
   int resolve_into_variables(const ParseNode *node,
@@ -865,10 +863,9 @@ protected:
                                       const share::schema::ObTableSchema *table_schema,
                                       common::ObIArray<ObRawExpr*> &check_exprs,
                                       ObIArray<int64_t> *check_flags = NULL);
-  int gen_values_table_column_items(const int64_t column_cnt,
-                                    const ObIArray<ObExprResType> &res_types,
-                                    TableItem &table_item);
+
   int resolve_match_against_expr(ObMatchFunRawExpr &expr);
+
 private:
   int resolve_function_table_column_item_udf(const TableItem &table_item,
                                              common::ObIArray<ColumnItem> &col_items);
@@ -1034,7 +1031,6 @@ private:
                                 bool &is_true,
                                 ObIArray<ObExprConstraint> &constraints);
   int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
-  int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
   int compute_values_table_row_count(ObValuesTableDef &table_def);
 protected:
   struct GenColumnExprInfo {

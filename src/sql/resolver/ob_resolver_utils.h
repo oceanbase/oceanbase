@@ -879,6 +879,12 @@ public:
 
   static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
   static int check_schema_valid_for_mview(const share::schema::ObTableSchema &table_schema);
+  static int gen_values_table_column_items(ObDMLStmt *stmt,
+                                           ObRawExprFactory *expr_factory,
+                                           common::ObIAllocator *allocator,
+                                           TableItem *table_item);
+
+  static int estimate_values_table_stats(ObValuesTableDef &table_def, const ParamStore *param_store, ObSQLSessionInfo *session_info);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,
@@ -915,6 +921,7 @@ private:
   static int is_negative_ora_nmb(const common::ObObjParam &obj_param, bool &is_neg, bool &is_zero);
   static const common::ObString stmt_type_string[];
 
+  static int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
   // disallow construct
   ObResolverUtils();
   ~ObResolverUtils();

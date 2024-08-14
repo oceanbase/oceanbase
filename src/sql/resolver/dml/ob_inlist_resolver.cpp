@@ -93,7 +93,7 @@ int ObInListResolver::resolve_values_table_from_inlist(const ParseNode *in_list,
              OB_FAIL(resolve_access_obj_values_table(*in_list, column_cnt, row_cnt, session_info,
                                                      allocator, *table_def))) {
     LOG_WARN("failed to resolve access obj values table", K(ret));
-  } else if (OB_FAIL(cur_resolver_->estimate_values_table_stats(*table_def))) {
+  } else if (OB_FAIL(ObResolverUtils::estimate_values_table_stats(*table_def, param_store, session_info))) {
     LOG_WARN("failed to estimate values table stats", K(ret));
   }
   return ret;

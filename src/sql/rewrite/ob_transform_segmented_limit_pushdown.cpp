@@ -13,36 +13,33 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 
 #include "sql/resolver/dml/ob_insert_stmt.h"
+#include "sql/resolver/ob_resolver_utils.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "common/ob_smart_call.h"
 #include "sql/rewrite/ob_transform_segmented_limit_pushdown.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/engine/expr/ob_expr_version.h"
-#include "sql/engine/aggregate/ob_aggregate_processor.h"
 
 namespace oceanbase {
 using namespace common;
 namespace sql {
 
 int ObTransformSegmentedLimitPushdown::transform_one_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                                                            ObDMLStmt *&stmt,
-                                                            bool &trans_happened) {
+                                                          ObDMLStmt *&stmt,
+                                                          bool &trans_happened) {
   int ret = OB_SUCCESS;
   bool is_valid;
-  if (OB_FAIL(check_stmt_validity(stmt, is_valid))) {
+  TransformContext transform_ctx;
+  if (OB_FAIL(check_stmt_validity(stmt, is_valid, transform_ctx))) {
     LOG_WARN("failed to check stmt validity", K(ret));
   } else if (!is_valid) {
-  } else if (OB_FAIL(do_transform(parent_stmts, stmt, trans_happened))) {
+  } else if (OB_FAIL(do_transform(parent_stmts, stmt, transform_ctx, trans_happened))) {
     LOG_WARN("failed to push order by limit before join", K(ret));
   }
 
   if (OB_SUCC(ret) && trans_happened) {
-    if (OB_FAIL(stmt->rebuild_tables_hash())) {
-      LOG_WARN("failed to rebuild table hash", K(ret));
-    } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
-      LOG_WARN("failed to update column rel ids", K(ret));
-    } else if (OB_FAIL(add_transform_hint(*stmt))) {
+    if (OB_FAIL(add_transform_hint(*stmt))) {
       LOG_WARN("failed to add transform hint", K(ret));
     }
   }
@@ -51,7 +48,8 @@ int ObTransformSegmentedLimitPushdown::transform_one_stmt(common::ObIArray<ObPar
 }
 
 int ObTransformSegmentedLimitPushdown::check_stmt_validity(ObDMLStmt *stmt,
-                                                             bool &is_valid) {
+                                                           bool &is_valid,
+                                                           TransformContext &transform_ctx) {
 
   int ret = OB_SUCCESS;
   is_valid = true;
@@ -60,35 +58,50 @@ int ObTransformSegmentedLimitPushdown::check_stmt_validity(ObDMLStmt *stmt,
   bool is_valid_order_by = true;
   bool is_valid_table = true;
   bool is_valid_condition = true;
+  bool has_rownum = false;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid stmt", K(ret));
   } else if (!stmt->is_select_stmt()) {
     is_valid = false;
   } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(stmt))) {
-    is_valid = false;
   } else if (!select_stmt->has_limit() ||
              !select_stmt->has_order_by() ||
-             select_stmt->has_subquery() ||
              select_stmt->is_hierarchical_query() ||
              select_stmt->has_group_by() ||
              select_stmt->has_having() ||
-             select_stmt->has_rollup() ||
              select_stmt->has_window_function() ||
              select_stmt->has_sequence() ||
              select_stmt->has_distinct()) {
     is_valid = false;
-  } else if (OB_FAIL(check_condition(select_stmt, is_valid_condition)) || !is_valid_condition) {
+  } else if (OB_FAIL(select_stmt->has_rownum(has_rownum))) {
+    LOG_WARN("failed to check stmt has rownum", K(ret));
+  } else if (has_rownum) {
     is_valid = false;
-  } else if (OB_FAIL(check_limit(select_stmt, is_valid_limit)) || !is_valid_limit) {
+  } else if (OB_FAIL(check_condition(select_stmt, is_valid_condition))) {
+    LOG_WARN("fail to check condition expression of stmt");
+  } else if (!is_valid_condition) {
     is_valid = false;
-  } else if (OB_FAIL(check_order_by(select_stmt, is_valid_order_by)) || !is_valid_order_by) {
+  } else if (OB_FAIL(check_limit(select_stmt, is_valid_limit))) {
+    LOG_WARN("fail to check limit expression of stmt");
+  } else if (!is_valid_limit) {
+    is_valid = false;
+  } else if (OB_FAIL(check_order_by(select_stmt, is_valid_order_by))) {
+    LOG_WARN("fail to check order by expression of stmt");
+  } else if (!is_valid_order_by) {
+    is_valid = false;
+  } else if (OB_FAIL(extract_conditions(select_stmt, transform_ctx))) {
+    LOG_WARN("failed to extract conditions from select stmt", K(ret));
+  } else if (transform_ctx.need_rewrite_in_conds_offsets.count() <= 0) {
     is_valid = false;
   }
   return ret;
 }
 
-int ObTransformSegmentedLimitPushdown::do_transform(ObIArray<ObParentDMLStmt> &parent_stmts, ObDMLStmt *&stmt, bool &trans_happened) {
+int ObTransformSegmentedLimitPushdown::do_transform(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                                    ObDMLStmt *&stmt,
+                                                    const TransformContext &transform_ctx,
+                                                    bool &trans_happened) {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> pushdown_conds;
   ObSEArray<ObRawExpr *, 8> need_rewrite_in_conds;
@@ -103,9 +116,13 @@ int ObTransformSegmentedLimitPushdown::do_transform(ObIArray<ObParentDMLStmt> &p
   } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*stmt_factory, *expr_factory, stmt, trans_stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
   } else if (FALSE_IT(select_stmt = static_cast<ObSelectStmt *>(trans_stmt))) {
-  } else if (OB_FAIL(extract_conditions(select_stmt, &need_rewrite_in_conds, &pushdown_conds))) {
-    LOG_WARN("failed to extract conditions from select stmt", K(ret));
+  } else if (OB_FAIL(extract_conditions_with_offsets(select_stmt, need_rewrite_in_conds, transform_ctx.need_rewrite_in_conds_offsets))) {
+    LOG_WARN("failed to extract need_rewrite_in_conds conditions from select stmt", K(ret));
+  } else if (OB_FAIL(extract_conditions_with_offsets(select_stmt, pushdown_conds, transform_ctx.pushdown_conds_offsets))) {
+    LOG_WARN("failed to extract pushdown_conds conditions from select stmt", K(ret));
   } else if (need_rewrite_in_conds.count() == 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("size of need_rewrite_in_conds must be greater than 0", K(ret));
   } else {
     bool last_transform = false;
     ObSelectStmt *next_trans_stmt = select_stmt;
@@ -113,18 +130,22 @@ int ObTransformSegmentedLimitPushdown::do_transform(ObIArray<ObParentDMLStmt> &p
       last_transform = (i == need_rewrite_in_conds.count() - 1);
       if (OB_FAIL(do_one_transform(next_trans_stmt,
                                    need_rewrite_in_conds.at(i),
-                                   &pushdown_conds,
+                                   pushdown_conds,
                                    last_transform))) {
         LOG_WARN("failed to do transform for stmt", K(*next_trans_stmt));
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(accept_transform(parent_stmts,
-                                   stmt,
-                                   trans_stmt,
-                                   get_hint(stmt->get_stmt_hint()) != nullptr,
-                                   true,
-                                   trans_happened))) {
+      if (OB_FAIL(stmt->rebuild_tables_hash())) {
+        LOG_WARN("failed to rebuild table hash", K(ret));
+      } else if (OB_FAIL(stmt->update_column_item_rel_id())) {
+        LOG_WARN("failed to update column rel ids", K(ret));
+      } else if (OB_FAIL(accept_transform(parent_stmts,
+                                          stmt,
+                                          trans_stmt,
+                                          get_hint(stmt->get_stmt_hint()) != nullptr,
+                                          true,
+                                          trans_happened))) {
         LOG_WARN("failed to accept transform", K(ret));
       } else if (trans_happened) {
         stmt = trans_stmt;
@@ -150,7 +171,7 @@ int ObTransformSegmentedLimitPushdown::do_transform(ObIArray<ObParentDMLStmt> &p
 */
 int ObTransformSegmentedLimitPushdown::do_one_transform(ObSelectStmt *&select_stmt,
                                                         ObRawExpr *in_condition,
-                                                        ObIArray<ObRawExpr *> *pushdown_conds,
+                                                        ObIArray<ObRawExpr *> &pushdown_conds,
                                                         bool last_transform) {
   int ret = OB_SUCCESS;
 
@@ -185,13 +206,18 @@ int ObTransformSegmentedLimitPushdown::do_one_transform(ObSelectStmt *&select_st
     LOG_WARN("failed to create inline view", K(ret));
   } else if (OB_FAIL(pushdown_limit(select_stmt,
                                             lateral_table->ref_query_))) {
+    LOG_WARN("failed to pushdown limit", K(ret));
   } else {
     lateral_table->type_ = TableItem::LATERAL_TABLE;
-    lateral_table->exec_params_.push_back(exec_param_expr);
-    if (last_transform) {
-      lateral_table->ref_query_->get_condition_exprs().assign(*pushdown_conds);
+    if (OB_FAIL(lateral_table->exec_params_.push_back(exec_param_expr))) {
+      LOG_WARN("fail to push an element into an array", K(ret));
+    } else if (last_transform) {
+      if (OB_FAIL(lateral_table->ref_query_->get_condition_exprs().assign(pushdown_conds))) {
+        LOG_WARN("fail to assign to an array", K(ret));
+      }
+    } else {
+      select_stmt = static_cast<ObSelectStmt *>(lateral_table->ref_query_);
     }
-    select_stmt = static_cast<ObSelectStmt *>(lateral_table->ref_query_);
   }
 
   return ret;
@@ -201,7 +227,7 @@ int ObTransformSegmentedLimitPushdown::check_condition(ObSelectStmt *select_stmt
   int ret = OB_SUCCESS;
   size_t candidate_in_condition_size = 0;
   is_valid = true;
-  for (size_t i = 0; OB_SUCC(ret) && i < select_stmt->get_condition_size() && is_valid; i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_condition_size(); i++) {
     bool is_candidate = true;
     if (OB_FAIL(is_candidate_in_condition(select_stmt->get_condition_expr(i), is_candidate))) {
       LOG_WARN("fail to check whether the condition is a candidate 'in condition' need to be rewrite", K(ret));
@@ -222,35 +248,49 @@ int ObTransformSegmentedLimitPushdown::is_candidate_in_condition(ObRawExpr *cond
   int ret = OB_SUCCESS;
   ObOpRawExpr *in_op_expr = nullptr;
   ObRawExpr *left_expr_without_cast = nullptr;
+  bool has_question_mark = false;
+  bool has_const = false;
   if (OB_ISNULL(condition_expr)) {
-    is_candidate_in_condition = false;
-  } else if (!condition_expr->is_op_expr()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null expr of condition expr.", K(ret));
+  } else if (condition_expr->get_expr_type() != T_OP_IN) {
     is_candidate_in_condition = false;
   } else if (FALSE_IT(in_op_expr = static_cast<ObOpRawExpr *>(condition_expr))) {
-  } else if (in_op_expr->get_expr_type() != T_OP_IN) {
-    is_candidate_in_condition = false;
   } else if (in_op_expr->get_param_count() != 2) {
     is_candidate_in_condition = false;
   } else if (in_op_expr->get_param_expr(1)->get_expr_type() != T_OP_ROW) {
     is_candidate_in_condition = false;
   } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(in_op_expr->get_param_expr(0), left_expr_without_cast))) {
     LOG_WARN("fail to get expr without lossless_cast");
-    is_candidate_in_condition = false;
   } else if (left_expr_without_cast->get_expr_type() != T_REF_COLUMN) {
     is_candidate_in_condition = false;
   } else {
     ObOpRawExpr *inlist_expr = static_cast<ObOpRawExpr *>(in_op_expr->get_param_expr(1));
-    for (size_t i = 0; is_candidate_in_condition && i < inlist_expr->get_param_count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && is_candidate_in_condition && i < inlist_expr->get_param_count(); i++) {
       ObRawExpr *element_expr = inlist_expr->get_param_expr(i);
-      if (element_expr->get_expr_type() == T_QUESTIONMARK) {
-      } else if (element_expr->is_op_expr()) {
+      if (OB_ISNULL(element_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null of element expr in the inlist", K(ret));
+      } else if (ob_is_enumset_tc(element_expr->get_result_type().get_type())) {
         is_candidate_in_condition = false;
-      } else if (!element_expr->is_static_const_expr()) {
+      } else if (element_expr->get_result_type().is_lob_storage()) {
+        is_candidate_in_condition = false;
+      } else if (element_expr->is_exec_param_expr()) {
+        is_candidate_in_condition = false;
+      } else if (element_expr->get_expr_type() == T_QUESTIONMARK) {
+        has_question_mark = true;
+      } else if (element_expr->is_const_raw_expr()) {
+        has_const = true;
+      } else {
+        is_candidate_in_condition = false;
+      }
+
+      if (OB_SUCC(ret) && has_question_mark && has_const) {
         is_candidate_in_condition = false;
       }
     }
   }
-  
+
   return ret;
 }
 
@@ -259,9 +299,8 @@ int ObTransformSegmentedLimitPushdown::check_limit(ObSelectStmt *select_stmt, bo
   is_valid = true;
   ObRawExpr *limit_expr = nullptr;
   if (OB_ISNULL(limit_expr = select_stmt->get_limit_expr())) {
-    is_valid = false;
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("illegal limit expr", K(ret));
+    LOG_WARN("get unexpected null of limit expr", K(ret));
   } else if (OB_NOT_NULL(select_stmt->get_limit_percent_expr())) {
     is_valid = false;
     LOG_TRACE("can not pushdown limit percent expr");
@@ -295,10 +334,11 @@ int ObTransformSegmentedLimitPushdown::check_order_by(ObSelectStmt *select_stmt,
     is_valid = false;
   } else {
     int64_t table_id = -1;
-    for (int64_t i = 0; is_valid && i < order_item_size; i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < order_item_size; i++) {
       ObColumnRefRawExpr *col_expr = nullptr;
       if (OB_ISNULL(order_by_expr = select_stmt->get_order_item(i).expr_)) {
-        is_valid = false;
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null of order by expr", K(ret));
       } else if (order_by_expr->get_expr_type() != T_REF_COLUMN) {
         is_valid = false;
       } else if (FALSE_IT(col_expr = static_cast<ObColumnRefRawExpr *>(order_by_expr))) {
@@ -320,13 +360,13 @@ int ObTransformSegmentedLimitPushdown::get_exec_param_expr(ObSelectStmt *select_
   ObSEArray<ColumnItem, 8> column_items;
   ObColumnRefRawExpr *col_ref_expr = nullptr;
   if (OB_FAIL(select_stmt->get_column_items(ref_table_id, column_items))) {
-
-  } else if (column_items.count() != 1){
+    LOG_WARN("failed to get column items.", K(ret));
+  } else if (column_items.count() != 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("The number of column items of values table must be 1.", K(ret));
   } else if (OB_ISNULL(col_ref_expr = column_items.at(0).get_expr())){
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("column expr of column item should not be null", K(ret));
+    LOG_WARN("get unexpected null of column expr", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::create_new_exec_param(*ctx_->expr_factory_,
                                                            col_ref_expr,
                                                            exec_param_expr,
@@ -346,7 +386,7 @@ int ObTransformSegmentedLimitPushdown::construct_join_condition(ObSelectStmt *se
                                                                 uint64_t values_table_id,
                                                                 ObRawExpr *in_condition,
                                                                 ObExecParamRawExpr *&exec_param_expr,
-                                                                ObIArray<ObRawExpr *> *pushdown_conditions) {
+                                                                ObIArray<ObRawExpr *> &pushdown_conds) {
   int ret = OB_SUCCESS;
   ObRawExpr *left_expr = static_cast<ObOpRawExpr *>(in_condition)->get_param_expr(0);
   ObRawExpr *eq_expr = nullptr;
@@ -357,11 +397,10 @@ int ObTransformSegmentedLimitPushdown::construct_join_condition(ObSelectStmt *se
                                                        exec_param_expr,
                                                        left_expr,
                                                        eq_expr))) {
-    LOG_WARN("fail to create equal expr");
-  } else {
-    pushdown_conditions->push_back(eq_expr);
+    LOG_WARN("fail to create equal expr", K(ret));
+  } else if (OB_FAIL(pushdown_conds.push_back(eq_expr))){
+    LOG_WARN("fail to push an element into an array", K(ret));
   }
-
   // remove where condition from original select statement.
   select_stmt->get_condition_exprs().reset();
   return ret;
@@ -370,22 +409,25 @@ int ObTransformSegmentedLimitPushdown::construct_join_condition(ObSelectStmt *se
 int ObTransformSegmentedLimitPushdown::pushdown_limit(ObSelectStmt *upper_stmt, ObSelectStmt *generated_view) {
   int ret = OB_SUCCESS;
 
-  ObRawExpr *limit_expr = nullptr;
-  ObRawExpr *offset_expr = nullptr;
   ObRawExpr *new_limit_expr = nullptr;
+  ObRawExpr *limit_expr = upper_stmt->get_limit_expr();
+  ObRawExpr *offset_expr = upper_stmt->get_offset_expr();
 
-  if (OB_ISNULL(new_limit_expr = limit_expr = upper_stmt->get_limit_expr())) {
-  } else if (OB_ISNULL(offset_expr = upper_stmt->get_offset_expr())) {
+  if (OB_ISNULL(limit_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("limit expr should not be null", K(ret));
+  } else if (OB_ISNULL(offset_expr)) {
+    new_limit_expr = limit_expr;
   } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_->expr_factory_,
-                                                          ctx_->session_info_,
-                                                          T_OP_ADD,
-                                                          new_limit_expr,
-                                                          limit_expr,
-                                                          offset_expr))) {
+                                                           ctx_->session_info_,
+                                                           T_OP_ADD,
+                                                           new_limit_expr,
+                                                           limit_expr,
+                                                           offset_expr))) {
     LOG_WARN("fail to create add expr", K(ret));
   }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(new_limit_expr)) {
+  if (OB_SUCC(ret)) {
     generated_view->set_limit_offset(new_limit_expr, nullptr);
   }
 
@@ -407,25 +449,39 @@ int ObTransformSegmentedLimitPushdown::create_lateral_table(ObSelectStmt *select
   return ret;
 }
 
-int ObTransformSegmentedLimitPushdown::extract_conditions(ObSelectStmt *select_stmt,
-                                                          ObIArray<ObRawExpr *> *need_rewrite_in_conds,
-                                                          ObIArray<ObRawExpr *> *pushdown_conds) {
+int ObTransformSegmentedLimitPushdown::extract_conditions_with_offsets(ObSelectStmt *select_stmt,
+                                                                       ObIArray<ObRawExpr *> &conds,
+                                                                       const ObIArray<int64_t> &offsets) {
   int ret = OB_SUCCESS;
-  ObSEArray<ObRawExpr *, 8> candidate_in_conditions;
+  for (int64_t i = 0; OB_SUCC(ret) && i < offsets.count(); i++) {
+    int64_t offset = offsets.at(i);
+    if (OB_FAIL(conds.push_back(select_stmt->get_condition_expr(offset)))) {
+      LOG_WARN("failed to push an element into an array", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObTransformSegmentedLimitPushdown::extract_conditions(ObSelectStmt *select_stmt,
+                                                          TransformContext &transform_ctx) {
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 8> candidate_in_conds_offsets;
   ObRawExpr *condition_expr = nullptr;
-  for (size_t i = 0; i < select_stmt->get_condition_size(); i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_condition_size(); i++) {
     bool is_candidate = true;
     condition_expr = select_stmt->get_condition_expr(i);
     if (OB_FAIL(is_candidate_in_condition(condition_expr, is_candidate))) {
       LOG_WARN("fail to check whether the condition is a candidate 'in condition' need to be rewrite", K(ret));
     } else if (is_candidate) {
-      candidate_in_conditions.push_back(condition_expr);
-    } else {
-      pushdown_conds->push_back(condition_expr);
+      if (OB_FAIL(candidate_in_conds_offsets.push_back(i))) {
+        LOG_WARN("failed to push condition expr into 'candidate_in_conditions'", K(ret));
+      }
+    } else if (OB_FAIL(transform_ctx.pushdown_conds_offsets.push_back(i))) {
+      LOG_WARN("failed to push condition expr into 'pushdown_conds'", K(ret));
     }
   }
 
-  if (OB_FAIL(get_need_rewrite_in_conditions(select_stmt, &candidate_in_conditions, need_rewrite_in_conds, pushdown_conds))) {
+  if (OB_SUCC(ret) && OB_FAIL(get_need_rewrite_in_conditions(select_stmt, candidate_in_conds_offsets, transform_ctx))) {
     LOG_WARN("failed to get in conditions need to be rewritten", K(ret));
   }
 
@@ -452,11 +508,14 @@ int ObTransformSegmentedLimitPushdown::inlist_to_values_table(ObSelectStmt *sele
     values_table->values_table_def_ = new (table_buf) ObValuesTableDef();
     if (OB_FAIL(resolve_values_table_from_inlist(in_condition, values_table->values_table_def_))) {
       LOG_WARN("failed to resolve values table from in list", K(ret));
-    } else if (OB_FAIL(gen_values_table_column_items(select_stmt, values_table))) {
+    } else if (OB_FAIL(ObResolverUtils::gen_values_table_column_items(select_stmt,
+                                                                    ctx_->expr_factory_,
+                                                                    ctx_->allocator_,
+                                                                    values_table))) {
       LOG_WARN("failed to generate column item for values table", K(ret));
-    } else if (OB_FAIL(estimate_values_table_stats(*values_table->values_table_def_,
-                                                   &ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
-                                                   ctx_->session_info_))) {
+    } else if (OB_FAIL(ObResolverUtils::estimate_values_table_stats(*values_table->values_table_def_,
+                                                                    &ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
+                                                                    ctx_->session_info_))) {
       LOG_WARN("failed to calculate statistics for values table", K(ret));
     }
   }
@@ -470,13 +529,9 @@ int ObTransformSegmentedLimitPushdown::check_question_mark(ObOpRawExpr *in_list_
 
   if (in_list_expr->get_param_count() == 0) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inlist length is empty", K(ret));
-  } else {
-
-  }
-
-  row_expr = in_list_expr->get_param_expr(0);
-  if (row_expr->get_expr_type() == T_QUESTIONMARK) {
+    LOG_WARN("inlist length should not be empty", K(ret));
+  } else if (FALSE_IT(row_expr = in_list_expr->get_param_expr(0))) {
+  } else if (row_expr->get_expr_type() == T_QUESTIONMARK) {
     is_question_mark = true;
   } else {
     is_question_mark = false;
@@ -495,13 +550,13 @@ int ObTransformSegmentedLimitPushdown::resolve_access_param_values_table(ObOpRaw
 
   values_table_def->access_type_ = ObValuesTableDef::ACCESS_PARAM;
 
-  for (int i = 0; i < row_cnt; i++) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; i++) {
     row_expr = in_list_expr->get_param_expr(i);
     if (OB_ISNULL(row_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("got unexpected row expr in inlist", K(*in_list_expr));
     }
-    for (int j = 0; j < column_cnt; j++) {
+    for (int64_t j = 0; OB_SUCC(ret) && j < column_cnt; j++) {
       ObRawExpr *element_expr = column_cnt == 1 ? row_expr : row_expr->get_param_expr(j);
       int idx = static_cast<ObConstRawExpr *>(element_expr)->get_value().get_unknown();
       ObExprResType res_type;
@@ -527,7 +582,6 @@ int ObTransformSegmentedLimitPushdown::resolve_access_param_values_table(ObOpRaw
 
   return ret;
 }
-
 
 //Refre to ObInListResolver::resolve_access_obj_values_table
 int ObTransformSegmentedLimitPushdown::resolve_access_obj_values_table(ObOpRawExpr *in_list_expr,
@@ -620,206 +674,18 @@ int ObTransformSegmentedLimitPushdown::resolve_values_table_from_inlist(ObRawExp
   return ret;
 }
 
-int ObTransformSegmentedLimitPushdown::gen_values_table_column_items(ObSelectStmt *select_stmt,
-                                                                       TableItem *values_table)
-{
-  int ret = OB_SUCCESS;
-  ObValuesTableDef *table_def = values_table->values_table_def_;
-  int64_t column_cnt = table_def->column_cnt_;
-  const ObIArray<ObExprResType> &res_types = table_def->column_types_;
-  for (int64_t i = 0; OB_SUCC(ret) && i < column_cnt; ++i) {
-    ObColumnRefRawExpr *column_expr = NULL;
-    if (OB_FAIL(ctx_->expr_factory_->create_raw_expr(T_REF_COLUMN, column_expr))) {
-      LOG_WARN("create column ref raw expr failed", K(ret));
-    } else {
-      column_expr->set_result_type(res_types.at(i));
-//    column_expr->set_result_flag(table_def->access_exprs_.at(i)->get_result_flag());
-      column_expr->set_ref_id(values_table->table_id_, i + OB_APP_MIN_COLUMN_ID);
-      // compatible Mysql8.0, column name is column_0, column_1, ...
-      ObSqlString tmp_col_name;
-      char *buf = NULL;
-      if (OB_FAIL(tmp_col_name.append_fmt("column_%ld", i))) {
-        LOG_WARN("failed to append fmt", K(ret));
-      } else if (OB_ISNULL(buf = static_cast<char*>(ctx_->allocator_->alloc(tmp_col_name.length())))) {
-        ret = common::OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory", K(ret), K(buf));
-      } else {
-        MEMCPY(buf, tmp_col_name.ptr(), tmp_col_name.length());
-        ObString column_name(tmp_col_name.length(), buf);
-        column_expr->set_column_attr(values_table->table_name_, column_name);
-        if (ob_is_enumset_tc(column_expr->get_result_type().get_type()) ||
-            column_expr->get_result_type().is_lob_storage()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("values stmt not support such column type", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "type of column in values table");
-        } else if (OB_FAIL(column_expr->add_flag(IS_COLUMN))) {
-          LOG_WARN("failed to add flag IS_COLUMN", K(ret));
-        } else if (OB_FAIL(column_expr->formalize(ctx_->session_info_))) {
-          LOG_WARN("failed to formalize a column expr", K(ret));
-        } else {
-          ColumnItem column_item;
-          column_item.expr_ = column_expr;
-          column_item.table_id_ = column_expr->get_table_id();
-          column_item.column_id_ = column_expr->get_column_id();
-          column_item.column_name_ = column_expr->get_column_name();
-          if (OB_FAIL(select_stmt->add_column_item(column_item))) {
-            LOG_WARN("failed to add column item", K(ret));
-          }
-        }
-      }
-    }
-  }
-
-  return ret;
-}
-
-/*
-* TODO:The implementation is similar with ObDMLResolver::add_obj_to_llc_bitmap,
- *  move this function into some util class later.
-*/
-int ObTransformSegmentedLimitPushdown::add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null)
-{
-  int ret = OB_SUCCESS;
-  uint64_t hash_value = 0;
-  if (OB_ISNULL(llc_bitmap)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected", K(ret), KP(llc_bitmap));
-  } else if (obj.is_null()) {
-    num_null += 1.0;
-  } else {
-    if (obj.is_string_type()) {
-      hash_value = obj.varchar_hash(obj.get_collation_type(), hash_value);
-    } else if (OB_FAIL(obj.hash(hash_value, hash_value))) {
-      LOG_WARN("fail to do hash", K(ret), K(obj));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObAggregateProcessor::llc_add_value(hash_value, llc_bitmap, ObOptColumnStat::NUM_LLC_BUCKET))) {
-        LOG_WARN("fail to calc llc", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-/* TODO: The implementation is similar with ObDMLResolver::estimate_values_table_stats,
-*     move this function into some util class later.
-*/
-int ObTransformSegmentedLimitPushdown::estimate_values_table_stats(ObValuesTableDef &table_def,
-                                                                   const ParamStore *param_store,
-                                                                   ObSQLSessionInfo *session_info)
-{
-  int ret = OB_SUCCESS;
-  const int64_t compute_ndv_thredhold = 2000;
-  char *llc_bitmap = NULL;
-  const int64_t llc_bitmap_size = ObOptColumnStat::NUM_LLC_BUCKET;
-  ObArenaAllocator alloc("ValuesTableStat");
-  bool is_ps_prepare = false;
-  bool has_ps_param = false;
-  table_def.column_ndvs_.reset();
-  table_def.column_nnvs_.reset();
-  if (OB_ISNULL(session_info)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpect param", K(ret));
-  } else {
-    is_ps_prepare = session_info->is_varparams_sql_prepare();
-  }
-  for (int64_t col_idx = 0; OB_SUCC(ret) && col_idx < table_def.column_cnt_; col_idx++) {
-    double ndv = table_def.row_cnt_;
-    double num_null = 0.0;
-    if (ObValuesTableDef::ACCESS_EXPR == table_def.access_type_) {
-      /* ndv = table_def.row_cnt_, num_null = 0.0 */
-    } else if (OB_ISNULL(llc_bitmap = static_cast<char*>(alloc.alloc(llc_bitmap_size)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("allocate memory for uncompressed data failed.", K(ret), K(llc_bitmap_size));
-    } else {
-      MEMSET(llc_bitmap, 0, llc_bitmap_size);
-      if (ObValuesTableDef::FOLD_ACCESS_EXPR == table_def.access_type_) {
-        ObRawExpr *access_expr = NULL;
-        if (OB_UNLIKELY(col_idx >= table_def.access_exprs_.count()) ||
-            OB_ISNULL(access_expr = table_def.access_exprs_.at(col_idx))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("get unexpect param", K(ret), K(col_idx), KP(access_expr));
-        } else if (T_QUESTIONMARK == access_expr->get_expr_type()) {
-          ObConstRawExpr *param_expr = static_cast<ObConstRawExpr *>(access_expr);
-          int64_t param_idx = param_expr->get_value().get_unknown();
-          if (OB_ISNULL(param_store) ||
-              OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
-            if (is_ps_prepare) {
-              has_ps_param = true;
-              LOG_TRACE("ps prepare param_store is empty");
-            } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
-            }
-          } else if (param_store->at(param_idx).is_ext_sql_array()) {
-            const ObSqlArrayObj *array_obj =
-                    reinterpret_cast<const ObSqlArrayObj*>(param_store->at(param_idx).get_ext());
-            if (OB_ISNULL(array_obj)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected nullptr", K(ret), K(param_idx));
-            } else {
-              for (int64_t i = 0; OB_SUCC(ret) && i < array_obj->count_ && i < compute_ndv_thredhold; i++) {
-                const ObObjParam &obj_param = array_obj->data_[i];
-                if (OB_FAIL(add_obj_to_llc_bitmap(obj_param, llc_bitmap, num_null))) {
-                  LOG_WARN("failed to add obj to bitmap", K(ret));
-                }
-              }
-            }
-          }
-        }
-      } else if (ObValuesTableDef::ACCESS_PARAM == table_def.access_type_) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < table_def.row_cnt_ && i < compute_ndv_thredhold; i++) {
-          int64_t param_idx = table_def.start_param_idx_ + i * table_def.column_cnt_ + col_idx;
-          if (OB_UNLIKELY(param_idx < 0 || param_idx >= param_store->count())) {
-            if (is_ps_prepare) {
-              has_ps_param = true;
-              LOG_TRACE("ps prepare param_store is empty");
-            } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("param_idx is invalid", K(ret), K(param_idx));
-            }
-          } else if (OB_FAIL(add_obj_to_llc_bitmap(param_store->at(param_idx), llc_bitmap, num_null))) {
-            LOG_WARN("failed to add obj to bitmap", K(ret));
-          }
-        }
-      } else if (ObValuesTableDef::ACCESS_OBJ == table_def.access_type_) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < table_def.row_cnt_ && i < compute_ndv_thredhold; i++) {
-          int64_t param_idx = i * table_def.column_cnt_ + col_idx;
-          if (OB_FAIL(add_obj_to_llc_bitmap(table_def.access_objs_.at(param_idx), llc_bitmap, num_null))) {
-            LOG_WARN("failed to add obj to bitmap", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret) && !has_ps_param) {
-        ndv = MIN(ObGlobalNdvEval::get_ndv_from_llc(llc_bitmap), ndv);
-        ndv = table_def.row_cnt_ <= compute_ndv_thredhold ? ndv :
-              ObOptSelectivity::scale_distinct(table_def.row_cnt_, compute_ndv_thredhold, ndv);
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(table_def.column_ndvs_.push_back(ndv))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else if (OB_FAIL(table_def.column_nnvs_.push_back(num_null))) {
-        LOG_WARN("failed to push back", K(ret));
-      } else {
-        LOG_TRACE("print stats", K(ndv), K(num_null));
-      }
-    }
-  }
-  return ret;
-}
 /* @brief: Find all target 'in expression' need to be rewritten in candidate_in_condition.
  * Step1: find 'order elimiation index'
  * Step2: Find all target 'in expression' whose the column is inside the 'order elimination index'
  */
 int ObTransformSegmentedLimitPushdown::get_need_rewrite_in_conditions(ObSelectStmt *select_stmt,
-                                                                      ObIArray<ObRawExpr *> *candidate_in_conditions,
-                                                                      ObIArray<ObRawExpr *> *need_rewrite_in_conditions,
-                                                                      ObIArray<ObRawExpr *> *pushdown_conds) {
+                                                                      const ObIArray<int64_t> &candidate_in_conds_offsets,
+                                                                      TransformContext &transform_ctx) {
 
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr *, 8> order_exprs;
   ObSEArray<ObRawExpr *, 8> equal_condition_exprs;
+  ObSEArray<ObRawExpr *, 8> candidate_in_conds;
   ObSEArray<uint64_t, 8> order_column_ids;
   ObSEArray<uint64_t, 8> equal_column_ids;
   ObSEArray<uint64_t, 8> index_column_ids;
@@ -828,26 +694,31 @@ int ObTransformSegmentedLimitPushdown::get_need_rewrite_in_conditions(ObSelectSt
   uint64_t target_table_id = static_cast<ObColumnRefRawExpr*>(select_stmt->get_order_item(0).expr_)->get_table_id();
   bool found_index = false;
   if (OB_FAIL(select_stmt->get_order_exprs(order_exprs))) {
-    LOG_WARN("fail to get order by exprs of stmt.");
+    LOG_WARN("fail to get order by exprs of stmt.", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(order_exprs, target_table_id, order_column_ids))) {
-    LOG_WARN("fail to extract column ids of order.");
-  } else if (OB_FAIL(get_equal_conditions(select_stmt, &equal_condition_exprs))) {
-    LOG_WARN("fail to get equal set of stmt.");
+    LOG_WARN("fail to extract column ids of order.", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(select_stmt->get_condition_exprs(), equal_condition_exprs))) {
+    LOG_WARN("fail to get 'const equal condition exprs' of stmt.", K(ret));
   } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(equal_condition_exprs, target_table_id, equal_column_ids))) {
-    LOG_WARN("fail to extract column ids of equal conditions.");
-  } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(*candidate_in_conditions, target_table_id, equal_column_ids))) {
-    LOG_WARN("fail to extract column ids of candidate in conditions.");
-  } else if (OB_FAIL(find_order_elimination_index(select_stmt, target_table_id, &order_column_ids, &equal_column_ids, &index_column_ids, found_index))) {
-    LOG_WARN("fail when try to find 'order elimination' index of table: ", K(target_table_id));
+    LOG_WARN("fail to extract column ids of equal conditions.", K(ret));
+  } else if (OB_FAIL(extract_conditions_with_offsets(select_stmt, candidate_in_conds, candidate_in_conds_offsets)))  {
+    LOG_WARN("fail to extract conditions according to offsets.", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::extract_column_ids(candidate_in_conds, target_table_id, equal_column_ids))) {
+    LOG_WARN("fail to extract column ids of candidate in conditions.", K(ret));
+  } else if (OB_FAIL(remove_duplicated_elements(order_column_ids))) {
+    LOG_WARN("fail to remove duplicated elements for order_column_ids.", K(ret));
+  } else if (OB_FAIL(find_order_elimination_index(select_stmt, target_table_id, order_column_ids, equal_column_ids, index_column_ids, found_index))) {
+    LOG_WARN("fail when try to find 'order elimination' index of table: ", K(target_table_id), K(ret));
   } else if (found_index) {
     ObRawExpr *without_cast_expr = nullptr;
     ObOpRawExpr *in_condition_expr = nullptr;
     ObColumnRefRawExpr *col_expr = nullptr;
-    for (int64_t i = 0; OB_SUCC(ret) && i < candidate_in_conditions->count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidate_in_conds_offsets.count(); i++) {
       bool need_rewrite = true;
-      in_condition_expr = static_cast<ObOpRawExpr*>(candidate_in_conditions->at(i));
+      int64_t cond_offset = candidate_in_conds_offsets.at(i);
+      in_condition_expr = static_cast<ObOpRawExpr*>(select_stmt->get_condition_expr(cond_offset));
       if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(in_condition_expr->get_param_expr(0), without_cast_expr))) {
-        LOG_WARN("fail to get expr without lossless_cast");
+        LOG_WARN("fail to get expr without lossless_cast", K(ret));
         need_rewrite = false;
       } else if (without_cast_expr->get_expr_type() != T_REF_COLUMN) {
         need_rewrite = false;
@@ -858,29 +729,31 @@ int ObTransformSegmentedLimitPushdown::get_need_rewrite_in_conditions(ObSelectSt
         need_rewrite = false;
       }
 
-      if (need_rewrite) {
-        need_rewrite_in_conditions->push_back(in_condition_expr);
-      } else {
-        pushdown_conds->push_back(in_condition_expr);
+      if (OB_FAIL(ret)) {
+      } else if (need_rewrite) {
+        if (OB_FAIL(transform_ctx.need_rewrite_in_conds_offsets.push_back(cond_offset))) {
+          LOG_WARN("fail to push a int value into transform_ctx.need_rewrite_in_conds_offsets", K(ret));
+        }
+      } else if (OB_FAIL(transform_ctx.pushdown_conds_offsets.push_back(cond_offset))) {
+        LOG_WARN("fail to push a int value into transform_ctx.pushdown_conds_offsets", K(ret));
       }
     }
   }
   return ret;
 }
 
-int ObTransformSegmentedLimitPushdown::get_equal_conditions(ObSelectStmt *select_stmt,
-                                                            ObIArray<ObRawExpr *> *equal_condition_exprs) {
+int ObTransformSegmentedLimitPushdown::remove_duplicated_elements(ObIArray<uint64_t> &order_column_ids) {
   int ret = OB_SUCCESS;
-  ObOpRawExpr *op_expr = nullptr;
-  for (int64_t i = 0; i < select_stmt->get_condition_size(); i++) {
-    op_expr = static_cast<ObOpRawExpr *>(select_stmt->get_condition_expr(i));
-    if (op_expr->get_expr_type() == T_OP_EQ) {
-      if (op_expr->get_param_count() != 2) {
-      } else if (
-              (op_expr->get_param_expr(0)->is_column_ref_expr() && op_expr->get_param_expr(1)->is_const_expr()) ||
-              (op_expr->get_param_expr(1)->is_column_ref_expr() && op_expr->get_param_expr(0)->is_const_expr())
-              ) {
-        equal_condition_exprs->push_back(op_expr);
+  ObSEArray<uint64_t, 8> copy_order_column_ids;
+  if (OB_FAIL(copy_order_column_ids.assign(order_column_ids))) {
+    LOG_WARN("fail to assign to an array", K(ret));
+  } else {
+    order_column_ids.reset();
+    for (int64_t i = 0; OB_SUCC(ret) && i < copy_order_column_ids.count(); i++) {
+      uint64_t column_id = copy_order_column_ids.at(i);
+      if (ObOptimizerUtil::find_item(order_column_ids, column_id)) {
+      } else if (OB_FAIL(order_column_ids.push_back(column_id))) {
+        LOG_WARN("fail to push a int value into order_column_ids", K(ret));
       }
     }
   }
@@ -889,9 +762,9 @@ int ObTransformSegmentedLimitPushdown::get_equal_conditions(ObSelectStmt *select
 
 int ObTransformSegmentedLimitPushdown::find_order_elimination_index(ObSelectStmt *select_stmt,
                                                                     uint64_t table_id,
-                                                                    ObIArray<uint64_t> *order_column_ids,
-                                                                    ObIArray<uint64_t> *equal_column_ids,
-                                                                    ObIArray<uint64_t> *index_column_ids,
+                                                                    const ObIArray<uint64_t> &order_column_ids,
+                                                                    const ObIArray<uint64_t> &equal_column_ids,
+                                                                    ObIArray<uint64_t> &index_column_ids,
                                                                     bool &found_index) {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 8> index_ids;
@@ -904,7 +777,7 @@ int ObTransformSegmentedLimitPushdown::find_order_elimination_index(ObSelectStmt
     const ObTableSchema *index_schema = NULL;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < index_ids.count() && !found_index; ++i) {
-      index_column_ids->reuse();
+      index_column_ids.reuse();
       if (OB_FAIL(schema_guard->get_table_schema(index_ids.at(i), table_item, index_schema))) {
         LOG_WARN("fail to get index schema", K(ret), K(index_ids.at(i)));
       } else if (OB_ISNULL(index_schema)) {
@@ -914,26 +787,26 @@ int ObTransformSegmentedLimitPushdown::find_order_elimination_index(ObSelectStmt
         // do nothing
       } else if (OB_UNLIKELY(index_schema->is_spatial_index())) {
         // Do not consider spatial indexing for the time being
-      } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(*index_column_ids))) {
+      } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(index_column_ids))) {
         LOG_WARN("failed to get index cols", K(ret));
       } else {
         int order_column_idx = 0, index_column_idx = 0;
-        bool match_order_prefix = false;
-        while (order_column_idx < order_column_ids->count() && index_column_idx < index_column_ids->count()) {
-          if (match_order_prefix && index_column_ids->at(index_column_idx) == order_column_ids->at(order_column_idx)) {
+        //Note: All non-constant order columns form a prefix sequence of an index.
+        while (order_column_idx < order_column_ids.count() && index_column_idx < index_column_ids.count()) {
+          int64_t order_column_id = order_column_ids.at(order_column_idx);
+          int64_t index_column_id = index_column_ids.at(index_column_idx);
+          if (ObOptimizerUtil::find_item(equal_column_ids, order_column_id)) {
+            order_column_idx++;
+          } if (index_column_ids.at(index_column_idx) == order_column_ids.at(order_column_idx)) {
             index_column_idx++;
             order_column_idx++;
-          } else if (!match_order_prefix && index_column_ids->at(index_column_idx) == order_column_ids->at(order_column_idx)) {
-            match_order_prefix = true;
-            index_column_idx++;
-            order_column_idx++;
-          } else if (!match_order_prefix && ObOptimizerUtil::find_item(*equal_column_ids, index_column_ids->at(index_column_idx))) {
+          } else if (ObOptimizerUtil::find_item(equal_column_ids, index_column_ids.at(index_column_idx))) {
             index_column_idx++;
           } else {
             break;
           }
         }
-        if (order_column_idx == order_column_ids->count()) {
+        if (order_column_idx == order_column_ids.count()) {
           found_index = true;
         }
       }
