@@ -89,6 +89,7 @@ struct ObCSVGeneralFormat {
     cs_type_(common::CHARSET_INVALID),
     skip_header_lines_(0),
     skip_blank_lines_(false),
+    ignore_extra_fields_(false),
     trim_space_(false),
     null_if_(),
     empty_field_as_null_(false),
@@ -114,6 +115,7 @@ struct ObCSVGeneralFormat {
   common::ObCharsetType cs_type_; // charset type of format strings
   int64_t skip_header_lines_;
   bool skip_blank_lines_;
+  bool ignore_extra_fields_;
   bool trim_space_;
   common::ObArrayWrap<common::ObString> null_if_;
   bool empty_field_as_null_;
@@ -491,7 +493,8 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
     }
     if (OB_LIKELY(find_new_line) || is_end_file) {
       if (!format_.skip_blank_lines_ || field_idx > 0) {
-        if (field_idx != format_.file_column_nums_) {
+        if (field_idx < format_.file_column_nums_
+            || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_)) {
           ret = handle_irregular_line(field_idx, line_no, errors);
         }
         if (OB_SUCC(ret)) {
