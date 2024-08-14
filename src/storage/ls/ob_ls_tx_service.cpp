@@ -252,7 +252,7 @@ int ObLSTxService::get_write_store_ctx(ObTxDesc &tx,
       abs_expire_ts = ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME;
     }
 
-    ObTxDataThrottleGuard tx_data_throttle_guard(false /* for_replay */, abs_expire_ts);
+    ObTxDataThrottleGuard tx_data_throttle_guard(ls_id_, false /* for_replay */, abs_expire_ts);
     ret = trans_service_->get_write_store_ctx(tx, snapshot, write_flag, store_ctx, spec_seq_no, false);
   }
   return ret;
