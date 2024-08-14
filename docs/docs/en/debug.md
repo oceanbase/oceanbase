@@ -1,3 +1,7 @@
+---
+title: Debug
+---
+
 # Abstract
 
 This document describes some methods to debug OceanBase. We have many ways to debug OceanBase, such as gdb, logging, etc.

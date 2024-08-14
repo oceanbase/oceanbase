@@ -1,3 +1,7 @@
+---
+title: Set up an IDE
+---
+
 # Abstract
 
 In order to easily read the code of OceanBase, we suggest using one IDE which is easily index the symbols of OceanBase. In Windows, we recommend `Souce Insight` can be used, and in Mac or Linux, we recommend that `VSCode + ccls` can be used to read the oceanbase code. Due to it is very easy to use `Source Ingisht`, so this document skip introduction how to use `Souce Insight`.

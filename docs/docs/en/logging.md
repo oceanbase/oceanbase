@@ -1,3 +1,7 @@
+---
+title: System Log
+---
+
 # OceanBase System Log Introduction
 
 ## Introduction

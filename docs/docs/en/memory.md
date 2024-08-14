@@ -1,3 +1,7 @@
+---
+title: Memory Management
+---
+
 # Introduction
 Memory management is one of the most important modules in any large C++ project. Since OceanBase also needs to deal with the issue of multi-tenant memory resource isolation, OceanBase's memory management is more complicated than ordinary C++ projects. Generally, a good memory management module needs to consider the following issues:
 
