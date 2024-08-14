@@ -292,6 +292,11 @@ void ObBasicSessionInfo::destroy()
     thread_data_.cur_query_ = nullptr;
     thread_data_.cur_query_buf_len_ = 0;
   }
+  if (thread_data_.top_query_ != nullptr) {
+    ob_free(thread_data_.top_query_);
+    thread_data_.top_query_ = nullptr;
+    thread_data_.top_query_buf_len_ = 0;
+  }
   total_stmt_tables_.reset();
   cur_stmt_tables_.reset();
 #ifdef OB_BUILD_ORACLE_PL
@@ -319,6 +324,7 @@ void ObBasicSessionInfo::clean_status()
   set_valid(true);
   thread_data_.cur_query_start_time_ = 0;
   thread_data_.cur_query_len_ = 0;
+  thread_data_.top_query_len_ = 0;
   thread_data_.last_active_time_ = ObTimeUtility::current_time();
   reset_session_changed_info();
 }
@@ -5873,7 +5879,47 @@ bool ObBasicSessionInfo::get_tx_read_only() const
 int ObBasicSessionInfo::store_query_string(const ObString &stmt)
 {
   LockGuard lock_guard(thread_data_mutex_);
-  return store_query_string_(stmt);
+  return store_query_string_(stmt, thread_data_.cur_query_buf_len_, thread_data_.cur_query_, thread_data_.cur_query_len_);
+}
+
+int ObBasicSessionInfo::store_top_query_string(const ObString &stmt)
+{
+  LockGuard lock_guard(thread_data_mutex_);
+  return store_query_string_(stmt, thread_data_.top_query_buf_len_, thread_data_.top_query_, thread_data_.top_query_len_);
+}
+
+int ObBasicSessionInfo::store_query_string_(const ObString &stmt, int64_t& buf_len, char *& query,  volatile int64_t& query_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t truncated_len = std::min(MAX_QUERY_STRING_LEN - 1,
+                                   static_cast<int64_t>(stmt.length()));
+  if (truncated_len < 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid str length", K(ret), K(truncated_len));
+  } else if (buf_len - 1 < truncated_len) {
+    if (query != nullptr) {
+      ob_free(query);
+      query = NULL;
+      buf_len = 0;
+    }
+    int64_t len = MAX(MIN_CUR_QUERY_LEN, truncated_len + 1);
+    char *buf = reinterpret_cast<char*>(ob_malloc(len, ObMemAttr(orig_tenant_id_,
+                                                                 ObModIds::OB_SQL_SESSION_QUERY_SQL)));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc memory failed", K(ret));
+    } else {
+      query = buf;
+      buf_len = len;
+    }
+  }
+  if (OB_SUCC(ret)) {
+    MEMCPY(query, stmt.ptr(), truncated_len);
+    //char query[MAX_QUERY_STRING_LEN] 不存在越界风险,且不需要判空
+    query[truncated_len] = '\0';
+    query_len = truncated_len;
+  }
+  return ret;
 }
 
 int ObBasicSessionInfo::store_query_string_(const ObString &stmt)
@@ -5919,6 +5965,14 @@ void ObBasicSessionInfo::reset_query_string()
 {
   thread_data_.cur_query_[0] = '\0';
   thread_data_.cur_query_len_ = 0;
+}
+
+void ObBasicSessionInfo::reset_top_query_string()
+{
+  if (thread_data_.top_query_ != nullptr) {
+    thread_data_.top_query_[0] = '\0';
+    thread_data_.top_query_len_ = 0;
+  }
 }
 
 int ObBasicSessionInfo::update_session_timeout()

@@ -690,7 +690,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
 
     OZ (ob_write_string(allocator != NULL ? *allocator
                         : ctx.get_allocator(), session_info.get_current_query_string(), cur_query_));
-
+    OZ (session_info.store_top_query_string(cur_query_));
     OZ (recursion_ctx_.init(session_info));
     // set top level sql id
     if ('\0' == ObActiveSessionGuard::get_stat().top_level_sql_id_[0]) {
@@ -958,6 +958,7 @@ void ObPLContext::destory(
         LOG_WARN("failed to restore query string", K(ret), K(cur_query_));
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
+      session_info.reset_top_query_string();
     }
     // 无论如何恢复session上的状态
     session_info.set_pl_stack_ctx(NULL);
