@@ -35,7 +35,7 @@ public:
       alloc_(alloc),
       bg_map_(),
       orig_part_group_cnt_map_(),
-      ls_num_(0)
+      balanced_ls_num_(0)
   {}
   ~ObLSBalanceGroupInfo() { destroy(); }
 
@@ -72,7 +72,7 @@ public:
                             const float factor,
                             share::ObTransferPartList &part_list);
 
-  TO_STRING_KV(K_(inited), K_(ls_id), "balance_group_count", bg_map_.size(), K_(ls_num));
+  TO_STRING_KV(K_(inited), K_(ls_id), "balance_group_count", bg_map_.size(), K_(balanced_ls_num));
 
 private:
   int get_or_create_(const ObBalanceGroupID &bg_id,
@@ -90,7 +90,8 @@ private:
   // This original count will be maintained during adding partitions into balance group.
   // When all partitions are added, the original count will not change anymore.
   common::hash::ObHashMap<ObBalanceGroupID, int64_t> orig_part_group_cnt_map_;
-  int64_t ls_num_;
+  // the number of LS after LS balance
+  int64_t balanced_ls_num_;
 };
 
 }

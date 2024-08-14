@@ -59,7 +59,7 @@ public:
     return !(*this == other);
   }
   bool is_non_part_table_bg() const {
-    return 0 == id_high_ && 0 == id_low_;
+    return NON_PART_BG_ID == *this;
   }
   void reset() {
     id_high_ = common::OB_INVALID_ID;
@@ -73,6 +73,8 @@ public:
     return OB_INVALID_ID != id_high_
            && OB_INVALID_ID != id_low_;
   }
+
+  const static ObBalanceGroupID NON_PART_BG_ID;
 
 public:
   uint64_t id_high_;

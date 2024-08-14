@@ -116,7 +116,8 @@ public:
   }
 
   ~ObBalanceGroupInfo();
-
+  // for partition balance: ls_num is the number of LS during partition balance
+  // for LS balance: ls_num is the number of LS after LS balance
   int init(const ObBalanceGroupID &bg_id, const share::ObLSID &ls_id, const int64_t ls_num);
   bool is_valid() const { return inited_; }
   const ObBalanceGroupID& get_bg_id() const { return bg_id_; }

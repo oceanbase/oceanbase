@@ -212,8 +212,7 @@ int ObPartitionBalance::prepare_balance_group_()
 
 int ObPartitionBalance::on_new_partition(
     const ObBalanceGroup &bg_in,
-    const ObObjectID bg_unit_id,
-    const ObObjectID table_id,
+    const ObSimpleTableSchemaV2 &table_schema,
     const ObObjectID part_object_id,
     const ObLSID &src_ls_id,
     const ObLSID &dest_ls_id,
@@ -225,25 +224,27 @@ int ObPartitionBalance::on_new_partition(
   ObBalanceGroup bg = bg_in; // get a copy
   ObLSDesc *src_ls_desc = nullptr;
   ObTransferPartInfo part_info;
+  const ObObjectID bg_unit_id = OB_INVALID_ID != table_schema.get_tablegroup_id()
+      ? table_schema.get_tablegroup_id()
+      : table_schema.get_database_id();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not inited", KR(ret), K(inited_));
-  } else if (OB_UNLIKELY(!bg_in.is_valid() || !is_valid_id(bg_unit_id) || !is_valid_id(table_id)
+  } else if (OB_UNLIKELY(!bg_in.is_valid() || !table_schema.is_valid()
             || !is_valid_id(part_object_id) || !is_valid_id(part_group_uid)
             || !src_ls_id.is_valid_with_tenant(tenant_id_)
             || !dest_ls_id.is_valid_with_tenant(tenant_id_)
             || tablet_size < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(bg_in), K(bg_unit_id),
-            K(table_id), K(part_object_id), K(src_ls_id),
-            K(dest_ls_id), K(tablet_size), K(part_group_uid));
+    LOG_WARN("invalid argument", KR(ret), K(bg_in), K(table_schema), K(part_object_id),
+            K(src_ls_id), K(dest_ls_id), K(tablet_size), K(part_group_uid));
   } else if (OB_FAIL(ls_desc_map_.get_refactored(src_ls_id, src_ls_desc))) {
     LOG_WARN("get LS desc fail", KR(ret), K(src_ls_id));
   } else if (OB_ISNULL(src_ls_desc)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not found LS", KR(ret), K(src_ls_id), KPC(src_ls_desc));
-  } else if (OB_FAIL(part_info.init(table_id, part_object_id))) {
-    LOG_WARN("part_info init fail", KR(ret), K(table_id), K(part_object_id));
+  } else if (OB_FAIL(part_info.init(table_schema.get_table_id(), part_object_id))) {
+    LOG_WARN("part_info init fail", KR(ret), K(table_schema.get_table_id()), K(part_object_id));
   }
   // if dest_ls_id differs from src_ls_id, need generate balance task
   else if (dest_ls_id != src_ls_id) {
@@ -256,9 +257,8 @@ int ObPartitionBalance::on_new_partition(
     }
   } else if (OB_FAIL(add_part_to_bg_map_(src_ls_id, bg, bg_unit_id, part_group_uid,
                                         part_info, tablet_size))) {
-    LOG_WARN("add new partition group to balance group failed", KR(ret),
-            K(src_ls_id), K(bg), K(bg_unit_id), K(part_group_uid),
-            K(part_info), K(tablet_size));
+    LOG_WARN("add new partition group to balance group failed", KR(ret), K(src_ls_id), K(bg),
+            K(bg_unit_id), K(part_group_uid), K(part_info), K(tablet_size));
   } else if (in_new_partition_group && FALSE_IT(src_ls_desc->add_partgroup(1, 0))) {
   } else {
     src_ls_desc->add_data_size(tablet_size);
@@ -298,8 +298,8 @@ int ObPartitionBalance::add_part_to_bg_map_(
             ret = OB_ALLOCATE_MEMORY_FAILED;
             LOG_WARN("alloc mem fail", KR(ret), K(ls_id), K(bg));
           } else if (FALSE_IT(new(bg_info) ObBalanceGroupInfo(allocator_))) {
-          } else if (OB_FAIL(bg_info->init(bg.id(),
-                            ls_desc_array_.at(i)->get_ls_id(), ls_desc_array_.count()))) {
+          } else if (OB_FAIL(bg_info->init(bg.id(), ls_desc_array_.at(i)->get_ls_id(),
+                                          ls_desc_array_.count()))) {
             LOG_WARN("failed to init bg_info", KR(ret), K(bg_info));
           } else if (OB_FAIL(bg_ls_array->push_back(bg_info))) {
             LOG_WARN("push_back fail", KR(ret), K(ls_id), K(bg));

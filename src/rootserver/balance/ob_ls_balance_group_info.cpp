@@ -22,22 +22,22 @@ using namespace common;
 namespace rootserver
 {
 
-int ObLSBalanceGroupInfo::init(const ObLSID &ls_id, int64_t ls_num)
+int ObLSBalanceGroupInfo::init(const ObLSID &ls_id, int64_t balanced_ls_num)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K(inited_), K(ls_id), KPC(this));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || ls_num <= 0)) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || balanced_ls_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(ls_num));
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(balanced_ls_num));
   } else if (OB_FAIL(bg_map_.create(MAP_BUCKET_NUM, "LSBGMap"))) {
     LOG_WARN("create map for balance group fail", KR(ret), LITERAL_K(MAP_BUCKET_NUM));
   } else if (OB_FAIL(orig_part_group_cnt_map_.create(MAP_BUCKET_NUM, "LSPGCntMap"))) {
     LOG_WARN("create map for balance group original partition group cnt fail", KR(ret), LITERAL_K(MAP_BUCKET_NUM));
   } else {
     ls_id_ = ls_id;
-    ls_num_ = ls_num;
+    balanced_ls_num_ = balanced_ls_num;
     inited_ = true;
   }
   return ret;
@@ -57,7 +57,7 @@ void ObLSBalanceGroupInfo::destroy()
   bg_map_.destroy();
   orig_part_group_cnt_map_.destroy();
   ls_id_.reset();
-  ls_num_ = 0;
+  balanced_ls_num_ = 0;
   inited_ = false;
 }
 
@@ -109,7 +109,7 @@ int ObLSBalanceGroupInfo::get_or_create_(const ObBalanceGroupID &bg_id,
       } else if (OB_ISNULL(bg = new(buf) ObBalanceGroupInfo(alloc_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("construct ObBalanceGroupInfo fail", KR(ret), K(bg_size), K(buf), K(bg_id));
-      } else if (OB_FAIL(bg->init(bg_id, ls_id_, ls_num_))) {
+      } else if (OB_FAIL(bg->init(bg_id, ls_id_, balanced_ls_num_))) {
         LOG_WARN("init ObBalanceGroupInfo fail", KR(ret), KPC(bg));
       } else if (OB_FAIL(bg_map_.set_refactored(bg_id, bg))) {
         LOG_WARN("set into balance group map fail", KR(ret), K(bg_id), KPC(bg));

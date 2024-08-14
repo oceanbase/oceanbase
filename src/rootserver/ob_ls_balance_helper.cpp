@@ -724,8 +724,8 @@ int ObLSBalanceTaskHelper::generate_balance_task_for_expand_(
   } else {
     //generate new ls info for split
     int64_t task_begin_index = OB_INVALID_INDEX_INT64;
-    ObLSID dest_ls_id;
-    if (OB_FAIL(generate_ls_split_task_(dest_split_param, dest_ls_id, task_begin_index))) {
+    ObLSID target_ls_id;
+    if (OB_FAIL(generate_ls_split_task_(dest_split_param, target_ls_id, task_begin_index))) {
       LOG_WARN("failed to generate ls info", KR(ret), K(dest_split_param));
     } else if (OB_UNLIKELY(task_begin_index < 0 || task_begin_index > task_array_.count())) {
       ret = OB_ERR_UNEXPECTED;
@@ -743,9 +743,9 @@ int ObLSBalanceTaskHelper::generate_balance_task_for_expand_(
     for (int64_t i = task_begin_index + 1; OB_SUCC(ret) && i < task_array_.count(); ++i) {
       if (task_array_.at(i).get_task_type().is_split_task()) {
         if (OB_FAIL(construct_ls_merge_task_(task_array_.at(i).get_dest_ls_id(),
-                                            dest_ls_id, ls_group_id))) {
+                                            target_ls_id, ls_group_id))) {
           LOG_WARN("failed to construct ls merge task", KR(ret),
-                  K(task_array_.at(i)), K(dest_ls_id), K(ls_group_id));
+                  K(task_array_.at(i)), K(target_ls_id), K(ls_group_id));
         }
       }
     }
@@ -754,7 +754,7 @@ int ObLSBalanceTaskHelper::generate_balance_task_for_expand_(
 }
 
 int ObLSBalanceTaskHelper::generate_ls_split_task_(const ObSplitLSParamArray &dest_split_param,
-                                                  share::ObLSID &dest_ls_id,
+                                                  share::ObLSID &target_ls_id,
                                                   int64_t &task_begin_index)
 {
   int ret = OB_SUCCESS;
@@ -771,28 +771,28 @@ int ObLSBalanceTaskHelper::generate_ls_split_task_(const ObSplitLSParamArray &de
   task_begin_index = task_array_.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < dest_split_param.count(); ++i) {
     // split task has equal ls group id with source
-    // dest_ls_id_tmp is the temporary dest ls for ls_split task
+    // dest_ls_id is the temporary dest ls for ls_split task
     // the first temporary ls serves as the missing ls for ls expand strategy
     task.reset();
-    ObLSID dest_ls_id_tmp;
+    ObLSID dest_ls_id;
     ObBalanceTaskID task_id;
     const share::ObLSStatusInfo *src_ls = dest_split_param.at(i).get_ls_info();
     if (OB_ISNULL(src_ls)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("src ls is null", KR(ret), K(i), K(dest_split_param));
     } else if (OB_FAIL(ObLSServiceHelper::fetch_new_ls_id(sql_proxy_, tenant_id_,
-                                                          dest_ls_id_tmp))) {
+                                                          dest_ls_id))) {
       LOG_WARN("failed to fetch new ls id", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(ObCommonIDUtils::gen_unique_id(tenant_id_, task_id))) {
       LOG_WARN("failed to gen unique id", KR(ret), K(tenant_id_));
-    } else if (!dest_ls_id.is_valid() && OB_FALSE_IT(dest_ls_id = dest_ls_id_tmp)) { // empty
-    } else if (OB_FAIL(construct_ls_part_info_(dest_split_param.at(i), dest_ls_id, part_list))) {
+    } else if (!target_ls_id.is_valid() && OB_FALSE_IT(target_ls_id = dest_ls_id)) { // empty
+    } else if (OB_FAIL(construct_ls_part_info_(dest_split_param.at(i), target_ls_id, part_list))) {
       LOG_WARN("failed to construct ls part info", KR(ret), KPC(src_ls));
     } else if (OB_FAIL(task.simple_init(tenant_id_, job_.get_job_id(), task_id, task_type,
-                                        src_ls->ls_group_id_, src_ls->ls_id_, dest_ls_id_tmp,
+                                        src_ls->ls_group_id_, src_ls->ls_id_, dest_ls_id,
                                         part_list))) {
       LOG_WARN("failed to init task", KR(ret), K(tenant_id_), K(job_), K(task_id), K(task_type),
-               KPC(src_ls), K(dest_ls_id_tmp), K(part_list));
+               KPC(src_ls), K(dest_ls_id), K(part_list));
     } else if (OB_FAIL(task_array_.push_back(task))) {
       LOG_WARN("failed to push back task", KR(ret), K(task));
     }

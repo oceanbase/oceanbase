@@ -22,20 +22,20 @@ using namespace common;
 namespace rootserver
 {
 
-int ObTenantLSBalanceGroupInfo::init(const uint64_t tenant_id, int64_t ls_num)
+int ObTenantLSBalanceGroupInfo::init(const uint64_t tenant_id, int64_t balanced_ls_num)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K(inited_));
-  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || ls_num <= 0)) {
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || balanced_ls_num <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_num));
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(balanced_ls_num));
   } else if (OB_FAIL(ls_bg_map_.create(MAP_BUCKET_NUM, "TntLSBGMap"))) {
     LOG_WARN("create map for tenant balance group info fail", KR(ret), LITERAL_K(MAP_BUCKET_NUM));
   } else {
     tenant_id_ = tenant_id;
-    ls_num_ = ls_num;
+    balanced_ls_num_ = balanced_ls_num;
     inited_ = true;
   }
   return ret;
@@ -55,7 +55,7 @@ void ObTenantLSBalanceGroupInfo::destroy()
   inited_ = false;
   ls_bg_map_.destroy();
   tenant_id_ = OB_INVALID_TENANT_ID;
-  ls_num_ = 0;
+  balanced_ls_num_ = 0;
 }
 
 int ObTenantLSBalanceGroupInfo::build(const char *mod,
@@ -82,8 +82,7 @@ int ObTenantLSBalanceGroupInfo::build(const char *mod,
 
 int ObTenantLSBalanceGroupInfo::on_new_partition(
     const ObBalanceGroup &bg,
-    const common::ObObjectID bg_unit_id,
-    const common::ObObjectID table_id,
+    const schema::ObSimpleTableSchemaV2 &table_schema,
     const common::ObObjectID part_object_id,
     const share::ObLSID &src_ls_id,
     const share::ObLSID &dest_ls_id,
@@ -94,16 +93,19 @@ int ObTenantLSBalanceGroupInfo::on_new_partition(
   UNUSEDx(dest_ls_id, in_new_partition_group);
   int ret = OB_SUCCESS;
   ObLSBalanceGroupInfo *ls_bg_info = NULL;
-  ObTransferPartInfo part_info(table_id, part_object_id);
+  ObTransferPartInfo part_info(table_schema.get_table_id(), part_object_id);
+  const ObObjectID &bg_unit_id = OB_INVALID_ID != table_schema.get_tablegroup_id()
+      ? table_schema.get_tablegroup_id()
+      : table_schema.get_database_id();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantLSBalanceGroupInfo not inited", KR(ret), K_(inited));
-  } else if (OB_UNLIKELY(!bg.is_valid() || !is_valid_id(bg_unit_id) || !is_valid_id(table_id)
+  } else if (OB_UNLIKELY(!bg.is_valid() || !table_schema.is_valid()
             || !is_valid_id(part_object_id) || !is_valid_id(part_group_uid)
             || !src_ls_id.is_valid_with_tenant(tenant_id_)
             || tablet_size < 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(bg_unit_id), K(table_id), K(part_object_id),
+    LOG_WARN("invalid argument", KR(ret), K(table_schema), K(part_object_id),
             K(src_ls_id), K(tablet_size), K(part_group_uid));
   } else if (OB_FAIL(get_or_create(src_ls_id, ls_bg_info))) {
     LOG_WARN("get or create ls balance group info fail", KR(ret), K(src_ls_id));
@@ -135,8 +137,7 @@ int ObTenantLSBalanceGroupInfo::get(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObTenantLSBalanceGroupInfo::get_or_create(const ObLSID ls_id,
-                                              ObLSBalanceGroupInfo *&ls_bg_info)
+int ObTenantLSBalanceGroupInfo::get_or_create(const ObLSID ls_id, ObLSBalanceGroupInfo *&ls_bg_info)
 {
   int ret = OB_SUCCESS;
   void *buf = NULL;
@@ -156,8 +157,9 @@ int ObTenantLSBalanceGroupInfo::get_or_create(const ObLSID ls_id,
       } else if (OB_ISNULL(ls_bg_info = new(buf) ObLSBalanceGroupInfo(alloc_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("construct ObLSBalanceGroupInfo fail", KR(ret));
-      } else if (OB_FAIL(ls_bg_info->init(ls_id, ls_num_))) {
-        LOG_WARN("init ls balance group info fail", KR(ret), K(ls_id), K_(ls_num), KPC(ls_bg_info));
+      } else if (OB_FAIL(ls_bg_info->init(ls_id, balanced_ls_num_))) {
+        LOG_WARN("init ls balance group info fail", KR(ret), K(ls_id), K_(balanced_ls_num),
+                KPC(ls_bg_info));
       } else if (OB_FAIL(ls_bg_map_.set_refactored(ls_id, ls_bg_info))) {
         LOG_WARN("set ls balance group info to map fail", KR(ret), K(ls_id));
       }

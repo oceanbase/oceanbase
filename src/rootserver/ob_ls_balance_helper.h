@@ -193,8 +193,18 @@ public:
                                   ObIArray<ObSplitLSParamArray> &dest_array);
   int generate_balance_task_for_expand_(const ObSplitLSParamArray &dest_split_param,
                                         const uint64_t ls_group_id);
+  // target_ls_id: the ls which the splitted part groups will be located eventually
+  // 1. for ls expand:
+  //    param[out] target_ls_id: the first splitted dest_ls_id, other splitted dest_ls_id
+  //                             is merged into target_ls_id
+  //    for example: when ls_num 2 -> 3, generate ls_split(1001, 1003), ls_split(1002, 1004),
+  //                 ls_merge(1004, 1003). target_ls_id will be 1003
+  // 2. for ls shrink:
+  //    param[in] target_ls_id: the normal ls which the splitted part groups will be located eventually
+  //    for example: when ls_num 3 -> 2, generate ls_split(1003, 1004)
+  //                 target_ls_id is 1001
   int generate_ls_split_task_(const ObSplitLSParamArray &dest_split_param,
-                              share::ObLSID &dest_ls_id,
+                              share::ObLSID &target_ls_id,
                               int64_t &task_begin_index);
   int prepare_ls_partition_info_();
   int add_ls_part_info(const share::ObLSID &ls_id, const share::ObTransferPartInfo &part_info,

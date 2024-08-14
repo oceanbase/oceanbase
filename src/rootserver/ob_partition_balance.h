@@ -80,8 +80,7 @@ public:
   // handle new partition of every balance group
   int on_new_partition(
       const ObBalanceGroup &bg_in,
-      const ObObjectID bg_unit_id,
-      const ObObjectID table_id,
+      const schema::ObSimpleTableSchemaV2 &table_schema,
       const ObObjectID part_object_id,
       const ObLSID &src_ls_id,
       const ObLSID &dest_ls_id,
