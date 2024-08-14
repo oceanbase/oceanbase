@@ -444,6 +444,7 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
     // When updating or deleting records with lob type,
     // the null value of the lob type column may be incorrect
     // due to the limitations of obcdc.
+    // Currently, it only indicates that obcdc has mistakenly identified a NULL value as a LOB type.
 	  bool has_lob_null = false;
 	  // xmltype and sdo_geometry type don't support compare operation.
     bool has_unsupport_type_compare = false;
@@ -594,7 +595,7 @@ int ObLogMinerRecord::build_insert_stmt_(ObStringBuffer &stmt,
             "col_idx", i);
       }
       if (OB_SUCC(ret)) {
-        if (is_lob_type_(col_meta) && nullptr == new_cols[i].buf) {
+        if (is_lob_type_(col_meta) && nullptr == new_cols[i].buf && new_cols[i].m_origin != VALUE_ORIGIN::REDO) {
           has_lob_null = true;
         }
       }
@@ -653,7 +654,7 @@ int ObLogMinerRecord::build_update_stmt_(ObStringBuffer &stmt,
             "col_idx", i);
       }
       if (OB_SUCC(ret)) {
-        if (is_lob_type_(col_meta) && nullptr == new_cols[i].buf) {
+        if (is_lob_type_(col_meta) && nullptr == new_cols[i].buf && new_cols[i].m_origin != VALUE_ORIGIN::REDO) {
           has_lob_null = true;
         }
       }
@@ -949,7 +950,7 @@ int ObLogMinerRecord::build_cond_(ObStringBuffer &stmt,
       }
     }
     if (OB_SUCC(ret)) {
-      if (is_lob_type_(col_meta) && nullptr == cols[col_idx].buf) {
+      if (is_lob_type_(col_meta) && nullptr == cols[col_idx].buf && cols[col_idx].m_origin != VALUE_ORIGIN::REDO) {
         has_lob_null = true;
       }
     }
