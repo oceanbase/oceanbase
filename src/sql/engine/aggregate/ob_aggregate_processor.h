@@ -1003,9 +1003,6 @@ private:
                             ObEvalCtx &ctx,
                             GroupConcatExtraResult *&extra,
                             ObDatum &concat_result);
-  template<typename GcTreeType>
-  int narrow_st_collect_result(ObIAllocator &allocator,
-                               ObGeometry *&geo);
 
   int get_rb_build_agg_result(const ObAggrInfo &aggr_info,
                               GroupConcatExtraResult *&extra,

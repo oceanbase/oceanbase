@@ -49,12 +49,8 @@ int ObExprSTGeometryN::calc_result_type2(ObExprResType &type,
     LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, get_name());
   }
 
-  if (OB_SUCC(ret)) {
-    if (ob_is_null(type_n)) {
-      // do nothing
-    } else {
-      type2.set_calc_type(ObIntType);
-    }
+  if (OB_SUCC(ret) && !ob_is_null(type_n)) {
+    type2.set_calc_type(ObIntType);
   }
   type.set_geometry();
   type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
@@ -74,14 +70,15 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
   const ObSrsItem *srs = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_alloc = tmp_alloc_g.get_allocator();
-  bool is_null_result = false;
 
-  // check null
-  is_null_result = ob_is_null(expr.args_[0]->datum_meta_.type_) || ob_is_null(expr.args_[1]->datum_meta_.type_);
-
-  if (is_null_result) {
+  // check NULL, but normally return when arg0 == NULL, arg != NULL
+  if (ob_is_null(expr.args_[0]->datum_meta_.type_) 
+      && !ob_is_null(expr.args_[1]->datum_meta_.type_)) {
     res.set_null();
-    ret = OB_ERR_PARAM_SIZE;
+  } else if (ob_is_null(expr.args_[0]->datum_meta_.type_) 
+            || ob_is_null(expr.args_[1]->datum_meta_.type_)) {
+    res.set_null();
+    ret = OB_ERR_PARAM_SIZE;    
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum))) {
     LOG_WARN("eval geo arg failed", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, datum2))) {
@@ -111,16 +108,14 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
       LOG_WARN("unknown geometry type", K(ret), K(src_geo->type()));
     } else if (src_geo->type() <= ObGeoType::POLYGON) {
       ret = OB_ERR_BAD_FIELD_ERROR;
-      // todo LOG
+      LOG_WARN("The type of geometry should be collection", K(ret));
     } else {
       const int N = datum2->get_int() - 1;
       if (N < 0) {
         ret = OB_ERR_BAD_FIELD_ERROR;
-        // todo LOG
+        LOG_WARN("The index out range of geometry collection", K(ret));
       } else { 
         bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
-        bool need_reverse = (is_geog && srs->is_lat_long_order());
-
         switch (src_geo->type()) {
           case common::ObGeoType::MULTIPOINT:{
             if (is_geog) {
@@ -166,15 +161,16 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
             break;
         } // end switch
 
-        if (OB_SUCC(ret) && is_geog && need_reverse) {
+        if (OB_SUCC(ret)) {
           if (src_geo->type() == common::ObGeoType::MULTIPOINT) {
             tmp_geo = dest_geo;
           } else {
             ObGeoToTreeVisitor visitor(&tmp_alloc);
             if (OB_FAIL(dest_geo->do_visit(visitor))) {
               LOG_WARN("failed to convert bin to tree", K(ret));
-            } else
+            } else {
               tmp_geo = visitor.get_geometry();
+            }
           }
         }
       }
@@ -184,8 +180,9 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
       if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*tmp_geo, expr, ctx, 
                                              srs, res_wkb, srid))){
         LOG_WARN("failed to write geometry to wkb", K(ret));
-      } else
+      } else {
         res.set_string(res_wkb);
+      }
     } else {
       LOG_WARN("failed to get Nth-Geometry from Collection", K(ret));
     }
@@ -203,7 +200,7 @@ int ObExprSTGeometryN::get_sub_point(const ObGeometry *g,
   const MPT *src_geo = reinterpret_cast<const MPT *>(const_cast<char *>(g->val()));
   if (N >= src_geo->size()) {
     ret = OB_ERR_BAD_FIELD_ERROR;
-    // todo LOG
+    LOG_WARN("The index out range of geometry collection", K(ret));
     return ret;
   }
   typename MPT::iterator iter = src_geo->begin();
@@ -235,6 +232,7 @@ int ObExprSTGeometryN::get_sub_geometry(const ObGeometry *g,
   const MultiType *src_geo = reinterpret_cast<const MultiType *>(const_cast<char *>(g->val()));
   if (N >= src_geo->size()) {
     ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("The index out range of geometry collection", K(ret));
     return ret;
   }
   typename MultiType::iterator iter = src_geo->begin();
@@ -264,6 +262,7 @@ int ObExprSTGeometryN::get_sub_geometry_gc(const ObGeometry *g,
   const GCInType *src_geo = reinterpret_cast<const GCInType *>(const_cast<char *>(g->val()));
   if (N >= src_geo->size()) {
     ret = OB_ERR_BAD_FIELD_ERROR;
+    LOG_WARN("The index out range of geometry collection", K(ret));
     return ret;
   }
   typename GCInType::iterator iter = src_geo->begin();

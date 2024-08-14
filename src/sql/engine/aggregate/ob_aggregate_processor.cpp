@@ -44,7 +44,7 @@
 #include "observer/omt/ob_tenant_srs.h"
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_utils.h"
-// #include "lib/geo/ob_geo_func_utils.h"
+#include "lib/geo/ob_geo_func_utils.h"
 
 
 namespace oceanbase
@@ -8462,54 +8462,57 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
         LOG_WARN("get unexpected null", K(ret), K(storted_row));
       } else {        
         const ObDatum& gis_datum = storted_row->cells()[0];
-        if (gis_datum.is_null()) { // ignore NULL arguments
-          continue;
-        } 
-        is_null_result = false;
-        ObString wkb = gis_datum.get_string();
-
-        if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_alloc, gis_datum, datum_meta,
-                                                              has_lob_header, wkb))) {
-          LOG_WARN("fail to get real string data", K(ret), K(wkb));
-        } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_alloc, wkb, srs_guard, 
-                                                              srs, cur_geo, N_ST_COLLECT))) {
-          LOG_WARN("fail to create geo", K(ret), K(wkb));     // ObIWkbGeo
-        } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
-          ret = OB_ERR_GIS_INVALID_DATA;
-          LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_COLLECT);
-          LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
-        } else if (!is_inited) {
-          is_inited = true;
-          if (OB_FAIL(ObGeometrycollection::create_collection(cur_geo->crs(), srid,
-                                                              tmp_alloc, gc))) {
-            LOG_WARN("fail to create geometry collection", K(ret), K(wkb));
+        if (!gis_datum.is_null()) { // ignore NULL arguments
+          is_null_result = false;
+          ObString wkb = gis_datum.get_string();
+          if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_alloc, gis_datum, datum_meta,
+                                                                has_lob_header, wkb))) {
+            LOG_WARN("fail to get real string data", K(ret), K(wkb));
+          } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_alloc, wkb, srs_guard, 
+                                                                srs, cur_geo, N_ST_COLLECT))) {
+            LOG_WARN("fail to create geo", K(ret), K(wkb));     // ObIWkbGeo
+          } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
+            ret = OB_ERR_GIS_INVALID_DATA;
+            LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_COLLECT);
+            LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
+          } else if (!is_inited) {
+            is_inited = true;
+            if (OB_FAIL(ObGeometrycollection::create_collection(cur_geo->crs(), srid,
+                                                                tmp_alloc, gc))) {
+              LOG_WARN("fail to create geometry collection", K(ret), K(wkb));
+            }
           }
-        }
 
-        if (OB_SUCC(ret)) {
-          if (srid != gc->get_srid()) {
-            ret = OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION;
-            LOG_WARN("geometry in collection must in the same SRS", K(ret));
-            break;
-          } else {
-            gc->push_back(*cur_geo);
-            switch (cur_geo->type()) {
-              case common::ObGeoType::POINT:
-                has_pt = TRUE;
-                break;
-              case common::ObGeoType::LINESTRING:
-                has_ls = TRUE;
-                break;
-              case common::ObGeoType::POLYGON:
-                has_py = TRUE;
-                break;
-              default:
-                has_other = TRUE;
-                break;
-            } // end switch
-          }
-        }
-      }
+          if (OB_SUCC(ret)) {
+            if (srid != gc->get_srid()) {
+              ret = OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION;
+              // LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION, N_ST_COLLECT, srid, gc->get_srid());
+              LOG_WARN("geometry in collection must in the same SRS", K(ret));
+              break;
+            } else {
+              gc->push_back(*cur_geo);
+              switch (cur_geo->type()) {  // flags for narrow collection
+                case common::ObGeoType::POINT: {
+                  has_pt = TRUE;
+                  break;                  
+                }
+                case common::ObGeoType::LINESTRING: {
+                  has_ls = TRUE;
+                  break;
+                }
+                case common::ObGeoType::POLYGON: {
+                  has_py = TRUE;
+                  break;
+                }
+                default: {
+                  has_other = TRUE;
+                  break;                
+                }
+              } // end switch
+            } // end else
+          } // end if (OB_SUCC(ret))
+        } // end if (!gis_datum.is_null()) 
+      } // end else
     } // end while
 
     if (ret != OB_ITER_END && ret != OB_SUCCESS) {
@@ -8520,23 +8523,23 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
       } else {
         ObString res_wkb;
         ObGeometry* narrow_gc = static_cast<ObGeometry *>(gc);
-        if (!has_other && !(has_pt & has_ls & has_py) 
-            && (has_pt ^ has_ls ^ has_py)) { 
+        if (!has_other && ((has_pt && !has_ls && !has_py)
+            || (!has_pt && has_ls && !has_py)
+            || (!has_pt && !has_ls && has_py))) {
           if (narrow_gc->crs() == ObGeoCRS::Geographic) {
-            ret = narrow_st_collect_result<ObGeographGeometrycollection>(
-                      tmp_alloc, narrow_gc);
+            ret = ObGeoFuncUtils::narrow_st_collect_result<ObGeographGeometrycollection>(
+                      tmp_alloc, narrow_gc, srs);
           } else {
-            ret = narrow_st_collect_result<ObCartesianGeometrycollection>(
-                      tmp_alloc, narrow_gc);
+            ret = ObGeoFuncUtils::narrow_st_collect_result<ObCartesianGeometrycollection>(
+                      tmp_alloc, narrow_gc, srs);
           }
           if (OB_FAIL(ret)) {
-            LOG_WARN("fail to narrow_st_collect_result", K(ret));
+            LOG_WARN("fail to narrow st_collect's result", K(ret));
           }
         }
-        // todo using reverse_coordinate to fix the bug of narrow when srid != 0 
-        // maybe similiar to st_astext?
-        if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*narrow_gc, *aggr_info.expr_, 
-                                               ctx, srs, res_wkb))) {
+        if ((ret == OB_ITER_END || ret == OB_SUCCESS) &&
+            OB_FAIL(ObGeoExprUtils::geo_to_wkb(*narrow_gc, *aggr_info.expr_, 
+                                                ctx, srs, res_wkb))) {
           LOG_WARN("failed to write geometry to wkb", K(ret));
         } else {
           concat_result.set_string(res_wkb);
@@ -8544,82 +8547,6 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
       }
     }
     tmp_alloc.clear();
-  }
-  return ret;
-}
-
-template<typename GcTreeType>
-int ObAggregateProcessor::narrow_st_collect_result(ObIAllocator &allocator,
-                                                   ObGeometry *&geo)
-{
-  int ret = OB_SUCCESS;
-  ObGeoToTreeVisitor tree_visitor(&allocator);
-  GcTreeType *&geo_coll = reinterpret_cast<GcTreeType *&>(geo);
-  switch(geo_coll->front().type()) {
-    case ObGeoType::POINT: {
-      typename GcTreeType::sub_mpt_type *res_geo = OB_NEWx(typename GcTreeType::sub_mpt_type, 
-                                                           &allocator, geo->get_srid(), allocator);
-      if (OB_ISNULL(res_geo)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to alloc memory", K(ret));
-      }
-      for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-        typename GcTreeType::sub_pt_type &geo_point = reinterpret_cast<typename GcTreeType::sub_pt_type &>((*geo_coll)[i]);
-        typename GcTreeType::sub_mpt_type::value_type point_tmp(geo_point.template get<1>(), 
-                                                                geo_point.template get<0>());
-        if (OB_FAIL(res_geo->push_back(point_tmp))) {  // ? fail to use geo_point.data 
-          OB_LOG(WARN, "failed to add point to multipoint", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        geo = res_geo;
-      }
-      break;
-    }
-    case ObGeoType::LINESTRING: {
-      typename GcTreeType::sub_ml_type *res_geo = OB_NEWx(typename GcTreeType::sub_ml_type, 
-                                                          &allocator, geo->get_srid(), allocator);
-      if (OB_ISNULL(res_geo)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to alloc memory", K(ret));
-      } else {
-        for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-          if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
-            LOG_WARN("fail to convert geometry to tree", K(ret));
-          }
-          if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
-            OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        geo = res_geo;
-      }
-      break;
-    }
-    case ObGeoType::POLYGON: {
-      typename GcTreeType::sub_mp_type *res_geo = OB_NEWx(typename GcTreeType::sub_mp_type, 
-                                                          &allocator, geo->get_srid(), allocator);
-      if (OB_ISNULL(res_geo)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to alloc memory", K(ret));
-      } else {
-        for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-          if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
-            LOG_WARN("fail to convert geometry to tree", K(ret));
-          }
-          if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
-            OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        geo = res_geo;
-      }
-      break;
-    }
-    default: // do nothing
-      break;
   }
   return ret;
 }

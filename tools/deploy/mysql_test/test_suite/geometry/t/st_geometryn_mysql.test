@@ -26,3 +26,122 @@ SELECT ST_AsText(ST_GeometryN(ST_GeomFromText(@mls, 4326),2));
 
 SELECT ST_AsText(ST_GeometryN(ST_GeomFromText(@mpy),2));
 SELECT ST_AsText(ST_GeometryN(ST_GeomFromText(@mpy, 4326),2));
+
+--echo #====================================================================================
+--echo # ST_GEOMETRYN(geometrycollection, number)
+--echo #====================================================================================
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0))'), 1));
+
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(0 0,2 2,4 4,6 6,8 8,10 10), POLYGON((0 0,0 5,5 5,5 0,0 0)))'), 3));
+
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTIPOINT(0 0), MULTILINESTRING((0 0,5 5,10 10),(0 0,-5 -5,-10 -10)), MULTIPOLYGON(((0 0,0 5,5 5,5 0,0 0)),((5 5,5 10,10 10,10 5,5 5))))'), 3));
+
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0),GEOMETRYCOLLECTION())'), 2));
+
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(
+                                                 POINT(10,10),
+                                                 LINESTRING(POINT(0,0), POINT(2,2), POINT(4,4), POINT(6,6), POINT(8,8)),
+                                                 POLYGON(LINESTRING(POINT(0,0), POINT(10,0), POINT(10,10), POINT(0,10), POINT(0,0)),
+                                                         LINESTRING(POINT(4,4), POINT(4,6), POINT(6,6), POINT(6,4), POINT(4,4)))))), 2));
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(
+                                                 MULTIPOINT(POINT(1e308,1e308), POINT(-1e308,1e308), POINT(1e308,-1e308)),
+                                                 MULTILINESTRING(LINESTRING(POINT(0,0), POINT(5,5), POINT(10,10)),
+                                                                 LINESTRING(POINT(0,0), POINT(-5,-5), POINT(-10,-10))),
+                                                 MULTIPOLYGON(POLYGON(LINESTRING(POINT(0,0), POINT(0,1), POINT(1,1), POINT(1,0), POINT(0,0))),
+                                                              POLYGON(LINESTRING(POINT(2,2), POINT(2,13), POINT(13,13), POINT(13,2), POINT(2,2)),
+                                                                      LINESTRING(POINT(4,4), POINT(4,6), POINT(6,6), POINT(6,4), POINT(4,4))))))), 3));
+
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(
+                                                           POINT(0,0),
+                                                           LINESTRING(POINT(0,0), POINT(2,2), POINT(4,4), POINT(6,6)),
+                                                           POLYGON(LINESTRING(POINT(0,0), POINT(10,0), POINT(10,10), POINT(0,10), POINT(0,0)),
+                                                                   LINESTRING(POINT(4,4), POINT(4,6), POINT(6,6), POINT(6,4), POINT(4,4))),
+                                                           MULTIPOINT(POINT(1e308,1e308), POINT(-1e308,1e308), POINT(1e308,-1e308)),
+                                                           MULTILINESTRING(LINESTRING(POINT(0,0), POINT(5,5), POINT(10,10)),
+                                                                           LINESTRING(POINT(0,0), POINT(-5,-5), POINT(-10,-10))),
+                                                           MULTIPOLYGON(POLYGON(LINESTRING(POINT(0,0), POINT(0,1), POINT(1,1), POINT(1,0), POINT(0,0))),
+                                                                        POLYGON(LINESTRING(POINT(2,2), POINT(2,3), POINT(3,3), POINT(3,2), POINT(2,2))))))), 2));
+
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(
+                                                           POINT(0,0),
+                                                           LINESTRING(POINT(0,0), POINT(2,2), POINT(4,4), POINT(6,6)),
+                                                           POLYGON(LINESTRING(POINT(0,0), POINT(10,0), POINT(10,10), POINT(0,10), POINT(0,0)),
+                                                                   LINESTRING(POINT(4,4), POINT(4,6), POINT(6,6), POINT(6,4), POINT(4,4))),
+                                                           MULTIPOINT(POINT(1e308,1e308), POINT(-1e308,1e308), POINT(1e308,-1e308)),
+                                                           MULTILINESTRING(LINESTRING(POINT(0,0), POINT(5,5), POINT(10,10)),
+                                                                           LINESTRING(POINT(0,0), POINT(-5,-5), POINT(-10,-10))),
+                                                           MULTIPOLYGON(POLYGON(LINESTRING(POINT(0,0), POINT(0,1), POINT(1,1), POINT(1,0), POINT(0,0))),
+                                                                        POLYGON(LINESTRING(POINT(2,2), POINT(2,3), POINT(3,3), POINT(3,2), POINT(2,2))))))), 5));
+
+SELECT ST_ASTEXT(ST_GEOMETRYN(ST_GEOMFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(
+                                                           POINT(0,0),
+                                                           LINESTRING(POINT(0,0), POINT(2,2), POINT(4,4), POINT(6,6)),
+                                                           POLYGON(LINESTRING(POINT(0,0), POINT(10,0), POINT(10,10), POINT(0,10), POINT(0,0)),
+                                                                   LINESTRING(POINT(4,4), POINT(4,6), POINT(6,6), POINT(6,4), POINT(4,4))),
+                                                           MULTIPOINT(POINT(1e308,1e308), POINT(-1e308,1e308), POINT(1e308,-1e308)),
+                                                           MULTILINESTRING(LINESTRING(POINT(0,0), POINT(5,5), POINT(10,10)),
+                                                                           LINESTRING(POINT(0,0), POINT(-5,-5), POINT(-10,-10))),
+                                                           MULTIPOLYGON(POLYGON(LINESTRING(POINT(0,0), POINT(0,1), POINT(1,1), POINT(1,0), POINT(0,0))),
+                                                                        POLYGON(LINESTRING(POINT(2,2), POINT(2,3), POINT(3,3), POINT(3,2), POINT(2,2))))))), 6));
+
+
+--echo #====================================================================================
+--echo # Invalid function calls of ST_GeometryN
+--echo #====================================================================================
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+SELECT ST_GEOMETRYN();
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+SELECT ST_GEOMETRYN(NULL);
+
+SELECT ST_GEOMETRYN(NULL, 1);
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+SELECT ST_GEOMETRYN(ST_GEOMFROMWKB());
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+SELECT ST_GEOMETRYN(ST_GEOMFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(POINT(0,0), LINESTRING(POINT(1,1), POINT(2,2))))));
+
+--error ER_BAD_FIELD_ERROR
+SELECT ST_GEOMETRYN(ST_GEOMETRYCOLLECTIONFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(POINT(0,0), LINESTRING(POINT(a,1), POINT(2,2))))), 1);
+
+--error ER_BAD_FIELD_ERROR
+SELECT ST_GEOMETRYN(ST_GEOMETRYCOLLECTIONFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(POINT(0,b), LINESTRING(POINT(a,1), POINT(2,2))))), 1);
+
+--error ER_BAD_FIELD_ERROR
+SELECT ST_GEOMETRYN(ST_GEOMETRYCOLLECTIONFROMWKB(ST_ASWKB(GEOMETRYCOLLECTION(POINT(0,0), LINESTRING(POINT(1,1), POINT(2,2))))), A);
+
+--error ER_WRONG_PARAMCOUNT_TO_NATIVE_FCT
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT());
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('NULL'), 1);
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(1)'), 2);
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0))'), 3);
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2 2)'), 4);
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2))'), 5);
+
+--error ER_GIS_INVALID_DATA
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2 a))'), 6);
+
+--error ER_PARSE_ERROR
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2 '!'))'), 7);
+
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2 2))'), 0);
+
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2 2))'), -1);
+
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2 2))'), -1024);
+
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2 2))'), 10000);
+
+SELECT ST_GEOMETRYN(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(0 0), LINESTRING(1 1,2 2))'), 123456789);

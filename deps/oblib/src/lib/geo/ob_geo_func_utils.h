@@ -17,6 +17,7 @@
 #include "ob_geo_func_register.h"
 #include "lib/utility/ob_hang_fatal_error.h"
 #include "lib/geo/ob_geo_to_tree_visitor.h"
+#include "lib/geo/ob_geo_normalize_visitor.h"
 #include "common/ob_smart_call.h"
 
 namespace oceanbase
@@ -63,6 +64,8 @@ public:
   static int simplify_geo_collection(ObGeometry *&geo, common::ObIAllocator &allocator, const ObSrsItem *srs);
   template<typename GcType>
   static int simplify_multi_geo(ObGeometry *&geo, common::ObIAllocator &allocator);
+  template<typename GcTreeType>
+  static int narrow_st_collect_result(ObIAllocator &allocator, ObGeometry *&geo, const ObSrsItem *srs);
 
 private:
   template<typename GcTreeType>
@@ -595,6 +598,98 @@ int ObGeoFuncUtils::remove_duplicate_multi_geo(ObGeometry *&geo, common::ObIAllo
   }
   return ret;
 }
+
+/*
+ * Narrowing Collection type to MultiX for aggregate func: st_collect
+*/
+template<typename GcTreeType>
+int ObGeoFuncUtils::narrow_st_collect_result(ObIAllocator &allocator,
+                                             ObGeometry *&geo,
+                                             const ObSrsItem *srs)
+{
+  int ret = OB_SUCCESS;
+  ObGeoToTreeVisitor tree_visitor(&allocator);
+  GcTreeType *&geo_coll = reinterpret_cast<GcTreeType *&>(geo);
+
+  if (OB_NOT_NULL(srs) && (srs->is_geographical_srs() || srs->is_lat_long_order())) {
+    ObGeoNormalizeVisitor normalize_visitor(srs);
+    for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+      if (OB_FAIL((*geo_coll)[i].do_visit(normalize_visitor))) {
+        LOG_WARN("normalize geo failed", K(ret));
+        return ret;
+      }
+    } // end for
+  }
+
+  switch(geo_coll->front().type()) {
+    case ObGeoType::POINT: {
+      typename GcTreeType::sub_mpt_type *res_geo = OB_NEWx(typename GcTreeType::sub_mpt_type, 
+                                                           &allocator, geo->get_srid(), allocator);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "fail to alloc memory", K(ret));
+      }
+      for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+        typename GcTreeType::sub_pt_type &geo_point = reinterpret_cast<typename GcTreeType::sub_pt_type &>((*geo_coll)[i]);
+        typename GcTreeType::sub_mpt_type::value_type point_tmp(geo_point.template get<1>(), 
+                                                                geo_point.template get<0>());
+        if (OB_FAIL(res_geo->push_back(point_tmp))) { 
+          OB_LOG(WARN, "failed to add point to multipoint", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    case ObGeoType::LINESTRING: {
+      typename GcTreeType::sub_ml_type *res_geo = OB_NEWx(typename GcTreeType::sub_ml_type, 
+                                                          &allocator, geo->get_srid(), allocator);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "fail to alloc memory", K(ret));
+      } else {
+        for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+          if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
+            LOG_WARN("fail to convert geometry to tree", K(ret));
+          }
+          if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
+            OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    case ObGeoType::POLYGON: {
+      typename GcTreeType::sub_mp_type *res_geo = OB_NEWx(typename GcTreeType::sub_mp_type, 
+                                                          &allocator, geo->get_srid(), allocator);
+      if (OB_ISNULL(res_geo)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        OB_LOG(WARN, "fail to alloc memory", K(ret));
+      } else {
+        for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
+          if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
+            LOG_WARN("fail to convert geometry to tree", K(ret));
+          }
+          if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
+            OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        geo = res_geo;
+      }
+      break;
+    }
+    default: // do nothing
+      break;
+  }
+  return ret;
+}
+
 } // sql
 } // oceanbase
 #endif // OCEANBASE_LIB_OB_GEO_FUNC_UTILS_H_
