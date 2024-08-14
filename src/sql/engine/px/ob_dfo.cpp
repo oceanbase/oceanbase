@@ -16,6 +16,7 @@
 #include "sql/engine/px/ob_px_util.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
+#include "sql/engine/px/exchange/ob_px_transmit_op.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -553,6 +554,31 @@ int ObDfo::get_qc_channels(ObIArray<ObDtlChannel *> &sqc_chs)
       LOG_WARN("fail push back ch", K(ret));
     }
   }
+  return ret;
+}
+
+int ObDfo::ready_to_earlier_sched(bool &ready_to_sched)
+{
+  int ret = OB_SUCCESS;
+  // DFO is ready to be earlier scheduled iff:
+  // 1. its parent DFO could be earliers scheduled
+  // 2. its top operator(skip exchange-out and matierial) consumes child 1 by 1 or all of its child
+  //    DFOs are scheduled
+  const ObPxTransmitSpec *op = static_cast<const ObPxTransmitSpec *>(root_op_spec_);
+  ready_to_sched = true;
+  if (op->child_finish_for_early_sched_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_dfos_.count(); ++i) {
+      ObDfo *child = child_dfos_.at(i);
+      if (OB_ISNULL(child)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null child dfo");
+      } else if (!child->is_active()) {
+        ready_to_sched = false;
+        break;
+      }
+    }
+  }
+
   return ret;
 }
 
