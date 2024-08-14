@@ -267,7 +267,7 @@ int ObResolverUtils::collect_schema_version(share::schema::ObSchemaGetterGuard &
                                         (udf_expr->get_database_name().empty() || (0 == udf_expr->get_database_name().case_compare(OB_SYS_DATABASE_NAME)))
                                         ? session_info->get_database_name() : udf_expr->get_database_name(),
                                         database_id));
-      if (OB_SUCC(ret)) {
+      if (OB_SUCC(ret) && udf_expr->is_standalone_udf()) {
         bool exist = false;
         uint64_t object_db_id = OB_INVALID_ID;
         ObSchemaChecker schema_checker;

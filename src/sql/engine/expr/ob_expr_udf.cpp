@@ -441,6 +441,7 @@ int ObExprUDF::process_singal_out_param(int64_t i,
     if (obj.is_ext() && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
       OZ (pl::ObUserDefinedType::deep_copy_obj(alloc, obj, dst, true));
     }
+    OX (dones.at(i) = true);
   }
   return ret;
 }
