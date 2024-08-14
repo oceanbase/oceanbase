@@ -96,18 +96,49 @@ static int pad_obj(ObTableLoadCastObjCtx &cast_obj_ctx, const ObColumnSchemaV2 *
 }
 
 int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
-                                   const ObColumnSchemaV2 *column_schema, const ObObj &src,
+                                   const ObColumnSchemaV2 *column_schema,
+                                   const ObObj &src,
                                    ObObj &dst)
 {
   int ret = OB_SUCCESS;
   const ObObj *convert_src_obj = nullptr;
   const ObObjType expect_type = column_schema->get_meta_type().get_type();
   const ObAccuracy &accuracy = column_schema->get_accuracy();
-  if (OB_FAIL(convert_obj(expect_type, src, convert_src_obj))) {
-    LOG_WARN("fail to convert obj", KR(ret));
+  if (src.is_nop_value()) {
+    // 默认值是表达式
+    if (lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("column default value is ext", KR(ret), KPC(column_schema));
+    } else if (lib::is_oracle_mode() && column_schema->is_default_expr_v2_column()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("column default value is expr", KR(ret), KPC(column_schema));
+    }
+    // 没有默认值, 且为NOT NULL
+    // 例外:枚举类型默认为第一个
+    else if (column_schema->is_not_null_for_write() &&
+             column_schema->get_cur_default_value().is_null()) {
+      if (column_schema->get_meta_type().is_enum()) {
+        const uint64_t ENUM_FIRST_VAL = 1;
+        dst.set_enum(ENUM_FIRST_VAL);
+      } else {
+        ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+        LOG_WARN("column can not be null", KR(ret), KPC(column_schema));
+      }
+    }
+    // mysql模式可以直接用default value
+    else if (lib::is_mysql_mode()) {
+      dst = column_schema->get_cur_default_value();
+    }
+    // oracle模式需要转换
+    else {
+      convert_src_obj = &(column_schema->get_cur_default_value());
+    }
+  } else {
+    if (OB_FAIL(convert_obj(expect_type, src, convert_src_obj))) {
+      LOG_WARN("fail to convert obj", KR(ret));
+    }
   }
-
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && convert_src_obj != nullptr) {
     if (column_schema->is_enum_or_set()) {
       if (OB_FAIL(handle_string_to_enum_set(cast_obj_ctx, column_schema, src, dst))) {
         LOG_WARN("fail to convert string to enum or set", KR(ret), K(src), K(dst));
@@ -117,18 +148,18 @@ int ObTableLoadObjCaster::cast_obj(ObTableLoadCastObjCtx &cast_obj_ctx,
         LOG_WARN("fail to do to type", KR(ret));
       }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(pad_obj(cast_obj_ctx, column_schema, dst))) {
-      LOG_WARN("fail to pad obj", KR(ret));
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(pad_obj(cast_obj_ctx, column_schema, dst))) {
+        LOG_WARN("fail to pad obj", KR(ret));
+      }
     }
-  }
 
-  if (OB_SUCC(ret)) {
-    if (cast_obj_ctx.is_need_check_ &&
-                OB_FAIL(cast_obj_check(cast_obj_ctx, column_schema, dst))) {
-      LOG_WARN("fail to check cast obj result", KR(ret), K(dst));
+    if (OB_SUCC(ret)) {
+      if (cast_obj_ctx.is_need_check_ &&
+                  OB_FAIL(cast_obj_check(cast_obj_ctx, column_schema, dst))) {
+        LOG_WARN("fail to check cast obj result", KR(ret), K(dst));
+      }
     }
   }
   return ret;

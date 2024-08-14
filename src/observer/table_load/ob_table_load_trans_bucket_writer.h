@@ -70,6 +70,7 @@ private:
   const ObTableLoadParam &param_;
   common::ObArenaAllocator allocator_;
   bool is_partitioned_;
+  int64_t column_count_;
   common::ObCastMode cast_mode_;
   struct SessionContext
   {
