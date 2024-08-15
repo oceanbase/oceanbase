@@ -1257,7 +1257,8 @@ inline bool ob_is_unsigned_type(ObObjType type)
           || ObYearType == type
           || ObUFloatType == type
           || ObUDoubleType == type
-          || ObUNumberType == type;
+          || ObUNumberType == type
+          || ObBitType == type;
 }
 
 bool is_match_alter_integer_column_online_ddl_rules(const common::ObObjMeta& src_meta,
