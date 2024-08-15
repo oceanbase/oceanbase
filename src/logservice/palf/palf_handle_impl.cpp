@@ -1403,7 +1403,20 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
       }
     }
     time_guard.click("precheck");
-    // step 3: check whether the new config info can be set to the election module
+    // step 3: check whether the reconfiguration is allowed
+    if (OB_SUCC(ret) && is_add_log_sync_member_list(args.type_) &&
+        UPGRADE_LEARNER_TO_ACCEPTOR != args.type_) {
+      ret = plugins_.check_can_add_member(args.server_.get_server(), timeout_us);
+      // reset retcode if the plugin is empty
+      ret = (OB_NOT_INIT == ret)? OB_SUCCESS: ret;
+    } else if (OB_SUCC(ret) && DEGRADE_ACCEPTOR_TO_LEARNER != args.type_ &&
+        (is_remove_log_sync_member_list(args.type_) || CHANGE_REPLICA_NUM == args.type_)) {
+      ret = plugins_.check_can_change_memberlist(new_config_info.config_.log_sync_memberlist_,
+          new_config_info.config_.log_sync_replica_num_, timeout_us);
+      ret = (OB_NOT_INIT == ret)? OB_SUCCESS: ret;
+    }
+    time_guard.click("check_deps");
+    // step 4: check whether the new config info can be set to the election module
     while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
       {
         RLockGuard guard(lock_);
@@ -1421,12 +1434,12 @@ int PalfHandleImpl::one_stage_config_change_(const LogConfigChangeArgs &args,
       ob_usleep(50 * 1000);
     }
     time_guard.click("wait_ele");
-    // step 4: waiting for log barrier if a arbitration member exists
+    // step 5: waiting for log barrier if a arbitration member exists
     if (OB_SUCC(ret) && true == new_config_info.config_.arbitration_member_.is_valid()) {
       ret = wait_log_barrier_(args, new_config_info, not_timeout);
     }
     time_guard.click("wait_barrier");
-    // step 5: motivate reconfiguration
+    // step 6: motivate reconfiguration
     while (OB_SUCCESS == ret && OB_SUCC(not_timeout())) {
       bool need_wlock = false;
       bool need_rlock = false;
@@ -2626,6 +2639,35 @@ int PalfHandleImpl::reset_locality_cb()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(plugins_.del_plugin(locality_cb))) {
+    PALF_LOG(WARN, "del_plugin failed", KR(ret), KPC(this), K_(plugins));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::set_reconfig_checker_cb(PalfReconfigCheckerCb *reconfig_checker)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    PALF_LOG(WARN, "not initted", KR(ret), KPC(this));
+  } else if (OB_ISNULL(reconfig_checker)) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "reconfig_checker is NULL, can't register", KR(ret), KPC(this));
+  } else if (OB_FAIL(plugins_.add_plugin(reconfig_checker))) {
+    PALF_LOG(WARN, "add_plugin failed", KR(ret), KPC(this), KP(reconfig_checker), K_(plugins));
+  } else {
+    PALF_LOG(INFO, "set_reconfig_checker_cb success", KPC(this), K_(plugins), KP(reconfig_checker));
+  }
+  return ret;
+}
+
+int PalfHandleImpl::reset_reconfig_checker_cb()
+{
+  int ret = OB_SUCCESS;
+  PalfReconfigCheckerCb *reconfig_checker = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(plugins_.del_plugin(reconfig_checker))) {
     PALF_LOG(WARN, "del_plugin failed", KR(ret), KPC(this), K_(plugins));
   }
   return ret;

@@ -539,6 +539,8 @@ public:
   int reset_election_priority();
   int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb);
   int reset_locality_cb();
+  int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker);
+  int reset_reconfig_checker_cb();
   int stat(PalfStat &palf_stat) const;
 
   //---------config change lock related--------//

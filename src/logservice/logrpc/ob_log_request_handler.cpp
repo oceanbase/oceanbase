@@ -15,6 +15,7 @@
 #include "logservice/ob_log_handler.h"
 #include "logservice/logrpc/ob_log_rpc_proxy.h"
 #include "storage/tx_storage/ob_ls_handle.h"
+#include "logservice/ob_reconfig_checker_adapter.h"
 #include "logservice/palf/log_define.h"
 #include "logservice/replayservice/ob_log_replay_service.h"
 
@@ -232,12 +233,18 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
 {
   int ret = OB_SUCCESS;
   ObLogReporterAdapter *reporter;
+  logservice::ObReconfigCheckerAdapter reconfig_checker;
   if (NULL == palf_handle_) {
     ret = OB_NOT_INIT;
   } else if (false == req.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(get_reporter_(reporter))) {
     CLOG_LOG(ERROR, "get_reporter failed", K(req.palf_id_));
+  } else if (OB_FAIL(reconfig_checker.init(MTL_ID(), share::ObLSID(req.palf_id_), req.timeout_us_))) {
+    CLOG_LOG(WARN, "ObLSRecoveryGuard init failed", K(ret), K(req.palf_id_));
+  } else if (OB_FAIL(palf_handle_->set_reconfig_checker_cb(&reconfig_checker))) {
+    CLOG_LOG(WARN, "set_reconfig_checker_cb failed, another reconfiguration is running", K(ret), K(req.palf_id_));
+    ret = OB_EAGAIN;
   } else {
     switch (req.cmd_type_) {
       case FORCE_SINGLE_MEMBER_CMD:
@@ -297,6 +304,7 @@ int ConfigChangeCmdHandler::handle_config_change_cmd(const LogConfigChangeCmd &r
       default:
         break;
     }
+    palf_handle_->reset_reconfig_checker_cb();
   }
   resp.ret_ = ret;
   if (OB_SUCC(ret) && OB_FAIL(reporter->report_replica_info(req.palf_id_))) {

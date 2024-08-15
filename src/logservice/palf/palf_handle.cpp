@@ -728,6 +728,31 @@ int PalfHandle::reset_locality_cb()
   return ret;
 }
 
+int PalfHandle::set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker)
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  if (OB_ISNULL(reconfig_checker)) {
+    PALF_LOG(INFO, "no need set_reconfig_checker_cb", KR(ret), KP(reconfig_checker));
+  } else if (OB_FAIL(palf_handle_impl_->set_reconfig_checker_cb(reconfig_checker))) {
+    PALF_LOG(WARN, "set_reconfig_checker_cb failed", KR(ret));
+  } else {
+  }
+  return ret;
+}
+
+int PalfHandle::reset_reconfig_checker_cb()
+{
+  int ret = OB_SUCCESS;
+  CHECK_VALID;
+  if (OB_FAIL(palf_handle_impl_->reset_reconfig_checker_cb())) {
+    PALF_LOG(WARN, "reset_reconfig_checker_cb failed", KR(ret));
+  } else {
+    PALF_LOG(INFO, "reset_reconfig_checker_cb success", KR(ret));
+  }
+  return ret;
+}
+
 int PalfHandle::advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
                                                               const int64_t downgrade_priority_time_us,
                                                               const char *reason)

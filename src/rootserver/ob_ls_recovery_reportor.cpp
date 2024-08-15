@@ -301,8 +301,7 @@ int ObLSRecoveryReportor::update_ls_recovery(
   int ret = OB_SUCCESS;
   ObLSRecoveryStat ls_recovery_stat;
   ObMySQLTransaction trans;
-  ObLSHandle ls_handle;
-  ObLSRecoveryGuard guard(ls_handle);
+  ObLSRecoveryGuard guard;
   const uint64_t exec_tenant_id = ObLSLifeIAgent::get_exec_tenant_id(tenant_id_);
   if (OB_ISNULL(ls) || OB_ISNULL(sql_proxy)) {
     ret = OB_INVALID_ARGUMENT;

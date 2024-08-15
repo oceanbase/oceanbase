@@ -50,8 +50,9 @@ int ObLSRecoveryGuard::init(const uint64_t tenant_id, const share::ObLSID &ls_id
              || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
-  } else if (!is_user_tenant(tenant_id)) {
+  } else if (skip_check_member_list_change_(tenant_id)) {
     //meta and sys no transfer, no need report and wait readable_scn
+    //primary tenant no need check member list change
     ls_recovery_stat_ = NULL;
     tenant_id_ = tenant_id;
   } else {
@@ -97,6 +98,61 @@ ObLSRecoveryGuard::~ObLSRecoveryGuard()
   }
 }
 
+bool ObLSRecoveryGuard::skip_check_member_list_change_(const uint64_t tenant_id)
+{
+  bool bret = false;
+  if (!is_user_tenant(tenant_id)) {
+    bret = true;
+    LOG_INFO("not user tenant, no need to check member list change", K(tenant_id));
+  } else {
+    int ret = OB_SUCCESS;//use to MTL_SWITCH
+    MTL_SWITCH(tenant_id) {
+      if (MTL_TENANT_ROLE_CACHE_IS_PRIMARY()) {
+        bret = true;
+        LOG_INFO("is primary tenant, no need check readable_scn");
+      }
+    }
+  }
+  return bret;
+}
+
+int ObLSRecoveryGuard::check_can_add_member(const ObAddr &server, const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!server.is_valid() || 0 >= timeout)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server), K(timeout));
+  } else if (skip_check_member_list_change_(tenant_id_)) {
+    //if not user tenant, no need to check and add member
+  } else if (OB_ISNULL(ls_recovery_stat_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls recovery stat is null, not init", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ls_recovery_stat_->set_add_replica_server(server))) {
+    LOG_WARN("failed to set add replica server", KR(ret), K(server));
+  } else if (OB_FAIL(ls_recovery_stat_->wait_server_readable_scn(server, timeout))) {
+    LOG_WARN("failed to wait readable scn", KR(ret), K(server));
+  }
+  return ret;
+}
+
+int ObLSRecoveryGuard::check_can_change_member(const ObMemberList &new_member_list,
+      const int64_t paxos_replica_num, const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!new_member_list.is_valid() || 0 >= paxos_replica_num || 0 >= timeout)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
+  } else if (skip_check_member_list_change_(tenant_id_)) {
+    //if not user tenant, no need to check and add member
+  } else if (OB_ISNULL(ls_recovery_stat_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls recovery stat is null, not init", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ls_recovery_stat_->wait_can_change_member_list(new_member_list,
+                     paxos_replica_num, timeout))) {
+    LOG_WARN("failed to check can change member", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
+  }
+  return ret;
+}
 
 int ObLSRecoveryStatHandler::init(const uint64_t tenant_id, ObLS *ls)
 {
@@ -222,8 +278,24 @@ int ObLSRecoveryStatHandler::reset_inner_readable_scn()
   return ret;
 }
 
-int ObLSRecoveryStatHandler::check_inner_stat_()
+int ObLSRecoveryStatHandler::wait_can_change_member_list(
+    const ObMemberList &new_member_list, const int64_t paxos_replica_num,
+    const int64_t timeout)
 {
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::current_time();
+  if (OB_UNLIKELY(!new_member_list.is_valid() || 0 >= paxos_replica_num || 0 >= timeout)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
+  } else if (OB_FAIL(wait_func_with_timeout_(timeout, new_member_list, paxos_replica_num))) {
+    LOG_WARN("failed to wait func with timeout", KR(ret), K(new_member_list), K(paxos_replica_num), K(timeout));
+  }
+  LOG_INFO("finish wait for change member_list", KR(ret), K(new_member_list), K(paxos_replica_num),
+      K(timeout), "cost",  ObTimeUtility::current_time() - now);
+  return ret;
+}
+
+int ObLSRecoveryStatHandler::check_inner_stat_() {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -234,7 +306,6 @@ int ObLSRecoveryStatHandler::check_inner_stat_()
   }
   return ret;
 }
-
 int ObLSRecoveryStatHandler::get_ls_replica_readable_scn(share::SCN &readable_scn)
 {
   int ret = OB_SUCCESS;
@@ -322,6 +393,67 @@ int ObLSRecoveryStatHandler::get_all_replica_min_readable_scn(share::SCN &readab
   }
   return ret;
 }
+
+int ObLSRecoveryStatHandler::wait_server_readable_scn(
+    const common::ObAddr &server, const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  int64_t now = ObTimeUtility::current_time();
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_UNLIKELY(!server.is_valid() || 0 >= timeout)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server), K(timeout));
+  } else {
+    if (OB_FAIL(wait_func_with_timeout_(timeout, server))) {
+      LOG_WARN("failed wait func with timeout", KR(ret), K(server), K(timeout));
+    }
+  }
+  LOG_INFO("finish wait for add member", KR(ret), K(server),
+      K(timeout), "cost",  ObTimeUtility::current_time() - now);
+
+  return ret;
+}
+
+int ObLSRecoveryStatHandler::check_member_change_valid_(
+    const common::ObAddr &server, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("inner stat error", KR(ret));
+  } else if (OB_UNLIKELY(!server.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(server));
+  } else {
+    SCN readable_scn;
+    is_valid = false;
+    const int64_t TIME_WAIT = 100 * 1000;
+    bool found = false;
+    SpinRLockGuard guard(lock_);
+    for (int64_t i = 0; i < replicas_scn_.count() && OB_SUCC(ret) && !found;
+         ++i) {
+      if (replicas_scn_.at(i).get_server() == server) {
+        found = true;
+        readable_scn = replicas_scn_.at(i).get_readable_scn();
+        if (readable_scn >= readable_scn_upper_limit_) {
+          is_valid = true;
+          LOG_INFO("can change member list", K(server), K(readable_scn),
+              K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
+        } else if (REACH_TENANT_TIME_INTERVAL(TIME_WAIT)) {
+          LOG_INFO("server readable scn is not larger enough", K(server),
+                   K(readable_scn), K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
+        }
+      }
+    }  // end for
+    if (OB_SUCC(ret) && !found && REACH_TENANT_TIME_INTERVAL(TIME_WAIT)) {
+      is_valid = false;
+      LOG_INFO("cannot find server readable scn", K(server), K(replicas_scn_),
+          K(readable_scn_upper_limit_), "ls_id", ls_->get_ls_id());
+    }
+  }
+  return ret;
+}
+
 
 int ObLSRecoveryStatHandler::increase_ls_replica_readable_scn_(SCN &readable_scn)
 {
@@ -663,7 +795,45 @@ int ObLSRecoveryStatHandler::dump_all_replica_readable_scn_(const bool force_dum
           K(last_dump_ts_), K(force_dump));
       last_dump_ts_ = now;
     } else {
-      LOG_TRACE("ls readable scn in memory", KR(ret), K(ls_id), K(replicas_scn_));
+      LOG_TRACE("ls readable scn in memory", KR(ret), K(ls_id),
+          K(readable_scn_upper_limit_), K(replicas_scn_));
+    }
+  }
+  return ret;
+}
+
+int ObLSRecoveryStatHandler::check_member_change_valid_(
+    const ObMemberList &new_member_list, const int64_t paxos_replica_num, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  SCN readable_scn;
+  palf::PalfStat palf_stat;
+  ObArray<ObAddr> addr_list;
+  is_valid = false;
+  if (OB_UNLIKELY(!new_member_list.is_valid() || 0 >= paxos_replica_num)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(new_member_list), K(paxos_replica_num));
+  } else if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("inner stat error", KR(ret), K_(is_inited));
+  } else if (OB_FAIL(get_palf_stat_(palf_stat))) {
+    LOG_WARN("failed to get palf stat", KR(ret));
+  } else if (OB_FAIL(new_member_list.get_addr_array(addr_list))) {
+    LOG_WARN("failed to get addr array", KR(ret), K(new_member_list));
+  } else if (OB_FAIL(do_get_majority_readable_scn_V2_(addr_list,
+     rootserver::majority(paxos_replica_num), palf_stat.config_version_, readable_scn))) {
+    LOG_WARN("failed to get majority readable scn", KR(ret), K(addr_list),
+    K(paxos_replica_num), K(palf_stat));
+  } else {
+    SpinRLockGuard guard(lock_);
+    if (readable_scn >= readable_scn_upper_limit_) {
+      is_valid = true;
+      LOG_INFO("can change member list", K(new_member_list), K(paxos_replica_num),
+         "new readable_scn", readable_scn, "current readable_scn", readable_scn_upper_limit_,
+         "ls_id", ls_->get_ls_id(), K(palf_stat));
+    } else if (REACH_TENANT_TIME_INTERVAL(1 * 1000 * 1000L)) {
+      LOG_INFO("can not change member list",  K(new_member_list), K(paxos_replica_num),
+          K(readable_scn), K(readable_scn_upper_limit_),
+          "ls_id", ls_->get_ls_id(), K(palf_stat));
     }
   }
   return ret;
@@ -751,16 +921,7 @@ int ObLSRecoveryStatHandler::do_get_each_replica_readable_scn_(
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < ob_member_list.count(); ++i) {
       const ObAddr &member = ob_member_list.at(i);
-      if (GCTX.self_addr() == member) {
-        SCN self_readable_scn;
-        if (OB_FAIL(ls_->get_max_decided_scn(self_readable_scn))) {
-          LOG_WARN("failed to get max decide scn", KR(ret));
-        } else if (OB_FAIL(replica_scn.init(member, self_readable_scn))) {
-          LOG_WARN("failed to init replica scn", KR(ret), K(member), K(self_readable_scn));
-        } else if (OB_FAIL(replicas_scn.push_back(replica_scn))) {
-          LOG_WARN("failed to push back replica scn", KR(ret), K(replica_scn));
-        }
-      } else if (OB_TMP_FAIL(proxy.call(member, ctx.get_timeout(),
+      if (OB_TMP_FAIL(proxy.call(member, ctx.get_timeout(),
               GCONF.cluster_id, tenant_id_, group_id, arg))) {
         LOG_WARN("failed to send rpc", KR(ret), KR(tmp_ret), K(member), K(i), K(ctx),
             K_(tenant_id), K(arg), K(ob_member_list), K(group_id));
@@ -827,6 +988,11 @@ int ObLSRecoveryStatHandler::get_majority_readable_scn_(
     majority_min_readable_scn))) {
       LOG_WARN("failed to get majority readable scn", KR(ret), K(palf_stat_first),
           K(paxos_replica_number_new), K(member_list_new));
+    } else if (OB_FAIL(set_inner_readable_scn(palf_stat_first.config_version_,
+            majority_min_readable_scn, true))) {
+      //尝试更新内存中的可读点
+      LOG_WARN("failed to set inner readable scn", KR(ret), K(palf_stat_first),
+        K(majority_min_readable_scn));
     }
   } else if (OB_FAIL(do_get_majority_readable_scn_(member_list_new,
           leader_readable_scn, rootserver::majority(paxos_replica_number_new), majority_min_readable_scn))) {
@@ -981,13 +1147,9 @@ int ObLSRecoveryStatHandler::do_get_majority_readable_scn_V2_(
     }
   }
   if (FAILEDx(do_calc_majority_min_readable_scn_(need_query_member_cnt,
-  replica_readble_scn, majority_min_readable_scn))) {
+          replica_readble_scn, majority_min_readable_scn))) {
     LOG_WARN("failed to calc majority readable scn", KR(ret),
     K(need_query_member_cnt), K(replica_readble_scn));
-  } else if (OB_FAIL(set_inner_readable_scn(config_version, majority_min_readable_scn, true))) {
-    //尝试更新内存中的可读点
-    LOG_WARN("failed to set inner readable scn", KR(ret), K(config_version),
-        K(majority_min_readable_scn));
   }
   return ret;
 }

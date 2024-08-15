@@ -815,6 +815,8 @@ public:
   virtual int reset_election_priority() = 0;
   virtual int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) = 0;
   virtual int reset_locality_cb() = 0;
+  virtual int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) = 0;
+  virtual int reset_reconfig_checker_cb() = 0;
   // ==================== Callback end ========================
   virtual int advance_election_epoch_and_downgrade_priority(const int64_t proposal_id,
                                                             const int64_t downgrade_priority_time_us,
@@ -1030,6 +1032,8 @@ public:
   int reset_election_priority() override final;
   int set_locality_cb(palf::PalfLocalityInfoCb *locality_cb) override final;
   int reset_locality_cb() override final;
+  int set_reconfig_checker_cb(palf::PalfReconfigCheckerCb *reconfig_checker) override final;
+  int reset_reconfig_checker_cb() override final;
   // ==================== Callback end ========================
 public:
   int get_begin_lsn(LSN &lsn) const override final;

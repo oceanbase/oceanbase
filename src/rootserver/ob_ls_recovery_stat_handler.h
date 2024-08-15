@@ -61,8 +61,8 @@ class ObLSRecoveryGuard
   //These two types of tenants do not report on ls_recovery_stat; the interface is used solely to standardize member changes.
   // The detructor of the class will clear the reference count and reset any set information
 public:
-  ObLSRecoveryGuard(storage::ObLSHandle &ls_handle) :
-    tenant_id_(OB_INVALID_TENANT_ID), ls_handle_(ls_handle), ls_recovery_stat_(NULL) {}
+  ObLSRecoveryGuard() :
+    tenant_id_(OB_INVALID_TENANT_ID), ls_handle_(), ls_recovery_stat_(NULL) {}
   ~ObLSRecoveryGuard();
   /**
    * @description:
@@ -97,11 +97,15 @@ public:
    * @param[in] timeout: Timeout period
    * **/
   int check_can_change_member(const ObMemberList &new_member_list,
-      const int64_t paxos_replica_num, const int64_t timeout);
+                              const int64_t paxos_replica_num,
+                              const int64_t timeout);
   friend class TestLSRecoveryGuard;
 private:
+  bool skip_check_member_list_change_(const uint64_t tenant_id);
+private:
+
   uint64_t tenant_id_;
-  ObLSHandle &ls_handle_;
+  ObLSHandle ls_handle_;
   ObLSRecoveryStatHandler *ls_recovery_stat_;
 };
 
@@ -173,7 +177,23 @@ public:
    *                 or the config_version has changed during the statistical process.
    * */
   int get_all_replica_min_readable_scn(share::SCN &readable_scn);
-
+  /*
+   * @description: Used to check whether the readable_SCN of this member has surpassed the reported readable_SCN,
+   * for the purpose of judging member changes and the addition of replicas during timeout.
+   * @param[in] server: target server
+   * @param[in] timeout: Timeout period
+  * @return:
+  */
+  int wait_server_readable_scn(const common::ObAddr &server, const int64_t timeout);
+  /*
+   * @description: Within the timeout period, determine whether the new member list can ensure that the readable_SCN does not regress.
+   * @param[in] new_member_list : new_member_list
+   * @param[in] paxos_replica_num : paxos_replica_num of new member_list
+   * @param[in] timeout: Timeout period
+   * @return:
+  */
+  int wait_can_change_member_list(const ObMemberList &new_member_list,
+      const int64_t paxos_replica_num, const int64_t timeout);
   TO_STRING_KV(K_(tenant_id), K_(ls), K(ref_cnt_));
   friend class TestLSRecoveryGuard;
   friend class ObLSRecoveryGuard;
@@ -253,7 +273,11 @@ private:
   int construct_addr_list_(const palf::PalfStat &palf_stat,
       ObIArray<common::ObAddr> &addr_list);
   int dump_all_replica_readable_scn_(const bool force_dump);
-
+  template<typename... Args>
+  int wait_func_with_timeout_(const int64_t timeout, Args &&... args);
+  int check_member_change_valid_(const common::ObAddr &server, bool &is_valid);
+  int check_member_change_valid_(const ObMemberList &new_member_list,
+      const int64_t paxos_replica_num, bool &is_valid);
   DISALLOW_COPY_AND_ASSIGN(ObLSRecoveryStatHandler);
 
 private:
@@ -274,7 +298,45 @@ private:
   ObSEArray<ObLSReplicaReadableSCN, OB_MAX_MEMBER_NUMBER + 1, ObNullAllocator> replicas_scn_;//缓存每个副本的可读位点
 };
 
+template <typename... Args>
+inline int ObLSRecoveryStatHandler::wait_func_with_timeout_(
+   const int64_t timeout, Args &&...args)
+{
+  int ret = OB_SUCCESS;
+  bool is_valid_use = false;
+  if (OB_UNLIKELY(timeout <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    RS_LOG(WARN, "invalid argument", KR(ret), K(timeout));
+  } else if (OB_FAIL(check_can_use_new_version_(is_valid_use))) {
+    RS_LOG(WARN, "failed to check use new version", KR(ret));
+  } else if (!is_valid_use) {
+    RS_LOG(INFO, "can not use readable in memory, no need to check", K(timeout));
+  } else {
+    int64_t current_timeout = timeout;
+    const int64_t TIME_WAIT = 100 * 1000;
+    bool is_finish = false;
+    do {
+      if (OB_FAIL(check_member_change_valid_(std::forward<Args>(args)..., is_finish))) {
+        RS_LOG(WARN, "failed to check", KR(ret));
+      } else if (current_timeout > 0) {
+        usleep(TIME_WAIT);
+        current_timeout -= TIME_WAIT;
+      } else if (OB_SUCC(ret)) {
+        ret = OB_TIMEOUT;
+        RS_LOG(WARN, "failed to wait server readable scn", KR(ret), K(timeout));
+      }
+    } while (current_timeout > 0 && OB_SUCC(ret) && !is_finish);
+  }
+  if (OB_FAIL(ret)) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(dump_all_replica_readable_scn_(true))) {
+      RS_LOG(WARN, "failed to dump all replica readable scn", KR(ret), KR(tmp_ret));
+    }
+  }
+  return ret;
 }
+
+}  // namespace rootserver
 }
 
 #endif // OCEANBASE_STORAGE_OB_LS_RECOVERY_STAT_HANDLER
