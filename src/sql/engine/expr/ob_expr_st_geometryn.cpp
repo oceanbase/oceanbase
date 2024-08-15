@@ -68,27 +68,27 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObGeometry *tmp_geo = NULL;
   omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = NULL;
+  uint32_t srid = 0;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &tmp_alloc = tmp_alloc_g.get_allocator();
+  bool is_null_result = false;
 
-  // check NULL, but normally return when arg0 == NULL, arg != NULL
   if (ob_is_null(expr.args_[0]->datum_meta_.type_) 
       && !ob_is_null(expr.args_[1]->datum_meta_.type_)) {
-    res.set_null();
+    is_null_result = true;
   } else if (ob_is_null(expr.args_[0]->datum_meta_.type_) 
             || ob_is_null(expr.args_[1]->datum_meta_.type_)) {
-    res.set_null();
+    is_null_result = true;
     ret = OB_ERR_PARAM_SIZE;    
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum))) {
     LOG_WARN("eval geo arg failed", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, datum2))) {
     LOG_WARN("eval index arg failed", K(ret));
   } else if (gis_datum->is_null() || datum2->is_null()) {
-    res.set_null();
+    is_null_result = true;
     ret = OB_ERR_PARAM_SIZE;
   } else {
     ObString wkb = gis_datum->get_string();
-    uint32_t srid = 0;
 
     if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_alloc, *gis_datum,
               expr.args_[0]->datum_meta_, expr.args_[0]->obj_meta_.has_lob_header(), wkb))) {
@@ -100,7 +100,7 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
       LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_GEOMETRYN);
       LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_alloc, wkb, src_geo, srs, N_ST_GEOMETRYN, 
-                                                      ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT))) {
+                                                      ObGeoBuildFlag::GEO_DEFAULT ^ ObGeoBuildFlag::GEO_CORRECT))) {
       LOG_WARN("failed to parse wkb", K(ret));        // ObIWkbGeom
     } else if ((src_geo->type() <= ObGeoType::GEOMETRY) 
                 || (src_geo->type() >= ObGeoType::GEOTYPEMAX)) {
@@ -111,49 +111,46 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
       LOG_WARN("The type of geometry should be collection", K(ret));
     } else {
       const int N = datum2->get_int() - 1;
-      if (N < 0) {
-        ret = OB_ERR_BAD_FIELD_ERROR;
-        LOG_WARN("The index out range of geometry collection", K(ret));
-      } else { 
+      if (N >= 0) { // N should be a no-negative number
         bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
         switch (src_geo->type()) {
           case common::ObGeoType::MULTIPOINT:{
             if (is_geog) {
               ret = get_sub_point<ObWkbGeogMultiPoint, ObGeographPoint>(
-                        src_geo, N, tmp_alloc, dest_geo);
+                        src_geo, N, is_null_result, tmp_alloc, dest_geo);
             } else {
               ret = get_sub_point<ObWkbGeomMultiPoint, ObCartesianPoint>(
-                        src_geo, N, tmp_alloc, dest_geo);
+                        src_geo, N, is_null_result, tmp_alloc, dest_geo);
             }
             break;
           }
           case common::ObGeoType::MULTILINESTRING:{
             if (is_geog) {
               ret = get_sub_geometry<ObWkbGeogMultiLineString>(
-                        src_geo, N, tmp_alloc, dest_geo, ObGeoType::LINESTRING);
+                        src_geo, N, is_null_result, tmp_alloc, dest_geo, ObGeoType::LINESTRING);
             } else {
               ret = get_sub_geometry<ObWkbGeomMultiLineString>(
-                        src_geo, N, tmp_alloc, dest_geo, ObGeoType::LINESTRING);
+                        src_geo, N, is_null_result, tmp_alloc, dest_geo, ObGeoType::LINESTRING);
             }
             break;
           }
           case common::ObGeoType::MULTIPOLYGON:{
             if (is_geog) {
               ret = get_sub_geometry<ObWkbGeogMultiPolygon>(
-                        src_geo, N, tmp_alloc, dest_geo, ObGeoType::POLYGON);
+                        src_geo, N, is_null_result, tmp_alloc, dest_geo, ObGeoType::POLYGON);
             } else {
               ret = get_sub_geometry<ObWkbGeomMultiPolygon>(
-                        src_geo, N, tmp_alloc, dest_geo, ObGeoType::POLYGON);
+                        src_geo, N, is_null_result, tmp_alloc, dest_geo, ObGeoType::POLYGON);
             }
             break;
           }
           case common::ObGeoType::GEOMETRYCOLLECTION:{
             if (is_geog) {
               ret = get_sub_geometry_gc<ObWkbGeogCollection>(
-                        src_geo, N, tmp_alloc, dest_geo);
+                        src_geo, N, is_null_result, tmp_alloc, dest_geo);
             } else {
               ret = get_sub_geometry_gc<ObWkbGeomCollection>(
-                        src_geo, N, tmp_alloc, dest_geo);
+                        src_geo, N, is_null_result, tmp_alloc, dest_geo);
             }
             break;
           }
@@ -161,7 +158,7 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
             break;
         } // end switch
 
-        if (OB_SUCC(ret)) {
+        if (OB_SUCC(ret) && !is_null_result) {
           if (src_geo->type() == common::ObGeoType::MULTIPOINT) {
             tmp_geo = dest_geo;
           } else {
@@ -173,18 +170,20 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
             }
           }
         }
+      } else { // N < 0, return NULL
+        is_null_result = true;
       }
     }
-    if (OB_SUCC(ret)) {
-      ObString res_wkb;
-      if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*tmp_geo, expr, ctx, 
-                                             srs, res_wkb, srid))){
-        LOG_WARN("failed to write geometry to wkb", K(ret));
-      } else {
-        res.set_string(res_wkb);
-      }
+  }
+  if (is_null_result) {
+    res.set_null();
+  } else if (OB_SUCC(ret)) {
+    ObString res_wkb;
+    if (OB_FAIL(ObGeoExprUtils::geo_to_wkb(*tmp_geo, expr, ctx, 
+                                            srs, res_wkb, srid))){
+      LOG_WARN("failed to write geometry to wkb", K(ret));
     } else {
-      LOG_WARN("failed to get Nth-Geometry from Collection", K(ret));
+      res.set_string(res_wkb);
     }
   }
   return ret;
@@ -193,30 +192,30 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
 template<typename MPT, typename PT>
 int ObExprSTGeometryN::get_sub_point(const ObGeometry *g,
                                      const int N,
+                                     bool& is_null_result,
                                      ObIAllocator &allocator,
                                      ObGeometry *&sub_geo) 
 {
   int ret = OB_SUCCESS;
   const MPT *src_geo = reinterpret_cast<const MPT *>(const_cast<char *>(g->val()));
   if (N >= src_geo->size()) {
-    ret = OB_ERR_BAD_FIELD_ERROR;
-    LOG_WARN("The index out range of geometry collection", K(ret));
-    return ret;
-  }
-  typename MPT::iterator iter = src_geo->begin();
-  for (uint32 i = 0; i < N; ++i) {
-    iter++;
-  }
-  typename MPT::const_pointer sub_ptr = iter.operator->();
-  PT *pt = OB_NEWx(PT, &allocator, 
-                   sub_ptr->template get<0>(),
-                   sub_ptr->template get<1>(), 
-                   g->get_srid(), &allocator);
-  if (OB_ISNULL(pt)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(ret));
+    is_null_result = true;
   } else {
-    sub_geo = pt;
+    typename MPT::iterator iter = src_geo->begin();
+    for (uint32 i = 0; i < N; ++i) {
+      iter++;
+    }
+    typename MPT::const_pointer sub_ptr = iter.operator->();
+    PT *pt = OB_NEWx(PT, &allocator, 
+                    sub_ptr->template get<0>(),
+                    sub_ptr->template get<1>(), 
+                    g->get_srid(), &allocator);
+    if (OB_ISNULL(pt)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret));
+    } else {
+      sub_geo = pt;
+    }    
   }
   return ret;
 }
@@ -224,6 +223,7 @@ int ObExprSTGeometryN::get_sub_point(const ObGeometry *g,
 template<typename MultiType>
 int ObExprSTGeometryN::get_sub_geometry(const ObGeometry *g,
                                         const int N,
+                                        bool& is_null_result,
                                         ObIAllocator &allocator,
                                         ObGeometry *&sub_geo,
                                         ObGeoType sub_type) 
@@ -231,23 +231,21 @@ int ObExprSTGeometryN::get_sub_geometry(const ObGeometry *g,
   int ret = OB_SUCCESS;
   const MultiType *src_geo = reinterpret_cast<const MultiType *>(const_cast<char *>(g->val()));
   if (N >= src_geo->size()) {
-    ret = OB_ERR_BAD_FIELD_ERROR;
-    LOG_WARN("The index out range of geometry collection", K(ret));
-    return ret;
-  }
-  typename MultiType::iterator iter = src_geo->begin();
-  for (uint32 i = 0; i < N; ++i) {
-    iter++;
-  }
-
-  typename MultiType::const_pointer sub_ptr = iter.operator->();
-  bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
-  if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, sub_type, is_geog, true, sub_geo))) {
-    LOG_WARN("failed to create wkb", K(ret), K(sub_type));    // ObIWkbgeo
+    is_null_result = true;
   } else {
-    ObString wkb_nosrid(WKB_COMMON_WKB_HEADER_LEN, reinterpret_cast<const char *>(sub_ptr));
-    sub_geo->set_data(wkb_nosrid);
-    sub_geo->set_srid(g->get_srid());
+    typename MultiType::iterator iter = src_geo->begin();
+    for (uint32 i = 0; i < N; ++i) {
+      iter++;
+    }
+    typename MultiType::const_pointer sub_ptr = iter.operator->();
+    bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
+    if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, sub_type, is_geog, true, sub_geo))) {
+      LOG_WARN("failed to create wkb", K(ret), K(sub_type));    // ObIWkbgeo
+    } else {
+      ObString wkb_nosrid(WKB_COMMON_WKB_HEADER_LEN, reinterpret_cast<const char *>(sub_ptr));
+      sub_geo->set_data(wkb_nosrid);
+      sub_geo->set_srid(g->get_srid());
+    }    
   }
   return ret;
 }
@@ -255,30 +253,29 @@ int ObExprSTGeometryN::get_sub_geometry(const ObGeometry *g,
 template<typename GCInType>
 int ObExprSTGeometryN::get_sub_geometry_gc(const ObGeometry *g,
                                            const int N,
+                                           bool& is_null_result,
                                            ObIAllocator &allocator,
                                            ObGeometry *&sub_geo) 
 {
   int ret = OB_SUCCESS;
   const GCInType *src_geo = reinterpret_cast<const GCInType *>(const_cast<char *>(g->val()));
   if (N >= src_geo->size()) {
-    ret = OB_ERR_BAD_FIELD_ERROR;
-    LOG_WARN("The index out range of geometry collection", K(ret));
-    return ret;
-  }
-  typename GCInType::iterator iter = src_geo->begin();
-  for (uint32 i = 0; i < N; ++i) {
-    iter++;
-  }
-
-  typename GCInType::const_pointer sub_ptr = iter.operator->();
-  ObGeoType sub_type = src_geo->get_sub_type(sub_ptr);
-  bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
-  if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, sub_type, is_geog, true, sub_geo))) {
-    LOG_WARN("failed to create wkb", K(ret), K(sub_type));    // ObIWkbgeo
+    is_null_result = true;
   } else {
-    ObString wkb_nosrid(WKB_COMMON_WKB_HEADER_LEN, reinterpret_cast<const char *>(sub_ptr));
-    sub_geo->set_data(wkb_nosrid);
-    sub_geo->set_srid(g->get_srid());
+    typename GCInType::iterator iter = src_geo->begin();
+    for (uint32 i = 0; i < N; ++i) {
+      iter++;
+    }
+    typename GCInType::const_pointer sub_ptr = iter.operator->();
+    ObGeoType sub_type = src_geo->get_sub_type(sub_ptr);
+    bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
+    if (OB_FAIL(ObGeoTypeUtil::create_geo_by_type(allocator, sub_type, is_geog, true, sub_geo))) {
+      LOG_WARN("failed to create wkb", K(ret), K(sub_type));    // ObIWkbgeo
+    } else {
+      ObString wkb_nosrid(WKB_COMMON_WKB_HEADER_LEN, reinterpret_cast<const char *>(sub_ptr));
+      sub_geo->set_data(wkb_nosrid);
+      sub_geo->set_srid(g->get_srid());
+    }
   }
   return ret;
 }

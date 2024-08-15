@@ -40,17 +40,20 @@ private:
   template<typename MPT, typename PT>
   static int get_sub_point(const ObGeometry *g,
                            const int N,
+                           bool& is_null_result,
                            ObIAllocator &allocator,
                            ObGeometry *&sub_geo);
   template<typename MultiType>
   static int get_sub_geometry(const ObGeometry *g, 
                               const int N,
+                              bool& is_null_result,
                               ObIAllocator &allocator,
                               ObGeometry *&sub_geo,
                               ObGeoType sub_type);
   template<typename GCInType>
   static int get_sub_geometry_gc(const ObGeometry *g, 
                                  const int N,
+                                 bool& is_null_result,
                                  ObIAllocator &allocator,
                                  ObGeometry *&sub_geo);
   DISALLOW_COPY_AND_ASSIGN(ObExprSTGeometryN);
