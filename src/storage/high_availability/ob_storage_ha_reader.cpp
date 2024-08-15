@@ -181,11 +181,13 @@ ObCopyMacroBlockObReader::ObCopyMacroBlockObReader()
     data_buffer_(),
     rpc_buffer_(),
     rpc_buffer_parse_pos_(0),
-    allocator_("CMBObReader"),
+    allocator_(),
     macro_block_mem_context_(),
     last_send_time_(0),
     data_size_(0)
 {
+  ObMemAttr attr(MTL_ID(), "CMBObReader");
+  allocator_.set_attr(attr);
 }
 
 ObCopyMacroBlockObReader::~ObCopyMacroBlockObReader()
@@ -571,14 +573,18 @@ ObCopyMacroBlockObProducer::ObCopyMacroBlockObProducer()
     macro_idx_(0),
     handle_idx_(0),
     prefetch_meta_time_(0),
-    tablet_allocator_("HaTabletHdl"),
+    tablet_allocator_(),
     tablet_handle_(),
     sstable_handle_(),
     sstable_(nullptr),
     datum_range_(),
-    allocator_("CopyMacroBlock"),
+    allocator_(),
     second_meta_iterator_()
 {
+  ObMemAttr attr_tablet_alloc(MTL_ID(), "HaTabletHdl");
+  tablet_allocator_.set_attr(attr_tablet_alloc);
+  ObMemAttr attr_copy_macro_block(MTL_ID(), "CopyMacroBlock");
+  allocator_.set_attr(attr_copy_macro_block);
 }
 
 ObCopyMacroBlockObProducer::~ObCopyMacroBlockObProducer()
@@ -1052,11 +1058,13 @@ int ObCopyTabletInfoObProducer::get_next_tablet_info(obrpc::ObCopyTabletInfo &ta
 ObCopySSTableInfoObReader::ObCopySSTableInfoObReader()
   : is_inited_(false),
     rpc_reader_(),
-    allocator_("CSSTObReader"),
+    allocator_(),
     is_sstable_iter_end_(true),
     sstable_index_(0),
     sstable_count_(0)
 {
+  ObMemAttr attr(MTL_ID(), "CSSTObReader");
+  allocator_.set_attr(attr);
 }
 
 int ObCopySSTableInfoObReader::init(
@@ -1173,8 +1181,10 @@ ObCopySSTableInfoRestoreReader::ObCopySSTableInfoRestoreReader()
     sstable_index_(0),
     is_sstable_iter_end_(true),
     backup_sstable_meta_array_(),
-    allocator_("CSSTREReader")
+    allocator_()
 {
+  ObMemAttr attr(MTL_ID(), "CSSTREReader");
+  allocator_.set_attr(attr);
 }
 
 int ObCopySSTableInfoRestoreReader::init(
@@ -1945,8 +1955,10 @@ int ObCopySSTableInfoObProducer::fake_deleted_tablet_meta_(
 ObCopySSTableMacroObReader::ObCopySSTableMacroObReader()
   : is_inited_(false),
     rpc_reader_(),
-    allocator_("CSSTMBObReader")
+    allocator_()
 {
+  ObMemAttr attr(MTL_ID(), "CSSTMBObReader");
+  allocator_.set_attr(attr);
 }
 
 int ObCopySSTableMacroObReader::init(
@@ -2302,9 +2314,11 @@ ObCopySSTableMacroRangeObProducer::ObCopySSTableMacroRangeObProducer()
     table_handle_(),
     tablet_handle_(),
     datum_range_(),
-    allocator_("CopySSTMacro"),
+    allocator_(),
     second_meta_iterator_()
 {
+  ObMemAttr attr(MTL_ID(), "CopySSTMacro");
+  allocator_.set_attr(attr);
 }
 
 int ObCopySSTableMacroRangeObProducer::init(
@@ -2432,8 +2446,10 @@ int ObCopySSTableMacroRangeObProducer::get_next_macro_range_info(
 ObCopyLSViewInfoObReader::ObCopyLSViewInfoObReader()
   : is_inited_(false),
     rpc_reader_(),
-    allocator_("CPLSVObReader")
+    allocator_()
 {
+  ObMemAttr attr(MTL_ID(), "CPLSVObReader");
+  allocator_.set_attr(attr);
 }
 
 int ObCopyLSViewInfoObReader::init(
