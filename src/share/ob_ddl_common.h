@@ -182,6 +182,8 @@ enum ObDDLTaskStatus {
   REBUILD_SCHEMA = 35,
   SWITCH_INDEX_NAME = 36,
   WRITE_SPLIT_START_LOG = 37,
+  DROP_AUX_INDEX_TABLE = 38,
+  DROP_LOB_META_ROW = 39,
   FAIL = 99,
   SUCCESS = 100
 };
@@ -327,6 +329,12 @@ static const char* ddl_task_status_to_str(const ObDDLTaskStatus &task_status) {
       break;
     case ObDDLTaskStatus::WRITE_SPLIT_START_LOG:
       str = "WRITE_SPLIT_START_LOG";
+      break;
+    case ObDDLTaskStatus::DROP_AUX_INDEX_TABLE:
+      str = "DROP_AUX_INDEX_TABLE";
+      break;
+    case ObDDLTaskStatus::DROP_LOB_META_ROW:
+      str = "DROP_LOB_META_ROW";
       break;
     case ObDDLTaskStatus::FAIL:
       str = "FAIL";
