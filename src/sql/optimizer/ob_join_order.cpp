@@ -9302,6 +9302,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
   int ret = OB_SUCCESS;
   ObSEArray<Path*, 8> left_best_paths;
   ObSEArray<Path*, 8> right_best_paths;
+  bool can_slave_mapping = false;
   if (OB_FAIL(find_minimal_cost_path(left_paths, left_best_paths))) {
     LOG_WARN("failed to find minimal cost path", K(ret));
   } else if (OB_FAIL(find_minimal_cost_path(right_paths, right_best_paths))) {
@@ -9334,7 +9335,8 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                                          HASH_JOIN,
                                                          false,
                                                          naaj_info.is_naaj_,
-                                                         dist_method))) {
+                                                         dist_method,
+                                                         can_slave_mapping))) {
             LOG_WARN("failed to get distributed join method", K(ret));
           } else {
             LOG_TRACE("succeed to get distributed hash join method", K(dist_method));
@@ -9346,7 +9348,7 @@ int ObJoinOrder::generate_hash_paths(const EqualSets &equal_sets,
                                                      right_path,
                                                      path_info.join_type_,
                                                      dist_algo,
-                                                     path_info.force_slave_mapping_,
+                                                     can_slave_mapping,
                                                      join_conditions,
                                                      join_filters,
                                                      join_quals,
@@ -9533,6 +9535,7 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
 {
   int ret = OB_SUCCESS;
   int64_t dist_method = 0;
+  bool can_slave_mapping = false;
   if (OB_UNLIKELY(left_paths.empty()) || OB_ISNULL(left_paths.at(0)) || OB_ISNULL(right_path)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(left_paths.count()), K(right_path), K(ret));
@@ -9546,7 +9549,8 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
                                                  NESTED_LOOP_JOIN,
                                                  true,
                                                  false,
-                                                 dist_method))) {
+                                                 dist_method,
+                                                 can_slave_mapping))) {
     LOG_WARN("failed to get distributed join method", K(ret));
   } else if (dist_method == 0) {
     /*do nothing*/
@@ -9562,7 +9566,7 @@ int ObJoinOrder::generate_inner_nl_paths(const EqualSets &equal_sets,
                                               right_path,
                                               path_info.join_type_,
                                               dist_algo,
-                                              path_info.force_slave_mapping_,
+                                              can_slave_mapping,
                                               on_conditions,
                                               where_conditions,
                                               has_equal_cond,
@@ -9593,6 +9597,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
   Path *left_path = NULL;
   ObJoinOrder *left_tree = NULL;
   int64_t dist_method = 0;
+  bool can_slave_mapping = false;
   if (OB_UNLIKELY(left_paths.empty()) || OB_ISNULL(left_paths.at(0)) ||
       OB_ISNULL(left_tree = left_paths.at(0)->parent_) ||
       OB_ISNULL(right_path) || OB_ISNULL(right_path->get_sharding())) {
@@ -9608,7 +9613,8 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                                  NESTED_LOOP_JOIN,
                                                  false,
                                                  false,
-                                                 dist_method))) {
+                                                 dist_method,
+                                                 can_slave_mapping))) {
     LOG_WARN("failed to get distributed join method", K(ret));
   } else if (dist_method == 0) {
     /*do nothing*/
@@ -9645,7 +9651,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                               right_path,
                                               path_info.join_type_,
                                               dist_algo,
-                                              path_info.force_slave_mapping_,
+                                              can_slave_mapping,
                                               on_conditions,
                                               where_conditions,
                                               has_equal_cond,
@@ -9657,7 +9663,7 @@ int ObJoinOrder::generate_normal_nl_paths(const EqualSets &equal_sets,
                                                     right_path,
                                                     path_info.join_type_,
                                                     dist_algo,
-                                                    path_info.force_slave_mapping_,
+                                                    can_slave_mapping,
                                                     on_conditions,
                                                     where_conditions,
                                                     has_equal_cond,
@@ -9682,7 +9688,8 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
                                              const JoinAlgo join_algo,
                                              const bool is_push_down,
                                              const bool is_naaj,
-                                             int64_t &distributed_methods)
+                                             int64_t &distributed_methods,
+                                             bool &can_slave_mapping)
 {
   int ret = OB_SUCCESS;
   bool is_basic = false;
@@ -9699,6 +9706,12 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   distributed_methods = path_info.distributed_methods_;
   bool use_shared_hash_join = right_path.parallel_ > ObGlobalHint::DEFAULT_PARALLEL;
   ObSQLSessionInfo *session = NULL;
+  int64_t max_path_parallel = max(left_path.parallel_, right_path.parallel_);
+  can_slave_mapping =
+      path_info.force_slave_mapping_ && max_path_parallel > ObGlobalHint::DEFAULT_PARALLEL;
+  if (path_info.force_slave_mapping_ && !can_slave_mapping) {
+    OPT_TRACE("Disable slave mapping because parallel is 1");
+  }
   if (OB_ISNULL(get_plan()) || OB_ISNULL(left_sharding = left_path.get_sharding()) ||
       OB_ISNULL(session = get_plan()->get_optimizer_context().get_session_info()) ||
       OB_ISNULL(right_sharding = right_path.get_sharding()) ||
@@ -9910,7 +9923,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) &&
       ((distributed_methods & DIST_PARTITION_NONE)
        || (distributed_methods & DIST_HASH_NONE)
-       || ((distributed_methods & DIST_BROADCAST_NONE) && path_info.force_slave_mapping_))) {
+       || ((distributed_methods & DIST_BROADCAST_NONE) && can_slave_mapping))) {
     target_part_keys.reuse();
     if (OB_FAIL(right_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
@@ -9926,7 +9939,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   if (OB_SUCC(ret) &&
       ((distributed_methods & DIST_NONE_PARTITION)
        || (distributed_methods & DIST_NONE_HASH)
-       || ((distributed_methods & DIST_NONE_BROADCAST) && path_info.force_slave_mapping_))) {
+       || ((distributed_methods & DIST_NONE_BROADCAST) && can_slave_mapping))) {
     target_part_keys.reuse();
     if (OB_FAIL(left_sharding->get_all_partition_keys(target_part_keys, true))) {
       LOG_WARN("failed to get partition keys", K(ret));
@@ -10026,13 +10039,13 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   }
 
   if (OB_SUCC(ret) && (distributed_methods & DIST_BROADCAST_NONE)
-      && path_info.force_slave_mapping_ && !is_right_match_repart) {
+      && can_slave_mapping && !is_right_match_repart) {
     OPT_TRACE("force slave mapping and right path not meet repart, prune broadcast none method");
     distributed_methods &= ~DIST_BROADCAST_NONE;
   }
 
   if (OB_SUCC(ret) && (distributed_methods & DIST_NONE_BROADCAST)
-      && path_info.force_slave_mapping_ && !is_left_match_repart) {
+      && can_slave_mapping && !is_left_match_repart) {
     OPT_TRACE("force slave mapping and left path not meet repart, prune none broadcast method");
     distributed_methods &= ~DIST_NONE_BROADCAST;
   }
@@ -10196,6 +10209,7 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
   bool best_need_sort = false;
   ObSEArray<OrderItem, 4> best_order_items;
   ObSEArray<ObRawExpr*, 4> adjusted_join_conditions;
+  bool can_slave_mapping = false;
   if (OB_UNLIKELY(left_paths.empty() || OB_ISNULL(left_paths.at(0))) ||
       OB_UNLIKELY(right_paths.empty()) || OB_ISNULL(right_paths.at(0)) || OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
@@ -10210,7 +10224,8 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                                  MERGE_JOIN,
                                                  false,
                                                  false,
-                                                 dist_method))) {
+                                                 dist_method,
+                                                 can_slave_mapping))) {
     LOG_WARN("failed to get distributed join method", K(ret));
   } else if (0 == dist_method) {
     /*do nothing*/
@@ -10236,7 +10251,7 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                                      right_join_keys,
                                                      right_paths,
                                                      dist_algo,
-                                                     path_info.force_slave_mapping_,
+                                                     can_slave_mapping,
                                                      best_order_items,
                                                      right_path,
                                                      best_need_sort,
@@ -10248,7 +10263,7 @@ int ObJoinOrder::generate_mj_paths(const EqualSets &equal_sets,
                                                       right_path,
                                                       path_info.join_type_,
                                                       dist_algo,
-                                                      path_info.force_slave_mapping_,
+                                                      can_slave_mapping,
                                                       merge_key->order_directions_,
                                                       adjusted_join_conditions,
                                                       other_join_conditions,

@@ -2026,7 +2026,8 @@ struct NullAwareAntiJoinInfo {
                                     const JoinAlgo join_algo,
                                     const bool is_push_down,
                                     const bool is_naaj,
-                                    int64_t &distributed_types);
+                                    int64_t &distributed_types,
+                                    bool &can_slave_mapping);
 
     bool is_partition_wise_valid(const Path &left_path,
                                  const Path &right_path);
