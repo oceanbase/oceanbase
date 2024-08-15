@@ -1145,6 +1145,12 @@ int ObTenant::try_wait()
   return ret;
 }
 
+void __attribute__((weak)) print_all_thread(const char* desc, uint64_t tenant_id)
+{
+  UNUSED(desc);
+  UNUSED(tenant_id);
+}
+
 void ObTenant::destroy()
 {
   int tmp_ret = OB_SUCCESS;
@@ -1159,6 +1165,7 @@ void ObTenant::destroy()
   }
   group_map_.destroy_group();
   ObTenantSwitchGuard guard(this);
+  print_all_thread("TENANT_BEFORE_DESTROY", id_);
   destroy_mtl_module();
   // 1.some mtl module(eg: ObDataAccessService) remove tmp file when destroy,
   //   so remove_tenant_file must be after destroy_mtl_module.
