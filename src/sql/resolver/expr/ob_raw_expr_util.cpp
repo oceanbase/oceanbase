@@ -3681,7 +3681,7 @@ int ObRawExprUtils::extract_contain_exprs(ObRawExpr *raw_expr,
 }
 
 int ObRawExprUtils::extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
-                                         ObRelIds &rel_ids,
+                                         const ObRelIds &rel_ids,
                                          ObIArray<ObRawExpr*> &column_exprs)
 {
   int ret = OB_SUCCESS;
@@ -3697,7 +3697,7 @@ int ObRawExprUtils::extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
 }
 
 int ObRawExprUtils::extract_column_exprs(ObRawExpr* expr,
-                                         ObRelIds &rel_ids,
+                                         const ObRelIds &rel_ids,
                                          ObIArray<ObRawExpr*> &column_exprs)
 {
   int ret = OB_SUCCESS;

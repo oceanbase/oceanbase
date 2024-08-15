@@ -36,8 +36,7 @@ int ObLogCount::est_cost()
   if (OB_ISNULL(get_plan()) || OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(child), K(ret));
-  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(
-      &child->get_output_equal_sets(), child->get_card()))) {
+  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(child))) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_update_table_metas(),
                                                              get_plan()->get_selectivity_ctx(),
                                                              get_filter_exprs(),
@@ -82,8 +81,7 @@ int ObLogCount::do_re_est_cost(EstimateCostInfo &param, double &card, double &op
       OB_ISNULL(child = get_child(ObLogicalOperator::first_child))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(child), K(ret));
-  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(
-      &child->get_output_equal_sets(), child->get_card()))) {
+  } else if (OB_FALSE_IT(get_plan()->get_selectivity_ctx().init_op_ctx(child))) {
   } else if (OB_FAIL(ObOptSelectivity::calculate_selectivity(get_plan()->get_basic_table_metas(),
                                                             get_plan()->get_selectivity_ctx(),
                                                             get_filter_exprs(),

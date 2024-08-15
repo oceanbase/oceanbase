@@ -151,8 +151,8 @@ Query Plan
 =============================================================================
 |ID|OPERATOR                                 |NAME    |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------------------
-|0 |PX COORDINATOR                           |        |2       |41          |
-|1 |└─EXCHANGE OUT DISTR                     |:EX10003|2       |40          |
+|0 |PX COORDINATOR                           |        |2       |43          |
+|1 |└─EXCHANGE OUT DISTR                     |:EX10003|2       |41          |
 |2 |  └─HASH UNION DISTINCT                  |        |2       |38          |
 |3 |    ├─HASH JOIN                          |        |1       |18          |
 |4 |    │ ├─PX PARTITION ITERATOR            |        |1       |11          |

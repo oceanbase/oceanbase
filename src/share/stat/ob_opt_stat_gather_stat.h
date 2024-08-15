@@ -26,7 +26,8 @@ namespace common
 enum ObOptStatGatherType {
   INVALID_GATHER_TYPE = -1,
   MANUAL_GATHER,
-  AUTO_GATHER
+  AUTO_GATHER,
+  AYSNC_GATHER
 };
 
 enum ObOptStatRunningPhase {
@@ -213,7 +214,7 @@ struct ObOptStatRunningMonitor
   void init(int64_t current_time,
             int64_t current_memory_used,
             ObOptStatGatherStat &opt_stat_gather_stat);
-  int add_table_info(common::ObTableStatParam &table_param,
+  int add_table_info(const common::ObTableStatParam &table_param,
                      double stale_percent = -1.0);
   int add_monitor_info(ObOptStatRunningPhase current_phase, double extra_progress_ratio = 0);
   double get_monitor_extra_progress_ratio(ObOptStatRunningPhase current_phase,

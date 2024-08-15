@@ -17,7 +17,9 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       statown            VARCHAR(65535) DEFAULT NULL,
       no_invalidate      BOOLEAN DEFAULT FALSE,
       stattype           VARCHAR(65535) DEFAULT 'DATA',
-      force              BOOLEAN DEFAULT FALSE
+      force              BOOLEAN DEFAULT FALSE,
+      hist_est_percent   DECIMAL DEFAULT AUTO_SAMPLE_SIZE,
+      hist_block_sample  BOOLEAN DEFAULT NULL
     );
     PRAGMA INTERFACE(C, GATHER_TABLE_STATS);
 
@@ -450,6 +452,7 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       taskid          VARCHAR(65535)
     );
     PRAGMA INTERFACE(C, CANCEL_GATHER_STATS);
+
     PROCEDURE GATHER_SYSTEM_STATS();
     PRAGMA INTERFACE(C, GATHER_SYSTEM_STATS);
 
@@ -462,4 +465,6 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
     );
     PRAGMA INTERFACE(C, SET_SYSTEM_STATS);
 
+    PROCEDURE async_gather_stats_job_proc (duration BIGINT DEFAULT NULL);
+    PRAGMA INTERFACE(C, ASYNC_GATHER_STATS_JOB_PROC);
 END dbms_stats;

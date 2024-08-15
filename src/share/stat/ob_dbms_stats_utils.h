@@ -195,6 +195,10 @@ public:
                                              const uint64_t tenant_id,
                                              const uint64_t table_id,
                                              double &percent);
+  static int check_can_async_gather_stats(sql::ObExecContext &ctx);
+
+  static int cancel_async_gather_stats(sql::ObExecContext &ctx);
+
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,
@@ -205,6 +209,10 @@ private:
                          const bool is_index_stat,
                          const bool is_online_stat = false,
                          const ObObjPrintParams &print_params = ObObjPrintParams());
+
+  static int fetch_need_cancel_async_gather_stats_task(ObIAllocator &allocator,
+                                                       sql::ObExecContext &ctx,
+                                                       ObIArray<ObString> &task_ids);
 
 };
 

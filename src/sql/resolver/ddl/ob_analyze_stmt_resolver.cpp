@@ -462,6 +462,7 @@ int ObAnalyzeStmtResolver::resolve_for_clause_element(const ParseNode *for_claus
   int ret = OB_SUCCESS;
   ObSEArray<ObString, 4> all_for_col;
   ObAnalyzeTableInfo &table_info = analyze_stmt.get_tables().at(0);
+  bool is_async_gather = false;
   if (OB_ISNULL(for_clause_node)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null parse node", K(ret));
@@ -474,6 +475,7 @@ int ObAnalyzeStmtResolver::resolve_for_clause_element(const ParseNode *for_claus
     bool use_size_auto = false;
     if (OB_FAIL(pl::ObDbmsStats::parser_for_all_clause(for_clause_node,
                                                        table_info.get_column_params(),
+                                                       is_async_gather,
                                                        use_size_auto))) {
       LOG_WARN("failed to resolve for all clause", K(ret));
     } else {

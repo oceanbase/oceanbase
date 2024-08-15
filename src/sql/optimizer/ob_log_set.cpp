@@ -492,6 +492,12 @@ int ObLogSet::get_re_est_cost_infos(const EstimateCostInfo &param,
   return ret;
 }
 
+int ObLogSet::est_ambient_card()
+{
+  // do nothing
+  return OB_SUCCESS;
+}
+
 int ObLogSet::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;

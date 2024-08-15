@@ -198557,7 +198557,7 @@ Query Plan
 |1 |└─PX COORDINATOR               |                        |1       |6           |
 |2 |  └─EXCHANGE OUT DISTR         |:EX10000                |1       |6           |
 |3 |    └─MERGE GROUP BY           |                        |1       |6           |
-|4 |      └─NESTED-LOOP ANTI JOIN  |                        |14      |5           |
+|4 |      └─NESTED-LOOP ANTI JOIN  |                        |14      |6           |
 |5 |        ├─PX PARTITION ITERATOR|                        |14      |5           |
 |6 |        │ └─TABLE FULL SCAN    |table1000_key_pk_parts_2|14      |5           |
 |7 |        └─MATERIAL             |                        |1       |1           |

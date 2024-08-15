@@ -234,8 +234,6 @@ bool ObStatTopKHist::is_needed() const
 int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  const int64_t MIN_BUCKET_SIZE = 256;
-  const int64_t MAX_BUCKET_SIZE = 2048;
   if (OB_ISNULL(col_param_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("column param is null", K(ret), K(col_param_));
@@ -247,7 +245,7 @@ int ObStatTopKHist::gen_expr(char *buf, const int64_t buf_len, int64_t &pos)
       ret = OB_ERR_INVALID_SIZE_SPECIFIED;
       LOG_WARN("get invalid argument, expected value in the range[1, 2048]", K(ret), K(bkt_num));
     }
-    double err_rate = 1.0 / (1000 * (bkt_num / MIN_BUCKET_SIZE));
+    double err_rate = 1.0 / get_window_size(bkt_num);
     if (OB_SUCC(ret)) {
       if (OB_FAIL(databuff_printf(buf, buf_len, pos,
                                   lib::is_oracle_mode() ? " TOP_K_FRE_HIST(%lf, \"%.*s\", %ld, %ld)" :
