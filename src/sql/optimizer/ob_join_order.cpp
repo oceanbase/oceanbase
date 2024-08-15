@@ -8800,6 +8800,9 @@ int ObJoinOrder::check_valid_for_inner_path(const ObIArray<ObRawExpr*> &join_con
   } else if (join_conditions.empty() || path_info.force_mat_ ||
       (ACCESS != right_tree.get_type() && SUBQUERY != right_tree.get_type())) {
     is_valid = false;
+  } else if (!OPT_CTX.is_push_join_pred_into_view_enabled() &&
+             SUBQUERY == right_tree.get_type()) {
+    is_valid = false;
   } else if (CONNECT_BY_JOIN == path_info.join_type_) {
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < join_conditions.count(); i++) {
       if (OB_ISNULL(join_conditions.at(i))) {
