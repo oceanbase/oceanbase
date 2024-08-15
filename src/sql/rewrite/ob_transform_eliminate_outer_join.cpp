@@ -472,6 +472,7 @@ int ObTransformEliminateOuterJoin::can_be_eliminated_with_foreign_primary_join(O
                                                                   right_col_exprs,
                                                                   ctx_->schema_checker_,
                                                                   ctx_->session_info_,
+                                                                  true,
                                                                   is_foreign_primary_join,
                                                                   is_first_table_parent,
                                                                   foreign_key_info))) {
