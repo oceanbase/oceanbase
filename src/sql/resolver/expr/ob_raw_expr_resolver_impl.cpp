@@ -306,6 +306,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         } else {
           ObObj val;
           ObObjType data_type = static_cast<ObObjType>(node->int16_values_[OB_NODE_CAST_TYPE_IDX]);
+          bool need_set = true;
           if (ob_is_string_tc(data_type)) {
             int32_t len = node->int32_values_[1];
             if (lib::is_oracle_mode()) {
@@ -348,67 +349,122 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
               }
             }
           } else if (ob_is_extend(data_type)) {
-            if (lib::is_mysql_mode()) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("extend type in mysql is invalid", K(ret));
-            } else {
-              const ParseNode *name_node = node->children_[0];
-              CK (OB_NOT_NULL(ctx_.session_info_),  OB_NOT_NULL(ctx_.schema_checker_));
-              CK (OB_NOT_NULL(name_node));
-              CK (T_SP_TYPE == name_node->type_);
-              if (OB_SUCC(ret)) {
-                uint64_t udt_id = OB_INVALID_ID;
-                uint64_t db_id = ctx_.session_info_->get_database_id();
-                ObString udt_name(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_);
-
-                if (NULL != name_node->children_[0]) {
-                  OZ (ctx_.schema_checker_->get_database_id(ctx_.session_info_->get_effective_tenant_id(),
-                                                    ObString(name_node->children_[0]->str_len_, name_node->children_[0]->str_value_),
-                                                    db_id));
-                }
-                OZ (ctx_.schema_checker_->get_udt_id(ctx_.session_info_->get_effective_tenant_id(), db_id, OB_INVALID_ID,
-                               ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_), udt_id));
-
-                if (OB_SUCC(ret) && OB_INVALID_ID == udt_id) {
-                  if(OB_FAIL(ctx_.schema_checker_->get_udt_id(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, OB_INVALID_ID,
-                             udt_name, udt_id))) {
-                    LOG_WARN("get udt id from sys fail", K(ret), K(udt_name));
-                  }
-                }
-
-                if (OB_SUCC(ret)) {
+            ParseNode *name_node = node->children_[0];
+            CK (lib::is_oracle_mode());
+            CK (OB_NOT_NULL(ctx_.session_info_),
+                OB_NOT_NULL(ctx_.schema_checker_),
+                OB_NOT_NULL(ctx_.schema_checker_->get_schema_guard()));
+            CK (OB_NOT_NULL(name_node));
+            if (OB_SUCC(ret)) {
+              ObArray<pl::ObObjAccessIdx> access_idxs;
+              if (OB_FAIL(pl::ObPLResolver::resolve_obj_access_node(name_node,
+                                                  ctx_.expr_factory_.get_allocator(),
+                                                  ctx_.expr_factory_,
+                                                  *const_cast<ObSQLSessionInfo *>(ctx_.session_info_),
+                                                  *(ctx_.schema_checker_->get_schema_guard()),
+                                                  GCTX.sql_proxy_,
+                                                  ctx_.secondary_namespace_,
+                                                  access_idxs))) {
+                LOG_WARN("failed to resolve sp obj access node", K(ret), K(access_idxs));
+              } else if (access_idxs.count() > 0) {
+                if (pl::ObObjAccessIdx::is_udt_type(access_idxs)) {
+                  uint64_t udt_id = access_idxs.at(access_idxs.count() - 1).var_index_;
                   if (OB_INVALID_ID == udt_id) {
-                    ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
-                    LOG_WARN("Invalid type to cast", K(ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_)), K(ret));
-                  } else {
-                    c_expr->set_udt_id(udt_id);
-                  }
-                }
-
-                if (OB_SUCC(ret) && NULL != ctx_.stmt_) {
-                  ObStmt *stmt = ctx_.stmt_;
-                  uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
-                  const ObUDTTypeInfo *udt_info = NULL;
-                  if (OB_FAIL(ctx_.schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
-                    LOG_WARN("failed to get udt info", K(ret));
-                  } else if (OB_ISNULL(udt_info)) {
                     ret = OB_ERR_UNEXPECTED;
-                    LOG_WARN("get null udt info", K(ret));
-                  } else if (udt_info->get_schema_version() != common::OB_INVALID_VERSION) {
-                    ObSchemaObjVersion udt_schema_version;
-                    udt_schema_version.object_id_ = udt_id;
-                    udt_schema_version.object_type_ = share::schema::DEPENDENCY_TYPE;
-                    udt_schema_version.version_ = udt_info->get_schema_version();
-                    uint64_t dep_obj_id = ctx_.view_ref_id_;
-                    if (OB_FAIL(stmt->add_global_dependency_table(udt_schema_version))) {
-                      LOG_WARN("failed to add global dependency", K(ret));
-                    } else if (OB_FAIL(stmt->add_ref_obj_version(dep_obj_id, db_id,
-                                                             ObObjectType::VIEW, udt_schema_version,
-                                                             ctx_.expr_factory_.get_allocator()))) {
-                      LOG_WARN("failed to add ref obj version", K(ret));
+                    LOG_WARN("unexpected udt id from access_idxs", K(ret), K(access_idxs));
+                  } else {
+                    c_expr->set_udt_id(access_idxs.at(access_idxs.count() - 1).var_index_);
+                    if (OB_NOT_NULL(ctx_.stmt_)) {
+                      ObStmt *stmt = ctx_.stmt_;
+                      uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+                      const ObUDTTypeInfo *udt_info = NULL;
+                      if (OB_FAIL(ctx_.schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
+                        LOG_WARN("failed to get udt info", K(ret));
+                      } else if (OB_ISNULL(udt_info)) {
+                        ret = OB_ERR_UNEXPECTED;
+                        LOG_WARN("get null udt info", K(ret));
+                      } else if (udt_info->get_schema_version() != common::OB_INVALID_VERSION) {
+                        ObSchemaObjVersion udt_schema_version(
+                          udt_id, udt_info->get_schema_version(), share::schema::DEPENDENCY_TYPE);
+                        if (OB_FAIL(stmt->add_global_dependency_table(udt_schema_version))) {
+                          LOG_WARN("failed to add global dependency", K(ret));
+                        } else if (OB_FAIL(stmt->add_ref_obj_version(ctx_.view_ref_id_,
+                                                                     udt_info->get_database_id(),
+                                                                     ObObjectType::VIEW,
+                                                                     udt_schema_version,
+                                                                     ctx_.expr_factory_.get_allocator()))) {
+                          LOG_WARN("failed to add ref obj version", K(ret));
+                        }
+                      }
                     }
                   }
+                } else if (OB_NOT_NULL(ctx_.stmt_)) {
+                  ret = OB_ERR_PARAM_INVALID;
+                  LOG_WARN("Invalid type to cast", K(ret), K(access_idxs));
+                } else if (pl::ObObjAccessIdx::is_local_variable(access_idxs) ||
+                           pl::ObObjAccessIdx::is_table_column(access_idxs) ||
+                           pl::ObObjAccessIdx::is_function_return_variable(access_idxs) ||
+                           pl::ObObjAccessIdx::is_package_variable(access_idxs) ||
+                           pl::ObObjAccessIdx::is_subprogram_variable(access_idxs) ||
+                           pl::ObObjAccessIdx::is_type(access_idxs)) {
+                  pl::ObPLDataType final_type;
+                  if (pl::ObObjAccessIdx::is_type(access_idxs)) {
+                    uint64_t udt_id = access_idxs.at(access_idxs.count() - 1).var_index_;
+                    const pl::ObUserDefinedType *user_type = NULL;
+                    CK (udt_id != OB_INVALID_ID);
+                    OZ (ctx_.secondary_namespace_->get_pl_data_type_by_id(udt_id, user_type));
+                    CK (OB_NOT_NULL(user_type));
+                    OX (final_type = *user_type);
+                  } else {
+                    final_type = pl::ObObjAccessIdx::get_final_type(access_idxs);
+                  }
+                  if (final_type.is_subtype()) {
+                    CK (OB_NOT_NULL(ctx_.secondary_namespace_));
+                    OZ (ctx_.secondary_namespace_->get_subtype_actually_basetype(final_type));
+                  }
+                  if (OB_FAIL(ret)) {
+                  } else if (OB_NOT_NULL(final_type.get_data_type())) { // basic type
+                    val.set_smallint(final_type.get_data_type()->get_meta_type().get_type());
+                    int16_t type_val[4];
+                    type_val[0] = final_type.get_data_type()->get_meta_type().get_type();
+                    if (ObRawType == type_val[0]) {
+                      type_val[1] = BINARY_COLLATION;
+                      type_val[2] = final_type.get_data_type()->get_length() & 0xffff;
+                      type_val[3] = (final_type.get_data_type()->get_length() >> 16) & 0xffff;
+                    } else if (ObCharType == type_val[0]
+                                || ObVarcharType == type_val[0]
+                                || ObNVarchar2Type == type_val[0]
+                                || ObNCharType == type_val[0]) {
+                      type_val[1] = INVALID_COLLATION;
+                      type_val[2] = final_type.get_data_type()->get_length() & 0xffff;
+                      type_val[3] = (final_type.get_data_type()->get_length() >> 16) & 0xffff;
+                    } else if (ObURowIDType == type_val[0]) {
+                      type_val[1] = final_type.get_data_type()->get_length();
+                      type_val[2] = final_type.get_data_type()->get_precision()& 0xffff;
+                      type_val[3] = final_type.get_data_type()->get_scale()& 0xffff;
+                    } else {
+                      type_val[1] = final_type.get_data_type()->get_collation_type();
+                      type_val[2] = final_type.get_data_type()->get_precision()& 0xffff;
+                      type_val[3] = final_type.get_data_type()->get_scale()& 0xffff;
+                    }
+                    c_expr->set_accuracy(final_type.get_data_type()->get_accuracy());
+                    int64_t v = (((unsigned long)type_val[3] << 48) & 0xffff000000000000)
+                                  | (((unsigned long)type_val[2] << 32) & 0x0000ffff00000000)
+                                  | ((type_val[1] << 16) & 0x00000000ffff0000)
+                                  | (type_val[0] & 0x000000000000ffff);
+                    val.set_int(v);
+                    need_set = false;
+                  } else {
+                    ret = OB_NOT_SUPPORTED;
+                    LOG_WARN("cast composite only support udt or basic type", K(ret), K(access_idxs));
+                  }
+                } else {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_WARN("access idxs not include type describe", K(ret), K(access_idxs));
                 }
+              } else {
+                ret = OB_ERR_PARAM_INVALID;
+                LOG_WARN("not allow null type to cast.", K(ret), K(access_idxs));
               }
             }
           } else if (ob_is_rowid_tc(data_type)) {
@@ -424,7 +480,9 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
 
           if (OB_SUCC(ret)) {
             if (is_oracle_mode()) {
-              val.set_int(node->value_);
+              if (need_set) {
+                val.set_int(node->value_);
+              }
             } else {
               ObCollationType coll_type = static_cast<ObCollationType>(node->int16_values_[OB_NODE_CAST_COLL_IDX]);
               if (CS_TYPE_INVALID != coll_type) {
