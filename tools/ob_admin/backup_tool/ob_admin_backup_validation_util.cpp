@@ -31,8 +31,8 @@ int ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
     STORAGE_LOG(WARN, "invalid argument", K(ret), KP(str));
   } else {
     int start_pos = 0;
-    int end_pos = strlen(str) - 1;
-    while (start_pos <= end_pos) {
+    int end_pos = STRLEN(str) - 1;
+    while (OB_SUCC(ret) && start_pos <= end_pos) {
       int item_start_pos = start_pos;
       // Find the position of the comma or the end of the content part
       while (start_pos <= end_pos && str[start_pos] != ',') {
@@ -43,11 +43,12 @@ int ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
         common::ObString item(item_end_pos - item_start_pos + 1, str + item_start_pos);
         if (OB_FAIL(str_array.push_back(item))) {
           STORAGE_LOG(WARN, "failed to push back item", K(ret));
-          break;
         }
       }
-      // Move to the next item, skip the comma
-      start_pos++;
+      if (OB_SUCC(ret)) {
+        // Move to the next item, skip the comma
+        start_pos++;
+      }
     }
   }
 
@@ -107,9 +108,14 @@ int ObAdminBackupValidationUtil::get_tenant_meta_index_retry_id(
   const char *file_name_prefix = nullptr;
   share::ObBackupPath full_path;
   common::ObBackupIoAdapter util;
-  if (OB_FAIL(get_tenant_index_file_name_prefix_(backup_data_type, backup_file_type,
-                                                 file_name_prefix))) {
-  } else if (OB_SUCC(ret)) {
+  if (!backup_set_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(backup_set_dest));
+  } else if (OB_FAIL(get_tenant_index_file_name_prefix_(backup_data_type, backup_file_type,
+                                                        file_name_prefix))) {
+    STORAGE_LOG(WARN, "failed to get tenant index file name prefix", K(ret), K(backup_data_type),
+                K(backup_file_type));
+  } else {
     backup::ObBackupDataFileRangeOp file_range_op(file_name_prefix);
     if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
             backup_set_dest, backup_data_type, turn_id, full_path))) {
@@ -200,7 +206,10 @@ int ObAdminBackupValidationUtil::read_tablet_meta(const share::ObBackupDest &bac
   int ret = OB_SUCCESS;
   share::ObBackupPath full_path;
 
-  if (!meta_index.is_valid()) {
+  if (!backup_set_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(backup_set_dest));
+  } else if (!meta_index.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid args", K(meta_index));
   } else if (backup::BACKUP_TABLET_META != meta_index.meta_key_.meta_type_) {
@@ -212,6 +221,7 @@ int ObAdminBackupValidationUtil::read_tablet_meta(const share::ObBackupDest &bac
     STORAGE_LOG(WARN, "failed to get macro block backup path", K(ret), K(backup_set_dest),
                 K(meta_index));
   } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(meta_index.length_))) {
+    STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(meta_index.length_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_tablet_meta(
                  full_path.get_obstr(), backup_set_dest.get_storage_info(), backup_data_type,
                  meta_index, tablet_meta))) {
@@ -235,7 +245,10 @@ int ObAdminBackupValidationUtil::read_sstable_metas(
   int ret = OB_SUCCESS;
   share::ObBackupPath full_path;
 
-  if (!meta_index.is_valid()) {
+  if (!backup_set_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(backup_set_dest));
+  } else if (!meta_index.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid args", K(meta_index));
   } else if (backup::BACKUP_SSTABLE_META != meta_index.meta_key_.meta_type_) {
@@ -247,6 +260,7 @@ int ObAdminBackupValidationUtil::read_sstable_metas(
     STORAGE_LOG(WARN, "failed to get macro block backup path", K(ret), K(backup_set_dest),
                 K(meta_index));
   } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(meta_index.length_))) {
+    STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(meta_index.length_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_sstable_metas(
                  full_path.get_obstr(), backup_set_dest.get_storage_info(), meta_index,
                  sstable_metas))) {
@@ -269,7 +283,10 @@ int ObAdminBackupValidationUtil::read_macro_block_id_mappings_meta(
   int ret = OB_SUCCESS;
   share::ObBackupPath full_path;
 
-  if (!meta_index.is_valid()) {
+  if (!backup_set_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(backup_set_dest));
+  } else if (!meta_index.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid args", K(meta_index));
   } else if (backup::BACKUP_MACRO_BLOCK_ID_MAPPING_META != meta_index.meta_key_.meta_type_) {
@@ -281,6 +298,7 @@ int ObAdminBackupValidationUtil::read_macro_block_id_mappings_meta(
     STORAGE_LOG(WARN, "failed to get macro block backup path", K(ret), K(backup_set_dest),
                 K(meta_index));
   } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(meta_index.length_))) {
+    STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(meta_index.length_));
   } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_id_mapping_metas(
                  full_path.get_obstr(), backup_set_dest.get_storage_info(), meta_index,
                  id_mappings_meta))) {
@@ -304,12 +322,15 @@ int ObAdminBackupValidationUtil::read_macro_block_data(
   char *buf = nullptr;
   share::ObBackupPath full_path;
   common::ObBackupIoAdapter util;
-  common::ObArenaAllocator tmp_allocator;
+  common::ObArenaAllocator tmp_allocator("ObAdmBakVal");
   blocksstable::ObBufferReader buffer_reader;
   int64_t read_size = -1;
 
-  if (align_size <= 0 || !common::is_io_aligned(macro_index.length_)
-      || !common::is_io_aligned(align_size)) {
+  if (!backup_set_dest.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "get invalid args", K(backup_set_dest));
+  } else if (align_size <= 0 || !common::is_io_aligned(macro_index.length_)
+             || !common::is_io_aligned(align_size)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid args", K(ret), K(macro_index), K(align_size));
   } else if (!macro_index.is_valid()) {
@@ -326,6 +347,7 @@ int ObAdminBackupValidationUtil::read_macro_block_data(
   } else {
     blocksstable::ObBufferReader buffer_reader(buf, macro_index.length_);
     if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(macro_index.length_))) {
+      STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(macro_index.length_));
     } else if (OB_FAIL(backup::ObLSBackupRestoreUtil::read_macro_block_data(
                    full_path.get_obstr(), backup_set_dest.get_storage_info(), macro_index,
                    DIO_READ_ALIGN_SIZE /*align_size*/, buffer_reader, data_buffer))) {

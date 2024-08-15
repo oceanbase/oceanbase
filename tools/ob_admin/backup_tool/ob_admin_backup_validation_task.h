@@ -27,7 +27,7 @@ struct ObAdminDataBackupValidationDagInitParam final : public ObIDagInitParam
 {
   ObAdminDataBackupValidationDagInitParam() {}
   ObAdminDataBackupValidationDagInitParam(ObAdminBackupValidationCtx *ctx) : ctx_(ctx) {}
-  virtual ~ObAdminDataBackupValidationDagInitParam() {}
+  ~ObAdminDataBackupValidationDagInitParam() {}
   virtual bool is_valid() const override { return true; }
   ObAdminBackupValidationCtx *ctx_;
 };
@@ -39,7 +39,7 @@ public:
         ctx_(nullptr)
   {
   }
-  virtual ~ObAdminDataBackupValidationDagNet();
+  ~ObAdminDataBackupValidationDagNet();
   int init(ObAdminBackupValidationCtx *ctx);
   int init_by_param(const ObIDagInitParam *param);
   virtual bool is_valid() const override;
@@ -61,7 +61,7 @@ struct ObAdminLogArchiveValidationDagInitParam final : public ObIDagInitParam
 {
   ObAdminLogArchiveValidationDagInitParam() {}
   ObAdminLogArchiveValidationDagInitParam(ObAdminBackupValidationCtx *ctx) : ctx_(ctx) {}
-  virtual ~ObAdminLogArchiveValidationDagInitParam() {}
+  ~ObAdminLogArchiveValidationDagInitParam() {}
   virtual bool is_valid() const override { return true; }
   ObAdminBackupValidationCtx *ctx_;
 };
@@ -73,7 +73,7 @@ public:
         ctx_(nullptr)
   {
   }
-  virtual ~ObAdminLogArchiveValidationDagNet();
+  ~ObAdminLogArchiveValidationDagNet();
   int init(ObAdminBackupValidationCtx *ctx);
   int init_by_param(const ObIDagInitParam *param);
   virtual bool is_valid() const override;
@@ -102,7 +102,7 @@ public:
         id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminPrepareDataBackupValidationDag();
+  ~ObAdminPrepareDataBackupValidationDag();
   int init(int64_t id, ObAdminBackupValidationCtx *ctx);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
@@ -133,7 +133,7 @@ public:
         ctx_(nullptr)
   {
   }
-  virtual ~ObAdminBackupSetMetaValidationDag();
+  ~ObAdminBackupSetMetaValidationDag();
   int init(int64_t id, ObAdminBackupValidationCtx *ctx);
   virtual int create_first_task() override;
   virtual int generate_next_dag(ObIDag *&next_dag) override;
@@ -167,7 +167,7 @@ public:
         stat_()
   {
   }
-  virtual ~ObAdminBackupTabletValidationDag();
+  ~ObAdminBackupTabletValidationDag();
   int init(int64_t id, ObAdminBackupValidationCtx *ctx, bool generate_sibling_dag = true);
   virtual int create_first_task() override;
   virtual int generate_next_dag(ObIDag *&next_dag) override;
@@ -189,7 +189,6 @@ private:
   int64_t id_;
   ObAdminBackupValidationCtx *ctx_;
   bool generate_sibling_dag_;
-  // common::ObArenaAllocator local_allocator_;
   ObSpinLock lock_;
   int64_t time_identifier_; // only used for hash
 
@@ -202,7 +201,6 @@ public:
   ObArray<ObArray<std::pair<backup::ObBackupMacroBlockIDPair, share::ObBackupDataType>>>
       processing_macro_block_array_;
   ObAdminBackupValidationStat stat_;
-  // common::ObSafeArenaAllocator allocator_;
 
   DISALLOW_COPY_AND_ASSIGN(ObAdminBackupTabletValidationDag);
 };
@@ -215,7 +213,7 @@ public:
         ctx_(nullptr)
   {
   }
-  virtual ~ObAdminFinishDataBackupValidationDag();
+  ~ObAdminFinishDataBackupValidationDag();
   int init(int64_t id, ObAdminBackupValidationCtx *ctx);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
@@ -246,7 +244,7 @@ public:
         id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminPrepareLogArchiveValidationDag();
+  ~ObAdminPrepareLogArchiveValidationDag();
   int init(int64_t id, ObAdminBackupValidationCtx *ctx);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
@@ -277,7 +275,7 @@ public:
         ctx_(nullptr)
   {
   }
-  virtual ~ObAdminBackupPieceValidationDag();
+  ~ObAdminBackupPieceValidationDag();
   int init(int64_t id, ObAdminBackupValidationCtx *ctx);
   virtual int create_first_task() override;
   virtual int generate_next_dag(ObIDag *&next_dag) override;
@@ -315,7 +313,7 @@ public:
         ctx_(nullptr)
   {
   }
-  virtual ~ObAdminFinishLogArchiveValidationDag();
+  ~ObAdminFinishLogArchiveValidationDag();
   int init(int64_t id, ObAdminBackupValidationCtx *ctx);
   virtual int create_first_task() override;
   virtual bool operator==(const ObIDag &other) const override;
@@ -347,7 +345,7 @@ public:
       : share::ObITask(TASK_TYPE_VALIDATE_BACKUP), is_inited_(false), task_id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminPrepareDataBackupValidationTask();
+  ~ObAdminPrepareDataBackupValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -373,7 +371,7 @@ public:
   {
   }
 
-  virtual ~ObAdminBackupSetMetaValidationTask();
+  ~ObAdminBackupSetMetaValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -385,6 +383,9 @@ private:
 
   int collect_inner_tablet_meta_index_();
   // int check_inner_tablet_macro_block_range_index_();
+  int inner_assign_meta_index_to_tablet_attr_(int64_t backup_set_id, const share::ObLSID &ls_id,
+                                              const backup::ObBackupMetaIndex &meta_index,
+                                              const share::ObBackupDataType &data_type);
   int check_inner_tablet_meta_index_();
 
   int collect_consistent_scn_tablet_id_();
@@ -418,7 +419,7 @@ public:
       : share::ObITask(TASK_TYPE_VALIDATE_BACKUP), is_inited_(false), task_id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminPrepareTabletValidationTask();
+  ~ObAdminPrepareTabletValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -438,10 +439,10 @@ class ObAdminTabletMetaValidationTask final : public share::ObITask
 public:
   ObAdminTabletMetaValidationTask()
       : share::ObITask(TASK_TYPE_VALIDATE_BACKUP), is_inited_(false), task_id_(0), ctx_(nullptr),
-        local_allocator_()
+        local_allocator_("ObAdmBakVal")
   {
   }
-  virtual ~ObAdminTabletMetaValidationTask();
+  ~ObAdminTabletMetaValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -472,7 +473,7 @@ public:
       : share::ObITask(TASK_TYPE_VALIDATE_BACKUP), is_inited_(false), task_id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminMacroBlockDataValidationTask();
+  ~ObAdminMacroBlockDataValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -495,7 +496,7 @@ public:
       : share::ObITask(TASK_TYPE_VALIDATE_BACKUP), is_inited_(false), task_id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminFinishTabletValidationTask();
+  ~ObAdminFinishTabletValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -516,7 +517,7 @@ public:
       : share::ObITask(TASK_TYPE_VALIDATE_BACKUP), is_inited_(false), task_id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminPrepareLogArchiveValidationTask();
+  ~ObAdminPrepareLogArchiveValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -541,7 +542,7 @@ public:
   {
   }
 
-  virtual ~ObAdminBackupPieceMetaValidationTask();
+  ~ObAdminBackupPieceMetaValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -566,7 +567,7 @@ public:
       : share::ObITask(TASK_TYPE_VALIDATE_BACKUP), is_inited_(false), task_id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminBackupPieceLogIterationTask();
+  ~ObAdminBackupPieceLogIterationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
@@ -588,12 +589,16 @@ public:
       : share::ObITask(TASK_TYPE_VALIDATE_BACKUP), is_inited_(false), task_id_(0), ctx_(nullptr)
   {
   }
-  virtual ~ObAdminFinishLogArchiveValidationTask();
+  ~ObAdminFinishLogArchiveValidationTask();
   int init(int64_t task_id, ObAdminBackupValidationCtx *ctx);
   virtual int process() override;
 
 private:
   int cross_check_scn_continuity_();
+  int inner_get_backup_set_scn_range_(
+      common::ObArray<std::pair<share::SCN, share::SCN>> &scn_range);
+  int inner_get_backup_piece_scn_range_(
+      common::ObArray<std::pair<share::SCN, share::SCN>> &scn_range);
 
 private:
   bool is_inited_;

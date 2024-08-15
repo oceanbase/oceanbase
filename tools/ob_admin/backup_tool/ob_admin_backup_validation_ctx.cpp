@@ -42,7 +42,6 @@ ObAdminTabletAttr::~ObAdminTabletAttr()
 ObAdminLSAttr::ObAdminLSAttr()
     : ls_type_(INVALID), ls_meta_package_(), single_ls_info_desc_(nullptr)
 {
-  sys_tablet_map_.create(4, ObModIds::BACKUP);
 }
 ObAdminLSAttr::~ObAdminLSAttr()
 {
@@ -57,13 +56,18 @@ ObAdminLSAttr::~ObAdminLSAttr()
     single_ls_info_desc_ = nullptr;
   }
 }
+int ObAdminLSAttr::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(sys_tablet_map_.create(100, ObModIds::BACKUP))) {
+    STORAGE_LOG(WARN, "failed to create sys tablet map", K(ret));
+  }
+  return ret;
+}
 ObAdminBackupSetAttr::ObAdminBackupSetAttr()
     : backup_set_store_(nullptr), backup_set_info_desc_(nullptr), ls_inner_tablet_done_(false),
       minor_tablet_pos_(0), major_tablet_pos_(0), lock_(ObLatchIds::BACKUP_LOCK)
 {
-  ls_map_.create(100, ObModIds::BACKUP);
-  minor_tablet_map_.create(10000, ObModIds::BACKUP);
-  major_tablet_map_.create(10000, ObModIds::BACKUP);
 }
 ObAdminBackupSetAttr::~ObAdminBackupSetAttr()
 {
@@ -93,6 +97,18 @@ ObAdminBackupSetAttr::~ObAdminBackupSetAttr()
     iter->second = nullptr;
   }
   major_tablet_map_.destroy();
+}
+int ObAdminBackupSetAttr::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_map_.create(100, ObModIds::BACKUP))) {
+    STORAGE_LOG(WARN, "failed to create ls map", K(ret));
+  } else if (OB_FAIL(minor_tablet_map_.create(10000, ObModIds::BACKUP))) {
+    STORAGE_LOG(WARN, "failed to create minor tablet map", K(ret));
+  } else if (OB_FAIL(major_tablet_map_.create(10000, ObModIds::BACKUP))) {
+    STORAGE_LOG(WARN, "failed to create major tablet map", K(ret));
+  }
+  return ret;
 }
 int ObAdminBackupSetAttr::fetch_next_tablet_group(
     common::ObArray<common::ObArray<ObAdminTabletAttr *>> &tablet_group, int64_t &scheduled_cnt)
@@ -188,10 +204,7 @@ bool ObAdminBackupSetAttr::is_all_tablet_done()
   return ls_inner_tablet_done_ && minor_tablet_pos_ >= minor_tablet_id_.count()
          && major_tablet_pos_ >= major_tablet_id_.count();
 }
-ObAdminBackupPieceAttr::ObAdminBackupPieceAttr() : backup_piece_store_(nullptr)
-{
-  ls_map_.create(100, ObModIds::BACKUP);
-}
+ObAdminBackupPieceAttr::ObAdminBackupPieceAttr() : backup_piece_store_(nullptr) {}
 ObAdminBackupPieceAttr::~ObAdminBackupPieceAttr()
 {
   if (OB_NOT_NULL(backup_piece_store_)) {
@@ -207,6 +220,14 @@ ObAdminBackupPieceAttr::~ObAdminBackupPieceAttr()
     iter->second->~ObAdminLSAttr();
     iter->second = nullptr;
   }
+}
+int ObAdminBackupPieceAttr::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ls_map_.create(100, ObModIds::BACKUP))) {
+    STORAGE_LOG(WARN, "failed to create ls map", K(ret));
+  }
+  return ret;
 }
 int ObAdminBackupPieceAttr::split_lsn_range(
     ObArray<std::pair<share::ObLSID, std::pair<palf::LSN, palf::LSN>>> &lsn_range_array)
@@ -241,9 +262,6 @@ ObAdminBackupValidationCtx::ObAdminBackupValidationCtx(ObArenaAllocator &arena)
     : aborted_(false), sql_proxy_(nullptr), global_stat_(), allocator_(arena), throttle_(),
       states_icon_pos_(0)
 {
-  backup_set_map_.create(10, ObModIds::BACKUP);
-  backup_piece_map_.create(100, ObModIds::BACKUP);
-  throttle_.init(INT64_MAX /*default io_bandwidth*/);
 }
 ObAdminBackupValidationCtx::~ObAdminBackupValidationCtx()
 {
@@ -285,12 +303,28 @@ ObAdminBackupValidationCtx::~ObAdminBackupValidationCtx()
     fail_file_ = nullptr;
   }
 }
+int ObAdminBackupValidationCtx::init()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(throttle_.init(INT64_MAX /*default io_bandwidth*/))) {
+    STORAGE_LOG(WARN, "failed to init throttle", K(ret));
+  } else if (OB_FAIL(backup_set_map_.create(10, ObModIds::BACKUP))) {
+    STORAGE_LOG(WARN, "failed to create backup set map", K(ret));
+  } else if (OB_FAIL(backup_piece_map_.create(100, ObModIds::BACKUP))) {
+    STORAGE_LOG(WARN, "failed to create backup piece map", K(ret));
+  }
+  return ret;
+}
 int ObAdminBackupValidationCtx::limit_and_sleep(const int64_t bytes)
 {
+  int ret = OB_SUCCESS;
   int64_t sleep_us = 0;
-  throttle_.limit_and_sleep(bytes, last_active_time_, INT64_MAX, sleep_us);
-  ATOMIC_SET(&last_active_time_, ObTimeUtility::current_time());
-  return OB_SUCCESS;
+  if (OB_FAIL(throttle_.limit_and_sleep(bytes, last_active_time_, INT64_MAX, sleep_us))) {
+    STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(bytes));
+  } else {
+    ATOMIC_SET(&last_active_time_, ObTimeUtility::current_time());
+  }
+  return ret;
 }
 int ObAdminBackupValidationCtx::set_io_bandwidth(const int64_t bandwidth)
 {
@@ -375,6 +409,8 @@ int ObAdminBackupValidationCtx::add_backup_set(int64_t backup_set_id)
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
       } else if (FALSE_IT(backup_set_attr = new (alc_ptr) ObAdminBackupSetAttr())) {
+      } else if (OB_FAIL(backup_set_attr->init())) {
+        STORAGE_LOG(WARN, "fail to init backup set attr", K(ret));
       } else if (OB_FAIL(backup_set_map_.set_refactored(backup_set_id, backup_set_attr))) {
         STORAGE_LOG(WARN, "fail to set backup set id", K(ret), K(backup_set_id));
       } else if (OB_FAIL(processing_backup_set_id_array_.push_back(backup_set_id))) {
@@ -425,6 +461,8 @@ int ObAdminBackupValidationCtx::add_ls(int64_t backup_set_id, const share::ObLSI
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
       } else if (FALSE_IT(ls_attr = new (alc_ptr) ObAdminLSAttr())) {
+      } else if (OB_FAIL(ls_attr->init())) {
+        STORAGE_LOG(WARN, "fail to init ls attr", K(ret));
       } else if (OB_FAIL(backup_set_attr->ls_map_.set_refactored(ls_id, ls_attr))) {
         STORAGE_LOG(WARN, "fail to set ls id", K(ret), K(ls_id));
       } else {
@@ -459,8 +497,8 @@ int ObAdminBackupValidationCtx::get_ls_attr(int64_t backup_set_id, const share::
       STORAGE_LOG(WARN, "unexpected fail to get ls id", K(ret), K(ls_id));
     }
   } else if (nullptr == ls_attr) {
-    STORAGE_LOG(WARN, "unexpected null ls attr", K(ret), K(backup_set_id), K(ls_id));
     ret = OB_ERR_NULL_VALUE;
+    STORAGE_LOG(WARN, "unexpected null ls attr", K(ret), K(backup_set_id), K(ls_id));
   }
   return ret;
 }
@@ -666,6 +704,8 @@ int ObAdminBackupValidationCtx::add_backup_piece(const share::ObPieceKey &backup
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
       } else if (FALSE_IT(backup_piece_attr = new (alc_ptr) ObAdminBackupPieceAttr())) {
+      } else if (OB_FAIL(backup_piece_attr->init())) {
+        STORAGE_LOG(WARN, "fail to init backup piece attr", K(ret));
       } else if (OB_FAIL(backup_piece_map_.set_refactored(backup_piece_key, backup_piece_attr))) {
         STORAGE_LOG(WARN, "fail to set backup piece key", K(ret), K(backup_piece_key));
       } else if (OB_FAIL(processing_backup_piece_key_array_.push_back(backup_piece_key))) {
@@ -717,6 +757,8 @@ int ObAdminBackupValidationCtx::add_ls(const share::ObPieceKey &backup_piece_key
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to alloc memory", K(ret));
       } else if (FALSE_IT(ls_attr = new (alc_ptr) ObAdminLSAttr())) {
+      } else if (OB_FAIL(ls_attr->init())) {
+        STORAGE_LOG(WARN, "fail to init ls attr", K(ret));
       } else if (OB_FAIL(backup_piece_attr->ls_map_.set_refactored(ls_id, ls_attr))) {
         STORAGE_LOG(WARN, "fail to set ls id", K(ret), K(ls_id));
       } else {
@@ -742,11 +784,13 @@ int ObAdminBackupValidationCtx::get_ls_attr(const share::ObPieceKey &backup_piec
   } else if (OB_FAIL(backup_piece_attr->ls_map_.get_refactored(ls_id, ls_attr))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_ENTRY_NOT_EXIST;
+      STORAGE_LOG(WARN, "fail to get ls attr", K(ret), K(backup_piece_key), K(ls_id));
     } else {
       STORAGE_LOG(WARN, "unexpected fail to get ls attr", K(ret), K(ls_id));
     }
   } else if (nullptr == ls_attr) {
     return OB_ERR_NULL_VALUE;
+    STORAGE_LOG(WARN, "unexpected null ls attr", K(ret), K(backup_piece_key), K(ls_id));
   }
   return ret;
 }

@@ -107,6 +107,7 @@ struct ObAdminLSAttr final
   storage::ObLSMetaPackage ls_meta_package_;
   common::hash::ObHashMap<common::ObTabletID, ObAdminTabletAttr *> sys_tablet_map_;
   ObSingleLSInfoDesc *single_ls_info_desc_;
+  int init();
   DISALLOW_COPY_AND_ASSIGN(ObAdminLSAttr);
 };
 struct ObAdminBackupSetAttr final
@@ -122,6 +123,7 @@ struct ObAdminBackupSetAttr final
   common::hash::ObHashMap<common::ObTabletID, ObAdminTabletAttr *> major_tablet_map_;
   ObAdminBackupValidationStat stat_;
   TO_STRING_KV(KP(backup_set_store_));
+  int init();
   int fetch_next_tablet_group(common::ObArray<common::ObArray<ObAdminTabletAttr *>> &tablet_group,
                               int64_t &scheduled_cnt);
   bool is_all_tablet_done();
@@ -142,6 +144,7 @@ struct ObAdminBackupPieceAttr final
   common::hash::ObHashMap<share::ObLSID, ObAdminLSAttr *> ls_map_;
   ObAdminBackupValidationStat stat_;
   TO_STRING_KV(KP(backup_piece_store_));
+  int init();
   int split_lsn_range(
       ObArray<std::pair<share::ObLSID, std::pair<palf::LSN, palf::LSN>>> &lsn_range_array);
 
@@ -152,6 +155,7 @@ struct ObAdminBackupValidationCtx final
 {
   ObAdminBackupValidationCtx(ObArenaAllocator &arena);
   ~ObAdminBackupValidationCtx();
+  int init();
   int limit_and_sleep(const int64_t bytes);
   int set_io_bandwidth(const int64_t bandwidth);
   void print_log_archive_validation_status();
@@ -189,7 +193,7 @@ struct ObAdminBackupValidationCtx final
   common::ObArray<int64_t> processing_backup_set_id_array_;
   common::ObArray<share::ObPieceKey> processing_backup_piece_key_array_;
   // TODO: give a sql_proxy
-  common::ObMySQLProxy* sql_proxy_;
+  common::ObMySQLProxy *sql_proxy_;
   ObAdminBackupValidationStat global_stat_;
   common::ObSafeArenaAllocator allocator_;
 

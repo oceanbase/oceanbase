@@ -49,9 +49,9 @@ public:
   // typical read_size but under typical case, the data will be aligned to
   // DIO_READ_ALIGN_SIZE
   template <typename BackupStructType>
-  static int read_backup_struct(const share::ObBackupPath &file_path, int64_t &pos,
+  static int read_backup_struct(const share::ObBackupPath &file_path,
                                 const share::ObBackupStorageInfo &storage_info,
-                                BackupStructType &backup_struct,
+                                BackupStructType &backup_struct, int64_t &pos,
                                 ObAdminBackupValidationCtx *ctx = nullptr,
                                 int64_t advance_size = sizeof(BackupStructType))
   {
@@ -59,27 +59,46 @@ public:
     common::ObBackupIoAdapter util;
     int64_t file_length = 0;
     int64_t read_size = 0;
-
-    if (OB_FAIL(util.get_file_length(file_path.get_ptr(), &storage_info, file_length))) {
+    char *buf = nullptr;
+    common::ObArenaAllocator allocator("ObAdmBakVal");
+    if (file_path.is_empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "file_path is empty", K(ret));
+    } else if (!storage_info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "storage_info is invalid", K(ret), K(storage_info));
+    } else if (OB_FAIL(util.get_file_length(file_path.get_ptr(), &storage_info, file_length))) {
       STORAGE_LOG(WARN, "failed to get file length", K(ret), K(file_path));
     } else if (file_length - pos < sizeof(backup_struct)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "file not enough", K(ret), K(file_path), K(file_length));
     } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(sizeof(BackupStructType)))) {
-    } else if (OB_FAIL(util.read_part_file(file_path.get_obstr(), &storage_info,
-                                           reinterpret_cast<char *>(&backup_struct),
+      STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(sizeof(BackupStructType)));
+    } else if (OB_ISNULL(buf = static_cast<char *>(allocator.alloc(sizeof(backup_struct))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(sizeof(backup_struct)));
+    } else if (OB_FAIL(util.read_part_file(file_path.get_obstr(), &storage_info, buf,
                                            sizeof(backup_struct), pos, read_size))) {
       STORAGE_LOG(WARN, "failed to pread file", K(ret), K(file_path));
     } else if (read_size != sizeof(BackupStructType)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "read length not match", K(ret), K(file_path), K(file_length),
                   K(read_size));
-    } else if (OB_FAIL(backup_struct.check_valid())) {
-      STORAGE_LOG(WARN, "backup struct is not valid", K(ret), K(file_path));
-    } else if (FALSE_IT(pos += advance_size)) {
-      // do nothing
     } else {
-      STORAGE_LOG(INFO, "succeed to read backup struct", K(file_path));
+      blocksstable::ObBufferReader buffer_reader(buf, sizeof(backup_struct));
+      const BackupStructType *tmp_struct = nullptr;
+      if (OB_FAIL(buffer_reader.get(tmp_struct))) {
+        STORAGE_LOG(WARN, "failed to get tmp struct", K(ret));
+      } else if (OB_ISNULL(tmp_struct)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "backup data tmp struct is null", K(ret));
+      } else if (OB_FAIL(tmp_struct->check_valid())) {
+        STORAGE_LOG(WARN, "failed to check is valid", K(ret), K(*tmp_struct));
+      } else {
+        backup_struct = *tmp_struct;
+        pos += advance_size;
+        STORAGE_LOG(INFO, "succeed to read backup struct", K(file_path));
+      }
     }
     if (OB_NOT_NULL(ctx) && OB_FAIL(ret)) {
       ctx->go_abort(file_path.get_ptr(), "File not exist or physical corrputed");
@@ -99,10 +118,16 @@ public:
     char *buf = nullptr;
     int64_t read_size = 0;
     common::ObBackupIoAdapter util;
-    common::ObArenaAllocator allocator;
+    common::ObArenaAllocator allocator("ObAdmBakVal");
     share::ObBackupSerializeHeaderWrapper serializer_wrapper(&file_info);
 
-    if (OB_FAIL(util.get_file_length(file_path.get_ptr(), &storage_info, file_length))) {
+    if (file_path.is_empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "file_path is empty", K(ret));
+    } else if (!storage_info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "storage_info is invalid", K(ret), K(storage_info));
+    } else if (OB_FAIL(util.get_file_length(file_path.get_ptr(), &storage_info, file_length))) {
       STORAGE_LOG(WARN, "failed to get file length", K(ret), K(file_path));
     } else if (0 == file_length) {
       ret = OB_ERR_UNEXPECTED;
@@ -111,6 +136,7 @@ public:
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(file_length));
     } else if (OB_NOT_NULL(ctx) && OB_FAIL(ctx->limit_and_sleep(file_length))) {
+      STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(file_length));
     } else if (OB_FAIL(util.read_single_file(file_path.get_obstr(), &storage_info, buf, file_length,
                                              read_size))) {
       STORAGE_LOG(WARN, "failed to read file", K(ret), K(file_path), K(file_length));
@@ -122,6 +148,7 @@ public:
       // in deserialize, will automactically check the crc in the common header
       STORAGE_LOG(WARN, "failed to deserialize", K(ret), K(file_path), K(file_length));
     } else if (!serializer_wrapper.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "file_info is not valid", K(ret), K(file_path), K(file_length));
     } else {
       STORAGE_LOG(INFO, "succeed to read single file", K(file_path));
@@ -143,15 +170,21 @@ public:
     backup::ObBackupMultiLevelIndexTrailer index_trailer;
     backup::ObBackupFileType file_type;
     common::ObBackupIoAdapter util;
-    ObArenaAllocator tmp_allocator;
+    ObArenaAllocator tmp_allocator("ObAdmBakVal");
     int64_t pos = 0;
     int64_t file_length = -1;
     int64_t data_length = -1;
     int64_t read_size = -1;
     char *buf = nullptr;
-    if (OB_FAIL(util.get_file_length(file_path.get_ptr(), &storage_info, file_length))) {
+    if (file_path.is_empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "file_path is empty", K(ret));
+    } else if (!storage_info.is_valid()) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "storage_info is invalid", K(ret), K(storage_info));
+    } else if (OB_FAIL(util.get_file_length(file_path.get_ptr(), &storage_info, file_length))) {
       STORAGE_LOG(WARN, "failed to get file length", K(ret), K(file_path));
-    } else if (OB_FAIL(read_backup_struct(file_path, pos, storage_info, file_header, ctx,
+    } else if (OB_FAIL(read_backup_struct(file_path, storage_info, file_header, pos, ctx,
                                           DIO_ALIGN_SIZE /*file header aligned*/))) {
       STORAGE_LOG(WARN, "failed to read backup file header", K(ret), K(file_path));
     } else if (FALSE_IT(data_length = file_length - DIO_ALIGN_SIZE /*file header aligned*/
@@ -163,6 +196,7 @@ public:
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc buf", K(ret), K(data_length));
     } else if (ctx != nullptr && OB_FAIL(ctx->limit_and_sleep(data_length))) {
+      STORAGE_LOG(WARN, "failed to limit and sleep", K(ret), K(data_length));
     } else if (OB_FAIL(util.read_part_file(file_path.get_obstr(), &storage_info, buf, data_length,
                                            pos, read_size))) {
       STORAGE_LOG(WARN, "failed to pread file", K(ret), K(file_path));
@@ -170,7 +204,7 @@ public:
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "failed to pread file", K(ret), K(file_path));
     } else if (FALSE_IT(pos += read_size)) {
-    } else if (OB_FAIL(read_backup_struct(file_path, pos, storage_info, index_trailer, ctx))) {
+    } else if (OB_FAIL(read_backup_struct(file_path, storage_info, index_trailer, pos, ctx))) {
       STORAGE_LOG(WARN, "failed to read backup file trailer", K(ret), K(file_path));
     } else if (pos != file_length) {
       ret = OB_ERR_UNEXPECTED;

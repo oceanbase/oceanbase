@@ -102,8 +102,10 @@ int ObAdminBackupValidationExecutor::init_()
   } else if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(ObAdminBackupValidationCtx)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+  } else if (FALSE_IT(ctx_ = new (alc_ptr) ObAdminBackupValidationCtx(allocator_))) {
+  } else if (OB_FAIL(ctx_->init())) {
+    STORAGE_LOG(WARN, "failed to init ctx", K(ret));
   } else {
-    ctx_ = new (alc_ptr) ObAdminBackupValidationCtx(allocator_);
     ctx_->validation_type_ = validation_type_;
     ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
     is_inited_ = true;
@@ -119,7 +121,7 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
   int opt = 0;
   int index = -1;
   int64_t concurrency_ = 1; // default concurrency
-  common::ObArenaAllocator tmp_allocator;
+  common::ObArenaAllocator tmp_allocator("ObAdmBakVal");
 
   struct option longopts[] = {{"help", 0, NULL, 0},
                               {"log_archive_dest", 1, NULL, 1},
