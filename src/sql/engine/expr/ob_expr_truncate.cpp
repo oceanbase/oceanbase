@@ -120,6 +120,10 @@ int ObExprTruncate::calc_result_type2(ObExprResType &type,
             //防御可能出现的没有设置precision的decimal 或者scale_val 为负数
             precision = std::max(static_cast<int16_t>(-1), precision);
             type.set_precision(precision);
+            if (lib::is_mysql_mode() && ob_is_double_tc(type.get_type())) {
+              type.set_precision(PRECISION_UNKNOWN_YET);
+              type.set_scale(SCALE_UNKNOWN_YET);
+            }
           } else { /* do nothing */}
         } else if (ret == OB_ERR_TRUNCATED_WRONG_VALUE_FOR_FIELD ||
             ret == OB_ERR_DATA_TRUNCATED){
