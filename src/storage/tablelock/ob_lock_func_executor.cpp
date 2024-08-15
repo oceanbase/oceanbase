@@ -209,24 +209,31 @@ int ObLockFuncContext::open_inner_conn_()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = my_exec_ctx_->get_my_session();
+  observer::ObInnerSQLConnection *inner_conn = nullptr;
 
   if (OB_ISNULL(session) || OB_ISNULL(sql_proxy_ = my_exec_ctx_->get_sql_proxy())) {
     ret = OB_NOT_INIT;
     LOG_WARN("session or sql_proxy is NULL", K(ret), KP(session), KP(sql_proxy_));
-  } else if (OB_NOT_NULL(inner_conn_ = static_cast<observer::ObInnerSQLConnection *>(session->get_inner_conn()))) {
-    // do nothing.
-  } else if (OB_FAIL(ObInnerConnectionLockUtil::create_inner_conn(session, my_exec_ctx_->get_sql_proxy(), inner_conn_))) {
-    LOG_WARN("create inner connection failed", K(ret), KPC(session));
-  } else if (OB_ISNULL(inner_conn_)) {
+  } else if (OB_NOT_NULL(inner_conn_) || OB_NOT_NULL(store_inner_conn_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("inner connection is still null", KPC(session));
+    LOG_WARN("inner_conn_ or store_inner_conn_ should be null", K(ret), KP(inner_conn_), KP(store_inner_conn_));
+  } else if (OB_FAIL(ObInnerConnectionLockUtil::create_inner_conn(session, sql_proxy_, inner_conn))) {
+    LOG_WARN("create inner connection failed", K(ret), KPC(session));
+  } else if (OB_ISNULL(inner_conn)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("inner connection is still null", KPC(session));
   } else {
     /**
      * session is the only data struct which can pass through multi layer nested sql,
      * so we put inner conn in session to share it within multi layer nested sql.
      */
-    session->set_inner_conn(inner_conn_);
-    need_close_conn_ = true;
+    inner_conn_ = inner_conn;
+    store_inner_conn_ = static_cast<observer::ObInnerSQLConnection *>(session->get_inner_conn());
+    session->set_inner_conn(inner_conn);
+    LOG_DEBUG("ObLockFuncContext::open_inner_conn_ successfully",
+              KP(inner_conn_),
+              KP(store_inner_conn_),
+              K(inner_conn_->is_oracle_compat_mode()));
   }
   return ret;
 }
@@ -234,19 +241,18 @@ int ObLockFuncContext::open_inner_conn_()
 int ObLockFuncContext::close_inner_conn_()
 {
   int ret = OB_SUCCESS;
-  if (need_close_conn_) {
-    ObSQLSessionInfo *session = my_exec_ctx_->get_my_session();
-    if (OB_ISNULL(sql_proxy_) || OB_ISNULL(session) || OB_ISNULL(inner_conn_)) {
-      ret = OB_NOT_INIT;
-      LOG_WARN("sql_proxy or inner_conn of session is NULL", K(ret), KP(sql_proxy_), KP(session), KP(inner_conn_));
-    } else {
-      OZ (sql_proxy_->close(inner_conn_, true));
-      OX (session->set_inner_conn(NULL));
-    }
-    need_close_conn_ = false;
+  ObSQLSessionInfo *session = my_exec_ctx_->get_my_session();
+
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(session) || OB_ISNULL(inner_conn_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sql_proxy or inner_conn of session is NULL", K(ret), KP(sql_proxy_), KP(session), KP(inner_conn_));
+  } else {
+    session->set_inner_conn(store_inner_conn_);  // restore inner_conn to session before close the tmp inner_conn
+    OZ (sql_proxy_->close(inner_conn_, true));
   }
-  sql_proxy_ = NULL;
-  inner_conn_ = NULL;
+  sql_proxy_ = nullptr;
+  inner_conn_ = nullptr;
+  store_inner_conn_ = nullptr;
   return ret;
 }
 
