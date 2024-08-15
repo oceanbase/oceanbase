@@ -45,7 +45,7 @@
 #include "sql/engine/expr/ob_geo_expr_utils.h"
 #include "lib/geo/ob_geo_utils.h"
 #include "lib/geo/ob_geo_func_utils.h"
-
+#include "lib/geo/ob_geo_to_tree_visitor.h"
 
 namespace oceanbase
 {
@@ -8468,13 +8468,15 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
           if (OB_FAIL(ObTextStringHelper::read_real_string_data(tmp_alloc, gis_datum, datum_meta,
                                                                 has_lob_header, wkb))) {
             LOG_WARN("fail to get real string data", K(ret), K(wkb));
-          } else if (OB_FAIL(ObGeoExprUtils::construct_geometry(tmp_alloc, wkb, srs_guard, 
-                                                                srs, cur_geo, N_ST_COLLECT))) {
-            LOG_WARN("fail to create geo", K(ret), K(wkb));     // ObIWkbGeo
+          } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(ctx, srs_guard, wkb, srs, true, N_ST_COLLECT))) {
+            LOG_WARN("fail to get srs item", K(ret), K(wkb));
           } else if (OB_FAIL(ObGeoTypeUtil::get_srid_from_wkb(wkb, srid))) {
             ret = OB_ERR_GIS_INVALID_DATA;
             LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_COLLECT);
             LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
+          } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_alloc, wkb, cur_geo, srs, N_ST_COLLECT, 
+                                                            ObGeoBuildFlag::GEO_DEFAULT ^ ObGeoBuildFlag::GEO_CORRECT))) {
+            LOG_WARN("failed to parse wkb", K(ret));        // ObIWkbGeom
           } else if (!is_inited) {
             is_inited = true;
             if (OB_FAIL(ObGeometrycollection::create_collection(cur_geo->crs(), srid,
@@ -8490,11 +8492,10 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
               LOG_WARN("geometry in collection must in the same SRS", K(ret));
               break;
             } else {
-              gc->push_back(*cur_geo);
               switch (cur_geo->type()) {  // flags for narrow collection
                 case common::ObGeoType::POINT: {
                   has_pt = TRUE;
-                  break;                  
+                  break;
                 }
                 case common::ObGeoType::LINESTRING: {
                   has_ls = TRUE;
@@ -8506,9 +8507,15 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
                 }
                 default: {
                   has_other = TRUE;
-                  break;                
+                  break;
                 }
               } // end switch
+              ObGeoToTreeVisitor visitor(&tmp_alloc);
+              if (OB_FAIL(cur_geo->do_visit(visitor))) {
+                LOG_WARN("failed to convert bin to tree", K(ret));
+              } else {
+                gc->push_back(*(visitor.get_geometry()));
+              }
             } // end else
           } // end if (OB_SUCC(ret))
         } // end if (!gis_datum.is_null()) 

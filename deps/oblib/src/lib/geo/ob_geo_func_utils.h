@@ -599,9 +599,7 @@ int ObGeoFuncUtils::remove_duplicate_multi_geo(ObGeometry *&geo, common::ObIAllo
   return ret;
 }
 
-/*
- * Narrowing Collection type to MultiX for aggregate func: st_collect
-*/
+// Narrowing Collection type to MultiX for aggregate func: st_collect
 template<typename GcTreeType>
 int ObGeoFuncUtils::narrow_st_collect_result(ObIAllocator &allocator,
                                              ObGeometry *&geo,
@@ -610,16 +608,6 @@ int ObGeoFuncUtils::narrow_st_collect_result(ObIAllocator &allocator,
   int ret = OB_SUCCESS;
   ObGeoToTreeVisitor tree_visitor(&allocator);
   GcTreeType *&geo_coll = reinterpret_cast<GcTreeType *&>(geo);
-
-  if (OB_NOT_NULL(srs) && (srs->is_geographical_srs() || srs->is_lat_long_order())) {
-    ObGeoNormalizeVisitor normalize_visitor(srs);
-    for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-      if (OB_FAIL((*geo_coll)[i].do_visit(normalize_visitor))) {
-        LOG_WARN("normalize geo failed", K(ret));
-        return ret;
-      }
-    } // end for
-  }
 
   switch(geo_coll->front().type()) {
     case ObGeoType::POINT: {
@@ -631,9 +619,7 @@ int ObGeoFuncUtils::narrow_st_collect_result(ObIAllocator &allocator,
       }
       for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
         typename GcTreeType::sub_pt_type &geo_point = reinterpret_cast<typename GcTreeType::sub_pt_type &>((*geo_coll)[i]);
-        typename GcTreeType::sub_mpt_type::value_type point_tmp(geo_point.template get<1>(), 
-                                                                geo_point.template get<0>());
-        if (OB_FAIL(res_geo->push_back(point_tmp))) { 
+        if (OB_FAIL(res_geo->push_back(geo_point))) {
           OB_LOG(WARN, "failed to add point to multipoint", K(ret));
         }
       }
@@ -650,10 +636,7 @@ int ObGeoFuncUtils::narrow_st_collect_result(ObIAllocator &allocator,
         OB_LOG(WARN, "fail to alloc memory", K(ret));
       } else {
         for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-          if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
-            LOG_WARN("fail to convert geometry to tree", K(ret));
-          }
-          if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
+          if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
             OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
           }
         }
@@ -671,10 +654,7 @@ int ObGeoFuncUtils::narrow_st_collect_result(ObIAllocator &allocator,
         OB_LOG(WARN, "fail to alloc memory", K(ret));
       } else {
         for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-          if (OB_FAIL((*geo_coll)[i].do_visit(tree_visitor))) {
-            LOG_WARN("fail to convert geometry to tree", K(ret));
-          }
-          if (OB_FAIL(res_geo->push_back(*(tree_visitor.get_geometry())))) {
+          if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
             OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
           }
         }
