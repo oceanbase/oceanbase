@@ -168,4 +168,6 @@ TG_DEF(StartupAccelHandler, StartupAccelHandler, QUEUE_THREAD, 1, observer::ObSt
 TG_DEF(TenantTTLManager, TTLManager, TIMER)
 TG_DEF(TenantTabletTTLMgr, TTLTabletMgr, TIMER)
 TG_DEF(TntSharedTimer, TntSharedTimer, TIMER)
+
+TG_DEF(TmpFileSwap, TFSwap, THREAD_POOL, 1)
 #endif

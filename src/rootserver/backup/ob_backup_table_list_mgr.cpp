@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_table_list_mgr.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/backup/ob_backup_data_store.h"
 #include "share/backup/ob_backup_io_adapter.h"
 
@@ -354,10 +355,9 @@ int ObBackupTableListMgr::read_from_tmp_file_(const int64_t read_size, const int
 {
   int ret = OB_SUCCESS;
   table_list.reset();
-  blocksstable::ObTmpFileIOInfo io_info;
-  blocksstable::ObTmpFileIOHandle handle;
+  tmp_file::ObTmpFileIOInfo io_info;
+  tmp_file::ObTmpFileIOHandle handle;
   io_info.fd_ = tmp_file_.get_fd();
-  io_info.tenant_id_ = tmp_file_.get_tenant_id();
   io_info.dir_id_ = tmp_file_.get_dir();
   io_info.io_desc_.set_wait_event(2);
   io_info.size_ = read_size;
@@ -370,7 +370,7 @@ int ObBackupTableListMgr::read_from_tmp_file_(const int64_t read_size, const int
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret), K(read_size));
   } else if (FALSE_IT(io_info.buf_ = buf)) {
-  } else if (OB_FAIL(blocksstable::ObTmpFileManager::get_instance().pread(io_info, offset, handle))) {
+  } else if (OB_FAIL(MTL(tmp_file::ObTenantTmpFileManager*)->pread(io_info, offset, handle))) {
     LOG_WARN("failed to pread from tmp file", K(ret), K(io_info), K(offset), K(read_size));
   } else {
     blocksstable::ObBufferReader buffer_reader(buf, read_size);

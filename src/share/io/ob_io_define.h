@@ -296,6 +296,7 @@ public:
   void reset();
   void destroy();
   void cancel();
+  int wait(int64_t wait_ms);
   void finish(const ObIORetCode &ret_code, ObIORequest *req = nullptr);
   void calc_io_offset_and_size(int64_t &size, int32_t &offset);
   ObIOMode get_mode() const;
@@ -465,7 +466,7 @@ public:
   bool is_valid() const;
   OB_INLINE bool is_finished() const { return nullptr != result_ && result_->is_finished_; }
 
-  int wait();
+  int wait(const int64_t wait_timeout_ms=UINT64_MAX);
   const char *get_buffer();
   int64_t get_data_size() const;
   int64_t get_rt() const;

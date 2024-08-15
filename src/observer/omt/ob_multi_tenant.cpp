@@ -165,6 +165,7 @@
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
 
 using namespace oceanbase;
@@ -186,6 +187,7 @@ using namespace oceanbase::archive;
 using namespace oceanbase::observer;
 using namespace oceanbase::rootserver;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::tmp_file;
 
 #define OB_TENANT_LOCK_BUCKET_NUM 10000L
 
@@ -447,6 +449,7 @@ int ObMultiTenant::init(ObAddr myaddr,
 
   if (OB_SUCC(ret) && mtl_bind_flag) {
     MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
+    MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
     // base mtl
     MTL_BIND2(mtl_new_default, storage::mds::ObTenantMdsService::mtl_init, storage::mds::ObTenantMdsService::mtl_start, storage::mds::ObTenantMdsService::mtl_stop, storage::mds::ObTenantMdsService::mtl_wait, mtl_destroy_default);

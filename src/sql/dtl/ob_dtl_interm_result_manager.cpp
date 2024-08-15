@@ -15,7 +15,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/ob_server_struct.h"
 #include "ob_dtl_interm_result_manager.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "observer/virtual_table/ob_all_virtual_dtl_interm_result_monitor.h"
 #include "sql/dtl/ob_dtl_linked_buffer.h"
 #include "sql/dtl/ob_dtl_msg_type.h"

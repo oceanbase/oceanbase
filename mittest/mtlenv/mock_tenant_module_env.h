@@ -95,6 +95,7 @@
 #include "observer/table/ob_table_session_pool.h"
 #include "share/index_usage/ob_index_usage_info_mgr.h"
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/memtable/ob_lock_wait_mgr.h"
 
 namespace oceanbase
@@ -658,6 +659,10 @@ int MockTenantModuleEnv::init_before_start_mtl()
     STORAGE_LOG(WARN, "fail to init env", K(ret));
   } else if (OB_FAIL(oceanbase::palf::election::GLOBAL_INIT_ELECTION_MODULE())) {
     STORAGE_LOG(WARN, "fail to init env", K(ret));
+  } else if (OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
+    STORAGE_LOG(WARN, "init tmp block cache failed", KR(ret));
+  } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
+    STORAGE_LOG(WARN, "init tmp page cache failed", KR(ret));
   } else if (OB_SUCCESS != (ret = bandwidth_throttle_.init(1024 * 1024 * 60))) {
     STORAGE_LOG(ERROR, "failed to init bandwidth_throttle_", K(ret));
   } else if (OB_FAIL(TG_START(lib::TGDefIDs::ServerGTimer))) {
@@ -691,6 +696,7 @@ int MockTenantModuleEnv::init()
     } else {
       oceanbase::ObClusterVersion::get_instance().update_data_version(DATA_CURRENT_VERSION);
       MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
+      MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, omt::ObSharedTimer::mtl_init, omt::ObSharedTimer::mtl_start, omt::ObSharedTimer::mtl_stop, omt::ObSharedTimer::mtl_wait, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObTenantSchemaService::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
       MTL_BIND2(mtl_new_default, ObStorageLogger::mtl_init, ObStorageLogger::mtl_start, ObStorageLogger::mtl_stop, ObStorageLogger::mtl_wait, mtl_destroy_default);
@@ -753,8 +759,6 @@ int MockTenantModuleEnv::init()
       STORAGE_LOG(ERROR, "reload memory config failed", K(ret));
     } else if (OB_FAIL(start_())) {
       STORAGE_LOG(ERROR, "mock env start failed", K(ret));
-    } else if (OB_FAIL(ObTmpFileManager::get_instance().init())) {
-      STORAGE_LOG(WARN, "init_tmp_file_manager failed", K(ret));
     } else {
       inited_ = true;
     }
@@ -853,7 +857,6 @@ void MockTenantModuleEnv::destroy()
   ObKVGlobalCache::get_instance().destroy();
   ObServerCheckpointSlogHandler::get_instance().destroy();
   SLOGGERMGR.destroy();
-  ObTmpFileManager::get_instance().destroy();
 
   OB_SERVER_BLOCK_MGR.stop();
   OB_SERVER_BLOCK_MGR.wait();
@@ -867,7 +870,8 @@ void MockTenantModuleEnv::destroy()
   net_frame_.stop();
   net_frame_.wait();
   net_frame_.destroy();
-
+  tmp_file::ObTmpBlockCache::get_instance().destroy();
+  tmp_file::ObTmpPageCache::get_instance().destroy();
   TG_STOP(lib::TGDefIDs::ServerGTimer);
   TG_WAIT(lib::TGDefIDs::ServerGTimer);
   TG_DESTROY(lib::TGDefIDs::ServerGTimer);

@@ -27,7 +27,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
-#include "storage/blocksstable/ob_tmp_file_store.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -41,6 +41,7 @@
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::tmp_file;
 using namespace oceanbase::storage;
 using namespace oceanbase::share;
 
@@ -1493,18 +1494,29 @@ int ObBlockManager::mark_tmp_file_blocks(
     ObMacroBlockMarkerStatus &tmp_status)
 {
   int ret = OB_SUCCESS;
-  ObArray<MacroBlockId> macro_block_list;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  common::ObSEArray<uint64_t, 8> mtl_tenant_ids;
 
-  if (OB_FAIL(macro_block_list.reserve(DEFAULT_PENDING_FREE_COUNT))) {
-    LOG_WARN("fail to reserve macro block list", K(ret));
-  } else if (OB_FAIL(OB_TMP_FILE_STORE.get_macro_block_list(macro_block_list))) {
-    LOG_WARN("fail to get macro block list", K(ret));
-  } else if (OB_FAIL(update_mark_info(macro_block_list, macro_id_set, mark_info))){
-    LOG_WARN("fail to update mark info", K(ret), K(macro_block_list.count()));
-  } else {
-    tmp_status.tmp_file_count_ += macro_block_list.count();
-    tmp_status.hold_count_ -= macro_block_list.count();
+  omt->get_mtl_tenant_ids(mtl_tenant_ids);
+  for (int64_t i = 0; OB_SUCC(ret) && i < mtl_tenant_ids.count(); i++) {
+    const uint64_t tenant_id = mtl_tenant_ids.at(i);
+    MTL_SWITCH(tenant_id) {
+      ObArray<MacroBlockId> macro_block_list;
+      if (OB_FAIL(set_group_id(tenant_id))) {
+        LOG_WARN("isolate CPU and IOPS failed", K(ret));
+      } else if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set, tmp_status))) {
+        LOG_WARN("fail to mark tenant blocks", K(ret), K(tenant_id));
+      } else if (OB_FALSE_IT(MTL(ObTenantTmpFileManager*)->get_macro_block_list(macro_block_list))) {
+        LOG_WARN("fail to get macro block list", K(ret));
+      } else if (OB_FAIL(update_mark_info(macro_block_list, macro_id_set, mark_info))){
+        LOG_WARN("fail to update mark info", K(ret), K(macro_block_list.count()));
+      } else {
+        tmp_status.tmp_file_count_ += macro_block_list.count();
+        tmp_status.hold_count_ -= macro_block_list.count();
+      }
+    }
   }
+
   return ret;
 }
 

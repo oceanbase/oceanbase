@@ -45,7 +45,7 @@ public:
   int async_read(const ObMacroBlockReadInfo &read_info);
   int async_write(const ObMacroBlockWriteInfo &write_info);
   int set_macro_block_id(const MacroBlockId &macro_block_id);
-  int wait();
+  int wait(const int64_t wait_timeout_ms=UINT64_MAX);
   TO_STRING_KV(K_(macro_id), K_(io_handle));
 private:
   int report_bad_block() const;
