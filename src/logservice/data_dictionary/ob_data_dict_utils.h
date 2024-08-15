@@ -124,7 +124,7 @@ OB_INLINE const char *extract_str(const ObString &str)
   return str.empty() ? "" : str.ptr();
 }
 
-int check_ls_leader(logservice::ObLogHandler *handler, bool &is_leader);
+int check_ls_leader(logservice::ObLogHandler *handler, bool &is_leader, int64_t &proposal_id);
 
 } // namespace datadict
 } // namespace oceanbase

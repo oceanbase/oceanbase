@@ -264,6 +264,8 @@ int ObDataDictService::do_dump_data_dict_()
   share::SCN snapshot_scn;
   palf::LSN start_lsn;
   palf::LSN end_lsn;
+  int64_t start_proposal_id = 0;
+  int64_t end_proposal_id = 0;
   bool is_cluster_status_normal = false;
   bool is_data_dict_dump_success = false;
   bool is_any_log_callback_fail = false;
@@ -293,17 +295,18 @@ int ObDataDictService::do_dump_data_dict_()
   } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
     ret = OB_ERR_UNEXPECTED;
     DDLOG(WARN, "invalid log_handler_ get from OBLS", KR(ret), K_(tenant_id));
-  } else if (check_ls_leader(log_handler, is_leader)) {
-    DDLOG(WARN, "check_is_sys_ls_leader failed", KR(ret));
+  } else if (OB_FAIL(check_ls_leader(log_handler, is_leader, start_proposal_id))) {
+    DDLOG(WARN, "check_is_sys_ls_leader failed", KR(ret), K(start_proposal_id));
   } else if (! is_leader) {
-    DDLOG(DEBUG, "won't do_dump_data_dict_ cause not ls_leader", KR(ret), K(is_leader));
+    ret = OB_STATE_NOT_MATCH;
+    DDLOG(WARN, "won't do_dump_data_dict_ cause not ls_leader", KR(ret), K(is_leader), K(start_proposal_id));
     // do nothing if not ls leader.
   } else if (OB_FAIL(get_snapshot_scn_(snapshot_scn))) {
     DDLOG(WARN, "get_snapshot_scn failed", KR(ret), K(snapshot_scn));
   } else if (OB_FAIL(storage_.prepare(snapshot_scn, log_handler))) {
     DDLOG(WARN, "storage prepare for data_dict_dump failed", KR(ret), K(snapshot_scn));
   } else if (OB_FAIL(generate_dict_and_dump_(snapshot_scn))) {
-    DDLOG(WARN, "generate_dict_and_dump_", KR(ret), K_(tenant_id), K(snapshot_scn));
+    DDLOG(WARN, "generate_dict_and_dump_", KR(ret), K_(tenant_id), K(snapshot_scn), K(start_proposal_id));
   } else {
     is_data_dict_dump_success = true;
   }
@@ -319,7 +322,17 @@ int ObDataDictService::do_dump_data_dict_()
           K(snapshot_scn), K(start_lsn), K(end_lsn), K_(stop_flag), K_(is_inited));
     }
     ret = tmp_ret;
-  } else if (is_data_dict_dump_success && ! is_any_log_callback_fail) {
+  } else if (OB_UNLIKELY(! is_data_dict_dump_success || is_any_log_callback_fail)) {
+    ret = OB_STATE_NOT_MATCH;
+    DDLOG(INFO, "won't report data_dict persist info cause data_dict dump failed or log_callback failed",
+        KR(ret), K(is_data_dict_dump_success), K(is_any_log_callback_fail));
+  } else if (OB_FAIL(check_ls_leader(log_handler, is_leader, end_proposal_id))) {
+    DDLOG(WARN, "check_is_sys_ls_leader failed", KR(ret), K(start_proposal_id), K(end_proposal_id));
+  } else if (OB_UNLIKELY(! is_leader || start_proposal_id != end_proposal_id)) {
+    ret = OB_STATE_NOT_MATCH;
+    DDLOG(INFO, "won't report data_dict persist info cause currently not ls_leader or not the same election term",
+        KR(ret), K(is_leader), K(start_proposal_id), K(end_proposal_id));
+  } else {
     // only report when dict dump success and all log_callback success.
     const int64_t half_dump_interval = ATOMIC_LOAD(&dump_interval_) / 2;
     const int64_t report_timeout = DEFAULT_REPORT_TIMEOUT > half_dump_interval ? half_dump_interval : DEFAULT_REPORT_TIMEOUT;
@@ -607,13 +620,15 @@ int ObDataDictService::handle_table_metas_(
     int64_t &filter_table_count)
 {
   int ret = OB_SUCCESS;
+  const int64_t total_table_count = table_ids.count();
   lib::ObMemAttr mem_attr(tenant_id_, "ObDatDictTbMeta");
   ObArenaAllocator tb_meta_allocator(mem_attr);
   static const int64_t batch_table_meta_size = 200;
   filter_table_count = 0;
+  int64_t dump_succ_tb_cnt = 0;
   schema::ObSchemaGetterGuard schema_guard; // will reset while getting schem_guard
 
-  for (int i = 0; OB_SUCC(ret) && ! stop_flag_ && i < table_ids.count(); i++) {
+  for (int i = 0; OB_SUCC(ret) && i < total_table_count; i++) {
     const ObTableSchema *table_schema = NULL;
     uint64_t table_id = OB_INVALID_ID;
     // NOTICE: get schema_guard for each table_meta in case of too much memory usage in schema_service.
@@ -649,9 +664,20 @@ int ObDataDictService::handle_table_metas_(
     } else if (OB_FAIL(storage_.handle_dict_meta(table_meta, header))) {
       DDLOG(WARN, "handle dict_table_meta failed", KR(ret), K(table_meta), K(header), KPC(table_schema));
     } else {
+      dump_succ_tb_cnt ++;
       DDLOG(DEBUG, "handle dict_table_meta succ", KR(ret), K(table_meta), K(header), KPC(table_schema));
+      if (i == 0) {
+        DEBUG_SYNC(BEFORE_DATA_DICT_DUMP_FINISH);
+      }
+    }
+
+    if (OB_SUCC(ret) && stop_flag_) {
+      ret = OB_STATE_NOT_MATCH;
+      DDLOG(WARN, "data_dict service marked stop_flag, may already switch to follower", KR(ret), K_(stop_flag));
     }
   }
+
+  DDLOG(INFO, "handle_table_metas_ done", KR(ret), K(total_table_count), K(dump_succ_tb_cnt), K(filter_table_count), K_(stop_flag));
 
   return ret;
 }
