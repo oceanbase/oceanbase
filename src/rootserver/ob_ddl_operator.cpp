@@ -81,6 +81,7 @@
 #include "share/schema/ob_mview_refresh_stats_params.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "pl/ob_pl_persistent.h"
+#include "pl/pl_cache/ob_pl_cache_mgr.h"
 
 namespace oceanbase
 {
@@ -699,7 +700,6 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
   const uint64_t tenant_id = db_schema.get_tenant_id();
   const uint64_t database_id = db_schema.get_database_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
-
   if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_SYS;
     LOG_ERROR("schama service_impl and schema manage must not null",
@@ -842,7 +842,7 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
       LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id));
     } else if (OB_FAIL(schema_guard.get_simple_package_schemas_in_database(tenant_id, database_id, package_schemas))) {
        LOG_WARN("get packages in database failed", K(tenant_id), KT(database_id), K(ret));
-     } else {
+    } else {
        ObArray<const ObSAuditSchema *> audits;
        common::ObSqlString public_sql_string;
        for (int64_t i = 0; OB_SUCC(ret) && i < package_schemas.count(); ++i) {
@@ -998,27 +998,31 @@ int ObDDLOperator::drop_database(const ObDatabaseSchema &db_schema,
           LOG_WARN("drop routine failed", "routine_id", udt_info->get_type_id(), K(ret));
         }
         if (OB_SUCC(ret)) {
+          uint64_t udt_db_id = udt_info->get_database_id();
           if (udt_info->is_object_spec_ddl() &&
               OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id))) {
-            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                          ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id)),
-                          udt_info->get_database_id()));
+            uint64_t udt_spec_id = ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id));
+            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, udt_spec_id, udt_db_id));
             if (udt_info->has_type_body() &&
                 OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id))) {
-              OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                            ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id)),
-                            udt_info->get_database_id()));
+              uint64_t udt_body_id = ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id));
+              OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, udt_body_id, udt_db_id));
             }
           } else if (udt_info->is_object_body_ddl() &&
                     OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id))) {
-            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                                      ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id)),
-                                      udt_info->get_database_id()));
+            uint64_t udt_body_id = ObUDTObjectType::mask_object_id(udt_info->get_object_body_id(tenant_id));
+            OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, udt_body_id, udt_db_id));
+            if (OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id))) {
+              uint64_t udt_spec_id = ObUDTObjectType::mask_object_id(udt_info->get_object_spec_id(tenant_id));
+              OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, udt_spec_id, udt_db_id));
+            }
           }
         }
       }
     }
   }
+  // flush pl cache
+  OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(OB_INVALID_ID, database_id, tenant_id, schema_service_));
 
   // delete sequences in database
   if (OB_SUCC(ret)) {
@@ -9113,6 +9117,9 @@ int ObDDLOperator::drop_routine(const ObRoutineInfo &routine_info,
                      routine_info, new_schema_version, trans, ddl_stmt_str))) {
     LOG_WARN("drop routine info failed", K(routine_info), K(ret));
   }
+  uint64_t rt_id = routine_info.get_routine_id();
+  uint64_t db_id = routine_info.get_database_id();
+  OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(rt_id, db_id, tenant_id, schema_service_));
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, routine_info.get_tenant_id(),
                             routine_info.get_routine_id(), routine_info.get_database_id()));
   OZ (ObDependencyInfo::delete_schema_object_dependency(trans, routine_info.get_tenant_id(),
@@ -9480,6 +9487,8 @@ int ObDDLOperator::drop_package(const ObPackageInfo &package_info,
                                                         package_info.get_package_id(),
                                                         new_schema_version,
                                                         package_info.get_object_type()));
+        OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(package_info.get_package_id(), package_info.get_database_id(), tenant_id,
+                                                              schema_service_));
         OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_info.get_package_id(),
                                                               package_info.get_database_id()));
         if (OB_NOT_NULL(package_body_info)) {
@@ -9487,11 +9496,15 @@ int ObDDLOperator::drop_package(const ObPackageInfo &package_info,
                                                         package_body_info->get_package_id(),
                                                         new_schema_version,
                                                         package_body_info->get_object_type()));
+          OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(package_body_info->get_package_id(), package_body_info->get_database_id(),
+                                                                tenant_id, schema_service_));
           OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_body_info->get_package_id(),
                                                                 package_body_info->get_database_id()));
         }
       }
     } else {
+      OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(package_info.get_package_id(), package_info.get_database_id(), tenant_id,
+                                                            schema_service_));
       OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id, package_info.get_package_id(),
                                                             package_info.get_database_id()));
     }
@@ -9675,9 +9688,13 @@ int ObDDLOperator::drop_trigger(const ObTriggerInfo &trigger_info,
                                                         trigger_info.get_trigger_id(),
                                                         new_schema_version,
                                                         trigger_info.get_object_type()));
+  uint64_t spec_trig_id = share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id());
+  uint64_t body_trig_id = share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id());
+  OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(spec_trig_id, trigger_info.get_database_id(), tenant_id, schema_service_));
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
                 share::schema::ObTriggerInfo::get_trigger_spec_package_id(trigger_info.get_trigger_id()),
                 trigger_info.get_database_id()));
+  OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(body_trig_id, trigger_info.get_database_id(), tenant_id, schema_service_));
   OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
                 share::schema::ObTriggerInfo::get_trigger_body_package_id(trigger_info.get_trigger_id()),
                 trigger_info.get_database_id()));
@@ -10198,21 +10215,27 @@ int ObDDLOperator::drop_udt(const ObUDTTypeInfo &udt_info,
     LOG_WARN("drop udt info failed", K(udt_info), K(ret));
   }
   if (OB_SUCC(ret)) {
+    uint64_t spec_udt_id = ObUDTObjectType::mask_object_id(udt_info.get_object_spec_id(tenant_id));
     if (udt_info.is_object_spec_ddl() &&
-        OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info.get_object_spec_id(tenant_id))) {
+        OB_INVALID_ID != spec_udt_id) {
+      OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(spec_udt_id, udt_info.get_database_id(), tenant_id, schema_service_));
       OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                    ObUDTObjectType::mask_object_id(udt_info.get_object_spec_id(tenant_id)),
+                    spec_udt_id,
                     udt_info.get_database_id()));
       if (udt_info.has_type_body() &&
           OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id))) {
+        uint64_t body_udt_id = ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id));
+        OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(body_udt_id, udt_info.get_database_id(), tenant_id, schema_service_));
         OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                      ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id)),
+                      body_udt_id,
                       udt_info.get_database_id()));
       }
     } else if (udt_info.is_object_body_ddl() &&
                OB_INVALID_ID != ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id))) {
+      uint64_t body_udt_id = ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id));
+      OZ (pl::ObPLCacheMgr::flush_pl_cache_by_sql(body_udt_id, udt_info.get_database_id(), tenant_id, schema_service_));
       OZ (pl::ObRoutinePersistentInfo::delete_dll_from_disk(trans, tenant_id,
-                    ObUDTObjectType::mask_object_id(udt_info.get_object_body_id(tenant_id)),
+                    body_udt_id,
                     udt_info.get_database_id()));
     }
   }
