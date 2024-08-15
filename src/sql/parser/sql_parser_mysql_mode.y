@@ -15253,11 +15253,6 @@ USER_VARIABLE to_or_eq expr
   malloc_non_terminal_node($$, result->malloc_pool_, T_VAR_VAL, 2, $1, $3);
   $$->value_ = 2;
 }
-| USER_VARIABLE SET_VAR expr
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_VAR_VAL, 2, $1, $3);
-  $$->value_ = 2;
-}
 | sys_var_and_val
 {
   $$ = $1;
@@ -15305,11 +15300,6 @@ var_name to_or_eq set_expr_or_default
   malloc_non_terminal_node($$, result->malloc_pool_, T_VAR_VAL, 2, $1, $3);
   $$->value_ = 2;
 }
-| var_name SET_VAR set_expr_or_default
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_VAR_VAL, 2, $1, $3);
-  $$->value_ = 2;
-}
 ;
 
 scope_or_scope_alias:
@@ -15320,8 +15310,9 @@ GLOBAL %prec LOWER_PARENS      { $$[0] = 1; }
 ;
 
 to_or_eq:
-TO      { $$ = NULL; }
+TO        { $$ = NULL; }
 | COMP_EQ { $$ = NULL; }
+| SET_VAR { $$ = NULL; }
 ;
 
 set_role_stmt:
@@ -20390,18 +20381,18 @@ CREATE
  *===========================================================*/
 
 var_name:
-    NAME_OB
-    {
-      $$ = $1;
-    }
-  | unreserved_keyword_normal
-    {
-      get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
-    }
-  | new_or_old_column_ref
-    {
-      $$ = $1;
-    }
+NAME_OB
+{
+  $$ = $1;
+}
+| unreserved_keyword_normal
+{
+  get_non_reserved_node($$, result->malloc_pool_, @1.first_column, @1.last_column);
+}
+| new_or_old_column_ref
+{
+  $$ = $1;
+}
 ;
 
 new_or_old:
