@@ -1,0 +1,59 @@
+# owner: xiaoyen.xy
+# tags: optimizer 
+# 测试冗余单谓词选择率估计过小的场景
+
+# 创建表
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+CREATE TABLE t1 (
+    c0 INT,
+    c1 INT,
+    c2 INT,
+    c3 INT
+);
+
+# 填充表
+DROP PROCEDURE IF EXISTS FillTable;
+DELIMITER //;
+CREATE PROCEDURE FillTable()
+BEGIN
+  DECLARE i INT DEFAULT 0;
+  WHILE i < 1000 DO
+    INSERT INTO t1 (c0, c1, c2, c3) VALUES (MOD(i, 10), MOD(i, 10), MOD(i, 10), MOD(i, 10));
+    SET i = i + 1;
+  END WHILE;
+END //
+
+DELIMITER ;//
+CALL FillTable();
+--enable_warnings
+
+# 禁用动态采样功能
+SET GLOBAL optimizer_dynamic_sampling = 0;
+# 开启 SQL 扩展功能
+alter system set enable_sql_extension = true;
+# 分析表 t1 的统计信息
+call dbms_stats.delete_table_stats('test', 't1');
+call dbms_stats.gather_table_stats('test', 't1', method_opt=>'FOR ALL COLUMNS SIZE 1');
+# 记录日志
+set ob_enable_show_trace=true;set ob_log_level='debug';
+
+
+# 测试场景
+# EqualSelEstimator
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c2,2,c2)=(1,c2,3) and c2=2;
+explain select /*+ NO_REWRITE */ count(*) from t1 where c2=4 and c2=4;
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c2,c3)=((2,3)) and (c2,c3)=(2,3);
+# InSelEstimator
+explain select /*+ NO_REWRITE */ count(*) from t1 where (2,2) in ((c2,c2));
+explain select /*+ NO_REWRITE */ count(*) from t1 where c0 in (1,2,3,7) AND c0 in (4,5);
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c0,c1) in ((1,2), (3,4));
+# EqualSelEstimator & InSelEstimator
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c0,c1)=(1,2) AND 3 in (c0,c1,c2);
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c0,c1)=(1,2) AND c0 in (7,3);
+# EqualSelEstimator & RangeSelEstimator
+explain select /*+ NO_REWRITE */ count(*) from t1 where (c0,c1)=(1,2) AND c0>=9 AND c1<=2;
+explain select /*+ NO_REWRITE */ count(*) from t1 where c1>=5 and c2=1;
+explain select /*+ NO_REWRITE */ count(*) from t1 where c1>0 and c1<0 and c2=1;
+# Other situation
+explain select /*+ NO_REWRITE */ count(*) from t1 where c0 >> 12 & 15 in (0,1);

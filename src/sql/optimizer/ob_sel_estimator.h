@@ -39,6 +39,10 @@ enum class ObSelEstType
   INEQUAL_JOIN,
 };
 
+inline unsigned int sel_type_value(ObSelEstType type) {
+  return 1 << static_cast<int>(type);
+}
+
 class ObSelEstimatorFactory;
 class ObSelEstimator
 {
@@ -46,12 +50,13 @@ public:
   ObSelEstimator(ObSelEstType type) : type_(type) {}
   virtual ~ObSelEstimator() = default;
 
-  static int append_estimators(ObIArray<ObSelEstimator *> &sel_estimators, ObSelEstimator *new_estimator);
+  static int append_estimators(const OptSelectivityCtx &ctx, ObIArray<ObSelEstimator *> &sel_estimators, ObSelEstimator *new_estimator);
 
   // Check whether it is related to other ObSelEstimator, and if so, merge them
-  virtual int merge(const ObSelEstimator &other, bool &is_success) = 0;
+  virtual int merge(const OptSelectivityCtx &ctx, ObSelEstimator &other, ObSelEstimator* &discard_estimator);
   // check whether it is independent of any other ObSelEstimator
   virtual bool is_independent() const = 0;
+  virtual bool is_precisable() const { return false; }
   // Calculate the selectivity
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
@@ -60,11 +65,14 @@ public:
   // Check whether we tend to use dynamic sampling for this estimator
   virtual bool tend_to_use_ds() = 0;
   inline ObSelEstType get_type() const { return type_; }
+  ObIArray<ObColumnRefRawExpr *> &get_calc_cols() { return calc_cols; }
+  void set_calc_cols(ObIArray<ObColumnRefRawExpr *> &cols) { calc_cols.assign(cols); }
 
   VIRTUAL_TO_STRING_KV(K_(type));
 
 protected:
   ObSelEstType type_;
+  common::ObSEArray<ObColumnRefRawExpr *, 4, common::ModulePageAllocator, true> calc_cols;
 
 private:
   DISABLE_COPY_ASSIGN(ObSelEstimator);
@@ -131,21 +139,7 @@ template<typename ObTemplateEstimator>
 int create_simple_estimator(ObSelEstimatorFactory &factory,
                             const OptSelectivityCtx &ctx,
                             const ObRawExpr &expr,
-                            ObSelEstimator *&estimator)
-{
-  int ret = OB_SUCCESS;
-  estimator = NULL;
-  ObTemplateEstimator *temp_estimator = NULL;
-  if (!ObTemplateEstimator::check_expr_valid(expr)) {
-    // do nothing
-  } else if (OB_FAIL(factory.create_estimator_inner(temp_estimator))) {
-    LOG_WARN("failed to create estimator ", K(ret));
-  } else {
-    temp_estimator->set_expr(&expr);
-    estimator = temp_estimator;
-  }
-  return ret;
-}
+                            ObSelEstimator *&estimator);
 
 /**
  * Virtual class which estimate selectivity for filters that are independent of others
@@ -156,14 +150,15 @@ public:
   ObIndependentSelEstimator(ObSelEstType type) : ObSelEstimator(type), expr_(NULL) {}
   virtual ~ObIndependentSelEstimator() = default;
 
-  virtual int merge(const ObSelEstimator &other, bool &is_success) override {
+  virtual int merge(const OptSelectivityCtx &ctx, ObSelEstimator &other, ObSelEstimator* &discard_estimator) override {
     int ret = OB_SUCCESS;
-    is_success = false;
+    ObSelEstimator::merge(ctx, other, discard_estimator);
     return ret;
   }
 
   virtual bool is_independent() const override { return true; }
   inline void set_expr(const ObRawExpr *expr) { expr_ = expr; }
+  const ObRawExpr* get_expr() { return expr_; }
 
   VIRTUAL_TO_STRING_KV(K_(type), KPC_(expr));
 
@@ -379,6 +374,7 @@ public:
   {
     return create_simple_estimator<ObInSelEstimator>(factory, ctx, expr, estimator);
   }
+  virtual bool is_precisable() const override { return true; }
   virtual bool tend_to_use_ds() override { return false; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
@@ -397,6 +393,21 @@ public:
   inline static bool check_expr_valid(const ObRawExpr &expr) {
     return T_OP_IN == expr.get_expr_type() || T_OP_NOT_IN == expr.get_expr_type();
   }
+  static int is_valid_inExpr(const ObRawExpr &qual, const ObRawExpr* &left_expr , const ObRawExpr* &right_expr)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(2 != qual.get_param_count()) ||
+        OB_ISNULL(left_expr = qual.get_param_expr(0)) ||
+        OB_ISNULL(right_expr = qual.get_param_expr(1)) ||
+        T_OP_ROW != right_expr->get_expr_type()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpect expr", K(ret), K(qual), K(left_expr), K(right_expr));
+    } else if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(left_expr))) {
+      LOG_WARN("failed to remove ignorable function", K(ret));
+    } 
+    return ret;
+  }
+
 private:
   static int get_in_sel(const OptTableMetas &table_metas,
                         const OptSelectivityCtx &ctx,
@@ -559,6 +570,7 @@ public:
   {
     return create_simple_estimator<ObEqualSelEstimator>(factory, ctx, expr, estimator);
   }
+  virtual bool is_precisable() const override { return true; }
   virtual bool tend_to_use_ds() override { return false; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
@@ -587,6 +599,7 @@ public:
                            const ObRawExpr &right_expr,
                            const bool null_safe,
                            double &selectivity);
+  
 private:
   // col or (col +-* 2) != 1, 1.0 - distinct_sel - null_sel
   // col or (col +-* 2) != NULL -> 0.0
@@ -708,7 +721,8 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual int merge(const ObSelEstimator &other, bool &is_success) override;
+  virtual bool is_precisable() const override { return true; }
+  virtual int merge(const OptSelectivityCtx &ctx, ObSelEstimator &other, ObSelEstimator* &discard_estimator) override;
   virtual bool is_independent() const override { return false; }
 
   // 计算选择率
@@ -751,7 +765,7 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual int merge(const ObSelEstimator &other, bool &is_success) override;
+  virtual int merge(const OptSelectivityCtx &ctx, ObSelEstimator &other, ObSelEstimator* &discard_estimator) override;
   virtual bool is_independent() const override { return false; }
 
   // 计算选择率
@@ -833,7 +847,7 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual int merge(const ObSelEstimator &other, bool &is_success) override;
+  virtual int merge(const OptSelectivityCtx &ctx, ObSelEstimator &other, ObSelEstimator* &discard_estimator) override;
   virtual bool is_independent() const override { return false; }
 
   virtual int get_sel(const OptTableMetas &table_metas,
@@ -921,6 +935,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObInequalJoinSelEstimator);
 };
 
+int precised_estimator(const OptSelectivityCtx &ctx,
+                       ObSelEstimator *estimator1,
+                       ObSelEstimator *estimator2,
+                       ObSelEstimator* &discard_estimator,
+                       const ObItemType precised_type = ObItemType::T_OP_AND);
+int precised_equal_expr(ObRawExpr *left_expr, 
+                        ObRawExpr *right_expr, 
+                        ObIArray<ObColumnRefRawExpr *> &calc_cols,
+                        bool &can_calc);
+int precised_in_expr(ObRawExpr *qual, 
+                     ObIArray<ObColumnRefRawExpr *> &calc_cols);
 }
 }
 

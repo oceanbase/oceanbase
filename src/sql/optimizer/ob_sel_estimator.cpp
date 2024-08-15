@@ -38,29 +38,51 @@ namespace sql
 {
 inline double revise_ndv(double ndv) { return ndv < 1.0 ? 1.0 : ndv; }
 
-int ObSelEstimator::append_estimators(ObIArray<ObSelEstimator *> &sel_estimators, ObSelEstimator *new_estimator)
+int ObSelEstimator::append_estimators(const OptSelectivityCtx &ctx,
+                                      ObIArray<ObSelEstimator *> &sel_estimators, 
+                                      ObSelEstimator *new_estimator)
 {
   int ret = OB_SUCCESS;
-  bool find_same_class = false;
+  bool new_estimator_is_discared = false; // 表示当前 new_estimator是否被丢弃
   if (OB_ISNULL(new_estimator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("estimator is null", K(new_estimator));
-  } else if (new_estimator->is_independent()) {
-    // do nothing
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && !find_same_class && i < sel_estimators.count(); i ++) {
+    for (int64_t i = sel_estimators.count() - 1; OB_SUCC(ret) && !new_estimator_is_discared && i >= 0; i--) {
       if (OB_ISNULL(sel_estimators.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("estimator is null", K(ret), K(sel_estimators));
-      } else if (OB_FAIL(sel_estimators.at(i)->merge(*new_estimator, find_same_class))) {
-        LOG_WARN("failed to merge same class", K(ret), KPC(sel_estimators.at(i)), KPC(new_estimator));
+      } else {
+        LOG_TRACE("merge estimators with type",K(new_estimator->get_type()),K(sel_estimators.at(i)->get_type()));
+        LOG_TRACE("merge estimators before",K(sel_estimators.at(i)->get_calc_cols().count()), K(new_estimator->get_calc_cols().count()));
+        ObSelEstimator *discard_estimator = NULL;
+        if(OB_FAIL(sel_estimators.at(i)->merge(ctx, *new_estimator, discard_estimator))){
+          LOG_WARN("failed to merge estimators", K(ret), KPC(sel_estimators.at(i)), KPC(new_estimator), KPC(discard_estimator));
+        } else {
+          LOG_TRACE("merge estimators after",K(sel_estimators.at(i)->get_calc_cols().count()), K(new_estimator->get_calc_cols().count()));
+          if (new_estimator == discard_estimator) {
+            new_estimator_is_discared = true;
+          } else if (sel_estimators.at(i) == discard_estimator && OB_FAIL(sel_estimators.remove(i))){
+            LOG_WARN("failed to remove item", K(ret));
+          } else {
+            // do nothing
+          }    
+        }
       }
     }
   }
-  if (OB_SUCC(ret) && !find_same_class) {
-    if (OB_FAIL(sel_estimators.push_back(new_estimator))) {
-      LOG_WARN("failed to push back", K(ret), K(sel_estimators));
-    }
+  if (OB_SUCC(ret) && !new_estimator_is_discared && OB_FAIL(sel_estimators.push_back(new_estimator))) {
+    LOG_WARN("failed to push back", K(ret), K(sel_estimators));
+  }
+  return ret;
+}
+
+int ObSelEstimator::merge(const OptSelectivityCtx &ctx, ObSelEstimator &other, ObSelEstimator* &discard_estimator){
+  int ret = OB_SUCCESS;
+  if(!this->is_precisable() || !other.is_precisable()) {
+    LOG_TRACE("merge estimators not supported", K(this->get_type()), K(other.get_type()));
+  } else if (OB_FAIL(precised_estimator(ctx, this, &other, discard_estimator))){
+    LOG_WARN("failed to merge estimators", KPC(this), K(other), KPC(discard_estimator));
   }
   return ret;
 }
@@ -155,15 +177,12 @@ int ObInSelEstimator::get_in_sel(const OptTableMetas &table_metas,
   const ObRawExpr *right_expr = NULL;
   const ObRawExpr *param_expr = NULL;
   bool contain_null = false;
-  if (OB_UNLIKELY(2 != qual.get_param_count()) ||
-      OB_ISNULL(left_expr = qual.get_param_expr(0)) ||
-      OB_ISNULL(right_expr = qual.get_param_expr(1)) ||
-      T_OP_ROW != right_expr->get_expr_type()) {
+  // reuse basic function
+  if (OB_FAIL(is_valid_inExpr(qual, left_expr, right_expr)) || 
+        OB_ISNULL(left_expr) || OB_ISNULL(right_expr)){
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpect expr", K(ret), K(qual), K(left_expr), K(right_expr));
-  } else if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(left_expr))) {
-    LOG_WARN("failed to remove ignorable function", K(ret));
-  } else if (OB_LIKELY(left_expr->is_column_ref_expr() && !right_expr->has_flag(CNT_COLUMN))) {
+  } else if (left_expr->is_column_ref_expr() && !right_expr->has_flag(CNT_COLUMN)) {
     ObOptColumnStatHandle handler;
     ObObj expr_value;
     bool histogram_valid = false;
@@ -466,8 +485,7 @@ int ObEqualSelEstimator::get_sel(const OptTableMetas &table_metas,
       if (OB_FAIL(get_ne_sel(table_metas, ctx, *left_expr, *right_expr, selectivity))) {
         LOG_WARN("failed to get equal sel", K(ret));
       }
-    } else if (T_OP_EQ == qual.get_expr_type() ||
-               T_OP_NSEQ == qual.get_expr_type()) {
+    } else if (T_OP_EQ == qual.get_expr_type() || T_OP_NSEQ == qual.get_expr_type()) {
       if (OB_FAIL(get_equal_sel(table_metas, ctx, *left_expr, *right_expr,
                                 T_OP_NSEQ == qual.get_expr_type(), selectivity))) {
         LOG_WARN("failed to get equal sel", K(ret));
@@ -697,6 +715,7 @@ int ObEqualSelEstimator::get_equal_sel(const OptTableMetas &table_metas,
         } else if (OB_FAIL(ObOptSelectivity::get_column_ndv_and_nns(table_metas, ctx, *cnt_col_expr, NULL, &nns))) {
           LOG_WARN("failed to get column ndv and nns", K(ret));
         } else {
+          LOG_TRACE("[sel-get_equal_sel] nns: ", K(nns));
           selectivity *= nns;
         }
       } else if (OB_FAIL(get_simple_equal_sel(table_metas, ctx, *cnt_col_expr,
@@ -1658,7 +1677,7 @@ int ObBoolOpSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
         LOG_WARN("failed to create estimator", KPC(child_expr));
       } else {
         if (T_OP_AND == expr.get_expr_type()) {
-          if (OB_FAIL(append_estimators(bool_estimator->child_estimators_, child_estimator))) {
+          if (OB_FAIL(append_estimators(ctx, bool_estimator->child_estimators_, child_estimator))) {
             LOG_WARN("failed to append estimators", K(ret));
           }
         } else {
@@ -1689,6 +1708,7 @@ int ObBoolOpSelEstimator::get_sel(const OptTableMetas &table_metas,
 {
   int ret = OB_SUCCESS;
   const ObRawExpr &qual = *expr_;
+  LOG_TRACE("[sel-bool_get_sel-qual]: ", K(qual));
   if (OB_ISNULL(expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", KPC(this));
@@ -1737,6 +1757,7 @@ int ObBoolOpSelEstimator::get_sel(const OptTableMetas &table_metas,
     ObSEArray<double, 4> selectivities;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_estimators_.count(); ++i) {
       ObSelEstimator *estimator = NULL;
+      LOG_TRACE("[sel-bool_get_sel-child_estimator]: ", K(i), KPC(child_estimators_.at(i)));
       if (OB_ISNULL(estimator = child_estimators_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected param", KPC(this));
@@ -1756,6 +1777,7 @@ int ObBoolOpSelEstimator::get_sel(const OptTableMetas &table_metas,
       } else {
         // sel(p1 or p2 or p3) = sel(!(!p1 and !p2 and !p3))
         for (int64_t i = 0; i < selectivities.count(); i ++) {
+          LOG_TRACE("[sel-bool_get_sel-child_sel_value]: ", K(i), K(selectivities.at(i)));
           selectivities.at(i) = 1 - selectivities.at(i);
         }
         selectivity = ObOptSelectivity::get_filters_selectivity(selectivities, ctx.get_dependency_type());
@@ -1803,18 +1825,19 @@ int ObRangeSelEstimator::create_estimator(ObSelEstimatorFactory &factory,
   return ret;
 }
 
-int ObRangeSelEstimator::merge(const ObSelEstimator &other, bool &is_success)
+int ObRangeSelEstimator::merge(const OptSelectivityCtx &ctx, ObSelEstimator &other, ObSelEstimator* &discard_estimator)
 {
   int ret = OB_SUCCESS;
-  is_success = false;
   if (get_type() == other.get_type()) {
     const ObRangeSelEstimator &est_other = static_cast<const ObRangeSelEstimator &>(other);
     if (column_expr_ == est_other.column_expr_) {
-      is_success = true;
+      discard_estimator = &other;
       if (OB_FAIL(append(range_exprs_, est_other.range_exprs_))) {
         LOG_WARN("failed to append", K(ret));
       }
     }
+  } else {
+    ObSelEstimator::merge(ctx, other, discard_estimator);
   }
   return ret;
 }
@@ -1898,10 +1921,10 @@ int ObSimpleJoinSelEstimator::is_simple_join_condition(const ObRawExpr &qual,
   return ret;
 }
 
-int ObSimpleJoinSelEstimator::merge(const ObSelEstimator &other, bool &is_success)
+int ObSimpleJoinSelEstimator::merge(const OptSelectivityCtx &ctx, ObSelEstimator &other, ObSelEstimator* &discard_estimator)
 {
   int ret = OB_SUCCESS;
-  is_success = false;
+  discard_estimator = NULL;
   if (get_type() == other.get_type()) {
     const ObSimpleJoinSelEstimator &est_other = static_cast<const ObSimpleJoinSelEstimator &>(other);
     if (OB_ISNULL(left_rel_ids_) || OB_ISNULL(right_rel_ids_) ||
@@ -1910,7 +1933,7 @@ int ObSimpleJoinSelEstimator::merge(const ObSelEstimator &other, bool &is_succes
       LOG_WARN("unexpected NULL", KPC(this), K(est_other));
     } else if (*left_rel_ids_ == *est_other.left_rel_ids_ &&
                *right_rel_ids_ == *est_other.right_rel_ids_) {
-      is_success = true;
+      discard_estimator = &other;
       if (OB_FAIL(append(join_conditions_, est_other.join_conditions_))) {
         LOG_WARN("failed to append", K(ret));
       }
@@ -2456,15 +2479,17 @@ void ObInequalJoinSelEstimator::update_upper_bound(double bound, bool include) {
   has_upper_bound_= true;
 }
 
-int ObInequalJoinSelEstimator::merge(const ObSelEstimator &other_estmator, bool &is_success)
+int ObInequalJoinSelEstimator::merge(const OptSelectivityCtx &ctx, ObSelEstimator &other_estiamtor, ObSelEstimator* &discard_estimator)
 {
   int ret = OB_SUCCESS;
-  is_success = false;
-  if (get_type() == other_estmator.get_type()) {
-    const ObInequalJoinSelEstimator &other = static_cast<const ObInequalJoinSelEstimator &>(other_estmator);
+  bool is_success = false;
+  discard_estimator = NULL;
+  if (get_type() == other_estiamtor.get_type()) {
+    ObInequalJoinSelEstimator &other = static_cast<ObInequalJoinSelEstimator &>(other_estiamtor);
     bool need_reverse = false;
     cmp_term(term_, other.term_, is_success, need_reverse);
     if (is_success){
+      discard_estimator = &other;
       if (need_reverse) {
         reverse();
       }
@@ -2796,6 +2821,280 @@ int ObSelEstimatorFactory::create_estimator(const OptSelectivityCtx &ctx,
     LOG_WARN("failed to create estimator", KPC(new_estimator), KPC(expr));
   }
   LOG_DEBUG("succeed to create estimator", KPC(new_estimator));
+  return ret;
+}
+
+template<typename ObTemplateEstimator>
+int create_simple_estimator(ObSelEstimatorFactory &factory,
+                            const OptSelectivityCtx &ctx,
+                            const ObRawExpr &expr,
+                            ObSelEstimator *&estimator)
+{
+  int ret = OB_SUCCESS;
+  estimator = NULL;
+  ObTemplateEstimator *temp_estimator = NULL;
+  if (!ObTemplateEstimator::check_expr_valid(expr)) {
+    // do nothing
+  } else if (OB_FAIL(factory.create_estimator_inner(temp_estimator))) {
+    LOG_WARN("failed to create estimator ", K(ret));
+  } else {
+    LOG_TRACE("create_simple_estimator with", K(temp_estimator->is_precisable()));
+    ObArray<ObRawExpr*> column_exprs;
+    if(!temp_estimator->is_precisable()){
+      // do nothing
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(&expr, column_exprs))) {
+      LOG_WARN("failed to extract column exprs", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); i++){
+        ObRawExpr *col = column_exprs.at(i);
+        if (OB_FAIL(temp_estimator->get_calc_cols().push_back(static_cast<ObColumnRefRawExpr *>(col)))) {
+          LOG_WARN("failed to push back", K(ret), KPC(col));
+        }
+      } 
+      LOG_TRACE("precised estimator with create_simple_estimator", K(column_exprs.size()),K(column_exprs));
+    }
+    common::ObSEArray<ObColumnRefRawExpr *, 4> col_set;
+    if(OB_FAIL(col_set.assign(temp_estimator->get_calc_cols()))) {
+      LOG_WARN("failed to assign caculable cols", K(ret));
+    }
+    LOG_TRACE("precised estimator with single estimator before removing", K(temp_estimator->get_type()), K(expr));
+    
+    // 深拷贝表达式后进行精简
+    // 不能修改原有表达式，因为在其他地方会继续被用到
+    ObOptimizerContext *opt_ctx =  const_cast<ObOptimizerContext*>(&ctx.get_opt_ctx());
+    ObRawExprCopier copier(opt_ctx->get_expr_factory());
+    ObRawExpr *calc_expr = NULL;
+    ObRawExpr *non_const_expr = const_cast<ObRawExpr*>(&expr);
+    if (OB_FAIL(copier.copy_on_replace(non_const_expr, calc_expr))) {
+      LOG_WARN("failed to copy on replace expr", K(ret));
+    } else if (OB_ISNULL(calc_expr)){
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (ObSelEstType::EQUAL == temp_estimator->get_type()){
+      bool can_calc = true;
+      ObRawExpr *left_expr = NULL;
+      ObRawExpr *right_expr = NULL;
+      if(OB_ISNULL(left_expr = calc_expr->get_param_expr(0)) ||
+          OB_ISNULL(right_expr = calc_expr->get_param_expr(1))){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret), K(left_expr), K(right_expr));
+      } else if (OB_FAIL(precised_equal_expr(left_expr, right_expr, col_set, can_calc))){
+        LOG_WARN("failed to precised EQUAL expr", K(ObSelEstType::EQUAL), KPC(left_expr), KPC(right_expr), K(col_set)); 
+      }
+    } else if (ObSelEstType::IN == temp_estimator->get_type()) {
+      if(OB_FAIL(precised_in_expr(calc_expr, col_set))){
+        LOG_WARN("failed to precised IN expr", K(ObSelEstType::IN), KPC(calc_expr), K(col_set)); 
+      }
+    } else {
+      LOG_TRACE("precised_estimator not support",K(temp_estimator->get_type()));
+    }
+    LOG_TRACE("precised estimator with single estimator after removing", K(temp_estimator->get_type()), KPC(calc_expr));       
+
+    // 需要放在后面执行
+    temp_estimator->set_expr(calc_expr);
+    estimator = temp_estimator;
+  }
+  return ret;
+}
+
+int precised_in_expr(ObRawExpr *qual, 
+                     ObIArray<ObColumnRefRawExpr *> &calc_cols) 
+{
+  bool can_calc = true;
+  int ret = OB_SUCCESS;
+  const ObRawExpr *left_expr_const = NULL, *right_expr_const = NULL;
+  ObRawExpr *param_expr = NULL;
+  if (OB_ISNULL(qual) || OB_FAIL(ObInSelEstimator::is_valid_inExpr(*qual, left_expr_const, right_expr_const))){
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpect expr", K(ret), KPC(qual), K(left_expr_const), K(right_expr_const));
+  } else {
+    ObRawExpr *left_expr = const_cast<ObRawExpr*>(left_expr_const);
+    ObRawExpr *right_expr = const_cast<ObRawExpr*>(right_expr_const);
+    if (OB_ISNULL(left_expr) || OB_ISNULL(right_expr)){
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpect expr", K(ret), K(left_expr), K(right_expr));
+    } else if (T_OP_ROW == right_expr->get_expr_type() &&
+                ((T_OP_ROW == left_expr->get_expr_type() && 1 == right_expr->get_param_count()) || left_expr->is_const_raw_expr())) {
+      for (int64_t i = right_expr->get_param_count()-1; OB_SUCC(ret) && i >= 0 ; i--) {
+        common::ObSEArray<ObColumnRefRawExpr *, 4> tmp_calc_cols;
+        if (OB_ISNULL(param_expr = right_expr->get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null expr", K(ret));
+        } else if (OB_FAIL(precised_equal_expr(left_expr, param_expr, calc_cols, can_calc))){
+          LOG_WARN("failed to precised EQUAL expr", K(ObSelEstType::IN), KPC(left_expr), KPC(param_expr), K(calc_cols)); 
+        } else if (!can_calc){
+          if(OB_FAIL(static_cast<ObOpRawExpr *>(right_expr)->remove_param_expr(i))){
+            LOG_WARN("failed to remove param expr", K(ret));
+          }
+          LOG_TRACE("precised estimator with IN removing", KPC(left_expr),KPC(right_expr),K(calc_cols));
+        } else {
+          // do nothing
+        }
+      }
+    } else {
+       LOG_TRACE("precised_in_expr not support",KPC(left_expr),
+                                                KPC(right_expr),
+                                                K(calc_cols));
+    }
+  }
+  return ret;
+}
+
+int precised_equal_expr(ObRawExpr *left_expr, ObRawExpr *right_expr, 
+                        ObIArray<ObColumnRefRawExpr *> &calc_cols,
+                        bool &can_calc)
+{
+  int ret = OB_SUCCESS;
+  if (T_OP_ROW == left_expr->get_expr_type() && T_OP_ROW == right_expr->get_expr_type()) {
+    ObRawExpr *l_expr = NULL, *r_expr = NULL;
+    ObRawExpr *l_row = left_expr, *r_row = right_expr;
+    if (OB_UNLIKELY(l_row->get_param_count() != r_row->get_param_count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected expr", KPC(l_row), KPC(r_row), K(ret));
+    } else {
+      int64_t num = l_row->get_param_count();
+      for (int64_t i = num-1; OB_SUCC(ret) && i >= 0; i--) {
+        can_calc = true;
+        LOG_TRACE("precised estimator with EQUAL removing info at", K(i), KPC(l_row->get_param_expr(i)), KPC(r_row->get_param_expr(i)), K(calc_cols));
+        if (OB_ISNULL(l_expr = l_row->get_param_expr(i)) ||
+            OB_ISNULL(r_expr = r_row->get_param_expr(i))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null expr", K(ret), K(l_expr), K(r_expr), K(i));
+        } else if(OB_FAIL(SMART_CALL(precised_equal_expr(l_expr, r_expr, calc_cols, can_calc)))){   
+          LOG_WARN("failed to precised equal expr", K(ObSelEstType::EQUAL), KPC(l_expr), KPC(r_expr), K(calc_cols)); 
+        } else if (!can_calc) {
+          if(OB_FAIL(static_cast<ObOpRawExpr *>(l_row)->remove_param_expr(i)) || 
+              OB_FAIL(static_cast<ObOpRawExpr *>(r_row)->remove_param_expr(i))){
+            LOG_WARN("failed to remove param expr", K(ret));
+          }
+          LOG_TRACE("precised estimator with EQUAL removing", KPC(l_row), KPC(r_row), K(calc_cols));
+        } else {
+          // do nothing
+        }
+      }
+      can_calc = (0 != l_row->get_param_count()) ? true : false;
+      
+    }
+  } else if ((left_expr->has_flag(CNT_COLUMN) && !right_expr->has_flag(CNT_COLUMN)) ||
+          (!left_expr->has_flag(CNT_COLUMN) && right_expr->has_flag(CNT_COLUMN))) {
+    // column = const
+    can_calc = false;
+    ObRawExpr *cnt_col_expr = left_expr->has_flag(CNT_COLUMN) ? left_expr : right_expr;
+    ObRawExpr *calc_expr = left_expr->has_flag(CNT_COLUMN) ? right_expr : left_expr;
+    if (OB_FAIL(ObOptSelectivity::remove_ignorable_func_for_est_sel(cnt_col_expr))) {
+      LOG_WARN("failed to remove ignorable function", K(ret));
+    } else if (cnt_col_expr->is_column_ref_expr()) {
+      ObColumnRefRawExpr* col = static_cast<ObColumnRefRawExpr*>(cnt_col_expr);
+      LOG_TRACE("precised estimator with EQUAL removing info",K(col->get_column_name()), K(calc_cols));
+      bool removed = false;
+      if (OB_FAIL(ObOptimizerUtil::remove_item(calc_cols, col, &removed))){    
+        LOG_WARN("failed to remove item", K(ret), K(col->get_column_name()), K(calc_cols));
+      } else if (removed){
+        can_calc = true;
+        LOG_TRACE("precised estimator with EQUAL remaining SUCCESS", K(calc_cols));
+      }
+    }
+  } else {
+    // do nothing
+    LOG_TRACE("precised_equal_expr not support",KPC(left_expr),
+                                                KPC(right_expr),
+                                                K(calc_cols));
+  }
+  return ret;
+}
+int precised_estimator(const OptSelectivityCtx &ctx,
+                       ObSelEstimator *estimator1,
+                       ObSelEstimator *estimator2,
+                       ObSelEstimator* &discard_estimator,
+                       const ObItemType precised_type)
+{
+  int ret = OB_SUCCESS;
+  if (ObSelEstType::EQUAL == estimator2->get_type() 
+      && ObSelEstType::EQUAL != estimator1->get_type()){
+    std::swap(estimator1, estimator2);    
+  }
+  common::ObSEArray<ObColumnRefRawExpr *, 4> col_set1, col_set2;
+  if(OB_FAIL(col_set1.assign(estimator1->get_calc_cols()))){
+    LOG_WARN("failed to assign caculable cols for col_set1", K(ret), K(estimator1->get_calc_cols()));
+  }
+  if(ObSelEstType::RANGE == estimator2->get_type()){
+    ObColumnRefRawExpr *col = const_cast<ObColumnRefRawExpr *>(static_cast<ObRangeSelEstimator *>(estimator2)->get_column_expr());
+    if(OB_FAIL(col_set2.push_back(col))) {
+      LOG_WARN("failed to assign caculable cols for col_set2", K(ret), KPC(col));
+    }
+  } else if(OB_FAIL(col_set2.assign(estimator2->get_calc_cols()))){
+    LOG_WARN("failed to assign caculable cols for col_set2", K(ret), K(estimator2->get_calc_cols()));
+  }
+  ObSelEstType type1 = estimator1->get_type(), type2 = estimator2->get_type();
+  if (ObSelEstType::IN == type1 && ObSelEstType::IN == type2) {
+      const ObRawExpr *qual_expr1 = static_cast<ObInSelEstimator *>(estimator1)->get_expr();
+      const ObRawExpr *qual_expr2 = static_cast<ObInSelEstimator *>(estimator2)->get_expr();
+      const ObRawExpr *left_expr1 = NULL, *right_expr1 = NULL;
+      const ObRawExpr *left_expr2 = NULL, *right_expr2 = NULL;
+      if (OB_ISNULL(qual_expr1) || OB_ISNULL(qual_expr2) ||
+            OB_FAIL(ObInSelEstimator::is_valid_inExpr(*qual_expr1, left_expr1, right_expr1)) ||
+              OB_FAIL(ObInSelEstimator::is_valid_inExpr(*qual_expr2, left_expr2, right_expr2)) ||
+              OB_ISNULL(left_expr1) || OB_ISNULL(right_expr1) ||
+              OB_ISNULL(left_expr2) || OB_ISNULL(right_expr2)){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpect expr", K(ret), 
+                  KPC(qual_expr1), K(left_expr1), K(right_expr1), 
+                  KPC(qual_expr2), K(left_expr2), K(right_expr2));
+      } else if (left_expr1->is_column_ref_expr() && !right_expr1->has_flag(CNT_COLUMN) &&
+                  left_expr2->is_column_ref_expr() && !right_expr2->has_flag(CNT_COLUMN) && 
+                  left_expr1 == left_expr2) {
+          discard_estimator = right_expr1->get_param_count() > right_expr2->get_param_count() ? estimator1 : estimator2;
+          LOG_TRACE("precised estimator with IN",
+                    K(estimator1), K(right_expr1->get_param_count()),
+                    K(estimator2), K(right_expr2->get_param_count()),
+                    K(discard_estimator));
+      } else {
+        // do nothing
+      }
+  } else if (ObSelEstType::EQUAL == type1 && 
+              (ObSelEstType::EQUAL == type2 || ObSelEstType::RANGE == type2 || ObSelEstType::IN == type2)) {
+    
+    // B = B - A
+    bool removed = false;
+    bool can_calc = true;
+    // 删除不必要的表达式
+    LOG_TRACE("precised estimator with EQUAL", K(col_set1.count()), K(col_set2.count()));  
+    if(OB_FAIL(ObOptimizerUtil::remove_item(col_set2, col_set1, &removed))) {
+      LOG_WARN("failed to remove item", K(ret), K(col_set1), K(col_set2));
+    } else if(OB_FAIL(estimator2->get_calc_cols().assign(col_set2))){
+      LOG_WARN("failed to assign caculable cols for col_set2", K(ret), K(col_set2));
+    } else if (col_set2.empty()) {
+      discard_estimator = estimator2;
+    } else if (removed){
+      can_calc = true;
+      const ObRawExpr *qual2_const = static_cast<ObIndependentSelEstimator *>(estimator2)->get_expr();
+      ObRawExpr *qual2 = const_cast<ObRawExpr*>(qual2_const);
+      // 深拷贝表达式
+      ObOptimizerContext *opt_ctx =  const_cast<ObOptimizerContext*>(&ctx.get_opt_ctx());
+      ObRawExprCopier copier(opt_ctx->get_expr_factory());
+      ObRawExpr *calc_expr = NULL;
+      if (OB_FAIL(copier.copy_on_replace(qual2, calc_expr))) {
+        LOG_WARN("failed to copy on replace expr", K(ret));
+      } else if (OB_ISNULL(calc_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr");
+      } else if(ObSelEstType::EQUAL == type2) {
+        ObRawExpr *left_expr_2 = NULL;
+        ObRawExpr *right_expr_2 = NULL;
+        if(OB_ISNULL(left_expr_2 = calc_expr->get_param_expr(0)) ||
+            OB_ISNULL(right_expr_2 = calc_expr->get_param_expr(1))){
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null", K(ret), K(left_expr_2), K(right_expr_2));
+        } else if (OB_FAIL(precised_equal_expr(left_expr_2, right_expr_2, col_set2, can_calc))){
+          LOG_WARN("failed to precised EQUAL expr", K(ObSelEstType::EQUAL), KPC(left_expr_2), KPC(right_expr_2), K(col_set2)); 
+        }
+      } else if(ObSelEstType::IN == type2 && OB_FAIL(precised_in_expr(calc_expr, col_set2))) {
+        LOG_WARN("failed to precised IN expr", K(ObSelEstType::IN), KPC(calc_expr), K(col_set2)); 
+      }             
+    } 
+  } else {
+    LOG_TRACE("precised_estimator not support", K(type1), K(type2));
+  }
   return ret;
 }
 
