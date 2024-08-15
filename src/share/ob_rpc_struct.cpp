@@ -4281,10 +4281,10 @@ OB_SERIALIZE_MEMBER(ObLSMigrateReplicaArg,
                     ls_id_,
                     src_,
                     dst_,
-                    data_source_,
+                    discarded_data_source_, // FARM COMPAT WHITELIST
                     paxos_replica_number_,
                     skip_change_member_list_,
-                    force_use_data_source_,
+                    discarded_force_use_data_source_, // FARM COMPAT WHITELIST
                     force_data_source_,
                     prioritize_same_zone_src_);
 
@@ -4297,10 +4297,10 @@ int ObLSMigrateReplicaArg::assign(
   ls_id_ = that.ls_id_;
   src_ = that.src_;
   dst_ = that.dst_;
-  data_source_ = that.data_source_;
+  discarded_data_source_ = that.discarded_data_source_;
   paxos_replica_number_ = that.paxos_replica_number_;
   skip_change_member_list_ = that.skip_change_member_list_;
-  force_use_data_source_ = that.force_use_data_source_;
+  discarded_force_use_data_source_ = that.discarded_force_use_data_source_;
   force_data_source_ = that.force_data_source_;
   prioritize_same_zone_src_ = that.prioritize_same_zone_src_;
   return ret;
@@ -4312,7 +4312,7 @@ int ObLSMigrateReplicaArg::init(
     const share::ObLSID &ls_id,
     const common::ObReplicaMember &src,
     const common::ObReplicaMember &dst,
-    const common::ObReplicaMember &data_source,
+    const common::ObReplicaMember &discarded_data_source,
     const int64_t paxos_replica_number,
     const bool skip_change_member_list,
     const common::ObReplicaMember &force_data_source)
@@ -4323,7 +4323,7 @@ int ObLSMigrateReplicaArg::init(
   ls_id_ = ls_id;
   src_ = src;
   dst_ = dst;
-  data_source_ = data_source;
+  discarded_data_source_ = discarded_data_source;
   paxos_replica_number_ = paxos_replica_number;
   skip_change_member_list_ = skip_change_member_list;
   force_data_source_ = force_data_source;
@@ -4335,11 +4335,11 @@ OB_SERIALIZE_MEMBER(ObLSAddReplicaArg,
                     tenant_id_,
                     ls_id_,
                     dst_,
-                    data_source_,
+                    discarded_data_source_, // FARM COMPAT WHITELIST
                     orig_paxos_replica_number_,
                     new_paxos_replica_number_,
                     skip_change_member_list_,
-                    force_use_data_source_,
+                    discarded_force_use_data_source_, // FARM COMPAT WHITELIST
                     force_data_source_);
 
 int ObLSAddReplicaArg::assign(
@@ -4350,11 +4350,11 @@ int ObLSAddReplicaArg::assign(
   tenant_id_ = that.tenant_id_;
   ls_id_ = that.ls_id_;
   dst_ = that.dst_;
-  data_source_ = that.data_source_;
+  discarded_data_source_ = that.discarded_data_source_;
   orig_paxos_replica_number_ = that.orig_paxos_replica_number_;
   new_paxos_replica_number_ = that.new_paxos_replica_number_;
   skip_change_member_list_ = that.skip_change_member_list_;
-  force_use_data_source_ = that.force_use_data_source_;
+  discarded_force_use_data_source_ = that.discarded_force_use_data_source_;
   force_data_source_ = that.force_data_source_;
   return ret;
 }
@@ -4364,7 +4364,7 @@ int ObLSAddReplicaArg::init(
     const uint64_t tenant_id,
     const share::ObLSID &ls_id,
     const common::ObReplicaMember &dst,
-    const common::ObReplicaMember &data_source,
+    const common::ObReplicaMember &discarded_data_source,
     const int64_t orig_paxos_replica_number,
     const int64_t new_paxos_replica_number,
     const bool skip_change_member_list,
@@ -4375,7 +4375,7 @@ int ObLSAddReplicaArg::init(
   tenant_id_ = tenant_id;
   ls_id_ = ls_id;
   dst_ = dst;
-  data_source_ = data_source;
+  discarded_data_source_ = discarded_data_source;
   orig_paxos_replica_number_ = orig_paxos_replica_number;
   new_paxos_replica_number_ = new_paxos_replica_number;
   skip_change_member_list_ = skip_change_member_list;

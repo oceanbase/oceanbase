@@ -4492,10 +4492,10 @@ public:
       ls_id_(),
       src_(),
       dst_(),
-      data_source_(),
+      discarded_data_source_(),
       paxos_replica_number_(0),
       skip_change_member_list_(),
-      force_use_data_source_(false),
+      discarded_force_use_data_source_(false),
       force_data_source_(),
       prioritize_same_zone_src_(false) {}
 public:
@@ -4507,7 +4507,7 @@ public:
       const share::ObLSID &ls_id,
       const common::ObReplicaMember &src,
       const common::ObReplicaMember &dst,
-      const common::ObReplicaMember &data_source,
+      const common::ObReplicaMember &discarded_data_source,
       const int64_t paxos_replica_number,
       const bool skip_change_member_list,
       const common::ObReplicaMember &force_data_source);
@@ -4517,10 +4517,10 @@ public:
                K_(ls_id),
                K_(src),
                K_(dst),
-               K_(data_source),
+               K_(discarded_data_source),
                K_(paxos_replica_number),
                K_(skip_change_member_list),
-               K_(force_use_data_source),
+               K_(discarded_force_use_data_source),
                K_(force_data_source),
                K_(prioritize_same_zone_src));
 
@@ -4530,7 +4530,7 @@ public:
            && ls_id_.is_valid()
            && src_.is_valid()
            && dst_.is_valid()
-           && data_source_.is_valid()
+           && discarded_data_source_.is_valid()
            && paxos_replica_number_ > 0;
   }
 public:
@@ -4539,11 +4539,12 @@ public:
   share::ObLSID ls_id_;
   common::ObReplicaMember src_;
   common::ObReplicaMember dst_;
-  common::ObReplicaMember data_source_;
+  // deprecated field, to ensure compatibility, it must be valid
+  common::ObReplicaMember discarded_data_source_;
   int64_t paxos_replica_number_;
   bool skip_change_member_list_;
-  bool force_use_data_source_;
   // deprecated field, in order to fix the upgrade compatibility issue from 430rc2 to master
+  bool discarded_force_use_data_source_;
   common::ObReplicaMember force_data_source_;
   bool prioritize_same_zone_src_;
 };
@@ -4558,11 +4559,11 @@ public:
       tenant_id_(OB_INVALID_ID),
       ls_id_(),
       dst_(),
-      data_source_(),
+      discarded_data_source_(),
       orig_paxos_replica_number_(0),
       new_paxos_replica_number_(0),
       skip_change_member_list_(false),
-      force_use_data_source_(false),
+      discarded_force_use_data_source_(false),
       force_data_source_() {}
 public:
   int assign(const ObLSAddReplicaArg &that);
@@ -4572,7 +4573,7 @@ public:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const common::ObReplicaMember &dst,
-      const common::ObReplicaMember &data_source,
+      const common::ObReplicaMember &discarded_data_source,
       const int64_t orig_paxos_replica_number,
       const int64_t new_paxos_replica_number,
       const bool skip_change_member_list,
@@ -4582,11 +4583,11 @@ public:
                K_(tenant_id),
                K_(ls_id),
                K_(dst),
-               K_(data_source),
+               K_(discarded_data_source),
                K_(orig_paxos_replica_number),
                K_(new_paxos_replica_number),
                K_(skip_change_member_list),
-               K_(force_use_data_source),
+               K_(discarded_force_use_data_source),
                K_(force_data_source));
 
   bool is_valid() const {
@@ -4594,7 +4595,7 @@ public:
            && common::OB_INVALID_ID != tenant_id_
            && ls_id_.is_valid()
            && dst_.is_valid()
-           && data_source_.is_valid()
+           && discarded_data_source_.is_valid()
            && orig_paxos_replica_number_ > 0
            && new_paxos_replica_number_ > 0;
   }
@@ -4603,12 +4604,13 @@ public:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
   common::ObReplicaMember dst_;
-  common::ObReplicaMember data_source_;
+  // deprecated field, to ensure compatibility, it must be valid
+  common::ObReplicaMember discarded_data_source_;
   int64_t orig_paxos_replica_number_;
   int64_t new_paxos_replica_number_;
   bool skip_change_member_list_;
-  bool force_use_data_source_;
   // deprecated field, in order to fix the upgrade compatibility issue from 430rc2 to master
+  bool discarded_force_use_data_source_;
   common::ObReplicaMember force_data_source_;
 };
 
