@@ -1501,7 +1501,8 @@ int ObTenantTabletScheduler::schedule_ls_minor_merge(
       }
     } // end of while
 
-    const bool is_sync = true;
+    // ATTENTION! : do not use sync freeze because cyclic dependencies exist
+    const bool is_sync = false;
     start_time_us = ObClockGenerator::getClock();
     if (need_fast_freeze_tablets.empty()) {
       // empty array. do not need freeze
