@@ -206,6 +206,7 @@ public:
   virtual void set_is_load_data_exec(bool v) { UNUSED(v); }
   virtual void set_force_remote_exec(bool v) { UNUSED(v); }
   virtual void set_use_external_session(bool v) { UNUSED(v); }
+  virtual void set_ob_enable_pl_cache(bool v) { UNUSED(v); }
   virtual int64_t get_cluster_id() const { return common::OB_INVALID_ID; }
   void set_session_init_status(bool status) { is_inited_ = status;}
   virtual void set_user_timeout(int64_t user_timeout) { UNUSED(user_timeout); }
