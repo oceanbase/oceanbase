@@ -8475,7 +8475,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
             LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_COLLECT);
             LOG_WARN("get srid from wkb failed", K(wkb), K(ret));
           } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_alloc, wkb, cur_geo, srs, N_ST_COLLECT, 
-                                                            ObGeoBuildFlag::GEO_DEFAULT ^ ObGeoBuildFlag::GEO_CORRECT))) {
+                                                            ObGeoBuildFlag::GEO_DEFAULT))) {
             LOG_WARN("failed to parse wkb", K(ret));        // ObIWkbGeom
           } else if (!is_inited) {
             is_inited = true;
@@ -8516,10 +8516,10 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
               } else {
                 gc->push_back(*(visitor.get_geometry()));
               }
-            } // end else
+            }
           } // end if (OB_SUCC(ret))
         } // end if (!gis_datum.is_null()) 
-      } // end else
+      }
     } // end while
 
     if (ret != OB_ITER_END && ret != OB_SUCCESS) {

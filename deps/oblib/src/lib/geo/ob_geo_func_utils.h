@@ -599,73 +599,30 @@ int ObGeoFuncUtils::remove_duplicate_multi_geo(ObGeometry *&geo, common::ObIAllo
   return ret;
 }
 
-// Narrowing Collection type to MultiX for aggregate func: st_collect
+// narrow tree gc to tree multipoint / multilinestring / multipolygon
 template<typename GcTreeType>
 int ObGeoFuncUtils::narrow_st_collect_result(ObIAllocator &allocator,
                                              ObGeometry *&geo,
-                                             const ObSrsItem *srs)
-{
+                                             const ObSrsItem *srs) {
   int ret = OB_SUCCESS;
-  ObGeoToTreeVisitor tree_visitor(&allocator);
-  GcTreeType *&geo_coll = reinterpret_cast<GcTreeType *&>(geo);
+  typename GcTreeType::sub_mpt_type *mpt = NULL;
+  typename GcTreeType::sub_ml_type *mls = NULL;
+  typename GcTreeType::sub_mp_type *mpy = NULL;
 
-  switch(geo_coll->front().type()) {
-    case ObGeoType::POINT: {
-      typename GcTreeType::sub_mpt_type *res_geo = OB_NEWx(typename GcTreeType::sub_mpt_type, 
-                                                           &allocator, geo->get_srid(), allocator);
-      if (OB_ISNULL(res_geo)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to alloc memory", K(ret));
-      }
-      for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-        typename GcTreeType::sub_pt_type &geo_point = reinterpret_cast<typename GcTreeType::sub_pt_type &>((*geo_coll)[i]);
-        if (OB_FAIL(res_geo->push_back(geo_point))) {
-          OB_LOG(WARN, "failed to add point to multipoint", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        geo = res_geo;
-      }
-      break;
+  if (OB_FAIL(ObGeoFuncUtils::ob_geo_gc_split(allocator, *static_cast<const GcTreeType *>(geo), 
+                                              mpt, mls, mpy))) {
+    LOG_WARN("failed to do gc split", K(ret));
+  } else {
+    bool mpt_empty = mpt->is_empty();
+    bool mls_empty = mls->is_empty();
+    bool mpy_empty = mpy->is_empty();
+    if (!mpt_empty && mls_empty && mpy_empty) {
+      geo = mpt;
+    } else if (mpt_empty && !mls_empty && mpy_empty) {
+      geo = mls;
+    } else if (mpt_empty && mls_empty && !mpy_empty) {
+      geo = mpy;
     }
-    case ObGeoType::LINESTRING: {
-      typename GcTreeType::sub_ml_type *res_geo = OB_NEWx(typename GcTreeType::sub_ml_type, 
-                                                          &allocator, geo->get_srid(), allocator);
-      if (OB_ISNULL(res_geo)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to alloc memory", K(ret));
-      } else {
-        for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-          if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
-            OB_LOG(WARN, "failed to add linestring to multilinestring", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        geo = res_geo;
-      }
-      break;
-    }
-    case ObGeoType::POLYGON: {
-      typename GcTreeType::sub_mp_type *res_geo = OB_NEWx(typename GcTreeType::sub_mp_type, 
-                                                          &allocator, geo->get_srid(), allocator);
-      if (OB_ISNULL(res_geo)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        OB_LOG(WARN, "fail to alloc memory", K(ret));
-      } else {
-        for (uint32_t i = 0; OB_SUCC(ret) && i < geo_coll->size(); ++i) {
-          if (OB_FAIL(res_geo->push_back((*geo_coll)[i]))) {
-            OB_LOG(WARN, "failed to add polygon to multipolygon", K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        geo = res_geo;
-      }
-      break;
-    }
-    default: // do nothing
-      break;
   }
   return ret;
 }
