@@ -292,7 +292,7 @@ private:
                                ObISQLClient &client,
                                SCN &sync_scn,
                                SCN &min_wrs);
-
+ int construct_status_sql_(common::ObSqlString &sql);
 };
 }
 }

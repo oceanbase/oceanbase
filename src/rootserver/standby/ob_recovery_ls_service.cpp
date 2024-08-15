@@ -506,8 +506,17 @@ int ObRecoveryLSService::process_ls_tx_log_(ObTxLogBlock &tx_log_block, const SC
         if (OB_FAIL(ret) || !has_operation) {
         } else if (OB_FAIL(guard.init(tenant_id_, SYS_LS))) {
           LOG_WARN("failed to init guard", KR(ret), K(tenant_id_));
+          //if has operation, sync_scn of tenant_info must equal to sync_scn of sys_ls
+          /*
+           * 这里校验有两个目的：
+           * 1. 预期在有多源事务的情况下，tenant_info中汇报的sync_scn应该一定等于1号日志流的sync_scn
+           * 所以这里去校验tenant_info的sync_scn和1号日志流的sync_scn是一个防御性的校验
+           * 2. 日志流由create_pre到create_end的时候,前置检查并不会检查这个日志流的sync_scn，但是在汇报tenant_info的时候
+           * 这个日志流已经变成了NORMAL状态，所以可能会导致tenant_info的sync_scn小于系统日志流的sync_scn，这里增加一个校验
+           * 是为了防止这种情况
+           * */
         } else if (OB_FAIL(report_sys_ls_recovery_stat_in_trans_(sync_scn, false, trans,
-                "report recovery stat and has multi data source"))) {
+                "report recovery stat and has multi data source", true/*need_check_sync_scn*/))) {
           LOG_WARN("failed to report sys ls recovery stat", KR(ret), K(sync_scn));
         }
         ret = ERRSIM_END_TRANS_ERROR ? : ret;
@@ -807,7 +816,6 @@ int ObRecoveryLSService::process_ls_table_in_trans_(const transaction::ObTxBuffe
 int ObRecoveryLSService::check_valid_to_operator_ls_(const SCN &sync_scn)
 {
   int ret = OB_SUCCESS;
-  bool has_user_ls = true;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K(inited_));
@@ -817,9 +825,7 @@ int ObRecoveryLSService::check_valid_to_operator_ls_(const SCN &sync_scn)
   } else if (OB_UNLIKELY(!sync_scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("syns scn is invalid", KR(ret), K(sync_scn));
-  } else if (OB_FAIL(ObCreateStandbyFromNetActor::check_has_user_ls(tenant_id_, proxy_, has_user_ls))) {
-    LOG_WARN("check_has_user_ls failed", KR(ret), K(tenant_id_));
-  } else if (has_user_ls) {
+  } else {
     SCN user_scn;
     ObLSRecoveryStatOperator ls_recovery;
     if (OB_FAIL(ls_recovery.get_user_ls_sync_scn(tenant_id_, *proxy_, user_scn))) {
@@ -998,8 +1004,9 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_(const SCN &sync_scn, const
     ObLSRecoveryStatOperator ls_recovery;
     const uint64_t exec_tenant_id = ls_recovery.get_exec_tenant_id(tenant_id_);
     START_TRANSACTION(proxy_, exec_tenant_id)
+    //这个接口不会被有多源事务的汇报调度到，所以不需要去校验tenant_info的sync_scn等于系统日志流的sync_scn
     if (FAILEDx(report_sys_ls_recovery_stat_in_trans_(sync_scn,
-            only_update_readable_scn, trans, comment))) {
+            only_update_readable_scn, trans, comment, false/*need_check_sync_scn*/))) {
       LOG_WARN("failed to report sys ls recovery stat", KR(ret), K(sync_scn), K(only_update_readable_scn));
     }
     END_TRANSACTION(trans)
@@ -1008,9 +1015,11 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_(const SCN &sync_scn, const
 }
 
 int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
-    const share::SCN &sync_scn, const bool only_update_readable_scn,
+    const share::SCN &sync_scn,
+    const bool only_update_readable_scn,
     common::ObMySQLTransaction &trans,
-    const char* comment)
+    const char* comment,
+    const bool need_check_sync_scn)
 {
   int ret = OB_SUCCESS;
   TIMEGUARD_INIT(RECOVERY_LS, 100_ms, 10_s);
@@ -1045,9 +1054,10 @@ int ObRecoveryLSService::report_sys_ls_recovery_stat_in_trans_(
     CLICK();
 
     if (FAILEDx(ObLSRecoveryReportor::update_sys_ls_recovery_stat_and_tenant_info(
-            ls_recovery_stat, tenant_info.get_tenant_role(), only_update_readable_scn, trans))) {
+            ls_recovery_stat, tenant_info.get_tenant_role(), only_update_readable_scn,
+            need_check_sync_scn, trans))) {
       LOG_WARN("failed to update sys ls recovery stat", KR(ret),
-          K(ls_recovery_stat), K(tenant_info));
+          K(ls_recovery_stat), K(tenant_info), K(need_check_sync_scn));
     } else {
       last_report_ts_ = ObTimeUtility::current_time();
       if (!only_update_readable_scn) {

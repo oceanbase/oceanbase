@@ -128,7 +128,8 @@ private:
  int report_sys_ls_recovery_stat_in_trans_(const share::SCN &sync_scn,
                                            const bool only_update_readable_scn,
                                            common::ObMySQLTransaction &trans,
-                                           const char* comment);
+                                           const char* comment,
+                                           const bool need_check_sync_scn);
 
  int process_ls_transfer_task_in_trans_(const transaction::ObTxBufferNode &node,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
