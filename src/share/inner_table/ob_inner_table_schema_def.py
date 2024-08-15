@@ -20696,6 +20696,13 @@ def_table_schema(
                   (SELECT OBJ_ID FROM OCEANBASE.__ALL_VIRTUAL_ERROR E
                     WHERE P.TENANT_ID = E.TENANT_ID AND P.PACKAGE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 3 OR E.OBJ_TYPE = 5))
                  THEN 'INVALID'
+            WHEN TYPE = 2 AND EXISTS
+                  (SELECT OBJ_ID FROM OCEANBASE.__ALL_VIRTUAL_ERROR Eb
+                    WHERE OBJ_ID IN
+                            (SELECT PACKAGE_ID FROM OCEANBASE.__ALL_VIRTUAL_PACKAGE Pb
+                              WHERE Pb.PACKAGE_NAME = P.PACKAGE_NAME AND Pb.DATABASE_ID = P.DATABASE_ID AND Pb.TENANT_ID = P.TENANT_ID AND TYPE = 1)
+                          AND Eb.OBJ_TYPE = 3)
+              THEN 'INVALID'
             ELSE 'VALID' END AS STATUS
       ,'N' AS TEMPORARY
       ,'N' AS "GENERATED"
@@ -22720,6 +22727,13 @@ def_table_schema(
                   (SELECT OBJ_ID FROM OCEANBASE.__ALL_TENANT_ERROR E
                     WHERE P.TENANT_ID = E.TENANT_ID AND P.PACKAGE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 3 OR E.OBJ_TYPE = 5))
                  THEN 'INVALID'
+            WHEN TYPE = 2 AND EXISTS
+                  (SELECT OBJ_ID FROM OCEANBASE.__ALL_TENANT_ERROR Eb
+                    WHERE OBJ_ID IN
+                            (SELECT PACKAGE_ID FROM OCEANBASE.__ALL_PACKAGE Pb
+                              WHERE Pb.PACKAGE_NAME = P.PACKAGE_NAME AND Pb.DATABASE_ID = P.DATABASE_ID AND Pb.TENANT_ID = P.TENANT_ID AND TYPE = 1)
+                          AND Eb.OBJ_TYPE = 3)
+              THEN 'INVALID'
             ELSE 'VALID' END AS STATUS
       ,'N' AS TEMPORARY
       ,'N' AS "GENERATED"
@@ -36228,6 +36242,13 @@ def_table_schema(
                   (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT E
                     WHERE P.TENANT_ID = E.TENANT_ID AND P.PACKAGE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 3 OR E.OBJ_TYPE = 5))
                  THEN 'INVALID'
+            WHEN TYPE = 2 AND EXISTS
+                  (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT Eb
+                    WHERE OBJ_ID IN
+                            (SELECT PACKAGE_ID FROM SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT Pb
+                              WHERE Pb.PACKAGE_NAME = P.PACKAGE_NAME AND Pb.DATABASE_ID = P.DATABASE_ID AND Pb.TENANT_ID = P.TENANT_ID AND TYPE = 1)
+                          AND Eb.OBJ_TYPE = 3)
+              THEN 'INVALID'
             ELSE 'VALID' END AS STATUS
       ,'N' AS TEMPORARY
       ,'N' AS "GENERATED"
@@ -36722,6 +36743,13 @@ def_table_schema(
                   (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT E
                     WHERE P.TENANT_ID = E.TENANT_ID AND P.PACKAGE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 3 OR E.OBJ_TYPE = 5))
                  THEN 'INVALID'
+            WHEN TYPE = 2 AND EXISTS
+                  (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT Eb
+                    WHERE OBJ_ID IN
+                            (SELECT PACKAGE_ID FROM SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT Pb
+                              WHERE Pb.PACKAGE_NAME = P.PACKAGE_NAME AND Pb.DATABASE_ID = P.DATABASE_ID AND Pb.TENANT_ID = P.TENANT_ID AND TYPE = 1)
+                          AND Eb.OBJ_TYPE = 3)
+              THEN 'INVALID'
             ELSE 'VALID' END AS STATUS
       ,'N' AS TEMPORARY
       ,'N' AS "GENERATED"
@@ -37219,7 +37247,14 @@ def_table_schema(
       ,CASE WHEN EXISTS
                   (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT E
                     WHERE P.TENANT_ID = E.TENANT_ID AND P.PACKAGE_ID = E.OBJ_ID AND (E.OBJ_TYPE = 3 OR E.OBJ_TYPE = 5))
-                 THEN 'INVALID'
+                  THEN 'INVALID'
+            WHEN TYPE = 2 AND EXISTS
+                  (SELECT OBJ_ID FROM SYS.ALL_VIRTUAL_TENANT_ERROR_REAL_AGENT Eb
+                    WHERE OBJ_ID IN
+                            (SELECT PACKAGE_ID FROM SYS.ALL_VIRTUAL_PACKAGE_REAL_AGENT Pb
+                              WHERE Pb.PACKAGE_NAME = P.PACKAGE_NAME AND Pb.DATABASE_ID = P.DATABASE_ID AND Pb.TENANT_ID = P.TENANT_ID AND TYPE = 1)
+                          AND Eb.OBJ_TYPE = 3)
+                  THEN 'INVALID'
             ELSE 'VALID' END AS STATUS
       ,'N' AS TEMPORARY
       ,'N' AS "GENERATED"
