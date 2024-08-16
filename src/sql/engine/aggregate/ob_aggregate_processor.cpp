@@ -8488,9 +8488,8 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
           if (OB_SUCC(ret)) {
             if (srid != gc->get_srid()) {
               ret = OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION;
-              // LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION, N_ST_COLLECT, srid, gc->get_srid());
+              LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION, N_ST_COLLECT, gc->get_srid(), srid);
               LOG_WARN("geometry in collection must in the same SRS", K(ret));
-              break;
             } else {
               switch (cur_geo->type()) {  // flags for narrow collection
                 case common::ObGeoType::POINT: {
@@ -8525,6 +8524,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
     if (ret != OB_ITER_END && ret != OB_SUCCESS) {
       LOG_WARN("fail to get next row", K(ret));
     } else {
+      ret = OB_SUCCESS;
       if (is_null_result) {
         concat_result.set_null();
       } else {
@@ -8533,20 +8533,18 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
         if (!has_other && ((has_pt && !has_ls && !has_py)
             || (!has_pt && has_ls && !has_py)
             || (!has_pt && !has_ls && has_py))) {
-          if (narrow_gc->crs() == ObGeoCRS::Geographic) {
-            ret = ObGeoFuncUtils::narrow_st_collect_result<ObGeographGeometrycollection>(
-                      tmp_alloc, narrow_gc, srs);
-          } else {
-            ret = ObGeoFuncUtils::narrow_st_collect_result<ObCartesianGeometrycollection>(
-                      tmp_alloc, narrow_gc, srs);
-          }
-          if (OB_FAIL(ret)) {
+          if (narrow_gc->crs() == ObGeoCRS::Geographic && 
+              OB_FAIL(ObGeoFuncUtils::narrow_st_collect_result<ObGeographGeometrycollection>(
+                                                                tmp_alloc, narrow_gc, srs))) {
+            LOG_WARN("fail to narrow st_collect's result", K(ret));
+          } else if (narrow_gc->crs() == ObGeoCRS::Cartesian && 
+              OB_FAIL(ObGeoFuncUtils::narrow_st_collect_result<ObCartesianGeometrycollection>(
+                                                                tmp_alloc, narrow_gc, srs))) {
             LOG_WARN("fail to narrow st_collect's result", K(ret));
           }
         }
-        if ((ret == OB_ITER_END || ret == OB_SUCCESS) &&
-            OB_FAIL(ObGeoExprUtils::geo_to_wkb(*narrow_gc, *aggr_info.expr_, 
-                                                ctx, srs, res_wkb))) {
+        if (OB_SUCC(ret) && OB_FAIL(ObGeoExprUtils::geo_to_wkb(*narrow_gc, *aggr_info.expr_, 
+                                                               ctx, srs, res_wkb))) {
           LOG_WARN("failed to write geometry to wkb", K(ret));
         } else {
           concat_result.set_string(res_wkb);
