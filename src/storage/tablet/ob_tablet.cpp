@@ -1353,6 +1353,91 @@ int ObTablet::init_for_compat(
     const ObTablet &old_tablet,
     ObTableHandleV2 &mds_mini_sstable)
 {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(is_inited_)) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("init twice", K(ret), K(is_inited_));
+  } else if (OB_UNLIKELY(!pointer_hdl_.is_valid()) || OB_ISNULL(log_handler_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(log_handler));
+  } else if (OB_UNLIKELY(old_tablet.is_ls_inner_tablet() && mds_mini_sstable.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("ls inner tablet should NOT have valid mds sstable", K(ret),
+        "ls_id", old_tablet.get_ls_id(), "tablet_id", old_tablet.get_tablet_id(), K(mds_mini_sstable));
+  } else if (old_tablet.is_empty_shell()) {
+    if (OB_FAIL(inner_init_compat_empty_shell(allocator, old_tablet, mds_mini_sstable))) {
+      LOG_WARN("fail to compat empty shell tablet", K(ret),
+        "ls_id", old_tablet.get_ls_id(), "tablet_id", old_tablet.get_tablet_id(), K(mds_mini_sstable));
+    }
+  } else {
+    if (OB_FAIL(inner_init_compat_normal_tablet(allocator, old_tablet, mds_mini_sstable))) {
+      LOG_WARN("fail to compat normal tablet", K(ret),
+        "ls_id", old_tablet.get_ls_id(), "tablet_id", old_tablet.get_tablet_id(), K(mds_mini_sstable));
+    }
+  }
+
+  if (OB_UNLIKELY(!is_inited_)) {
+    reset();
+  }
+  return ret;
+}
+
+int ObTablet::inner_init_compat_empty_shell(
+    common::ObArenaAllocator &allocator,
+    const ObTablet &old_tablet,
+    ObTableHandleV2 &mds_mini_sstable)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(mds_mini_sstable.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;;
+    LOG_WARN("empth shell should not have valid mds sstable", K(ret), K(mds_mini_sstable));
+  } else if (OB_UNLIKELY(old_tablet.get_tablet_meta().has_next_tablet_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old tablet should not have next tablet", K(ret), K(old_tablet.get_tablet_meta()));
+  } else if (OB_ISNULL(old_tablet.mds_data_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("old tablet has null mds data", K(ret), K(old_tablet.get_tablet_meta()));
+  } else {
+    const ObTabletCreateDeleteMdsUserData &user_data = old_tablet.mds_data_->tablet_status_cache_;
+    if (ObTabletStatus::DELETED != user_data.tablet_status_
+      && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
+      ret = OB_STATE_NOT_MATCH;
+      LOG_WARN("old tablet status is not deleted", K(ret), K(old_tablet.get_tablet_meta()));
+    } else if (OB_FAIL(tablet_meta_.assign(old_tablet.tablet_meta_))) {
+      LOG_WARN("failed to copy tablet meta", K(ret), K(old_tablet.tablet_meta_));
+    } else if (OB_FAIL(tablet_meta_.last_persisted_committed_tablet_status_.assign(user_data))) {
+      LOG_WARN("fail to init last_persisted_committed_tablet_status", K(ret), K(user_data));
+    } else if (OB_FAIL(wait_release_memtables_())) {
+      LOG_ERROR("fail to release memtables", K(ret), K(old_tablet));
+    } else if (OB_FAIL(mark_mds_table_switched_to_empty_shell_())) {// to avoid calculate it's rec_scn
+      LOG_WARN("fail to mark mds table switched to empty shell", K(ret), K(old_tablet));
+    } else if (OB_FAIL(ObTabletObjLoadHelper::alloc_and_new(allocator, table_store_addr_.ptr_))) {
+      LOG_WARN("fail to allocate and new rowkey read info", K(ret));
+    } else if (OB_FAIL(table_store_addr_.ptr_->init(allocator, *this))) {
+      LOG_WARN("fail to init table store", K(ret));
+    } else if (OB_FAIL(try_update_start_scn())) {
+      LOG_WARN("failed to update start scn", K(ret), K(table_store_addr_));
+    } else {
+      tablet_meta_.extra_medium_info_.reset();
+      table_store_addr_.addr_.set_none_addr();
+      storage_schema_addr_.addr_.set_none_addr();
+      macro_info_addr_.addr_.set_none_addr();
+      tablet_meta_.clog_checkpoint_scn_ = user_data.delete_commit_scn_ > tablet_meta_.clog_checkpoint_scn_ ?
+                                          user_data.delete_commit_scn_ : tablet_meta_.clog_checkpoint_scn_;
+      tablet_meta_.mds_checkpoint_scn_ = user_data.delete_commit_scn_;
+      is_inited_ = true;
+      LOG_INFO("succeeded to init empty shell tablet for compat", K(ret), K(old_tablet), KPC(this));
+    }
+  }
+  return ret;
+}
+
+int ObTablet::inner_init_compat_normal_tablet(
+    common::ObArenaAllocator &allocator,
+    const ObTablet &old_tablet,
+    ObTableHandleV2 &mds_mini_sstable)
+{
   TIMEGUARD_INIT(STORAGE, 10_ms);
   int ret = OB_SUCCESS;
   allocator_ = &allocator;
@@ -1364,18 +1449,7 @@ int ObTablet::init_for_compat(
   int64_t ddl_kv_count = 0;
   ObLinkedMacroBlockItemWriter linked_writer;
 
-  if (OB_UNLIKELY(is_inited_)) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("init twice", K(ret), K(is_inited_));
-  } else if (OB_UNLIKELY(!pointer_hdl_.is_valid())
-      || OB_ISNULL(log_handler_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet pointer handle is invalid", K(ret), K_(pointer_hdl), K_(log_handler));
-  } else if (OB_UNLIKELY(old_tablet.is_ls_inner_tablet() && mds_mini_sstable.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ls inner tablet should NOT have valid mds sstable", K(ret),
-        "ls_id", old_tablet.get_ls_id(), "tablet_id", old_tablet.get_tablet_id(), K(mds_mini_sstable));
-  } else if (CLICK_FAIL(old_tablet.fetch_table_store(old_table_store_wrapper))) {
+  if (CLICK_FAIL(old_tablet.fetch_table_store(old_table_store_wrapper))) {
     LOG_WARN("failed to fetch old table store", K(ret), K(old_tablet));
   } else if (CLICK_FAIL(old_table_store_wrapper.get_member(old_table_store))) {
     LOG_WARN("failed to get old table store", K(ret));
