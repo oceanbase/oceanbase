@@ -1046,9 +1046,9 @@ int ObTabletMdsData::load_medium_info_list(
     if (src_medium_info->medium_info_list_.empty()) {
       ObTabletObjLoadHelper::free(allocator, ptr);
       ptr = nullptr;
-      LOG_INFO("read empty medium info", K(ret), K(complex_addr));
+      LOG_DEBUG("read empty medium info", K(ret), K(complex_addr));
     } else if (OB_FAIL(ptr->assign(*src_medium_info, allocator))) {
-      LOG_INFO("failed to copy medium info list", K(ret));
+      LOG_WARN("failed to copy medium info list", K(ret));
     }
   } else if (complex_addr.is_disk_object()) {
     if (OB_FAIL(read_medium_info(allocator, complex_addr.addr_, ptr->medium_info_list_))) {
@@ -1056,7 +1056,7 @@ int ObTabletMdsData::load_medium_info_list(
     } else if (ptr->medium_info_list_.empty()) {
       ObTabletObjLoadHelper::free(allocator, ptr);
       ptr = nullptr;
-      LOG_INFO("read empty medium info", K(ret), K(complex_addr));
+      LOG_DEBUG("read empty medium info", K(ret), K(complex_addr));
     } else {
       std::sort(ptr->medium_info_list_.begin(), ptr->medium_info_list_.end(), ObTabletDumpedMediumInfo::compare);
 

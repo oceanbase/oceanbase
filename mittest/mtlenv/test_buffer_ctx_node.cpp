@@ -117,7 +117,7 @@ TEST_F(TestBufferCtxNode, test_exec_info_serialize_deserialize) {
   ObTxExecInfo exec_info_new;
   ASSERT_EQ(OB_SUCCESS, exec_info_new.deserialize(serialize_buffer, 4096, pos));
   ASSERT_EQ(exec_info_new.mds_buffer_ctx_array_.count(), 2);
-  exec_info_new.mrege_buffer_ctx_array_to_multi_data_source();
+  exec_info_new.merge_buffer_ctx_array_to_multi_data_source();
   for (int i = 0; i < exec_info_new.multi_data_source_.count(); ++i) {
     exec_info_new.multi_data_source_[i].buffer_ctx_node_.destroy_ctx();
   }

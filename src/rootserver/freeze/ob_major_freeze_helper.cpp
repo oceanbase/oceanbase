@@ -479,7 +479,7 @@ int ObMajorFreezeHelper::do_one_tenant_admin_merge(
       }
     }
 
-    LOG_INFO("finish to do tenant admin mrege", K(tenant_id), K(leader), K(admin_type), KR(ret));
+    LOG_INFO("finish to do tenant admin merge", K(tenant_id), K(leader), K(admin_type), KR(ret));
   }
   return ret;
 }

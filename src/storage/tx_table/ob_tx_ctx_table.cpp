@@ -219,7 +219,7 @@ int ObTxCtxTableRecoverHelper::recover(const blocksstable::ObDatumRow &row,
     ctx_info_.set_compatible_version(curr_meta.get_version());
     if (OB_FAIL(ctx_info_.deserialize(deserialize_buf, deserialize_buf_length, pos, tx_data_table))) {
       STORAGE_LOG(WARN, "failed to deserialize status_info", K(ret), K_(ctx_info));
-    } else if (FALSE_IT(ctx_info_.exec_info_.mrege_buffer_ctx_array_to_multi_data_source())) {
+    } else if (FALSE_IT(ctx_info_.exec_info_.merge_buffer_ctx_array_to_multi_data_source())) {
     } else if (OB_FAIL(recover_one_tx_ctx_(ls_tx_ctx_mgr, ctx_info_))) {
       // heap memory needed be freed, but can not do this in destruction, cause tx_buffer_node has no value sematics
       ctx_info_.exec_info_.clear_buffer_ctx_in_multi_data_source();

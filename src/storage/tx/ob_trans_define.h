@@ -1732,7 +1732,7 @@ public:
   }
 public:
   int generate_mds_buffer_ctx_array();
-  void mrege_buffer_ctx_array_to_multi_data_source() const;
+  void merge_buffer_ctx_array_to_multi_data_source() const;
   void clear_buffer_ctx_in_multi_data_source();
   void reset();
   // can not destroy in tx_ctx_table

@@ -775,7 +775,7 @@ int ObTxExecInfo::generate_mds_buffer_ctx_array()
   return ret;
 }
 
-void ObTxExecInfo::mrege_buffer_ctx_array_to_multi_data_source() const
+void ObTxExecInfo::merge_buffer_ctx_array_to_multi_data_source() const
 {
   ObTxBufferNodeArray &multi_data_source = const_cast<ObTxBufferNodeArray &>(multi_data_source_);
   ObTxBufferCtxArray &mds_buffer_ctx_array = const_cast<ObTxBufferCtxArray &>(mds_buffer_ctx_array_);
