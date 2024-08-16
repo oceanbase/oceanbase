@@ -1510,6 +1510,7 @@ int ObTransformJoinElimination::check_transform_validity_foreign_key(const ObDML
                                                                     target_exprs,
                                                                     ctx_->schema_checker_,
                                                                     ctx_->session_info_,
+                                                                    false,
                                                                     is_foreign_primary_join,
                                                                     is_first_table_parent,
                                                                     foreign_key_info))) {
@@ -3202,6 +3203,7 @@ int ObTransformJoinElimination::check_transform_validity_foreign_key(const ObDML
                                                                   target_exprs,
                                                                   ctx_->schema_checker_,
                                                                   ctx_->session_info_,
+                                                                  false,
                                                                   is_foreign_primary_join,
                                                                   is_first_table_parent,
                                                                   foreign_key_info))) {

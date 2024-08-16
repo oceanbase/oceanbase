@@ -3840,6 +3840,7 @@ int ObTransformUtils::check_foreign_primary_join(const TableItem *first_table,
                                                  const ObIArray<const ObRawExpr *> &second_exprs,
                                                  ObSchemaChecker *schema_checker,
                                                  ObSQLSessionInfo *session_info,
+                                                 bool allow_partial_join,
                                                  bool &is_foreign_primary_join,
                                                  bool &is_first_table_parent,
                                                  ObForeignKeyInfo *&foreign_key_info)
@@ -3866,13 +3867,13 @@ int ObTransformUtils::check_foreign_primary_join(const TableItem *first_table,
       if (child_id == first_table->ref_id_ && parent_id == second_table->ref_id_) {
         // first table is child table
         is_first_table_parent = false;
-        if (OB_FAIL(is_all_foreign_key_involved(first_exprs, second_exprs, cur_info, find))) {
+        if (OB_FAIL(is_all_foreign_key_involved(first_exprs, second_exprs, cur_info, allow_partial_join, find))) {
           LOG_WARN("failed to check is all foreign key involved", K(ret));
         }
       } else if (child_id == second_table->ref_id_ && parent_id == first_table->ref_id_) {
         // second table is child table
         is_first_table_parent = true;
-        if (OB_FAIL(is_all_foreign_key_involved(second_exprs, first_exprs, cur_info, find))) {
+        if (OB_FAIL(is_all_foreign_key_involved(second_exprs, first_exprs, cur_info, allow_partial_join, find))) {
           LOG_WARN("failed to check is all foreign key involved", K(ret));
         }
       }
@@ -3891,6 +3892,7 @@ int ObTransformUtils::check_foreign_primary_join(const TableItem *first_table,
                                                  const ObIArray<ObRawExpr *> &second_exprs,
                                                  ObSchemaChecker *schema_checker,
                                                  ObSQLSessionInfo *session_info,
+                                                 bool allow_partial_join,
                                                  bool &is_foreign_primary_join,
                                                  bool &is_first_table_parent,
                                                  ObForeignKeyInfo *&foreign_key_info)
@@ -3917,13 +3919,13 @@ int ObTransformUtils::check_foreign_primary_join(const TableItem *first_table,
       if (child_id == first_table->ref_id_ && parent_id == second_table->ref_id_) {
         // first table is child table
         is_first_table_parent = false;
-        if (OB_FAIL(is_all_foreign_key_involved(first_exprs, second_exprs, cur_info, find))) {
+        if (OB_FAIL(is_all_foreign_key_involved(first_exprs, second_exprs, cur_info, allow_partial_join, find))) {
           LOG_WARN("failed to check is all foreign key involved", K(ret));
         }
       } else if (child_id == second_table->ref_id_ && parent_id == first_table->ref_id_) {
         // second table is child table
         is_first_table_parent = true;
-        if (OB_FAIL(is_all_foreign_key_involved(second_exprs, first_exprs, cur_info, find))) {
+        if (OB_FAIL(is_all_foreign_key_involved(second_exprs, first_exprs, cur_info, allow_partial_join, find))) {
           LOG_WARN("failed to check is all foreign key involved", K(ret));
         }
       }
@@ -3939,43 +3941,47 @@ int ObTransformUtils::check_foreign_primary_join(const TableItem *first_table,
 int ObTransformUtils::is_all_foreign_key_involved(const ObIArray<const ObRawExpr *> &child_exprs,
                                                   const ObIArray<const ObRawExpr *> &parent_exprs,
                                                   const ObForeignKeyInfo &info,
+                                                  bool allow_partial_join,
                                                   bool &is_all_involved)
 {
   int ret = OB_SUCCESS;
+  bool valid = true;
   is_all_involved = false;
-  const int64_t N = info.child_column_ids_.count();
-  // generate stmt时会进行去重，不会出现t1.c1 = t2.c1 and t1.c1 = t2.c1的情况
-  if (OB_UNLIKELY(child_exprs.count() != parent_exprs.count())) {
+  ObSEArray<int64_t, 4> matched_idxs;
+  if (OB_UNLIKELY(child_exprs.count() != parent_exprs.count()) ||
+      OB_UNLIKELY(info.child_column_ids_.count() != info.parent_column_ids_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child exprs and parent exprs should have equal size",
               K(ret), K(child_exprs.count()), K(parent_exprs.count()));
-  } else if (N == child_exprs.count()) {
-    int64_t match = 0;
-    for (int64_t i = 0; i < N; ++i) {
-      bool find = false;
-      const ObRawExpr *child_expr = child_exprs.at(i);
-      const ObRawExpr *parent_expr = parent_exprs.at(i);
-      if (OB_ISNULL(child_expr) || OB_ISNULL(parent_expr)) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && valid && i < child_exprs.count(); i++) {
+      if (OB_ISNULL(child_exprs.at(i)) || OB_ISNULL(parent_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child expr or parent expr is null", K(ret), K(child_expr), K(parent_expr));
-      } else if (OB_UNLIKELY(!child_expr->has_flag(IS_COLUMN) || !parent_expr->has_flag(IS_COLUMN))) {
+        LOG_WARN("child expr or parent expr is null", K(ret), K(child_exprs.at(i)), K(parent_exprs.at(i)));
+      } else if (OB_UNLIKELY(!child_exprs.at(i)->is_column_ref_expr() || !parent_exprs.at(i)->is_column_ref_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("not column expr", K(ret));
       } else{
         const ObColumnRefRawExpr *child_col = static_cast<const ObColumnRefRawExpr *>(child_exprs.at(i));
         const ObColumnRefRawExpr *parent_col = static_cast<const ObColumnRefRawExpr *>(parent_exprs.at(i));
-        for (int64_t j = 0; !find && j < N; ++j) {
-          if(parent_col->get_column_id() == info.parent_column_ids_.at(j)
-             && child_col->get_column_id() == info.child_column_ids_.at(j)) {
-            ++match;
-            find = true;
+        int64_t parent_idx = -1;
+        int64_t child_idx = -1;
+        if (ObOptimizerUtil::find_item(info.parent_column_ids_, parent_col->get_column_id(), &parent_idx) &&
+            ObOptimizerUtil::find_item(info.child_column_ids_, child_col->get_column_id(), &child_idx) &&
+            parent_idx == child_idx) {
+          if (OB_FAIL(add_var_to_array_no_dup(matched_idxs, child_idx))) {
+            LOG_WARN("failed to add var to array no dup", K(ret));
           }
+        } else {
+          // join quals use cols more than foreign keys or miss match with foreign key relationship
+          // e.g. (t2.c1, t2.c2) => foreign key(t1.c1, t2.c2)
+          // `t2.c3 = t1.c1`, `t1.c1 = t2.c2` are invalid
+          valid = false;
         }
       }
     }
-    if (N == match) {
-      is_all_involved = true;
-    }
+    is_all_involved = valid && (allow_partial_join ? matched_idxs.count() > 0 :
+                               matched_idxs.count() == info.child_column_ids_.count());
   }
   return ret;
 }
@@ -3983,43 +3989,47 @@ int ObTransformUtils::is_all_foreign_key_involved(const ObIArray<const ObRawExpr
 int ObTransformUtils::is_all_foreign_key_involved(const ObIArray<ObRawExpr *> &child_exprs,
                                                   const ObIArray<ObRawExpr *> &parent_exprs,
                                                   const ObForeignKeyInfo &info,
+                                                  bool allow_partial_join,
                                                   bool &is_all_involved)
 {
   int ret = OB_SUCCESS;
+  bool valid = true;
   is_all_involved = false;
-  const int64_t N = info.child_column_ids_.count();
-  // generate stmt时会进行去重，不会出现t1.c1 = t2.c1 and t1.c1 = t2.c1的情况
-  if (OB_UNLIKELY(child_exprs.count() != parent_exprs.count())) {
+  ObSEArray<int64_t, 4> matched_idxs;
+  if (OB_UNLIKELY(child_exprs.count() != parent_exprs.count()) ||
+      OB_UNLIKELY(info.child_column_ids_.count() != info.parent_column_ids_.count())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("child exprs and parent exprs should have equal size",
               K(ret), K(child_exprs.count()), K(parent_exprs.count()));
-  } else if (N == child_exprs.count()) {
-    int64_t match = 0;
-    for (int64_t i = 0; i < N; ++i) {
-      bool find = false;
-      ObRawExpr *child_expr = child_exprs.at(i);
-      ObRawExpr *parent_expr = parent_exprs.at(i);
-      if (OB_ISNULL(child_expr) || OB_ISNULL(parent_expr)) {
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && valid && i < child_exprs.count(); i++) {
+      if (OB_ISNULL(child_exprs.at(i)) || OB_ISNULL(parent_exprs.at(i))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("child expr or parent expr is null", K(ret), K(child_expr), K(parent_expr));
-      } else if (OB_UNLIKELY(!child_expr->has_flag(IS_COLUMN) || !parent_expr->has_flag(IS_COLUMN))) {
+        LOG_WARN("child expr or parent expr is null", K(ret), K(child_exprs.at(i)), K(parent_exprs.at(i)));
+      } else if (OB_UNLIKELY(!child_exprs.at(i)->is_column_ref_expr() || !parent_exprs.at(i)->is_column_ref_expr())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("not column expr", K(ret));
       } else{
         ObColumnRefRawExpr *child_col = static_cast<ObColumnRefRawExpr *>(child_exprs.at(i));
         ObColumnRefRawExpr *parent_col = static_cast<ObColumnRefRawExpr *>(parent_exprs.at(i));
-        for (int64_t j = 0; !find && j < N; ++j) {
-          if(parent_col->get_column_id() == info.parent_column_ids_.at(j)
-             && child_col->get_column_id() == info.child_column_ids_.at(j)) {
-            ++match;
-            find = true;
+        int64_t parent_idx = -1;
+        int64_t child_idx = -1;
+        if (ObOptimizerUtil::find_item(info.parent_column_ids_, parent_col->get_column_id(), &parent_idx) &&
+            ObOptimizerUtil::find_item(info.child_column_ids_, child_col->get_column_id(), &child_idx) &&
+            parent_idx == child_idx) {
+          if (OB_FAIL(add_var_to_array_no_dup(matched_idxs, child_idx))) {
+            LOG_WARN("failed to add var to array no dup", K(ret));
           }
+        } else {
+          // join quals use cols more than foreign keys or miss match with foreign key relationship
+          // e.g. (t2.c1, t2.c2) => foreign key(t1.c1, t2.c2)
+          // `t2.c3 = t1.c1`, `t1.c1 = t2.c2` are invalid
+          valid = false;
         }
       }
     }
-    if (N == match) {
-      is_all_involved = true;
-    }
+    is_all_involved = valid && (allow_partial_join ? matched_idxs.count() > 0 :
+                               matched_idxs.count() == info.child_column_ids_.count());
   }
   return ret;
 }
