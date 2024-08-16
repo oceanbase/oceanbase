@@ -39,8 +39,8 @@ table_simple_aggregation) , ST_GEOMFROMTEXT('MULTIPOINT((0 0),(1 0),(2 0),(3
 SELECT ST_ASTEXT(ST_COLLECT( DISTINCT location )) AS t FROM
 table_simple_aggregation GROUP BY grouping_condition;
 t
-MULTIPOINT((0 0),(1 0),(3 0))
 MULTIPOINT((0 0),(2 0))
+MULTIPOINT((0 0),(3 0),(1 0))
 # Distinct with rollup 
 SELECT st_astext(ST_COLLECT( distinct location )) AS t from
 table_simple_aggregation group by st_latitude(location) with rollup;
@@ -49,7 +49,7 @@ MULTIPOINT((0 0))
 MULTIPOINT((1 0))
 MULTIPOINT((2 0))
 MULTIPOINT((3 0))
-MULTIPOINT((0 0),(1 0),(2 0),(3 0))
+MULTIPOINT((0 0),(2 0),(3 0),(1 0))
 INSERT INTO table_simple_aggregation (location) VALUES
 ( ST_GEOMFROMTEXT('POINT(0 -0)'         ,4326)),
 ( NULL);
@@ -101,6 +101,7 @@ Excercising multiple code paths.
 SELECT ST_ASTEXT(ST_COLLECT(DISTINCT location)) AS geo, SUM(running_number)
 OVER()  FROM table_simple_aggregation GROUP BY running_number;
 geo	SUM(running_number)
+OVER()
 MULTIPOINT((0 0))	55
 MULTIPOINT((0 0))	55
 MULTIPOINT((0 0))	55
@@ -111,15 +112,14 @@ MULTIPOINT((3 0))	55
 NULL	55
 NULL	55
 NULL	55
-OVER()
 SELECT ST_ASTEXT(ST_COLLECT(DISTINCT location)) AS geo, SUM(grouping_condition)
 OVER(), grouping_condition FROM table_simple_aggregation GROUP BY
 grouping_condition;
 geo	SUM(grouping_condition)
-MULTIPOINT((0 0))	1	NULL
-MULTIPOINT((0 0),(1 0),(3 0))	1	0
-MULTIPOINT((0 0),(2 0))	1	1
 OVER()	grouping_condition
+MULTIPOINT((0 0))	1	NULL
+MULTIPOINT((0 0),(2 0))	1	1
+MULTIPOINT((0 0),(3 0),(1 0))	1	0
 SELECT ST_ASTEXT(ST_COLLECT(location)) AS geo, SUM(grouping_condition) OVER(),
 grouping_condition FROM table_simple_aggregation GROUP BY grouping_condition;
 geo	SUM(grouping_condition) OVER()	grouping_condition
@@ -274,9 +274,9 @@ result
 MULTIPOINT((60 -24),(28 -77),(28 -77),(38 60),(60 -24),(28 -77))
 # test with distinct AND group_by
 SELECT year, ST_AsText(ST_Collect(DISTINCT location)) AS result FROM product GROUP BY year;
-year   result
-2000   MULTIPOINT((60 -24),(28 -77),(38 60))
-2001   MULTIPOINT((60 -24),(28 -77))
+year	result
+2001	MULTIPOINT((60 -24),(28 -77))
+2000	MULTIPOINT((60 -24),(38 60),(28 -77))
 # result is null
 SELECT ST_Collect(location) AS result FROM product WHERE year = 1999;
 result
