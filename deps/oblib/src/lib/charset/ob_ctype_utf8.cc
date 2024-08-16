@@ -140,12 +140,12 @@ OB_DECLARE_DEFAULT_CODE(
                                          const char *b, const char *e,
                                          size_t pos, int *error)
   {
-    int len = (int)(e-b);
-    if (OB_UNLIKELY(len <= 0)) {
-      return 0;
-    } else if (len>=15 && ascii_u64((const uint8_t *)b, len)) {
-      return (size_t)len;
-    }
+    // int len = (int)(e-b);
+    // if (OB_UNLIKELY(len <= 0)) {
+    //   return 0;
+    // } else if (len>=15 && ascii_u64((const uint8_t *)b, len)) {
+    //   return (size_t)len;
+    // }
     const char *b_start= b;
     *error= 0;
     while (pos)
@@ -492,8 +492,11 @@ static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
   if (err_pos == 0) {
     return len;
   } else {
-    if (err_pos > 0)
+    if (err_pos > 0){
+      *error = 1;
       return err_pos - 1;
+    }
+      
   }
   return 0;
   
@@ -795,8 +798,10 @@ static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
   if (err_pos == 0) {
     return len;
   } else {
-    if (err_pos > 0)
+    if (err_pos > 0){
+      *error = 1;
       return err_pos - 1;
+    }
   }
   return 0;
   
