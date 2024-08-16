@@ -1,0 +1,26 @@
+--disable_query_log
+set @@session.explicit_defaults_for_timestamp=off;
+--enable_query_log
+# owner: jim.wzh
+# owner group: SQL
+drop table if exists test_table;
+# valid utf8 string
+CREATE TABLE test_table (id INT PRIMARY KEY AUTO_INCREMENT, content varchar(255)) CHARACTER SET utf8mb4;
+INSERT INTO test_table (content) VALUES (0x3126e8a4b3db8530e9ab8ee58296e9bb9ec2ad32ce99ce953acebcceac64d88ce5a88ddb9adbb8daaed983e7b493da9ae8b6b4);
+INSERT INTO test_table (content) VALUES (0xcf8fce85c2bf36cea1c3abdaa4e7a8ba50c3912ae6858eceafdabdc38bc2a9e8a1bfc2aee4be96e9979dd8a6ce9dc392c2b2);
+INSERT INTO test_table (content) VALUES (0xcfa4ce8bcf95d8a6cea8cfacda8ed885cf84c2b2d99bcf9fdbae655ac383483536e88daad8b8dba4cfa7da93d89ccfa4e782af);
+INSERT INTO test_table (content) VALUES (0xcfa6e5bf86cdb7da97e6a482c3b5e7a99ccfbb4367c3bbce98dabdcdb9e8908ec38531cea0d8aad9a3c38ad988da8bd891c2a3);
+INSERT INTO test_table (content) VALUES (0xdbadcfbae7b7a35fcf8ce78f97cdb73ada89cdb0c3a8da814ec399e8bdac3ccdb7c3bfc2bcd8a5c3a7dba2ce85c3b63fc3bf);
+#invalid utf8 string
+--error 1366
+INSERT INTO test_table (content) VALUES (0xce917a78d88847807e70f574e9ba9cff7ddbb0eda080c39fd88a49f5feda9780c0feffdb88cf8fdbbb80c080c2b9e8a79ff5);
+--error 1366
+INSERT INTO test_table (content) VALUES (0xffe58eaee7ae8a80d9a8e4beb9d88bcf9e80eda08080e88183d98fcfaac080eda080c2afc080c39fff2a7ec0cdb1bfffffe89695);
+--error 1366
+INSERT INTO test_table (content) VALUES (0xdba2da81ffbf80334fc1c066c2aeeda080e58b80696eda95bffebff5f5c055cfa4db94eda080c1f5e5bd94d8b457c08067ff);
+--error 1366
+INSERT INTO test_table (content) VALUES (0xe5a59ec2bafffe2ec0eda080c1eda08051ce8eeda080e9be89c3b7eda0807ee5bf98e596adcf9fffdbafc0febfc080dbb6cfbc);
+--error 1366
+INSERT INTO test_table (content) VALUES (0xc08080e79cb1c08036f5c3a0c3bcc385fffec1feffe583aece8bf5c2a1fee7ba8fd9b3c1c1c0802acfbbceb42ceda080f5db9f);
+select * from test_table;
+DROP TABLE test_table;
