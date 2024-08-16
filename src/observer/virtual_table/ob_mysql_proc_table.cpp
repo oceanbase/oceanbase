@@ -65,6 +65,7 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
           const ObRoutineInfo *routine_info = NULL;
           sql::ObExecEnv exec_env;
           for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < routine_array.count(); ++row_idx) {
+            const ObDatabaseSchema *db_schema = NULL;
             exec_env.reset();
             if (OB_ISNULL(routine_info = routine_array.at(row_idx))) {
               ret = OB_ERR_UNEXPECTED;
@@ -72,6 +73,15 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
             } else if (ROUTINE_PACKAGE_TYPE == routine_info->get_routine_type()
                        || ROUTINE_UDT_TYPE == routine_info->get_routine_type()) {
               // mysql compatible view, ignore oracle system package/udt routine
+              continue;
+            } else if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_,
+                        routine_info->get_database_id(), db_schema))) {
+              SERVER_LOG(WARN, "Failed to get database schema", K_(tenant_id), K(routine_info->get_database_id()), K(ret));
+            } else if (OB_ISNULL(db_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              SERVER_LOG(WARN, "Database schema should not be NULL", K(ret));
+            } else if (db_schema->is_in_recyclebin()) {
+              // ignore is_in_recyclebin routine
               continue;
             } else if (OB_FAIL(exec_env.init(routine_info->get_exec_env()))) {
               SERVER_LOG(ERROR, "fail to load exec env", K(ret));
@@ -117,18 +127,8 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                 const uint64_t col_id = output_column_ids_.at(col_idx);
                 switch (col_id) {
                   case (DB): {
-                    const ObDatabaseSchema *db_schema = NULL;
-                    if (OB_FAIL(schema_guard_->get_database_schema(tenant_id_,
-                        routine_info->get_database_id(), db_schema))) {
-                      SERVER_LOG(WARN, "Failed to get database schema", K_(tenant_id),
-                                  K(routine_info->get_database_id()), K(ret));
-                    } else if (OB_ISNULL(db_schema)) {
-                      ret = OB_ERR_UNEXPECTED;
-                      SERVER_LOG(WARN, "Database schema should not be NULL", K(ret));
-                    } else {
-                      cells[col_idx].set_varchar(db_schema->get_database_name());
-                      cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
-                    }
+                    cells[col_idx].set_varchar(db_schema->get_database_name());
+                    cells[col_idx].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
                     break;
                   }
                   case (DEFINER): {
