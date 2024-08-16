@@ -1343,6 +1343,8 @@ int ObFlushCacheP::process()
             for (uint64_t i=0; i<arg_.db_ids_.count(); i++) {
               if (is_evict_by_schema_id) {
                 ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryBySchemaIdOp, uint64_t>(arg_.db_ids_.at(i), arg_.schema_id_);
+              } else if (OB_ISNULL(arg_.sql_id_)) {
+                ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryByDbIdOp, uint64_t>(arg_.db_ids_.at(i), arg_.schema_id_);
               } else {
                 ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryBySQLIDOp, ObString>(arg_.db_ids_.at(i), arg_.sql_id_);
               }
