@@ -2021,7 +2021,7 @@ int get_revoke_stmt_need_privs(
         const ObUserInfo *user_info = NULL;
         OZ(schema_guard.get_user_info(session_priv.tenant_id_, stmt->get_users().at(i), user_info));
         CK (user_info != NULL);
-        need_add = (0 != (user_info->get_priv_set() & OB_PRIV_SUPER));
+        OX(need_add = (0 != (user_info->get_priv_set() & OB_PRIV_SUPER)));
       }
       if (OB_FAIL(ret)) {
       } else if (need_add) { //mysql8.0 if exists dynamic privs, then need SYSTEM_USER dynamic privilge to revoke all, now use SUPER to do so.
