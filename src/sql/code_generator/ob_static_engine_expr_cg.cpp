@@ -308,7 +308,7 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
       if (ob_is_decimal_int(rt_expr->datum_meta_.type_)) {
         const int16_t precision = rt_expr->datum_meta_.precision_;
         const int16_t scale = rt_expr->datum_meta_.scale_;
-        if (precision < 0 || precision > MAX_PRECISION_DECIMAL_INT_512
+        if (precision < 0 || precision > OB_MAX_DECIMAL_POSSIBLE_PRECISION
             || scale < 0 || scale > precision) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("Unexpected ps meta for decimal int type", K(ret), K(precision), K(scale));
