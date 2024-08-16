@@ -905,8 +905,7 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     }
 
     if (OB_NOT_NULL(file_reader)) {
-      file_reader->~ObFileReader();
-      allocator.free(file_reader);
+      ObFileReader::destroy(file_reader);
     }
   }
   return ret;
