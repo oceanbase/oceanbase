@@ -237,6 +237,7 @@ public:
   // for read uncommitted data, txn possible rollbacked before iterate
   // check txn status after read rows to ensure read result is correct
   int check_txn_status_if_read_uncommitted();
+  int get_write_seq(transaction::ObTxSEQ &seq) const;
   TO_STRING_KV(K_(type),
                K_(abs_lock_timeout_ts),
                K_(tx_lock_timeout_us),
@@ -276,7 +277,7 @@ public: // NOTE: those field should only be accessed by txn relative routine
   transaction::ObTxDesc *tx_desc_;             // the txn descriptor
   transaction::ObPartTransCtx *tx_ctx_;        // the txn context
   ObMemtableCtx *mem_ctx_;                     // memtable-ctx
-  transaction::ObTxSEQ tx_scn_;                             // the change's number of this modify
+  transaction::ObTxSEQ tx_scn_;                // the change's number of this modify
   concurrent_control::ObWriteFlag write_flag_; // the write flag of the write process
 
   // this was used for runtime mertic

@@ -3041,9 +3041,14 @@ int ObMemtable::set_(
   }
   if (OB_SUCC(ret)) {
     bool is_new_locked = false;
+    ObTxSEQ write_seq;
+    int64_t write_epoch = 0;
     row_writer.reset();
     if (OB_FAIL(ret)) {
       //do nothing
+    } else if (FALSE_IT(write_epoch = mem_ctx->get_write_epoch())) {
+    } else if (OB_FAIL(ctx.mvcc_acc_ctx_.get_write_seq(write_seq))) {
+      TRANS_LOG(WARN, "get write seq failed", K(ret));
     } else if (OB_FAIL(row_writer.write(param.get_schema_rowkey_count(), new_row, update_idx, buf, len))) {
       TRANS_LOG(WARN, "Failed to write new row", K(ret), K(new_row));
     } else if (OB_UNLIKELY(new_row.flag_.is_not_exist())) {
@@ -3056,7 +3061,8 @@ int ObMemtable::set_(
           &mtd,        /*memtable_data*/
           NULL == old_row ? NULL : &old_row_data,
           timestamp_,  /*memstore_version*/
-          ctx.mvcc_acc_ctx_.tx_scn_,  /*seq_no*/
+          write_seq,  /*seq_no*/
+          write_epoch, /*write_epoch*/
           new_row.row_val_.count_ /*column_cnt*/);
       if (OB_FAIL(mvcc_write_(param,
                               context,
@@ -3128,17 +3134,26 @@ int ObMemtable::lock_(
   blocksstable::ObRowWriter row_writer;
   char *buf = NULL;
   int64_t len = 0;
-
-  if (OB_FAIL(row_writer.write_rowkey(rowkey, buf, len))) {
+  ObTxSEQ lock_seq;
+  ObMvccAccessCtx &acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
+  ObMemtableCtx *mem_ctx = acc_ctx.get_mem_ctx();
+  int64_t write_epoch = 0;
+  if (OB_ISNULL(mem_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "mem_ctx is null", K(ret), KPC(context.store_ctx_));
+  } else if (FALSE_IT(write_epoch = mem_ctx->get_write_epoch())) {
+  } else if (OB_FAIL(acc_ctx.get_write_seq(lock_seq))) {
+    TRANS_LOG(WARN, "get write seq failed", K(ret));
+  } else if (OB_FAIL(row_writer.write_rowkey(rowkey, buf, len))) {
     TRANS_LOG(WARN, "Failed to writer rowkey", K(ret), K(rowkey));
   } else {
-    ObMvccAccessCtx &acc_ctx = context.store_ctx_->mvcc_acc_ctx_;
     ObMemtableData mtd(blocksstable::ObDmlFlag::DF_LOCK, len, buf);
     ObTxNodeArg arg(acc_ctx.tx_id_,          /*trans id*/
                     &mtd,                    /*memtable_data*/
                     NULL,                    /*old_data*/
                     timestamp_,              /*memstore_version*/
-                    acc_ctx.tx_scn_,         /*seq_no*/
+                    lock_seq,                /*seq_no*/
+                    write_epoch,             /*write_epoch*/
                     rowkey.get_obj_cnt());   /*column_cnt*/
     if (OB_FAIL(mvcc_write_(param,
                             context,

@@ -66,6 +66,7 @@ public:
     trans_version_(share::SCN::min_scn()),
     scn_(share::SCN::max_scn()),
     seq_no_(),
+    write_epoch_(0),
     tx_end_scn_(share::SCN::max_scn()),
     prev_(NULL),
     next_(NULL),
@@ -82,6 +83,7 @@ public:
   share::SCN trans_version_;
   share::SCN scn_;
   transaction::ObTxSEQ seq_no_;
+  int64_t write_epoch_;
   share::SCN tx_end_scn_;
   ObMvccTransNode *prev_;
   ObMvccTransNode *next_;
@@ -197,7 +199,7 @@ public:
   share::SCN get_tx_end_scn() const { return tx_end_scn_.atomic_load(); }
   share::SCN get_tx_version() const { return trans_version_.atomic_load(); }
   share::SCN get_scn() const { return scn_.atomic_load(); }
-
+  int64_t get_write_epoch() const { return write_epoch_; }
 private:
   // the row flag of the mvcc tx node
   static const uint8_t F_INIT;

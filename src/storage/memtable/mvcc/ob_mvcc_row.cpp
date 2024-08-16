@@ -217,7 +217,8 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           "snapshot_barrier=%ld "
                           "snapshot_barrier_flag=%ld "
                           "mtd=%s "
-                          "seq_no=%s",
+                          "seq_no=%s "
+                          "write_epoch=%ld",
                           this,
                           to_cstring(trans_version_),
                           to_cstring(scn_),
@@ -233,7 +234,8 @@ int64_t ObMvccTransNode::to_string(char *buf, const int64_t buf_len) const
                           & (~SNAPSHOT_VERSION_BARRIER_BIT),
                           snapshot_version_barrier_ >> 62,
                           to_cstring(*mtd),
-                          to_cstring(seq_no_));
+                          to_cstring(seq_no_),
+                          write_epoch_);
   return pos;
 }
 
@@ -508,7 +510,10 @@ int ObMvccRow::insert_trans_node(ObIMvccCtx &ctx,
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "scn partially order break", KR(ret), KPC(prev), K(node), KPC(index_node), KPC(this));
             abort_unless(0);
-          } else if (prev->tx_id_ == node.tx_id_ && (OB_UNLIKELY(prev->seq_no_ > node.seq_no_))) {
+          } else if (prev->tx_id_ == node.tx_id_
+                     && OB_UNLIKELY(prev->seq_no_ > node.seq_no_)
+                     // exclude the concurrently update uk case, which always in branch 0
+                     && !(prev->seq_no_.get_branch() == 0 && node.seq_no_.get_branch() == 0)) {
             ret = OB_ERR_UNEXPECTED;
             TRANS_LOG(ERROR, "same txn prev node seq_no > this node", KR(ret), KPC(prev), K(node), KPC(this));
             usleep(1000);
@@ -817,10 +822,28 @@ int ObMvccRow::mvcc_write_(ObStoreCtx &ctx,
         iter = iter->prev_;
         need_retry = true;
       } else if (data_tx_id == writer_tx_id) {
+        bool is_lock_node = false;
+        if (iter->is_incomplete()) {
+          // TODO(handora.qc): remove after kaizhan.dkz finish the concureent
+          // insert/delete feature
+          //
+          // Tip 2: The current implementation allows the same rowkey to perform
+          // insert and delete within the same statement concurrently. So to
+          // prevent disorder between insert and callback registeration, we
+          // return an error in this scenario, hoping that the sql layer
+          // will retry later. Otherwise, it may lead to an out-of-order actions
+          // from logs between leader and follower.
+          ret = OB_SEQ_NO_REORDER_UNDER_PDML;
+          TRANS_LOG(INFO, "mvcc_write meet current write by self", KPC(iter),
+                    K(writer_node), K(ret));
+        } else if (iter->get_write_epoch() == writer_node.get_write_epoch() &&
+                   iter->get_seq_no().get_branch() != writer_node.get_seq_no().get_branch()) {
+          // sanity check, concurrent modify to the same row
+          ret = OB_ERR_UNEXPECTED;
+          TRANS_LOG(ERROR, "concurrent modify to the same row", K(ret), KPC(iter), K(writer_node));
         // Case 4: the newest node is not decided and locked by itself, so we
         //         can insert into it
-        bool is_lock_node = false;
-        if (OB_FAIL(writer_node.is_lock_node(is_lock_node))) {
+        } else if (OB_FAIL(writer_node.is_lock_node(is_lock_node))) {
           TRANS_LOG(ERROR, "get is lock node failed", K(ret), K(writer_node));
         } else if (is_lock_node) {
           // Case 4.1: the writer node is lock node, so we do not insert into it

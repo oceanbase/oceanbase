@@ -478,6 +478,7 @@ public: // callback
   {
     return trans_mgr_.get_tx_seq_replay_idx(seq);
   }
+  int64_t get_write_epoch() const { return trans_mgr_.get_write_epoch(); }
 public:
   // tx_status
   enum ObTxStatus {
