@@ -1992,7 +1992,7 @@ int ObSharedNothingTmpFile::update_meta_after_flush(const int64_t info_idx, cons
               K(end_pos), K(inner_flush_ctx_), KPC(this));
   }
 
-  if (OB_FAIL(inner_flush_ctx_.update_finished_continuous_flush_info_num(is_meta, end_pos))) {
+  if (FAILEDx(inner_flush_ctx_.update_finished_continuous_flush_info_num(is_meta, end_pos))) {
     LOG_WARN("fail to update finished continuous flush info num", KR(ret), K(start_pos), K(end_pos), KPC(this));
   } else if (inner_flush_ctx_.is_all_finished()) {
     if (OB_ISNULL(data_flush_node_.get_next()) && OB_FAIL(reinsert_flush_node_(false /*is_meta*/))) {
@@ -2680,7 +2680,8 @@ int ObSharedNothingTmpFile::get_physical_page_id_in_wbp(const int64_t virtual_pa
     LOG_WARN("the page doesn't exist in wbp", KR(ret), K(virtual_page_id), K(end_page_virtual_id), K(begin_page_virtual_id_), KPC(this));
   } else if (virtual_page_id == begin_page_virtual_id_) {
     page_id = begin_page_id_;
-  } else if (virtual_page_id < flushed_page_virtual_id_) {
+  } else if (ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID == flushed_page_virtual_id_ ||
+      virtual_page_id < flushed_page_virtual_id_) {
     if (OB_FAIL(wbp_->get_page_id_by_virtual_id(fd_, virtual_page_id, begin_page_id_, page_id))) {
       LOG_WARN("fail to get page id by virtual id", KR(ret), K(virtual_page_id), K(begin_page_id_), KPC(this));
     }
