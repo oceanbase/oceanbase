@@ -250,9 +250,13 @@ int ObDBMSSchedJobMaster::stop()
 
 int64_t ObDBMSSchedJobMaster::calc_next_date(ObDBMSSchedJobInfo &job_info)
 {
+  int64_t ret = 0;
   int64_t next_date = 0;
   const int64_t now = ObTimeUtility::current_time();
-  if (job_info.get_interval_ts() == 0) {
+  if (job_info.get_interval_ts() < 0) {
+    next_date = 64060560000000000;
+    LOG_WARN("job interval is not valid, so regard as once job", K(job_info.get_interval_ts()), K(job_info));
+  } else if (job_info.get_interval_ts() <= 0) {
     next_date = 64060560000000000;
   } else {
     int64_t N = (now - job_info.get_start_date()) / job_info.get_interval_ts();
