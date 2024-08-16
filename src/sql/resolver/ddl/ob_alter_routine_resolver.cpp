@@ -413,7 +413,7 @@ int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineIn
       ObArray<int64_t> subprogram_path;  // empty array
 
       ObSqlString const_name;
-      common::ObIArray<jit::ObDWARFHelper*> *pl_dwarf_helpers = nullptr;
+      common::ObIArray<pl::debugger::ObPLDebugger::DwarfHelperWrapper> *pl_dwarf_helpers = nullptr;
 
       pl::debugger::ObPLDebugger *old_debugger = session_info_->get_pl_debugger();
       session_info_->set_pl_debugger(pl_debugger);
@@ -455,7 +455,7 @@ int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineIn
         int64_t line = 1;
         int64_t address = -1;
         for (int64_t i = 0; OB_SUCC(ret) && address == -1 && i < pl_dwarf_helpers->count(); ++i) {
-          jit::ObDWARFHelper* dwarf_helper = pl_dwarf_helpers->at(i);
+          jit::ObDWARFHelper* dwarf_helper = pl_dwarf_helpers->at(i).first;
           if (OB_ISNULL(dwarf_helper)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected NULL dwarf helper", KPC(pl_dwarf_helpers));
@@ -501,7 +501,7 @@ int ObAlterRoutineResolver::register_debug_info(const share::schema::ObRoutineIn
             LOG_WARN("failed to placement new ObDWARFHelper");
           } else if (OB_FAIL(dwarf_helper->init())) {
             LOG_WARN("failed to init dwarf helper", K(ret));
-          } else if (OB_FAIL(pl_debugger->get_debugger_ctrl().register_debug_info(dwarf_helper))) {
+          } else if (OB_FAIL(pl_debugger->get_debugger_ctrl().register_debug_info(dwarf_helper, true))) {
             LOG_WARN("failed to register debug info", K(ret));
           }
         }
