@@ -186,7 +186,10 @@ public:
                K_(end_row_id),
                K_(type),
                K_(trans_id),
-               K_(with_cs_replica));
+               K_(with_cs_replica),
+               K_(macro_block_id),
+               K_(parallel_cnt),
+               K_(cg_cnt));
 public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
@@ -198,6 +201,11 @@ public:
   storage::ObDirectLoadType type_;
   transaction::ObTransID trans_id_; // for incremental direct load only
   bool with_cs_replica_;
+
+  blocksstable::MacroBlockId macro_block_id_; // for shared storage mode
+  // for shared storage gc occupy info
+  int64_t parallel_cnt_;
+  int64_t cg_cnt_;
 };
 
 class ObTabletDirectLoadMgr;

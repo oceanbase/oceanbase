@@ -515,8 +515,8 @@ int ObTransformWinMagic::sanity_check_and_init(ObDMLStmt *stmt,
   } else if (view->get_table_size() != map_info.table_map_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table size does not match to table map count", K(ret));
-  } else if (FALSE_IT(context.init(view, stmt, map_info, nullptr))) {
-    //nvr
+  } else if (OB_FAIL(context.init(view, stmt, map_info, nullptr))) {
+    LOG_WARN("failed to init", K(ret));
   }
   return ret;
 }

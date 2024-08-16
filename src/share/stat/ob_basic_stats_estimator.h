@@ -142,6 +142,13 @@ public:
                                    const int64_t slice_cnt,
                                    ObIArray<int64_t> &table_ids);
 
+  static int get_async_gather_stats_tables(ObExecContext &ctx,
+                                           const int64_t tenant_id,
+                                           const int64_t max_table_cnt,
+                                           ObIArray<AsyncStatTable> &stat_tables);
+
+  static int check_async_gather_need_sample(ObExecContext &ctx, ObTableStatParam &param);
+
   int estimate(const ObOptStatGatherParam &param,
                ObIArray<ObOptStat> &dst_opt_stats);
 

@@ -1248,7 +1248,7 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
   && (co_merge_ctx_->is_build_row_store() || max_cg_idx < DELAY_SCHEDULE_FINISH_DAG_CG_CNT)) {
     // add into dag_scheduler after parent-child relation generated
     if (OB_FAIL(create_dag<ObCOMergeFinishDag>(0, 0, finish_dag_, parent_dag/*parent*/, false/*add_scheduler_flag*/))) {
-      LOG_WARN("failed to create finish dag", K(ret));
+      LOG_WARN("failed to create finish dag", K(ret), K_(finish_dag));
     }
   }
   // refine merge_batch_size_ with tenant memory

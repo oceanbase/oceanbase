@@ -54,7 +54,7 @@ public:
   virtual int est_cost() override;
   virtual int est_width() override;
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
-  int inner_est_cost(const int64_t parallel, double child_card, double child_ndv, double &op_cost);
+  int inner_est_cost(const int64_t parallel, double child_card, double &child_ndv, double &op_cost);
   virtual bool is_block_op() const override { return false; }
   virtual int compute_fd_item_set() override;
   virtual int allocate_granule_post(AllocGIContext &ctx) override;

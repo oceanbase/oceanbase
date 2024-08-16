@@ -15,14 +15,15 @@
 #define protected public
 #include <cstdlib>
 #include <ctime>
+#include "share/ob_tenant_mgr.h"
 #include "../unittest/storage/blocksstable/ob_data_file_prepare.h"
 #include "../unittest/storage/blocksstable/ob_row_generate.h"
 #include "observer/table_load/ob_table_load_partition_location.h"
 #include "share/ob_simple_mem_limit_getter.h"
-#include "storage/blocksstable/ob_tmp_file.h"
 #include "storage/direct_load/ob_direct_load_tmp_file.h"
 #include "storage/direct_load/ob_direct_load_sstable_scanner.h"
 #include "storage/ob_i_store.h"
+#include "mtlenv/mock_tenant_module_env.h"
 namespace oceanbase
 {
 using namespace common;
@@ -52,6 +53,25 @@ public:
   static void SetUpTestCase() {}
   static void TearDownTestCase() {}
   void test_alloc(char *&ptr, const int64_t size);
+
+  int init_tenant_mgr()
+  {
+    int ret = OB_SUCCESS;
+    ObAddr self;
+    obrpc::ObSrvRpcProxy rpc_proxy;
+    obrpc::ObCommonRpcProxy rs_rpc_proxy;
+    share::ObRsMgr rs_mgr;
+    self.set_ip_addr("127.0.0.1", 8086);
+    rpc::frame::ObReqTransport req_transport(NULL, NULL);
+    const int64_t ulmt = 128LL << 30;
+    const int64_t llmt = 128LL << 30;
+    ret = getter.add_tenant(OB_SYS_TENANT_ID, ulmt, llmt);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    ret = getter.add_tenant(OB_SERVER_TENANT_ID, ulmt, llmt);
+    EXPECT_EQ(OB_SUCCESS, ret);
+    lib::set_memory_limit(128LL << 32);
+    return ret;
+  }
 
 private:
   void prepare_schema();
@@ -106,7 +126,6 @@ void TestIndexBlockWriter::prepare_schema()
     column.set_collation_type(ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI);
     ASSERT_EQ(OB_SUCCESS, table_schema_.add_column(column));
   }
-  ObTmpFileManager::get_instance().destroy();
 }
 
 void TestIndexBlockWriter::SetUp()
@@ -134,8 +153,11 @@ void TestIndexBlockWriter::SetUp()
   }
   // set observer memory limit
   CHUNK_MGR.set_limit(8L * 1024L * 1024L * 1024L);
-  ret = ObTmpFileManager::get_instance().init();
-  ASSERT_EQ(OB_SUCCESS, ret);
+  EXPECT_EQ(OB_SUCCESS, init_tenant_mgr());
+  ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
+
   static ObTenantBase tenant_ctx(OB_SYS_TENANT_ID);
   ObTenantEnv::set_tenant(&tenant_ctx);
   ObTenantIOManager *io_service = nullptr;
@@ -143,6 +165,14 @@ void TestIndexBlockWriter::SetUp()
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
+
+  tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
+  EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
+  EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
+  tf_mgr->page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
+  EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
+  tenant_ctx.set(tf_mgr);
+
   ObTenantEnv::set_tenant(&tenant_ctx);
 }
 
@@ -150,9 +180,11 @@ void TestIndexBlockWriter::TearDown()
 {
   file_mgr_->~ObDirectLoadTmpFileManager();
   table_schema_.reset();
-  ObTmpFileManager::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
   TestDataFilePrepare::TearDown();
+  tmp_file::ObTmpBlockCache::get_instance().destroy();
+  tmp_file::ObTmpPageCache::get_instance().destroy();
+  common::ObClockGenerator::destroy();
 }
 
 TEST_F(TestIndexBlockWriter, test_write_and_read)

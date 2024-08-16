@@ -501,6 +501,36 @@ int ObTabletMemtableMgr::get_active_memtable(ObTableHandleV2 &handle) const
   return ret;
 }
 
+int ObTabletMemtableMgr::try_get_active_memtable(ObTableHandleV2 &handle,
+                                                 const int64_t timeout)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+
+  handle.reset();
+
+  while (OB_SUCC(ret)) {
+    if (ObTimeUtility::current_time() - start_ts > timeout) {
+      ret = OB_EAGAIN;
+    } else if (OB_SUCCESS == lock_.try_rdlock()) {
+      if (OB_UNLIKELY(!is_inited_)) {
+        ret = OB_NOT_INIT;
+        LOG_WARN("not inited", K(ret), K_(is_inited));
+      } else if (OB_FAIL(get_active_memtable_(handle))) {
+        if (OB_ENTRY_NOT_EXIST != ret) {
+          LOG_WARN("fail to get active memtable", K(ret));
+        }
+      }
+      lock_.rdunlock();
+      break;
+    } else {
+      ob_usleep(10 * 1000);
+    }
+  }
+
+  return ret;
+}
+
 int ObTabletMemtableMgr::get_active_memtable_(ObTableHandleV2 &handle) const
 {
   int ret = OB_SUCCESS;
@@ -585,7 +615,7 @@ int ObTabletMemtableMgr::resolve_left_boundary_for_active_memtable(ObITabletMemt
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret), K_(is_inited));
-  } else if (OB_FAIL(get_active_memtable(handle))) {
+  } else if (OB_FAIL(try_get_active_memtable(handle, 1_s/*timeout*/))) {
     if (OB_ENTRY_NOT_EXIST != ret) {
       LOG_WARN("fail to get active memtable", K(ret));
     }

@@ -362,6 +362,16 @@ public:
                              ObIArray<ObRawExpr*> &real_exprs,
                              ObPLCompileUnitAST &unit_ast,
                              sql::ObRawExpr *&expr);
+
+  static
+  int resolve_obj_access_node(ParseNode *node,
+                              common::ObIAllocator &allocator,
+                              sql::ObRawExprFactory &expr_factory,
+                              sql::ObSQLSessionInfo &session_info,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              common::ObMySQLProxy *sql_proxy,
+                              pl::ObPLBlockNS *ns,
+                              ObArray<pl::ObObjAccessIdx> &access_idxs);
   static
   int resolve_obj_access_node(const ParseNode &node,
                               ObSQLSessionInfo &session_info,
@@ -371,6 +381,7 @@ public:
                               ObIArray<ObObjAccessIdent> &obj_access_idents,
                               ObIArray<ObObjAccessIdx>& access_idxs,
                               ObPLPackageGuard *package_guard);
+
   static
   int resolve_cparam_list_simple(const ParseNode &node,
                                  ObRawExprFactory &expr_factory,

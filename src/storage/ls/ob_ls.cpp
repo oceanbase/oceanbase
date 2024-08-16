@@ -1858,10 +1858,15 @@ int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int
     const int64_t abs_timeout_ts = (0 == input_abs_timeout_ts)
                                        ? ObClockGenerator::getClock() + ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME
                                        : input_abs_timeout_ts;
-    ret = logstream_freeze_task(trace_id, abs_timeout_ts);
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_meta_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_meta_.ls_id_));
+    } else {
+      ret = logstream_freeze_task(trace_id, abs_timeout_ts);
+    }
   } else {
     const bool is_ls_freeze = true;
-    (void)ls_freezer_.commit_an_async_freeze_task(trace_id, is_ls_freeze);
+    (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
   return ret;
 }
@@ -1963,14 +1968,10 @@ int ObLS::tablet_freeze(const int64_t trace_id,
       is_not_timeout = current_time < abs_timeout_ts;
     } while (is_retry_code && is_not_timeout);
   } else {
+    //Async tablet freeze. Must record tablet ids before submit task
+    const bool is_ls_freeze = false;
     (void)record_async_freeze_tablets_(tablet_ids, freeze_epoch);
-
-    if (ls_freezer_.is_async_tablet_freeze_task_running()) {
-      // do not need another async batch freeze task
-    } else {
-      const bool is_ls_freeze = false;
-      (void)ls_freezer_.commit_an_async_freeze_task(trace_id, is_ls_freeze);
-    }
+    (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
   return ret;
 }

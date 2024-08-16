@@ -351,8 +351,8 @@ Query Plan
 =========================================================================
 |ID|OPERATOR                           |NAME      |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |          |1       |41          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001  |1       |41          |
+|0 |PX COORDINATOR MERGE SORT          |          |1       |42          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001  |1       |42          |
 |2 |  └─MERGE GROUP BY                 |          |1       |41          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |          |20      |39          |
 |4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000  |20      |31          |
@@ -462,7 +462,7 @@ Query Plan
 |ID|OPERATOR                           |NAME      |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------
 |0 |PX COORDINATOR MERGE SORT          |          |1       |44          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001  |1       |43          |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001  |1       |44          |
 |2 |  └─MERGE GROUP BY                 |          |1       |43          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |          |20      |41          |
 |4 |      └─EXCHANGE OUT DISTR (HASH)  |:EX10000  |20      |33          |
@@ -571,7 +571,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR                           |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT          |             |1       |60          |
+|0 |PX COORDINATOR MERGE SORT          |             |1       |61          |
 |1 |└─EXCHANGE OUT DISTR               |:EX10001     |1       |60          |
 |2 |  └─MERGE GROUP BY                 |             |1       |60          |
 |3 |    └─EXCHANGE IN MERGE SORT DISTR |             |20      |58          |

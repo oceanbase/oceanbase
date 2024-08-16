@@ -744,7 +744,7 @@ int ObSSTableMeta::init(
   }
 
   if (OB_SUCC(ret) && transaction::ObTransID(param.uncommitted_tx_id_).is_valid()) {
-    if (OB_FAIL(prepare_tx_context({param.uncommitted_tx_id_, 0}, allocator))) {
+    if (OB_FAIL(prepare_tx_context(ObTxContext::ObTxDesc(param.uncommitted_tx_id_, 0), allocator))) {
       LOG_WARN("failed to alloc memory for tx_ids_", K(ret), K(param));
     }
   }

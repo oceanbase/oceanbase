@@ -776,7 +776,8 @@ public:
   ObDagNetScheduler()
     : allocator_(nullptr),
       ha_allocator_(nullptr),
-      scheduler_(nullptr)
+      scheduler_(nullptr),
+      dag_net_map_lock_(ObLatchIds::DAG_NET_SCHEDULER)
   {}
   ~ObDagNetScheduler() { destroy(); }
   void destroy();
@@ -857,7 +858,8 @@ class ObDagPrioScheduler
 public:
   typedef common::ObDList<ObTenantDagWorker> WorkerList;
   ObDagPrioScheduler()
-    : allocator_(nullptr),
+    : prio_lock_(ObLatchIds::DAG_PRIO_SCHEDULER),
+      allocator_(nullptr),
       ha_allocator_(nullptr),
       scheduler_(nullptr),
       priority_(ObDagPrio::DAG_PRIO_MAX),

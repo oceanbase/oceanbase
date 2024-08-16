@@ -1177,7 +1177,12 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     if (OB_SUCC(ret)) {
       ObPLExecCtx pl_ctx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
                         NULL/*result*/, &ret, NULL/*func*/, true);
-      if (OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))) {
+      int64_t orc_max_ret_rows = INT64_MAX;
+      if (lib::is_oracle_mode()
+          && OB_FAIL(session.get_oracle_sql_select_limit(orc_max_ret_rows))) {
+        LOG_WARN("failed to get sytem variable _oracle_sql_select_limit", K(ret));
+      } else if (OB_FAIL(ObSPIService::dbms_dynamic_open(
+                     &pl_ctx, *cursor, false, orc_max_ret_rows))) {
         LOG_WARN("open cursor fail. ", K(ret), K(stmt_id_));
         if (!THIS_WORKER.need_retry()) {
           int cli_ret = OB_SUCCESS;
@@ -2394,7 +2399,7 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
           param.set_collation_type(ncs_type);
         }
         LOG_DEBUG("recieve Nchar param", K(ret), K(str), K(dst));
-      } else if (ObURowIDType == type) {
+      } else if (MYSQL_TYPE_OB_UROWID == type) {
         // decode bae64 str and get urowid content
         ObURowIDData urowid_data;
         if (OB_FAIL(ObURowIDData::decode2urowid(str.ptr(), str.length(),
@@ -2540,16 +2545,22 @@ int ObMPStmtExecute::parse_basic_param_value(ObIAllocator &allocator,
                 LOG_WARN("Fail to convert plain lob data to templob",K(ret));
               }
             }
-          } else {
+          } else if (MYSQL_TYPE_STRING == type
+                     || MYSQL_TYPE_VARCHAR == type
+                     || MYSQL_TYPE_VAR_STRING == type) {
             param.set_collation_type(cs_type);
-            if (is_oracle_mode() && !is_complex_element) {
-              param.set_char(dst);
-            } else {
-              if (is_complex_element && dst.length()== 0) {
+            if (is_complex_element) {
+              if (dst.length()== 0) {
                 param.set_null();
+              } else if (MYSQL_TYPE_STRING == type) {  // ObCharType
+                param.set_char(dst);
               } else {
                 param.set_varchar(dst);
               }
+            } else if (is_oracle_mode()) {
+              param.set_char(dst);
+            } else {
+              param.set_varchar(dst);
             }
           }
         }

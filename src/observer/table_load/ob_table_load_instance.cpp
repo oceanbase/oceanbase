@@ -70,9 +70,10 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadInstance init twice", KR(ret), KP(this));
-  } else if (OB_UNLIKELY(!param.is_valid() || !execute_ctx->is_valid())) {
+  } else if (OB_UNLIKELY(!param.is_valid() || column_ids.empty() ||
+                         column_ids.count() != param.column_count_ || !execute_ctx->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(param), KPC(execute_ctx));
+    LOG_WARN("invalid args", KR(ret), K(param), K(column_ids), KPC(execute_ctx));
   } else {
     DISABLE_SQL_MEMLEAK_GUARD;
     execute_ctx_ = execute_ctx;
@@ -92,7 +93,8 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
     else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_,
                                                                    param.method_,
                                                                    param.insert_mode_,
-                                                                   param.load_mode_))) {
+                                                                   param.load_mode_,
+                                                                   column_ids))) {
       LOG_WARN("fail to check support direct load", KR(ret), K(param));
     }
     // start direct load

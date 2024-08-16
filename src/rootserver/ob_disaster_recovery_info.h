@@ -204,7 +204,7 @@ public:
   int get_leader_and_member_list(
       common::ObAddr &leader_addr,
       common::ObMemberList &member_list,
-      GlobalLearnerList &learner_list);
+      GlobalLearnerList &learner_list) const;
 
   // get data_source from leader replcia
   // @param [out] data_source, leader replica
@@ -212,6 +212,20 @@ public:
   int get_default_data_source(
       ObReplicaMember &data_source,
       int64_t &data_size) const;
+
+  // get member by server address in leader's learner list and member list
+  // @param [in] server_addr, which server the member in
+  // @param [out] member, target member
+  int get_member_by_server(
+      const common::ObAddr& server_addr,
+      ObMember &member) const;
+
+  // check and get if there is a replica on the target server
+  // @param [in] server_addr, which server the replica in
+  // @param [out] ls_replica, target replic
+  int check_replica_exist_and_get_ls_replica(
+      const common::ObAddr& server_addr,
+      share::ObLSReplica& ls_replica) const;
 private:
   int construct_filtered_ls_info_to_use_(
       const share::ObLSInfo &input_ls_info,

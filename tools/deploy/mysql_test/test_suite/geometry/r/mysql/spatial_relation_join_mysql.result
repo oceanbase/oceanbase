@@ -89,7 +89,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[tgnoindex2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   tgnoindex1:
@@ -101,7 +101,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[tgnoindex1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   Plan Type:
@@ -196,7 +196,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[gidx1, tgeom1]
       pruned_index_name:[gidx1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   tgeom2:
@@ -208,7 +208,7 @@ Optimization Info:
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[gidx2, tgeom2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
@@ -312,7 +312,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[pgidx1, ptgeom1]
       pruned_index_name:[pgidx1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING FULL]
   ptgeom2:
@@ -324,7 +324,7 @@ Optimization Info:
       table_dop:1
       dop_method:DAS DOP
       avaiable_index_name:[pgidx2, ptgeom2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:1
       estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:

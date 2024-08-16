@@ -14,28 +14,29 @@
 
 #include "ob_disaster_recovery_task_mgr.h"
 
-#include "lib/lock/ob_mutex.h"
-#include "lib/stat/ob_diagnose_info.h"
-#include "lib/profile/ob_trace_id.h"
 #include "lib/alloc/ob_malloc_allocator.h"
-#include "share/ob_debug_sync.h"
-#include "share/ob_srv_rpc_proxy.h"
-#include "share/config/ob_server_config.h"
-#include "ob_disaster_recovery_task_executor.h"
-#include "rootserver/ob_root_balancer.h"
-#include "ob_rs_event_history_table_operator.h"
-#include "share/ob_rpc_struct.h"
-#include "observer/ob_server_struct.h"
-#include "sql/executor/ob_executor_rpc_proxy.h"
-#include "rootserver/ob_disaster_recovery_task.h"    // for ObDRTaskType
-#include "share/ob_share_util.h"                     // for ObShareUtil
+#include "lib/lock/ob_mutex.h"
 #include "lib/lock/ob_tc_rwlock.h"                   // for common::RWLock
+#include "lib/profile/ob_trace_id.h"
+#include "lib/stat/ob_diagnose_info.h"
+#include "observer/ob_server_struct.h"
+#include "ob_disaster_recovery_task_executor.h"
+#include "ob_disaster_recovery_task_table_operator.h"
+#include "ob_rs_event_history_table_operator.h"
+#include "rootserver/ob_disaster_recovery_task.h"    // for ObDRTaskType
 #include "rootserver/ob_disaster_recovery_task.h"
 #include "rootserver/tenant_snapshot/ob_tenant_snapshot_util.h" // for ObTenantSnapshotUtil
-#include "share/inner_table/ob_inner_table_schema_constants.h"
-#include "share/ob_all_server_tracer.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h" // for ObInnerConnectionLockUtil
 #include "observer/ob_inner_sql_connection.h"
+#include "rootserver/ob_root_balancer.h"
+#include "share/config/ob_server_config.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "share/ob_all_server_tracer.h"
+#include "share/ob_debug_sync.h"
+#include "share/ob_rpc_struct.h"
+#include "share/ob_share_util.h"                     // for ObShareUtil
+#include "share/ob_srv_rpc_proxy.h"
+#include "sql/executor/ob_executor_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -220,7 +221,7 @@ int ObDRTaskQueue::push_task_in_wait_list(
 }
 
 int ObDRTaskQueue::push_task_in_schedule_list(
-    ObDRTask &task)
+    const ObDRTask &task)
 {
   // STEP 1: push task into schedule list
   // STEP 2: push task into task_map
@@ -815,6 +816,55 @@ int ObDRTaskMgr::check_task_exist(
   return ret;
 }
 
+int ObDRTaskMgr::add_task_in_queue_and_execute(const ObDRTask &task)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(loaded), K_(stopped));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid dr task", KR(ret), K(task));
+  } else {
+    ObThreadCondGuard guard(cond_);
+    bool task_exist = false;
+    bool sibling_in_schedule = false;
+    ObDRTaskQueue &queue = task.is_high_priority_task() ? high_task_queue_ : low_task_queue_;
+    ObDRTaskQueue &sibling_queue = task.is_high_priority_task() ? low_task_queue_ : high_task_queue_;
+    if (OB_UNLIKELY(queue.task_cnt() >= TASK_QUEUE_LIMIT)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("disaster recovery task queue is full", KR(ret), "task_cnt", queue.task_cnt());
+    } else if (OB_FAIL(queue.check_task_exist(task.get_task_key(), task_exist))) {
+      LOG_WARN("fail to check task in scheduling", KR(ret), K(task));
+    } else if (task_exist) {
+      ret = OB_ENTRY_EXIST;
+      LOG_WARN("ls disaster recovery task has existed in queue", KR(ret), K(task), K(task_exist));
+    } else if (OB_FAIL(sibling_queue.check_task_in_scheduling(task.get_task_key(), sibling_in_schedule))) {
+      LOG_WARN("fail to check task in scheduling", KR(ret), K(task));
+    } else if (sibling_in_schedule) {
+      ret = OB_ENTRY_EXIST;
+      LOG_WARN("ls disaster recovery task has existed in sibling_queue",
+                  KR(ret), K(task), K(sibling_in_schedule));
+    } else if (OB_FAIL(queue.push_task_in_schedule_list(task))) {
+      LOG_WARN("fail to add task to schedule list", KR(ret), K(task));
+    } else if (OB_FAIL(set_sibling_in_schedule(task, true/*in_schedule*/))) {
+      //after successfully adding the scheduling queue,
+      //need mark in both queues that the task has been scheduled in the queue.
+      //if there is a task in the waiting queue of another queue, need update its mark
+      LOG_WARN("set sibling in schedule failed", KR(ret), K(task));
+    } else {
+      if (OB_SUCCESS != (tmp_ret = task.log_execute_start())) {
+        LOG_WARN("fail to log task start", KR(tmp_ret), K(task));
+      }
+      if (OB_FAIL(execute_manual_task_(task))) {
+        //must under cond
+        LOG_WARN("fail to execute manual task", KR(ret), K(task));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDRTaskMgr::add_task(
     const ObDRTask &task)
 {
@@ -1207,9 +1257,7 @@ int ObDRTaskMgr::persist_task_info_(
 {
   int ret = OB_SUCCESS;
   ret_comment = ObDRTaskRetComment::MAX;
-  share::ObDMLSqlSplicer dml;
-  ObSqlString sql;
-  int64_t affected_rows = 0;
+  ObLSReplicaTaskTableOperator task_table_operator;
   const uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
   ObMySQLTransaction trans;
   const int64_t timeout = GCONF.internal_sql_execute_timeout;
@@ -1223,10 +1271,6 @@ int ObDRTaskMgr::persist_task_info_(
     LOG_WARN("invalid argument", KR(ret));
   } else if (OB_FAIL(trans.start(sql_proxy_, sql_tenant_id))) {
     LOG_WARN("failed to start trans", KR(ret), K(sql_tenant_id));
-  } else if (OB_FAIL(task.fill_dml_splicer(dml))) {
-    LOG_WARN("fill dml splicer failed", KR(ret));
-  } else if (OB_FAIL(dml.splice_insert_sql(share::OB_ALL_LS_REPLICA_TASK_TNAME, sql))) {
-    LOG_WARN("fail to splice batch insert update sql", KR(ret), K(sql));
   } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("conn_ is NULL", KR(ret));
@@ -1239,8 +1283,8 @@ int ObDRTaskMgr::persist_task_info_(
   } else if (OB_FAIL(ObTenantSnapshotUtil::check_tenant_not_in_cloning_procedure(task.get_tenant_id(), case_to_check))) {
     LOG_WARN("fail to check whether tenant is in cloning procedure", KR(ret));
     ret_comment = CANNOT_PERSIST_TASK_DUE_TO_CLONE_CONFLICT;
-  } else if (OB_FAIL(trans.write(sql_tenant_id, sql.ptr(), affected_rows))) {
-    LOG_WARN("execute sql failed", KR(ret), "tenant_id",task.get_tenant_id(), K(sql_tenant_id), K(sql));
+  } else if (OB_FAIL(task_table_operator.insert_task(trans, task))) {
+    LOG_WARN("task_table_operator insert_task failed", KR(ret), K(task));
   }
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
@@ -1443,6 +1487,41 @@ int ObDRTaskMgr::pop_task(
           LOG_WARN("set sibling in schedule failed", KR(ret), KPC(task));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObDRTaskMgr::execute_manual_task_(
+    const ObDRTask &task)
+{
+  int ret = OB_SUCCESS;
+  FLOG_INFO("execute manual disaster recovery task", K(task));
+  int dummy_ret = OB_SUCCESS;
+  ObDRTaskRetComment ret_comment = ObDRTaskRetComment::MAX;
+  DEBUG_SYNC(BEFORE_ADD_MANUAL_REPLICA_TASK_IN_INNER_TABLE);
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped), K_(loaded));
+  } else if (OB_UNLIKELY(!task.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(task));
+  } else if (OB_ISNULL(task_executor_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("task_executor_ is nullptr", KR(ret), K(task));
+  } else if (OB_FAIL(persist_task_info_(task, ret_comment))) {
+    LOG_WARN("fail to persist task info into table", KR(ret), K(task));
+  } else if (OB_FAIL(task_executor_->execute(task, dummy_ret, ret_comment))) {
+    LOG_WARN("fail to execute disaster recovery task", KR(ret), K(task));
+  }
+  if (OB_FAIL(ret)) {
+    (void)log_task_result(task, ret, ret_comment);
+    const bool data_in_limit = (OB_REACH_SERVER_DATA_COPY_IN_CONCURRENCY_LIMIT == ret);
+    if (OB_SUCCESS != async_add_cleaning_task_to_updater(
+          task.get_task_id(),
+          task.get_task_key(),
+          ret, false/*need_record_event*/, ret_comment,
+          !data_in_limit)) {
+      LOG_WARN("fail to do execute over", KR(ret), K(task));
     }
   }
   return ret;

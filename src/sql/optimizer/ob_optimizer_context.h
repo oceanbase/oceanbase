@@ -41,6 +41,14 @@ namespace sql
 class ObRawExprFactory;
 class ObLogPlanFactory;
 
+enum class ObEstCorrelationType
+{
+  INDEPENDENT,
+  PARTIAL,
+  FULL,
+  MAX
+};
+
 typedef common::ObArray<common::ObString, common::ObIAllocator &> ObPlanNotes;
 //table location local index id related info
 //tablet_loc_id and ref_table_id_ are used to uniquely determine
@@ -235,7 +243,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     system_stat_(),
     storage_estimation_enabled_(false),
     das_keep_order_enabled_(true),
-    generate_random_plan_(false)
+    generate_random_plan_(false),
+    correlation_type_(ObEstCorrelationType::MAX)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -610,6 +619,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline bool generate_random_plan() const { return generate_random_plan_; }
   inline void set_generate_random_plan(bool rand_plan) { generate_random_plan_ = rand_plan; }
 
+  inline void set_correlation_type(ObEstCorrelationType type) { correlation_type_ = type; }
+  inline ObEstCorrelationType get_correlation_type() const { return correlation_type_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -696,6 +707,7 @@ private:
   bool das_keep_order_enabled_;
 
   bool generate_random_plan_;
+  ObEstCorrelationType correlation_type_;
 };
 }
 }

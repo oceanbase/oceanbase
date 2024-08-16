@@ -146,7 +146,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     can_set_feedback_info_(true),
     need_switch_to_table_lock_worker_(false),
     data_complement_gen_doc_id_(false),
-    dml_table_ids_(),
+    dml_table_ids_(&allocator_),
     direct_load_need_sort_(false)
 {
 }

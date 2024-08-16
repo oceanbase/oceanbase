@@ -485,7 +485,8 @@ private:
                     const ObIArray<ObRawExpr*> &const_exprs,
                     const double card,
                     const bool is_at_most_one_row,
-                    const ObIArray<ObRawExpr*> &qualify_filters)
+                    const ObIArray<ObRawExpr*> &qualify_filters,
+                    const ObIArray<double> &ambient_card)
       : all_win_func_exprs_(all_win_func_exprs),
         win_dist_hint_(win_dist_hint),
         explicit_hint_(explicit_hint),
@@ -507,7 +508,8 @@ private:
         enable_topn_(false),
         topn_const_(NULL),
         is_fetch_with_ties_(false),
-        origin_sort_card_(0.0)
+        origin_sort_card_(0.0),
+        ambient_card_(ambient_card)
     {
     }
     virtual ~WinFuncOpHelper() {}
@@ -545,6 +547,7 @@ private:
     ObRawExpr* topn_const_;
     bool is_fetch_with_ties_;
     double origin_sort_card_;
+    const ObIArray<double> &ambient_card_;
 
     TO_STRING_KV(K_(win_dist_method),
                  K_(win_op_idx),
@@ -557,6 +560,7 @@ private:
                  K_(ordered_win_func_exprs),
                  K_(win_dist_hint),
                  K_(explicit_hint),
+                 K_(ambient_card),
                  K_(enable_topn),
                  K_(topn_const),
                  K_(is_fetch_with_ties),

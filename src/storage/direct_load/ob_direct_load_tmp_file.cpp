@@ -181,9 +181,9 @@ ObDirectLoadTmpFileIOHandle::~ObDirectLoadTmpFileIOHandle()
 void ObDirectLoadTmpFileIOHandle::reset()
 {
   tmp_file_ = nullptr;
+  file_io_handle_.reset();
   file_handle_.reset();
   io_info_.reset();
-  file_io_handle_.reset();
   is_cancel_ = false;
 }
 
@@ -207,7 +207,6 @@ int ObDirectLoadTmpFileIOHandle::open(const ObDirectLoadTmpFileHandle &file_hand
       LOG_WARN("fail to assign file handle", KR(ret));
     } else {
       tmp_file_ = tmp_file;
-      io_info_.tenant_id_ = MTL_ID();
       io_info_.dir_id_ = tmp_file_->get_file_id().dir_id_;
       io_info_.fd_ = tmp_file_->get_file_id().fd_;
       io_info_.io_desc_.set_resource_group_id(THIS_WORKER.get_group_id());
@@ -424,7 +423,7 @@ int ObDirectLoadTmpFileIOHandle::wait()
     while (OB_SUCC(ret)) {
       if (OB_FAIL(check_status())) {
         LOG_WARN("fail to check status", KR(ret));
-      } else if (OB_FAIL(file_io_handle_.wait())) {
+      } else if (file_io_handle_.is_valid() && OB_FAIL(file_io_handle_.wait())) {
         LOG_WARN("fail to wait io finish", KR(ret));
         if (OB_LIKELY(is_retry_err(ret))) {
           if (++retry_cnt <= MAX_RETRY_CNT) {
@@ -437,34 +436,6 @@ int ObDirectLoadTmpFileIOHandle::wait()
         break;
       }
     }
-  }
-  return ret;
-}
-
-int ObDirectLoadTmpFileIOHandle::seek(const ObDirectLoadTmpFileHandle &file_handle, int64_t offset,
-                                      int whence)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!file_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(file_handle));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.seek(file_handle.get_file()->get_file_id().fd_,
-                                                   offset, whence))) {
-    LOG_WARN("fail to seek tmp file", KR(ret), K(file_handle), K(offset), K(whence));
-  }
-  return ret;
-}
-
-int ObDirectLoadTmpFileIOHandle::sync(const ObDirectLoadTmpFileHandle &file_handle,
-                                      int64_t timeout_ms)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!file_handle.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), K(file_handle));
-  } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.sync(file_handle.get_file()->get_file_id().fd_,
-                                                   timeout_ms))) {
-    LOG_WARN("fail to sync tmp file", KR(ret), K(file_handle));
   }
   return ret;
 }

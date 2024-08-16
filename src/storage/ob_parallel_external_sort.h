@@ -22,7 +22,7 @@
 #include "share/io/ob_io_manager.h"
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "blocksstable/ob_block_sstable_struct.h"
-#include "blocksstable/ob_tmp_file.h"
+#include "tmp_file/ob_tmp_file_manager.h"
 #include "share/config/ob_server_config.h"
 
 
@@ -194,7 +194,7 @@ private:
   ObMacroBufferWriter<T> macro_buffer_writer_;
   bool has_sample_item_;
   T sample_item_;
-  blocksstable::ObTmpFileIOHandle file_io_handle_;
+  tmp_file::ObTmpFileIOHandle file_io_handle_;
   int64_t fd_;
   int64_t dir_id_;
   uint64_t tenant_id_;
@@ -308,16 +308,13 @@ int ObFragmentWriterV2<T>::flush_buffer()
     STORAGE_LOG(WARN, "ObFragmentWriterV2 has not been inited", K(ret));
   } else if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, timeout_ms))) {
     STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_));
-  } else if (OB_FAIL(file_io_handle_.wait())) {
-    STORAGE_LOG(WARN, "fail to wait io finish", K(ret));
   } else if (OB_FAIL(macro_buffer_writer_.serialize_header())) {
     STORAGE_LOG(WARN, "fail to serialize header", K(ret));
   } else {
-    blocksstable::ObTmpFileIOInfo io_info;
+    tmp_file::ObTmpFileIOInfo io_info;
     io_info.fd_ = fd_;
     io_info.dir_id_ = dir_id_;
     io_info.size_ = buf_size_;
-    io_info.tenant_id_ = tenant_id_;
     io_info.buf_ = buf_;
     io_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_WRITE);
     io_info.io_timeout_ms_ = timeout_ms;
@@ -341,16 +338,6 @@ int ObFragmentWriterV2<T>::sync()
     } else if (need_flush) {
       if (OB_FAIL(flush_buffer())) {
         STORAGE_LOG(WARN, "fail to flush buffer", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      int64_t timeout_ms = 0;
-      if (OB_FAIL(file_io_handle_.wait())) {
-        STORAGE_LOG(WARN, "fail to wait io finish", K(ret));
-      } else if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, timeout_ms))) {
-        STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.sync(fd_, timeout_ms))) {
-        STORAGE_LOG(WARN, "fail to sync macro file", K(ret));
       }
     }
   }
@@ -472,9 +459,9 @@ private:
   int64_t fd_;
   int64_t dir_id_;
   T curr_item_;
-  blocksstable::ObTmpFileIOHandle file_io_handles_[MAX_HANDLE_COUNT];
+  tmp_file::ObTmpFileIOHandle file_io_handles_[MAX_HANDLE_COUNT];
   int64_t handle_cursor_;
-  char *buf_;
+  char *buf_[MAX_HANDLE_COUNT];
   uint64_t tenant_id_;
   bool is_prefetch_end_;
   int64_t buf_size_;
@@ -487,9 +474,12 @@ ObFragmentReaderV2<T>::ObFragmentReaderV2()
     allocator_(common::ObNewModIds::OB_ASYNC_EXTERNAL_SORTER, common::OB_MALLOC_BIG_BLOCK_SIZE),
     sample_allocator_(common::ObNewModIds::OB_ASYNC_EXTERNAL_SORTER, OB_MALLOC_NORMAL_BLOCK_SIZE),
     macro_buffer_reader_(), fd_(-1), dir_id_(-1), curr_item_(),
-    file_io_handles_(), handle_cursor_(-1), buf_(NULL), tenant_id_(common::OB_INVALID_ID),
+    file_io_handles_(), handle_cursor_(-1), buf_(), tenant_id_(common::OB_INVALID_ID),
     is_prefetch_end_(false), buf_size_(0), is_first_prefetch_(true)
 {
+  for (int64_t i = 0; i < MAX_HANDLE_COUNT; ++i) {
+    buf_[i] = nullptr;
+  }
 }
 
 template <typename T>
@@ -558,23 +548,24 @@ int ObFragmentReaderV2<T>::prefetch()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObFragmentReaderV2 has not been inited", K(ret));
   } else {
-    if (nullptr == buf_) {
-      if (OB_ISNULL(buf_ = static_cast<char *>(allocator_.alloc(buf_size_)))) {
+    int64_t handle_index = handle_cursor_ % MAX_HANDLE_COUNT;
+    if (nullptr == buf_[handle_index]) {
+      if (OB_ISNULL(buf_[handle_index] = static_cast<char *>(allocator_.alloc(buf_size_)))) {
         ret = common::OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "fail to allocate memory", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
-      blocksstable::ObTmpFileIOInfo io_info;
+      tmp_file::ObTmpFileIOInfo io_info;
       io_info.fd_ = fd_;
       io_info.dir_id_ = dir_id_;
       io_info.size_ = buf_size_;
-      io_info.tenant_id_ = tenant_id_;
-      io_info.buf_ = buf_;
+      io_info.buf_ = buf_[handle_index];
+      io_info.disable_page_cache_ = true;
       io_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_INDEX_BUILD_READ);
       if (OB_FAIL(ObExternalSortConstant::get_io_timeout_ms(expire_timestamp_, io_info.io_timeout_ms_))) {
         STORAGE_LOG(WARN, "fail to get io timeout ms", K(ret), K(expire_timestamp_), K(io_info.io_timeout_ms_));
-      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_read(io_info, file_io_handles_[handle_cursor_ % MAX_HANDLE_COUNT]))) {
+      } else if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.aio_read(io_info, file_io_handles_[handle_index]))) {
         if (common::OB_ITER_END != ret) {
           STORAGE_LOG(WARN, "fail to do aio read from macro file", K(ret), K(fd_), K(io_info));
         } else {
@@ -676,7 +667,9 @@ void ObFragmentReaderV2<T>::reset()
     file_io_handles_[i].reset();
   }
   handle_cursor_ = 0;
-  buf_ = NULL;
+  for (int64_t i = 0; i < MAX_HANDLE_COUNT; ++i) {
+    buf_[i] = nullptr;
+  }
   tenant_id_ = common::OB_INVALID_ID;
   is_prefetch_end_ = false;
   buf_size_ = 0;
@@ -688,6 +681,9 @@ int ObFragmentReaderV2<T>::clean_up()
 {
   int ret = common::OB_SUCCESS;
   if (is_inited_) {
+    for (int64_t i = 0; i < MAX_HANDLE_COUNT; ++i) {
+      file_io_handles_[i].reset();
+    }
     if (OB_FAIL(FILE_MANAGER_INSTANCE_V2.remove(fd_))) {
       STORAGE_LOG(WARN, "fail to remove macro file", K(ret));
     }

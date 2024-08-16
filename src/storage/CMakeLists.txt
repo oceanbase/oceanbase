@@ -43,9 +43,6 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_sstable_printer.cpp
   blocksstable/ob_storage_cache_suite.cpp
   blocksstable/ob_super_block_buffer_holder.cpp
-  blocksstable/ob_tmp_file.cpp
-  blocksstable/ob_tmp_file_cache.cpp
-  blocksstable/ob_tmp_file_store.cpp
   blocksstable/ob_datum_row.cpp
   blocksstable/ob_datum_rowkey.cpp
   blocksstable/ob_data_store_desc.cpp
@@ -140,6 +137,27 @@ ob_set_subtarget(ob_storage blocksstable_index_block
   blocksstable/index_block/ob_skip_index_filter_executor.cpp
   blocksstable/index_block/ob_sstable_meta_info.cpp
   blocksstable/index_block/ob_sstable_sec_meta_iterator.cpp
+)
+
+ob_set_subtarget(ob_storage tmp_file
+  tmp_file/ob_shared_nothing_tmp_file.cpp
+  tmp_file/ob_tmp_file_write_buffer_index_cache.cpp
+  tmp_file/ob_tmp_file_cache.cpp
+  tmp_file/ob_tmp_file_io_define.cpp
+  tmp_file/ob_tmp_file_io_ctx.cpp
+  tmp_file/ob_tmp_file_global.cpp
+  tmp_file/ob_tmp_file_block_manager.cpp
+  tmp_file/ob_tmp_file_manager.cpp
+  tmp_file/ob_tmp_file_eviction_manager.cpp
+  tmp_file/ob_tmp_file_flush_priority_manager.cpp
+  tmp_file/ob_tmp_file_flush_list_iterator.cpp
+  tmp_file/ob_tmp_file_meta_tree.cpp
+  tmp_file/ob_tmp_file_flush_manager.cpp
+  tmp_file/ob_tmp_file_flush_ctx.cpp
+  tmp_file/ob_tmp_file_page_cache_controller.cpp
+  tmp_file/ob_tmp_file_thread_wrapper.cpp
+  tmp_file/ob_tmp_file_thread_job.cpp
+  tmp_file/ob_tmp_file_write_buffer_pool.cpp
 )
 
 ob_set_subtarget(ob_storage slog

@@ -293,6 +293,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 505	__all_column_privilege	0	201001	1
 506	__all_column_privilege_history	0	201001	1
 507	__all_tenant_snapshot_ls_replica_history	0	201001	1
+508	__all_ls_replica_task_history	0	201001	1
 512	__all_user_proxy_info	0	201001	1
 513	__all_user_proxy_info_history	0	201001	1
 514	__all_user_proxy_role_info	0	201001	1
@@ -742,6 +743,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12463	__all_virtual_column_privilege_history	2	201001	1
 12464	__all_virtual_tenant_snapshot_ls_replica_history	2	201001	1
 12466	ENABLED_ROLES	2	201002	1
+12467	__all_virtual_ls_replica_task_history	2	201001	1
 12468	__all_virtual_session_ps_info	2	201001	1
 12469	__all_virtual_tracepoint_info	2	201001	1
 12473	__all_virtual_compatibility_control	2	201001	1
@@ -1150,6 +1152,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21517	GV$OB_LS_SNAPSHOTS	1	201001	1
 21518	V$OB_LS_SNAPSHOTS	1	201001	1
 21519	DBA_OB_CLONE_HISTORY	1	201001	1
+21523	DBA_OB_LS_REPLICA_TASK_HISTORY	1	201001	1
+21524	CDB_OB_LS_REPLICA_TASK_HISTORY	1	201001	1
 21525	CDB_MVIEW_LOGS	1	201001	1
 21526	DBA_MVIEW_LOGS	1	201001	1
 21527	CDB_MVIEWS	1	201001	1

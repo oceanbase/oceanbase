@@ -13,17 +13,16 @@
 #define USING_LOG_PREFIX SQL
 
 #include <gtest/gtest.h>
+#include "mtlenv/mock_tenant_module_env.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/allocator/ob_malloc.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
-#include "storage/blocksstable/ob_tmp_file.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_ra_row_store.h"
 #include "common/row/ob_row_store.h"
 #include "share/config/ob_server_config.h"
 #include "sql/ob_sql_init.h"
 #include "share/ob_simple_mem_limit_getter.h"
-
 
 namespace oceanbase
 {
@@ -69,16 +68,25 @@ public:
     int ret = OB_SUCCESS;
     ASSERT_EQ(OB_SUCCESS, init_tenant_mgr());
     blocksstable::TestDataFilePrepare::SetUp();
-    ret = blocksstable::ObTmpFileManager::get_instance().init();
-    ASSERT_EQ(OB_SUCCESS, ret);
+    ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
+    ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
     if (!is_server_tenant(tenant_id_)) {
       static ObTenantBase tenant_ctx(tenant_id_);
       ObTenantEnv::set_tenant(&tenant_ctx);
+
       ObTenantIOManager *io_service = nullptr;
       EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_new(io_service));
       EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
       EXPECT_EQ(OB_SUCCESS, io_service->start());
       tenant_ctx.set(io_service);
+
+      tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
+      EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
+      EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
+      tf_mgr->page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
+      EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
+      tenant_ctx.set(tf_mgr);
+
       ObTenantEnv::set_tenant(&tenant_ctx);
     }
 
@@ -107,7 +115,8 @@ public:
     rs_.reset();
     rs_.~ObChunkRowStore();
 
-    blocksstable::ObTmpFileManager::get_instance().destroy();
+    tmp_file::ObTmpBlockCache::get_instance().destroy();
+    tmp_file::ObTmpPageCache::get_instance().destroy();
     blocksstable::TestDataFilePrepare::TearDown();
     LOG_INFO("TearDown finished", K_(rs));
   }

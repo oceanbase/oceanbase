@@ -16,6 +16,7 @@
 #include "lib/oblog/ob_log_module.h"
 
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::tmp_file;
 using namespace oceanbase::storage;
 
 namespace oceanbase {
@@ -40,9 +41,9 @@ int ObBackupTmpFile::open(const uint64_t tenant_id)
   if (is_opened_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("backup tmp file init twice", K(ret));
-  } else if (OB_FAIL(ObTmpFileManager::get_instance().alloc_dir(file_dir_))) {
+  } else if (OB_FAIL(ObTenantTmpFileManager::get_instance().alloc_dir(file_dir_))) {
     LOG_WARN("failed to alloc dir", K(ret));
-  } else if (OB_FAIL(ObTmpFileManager::get_instance().open(file_fd_, file_dir_))) {
+  } else if (OB_FAIL(ObTenantTmpFileManager::get_instance().open(file_fd_, file_dir_))) {
     LOG_WARN("failed to open tmp file", K(ret), K(file_dir_));
   } else {
     tenant_id_ = tenant_id;
@@ -63,7 +64,7 @@ int ObBackupTmpFile::write(const char *buf, const int64_t size)
     LOG_WARN("backup tmp file init twice", K(ret));
   } else if (OB_FAIL(get_io_info_(buf, size, timeout_ms, io_info))) {
     LOG_WARN("failed to get io info", K(ret), K(buf), K(size));
-  } else if (OB_FAIL(ObTmpFileManager::get_instance().write(io_info))) {
+  } else if (OB_FAIL(ObTenantTmpFileManager::get_instance().write(io_info))) {
     LOG_WARN("failed to write tmp file", K(ret), K(io_info), K(timeout_ms));
   } else {
     file_size_ += size;
@@ -78,7 +79,7 @@ int ObBackupTmpFile::close()
   if (!is_opened_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup tmp file do not init", K(ret));
-  } else if (OB_FAIL(ObTmpFileManager::get_instance().remove(file_fd_))) {
+  } else if (OB_FAIL(ObTenantTmpFileManager::get_instance().remove(file_fd_))) {
     LOG_WARN("failed to remove tmp file fd", K(ret), K(file_fd_));
   } else {
     is_opened_ = false;
@@ -92,7 +93,7 @@ int ObBackupTmpFile::get_io_info_(const char *buf, const int64_t size, const int
   int ret = OB_SUCCESS;
   io_info.reset();
   io_info.fd_ = file_fd_;
-  io_info.tenant_id_ = tenant_id_;
+  io_info.dir_id_ = file_dir_;
   io_info.io_desc_.set_wait_event(2);
   io_info.buf_ = const_cast<char *>(buf);
   io_info.size_ = size;

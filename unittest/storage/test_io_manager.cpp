@@ -27,8 +27,7 @@
 #include "lib/file/file_directory_utils.h"
 #include "common/ob_clock_generator.h"
 #include "storage/blocksstable/ob_micro_block_cache.h"
-#include "storage/blocksstable/ob_tmp_file_cache.h"
-#include "storage/blocksstable/ob_tmp_file_store.h"
+#include "storage/tmp_file/ob_tmp_file_cache.h"
 #include "storage/meta_mem/ob_storage_meta_cache.h"
 
 #define ASSERT_SUCC(ret) ASSERT_EQ((ret), ::oceanbase::common::OB_SUCCESS)
@@ -38,6 +37,7 @@ using namespace oceanbase::lib;
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::tmp_file;
 
 #define TEST_ROOT_DIR "./"
 #define TEST_DATA_DIR TEST_ROOT_DIR "/data_dir"
@@ -615,8 +615,8 @@ TEST_F(TestIOStruct, Test_Size)
   int64_t size1 = sizeof(ObAsyncSingleMicroBlockIOCallback);
   int64_t size2 = sizeof(ObMultiDataBlockIOCallback);
   int64_t size3 = sizeof(ObSyncSingleMicroBLockIOCallback);
-  int64_t size4 = sizeof(ObTmpPageCache::ObTmpPageIOCallback);
-  int64_t size5 = sizeof(ObTmpPageCache::ObTmpMultiPageIOCallback);
+  int64_t size4 = sizeof(ObTmpPageCache::ObTmpCachedReadPageIOCallback);
+  int64_t size5 = sizeof(ObTmpPageCache::ObTmpDirectReadPageIOCallback);
   int64_t size6 = sizeof(oceanbase::ObStorageMetaCache::ObStorageMetaIOCallback);
   int64_t max_callback_size = std::max({size1, size2, size3, size4, size5, size6});
   int64_t size_request = sizeof(ObIORequest);

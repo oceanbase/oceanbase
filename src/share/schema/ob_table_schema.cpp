@@ -6842,12 +6842,12 @@ OB_DEF_SERIALIZE(ObTableSchema)
 
   OB_UNIS_ENCODE(mlog_tid_);
   OB_UNIS_ENCODE(auto_increment_cache_size_);
-  OB_UNIS_ENCODE(local_session_vars_);
-  OB_UNIS_ENCODE(duplicate_read_consistency_);
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_ENCODE,
                 external_properties_);
   }
+  OB_UNIS_ENCODE(local_session_vars_);
+  OB_UNIS_ENCODE(duplicate_read_consistency_);
   if (OB_SUCC(ret)) {
     OB_UNIS_ENCODE(index_params_);
   }
@@ -7281,12 +7281,12 @@ OB_DEF_DESERIALIZE(ObTableSchema)
 
   OB_UNIS_DECODE(mlog_tid_);
   OB_UNIS_DECODE(auto_increment_cache_size_);
-  OB_UNIS_DECODE(local_session_vars_);
-  OB_UNIS_DECODE(duplicate_read_consistency_);
   if (OB_SUCC(ret)) {
     LST_DO_CODE(OB_UNIS_DECODE,
                 external_properties_);
   }
+  OB_UNIS_DECODE(local_session_vars_);
+  OB_UNIS_DECODE(duplicate_read_consistency_);
 
   if (OB_SUCC(ret)) {
     OB_UNIS_DECODE(index_params);
@@ -7444,9 +7444,9 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(max_used_column_group_id_);
   OB_UNIS_ADD_LEN(mlog_tid_);
   OB_UNIS_ADD_LEN(auto_increment_cache_size_);
+  OB_UNIS_ADD_LEN(external_properties_);
   OB_UNIS_ADD_LEN(local_session_vars_);
   OB_UNIS_ADD_LEN(duplicate_read_consistency_);
-  OB_UNIS_ADD_LEN(external_properties_);
   OB_UNIS_ADD_LEN(index_params_);
   return len;
 }

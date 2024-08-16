@@ -247,7 +247,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[idx]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -296,7 +296,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[idx]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -438,7 +438,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       unstable_index_name:[tt2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -577,7 +577,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[tt2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -716,7 +716,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       unstable_index_name:[tt2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -855,7 +855,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[idx, tt2]
       pruned_index_name:[tt2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:

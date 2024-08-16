@@ -261,6 +261,8 @@ enum EMySQLFieldType
   MYSQL_TYPE_ORA_BLOB = 210,
   MYSQL_TYPE_ORA_CLOB = 211,
   MYSQL_TYPE_ROARINGBITMAP = 215,
+  MYSQL_TYPE_OB_VECTOR = 216, // used in cdc/oms not used in client
+  MYSQL_TYPE_OB_ARRAY = 217, // used in cdc/oms not used in client
   MYSQL_TYPE_JSON = 245,
   MYSQL_TYPE_NEWDECIMAL = 246,
   MYSQL_TYPE_ENUM = 247,

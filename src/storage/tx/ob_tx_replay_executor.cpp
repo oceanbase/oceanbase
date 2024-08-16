@@ -301,6 +301,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
                         INT64_MAX,         /*trans_expired_time_*/
                         ls_tx_srv_->get_trans_service());
       ObTxDataThrottleGuard tx_data_throttle_guard(
+          ls_id_,
           true /* for_replay_ */,
           ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME);
       if (OB_FAIL(ls_tx_srv_->create_tx_ctx(arg, tx_ctx_existed, ctx_))) {
@@ -418,6 +419,7 @@ int ObTxReplayExecutor::replay_rollback_to_()
   ObTxRollbackToLog log;
   const bool pre_barrier = base_header_.need_pre_replay_barrier();
   ObTxDataThrottleGuard tx_data_throttle_guard(
+      ls_id_,
       true /* for_replay_ */,
       ObClockGenerator::getClock() + share::ObThrottleUnit<ObTenantTxDataAllocator>::DEFAULT_MAX_THROTTLE_TIME);
   if (OB_FAIL(log_block_.deserialize_log_body(log))) {
@@ -466,7 +468,8 @@ int ObTxReplayExecutor::replay_multi_source_data_()
   int ret = OB_SUCCESS;
   ObTxMultiDataSourceLog log;
 
-  ObMdsThrottleGuard mds_throttle_guard(true /* for_replay */,
+  ObMdsThrottleGuard mds_throttle_guard(ls_id_,
+                                        true /* for_replay */,
                                         ObClockGenerator::getClock() +
                                             share::ObThrottleUnit<ObTenantMdsAllocator>::DEFAULT_MAX_THROTTLE_TIME);
 

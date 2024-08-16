@@ -293,7 +293,7 @@ private:
 class ObSliceAlloc
 {
 public:
-  enum { MAX_ARENA_NUM = 32, MAX_REF_NUM = 4096, DEFAULT_BLOCK_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE };
+  enum { MAX_ARENA_NUM = 32, MAX_REF_NUM = 128, DEFAULT_BLOCK_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE };
   typedef ObSimpleSync Sync;
   typedef ObBlockSlicer Block;
   typedef ObBlockAllocMgr BlockAlloc;

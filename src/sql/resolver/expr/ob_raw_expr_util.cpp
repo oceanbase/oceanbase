@@ -1181,7 +1181,8 @@ do {                                                                            
               GET_CONST_EXPR_VALUE(f_expr->get_param_expr(1), var_id);
             }
             OZ (udf_raw_expr->add_param_desc(
-                ObUDFParamDesc(ObUDFParamDesc::OBJ_ACCESS_OUT, var_id, OB_INVALID_ID, pkg_id)));
+                ObUDFParamDesc(pl::ObPLRoutineParamMode::PL_PARAM_OUT == mode ? ObUDFParamDesc::OBJ_ACCESS_OUT : ObUDFParamDesc::OBJ_ACCESS_INOUT,
+                              var_id, OB_INVALID_ID, pkg_id)));
           } else if (T_QUESTIONMARK == iexpr->get_expr_type()) {
             ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
             pl::ObPLDataType param_type;
@@ -3680,7 +3681,7 @@ int ObRawExprUtils::extract_contain_exprs(ObRawExpr *raw_expr,
 }
 
 int ObRawExprUtils::extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
-                                         ObRelIds &rel_ids,
+                                         const ObRelIds &rel_ids,
                                          ObIArray<ObRawExpr*> &column_exprs)
 {
   int ret = OB_SUCCESS;
@@ -3696,7 +3697,7 @@ int ObRawExprUtils::extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
 }
 
 int ObRawExprUtils::extract_column_exprs(ObRawExpr* expr,
-                                         ObRelIds &rel_ids,
+                                         const ObRelIds &rel_ids,
                                          ObIArray<ObRawExpr*> &column_exprs)
 {
   int ret = OB_SUCCESS;
@@ -4122,8 +4123,10 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
     if (T_FUN_SYS_CAST == expr.get_expr_type()
         && expr.has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
         && !ignore_dup_cast_error
-        && !((src_type.is_user_defined_sql_type()|| src_type.is_collection_sql_type())
-                  && (dst_type.is_character_type() || dst_type.is_null()))) {
+        && !(((src_type.is_user_defined_sql_type()|| src_type.is_collection_sql_type())
+                  && (dst_type.is_character_type() || dst_type.is_null()))
+            || (src_type.is_character_type() && dst_type.is_character_type())))
+      {
       // cases like: select xmltype(var)||xmltype(var) as "res1" from t1 t;
       // xmltype is a lp constructor, an implicit cast is added to cast PL xmltype to SQL xmltype
       // when deduce concat, another cast is needed to cast SQL xmltype to string

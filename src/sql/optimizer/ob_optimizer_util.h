@@ -611,6 +611,9 @@ public:
   static int get_onetime_exprs(ObRawExpr* expr,
                                ObIArray<ObExecParamRawExpr*> &onetime_exprs);
 
+  static int get_onetime_exprs(ObIArray<ObRawExpr*> &exprs,
+                               ObIArray<ObExecParamRawExpr*> &onetime_exprs);
+
   static int get_query_ref_exprs(ObIArray<ObRawExpr *> &subquery_exprs,
                                  ObIArray<ObRawExpr *> &subqueries,
                                  ObIArray<ObRawExpr *> &nested_subqueries);

@@ -76,6 +76,7 @@
 #include "storage/compaction/ob_sstable_merge_info_mgr.h"
 #include "storage/tablelock/ob_table_lock_service.h"
 #include "storage/tx/ob_ts_mgr.h"
+#include "storage/tmp_file/ob_tmp_file_cache.h"
 #include "storage/tx_table/ob_tx_data_cache.h"
 #include "storage/ob_file_system_router.h"
 #include "storage/ob_tablet_autoinc_seq_rpc_handler.h"
@@ -419,6 +420,10 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init storage failed", KR(ret));
     } else if (OB_FAIL(init_tx_data_cache())) {
       LOG_ERROR("init tx data cache failed", KR(ret));
+    } else if (OB_FAIL(tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1))) {
+      LOG_ERROR("init tmp block cache failed", KR(ret));
+    } else if (OB_FAIL(tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1))) {
+      LOG_ERROR("init tmp page cache failed", KR(ret));
     } else if (OB_FAIL(init_log_kv_cache())) {
       LOG_ERROR("init log kv cache failed", KR(ret));
     } else if (OB_FAIL(locality_manager_.init(self_addr_,
@@ -703,10 +708,6 @@ void ObServer::destroy()
     disk_usage_report_task_.destroy();
     FLOG_INFO("tenant disk usage report task destroyed");
 
-    FLOG_INFO("begin to destroy tmp file manager");
-    ObTmpFileManager::get_instance().destroy();
-    FLOG_INFO("tmp file manager destroyed");
-
     FLOG_INFO("begin to destroy disk usage report task");
     TG_DESTROY(lib::TGDefIDs::DiskUseReport);
     FLOG_INFO("disk usage report task destroyed");
@@ -718,6 +719,14 @@ void ObServer::destroy()
     FLOG_INFO("begin to destroy tx data kv cache");
     OB_TX_DATA_KV_CACHE.destroy();
     FLOG_INFO("tx data kv cache destroyed");
+
+    FLOG_INFO("begin to destroy tmp block cache");
+    tmp_file::ObTmpBlockCache::get_instance().destroy();
+    FLOG_INFO("tmp block cache destroyed");
+
+    FLOG_INFO("begin to destroy tmp page cache");
+    tmp_file::ObTmpPageCache::get_instance().destroy();
+    FLOG_INFO("tmp page cache destroyed");
 
     FLOG_INFO("begin to destroy log kv cache");
     OB_LOG_KV_CACHE.destroy();
@@ -2917,8 +2926,6 @@ int ObServer::init_storage()
                                     storage_env_.bf_cache_miss_count_threshold_,
                                     storage_env_.storage_meta_cache_priority_))) {
       LOG_WARN("Fail to init OB_STORE_CACHE, ", KR(ret), K(storage_env_.data_dir_));
-    } else if (OB_FAIL(ObTmpFileManager::get_instance().init())) {
-      LOG_WARN("fail to init temp file manager", KR(ret));
     } else if (OB_FAIL(OB_SERVER_BLOCK_MGR.init(THE_IO_DEVICE,
                                                 storage_env_.default_block_size_))) {
       LOG_ERROR("init server block mgr fail", KR(ret));

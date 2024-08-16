@@ -394,6 +394,16 @@ int ObLogJoin::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   return ret;
 }
 
+int ObLogJoin::est_ambient_card()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ambient_card_.assign(join_path_->parent_->get_ambient_card()))) {
+    LOG_WARN("failed to assign ambient cards", K(ret));
+  }
+  // do nothing
+  return ret;
+}
+
 int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;
@@ -430,9 +440,10 @@ int ObLogJoin::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_
     LOG_WARN("failed to re estimate cost", K(ret));
   } else if (OB_FAIL(join_path_->try_set_batch_nlj_for_right_access_path(false))) {
     LOG_WARN("failed to try set batch nlj for right access path", K(ret));
-  } else if (OB_FAIL(join_path_->re_estimate_rows(left_output_rows, 
-                                                 right_output_rows, 
-                                                 card))) {
+  } else if (OB_FAIL(join_path_->re_estimate_rows(param.join_filter_infos_,
+                                                  left_output_rows,
+                                                  right_output_rows,
+                                                  card))) {
     LOG_WARN("failed to re estimate rows", K(ret));
   } else if (NESTED_LOOP_JOIN == join_algo_) {
     if (OB_FAIL(join_path_->cost_nest_loop_join(parallel,

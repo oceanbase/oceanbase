@@ -36,6 +36,14 @@ class ObTxContext final
 public:
   struct ObTxDesc final
   {
+    ObTxDesc()
+      : tx_id_(0),
+        row_count_(0)
+    {}
+    ObTxDesc(const int64_t tx_id, const int64_t row_count)
+      : tx_id_(tx_id),
+        row_count_(row_count)
+    {}
     int64_t tx_id_;
     int64_t row_count_;
     int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;

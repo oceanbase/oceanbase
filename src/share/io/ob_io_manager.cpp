@@ -896,7 +896,9 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     LOG_WARN("schedule request failed", K(ret), KPC(req));
   }
   if (OB_FAIL(ret)) {
-    req->free();
+    if (OB_NOT_NULL(req)) {
+      req->free();
+    }
     handle.reset();
   }
   return ret;

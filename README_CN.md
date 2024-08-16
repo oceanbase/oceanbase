@@ -39,29 +39,13 @@
 
 # 关键特性
 
-- **水平扩展**
+- **水平扩展**：单机群支持超过1500节点、PB级数据量和单表超万亿行数据；
+- **极致性能**：TPC-C 7.07亿tmpC和TPC-H 1526 万 QphH @30000GB；
+- **低成本**：存储成本节省70%-90%；
+- **实时分析**：不需要额外开销，支持HTAP；
+- **高可用**：RPO = 0（0数据丢失），RTO < 8秒（恢复时间）；
+- **MySQL 兼容**：很容易的从MySQL迁移过来。
 
-    实现透明水平扩展，支持业务快速的扩容缩容，同时通过准内存处理架构实现高性能。支持集群节点超过数千个，单集群最大数据量超过 3PB，最大单表行数达万亿级。
-
-- **极致性能**
-    
-    唯一一个刷新了 TPC-C 记录（7.07 亿 tmpC）和 TPC-H 记录（1526 万 QphH @30000GB）的分布式数据库。
-
-- **实时分析**
-    
-    基于“同一份数据，同一个引擎”，同时支持在线实时交易及实时分析两种场景，“一份数据”的多个副本可以存储成多种形态，用于不同工作负载，从根本上保持数据一致性。
-
-- **高可用**
-    
-    独创“三地五中心”容灾架构方案，建立金融行业无损容灾新标准。支持同城/异地容灾，可实现多地多活，满足金融行业 6 级容灾标准（RPO=0，RTO< 8s），数据零丢失。
-
-- **MySQL 兼容**
-     
-    高度兼容 MySQL，覆盖绝大多数常见功能，支持过程语言、触发器等高级特性，提供自动迁移工具，支持迁移评估和反向同步以保障数据迁移安全，可支撑金融、政府、运营商等关键行业核心场景。
-
-- **低成本**
-
-    基于 LSM-Tree 的高压缩引擎，存储成本降低 70% - 90%；原生支持多租户架构，同集群可为多个独立业务提供服务，租户间数据隔离，降低部署和运维成本。
 
 更多信息请参考 [OceanBase 产品](https://www.oceanbase.com/product/oceanbase)。
 
@@ -86,28 +70,36 @@ obd demo
 
 ## 🐳 使用 docker
 
+**注意**: 我们在 [dockerhub](https://hub.docker.com/r/oceanbase/oceanbase-ce/tags), [quay.io](https://quay.io/repository/oceanbase/oceanbase-ce?tab=tags) 和 [ghcr.io](https://github.com/oceanbase/docker-images/pkgs/container/oceanbase-ce) 提供镜像。如果您在从 dockerhub 拉取镜像时遇到问题，请尝试其他两个镜像库。
+
 1. 启动 OceanBase 数据库实例
 
     ```shell
     # 部署一个mini模式实例
     docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d oceanbase/oceanbase-ce
+
+    # 使用 quay.io 仓库的镜像部署 OceanBase.
+    # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d quay.io/oceanbase/oceanbase-ce
+
+    # 使用 ghcr.io 仓库的镜像部署 OceanBase.
+    # docker run -p 2881:2881 --name oceanbase-ce -e MODE=mini -d ghcr.io/oceanbase/oceanbase-ce
     ```
 
 2. 连接 OceanBase
 
     ```shell
-    docker exec -it oceanbase-ce ob-mysql sys # 连接root用户sys租户
+    docker exec -it oceanbase-ce obclient -h127.0.0.1 -P2881 -uroot # 连接root用户sys租户
     ```
 
 更多信息参考[docker 文档](https://github.com/oceanbase/docker-images/tree/main/oceanbase-ce)。
 
 ## ☸️ 使用 Kubernetes
 
-使用 [ob-operator](https://github.com/oceanbase/ob-operator) 可在 Kubernetes 环境中快速部署和管理 OceanBase 数据库实例，可参考文档 [ob-operator 快速上手](https://oceanbase.github.io/ob-operator/README-CN.html)了解具体的使用方法。
+使用 [ob-operator](https://github.com/oceanbase/ob-operator) 可在 Kubernetes 环境中快速部署和管理 OceanBase 数据库实例，可参考文档 [ob-operator 快速上手](https://oceanbase.github.io/ob-operator/zh-Hans/)了解具体的使用方法。
 
 ## 👨‍💻 使用源码编译部署
 
-参考 [OceanBase 开发者文档](https://oceanbase.github.io/oceanbase/build-and-run.html)了解如何编译和部署手动编译的observer。
+参考 [OceanBase 开发者文档](https://oceanbase.github.io/oceanbase/build-and-run)了解如何编译和部署手动编译的observer。
 
 # Roadmap
 

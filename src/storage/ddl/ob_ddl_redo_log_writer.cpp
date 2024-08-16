@@ -340,24 +340,34 @@ void ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::reset()
   if (nullptr != item_) {
     if (0 == item_->dec_ref()) {
       item_->~ObDDLCtrlSpeedItem();
+      ObDDLCtrlSpeedHandle::get_instance().get_allocator().free(item_);
     }
     item_ = nullptr;
   }
 }
 
 ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedHandle()
-  : is_inited_(false), speed_handle_map_(), allocator_(SET_USE_500("DDLClogCtrl")),
+  : is_inited_(false), speed_handle_map_(),
     bucket_lock_(), refreshTimerTask_()
 {
 }
 
 ObDDLCtrlSpeedHandle::~ObDDLCtrlSpeedHandle()
 {
-  bucket_lock_.destroy();
+  int ret = OB_SUCCESS;
   if (speed_handle_map_.created()) {
+    ObArray<SpeedHandleKey> remove_items;
+    common::hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedItem*>::const_iterator iter = speed_handle_map_.begin();
+    for (; iter != speed_handle_map_.end(); ++iter) {
+      if (OB_FAIL(remove_items.push_back(iter->first))) {
+        LOG_WARN("push back failed", K(ret), "key", iter->first);
+      }
+    }
+    (void)remove_ctrl_speed_item(remove_items);
     speed_handle_map_.destroy();
   }
-  allocator_.reset();
+  bucket_lock_.destroy();
+  allocator_.destroy();
 }
 
 ObDDLCtrlSpeedHandle &ObDDLCtrlSpeedHandle::get_instance()
@@ -371,6 +381,7 @@ int ObDDLCtrlSpeedHandle::init()
   int ret = OB_SUCCESS;
   lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "DDLSpeedCtrl");
   SET_USE_500(attr);
+  const int64_t memory_limit = 1024L * 1024L * 1024L * 1L; // 1GB
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", K(ret));
@@ -381,13 +392,14 @@ int ObDDLCtrlSpeedHandle::init()
     LOG_WARN("init bucket lock failed", K(ret));
   } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, attr, attr))) {
     LOG_WARN("fail to create speed handle map", K(ret));
+  } else if (OB_FAIL(allocator_.init(OB_MALLOC_NORMAL_BLOCK_SIZE,
+      attr.label_, OB_SERVER_TENANT_ID, memory_limit))) {
+    LOG_WARN("init alloctor failed", K(ret));
+  } else if (OB_FAIL(refreshTimerTask_.init(lib::TGDefIDs::ServerGTimer))) {
+    LOG_WARN("fail to init refreshTimerTask", K(ret));
   } else {
     is_inited_ = true;
-    if (OB_FAIL(refreshTimerTask_.init(lib::TGDefIDs::ServerGTimer))) {
-      LOG_WARN("fail to init refreshTimerTask", K(ret));
-    } else {
-      LOG_INFO("succeed to init ObDDLCtrlSpeedHandle", K(ret));
-    }
+    LOG_INFO("succeed to init ObDDLCtrlSpeedHandle", K(ret));
   }
   return ret;
 }
@@ -502,7 +514,7 @@ int ObDDLCtrlSpeedHandle::add_ctrl_speed_item(
 int ObDDLCtrlSpeedHandle::remove_ctrl_speed_item(const ObIArray<SpeedHandleKey> &remove_items)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < remove_items.count(); i++) {
+  for (int64_t i = 0; i < remove_items.count(); i++) { // ignore ret, to free more items.
     const SpeedHandleKey &speed_handle_key = remove_items.at(i);
     common::ObBucketHashWLockGuard guard(bucket_lock_, speed_handle_key.hash());
     char *buf = nullptr;
@@ -526,6 +538,7 @@ int ObDDLCtrlSpeedHandle::remove_ctrl_speed_item(const ObIArray<SpeedHandleKey> 
     } else {
       if (0 == speed_handle_item->dec_ref()) {
         speed_handle_item->~ObDDLCtrlSpeedItem();
+        allocator_.free(speed_handle_item);
         speed_handle_item = nullptr;
       }
     }
@@ -1608,6 +1621,12 @@ int ObDDLRedoLogWriterCallback::write(ObMacroBlockHandle &macro_handle,
     redo_info_.start_scn_ = start_scn_;
     redo_info_.data_format_version_ = data_format_version_;
     redo_info_.type_ = direct_load_type_;
+
+    redo_info_.parallel_cnt_ = 0; // TODO @zhuoran.zzr, place holder for shared storage
+    redo_info_.cg_cnt_ = 0;
+
+    redo_info_.macro_block_id_ = MacroBlockId::mock_valid_macro_id();
+
     if (is_column_group_info_valid()) {
       redo_info_.end_row_id_ = row_id_offset_ + row_count - 1;
       row_id_offset_ += row_count;

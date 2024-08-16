@@ -462,40 +462,25 @@ int ObInnerConnectionLockUtil::create_inner_conn(sql::ObSQLSessionInfo *session_
                                                  observer::ObInnerSQLConnection *&inner_conn)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObObj mysql_mode;
-  ObObj current_mode;
-  mysql_mode.set_int(0);
-  current_mode.set_int(-1);
-
   observer::ObInnerSQLConnectionPool *pool = nullptr;
   common::sqlclient::ObISQLConnection *conn = nullptr;
 
-  lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
   if (OB_ISNULL(session_info) || OB_ISNULL(sql_proxy)) {
     ret = OB_NOT_INIT;
     LOG_WARN("session or sql_proxy is NULL", KP(session_info), KP(sql_proxy));
-  } else if (OB_NOT_NULL(inner_conn = static_cast<observer::ObInnerSQLConnection *>(session_info->get_inner_conn()))) {
-    LOG_INFO("session has had inner connection, no need to create again", KPC(session_info));
   } else if (OB_ISNULL(pool = static_cast<observer::ObInnerSQLConnectionPool *>(sql_proxy->get_pool()))) {
     ret = OB_NOT_INIT;
     LOG_WARN("connection pool is NULL", K(ret));
-  } else if (OB_FAIL(session_info->get_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
-    LOG_WARN("can not get the compat_mode", KPC(session_info));
-  } else if (current_mode != mysql_mode
-             && OB_FAIL(session_info->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, mysql_mode))) {
-    LOG_WARN("update session_info to msyql_mode failed", KR(ret), KPC(session_info));
   } else if (common::sqlclient::INNER_POOL != pool->get_type()) {
     LOG_WARN("connection pool type is not inner", K(ret), K(pool->get_type()));
-  } else if (OB_FAIL(pool->acquire(session_info, conn))) {
+    // NOTICE: although we can set is_oracle_mode here, internally it will prioritize referencing
+    // the system variables on the session, so this parameter actually has no effect
+  } else if (OB_FAIL(pool->acquire(session_info, conn, false /* is_oracle_mode */))) {
     LOG_WARN("acquire connection from inner sql connection pool failed", KR(ret), KPC(session_info));
   } else {
     inner_conn = static_cast<observer::ObInnerSQLConnection *>(conn);
-  }
-  if (current_mode != mysql_mode && current_mode.get_int() != -1
-      && OB_TMP_FAIL(session_info->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    LOG_WARN("failed to update sys variable for compatibility mode", K(current_mode), KPC(session_info));
+    // the inner_connection must be mysql_mode, so that we can write inner_table
+    inner_conn->set_mysql_compat_mode();
   }
   return ret;
 }
@@ -505,71 +490,38 @@ int ObInnerConnectionLockUtil::execute_write_sql(observer::ObInnerSQLConnection 
                                                  int64_t &affected_rows)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  sql::ObSQLSessionInfo *session = nullptr;
-  ObObj current_mode;
-  ObObj mysql_mode;
-  mysql_mode.set_int(0);
-  current_mode.set_int(-1);
 
-  // If we want to executre dml with mysql_mode, thread worker and session need to meet 2 conditions:
-  // 1. The thread worker is in mysql_mode, it depends on the connection itself, we cannot modify it;
-  // 2. The sys_variable of session should be mysql_mode. Otherwise, it will trigger defensive check.
+  // NOTICE: This will be overwritten by the oracle_made_ field on connection,
+  // but for safety reason, we still set up a compat_guard here.
+  lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
+
   if (OB_ISNULL(conn)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inner_conn is nullptr", K(sql));
-  } else if (OB_ISNULL(session = &conn->get_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session_info is nullptr", K(sql));
-  } else if (OB_FAIL(session->get_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
-    LOG_WARN("can not get the compat_mode", K(sql));
-  } else if (current_mode != mysql_mode
-             && OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, mysql_mode))) {
-    LOG_WARN("update compat_mode to mysql_mode failed", K(sql));
+    LOG_ERROR("inner_conn is nullptr", K(ret), K(sql));
   } else if (OB_FAIL(conn->execute_write(MTL_ID(), sql.ptr(), affected_rows))) {
-    LOG_WARN("execute write for inner_sql failed", K(sql));
+    LOG_WARN("execute write sql failed", K(ret), K(sql));
   }
-  if (current_mode != mysql_mode && current_mode.get_int() != -1
-      && OB_TMP_FAIL(session->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    LOG_WARN("failed to update sys variable for compatibility mode", K(current_mode), K(sql));
-  }
+  LOG_DEBUG("ObInnerConnectionLockUtil::execute_write_sql", K(ret), KP(conn), K(conn->is_oracle_compat_mode()));
   return ret;
 }
+
 int ObInnerConnectionLockUtil::execute_read_sql(observer::ObInnerSQLConnection *conn,
                                                 const ObSqlString &sql,
                                                 ObISQLClient::ReadResult &res)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  sql::ObSQLSessionInfo *session = nullptr;
-  ObObj current_mode;
-  ObObj mysql_mode;
-  mysql_mode.set_int(0);
-  current_mode.set_int(-1);
 
-  // If we want to executre dml with mysql_mode, thread worker and session need to meet 2 conditions:
-  // 1. The thread worker is in mysql_mode, it depends on the connection itself, we cannot modify it;
-  // 2. The sys_variable of session should be mysql_mode. Otherwise, it will trigger defensive check.
+  // NOTICE: This will be overwritten by the oracle_made_ field on connection,
+  // but for safety reason, we still set up a compat_guard here.
+  lib::CompatModeGuard guard(lib::Worker::CompatMode::MYSQL);
+
   if (OB_ISNULL(conn)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inner_conn is nullptr", K(sql));
-  } else if (OB_ISNULL(session = &conn->get_session())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session_info is nullptr", K(sql));
-  } else if (OB_FAIL(session->get_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
-    LOG_WARN("can not get the compat_mode", K(sql));
-  } else if (current_mode != mysql_mode
-             && OB_FAIL(session->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, mysql_mode))) {
-    LOG_WARN("update compat_mode to mysql_mode failed", K(sql));
+    LOG_ERROR("inner_conn is nullptr", K(ret), K(sql));
   } else if (OB_FAIL(conn->execute_read(MTL_ID(), sql.ptr(), res))) {
-    LOG_WARN("execute write for inner_sql failed", K(sql));
+    LOG_WARN("execute read sql failed", K(ret), K(sql));
   }
-  if (current_mode != mysql_mode && current_mode.get_int() != -1
-      && OB_TMP_FAIL(session->update_sys_variable(share::SYS_VAR_OB_COMPATIBILITY_MODE, current_mode))) {
-    ret = OB_SUCCESS == ret ? tmp_ret : ret;
-    LOG_WARN("failed to update sys variable for compatibility mode", K(current_mode), K(sql));
-  }
+  LOG_DEBUG("ObInnerConnectionLockUtil::execute_read_sql", K(ret), KP(conn), K(conn->is_oracle_compat_mode()));
   return ret;
 }
 
@@ -967,7 +919,6 @@ int ObInnerConnectionLockUtil::get_org_cluster_id_(ObSQLSessionInfo *session, in
   }
   return ret;
 }
-
 #undef REQUEST_LOCK_4_1
 } // tablelock
 } // transaction

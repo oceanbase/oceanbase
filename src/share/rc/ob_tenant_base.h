@@ -66,6 +66,9 @@ namespace blocksstable {
   class ObSharedMacroBlockMgr;
   class ObDecodeResourcePool;
 }
+namespace tmp_file {
+  class ObTenantTmpFileManager;
+}
 namespace storage {
 namespace mds {
 class ObTenantMdsService;
@@ -257,6 +260,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       ObPartTransCtxObjPool*,                        \
       ObTableScanIteratorObjPool*,                   \
       common::ObTenantIOManager*,                    \
+      tmp_file::ObTenantTmpFileManager*,             \
       storage::mds::ObTenantMdsService*,             \
       storage::ObStorageLogger*,                     \
       blocksstable::ObSharedMacroBlockMgr*,          \

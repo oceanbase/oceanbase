@@ -1533,6 +1533,9 @@ struct ObExprEqualCheckContext
   bool ignore_param_; // only compare structure of expr
   bool ora_numeric_compare_;
   int64_t error_code_; //error code to return
+
+private:
+  DISABLE_COPY_ASSIGN(ObExprEqualCheckContext);
 };
 
 struct ObExprParamCheckContext : ObExprEqualCheckContext
@@ -1571,6 +1574,9 @@ struct ObExprParamCheckContext : ObExprEqualCheckContext
   const ObIArray<ObHiddenColumnItem> *calculable_items_; // from query context
   const common::ObIArray<ObPCParamEqualInfo> *equal_param_constraints_;
   EqualSets *equal_sets_;
+
+private:
+  DISABLE_COPY_ASSIGN(ObExprParamCheckContext);
 };
 
 enum ObVarType
@@ -3909,7 +3915,8 @@ public:
     OBJ_ACCESS_OUT,
     LOCAL_OUT,
     PACKAGE_VAR_OUT,
-    SUBPROGRAM_VAR_OUT
+    SUBPROGRAM_VAR_OUT,
+    OBJ_ACCESS_INOUT
   };
 
   OutType type_;
@@ -3931,7 +3938,8 @@ public:
   OB_INLINE bool is_local_out() const { return OutType::LOCAL_OUT == type_; }
   OB_INLINE bool is_package_var_out() const { return OutType::PACKAGE_VAR_OUT == type_; }
   OB_INLINE bool is_subprogram_var_out() const { return OutType::SUBPROGRAM_VAR_OUT == type_; }
-  OB_INLINE bool is_obj_access_out() const { return OutType::OBJ_ACCESS_OUT == type_; }
+  OB_INLINE bool is_obj_access_out() const { return OutType::OBJ_ACCESS_OUT == type_ || OutType::OBJ_ACCESS_INOUT == type_; }
+  OB_INLINE bool is_obj_access_pure_out() const { return OutType::OBJ_ACCESS_OUT == type_; }
 
   OB_INLINE int64_t get_index() const { return id1_; }
   OB_INLINE int64_t get_subprogram_id() const { return id2_; }

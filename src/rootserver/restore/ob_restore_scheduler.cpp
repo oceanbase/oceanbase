@@ -419,16 +419,21 @@ int ObRestoreScheduler::restore_pre(const ObPhysicalRestoreJob &job_info)
     LOG_WARN("fail to restore root key", K(ret));
   } else if (OB_FAIL(restore_keystore(job_info))) {
     LOG_WARN("fail to restore keystore", K(ret), K(job_info));
-  } else {
-    if (OB_FAIL(fill_restore_statistics(job_info))) {
-      LOG_WARN("fail to fill restore statistics", K(ret), K(job_info));
-    }
+  } else if (OB_FAIL(fill_restore_statistics(job_info))) {
+    LOG_WARN("fail to fill restore statistics", K(ret), K(job_info));
+  }
+
+  if (OB_IO_ERROR == ret || OB_SUCC(ret)) {
     int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = try_update_job_status(*sql_proxy_, ret, job_info))) {
+    if (OB_TMP_FAIL(try_update_job_status(*sql_proxy_, ret, job_info))) {
       LOG_WARN("fail to update job status", K(ret), K(tmp_ret), K(job_info));
     }
+
+    ret = COVER_SUCC(tmp_ret);
   }
+
   LOG_INFO("[RESTORE] restore pre", K(ret), K(job_info));
+
   return ret;
 }
 
@@ -516,12 +521,23 @@ int ObRestoreScheduler::convert_tde_parameters(
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_RESTORE_ROOT_KEY_FAILED);
 int ObRestoreScheduler::restore_root_key(const share::ObPhysicalRestoreJob &job_info)
 {
   int ret = OB_SUCCESS;
+
+#ifdef ERRSIM
+  ret = EN_RESTORE_ROOT_KEY_FAILED ? : OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+    LOG_WARN("fake EN_RESTORE_ROOT_KEY_FAILED", K(ret));
+  }
+#endif
+
 #ifdef OB_BUILD_TDE_SECURITY
-  int64_t idx = job_info.get_multi_restore_path_list().get_backup_set_path_list().count() - 1;
-  if (idx < 0) {
+  int64_t idx = 0;
+  if (OB_FAIL(ret)) {
+  } else if (FALSE_IT(idx = job_info.get_multi_restore_path_list().get_backup_set_path_list().count() - 1)) {
+  } else if (idx < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid job info", K(ret), K(idx), K(job_info));
   } else if (OB_ISNULL(srv_rpc_proxy_) || OB_ISNULL(sql_proxy_)) {

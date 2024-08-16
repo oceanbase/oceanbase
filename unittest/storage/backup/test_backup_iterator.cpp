@@ -24,6 +24,7 @@
 #include "test_backup_include.h"
 #include "share/backup/ob_backup_io_adapter.h"
 #include "lib/string/ob_string.h"
+#include "mtlenv/mock_tenant_module_env.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -111,7 +112,11 @@ void TestBackupIndexIterator::SetUp()
   }
   // set observer memory limit
   CHUNK_MGR.set_limit(8L * 1024L * 1024L * 1024L);
-  ret = ObTmpFileManager::get_instance().init();
+
+  ASSERT_EQ(OB_SUCCESS, common::ObClockGenerator::init());
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpBlockCache::get_instance().init("tmp_block_cache", 1));
+  ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("tmp_page_cache", 1));
+
   if (OB_INIT_TWICE == ret) {
     ret = OB_SUCCESS;
   } else {
@@ -124,6 +129,14 @@ void TestBackupIndexIterator::SetUp()
   EXPECT_EQ(OB_SUCCESS, ObTenantIOManager::mtl_init(io_service));
   EXPECT_EQ(OB_SUCCESS, io_service->start());
   tenant_ctx.set(io_service);
+
+  tmp_file::ObTenantTmpFileManager *tf_mgr = nullptr;
+  EXPECT_EQ(OB_SUCCESS, mtl_new_default(tf_mgr));
+  EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
+  tf_mgr->page_cache_controller_.write_buffer_pool_.default_wbp_memory_limit_ = 40*1024*1024;
+  EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
+  tenant_ctx.set(tf_mgr);
+
   ObTenantEnv::set_tenant(&tenant_ctx);
   inner_init_();
   ASSERT_EQ(OB_SUCCESS, bandwidth_throttle_.init(1024 * 1024 * 60));
@@ -131,8 +144,10 @@ void TestBackupIndexIterator::SetUp()
 
 void TestBackupIndexIterator::TearDown()
 {
-  ObTmpFileManager::get_instance().destroy();
+  tmp_file::ObTmpBlockCache::get_instance().destroy();
+  tmp_file::ObTmpPageCache::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();
+  common::ObClockGenerator::destroy();
 }
 
 void TestBackupIndexIterator::inner_init_()

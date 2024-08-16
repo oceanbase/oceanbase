@@ -772,7 +772,7 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
       case REBUILD_BACKUP_TASK:
       case REBUILD_BACKUP_DDL_TASK:
         for (int64_t i = 0; i < roots_.count(); ++i) {
-          if (roots_[i]->meta_block_info_.in_disk()) {
+          if (roots_[i]->index_tree_info_.in_disk()) {
             all_in_mem = false;
             break;
           }

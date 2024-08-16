@@ -616,6 +616,29 @@ void ObIOResult::cancel()
   }
 }
 
+int ObIOResult::wait(int64_t wait_ms)
+{
+  int ret = OB_SUCCESS;
+  ObThreadCondGuard guard(cond_);
+  if (OB_FAIL(guard.get_ret())) {
+    LOG_ERROR("fail to guard result condition", K(ret));
+  } else {
+    int64_t begin_ms = ObTimeUtility::current_time();
+    while (OB_SUCC(ret) && !is_finished_ && wait_ms > 0) {
+      if (OB_FAIL(cond_.wait(wait_ms))) {
+        LOG_WARN("fail to wait result condition", K(ret), K(wait_ms), K(*this));
+      } else if (!is_finished_) {
+        int64_t duration_ms = ObTimeUtility::current_time() - begin_ms;
+        wait_ms -= duration_ms;
+      }
+    }
+    if (OB_UNLIKELY(wait_ms <= 0)) { // rarely happen
+      ret = OB_TIMEOUT;
+    }
+  }
+  return ret;
+}
+
 void ObIOResult::inc_ref(const char *msg)
 {
   (void)ATOMIC_FAA(&result_ref_cnt_, 1);
@@ -1449,13 +1472,19 @@ bool ObIOHandle::is_valid() const
   return nullptr != result_;
 }
 
-int ObIOHandle::wait()
+int ObIOHandle::wait(const int64_t wait_timeout_ms)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(result_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("The IOHandle has not been inited, ", K(ret));
-  } else if (!result_->is_finished_) {
+  } else if (OB_FAIL(result_->ret_code_.io_ret_)) {
+    LOG_WARN("IO error, ", K(ret), K(*result_));
+  } else if (result_->is_finished_) {
+    // do nothing
+  } else if (0 == wait_timeout_ms) {
+    ret = OB_EAGAIN;
+  } else if (UINT64_MAX == wait_timeout_ms) {
     const int64_t timeout_ms = ((result_->begin_ts_ > 0 ? result_->begin_ts_ + result_->timeout_us_ : 0)
                                 - ObTimeUtility::current_time()) / 1000L;
     ObWaitEventGuard wait_guard(result_->flag_.get_wait_event(),
@@ -1464,30 +1493,26 @@ int ObIOHandle::wait()
     const int64_t real_wait_timeout = min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, timeout_ms);
 
     if (real_wait_timeout > 0) {
-      ObThreadCondGuard guard(result_->cond_);
-      if (OB_FAIL(guard.get_ret())) {
-        LOG_ERROR("fail to guard result condition", K(ret));
-      } else {
-        int64_t wait_ms = real_wait_timeout;
-        int64_t begin_ms = ObTimeUtility::current_time();
-        while (OB_SUCC(ret) && !result_->is_finished_ && wait_ms > 0) {
-          if (OB_FAIL(result_->cond_.wait(wait_ms))) {
-            LOG_WARN("fail to wait result condition", K(ret), K(wait_ms), K(*result_));
-          } else if (!result_->is_finished_) {
-            int64_t duration_ms = ObTimeUtility::current_time() - begin_ms;
-            wait_ms = real_wait_timeout - duration_ms;
-          }
-        }
-        if (OB_UNLIKELY(wait_ms <= 0)) { // rarely happen
-          ret = OB_TIMEOUT;
-          LOG_WARN("fail to wait result condition due to spurious wakeup",
-              K(ret), K(wait_ms), K(*result_));
+      int64_t wait_ms = real_wait_timeout;
+      if (OB_FAIL(result_->wait(wait_ms))) {
+        if (OB_TIMEOUT == ret) {  // rarely happen
+          LOG_WARN("fail to wait result condition due to spurious wakeup", K(ret), K(wait_ms), K(*result_));
         }
       }
     } else if (result_->is_finished_) {
       // do nothing
     } else {
       ret = OB_TIMEOUT;
+    }
+  } else {
+    int64_t wait_ms = wait_timeout_ms;
+    if (OB_FAIL(result_->wait(wait_ms))) {
+      if (OB_TIMEOUT == ret) {
+        const int64_t real_wait_timeout = min(OB_IO_MANAGER.get_io_config().data_storage_io_timeout_ms_, result_->timeout_us_ / 1000L);
+        if ((ObTimeUtility::current_time() - result_->begin_ts_) / 1000L < real_wait_timeout) {
+          ret = OB_EAGAIN;
+        }
+      }
     }
   }
   if (OB_SUCC(ret)) {

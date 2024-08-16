@@ -14,7 +14,6 @@
 
 #include "ob_table_access_param.h"
 #include "ob_dml_param.h"
-#include "ob_sstable_index_filter.h"
 #include "storage/ob_relative_table.h"
 #include "storage/tablet/ob_tablet.h"
 #include "share/schema/ob_table_dml_param.h"
@@ -165,6 +164,23 @@ int ObTableIterParam::get_cg_column_param(const share::schema::ObColumnParam *&c
     STORAGE_LOG(WARN, "unexpected read info", K(ret), KPC(read_info_));
   } else {
     column_param = cg_col_param_;
+  }
+  return ret;
+}
+
+int ObTableIterParam::build_index_filter_for_row_store(common::ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (!is_use_column_store() && enable_pd_blockscan()
+      && enable_pd_filter() && enable_skip_index() && nullptr != pushdown_filter_) {
+    if (OB_FAIL(ObSSTableIndexFilterFactory::build_sstable_index_filter(
+                  false,
+                  get_read_info(),
+                  *pushdown_filter_,
+                  allocator,
+                  sstable_index_filter_))) {
+      STORAGE_LOG(WARN, "Failed to build sstable index filter", K(ret), KPC(this));
+    }
   }
   return ret;
 }
@@ -328,19 +344,7 @@ int ObTableAccessParam::init(
       iter_param_.set_use_stmt_iter_pool();
     }
 
-    if (!iter_param_.is_use_column_store()
-        && iter_param_.enable_pd_blockscan()
-        && iter_param_.enable_pd_filter()
-        && iter_param_.enable_skip_index()
-        && nullptr != iter_param_.pushdown_filter_
-        && OB_FAIL(ObSSTableIndexFilterFactory::build_sstable_index_filter(
-                false,
-                iter_param_.get_read_info(),
-                *iter_param_.pushdown_filter_,
-                scan_param.scan_allocator_,
-                iter_param_.sstable_index_filter_))) {
-      STORAGE_LOG(WARN, "Failed to build sstable index filter", K(ret), K(iter_param_));
-    } else if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
+    if (OB_FAIL(iter_param_.refresh_lob_column_out_status())) {
       STORAGE_LOG(WARN, "Failed to refresh lob column out status", K(ret), K(iter_param_));
     } else if (scan_param.use_index_skip_scan() &&
         OB_FAIL(get_prefix_cnt_for_skip_scan(scan_param, iter_param_))) {
