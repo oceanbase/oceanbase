@@ -19,7 +19,6 @@ namespace oceanbase
 {
 namespace tools
 {
-// memory issue
 // lock free
 struct ObAdminBackupValidationStat final
 {

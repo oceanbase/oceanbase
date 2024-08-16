@@ -549,6 +549,8 @@ public:
 private:
   int check_backup_piece_info_();
   int collect_and_check_piece_ls_info_();
+  int inner_collect_active_piece_ls_info_(const share::ObPieceKey &backup_piece_key,
+                                          const ObAdminBackupPieceAttr &backup_piece_attr);
   int collect_and_check_piece_ls_onefile_length_();
   void post_process_(int ret);
 

@@ -36,6 +36,10 @@ public:
   virtual int execute(int argc, char *argv[]) override;
   static const int64_t MAX_TABLET_BATCH_COUNT = 512;      // for one dag
   static const int64_t MAX_MACRO_BLOCK_BATCH_COUNT = 128; // for one task
+  static const int64_t DEFAULT_BACKUP_SET_BUCKET_NUM = 16;
+  static const int64_t DEFAULT_BACKUP_PIECE_BUCKET_NUM = 64;
+  static const int64_t DEFAULT_BACKUP_LS_BUCKET_NUM = 16;
+  static const int64_t DEFAULT_BACKUP_TABLET_BUCKET_NUM = 4096;
 
 private:
   int parse_cmd_(int argc, char *argv[]);

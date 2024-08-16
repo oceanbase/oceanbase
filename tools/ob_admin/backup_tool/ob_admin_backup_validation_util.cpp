@@ -26,7 +26,7 @@ int ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(str) || strlen(str) == 0) {
+  if (OB_ISNULL(str) || 0 == STRLEN(str)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(ret), KP(str));
   } else {
@@ -119,8 +119,8 @@ int ObAdminBackupValidationUtil::get_tenant_meta_index_retry_id(
     backup::ObBackupDataFileRangeOp file_range_op(file_name_prefix);
     if (OB_FAIL(share::ObBackupPathUtil::get_ls_info_data_info_dir_path(
             backup_set_dest, backup_data_type, turn_id, full_path))) {
-    } else if (OB_FAIL(util.list_files(full_path.get_obstr(), backup_set_dest.get_storage_info(),
-                                       file_range_op))) {
+    } else if (OB_FAIL(util.adaptively_list_files(
+                   full_path.get_obstr(), backup_set_dest.get_storage_info(), file_range_op))) {
       STORAGE_LOG(WARN, "failed to list files", K(ret), K(full_path), K(file_name_prefix));
     } else if (OB_FAIL(file_range_op.get_file_list(id_list))) {
       STORAGE_LOG(WARN, "failed to get file list", K(ret), K(full_path), K(file_name_prefix));
@@ -356,6 +356,125 @@ int ObAdminBackupValidationUtil::read_macro_block_data(
       STORAGE_LOG(DEBUG, "succeed to read macro data", K(ret), K(full_path),
                   K(macro_index.logic_id_));
     }
+  }
+  if (OB_NOT_NULL(ctx) && OB_FAIL(ret)) {
+    ctx->go_abort(full_path.get_ptr(), "File not exist or physical corrputed");
+  }
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::get_ls_ids_from_active_piece(
+    const share::ObBackupDest &backup_piece_dest, common::ObArray<share::ObLSID> &ls_ids,
+    ObAdminBackupValidationCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter util;
+  ObArray<ObIODirentEntry> d_entrys;
+  ObDirPrefixEntryNameFilter prefix_op(d_entrys);
+  char logstream_prefix[OB_BACKUP_DIR_PREFIX_LENGTH] = {0};
+  if (OB_FAIL(databuff_printf(logstream_prefix, sizeof(logstream_prefix), "%s", "logstream_"))) {
+    STORAGE_LOG(WARN, "failed to set log stream prefix", K(ret));
+  } else if (OB_FAIL(prefix_op.init(logstream_prefix, strlen(logstream_prefix)))) {
+    STORAGE_LOG(WARN, "failed to init dir prefix", K(ret), K(logstream_prefix));
+  } else if (OB_FAIL(util.list_directories(backup_piece_dest.get_root_path(),
+                                           backup_piece_dest.get_storage_info(), prefix_op))) {
+    STORAGE_LOG(WARN, "failed to list files", K(ret));
+  } else {
+    ObIODirentEntry tmp_entry;
+    ObLSID ls_id;
+    for (int64_t i = 0; OB_SUCC(ret) && i < d_entrys.count(); ++i) {
+      int64_t id_val = 0;
+      tmp_entry = d_entrys.at(i);
+      if (OB_ISNULL(tmp_entry.name_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "file name is null", K(ret));
+      } else if (sscanf(tmp_entry.name_, "logstream_%ld", &id_val) != 1) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "file name is null", K(ret));
+      } else if (FALSE_IT(ls_id = id_val)) {
+      } else if (OB_FAIL(ls_ids.push_back(ls_id))) {
+        STORAGE_LOG(WARN, "failed to push back ls_ids", K(ret));
+      }
+    }
+  }
+  if (OB_NOT_NULL(ctx) && OB_FAIL(ret)) {
+    ctx->go_abort(backup_piece_dest.get_root_path().ptr(), "File not exist or physical corrputed");
+  }
+  return ret;
+}
+
+int ObAdminBackupValidationUtil::get_piece_ls_start_lsn(
+    const share::ObBackupDest &backup_piece_dest, const share::ObLSID &ls_id, uint64_t &start_lsn,
+    ObAdminBackupValidationCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  class ObLSStartFileGetterOp final : public ObBaseDirEntryOperator
+  {
+  public:
+    ObLSStartFileGetterOp() : min_file_id_(INT64_MAX) {}
+    ~ObLSStartFileGetterOp() {}
+    int func(const dirent *entry) override
+    {
+      // The format of archive file name is like '100.obarc'.
+      int ret = OB_SUCCESS;
+      int64_t file_id_ = INT64_MAX;
+      char *endptr = NULL;
+      const char *filename = NULL;
+      if (OB_ISNULL(entry)) {
+        ret = OB_INVALID_ARGUMENT;
+        STORAGE_LOG(WARN, "invalid entry", K(ret));
+      } else if (OB_FALSE_IT(filename = entry->d_name)) {
+      } else if (STRLEN(filename) <= STRLEN(OB_ARCHIVE_SUFFIX)) {
+        STORAGE_LOG(WARN, "ignore invalid file name", KCSTRING(filename));
+      } else if (OB_FAIL(ob_strtoll(filename, endptr, file_id_))) {
+        STORAGE_LOG(WARN, "ignore invalid file name", K(ret), KCSTRING(filename));
+        ret = OB_SUCCESS;
+      } else if (OB_ISNULL(endptr) || 0 != STRCMP(endptr, OB_ARCHIVE_SUFFIX)) {
+        STORAGE_LOG(WARN, "ignore invalid file name", KCSTRING(filename));
+      } else if (file_id_ < min_file_id_) {
+        min_file_id_ = file_id_;
+      }
+      return ret;
+    }
+    int get_start_file_path(share::ObBackupPath &piece_ls_dir)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(piece_ls_dir.join(min_file_id_, ObBackupFileSuffix::ARCHIVE))) {
+        STORAGE_LOG(WARN, "failed to join file id", K(ret), K(min_file_id_));
+      }
+      return ret;
+    }
+    TO_STRING_KV(K_(min_file_id));
+
+  private:
+    int64_t min_file_id_;
+
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObLSStartFileGetterOp);
+  };
+
+  share::ObBackupPath full_path;
+  ObBackupIoAdapter util;
+  ObLSStartFileGetterOp op;
+  archive::ObArchiveFileHeader file_header;
+  int64_t pos = 0;
+  if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(backup_piece_dest, ls_id, full_path))) {
+    STORAGE_LOG(WARN, "failed to get piece ls log dir path", K(ret), K(backup_piece_dest),
+                K(ls_id));
+  } else if (OB_FAIL(util.adaptively_list_files(full_path.get_ptr(),
+                                                backup_piece_dest.get_storage_info(), op))) {
+    STORAGE_LOG(WARN, "failed to list files", K(ret), K(full_path));
+  } else if (OB_FAIL(op.get_start_file_path(full_path))) {
+    STORAGE_LOG(WARN, "failed to get start file path", K(ret), K(full_path));
+  } else if (OB_FAIL(backup_reader<archive::ObArchiveFileHeader>::read_backup_struct(
+                 full_path, *backup_piece_dest.get_storage_info(), file_header, pos, ctx))) {
+    STORAGE_LOG(WARN, "failed to read backup struct", K(ret), K(full_path));
+  } else if (!file_header.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "invalid file header", K(ret), K(file_header));
+  } else {
+    start_lsn = file_header.start_lsn_;
+    STORAGE_LOG(DEBUG, "succeed to get piece ls start lsn", K(ret), K(start_lsn), K(full_path));
   }
   if (OB_NOT_NULL(ctx) && OB_FAIL(ret)) {
     ctx->go_abort(full_path.get_ptr(), "File not exist or physical corrputed");

@@ -297,9 +297,12 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
         {
           share::ObPieceKey backup_piece_key;
           backup_piece_key.reset();
-          sscanf(str->ptr(), "d%ldr%ldp%ld", &backup_piece_key.dest_id_,
-                 &backup_piece_key.round_id_, &backup_piece_key.piece_id_);
-          if (OB_FAIL(ctx_->backup_piece_key_array_.push_back(backup_piece_key))) {
+          if (sscanf(str->ptr(), "d%ldr%ldp%ld", &backup_piece_key.dest_id_,
+                     &backup_piece_key.round_id_, &backup_piece_key.piece_id_)
+              != 3) {
+            ret = OB_INVALID_ARGUMENT;
+            STORAGE_LOG(WARN, "invalid argument", K(ret));
+          } else if (OB_FAIL(ctx_->backup_piece_key_array_.push_back(backup_piece_key))) {
             STORAGE_LOG(WARN, "failed to push back backup_piece_key", K(ret));
           }
         }
@@ -350,11 +353,11 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
         ret = OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "invalid argument", K(ret));
       }
-      if (STRCASECMP(optarg, "none") == 0) {
+      if (0 == STRCASECMP(optarg, "none")) {
         ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_NONE;
-      } else if (STRCASECMP(optarg, "physical") == 0) {
+      } else if (0 == STRCASECMP(optarg, "physical")) {
         ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
-      } else if (STRCASECMP(optarg, "logical") == 0) {
+      } else if (0 == STRCASECMP(optarg, "logical")) {
         ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_LOGICAL;
       }
 
