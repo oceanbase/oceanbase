@@ -14,7 +14,7 @@
 #define OCEANBASE_ROOTSERVER_OB_BALANCE_GROUP_DEFINE_H_
 #include "lib/ob_define.h"
 #include "lib/string/ob_fixed_length_string.h"
-#include "share/ob_ls_id.h"
+#include "lib/utility/ob_print_utils.h"     // TO_STRING_KV
 
 namespace oceanbase
 {

@@ -46,6 +46,7 @@ public:
                          balance_job_(),
                          balance_tasks_(),
                          task_mode_(GEN_BG_STAT),
+                         scatter_mode_(SCATTER_INVALID),
                          primary_zone_num_(-1),
                          unit_group_num_(-1)
   {}
@@ -63,7 +64,8 @@ public:
       common::ObMySQLProxy *sql_proxy,
       const int64_t primary_zone_num,
       const int64_t unit_group_num,
-      TaskMode mode = GEN_BG_STAT);
+      TaskMode mode = GEN_BG_STAT,
+      const ObPartitionScatterMode &scatter_mode = SCATTER_ROUND_ROBIN);
   void destroy();
   int process();
 
@@ -161,7 +163,7 @@ private:
   int add_part_to_bg_map_(
       const ObLSID &ls_id,
       ObBalanceGroup &bg,
-      const ObObjectID &bg_unit_id,
+      const schema::ObSimpleTableSchemaV2 &table_schema,
       const uint64_t part_group_uid,
       const ObTransferPartInfo &part_info,
       const int64_t tablet_size);
@@ -201,6 +203,7 @@ private:
   ObArray<ObBalanceTask> balance_tasks_;
 
   TaskMode task_mode_;
+  ObPartitionScatterMode scatter_mode_;
   //for generate balance job
   int64_t primary_zone_num_;
   int64_t unit_group_num_;

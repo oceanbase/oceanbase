@@ -12,7 +12,6 @@
 #define USING_LOG_PREFIX BALANCE
 
 #include "lib/ob_define.h"              // OB_FLOAT_EPSINON
-
 #include "ob_ls_balance_group_info.h"
 
 namespace oceanbase
@@ -22,13 +21,15 @@ using namespace common;
 namespace rootserver
 {
 
-int ObLSBalanceGroupInfo::init(const ObLSID &ls_id, int64_t balanced_ls_num)
+int ObLSBalanceGroupInfo::init(const ObLSID &ls_id, const int64_t balanced_ls_num,
+                              const ObPartitionScatterMode &scatter_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret), K(inited_), K(ls_id), KPC(this));
-  } else if (OB_UNLIKELY(!ls_id.is_valid() || balanced_ls_num <= 0)) {
+  } else if (OB_UNLIKELY(!ls_id.is_valid() || balanced_ls_num <= 0
+                        || scatter_mode <= SCATTER_INVALID || scatter_mode >= SCATTER_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(ls_id), K(balanced_ls_num));
   } else if (OB_FAIL(bg_map_.create(MAP_BUCKET_NUM, "LSBGMap"))) {
@@ -38,6 +39,7 @@ int ObLSBalanceGroupInfo::init(const ObLSID &ls_id, int64_t balanced_ls_num)
   } else {
     ls_id_ = ls_id;
     balanced_ls_num_ = balanced_ls_num;
+    scatter_mode_ = scatter_mode;
     inited_ = true;
   }
   return ret;
@@ -53,17 +55,17 @@ void ObLSBalanceGroupInfo::destroy()
       bg = NULL;
     }
   }
-
   bg_map_.destroy();
   orig_part_group_cnt_map_.destroy();
   ls_id_.reset();
   balanced_ls_num_ = 0;
+  scatter_mode_ = SCATTER_INVALID;
   inited_ = false;
 }
 
 int ObLSBalanceGroupInfo::append_part_into_balance_group(
     const ObBalanceGroupID &bg_id,
-    const ObObjectID &bg_unit_id,
+    const schema::ObSimpleTableSchemaV2 &table_schema,
     const uint64_t part_group_uid,
     share::ObTransferPartInfo &part,
     const int64_t data_size)
@@ -83,8 +85,9 @@ int ObLSBalanceGroupInfo::append_part_into_balance_group(
   } else if (OB_ISNULL(bg)) {
     ret = OB_INVALID_DATA;
     LOG_WARN("balance group is invalid", KR(ret), KPC(bg), K(bg_id));
-  } else if (OB_FAIL(bg->append_part(bg_unit_id, part_group_uid, part, data_size))) {
-    LOG_WARN("append part info balance group fail", KR(ret), K(part), K(data_size), K(part_group_uid));
+  } else if (OB_FAIL(bg->append_part(table_schema, part_group_uid, part, data_size))) {
+    LOG_WARN("append part info balance group fail", KR(ret), K(part), K(data_size),
+            K(part_group_uid), K(table_schema));
   } else if (FALSE_IT(part_group_cnt = bg->get_part_group_count())) {
   } else if (OB_FAIL(orig_part_group_cnt_map_.set_refactored(bg_id, part_group_cnt, 1/*overwrite*/))) {
     LOG_WARN("overwrite partition group count map fail", KR(ret), K(bg_id), K(part_group_cnt));
@@ -109,7 +112,7 @@ int ObLSBalanceGroupInfo::get_or_create_(const ObBalanceGroupID &bg_id,
       } else if (OB_ISNULL(bg = new(buf) ObBalanceGroupInfo(alloc_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("construct ObBalanceGroupInfo fail", KR(ret), K(bg_size), K(buf), K(bg_id));
-      } else if (OB_FAIL(bg->init(bg_id, ls_id_, balanced_ls_num_))) {
+      } else if (OB_FAIL(bg->init(bg_id, ls_id_, balanced_ls_num_, scatter_mode_))) {
         LOG_WARN("init ObBalanceGroupInfo fail", KR(ret), KPC(bg));
       } else if (OB_FAIL(bg_map_.set_refactored(bg_id, bg))) {
         LOG_WARN("set into balance group map fail", KR(ret), K(bg_id), KPC(bg));
@@ -128,6 +131,7 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(ObLSBalanceGroupInfo &dst_ls_bg
                                                 share::ObTransferPartList &part_list)
 {
   int ret = OB_SUCCESS;
+  ObIPartGroupInfo *pg_info = nullptr;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
@@ -177,11 +181,21 @@ int ObLSBalanceGroupInfo::transfer_out_by_factor(ObLSBalanceGroupInfo &dst_ls_bg
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("remove count should be greater than avail count", K(avail_count), K(remove_count));
           // transfer out part only when remove count > 0
-        } else if (OB_LIKELY(remove_count > 0)
-                  && OB_FAIL(src_bg_info->transfer_out(remove_count, *dst_bg_info,
-                                                      part_list, removed_part_count))) {
-          LOG_WARN("remove from balance group fail", KR(ret), K(remove_count), K(part_list),
-                  KPC(src_bg_info), KPC(dst_bg_info));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < remove_count; i++) {
+            if (OB_FAIL(src_bg_info->transfer_out(*dst_bg_info, pg_info))) {
+              LOG_WARN("fail to transfer out part group", KR(ret), K(dst_bg_info));
+            } else if (OB_UNLIKELY(nullptr == pg_info
+                                  || !pg_info->is_valid()
+                                  || nullptr == pg_info->part_group())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("part group info is invalid", KR(ret), KPC(pg_info));
+            } else if (OB_FAIL(append(part_list, pg_info->part_group()->get_part_list()))) {
+              LOG_WARN("fail to append part list", KR(ret), K(part_list), KPC(pg_info->part_group()));
+            } else {
+              removed_part_count += pg_info->part_group()->get_part_list().count();
+            }
+          }
         }
         FLOG_INFO("transfer out partition groups from LS one balance group by factor", KR(ret),
             K(factor), K_(ls_id), K(bg_id),

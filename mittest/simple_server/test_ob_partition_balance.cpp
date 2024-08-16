@@ -94,7 +94,7 @@ public:
     sql_proxy.write("drop tablegroup if exists my_tablegroup", affected_rows);
   }
 
-  int run(int ls_cnt) {
+  int run(int ls_cnt, ObPartitionScatterMode scatter_mode) {
     int ret = OB_SUCCESS;
     g_ls_cnt = ls_cnt;
     ObPartitionBalance balance_part_job;
@@ -104,7 +104,8 @@ public:
 
     if (OB_FAIL(guard.switch_to(OB_SYS_TENANT_ID))) {
       LOG_WARN("switch tenant", KR(ret));
-    } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_, GCTX.sql_proxy_, 1, 1))) {
+    } else if (OB_FAIL(balance_part_job.init(OB_SYS_TENANT_ID, GCTX.schema_service_,
+        GCTX.sql_proxy_, 1, 1, rootserver::ObPartitionBalance::GEN_TRANSFER_TASK, scatter_mode))) {
       LOG_WARN("balance_part_job init fail", KR(ret));
     } else if (OB_FAIL(balance_part_job.process())) {
       LOG_WARN("balance_part_job process fail", KR(ret));
@@ -118,13 +119,20 @@ public:
         const ObArray<ObBalanceGroupInfo*> &ls_part_groups = iter->second;
         for (int ls_idx = 0; ls_idx < ls_part_groups.count(); ls_idx++) {
           const ObBalanceGroupInfo *part_groups = ls_part_groups.at(ls_idx);
-          ObSqlString part_groups_str;
           ObArray<ObTransferPartGroup *> part_groups_arr;
-          for (auto unit_it = part_groups->bg_units_.begin(); unit_it != part_groups->bg_units_.end(); unit_it++) {
-            const ObBalanceGroupUnit *unit = unit_it->second;
-            for (int i = 0; i < unit->part_group_buckets_.count(); i++) {
-              append(part_groups_arr, unit->part_group_buckets_.at(i));
+          ObSqlString part_groups_str;
+          if (SCATTER_ROUND_ROBIN == scatter_mode) {
+            const ObRRPartGroupContainer *pg_ctn = dynamic_cast<ObRRPartGroupContainer *>(part_groups->pg_container_);
+            for (auto unit_it = pg_ctn->bg_units_.begin(); unit_it != pg_ctn->bg_units_.end(); unit_it++) {
+              const ObBalanceGroupUnit *unit = unit_it->second;
+              for (int i = 0; i < unit->part_group_buckets_.count(); i++) {
+                append(part_groups_arr, unit->part_group_buckets_.at(i));
+              }
             }
+          } else if (SCATTER_SIMPLE == scatter_mode) {
+            const ObSimplePartGroupContainer *pg_ctn =
+              dynamic_cast<ObSimplePartGroupContainer *>(part_groups->pg_container_);
+            append(part_groups_arr, pg_ctn->part_groups_);
           }
           lib::ob_sort(part_groups_arr.begin(), part_groups_arr.end(), [] (const ObTransferPartGroup *left, const ObTransferPartGroup *right) {
             const ObTransferPartInfo &part_left = left->part_list_.at(0);
@@ -176,7 +184,8 @@ TEST_F(ObBalancePartitionTest, empty)
 {
   LOG_INFO("-----------empty-------------");
   for (int i = 1; i <= 2; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, SCATTER_SIMPLE));
+    ASSERT_EQ(OB_SUCCESS, run(i, SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -192,8 +201,13 @@ TEST_F(ObBalancePartitionTest, simple_table)
     sql.assign_fmt("create table basic_%d(col1 int)", i);
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 20; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 20; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -209,8 +223,13 @@ TEST_F(ObBalancePartitionTest, partition)
     int64_t affected_rows = 0;
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 10; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 10; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -225,8 +244,13 @@ TEST_F(ObBalancePartitionTest, subpart)
     int64_t affected_rows = 0;
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 10; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 10; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -250,8 +274,13 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_none)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 3; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -269,8 +298,13 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition1)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 3; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -288,8 +322,13 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition2)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 3; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -310,8 +349,13 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_partition3)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 3; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -329,8 +373,13 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive1)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 3; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -348,8 +397,13 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive2)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 3; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 
@@ -367,8 +421,13 @@ TEST_F(ObBalancePartitionTest, tablegroup_sharding_adaptive3)
     ASSERT_EQ(OB_SUCCESS, sql_proxy.write(sql.ptr(), affected_rows));
   }
 
+  LOG_INFO("-----------scatter_simple-------------");
   for (int i = 1; i <= 3; i++) {
-    ASSERT_EQ(OB_SUCCESS, run(i));
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_SIMPLE));
+  }
+  LOG_INFO("-----------scatter_round_robin-------------");
+  for (int i = 1; i <= 3; i++) {
+    ASSERT_EQ(OB_SUCCESS, run(i, rootserver::SCATTER_ROUND_ROBIN));
   }
 }
 

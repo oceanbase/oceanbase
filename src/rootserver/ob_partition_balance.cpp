@@ -12,7 +12,6 @@
 
 #define USING_LOG_PREFIX BALANCE
 #include "share/schema/ob_schema_getter_guard.h"
-#include "share/tablet/ob_tablet_table_iterator.h"
 #include "share/schema/ob_part_mgr_util.h"
 #include "share/schema/ob_schema_struct.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
@@ -45,16 +44,19 @@ int ObPartitionBalance::init(
     common::ObMySQLProxy *sql_proxy,
     const int64_t primary_zone_num,
     const int64_t unit_group_num,
-    TaskMode task_mode)
+    TaskMode task_mode,
+    const ObPartitionScatterMode &scatter_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObPartitionBalance has inited", KR(ret), K(this));
   } else if (OB_INVALID_TENANT_ID == tenant_id || OB_ISNULL(schema_service) || OB_ISNULL(sql_proxy)
-      || (task_mode != GEN_BG_STAT && task_mode != GEN_TRANSFER_TASK)) {
+      || (task_mode != GEN_BG_STAT && task_mode != GEN_TRANSFER_TASK)
+      || (scatter_mode <= SCATTER_INVALID || scatter_mode >= SCATTER_MAX)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ObPartitionBalance run", KR(ret), K(tenant_id), K(schema_service), K(sql_proxy), K(task_mode));
+    LOG_WARN("ObPartitionBalance run", KR(ret), K(tenant_id), K(schema_service), K(sql_proxy),
+            K(task_mode), K(scatter_mode));
   } else if (OB_FAIL(bg_builder_.init(tenant_id, "PART_BALANCE", *this, *sql_proxy, *schema_service))) {
     LOG_WARN("init all balance group builder fail", KR(ret), K(tenant_id));
   } else if (OB_FAIL(bg_map_.create(40960, lib::ObLabel("PART_BALANCE")))) {
@@ -75,6 +77,7 @@ int ObPartitionBalance::init(
     balance_job_.reset();
     balance_tasks_.reset();
     task_mode_ = task_mode;
+    scatter_mode_ = scatter_mode;
 
     primary_zone_num_ = primary_zone_num;
     unit_group_num_ = unit_group_num;
@@ -114,6 +117,7 @@ void ObPartitionBalance::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
   sql_proxy_ = NULL;
   task_mode_ = GEN_BG_STAT;
+  scatter_mode_ = SCATTER_INVALID;
   primary_zone_num_ = -1;
   unit_group_num_ = -1;
 }
@@ -224,9 +228,6 @@ int ObPartitionBalance::on_new_partition(
   ObBalanceGroup bg = bg_in; // get a copy
   ObLSDesc *src_ls_desc = nullptr;
   ObTransferPartInfo part_info;
-  const ObObjectID bg_unit_id = OB_INVALID_ID != table_schema.get_tablegroup_id()
-      ? table_schema.get_tablegroup_id()
-      : table_schema.get_database_id();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPartitionBalance not inited", KR(ret), K(inited_));
@@ -255,10 +256,10 @@ int ObPartitionBalance::on_new_partition(
                                           false/*update_ls_desc_info*/))) {
       LOG_WARN("add new transfer task fail", KR(ret), K(src_ls_id), K(dest_ls_id));
     }
-  } else if (OB_FAIL(add_part_to_bg_map_(src_ls_id, bg, bg_unit_id, part_group_uid,
+  } else if (OB_FAIL(add_part_to_bg_map_(src_ls_id, bg, table_schema, part_group_uid,
                                         part_info, tablet_size))) {
     LOG_WARN("add new partition group to balance group failed", KR(ret), K(src_ls_id), K(bg),
-            K(bg_unit_id), K(part_group_uid), K(part_info), K(tablet_size));
+            K(table_schema), K(part_group_uid), K(part_info), K(tablet_size));
   } else if (in_new_partition_group && FALSE_IT(src_ls_desc->add_partgroup(1, 0))) {
   } else {
     src_ls_desc->add_data_size(tablet_size);
@@ -269,7 +270,7 @@ int ObPartitionBalance::on_new_partition(
 int ObPartitionBalance::add_part_to_bg_map_(
     const ObLSID &ls_id,
     ObBalanceGroup &bg,
-    const ObObjectID &bg_unit_id,
+    const ObSimpleTableSchemaV2 &table_schema,
     const uint64_t part_group_uid,
     const ObTransferPartInfo &part_info,
     const int64_t tablet_size)
@@ -296,10 +297,12 @@ int ObPartitionBalance::add_part_to_bg_map_(
           if (OB_ISNULL(bg_info = reinterpret_cast<ObBalanceGroupInfo*>(
               allocator_.alloc(sizeof(ObBalanceGroupInfo))))) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("alloc mem fail", KR(ret), K(ls_id), K(bg));
-          } else if (FALSE_IT(new(bg_info) ObBalanceGroupInfo(allocator_))) {
+            LOG_WARN("alloc mem fail", KR(ret));
+          } else if (OB_ISNULL(bg_info = new(bg_info) ObBalanceGroupInfo(allocator_))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("alloc mem fail", KR(ret));
           } else if (OB_FAIL(bg_info->init(bg.id(), ls_desc_array_.at(i)->get_ls_id(),
-                                          ls_desc_array_.count()))) {
+                                          ls_desc_array_.count(), scatter_mode_))) {
             LOG_WARN("failed to init bg_info", KR(ret), K(bg_info));
           } else if (OB_FAIL(bg_ls_array->push_back(bg_info))) {
             LOG_WARN("push_back fail", KR(ret), K(ls_id), K(bg));
@@ -316,9 +319,9 @@ int ObPartitionBalance::add_part_to_bg_map_(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("bg_info is null", KR(ret), K(bg_info), KPC(bg_ls_array), K(idx));
       } else if (bg_info->get_ls_id() == ls_id) {
-        if (OB_FAIL(bg_info->append_part(bg_unit_id, part_group_uid, part_info, tablet_size))) {
+        if (OB_FAIL(bg_info->append_part(table_schema, part_group_uid, part_info, tablet_size))) {
           LOG_WARN("append_part failed", KR(ret), K(bg_ls_array), K(idx), K(part_info),
-                  K(tablet_size), K(part_group_uid), K(bg_unit_id));
+                  K(tablet_size), K(part_group_uid), K(table_schema));
         }
         find_ls = true;
         break;
@@ -336,7 +339,7 @@ int ObPartitionBalance::add_part_to_bg_map_(
 int ObPartitionBalance::process_balance_partition_inner_()
 {
   int ret = OB_SUCCESS;
-
+  ObIPartGroupInfo *pg_info = nullptr;
   FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
     int64_t part_group_sum = 0;
     ObArray<ObBalanceGroupInfo*> &bg_ls_array = iter->second;
@@ -407,15 +410,19 @@ int ObPartitionBalance::process_balance_partition_inner_()
       }
       int64_t transfer_cnt = MIN(ls_more->get_part_group_count() - ls_more_dest,
                                 ls_less_dest - ls_less->get_part_group_count());
-      ObTransferPartGroup *part_group = NULL;
       for (int64_t i = 0; OB_SUCC(ret) && i < transfer_cnt; i++) {
-        if (OB_FAIL(ls_more->transfer_out(*ls_less, part_group))) {
+        if (OB_FAIL(ls_more->transfer_out(*ls_less, pg_info))) {
           LOG_WARN("failed to transfer partition from ls_more to ls_less", KR(ret),
                   KPC(ls_more), KPC(ls_less));
+        } else if (OB_UNLIKELY(nullptr == pg_info
+                              || !pg_info->is_valid()
+                              || nullptr == pg_info->part_group())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid pg_info", KR(ret), KPC(pg_info));
         } else if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(),
-                                              ls_less->get_ls_id(), part_group))) {
+                                              ls_less->get_ls_id(), pg_info->part_group()))) {
           LOG_WARN("add_transfer_task_ fail", KR(ret), K(ls_more->get_ls_id()),
-                  K(ls_less->get_ls_id()));
+                  K(ls_less->get_ls_id()), KPC(pg_info));
         }
       }
     }
@@ -485,6 +492,7 @@ int ObPartitionBalance::process_balance_partition_extend_()
 
   int64_t ls_cnt = ls_desc_array_.count();
   uint64_t part_group_sum = 0;
+  ObIPartGroupInfo *pg_info = nullptr;
   for (int64_t i = 0; i < ls_cnt; i++) {
     part_group_sum += ls_desc_array_.at(i)->get_partgroup_cnt();
   }
@@ -569,13 +577,18 @@ int ObPartitionBalance::process_balance_partition_extend_()
         }
         if (ls_more->get_part_group_count() > ls_less->get_part_group_count()) {
           ObTransferPartGroup *part_group = NULL;
-          if (OB_FAIL(ls_more->transfer_out(*ls_less, part_group))) {
+          if (OB_FAIL(ls_more->transfer_out(*ls_less, pg_info))) {
             LOG_WARN("failed to transfer partition from ls_more to ls_less", KR(ret),
                     KPC(ls_more), KPC(ls_less));
+          } else if (OB_UNLIKELY(nullptr == pg_info
+                                || !pg_info->is_valid()
+                                || nullptr == pg_info->part_group())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid pg_info", KR(ret), KPC(pg_info));
           } else if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(),
-                                                ls_less->get_ls_id(), part_group))) {
+                                                ls_less->get_ls_id(), pg_info->part_group()))) {
             LOG_WARN("add_transfer_task_ fail", KR(ret), K(ls_more->get_ls_id()),
-                    K(ls_less->get_ls_id()));
+                    K(ls_less->get_ls_id()), KPC(pg_info));
           }
           break;
         }
@@ -589,12 +602,7 @@ int ObPartitionBalance::process_balance_partition_extend_()
 int ObPartitionBalance::process_balance_partition_disk_()
 {
   int ret = OB_SUCCESS;
-
   int64_t ls_cnt = ls_desc_array_.count();
-  int64_t part_size_sum = 0;
-  for (int64_t i = 0; i < ls_cnt; i++) {
-    part_size_sum += ls_desc_array_.at(i)->get_data_size();
-  }
   while (OB_SUCC(ret)) {
     lib::ob_sort(ls_desc_array_.begin(), ls_desc_array_.end(), [] (ObLSDesc *l, ObLSDesc *r) {
       if (l->get_data_size() < r->get_data_size()) {
@@ -653,6 +661,8 @@ int ObPartitionBalance::try_swap_part_group_(
     int64_t &swap_cnt)
 {
   int ret = OB_SUCCESS;
+  ObIPartGroupInfo *largest_pg = nullptr;
+  ObIPartGroupInfo *smallest_pg = nullptr;
   FOREACH_X(iter, bg_map_, OB_SUCC(ret)) {
     if (!check_ls_need_swap_(src_ls.get_data_size(), dest_ls.get_data_size())) {
       break;
@@ -678,42 +688,38 @@ int ObPartitionBalance::try_swap_part_group_(
     if (ls_more->get_part_group_count() == 0 || ls_less->get_part_group_count() == 0) {
       continue;
     }
-    ObTransferPartGroup *largest_part_group = NULL;
-    ObTransferPartGroup *smallest_part_group = NULL;
-    ObBalanceGroupInfo::ObPartGroupIndex largest_idx;
-    ObBalanceGroupInfo::ObPartGroupIndex smallest_idx;
     int64_t swap_size = 0;
-    if (OB_FAIL(ls_more->get_largest_part_group(largest_idx, largest_part_group))) {
+    if (OB_FAIL(ls_more->get_largest_part_group(largest_pg))) {
       LOG_WARN("failed to get the largest part group", KR(ret), KPC(ls_more));
-    } else if (OB_FAIL(ls_less->get_smallest_part_group(smallest_idx, smallest_part_group))) {
+    } else if (OB_FAIL(ls_less->get_smallest_part_group(smallest_pg))) {
       LOG_WARN("failed to get the smallest part group", KR(ret), KPC(ls_less));
-    } else if (OB_ISNULL(largest_part_group) || OB_ISNULL(smallest_part_group)) {
+    } else if (OB_UNLIKELY(nullptr == largest_pg || nullptr == smallest_pg
+                          || !largest_pg->is_valid() || !smallest_pg->is_valid()
+                          || nullptr == largest_pg->part_group()
+                          || nullptr == smallest_pg->part_group())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("largest or smallest part group is null", KR(ret), K(largest_part_group),
-              K(smallest_part_group));
-    } else if (FALSE_IT(swap_size = largest_part_group->get_data_size() -
-                                    smallest_part_group->get_data_size())) { // empty
+      LOG_WARN("largest or smallest part group info is invalid", KR(ret), KPC(largest_pg),
+              KPC(smallest_pg));
+    } else if (FALSE_IT(swap_size = largest_pg->part_group()->get_data_size() -
+                                    smallest_pg->part_group()->get_data_size())) { // empty
     } else if (swap_size >= part_group_min_size
               && src_ls.get_data_size() - dest_ls.get_data_size() > swap_size) {
-      LOG_INFO("[PART_BALANCE] swap_partition", KPC(largest_part_group),
-              KPC(smallest_part_group), K(src_ls), K(dest_ls),
+      LOG_INFO("[PART_BALANCE] swap_partition", KPC(largest_pg->part_group()),
+              KPC(smallest_pg->part_group()), K(src_ls), K(dest_ls),
               K(swap_size), K(part_group_min_size));
-      if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(), ls_less->get_ls_id(), largest_part_group))) {
+      if (OB_FAIL(add_transfer_task_(ls_more->get_ls_id(), ls_less->get_ls_id(),
+                                    largest_pg->part_group()))) {
         LOG_WARN("add_transfer_task_ fail", KR(ret), K(ls_more->get_ls_id()), K(ls_less->get_ls_id()));
-      } else if (OB_FAIL(ls_less->append_part_group(largest_idx.bg_unit_id(),
-                                                    largest_idx.bucket_idx(),
-                                                    largest_part_group))) {
-        LOG_WARN("push_back fail", KR(ret), K(ls_less), K(largest_idx), K(largest_part_group));
-      } else if (OB_FAIL(ls_more->remove_part_group(largest_idx))) {
-        LOG_WARN("parts remove", KR(ret), K(ls_more), K(largest_idx));
+      } else if (OB_FAIL(ls_less->append_part_group(*largest_pg))) {
+        LOG_WARN("push_back fail", KR(ret), K(ls_less), K(largest_pg));
+      } else if (OB_FAIL(ls_more->remove_part_group(*largest_pg))) {
+        LOG_WARN("parts remove", KR(ret), K(ls_more), K(largest_pg));
       } else if (OB_FAIL(add_transfer_task_(ls_less->get_ls_id(), ls_more->get_ls_id(),
-                                            smallest_part_group))) {
+                                            smallest_pg->part_group()))) {
         LOG_WARN("add_transfer_task_ fail", KR(ret), K(ls_more->get_ls_id()), K(ls_less->get_ls_id()));
-      } else if (OB_FAIL(ls_more->append_part_group(smallest_idx.bg_unit_id(),
-                                                    smallest_idx.bucket_idx(),
-                                                    smallest_part_group))) {
+      } else if (OB_FAIL(ls_more->append_part_group(*smallest_pg))) {
         LOG_WARN("push_back fail", KR(ret), K(ls_more));
-      } else if (OB_FAIL(ls_less->remove_part_group(smallest_idx))) {
+      } else if (OB_FAIL(ls_less->remove_part_group(*smallest_pg))) {
         LOG_WARN("parts remove", KR(ret), K(ls_less));
       } else {
         swap_cnt++;

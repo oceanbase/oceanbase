@@ -12,13 +12,11 @@
 #define USING_LOG_PREFIX BALANCE
 #include "rootserver/ob_ls_balance_helper.h"
 #include "rootserver/ob_primary_ls_service.h"//fetch max ls id
-#include "lib/mysqlclient/ob_mysql_transaction.h"//trans
 #include "observer/ob_server_struct.h"//GCTX
 #include "share/schema/ob_schema_getter_guard.h"//ObSchemaGetGuard
 #include "share/schema/ob_multi_version_schema_service.h"//ObMultiSchemaService
 #include "share/schema/ob_table_schema.h"//ObTableSchema
 #include "share/ob_balance_define.h"  // ObBalanceTaskID, ObBalanceJobID
-#include "storage/tx/ob_unique_id_service.h" // ObUniqueIDService
 #include "storage/ob_common_id_utils.h"     // ObCommonIDUtils
 #include "ob_ls_balance_helper.h"
 
@@ -80,21 +78,26 @@ ObLSBalanceTaskHelper::ObLSBalanceTaskHelper() :
     sql_proxy_(NULL),
     job_(),
     task_array_(),
-    tenant_ls_bg_info_()
+    tenant_ls_bg_info_(),
+    scatter_mode_(SCATTER_INVALID)
 {
 }
 
-int ObLSBalanceTaskHelper::init(const uint64_t tenant_id,
-           const share::ObLSStatusInfoArray &status_array,
-           const ObIArray<share::ObSimpleUnitGroup> &unit_group_array,
-           const int64_t primary_zone_num, ObMySQLProxy *sql_proxy)
+int ObLSBalanceTaskHelper::init(
+    const uint64_t tenant_id,
+    const share::ObLSStatusInfoArray &status_array,
+    const ObIArray<share::ObSimpleUnitGroup> &unit_group_array,
+    const int64_t primary_zone_num,
+    ObMySQLProxy *sql_proxy,
+    const ObPartitionScatterMode &scatter_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", KR(ret));
   } else if (OB_UNLIKELY(0 == status_array.count() || 0 == unit_group_array.count()
-                  || 0 >= primary_zone_num || OB_INVALID_TENANT_ID == tenant_id)) {
+                  || 0 >= primary_zone_num || OB_INVALID_TENANT_ID == tenant_id
+                  || scatter_mode <= SCATTER_INVALID || scatter_mode >= SCATTER_MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(status_array), K(unit_group_array),
                                  K(primary_zone_num), K(tenant_id));
@@ -136,6 +139,7 @@ int ObLSBalanceTaskHelper::init(const uint64_t tenant_id,
     sql_proxy_ = sql_proxy;
     job_.reset();
     task_array_.reset();
+    scatter_mode_ = scatter_mode;
     inited_ = true;
   }
   return ret;
@@ -432,7 +436,7 @@ int ObLSBalanceTaskHelper::generate_expand_task_()
         lack_count += balance_info.get_lack_ls_count();
       }
     }
-    if (FAILEDx(tenant_ls_bg_info_.init(tenant_id_, src_ls.count() + lack_count))) {
+    if (FAILEDx(tenant_ls_bg_info_.init(tenant_id_, src_ls.count() + lack_count, scatter_mode_))) {
       LOG_WARN("init tenant LS balance group info fail", KR(ret), K_(tenant_id),
               K(src_ls.count() + lack_count));
       // build tenant all balance group info for ALL LS
@@ -494,7 +498,7 @@ int ObLSBalanceTaskHelper::generate_shrink_task_()
         }
       }
     }
-    if (FAILEDx(tenant_ls_bg_info_.init(tenant_id_, normal_ls_count))) {
+    if (FAILEDx(tenant_ls_bg_info_.init(tenant_id_, normal_ls_count, scatter_mode_))) {
       LOG_WARN("init tenant LS balance group info fail", KR(ret), K_(tenant_id), K(normal_ls_count));
     } else if (OB_FAIL(tenant_ls_bg_info_.build("LS_BALANCE", *sql_proxy_, *schema_service))) {
       LOG_WARN("build tenant all balance group info for all LS fail", KR(ret));

@@ -39,10 +39,12 @@ public:
       tenant_id_(OB_INVALID_TENANT_ID),
       alloc_("TenantLSBGInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       ls_bg_map_(),
-      balanced_ls_num_(0) {}
+      balanced_ls_num_(0),
+      scatter_mode_(SCATTER_INVALID) {}
   ~ObTenantLSBalanceGroupInfo() { destroy(); }
 
-  int init(const uint64_t tenant_id, int64_t balanced_ls_num);
+  int init(const uint64_t tenant_id, const int64_t balanced_ls_num,
+          const ObPartitionScatterMode &scatter_mode);
   void destroy();
 
   // build All LS Balance Group Info
@@ -65,7 +67,8 @@ public:
       const bool in_new_partition_group,
       const uint64_t part_group_uid);
 
-  TO_STRING_KV(K_(inited), K_(tenant_id), "valid_ls_count", ls_bg_map_.size(), K_(balanced_ls_num));
+  TO_STRING_KV(K_(inited), K_(tenant_id), "valid_ls_count", ls_bg_map_.size(), K_(balanced_ls_num),
+              K_(scatter_mode));
 
 public:
   int get_or_create(const share::ObLSID ls_id, ObLSBalanceGroupInfo *&ls_bg_info);
@@ -82,6 +85,7 @@ private:
   common::hash::ObHashMap<share::ObLSID, ObLSBalanceGroupInfo *> ls_bg_map_;
   // the number of LS after LS balance
   int64_t balanced_ls_num_;
+  ObPartitionScatterMode scatter_mode_;
 };
 
 }

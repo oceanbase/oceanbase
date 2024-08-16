@@ -159,7 +159,8 @@ public:
   int init(const uint64_t tenant_id, const share::ObLSStatusInfoArray &status_array,
            const ObIArray<share::ObSimpleUnitGroup> &unit_group_array,
            const int64_t primary_zone_num,
-           ObMySQLProxy *sql_proxy);
+           ObMySQLProxy *sql_proxy,
+           const ObPartitionScatterMode &scatter_mode = SCATTER_ROUND_ROBIN);
   //check need ls balance
   int check_need_ls_balance(bool &need_balance);
   //generate ls balance job and task
@@ -229,6 +230,7 @@ public:
   share::ObBalanceJob job_;
   ObArray<share::ObBalanceTask> task_array_;
   ObTenantLSBalanceGroupInfo tenant_ls_bg_info_;
+  ObPartitionScatterMode scatter_mode_;
 };
 
 }
