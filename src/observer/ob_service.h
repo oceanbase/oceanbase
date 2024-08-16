@@ -206,6 +206,7 @@ public:
   static int do_remove_ls_paxos_replica(const obrpc::ObLSDropPaxosReplicaArg &arg);
   static int do_remove_ls_nonpaxos_replica(const obrpc::ObLSDropNonPaxosReplicaArg &arg);
   static int do_add_ls_replica(const obrpc::ObLSAddReplicaArg &arg);
+  static int do_migrate_ls_replica(const obrpc::ObLSMigrateReplicaArg &arg);
   // ObRpcIsEmptyServerP @RS bootstrap
   int is_empty_server(const obrpc::ObCheckServerEmptyArg &arg, obrpc::Bool &is_empty);
   // ObRpcCheckDeploymentModeP
