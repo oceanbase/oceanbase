@@ -164,6 +164,7 @@ protected:
       common::hash::ObHashMap<uint64_t, uint64_t> &validate_checksum_column_ids);
   int check_data_dest_tables_columns_checksum(const int64_t execution_id);
   virtual int check_and_cancel_complement_data_dag(bool &all_complement_dag_exit); // wait dag exit before unlock table.
+  int check_killed_sessions_exist(bool &all_sessions_exit);
   virtual int fail();
   virtual int success();
   int hold_snapshot(const int64_t snapshot_version);

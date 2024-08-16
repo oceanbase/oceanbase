@@ -1373,6 +1373,7 @@ int ObDDLRedefinitionTask::fail()
 {
   int ret = OB_SUCCESS;
   bool all_complement_dag_exit = true;
+  bool all_session_exist = true;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
@@ -1382,6 +1383,12 @@ int ObDDLRedefinitionTask::fail()
   } else if (!all_complement_dag_exit) {
     if (REACH_COUNT_INTERVAL(1000L)) {
       LOG_INFO("wait all complement data dag exit", K(dst_tenant_id_), K(task_id_));
+    }
+  } else if (OB_FAIL(check_killed_sessions_exist(all_session_exist))) {
+    LOG_WARN("check killed session exit failed", K(ret));
+  } else if (!all_session_exist) {
+    if (REACH_COUNT_INTERVAL(1000L)) {
+      LOG_INFO("wait all session exit failed", K(task_id_), K(killed_sessions_));
     }
   } else if (OB_FAIL(finish())) {
     LOG_WARN("finish failed", K(ret));
@@ -2922,6 +2929,57 @@ int ObDDLRedefinitionTask::check_and_cancel_complement_data_dag(bool &all_comple
       || (++check_dag_exit_retry_cnt_ >= 10 /*MAX RETRY COUNT IF FAILED*/)) {
     ret = OB_SUCCESS;
     all_complement_dag_exit = true;
+  }
+  return ret;
+}
+
+int ObDDLRedefinitionTask::check_killed_sessions_exist(bool &all_sessions_exit)
+{
+  int ret = OB_SUCCESS;
+  all_sessions_exit = false;
+  ObRootService *root_service = GCTX.root_service_;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root_service is null", K(ret), KP(root_service));
+  } else if (killed_sessions_.empty()) {
+    all_sessions_exit = true;
+  } else {
+    const int64_t first_session_id = killed_sessions_.at(0);
+    ObSqlString sql_string;
+    if (OB_FAIL(sql_string.assign_fmt("select id from %s where id in ( %ld ", OB_ALL_VIRTUAL_SESSION_INFO_TNAME, first_session_id))) {
+      LOG_WARN("assign sql string failed", K(ret), K(first_session_id));
+    }
+    for (int64_t i = 1; OB_SUCC(ret) && i < killed_sessions_.count(); ++i) {
+      const int64_t session_id = killed_sessions_.at(i);
+      if (OB_FAIL(sql_string.append_fmt(", %ld", session_id))) {
+        LOG_WARN("assign sql string failed", K(ret), K(session_id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(sql_string.append(")"))) {
+        LOG_WARN("append sql string failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        sqlclient::ObMySQLResult *result = NULL;
+        if (OB_FAIL(root_service->get_sql_proxy().read(res, OB_SYS_TENANT_ID, sql_string.ptr()))) {
+          LOG_WARN("execute read sql failed", K(ret), K(sql_string));
+        } else if (OB_ISNULL((result = res.get_result()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get sql result", K(ret), KP(result));
+        } else if (OB_FAIL(result->next())) {
+          if (OB_ITER_END == ret) {
+            all_sessions_exit = true;
+          } else {
+            LOG_WARN("get next result failed", K(ret), K(sql_string));
+          }
+        }
+      }
+    }
   }
   return ret;
 }

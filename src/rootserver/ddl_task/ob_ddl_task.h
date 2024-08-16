@@ -313,7 +313,8 @@ public:
       const uint64_t tenant_id,
       const int64_t task_id,
       const int64_t snapshot_version,
-      const ObIArray<common::ObAddr> &sql_exec_addrs);
+      const ObIArray<common::ObAddr> &sql_exec_addrs,
+      common::ObIArray<int64_t> &killed_sessions);
 
   //query the internal table __all_virtual_session_info to obtain the executing tasks sql meeting specified mode.
   static int get_running_tasks_inner_sql(
@@ -690,6 +691,7 @@ protected:
   bool is_global_index_;
   int64_t consensus_schema_version_;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
+  ObArray<int64_t> killed_sessions_;
 };
 
 enum ColChecksumStat

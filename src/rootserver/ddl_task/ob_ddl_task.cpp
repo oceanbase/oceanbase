@@ -1108,7 +1108,7 @@ int ObDDLTask::switch_status(const ObDDLTaskStatus new_status, const bool enable
 
     if (OB_CANCELED == real_ret_code || ObDDLTaskStatus::FAIL == task_status_) {
       (void)ObDDLTaskRecordOperator::kill_task_inner_sql(root_service->get_sql_proxy(),
-          trace_id_, dst_tenant_id_, task_id_, snapshot_version_, sql_exec_addrs_); // ignore return code
+          trace_id_, dst_tenant_id_, task_id_, snapshot_version_, sql_exec_addrs_, killed_sessions_); // ignore return code
       LOG_WARN("ddl_task switch_status kill_task_inner_sql");
     }
   }
@@ -3558,9 +3558,11 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
     const uint64_t tenant_id,
     const int64_t task_id,
     const int64_t snapshot_version,
-    const ObIArray<common::ObAddr> &sql_exec_addrs)
+    const ObIArray<common::ObAddr> &sql_exec_addrs,
+    common::ObIArray<int64_t> &killed_sessions)
 {
   int ret = OB_SUCCESS;
+  killed_sessions.reset();
   char ip_str[common::OB_IP_STR_BUFF];
 
   if (OB_UNLIKELY(!proxy.is_inited() || trace_id.is_invalid())) {
@@ -3643,6 +3645,8 @@ int ObDDLTaskRecordOperator::kill_task_inner_sql(
               if (OB_SUCC(ret)) {
                 if (OB_FAIL(kill_inner_sql(proxy, tenant_id, session_id))){
                   LOG_WARN("fail to kill session", K(ret), K(session_id), K(trace_id));
+                } else if (OB_FAIL(killed_sessions.push_back(session_id))) {
+                  LOG_WARN("push back session id failed", K(ret), K(session_id));
                 } else {
                   LOG_WARN("succ to kill session", K(ret), K(session_id), K(trace_id));
                 }
