@@ -36,7 +36,9 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
       statown            VARCHAR(65535) DEFAULT NULL,
       no_invalidate      BOOLEAN DEFAULT FALSE,
       stattype           VARCHAR(65535) DEFAULT 'DATA',
-      force              BOOLEAN DEFAULT FALSE
+      force              BOOLEAN DEFAULT FALSE,
+      hist_est_percent   DECIMAL(20, 10) DEFAULT AUTO_SAMPLE_SIZE,
+      hist_block_sample  BOOLEAN DEFAULT NULL
     );
     PRAGMA INTERFACE(C, GATHER_SCHEMA_STATS);
 
