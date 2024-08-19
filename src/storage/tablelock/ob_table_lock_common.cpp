@@ -228,7 +228,7 @@ int ObTableLockOwnerID::deserialize(const char* buf, const int64_t data_len, int
 {
   int ret = OB_SUCCESS;
   const int64_t origin_pos = pos;
-  int16_t magic_num = 0;
+  int64_t magic_num = 0;
   if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(buf), K(data_len));
