@@ -13,6 +13,11 @@
 #ifndef SRC_SQL_ENGINE_BASIC_OB_SELECT_INTO_OP_H_
 #define SRC_SQL_ENGINE_BASIC_OB_SELECT_INTO_OP_H_
 
+#include <arrow/io/file.h>
+#include <arrow/util/logging.h>
+#include <parquet/api/writer.h>
+#include <parquet/exception.h>
+
 #include "sql/engine/ob_operator.h"
 #include "lib/file/ob_file.h"
 #include "common/storage/ob_io_device.h"
@@ -73,6 +78,8 @@ public:
       external_properties_(alloc),
       external_partition_(alloc)
   {
+    compression_algorithm_ = parquet::Compression::UNCOMPRESSED;
+    per_row_group_size_ = DEFAULT_MAX_FILE_SIZE;
     cs_type_ = ObCharset::get_system_collation();
   }
 
@@ -95,6 +102,8 @@ public:
   bool is_overwrite_;
   ObExternalFileFormat::StringData external_properties_;
   ObExternalFileFormat::StringData external_partition_;
+  int64_t per_row_group_size_;
+  parquet::Compression::type compression_algorithm_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
   static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
 };
