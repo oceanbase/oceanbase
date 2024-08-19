@@ -490,7 +490,8 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
     int64_t actual_block_read_size = 0;
 
     ObTmpBlockValueHandle block_value_handle;
-    if (OB_SUCC(ObTmpBlockCache::get_instance().get_block(ObTmpBlockCacheKey(block_index, MTL_ID()),
+    if (!io_ctx.is_disable_block_cache() &&
+        OB_SUCC(ObTmpBlockCache::get_instance().get_block(ObTmpBlockCacheKey(block_index, MTL_ID()),
                                                           block_value_handle))) {
       LOG_DEBUG("hit block cache", K(block_index), K(fd_), K(io_ctx));
       char *read_buf = io_ctx.get_todo_buffer();
@@ -511,7 +512,7 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
               K(remain_read_size), K(read_size), K(actual_read_size),
               K(data_items[i]), K(io_ctx));
       }
-    } else if (OB_ENTRY_NOT_EXIST != ret) {
+    } else if (OB_ENTRY_NOT_EXIST != ret && OB_SUCCESS != ret) {
       LOG_WARN("fail to get block", KR(ret), K(fd_), K(block_index));
     } else { // not hit block cache, read page from disk.
       ret = OB_SUCCESS;
@@ -1609,13 +1610,17 @@ int ObSharedNothingTmpFile::inner_truncate_(const int64_t truncate_offset, const
   } else if (truncate_offset > wbp_begin_offset) {
     const int64_t truncate_page_virtual_id = get_page_virtual_id_from_offset_(truncate_offset,
                                                                               true /*is_open_interval*/);
+    const int64_t truncate_offset_in_page = get_page_offset_from_file_or_block_offset_(truncate_offset);
     if (OB_FAIL(page_idx_cache_.binary_search(truncate_page_virtual_id, truncate_page_id))) {
       LOG_WARN("fail to find page index in array", KR(ret), K(fd_), K(truncate_page_virtual_id));
     } else if (ObTmpFileGlobal::INVALID_PAGE_ID != truncate_page_id) {
       // the page index of truncate_offset is in the range of cached page index.
       // truncate all page indexes whose offset is smaller than truncate_offset.
-      if (OB_FAIL(page_idx_cache_.truncate(truncate_page_virtual_id+1))) {
-        LOG_WARN("fail to truncate page idx cache", KR(ret), K(fd_), K(truncate_page_virtual_id));
+      const int64_t truncate_page_virtual_id_in_cache = truncate_offset_in_page == 0 ?
+                                                        truncate_page_virtual_id + 1 :
+                                                        truncate_page_virtual_id;
+      if (OB_FAIL(page_idx_cache_.truncate(truncate_page_virtual_id_in_cache))) {
+        LOG_WARN("fail to truncate page idx cache", KR(ret), K(fd_), K(truncate_page_virtual_id), K(truncate_page_virtual_id_in_cache));
       }
     } else { // ObTmpFileGlobal::INVALID_PAGE_ID == truncate_page_id
       // the page index of truncate_offset is smaller than the smallest cached page index.
@@ -1636,7 +1641,6 @@ int ObSharedNothingTmpFile::inner_truncate_(const int64_t truncate_offset, const
 
       // truncate the last page
       if (OB_SUCC(ret)) {
-        const int64_t truncate_offset_in_page = get_page_offset_from_file_or_block_offset_(truncate_offset);
         if (OB_UNLIKELY(truncate_page_virtual_id != begin_page_virtual_id_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected begin page virtual id", KR(ret), K(fd_), K(truncate_page_virtual_id), K(begin_page_virtual_id_));

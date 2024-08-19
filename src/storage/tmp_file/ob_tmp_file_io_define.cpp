@@ -25,7 +25,7 @@ namespace tmp_file
 
 ObTmpFileIOInfo::ObTmpFileIOInfo()
     : fd_(0), dir_id_(0), buf_(nullptr), size_(0),
-      disable_page_cache_(false),
+      disable_page_cache_(false), disable_block_cache_(false),
       io_desc_(), io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS)
 {}
 
@@ -43,6 +43,7 @@ void ObTmpFileIOInfo::reset()
   buf_ = nullptr;
   io_desc_.reset();
   disable_page_cache_ = false;
+  disable_block_cache_ = false;
 }
 
 bool ObTmpFileIOInfo::is_valid() const
@@ -94,7 +95,7 @@ int ObTmpFileIOHandle::init_write(const ObTmpFileIOInfo &io_info, ObTmpFileHandl
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(io_info));
   } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, false /*is_read*/, io_info.io_desc_,
-                               io_info.io_timeout_ms_, io_info.disable_page_cache_))) {
+                               io_info.io_timeout_ms_, io_info.disable_page_cache_, io_info.disable_block_cache_))) {
     LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
   } else if (OB_FAIL(ctx_.prepare_write(io_info.buf_, io_info.size_))) {
     LOG_WARN("fail to prepare write context", KR(ret), KPC(this));
@@ -122,7 +123,7 @@ int ObTmpFileIOHandle::init_pread(const ObTmpFileIOInfo &io_info, const int64_t 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(read_offset));
   } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, true /*is_read*/, io_info.io_desc_,
-                               io_info.io_timeout_ms_, io_info.disable_page_cache_))) {
+                               io_info.io_timeout_ms_, io_info.disable_page_cache_, io_info.disable_block_cache_))) {
     LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
   } else if (OB_FAIL(ctx_.prepare_read(io_info.buf_, MIN(io_info.size_, ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE), read_offset))) {
     LOG_WARN("fail to prepare read context", KR(ret), KPC(this), K(read_offset));
@@ -148,7 +149,7 @@ int ObTmpFileIOHandle::init_read(const ObTmpFileIOInfo &io_info, ObTmpFileHandle
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(io_info));
   } else if (OB_FAIL(ctx_.init(io_info.fd_, io_info.dir_id_, true /*is_read*/, io_info.io_desc_,
-                               io_info.io_timeout_ms_, io_info.disable_page_cache_))) {
+                               io_info.io_timeout_ms_, io_info.disable_page_cache_, io_info.disable_block_cache_))) {
     LOG_WARN("failed to init io handle context", KR(ret), K(io_info));
   } else if (OB_FAIL(ctx_.prepare_read(io_info.buf_, MIN(io_info.size_, ObTmpFileGlobal::TMP_FILE_READ_BATCH_SIZE)))) {
     LOG_WARN("fail to prepare read context", KR(ret), KPC(this));

@@ -32,6 +32,7 @@ ObTmpFileIOCtx::ObTmpFileIOCtx():
                 todo_size_(-1),
                 read_offset_in_file_(-1),
                 disable_page_cache_(false),
+                disable_block_cache_(false),
                 io_flag_(),
                 io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS),
                 io_handles_(),
@@ -50,7 +51,8 @@ int ObTmpFileIOCtx::init(const int64_t fd, const int64_t dir_id,
                          const bool is_read,
                          const common::ObIOFlag io_flag,
                          const int64_t io_timeout_ms,
-                         const bool disable_page_cache)
+                         const bool disable_page_cache,
+                         const bool disable_block_cache)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -73,6 +75,7 @@ int ObTmpFileIOCtx::init(const int64_t fd, const int64_t dir_id,
     io_flag_ = io_flag;
     io_timeout_ms_ = io_timeout_ms;
     disable_page_cache_ = disable_page_cache;
+    disable_block_cache_ = disable_block_cache;
     is_inited_ = true;
   }
   return ret;
@@ -103,6 +106,7 @@ void ObTmpFileIOCtx::reset()
   fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
   dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
   disable_page_cache_ = false;
+  disable_block_cache_ = false;
   io_flag_.reset();
   io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
 }

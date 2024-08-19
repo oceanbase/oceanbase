@@ -31,7 +31,8 @@ public:
            const bool is_read,
            const common::ObIOFlag io_flag,
            const int64_t io_timeout_ms,
-           const bool disable_page_cache);
+           const bool disable_page_cache,
+           const bool disable_block_cache);
   void reuse();
   void reset();
   bool is_valid() const;
@@ -58,6 +59,7 @@ public:
   OB_INLINE int64_t get_read_offset_in_file() const { return read_offset_in_file_; }
   OB_INLINE void set_read_offset_in_file(const int64_t offset) { read_offset_in_file_ = offset; }
   OB_INLINE bool is_disable_page_cache() const { return disable_page_cache_; }
+  OB_INLINE bool is_disable_block_cache() const { return disable_block_cache_; }
   OB_INLINE common::ObIOFlag get_io_flag() const { return io_flag_; }
   OB_INLINE int64_t get_io_timeout_ms() const { return io_timeout_ms_; }
 
@@ -66,6 +68,7 @@ public:
                K(buf_size_), K(done_size_), K(todo_size_),
                K(read_offset_in_file_),
                K(disable_page_cache_),
+               K(disable_block_cache_),
                K(io_flag_), K(io_timeout_ms_));
 
 public:
@@ -157,6 +160,7 @@ private:
   int64_t todo_size_;
   int64_t read_offset_in_file_;
   bool disable_page_cache_;
+  bool disable_block_cache_; // only used in ut, to control whether read data from block cache
   common::ObIOFlag io_flag_;
   int64_t io_timeout_ms_;
   common::ObSEArray<ObIOReadHandle, 1> io_handles_;

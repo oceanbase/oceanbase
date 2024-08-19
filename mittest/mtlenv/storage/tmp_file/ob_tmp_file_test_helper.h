@@ -156,7 +156,7 @@ public:
   TestTmpFileStress(ObTenantBase *tenant_ctx);
   virtual ~TestTmpFileStress();
   int init(const int fd, const TmpFileOp op, const int64_t thread_cnt,
-           char *buf, const int64_t offset, const int64_t size);
+           char *buf, const int64_t offset, const int64_t size, const bool disable_block_cache);
   void reset();
   virtual void run1();
   TO_STRING_KV(K_(thread_cnt), K_(fd), K_(op), KP_(buf), K_(offset), K_(size));
@@ -171,6 +171,7 @@ private:
   char *buf_;
   int64_t offset_;
   int64_t size_;
+  bool disable_block_cache_;
   ObTenantBase *tenant_ctx_;
 };
 
@@ -179,6 +180,7 @@ TestTmpFileStress::TestTmpFileStress(ObTenantBase *tenant_ctx)
     op_(OP_MAX),
     buf_(nullptr), offset_(0),
     size_(0),
+    disable_block_cache_(false),
     tenant_ctx_(tenant_ctx)
 {
 }
@@ -190,7 +192,8 @@ TestTmpFileStress::~TestTmpFileStress()
 int TestTmpFileStress::init(const int fd, const TmpFileOp op,
                             const int64_t thread_cnt,
                             char *buf, int64_t offset,
-                            const int64_t size)
+                            const int64_t size,
+                            const bool disable_block_cache)
 {
   int ret = OB_SUCCESS;
   if (thread_cnt < 0 || OB_ISNULL(buf) || offset < 0 || size <= 0) {
@@ -209,6 +212,7 @@ int TestTmpFileStress::init(const int fd, const TmpFileOp op,
     op_ = op;
     offset_ = offset;
     size_ = size;
+    disable_block_cache_ = disable_block_cache;
     set_thread_count(static_cast<int32_t>(thread_cnt));
   }
   return ret;
@@ -222,6 +226,7 @@ void TestTmpFileStress::reset()
   buf_ = nullptr;
   offset_ = 0;
   size_ = 0;
+  disable_block_cache_ = false;
 }
 
 void TestTmpFileStress::write_data_(const int64_t write_size)
@@ -271,6 +276,7 @@ void TestTmpFileStress::read_data_(const int64_t read_offset, const int64_t read
   io_info.io_desc_.set_wait_event(2);
   io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   io_info.buf_ = read_buf;
+  io_info.disable_block_cache_ = disable_block_cache_;
   ret = MTL(ObTenantTmpFileManager *)->pread(io_info, read_offset, handle);
   int cmp = memcmp(handle.get_buffer(), buf_ + read_offset, io_info.size_);
   if (cmp != 0 || OB_FAIL(ret)) {
@@ -295,6 +301,7 @@ void TestTmpFileStress::truncate_data_()
   io_info.fd_ = fd_;
   io_info.io_desc_.set_wait_event(2);
   io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+  io_info.disable_block_cache_ = disable_block_cache_;
   const int64_t invalid_size = truncate_offset - offset_;
   const int64_t valid_size = size_ - invalid_size;
 
@@ -380,7 +387,7 @@ public:
   TestMultiTmpFileStress(ObTenantBase *tenant_ctx);
   virtual ~TestMultiTmpFileStress();
   int init(const int64_t file_cnt, const int64_t dir_id, const int64_t thread_cnt,
-           const int64_t batch_size, const int64_t batch_num);
+           const int64_t batch_size, const int64_t batch_num, const bool disable_block_cache);
   virtual void run1();
 private:
   int64_t file_cnt_;
@@ -388,6 +395,7 @@ private:
   int64_t read_thread_cnt_perf_file_;
   int64_t batch_size_;
   int64_t batch_num_;
+  bool disable_block_cache_;
   ObTenantBase *tenant_ctx_;
 };
 
@@ -397,6 +405,7 @@ TestMultiTmpFileStress::TestMultiTmpFileStress(ObTenantBase *tenant_ctx)
     read_thread_cnt_perf_file_(0),
     batch_size_(0),
     batch_num_(0),
+    disable_block_cache_(true),
     tenant_ctx_(tenant_ctx)
 {
 }
@@ -409,7 +418,8 @@ int TestMultiTmpFileStress::init(const int64_t file_cnt,
                                  const int64_t dir_id,
                                  const int64_t thread_cnt,
                                  const int64_t batch_size,
-                                 const int64_t batch_num)
+                                 const int64_t batch_num,
+                                 const bool disable_block_cache)
 {
   int ret = OB_SUCCESS;
   if (file_cnt < 0 || thread_cnt < 0) {
@@ -421,6 +431,7 @@ int TestMultiTmpFileStress::init(const int64_t file_cnt,
     read_thread_cnt_perf_file_ = thread_cnt;
     batch_size_ = batch_size;
     batch_num_ = batch_num;
+    disable_block_cache_ = disable_block_cache;
     set_thread_count(static_cast<int32_t>(file_cnt));
   }
   return ret;
@@ -459,13 +470,13 @@ void TestMultiTmpFileStress::run1()
   for (int64_t i = 0; i < batch_num_; ++i) {
     if (i > 0) {
       // truncate read data in previous round
-      test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, data_buffer, (i-1) * batch_size_, batch_size_);
+      test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, data_buffer, (i-1) * batch_size_, batch_size_, disable_block_cache_);
       ASSERT_EQ(OB_SUCCESS, ret);
       STORAGE_LOG(INFO, "test_truncate run start", K(i), K(batch_size_));
       test_truncate.start();
     }
     TestTmpFileStress test_write(tenant_ctx_);
-    ret = test_write.init(fd, TmpFileOp::WRITE, 1, data_buffer + i * batch_size_, 0, batch_size_);
+    ret = test_write.init(fd, TmpFileOp::WRITE, 1, data_buffer + i * batch_size_, 0, batch_size_, disable_block_cache_);
     ASSERT_EQ(OB_SUCCESS, ret);
     STORAGE_LOG(INFO, "test_write run start");
     test_write.start();
@@ -473,7 +484,7 @@ void TestMultiTmpFileStress::run1()
     STORAGE_LOG(INFO, "test_write run end");
 
     TestTmpFileStress test_read(tenant_ctx_);
-    ret = test_read.init(fd, TmpFileOp::READ, read_thread_cnt_perf_file_, data_buffer, i * batch_size_, batch_size_);
+    ret = test_read.init(fd, TmpFileOp::READ, read_thread_cnt_perf_file_, data_buffer, i * batch_size_, batch_size_, disable_block_cache_);
     ASSERT_EQ(OB_SUCCESS, ret);
 
     STORAGE_LOG(INFO, "test_read run start", K(i), K(batch_size_));
@@ -491,7 +502,7 @@ void TestMultiTmpFileStress::run1()
     STORAGE_LOG(INFO, "TestMultiTmpFileStress thread run a batch end", K(i));
   }
 
-  test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, data_buffer, file_size - batch_size_, batch_size_);
+  test_truncate.init(fd, TmpFileOp::TRUNCATE, 1, data_buffer, file_size - batch_size_, batch_size_, disable_block_cache_);
   ASSERT_EQ(OB_SUCCESS, ret);
   STORAGE_LOG(INFO, "test_truncate run start");
   test_truncate.start();
