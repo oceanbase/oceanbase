@@ -944,11 +944,7 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
               int64_t mock_part_id = GET_EXT_MOCK_PART_ID(part_ids.at(i));
               CHECK_EXT_MOCK_PART_ID_VALID(file_part_ids_added, mock_part_id);
               part_id = MAP_EXT_MOCK_PART_ID_TO_REAL_PART_ID(file_part_ids_added, mock_part_id);
-            } else {
-              part_id = part_ids.at(i);
-            }
-            if (OB_SUCC(ret)) {
-              OZ (add_item_to_map(exec_ctx.get_allocator(), part_id_to_file_urls, part_id, file_infos.at(i)));
+              part_ids.at(i) = part_id;
             }
           }
           #undef GET_EXT_MOCK_PART_ID
@@ -956,6 +952,9 @@ int ObExternalTableFileManager::update_inner_table_files_list_by_table(
         }
       }
 
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_ids.count(); i++) {
+        OZ (add_item_to_map(exec_ctx.get_allocator(), part_id_to_file_urls, part_ids.at(i), file_infos.at(i)));
+      }
       //OZ (get_part_id_to_file_urls_map(table_schema, database_schema, is_local_storage, file_urls, file_sizes, schema_guard, exec_ctx, trans, part_id_to_file_urls));
       for (common::hash::ObHashMap<int64_t, ObArray<ObExternalFileInfoTmp> *>::iterator it = part_id_to_file_urls.begin();
           OB_SUCC(ret) && it != part_id_to_file_urls.end(); it++) {
@@ -1119,7 +1118,7 @@ int ObExternalTableFileManager::get_all_records_from_inner_table(ObIAllocator &a
   SMART_VAR(ObMySQLProxy::MySQLResult, res) {
     sqlclient::ObMySQLResult *result = NULL;
     ObSqlString sql;
-    OZ (sql.append_fmt("SELECT file_url, file_id FROM %s"
+    OZ (sql.append_fmt("SELECT file_url, file_id, file_size FROM %s"
                         " WHERE table_id = %lu AND part_id = %lu",
                         OB_ALL_EXTERNAL_TABLE_FILE_TNAME, table_id, partition_id));
     OZ (GCTX.sql_proxy_->read(res, tenant_id, sql.ptr()));
@@ -1130,13 +1129,17 @@ int ObExternalTableFileManager::get_all_records_from_inner_table(ObIAllocator &a
       } else {
         while (OB_SUCC(result->next())) {
           ObString file_url;
-          int64_t file_id;
+          int64_t file_id = 0;
+          int64_t file_size = 0;
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, "file_url", file_url);
           EXTRACT_INT_FIELD_MYSQL(*result, "file_id", file_id, int64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "file_size", file_size, int64_t);
           ObString tmp_url;
           OZ (ob_write_string(allocator, file_url, tmp_url));
           ObExternalFileInfoTmp file_info;
+          file_info.part_id_ = partition_id;
           file_info.file_url_ = tmp_url;
+          file_info.file_size_ = file_size;
           OZ (file_urls.push_back(file_info));
           OZ (file_ids.push_back(file_id));
         }
