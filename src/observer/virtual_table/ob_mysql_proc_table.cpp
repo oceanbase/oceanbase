@@ -248,15 +248,15 @@ int ObMySQLProcTable::inner_get_next_row(common::ObNewRow *&row)
                       SERVER_LOG(WARN, "fail to alloc returns_buf", K(ret));
                     } else {
                       if (routine_info->is_function()) {
-                        if (OB_FAIL(ob_sql_type_str(returns_buf,
-                                                    returns_buf_size,
-                                                    pos,
-                                                    routine_info->get_ret_type()->get_obj_type(),
-                                                    routine_info->get_ret_type()->get_length(),
-                                                    routine_info->get_ret_type()->get_precision(),
-                                                    routine_info->get_ret_type()->get_scale(),
-                                                    routine_info->get_ret_type()->get_collation_type()))) {
-                          SHARE_SCHEMA_LOG(WARN, "fail to get data type str", KPC(routine_info->get_ret_type()));
+                        if (OB_FAIL(ob_sql_type_str_with_coll(returns_buf,
+                                                              returns_buf_size,
+                                                              pos,
+                                                              routine_info->get_ret_type()->get_obj_type(),
+                                                              routine_info->get_ret_type()->get_length(),
+                                                              routine_info->get_ret_type()->get_precision(),
+                                                              routine_info->get_ret_type()->get_scale(),
+                                                              routine_info->get_ret_type()->get_collation_type()))) {
+                          SHARE_SCHEMA_LOG(WARN, "fail to get data type str with coll", KPC(routine_info->get_ret_type()));
                         }
                       } else {
                         // proc no returns, fill empty.
