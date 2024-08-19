@@ -591,7 +591,6 @@ private:
       const int64_t trans_version,
       const ObObjType &obj_type,
       const ObCollationType &cs_type,
-      const ObLobId &lob_id,
       const transaction::ObTransID trans_id,
       const int64_t seq_no,
       const int64_t timeout_ts,
@@ -599,6 +598,7 @@ private:
       const uint64_t src_tenant_id,
       const ObDirectLoadType direct_load_type,
       transaction::ObTxDesc* tx_desc,
+      share::ObTabletCacheInterval &pk_interval,
       ObLobMetaRowIterator *&row_iter);
   int mock_chunk_store(const int64_t row_cnt);
 private:
