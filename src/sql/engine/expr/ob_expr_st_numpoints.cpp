@@ -66,7 +66,7 @@ int ObExprSTNumPoints::eval_st_numpoints(
   ObObjType type1 = arg1->datum_meta_.type_;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-  bool bres = true;
+  uint32 res_num = 0;
 
   if (ob_is_null(type1)) {
     is_null_res = true;
@@ -88,8 +88,15 @@ int ObExprSTNumPoints::eval_st_numpoints(
     } else if ((geo->type() <= ObGeoType::GEOMETRY) || (geo->type() >= ObGeoType::GEOTYPEMAX)) {
       ret = OB_ERR_INVALID_GEOMETRY_TYPE;
       LOG_WARN("unknown geometry type", K(ret), K(geo->type()));
-    } else if (geo->type() <= ObGeoType::POLYGON) {
-      bres = false;
+    } else if (geo->type() != ObGeoType::LINESTRING) {
+      ret = OB_ERR_BAD_FIELD_ERROR;
+      LOG_WARN("The type of geometry should be LINESTRING", K(ret));
+    } else if (geo->crs() == ObGeoCRS::Geographic) {
+      const ObWkbGeogLineString *geo_ls = reinterpret_cast<const ObWkbGeogLineString *>(geo->val());
+      res_num = geo_ls->size();
+    } else if (geo->crs() == ObGeoCRS::Cartesian) {
+      const ObWkbGeomLineString *geo_ls = reinterpret_cast<const ObWkbGeomLineString *>(geo->val());
+      res_num = geo_ls->size();
     }
   }
 
@@ -97,7 +104,7 @@ int ObExprSTNumPoints::eval_st_numpoints(
     if (is_null_res) {
       res.set_null();
     } else {
-      res.set_bool(bres);
+      res.set_uint32(res_num);
     }
   }
 
