@@ -25,7 +25,8 @@ OB_SERIALIZE_MEMBER(ObExecFeedbackNode,
                     op_last_row_time_,
                     db_time_,
                     block_time_,
-                    worker_count_);
+                    worker_count_,
+                    pdml_op_write_rows_);
 
 OB_SERIALIZE_MEMBER(ObExecFeedbackInfo,
                     nodes_,
