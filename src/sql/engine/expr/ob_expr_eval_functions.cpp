@@ -390,6 +390,8 @@
 #include "ob_expr_rb_calc.h"
 #include "ob_expr_rb_to_string.h"
 #include "ob_expr_rb_from_string.h"
+#include "ob_expr_st_numpoints.h"
+#include "ob_expr_st_pointn.h"
 
 namespace oceanbase
 {
@@ -1246,6 +1248,8 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, //ObExprArrayContains::eval_array_contains_double,            /* 752 */
   NULL, //ObExprArrayContains::eval_array_contains_ObString,          /* 753 */
   NULL, //ObExprArrayContains::eval_array_contains_array,             /* 754 */
+  ObExprSTNumPoints::eval_st_numpoints,                               /* 755 */
+  ObExprSTPointN::eval_st_pointn,                                     /* 756 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
