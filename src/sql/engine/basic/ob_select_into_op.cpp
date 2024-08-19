@@ -1604,12 +1604,22 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
                        : datum.get_datetime();
           int64_t sec = us / 1000000;
           int32_t ns = (us % 1000000) * 1000;
-          table_record.SetTimeValue(col_idx, sec, ns, odps_type);
+          if (us < ORACLE_DATETIME_MIN_VAL) {
+            ret = OB_DATETIME_FUNCTION_OVERFLOW;
+            LOG_WARN("odps timestamp min value is 0001-01-01 00:00:00", K(ret), K(us));
+          } else {
+            table_record.SetTimeValue(col_idx, sec, ns, odps_type);
+          }
           break;
         }
         case apsara::odps::sdk::ODPS_DATE:
         {
-          table_record.SetDateValue(col_idx, datum.get_date());
+          if (datum.get_date() < ODPS_DATE_MIN_VAL) {
+            ret = OB_DATETIME_FUNCTION_OVERFLOW;
+            LOG_WARN("odps date min value is 0001-01-01", K(ret));
+          } else {
+            table_record.SetDateValue(col_idx, datum.get_date());
+          }
           break;
         }
         case apsara::odps::sdk::ODPS_DATETIME:
@@ -1620,6 +1630,9 @@ int ObSelectIntoOp::set_odps_column_value_mysql(apsara::odps::sdk::ODPSTableReco
             LOG_WARN("get unexpected null", K(ret));
           } else if (OB_FAIL(ctx_.get_my_session()->get_timezone_info()->get_timezone_offset(0, tmp_offset))) {
             LOG_WARN("failed to get timezone offset", K(ret));
+          } else if (datum.get_datetime() < ORACLE_DATETIME_MIN_VAL + SEC_TO_USEC(tmp_offset)) {
+            ret = OB_DATETIME_FUNCTION_OVERFLOW;
+            LOG_WARN("odps datetime min value is 0001-01-01 00:00:00", K(ret));
           } else {
             table_record.SetDatetimeValue(col_idx, (datum.get_datetime() - SEC_TO_USEC(tmp_offset)) / 1000);
           }
@@ -1858,12 +1871,12 @@ int ObSelectIntoOp::set_odps_column_value_oracle(apsara::odps::sdk::ODPSTableRec
         case apsara::odps::sdk::ODPS_TIMESTAMP_NTZ:
         {
           ObOTimestampData timestamp = datum.get_otimestamp_tiny();
-          table_record.SetTimeValue(col_idx, timestamp.time_us_, timestamp.time_ctx_.tail_nsec_, odps_type);
+          table_record.SetTimeValue(col_idx, timestamp.time_us_ / 1000000, timestamp.time_ctx_.tail_nsec_, odps_type);
           break;
         }
         case apsara::odps::sdk::ODPS_DATE:
         {
-          table_record.SetDateValue(col_idx, datum.get_datetime() / 100000 / 3600 / 24);
+          table_record.SetDateValue(col_idx, datum.get_datetime() / 1000000 / 3600 / 24);
           break;
         }
         case apsara::odps::sdk::ODPS_DATETIME:

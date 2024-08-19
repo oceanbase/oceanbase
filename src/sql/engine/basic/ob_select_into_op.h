@@ -415,6 +415,7 @@ private:
   bool need_commit_;
   static const int64_t SHARED_BUFFER_SIZE = 2LL * 1024 * 1024;
   static const int64_t MAX_OSS_FILE_SIZE = 5LL * 1024 * 1024 * 1024;
+  static const int32_t ODPS_DATE_MIN_VAL = -719162; // '0001-1-1'
 };
 
 
