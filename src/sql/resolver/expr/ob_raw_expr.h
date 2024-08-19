@@ -4131,6 +4131,11 @@ public:
   inline void set_pkg_body_udf(bool v) { is_pkg_body_udf_ = v; }
   inline bool is_pkg_body_udf() const { return is_pkg_body_udf_; }
 
+  inline bool is_standalone_udf() const
+  {
+    return common::OB_INVALID_ID == pkg_id_ && common::OB_INVALID_ID == type_id_;
+  }
+
   VIRTUAL_TO_STRING_KV_CHECK_STACK_OVERFLOW(N_ITEM_TYPE, type_,
                                             N_RESULT_TYPE, result_type_,
                                             N_EXPR_INFO, info_,
