@@ -217,6 +217,8 @@ int ObLockFuncContext::open_inner_conn_()
   } else if (OB_NOT_NULL(inner_conn_) || OB_NOT_NULL(store_inner_conn_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("inner_conn_ or store_inner_conn_ should be null", K(ret), KP(inner_conn_), KP(store_inner_conn_));
+  } else if (FALSE_IT(store_inner_conn_ = static_cast<observer::ObInnerSQLConnection *>(session->get_inner_conn()))) {
+  } else if (FALSE_IT(session->set_inner_conn(nullptr))) {
   } else if (OB_FAIL(ObInnerConnectionLockUtil::create_inner_conn(session, sql_proxy_, inner_conn))) {
     LOG_WARN("create inner connection failed", K(ret), KPC(session));
   } else if (OB_ISNULL(inner_conn)) {
@@ -228,7 +230,6 @@ int ObLockFuncContext::open_inner_conn_()
      * so we put inner conn in session to share it within multi layer nested sql.
      */
     inner_conn_ = inner_conn;
-    store_inner_conn_ = static_cast<observer::ObInnerSQLConnection *>(session->get_inner_conn());
     session->set_inner_conn(inner_conn);
     LOG_DEBUG("ObLockFuncContext::open_inner_conn_ successfully",
               KP(inner_conn_),
@@ -243,12 +244,22 @@ int ObLockFuncContext::close_inner_conn_()
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = my_exec_ctx_->get_my_session();
 
-  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(session) || OB_ISNULL(inner_conn_)) {
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(inner_conn_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("sql_proxy or inner_conn of session is NULL", K(ret), KP(sql_proxy_), KP(session), KP(inner_conn_));
   } else {
-    session->set_inner_conn(store_inner_conn_);  // restore inner_conn to session before close the tmp inner_conn
     OZ (sql_proxy_->close(inner_conn_, true));
+  }
+  if (OB_ISNULL(session)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("session is NULL", K(ret), KP(session));
+  } else if (OB_NOT_NULL(inner_conn_) || OB_NOT_NULL(store_inner_conn_)) {
+    // 1. if inner_conn_ is not null, means that we have created inner_conn successfully before, so we must have already
+    // set store_inner_conn_ successfully, just restore it to the session.
+    // 2. if inner_conn_ is null, it's uncertain whether store_inner_conn_ has been set before. If store_inner_conn_
+    // is not null, it must have been set. Otherwise, the inner_conn on the session may be null, or it may have existed
+    // with an error code before store_inner_conn_ being set. At this case, we do not set inner_conn on the session.
+    session->set_inner_conn(store_inner_conn_);
   }
   sql_proxy_ = nullptr;
   inner_conn_ = nullptr;
