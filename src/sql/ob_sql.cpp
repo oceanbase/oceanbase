@@ -4861,9 +4861,6 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
           // baseline and execute this plan directly.
           need_get_baseline = false;
           spm_ctx.baseline_exists_ = false;
-        } else {
-          // add baseline plan failed, need evict unaccepted baseline in baseline cache.
-          (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
         }
       } else if (plan_added && ObSpmCacheCtx::SpmStat::STAT_ADD_BASELINE_PLAN == spm_ctx.spm_stat_) {
         if (nullptr != spm_ctx.baseline_guard_.get_cache_obj() &&
@@ -4910,7 +4907,9 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
         } else if (!plan_added) {
           // plan not add to plan cache, do not check if need evolution.
           if (spm_ctx.check_execute_status_) {
-            (void) ObSpmController::deny_new_plan_as_baseline(spm_ctx);
+            // session which add plan succeed need check execute status
+            spm_ctx.check_execute_status_ = false;
+            LOG_TRACE("plan not add, disable check execute status");
           }
         } else if (baseline_enable && !baseline_exists) {
           need_get_baseline = true;
