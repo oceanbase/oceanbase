@@ -140,8 +140,7 @@ int ObTableApiCacheGuard::create_cache_key(ObTableCtx *tb_ctx)
   cache_key_.operation_type_ = operation_type;
   if (operation_type == ObTableOperationType::Type::UPDATE
       || operation_type == ObTableOperationType::Type::INSERT_OR_UPDATE
-      || operation_type == ObTableOperationType::Type::INCREMENT
-      || operation_type == ObTableOperationType::Type::APPEND) {
+      || tb_ctx->is_inc_append_update()) {
     const ObIArray<ObTableAssignment> &assigns = tb_ctx->get_assignments();
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns.count(); i++) {
       const ObTableAssignment &tmp_assign = assigns.at(i);

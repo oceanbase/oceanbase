@@ -597,6 +597,7 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
   } else if (obj.is_null() || is_inc_or_append()) { // increment or append check in init_increment() and init_append()
     if (is_append() && ob_is_string_type(obj.get_type())) {
       obj.set_type(column_type.get_type()); // set obj to column type to add lob header when column type is lob, obj is varchar(varchar will not add lob header).
+      obj.set_collation_type(cs_type);
     }
   } else if (column_type.get_type() != obj.get_type()
              && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))) {
@@ -1563,7 +1564,7 @@ int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
 
-  if (OB_FAIL(init_insert_up(false))) {
+  if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init insert up", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
@@ -1635,7 +1636,7 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
 
-  if (OB_FAIL(init_insert_up(false))) {
+  if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init insert up", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
@@ -2195,6 +2196,30 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
     }
   }
 
+  return ret;
+}
+
+int ObTableCtx::init_insert_when_inc_append()
+{
+  int ret = OB_SUCCESS;
+  inc_append_stage_ = ObTableIncAppendStage::TABLE_INCR_APPEND_INSERT;
+  // from init_update
+  is_for_update_ = false;
+  is_get_ = false;
+  assigns_.reset();
+  // from generate_exprs
+  all_exprs_.reuse();
+  select_exprs_.reset();
+  rowkey_exprs_.reset();
+  index_exprs_.reset();
+  filter_exprs_.reset();
+  related_index_ids_.reset();
+  table_index_info_.reset();
+  select_col_ids_.reset();
+  expr_info_ = nullptr;
+  if (OB_FAIL(init_insert_up(is_client_set_put_))) {
+    LOG_WARN("fail to init ttl insert", K(ret));
+  }
   return ret;
 }
 
