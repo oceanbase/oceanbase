@@ -23,6 +23,8 @@ namespace oceanbase {
 
 namespace share {
 
+thread_local int64_t ObTenantTxDataOpAllocator::local_alloc_size_ = 0;
+
 int64_t ObTenantTxDataAllocator::resource_unit_size()
 {
   static const int64_t TX_DATA_RESOURCE_UNIT_SIZE = OB_MALLOC_NORMAL_BLOCK_SIZE; /* 8KB */
@@ -148,6 +150,60 @@ ObTxDataThrottleGuard::~ObTxDataThrottleGuard()
     // do not need throttle, exit directly
   }
 }
+
+int ObTenantTxDataOpAllocator::init()
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  mem_attr.tenant_id_ = MTL_ID();
+  mem_attr.ctx_id_ = ObCtxIds::MDS_DATA_ID;
+  mem_attr.label_ = "TX_OP";
+  ObSharedMemAllocMgr *share_mem_alloc_mgr = MTL(ObSharedMemAllocMgr *);
+  throttle_tool_ = &(share_mem_alloc_mgr->share_resource_throttle_tool());
+  if (IS_INIT){
+    ret = OB_INIT_TWICE;
+    SHARE_LOG(WARN, "init tenant mds allocator twice", KR(ret), KPC(this));
+  } else if (OB_ISNULL(throttle_tool_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_LOG(WARN, "throttle tool is unexpected null", KP(throttle_tool_), KP(share_mem_alloc_mgr));
+  } else if (OB_FAIL(allocator_.init(OB_MALLOC_NORMAL_BLOCK_SIZE, block_alloc_, mem_attr))) {
+    MDS_LOG(WARN, "init vslice allocator failed", K(ret), K(OB_MALLOC_NORMAL_BLOCK_SIZE), KP(this), K(mem_attr));
+  } else {
+    allocator_.set_nway(MDS_ALLOC_CONCURRENCY);
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+void *ObTenantTxDataOpAllocator::alloc(const int64_t size)
+{
+  int64_t abs_expire_time = THIS_WORKER.get_timeout_ts();
+  void * buf = alloc(size, abs_expire_time);
+  if (OB_NOT_NULL(buf)) {
+    local_alloc_size_ += size;
+  }
+  return buf;
+}
+
+void *ObTenantTxDataOpAllocator::alloc(const int64_t size, const ObMemAttr &attr)
+{
+  UNUSED(attr);
+  void *obj = alloc(size);
+  return obj;
+}
+
+void *ObTenantTxDataOpAllocator::alloc(const int64_t size, const int64_t abs_expire_time)
+{
+  void *obj = allocator_.alloc(size);
+  return obj;
+}
+
+void ObTenantTxDataOpAllocator::free(void *ptr)
+{
+  allocator_.free(ptr);
+}
+
+void ObTenantTxDataOpAllocator::set_attr(const ObMemAttr &attr) { allocator_.set_attr(attr); }
 
 }  // namespace share
 }  // namespace oceanbase

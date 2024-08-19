@@ -144,6 +144,7 @@ int ObTxCtxTableInfo::deserialize_(const char *buf,
                                    ObTxDataTable &tx_data_table)
 {
   int ret = OB_SUCCESS;
+
   if (OB_FAIL(tx_id_.deserialize(buf, buf_len, pos))) {
     TRANS_LOG(WARN, "deserialize tx_id fail.", KR(ret), K(pos), K(buf_len));
   } else if (OB_FAIL(ls_id_.deserialize(buf, buf_len, pos))) {
@@ -448,6 +449,33 @@ bool ObCommitVersionsArray::is_valid()
     }
   }
   return bool_ret;
+}
+
+bool ObITxDataCheckFunctor::is_decided() const
+{
+  return tx_data_check_data_.is_rollback_ ||
+    ObTxData::ABORT == tx_data_check_data_.state_;
+}
+
+void ObITxDataCheckFunctor::resolve_tx_data_check_data_(const int32_t state,
+                                                        const share::SCN commit_version,
+                                                        const share::SCN end_scn,
+                                                        const bool is_rollback)
+{
+  tx_data_check_data_.state_ = state;
+  tx_data_check_data_.commit_version_ = commit_version;
+  tx_data_check_data_.end_scn_ = end_scn;
+  tx_data_check_data_.is_rollback_ = is_rollback;
+}
+
+bool ObITxDataCheckFunctor::may_exist_undecided_state_in_tx_data_table() const
+{
+  return may_exist_undecided_state_in_tx_data_table_;
+}
+
+void ObITxDataCheckFunctor::set_may_exist_undecided_state_in_tx_data_table()
+{
+  may_exist_undecided_state_in_tx_data_table_ = true;
 }
 
 } // end namespace transaction

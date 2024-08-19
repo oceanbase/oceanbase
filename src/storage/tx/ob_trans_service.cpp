@@ -163,6 +163,8 @@ int ObTransService::init(const ObAddr &self,
     TRANS_LOG(WARN, "init dup_tablet_scan_task_ failed",K(ret));
   } else if (OB_FAIL(tablet_to_ls_cache_.init(tenant_id, &tx_ctx_mgr_))) {
     TRANS_LOG(WARN, "init tablet to ls cache failed", K(ret));
+  } else if (OB_FAIL(rollback_sp_msg_mgr_.init(lib::ObMemAttr(tenant_id, "RollbackSPMgr")))) {
+    TRANS_LOG(WARN, "init rollback msg map failed", KR(ret));
   } else {
     self_ = self;
     tenant_id_ = tenant_id;
@@ -174,6 +176,7 @@ int ObTransService::init(const ObAddr &self,
     schema_service_ = schema_service;
     ts_mgr_ = ts_mgr;
     server_tracer_ = server_tracer;
+    rollback_sp_msg_sequence_ = ObTimeUtil::current_time();
     is_inited_ = true;
     TRANS_LOG(INFO, "transaction service inited success", KPC(this), K(tenant_memory_limit), K_(tablet_to_ls_cache));
   }
@@ -968,6 +971,8 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = revert_store_ctx(store_ctx))) {
       TRANS_LOG(WARN, "revert store ctx failed", KR(tmp_ret), K(tx_desc), K(ls_id), K(type));
+    } else {
+      store_ctx.reset();
     }
   }
   TRANS_LOG(DEBUG, "register multi source data on participant", KR(ret), K(tx_desc), K(ls_id),

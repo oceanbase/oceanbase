@@ -106,7 +106,8 @@ ObSimpleClusterTestBase::~ObSimpleClusterTestBase()
 
 void ObSimpleClusterTestBase::SetUp()
 {
-  SERVER_LOG(INFO, "SetUp");
+  auto case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  SERVER_LOG(INFO, "SetUp>>>>>>>>>>>>>>", K(case_name));
   int ret = OB_SUCCESS;
   if (!is_started_) {
     if (OB_FAIL(start())) {
@@ -126,7 +127,8 @@ void ObSimpleClusterTestBase::SetUp()
 
 void ObSimpleClusterTestBase::TearDown()
 {
-
+  auto case_name = ::testing::UnitTest::GetInstance()->current_test_info()->name();
+  SERVER_LOG(INFO, "TearDown>>>>>>>>>>>>>>", K(case_name));
 }
 
 void ObSimpleClusterTestBase::TearDownTestCase()
@@ -192,7 +194,8 @@ int ObSimpleClusterTestBase::close()
 int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
                                            const char *memory_size,
                                            const char *log_disk_size,
-                                           const bool oracle_mode)
+                                           const bool oracle_mode,
+                                           int64_t tenant_cpu)
 {
   SERVER_LOG(INFO, "create tenant start");
   int32_t log_level;
@@ -228,8 +231,8 @@ int ObSimpleClusterTestBase::create_tenant(const char *tenant_name,
   {
     ObSqlString sql;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu 2, memory_size '%s', log_disk_size='%s';",
-                                      UNIT_BASE, tenant_name, memory_size, log_disk_size))) {
+    } else if (OB_FAIL(sql.assign_fmt("create resource unit %s%s max_cpu %ld, memory_size '%s', log_disk_size='%s';",
+                                      UNIT_BASE, tenant_name, tenant_cpu, memory_size, log_disk_size))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));
     } else if (OB_FAIL(sql_proxy.write(sql.ptr(), affected_rows))) {
       SERVER_LOG(WARN, "create_tenant", K(ret));

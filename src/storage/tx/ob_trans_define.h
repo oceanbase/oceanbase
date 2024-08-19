@@ -402,11 +402,13 @@ struct ObLockForReadArg
                    ObTransID data_trans_id,
                    ObTxSEQ data_sql_sequence,
                    bool read_latest,
+                   bool read_uncommitted,
                    share::SCN scn)
     : mvcc_acc_ctx_(acc_ctx),
     data_trans_id_(data_trans_id),
     data_sql_sequence_(data_sql_sequence),
     read_latest_(read_latest),
+    read_uncommitted_(read_uncommitted),
     scn_(scn) {}
 
   DECLARE_TO_STRING;
@@ -415,7 +417,9 @@ struct ObLockForReadArg
   ObTransID data_trans_id_;
   ObTxSEQ data_sql_sequence_;
   bool read_latest_;
-  share::SCN scn_; // Compare with transfer_start_scn, sstable is end_scn, and memtable is ObMvccTransNode scn
+  bool read_uncommitted_;
+  // Compare with transfer_start_scn, sstable is end_scn, and memtable is ObMvccTransNode scn
+  share::SCN scn_;
 };
 
 class ObTransKey final
@@ -1122,6 +1126,13 @@ public:
   void clear_force_abort()
   { flag_ &= ~FORCE_ABORT_BIT; }
 
+  bool is_transfer_blocking() const
+  { return flag_ & TRANSFER_BLOCKING_BIT; }
+  void set_transfer_blocking()
+  { flag_ |= TRANSFER_BLOCKING_BIT; }
+  void clear_transfer_blocking()
+  { flag_ &= ~TRANSFER_BLOCKING_BIT; }
+
   // bool is_prepare_log_submitted() const
   // { return flag_ & PREPARE_LOG_SUBMITTED_BIT; }
   // void set_prepare_log_submitted()
@@ -1156,6 +1167,7 @@ private:
   // indicate whether notified multi data source to prepare
   static const int64_t PREPARE_NOTIFY_BIT = 1UL << 5;
   static const int64_t FORCE_ABORT_BIT = 1UL << 6;
+  static const int64_t TRANSFER_BLOCKING_BIT = 1UL << 7;
 private:
   int64_t flag_;
 };
@@ -1600,10 +1612,35 @@ public:
   TO_STRING_KV(K_(ls_id), K_(exec_epoch), K_(transfer_epoch));
 };
 
+struct ObStandbyCheckInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObStandbyCheckInfo() :
+      check_info_ori_ls_id_(-1),
+      check_part_()
+  {}
+  ~ObStandbyCheckInfo() {}
+  bool operator==(const ObStandbyCheckInfo &other) const {
+    bool bool_ret =    check_info_ori_ls_id_ == other.check_info_ori_ls_id_
+                    && check_part_ == other.check_part_;
+    return bool_ret;
+  }
+  void operator=(const ObStandbyCheckInfo &other) {
+    check_info_ori_ls_id_ = other.check_info_ori_ls_id_;
+    check_part_ = other.check_part_;
+  }
+  bool is_valid() const { return check_info_ori_ls_id_.is_valid()
+                                 && check_part_.is_valid(); }
+  share::ObLSID check_info_ori_ls_id_; // those carrry check info origin ls id
+  ObTxExecPart check_part_;
+  TO_STRING_KV(K_(check_info_ori_ls_id), K_(check_part));
+};
+
 class ObStateInfo
 {
 public:
-  ObStateInfo() : state_(ObTxState::UNKNOWN), version_(), snapshot_version_() {}
+  ObStateInfo() : state_(ObTxState::UNKNOWN), version_(), snapshot_version_(), check_info_() {}
   ObStateInfo(const share::ObLSID &ls_id,
               const ObTxState &state,
               const share::SCN &version,
@@ -1623,15 +1660,19 @@ public:
     state_ = state_info.state_;
     version_ = state_info.version_;
     snapshot_version_ = state_info.snapshot_version_;
+    check_info_ = state_info.check_info_;
   }
+
   bool need_update(const ObStateInfo &state_info);
-  TO_STRING_KV(K_(ls_id), K_(state), K_(version), K_(snapshot_version))
+  TO_STRING_KV(K_(ls_id), K_(state), K_(version), K_(snapshot_version), K_(check_info))
   OB_UNIS_VERSION(1);
 public:
   share::ObLSID ls_id_;
   ObTxState state_;
   share::SCN version_;
   share::SCN snapshot_version_;
+// for epoch check
+  ObStandbyCheckInfo check_info_;
 };
 
 typedef common::ObSEArray<ObElrTransInfo, 1, TransModulePageAllocator> ObElrTransInfoArray;
@@ -1672,6 +1713,26 @@ static const int DUP_TABLE_LEASE_LIST_MAX_COUNT = 8;
 
 
 typedef common::ObSEArray<ObTxExecPart, share::OB_DEFAULT_LS_COUNT> ObTxCommitParts;
+typedef common::ObSEArray<ObTxExecPart, share::OB_DEFAULT_LS_COUNT> ObTxRollbackParts;
+
+#define CONVERT_COMMIT_PARTS_TO_PARTS(commit_parts, parts)                   \
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < commit_parts.count(); idx++) { \
+    if (OB_FAIL(parts.push_back(commit_parts.at(idx).ls_id_))) {             \
+      TRANS_LOG(WARN, "parts push failed", K(ret));                          \
+    }                                                                        \
+  }                                                                          \
+  if (OB_FAIL(ret)) {                                                        \
+    parts.reset();                                                           \
+  }
+#define CONVERT_PARTS_TO_COMMIT_PARTS(parts, commit_parts)                      \
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < parts.count(); idx++) {           \
+    if (OB_FAIL(commit_parts.push_back(ObTxExecPart(parts.at(idx), -1, -1)))) { \
+      TRANS_LOG(WARN, "parts push failed", K(ret));                             \
+    }                                                                           \
+  }                                                                             \
+  if (OB_FAIL(ret)) {                                                           \
+    commit_parts.reset();                                                       \
+  }
 
 class ObEndParticipantsRes
 {
@@ -1687,6 +1748,21 @@ public:
 private:
   ObBlockedTransArray blocked_trans_ids_;
 };
+
+enum class PartCtxSource
+{
+  UNKOWN = 0,
+  MVCC_WRITE = 1,
+  REGISTER_MDS = 2,
+  REPLAY = 3,
+  RECOVER = 4,
+  TRANSFER = 5,
+  TRANSFER_RECOVER = 6,
+};
+
+bool is_transfer_ctx(PartCtxSource ctx_source);
+
+const char *to_str(PartCtxSource src);
 
 enum class RetainCause : int16_t
 {
@@ -1721,6 +1797,7 @@ public:
   explicit ObTxExecInfo(TransModulePageAllocator &allocator)
     : participants_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "PARTICIPANT")),
       incremental_participants_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "INC_PART`")),
+      intermediate_participants_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "INTER_PART`")),
       redo_lsns_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "REDO_LSNS")),
       multi_data_source_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "MDS_ARRAY")),
       checksum_(OB_MALLOC_NORMAL_BLOCK_SIZE, ModulePageAllocator(allocator, "TX_CHECKSUM")),
@@ -1741,6 +1818,8 @@ public:
 
 private:
   ObTxExecInfo &operator=(const ObTxExecInfo &info);
+  int assign_commit_parts(const share::ObLSArray &participants,
+                          const ObTxCommitParts &commit_parts);
 
 public:
   DECLARE_TO_STRING {
@@ -1751,6 +1830,7 @@ public:
                K_(upstream),
                K_(participants),
                K_(incremental_participants),
+               K_(intermediate_participants),
                K_(prev_record_lsn),
                K_(redo_lsns),
                "redo_log_no", redo_lsns_.count(),
@@ -1773,6 +1853,11 @@ public:
                K_(xid),
                K_(need_checksum),
                K_(is_sub2pc),
+               K_(is_transfer_blocking),
+               K_(commit_parts),
+               K_(transfer_parts),
+               K_(is_empty_ctx_created_by_transfer),
+               K_(exec_epoch),
                K_(serial_final_scn),
                K_(serial_final_seq_no));
     return pos;
@@ -1780,10 +1865,11 @@ public:
   ObTxState state_;
   share::ObLSID upstream_;
   share::ObLSArray participants_;
-  ObTxCommitParts commit_parts_;                   // serialization compatible padding
+  ObTxCommitParts commit_parts_;
+  // for tree phase commit
   share::ObLSArray incremental_participants_;
-  ObTxCommitParts intermediate_participants_;      // serialization compatible padding
-  ObTxCommitParts transfer_parts_;                 // serialization compatible padding
+  ObTxCommitParts intermediate_participants_;
+  ObTxCommitParts transfer_parts_;
   LogOffSet prev_record_lsn_;
   ObRedoLSNArray redo_lsns_;
   ObTxBufferNodeArray multi_data_source_;
@@ -1808,9 +1894,9 @@ public:
   ObXATransID xid_;
   bool need_checksum_;
   bool is_sub2pc_;
-  bool is_transfer_blocking_;              // serialization compatible padding
-  bool is_empty_ctx_created_by_transfer_;  // serialization compatible padding
-  int64_t exec_epoch_;                     // serialization compatible padding
+  bool is_transfer_blocking_;
+  bool is_empty_ctx_created_by_transfer_;
+  int64_t exec_epoch_;
   // if valid, this txCtx is logged by multi parallel thread
   // since this scn
   share::SCN serial_final_scn_;
@@ -1839,6 +1925,8 @@ struct ObMulSourceDataNotifyArg
   // force kill trans without abort scn
   bool is_force_kill_;
 
+  bool is_incomplete_replay_;
+
   ObMulSourceDataNotifyArg() { reset(); }
 
   void reset()
@@ -1852,6 +1940,7 @@ struct ObMulSourceDataNotifyArg
     redo_synced_ = false;
     willing_to_commit_ = false;
     is_force_kill_ = false;
+    is_incomplete_replay_ = false;
   }
 
   TO_STRING_KV(K_(tx_id),
@@ -1862,7 +1951,8 @@ struct ObMulSourceDataNotifyArg
                K_(redo_submitted),
                K_(redo_synced),
                K_(willing_to_commit),
-               K_(is_force_kill));
+               K_(is_force_kill),
+               K_(is_incomplete_replay));
 
   // The redo log of current buf_node has been submitted;
   bool is_redo_submitted() const;
@@ -1952,6 +2042,21 @@ struct ObIArraySerDeTrait {
     return ret;
   }
 };
+
+inline bool is_effective_trans_version(const share::SCN trans_version)
+{
+  return trans_version.is_valid()
+    && !trans_version.is_min()
+    && !trans_version.is_max();
+}
+
+inline bool is_effective_trans_version(const int64_t trans_version)
+{
+  return -1 != trans_version
+    && 0 != trans_version
+    && INT64_MAX != trans_version;
+}
+
 } // transaction
 } // oceanbase
 

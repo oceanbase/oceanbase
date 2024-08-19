@@ -1822,6 +1822,24 @@ void ObTxDesc::mark_part_abort(const ObTransID tx_id, const int abort_cause)
   }
 }
 
+int64_t ObTxDesc::get_coord_epoch() const
+{
+  int64_t epoch = -1;
+
+  if (OB_UNLIKELY(!coord_id_.is_valid())) {
+    epoch = -1;
+  } else {
+    ARRAY_FOREACH_NORET(commit_parts_, i) {
+      const ObTxExecPart &part = commit_parts_[i];
+      if (coord_id_ == part.ls_id_) {
+        epoch = part.exec_epoch_;
+      }
+    }
+  }
+
+  return epoch;
+}
+
 int ObTxDesc::add_modified_tables(const ObIArray<uint64_t> &dml_table_ids)
 {
   int ret = OB_SUCCESS;
@@ -1862,6 +1880,7 @@ int ObTxDesc::add_modified_tables(const ObIArray<uint64_t> &dml_table_ids)
   LOG_TRACE("record trans dml table_ids", K(modified_tables_), K(tx_id_));
   return ret;
 }
+
 bool ObTxDesc::has_modify_table(const uint64_t table_id) const
 {
   ObSpinLockGuard guard(lock_);

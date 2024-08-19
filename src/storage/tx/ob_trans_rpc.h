@@ -78,9 +78,10 @@ public:
   // rollback response has changed to use ObTxRollbackSPRespMsg
   // use this field to indicate handler ignore handle by this msg
   bool ignore_;
+  ObSEArray<transaction::ObTxLSEpochPair, 1> downstream_parts_;
 public:
   int get_status() const { return status_; }
-  TO_STRING_KV(K_(status), K_(send_timestamp), K_(born_epoch), K_(addr), K_(ignore));
+  TO_STRING_KV(K_(status), K_(send_timestamp), K_(born_epoch), K_(addr), K_(ignore), K_(downstream_parts));
 };
 
 class ObTransRpcProxy : public obrpc::ObRpcProxy

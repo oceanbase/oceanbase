@@ -16,77 +16,49 @@
 #include "storage/tx_table/ob_tx_table_interface.h"
 #include "storage/tx_table/ob_tx_table.h"
 
+#define PRINT_ERROR_LOG(tx_id, ret, this)                           \
+{                                                                 \
+  if (OB_TRANS_CTX_NOT_EXIST == ret) {                            \
+    LOG_ERROR("trans ctx not exit", KR(ret), K(tx_id), K(*this)); \
+  }                                                               \
+}
+
 namespace oceanbase
 {
 namespace storage
 {
-#define PRINT_ERROR_LOG(tx_id, ret, this) \
-{ \
-  if (OB_TRANS_CTX_NOT_EXIST == ret) { \
-    LOG_ERROR("trans ctx not exit", KR(ret), K(tx_id), K(*this));\
-  }\
-}
 
-// There are two log streams(ls_id=1001 and ls_id=1002). After the transaction is started, there may be scenarios
-// ***********************************************
-// |scene    |  tx_id  | ls_id=1001 | ls_id=1002 |
-// ***********************************************
-// |scene 1  |    1    |     Y      |      Y     |
-// |scene 2  |    2    |     N      |      Y     |
-// |scene 3  |    3    |     Y      |      N     |
-// |scene 4  |    4    |     N      |      N     |
-// ***********************************************
-
-// Only in the transfer scenario, src_tx_table_guard may be effective.
-// In the transfer scenario, suppose ls_id=1001 is src_ls, ls_id=1002 is dest_ls,
-// and then obtain the the output parameters of each interface in different scenarios.
-// tx_table_guard_ belongs to 1002, src_tx_table_guard belongs to 1001
-// ****************************************************************************
-// |             api             |  scene 1     | scene 2 | scene 3 | scene 4 |
-// ****************************************************************************
-// |check_row_locked             | 1002 + 1001  | 1002    | 1001    | ERROR   |
-// |check_sql_sequence_can_read  | 1002 + 1001  | 1002    | 1001    | ERROR   |
-// |lock_for_read                | 1002 + 1001  | 1002    | 1001    | ERROR   |
-// |get_tx_state_with_log_ts     | 1002         | 1002    | 1001    | ERROR   |
-// |cleanout_tx_node             | 1002 + 1001  | 1002    | 1001    | ERROR   |
-// ****************************************************************************
-
-int ObTxTableGuards::check_row_locked(
-    const transaction::ObTransID &read_tx_id,
-    const transaction::ObTransID &data_tx_id,
-    const transaction::ObTxSEQ &sql_sequence,
-    const share::SCN &scn,
-    storage::ObStoreRowLockState &lock_state)
+int ObTxTableGuards::check_row_locked(const transaction::ObTransID &read_tx_id,
+                                      const transaction::ObTransID &data_tx_id,
+                                      const transaction::ObTxSEQ &sql_sequence,
+                                      const share::SCN &scn,
+                                      storage::ObStoreRowLockState &lock_state)
 {
   int ret = OB_SUCCESS;
-  bool dest_succ = false;
-  if (!is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tx table guard is invalid", K(ret), K(data_tx_id), K(tx_table_guard_));
-  } else if (OB_SUCC(tx_table_guard_.check_row_locked(read_tx_id, data_tx_id, sql_sequence, lock_state))) {
-    dest_succ = true;
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(scn)) {
-    LOG_WARN("failed to check row locked", K(ret), K(data_tx_id), K(*this));
-  } else {
-    ret = OB_SUCCESS;
-  }
 
-  if (OB_FAIL(ret)) {
-  } else if (lock_state.is_locked_ || !is_need_read_src(scn)) {
-    // do nothing
+  CheckRowLockedFunctor fn(read_tx_id,
+                           data_tx_id,
+                           sql_sequence,
+                           lock_state);
+
+  if (!src_tx_table_guard_.is_valid()) {
+    ret = check_with_tx_data(data_tx_id, fn);
   } else {
+    bool use_dest = false;
     storage::ObStoreRowLockState src_lock_state;
-    if (OB_FAIL(src_tx_table_guard_.check_row_locked(read_tx_id, data_tx_id, sql_sequence, src_lock_state))) {
-      if (dest_succ && OB_TRANS_CTX_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("trans ctx is not exist", K(data_tx_id));
-      } else {
-        LOG_WARN("failed to check row locked", K(ret), K(data_tx_id), K(*this));
-      }
-    } else {
+    CheckRowLockedFunctor src_fn(read_tx_id,
+                                 data_tx_id,
+                                 sql_sequence,
+                                 src_lock_state);
+
+    ret = check_with_tx_data(data_tx_id,
+                             fn,
+                             src_fn,
+                             use_dest);
+
+    if (!use_dest) {
       lock_state = src_lock_state;
     }
-    PRINT_ERROR_LOG(data_tx_id, ret, this);
   }
 
   return ret;
@@ -106,59 +78,65 @@ int ObTxTableGuards::check_sql_sequence_can_read(
     bool &can_read)
 {
   int ret = OB_SUCCESS;
-  bool src_can_read = false;
-  bool dest_succ = false;
-  can_read = false;
-  if (!is_valid() || !scn.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tx table guard is invalid", K(ret), KPC(this), K(data_tx_id), K(scn));
-  } else if (OB_SUCC(tx_table_guard_.check_sql_sequence_can_read(data_tx_id, sql_sequence, can_read))) {
-    dest_succ = true;
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(scn)) {
-    LOG_WARN("failed to check sql sepuence can read", K(ret), K(data_tx_id), K(*this));
+
+  CheckSqlSequenceCanReadFunctor fn(sql_sequence,
+                                    can_read);
+
+  if (!src_tx_table_guard_.is_valid()) {
+    ret = check_with_tx_data(data_tx_id, fn);
   } else {
-    ret = OB_SUCCESS;
-  }
-  // Both tx_table_guard need to be checked
-  if (OB_FAIL(ret)) {
-  } else if ((dest_succ && !can_read) || !is_need_read_src(scn)) {
-    // do nothing
-  } else {
-    if (OB_FAIL(src_tx_table_guard_.check_sql_sequence_can_read(data_tx_id, sql_sequence, src_can_read))) {
-      if (dest_succ && OB_TRANS_CTX_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("trans ctx is not exist", K(data_tx_id));
-      } else {
-        LOG_WARN("failed to check sql sepuence can read from source tx table", K(ret), K(data_tx_id), K(*this));
-      }
-    } else {
+    bool use_dest = false;
+    bool src_can_read = false;
+    CheckSqlSequenceCanReadFunctor src_fn(sql_sequence,
+                                          src_can_read);
+
+    ret = check_with_tx_data(data_tx_id,
+                             fn,
+                             src_fn,
+                             use_dest);
+
+    if (!use_dest) {
       can_read = src_can_read;
     }
-    PRINT_ERROR_LOG(data_tx_id, ret, this);
   }
 
   return ret;
 }
 
 int ObTxTableGuards::get_tx_state_with_scn(
-    const transaction::ObTransID &data_trans_id,
+    const transaction::ObTransID &data_tx_id,
     const share::SCN scn,
     int64_t &state,
     share::SCN &trans_version)
 {
   int ret = OB_SUCCESS;
-  if (!is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tx table guard is invalid", K(ret), KPC(this), K(data_trans_id));
-  } else if (OB_SUCC(tx_table_guard_.get_tx_state_with_scn(data_trans_id, scn, state, trans_version))) {
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(scn)) {
-    LOG_WARN("failed to get tx state with log ts", K(ret), K(data_trans_id), K(*this));
+
+  GetTxStateWithSCNFunctor fn(scn,
+                              state,
+                              trans_version);
+
+  if (!src_tx_table_guard_.is_valid()) {
+    ret = check_with_tx_data(data_tx_id, fn);
   } else {
-    if (OB_FAIL(src_tx_table_guard_.get_tx_state_with_scn(data_trans_id, scn, state, trans_version))) {
-      LOG_WARN("failed to get tx state with log ts from source tx table", K(ret), K(data_trans_id), K(*this));
+    bool use_dest = false;
+    int64_t src_state = 0;
+    share::SCN src_trans_version;
+    GetTxStateWithSCNFunctor src_fn(scn,
+                                    src_state,
+                                    src_trans_version);
+
+
+    ret = check_with_tx_data(data_tx_id,
+                             fn,
+                             src_fn,
+                             use_dest);
+
+    if (!use_dest) {
+      state = src_state;
+      trans_version = src_trans_version;
     }
-    PRINT_ERROR_LOG(data_trans_id, ret, this);
   }
+
   return ret;
 }
 
@@ -166,47 +144,57 @@ int ObTxTableGuards::lock_for_read(
     const transaction::ObLockForReadArg &lock_for_read_arg,
     bool &can_read,
     share::SCN &trans_version,
-    bool &is_determined_state,
     ObCleanoutOp &cleanout_op,
     ObReCheckOp &recheck_op)
 {
   int ret = OB_SUCCESS;
-  bool dest_succ = false;
-  can_read = false;
-  if (!is_valid() || !lock_for_read_arg.scn_.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tx table guard is invalid", K(ret), KPC(this), K(lock_for_read_arg));
-  } else if (OB_SUCC(tx_table_guard_.lock_for_read(lock_for_read_arg,
-      can_read, trans_version, is_determined_state, cleanout_op, recheck_op))) {
-    dest_succ = true;
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(lock_for_read_arg.scn_)) {
-    LOG_WARN("failed to lock for read", K(ret), "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
-  } else {
-    ret = OB_SUCCESS;
-  }
 
-  if (OB_FAIL(ret)) {
-  } else if ((dest_succ && !can_read) || !is_need_read_src(lock_for_read_arg.scn_)) {
-    // do nothing
-  } else {
-    // Both tx_table_guard need to be checked
-    bool src_can_read = false;
-    share::SCN src_trans_version = share::SCN::invalid_scn();
-    bool src_is_determined_state = false;
-    if (OB_FAIL(src_tx_table_guard_.lock_for_read(lock_for_read_arg,
-        src_can_read, src_trans_version, src_is_determined_state, cleanout_op, recheck_op))) {
-      if (dest_succ && OB_TRANS_CTX_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("trans ctx is not exist", K(lock_for_read_arg));
-      } else {
-        LOG_WARN("failed to lock for read from source tx table", K(ret), "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
+  LockForReadFunctor fn(lock_for_read_arg,
+                        can_read,
+                        trans_version,
+                        tx_table_guard_.get_ls_id(),
+                        cleanout_op,
+                        recheck_op);
+
+  if (!src_tx_table_guard_.is_valid()) {
+    ret = check_with_tx_data(lock_for_read_arg.data_trans_id_, fn);
+
+    if (OB_SUCC(ret)) {
+      if (cleanout_op.need_cleanout()) {
+        cleanout_op(fn.get_tx_data_check_data());
       }
-    } else {
-      can_read = src_can_read;
-      trans_version = src_trans_version;
-      is_determined_state = src_is_determined_state;
     }
-    PRINT_ERROR_LOG(lock_for_read_arg.data_trans_id_, ret, this);
+  } else {
+    bool use_dest = false;
+    bool src_can_read = false;
+    share::SCN src_trans_version;
+
+    LockForReadFunctor src_fn(lock_for_read_arg,
+                              src_can_read,
+                              src_trans_version,
+                              src_tx_table_guard_.get_ls_id(),
+                              cleanout_op,
+                              recheck_op);
+
+    ret = check_with_tx_data(lock_for_read_arg.data_trans_id_,
+                             fn,
+                             src_fn,
+                             use_dest);
+
+    if (OB_SUCC(ret)) {
+      if (!use_dest) {
+        can_read = src_can_read;
+        trans_version = src_trans_version;
+      }
+
+      if (cleanout_op.need_cleanout()) {
+        if (use_dest) {
+          cleanout_op(fn.get_tx_data_check_data());
+        } else {
+          cleanout_op(src_fn.get_tx_data_check_data());
+        }
+      }
+    }
   }
 
   return ret;
@@ -215,78 +203,88 @@ int ObTxTableGuards::lock_for_read(
 int ObTxTableGuards::lock_for_read(
     const transaction::ObLockForReadArg &lock_for_read_arg,
     bool &can_read,
-    share::SCN &trans_version,
-    bool &is_determined_state)
+    share::SCN &trans_version)
 {
   int ret = OB_SUCCESS;
-  bool dest_succ = false;
-  if (!tx_table_guard_.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tx table guard is invalid", K(ret), K(tx_table_guard_));
-  } else if (OB_SUCC(tx_table_guard_.lock_for_read(lock_for_read_arg,
-      can_read, trans_version, is_determined_state))) {
-    dest_succ = true;
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(lock_for_read_arg.scn_)) {
-    LOG_WARN("failed to lock for read", K(ret), "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
+  ObCleanoutNothingOperation clean_nothing_op;
+  ObReCheckNothingOperation recheck_nothing_op;
+
+  LockForReadFunctor fn(lock_for_read_arg,
+                        can_read,
+                        trans_version,
+                        tx_table_guard_.get_ls_id(),
+                        clean_nothing_op,
+                        recheck_nothing_op);
+
+  if (!src_tx_table_guard_.is_valid()) {
+    ret = check_with_tx_data(lock_for_read_arg.data_trans_id_, fn);
   } else {
-    ret = OB_SUCCESS;
-  }
-  if (OB_FAIL(ret)) {
-  } else if ((dest_succ && !can_read) || !is_need_read_src(lock_for_read_arg.scn_)) {
-  } else {
+    bool use_dest = false;
     bool src_can_read = false;
-    share::SCN src_trans_version = share::SCN::invalid_scn();
-    bool src_is_determined_state = false;
-    if (OB_FAIL(src_tx_table_guard_.lock_for_read(lock_for_read_arg,
-        src_can_read, src_trans_version, src_is_determined_state))) {
-      if (dest_succ && OB_TRANS_CTX_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("trans ctx is not exist", K(lock_for_read_arg));
-      } else {
-        LOG_WARN("failed to lock for read from source tx table", K(ret), "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
-      }
-    } else {
+    share::SCN src_trans_version;
+
+    LockForReadFunctor src_fn(lock_for_read_arg,
+                              src_can_read,
+                              src_trans_version,
+                              src_tx_table_guard_.get_ls_id(),
+                              clean_nothing_op,
+                              recheck_nothing_op);
+
+    ret = check_with_tx_data(lock_for_read_arg.data_trans_id_,
+                             fn,
+                             src_fn,
+                             use_dest);
+
+    if (!use_dest) {
       can_read = src_can_read;
       trans_version = src_trans_version;
-      is_determined_state = src_is_determined_state;
     }
-    PRINT_ERROR_LOG(lock_for_read_arg.data_trans_id_, ret, this);
   }
+
   return ret;
 }
 
 int ObTxTableGuards::cleanout_tx_node(
-    const transaction::ObTransID &tx_id,
+    const transaction::ObTransID &data_tx_id,
     memtable::ObMvccRow &value,
     memtable::ObMvccTransNode &tnode,
     const bool need_row_latch)
 {
   int ret = OB_SUCCESS;
-  bool dest_succ = false;
-  if (!is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tx table guard is invalid", K(ret), KPC(this), K(tx_id));
-  } else if (OB_SUCC(tx_table_guard_.cleanout_tx_node(tx_id, value, tnode, need_row_latch))) {
-    dest_succ = true;
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(tnode.get_scn())) {
-    LOG_WARN("failed to cleanout tx node", K(ret), K(tx_id), K(*this));
-  } else {
-    ret = OB_SUCCESS;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (!is_need_read_src(tnode.get_scn())) {
-    // do nothing
-  } else {
-    if (OB_FAIL(src_tx_table_guard_.cleanout_tx_node(tx_id, value, tnode, need_row_latch))) {
-      if (dest_succ && OB_TRANS_CTX_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("trans ctx is not exist", K(tx_id));
-      } else {
-        LOG_WARN("failed to cleanout tx nod from source tx table", K(ret), K(tx_id), K(*this));
+
+  ObCleanoutTxNodeOperation op(value,
+                               tnode,
+                               need_row_latch);
+  CleanoutTxStateFunctor fn(tnode.seq_no_, op);
+
+  if (!src_tx_table_guard_.is_valid()) {
+    ret = check_with_tx_data(data_tx_id, fn);
+
+    if (OB_SUCC(ret)) {
+      if (op.need_cleanout()) {
+        op(fn.get_tx_data_check_data());
       }
     }
-    PRINT_ERROR_LOG(tx_id, ret, this);
+  } else {
+    bool use_dest = false;
+    CleanoutTxStateFunctor src_fn(tnode.seq_no_, op);
+
+    ret = check_with_tx_data(data_tx_id,
+                             fn,
+                             src_fn,
+                             use_dest);
+
+    if (OB_SUCC(ret)) {
+      if (op.need_cleanout()) {
+        if (use_dest) {
+          op(fn.get_tx_data_check_data());
+        } else {
+          op(src_fn.get_tx_data_check_data());
+        }
+      }
+    }
   }
+
   return ret;
 }
 
@@ -301,30 +299,92 @@ bool ObTxTableGuards::check_ls_offline()
   return discover_ls_offline;
 }
 
-// scn: sstable is end_scn, memtable is ObMvccTransNode scn
-// src_tx_table_guard_ and transfer_start_scn_ are valid, indicating that it is an operation during the transfer process.
-// By comparing the size of scn and transfer_start_scn_, you can indirectly determine which log stream the data corresponding to this transaction belongs to.
-// scn <= transfer_start_scn_ : the data is on the src ls of the transfer, you need to read src_tx_table_guard_.
-// scn > transfer_start_scn_ : the data is on the dest ls of the transfer, you need to check tx_table_guard_.
-bool ObTxTableGuards::is_need_read_src(const share::SCN scn) const
+int ObTxTableGuards::check_with_tx_data(
+  const transaction::ObTransID &data_tx_id,
+  ObITxDataCheckFunctor &functor,
+  ObITxDataCheckFunctor &src_functor,
+  bool &use_dst)
 {
-  bool is_need = false;
-  if (src_tx_table_guard_.is_valid()
-      && transfer_start_scn_.is_valid()
-      && scn.is_valid()
-      && !scn.is_max()
-      && scn <= transfer_start_scn_) {
-    is_need = true;
-    LOG_INFO("need read src", K(scn), KPC(this), K(is_need));
+  int ret = OB_SUCCESS;
+  bool need_src = false;
+  bool has_dest = false;
+
+  ObReadTxDataArg arg(data_tx_id,
+                      tx_table_guard_.get_epoch(),
+                      tx_table_guard_.get_mini_cache());
+
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tx table guards is invalid", K(ret), KPC(this), K(arg));
+  } else if (OB_FAIL(tx_table_guard_.check_with_tx_data(arg, functor))) {
+    if (OB_TRANS_CTX_NOT_EXIST == ret
+        && src_tx_table_guard_.is_valid()) {
+      // Case1: tx ctx not exists on dst, we need use src's result
+      ret = OB_SUCCESS;
+      need_src = true;
+      has_dest = false;
+    } else {
+      LOG_WARN("check with dst tx data failed", K(ret), KPC(this), K(arg));
+    }
+  } else {
+    need_src = !functor.is_decided()
+      && src_tx_table_guard_.is_valid();
+    has_dest = true;
   }
-  return is_need;
+
+  if (OB_FAIL(ret)) {
+    // pass
+  } else if (need_src) {
+    ObReadTxDataArg src_arg(data_tx_id,
+                            src_tx_table_guard_.get_epoch(),
+                            src_tx_table_guard_.get_mini_cache());
+
+    if (OB_FAIL(src_tx_table_guard_.check_with_tx_data(src_arg,
+                                                       src_functor))) {
+      if (OB_TRANS_CTX_NOT_EXIST == ret && has_dest) {
+        use_dst = true;
+        ret = OB_SUCCESS;
+        LOG_DEBUG("use dest tx table guard as src has no ctx", KPC(this), K(src_arg));
+      } else {
+        LOG_WARN("check with src tx data failed", K(ret), KPC(this), K(src_arg));
+      }
+    } else if (!has_dest || src_functor.is_decided()) {
+      use_dst = false;
+    } else {
+      use_dst = true;
+    }
+
+    LOG_INFO("need read src", KPC(this), K(use_dst), K(functor), K(src_functor));
+  } else {
+    use_dst = true;
+  }
+
+  PRINT_ERROR_LOG(data_tx_id, ret, this);
+
+  return ret;
 }
 
-bool ObTxTableGuards::during_transfer() const
+int ObTxTableGuards::check_with_tx_data(
+  const transaction::ObTransID &data_tx_id,
+  ObITxDataCheckFunctor &functor)
 {
-  return src_tx_table_guard_.is_valid()
-    && transfer_start_scn_.is_valid();
+  int ret = OB_SUCCESS;
+  ObReadTxDataArg arg(data_tx_id,
+                      tx_table_guard_.get_epoch(),
+                      tx_table_guard_.get_mini_cache());
+
+  if (!is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tx table guards is invalid", K(ret), KPC(this), K(arg));
+  } else if (OB_FAIL(tx_table_guard_.check_with_tx_data(arg,
+                                                        functor))) {
+    if (OB_TRANS_CTX_NOT_EXIST != ret) {
+      LOG_WARN("check with dst tx data failed", K(ret), KPC(this), K(arg));
+    }
+  }
+
+  return ret;
 }
 
+} // end namespace storage
 } // end namespace oceanbase
-}

@@ -29,9 +29,11 @@
 #include "storage/tablet/ob_tablet.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
+#include "storage/tx/wrs/ob_weak_read_util.h"
 
 using namespace oceanbase::transaction;
 using namespace oceanbase::share;
+using namespace oceanbase::compaction;
 
 namespace oceanbase
 {
@@ -440,7 +442,10 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   const int64_t start_ts = ObTimeUtil::current_time();
-  LOG_INFO("[TRANSFER] start do with start status", K(task_info));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  bool new_transfer = true;
+  LOG_INFO("[TRANSFER] start do with start status", K(task_info), K(new_transfer));
+
   ObTimeoutCtx timeout_ctx;
   ObMySQLTransaction trans;
   bool enable_kill_trx = false;
@@ -456,8 +461,8 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   diagnose_result_msg_ = share::ObStorageHACostItemName::MAX_NAME;
   process_perf_diagnose_info_(ObStorageHACostItemName::TRANSFER_START_BEGIN,
         ObStorageHADiagTaskType::TRANSFER_START, start_ts, round_, false/*is_report*/);
+  int64_t tablet_stop_begin = 0;
   bool commit_succ = false;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   ObSEArray<ObTabletID, 100> tablet_ids; // (0, 100], default 32, see ObTenantTransferService::get_tablet_count_threshold_(),
   tablet_ids.set_attr(ObMemAttr(MTL_ID(), "TransferTblts"));
   if (tenant_config.is_valid()) {
@@ -467,10 +472,12 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer handler do not init", K(ret));
+  } else if (OB_FAIL(enable_new_transfer(task_info.src_ls_id_, task_info.dest_ls_id_, new_transfer))) {
+    LOG_WARN("fail to fetch new transfer", K(ret));
   } else if (!task_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do with start status get invalid argument", K(ret), K(task_info));
-  } else if (!enable_kill_trx && OB_FAIL(precheck_active_trans_before_lock_member_list_(task_info))) {
+  } else if (!new_transfer && !enable_kill_trx && OB_FAIL(precheck_active_trans_before_lock_member_list_(task_info))) {
     LOG_WARN("failed to prepare active trans before lock member list", K(ret), K(task_info));
   } else if (OB_FAIL(ObTransferUtils::get_gts(task_info.tenant_id_, gts_seq_))) {
     LOG_WARN("failed to get gts seq", K(ret), K(task_info));
@@ -518,17 +525,22 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       LOG_WARN("failed to check start status transfer tablets", K(ret), K(task_info));
     } else if (OB_FAIL(get_dest_ls_max_desided_scn_(task_info, timeout_ctx, dest_max_desided_scn))) {
       LOG_WARN("failed to get dest ls max desided scn", K(ret), K(task_info));
-    } else if (!enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
+    } else if (!new_transfer && !enable_kill_trx && OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_))) {
       LOG_WARN("failed to check src ls active trans", K(ret), K(task_info));
     } else if (OB_FAIL(update_all_tablet_to_ls_(task_info, trans))) {
       LOG_WARN("failed to update all tablet to ls", K(ret), K(task_info));
     } else if (OB_FAIL(lock_tablet_on_dest_ls_for_table_lock_(task_info, trans))) {
       LOG_WARN("failed to lock tablet on dest ls for table lock", KR(ret), K(task_info));
-    } else if (OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, timeout_ctx, succ_block_tx))) {
+    } else if (!new_transfer && OB_FAIL(block_and_kill_tx_(task_info, enable_kill_trx, timeout_ctx, succ_block_tx))) {
       LOG_WARN("failed to block and kill tx", K(ret), K(task_info));
+    } else if (new_transfer && OB_FAIL(do_trans_transfer_start_prepare_(task_info, timeout_ctx, trans))) {
+      LOG_WARN("failed to do trans transfer start prepare", K(ret), K(task_info));
     } else if (OB_FAIL(reset_timeout_for_trans_(timeout_ctx))) {
       LOG_WARN("failed to reset timeout for trans", K(ret));
-    } else if (OB_FAIL(do_trans_transfer_start_(task_info, config_version, dest_max_desided_scn, timeout_ctx, trans))) {
+    } else if (!new_transfer && OB_FAIL(do_trans_transfer_start_(task_info, config_version, dest_max_desided_scn, timeout_ctx, trans))) {
+      LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
+    } else if (new_transfer && FALSE_IT(tablet_stop_begin = ObTimeUtil::current_time())) {
+    } else if (new_transfer && OB_FAIL(do_trans_transfer_start_v2_(task_info, config_version, dest_max_desided_scn, timeout_ctx, trans))) {
       LOG_WARN("failed to do trans transfer start", K(ret), K(task_info));
     } else {
 #ifdef ERRSIM
@@ -542,6 +554,7 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       DEBUG_SYNC(BEFORE_TRANSFER_START_COMMIT);
     }
 
+    int64_t trans_commit_begin = ObTimeUtil::current_time();
     commit_succ = OB_SUCC(ret);
     if (OB_TMP_FAIL(commit_trans_(ret, trans))) {
       LOG_WARN("failed to commit trans", K(tmp_ret), K(ret));
@@ -557,6 +570,15 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
       process_perf_diagnose_info_(ObStorageHACostItemName::START_TRANS_COMMIT,
           ObStorageHADiagTaskType::TRANSFER_START, 0/*start_ts*/, tmp_round, false/*is_report*/);
     }
+    int64_t trans_commit_end = ObTimeUtil::current_time();
+    if (new_transfer) {
+      // tablet write stop from transfer_out_prepare to trans end
+      LOG_INFO("[TRANSFER] transfer start trans commit", KR(ret),
+               "transfer_start_trans_cost", trans_commit_end - tablet_stop_begin,
+               "trans_process", trans_commit_begin - tablet_stop_begin,
+               "trans_commit", trans_commit_end - trans_commit_begin);
+    }
+
     clear_prohibit_(task_info, tablet_ids, succ_block_tx, succ_stop_medium);
   }
 
@@ -566,7 +588,10 @@ int ObTransferHandler::do_with_start_status_(const share::ObTransferTaskInfo &ta
     } else if (FALSE_IT(can_retry = can_retry_(task_info, ret))) {
     } else if (can_retry) {
       LOG_INFO("transfer task can retry", K(ret), K(task_info));
-      if (OB_TMP_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
+      if (!new_transfer && OB_TMP_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, gts_seq_))) {
+        diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_MEMBER_LIST_IN_START;
+        LOG_WARN("failed to unblock tx", K(ret));
+      } else if (OB_TMP_FAIL(unlock_src_and_dest_ls_member_list_(task_info))) {
         diagnose_result_msg_ = share::ObStorageHACostItemName::UNLOCK_MEMBER_LIST_IN_START;
         LOG_WARN("failed to unlock src and dest ls member list", K(tmp_ret), K(ret), K(task_info));
       } else {
@@ -1044,13 +1069,18 @@ int ObTransferHandler::do_trans_transfer_start_(
   } else if (!task_info.is_valid() || !config_version.is_valid() || !dest_max_desided_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("do trans transfer start get invalid argument", K(ret), K(task_info), K(config_version), K(dest_max_desided_scn));
-  } else if (OB_FAIL(do_tx_start_transfer_out_(task_info, dest_max_desided_scn, trans))) {
+  } else if (OB_FAIL(do_tx_start_transfer_out_(task_info,
+                                               dest_max_desided_scn,
+                                               trans,
+                                               transaction::ObTxDataSourceType::START_TRANSFER_OUT,
+                                               SCN::min_scn(),
+                                               nullptr))) {
     LOG_WARN("failed to do tx start transfer out", K(ret), K(task_info));
   } else if (OB_FAIL(check_config_version_(config_version))) {
     LOG_WARN("failed to check config version", K(ret), K(task_info));
   } else if (OB_FAIL(get_start_transfer_out_scn_(task_info, timeout_ctx, start_scn))) {
     LOG_WARN("failed to get start transfer out log ts", K(ret), K(task_info));
-  } else if (OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_, 1/*transfer out trans*/))) {
+  } else if (OB_FAIL(check_src_ls_has_active_trans_(task_info.src_ls_id_, 1 /*transfer out trans*/))) {
     LOG_WARN("failed to check src ls has active trans", K(ret), K(task_info));
   } else if (OB_FAIL(unblock_tx_(task_info.tenant_id_, task_info.src_ls_id_, gts_seq_))) {
     LOG_WARN("failed to unblock tx", K(ret), K(task_info));
@@ -1068,6 +1098,231 @@ int ObTransferHandler::do_trans_transfer_start_(
   }
 
   LOG_INFO("[TRANSFER] finish do trans transfer start", K(task_info), "cost_ts", ObTimeUtil::current_time() - start_ts);
+  return ret;
+}
+
+int ObTransferHandler::do_trans_transfer_start_prepare_(
+    const share::ObTransferTaskInfo &task_info,
+    ObTimeoutCtx &timeout_ctx,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObLSHandle src_ls_handle;
+  ObTransID failed_tx_id;
+  ObStorageHASrcInfo addr_info;
+  addr_info.cluster_id_ = GCONF.cluster_id;
+  ObAddr dest_ls_leader;
+  SCN data_scn;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer handler do not init", K(ret));
+  } else if (!task_info.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("do trans transfer start get invalid argument", K(ret), K(task_info));
+  } else if (OB_FAIL(get_ls_leader_(task_info.dest_ls_id_, dest_ls_leader))) {
+    LOG_WARN("failed to get dest ls leader", K(ret), K(task_info));
+  } else if (task_info.tenant_id_ != MTL_ID()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant not match", K(ret), K(task_info), K(MTL_ID()));
+  } else if (OB_FAIL(do_trans_transfer_dest_prepare_(task_info, trans))) {
+    LOG_WARN("failed to do transfer dest prepare", K(ret), K(task_info));
+  } else if (FALSE_IT(addr_info.src_addr_ = dest_ls_leader)) {
+  // submit active tx redo log before block tablet write to optimise system interrupt time
+  } else if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_, src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("failed to get ls", K(ret), K(task_info));
+  } else if (OB_FAIL(src_ls_handle.get_ls()->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
+    LOG_WARN("failed to submit tx log", K(ret), K(task_info));
+  // submit dest_ls active tx redo log
+  } else if (OB_FAIL(storage_rpc_->submit_tx_log(task_info.tenant_id_, addr_info, task_info.dest_ls_id_, data_scn))) {
+    LOG_WARN("failed to submit tx log", K(ret), K(task_info));
+  } else if (OB_FAIL(wait_src_ls_advance_weak_read_ts_(task_info, timeout_ctx))) {
+    LOG_WARN("failed to wait src_ls advance weak_read_ts", K(ret), K(task_info));
+  }
+  return ret;
+}
+
+int ObTransferHandler::wait_tablet_write_end_(
+    const share::ObTransferTaskInfo &task_info,
+    SCN &data_end_scn,
+    ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = task_info.tenant_id_;
+  const share::ObLSID &src_ls_id = task_info.src_ls_id_;
+  ObLSHandle ls_handle;
+  ObLSService *ls_srv = NULL;
+  ObLS *ls = NULL;
+  logservice::ObLogService *log_service = nullptr;
+  ObRole role;
+  int64_t proposal_id = 0;
+  SCN scn;
+  if (OB_ISNULL(ls_srv = MTL(ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls srv should not be NULL", K(ret), KP(ls_srv));
+  } else if (OB_FAIL(ls_srv->get_ls(src_ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("ls_srv->get_ls() fail", K(ret), K(src_ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is NULL", KR(ret), K(ls_handle));
+  } else {
+    ObSEArray<ObTabletID, 1> tablet_list;
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < task_info.tablet_list_.count(); idx++) {
+      if (OB_FAIL(tablet_list.push_back(task_info.tablet_list_.at(idx).tablet_id()))) {
+        LOG_WARN("push tablet to array failed", KR(ret));
+      }
+    }
+    // wait tablet all operation stop
+    // data memtable write end
+    // table lock operation end
+    ObTransID failed_tx_id;
+    bool has_active_memtable = false;
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ls->get_lock_table()->enable_check_tablet_status(true))) {
+      LOG_WARN("failed to enable check tablet status", KR(ret), K(task_info));
+    } else if (OB_FAIL(ls->wait_tx_write_end(timeout_ctx))) {
+      LOG_WARN("failed to wait tx_write end", KR(ret), K(task_info));
+    } else if (OB_FAIL(ls->get_tx_svr()->traverse_trans_to_submit_redo_log(failed_tx_id))) {
+      LOG_WARN("failed to submit tx log", KR(ret), K(task_info));
+    } else if (OB_FAIL(ls->batch_tablet_freeze(checkpoint::INVALID_TRACE_ID, tablet_list, true))) {
+      LOG_WARN("batch tablet freeze failed", KR(ret), KPC(ls), K(task_info));
+    } else if (OB_FAIL(ls->check_tablet_no_active_memtable(tablet_list, has_active_memtable))) {
+      LOG_WARN("check tablet has active memtable failed", KR(ret), KPC(ls), K(task_info));
+    } else if (has_active_memtable) {
+      ret = OB_EAGAIN;
+      LOG_WARN("tablet has active memtable need retry", KR(ret), K(tablet_list));
+    } else if (OB_FAIL(ls->get_log_handler()->get_max_scn(scn))) {
+      LOG_WARN("log_handler get_max_scn failed", KR(ret), K(task_info));
+    } else {
+      data_end_scn = scn;
+      LOG_INFO("success to wait tablet write end", KR(ret), K(task_info));
+    }
+  }
+  return ret;
+}
+
+int ObTransferHandler::do_trans_transfer_start_v2_(
+    const share::ObTransferTaskInfo &task_info,
+    const palf::LogConfigVersion &config_version,
+    const share::SCN &dest_max_desided_scn,
+    ObTimeoutCtx &timeout_ctx,
+    ObMySQLTransaction &trans)
+{
+  LOG_INFO("[TRANSFER] start do trans transfer start v2", K(task_info));
+  int ret = OB_SUCCESS;
+  SCN start_scn;
+  ObArray<ObMigrationTabletParam> tablet_meta_list;
+  const share::ObTransferStatus next_status(ObTransferStatus::DOING);
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  SCN data_end_scn;
+  ObArray<ObTabletID> tablet_list;
+  ObArray<ObTransID> move_tx_ids;
+  int64_t move_tx_count = 0;
+  int64_t start_time = ObTimeUtil::current_time();
+  int64_t transfer_out_prepare_cost = 0;
+  int64_t wait_tablet_write_end_cost = 0;
+  int64_t filter_tx_cost = 0;
+  int64_t transfer_out_cost = 0;
+  int64_t wait_src_replay_cost = 0;
+  int64_t get_transfer_out_scn_cost = 0;
+  int64_t get_tablets_meta_cost = 0;
+  int64_t move_tx_cost = 0;
+  int64_t transfer_in_cost = 0;
+  int64_t now_time = ObTimeUtil::current_time();
+  int64_t step_time = now_time;
+  #define STEP_COST_AND_CHECK_TIMEOUT(cost)  FALSE_IT(now_time = ObTimeUtil::current_time()) || \
+                                          FALSE_IT(cost = now_time - step_time) ||           \
+                                          FALSE_IT(step_time = now_time) ||                  \
+                                          (timeout_ctx.is_timeouted() && !FALSE_IT(ret = OB_TIMEOUT))
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("transfer handler do not init", K(ret));
+  } else if (!task_info.is_valid() || !config_version.is_valid() || !dest_max_desided_scn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("do trans transfer start get invalid argument", K(ret),
+             K(task_info), K(config_version), K(dest_max_desided_scn));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < task_info.tablet_list_.count(); idx++) {
+      if (OB_FAIL(tablet_list.push_back(task_info.tablet_list_.at(idx).tablet_id()))) {
+        LOG_WARN("push to array failed", KR(ret));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  // MDS transaction operation for block tablet write
+  } else if (OB_FAIL(do_tx_start_transfer_out_(task_info,
+                                               dest_max_desided_scn,
+                                               trans,
+                                               transaction::ObTxDataSourceType::START_TRANSFER_OUT_PREPARE,
+                                               SCN::min_scn(),
+                                               nullptr))) {
+    LOG_WARN("failed to do tx start transfer prepare", K(ret), K(task_info));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(transfer_out_prepare_cost)) {
+    // resubmit tx log promise transfer tablet redo complete
+  } else if (OB_FAIL(wait_tablet_write_end_(task_info, data_end_scn, timeout_ctx))) {
+    LOG_WARN("failed to wait tablet write end", K(ret), K(task_info));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(wait_tablet_write_end_cost)) {
+  } else if (!data_end_scn.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("transfer data_end_scn is invalid", K(ret), K(task_info), K(data_end_scn));
+  } else if (OB_FAIL(ls_->filter_tx_need_transfer(tablet_list, data_end_scn, move_tx_ids))) {
+    LOG_WARN("filter tx need transfer", KR(ret), K(task_info));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(filter_tx_cost)) {
+  } else if (OB_FAIL(check_config_version_(config_version))) {
+    LOG_WARN("failed to check config version", K(ret), K(task_info));
+  } else if (OB_FAIL(do_tx_start_transfer_out_(task_info,
+                                               dest_max_desided_scn,
+                                               trans,
+                                               transaction::ObTxDataSourceType::START_TRANSFER_OUT_V2,
+                                               data_end_scn,
+                                               &move_tx_ids))) {
+    LOG_WARN("failed to do tx start transfer out", K(ret), K(task_info));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(transfer_out_cost)) {
+  } else if (OB_FAIL(get_start_transfer_out_scn_(task_info, timeout_ctx, start_scn))) {
+    LOG_WARN("failed to get start transfer out log ts", K(ret), K(task_info));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(get_transfer_out_scn_cost)) {
+    // wait src replay
+  } else if (OB_FAIL(wait_src_ls_replay_to_start_scn_(task_info, start_scn, timeout_ctx))) {
+    LOG_WARN("failed to wait src ls replay to start scn", K(ret), K(task_info));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(wait_src_replay_cost)) {
+  } else if (OB_FAIL(get_transfer_tablets_meta_(task_info, tablet_meta_list))) {
+    LOG_WARN("failed to get transfer tablets meta", K(ret), K(task_info));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(get_tablets_meta_cost)) {
+  } else if (task_info.data_version_ >= DATA_VERSION_4_2_3_0
+             && OB_FAIL(update_transfer_meta_info_(task_info, start_scn, timeout_ctx))) {
+    LOG_WARN("failed to update transfer meta info", K(ret), K(task_info));
+    // move tx
+  } else if (move_tx_ids.count() > 0
+      && OB_FAIL(do_move_tx_to_dest_ls_(task_info,
+                                        timeout_ctx,
+                                        trans,
+                                        data_end_scn,
+                                        start_scn,
+                                        tablet_list,
+                                        move_tx_ids,
+                                        move_tx_count))) {
+    LOG_WARN("failed to do move tx to dest_ls", K(ret), K(task_info));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(move_tx_cost)) {
+    // transfer in
+  } else if (OB_FAIL(do_tx_start_transfer_in_(task_info, start_scn, tablet_meta_list, timeout_ctx, trans))) {
+    LOG_WARN("failed to do tx start transfer in", K(ret), K(task_info), K(start_scn), K(tablet_meta_list));
+  } else if (STEP_COST_AND_CHECK_TIMEOUT(transfer_in_cost)) {
+  } else if (OB_FAIL(update_transfer_status_(task_info, next_status, start_scn, OB_SUCCESS, trans))) {
+    LOG_WARN("failed to update transfer status", K(ret), K(task_info));
+  }
+
+  LOG_INFO("[TRANSFER] finish transfer start", K(ret), K(task_info), "cost", ObTimeUtil::current_time() - start_time,
+                                               K(transfer_out_prepare_cost),
+                                               K(wait_tablet_write_end_cost),
+                                               K(filter_tx_cost),
+                                               K(transfer_out_cost),
+                                               K(get_transfer_out_scn_cost),
+                                               K(wait_src_replay_cost),
+                                               K(get_tablets_meta_cost),
+                                               K(move_tx_cost),
+                                               K(transfer_in_cost),
+                                               K(move_tx_count),
+                                               K(move_tx_ids));
   return ret;
 }
 
@@ -1182,9 +1437,12 @@ int ObTransferHandler::lock_transfer_task_(
 int ObTransferHandler::do_tx_start_transfer_out_(
     const share::ObTransferTaskInfo &task_info,
     const share::SCN &dest_max_desided_scn,
-    common::ObMySQLTransaction &trans)
+    common::ObMySQLTransaction &trans,
+    const transaction::ObTxDataSourceType data_source_type,
+    SCN data_end_scn,
+    ObIArray<ObTransID> *move_tx_ids)
 {
-  LOG_INFO("start do tx start transfer out", K(task_info));
+  LOG_INFO("[TRANSFER] register start transfer out", K(task_info), K(data_source_type));
   int ret = OB_SUCCESS;
   observer::ObInnerSQLConnection *conn = NULL;
   ObTXStartTransferOutInfo start_transfer_out_info;
@@ -1208,9 +1466,28 @@ int ObTransferHandler::do_tx_start_transfer_out_(
     start_transfer_out_info.dest_ls_id_ = task_info.dest_ls_id_;
     start_transfer_out_info.task_id_ = task_info.task_id_;
     start_transfer_out_info.data_version_ = task_info.data_version_;
+    start_transfer_out_info.data_end_scn_ = data_end_scn;
+    // TODO lana optimise transfer_epoch value
+    start_transfer_out_info.transfer_epoch_ = task_info.task_id_.id();
+    start_transfer_out_info.task_id_ = task_info.task_id_;
+    start_transfer_out_info.data_version_ = DEFAULT_MIN_DATA_VERSION;
+    start_transfer_out_info.filter_tx_need_transfer_ = false;
     if (OB_FAIL(start_transfer_out_info.tablet_list_.assign(task_info.tablet_list_))) {
       LOG_WARN("failed to assign transfer tablet list", K(ret), K(task_info));
-    } else {
+    } else if (ObTxDataSourceType::START_TRANSFER_OUT_V2 == data_source_type) {
+      if (OB_ISNULL(move_tx_ids)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid argument", K(ret), K(task_info));
+      } else {
+        // if has too many tx_ids, we just use data_end_scn to filter
+        start_transfer_out_info.filter_tx_need_transfer_ = true;
+        if (OB_FAIL(start_transfer_out_info.move_tx_ids_.assign(*move_tx_ids))) {
+          LOG_WARN("assign failed", KR(ret), K(move_tx_ids));
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       int64_t buf_len = start_transfer_out_info.get_serialize_size();
       int64_t pos = 0;
       char *buf = (char*)allocator.alloc(buf_len);
@@ -1223,10 +1500,11 @@ int ObTransferHandler::do_tx_start_transfer_out_(
       } else if (OB_FAIL(start_transfer_out_info.serialize(buf, buf_len, pos))) {
         LOG_WARN("fail to serialize start transfer out info", KR(ret), K(start_transfer_out_info));
       } else if (OB_FAIL(conn->register_multi_data_source(task_info.tenant_id_, task_info.src_ls_id_,
-          transaction::ObTxDataSourceType::START_TRANSFER_OUT, buf, buf_len, flag))) {
+          data_source_type, buf, buf_len, flag))) {
         LOG_WARN("failed to register multi data source", K(ret), K(task_info));
       } else {
-        LOG_INFO("[TRANSFER_BLOCK_TX] success register start transfer out", "cost", ObTimeUtil::current_time() - start_ts);
+        LOG_INFO("[TRANSFER] success register start transfer out", "cost", ObTimeUtil::current_time() - start_ts,
+                                                                    K(data_source_type));
       }
 #ifdef ERRSIM
       ObTransferEventRecorder::record_transfer_task_event(
@@ -1244,7 +1522,6 @@ int ObTransferHandler::do_tx_start_transfer_out_(
 #endif
 
     DEBUG_SYNC(AFTER_START_TRANSFER_OUT);
-
   }
   if (OB_SUCC(ret)) {
     process_perf_diagnose_info_(ObStorageHACostItemName::REGISTER_TRANSFER_START_OUT,
@@ -1555,6 +1832,7 @@ int ObTransferHandler::wait_ls_replay_event_(
     }
     ob_usleep(OB_CHECK_START_SCN_READY_INTERVAL);
   }
+  FLOG_INFO("[TRANSFER] wait_ls_replay_event_ finish", K(ret), K(task_info.task_id_), K(check_scn), "cost", ObTimeUtil::current_time() - start_ts);
   return ret;
 }
 
@@ -2390,6 +2668,264 @@ int ObTransferHandler::clear_prohibit_medium_flag_(const ObIArray<ObTabletID> &t
   }
   return ret;
 }
+/*
+ * when src_ls replica replay to latest (> transfer_scn)
+ *
+ * we can collect active tx info from replica, because we have set transfer_blocking on moving ctxs
+ *
+ * after collect we can register move_tx_ctx MDS operation on dest_ls
+ */
+
+int ObTransferHandler::do_move_tx_to_dest_ls_(const share::ObTransferTaskInfo &task_info,
+                                              ObTimeoutCtx &timeout_ctx,
+                                              ObMySQLTransaction &trans,
+                                              const SCN data_end_scn,
+                                              const SCN transfer_scn,
+                                              ObIArray<ObTabletID> &tablet_list,
+                                              ObIArray<ObTransID> &move_tx_ids,
+                                              int64_t &move_tx_count)
+{
+  LOG_INFO("[TRANSFER] do_move_tx_to_dest_ls_", K(task_info), K(data_end_scn));
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  ObLSHandle src_ls_handle;
+  CollectTxCtxInfo collect_res;
+  collect_res.src_ls_id_ = task_info.src_ls_id_;
+  collect_res.dest_ls_id_ = task_info.dest_ls_id_;
+  collect_res.task_id_ = task_info.task_id_.id();
+  // TODO lana optimise transfer_epoch value
+  collect_res.transfer_epoch_ = task_info.task_id_.id();
+  collect_res.transfer_scn_ = transfer_scn;
+  int64_t tx_count = 0;
+  int64_t buf_len = 0;
+  int64_t collect_count = 0;
+  if (OB_FAIL(MTL(ObLSService*)->get_ls(task_info.src_ls_id_,src_ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    LOG_WARN("get ls failed", KR(ret), K(task_info));
+  } else if (OB_FAIL(src_ls_handle.get_ls()->collect_tx_ctx(task_info.dest_ls_id_,
+                                                            data_end_scn,
+                                                            tablet_list,
+                                                            move_tx_ids,
+                                                            collect_count,
+                                                            collect_res.args_))) {
+    LOG_WARN("collect tx ctx failed", KR(ret), K(task_info));
+  } else if (collect_count != collect_res.args_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("collect tx ctx count mismatch", KR(ret), K(collect_count), K(collect_res));
+  } else if (FALSE_IT(move_tx_count = collect_count)) {
+  } else if (0 == collect_count) {
+    // no active tx do nothing
+  } else if (collect_res.args_.count() <= MOVE_TX_BATCH) {
+    // register once
+    if (OB_FAIL(register_move_tx_ctx_batch_(task_info,
+                                            transfer_scn,
+                                            trans,
+                                            collect_res,
+                                            buf_len))) {
+      LOG_WARN("register move_tx_ctx batch failed", KR(ret), K(task_info));
+    }
+  } else {
+    // register batch
+    int64_t start_idx = 0;
+    while (OB_SUCC(ret) && start_idx < collect_res.args_.count()) {
+      int64_t batch_len = 0;
+      CollectTxCtxInfo collect_batch;
+      collect_batch.src_ls_id_ = task_info.src_ls_id_;
+      collect_batch.dest_ls_id_ = task_info.dest_ls_id_;
+      collect_batch.task_id_ = task_info.task_id_.id();
+      collect_batch.transfer_epoch_ = task_info.task_id_.id();
+      collect_batch.transfer_scn_ = transfer_scn;
+      for (int count =0; OB_SUCC(ret) && count < MOVE_TX_BATCH && start_idx < collect_res.args_.count(); count++) {
+        if (OB_FAIL(collect_batch.args_.push_back(collect_res.args_.at(start_idx)))) {
+          LOG_WARN("push to array fail", KR(ret));
+        }
+        start_idx++;
+      }
+      if (FAILEDx(register_move_tx_ctx_batch_(task_info,
+                                              transfer_scn,
+                                              trans,
+                                              collect_batch,
+                                              batch_len))) {
+      } else {
+        buf_len += batch_len;
+      }
+      LOG_INFO("register move_tx_ctx batch", KR(ret), K(start_idx), K(batch_len));
+    }
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("do_move_tx_to_dest_ls_", KR(ret), "cost", end_time-start_time,
+                                              K(task_info),
+                                              "move_tx_count", collect_res.args_.count(),
+                                              "buf_size", buf_len);
+  return ret;
+}
+
+int ObTransferHandler::register_move_tx_ctx_batch_(const share::ObTransferTaskInfo &task_info,
+                                                  const SCN transfer_scn,
+                                                  ObMySQLTransaction &trans,
+                                                  CollectTxCtxInfo &collect_batch,
+                                                  int64_t &batch_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t buf_len = collect_batch.get_serialize_size();
+  int64_t pos = 0;
+  char *buf = NULL;
+  ObArenaAllocator allocator;
+  observer::ObInnerSQLConnection *conn = NULL;
+  ObRegisterMdsFlag flag;
+  flag.need_flush_redo_instantly_ = true;
+  flag.mds_base_scn_ = transfer_scn;
+  if (OB_ISNULL(buf = (char*)allocator.alloc(buf_len))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory failed", KR(ret), K(buf_len));
+  } else if (OB_FAIL(collect_batch.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize", KR(ret), K(collect_batch));
+  } else if (buf_len > OB_MAX_LOG_ALLOWED_SIZE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("move tx ctx batch exceed log size", KR(ret), K(buf_len));
+  } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("conn is null", KR(ret), K(task_info));
+  } else if (OB_FAIL(conn->register_multi_data_source(task_info.tenant_id_, task_info.dest_ls_id_,
+      ObTxDataSourceType::TRANSFER_MOVE_TX_CTX, buf, buf_len, flag))) {
+    LOG_WARN("failed to register multi data source", KR(ret), K(task_info), K(buf), K(buf_len));
+  } else {
+    batch_len = buf_len;
+  }
+  return ret;
+}
+
+int ObTransferHandler::do_trans_transfer_dest_prepare_(
+    const share::ObTransferTaskInfo &task_info,
+    ObMySQLTransaction &trans)
+{
+  LOG_INFO("do_trans_transfer_dest_prepare_", K(task_info));
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtil::current_time();
+  ObTransferDestPrepareInfo info;
+  info.task_id_ = task_info.task_id_.id();
+  info.src_ls_id_ = task_info.src_ls_id_;
+  info.dest_ls_id_ = task_info.dest_ls_id_;
+  int64_t buf_len = info.get_serialize_size();
+  int64_t pos = 0;
+  char *buf = NULL;
+  ObArenaAllocator allocator;
+  observer::ObInnerSQLConnection *conn = NULL;
+  ObRegisterMdsFlag flag;
+  flag.need_flush_redo_instantly_ = true;
+  if (OB_ISNULL(buf = (char*)allocator.alloc(buf_len))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc memory failed", KR(ret), K(buf_len));
+  } else if (OB_FAIL(info.serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize", KR(ret), K(info));
+  } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans.get_connection()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("conn is null", KR(ret), K(task_info));
+  } else if (OB_FAIL(conn->register_multi_data_source(task_info.tenant_id_, task_info.dest_ls_id_,
+      ObTxDataSourceType::TRANSFER_DEST_PREPARE, buf, buf_len, flag))) {
+    LOG_WARN("failed to register multi data source", KR(ret), K(task_info), K(buf), K(buf_len));
+  }
+  int64_t end_time = ObTimeUtil::current_time();
+  LOG_INFO("[TRANSFER] do_trans_transfer_dest_prepare_", KR(ret), "cost", end_time - start_time, K(task_info));
+  return ret;
+}
+
+int ObTransferHandler::wait_src_ls_advance_weak_read_ts_(
+    const share::ObTransferTaskInfo &task_info,
+    ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObAddr dest_ls_leader;
+  ObStorageHASrcInfo addr_info;
+  addr_info.cluster_id_ = GCONF.cluster_id;
+  if (OB_FAIL(get_ls_leader_(task_info.dest_ls_id_, dest_ls_leader))) {
+    LOG_WARN("failed to get src ls leader", K(ret), K(task_info));
+  } else if (FALSE_IT(addr_info.src_addr_ = dest_ls_leader)) {
+  } else {
+     int64_t start_time = ObClockGenerator::getClock();
+     share::SCN transfer_dest_prepare_scn;
+     int64_t timeout = timeout_ctx.get_timeout();
+     // get dest_ls transfer_dest_prepare_scn
+     while (OB_SUCC(ret)) {
+       if (OB_FAIL(storage_rpc_->get_transfer_dest_prepare_scn(task_info.tenant_id_,
+                                                               addr_info,
+                                                               task_info.dest_ls_id_,
+                                                               transfer_dest_prepare_scn))) {
+         LOG_WARN("failed to get transfer_dest_prepare_scn", KR(ret), K(task_info));
+       } else if (!transfer_dest_prepare_scn.is_valid()) {
+         LOG_WARN("transfer_dest_prepare_scn is invalid need retry", K(task_info.task_id_));
+         if (ObTimeUtil::current_time() - start_time > timeout) {
+           ret = OB_TIMEOUT;
+           FLOG_WARN("failed to get transfer_dest_prepare_scn", KR(ret), K(task_info));
+         } else {
+           ob_usleep(50 * 1000);
+         }
+       } else {
+         break;
+       }
+     }
+     int64_t step_time = ObClockGenerator::getClock();
+     LOG_INFO("[TRANSFER] get dest_ls transfer_dest_prepare_scn", KR(ret), K(task_info.task_id_), K(transfer_dest_prepare_scn),
+         "cost", step_time - start_time, K(timeout));
+     // check src_ls advance weak_read_ts
+     while (OB_SUCC(ret)) {
+       SCN weak_read_ts = ls_->get_ls_wrs_handler()->get_ls_weak_read_ts();
+       if (weak_read_ts <= transfer_dest_prepare_scn) {
+         LOG_WARN("wait src_ls weak_read_ts advance", K(task_info.task_id_), K(weak_read_ts), K(transfer_dest_prepare_scn));
+         if (ObClockGenerator::getClock() - start_time > timeout) {
+           ret = OB_TIMEOUT;
+           FLOG_WARN("failed to wait src_ls advance transfer_dest_prepare_scn", KR(ret), K(task_info), K(transfer_dest_prepare_scn));
+         } else {
+           ob_usleep(20 * 1000);
+         }
+       } else {
+         break;
+       }
+     }
+     int64_t end_time = ObClockGenerator::getClock();
+     LOG_INFO("[TRANSFER] wait src_ls weak_read_ts advance", KR(ret), K(task_info.task_id_), K(transfer_dest_prepare_scn),
+         "cost", end_time - step_time, K(timeout));
+  }
+  return ret;
+}
+
+int enable_new_transfer(const share::ObLSID src_ls_id,
+                        const share::ObLSID dst_ls_id,
+                        bool &enable)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+    LOG_INFO("[TRANSFER] get min data version failed", K(ret));
+  } else if (DATA_VERSION_4_2_5_0 > data_version) {
+    enable = false;
+  } else if (!tenant_config->_enable_active_txn_transfer) {
+    enable = false;
+  } else {
+    enable = true;
+  }
+
+
+  // TODO(handora.qc): remove later
+  if (OB_SUCC(ret) && enable) {
+    share::ObLSStatusOperator op;
+    bool contain = false;
+    if (OB_FAIL(op.check_transfer_contain_duplicate_ls(MTL_ID(),
+                                                       *GCTX.sql_proxy_,
+                                                       src_ls_id,
+                                                       dst_ls_id,
+                                                       contain))) {
+      LOG_WARN("[TRANSFER] check contain failed", K(ret));
+    } else if (contain) {
+      enable = false;
+      LOG_INFO("[TRANSFER] contain duplicate ls for transfer");
+    }
+  }
+
+
+  return ret;
+}
 
 int ObTransferHandler::clear_prohibit_(
     const share::ObTransferTaskInfo &task_info,
@@ -2413,6 +2949,12 @@ int ObTransferHandler::clear_prohibit_(
   if (OB_FAIL(ret)) {
   } else if (is_medium_stop && OB_FAIL(clear_prohibit_medium_flag_(tablet_ids))) {
     LOG_WARN("failed to clear prohibit medium flag", K(ret), K(task_info));
+    ob_abort();
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ls_->get_lock_table()->enable_check_tablet_status(false))) {
+    LOG_WARN("failed to cancel lock table check tablet status", K(ret), K(task_info));
     ob_abort();
   }
 

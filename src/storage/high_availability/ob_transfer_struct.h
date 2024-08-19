@@ -38,6 +38,8 @@ public:
   bool is_valid() const;
   int assign(const ObTXStartTransferOutInfo &start_transfer_out_info);
   int64_t to_string(char *buf, const int64_t buf_len) const;
+  bool empty_tx() { return filter_tx_need_transfer_ && move_tx_ids_.count() == 0; }
+
 
   share::ObLSID src_ls_id_;
   share::ObLSID dest_ls_id_;
@@ -45,8 +47,9 @@ public:
   share::ObTransferTaskID task_id_;
   share::SCN data_end_scn_;   //master placeholder, 42x do not use it
   int64_t transfer_epoch_;    //master placeholder, 42x do not use it
-  uint64_t data_version_;
-
+  uint64_t data_version_;  //transfer_dml_ctrl_42x # placeholder
+  bool filter_tx_need_transfer_;
+  common::ObSEArray<transaction::ObTransID, 1> move_tx_ids_;
   DISALLOW_COPY_AND_ASSIGN(ObTXStartTransferOutInfo);
 };
 

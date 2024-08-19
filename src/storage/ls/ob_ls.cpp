@@ -206,6 +206,8 @@ int ObLS::init(const share::ObLSID &ls_id,
       LOG_WARN("failed to init member list service", K(ret));
     } else if (OB_FAIL(block_tx_service_.init(this))) {
       LOG_WARN("failed to init block tx service", K(ret));
+    } else if (OB_FAIL(ls_transfer_status_.init(this))) {
+      LOG_WARN("failed to init transfer status", K(ret));
     } else {
       REGISTER_TO_LOGSERVICE(logservice::TRANS_SERVICE_LOG_BASE_TYPE, &ls_tx_svr_);
       REGISTER_TO_LOGSERVICE(logservice::STORAGE_SCHEMA_LOG_BASE_TYPE, &ls_tablet_svr_);
@@ -930,6 +932,7 @@ void ObLS::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
   startup_transfer_info_.reset();
   need_delay_resource_recycle_ = false;
+  ls_transfer_status_.reset();
 }
 
 int ObLS::offline_tx_(const int64_t start_ts)
@@ -1001,6 +1004,8 @@ int ObLS::offline_(const int64_t start_ts)
     LOG_WARN("tablet service offline failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(tablet_empty_shell_handler_.offline())) {
     LOG_WARN("tablet_empty_shell_handler  failed", K(ret), K(ls_meta_));
+  } else if (OB_FAIL(ls_transfer_status_.offline())) {
+    LOG_WARN("ls transfer status offline failed", K(ret), K(ls_meta_));
   } else {
     // do nothing
   }
@@ -1137,6 +1142,8 @@ int ObLS::online()
   } else if (FALSE_IT(checkpoint_executor_.online())) {
   } else if (FALSE_IT(tablet_gc_handler_.online())) {
   } else if (FALSE_IT(tablet_empty_shell_handler_.online())) {
+  } else if (OB_FAIL(ls_transfer_status_.online())) {
+    LOG_WARN("ls transfer status online failed", K(ret), K(ls_meta_));
   } else if (OB_FAIL(online_advance_epoch_())) {
   } else {
     is_offlined_ = false;

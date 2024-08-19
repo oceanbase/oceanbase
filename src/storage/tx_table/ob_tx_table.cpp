@@ -690,7 +690,8 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   // step 1 : read tx data in mini cache
   int tmp_ret = OB_SUCCESS;
   bool find_tx_data_in_cache = false;
-  if (OB_TMP_FAIL(check_tx_data_in_mini_cache_(read_tx_data_arg, fn))) {
+  if (read_tx_data_arg.skip_cache_) {
+  } else if (OB_TMP_FAIL(check_tx_data_in_mini_cache_(read_tx_data_arg, fn))) {
     if (OB_TRANS_CTX_NOT_EXIST != tmp_ret) {
       STORAGE_LOG(WARN, "check tx data in mini cache failed", KR(tmp_ret), K(read_tx_data_arg));
     }
@@ -700,7 +701,8 @@ int ObTxTable::check_with_tx_data(ObReadTxDataArg &read_tx_data_arg, ObITxDataCh
   }
 
   // step 2 : read tx data in kv cache
-  if (find_tx_data_in_cache) {
+  if (read_tx_data_arg.skip_cache_) {
+  } else if (find_tx_data_in_cache) {
     // already find tx data and do function with mini cache
   } else if (OB_TMP_FAIL(check_tx_data_in_kv_cache_(read_tx_data_arg, fn))) {
     if (OB_TRANS_CTX_NOT_EXIST != tmp_ret) {
@@ -774,7 +776,7 @@ int ObTxTable::check_tx_data_in_kv_cache_(ObReadTxDataArg &read_tx_data_arg, ObI
       if (ObTxData::RUNNING == tx_data->state_) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR, "read an unexpected state tx data from kv cache");
-      } else if (OB_ISNULL(tx_data->undo_status_list_.head_)) {
+      } else if (!tx_data->op_guard_.is_valid()) {
         // put into mini cache only if this tx data do not have undo actions
         read_tx_data_arg.tx_data_mini_cache_.set(*tx_data);
       }
@@ -813,7 +815,7 @@ int ObTxTable::check_tx_data_in_tables_(ObReadTxDataArg &read_tx_data_arg, ObITx
       // if tx data is not null, put tx data into cache
       if (ObTxData::RUNNING == tx_data->state_) {
       } else {
-        if (OB_ISNULL(tx_data->undo_status_list_.head_)) {
+        if (!tx_data->op_guard_.is_valid()) {
           read_tx_data_arg.tx_data_mini_cache_.set(*tx_data);
         }
 
@@ -889,7 +891,6 @@ int ObTxTable::check_row_locked(ObReadTxDataArg &read_tx_data_arg,
 {
   CheckRowLockedFunctor fn(read_tx_id, read_tx_data_arg.tx_id_, sql_sequence, lock_state);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish check row locked", K(read_tx_data_arg), K(read_tx_id), K(sql_sequence), K(lock_state));
   return ret;
 }
@@ -900,7 +901,6 @@ int ObTxTable::check_sql_sequence_can_read(ObReadTxDataArg &read_tx_data_arg,
 {
   CheckSqlSequenceCanReadFunctor fn(sql_sequence, can_read);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish check sql sequence can read", K(read_tx_data_arg), K(sql_sequence), K(can_read));
   return ret;
 }
@@ -912,7 +912,6 @@ int ObTxTable::get_tx_state_with_scn(ObReadTxDataArg &read_tx_data_arg,
 {
   GetTxStateWithSCNFunctor fn(scn, state, trans_version);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
   LOG_DEBUG("finish get tx state with scn", K(read_tx_data_arg), K(scn), K(state), K(trans_version));
   return ret;
 }
@@ -924,6 +923,7 @@ int ObTxTable::try_get_tx_state(ObReadTxDataArg &read_tx_data_arg,
 {
   int ret = OB_SUCCESS;
   GetTxStateWithSCNFunctor fn(SCN::max_scn(), state, trans_version);
+  fn.set_may_exist_undecided_state_in_tx_data_table();
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tx table is not init.", KR(ret), K(read_tx_data_arg));
@@ -943,15 +943,17 @@ int ObTxTable::lock_for_read(ObReadTxDataArg &read_tx_data_arg,
                              const transaction::ObLockForReadArg &lock_for_read_arg,
                              bool &can_read,
                              SCN &trans_version,
-                             bool &is_determined_state,
                              ObCleanoutOp &cleanout_op,
                              ObReCheckOp &recheck_op)
 {
-  LockForReadFunctor fn(
-      lock_for_read_arg, can_read, trans_version, is_determined_state, ls_id_, cleanout_op, recheck_op);
+  LockForReadFunctor fn(lock_for_read_arg,
+                        can_read,
+                        trans_version,
+                        ls_id_,
+                        cleanout_op,
+                        recheck_op);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
-  // TODO(handora.qc): remove it
-  LOG_DEBUG("finish lock for read", K(lock_for_read_arg), K(can_read), K(trans_version), K(is_determined_state));
+  LOG_DEBUG("finish lock for read", K(lock_for_read_arg), K(can_read), K(trans_version));
   return ret;
 }
 
@@ -1091,7 +1093,7 @@ int ObTxTable::cleanout_tx_node(ObReadTxDataArg &read_tx_data_arg,
                                 const bool need_row_latch)
 {
   ObCleanoutTxNodeOperation op(value, tnode, need_row_latch);
-  CleanoutTxStateFunctor fn(op);
+  CleanoutTxStateFunctor fn(tnode.seq_no_, op);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
   if (OB_TRANS_CTX_NOT_EXIST == ret) {
     if (tnode.is_committed() || tnode.is_aborted()) {
@@ -1099,12 +1101,18 @@ int ObTxTable::cleanout_tx_node(ObReadTxDataArg &read_tx_data_arg,
       ret = OB_SUCCESS;
     }
   }
+
+  if (OB_SUCC(ret)) {
+    if (op.need_cleanout()) {
+      op(fn.get_tx_data_check_data());
+    }
+  }
   return ret;
 }
 
-int ObTxTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
+int ObTxTable::supplement_tx_op_if_exist(ObTxData *tx_data)
 {
-  return tx_data_table_.supplement_undo_actions_if_exist(tx_data);
+  return tx_data_table_.supplement_tx_op_if_exist(tx_data);
 }
 
 int ObTxTable::self_freeze_task() { return tx_data_table_.self_freeze_task(); }
@@ -1113,7 +1121,7 @@ int ObTxTable::generate_virtual_tx_data_row(const transaction::ObTransID tx_id, 
 {
   GenerateVirtualTxDataRowFunctor fn(row_data);
   ObTxDataMiniCache mini_cache;
-  ObReadTxDataArg read_tx_data_arg(tx_id, epoch_, mini_cache);
+  ObReadTxDataArg read_tx_data_arg(tx_id, epoch_, mini_cache, true);
   int ret = check_with_tx_data(read_tx_data_arg, fn);
   return ret;
 }

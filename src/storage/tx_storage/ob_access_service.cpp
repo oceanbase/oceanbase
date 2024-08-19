@@ -476,18 +476,21 @@ int ObAccessService::get_source_ls_tx_table_guard_(
   } else if (ObTabletStatus::TRANSFER_IN != user_data.tablet_status_ || !user_data.transfer_ls_id_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet status is unexpected", K(ret), K(user_data));
+  } else if (ctx_guard.get_store_ctx().mvcc_acc_ctx_.get_tx_table_guards().is_src_valid()) {
+    // The main tablet and local index tablets use the same mvcc_acc_ctx, if the src_tx_table_guard
+    // has been set, you do not need to set it again and must skip start_request_for_transfer,
+    // because it only call end_request_for_transfer once when revert store ctx.
+    ObTxTableGuards &tx_table_guards = ctx_guard.get_store_ctx().mvcc_acc_ctx_.get_tx_table_guards();
+    if (OB_UNLIKELY(tx_table_guards.src_ls_handle_.get_ls()->get_ls_id() != user_data.transfer_ls_id_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("main tablet and local index tablet must have same src ls", K(ret), K(tx_table_guards), K(user_data));
+    }
   } else {
     ObLS *src_ls = nullptr;
-    ObLSService *ls_service = nullptr;
+    ObLSService *ls_service = MTL(ObLSService*);
     ObLSHandle ls_handle;
     ObTxTableGuard src_tx_table_guard;
-    if (!user_data.transfer_ls_id_.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table type is unexpected", K(ret), K(user_data));
-    } else if (OB_ISNULL(ls_service = MTL(ObLSService*))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get ObLSService from MTL", K(ret), KP(ls_service));
-    } else if (OB_FAIL(ls_service->get_ls(user_data.transfer_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
+    if (OB_FAIL(ls_service->get_ls(user_data.transfer_ls_id_, ls_handle, ObLSGetMod::HA_MOD))) {
       LOG_WARN("failed to get ls", K(ret), K(user_data));
     } else if (OB_ISNULL(src_ls = ls_handle.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
@@ -497,10 +500,11 @@ int ObAccessService::get_source_ls_tx_table_guard_(
     } else if (!user_data.transfer_scn_.is_valid() || !src_tx_table_guard.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("transfer_scn or source ls tx_table_guard is invalid", K(ret), K(src_tx_table_guard), K(user_data));
+    } else if (OB_FAIL(src_ls->get_tx_svr()->start_request_for_transfer())) {
+      LOG_WARN("start request for transfer failed", KR(ret), K(user_data));
     } else {
       ObStoreCtx &ctx = ctx_guard.get_store_ctx();
-      ctx.mvcc_acc_ctx_.set_src_tx_table_guard(src_tx_table_guard);
-      ctx.mvcc_acc_ctx_.set_transfer_scn(user_data.transfer_scn_);
+      ctx.mvcc_acc_ctx_.set_src_tx_table_guard(src_tx_table_guard, ls_handle);
       LOG_DEBUG("succ get src tx table guard", K(ret), K(src_ls->get_ls_id()), K(src_tx_table_guard), K(user_data));
     }
   }

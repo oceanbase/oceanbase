@@ -161,7 +161,7 @@ public:
   }
   static bool is_ls_log(const ObTxLogType log_type)
   {
-    return ObTxLogType::TX_START_WORKING_LOG == log_type; 
+    return ObTxLogType::TX_START_WORKING_LOG == log_type;
   }
   static bool can_be_spilt(const ObTxLogType log_type)
   {
@@ -176,6 +176,58 @@ public:
   need_replay_barrier(const ObTxLogType log_type, const ObTxDataSourceType data_source_type);
   static int decide_final_barrier_type(const logservice::ObReplayBarrierType tmp_log_barrier_type,
                                        logservice::ObReplayBarrierType &final_barrier_type);
+};
+
+inline bool is_contain_stat_log(const ObTxCbArgArray &array)
+{
+  bool bool_ret = false;
+  for (int64_t i = 0; i < array.count(); i++) {
+    if ((ObTxLogTypeChecker::is_state_log(array.at(i).get_log_type()))) {
+      bool_ret = true;
+      break;
+    }
+  }
+  return bool_ret;
+}
+
+class ObTxPrevLogType
+{
+public:
+  enum TypeEnum : uint8_t
+  {
+    UNKOWN = 0,
+    SELF = 1,
+    COMMIT_INFO = 2,
+    PREPARE = 3,
+    TRANSFER_IN = 10,
+  };
+
+public:
+  NEED_SERIALIZE_AND_DESERIALIZE;
+  ObTxPrevLogType() { reset(); }
+  ObTxPrevLogType(const TypeEnum prev_log_type) : prev_log_type_(prev_log_type) {}
+
+  bool is_valid() const { return prev_log_type_ > 0; }
+  void set_self() { prev_log_type_ = TypeEnum::SELF; }
+  bool is_self() const { return TypeEnum::SELF == prev_log_type_; }
+  void set_tranfer_in() { prev_log_type_ = TypeEnum::TRANSFER_IN; }
+  bool is_transfer_in() const { return TypeEnum::TRANSFER_IN == prev_log_type_; }
+
+  void set_prepare() { prev_log_type_ = TypeEnum::PREPARE; }
+  void set_commit_info() { prev_log_type_ = TypeEnum::COMMIT_INFO; }
+  bool is_normal_log() const
+  {
+    return TypeEnum::COMMIT_INFO == prev_log_type_ || TypeEnum::PREPARE == prev_log_type_;
+  }
+
+  ObTxLogType convert_to_tx_log_type();
+
+  void reset() { prev_log_type_ = TypeEnum::UNKOWN; }
+
+  TO_STRING_KV("val", prev_log_type_);
+
+private:
+  TypeEnum prev_log_type_;
 };
 
 // ============================== Tx Log Header ==============================
@@ -490,7 +542,7 @@ public:
         incremental_participants_(temp_ref.incremental_participants_), cluster_version_(0),
         app_trace_id_str_(temp_ref.app_trace_id_str_), app_trace_info_(temp_ref.app_trace_info_),
         prev_record_lsn_(temp_ref.prev_record_lsn_), redo_lsns_(temp_ref.redo_lsns_),
-        xid_(temp_ref.xid_)
+        xid_(temp_ref.xid_), commit_parts_(), epoch_(0)
   {
     before_serialize();
   }
@@ -506,12 +558,14 @@ public:
                     ObRedoLSNArray &redo_lsns,
                     share::ObLSArray &incremental_participants,
                     uint64_t cluster_version,
-                    const ObXATransID &xid)
+                    const ObXATransID &xid,
+                    const ObTxCommitParts &commit_parts,
+                    int64_t epoch)
       : scheduler_(scheduler), participants_(participants), upstream_(upstream),
         is_sub2pc_(is_sub2pc), is_dup_tx_(is_dup_tx), can_elr_(is_elr),
         incremental_participants_(incremental_participants), cluster_version_(cluster_version),
         app_trace_id_str_(app_trace_id), app_trace_info_(app_trace_info),
-        prev_record_lsn_(prev_record_lsn), redo_lsns_(redo_lsns), xid_(xid)
+        prev_record_lsn_(prev_record_lsn), redo_lsns_(redo_lsns), xid_(xid), commit_parts_(commit_parts), epoch_(epoch)
   {
     before_serialize();
   };
@@ -529,6 +583,8 @@ public:
   const share::ObLSArray &get_incremental_participants() const { return incremental_participants_; }
   uint64_t get_cluster_version() const { return cluster_version_; }
   const ObXATransID &get_xid() const { return xid_; }
+  int64_t get_epoch() const { return epoch_; }
+  const ObTxCommitParts &get_commit_parts() const { return commit_parts_; }
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
   static const ObTxLogType LOG_TYPE;
@@ -545,7 +601,9 @@ public:
                K(app_trace_info_),
                K(prev_record_lsn_),
                K(redo_lsns_),
-               K(xid_))
+               K(xid_),
+               K(commit_parts_),
+               K(epoch_))
 public:
   int before_serialize();
 
@@ -567,6 +625,8 @@ private:
   ObRedoLSNArray &redo_lsns_;
   // for xa
   ObXATransID xid_;
+  ObTxCommitParts commit_parts_;
+  int64_t epoch_;
 };
 
 class ObTxPrepareLogTempRef
@@ -583,23 +643,24 @@ class ObTxPrepareLog
 
 public:
   ObTxPrepareLog(ObTxPrepareLogTempRef &temp_ref)
-      : incremental_participants_(temp_ref.incremental_participants_), prev_lsn_()
+      : incremental_participants_(temp_ref.incremental_participants_), prev_lsn_(), prev_log_type_()
   {
     before_serialize();
   };
-  ObTxPrepareLog(share::ObLSArray &incremental_participants, LogOffSet &commit_info_lsn)
-      : incremental_participants_(incremental_participants), prev_lsn_(commit_info_lsn)
+  ObTxPrepareLog(share::ObLSArray &incremental_participants, LogOffSet &commit_info_lsn, ObTxPrevLogType prev_log_type)
+      : incremental_participants_(incremental_participants), prev_lsn_(commit_info_lsn), prev_log_type_(prev_log_type)
   {
     before_serialize();
   };
 
   const share::ObLSArray &get_incremental_participants() const { return incremental_participants_; }
   const LogOffSet &get_prev_lsn() { return prev_lsn_; }
+  const ObTxPrevLogType &get_prev_log_type() const  { return prev_log_type_; }
   void set_prev_lsn(const LogOffSet &lsn) { prev_lsn_ = lsn; }
   int ob_admin_dump(share::ObAdminMutatorStringArg &arg);
 
   static const ObTxLogType LOG_TYPE;
-  TO_STRING_KV(K(LOG_TYPE), K(incremental_participants_), K(prev_lsn_));
+  TO_STRING_KV(K(LOG_TYPE), K(incremental_participants_), K(prev_lsn_), K(prev_log_type_));
 
 public:
   int before_serialize();
@@ -610,6 +671,7 @@ private:
 
   //--------- for liboblog -----------
   LogOffSet prev_lsn_;
+  ObTxPrevLogType prev_log_type_;
 };
 
 class ObTxDataBackup
@@ -655,7 +717,7 @@ public:
         checksum_sig_serde_(checksum_sig_),
         incremental_participants_(temp_ref.incremental_participants_),
         multi_source_data_(temp_ref.multi_source_data_), trans_type_(TransType::SP_TRANS),
-        tx_data_backup_(), prev_lsn_(), ls_log_info_arr_(temp_ref.ls_log_info_arr_)
+        tx_data_backup_(), prev_lsn_(), ls_log_info_arr_(temp_ref.ls_log_info_arr_), prev_log_type_()
   {
     before_serialize();
   }
@@ -666,10 +728,11 @@ public:
                 ObTxBufferNodeArray &multi_source_data,
                 int32_t trans_type,
                 LogOffSet prev_lsn,
-                ObLSLogInfoArray &ls_log_info_arr)
+                ObLSLogInfoArray &ls_log_info_arr,
+                ObTxPrevLogType prev_log_type)
       : checksum_(checksum), checksum_sig_(checksum_sig), checksum_sig_serde_(checksum_sig_),
         incremental_participants_(incremental_participants), multi_source_data_(multi_source_data),
-        trans_type_(trans_type), prev_lsn_(prev_lsn), ls_log_info_arr_(ls_log_info_arr)
+        trans_type_(trans_type), prev_lsn_(prev_lsn), ls_log_info_arr_(ls_log_info_arr), prev_log_type_(prev_log_type)
   {
     commit_version_ = commit_version;
     before_serialize();
@@ -683,6 +746,7 @@ public:
   const int32_t &get_trans_type() const { return trans_type_; }
   const ObLSLogInfoArray &get_ls_log_info_arr() const { return ls_log_info_arr_; }
   const LogOffSet &get_prev_lsn() const { return prev_lsn_; }
+  const ObTxPrevLogType &get_prev_log_type() const  { return prev_log_type_; }
   void set_prev_lsn(const LogOffSet &lsn) { prev_lsn_ = lsn; }
 
   const share::SCN get_backup_start_scn() { return tx_data_backup_.get_start_log_ts(); }
@@ -699,7 +763,8 @@ public:
                K(trans_type_),
                K(tx_data_backup_),
                K(prev_lsn_),
-               K(ls_log_info_arr_));
+               K(ls_log_info_arr_),
+               K(prev_log_type_));
 
 public:
   int before_serialize();
@@ -718,9 +783,10 @@ private:
 
   ObTxDataBackup tx_data_backup_;
 
-  //--------- fo r liboblog -----------
+  //--------- for liboblog -----------
   LogOffSet prev_lsn_;
   ObLSLogInfoArray &ls_log_info_arr_;
+  ObTxPrevLogType prev_log_type_;
 };
 
 class ObTxClearLogTempRef
@@ -777,7 +843,8 @@ class ObTxAbortLog
 
 public:
   ObTxAbortLog(ObTxAbortLogTempRef &temp_ref)
-      : multi_source_data_(temp_ref.multi_source_data_), tx_data_backup_()
+      : multi_source_data_(temp_ref.multi_source_data_),
+        tx_data_backup_()
   {
     before_serialize();
   }
@@ -1157,7 +1224,6 @@ public:
                K(len_),
                K(pos_),
                K(cur_log_type_),
-               K(cur_block_barrier_type_),
                K(cb_arg_array_),
                KPC(big_segment_buf_),
                K_(inited),
@@ -1183,7 +1249,6 @@ private:
   int64_t len_;
   int64_t pos_;
   ObTxLogType cur_log_type_;
-  logservice::ObReplayBarrierType cur_block_barrier_type_;
   ObTxCbArgArray cb_arg_array_;
 
   ObTxBigSegmentBuf *big_segment_buf_;

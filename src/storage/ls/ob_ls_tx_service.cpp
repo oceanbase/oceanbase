@@ -26,6 +26,7 @@
 #include "logservice/ob_log_base_header.h"
 #include "share/scn.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 namespace oceanbase
 {
@@ -195,6 +196,30 @@ int ObLSTxService::get_read_store_ctx(const ObTxReadSnapshot &snapshot,
   return ret;
 }
 
+int ObLSTxService::start_request_for_transfer()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(trans_service_) || OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret), KP(trans_service_), KP(mgr_));
+  } else {
+    mgr_->inc_total_request_by_transfer_dest();
+  }
+  return ret;
+}
+
+int ObLSTxService::end_request_for_transfer()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(trans_service_) || OB_ISNULL(mgr_)) {
+    ret = OB_NOT_INIT;
+    TRANS_LOG(WARN, "not init", K(ret), KP(trans_service_), KP(mgr_));
+  } else {
+    mgr_->dec_total_request_by_transfer_dest();
+  }
+  return ret;
+}
+
 int ObLSTxService::get_read_store_ctx(const SCN &snapshot,
                                       const int64_t lock_timeout,
                                       ObStoreCtx &store_ctx) const
@@ -241,20 +266,44 @@ int ObLSTxService::get_write_store_ctx(ObTxDesc &tx,
 int ObLSTxService::revert_store_ctx(storage::ObStoreCtx &store_ctx) const
 {
   int ret = OB_SUCCESS;
+
+  // Phase1: revert the read count of the transfer src read
+  ObTxTableGuard src_tx_table_guard = store_ctx.mvcc_acc_ctx_.get_tx_table_guards().src_tx_table_guard_;
+  if (src_tx_table_guard.is_valid()) {
+    // do not overrite ret
+    int tmp_ret = OB_SUCCESS;
+    ObLSHandle ls_handle = store_ctx.mvcc_acc_ctx_.get_tx_table_guards().src_ls_handle_;
+    if (!ls_handle.is_valid()) {
+      TRANS_LOG(ERROR, "src tx guard is valid when src ls handle not valid", K(store_ctx));
+      if (OB_TMP_FAIL(MTL(ObLSService*)->get_ls(src_tx_table_guard.get_ls_id(), ls_handle, ObLSGetMod::STORAGE_MOD))) {
+        TRANS_LOG(ERROR, "get_ls failed", KR(tmp_ret), K(src_tx_table_guard));
+      } else if (OB_TMP_FAIL(ls_handle.get_ls()->get_tx_svr()->end_request_for_transfer())) {
+        TRANS_LOG(ERROR, "end request for transfer", KR(tmp_ret), K(src_tx_table_guard));
+      }
+    } else {
+      if (OB_TMP_FAIL(ls_handle.get_ls()->get_tx_svr()->end_request_for_transfer())) {
+        TRANS_LOG(ERROR, "end request for transfer", KR(tmp_ret), K(src_tx_table_guard));
+      }
+    }
+  }
+
+  // Phase2: revert the read count of the normal read
+  if (store_ctx.is_read_store_ctx()) {
+    // do not overrite ret
+    int tmp_ret = OB_SUCCESS;
+    if (OB_ISNULL(mgr_)) {
+      tmp_ret = OB_ERR_UNEXPECTED;
+      TRANS_LOG(ERROR, "mgr is null", K(tmp_ret), KP(this));
+    } else {
+      (void)mgr_->end_readonly_request();
+    }
+  }
+
   if (OB_ISNULL(trans_service_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", K(ret));
   } else {
     ret = trans_service_->revert_store_ctx(store_ctx);
-  }
-  // ignore ret
-  if (store_ctx.is_read_store_ctx()) {
-    if (OB_ISNULL(mgr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "mgr is null", K(ret), KP(this));
-    } else {
-      (void)mgr_->end_readonly_request();
-    }
   }
   return ret;
 }
@@ -292,6 +341,7 @@ int ObLSTxService::check_all_readonly_tx_clean_up() const
 {
   int ret = OB_SUCCESS;
   int64_t active_readonly_request_count = 0;
+  int64_t total_request_by_transfer_dest = 0;
   if (OB_ISNULL(mgr_)) {
     ret = OB_NOT_INIT;
     TRANS_LOG(WARN, "not init", KR(ret), K_(ls_id));
@@ -299,6 +349,11 @@ int ObLSTxService::check_all_readonly_tx_clean_up() const
     if (REACH_TIME_INTERVAL(5000000)) {
       TRANS_LOG(INFO, "readonly requests are active", K(active_readonly_request_count));
       mgr_->dump_readonly_request(3);
+    }
+    ret = OB_EAGAIN;
+  } else if ((total_request_by_transfer_dest = mgr_->get_total_request_by_transfer_dest()) > 0) {
+    if (REACH_TIME_INTERVAL(5000000)) {
+      TRANS_LOG(INFO, "readonly requests are active", K(total_request_by_transfer_dest));
     }
     ret = OB_EAGAIN;
   } else {
@@ -760,10 +815,16 @@ int ObLSTxService::prepare_offline(const int64_t start_ts)
     // dont care readonly request
   } else {
     const int64_t readonly_request_cnt = mgr_->get_total_active_readonly_request_count();
+    const int64_t request_by_transfer_dest = mgr_->get_total_request_by_transfer_dest();
     if (readonly_request_cnt > 0) {
       ret = OB_EAGAIN;
       if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
         TRANS_LOG(WARN, "readonly requests are active", K(ret), KP(mgr_), K_(ls_id), K(readonly_request_cnt));
+      }
+    } else if (request_by_transfer_dest > 0) {
+      ret = OB_EAGAIN;
+      if (REACH_TIME_INTERVAL(PRINT_LOG_INTERVAL)) {
+        TRANS_LOG(WARN, "request by transfer_dest", K(ret), KP(mgr_), K_(ls_id), K(request_by_transfer_dest));
       }
     }
   }
@@ -903,6 +964,75 @@ int ObLSTxService::check_tx_blocked(bool &tx_blocked) const
   }
   return ret;
 }
-} // transaction
+int ObLSTxService::filter_tx_need_transfer(ObIArray<ObTabletID> &tablet_list,
+                                           const share::SCN data_end_scn,
+                                           ObIArray<transaction::ObTransID> &move_tx_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(mgr_->filter_tx_need_transfer(tablet_list, data_end_scn, move_tx_ids))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  return ret;
+}
 
+int ObLSTxService::transfer_out_tx_op(const ObTransferOutTxParam &param,
+                                      int64_t &active_tx_count,
+                                      int64_t &op_tx_count)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(mgr_->transfer_out_tx_op(param, active_tx_count, op_tx_count))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("transfer_out_tx_op", KR(ret), "cost", end_time - start_time, K(active_tx_count), K(op_tx_count));
+  return ret;
+}
+
+int ObLSTxService::wait_tx_write_end(ObTimeoutCtx &timeout_ctx)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(mgr_->wait_tx_write_end(timeout_ctx))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("wait_tx_write_end", KR(ret), "cost", end_time - start_time);
+  return ret;
+}
+
+int ObLSTxService::collect_tx_ctx(const ObLSID dest_ls_id,
+                                  const SCN log_scn,
+                                  const ObIArray<ObTabletID> &tablet_list,
+                                  const ObIArray<ObTransID> &move_tx_ids,
+                                  int64_t &collect_count,
+                                  ObIArray<ObTxCtxMoveArg> &res)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(mgr_->collect_tx_ctx(dest_ls_id, log_scn, tablet_list, move_tx_ids, collect_count, res))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("collect_tx_ctx", KR(ret), K(ls_id_), "cost_us", end_time - start_time, K(collect_count));
+  return ret;
+}
+
+int ObLSTxService::move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                              const ObIArray<ObTxCtxMoveArg> &args)
+{
+  int ret = OB_SUCCESS;
+  int64_t start_time = ObTimeUtility::current_time();
+  if (OB_FAIL(mgr_->move_tx_op(move_tx_param, args))) {
+    TRANS_LOG(WARN, "for each tx ctx error", KR(ret));
+  }
+  int64_t end_time = ObTimeUtility::current_time();
+  LOG_INFO("move_tx_ctx", KR(ret), K(ls_id_),"cost_us", end_time - start_time,
+      "count", args.count());
+  return ret;
+
+}
+
+
+} // transaction
 } // oceanbase

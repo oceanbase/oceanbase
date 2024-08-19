@@ -19,6 +19,7 @@
 #include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx_table/ob_tx_table_define.h"
 #include "storage/tx_table/tx_table_local_buffer.h"
+#include "storage/tx/ob_tx_data_op.h"
 
 namespace oceanbase
 {
@@ -154,6 +155,7 @@ public:  // ObTxDataMemtable
       deleted_cnt_(0),
       write_ref_(0),
       occupied_size_(),
+      total_undo_node_cnt_(),
       last_insert_ts_(0),
       state_(ObTxDataMemtable::State::INVALID),
       arena_allocator_(),
@@ -212,6 +214,7 @@ public:  // ObTxDataMemtable
   int get_iter_start_and_count(const transaction::ObTransID &tx_id, ObTxDataLinkNode *&start_node, int64_t &iterate_row_cnt);
 
   share::ObLSID get_ls_id() const;
+  int64_t get_total_undo_node_cnt() const;
 
   /**
    * @brief dump tx data memtable to file
@@ -303,7 +306,6 @@ public:  // checkpoint
   }
 
   int flush(const int64_t trace_id);
-  
   /**
    * @brief Because of the random order of clog callbacks, the tx data in a freezing tx data
    * memtable may not completed. We must wait until the max_consequent_callbacked_scn is larger
@@ -447,6 +449,7 @@ private:  // ObTxDataMemtable
   int64_t write_ref_;
 
   int64_t occupied_size_[MAX_TX_DATA_TABLE_CONCURRENCY];
+  int64_t total_undo_node_cnt_[MAX_TX_DATA_TABLE_CONCURRENCY];
 
   int64_t last_insert_ts_;
   StateChangeTime stat_change_ts_;
@@ -501,7 +504,10 @@ public:
 
     // printf undo status list
     fprintf(fd_, "Undo Actions [from, to): {");
-    ObUndoStatusNode *cur_node = tx_data->undo_status_list_.head_;
+    ObUndoStatusNode *cur_node = NULL;
+    if (tx_data->op_guard_.is_valid()) {
+      cur_node = tx_data->op_guard_->get_undo_status_list().head_;
+    }
     while (OB_NOT_NULL(cur_node))
     {
       for (int i = 0; i < cur_node->size_; i++) {

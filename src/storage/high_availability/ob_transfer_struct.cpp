@@ -34,7 +34,9 @@ ObTXStartTransferOutInfo::ObTXStartTransferOutInfo()
     task_id_(),
     data_end_scn_(),
     transfer_epoch_(0),
-    data_version_(DEFAULT_MIN_DATA_VERSION)
+    data_version_(DEFAULT_MIN_DATA_VERSION),
+    filter_tx_need_transfer_(false),
+    move_tx_ids_()
 {
 }
 
@@ -47,6 +49,8 @@ void ObTXStartTransferOutInfo::reset()
   data_end_scn_.reset();
   transfer_epoch_ = 0;
   data_version_ = 0;
+  filter_tx_need_transfer_ = false;
+  move_tx_ids_.reset();
 }
 
 bool ObTXStartTransferOutInfo::is_valid() const
@@ -65,6 +69,8 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
     LOG_WARN("assign start transfer out info get invalid argument", K(ret), K(start_transfer_out_info));
   } else if (OB_FAIL(tablet_list_.assign(start_transfer_out_info.tablet_list_))) {
     LOG_WARN("failed to assign start transfer out info", K(ret), K(start_transfer_out_info));
+  } else if (OB_FAIL(move_tx_ids_.assign(start_transfer_out_info.move_tx_ids_))) {
+    LOG_WARN("failed to assign move_tx_ids", K(ret), K(start_transfer_out_info));
   } else {
     src_ls_id_ = start_transfer_out_info.src_ls_id_;
     dest_ls_id_ = start_transfer_out_info.dest_ls_id_;
@@ -72,6 +78,7 @@ int ObTXStartTransferOutInfo::assign(const ObTXStartTransferOutInfo &start_trans
     data_end_scn_ = start_transfer_out_info.data_end_scn_;
     transfer_epoch_ = start_transfer_out_info.transfer_epoch_;
     data_version_ = start_transfer_out_info.data_version_;
+    filter_tx_need_transfer_ = start_transfer_out_info.filter_tx_need_transfer_;
   }
   return ret;
 }
@@ -82,22 +89,30 @@ int64_t ObTXStartTransferOutInfo::to_string(char *buf, const int64_t buf_len) co
   int64_t pos = 0;
   int64_t save_pos = 0;
   if (OB_ISNULL(buf) || buf_len <= 0) {
-      // do nothing
+    // do nothing
   } else {
     ObClusterVersion data_version;
     if (OB_FAIL(data_version.init(data_version_))) {
       LOG_WARN("failed to init data version", K(ret), K(data_version_));
     } else {
       J_OBJ_START();
-      J_KV(K_(src_ls_id), K_(dest_ls_id), K_(tablet_list), K_(task_id), K_(data_end_scn), K_(transfer_epoch), K(data_version));
+      J_KV(K_(src_ls_id),
+           K_(dest_ls_id),
+           K_(tablet_list),
+           K_(task_id),
+           K_(data_end_scn),
+           K_(transfer_epoch),
+           K(data_version),
+           K_(filter_tx_need_transfer),
+           K_(move_tx_ids));
       J_OBJ_END();
     }
   }
   return pos;
 }
 
-OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, task_id_, data_end_scn_,
-    transfer_epoch_, data_version_);
+OB_SERIALIZE_MEMBER(ObTXStartTransferOutInfo, src_ls_id_, dest_ls_id_, tablet_list_, task_id_,
+    data_end_scn_, transfer_epoch_, data_version_, filter_tx_need_transfer_, move_tx_ids_);
 
 
 ObTXStartTransferInInfo::ObTXStartTransferInInfo()

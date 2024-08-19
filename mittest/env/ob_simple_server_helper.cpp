@@ -187,6 +187,25 @@ int SimpleServerHelper::select_int64(sqlclient::ObISQLConnection *conn, const ch
   return ret;
 }
 
+int SimpleServerHelper::select_int64(ObMySQLTransaction &trans, uint64_t tenant_id, const char *sql, int64_t &val)
+{
+  int ret = OB_SUCCESS;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    if (OB_FAIL(trans.read(res, tenant_id, sql))) {
+    } else {
+      sqlclient::ObMySQLResult *result = res.get_result();
+      if (result == nullptr) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else if (OB_FAIL(result->next())) {
+      } else if (OB_FAIL(result->get_int("val", val))) {
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("select failed", KR(ret), K(sql));
+  }
+  return ret;
+}
 int SimpleServerHelper::g_select_varchar(uint64_t tenant_id, const char *sql, ObString &val)
 {
   int ret = OB_SUCCESS;
@@ -311,6 +330,57 @@ int SimpleServerHelper::freeze(uint64_t tenant_id, ObLSID ls_id, ObTabletID tabl
   return ret;
 }
 
+int SimpleServerHelper::freeze_tx_data(uint64_t tenant_id, ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else {
+      storage::checkpoint::ObCheckpointExecutor *checkpoint_executor = ls_handle.get_ls()->get_checkpoint_executor();
+      ObTxDataMemtableMgr *tx_data_memtable_mgr
+        = dynamic_cast<ObTxDataMemtableMgr *>(
+          dynamic_cast<ObLSTxService *>(
+            checkpoint_executor->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
+          ->common_checkpoints_[storage::checkpoint::ObCommonCheckpointType::TX_DATA_MEMTABLE_TYPE]);
+      if (OB_ISNULL(tx_data_memtable_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("checkpoint obj is null", KR(ret));
+      } else if (OB_FAIL(tx_data_memtable_mgr->flush(share::SCN::max_scn(),
+              checkpoint::INVALID_TRACE_ID))) {
+      } else {
+        usleep(10 * 1000 * 1000);
+      }
+    }
+  }
+  return ret;
+}
+
+int SimpleServerHelper::freeze_tx_ctx(uint64_t tenant_id, ObLSID ls_id)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+    } else {
+      storage::checkpoint::ObCheckpointExecutor *checkpoint_executor = ls_handle.get_ls()->get_checkpoint_executor();
+      ObTxCtxMemtable *tx_ctx_memtable
+        = dynamic_cast<ObTxCtxMemtable *>(
+          dynamic_cast<ObLSTxService *>(
+            checkpoint_executor->handlers_[logservice::TRANS_SERVICE_LOG_BASE_TYPE])
+          ->common_checkpoints_[storage::checkpoint::ObCommonCheckpointType::TX_CTX_MEMTABLE_TYPE]);
+      if (OB_ISNULL(tx_ctx_memtable)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("checkpoint obj is null", KR(ret));
+      } else if (OB_FAIL(tx_ctx_memtable->flush(share::SCN::max_scn(), 0))) {
+      } else {
+        usleep(10 * 1000 * 1000);
+      }
+    }
+  }
+  return ret;
+}
+
 int SimpleServerHelper::wait_flush_finish(uint64_t tenant_id, ObLSID ls_id, ObTabletID tablet_id)
 {
   int ret = OB_SUCCESS;
@@ -367,6 +437,43 @@ int SimpleServerHelper::remove_tx(uint64_t tenant_id, ObLSID ls_id, ObTransID tx
         ctx->get_ctx_guard(ctx_lock_guard);
         m.del(tx_id, ctx);
       }
+    }
+  }
+  return ret;
+}
+
+int SimpleServerHelper::get_tx_ctx(uint64_t tenant_id,
+                                   ObLSID ls_id,
+                                   ObTransID tx_id,
+                                   ObPartTransCtx *&ctx)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id,
+                                          ls_handle,
+                                          ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("get ls failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(ls_handle.get_ls()->get_tx_ctx(tx_id, false, ctx))) {
+      LOG_WARN("fail to get tx ctx", KR(ret), K(ls_id));
+    }
+  }
+  return ret;
+}
+
+int SimpleServerHelper::revert_tx_ctx(uint64_t tenant_id,
+                                      ObLSID ls_id,
+                                      ObPartTransCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(ls_id,
+                                          ls_handle,
+                                          ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("get ls failed", KR(ret), K(ls_id));
+    } else if (OB_FAIL(ls_handle.get_ls()->revert_tx_ctx(ctx))) {
+      LOG_WARN("fail to revert tx ctx", KR(ret), K(ls_id));
     }
   }
   return ret;
@@ -708,7 +815,12 @@ int SimpleServerHelper::write(sqlclient::ObISQLConnection *conn, const char *sql
   return conn->execute_write(OB_SYS_TENANT_ID, sql, affected_rows);
 }
 
-int InjectTxFaultHelper::submit_log(const char *buf, const int64_t size, const share::SCN &base_ts, ObTxBaseLogCb *cb, const bool need_nonblock)
+int InjectTxFaultHelper::submit_log(const char *buf,
+                                    const int64_t size,
+                                    const share::SCN &base_ts,
+                                    ObTxBaseLogCb *cb,
+                                    const bool need_nonblock,
+                                    const int64_t retry_timeout_us)
 {
 
   int ret = OB_SUCCESS;
@@ -761,6 +873,7 @@ int InjectTxFaultHelper::submit_log(const char *buf, const int64_t size, const s
   }
   return ret;
 }
+
 
 int InjectTxFaultHelper::inject_tx_block(uint64_t tenant_id, ObLSID ls_id, ObTransID tx_id, ObTxLogType log_type)
 {

@@ -10,6 +10,7 @@ target_include_directories(observer_test PUBLIC
   ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
 target_link_libraries(observer_test PUBLIC
   oceanbase
+  mit_env
 )
 
 function(ob_unittest_observer case)
@@ -29,27 +30,33 @@ function(errsim_ha_unittest_observer case)
   target_link_libraries(${case} PRIVATE gtest gmock observer_test oceanbase)
 endfunction()
 
-add_executable(test_simple_ob
-  EXCLUDE_FROM_ALL
-  test_ob_simple_cluster.cpp
-  env/ob_simple_server.cpp
-  env/ob_simple_server_restart_helper.cpp
-  env/ob_simple_cluster_test_base.cpp
-  )
-target_include_directories(test_simple_ob PUBLIC
-  ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
-target_link_libraries(test_simple_ob
-  PRIVATE
-  -Wl,--start-group
-  oceanbase_static
-  ob_sql_static
-  ob_storage_static
-  -Wl,--end-group
-  -static-libgcc
-  -static-libstdc++
-  gtest
-  gmock)
+function(ob_offline_observer case case_file)
+  add_executable(${case}
+    EXCLUDE_FROM_ALL
+    ${case_file}
+    ${OBSERVER_TEST_SRCS}
+    ../${MIT_SRCS}
+    )
+  target_include_directories(${case} PUBLIC
+    ${CMAKE_SOURCE_DIR}/unittest ${CMAKE_SOURCE_DIR}/mittest)
+  target_link_libraries(${case}
+    PRIVATE
+    -Wl,--start-group
+    oceanbase_static
+    ob_sql_static
+    ob_storage_static
+    -Wl,--end-group
+    -static-libgcc
+    -static-libstdc++
+    gtest
+    gmock)
+endfunction()
 
+ob_offline_observer(test_simple_ob test_ob_simple_cluster.cpp)
+ob_offline_observer(test_transfer_tx test_transfer_tx.cpp)
+ob_offline_observer(test_tx_data test_tx_data.cpp)
+
+ob_unittest_observer(test_transfer_no_kill_tx test_transfer_tx.cpp)
 ob_unittest_observer(test_standby_balance test_standby_balance_ls_group.cpp)
 ob_unittest_observer(test_ls_recover test_ls_recover.cpp)
 ob_unittest_observer(test_ob_simple_cluster test_ob_simple_cluster.cpp)
@@ -104,6 +111,9 @@ ob_unittest_observer(test_ob_admin_arg test_ob_admin_arg.cpp)
 ob_unittest_observer(test_tablet_autoinc_mgr test_tablet_autoinc_mgr.cpp)
 ob_unittest_observer(test_tablet_to_ls_cache test_tablet_to_ls_cache.cpp)
 ob_unittest_observer(test_callbacks_with_reverse_order test_callbacks_with_reverse_order.cpp)
+ob_unittest_observer(test_transfer_tx_data test_transfer_with_smaller_tx_data.cpp)
+ob_unittest_observer(test_transfer_in_after_abort test_transfer_in_after_abort.cpp)
+ob_unittest_observer(test_transfer_commit_action test_transfer_with_commit_action.cpp)
 # TODO(muwei.ym): open later
 ob_ha_unittest_observer(test_transfer_handler storage_ha/test_transfer_handler.cpp)
 ob_ha_unittest_observer(test_transfer_and_restart_basic storage_ha/test_transfer_and_restart_basic.cpp)

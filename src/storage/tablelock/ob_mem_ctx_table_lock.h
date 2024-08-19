@@ -91,6 +91,8 @@ public:
       const ObTableLockOpType op_type,
       bool &is_exist,
       uint64_t lock_mode_cnt_in_same_trans[]) const;
+  int64_t get_lock_op_count() { return lock_list_.get_size(); }
+  int check_contain_tablet(ObTabletID tablet_id, bool &contain);
   // wait all the trans that modify with a smaller schema_version finished.
   int check_modify_schema_elapsed(
       const ObLockID &lock_id,
@@ -107,6 +109,7 @@ public:
   int rollback_table_lock(const ObTxSEQ to_seq_no, const ObTxSEQ from_seq_no);
   int sync_log_succ(const share::SCN &scn);
   int get_table_lock_store_info(ObTableLockInfo &table_lock_info);
+  int get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<ObTabletID> &tablet_list);
   // used by deadlock detector to kill the trans.
   void set_killed()
   { is_killed_ = true; }

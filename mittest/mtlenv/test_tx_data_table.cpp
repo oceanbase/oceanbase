@@ -246,6 +246,7 @@ void TestTxDataTable::insert_tx_data_()
     tx_data_guard.reset();
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -283,6 +284,7 @@ void TestTxDataTable::insert_rollback_tx_data_()
     ObTxData *tx_data = nullptr;
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -463,23 +465,24 @@ void TestTxDataTable::do_undo_status_test()
     ObTxDataGuard tx_data_guard;
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
 
     tx_data->tx_id_ = rand();
     for (int i = 1; i <= 1001; i++) {
       transaction::ObUndoAction undo_action(ObTxSEQ(10 * (i + 1), 0), ObTxSEQ(10 * i, 0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
-    ASSERT_EQ(1000 / TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE + 1, tx_data->undo_status_list_.undo_node_cnt_);
+    ASSERT_EQ(1000 / TX_DATA_UNDO_ACT_MAX_NUM_PER_NODE + 1, tx_data->op_guard_->get_undo_status_list().undo_node_cnt_);
 
     {
       transaction::ObUndoAction undo_action(ObTxSEQ(10000000, 0), ObTxSEQ(10,0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
 
-    STORAGETEST_LOG(INFO, "", K(tx_data->undo_status_list_));
-    ASSERT_EQ(1, tx_data->undo_status_list_.head_->size_);
-    ASSERT_EQ(nullptr, tx_data->undo_status_list_.head_->next_);
-    ASSERT_EQ(1, tx_data->undo_status_list_.undo_node_cnt_);
+    STORAGETEST_LOG(INFO, "", K(tx_data->op_guard_->get_undo_status_list()));
+    ASSERT_EQ(1, tx_data->op_guard_->get_undo_status_list().head_->size_);
+    ASSERT_EQ(nullptr, tx_data->op_guard_->get_undo_status_list().head_->next_);
+    ASSERT_EQ(1, tx_data->op_guard_->get_undo_status_list().undo_node_cnt_);
   }
 
   {
@@ -489,23 +492,24 @@ void TestTxDataTable::do_undo_status_test()
   ObTxDataGuard tx_data_guard;
   ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
   ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
+  ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
     tx_data->tx_id_ = rand();
 
     for (int i = 1; i <= 14; i++) {
       transaction::ObUndoAction undo_action(ObTxSEQ(i + 1,0), ObTxSEQ(i,0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
-    ASSERT_EQ(2, tx_data->undo_status_list_.undo_node_cnt_);
+    ASSERT_EQ(2, tx_data->op_guard_->get_undo_status_list().undo_node_cnt_);
 
     {
       transaction::ObUndoAction undo_action(ObTxSEQ(15, 0), ObTxSEQ(7,0));
       ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
     }
 
-    STORAGETEST_LOG(INFO, "", K(tx_data->undo_status_list_));
-    ASSERT_EQ(7, tx_data->undo_status_list_.head_->size_);
-    ASSERT_EQ(nullptr, tx_data->undo_status_list_.head_->next_);
-    ASSERT_EQ(1, tx_data->undo_status_list_.undo_node_cnt_);
+    STORAGETEST_LOG(INFO, "", K(tx_data->op_guard_->get_undo_status_list()));
+    ASSERT_EQ(7, tx_data->op_guard_->get_undo_status_list().head_->size_);
+    ASSERT_EQ(nullptr, tx_data->op_guard_->get_undo_status_list().head_->next_);
+    ASSERT_EQ(1, tx_data->op_guard_->get_undo_status_list().undo_node_cnt_);
   }
 }
 
@@ -515,6 +519,7 @@ void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
     ObTxDataGuard tx_data_guard;
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
     tx_data->tx_id_ = transaction::ObTransID(269381);
     tx_data->commit_version_.convert_for_logservice(ObTimeUtil::current_time_ns());
     tx_data->end_scn_.convert_for_logservice(ObTimeUtil::current_time_ns());
@@ -531,7 +536,7 @@ void TestTxDataTable::test_serialize_with_action_cnt_(int cnt)
     } else {
       node_cnt = cnt / 7 + 1;
     }
-    ASSERT_EQ(node_cnt, tx_data->undo_status_list_.undo_node_cnt_);
+    ASSERT_EQ(node_cnt, tx_data->op_guard_->get_undo_status_list().undo_node_cnt_);
 
     char *buf = nullptr;
     ObArenaAllocator allocator;
@@ -650,6 +655,7 @@ void TestTxDataTable::do_repeat_insert_test() {
     ObTxDataGuard tx_data_guard;
     ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(tx_data_guard, false));
     ASSERT_NE(nullptr, tx_data = tx_data_guard.tx_data());
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
 
     // fill in data
     tx_data->tx_id_ = tx_id;
@@ -752,9 +758,7 @@ int main(int argc, char **argv)
   // TEST_LOG("GCONF.syslog_io_bandwidth_limit %ld ", GCONF.syslog_io_bandwidth_limit.get_value());
   // LOG_INFO("GCONF.syslog_io_bandwidth_limit ", K(GCONF.syslog_io_bandwidth_limit.get_value()));
 
-  if (OB_SUCCESS != ObClockGenerator::init()) {
-    TRANS_LOG(WARN, "ObClockGenerator::init error!");
-  } else {
+  {
     if (argc > 1) {
       const_data_num = atoi(argv[1]);
     } else {

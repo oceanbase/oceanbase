@@ -84,12 +84,11 @@ int ObCachedTransStateMgr::add_trans_state(
   const transaction::ObTxSEQ &sql_seq,
   const int64_t commited_trans_version,
   const int32_t trans_state,
-  const int16_t can_read,
-  const int16_t is_determined_state)
+  const int16_t can_read)
 {
   int ret = OB_SUCCESS;
   ObMergeCachedTransKey key(trans_id, sql_seq);
-  ObMergeCachedTransState status(trans_id, sql_seq, commited_trans_version, trans_state, can_read, is_determined_state);
+  ObMergeCachedTransState status(trans_id, sql_seq, commited_trans_version, trans_state, can_read);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCachedTransStateMgr is not initialized", K(ret));

@@ -37,6 +37,7 @@
   #include "src/storage/multi_data_source/ob_start_transfer_in_mds_ctx.h"
   #include "src/storage/multi_data_source/ob_finish_transfer_in_mds_ctx.h"
   #include "src/storage/multi_data_source/ob_abort_transfer_in_mds_ctx.h"
+  #include "src/storage/tablet/ob_tablet_transfer_tx_ctx.h"
 #endif
 /**************************************************************************************************/
 
@@ -105,6 +106,22 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           24,\
                                           TRANSFER_TASK)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletStartTransferOutPrepareHelper,\
+                                          ::oceanbase::storage::mds::MdsCtx,\
+                                          25,\
+                                          START_TRANSFER_OUT_PREPARE)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletStartTransferOutV2Helper,\
+                                          ::oceanbase::storage::ObTransferOutTxCtx,\
+                                          26,\
+                                          START_TRANSFER_OUT_V2)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObStartTransferMoveTxHelper,\
+                                          ::oceanbase::storage::ObTransferMoveTxCtx,\
+                                          27,\
+                                          TRANSFER_MOVE_TX_CTX)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObStartTransferDestPrepareHelper,\
+                                          ::oceanbase::storage::ObTransferDestPrepareTxCtx,\
+                                          28,\
+                                          TRANSFER_DEST_PREPARE)
   GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletAbortTransferHelper,\
                                           ::oceanbase::storage::mds::ObAbortTransferInMdsCtx,\
                                           32,\
@@ -113,6 +130,7 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                           ::oceanbase::storage::mds::MdsCtx,\
                                           29,\
                                           UNBIND_LOB_TABLET)
+
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
 /**************************************************************************************************/

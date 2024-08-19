@@ -37,6 +37,9 @@ namespace storage
 class ObLSTxService;
 class ObTransSubmitLogFunctor;
 class ObTxCtxTable;
+struct ObTxCtxMoveArg;
+struct ObTransferMoveTxParam;
+struct ObTransferOutTxParam;
 }
 
 namespace memtable
@@ -90,7 +93,7 @@ typedef common::LinkHashValue<share::ObLSID> ObLSTxCtxMgrHashValue;
 struct ObTxCreateArg
 {
   ObTxCreateArg(const bool for_replay,
-                const bool for_special_tx,
+                const PartCtxSource ctx_source,
                 const uint64_t tenant_id,
                 const ObTransID &trans_id,
                 const share::ObLSID &ls_id,
@@ -100,9 +103,12 @@ struct ObTxCreateArg
                 const uint32_t associated_session_id,
                 const common::ObAddr &scheduler,
                 const int64_t trans_expired_time,
-                ObTransService *trans_service)
+                ObTransService *trans_service,
+                ObXATransID xid = ObXATransID(),
+                int64_t epoch = -1,
+                const ObTxCtxMoveArg *move_arg = NULL)
       : for_replay_(for_replay),
-        for_special_tx_(for_special_tx),
+        ctx_source_(ctx_source),
         tenant_id_(tenant_id),
         tx_id_(trans_id),
         ls_id_(ls_id),
@@ -112,7 +118,10 @@ struct ObTxCreateArg
         associated_session_id_(associated_session_id),
         scheduler_(scheduler),
         trans_expired_time_(trans_expired_time),
-        trans_service_(trans_service) {}
+        trans_service_(trans_service),
+        xid_(xid),
+        epoch_(epoch),
+        move_arg_(move_arg) {}
   bool is_valid() const
   {
     return ls_id_.is_valid()
@@ -120,13 +129,13 @@ struct ObTxCreateArg
         && trans_expired_time_ > 0
         && NULL != trans_service_;
   }
-  TO_STRING_KV(K_(for_replay), K_(for_special_tx),
-                 K_(tenant_id), K_(tx_id),
-                 K_(ls_id), K_(cluster_id), K_(cluster_version),
-                 K_(session_id), K_(associated_session_id),
-                 K_(scheduler), K_(trans_expired_time), KP_(trans_service));
+  TO_STRING_KV(K_(for_replay), "ctx_source_", to_str(ctx_source_),
+               K_(tenant_id), K_(tx_id),
+               K_(ls_id), K_(cluster_id), K_(cluster_version),
+               K_(session_id), K_(scheduler), K_(trans_expired_time), KP_(trans_service),
+               K_(epoch), K_(xid), K_(associated_session_id));
   bool for_replay_;
-  bool for_special_tx_;
+  PartCtxSource ctx_source_;
   uint64_t tenant_id_;
   ObTransID tx_id_;
   share::ObLSID ls_id_;
@@ -137,6 +146,9 @@ struct ObTxCreateArg
   const common::ObAddr &scheduler_;
   int64_t trans_expired_time_;
   ObTransService *trans_service_;
+  ObXATransID xid_;
+  int64_t epoch_;
+  const ObTxCtxMoveArg *move_arg_;
 };
 
 // Is used to store and traverse ObTxID
@@ -193,6 +205,23 @@ public:
 
   // Offline the in-memory state of the ObLSTxCtxMgr
   int offline();
+
+  int filter_tx_need_transfer(ObIArray<ObTabletID> &tablet_list,
+                              const share::SCN data_end_scn,
+                              ObIArray<transaction::ObTransID> &move_tx_ids);
+
+  int transfer_out_tx_op(const ObTransferOutTxParam &param,
+                         int64_t& active_tx_count,
+                         int64_t &op_tx_count);
+  int wait_tx_write_end(ObTimeoutCtx &timeout_ctx);
+  int collect_tx_ctx(const share::ObLSID dest_ls_id,
+                     const SCN log_scn,
+                     const ObIArray<ObTabletID> &tablet_list,
+                     const ObIArray<ObTransID> &move_tx_ids,
+                     int64_t &colllect_count,
+                     ObIArray<ObTxCtxMoveArg> &res);
+  int move_tx_op(const ObTransferMoveTxParam &move_tx_param,
+                 const ObIArray<ObTxCtxMoveArg> &args);
 public:
   // Create a TxCtx whose tx_id is specified
   // @param [in] tx_id: transaction ID
@@ -376,6 +405,11 @@ public:
   }
   int64_t get_total_active_readonly_request_count() { return ATOMIC_LOAD(&total_active_readonly_request_count_); }
 
+  void inc_total_request_by_transfer_dest() { (void)ATOMIC_AAF(&total_request_by_transfer_dest_, 1); }
+  void dec_total_request_by_transfer_dest() { (void)ATOMIC_AAF(&total_request_by_transfer_dest_, -1); }
+  int64_t get_total_request_by_transfer_dest() {
+    return total_request_by_transfer_dest_;
+  }
   // Get all tx obj lock information in this ObLSTxCtxMgr
   // @param [out] iter: all tx obj lock op information
   int iterate_tx_obj_lock_op(ObLockOpIterator &iter);
@@ -657,7 +691,6 @@ private:
     static const int64_t ONLINE = 10;
     static const int64_t UNBLOCK_NORMAL = 11;
     static const int64_t MAX = 12;
-
   public:
     static bool is_valid(const int64_t op)
     { return op > INVALID && op < MAX; }
@@ -827,6 +860,9 @@ private:
   int64_t total_active_readonly_request_count_ CACHE_ALIGNED;
 
   int64_t active_tx_count_;
+
+  // for transfer dest_ls depend src_ls
+  int64_t total_request_by_transfer_dest_;
 
   // It is used to record the time point of leader takeover
   // gts must be refreshed to the newest before the leader provides services

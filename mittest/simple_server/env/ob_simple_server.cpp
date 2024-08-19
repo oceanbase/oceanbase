@@ -251,7 +251,7 @@ int ObSimpleServer::init_sql_proxy2(const char *tenant_name, const char *db_name
   param.long_query_timeout_ = 300*1000*1000; // 120s
   param.connection_refresh_interval_ = 200*1000; // 200ms
   param.connection_pool_warn_time_ = 10*1000*1000; // 1s
-  param.sqlclient_per_observer_conn_limit_ = 1000;
+  param.sqlclient_per_observer_conn_limit_ = 10000;
   ret = sql_conn_pool2_.init(db_addr, param);
   if (OB_SUCC(ret)) {
     sql_conn_pool2_.set_mode(common::sqlclient::ObMySQLConnection::DEBUG_MODE);

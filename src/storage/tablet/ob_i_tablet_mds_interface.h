@@ -63,6 +63,7 @@ public:
   int is_locked_by_others(bool &is_locked, const mds::MdsWriter &self = mds::MdsWriter()) const;
 
   int check_tablet_status_written(bool &written) const;
+  int get_latest_tablet_status(ObTabletCreateDeleteMdsUserData &data, bool &is_committed) const;
   // belows are wrapper interfaces for default getter for simple data structure
   // specialization get for each module
   // if trans_stat < BEFORE_PREPARE, trans_version is explained as prepare_version(which is MAX).

@@ -114,4 +114,5 @@ endif()
 if(OB_BUILD_CLOSE_MODULES)
   storage_unittest(test_lob_seq_id)
 endif()
+
 storage_unittest(test_sstable_log_ts_range_cut test_sstable_log_ts_range_cut.cpp)

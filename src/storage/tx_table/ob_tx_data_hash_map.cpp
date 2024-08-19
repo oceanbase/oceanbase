@@ -57,7 +57,6 @@ int ObTxDataHashMap::init()
 int ObTxDataHashMap::insert(const transaction::ObTransID &key, ObTxData *value)
 {
   int ret = OB_SUCCESS;
-
   if (!key.is_valid() || OB_ISNULL(value)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", K(key), KP(value));

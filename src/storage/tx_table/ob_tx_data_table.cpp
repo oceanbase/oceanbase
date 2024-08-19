@@ -39,7 +39,7 @@ using namespace oceanbase::share;
 namespace storage
 {
 
-int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 30 * 1000 * 1000; // 30 seconds
+int64_t ObTxDataTable::UPDATE_CALC_UPPER_INFO_INTERVAL = 15 * 1000 * 1000; // 15 seconds
 
 int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
 {
@@ -71,6 +71,8 @@ int ObTxDataTable::init(ObLS *ls, ObTxCtxTable *tx_ctx_table)
     memtable_mgr_ = static_cast<ObTxDataMemtableMgr *>(memtable_mgr_handle.get_memtable_mgr());
     tx_ctx_table_ = tx_ctx_table;
     tablet_id_ = LS_TX_DATA_TABLET;
+    calc_upper_trans_is_disabled_ = false;
+    latest_transfer_scn_.reset();
 
     is_inited_ = true;
     FLOG_INFO("tx data table init success", K(sizeof(ObTxData)), K(sizeof(ObTxDataLinkNode)), KPC(this));
@@ -181,6 +183,8 @@ void ObTxDataTable::reset()
   tx_ctx_table_ = nullptr;
   calc_upper_trans_version_cache_.reset();
   memtables_cache_.reuse();
+  calc_upper_trans_is_disabled_ = false;
+  latest_transfer_scn_.reset();
   is_started_ = false;
   is_inited_ = false;
 }
@@ -203,8 +207,36 @@ int ObTxDataTable::offline()
   } else if (OB_FAIL(clean_memtables_cache_())) {
     STORAGE_LOG(WARN, "clean memtables cache failed", KR(ret), KPC(this));
   } else {
+    is_started_ = false;
+    disable_upper_trans_calculation();
     calc_upper_trans_version_cache_.reset();
   }
+  return ret;
+}
+
+int ObTxDataTable::online()
+{
+  int ret = OB_SUCCESS;
+  ObTabletHandle handle;
+  ObTablet *tablet;
+  ObLSTabletService *ls_tablet_svr = ls_->get_tablet_svr();
+
+  if (OB_ISNULL(ls_tablet_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("get ls tablet svr failed", K(ret));
+  } else if (OB_FAIL(ls_tablet_svr->get_tablet(LS_TX_DATA_TABLET,
+                                               handle))) {
+    LOG_WARN("get tablet failed", K(ret));
+  } else if (FALSE_IT(tablet = handle.get_obj())) {
+  } else if (OB_FAIL(ls_tablet_svr->create_memtable(LS_TX_DATA_TABLET, 0 /* schema_version */))) {
+    LOG_WARN("failed to create memtable", K(ret));
+  } else {
+    // load tx data table succeed
+    is_started_ = true;
+    calc_upper_trans_is_disabled_ = false;
+    latest_transfer_scn_.reset();
+  }
+
   return ret;
 }
 
@@ -231,69 +263,9 @@ int ObTxDataTable::alloc_tx_data(ObTxDataGuard &tx_data_guard,
   } else {
     ObTxData *tx_data = new (slice_ptr) ObTxData();
     tx_data->tx_data_allocator_ = tx_data_allocator_;
+    tx_data->op_allocator_ = &MTL(share::ObSharedMemAllocMgr*)->tx_data_op_allocator();
     tx_data_guard.init(tx_data);
   }
-  return ret;
-}
-
-int ObTxDataTable::deep_copy_tx_data(const ObTxDataGuard &in_tx_data_guard, ObTxDataGuard &out_tx_data_guard)
-{
-  int ret = OB_SUCCESS;
-  void *slice_ptr = nullptr;
-  const int64_t abs_expire_time = THIS_WORKER.get_timeout_ts();
-  const ObTxData *in_tx_data = in_tx_data_guard.tx_data();
-  ObTxData *out_tx_data = nullptr;
-
-  if (OB_ISNULL(slice_ptr = tx_data_allocator_->alloc(true, abs_expire_time))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    STORAGE_LOG(WARN, "allocate memory from slice_allocator fail.", KR(ret), KP(this),
-                K(tablet_id_), K(abs_expire_time));
-  } else if (OB_ISNULL(in_tx_data)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(ERROR, "invalid nullptr of tx data", K(in_tx_data_guard), KPC(this));
-  } else {
-    out_tx_data = new (slice_ptr) ObTxData();
-    *out_tx_data = *in_tx_data;
-    out_tx_data->tx_data_allocator_ = tx_data_allocator_;
-    out_tx_data->undo_status_list_.head_ = nullptr;
-    out_tx_data->ref_cnt_ = 0;
-    out_tx_data_guard.init(out_tx_data);
-
-    if (OB_FAIL(deep_copy_undo_status_list_(in_tx_data->undo_status_list_,
-                                            out_tx_data->undo_status_list_))) {
-      STORAGE_LOG(WARN, "deep copy undo status list failed.");
-    } else {
-      // deep copy succeed.
-    }
-  }
-  return ret;
-}
-
-int ObTxDataTable::deep_copy_undo_status_list_(const ObUndoStatusList &in_list,
-                                               ObUndoStatusList &out_list)
-{
-  int ret = OB_SUCCESS;
-  ObUndoStatusNode *cur_in_node = in_list.head_;
-  ObUndoStatusNode *pre_node = nullptr;
-  ObUndoStatusNode *new_node = nullptr;
-
-  while (OB_SUCC(ret) && nullptr != cur_in_node) {
-    if (OB_FAIL(alloc_undo_status_node(new_node))) {
-      STORAGE_LOG(WARN, "alloc undo status node failed.", KR(ret));
-    } else {
-      *new_node = *cur_in_node;
-      // reset next pointer to avoid invalid free
-      new_node->next_ = nullptr;
-      if (nullptr == pre_node) {
-        out_list.head_ = new_node;
-      } else {
-        pre_node->next_ = new_node;
-      }
-      pre_node = new_node;
-      cur_in_node = cur_in_node->next_;
-    }
-  }
-
   return ret;
 }
 
@@ -438,7 +410,10 @@ int ObTxDataTable::check_with_tx_data(const ObTransID tx_id,
                 K(tablet_id_));
   }
 
-  if (OB_SUCC(ret) && OB_NOT_NULL(tx_data_guard.tx_data()) && (ObTxData::RUNNING == tx_data_guard.tx_data()->state_)) {
+  if (OB_SUCC(ret) &&
+      OB_NOT_NULL(tx_data_guard.tx_data()) &&
+      !fn.may_exist_undecided_state_in_tx_data_table() &&
+      (ObTxData::RUNNING == tx_data_guard.tx_data()->state_)) {
     ret = OB_EAGAIN;
     STORAGE_LOG(WARN, "read a running state tx data from tx data table, need retry", KR(ret), K(tx_data_guard));
   }
@@ -484,7 +459,8 @@ int ObTxDataTable::check_tx_data_with_cache_once_(const transaction::ObTransID t
     }
   } else {
     if (find) {
-      if (ObTxData::RUNNING == tx_data_guard.tx_data()->state_) {
+      if (ObTxData::RUNNING == tx_data_guard.tx_data()->state_ &&
+          !fn.may_exist_undecided_state_in_tx_data_table()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(ERROR,
                     "read a running state tx data from tx data table",
@@ -582,6 +558,7 @@ int ObTxDataTable::check_need_update_memtables_cache_(bool &need_update)
     // cache already up to date, skip update
     need_update = false;
   }
+
   return ret;
 }
 
@@ -792,6 +769,8 @@ int ObTxDataTable::get_upper_trans_version_before_given_scn(const SCN sstable_en
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "The tx data table is not inited.", KR(ret));
+  } else if (ATOMIC_LOAD(&calc_upper_trans_is_disabled_)) {
+    skip_calc = true;
   } else if (true == (skip_calc = skip_this_sstable_end_scn_(sstable_end_scn))) {
     // there is a start_scn of running transactions is smaller than the sstable_end_scn
   } else {
@@ -933,11 +912,11 @@ int ObTxDataTable::DEBUG_calc_with_row_iter_(ObStoreRowIterator *row_iter,
         tmp_upper_trans_version = tx_data.commit_version_;
       }
     }
-
-    if (OB_NOT_NULL(tx_data.undo_status_list_.head_)) {
-      free_undo_status_list_(tx_data.undo_status_list_.head_);
-      tx_data.undo_status_list_.head_ = nullptr;
+    if (tx_data.op_guard_.is_valid() && OB_NOT_NULL(tx_data.op_guard_->get_undo_status_list().head_)) {
+      free_undo_status_list_(tx_data.op_guard_->get_undo_status_list().head_);
+      tx_data.op_guard_->get_undo_status_list().head_ = nullptr;
     }
+
   }
 
   if (OB_ITER_END == ret) {
@@ -1008,7 +987,8 @@ int ObTxDataTable::check_min_start_in_ctx_(const SCN &sstable_end_scn,
   if (OB_FAIL(ls_->get_uncommitted_tx_min_start_scn(min_start_scn, effective_scn))) {
     need_skip = true;
     STORAGE_LOG(DEBUG, "get uncommited tx min_start_scn failed", KR(ret), K(sstable_end_scn), K(max_decided_scn));
-  } else if (min_start_scn <= sstable_end_scn || max_decided_scn <= effective_scn) {
+  } else if (min_start_scn <= sstable_end_scn || max_decided_scn <= effective_scn ||
+             (latest_transfer_scn_.is_valid() && effective_scn < latest_transfer_scn_)) {
     need_skip = true;
     STORAGE_LOG(DEBUG,
                 "skip calculate upper_trans_version",
@@ -1061,6 +1041,14 @@ int ObTxDataTable::check_min_start_in_tx_data_(const SCN &sstable_end_scn,
     }
   }
 
+  return ret;
+}
+
+int ObTxDataTable::deep_copy_tx_data(const ObTxDataGuard &in_tx_data, ObTxDataGuard &out_tx_data)
+{
+  int ret = OB_NOT_SUPPORTED;
+  UNUSED(in_tx_data);
+  UNUSED(out_tx_data);
   return ret;
 }
 
@@ -1173,7 +1161,7 @@ int ObTxDataTable::calc_upper_trans_scn_(const SCN sstable_end_scn, SCN &upper_t
   return ret;
 }
 
-int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
+int ObTxDataTable::supplement_tx_op_if_exist(ObTxData *tx_data)
 {
   int ret = OB_SUCCESS;
   ObTxData tx_data_from_sstable;
@@ -1186,6 +1174,8 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
   } else if (OB_ISNULL(tx_data)) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(ERROR, "tx data is nullptr", KR(ret), KP(this));
+  } else if (FALSE_IT(tx_data_from_sstable.tx_data_allocator_ = &MTL(share::ObSharedMemAllocMgr*)->tx_data_allocator())) {
+  } else if (FALSE_IT(tx_data_from_sstable.op_allocator_ = &MTL(share::ObSharedMemAllocMgr*)->tx_data_op_allocator())) {
   } else if (OB_FAIL(get_tx_data_in_sstable_(tx_data->tx_id_, tx_data_from_sstable, unused_scn))) {
     if (ret == OB_TRANS_CTX_NOT_EXIST) {
       // This transaction does not have undo actions
@@ -1193,19 +1183,10 @@ int ObTxDataTable::supplement_undo_actions_if_exist(ObTxData *tx_data)
     } else {
       STORAGE_LOG(WARN, "get tx data from sstable failed.", KR(ret));
     }
-  } else {
-    // assign and reset to avoid deep copy
-    if (OB_NOT_NULL(tx_data->undo_status_list_.head_)) {
-      STORAGE_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid undo status list", KPC(tx_data));
-    }
-    tx_data->undo_status_list_ = tx_data_from_sstable.undo_status_list_;
-    tx_data_from_sstable.undo_status_list_.reset();
+  } else if (FALSE_IT(*tx_data = tx_data_from_sstable)) {
   }
-
-  if (OB_NOT_NULL(tx_data_from_sstable.undo_status_list_.head_)) {
-    STORAGE_LOG(WARN, "supplement undo actions failed", KR(ret), KPC(tx_data), K(get_ls_id()));
-    free_undo_status_list_(tx_data_from_sstable.undo_status_list_.head_);
-  }
+  tx_data_from_sstable.tx_data_allocator_ = nullptr;
+  tx_data_from_sstable.reset();
   return ret;
 }
 
@@ -1243,6 +1224,29 @@ int ObTxDataTable::get_start_tx_scn(SCN &start_tx_scn)
     FLOG_INFO("get start tx scn done", KR(ret), K(start_tx_scn), KPC(oldest_minor_sstable));
   }
   return ret;
+}
+
+void ObTxDataTable::disable_upper_trans_calculation()
+{
+  ATOMIC_STORE(&calc_upper_trans_is_disabled_, true);
+  {
+    TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    calc_upper_trans_version_cache_.reset();
+  }
+}
+
+void ObTxDataTable::enable_upper_trans_calculation(const share::SCN latest_transfer_scn)
+{
+  {
+    TCWLockGuard lock_guard(calc_upper_trans_version_cache_.lock_);
+    calc_upper_trans_version_cache_.reset();
+  }
+  if (latest_transfer_scn_.is_valid()) {
+    latest_transfer_scn_ = SCN::max(latest_transfer_scn, latest_transfer_scn_);
+  } else {
+    latest_transfer_scn_ = latest_transfer_scn;
+  }
+  ATOMIC_STORE(&calc_upper_trans_is_disabled_, false);
 }
 
 int ObTxDataTable::dump_single_tx_data_2_text(const int64_t tx_id_int, FILE *fd)

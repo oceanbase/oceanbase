@@ -227,6 +227,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_tablet.cpp
   tablet/ob_tablet_medium_info_reader.cpp
   tablet/ob_tablet_abort_transfer_mds_helper.cpp
+  tablet/ob_tablet_transfer_tx_ctx.cpp
 )
 
 ob_set_subtarget(ob_storage tx_wrs
@@ -304,6 +305,7 @@ ob_set_subtarget(ob_storage tx
   tx/ob_tx_2pc_msg_handler.cpp
   tx/ob_tx_2pc_ctx_impl.cpp
   tx/ob_tx_data_define.cpp
+  tx/ob_tx_data_op.cpp
   tx/ob_tx_data_functor.cpp
   tx/ob_tx_serialization.cpp
   tx/ob_tx_log.cpp
@@ -385,6 +387,7 @@ ob_set_subtarget(ob_storage ls
   ls/ob_ls_saved_info.cpp
   ls/ob_ls_reserved_snapshot_mgr.cpp
   ls/ob_ls_storage_clog_handler.cpp
+  ls/ob_ls_transfer_status.cpp
 )
 
 ob_set_subtarget(ob_storage access

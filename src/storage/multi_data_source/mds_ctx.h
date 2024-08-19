@@ -104,9 +104,10 @@ private:
   }
 private:
   List<MdsNode> write_list_;
-  MdsWriter writer_;
   TwoPhaseCommitState state_;
   MdsLock lock_;
+protected: // for serialize in derived class
+  MdsWriter writer_;
 };
 OB_SERIALIZE_MEMBER_TEMP(inline, MdsCtx, writer_);
 }

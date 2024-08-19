@@ -73,6 +73,29 @@ public:
     }
     return ret;
   }
+  int unmask(const T &key)
+  {
+    int ret = OB_SUCCESS;
+    if (!is_inited_) {
+      ret = OB_NOT_INIT;
+    } else {
+      bool hit = false;
+      for (int64_t i = 0 ; OB_SUCCESS == ret && i < array_->count(); i++) {
+        if (array_->at(i) == key) {
+          hit = true;
+          if (OB_FAIL(bitset_.del_member(i))) {
+          }
+          break;
+        }
+      }
+      if (OB_SUCCESS == ret) {
+        if (!hit) {
+          ret = OB_MASK_SET_NO_NODE;
+        }
+      }
+    }
+    return ret;
+  }
   int mask(const T &key, bool &is_new_mask)
   {
     int ret = OB_SUCCESS;

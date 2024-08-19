@@ -1649,6 +1649,9 @@ DEF_INT(_transfer_task_tablet_count_threshold, OB_TENANT_PARAMETER, "100", "(0,1
         "Threshold for the count of tablets that can be processed by a transfer task. "
         "Range: (0, 100]",
         ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_active_txn_transfer, OB_TENANT_PARAMETER, "False",
+        "Specifies whether support transfer active tx",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_TIME(_transfer_task_retry_interval, OB_TENANT_PARAMETER, "1m", "[0s,)",
         "Retry interval after transfer task failure. "

@@ -96,6 +96,8 @@ public:  // ObTxDataTable
   ObTxDataTable()
     : is_inited_(false),
       is_started_(false),
+      calc_upper_trans_is_disabled_(false),
+      latest_transfer_scn_(),
       ls_id_(),
       tablet_id_(0),
       arena_allocator_(),
@@ -115,6 +117,7 @@ public:  // ObTxDataTable
   virtual void reset();
   virtual void destroy();
   int offline();
+  int online();
 
   /**
    * @brief the same as ObTxTable::alloc_tx_data
@@ -179,9 +182,9 @@ public:  // ObTxDataTable
   int get_upper_trans_version_before_given_scn(const share::SCN sstable_end_scn, share::SCN &upper_trans_version);
 
   /**
-   * @brief see ObTxTable::supplement_undo_actions_if_exist
+   * @brief see ObTxTable::supplement_tx_op_if_exist
    */
-  int supplement_undo_actions_if_exist(ObTxData *tx_data);
+  int supplement_tx_op_if_exist(ObTxData *tx_data);
 
   int self_freeze_task();
 
@@ -215,6 +218,8 @@ public: // getter and setter
   TxDataReadSchema &get_read_schema() { return read_schema_; };
 
   share::ObLSID get_ls_id();
+  void disable_upper_trans_calculation();
+  void enable_upper_trans_calculation(const share::SCN latest_transfer_scn);
 
 private:
   virtual ObTxDataMemtableMgr *get_memtable_mgr_() { return memtable_mgr_; }
@@ -299,6 +304,8 @@ private:
   static const int64_t LS_TX_DATA_SCHEMA_COLUMN_CNT = 5;
   bool is_inited_;
   bool is_started_;
+  bool calc_upper_trans_is_disabled_;
+  share::SCN latest_transfer_scn_;
   share::ObLSID ls_id_;
   ObTabletID tablet_id_;
   // Allocator to allocate ObTxData and ObUndoStatus

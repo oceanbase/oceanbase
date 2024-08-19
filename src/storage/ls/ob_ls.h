@@ -67,6 +67,7 @@
 #include "storage/high_availability/ob_ls_block_tx_service.h"
 #include "storage/high_availability/ob_ls_transfer_info.h"
 #include "observer/table/ttl/ob_tenant_tablet_ttl_mgr.h"
+#include "storage/ls/ob_ls_transfer_status.h"
 
 namespace oceanbase
 {
@@ -248,6 +249,8 @@ public:
   ObTransferHandler *get_transfer_handler() { return &transfer_handler_; }
   ObLSTransferInfo &get_ls_startup_transfer_info() { return startup_transfer_info_; }
 
+  // for transfer record MDS phase
+  ObLSTransferStatus &get_transfer_status() { return ls_transfer_status_; }
   //remove member handler
   ObLSRemoveMemberHandler *get_ls_remove_member_handler() { return &ls_remove_member_handler_; }
 
@@ -532,6 +535,8 @@ public:
   DELEGATE_WITH_RET(ls_tablet_svr_, disable_to_read, void);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_tablet_with_timeout, int);
   DELEGATE_WITH_RET(ls_tablet_svr_, get_mds_table_mgr, int);
+  // for transfer to check tablet no active memtable
+  DELEGATE_WITH_RET(ls_tablet_svr_, check_tablet_no_active_memtable, int);
 
   // ObLockTable interface:
   // check whether the lock op is conflict with exist lock.
@@ -787,6 +792,20 @@ public:
   CONST_DELEGATE_WITH_RET(dup_table_ls_handler_, get_dup_table_ls_meta, int);
   DELEGATE_WITH_RET(dup_table_ls_handler_, set_dup_table_ls_meta, int);
 
+  DELEGATE_WITH_RET(ls_tx_svr_, filter_tx_need_transfer, int);
+  // for transfer to modify active tx ctx state
+  DELEGATE_WITH_RET(ls_tx_svr_, transfer_out_tx_op, int);
+
+  // for transfer to wait tx write end
+  DELEGATE_WITH_RET(ls_tx_svr_, wait_tx_write_end, int);
+
+  // for transfer collect src_ls tx ctx
+  DELEGATE_WITH_RET(ls_tx_svr_, collect_tx_ctx, int);
+
+  // for transfer move tx ctx to dest_ls
+  DELEGATE_WITH_RET(ls_tx_svr_, move_tx_op, int);
+
+
   // ObReplayHandler interface:
   DELEGATE_WITH_RET(replay_handler_, replay, int);
 
@@ -963,6 +982,8 @@ private:
 
   // for delaying the resource recycle after correctness issue
   bool need_delay_resource_recycle_;
+  // for transfer MDS phase
+  ObLSTransferStatus ls_transfer_status_;
 };
 
 }

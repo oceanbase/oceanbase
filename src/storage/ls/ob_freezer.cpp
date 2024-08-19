@@ -968,7 +968,13 @@ int ObFreezer::decide_real_snapshot_version_(const ObTabletID &tablet_id,
   } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_
              && ObTabletStatus::TRANSFER_OUT_DELETED != user_data.tablet_status_) {
     //do nothing
-  } else if (user_data.transfer_scn_.is_valid()) {
+  } else if (user_data.transfer_scn_.is_valid()
+             // transfer's status and transfer_scn may not be synced because
+             // transfer_out_prepare log changes the status and transfer_out log
+             // changes the transfer_scn, while we can use origin freeze
+             // snapshot version because the transfer_out log which decides the
+             // transfer_scn has not been synced or replayed
+             && share::SCN::min_scn() != user_data.transfer_scn_) {
     transfer_scn = user_data.transfer_scn_;
   }
 
@@ -1087,7 +1093,7 @@ int ObFreezer::batch_tablet_freeze(const int64_t trace_id, const ObIArray<ObTabl
   int ret = OB_SUCCESS;
   share::ObLSID ls_id = get_ls_id();
   SCN freeze_snapshot_version;
-  FLOG_INFO("[Freezer] batch_tablet_freeze start", K(ret), K(ls_id), K(tablet_ids));
+  FLOG_INFO("[Freezer] batch_tablet_freeze start", K(ls_id), K(tablet_ids));
   int64_t start_time = ObTimeUtility::current_time();
   bool need_freeze = true;
 

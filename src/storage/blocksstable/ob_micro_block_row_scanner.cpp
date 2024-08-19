@@ -76,7 +76,6 @@ void ObIMicroBlockRowScanner::reuse()
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   last_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   can_ignore_multi_version_ = false;
-  tx_table_guard_.reuse();
 }
 
 int ObIMicroBlockRowScanner::init(
@@ -110,7 +109,6 @@ int ObIMicroBlockRowScanner::init(
       if (NULL != reader_) {
         reader_->reset();
       }
-      tx_table_guard_ = context.store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
       LOG_DEBUG("init ObIMicroBlockRowScanner", K(context), KPC_(read_info), K(param));
     }
   }
@@ -154,7 +152,6 @@ int ObIMicroBlockRowScanner::switch_context(
     context_ = &context;
     sstable_ = sstable;
     use_fuse_row_cache_ = context.use_fuse_row_cache_;
-    tx_table_guard_ = context.store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
   }
 
   return ret;
@@ -1045,19 +1042,14 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
     }
   } else {
     ObMultiVersionRowFlag flag;
-    int64_t trans_version = 0;
     const ObRowHeader *row_header = nullptr;
+    int64_t trans_version = 0;
     int64_t sql_sequence = 0;
-    bool can_read = true;
-    bool is_determined_state = false;
-    bool read_uncommitted_row = false;
     bool is_ghost_row_flag = false;
     const int64_t snapshot_version = context_->trans_version_range_.snapshot_version_;
     memtable::ObMvccAccessCtx &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
 
-    if (OB_UNLIKELY(context_->query_flag_.is_ignore_trans_stat())) {
-      version_fit = true;
-    } else if (OB_FAIL(reader_->get_multi_version_info(
+    if (OB_FAIL(reader_->get_multi_version_info(
                 current_,
                 read_info_->get_schema_rowkey_count(),
                 row_header,
@@ -1069,28 +1061,72 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("row header is null", K(ret));
     } else if (FALSE_IT(flag = row_header->get_row_multi_version_flag())) {
-    } else if (flag.is_uncommitted_row()) {
-      have_uncommited_row = true;  // TODO @lvling check transaction status instead
-      compaction::ObMergeCachedTransState trans_state;
-      transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
-      if (OB_NOT_NULL(context_->trans_state_mgr_) &&
-        OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(
-          transaction::ObTransID(row_header->get_trans_id()), tx_sequence, trans_state)) {
-        can_read = trans_state.can_read_;
-        trans_version = trans_state.trans_version_;
-        is_determined_state = trans_state.is_determined_state_;
-      } else {
-        transaction::ObLockForReadArg lock_for_read_arg(acc_ctx,
-                                                        transaction::ObTransID(row_header->get_trans_id()),
-                                                        tx_sequence,
-                                                        context_->query_flag_.read_latest_,
-                                                        sstable_->get_end_scn());
+    } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(flag, is_ghost_row_flag))) {
+      LOG_WARN("fail to check ghost row", K(ret), K_(current), KPC(row_header),
+               K(trans_version), K(sql_sequence), K_(macro_id));
+    } else {
+      is_last_multi_version_row_ = flag.is_last_multi_version_row();
+      final_result = is_last_multi_version_row_;
 
-        if (OB_FAIL(lock_for_read(lock_for_read_arg,
-                                  can_read,
-                                  trans_version,
-                                  is_determined_state))) {
-          STORAGE_LOG(WARN, "fail to check transaction status", K(ret), KPC(row_header), K_(macro_id));
+      if (OB_UNLIKELY(is_ghost_row_flag)) {
+        // Case1: Data is ghost row, and it means no valid value for the row, so
+        //        we can skip it
+        version_fit = false;
+        LOG_DEBUG("is ghost row", K(ret), K(current_), K(flag));
+      } else if (flag.is_uncommitted_row()) {
+        have_uncommited_row = true;  // TODO @lvling check transaction status instead
+        transaction::ObTxSEQ tx_sequence = transaction::ObTxSEQ::cast_from_int(sql_sequence);
+        // Case2: Data is uncommitted, so we use the txn state cache or txn
+        //        table to decide whether uncommitted txns are readable
+        compaction::ObMergeCachedTransState trans_state;
+        if (OB_NOT_NULL(context_->trans_state_mgr_) &&
+            OB_SUCCESS == context_->trans_state_mgr_->get_trans_state(
+              transaction::ObTransID(row_header->get_trans_id()), tx_sequence, trans_state)) {
+          version_fit = trans_state.can_read_;
+          trans_version = trans_state.trans_version_;
+
+          if (transaction::is_effective_trans_version(trans_version)
+              && trans_version <= version_range_.base_version_) {
+            version_fit = false;
+            // filter multi version row whose trans version is smaller than base_version
+            final_result = true;
+          }
+        } else {
+          transaction::ObLockForReadArg lock_for_read_arg(
+            acc_ctx,
+            transaction::ObTransID(row_header->get_trans_id()),
+            tx_sequence,
+            context_->query_flag_.read_latest_,
+            context_->query_flag_.iter_uncommitted_row(),
+            // TODO(handora.qc): remove it in the future
+            sstable_->get_end_scn());
+
+          if (OB_FAIL(lock_for_read(lock_for_read_arg,
+                                    version_fit,
+                                    trans_version))) {
+            STORAGE_LOG(WARN, "fail to check transaction status",
+                        K(ret), KPC(row_header), K_(macro_id));
+          } else if (transaction::is_effective_trans_version(trans_version)
+                     && trans_version <= version_range_.base_version_) {
+            version_fit = false;
+            // filter multi version row whose trans version is smaller than base_version
+            final_result = true;
+          }
+        }
+      } else {
+        // Case3: Data is committed, so we use the version on the data to decide
+        //        whether uncommitted txns are readable
+        if (context_->query_flag_.iter_uncommitted_row()) {
+          version_fit = true;
+        } else if (trans_version <= version_range_.base_version_) {
+          // filter multi version row whose trans version is smaller than base_version
+          version_fit = false;
+          final_result = true;
+        } else if (trans_version > snapshot_version) {
+          // filter multi version row whose trans version is larger than snapshot_version
+          version_fit = false;
+        } else {
+          version_fit = true;
         }
       }
     }
@@ -1127,43 +1163,6 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
       }
     }
 
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObGhostRowUtil::is_ghost_row(flag, is_ghost_row_flag))) {
-      LOG_WARN("fail to check ghost row", K(ret), K_(current), KPC(row_header),
-               K(trans_version), K(sql_sequence), K_(macro_id));
-    } else if (OB_UNLIKELY(is_ghost_row_flag)) {
-      can_read = false;
-      is_determined_state = true;
-      LOG_DEBUG("is ghost row", K(ret), K(current_), K(flag));
-    }
-
-    if (OB_SUCC(ret)) {
-      is_last_multi_version_row_ = flag.is_last_multi_version_row();
-      final_result = is_last_multi_version_row_;
-      if (OB_UNLIKELY(context_->query_flag_.is_ignore_trans_stat())) {
-        // do nothing
-      } else if (!can_read) {
-        if (!is_determined_state && context_->query_flag_.iter_uncommitted_row()) { // for mark deletion
-          version_fit = true;
-          read_uncommitted_row = true;
-        } else {
-          version_fit = false;
-        }
-      } else if (!flag.is_uncommitted_row() || is_determined_state) { // committed
-        if (trans_version <= version_range_.base_version_) {
-          version_fit = false;
-          // filter multi version row whose trans version is smaller than base_version
-          final_result = true;
-        } else if (trans_version > snapshot_version) { // filter multi version row whose trans version is larger than snapshot_version
-          version_fit = false;
-        } else {
-          version_fit = true;
-        }
-      } else {
-        // read rows in current transaction
-        version_fit = true;
-      }
-    }
     if (OB_SUCC(ret)) {
       if (version_fit) {
         ObDatumRow *row = nullptr;
@@ -1188,7 +1187,8 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
           }
         }
         if (OB_SUCC(ret) && version_fit) {
-          if (OB_INVALID_INDEX != read_info_->get_trans_col_index() && is_determined_state) {
+          if (OB_INVALID_INDEX != read_info_->get_trans_col_index()
+              && transaction::is_effective_trans_version(trans_version)) {
             // only uncommitted row need to be set, committed row set in row reader
             int64_t trans_idx = read_info_->get_trans_col_index();
             if (OB_UNLIKELY(trans_idx >= row->count_ || 0 >= trans_version)) {
@@ -1200,7 +1200,8 @@ int ObMultiVersionMicroBlockRowScanner::inner_inner_get_next_row(
             }
           }
           if (OB_SUCC(ret)) {
-            if (!row->mvcc_row_flag_.is_uncommitted_row() || is_determined_state) {
+            if (!row->mvcc_row_flag_.is_uncommitted_row()
+                || transaction::is_effective_trans_version(trans_version)) {
               row->snapshot_version_ = 0;
               row->trans_id_.reset();
             } else { // uncommitted row
@@ -1348,8 +1349,7 @@ int ObMultiVersionMicroBlockRowScanner::do_compact(
 int ObMultiVersionMicroBlockRowScanner::lock_for_read(
     const transaction::ObLockForReadArg &lock_for_read_arg,
     bool &can_read,
-    int64_t &trans_version,
-    bool &is_determined_state)
+    int64_t &trans_version)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -1357,15 +1357,16 @@ int ObMultiVersionMicroBlockRowScanner::lock_for_read(
   auto &tx_table_guards = context_->store_ctx_->mvcc_acc_ctx_.get_tx_table_guards();
   int64_t cost_time = common::ObClockGenerator::getClock();
 
-  if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg, can_read, scn_trans_version,
-      is_determined_state))) {
+  if (OB_FAIL(tx_table_guards.lock_for_read(lock_for_read_arg,
+                                            can_read,
+                                            scn_trans_version))) {
     LOG_WARN("failed to check transaction status", K(ret));
   } else {
     trans_version = scn_trans_version.get_val_for_tx();
     if (OB_NOT_NULL(context_->trans_state_mgr_) &&
       OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(
         lock_for_read_arg.data_trans_id_, lock_for_read_arg.data_sql_sequence_,
-        trans_version, ObTxData::MAX_STATE_CNT, can_read, is_determined_state))) {
+        trans_version, ObTxData::MAX_STATE_CNT, can_read))) {
       LOG_WARN("failed to add trans state to cache", K(tmp_ret),
         "trans_id", lock_for_read_arg.data_trans_id_,
         "sql_seq", lock_for_read_arg.data_sql_sequence_);
@@ -2289,7 +2290,7 @@ int ObMultiVersionMicroBlockMinorMergeRowScanner::check_curr_row_can_read(
       LOG_WARN("check sql sequence can read failed", K(ret), K(can_read), K(trans_id), K(sql_seq));
     } else if (OB_NOT_NULL(context_->trans_state_mgr_) &&
       OB_TMP_FAIL(context_->trans_state_mgr_->add_trans_state(trans_id, sql_seq,
-        committed_trans_version_, last_trans_state_, can_read, 0))) {
+        committed_trans_version_, last_trans_state_, can_read))) {
       LOG_WARN("failed to add minor trans state", K(tmp_ret), K(trans_id), K(sql_seq), K(can_read));
     }
     if (REACH_TENANT_TIME_INTERVAL(30 * 1000 * 1000 /*30s*/)) {

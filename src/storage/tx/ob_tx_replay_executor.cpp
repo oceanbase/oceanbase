@@ -278,7 +278,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
       // since 4.2.4, cluster version in log_block_header
       const uint64_t cluster_version = log_block_.get_header().get_cluster_version();
       ObTxCreateArg arg(true, /* for_replay */
-                        false, /* for_special_tx */
+                        PartCtxSource::REPLAY,
                         tenant_id_,
                         tx_id,
                         ls_id_,
@@ -304,7 +304,7 @@ int ObTxReplayExecutor::try_get_tx_ctx_()
       } else if (base_header_.need_pre_replay_barrier() && OB_UNLIKELY(ctx_->is_replay_complete_unknown())) {
         // if a pre-barrier log will be replayed
         // the txn can be confirmed to incomplete replayed
-        ret = ctx_->set_replay_incomplete();
+        ret = ctx_->set_replay_incomplete(log_ts_ns_);
       }
     }
   }

@@ -19,6 +19,33 @@ inline common::ObTabletID ObITabletMdsInterface::get_table_id_() const
   return get_tablet_meta_().tablet_id_;
 }
 
+inline int ObITabletMdsInterface::get_latest_tablet_status(ObTabletCreateDeleteMdsUserData &data, bool &is_committed) const
+{
+  #define PRINT_WRAPPER KR(ret), K(data)
+  MDS_TG(10_ms);
+  int ret = OB_SUCCESS;
+  mds::MdsWriter writer;
+  mds::TwoPhaseCommitState trans_stat;
+  share::SCN trans_version;
+  is_committed = false;
+  if (OB_UNLIKELY(!check_is_inited_())) {
+    ret = OB_NOT_INIT;
+    MDS_LOG_GET(WARN, "not inited");
+  } else if (CLICK_FAIL(get_latest<ObTabletCreateDeleteMdsUserData>(
+    [&data](const ObTabletCreateDeleteMdsUserData &user_data) -> int {
+      return data.assign(user_data);
+    }, writer, trans_stat, trans_version, 0))) {
+    MDS_LOG_GET(WARN, "fail to get_latest_tablet_status",  K(ret));
+  } else if (!data.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    MDS_LOG_GET(WARN, "invalid user data", K(lbt()));
+  } else {
+    is_committed = mds::TwoPhaseCommitState::ON_COMMIT == trans_stat;
+  }
+  return ret;
+  #undef PRINT_WRAPPER
+}
+
 inline int ObITabletMdsInterface::check_tablet_status_written(bool &written) const
 {
   int ret = OB_SUCCESS;

@@ -113,7 +113,6 @@ protected:
   ObIAllocator &allocator_;
   bool can_ignore_multi_version_;
   storage::ObBlockRowStore *block_row_store_;
-  storage::ObTxTableGuards tx_table_guard_;
 };
 
 // major sstable micro block scanner for query and merge
@@ -232,8 +231,7 @@ private:
   int lock_for_read(
       const transaction::ObLockForReadArg &lock_for_read_arg,
       bool &can_read,
-      int64_t &trans_version,
-      bool &is_determined_state);
+      int64_t &trans_version);
   // The store_rowkey is a decoration of the ObObj pointer,
   // and it will be destroyed when the life cycle of the rowkey_helper is end.
   // So we have to send it into the function to avoid this situation.

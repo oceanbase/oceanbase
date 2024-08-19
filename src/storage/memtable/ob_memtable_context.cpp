@@ -228,6 +228,11 @@ void ObMemtableCtx::wait_pending_write()
   WRLockGuard wrguard(rwlock_);
 }
 
+void ObMemtableCtx::wait_write_end()
+{
+  WRLockGuard wrguard(rwlock_);
+}
+
 SCN ObMemtableCtx::get_tx_end_scn() const
 {
   return ctx_->get_tx_end_log_ts();
@@ -956,7 +961,17 @@ int ObMemtableCtx::get_table_lock_store_info(ObTableLockInfo &table_lock_info)
   return ret;
 }
 
-int ObMemtableCtx::recover_from_table_lock_durable_info(const ObTableLockInfo &table_lock_info)
+int ObMemtableCtx::get_table_lock_for_transfer(ObTableLockInfo &table_lock_info, const ObIArray<ObTabletID> &tablet_list)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(lock_mem_ctx_.get_table_lock_for_transfer(table_lock_info, tablet_list))) {
+    TRANS_LOG(WARN, "get tablet lock for transfer failed", K(ret));
+  }
+  return ret;
+}
+
+int ObMemtableCtx::recover_from_table_lock_durable_info(const ObTableLockInfo &table_lock_info,
+                                                        const bool transfer_merge)
 {
   int ret = OB_SUCCESS;
   const int64_t op_cnt = table_lock_info.table_lock_ops_.count();
@@ -980,7 +995,7 @@ int ObMemtableCtx::recover_from_table_lock_durable_info(const ObTableLockInfo &t
     } else if (OB_NOT_NULL(lock_memtable)
               && OB_FAIL(lock_memtable->recover_obj_lock(lock_op))) {
       TRANS_LOG(ERROR, "recover_obj_lock failed", K(ret), K(*lock_memtable));
-    } else {
+    } else if (!transfer_merge) {
       lock_mem_ctx_.sync_log_succ(table_lock_info.max_durable_scn_);
     }
   }

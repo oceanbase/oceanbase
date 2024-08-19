@@ -29,6 +29,7 @@
 #include "share/ob_light_hashmap.h"
 #include "storage/tx/ob_trans_define.h"
 #include "common/ob_simple_iterator.h"
+#include "share/ob_common_id.h"
 
 namespace oceanbase
 {
@@ -442,6 +443,58 @@ public:
   const ObSArray<ObTransIDAndAddr> &get_conflict_txs() const { return cflict_txs_; }
 };
 
+class RollbackMaskSet
+{
+public:
+  RollbackMaskSet() : rollback_parts_(NULL) {}
+  int init(share::ObCommonID tx_msg_id, ObTxRollbackParts &parts) {
+    ObSpinLockGuard guard(lock_);
+    tx_msg_id_ = tx_msg_id;
+    rollback_parts_ = &parts;
+    return mask_set_.init(&parts);
+  }
+  int get_not_mask(ObTxRollbackParts &remain) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.get_not_mask(remain);
+  }
+  bool is_mask(const ObTxExecPart &part) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.is_mask(part);
+  }
+  int mask(const ObTxExecPart &part) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.mask(part);
+  }
+  int unmask(const ObTxExecPart &part) {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.unmask(part);
+  }
+  bool is_all_mask() {
+    ObSpinLockGuard guard(lock_);
+    return mask_set_.is_all_mask();
+  }
+  share::ObCommonID get_tx_msg_id() const {
+    return tx_msg_id_;
+  }
+  void reset() {
+    ObSpinLockGuard guard(lock_);
+    tx_msg_id_.reset();
+    rollback_parts_ = NULL;
+    mask_set_.reset();
+  }
+  int merge_part(const share::ObLSID add_ls_id,
+                 const int64_t exec_epoch,
+                 const int64_t transfer_epoch);
+  int find_part(const share::ObLSID ls_id,
+                const int64_t orig_epoch,
+                ObTxExecPart &part);
+private:
+  ObSpinLock lock_;
+  share::ObCommonID tx_msg_id_;
+  ObTxRollbackParts *rollback_parts_;
+  common::ObMaskSet2<ObTxExecPart> mask_set_;
+};
+
 class ObTxDesc final : public share::ObLightHashLink<ObTxDesc>
 {
   static constexpr const char *OP_LABEL = "TX_DESC_VALUE";
@@ -453,7 +506,6 @@ class ObTxDesc final : public share::ObLightHashLink<ObTxDesc>
   friend class ObTxStmtInfo;
   friend class IterateTxSchedulerFunctor;
   friend class ObTxnFreeRouteCtx;
-  typedef common::ObMaskSet2<ObTxLSEpochPair> MaskSet;
   OB_UNIS_VERSION(1);
 protected:
   uint64_t tenant_id_;        // FIXME: removable
@@ -576,7 +628,7 @@ protected:
   // used during commit
   share::ObLSID coord_id_;           // coordinator ID
   int64_t commit_expire_ts_;         // commit operation deadline
-  share::ObLSArray commit_parts_;    // participants to do commit
+  ObTxCommitParts commit_parts_;    // participants to do commit
   share::SCN commit_version_;        // Tx commit version
   int commit_out_;                   // the commit result
   int commit_times_;                 // times of sent commit request
@@ -593,7 +645,7 @@ private:
   ObITxCallback *commit_cb_;        // async commit callback
   int64_t cb_tid_;                  // commit callback thread id
   int64_t exec_info_reap_ts_;       // the time reaping incremental tx exec info
-  MaskSet brpc_mask_set_;           // used in message driven savepoint rollback
+  RollbackMaskSet brpc_mask_set_;   // used in message driven savepoint rollback
   ObTransCond rpc_cond_;            // used in message driven savepoint rollback
 
   ObTxTimeoutTask commit_task_;     // commit retry task
@@ -721,7 +773,7 @@ public:
   void set_with_temporary_table() { flags_.WITH_TEMP_TABLE_ = true; }
   bool with_temporary_table() const { return flags_.WITH_TEMP_TABLE_; }
   int64_t get_op_sn() const { return op_sn_; }
-  void inc_op_sn() { state_change_flags_.DYNAMIC_CHANGED_ = true; ++op_sn_; }
+  void inc_op_sn(const uint64_t num = 1) { state_change_flags_.DYNAMIC_CHANGED_ = true; ATOMIC_AAF(&op_sn_, num); }
   share::SCN get_commit_version() const { return commit_version_; }
   bool contain_savepoint(const ObString &sp);
   bool is_tx_end() {
@@ -825,6 +877,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
   void set_explicit() { flags_.EXPLICIT_ = true; }
   void clear_interrupt() { flags_.INTERRUPTED_ = false; }
   void mark_part_abort(const ObTransID tx_id, const int abort_cause);
+  int64_t get_coord_epoch() const;
   int get_and_inc_tx_seq(const int16_t branch, const int N, ObTxSEQ &tx_seq) const;
   ObTxSEQ inc_and_get_tx_seq(int16_t branch) const;
   ObTxSEQ get_tx_seq(int64_t seq_abs = 0) const;
@@ -837,6 +890,7 @@ LST_DO(DEF_FREE_ROUTE_DECODE, (;), static, dynamic, parts, extra);
 // Is used to store and travserse all TxScheduler's Stat information;
 typedef common::ObSimpleIterator<ObTxSchedulerStat,
         ObModIds::OB_TRANS_VIRTUAL_TABLE_TRANS_STAT, 16> ObTxSchedulerStatIterator;
+
 
 class ObTxDescMgr final
 {
@@ -860,7 +914,6 @@ public:
   int64_t get_alloc_count() const { return map_.alloc_cnt(); }
   int64_t get_total_count() const { return map_.count(); }
   int iterate_tx_scheduler_stat(ObTxSchedulerStatIterator &tx_scheduler_stat_iter);
-private:
   struct {
     bool inited_: 1;
     bool stoped_: 1;
@@ -869,34 +922,34 @@ private:
   {
   public:
     ObTxDescAlloc(): alloc_cnt_(0)
-#ifndef NDEBUG
+  #ifndef NDEBUG
                    , lk_()
                    , list_()
-#endif
-    {}
-    ObTxDesc* alloc_value()
-    {
-      ATOMIC_INC(&alloc_cnt_);
-      ObTxDesc *it = op_alloc(ObTxDesc);
-#ifndef NDEBUG
+  #endif
+   {}
+   ObTxDesc* alloc_value()
+   {
+     ATOMIC_INC(&alloc_cnt_);
+     ObTxDesc *it = op_alloc(ObTxDesc);
+  #ifndef NDEBUG
       ObSpinLockGuard guard(lk_);
       list_.insert(it->alloc_link_);
-#endif
+  #endif
       return it;
     }
     void free_value(ObTxDesc *v)
     {
       if (NULL != v) {
         ATOMIC_DEC(&alloc_cnt_);
-#ifndef NDEBUG
+  #ifndef NDEBUG
         ObSpinLockGuard guard(lk_);
         v->alloc_link_.remove();
-#endif
+  #endif
         op_free(v);
       }
     }
     int64_t get_alloc_cnt() const { return ATOMIC_LOAD(&alloc_cnt_); }
-#ifndef NDEBUG
+  #ifndef NDEBUG
     template<typename Function>
     int for_each(Function &fn)
     {
@@ -910,13 +963,13 @@ private:
       }
       return ret;
     }
-#endif
-  private:
-    int64_t alloc_cnt_;
-#ifndef NDEBUG
-    ObSpinLock lk_;
-    ObTxDesc::DLink list_;
-#endif
+  #endif
+    private:
+      int64_t alloc_cnt_;
+  #ifndef NDEBUG
+      ObSpinLock lk_;
+      ObTxDesc::DLink list_;
+  #endif
   };
   share::ObLightHashMap<ObTransID, ObTxDesc, ObTxDescAlloc, common::SpinRWLock, 1 << 16 /*bucket_num*/> map_;
   std::function<int(ObTransID&)> tx_id_allocator_;
