@@ -52,6 +52,7 @@ int ObExprSTPointN::calc_result_type2(ObExprResType &type,
   if (OB_SUCC(ret) && !ob_is_null(type_n)) {
     type2.set_calc_type(ObIntType);
   }
+  type_ctx.set_cast_mode(type_ctx.get_cast_mode() | CM_STRING_INTEGER_TRUNC);
   type.set_geometry();
   type.set_length((ObAccuracy::DDL_DEFAULT_ACCURACY[ObGeometryType]).get_length());
 
@@ -111,10 +112,13 @@ int ObExprSTPointN::eval_st_pointn(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     } else {
       const int N = datum2->get_int() - 1;
       if (N >= 0) { // N should be a no-negative number
-        bool is_geog = (src_geo->crs() == ObGeoCRS::Geographic);
-        
-        // todo
-
+        if (src_geo->crs() == ObGeoCRS::Geographic) {
+          ret = get_sub_point<ObWkbGeogLineString, ObGeographPoint>(
+                    src_geo, N, is_null_result, tmp_alloc, dest_geo);
+        } else if (src_geo->crs() == ObGeoCRS::Cartesian) {
+          ret = get_sub_point<ObWkbGeomLineString, ObCartesianPoint>(
+                    src_geo, N, is_null_result, tmp_alloc, dest_geo);
+        }
       } else { // N < 0, return NULL
         is_null_result = true;
       }
@@ -146,21 +150,21 @@ int ObExprSTPointN::get_sub_point(const ObGeometry *g,
   if (N >= src_geo->size()) {
     is_null_result = true;
   } else {
-    // typename MLS::iterator iter = src_geo->begin();
-    // for (uint32 i = 0; i < N; ++i) {
-    //   iter++;
-    // }
-    // typename MLS::const_pointer sub_ptr = iter.operator->();
-    // PT *pt = OB_NEWx(PT, &allocator, 
-    //                 sub_ptr->template get<0>(),
-    //                 sub_ptr->template get<1>(), 
-    //                 g->get_srid(), &allocator);
-    // if (OB_ISNULL(pt)) {
-    //   ret = OB_ALLOCATE_MEMORY_FAILED;
-    //   LOG_WARN("fail to allocate memory", K(ret));
-    // } else {
-    //   sub_geo = pt;
-    // }    
+    typename MLS::iterator iter = src_geo->begin();
+    for (uint32 i = 0; i < N; ++i) {
+      iter++;
+    }
+    typename MLS::const_pointer sub_ptr = iter.operator->();
+    PT *pt = OB_NEWx(PT, &allocator, 
+                    sub_ptr->template get<0>(),
+                    sub_ptr->template get<1>(), 
+                    g->get_srid(), &allocator);
+    if (OB_ISNULL(pt)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret));
+    } else {
+      sub_geo = pt;
+    }
   }
   return ret;
 }
