@@ -94,8 +94,12 @@ void ObTmpFileIOCtx::reuse()
   for (int32_t i = 0; i < page_cache_handles_.count(); i++) {
     page_cache_handles_.at(i).page_handle_.reset();
   }
+  for (int32_t i = 0; i < block_cache_handles_.count(); i++) {
+    block_cache_handles_.at(i).block_handle_.reset();
+  }
   io_handles_.reset();
   page_cache_handles_.reset();
+  block_cache_handles_.reset();
 }
 
 void ObTmpFileIOCtx::reset()
@@ -264,7 +268,7 @@ int ObTmpFileIOCtx::do_read_wait_()
       char * read_buf = page_cache_handle.dest_user_read_buf_;
       if (OB_UNLIKELY(!check_buf_range_valid(read_buf, read_size))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid range", KR(ret), K(read_buf), K(read_size), K(buf_size_));
+        LOG_WARN("invalid range", KR(ret), KP(read_buf), KP(buf_), K(read_size), K(buf_size_));
       } else if (OB_UNLIKELY(offset_in_page + read_size > ObTmpFileGlobal::PAGE_SIZE)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("read size is over than page range", KR(ret), KPC(this), K(offset_in_page), K(read_size));
@@ -290,7 +294,7 @@ int ObTmpFileIOCtx::do_read_wait_()
       char * read_buf = block_cache_handle.dest_user_read_buf_;
       if (OB_UNLIKELY(!check_buf_range_valid(read_buf, read_size))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid range", KR(ret), K(read_buf), K(read_size), K(buf_size_));
+        LOG_WARN("invalid range", KR(ret), KP(read_buf), KP(buf_), K(read_size), K(buf_size_));
       } else if (OB_UNLIKELY(offset_in_block + read_size > OB_DEFAULT_MACRO_BLOCK_SIZE)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("read size is over than macro block range", KR(ret), KPC(this), K(offset_in_block), K(read_size));
@@ -319,7 +323,7 @@ int ObTmpFileIOCtx::do_read_wait_()
       char * read_buf = io_handle.dest_user_read_buf_;
       if (OB_UNLIKELY(!check_buf_range_valid(read_buf, size))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid range", KR(ret), K(read_buf), K(size), K(buf_size_));
+        LOG_WARN("invalid range", KR(ret), KP(read_buf), KP(buf_), K(size), K(buf_size_));
       } else {
         MEMCPY(read_buf, data_buf + offset, size);
         io_handle.handle_.reset();

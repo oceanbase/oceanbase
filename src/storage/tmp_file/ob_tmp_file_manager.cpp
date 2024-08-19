@@ -290,7 +290,6 @@ int ObTenantTmpFileManager::aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIO
 {
   int ret = OB_SUCCESS;
   ObTmpFileHandle tmp_file_handle;
-  io_handle.reset();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -298,6 +297,10 @@ int ObTenantTmpFileManager::aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIO
   } else if (!io_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to aio read, invalid argument", KR(ret), K(io_info));
+  } else if (OB_UNLIKELY(io_handle.is_valid() && !io_handle.is_finished())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tmp file io handle has remain data need to be waited", KR(ret), K(io_info), K(io_handle));
+  } else if (FALSE_IT(io_handle.reset())) {
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(io_handle.init_read(io_info, tmp_file_handle))) {
@@ -316,7 +319,6 @@ int ObTenantTmpFileManager::aio_pread(const ObTmpFileIOInfo &io_info,
 {
   int ret = OB_SUCCESS;
   ObTmpFileHandle tmp_file_handle;
-  io_handle.reset();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -324,6 +326,10 @@ int ObTenantTmpFileManager::aio_pread(const ObTmpFileIOInfo &io_info,
   } else if (!io_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to aio read, invalid argument", KR(ret), K(io_info));
+  } else if (OB_UNLIKELY(io_handle.is_valid() && !io_handle.is_finished())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tmp file io handle has remain data need to be waited", KR(ret), K(io_info), K(io_handle));
+  } else if (FALSE_IT(io_handle.reset())) {
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(io_handle.init_pread(io_info, offset, tmp_file_handle))) {
@@ -340,7 +346,6 @@ int ObTenantTmpFileManager::read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHand
 {
   int ret = OB_SUCCESS;
   ObTmpFileHandle tmp_file_handle;
-  io_handle.reset();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -348,6 +353,10 @@ int ObTenantTmpFileManager::read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHand
   } else if (!io_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to aio read, invalid argument", KR(ret), K(io_info));
+  } else if (OB_UNLIKELY(io_handle.is_valid() && !io_handle.is_finished())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tmp file io handle has remain data need to be waited", KR(ret), K(io_info), K(io_handle));
+  } else if (FALSE_IT(io_handle.reset())) {
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(io_handle.init_read(io_info, tmp_file_handle))) {
@@ -372,7 +381,6 @@ int ObTenantTmpFileManager::pread(const ObTmpFileIOInfo &io_info, const int64_t 
 {
   int ret = OB_SUCCESS;
   ObTmpFileHandle tmp_file_handle;
-  io_handle.reset();
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -380,6 +388,10 @@ int ObTenantTmpFileManager::pread(const ObTmpFileIOInfo &io_info, const int64_t 
   } else if (!io_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("fail to aio read, invalid argument", KR(ret), K(io_info));
+  } else if (OB_UNLIKELY(io_handle.is_valid() && !io_handle.is_finished())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tmp file io handle has remain data need to be waited", KR(ret), K(io_info), K(io_handle));
+  } else if (FALSE_IT(io_handle.reset())) {
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(io_handle.init_pread(io_info, offset, tmp_file_handle))) {

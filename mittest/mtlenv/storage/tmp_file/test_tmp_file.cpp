@@ -1430,6 +1430,91 @@ TEST_F(TestTmpFile, test_big_file_disable_page_cache)
   test_big_file(write_size, wbp_mem_limit, io_info);
 }
 
+TEST_F(TestTmpFile, test_aio_pread)
+{
+  int ret = OB_SUCCESS;
+  const int64_t write_size = 10 * 1024 * 1024; // 10MB
+  char *write_buf = new char [write_size];
+  for (int64_t i = 0; i < write_size;) {
+    int64_t random_length = generate_random_int(1024, 8 * 1024);
+    int64_t random_int = generate_random_int(0, 256);
+    for (int64_t j = 0; j < random_length && i + j < write_size; ++j) {
+      write_buf[i + j] = random_int;
+    }
+    i += random_length;
+  }
+
+  int64_t dir = -1;
+  int64_t fd = -1;
+  ret = MTL(ObTenantTmpFileManager *)->alloc_dir(dir);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = MTL(ObTenantTmpFileManager *)->open(fd, dir);
+  std::cout << "open temporary file: " << fd << std::endl;
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTmpFileHandle file_handle;
+  ret = MTL(ObTenantTmpFileManager *)->get_tmp_file(fd, file_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  file_handle.get()->page_idx_cache_.max_bucket_array_capacity_ = SMALL_WBP_IDX_CACHE_MAX_CAPACITY;
+
+  ObTmpFileIOInfo io_info;
+  io_info.fd_ = fd;
+  io_info.io_desc_.set_wait_event(2);
+  io_info.buf_ = write_buf;
+  io_info.size_ = write_size;
+  io_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
+
+  // 1. Write data
+  int64_t write_time = ObTimeUtility::current_time();
+  ret = MTL(ObTenantTmpFileManager *)->write(io_info);
+  write_time = ObTimeUtility::current_time() - write_time;
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  // 2. check aio_pread
+  int64_t read_size = 9 * 1024 * 1024; // 9MB
+  int64_t read_offset = 0;
+  char *read_buf = new char [read_size];
+  ObTmpFileIOHandle handle;
+  io_info.buf_ = read_buf;
+  io_info.size_ = read_size;
+  ret = MTL(ObTenantTmpFileManager *)->aio_pread(io_info, read_offset, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, handle.get_done_size());
+  ret = handle.wait();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(io_info.size_, handle.get_done_size());
+  int cmp = memcmp(handle.get_buffer(), write_buf + read_offset, io_info.size_);
+  ASSERT_EQ(0, cmp);
+  handle.reset();
+  delete[] read_buf;
+
+  // 3. execute two aio_pread, but io_handle doesn't not call wait()
+  read_size = 5 * 1024 * 1024; // 5MB
+  read_offset = 0;
+  read_buf = new char [read_size];
+  io_info.buf_ = read_buf;
+  io_info.size_ = read_size;
+  ret = MTL(ObTenantTmpFileManager *)->aio_pread(io_info, read_offset, handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(0, handle.get_done_size());
+
+  int read_offset2 = read_offset + read_size;
+  ret = MTL(ObTenantTmpFileManager *)->aio_pread(io_info, read_offset2, handle);
+  ASSERT_NE(OB_SUCCESS, ret);
+
+  ret = handle.wait();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(io_info.size_, handle.get_done_size());
+  cmp = memcmp(handle.get_buffer(), write_buf + read_offset, io_info.size_);
+  ASSERT_EQ(0, cmp);
+  handle.reset();
+  delete[] read_buf;
+
+  file_handle.reset();
+  ret = MTL(ObTenantTmpFileManager *)->remove(fd);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  LOG_INFO("test_cached_read");
+}
 } // namespace oceanbase
 
 int main(int argc, char **argv)
