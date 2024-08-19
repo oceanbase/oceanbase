@@ -69,6 +69,12 @@ extern int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_
 }
 namespace pl
 {
+
+
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(OBPLCONTEXT_INIT);
+#endif // ERRSIM
+
 int ObPL::init(common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
@@ -611,6 +617,11 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
                        const bool is_dblink)
 {
   int ret = OB_SUCCESS;
+
+  // to mark what session status we need to do to rollback if init failed
+  bool need_remove_top_stack = false;
+  bool need_debug_stop = false;
+
   int64_t pl_block_timeout = 0;
   int64_t query_start_time = session_info.get_query_start_time();
   if (!is_dblink) {
@@ -651,7 +662,6 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
     }
     if (lib::is_oracle_mode()) {
-      OZ (ObPLContext::debug_start(&session_info));
       if (OB_SUCC(ret) && !in_nested_sql_ctrl()) {
         /*!
          * 如果已经开始了STMT, 说明在嵌套语句中, 此时不需要设置SAVEPOINT,
@@ -698,6 +708,7 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
         sizeof(ObActiveSessionGuard::get_stat().top_level_sql_id_));
     }
     OX (session_info.set_pl_stack_ctx(this));
+    OX (need_remove_top_stack = true);
     OX (session_info.set_pl_can_retry(true));
   } else if (is_function_or_trigger && lib::is_mysql_mode()) {
     //mysql模式, 内层function或者trigger不需要创建隐式savepoint, 只需要重置ac
@@ -731,6 +742,14 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
   if (OB_SUCC(ret) && is_function_or_trigger && lib::is_mysql_mode()) {
     last_insert_id_ = session_info.get_local_last_insert_id();
   }
+#ifdef ERRSIM
+  OX (ret = OBPLCONTEXT_INIT);
+#endif // ERRSIM
+  OZ (ObPLContext::debug_start(&session_info));
+  OX (need_debug_stop = true);
+#ifdef ERRSIM
+  OX (ret = OBPLCONTEXT_INIT);
+#endif // ERRSIM
   if (OB_SUCC(ret) && is_autonomous_) {
     has_inner_dml_write_ = session_info.has_exec_inner_dml();
     session_info.set_has_exec_inner_dml(false);
@@ -740,10 +759,52 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     OZ (session_info.begin_autonomous_session(saved_session_));
     OX (saved_has_implicit_savepoint_ = session_info.has_pl_implicit_savepoint());
     OX (session_info.clear_pl_implicit_savepoint());
-    OZ (ObSqlTransControl::explicit_start_trans(ctx, false));
-    (void) register_after_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(ObSqlTransControl::explicit_start_trans(ctx, false))) {
+      LOG_WARN("failed to ObSqlTransControl::explicit_start_trans", K(ret));
+      int tmp_ret = session_info.end_autonomous_session(saved_session_);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to end_autonomous_session after explicit_start_trans failed, will ignore this error",
+                 K(tmp_ret), K(ret));
+      }
+    } else {
+      (void) register_after_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
+    }
   }
-  OX (session_info_ = &session_info);
+
+  // add any code may fail before this line.
+  // if it should fail, the side-effect must be cleared by its own, or after this line.
+
+  if (OB_SUCC(ret)) {
+    // this marks init succeed
+    session_info_ = &session_info;
+  } else {  // failed to init, do some clean up work
+    // restore autocommit
+    if (reset_autocommit_) {
+      session_info.set_autocommit(true);
+    }
+
+    // restore timeout
+    if (old_worker_timeout_ts_ != 0) {
+      THIS_WORKER.set_timeout_ts(old_worker_timeout_ts_);
+      if (OB_NOT_NULL(ctx.get_physical_plan_ctx())) {
+        ctx.get_physical_plan_ctx()->set_timeout_timestamp(old_phy_plan_timeout_ts_);
+      }
+    }
+
+    // remove top stack
+    if (need_remove_top_stack) {
+      session_info.set_pl_stack_ctx(nullptr);
+    }
+
+    // stop debugger
+    if (need_debug_stop) {
+      IGNORE_RETURN ObPLContext::debug_stop(&session_info);
+    }
+  }
+
   return ret;
 }
 
