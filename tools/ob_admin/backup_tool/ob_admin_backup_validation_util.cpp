@@ -418,8 +418,8 @@ int ObAdminBackupValidationUtil::get_piece_ls_start_lsn(
       // The format of archive file name is like '100.obarc'.
       int ret = OB_SUCCESS;
       int64_t file_id_ = INT64_MAX;
-      char *endptr = NULL;
-      const char *filename = NULL;
+      char *endptr = nullptr;
+      const char *filename = nullptr;
       if (OB_ISNULL(entry)) {
         ret = OB_INVALID_ARGUMENT;
         STORAGE_LOG(WARN, "invalid entry", K(ret));
@@ -466,7 +466,7 @@ int ObAdminBackupValidationUtil::get_piece_ls_start_lsn(
     STORAGE_LOG(WARN, "failed to list files", K(ret), K(full_path));
   } else if (OB_FAIL(op.get_start_file_path(full_path))) {
     STORAGE_LOG(WARN, "failed to get start file path", K(ret), K(full_path));
-  } else if (OB_FAIL(backup_reader<archive::ObArchiveFileHeader>::read_backup_struct(
+  } else if (OB_FAIL(backup_sturct_reader<typeof(file_header)>::read_backup_struct(
                  full_path, *backup_piece_dest.get_storage_info(), file_header, pos, ctx))) {
     STORAGE_LOG(WARN, "failed to read backup struct", K(ret), K(full_path));
   } else if (!file_header.is_valid()) {

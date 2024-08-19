@@ -84,10 +84,10 @@ struct ObAdminBackupValidationStat final
                K(succeed_lsn_range_count_));
   DISALLOW_COPY_AND_ASSIGN(ObAdminBackupValidationStat);
 };
-struct ObAdminTabletAttr final
+struct ObAdminBackupTabletValidationAttr final
 {
-  ObAdminTabletAttr();
-  ~ObAdminTabletAttr();
+  ObAdminBackupTabletValidationAttr();
+  ~ObAdminBackupTabletValidationAttr();
   share::ObLSID ls_id_;
   share::ObBackupDataType data_type_;
   backup::ObBackupMetaIndex *sstable_meta_index_;
@@ -95,35 +95,35 @@ struct ObAdminTabletAttr final
   backup::ObBackupMetaIndex *macro_block_id_mappings_meta_index_;
   backup::ObBackupMacroBlockIDMappingsMeta *id_mappings_meta_;
   TO_STRING_KV(KP(tablet_meta_index_));
-  DISALLOW_COPY_AND_ASSIGN(ObAdminTabletAttr);
+  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupTabletValidationAttr);
 };
-struct ObAdminLSAttr final
+struct ObAdminBackupLSValidationAttr final
 {
-  ObAdminLSAttr();
-  ~ObAdminLSAttr();
+  ObAdminBackupLSValidationAttr();
+  ~ObAdminBackupLSValidationAttr();
   enum ObAdminLSType { INVALID = 0, NORMAL = 1, DELETED = 2, POST_CONSTRUCTED = 3 };
   ObAdminLSType ls_type_;
   storage::ObLSMetaPackage ls_meta_package_;
-  common::hash::ObHashMap<common::ObTabletID, ObAdminTabletAttr *> sys_tablet_map_;
+  common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *> sys_tablet_map_;
   ObSingleLSInfoDesc *single_ls_info_desc_;
   int init();
-  DISALLOW_COPY_AND_ASSIGN(ObAdminLSAttr);
+  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupLSValidationAttr);
 };
-struct ObAdminBackupSetAttr final
+struct ObAdminBackupSetValidationAttr final
 {
-  ObAdminBackupSetAttr();
-  ~ObAdminBackupSetAttr();
+  ObAdminBackupSetValidationAttr();
+  ~ObAdminBackupSetValidationAttr();
   storage::ObBackupDataStore *backup_set_store_;
   storage::ObExternBackupSetInfoDesc *backup_set_info_desc_;
-  common::hash::ObHashMap<share::ObLSID, ObAdminLSAttr *> ls_map_;
+  common::hash::ObHashMap<share::ObLSID, ObAdminBackupLSValidationAttr *> ls_map_;
   ObArray<common::ObTabletID> minor_tablet_id_; // not incluing sys
   ObArray<common::ObTabletID> major_tablet_id_; // not incluing sys
-  common::hash::ObHashMap<common::ObTabletID, ObAdminTabletAttr *> minor_tablet_map_;
-  common::hash::ObHashMap<common::ObTabletID, ObAdminTabletAttr *> major_tablet_map_;
+  common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *> minor_tablet_map_;
+  common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *> major_tablet_map_;
   ObAdminBackupValidationStat stat_;
   TO_STRING_KV(KP(backup_set_store_));
   int init();
-  int fetch_next_tablet_group(common::ObArray<common::ObArray<ObAdminTabletAttr *>> &tablet_group,
+  int fetch_next_tablet_group(common::ObArray<common::ObArray<ObAdminBackupTabletValidationAttr *>> &tablet_group,
                               int64_t &scheduled_cnt);
   bool is_all_tablet_done();
 
@@ -132,15 +132,15 @@ private:
   int64_t minor_tablet_pos_; // [0, minor_tablet_pos_) already done
   int64_t major_tablet_pos_; // [0, major_tablet_pos_) already done
   ObSpinLock lock_;
-  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupSetAttr);
+  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupSetValidationAttr);
 };
-struct ObAdminBackupPieceAttr final
+struct ObAdminBackupPieceValidationAttr final
 {
-  ObAdminBackupPieceAttr();
-  ~ObAdminBackupPieceAttr();
+  ObAdminBackupPieceValidationAttr();
+  ~ObAdminBackupPieceValidationAttr();
   share::ObArchiveStore *backup_piece_store_;
   share::ObSinglePieceDesc *backup_piece_info_desc_;
-  common::hash::ObHashMap<share::ObLSID, ObAdminLSAttr *> ls_map_;
+  common::hash::ObHashMap<share::ObLSID, ObAdminBackupLSValidationAttr *> ls_map_;
   ObAdminBackupValidationStat stat_;
   TO_STRING_KV(KP(backup_piece_store_));
   int init();
@@ -148,11 +148,11 @@ struct ObAdminBackupPieceAttr final
       ObArray<std::pair<share::ObLSID, std::pair<palf::LSN, palf::LSN>>> &lsn_range_array);
 
 private:
-  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupPieceAttr);
+  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupPieceValidationAttr);
 };
 struct ObAdminBackupValidationCtx final
 {
-  ObAdminBackupValidationCtx(ObArenaAllocator &arena);
+  explicit ObAdminBackupValidationCtx(ObArenaAllocator &arena);
   ~ObAdminBackupValidationCtx();
   int init();
   int limit_and_sleep(const int64_t bytes);
@@ -162,20 +162,20 @@ struct ObAdminBackupValidationCtx final
   int go_abort(const char *fail_file, const char *fail_reason);
   // stateful, no call twice
   int add_backup_set(int64_t backup_set_id);
-  int get_backup_set_attr(int64_t backup_set_id, ObAdminBackupSetAttr *&backup_set_attr);
+  int get_backup_set_attr(int64_t backup_set_id, ObAdminBackupSetValidationAttr *&backup_set_attr);
   int add_ls(int64_t backup_set_id, const share::ObLSID &ls_id);
-  int get_ls_attr(int64_t backup_set_id, const share::ObLSID &ls_id, ObAdminLSAttr *&ls_attr);
+  int get_ls_attr(int64_t backup_set_id, const share::ObLSID &ls_id, ObAdminBackupLSValidationAttr *&ls_attr);
   int add_tablet(int64_t backup_set_id, const share::ObLSID &ls_id,
                  const share::ObBackupDataType &data_type, const common::ObTabletID &tablet_id);
   int get_tablet_attr(int64_t backup_set_id, const share::ObLSID &ls_id,
                       const share::ObBackupDataType &data_type, const common::ObTabletID &tablet_id,
-                      ObAdminTabletAttr *&tablet_attr);
+                      ObAdminBackupTabletValidationAttr *&tablet_attr);
   int add_backup_piece(const share::ObPieceKey &backup_piece_key);
   int get_backup_piece_attr(const share::ObPieceKey &backup_piece_key,
-                            ObAdminBackupPieceAttr *&backup_piece_attr);
+                            ObAdminBackupPieceValidationAttr *&backup_piece_attr);
   int add_ls(const share::ObPieceKey &backup_piece_key, const share::ObLSID &ls_id);
   int get_ls_attr(const share::ObPieceKey &backup_piece_key, const share::ObLSID &ls_id,
-                  ObAdminLSAttr *&ls_attr);
+                  ObAdminBackupLSValidationAttr *&ls_attr);
   // fill before validation
   ObAdminBackupValidationType validation_type_;
   share::ObBackupDest *log_archive_dest_;
@@ -187,8 +187,8 @@ struct ObAdminBackupValidationCtx final
   blocksstable::ObMacroBlockCheckLevel mb_check_level_;
   // fill during validation
   bool aborted_;
-  common::hash::ObHashMap<int64_t, ObAdminBackupSetAttr *> backup_set_map_;
-  common::hash::ObHashMap<share::ObPieceKey, ObAdminBackupPieceAttr *> backup_piece_map_;
+  common::hash::ObHashMap<int64_t, ObAdminBackupSetValidationAttr *> backup_set_map_;
+  common::hash::ObHashMap<share::ObPieceKey, ObAdminBackupPieceValidationAttr *> backup_piece_map_;
   common::ObArray<int64_t> processing_backup_set_id_array_;
   common::ObArray<share::ObPieceKey> processing_backup_piece_key_array_;
   // TODO: give a sql_proxy

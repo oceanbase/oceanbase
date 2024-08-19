@@ -45,11 +45,11 @@ public:
   static int get_backup_common_header(blocksstable::ObBufferReader &buffer_reader,
                                       share::ObBackupCommonHeader &header);
 
-  template <typename BackupStructType, typename Enable = void> struct backup_reader;
+  template <typename BackupStructType, typename Enable = void> struct backup_sturct_reader;
   template <typename BackupStructType>
-  struct backup_reader<BackupStructType,
-                       typename std::enable_if<!std::is_same<
-                           BackupStructType, archive::ObArchiveFileHeader>::value>::type>
+  struct backup_sturct_reader<BackupStructType,
+                              typename std::enable_if<!std::is_same<
+                                  BackupStructType, archive::ObArchiveFileHeader>::value>::type>
   {
     // notice: the pos will be advanced
     // by default, it will go the sizeof(BackupStructType), this is also the
@@ -116,9 +116,9 @@ public:
   };
 
   template <typename BackupStructType>
-  struct backup_reader<BackupStructType,
-                       typename std::enable_if<std::is_same<
-                           BackupStructType, archive::ObArchiveFileHeader>::value>::type>
+  struct backup_sturct_reader<BackupStructType,
+                              typename std::enable_if<std::is_same<
+                                  BackupStructType, archive::ObArchiveFileHeader>::value>::type>
   {
     // notice: the pos will be advanced
     // by default, it will go the sizeof(BackupStructType), this is also the
@@ -257,7 +257,7 @@ public:
     } else if (OB_FAIL(util.adaptively_get_file_length(file_path.get_ptr(), &storage_info,
                                                        file_length))) {
       STORAGE_LOG(WARN, "failed to get file length", K(ret), K(file_path));
-    } else if (OB_FAIL(backup_reader<backup::ObBackupFileHeader>::read_backup_struct(
+    } else if (OB_FAIL(backup_sturct_reader<typeof(file_header)>::read_backup_struct(
                    file_path, storage_info, file_header, pos, ctx,
                    DIO_ALIGN_SIZE /*file header aligned*/))) {
       STORAGE_LOG(WARN, "failed to read backup file header", K(ret), K(file_path));
@@ -280,8 +280,9 @@ public:
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "failed to pread file", K(ret), K(file_path));
     } else if (FALSE_IT(pos += read_size)) {
-    } else if (OB_FAIL(backup_reader<backup::ObBackupMultiLevelIndexTrailer>::read_backup_struct(
-                   file_path, storage_info, index_trailer, pos, ctx))) {
+    } else if (OB_FAIL(
+                   backup_sturct_reader<typeof(index_trailer)>::read_backup_struct(
+                       file_path, storage_info, index_trailer, pos, ctx))) {
       STORAGE_LOG(WARN, "failed to read backup file trailer", K(ret), K(file_path));
     } else if (pos != file_length) {
       ret = OB_ERR_UNEXPECTED;

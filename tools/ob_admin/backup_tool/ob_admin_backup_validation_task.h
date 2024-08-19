@@ -196,7 +196,7 @@ public:
   // tablet_group ctx, only under dag sapce, same life span with dag
   int add_macro_block(const backup::ObBackupMacroBlockIDPair &macro_block_id_pair,
                       const share::ObBackupDataType &data_type);
-  ObArray<ObArray<ObAdminTabletAttr *>> processing_tablet_group_;
+  ObArray<ObArray<ObAdminBackupTabletValidationAttr *>> processing_tablet_group_;
   int64_t scheduled_tablet_cnt_;
   ObArray<ObArray<std::pair<backup::ObBackupMacroBlockIDPair, share::ObBackupDataType>>>
       processing_macro_block_array_;
@@ -550,7 +550,7 @@ private:
   int check_backup_piece_info_();
   int collect_and_check_piece_ls_info_();
   int inner_collect_active_piece_ls_info_(const share::ObPieceKey &backup_piece_key,
-                                          const ObAdminBackupPieceAttr &backup_piece_attr);
+                                          const ObAdminBackupPieceValidationAttr &backup_piece_attr);
   int collect_and_check_piece_ls_onefile_length_();
   void post_process_(int ret);
 
