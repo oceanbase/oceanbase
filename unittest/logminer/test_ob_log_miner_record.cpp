@@ -65,6 +65,35 @@ TEST(test_ob_log_miner_record, InitObLogMinerRecord)
   destroy_miner_br(br);
   record.destroy();
 
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", 8, "id", "1", "2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "name", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `id`='1', `name`=NULL WHERE `id`='2' AND `name` IS NULL LIMIT 1;", record.redo_stmt_.ptr());
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `id`='2', `name`=NULL WHERE `id`='1' AND `name` IS NULL LIMIT 1;", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  br = build_logminer_br(new_buf, old_buf, EUPDATE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", 8, "id", "1", "2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "name", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
+  old_buf[1].m_origin = VALUE_ORIGIN::PADDING;
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `id`='1', `name`=NULL WHERE `id`='2' AND `name` IS NULL LIMIT 1;/* POTENTIALLY INACCURATE */", record.redo_stmt_.ptr());
+  EXPECT_STREQ("UPDATE `db2`.`tbl2` SET `id`='2', `name`=NULL WHERE `id`='1' AND `name` IS NULL LIMIT 1;/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
   br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
       "tenant2.db2", "tbl2", 8, "id", nullptr , "2",
       static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
@@ -76,6 +105,35 @@ TEST(test_ob_log_miner_record, InitObLogMinerRecord)
   EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
   EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `id`='2' AND `name`='bbb' LIMIT 1;", record.redo_stmt_.ptr());
   EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`id`, `name`) VALUES ('2', 'bbb');", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+  br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", 8, "id", nullptr , "2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "name", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `id`='2' AND `name` IS NULL LIMIT 1;", record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`id`, `name`) VALUES ('2', NULL);", record.undo_stmt_.ptr());
+  destroy_miner_br(br);
+  record.destroy();
+
+   br = build_logminer_br(new_buf, old_buf, EDELETE, lib::Worker::CompatMode::MYSQL,
+      "tenant2.db2", "tbl2", 8, "id", nullptr , "2",
+      static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING),
+      "name", nullptr, nullptr, static_cast<int>(obmysql::EMySQLFieldType::MYSQL_TYPE_VAR_STRING));
+  old_buf[1].m_origin = VALUE_ORIGIN::PADDING;
+  EXPECT_EQ(OB_SUCCESS, record.init(*br));
+  EXPECT_STREQ("tenant2", record.tenant_name_.ptr());
+  EXPECT_STREQ("db2", record.database_name_.ptr());
+  EXPECT_STREQ("tbl2", record.table_name_.ptr());
+  EXPECT_EQ(OB_SUCCESS, record.build_stmts(*br));
+  EXPECT_STREQ("DELETE FROM `db2`.`tbl2` WHERE `id`='2' AND `name` IS NULL LIMIT 1;/* POTENTIALLY INACCURATE */", record.redo_stmt_.ptr());
+  EXPECT_STREQ("INSERT INTO `db2`.`tbl2` (`id`, `name`) VALUES ('2', NULL);/* POTENTIALLY INACCURATE */", record.undo_stmt_.ptr());
   destroy_miner_br(br);
   record.destroy();
 
