@@ -223,7 +223,7 @@ int ObExprToOutfileRow::extract_fisrt_wchar_from_varhcar(const ObObj &obj, int32
 {
   int ret = OB_SUCCESS;
   int32_t length = 0;
-  if (obj.is_varying_len_char_type()) {
+  if (obj.is_varying_len_char_type() || obj.is_varbinary_or_binary()) {
     ObString str = obj.get_varchar();
     if (str.length() > 0) {
       ret = ObCharset::mb_wc(obj.get_collation_type(), str.ptr(), str.length(), length, wchar);
@@ -257,8 +257,6 @@ int ObExprToOutfileRow::print_field(char *buf, const int64_t buf_len, int64_t &p
   } else if (obj.is_null()) {
     OZ(out_info.escape_.print_plain_str_literal(buf, buf_len, pos, out_info.print_params_));
     OZ(print_wchar_to_buf(buf, buf_len, pos, 'N', out_info.print_params_.cs_type_));
-  } else if (obj.is_string_or_lob_locator_type() && obj.get_collation_type() == CS_TYPE_BINARY) {
-    OZ(obj.print_plain_str_literal(buf, buf_len, pos, out_info.print_params_));
   } else {
     OZ(obj.print_plain_str_literal(out_info.tmp_buf_, out_info.tmp_buf_len_, tmp_pos,
                                    out_info.print_params_));
