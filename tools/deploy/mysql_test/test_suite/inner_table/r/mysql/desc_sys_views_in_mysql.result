@@ -6650,6 +6650,15 @@ SPEED_MBPS	bigint(20)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_NIC_INFO limit 1);
 cnt
 1
+desc mysql.func;
+Field	Type	Null	Key	Default	Extra
+name	varchar(64)	NO		NULL	
+ret	bigint(20)	NO		NULL	
+dl	varchar(128)	NO		NULL	
+type	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.func limit 1);
+cnt
+1
 desc oceanbase.GV$OB_NIC_INFO;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

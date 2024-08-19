@@ -3463,7 +3463,12 @@ int ObRawExprPrinter::print(ObUDFRawExpr *expr)
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
   } else {
     if (!print_params_.for_dblink_) {
-      if (!expr->get_database_name().empty()) {
+      if (expr->is_dblink_sys_func()) {
+        if (!expr->get_database_name().empty()) {
+          PRINT_IDENT_WITH_QUOT(expr->get_database_name());
+          DATA_PRINTF(".");
+        }
+      } else if (!expr->get_database_name().empty()) {
         if (expr->get_database_name().case_compare("oceanbase") != 0) {
           PRINT_IDENT_WITH_QUOT(expr->get_database_name());
           DATA_PRINTF(".");
@@ -3516,6 +3521,12 @@ do { \
       }
 
 #undef PRINT_IMPLICIT_DATABASE_NAME
+    } else {
+      if (!expr->get_dblink_name().empty()
+          && !expr->get_database_name().empty()) {
+        PRINT_IDENT_WITH_QUOT(expr->get_database_name());
+        DATA_PRINTF(".");
+      }
     }
 
     if (!expr->get_package_name().empty() &&

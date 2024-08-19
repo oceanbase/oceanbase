@@ -1802,6 +1802,7 @@ public:
   static int innodb_metrics_schema(share::schema::ObTableSchema &table_schema);
   static int events_schema(share::schema::ObTableSchema &table_schema);
   static int v_ob_nic_info_schema(share::schema::ObTableSchema &table_schema);
+  static int func_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_nic_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
   static int cdb_scheduler_job_run_details_schema(share::schema::ObTableSchema &table_schema);
@@ -4667,6 +4668,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::innodb_metrics_schema,
   ObInnerTableSchema::events_schema,
   ObInnerTableSchema::v_ob_nic_info_schema,
+  ObInnerTableSchema::func_schema,
   ObInnerTableSchema::gv_ob_nic_info_schema,
   ObInnerTableSchema::dba_scheduler_job_run_details_schema,
   ObInnerTableSchema::cdb_scheduler_job_run_details_schema,
@@ -6382,6 +6384,7 @@ const uint64_t tenant_space_tables [] = {
   OB_INNODB_METRICS_TID,
   OB_EVENTS_TID,
   OB_V_OB_NIC_INFO_TID,
+  OB_FUNC_TID,
   OB_GV_OB_NIC_INFO_TID,
   OB_DBA_SCHEDULER_JOB_RUN_DETAILS_TID,
   OB_INNODB_SYS_FIELDS_TID,
@@ -9013,6 +9016,7 @@ const char* const tenant_space_table_names [] = {
   OB_INNODB_METRICS_TNAME,
   OB_EVENTS_TNAME,
   OB_V_OB_NIC_INFO_TNAME,
+  OB_FUNC_TNAME,
   OB_GV_OB_NIC_INFO_TNAME,
   OB_DBA_SCHEDULER_JOB_RUN_DETAILS_TNAME,
   OB_INNODB_SYS_FIELDS_TNAME,
@@ -13166,10 +13170,10 @@ static inline int get_sys_table_lob_aux_schema(const uint64_t tid,
 const int64_t OB_CORE_TABLE_COUNT = 4;
 const int64_t OB_SYS_TABLE_COUNT = 297;
 const int64_t OB_VIRTUAL_TABLE_COUNT = 825;
-const int64_t OB_SYS_VIEW_COUNT = 915;
-const int64_t OB_SYS_TENANT_TABLE_COUNT = 2042;
+const int64_t OB_SYS_VIEW_COUNT = 916;
+const int64_t OB_SYS_TENANT_TABLE_COUNT = 2043;
 const int64_t OB_CORE_SCHEMA_VERSION = 1;
-const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2045;
+const int64_t OB_BOOTSTRAP_SCHEMA_VERSION = 2046;
 
 } // end namespace share
 } // end namespace oceanbase

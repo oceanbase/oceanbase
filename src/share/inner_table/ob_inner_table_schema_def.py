@@ -35672,7 +35672,21 @@ def_table_schema(
 # 21582: ROLE_TABLE_GRANTS
 # 21583: ROLE_COLUMN_GRANTS
 # 21584: ROLE_ROUTINE_GRANTS
-# 21585: func
+def_table_schema(
+  owner = 'wangbai.wx',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name     = 'func',
+  table_id       = '21585',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT name, ret, dl, type
+    FROM oceanbase.__all_func
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'gengfu.zpc',
