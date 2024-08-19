@@ -500,7 +500,7 @@ int ObMajorMergeProgressChecker::check_tablet_compaction_scn(
                   if (ObTabletReplica::ScnStatus::SCN_STATUS_ERROR == r->get_status()) {
                     ret = OB_CHECKSUM_ERROR;
                     LOG_ERROR("ERROR! ERROR! ERROR! find error status tablet replica", KR(ret), K(tablet_info));
-                    if (TC_REACH_TIME_INTERVAL(6 * 3600 * 1000 * 1000)) {  // record every 6h
+                    if (TC_REACH_TIME_INTERVAL(6 * 3600 * 1000 * 1000L)) {  // record every 6h
                       ROOTSERVICE_EVENT_ADD("daily_merge", "checksum_error", "tenant_id", r->get_tenant_id(),
                         "ls_id", r->get_ls_id().id(), "tablet_id", r->get_tablet_id().id());
                     }

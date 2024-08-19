@@ -122,6 +122,9 @@ if (OB_USE_CLANG)
     -Wno-uninitialized-const-reference -Wno-unused-function -Wno-atomic-alignment
     -Wno-tautological-constant-out-of-range-compare -Wno-unused-parameter
     -Wno-string-plus-int -Wno-misleading-indentation -Wno-unused-private-field
+    -Wno-unused-but-set-variable -Wno-null-pointer-subtraction -Wno-compound-token-split-by-macro
+    -Wno-packed-non-pod -Wno-format -Wno-shorten-64-to-32 -Wno-unused-but-set-parameter -Wno-single-bit-bitfield-constant-conversion
+    -Wno-enum-constexpr-conversion -Wno-covered-switch-default
     $<$<COMPILE_LANGUAGE:CXX>:-Wno-overloaded-virtual -Wno-reserved-user-defined-literal
     -Wno-self-assign -Wno-inconsistent-missing-override -Wno-mismatched-tags -Wno-unused-variable
     -Wno-invalid-offsetof -Wno-unevaluated-expression -Wno-constant-logical-operand>
@@ -216,10 +219,10 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libicuuc.a
   $<$<STREQUAL:"${ARCHITECTURE}","aarch64">:${DEVTOOLS_DIR}/lib64/libatomic.a>
   $<$<STREQUAL:"${ARCHITECTURE}","ppc64le">:${DEVTOOLS_DIR}/lib64/libatomic.a>
-  -L${DEP_DIR}/var/usr/lib64
-  -L${DEP_DIR}/var/usr/lib
-  -L${DEP_3RD_DIR}/usr/lib
-  -L${DEP_3RD_DIR}/usr/lib64
+  #-L${DEP_DIR}/var/usr/lib64
+  #-L${DEP_DIR}/var/usr/lib
+  #-L${DEP_3RD_DIR}/usr/lib
+  #-L${DEP_3RD_DIR}/usr/lib64
   -laio -lpthread -ldl -lrt
   ${ARCH_LDFLAGS}
  )
@@ -240,7 +243,7 @@ target_link_libraries(oblib_base_base_base
   ${DEP_DIR}/lib/libicui18n.a
   ${DEP_DIR}/lib/libicustubdata.a
   ${DEP_DIR}/lib/libicuuc.a
-  $<$<STREQUAL:"${ARCHITECTURE}","aarch64">:${DEVTOOLS_DIR}/lib64/libatomic.a>
+  $<$<STREQUAL:"${ARCHITECTURE}","aarch64">:${CMAKE_SOURCE_DIR}/deps/3rd/usr/local/oceanbase/devtools/lib64/libatomic.a>
   $<$<STREQUAL:"${ARCHITECTURE}","ppc64le">:${DEVTOOLS_DIR}/lib64/libatomic.a>
   -L${DEP_DIR}/var/usr/lib64
   -L${DEP_DIR}/var/usr/lib
