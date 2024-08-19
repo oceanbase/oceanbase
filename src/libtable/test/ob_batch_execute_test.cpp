@@ -1339,19 +1339,26 @@ TEST_F(TestBatchExecute, append_lob)
     ObTableRequestOptions req_options;
     req_options.set_returning_affected_entity(true);
     req_options.set_returning_rowkey(true);
-    // TODO:@linjing concat还未支持大对象，待修复到master后patch到特性分支
-    ASSERT_EQ(OB_SIZE_OVERFLOW, the_table->execute(table_operation, req_options, r));
-    // ASSERT_EQ(OB_SUCCESS, r.get_errno());
-    // ASSERT_EQ(1, r.get_affected_rows());
-    // ASSERT_EQ(ObTableOperationType::APPEND, r.type());
-    // ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
-    // ASSERT_TRUE(!result_entity->is_empty());
-    // ASSERT_EQ(1, result_entity->get_rowkey_size());
-    // ASSERT_EQ(OB_SUCCESS, result_entity->get_rowkey_value(0, val));
-    // ASSERT_EQ(key_key, val.get_int());
-    // ASSERT_EQ(1, result_entity->get_properties_count());
-    // ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, val));
-    // ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, val.get_collation_type());
+    ASSERT_EQ(OB_SUCCESS, the_table->execute(table_operation, req_options, r));
+    ASSERT_EQ(OB_SUCCESS, r.get_errno());
+    ASSERT_EQ(1, r.get_affected_rows());
+    ASSERT_EQ(ObTableOperationType::APPEND, r.type());
+    ASSERT_EQ(OB_SUCCESS, r.get_entity(result_entity));
+    ASSERT_TRUE(NULL != result_entity);
+    ASSERT_TRUE(!result_entity->is_empty());
+    ASSERT_EQ(1, result_entity->get_rowkey_size());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_rowkey_value(0, val));
+    ASSERT_EQ(key_key, val.get_int());
+    ASSERT_EQ(1, result_entity->get_properties_count());
+    ASSERT_EQ(OB_SUCCESS, result_entity->get_property(C3, val));
+    ObString str;
+    ASSERT_EQ(OB_SUCCESS, val.get_string(str));
+    ObString str_origin = ObString::make_string("hello worldhello world");
+    ObString str_append(big_value_len, big_value);
+    ASSERT_EQ(str_origin.length() + str_append.length(), str.length());
+    ASSERT_EQ(0, memcmp(str.ptr(), str_origin.ptr(), str_origin.length()));
+    ASSERT_EQ(0, memcmp(str.ptr() + str_origin.length(), str_append.ptr(), str_append.length()));
+    ASSERT_EQ(CS_TYPE_UTF8MB4_GENERAL_CI, val.get_collation_type());
 
     if (NULL != big_value) {
       free(big_value);
