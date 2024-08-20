@@ -1636,10 +1636,6 @@ simple_expr collation %prec NEG
 }
 | EXISTS select_with_parens
 {
-  /* mysql 允许 select * from dual 出现在 exists 中, 此处更改 from dual 的 select list 为常量 1 */
-  if (NULL == $2->children_[PARSE_SELECT_FROM]) {
-    $2->value_ = 2;
-  }
   malloc_non_terminal_node($$, result->malloc_pool_, T_OP_EXISTS, 1, $2);
 }
 | case_expr

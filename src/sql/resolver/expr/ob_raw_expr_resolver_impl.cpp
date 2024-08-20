@@ -481,7 +481,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node, ObRawExpr
         break;
       }
       case T_OP_EXISTS:
-        //fall through
+        if (OB_FAIL(ctx_.parents_expr_info_.add_member(IS_EXISTS))) {
+          LOG_WARN("failed to add member", K(ret));
+        } else if (OB_FAIL(process_any_or_all_node(node, expr))) {
+          LOG_WARN("fail to process exists node", K(ret), K(node));
+        }
+        break;
       case T_ANY:
         //fall through
       case T_ALL: {

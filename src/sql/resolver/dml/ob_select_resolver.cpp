@@ -52,6 +52,7 @@ ObSelectResolver::ObSelectResolver(ObResolverParams &params)
     has_top_limit_(false),
     in_set_query_(false),
     is_sub_stmt_(false),
+    in_exists_subquery_(false),
     standard_group_checker_(),
     transpose_item_(NULL),
     is_left_child_(false),
@@ -1039,8 +1040,6 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
   CK(OB_NOT_NULL(select_stmt),
      OB_NOT_NULL(session_info_),
      OB_NOT_NULL(select_stmt->get_query_ctx()));
-
-  set_in_exists_subquery(2 == parse_tree.value_);
 
   /**
    * @muhang.zb
@@ -2620,6 +2619,8 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
       SelectItem select_item;
       if (lib::is_mysql_mode()) {
         ObConstRawExpr *c_expr = NULL;
+        select_item.alias_name_ = "1";
+        select_item.expr_name_ = "1";
         if (!is_in_exists_subquery()) {
           ret = OB_ERR_NO_TABLES_USED;
           LOG_WARN("No tables used");
@@ -2678,7 +2679,29 @@ int ObSelectResolver::resolve_star(const ParseNode *node)
     bool is_column_name_equal = false;
     const TableItem* tab_item = NULL;
     ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
-    if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
+    if (is_in_exists_subquery()) {
+      // Oracle and MySQL support use any.* as EXISTS subquery select item.
+      // Consider SQL: SELECT ... FROM T1 WHERE EXISTS (SELECT T3.* FROM T2);
+      // Even if T3 does not exist, this SQL statement can still be executed
+      // successfully.
+      // Here, we just simply resolve any.* in exists subquery as 1.
+      SelectItem select_item;
+      ObConstRawExpr *c_expr = NULL;
+      select_item.alias_name_ = "1";
+      select_item.expr_name_ = "1";
+      if (lib::is_oracle_mode() &&
+          OB_FAIL(ObRawExprUtils::build_const_number_expr(*params_.expr_factory_, ObNumberType,
+                                                number::ObNumber::get_positive_one(), c_expr))) {
+        LOG_WARN("failed to build const number 1 expr", K(ret));
+      } else if (!lib::is_oracle_mode() &&
+          OB_FAIL(ObRawExprUtils::build_const_int_expr(*params_.expr_factory_,
+                                                       ObIntType, 1, c_expr))) {
+        LOG_WARN("failed to build const int 1 expr", K(ret));
+      } else if (OB_FALSE_IT(select_item.expr_ = c_expr)) {
+      } else if (OB_FAIL(select_stmt->add_select_item(select_item))) {
+        LOG_WARN("failed to add select item", K(ret));
+      }
+    } else if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
       LOG_WARN("fail to get name case mode", K(ret));
     } else if (OB_FAIL(ObResolverUtils::resolve_column_ref(node, case_mode, column_ref))) {
       LOG_WARN("fail to resolve table name", K(ret));
@@ -5356,6 +5379,7 @@ int ObSelectResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subq
     subquery_resolver.set_is_sub_stmt(true);
     subquery_resolver.set_parent_namespace_resolver(this);
     subquery_resolver.set_current_view_level(current_view_level_);
+    subquery_resolver.set_in_exists_subquery(info.parents_expr_info_.has_member(IS_EXISTS));
     set_query_ref_expr(info.ref_expr_);
     resolve_alias_for_subquery_ = !(T_FIELD_LIST_SCOPE == current_scope_
                                    && info.parents_expr_info_.has_member(IS_AGG));
