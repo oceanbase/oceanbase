@@ -4826,7 +4826,6 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           pctx->get_remote_sql_info().ps_param_cnt_ = static_cast<int32_t>(param_store.count());
         } else {
           //没有进plan cache，并且是文本协议，在远端再走一次文本解析
-          param_store.reset(); //走文本协议不需要携带参数，清空掉
           pctx->get_remote_sql_info().use_ps_ = false;
           pctx->get_remote_sql_info().is_batched_stmt_ =
               pc_ctx.sql_ctx_.multi_stmt_item_.is_batched_multi_stmt();
