@@ -7762,7 +7762,7 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
             OX (calc_array->at(i) = tmp);
           }
           if (OB_FAIL(ret)) {
-            for (int64_t j = 0; j < i; ++j) {
+            for (int64_t j = 0; j < i - 1; ++j) {
               int ret = OB_SUCCESS;
               if (calc_array->at(j).is_pl_extend() &&
                   calc_array->at(j).get_meta().get_extend_type() != PL_CURSOR_TYPE &&

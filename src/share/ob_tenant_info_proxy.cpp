@@ -594,7 +594,9 @@ int ObAllTenantInfoProxy::update_tenant_max_ls_id(
     if (for_upgrade) {
       //upgrade maybe reentry, so max_ls_id maybe already setted
     } else {
-      ret = OB_NEED_RETRY;
+      //在日志流个数2->3的时候，1001分裂出1003，1002分裂出1004，在实际创建的时候
+      //这两个任务是并发的，实际上是没有办法保证1003一定先于1004创建出来
+      //所以在更新max_ls_id可能会有回退的问题，不报错处理
       LOG_WARN("max ls id is used, no need to set", KR(ret), K(all_tenant_info), K(max_ls_id));
     }
   } else if (OB_FAIL(sql.assign_fmt(
