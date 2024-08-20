@@ -226,19 +226,15 @@ int ObTransferPartitionCommand::execute_transfer_partition_(const ObTransferPart
 int ObTransferPartitionCommand::check_data_version_and_config_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   uint64_t compat_version = 0;
   bool bret = false;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(!tenant_config.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant config is invalid", KR(ret), K(tenant_id));
-  } else if (!(bret = tenant_config->enable_transfer)) {
+  } else if (!(bret = ObShareUtil::is_tenant_enable_transfer(tenant_id))) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_transfer is off", KR(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Transfer is disabled, transfer partition is");
+    LOG_WARN("transfer is disabled or tenant is in upgrade mode", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Transfer is disabled or tenant is in upgrade mode, transfer partition is");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (compat_version < DATA_VERSION_4_2_1_2

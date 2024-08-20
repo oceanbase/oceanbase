@@ -831,7 +831,7 @@ int ObTabletTableUpdater::do_batch_update_(
       }
     }
   }
-  LOG_INFO("REPORT: batch update tablets finished", KR(ret), K(replicas.count()), K(tasks),
+  LOG_TRACE("REPORT: batch update tablets finished", KR(ret), K(replicas.count()), K(tasks),
       "cost_time", ObTimeUtility::current_time() - batch_update_start_time);
   return ret;
 }
