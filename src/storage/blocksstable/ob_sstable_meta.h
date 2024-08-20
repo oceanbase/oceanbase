@@ -188,6 +188,7 @@ public:
   common::ObRowStoreType latest_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   storage::ObTableFlag table_flag_;
+  int64_t root_macro_seq_; // placeholder, will be used after palf branch merged
   //Add new variable need consider ObSSTableMetaChecker
 };
 

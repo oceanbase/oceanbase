@@ -64,7 +64,8 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     master_key_id_(0),
     sstable_logic_seq_(0),
     latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE),
-    table_flag_()
+    table_flag_(),
+    root_macro_seq_(0)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
