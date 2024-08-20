@@ -900,9 +900,7 @@ int ObSharedNothingTmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
       if (OB_FAIL(inner_write_(io_ctx))) {
         if (OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret) {
           ret = OB_SUCCESS;
-          if (TC_REACH_COUNT_INTERVAL(10)) {
-            LOG_INFO("alloc mem failed, try to evict pages", K(fd_), K(file_size_), K(io_ctx));
-          }
+          LOG_INFO("alloc mem failed, try to evict pages", K(fd_), K(file_size_), K(io_ctx), KPC(this));
           if (OB_FAIL(page_cache_controller_->invoke_swap_and_wait(
                   MIN(io_ctx.get_todo_size(), ObTmpFileGlobal::TMP_FILE_WRITE_BATCH_PAGE_NUM * ObTmpFileGlobal::PAGE_SIZE),
                   io_ctx.get_io_timeout_ms()))) {
@@ -1998,12 +1996,20 @@ int ObSharedNothingTmpFile::update_meta_after_flush(const int64_t info_idx, cons
 
   if (FAILEDx(inner_flush_ctx_.update_finished_continuous_flush_info_num(is_meta, end_pos))) {
     LOG_WARN("fail to update finished continuous flush info num", KR(ret), K(start_pos), K(end_pos), KPC(this));
-  } else if (inner_flush_ctx_.is_all_finished()) {
-    if (OB_ISNULL(data_flush_node_.get_next()) && OB_FAIL(reinsert_flush_node_(false /*is_meta*/))) {
-      LOG_ERROR("fail to reinsert data flush node", KR(ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
-    } else if (OB_ISNULL(meta_flush_node_.get_next()) && OB_FAIL(reinsert_flush_node_(true /*is_meta*/))) {
-      LOG_ERROR("fail to reinsert meta flush node", KR(ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
-    } else {
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (inner_flush_ctx_.is_data_finished()) {
+      if (OB_ISNULL(data_flush_node_.get_next()) && OB_TMP_FAIL(reinsert_flush_node_(false /*is_meta*/))) {
+        LOG_ERROR("fail to reinsert data flush node", KR(tmp_ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
+      }
+    }
+    if (inner_flush_ctx_.is_meta_finished()) {
+      if (OB_ISNULL(meta_flush_node_.get_next()) && OB_TMP_FAIL(reinsert_flush_node_(true /*is_meta*/))) {
+        LOG_ERROR("fail to reinsert meta flush node", KR(tmp_ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
+      }
+    }
+
+    if (inner_flush_ctx_.is_all_finished()) {
       inner_flush_ctx_.reset();
     }
   }
