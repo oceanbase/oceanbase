@@ -473,6 +473,8 @@ int ObDDLTableMergeTask::merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, O
     if (OB_SUCC(ret) && merge_param_.is_commit_ && is_major_exist) {
       if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(merge_param_.ls_id_, merge_param_.tablet_id_))) {
         LOG_WARN("fail to submit tablet update task", K(ret), K(tenant_id), K(merge_param_));
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->release_ddl_kvs(SCN::max_scn()))) {
+        LOG_WARN("release all ddl kv failed", K(ret), K(ddl_param));
       } else if (OB_FAIL(tenant_direct_load_mgr->remove_tablet_direct_load(ObTabletDirectLoadMgrKey(merge_param_.tablet_id_, true)))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
