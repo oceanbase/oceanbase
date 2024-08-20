@@ -7742,6 +7742,15 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                                                *(table->get_allocator()),
                                                into_record_type->get_record_member_type(k)->get_type(),
                                                into_record_type->get_record_member_type(k)->get_user_type_id()));
+                } else if (obj_array.at(idx).is_null() && into_record_type->get_record_member_type(k)->is_composite_type()) {
+                  const ObUserDefinedType *type = NULL;
+                  int64_t ptr = 0;
+                  int64_t init_size = OB_INVALID_SIZE;
+                  OZ (ctx->get_user_type(into_record_type->get_record_member_type(k)->get_user_type_id(), type));
+                  CK (OB_NOT_NULL(type));
+                  OZ (type->newx(*(table->get_allocator()), ctx, ptr));
+                  OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
+                  OX (tmp.set_extend(ptr, type->get_type(), init_size));
                 } else {
                   OZ (deep_copy_obj(*table->get_allocator(), obj_array.at(idx), tmp));
                 }
@@ -7771,6 +7780,15 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                                                *(table->get_allocator()),
                                                table->get_element_desc().get_pl_type(),
                                                table->get_element_desc().get_udt_id()));
+                } else if (current_obj.is_null() && !table->get_element_desc().is_obj_type()) {
+                  const ObUserDefinedType *type = NULL;
+                  int64_t ptr = 0;
+                  int64_t init_size = OB_INVALID_SIZE;
+                  OZ (ctx->get_user_type(table->get_element_desc().get_udt_id(), type));
+                  CK (OB_NOT_NULL(type));
+                  OZ (type->newx(*(table->get_allocator()), ctx, ptr));
+                  OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
+                  OX (tmp.set_extend(ptr, type->get_type(), init_size));
                 } else {
                   OZ (deep_copy_obj(*table->get_allocator(), current_obj, tmp));
                 }
