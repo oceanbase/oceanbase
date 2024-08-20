@@ -1286,9 +1286,8 @@ int ObRootInspection::check_table_schema(const ObTableSchema &hard_code_table,
               "table_name", hard_code_table.get_table_name(), "column",
               hard_code_column->get_column_name(), K(ret));
         } else {
-          const bool ignore_column_id = is_virtual_table(hard_code_table.get_table_id());
           if (OB_FAIL(check_column_schema_(hard_code_table.get_table_name(),
-              *column, *hard_code_column, ignore_column_id))) {
+              *column, *hard_code_column))) {
             LOG_WARN("column schema mismatch with hard code column schema",
                 "table_name",inner_table.get_table_name(), "column", *column,
                 "hard_code_column", *hard_code_column, K(ret));
@@ -1333,7 +1332,6 @@ int ObRootInspection::check_and_get_system_table_column_diff(
     const ObColumnSchemaV2 *column = NULL;
     const ObColumnSchemaV2 *hard_code_column = NULL;
     ObColumnSchemaV2 tmp_column; // check_column_can_be_altered_online() may change dst_column, is ugly.
-    bool ignore_column_id = false;
 
     // case 1. check if columns should be dropped.
     // case 2. check if column can be altered online.
@@ -1353,8 +1351,7 @@ int ObRootInspection::check_and_get_system_table_column_diff(
         // case 2
         int tmp_ret = check_column_schema_(table_schema.get_table_name_str(),
                                            *column,
-                                           *hard_code_column,
-                                           ignore_column_id);
+                                           *hard_code_column);
         if (OB_SUCCESS == tmp_ret) {
           // not changed
         } else if (OB_SCHEMA_ERROR != tmp_ret) {
@@ -1654,8 +1651,7 @@ int ObRootInspection::check_table_options_(const ObTableSchema &table,
 
 int ObRootInspection::check_column_schema_(const ObString &table_name,
                                            const ObColumnSchemaV2 &column,
-                                           const ObColumnSchemaV2 &hard_code_column,
-                                           const bool ignore_column_id)
+                                           const ObColumnSchemaV2 &hard_code_column)
 {
   int ret = OB_SUCCESS;
   if (table_name.empty() || !column.is_valid() || !hard_code_column.is_valid()) {
@@ -1689,9 +1685,7 @@ int ObRootInspection::check_column_schema_(const ObString &table_name,
       }
     }
 
-    if (!ignore_column_id) {
-      CMP_COLUMN_ATTR(column_id);
-    }
+    CMP_COLUMN_ATTR(column_id);
     CMP_COLUMN_ATTR(tenant_id);
     CMP_COLUMN_ATTR(table_id);
     // don't need to check schema version
