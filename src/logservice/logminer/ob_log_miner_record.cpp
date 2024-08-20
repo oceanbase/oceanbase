@@ -450,7 +450,7 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
     bool has_unsupport_type_compare = false;
     if (OB_SUCC(ret)) {
       switch(record_type_) {
-        // Insert records with null value is accurate. obcdc will output all value of null.
+        // Insert records with null value is accurate. obcdc will output all value accurately.
         case EINSERT: {
           if (OB_FAIL(build_insert_stmt_(redo_stmt_, new_cols, new_col_cnt, tbl_meta))) {
             LOG_ERROR("build insert redo stmt failed", KPC(this));
