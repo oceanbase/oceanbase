@@ -901,7 +901,7 @@ int ObLogMinerRecord::build_key_conds_(ObStringBuffer &stmt,
 		const unsigned int col_cnt,
 		ITableMeta *tbl_meta,
 		const KeyArray &key,
-    bool &has_unreliable_null,
+		bool &has_unreliable_null,
 		bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
