@@ -866,7 +866,7 @@ int ObLogMinerRecord::build_where_conds_(ObStringBuffer &stmt,
 		binlogBuf *cols,
 		const unsigned int col_cnt,
 		ITableMeta *tbl_meta,
-    bool &has_unreliable_null,
+		bool &has_unreliable_null,
 		bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
