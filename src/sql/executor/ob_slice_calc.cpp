@@ -674,10 +674,13 @@ int ObAffinitizedRepartSliceIdxCalc::get_slice_idx_batch_inner(const ObIArray<Ob
                                                              batch_size, tablet_ids_))) {
     LOG_WARN("fail to get partition id", K(ret));
   } else {
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx);
+    batch_info_guard.set_batch_size(batch_size);
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
       if (skip.at(i)) {
         continue;
       }
+      batch_info_guard.set_batch_idx(i);
       if (OB_FAIL(px_repart_ch_map_.get_refactored(tablet_ids_[i], slice_indexes_[i]))) {
         if (OB_HASH_NOT_EXIST == ret && unmatch_row_dist_method_ == ObPQDistributeMethod::DROP) {
           slice_indexes_[i] = ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW;
