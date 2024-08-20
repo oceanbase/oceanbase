@@ -758,13 +758,14 @@ int ObTableApiProcessorBase::get_tablet_id(const ObTabletID &arg_tablet_id, uint
   if (!tablet_id.is_valid()) {
     share::schema::ObSchemaGetterGuard schema_guard;
     const uint64_t tenant_id = MTL_ID();
-    if (OB_ISNULL(simple_table_schema_) || (!is_tablegroup_req_ && table_id != simple_table_schema_->get_table_id())) {
+    if (OB_ISNULL(simple_table_schema_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema is NULL or table_id is not correct", K(ret), K(table_id));
-    } else if (is_tablegroup_req_ && table_id != simple_table_schema_->get_table_id()) {
+      LOG_WARN("table schema is NULL", K(ret), K(table_id));
+    } else if (table_id != simple_table_schema_->get_table_id()) {
       // table id not equal should retry in table group route
+      // table id not equal, ODP will retry
       ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("table id not correct in table group", K(ret));
+      LOG_WARN("table id not match", K(ret), K(table_id), K(simple_table_schema_->get_table_id()));
     } else if (!simple_table_schema_->is_partitioned_table()) {
       tablet_id = simple_table_schema_->get_tablet_id();
     } else {
