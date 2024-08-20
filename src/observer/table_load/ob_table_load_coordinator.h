@@ -47,7 +47,8 @@ class ObTableLoadCoordinator
 public:
   ObTableLoadCoordinator(ObTableLoadTableCtx *ctx);
   static bool is_ctx_inited(ObTableLoadTableCtx *ctx);
-  static int init_ctx(ObTableLoadTableCtx *ctx, const common::ObIArray<int64_t> &idx_array,
+  static int init_ctx(ObTableLoadTableCtx *ctx,
+                      const common::ObIArray<uint64_t> &column_ids,
                       ObTableLoadExecCtx *exec_ctx);
   static void abort_ctx(ObTableLoadTableCtx *ctx);
   int init();
@@ -55,15 +56,12 @@ public:
 private:
   static int abort_active_trans(ObTableLoadTableCtx *ctx);
   static int abort_peers_ctx(ObTableLoadTableCtx *ctx);
-  static int abort_redef_table(ObTableLoadTableCtx *ctx);
 
 // table load ctrl interface
 public:
   int begin();
   int finish();
   int commit(table::ObTableLoadResultInfo &result_info);
-  int px_commit_data();
-  int px_commit_ddl();
   int get_status(table::ObTableLoadStatusType &status, int &error_code);
   int heart_beat();
 private:
@@ -73,7 +71,6 @@ private:
   int pre_merge_peers();
   int start_merge_peers();
   int commit_peers(table::ObTableLoadSqlStatistics &sql_statistics);
-  int commit_redef_table();
   int write_sql_stat(table::ObTableLoadSqlStatistics &sql_statistics);
   int heart_beat_peer();
 private:

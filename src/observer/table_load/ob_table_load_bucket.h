@@ -32,7 +32,6 @@ public:
 
   int add_row(const common::ObTabletID &tablet_id,
               const table::ObTableLoadObjRow &obj_row,
-              int64_t count,
               int64_t batch_size,
               bool &flag);
 

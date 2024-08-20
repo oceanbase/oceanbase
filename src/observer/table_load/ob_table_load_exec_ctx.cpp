@@ -22,12 +22,12 @@ namespace observer
 {
 using namespace common;
 using namespace sql;
+using namespace transaction;
 
 /**
- * ObTableLoadSqlExecCtx
+ * ObTableLoadExecCtx
  */
-
-ObIAllocator *ObTableLoadSqlExecCtx::get_allocator()
+ObIAllocator *ObTableLoadExecCtx::get_allocator()
 {
   ObIAllocator *allocator = nullptr;
   if (nullptr != exec_ctx_) {
@@ -36,7 +36,7 @@ ObIAllocator *ObTableLoadSqlExecCtx::get_allocator()
   return allocator;
 }
 
-ObSQLSessionInfo *ObTableLoadSqlExecCtx::get_session_info()
+ObSQLSessionInfo *ObTableLoadExecCtx::get_session_info()
 {
   ObSQLSessionInfo *session_info = nullptr;
   if (nullptr != exec_ctx_) {
@@ -45,7 +45,16 @@ ObSQLSessionInfo *ObTableLoadSqlExecCtx::get_session_info()
   return session_info;
 }
 
-int ObTableLoadSqlExecCtx::check_status()
+ObSchemaGetterGuard *ObTableLoadExecCtx::get_schema_guard()
+{
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  if (nullptr != exec_ctx_ && nullptr != exec_ctx_->get_sql_ctx()) {
+    schema_guard = exec_ctx_->get_sql_ctx()->schema_guard_;
+  }
+  return schema_guard;
+}
+
+int ObTableLoadExecCtx::check_status()
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
@@ -53,6 +62,9 @@ int ObTableLoadSqlExecCtx::check_status()
     LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
   } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
+  } else if (OB_ISNULL(exec_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec_ctx_ is null", KR(ret));
   } else if (OB_FAIL(exec_ctx_->check_status())) {
     LOG_WARN("fail to check exec ctx status", KR(ret));
   }
@@ -66,24 +78,25 @@ int ObTableLoadSqlExecCtx::check_status()
 int ObTableLoadClientExecCtx::check_status()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(SS_STOPPING == GCTX.status_ || SS_STOPPED == GCTX.status_)) {
-    ret = OB_SERVER_IS_STOPPING;
-    LOG_WARN("observer is stopped", KR(ret), K(GCTX.status_));
-  } else if (OB_FAIL(ObTableLoadService::check_tenant())) {
-    LOG_WARN("fail to check tenant", KR(ret));
-  } else if (OB_UNLIKELY(timeout_ts_ < ObTimeUtil::current_time())) {
-    ret = OB_TIMEOUT;
-    LOG_WARN("table load is timeout", KR(ret), K_(timeout_ts));
-  } else if (OB_UNLIKELY(ObTimeUtil::current_time() - last_heartbeat_time_ > heartbeat_timeout_us_)) {
+  if (OB_FAIL(ObTableLoadExecCtx::check_status())) {
+    LOG_WARN("fail to check status", KR(ret));
+  } else if (OB_UNLIKELY(last_heartbeat_time_ + heartbeat_timeout_us_ <
+                         ObTimeUtil::current_time())) {
     ret = OB_TIMEOUT;
     LOG_WARN("heartbeat is timeout", KR(ret), K(last_heartbeat_time_), K(heartbeat_timeout_us_));
-  } else if (OB_ISNULL(session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info is null", KR(ret));
-  } else if (OB_UNLIKELY(session_info_->is_terminate(ret))) {
-    LOG_WARN("execution was terminated", KR(ret));
   }
   return ret;
+}
+
+void ObTableLoadClientExecCtx::init_heart_beat(const int64_t heartbeat_timeout_us)
+{
+  heartbeat_timeout_us_ = heartbeat_timeout_us;
+  last_heartbeat_time_ = ObTimeUtil::current_time();
+}
+
+void ObTableLoadClientExecCtx::heart_beat()
+{
+  last_heartbeat_time_ = ObTimeUtil::current_time();
 }
 
 } // namespace observer

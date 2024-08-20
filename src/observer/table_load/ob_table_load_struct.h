@@ -173,10 +173,21 @@ struct ObTableLoadParam
            ObCompressorType::INVALID_COMPRESSOR != compressor_type_;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(parallel), K_(session_count), K_(batch_size),
-               K_(max_error_row_count), K_(sql_mode), K_(column_count), K_(need_sort), K_(px_mode),
-               K_(online_opt_stat_gather), K_(dup_action), K_(avail_memory),
-               K_(write_session_count), K_(exe_mode), K_(compressor_type));
+  TO_STRING_KV(K_(tenant_id),
+               K_(table_id),
+               K_(parallel),
+               K_(session_count),
+               K_(batch_size),
+               K_(max_error_row_count),
+               K_(sql_mode),
+               K_(column_count),
+               K_(need_sort),
+               K_(px_mode),
+               K_(online_opt_stat_gather),
+               K_(dup_action), K_(avail_memory),
+               K_(write_session_count),
+               K_(exe_mode),
+               K_(compressor_type));
 public:
   uint64_t tenant_id_;
   uint64_t table_id_;
@@ -184,7 +195,7 @@ public:
   int32_t session_count_;
   int32_t batch_size_;
   uint64_t max_error_row_count_;
-  uint64_t sql_mode_;
+  uint64_t sql_mode_; // unused
   int32_t column_count_;
   bool need_sort_;
   bool px_mode_;

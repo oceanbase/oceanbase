@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2023 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -77,14 +77,26 @@ private:
   public:
     LoadExecuteParam();
     bool is_valid() const;
-    TO_STRING_KV(K_(tenant_id), K_(database_id), K_(table_id), K_(combined_name), K_(parallel), K_(thread_count),
-                 K_(batch_row_count), K_(data_mem_usage_limit), K_(need_sort), K_(online_opt_stat_gather),
-                 K_(max_error_rows), K_(ignore_row_num), K_(data_access_param), K_(store_column_idxs));
+    TO_STRING_KV(K_(tenant_id),
+                 K_(database_id),
+                 K_(table_id),
+                 K_(combined_name),
+                 K_(parallel),
+                 K_(thread_count),
+                 K_(batch_row_count),
+                 K_(data_mem_usage_limit),
+                 K_(need_sort),
+                 K_(online_opt_stat_gather),
+                 K_(max_error_rows),
+                 K_(ignore_row_num),
+                 K_(dup_action),
+                 K_(data_access_param),
+                 K_(column_ids),
+                 K_(compressor_type));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
     uint64_t table_id_;
-    uint64_t sql_mode_;
     common::ObString database_name_;
     common::ObString table_name_;
     common::ObString combined_name_; // database name + table name
@@ -98,7 +110,8 @@ private:
     int64_t ignore_row_num_; // number of rows to ignore per file
     sql::ObLoadDupActionType dup_action_;
     DataAccessParam data_access_param_;
-    common::ObArray<int64_t> store_column_idxs_; // Mapping of stored columns to source data columns
+    ObArray<uint64_t> column_ids_;
+    ObCompressorType compressor_type_;
   };
 
   struct LoadExecuteContext
@@ -108,7 +121,7 @@ private:
     bool is_valid() const;
     TO_STRING_KV(K_(exec_ctx), KP_(allocator), KP_(direct_loader), KP_(job_stat), KP_(logger));
   public:
-    observer::ObTableLoadSqlExecCtx exec_ctx_;
+    observer::ObTableLoadExecCtx exec_ctx_;
     common::ObIAllocator *allocator_;
     observer::ObTableLoadInstance *direct_loader_;
     sql::ObLoadDataStat *job_stat_;
@@ -473,7 +486,6 @@ private:
 private:
   int init_file_iter();
   // init execute param
-  int init_store_column_idxs(common::ObIArray<int64_t> &store_column_idxs);
   int init_execute_param();
   // init execute context
   int init_logger();

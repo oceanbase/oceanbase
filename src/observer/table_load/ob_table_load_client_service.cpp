@@ -40,7 +40,14 @@ bool ObTableLoadClientService::ClientTaskBriefEraseIfExpired::operator()(
  * ObTableLoadClientService
  */
 
-ObTableLoadClientService::ObTableLoadClientService() : next_task_id_(1), is_inited_(false) {}
+int64_t ObTableLoadClientService::next_task_sequence_ = 0;
+
+int64_t ObTableLoadClientService::generate_task_id()
+{
+  return ObTimeUtil::current_time() * 1000 + ATOMIC_FAA(&next_task_sequence_, 1) % 1000;
+}
+
+ObTableLoadClientService::ObTableLoadClientService() : is_inited_(false) {}
 
 ObTableLoadClientService::~ObTableLoadClientService() {}
 
@@ -54,9 +61,6 @@ int ObTableLoadClientService::init()
   } else {
     if (OB_FAIL(
           client_task_map_.create(bucket_num, "TLD_ClientTask", "TLD_ClientTask", MTL_ID()))) {
-      LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
-    } else if (OB_FAIL(client_task_index_map_.create(bucket_num, "TLD_ClientTask", "TLD_ClientTask",
-                                                     MTL_ID()))) {
       LOG_WARN("fail to create hashmap", KR(ret), K(bucket_num));
     } else if (OB_FAIL(client_task_brief_map_.init("TLD_ClientBrief", MTL_ID()))) {
       LOG_WARN("fail to init link hashmap", KR(ret));
@@ -95,7 +99,6 @@ int ObTableLoadClientService::alloc_task(ObTableLoadClientTask *&client_task)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadClientTask", KR(ret));
     } else {
-      new_client_task->task_id_ = service->get_client_service().generate_task_id();
       client_task = new_client_task;
       client_task->inc_ref_count();
     }
@@ -128,9 +131,7 @@ void ObTableLoadClientService::revert_task(ObTableLoadClientTask *client_task)
     const int64_t ref_count = client_task->dec_ref_count();
     OB_ASSERT(ref_count >= 0);
     if (0 == ref_count) {
-      const int64_t task_id = client_task->task_id_;
-      const uint64_t table_id = client_task->param_.get_table_id();
-      LOG_INFO("free client task", K(task_id), K(table_id), KP(client_task));
+      LOG_INFO("free client task", KPC(client_task));
       free_task(client_task);
       client_task = nullptr;
     }
@@ -144,8 +145,11 @@ int ObTableLoadClientService::add_task(ObTableLoadClientTask *client_task)
   if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
+  } else if (OB_ISNULL(client_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(client_task));
   } else {
-    ObTableLoadUniqueKey key(client_task->param_.get_table_id(), client_task->task_id_);
+    ObTableLoadUniqueKey key(client_task->get_table_id(), client_task->get_task_id());
     ret = service->get_client_service().add_client_task(key, client_task);
   }
   return ret;
@@ -158,8 +162,11 @@ int ObTableLoadClientService::remove_task(ObTableLoadClientTask *client_task)
   if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
+  } else if (OB_ISNULL(client_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(client_task));
   } else {
-    ObTableLoadUniqueKey key(client_task->param_.get_table_id(), client_task->task_id_);
+    ObTableLoadUniqueKey key(client_task->get_table_id(), client_task->get_task_id());
     ret = service->get_client_service().remove_client_task(key, client_task);
   }
   return ret;
@@ -181,23 +188,6 @@ int ObTableLoadClientService::get_task(const ObTableLoadUniqueKey &key,
   return ret;
 }
 
-int ObTableLoadClientService::get_task(const ObTableLoadKey &key,
-                                       ObTableLoadClientTask *&client_task)
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadService *service = nullptr;
-  if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("null table load service", KR(ret));
-  } else {
-    if (OB_FAIL(
-          service->get_client_service().get_client_task_by_table_id(key.table_id_, client_task))) {
-      LOG_WARN("fail to get client task", KR(ret), K(key));
-    }
-  }
-  return ret;
-}
-
 int ObTableLoadClientService::add_client_task(const ObTableLoadUniqueKey &key,
                                               ObTableLoadClientTask *client_task)
 {
@@ -209,22 +199,12 @@ int ObTableLoadClientService::add_client_task(const ObTableLoadUniqueKey &key,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(key), KP(client_task));
   } else {
-    const uint64_t table_id = key.table_id_;
     obsys::ObWLockGuard guard(rwlock_);
     if (OB_FAIL(client_task_map_.set_refactored(key, client_task))) {
       if (OB_UNLIKELY(OB_HASH_EXIST != ret)) {
         LOG_WARN("fail to set refactored", KR(ret), K(key));
       } else {
         ret = OB_ENTRY_EXIST;
-      }
-    }
-    // force update client task index
-    else if (OB_FAIL(client_task_index_map_.set_refactored(table_id, client_task, 1))) {
-      LOG_WARN("fail to set refactored", KR(ret), K(table_id));
-      // erase from client task map, avoid wild pointer is been use
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(client_task_map_.erase_refactored(key))) {
-        LOG_WARN("fail to erase refactored", KR(tmp_ret), K(key));
       }
     } else {
       client_task->inc_ref_count(); // hold by map
@@ -244,7 +224,6 @@ int ObTableLoadClientService::remove_client_task(const ObTableLoadUniqueKey &key
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(key));
   } else {
-    const uint64_t table_id = key.table_id_;
     HashMapEraseIfEqual erase_if_equal(client_task);
     bool is_erased = false;
     obsys::ObWLockGuard guard(rwlock_);
@@ -258,14 +237,6 @@ int ObTableLoadClientService::remove_client_task(const ObTableLoadUniqueKey &key
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected client task", KR(ret), KPC(client_task));
     }
-    // try remove index
-    else if (OB_FAIL(client_task_index_map_.erase_if(table_id, erase_if_equal, is_erased))) {
-      if (OB_UNLIKELY(OB_HASH_NOT_EXIST == ret)) {
-        LOG_WARN("fail to get refactored", KR(ret), K(table_id));
-      } else {
-        ret = OB_SUCCESS;
-      }
-    }
     if (OB_SUCC(ret)) {
       client_task->dec_ref_count();
     }
@@ -275,10 +246,10 @@ int ObTableLoadClientService::remove_client_task(const ObTableLoadUniqueKey &key
       if (OB_FAIL(client_task_brief_map_.create(key, client_task_brief))) {
         LOG_WARN("fail to create client task brief", KR(ret), K(key));
       } else {
-        client_task_brief->task_id_ = client_task->task_id_;
-        client_task_brief->table_id_ = client_task->param_.get_table_id();
+        client_task_brief->task_id_ = client_task->get_task_id();
+        client_task_brief->table_id_ = client_task->get_table_id();
         client_task->get_status(client_task_brief->client_status_, client_task_brief->error_code_);
-        client_task_brief->result_info_ = client_task->result_info_;
+        client_task_brief->result_info_ = client_task->get_result_info();
         client_task_brief->active_time_ = ObTimeUtil::current_time();
       }
       if (nullptr != client_task_brief) {
@@ -334,29 +305,6 @@ int ObTableLoadClientService::get_client_task(const ObTableLoadUniqueKey &key,
     if (OB_FAIL(client_task_map_.get_refactored(key, client_task))) {
       if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
         LOG_WARN("fail to get refactored", KR(ret), K(key));
-      } else {
-        ret = OB_ENTRY_NOT_EXIST;
-      }
-    } else {
-      client_task->inc_ref_count();
-    }
-  }
-  return ret;
-}
-
-int ObTableLoadClientService::get_client_task_by_table_id(uint64_t table_id,
-                                                          ObTableLoadClientTask *&client_task)
-{
-  int ret = OB_SUCCESS;
-  client_task = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadClientService not init", KR(ret), KP(this));
-  } else {
-    obsys::ObRLockGuard guard(rwlock_);
-    if (OB_FAIL(client_task_index_map_.get_refactored(table_id, client_task))) {
-      if (OB_UNLIKELY(OB_HASH_NOT_EXIST != ret)) {
-        LOG_WARN("fail to get refactored", KR(ret), K(table_id));
       } else {
         ret = OB_ENTRY_NOT_EXIST;
       }

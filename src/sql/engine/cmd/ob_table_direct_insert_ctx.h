@@ -1,5 +1,5 @@
 /**
- * Copyright (c) 2021 OceanBase
+ * Copyright (c) 2023 OceanBase
  * OceanBase CE is licensed under Mulan PubL v2.
  * You can use this software according to the terms and conditions of the Mulan PubL v2.
  * You may obtain a copy of Mulan PubL v2 at:
@@ -18,7 +18,7 @@ namespace oceanbase
 {
 namespace observer
 {
-class ObTableLoadSqlExecCtx;
+class ObTableLoadExecCtx;
 class ObTableLoadInstance;
 }
 
@@ -55,12 +55,7 @@ public:
   void set_is_direct(bool is_direct) { is_direct_ = is_direct; }
 
 private:
-  int init_store_column_idxs(const uint64_t tenant_id, const uint64_t table_id,
-                             common::ObIArray<int64_t> &store_column_idxs);
-  int get_compressor_type(const uint64_t tenant_id, const uint64_t table_id, const int64_t parallel,
-                          ObCompressorType &compressor_type);
-private:
-  observer::ObTableLoadSqlExecCtx *load_exec_ctx_;
+  observer::ObTableLoadExecCtx *load_exec_ctx_;
   observer::ObTableLoadInstance *table_load_instance_;
   bool is_inited_;
   bool is_online_gather_statistics_;

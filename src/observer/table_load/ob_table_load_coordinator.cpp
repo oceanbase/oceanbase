@@ -17,6 +17,7 @@
 #include "observer/table_load/control/ob_table_load_control_rpc_proxy.h"
 #include "observer/table_load/ob_table_load_coordinator_ctx.h"
 #include "observer/table_load/ob_table_load_coordinator_trans.h"
+#include "observer/table_load/ob_table_load_error_row_handler.h"
 #include "observer/table_load/ob_table_load_redef_table.h"
 #include "observer/table_load/ob_table_load_service.h"
 #include "observer/table_load/ob_table_load_stat.h"
@@ -73,14 +74,15 @@ bool ObTableLoadCoordinator::is_ctx_inited(ObTableLoadTableCtx *ctx)
   return ret;
 }
 
-int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx, const ObIArray<int64_t> &idx_array,
+int ObTableLoadCoordinator::init_ctx(ObTableLoadTableCtx *ctx,
+                                     const ObIArray<uint64_t> &column_ids,
                                      ObTableLoadExecCtx *exec_ctx)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid agrs", KR(ret));
-  } else if (OB_FAIL(ctx->init_coordinator_ctx(idx_array, exec_ctx))) {
+  } else if (OB_FAIL(ctx->init_coordinator_ctx(column_ids, exec_ctx))) {
     LOG_WARN("fail to init coordinator ctx", KR(ret));
   }
   return ret;
@@ -97,23 +99,20 @@ void ObTableLoadCoordinator::abort_ctx(ObTableLoadTableCtx *ctx)
     LOG_WARN("unexpected invalid coordinator ctx", KR(ret), KP(ctx->coordinator_ctx_));
   } else {
     LOG_INFO("coordinator abort");
+    int tmp_ret = OB_SUCCESS;
     // 1. mark status abort, speed up background task exit
-    if (OB_FAIL(ctx->coordinator_ctx_->set_status_abort())) {
-      LOG_WARN("fail to set coordinator status abort", KR(ret));
+    if (OB_SUCCESS != (tmp_ret = ctx->coordinator_ctx_->set_status_abort())) {
+      LOG_WARN("fail to set coordinator status abort", KR(tmp_ret));
     }
     // 2. disable heart beat
     ctx->coordinator_ctx_->set_enable_heart_beat(false);
     // 3. mark all active trans abort
-    if (OB_FAIL(abort_active_trans(ctx))) {
-      LOG_WARN("fail to abort active trans", KR(ret));
+    if (OB_SUCCESS != (tmp_ret = abort_active_trans(ctx))) {
+      LOG_WARN("fail to abort active trans", KR(tmp_ret));
     }
     // 4. abort peers ctx
-    if (OB_FAIL(abort_peers_ctx(ctx))) {
-      LOG_WARN("fail to abort peers ctx", KR(ret));
-    }
-    // 5. abort redef table, release table lock
-    if (OB_FAIL(abort_redef_table(ctx))) {
-      LOG_WARN("fail to abort redef table", KR(ret));
+    if (OB_SUCCESS != (tmp_ret = abort_peers_ctx(ctx))) {
+      LOG_WARN("fail to abort peers ctx", KR(tmp_ret));
     }
   }
 }
@@ -219,19 +218,6 @@ int ObTableLoadCoordinator::abort_peers_ctx(ObTableLoadTableCtx *ctx)
       std::swap(curr_round, next_round);
       next_round->reuse();
     }
-  }
-  return ret;
-}
-
-int ObTableLoadCoordinator::abort_redef_table(ObTableLoadTableCtx *ctx)
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadRedefTableAbortArg arg;
-  arg.tenant_id_ = ctx->param_.tenant_id_;
-  arg.task_id_ = ctx->ddl_param_.task_id_;
-  if (OB_FAIL(
-        ObTableLoadRedefTable::abort(arg, *ctx->coordinator_ctx_->exec_ctx_->get_session_info()))) {
-    LOG_WARN("fail to abort redef table", KR(ret), K(arg));
   }
   return ret;
 }
@@ -877,22 +863,6 @@ int ObTableLoadCoordinator::commit_peers(table::ObTableLoadSqlStatistics &sql_st
   return ret;
 }
 
-int ObTableLoadCoordinator::commit_redef_table()
-{
-  int ret = OB_SUCCESS;
-  ObTableLoadRedefTableFinishArg arg;
-  arg.tenant_id_ = param_.tenant_id_;
-  arg.table_id_ = param_.table_id_;
-  arg.dest_table_id_ = ctx_->ddl_param_.dest_table_id_;
-  arg.task_id_ = ctx_->ddl_param_.task_id_;
-  arg.schema_version_ = ctx_->ddl_param_.schema_version_;
-  if (OB_FAIL(
-        ObTableLoadRedefTable::finish(arg, *coordinator_ctx_->exec_ctx_->get_session_info()))) {
-    LOG_WARN("fail to finish redef table", KR(ret), K(arg));
-  }
-  return ret;
-}
-
 // commit() = px_commit_data() + px_commit_ddl()
 // used in non px_mode
 int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
@@ -912,57 +882,10 @@ int ObTableLoadCoordinator::commit(ObTableLoadResultInfo &result_info)
     } else if (FALSE_IT(coordinator_ctx_->set_enable_heart_beat(false))) {
     } else if (param_.online_opt_stat_gather_ && OB_FAIL(write_sql_stat(sql_statistics))) {
       LOG_WARN("fail to drive sql stat", KR(ret));
-    } else if (OB_FAIL(commit_redef_table())) {
-      LOG_WARN("fail to commit redef table", KR(ret));
     } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
       LOG_WARN("fail to set coordinator status commit", KR(ret));
     } else {
       result_info = coordinator_ctx_->result_info_;
-    }
-  }
-  return ret;
-}
-
-// used in insert /*+ append */ into select clause
-// commit data loaded
-int ObTableLoadCoordinator::px_commit_data()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
-  } else {
-    LOG_INFO("coordinator px_commit_data");
-    ObMutexGuard guard(coordinator_ctx_->get_op_lock());
-    ObTableLoadSqlStatistics sql_statistics;
-    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
-      LOG_WARN("fail to check coordinator status", KR(ret));
-    } else if (OB_FAIL(commit_peers(sql_statistics))) {
-      LOG_WARN("fail to commit peers", KR(ret));
-    } else if (FALSE_IT(coordinator_ctx_->set_enable_heart_beat(false))) {
-    } else if (param_.online_opt_stat_gather_ && OB_FAIL(write_sql_stat(sql_statistics))) {
-      LOG_WARN("fail to drive sql stat", KR(ret));
-    }
-  }
-  return ret;
-}
-
-// commit ddl procedure
-int ObTableLoadCoordinator::px_commit_ddl()
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTableLoadCoordinator not init", KR(ret), KP(this));
-  } else {
-    LOG_INFO("coordinator px_commit_ddl");
-    ObMutexGuard guard(coordinator_ctx_->get_op_lock());
-    if (OB_FAIL(coordinator_ctx_->check_status(ObTableLoadStatusType::MERGED))) {
-      LOG_WARN("fail to check coordinator status", KR(ret));
-    } else if (OB_FAIL(commit_redef_table())) {
-      LOG_WARN("fail to commit redef table", KR(ret));
-    } else if (OB_FAIL(coordinator_ctx_->set_status_commit())) {
-      LOG_WARN("fail to set coordinator status commit", KR(ret));
     }
   }
   return ret;
@@ -1486,10 +1409,20 @@ public:
   int set_objs(const ObTableLoadObjRowArray &obj_rows, const ObIArray<int64_t> &idx_array)
   {
     int ret = OB_SUCCESS;
+    ObTableLoadErrorRowHandler *error_row_handler = ctx_->coordinator_ctx_->error_row_handler_;
     for (int64_t i = 0; OB_SUCC(ret) && (i < obj_rows.count()); ++i) {
       const ObTableLoadObjRow &src_obj_row = obj_rows.at(i);
       ObTableLoadObjRow out_obj_row;
-      if (OB_FAIL(src_obj_row.project(idx_array, out_obj_row))) {
+      // 对于客户端导入场景, 需要处理多列或者少列
+      if (OB_UNLIKELY(src_obj_row.count_ != ctx_->param_.column_count_)) {
+        ret = OB_ERR_COULUMN_VALUE_NOT_MATCH;
+        LOG_WARN("column count doesn't match value count", KR(ret), K(src_obj_row),
+                 K(ctx_->param_.column_count_));
+        ObNewRow new_row(src_obj_row.cells_, src_obj_row.count_);
+        if (OB_FAIL(error_row_handler->handle_error_row(ret, new_row))) {
+          LOG_WARN("fail to handle error row", KR(ret));
+        }
+      } else if (OB_FAIL(src_obj_row.project(idx_array, out_obj_row))) {
         LOG_WARN("failed to projecte out_obj_row", KR(ret), K(src_obj_row.count_));
       } else if (OB_FAIL(obj_rows_.push_back(out_obj_row))) {
         LOG_WARN("failed to add row to obj_rows_", KR(ret), K(out_obj_row));
