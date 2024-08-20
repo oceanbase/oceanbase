@@ -441,24 +441,25 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
     binlogBuf *new_cols = cdc_rec.newCols(new_col_cnt);
     binlogBuf *old_cols = cdc_rec.oldCols(old_col_cnt);
     ITableMeta *tbl_meta = cdc_rec.getTableMeta();
-    // When updating or deleting records with lob type,
-    // the null value of the lob type column may be incorrect
-    // due to the limitations of obcdc.
-	  bool has_lob_null = false;
-	  // xmltype and sdo_geometry type don't support compare operation.
+    // When updating or deleting records with value null,
+    // the null value of the column may be incorrect
+    // due to the limitations of obcdc and the minimal mode.
+    // Currently, it only indicates that obcdc has mistakenly identified a NULL value.
+    bool has_unreliable_null = false;
+    // xmltype and sdo_geometry type don't support compare operation.
     bool has_unsupport_type_compare = false;
     if (OB_SUCC(ret)) {
       switch(record_type_) {
-        // Insert records with lob type is accurate. obcdc will output all value of lob type.
+        // Insert records with null value is accurate. obcdc will output all value accurately.
         case EINSERT: {
           if (OB_FAIL(build_insert_stmt_(redo_stmt_, new_cols, new_col_cnt, tbl_meta))) {
             LOG_ERROR("build insert redo stmt failed", KPC(this));
           } else {
             if (OB_FAIL(build_delete_stmt_(undo_stmt_, new_cols, new_col_cnt,
-                tbl_meta, has_lob_null, has_unsupport_type_compare))) {
+                tbl_meta, has_unreliable_null, has_unsupport_type_compare))) {
               LOG_ERROR("build insert undo stmt failed", KPC(this));
             } else {
-              // ignore has_lob_null
+              // ignore has_unreliable_null
               if (has_unsupport_type_compare) {
                 APPEND_STMT(undo_stmt_, "/* POTENTIALLY INACCURATE */");
               }
@@ -467,25 +468,25 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
           break;
         }
 
-        // Update records with lob type maybe inaccurate,
+        // Update records with null value maybe inaccurate,
         // if NULL value appears in the pre/post mirror, the NULL may be incorrect.
         case EUPDATE: {
           if (OB_FAIL(build_update_stmt_(redo_stmt_, new_cols, new_col_cnt, old_cols,
-              old_col_cnt, tbl_meta,  has_lob_null, has_unsupport_type_compare))) {
+              old_col_cnt, tbl_meta,  has_unreliable_null, has_unsupport_type_compare))) {
             LOG_ERROR("build update redo stmt failed", KPC(this));
           } else {
-            if (has_lob_null || has_unsupport_type_compare) {
+            if (has_unreliable_null || has_unsupport_type_compare) {
               APPEND_STMT(redo_stmt_, "/* POTENTIALLY INACCURATE */");
-              has_lob_null = false;
+              has_unreliable_null = false;
               has_unsupport_type_compare = false;
             }
           }
           if (OB_SUCC(ret)) {
             if (OB_FAIL(build_update_stmt_(undo_stmt_, old_cols, old_col_cnt, new_cols,
-                new_col_cnt, tbl_meta, has_lob_null, has_unsupport_type_compare))) {
+                new_col_cnt, tbl_meta, has_unreliable_null, has_unsupport_type_compare))) {
               LOG_ERROR("build update undo stmt failed", KPC(this));
             } else {
-              if (has_lob_null || has_unsupport_type_compare) {
+              if (has_unreliable_null || has_unsupport_type_compare) {
                 APPEND_STMT(undo_stmt_, "/* POTENTIALLY INACCURATE */");
               }
             }
@@ -493,25 +494,25 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
           break;
         }
 
-        // Delete records with lob type maybe inaccurate,
+        // Delete records with null value maybe inaccurate,
         // if NULL value appears in the pre mirror, the NULL may be incorrect.
         case EDELETE: {
           if (OB_FAIL(build_delete_stmt_(redo_stmt_, old_cols, old_col_cnt,
-              tbl_meta, has_lob_null, has_unsupport_type_compare))) {
+              tbl_meta, has_unreliable_null, has_unsupport_type_compare))) {
             LOG_ERROR("build delete redo stmt failed", KPC(this));
           } else {
-            if (has_lob_null || has_unsupport_type_compare) {
+            if (has_unreliable_null || has_unsupport_type_compare) {
               APPEND_STMT(redo_stmt_, "/* POTENTIALLY INACCURATE */");
-              has_lob_null = false;
+              has_unreliable_null = false;
               has_unsupport_type_compare = false;
             }
           }
           if (OB_SUCC(ret)) {
             if (OB_FAIL(build_insert_stmt_(undo_stmt_, old_cols,
-                old_col_cnt, tbl_meta, has_lob_null))) {
+                old_col_cnt, tbl_meta, has_unreliable_null))) {
               LOG_ERROR("build delete undo stmt failed", KPC(this));
             } else {
-              if (has_lob_null) {
+              if (has_unreliable_null) {
                 APPEND_STMT(undo_stmt_, "/* POTENTIALLY INACCURATE */");
               }
             }
@@ -536,9 +537,9 @@ int ObLogMinerRecord::build_insert_stmt_(ObStringBuffer &stmt,
     ITableMeta *tbl_meta)
 {
   int ret = OB_SUCCESS;
-  // ignore has_lob_null
-  bool has_lob_null = false;
-  if (OB_FAIL(build_insert_stmt_(stmt, new_cols, new_col_cnt, tbl_meta, has_lob_null))) {
+  // ignore has_unreliable_null
+  bool has_unreliable_null = false;
+  if (OB_FAIL(build_insert_stmt_(stmt, new_cols, new_col_cnt, tbl_meta, has_unreliable_null))) {
     LOG_ERROR("build insert stmt failed", KPC(this));
   }
   return ret;
@@ -547,7 +548,7 @@ int ObLogMinerRecord::build_insert_stmt_(ObStringBuffer &stmt,
     binlogBuf *new_cols,
     const unsigned int new_col_cnt,
     ITableMeta *tbl_meta,
-    bool &has_lob_null)
+    bool &has_unreliable_null)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -594,8 +595,8 @@ int ObLogMinerRecord::build_insert_stmt_(ObStringBuffer &stmt,
             "col_idx", i);
       }
       if (OB_SUCC(ret)) {
-        if (is_lob_type_(col_meta) && nullptr == new_cols[i].buf) {
-          has_lob_null = true;
+        if (nullptr == new_cols[i].buf && new_cols[i].m_origin == VALUE_ORIGIN::PADDING) {
+          has_unreliable_null = true;
         }
       }
     }
@@ -615,8 +616,8 @@ int ObLogMinerRecord::build_update_stmt_(ObStringBuffer &stmt,
     binlogBuf *old_cols,
     const unsigned int old_col_cnt,
     ITableMeta *tbl_meta,
-    bool &has_lob_null,
-		bool &has_unsupport_type_compare)
+    bool &has_unreliable_null,
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -653,15 +654,16 @@ int ObLogMinerRecord::build_update_stmt_(ObStringBuffer &stmt,
             "col_idx", i);
       }
       if (OB_SUCC(ret)) {
-        if (is_lob_type_(col_meta) && nullptr == new_cols[i].buf) {
-          has_lob_null = true;
+        if ((nullptr == new_cols[i].buf && new_cols[i].m_origin == VALUE_ORIGIN::PADDING)
+            || (nullptr != old_cols[i].buf && old_cols[i].m_origin == VALUE_ORIGIN::PADDING)) {
+          has_unreliable_null = true;
         }
       }
     }
     APPEND_STMT(stmt, " WHERE ");
 
     if (OB_SUCC(ret) && OB_FAIL(build_where_conds_(stmt, old_cols, old_col_cnt,
-        tbl_meta, has_lob_null, has_unsupport_type_compare))) {
+        tbl_meta, has_unreliable_null, has_unsupport_type_compare))) {
       LOG_ERROR("build where conds failed",);
     }
     if (lib::Worker::CompatMode::MYSQL == compat_mode_) {
@@ -686,8 +688,8 @@ int ObLogMinerRecord::build_delete_stmt_(ObStringBuffer &stmt,
     binlogBuf *old_cols,
     const unsigned int old_col_cnt,
     ITableMeta *tbl_meta,
-    bool &has_lob_null,
-		bool &has_unsupport_type_compare)
+    bool &has_unreliable_null,
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -705,7 +707,7 @@ int ObLogMinerRecord::build_delete_stmt_(ObStringBuffer &stmt,
     APPEND_STMT(stmt, " WHERE ");
 
     if (OB_SUCC(ret) && OB_FAIL(build_where_conds_(stmt, old_cols, old_col_cnt,
-        tbl_meta, has_lob_null, has_unsupport_type_compare))) {
+        tbl_meta, has_unreliable_null, has_unsupport_type_compare))) {
       LOG_ERROR("build where conds failed",);
     }
     if (lib::Worker::CompatMode::MYSQL == compat_mode_) {
@@ -861,21 +863,21 @@ int ObLogMinerRecord::build_column_value_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_where_conds_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_cnt,
-		ITableMeta *tbl_meta,
-    bool &has_lob_null,
-		bool &has_unsupport_type_compare)
+    binlogBuf *cols,
+    const unsigned int col_cnt,
+    ITableMeta *tbl_meta,
+    bool &has_unreliable_null,
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (!unique_keys_.empty()) {
     if (OB_FAIL(build_key_conds_(stmt, cols, col_cnt, tbl_meta,
-        unique_keys_, has_lob_null, has_unsupport_type_compare))) {
+        unique_keys_, has_unreliable_null, has_unsupport_type_compare))) {
       LOG_ERROR("build unique keys failed", K(stmt), K(unique_keys_));
     }
   } else if (!primary_keys_.empty()) {
     if (OB_FAIL(build_key_conds_(stmt, cols, col_cnt, tbl_meta,
-        primary_keys_, has_lob_null, has_unsupport_type_compare))) {
+        primary_keys_, has_unreliable_null, has_unsupport_type_compare))) {
       LOG_ERROR("build primary keys failed", K(stmt), K(primary_keys_));
     }
   } else {
@@ -885,7 +887,7 @@ int ObLogMinerRecord::build_where_conds_(ObStringBuffer &stmt,
         APPEND_STMT(stmt, " AND ");
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(build_cond_(stmt, cols, i, tbl_meta, col_meta, has_lob_null, has_unsupport_type_compare))) {
+        if (OB_FAIL(build_cond_(stmt, cols, i, tbl_meta, col_meta, has_unreliable_null, has_unsupport_type_compare))) {
           LOG_ERROR("build cond failed", "table_name", tbl_meta->getName());
         }
       }
@@ -895,12 +897,12 @@ int ObLogMinerRecord::build_where_conds_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_key_conds_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_cnt,
-		ITableMeta *tbl_meta,
-		const KeyArray &key,
-    bool &has_lob_null,
-		bool &has_unsupport_type_compare)
+    binlogBuf *cols,
+    const unsigned int col_cnt,
+    ITableMeta *tbl_meta,
+    const KeyArray &key,
+    bool &has_unreliable_null,
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < key.count(); i++) {
@@ -915,7 +917,7 @@ int ObLogMinerRecord::build_key_conds_(ObStringBuffer &stmt,
       }
       if (OB_SUCC(ret)) {
         if (OB_FAIL(build_cond_(stmt, cols, col_idx, tbl_meta, col_meta,
-            has_lob_null, has_unsupport_type_compare))) {
+            has_unreliable_null, has_unsupport_type_compare))) {
           LOG_ERROR("build cond failed", "table_name", tbl_meta->getName());
         }
       }
@@ -925,12 +927,12 @@ int ObLogMinerRecord::build_key_conds_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_cond_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_idx,
-		ITableMeta *tbl_meta,
-		IColMeta *col_meta,
-    bool &has_lob_null,
-		bool &has_unsupport_type_compare)
+    binlogBuf *cols,
+    const unsigned int col_idx,
+    ITableMeta *tbl_meta,
+    IColMeta *col_meta,
+    bool &has_unreliable_null,
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(col_meta)) {
@@ -940,7 +942,7 @@ int ObLogMinerRecord::build_cond_(ObStringBuffer &stmt,
     if (is_lob_type_(col_meta) && nullptr != cols[col_idx].buf) {
       // build lob type compare condition, excluding null value condition
       if (OB_FAIL(build_lob_cond_(stmt, cols, col_idx, tbl_meta,
-          col_meta, has_lob_null, has_unsupport_type_compare))) {
+          col_meta, has_unreliable_null, has_unsupport_type_compare))) {
         LOG_ERROR("build lob condition failed", "table_name", tbl_meta->getName());
       }
     } else {
@@ -949,8 +951,8 @@ int ObLogMinerRecord::build_cond_(ObStringBuffer &stmt,
       }
     }
     if (OB_SUCC(ret)) {
-      if (is_lob_type_(col_meta) && nullptr == cols[col_idx].buf) {
-        has_lob_null = true;
+      if (nullptr == cols[col_idx].buf && cols[col_idx].m_origin == VALUE_ORIGIN::PADDING) {
+        has_unreliable_null = true;
       }
     }
   }
@@ -958,12 +960,12 @@ int ObLogMinerRecord::build_cond_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_lob_cond_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_idx,
-		ITableMeta *tbl_meta,
-		IColMeta *col_meta,
-    bool &has_lob_null,
-		bool &has_unsupport_type_compare)
+    binlogBuf *cols,
+    const unsigned int col_idx,
+    ITableMeta *tbl_meta,
+    IColMeta *col_meta,
+    bool &has_unreliable_null,
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_lob_type_(col_meta) || nullptr == cols[col_idx].buf)) {
@@ -1020,10 +1022,10 @@ int ObLogMinerRecord::build_lob_cond_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_func_cond_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_idx,
+    binlogBuf *cols,
+    const unsigned int col_idx,
     ITableMeta *tbl_meta,
-		IColMeta *col_meta,
+    IColMeta *col_meta,
     const char *func_name)
 {
   int ret = OB_SUCCESS;
@@ -1042,10 +1044,10 @@ int ObLogMinerRecord::build_func_cond_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_normal_cond_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_idx,
-		ITableMeta *tbl_meta,
-		IColMeta *col_meta)
+    binlogBuf *cols,
+    const unsigned int col_idx,
+    ITableMeta *tbl_meta,
+    IColMeta *col_meta)
 {
   int ret = OB_SUCCESS;
   APPEND_ESCAPE_CHAR(stmt);
