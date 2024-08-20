@@ -868,6 +868,7 @@ typedef enum ObItemType
   T_FUNC_SYS_ARRAY_CONTAINS = 1745,
   T_FUN_SYS_ST_NUMPOINTS = 1746,
   T_FUN_SYS_ST_POINTN = 1747,
+  T_FUN_SYS_ST_POINTFROMTEXT = 1748,
   ///< @note add new oracle only function type before this line
 
   T_FUN_SYS_TABLET_AUTOINC_NEXTVAL = 1801, // add only for heap table

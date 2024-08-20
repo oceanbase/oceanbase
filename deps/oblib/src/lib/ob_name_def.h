@@ -1096,6 +1096,7 @@
 #define N_ALIGN_DATE4CMP                    "align_date4cmp"
 #define N_ST_NUMPOINTS                      "st_numpoints"
 #define N_ST_POINTN                         "st_pointn"
+#define N_ST_POINTFROMTEXT                  "st_pointfromtext"
 
 // for lock function
 #define N_GET_LOCK                          "get_lock"

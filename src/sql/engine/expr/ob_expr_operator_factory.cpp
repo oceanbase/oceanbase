@@ -452,6 +452,7 @@
 #include "sql/engine/expr/ob_expr_rb_from_string.h"
 #include "sql/engine/expr/ob_expr_st_numpoints.h"
 #include "sql/engine/expr/ob_expr_st_pointn.h"
+#include "sql/engine/expr/ob_expr_st_pointfromtext.h"
 
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_decode_trace_id.h"
@@ -1122,6 +1123,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprDecodeTraceId);
     REG_OP(ObExprSTNumPoints);
     REG_OP(ObExprSTPointN);
+    REG_OP(ObExprSTPointFromText);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath);
