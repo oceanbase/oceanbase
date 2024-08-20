@@ -445,8 +445,8 @@ int ObLogMinerRecord::build_dml_stmt_(ICDCRecord &cdc_rec)
     // the null value of the column may be incorrect
     // due to the limitations of obcdc and the minimal mode.
     // Currently, it only indicates that obcdc has mistakenly identified a NULL value.
-	  bool has_unreliable_null = false;
-	  // xmltype and sdo_geometry type don't support compare operation.
+    bool has_unreliable_null = false;
+    // xmltype and sdo_geometry type don't support compare operation.
     bool has_unsupport_type_compare = false;
     if (OB_SUCC(ret)) {
       switch(record_type_) {
@@ -617,7 +617,7 @@ int ObLogMinerRecord::build_update_stmt_(ObStringBuffer &stmt,
     const unsigned int old_col_cnt,
     ITableMeta *tbl_meta,
     bool &has_unreliable_null,
-		bool &has_unsupport_type_compare)
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -689,7 +689,7 @@ int ObLogMinerRecord::build_delete_stmt_(ObStringBuffer &stmt,
     const unsigned int old_col_cnt,
     ITableMeta *tbl_meta,
     bool &has_unreliable_null,
-		bool &has_unsupport_type_compare)
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -863,11 +863,11 @@ int ObLogMinerRecord::build_column_value_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_where_conds_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_cnt,
-		ITableMeta *tbl_meta,
-		bool &has_unreliable_null,
-		bool &has_unsupport_type_compare)
+    binlogBuf *cols,
+    const unsigned int col_cnt,
+    ITableMeta *tbl_meta,
+    bool &has_unreliable_null,
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (!unique_keys_.empty()) {
@@ -897,12 +897,12 @@ int ObLogMinerRecord::build_where_conds_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_key_conds_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_cnt,
-		ITableMeta *tbl_meta,
-		const KeyArray &key,
-		bool &has_unreliable_null,
-		bool &has_unsupport_type_compare)
+    binlogBuf *cols,
+    const unsigned int col_cnt,
+    ITableMeta *tbl_meta,
+    const KeyArray &key,
+    bool &has_unreliable_null,
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   for (int i = 0; OB_SUCC(ret) && i < key.count(); i++) {
@@ -927,12 +927,12 @@ int ObLogMinerRecord::build_key_conds_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_cond_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_idx,
-		ITableMeta *tbl_meta,
-		IColMeta *col_meta,
+    binlogBuf *cols,
+    const unsigned int col_idx,
+    ITableMeta *tbl_meta,
+    IColMeta *col_meta,
     bool &has_unreliable_null,
-		bool &has_unsupport_type_compare)
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(col_meta)) {
@@ -960,12 +960,12 @@ int ObLogMinerRecord::build_cond_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_lob_cond_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_idx,
-		ITableMeta *tbl_meta,
-		IColMeta *col_meta,
+    binlogBuf *cols,
+    const unsigned int col_idx,
+    ITableMeta *tbl_meta,
+    IColMeta *col_meta,
     bool &has_unreliable_null,
-		bool &has_unsupport_type_compare)
+    bool &has_unsupport_type_compare)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_lob_type_(col_meta) || nullptr == cols[col_idx].buf)) {
@@ -1022,10 +1022,10 @@ int ObLogMinerRecord::build_lob_cond_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_func_cond_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_idx,
+    binlogBuf *cols,
+    const unsigned int col_idx,
     ITableMeta *tbl_meta,
-		IColMeta *col_meta,
+    IColMeta *col_meta,
     const char *func_name)
 {
   int ret = OB_SUCCESS;
@@ -1044,10 +1044,10 @@ int ObLogMinerRecord::build_func_cond_(ObStringBuffer &stmt,
 }
 
 int ObLogMinerRecord::build_normal_cond_(ObStringBuffer &stmt,
-		binlogBuf *cols,
-		const unsigned int col_idx,
-		ITableMeta *tbl_meta,
-		IColMeta *col_meta)
+    binlogBuf *cols,
+    const unsigned int col_idx,
+    ITableMeta *tbl_meta,
+    IColMeta *col_meta)
 {
   int ret = OB_SUCCESS;
   APPEND_ESCAPE_CHAR(stmt);
