@@ -39,6 +39,8 @@ using namespace transaction::tablelock;
 namespace transaction
 {
 
+thread_local transaction::ObTxBufferNodeArray *TLOCAL_P_TX_BUFFER_NODE_ARRAY = nullptr;// FIXME: for compat issue, should be removed after barrier version
+
 //#####################################################
 // ObTxBufferNode
 //#####################################################
