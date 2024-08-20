@@ -280,9 +280,8 @@ public:
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "failed to pread file", K(ret), K(file_path));
     } else if (FALSE_IT(pos += read_size)) {
-    } else if (OB_FAIL(
-                   backup_sturct_reader<typeof(index_trailer)>::read_backup_struct(
-                       file_path, storage_info, index_trailer, pos, ctx))) {
+    } else if (OB_FAIL(backup_sturct_reader<typeof(index_trailer)>::read_backup_struct(
+                   file_path, storage_info, index_trailer, pos, ctx))) {
       STORAGE_LOG(WARN, "failed to read backup file trailer", K(ret), K(file_path));
     } else if (pos != file_length) {
       ret = OB_ERR_UNEXPECTED;
@@ -391,6 +390,22 @@ private:
   static int get_tenant_index_file_name_prefix_(const share::ObBackupDataType &backup_data_type,
                                                 const backup::ObBackupFileType &backup_file_type,
                                                 const char *&file_name);
+
+  class ObLSStartFileGetterOp final : public ObBaseDirEntryOperator
+  {
+  public:
+    ObLSStartFileGetterOp();
+    ~ObLSStartFileGetterOp();
+    int func(const dirent *entry) override;
+    int get_start_file_path(share::ObBackupPath &piece_ls_dir);
+    TO_STRING_KV(K_(min_file_id));
+
+  private:
+    int64_t min_file_id_;
+
+  private:
+    DISALLOW_COPY_AND_ASSIGN(ObLSStartFileGetterOp);
+  };
 };
 
 }; // namespace tools

@@ -157,9 +157,8 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
                  || OB_NOT_NULL(backuppiece_path_str) || OB_NOT_NULL(backuppiece_key_str)) {
         print_usage_();
         exit(1);
-      };
-      if (OB_ISNULL(log_archive_dest_str
-                    = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
+      } else if (OB_ISNULL(log_archive_dest_str
+                           = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
       } else if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
@@ -182,9 +181,8 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
                  || OB_NOT_NULL(backupset_path_str) || OB_NOT_NULL(backupset_id_str)) {
         print_usage_();
         exit(1);
-      }
-      if (OB_ISNULL(data_backup_dest_str
-                    = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
+      } else if (OB_ISNULL(data_backup_dest_str
+                           = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
       } else if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
@@ -406,8 +404,8 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
                     = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (databuff_printf(ha_high_thread_score, common::OB_MAX_URI_LENGTH, "%ld",
-                                 concurrency_)) {
+      } else if (OB_FAIL(databuff_printf(ha_high_thread_score, common::OB_MAX_URI_LENGTH, "%ld",
+                                         concurrency_))) {
         STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
       } else if (FALSE_IT(tenant_config->ha_high_thread_score.set_value(ha_high_thread_score))) {
       } else if (OB_ISNULL(dag_scheduler)) {
@@ -512,6 +510,13 @@ int ObAdminBackupValidationExecutor::wait_data_backup_validation_()
       usleep(500_ms);
     }
     int64_t end_time = ObTimeUtility::current_time();
+    if (ctx_->global_stat_.get_scheduled_tablet_count()
+        != ctx_->global_stat_.get_succeed_tablet_count()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "scheduled tablet count not equal to succeed tablet count", K(ret));
+      ctx_->go_abort("scheduled tablet count not equal to succeed tablet count",
+                     "tablet missing or meta info corrupted");
+    }
     ctx_->print_data_backup_validation_status();
     if (ctx_->aborted_) {
       printf("\nData Backup Validation \033[1;31mFailed✘\033[0m");
@@ -562,6 +567,13 @@ int ObAdminBackupValidationExecutor::wait_log_archive_validation_()
       usleep(500_ms);
     }
     int64_t end_time = ObTimeUtility::current_time();
+    if (ctx_->global_stat_.get_scheduled_piece_count()
+        != ctx_->global_stat_.get_succeed_piece_count()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "scheduled piece count not equal to succeed piece count", K(ret));
+      ctx_->go_abort("scheduled piece count not equal to succeed piece count",
+                     "piece or meta info corrupted");
+    }
     ctx_->print_log_archive_validation_status();
     if (ctx_->aborted_) {
       printf("\nData Archive Validation \033[1;31mFailed✘\033[0m");

@@ -70,6 +70,32 @@ struct ObAdminBackupValidationStat final
     ATOMIC_AAF(&succeed_lsn_range_count_, count);
     return OB_SUCCESS;
   }
+
+  inline int64_t get_scheduled_tablet_count() const
+  {
+    return ATOMIC_LOAD(&scheduled_tablet_count_);
+  }
+  inline int64_t get_succeed_tablet_count() const { return ATOMIC_LOAD(&succeed_tablet_count_); }
+  inline int64_t get_scheduled_macro_block_count() const
+  {
+    return ATOMIC_LOAD(&scheduled_macro_block_count_);
+  }
+  inline int64_t get_succeed_macro_block_count() const
+  {
+    return ATOMIC_LOAD(&succeed_macro_block_count_);
+  }
+  inline int64_t get_scheduled_piece_count() const { return ATOMIC_LOAD(&scheduled_piece_count_); }
+  inline int64_t get_succeed_piece_count() const { return ATOMIC_LOAD(&succeed_piece_count_); }
+  inline int64_t get_scheduled_lsn_range_count() const
+  {
+    return ATOMIC_LOAD(&scheduled_lsn_range_count_);
+  }
+  inline int64_t get_succeed_lsn_range_count() const
+  {
+    return ATOMIC_LOAD(&succeed_lsn_range_count_);
+  }
+
+private:
   int64_t scheduled_tablet_count_;
   int64_t succeed_tablet_count_;
   int64_t scheduled_macro_block_count_;
@@ -101,7 +127,7 @@ struct ObAdminBackupLSValidationAttr final
 {
   ObAdminBackupLSValidationAttr();
   ~ObAdminBackupLSValidationAttr();
-  enum ObAdminLSType { INVALID = 0, NORMAL = 1, DELETED = 2, POST_CONSTRUCTED = 3 };
+  enum class ObAdminLSType { INVALID = 0, NORMAL = 1, DELETED = 2, POST_CONSTRUCTED = 3 };
   ObAdminLSType ls_type_;
   storage::ObLSMetaPackage ls_meta_package_;
   common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *> sys_tablet_map_;
@@ -118,13 +144,16 @@ struct ObAdminBackupSetValidationAttr final
   common::hash::ObHashMap<share::ObLSID, ObAdminBackupLSValidationAttr *> ls_map_;
   ObArray<common::ObTabletID> minor_tablet_id_; // not incluing sys
   ObArray<common::ObTabletID> major_tablet_id_; // not incluing sys
-  common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *> minor_tablet_map_;
-  common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *> major_tablet_map_;
+  common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *>
+      minor_tablet_map_;
+  common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *>
+      major_tablet_map_;
   ObAdminBackupValidationStat stat_;
   TO_STRING_KV(KP(backup_set_store_));
   int init();
-  int fetch_next_tablet_group(common::ObArray<common::ObArray<ObAdminBackupTabletValidationAttr *>> &tablet_group,
-                              int64_t &scheduled_cnt);
+  int fetch_next_tablet_group(
+      common::ObArray<common::ObArray<ObAdminBackupTabletValidationAttr *>> &tablet_group,
+      int64_t &scheduled_cnt);
   bool is_all_tablet_done();
 
 private:
@@ -164,7 +193,8 @@ struct ObAdminBackupValidationCtx final
   int add_backup_set(int64_t backup_set_id);
   int get_backup_set_attr(int64_t backup_set_id, ObAdminBackupSetValidationAttr *&backup_set_attr);
   int add_ls(int64_t backup_set_id, const share::ObLSID &ls_id);
-  int get_ls_attr(int64_t backup_set_id, const share::ObLSID &ls_id, ObAdminBackupLSValidationAttr *&ls_attr);
+  int get_ls_attr(int64_t backup_set_id, const share::ObLSID &ls_id,
+                  ObAdminBackupLSValidationAttr *&ls_attr);
   int add_tablet(int64_t backup_set_id, const share::ObLSID &ls_id,
                  const share::ObBackupDataType &data_type, const common::ObTabletID &tablet_id);
   int get_tablet_attr(int64_t backup_set_id, const share::ObLSID &ls_id,

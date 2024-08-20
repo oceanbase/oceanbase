@@ -408,50 +408,6 @@ int ObAdminBackupValidationUtil::get_piece_ls_start_lsn(
     ObAdminBackupValidationCtx *ctx)
 {
   int ret = OB_SUCCESS;
-  class ObLSStartFileGetterOp final : public ObBaseDirEntryOperator
-  {
-  public:
-    ObLSStartFileGetterOp() : min_file_id_(INT64_MAX) {}
-    ~ObLSStartFileGetterOp() {}
-    int func(const dirent *entry) override
-    {
-      // The format of archive file name is like '100.obarc'.
-      int ret = OB_SUCCESS;
-      int64_t file_id_ = INT64_MAX;
-      char *endptr = nullptr;
-      const char *filename = nullptr;
-      if (OB_ISNULL(entry)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid entry", K(ret));
-      } else if (OB_FALSE_IT(filename = entry->d_name)) {
-      } else if (STRLEN(filename) <= STRLEN(OB_ARCHIVE_SUFFIX)) {
-        STORAGE_LOG(WARN, "ignore invalid file name", KCSTRING(filename));
-      } else if (OB_FAIL(ob_strtoll(filename, endptr, file_id_))) {
-        STORAGE_LOG(WARN, "ignore invalid file name", K(ret), KCSTRING(filename));
-        ret = OB_SUCCESS;
-      } else if (OB_ISNULL(endptr) || 0 != STRCMP(endptr, OB_ARCHIVE_SUFFIX)) {
-        STORAGE_LOG(WARN, "ignore invalid file name", KCSTRING(filename));
-      } else if (file_id_ < min_file_id_) {
-        min_file_id_ = file_id_;
-      }
-      return ret;
-    }
-    int get_start_file_path(share::ObBackupPath &piece_ls_dir)
-    {
-      int ret = OB_SUCCESS;
-      if (OB_FAIL(piece_ls_dir.join(min_file_id_, ObBackupFileSuffix::ARCHIVE))) {
-        STORAGE_LOG(WARN, "failed to join file id", K(ret), K(min_file_id_));
-      }
-      return ret;
-    }
-    TO_STRING_KV(K_(min_file_id));
-
-  private:
-    int64_t min_file_id_;
-
-  private:
-    DISALLOW_COPY_AND_ASSIGN(ObLSStartFileGetterOp);
-  };
 
   share::ObBackupPath full_path;
   ObBackupIoAdapter util;
@@ -481,5 +437,44 @@ int ObAdminBackupValidationUtil::get_piece_ls_start_lsn(
   }
   return ret;
 }
+
+ObAdminBackupValidationUtil::ObLSStartFileGetterOp::ObLSStartFileGetterOp()
+    : min_file_id_(INT64_MAX)
+{
+}
+ObAdminBackupValidationUtil::ObLSStartFileGetterOp::~ObLSStartFileGetterOp() {}
+int ObAdminBackupValidationUtil::ObLSStartFileGetterOp::func(const dirent *entry)
+{
+  // The format of archive file name is like '100.obarc'.
+  int ret = OB_SUCCESS;
+  int64_t file_id_ = INT64_MAX;
+  char *endptr = nullptr;
+  const char *filename = nullptr;
+  if (OB_ISNULL(entry)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid entry", K(ret));
+  } else if (OB_FALSE_IT(filename = entry->d_name)) {
+  } else if (STRLEN(filename) <= STRLEN(OB_ARCHIVE_SUFFIX)) {
+    STORAGE_LOG(WARN, "ignore invalid file name", KCSTRING(filename));
+  } else if (OB_FAIL(ob_strtoll(filename, endptr, file_id_))) {
+    STORAGE_LOG(WARN, "ignore invalid file name", K(ret), KCSTRING(filename));
+    ret = OB_SUCCESS;
+  } else if (OB_ISNULL(endptr) || 0 != STRCMP(endptr, OB_ARCHIVE_SUFFIX)) {
+    STORAGE_LOG(WARN, "ignore invalid file name", KCSTRING(filename));
+  } else if (file_id_ < min_file_id_) {
+    min_file_id_ = file_id_;
+  }
+  return ret;
+}
+int ObAdminBackupValidationUtil::ObLSStartFileGetterOp::get_start_file_path(
+    share::ObBackupPath &piece_ls_dir)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(piece_ls_dir.join(min_file_id_, ObBackupFileSuffix::ARCHIVE))) {
+    STORAGE_LOG(WARN, "failed to join file id", K(ret), K(min_file_id_));
+  }
+  return ret;
+}
+
 }; // namespace tools
 }; // namespace oceanbase

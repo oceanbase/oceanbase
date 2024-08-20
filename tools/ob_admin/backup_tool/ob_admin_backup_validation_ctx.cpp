@@ -40,7 +40,7 @@ ObAdminBackupTabletValidationAttr::~ObAdminBackupTabletValidationAttr()
   }
 }
 ObAdminBackupLSValidationAttr::ObAdminBackupLSValidationAttr()
-    : ls_type_(INVALID), ls_meta_package_(), single_ls_info_desc_(nullptr)
+    : ls_type_(ObAdminLSType::INVALID), ls_meta_package_(), single_ls_info_desc_(nullptr)
 {
 }
 ObAdminBackupLSValidationAttr::~ObAdminBackupLSValidationAttr()
@@ -144,7 +144,7 @@ int ObAdminBackupSetValidationAttr::fetch_next_tablet_group(
         if (OB_ISNULL(ls_map_iter->second)) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "ls map iter is null", K(ret));
-        } else if (ls_map_iter->second->ls_type_ != ObAdminBackupLSValidationAttr::NORMAL) {
+        } else if (ls_map_iter->second->ls_type_ != ObAdminBackupLSValidationAttr::ObAdminLSType::NORMAL) {
           STORAGE_LOG(INFO, "abnormal ls detected, maybe post-construct, skip inner tablet",
                       K(ls_map_iter->second->ls_meta_package_));
         } else {
@@ -368,16 +368,16 @@ void ObAdminBackupValidationCtx::print_log_archive_validation_status()
 {
   obsys::ObRLockGuard guard(lock_);
   if (!aborted_) {
-    if (0 == global_stat_.scheduled_lsn_range_count_) {
+    if (0 == global_stat_.get_scheduled_lsn_range_count()) {
       printf(CLEAR_LINE);
       printf("%c Validating Meta info of Backup pieces", states_icon_[states_icon_pos_]);
     } else {
       printf(CLEAR_LINE);
       printf("%c Total Pieces(Scheduled/Succeed): %ld/%ld, Total LSN "
              "Range(Scheduled/Succeed): %ld/%ld",
-             states_icon_[states_icon_pos_], global_stat_.scheduled_piece_count_,
-             global_stat_.succeed_piece_count_, global_stat_.scheduled_lsn_range_count_,
-             global_stat_.succeed_lsn_range_count_);
+             states_icon_[states_icon_pos_], global_stat_.get_scheduled_piece_count(),
+             global_stat_.get_succeed_piece_count(), global_stat_.get_scheduled_lsn_range_count(),
+             global_stat_.get_succeed_lsn_range_count());
     }
   } else {
     printf(CLEAR_LINE);
@@ -391,16 +391,16 @@ void ObAdminBackupValidationCtx::print_data_backup_validation_status()
 {
   obsys::ObRLockGuard guard(lock_);
   if (!aborted_) {
-    if (0 == global_stat_.scheduled_macro_block_count_) {
+    if (0 == global_stat_.get_scheduled_macro_block_count()) {
       printf(CLEAR_LINE);
       printf("%c Validating Meta info of Backup sets", states_icon_[states_icon_pos_]);
     } else {
       printf(CLEAR_LINE);
       printf("%c Total Tablets(Scheduled/Succeed): %ld/%ld, Total Marco "
              "Blocks(Scheduled/Succeed): %ld/%ld",
-             states_icon_[states_icon_pos_], global_stat_.scheduled_tablet_count_,
-             global_stat_.succeed_tablet_count_, global_stat_.scheduled_macro_block_count_,
-             global_stat_.succeed_macro_block_count_);
+             states_icon_[states_icon_pos_], global_stat_.get_scheduled_tablet_count(),
+             global_stat_.get_succeed_tablet_count(), global_stat_.get_scheduled_macro_block_count(),
+             global_stat_.get_succeed_macro_block_count());
     }
   } else {
     printf(CLEAR_LINE);
@@ -550,7 +550,7 @@ int ObAdminBackupValidationCtx::add_tablet(int64_t backup_set_id, const share::O
     STORAGE_LOG(WARN, "unexpected fail to get backup set attr", K(ret), K(backup_set_id));
   } else if (OB_FAIL(get_ls_attr(backup_set_id, ls_id, ls_attr))) {
     STORAGE_LOG(WARN, "unexpected fail to get ls attr", K(ret), K(backup_set_id), K(ls_id));
-  } else if (ObAdminBackupLSValidationAttr::DELETED == ls_attr->ls_type_) {
+  } else if (ObAdminBackupLSValidationAttr::ObAdminLSType::DELETED == ls_attr->ls_type_) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "ls should not be deleted", K(ret), K(backup_set_id), K(ls_id));
   } else {

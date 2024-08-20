@@ -11,8 +11,6 @@
  */
 #include "ob_admin_backup_validation_task.h"
 #include "logservice/restoreservice/ob_remote_log_iterator.h"
-#include "logservice/restoreservice/ob_remote_log_source.h"
-#include "logservice/restoreservice/ob_remote_log_source_allocator.h"
 #include "ob_admin_backup_validation_executor.h"
 #include "ob_admin_backup_validation_util.h"
 #include "share/backup/ob_archive_checkpoint_mgr.h"
@@ -377,7 +375,6 @@ int ObAdminPrepareLogArchiveValidationTask::process()
     }
     }
   }
-
   post_process_(ret);
   return ret;
 }
@@ -655,7 +652,7 @@ int ObAdminBackupPieceValidationDag::init(int64_t id, ObAdminBackupValidationCtx
     STORAGE_LOG(WARN, "ctx is null", K(ret));
   } else if (OB_FAIL(storage_handler_.init())) {
     STORAGE_LOG(WARN, "failed to init storage_handler");
-  } else if (OB_FAIL(storage_handler_.start(0))) {
+  } else if (OB_FAIL(storage_handler_.start(0 /*all request run in current thd*/))) {
     STORAGE_LOG(WARN, "failed to start storage_handler");
   } else if (OB_FAIL(large_buffer_pool_.init("DagLargePool", 1 * GB))) {
     STORAGE_LOG(WARN, "failed to init large_buffer_pool");
@@ -1167,6 +1164,35 @@ void ObAdminBackupPieceMetaValidationTask::post_process_(int ret)
 ////////////////ObAdminBackupPieceMetaValidationTask End////////////////
 
 ////////////////ObAdminBackupPieceLogIterationTask Start////////////////
+ObAdminBackupPieceLogIterationTask::GetSourceFunctor::GetSourceFunctor(
+    logservice::ObRemoteRawPathParent &raw_path_parent)
+    : raw_path_parent_(raw_path_parent)
+{
+}
+ObAdminBackupPieceLogIterationTask::GetSourceFunctor::~GetSourceFunctor() {}
+int ObAdminBackupPieceLogIterationTask::GetSourceFunctor::operator()(
+    const share::ObLSID &id, logservice::ObRemoteSourceGuard &guard)
+{
+  int ret = OB_SUCCESS;
+  logservice::ObRemoteRawPathParent *raw_path_parent
+      = static_cast<logservice::ObRemoteRawPathParent *>(
+          logservice::ObResSrcAlloctor::alloc(share::ObLogRestoreSourceType::RAWPATH, id));
+  if (OB_ISNULL(raw_path_parent)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    CLOG_LOG(WARN, "failed to allocate raw_path_parent", K(id));
+  } else if (OB_FAIL(raw_path_parent_.deep_copy_to(*raw_path_parent))) {
+    CLOG_LOG(WARN, "failed to deep copy to raw_path_parent");
+  } else if (OB_FAIL(guard.set_source(raw_path_parent))) {
+    CLOG_LOG(WARN, "failed to set location source");
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(raw_path_parent)) {
+    logservice::ObResSrcAlloctor::free(raw_path_parent);
+    raw_path_parent = nullptr;
+  }
+  return ret;
+}
+
 ObAdminBackupPieceLogIterationTask::~ObAdminBackupPieceLogIterationTask() {}
 int ObAdminBackupPieceLogIterationTask::init(int64_t task_id, ObAdminBackupValidationCtx *ctx)
 {
@@ -1187,6 +1213,7 @@ int ObAdminBackupPieceLogIterationTask::init(int64_t task_id, ObAdminBackupValid
 int ObAdminBackupPieceLogIterationTask::generate_next_task(ObITask *&next_task)
 {
   int ret = OB_SUCCESS;
+  next_task = nullptr;
   int64_t next_task_id = task_id_ + 1;
   ObAdminBackupPieceValidationDag *piece_validation_dag = nullptr;
   ObAdminBackupPieceLogIterationTask *sibling_task = nullptr;
@@ -1286,7 +1313,7 @@ int ObAdminBackupPieceLogIterationTask::iterate_log_()
   } else if (task_id_ >= piece_validation_dag->processing_lsn_range_array_.count()) {
     // no lsn range to iterate
     // maybe an active or empty piece
-    if (0 == backup_piece_attr->stat_.scheduled_lsn_range_count_) {
+    if (0 == backup_piece_attr->stat_.get_scheduled_lsn_range_count()) {
       ret = OB_SUCCESS;
       ctx_->global_stat_.add_succeed_piece_count_(1);
     } else {
@@ -1332,38 +1359,6 @@ int ObAdminBackupPieceLogIterationTask::iterate_log_()
     } else if (backup_piece_attr->backup_piece_info_desc_->piece_.is_frozen()) {
       raw_path_parent.set(dir_array, ls_attr->single_ls_info_desc_->checkpoint_scn_);
       restore_scn = ls_attr->single_ls_info_desc_->checkpoint_scn_;
-      class GetSourceFunctor
-      {
-      public:
-        GetSourceFunctor(logservice::ObRemoteRawPathParent &raw_path_parent)
-            : raw_path_parent_(raw_path_parent)
-        {
-        }
-        int operator()(const share::ObLSID &id, logservice::ObRemoteSourceGuard &guard)
-        {
-          int ret = OB_SUCCESS;
-          logservice::ObRemoteRawPathParent *raw_path_parent
-              = static_cast<logservice::ObRemoteRawPathParent *>(
-                  logservice::ObResSrcAlloctor::alloc(share::ObLogRestoreSourceType::RAWPATH, id));
-          if (OB_ISNULL(raw_path_parent)) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            CLOG_LOG(WARN, "failed to allocate raw_path_parent", K(id));
-          } else if (OB_FAIL(raw_path_parent_.deep_copy_to(*raw_path_parent))) {
-            CLOG_LOG(WARN, "failed to deep copy to raw_path_parent");
-          } else if (OB_FAIL(guard.set_source(raw_path_parent))) {
-            CLOG_LOG(WARN, "failed to set location source");
-          }
-
-          if (OB_FAIL(ret) && OB_NOT_NULL(raw_path_parent)) {
-            logservice::ObResSrcAlloctor::free(raw_path_parent);
-            raw_path_parent = nullptr;
-          }
-          return ret;
-        }
-
-      private:
-        logservice::ObRemoteRawPathParent &raw_path_parent_;
-      };
       GetSourceFunctor get_source_func(raw_path_parent);
       logservice::ObRemoteLogGroupEntryIterator remote_iter(get_source_func);
       logservice::LogGroupEntry tmp_entry;
@@ -1384,9 +1379,9 @@ int ObAdminBackupPieceLogIterationTask::iterate_log_()
             STORAGE_LOG(DEBUG, "succeed to iterate log", K(ret));
             break;
           } else {
-            STORAGE_LOG(WARN, "failed to iterate remote_log", K(ret), K(ls_id),
-                        K(palf::LSN(lsn_range.second.first)),
-                        K(palf::LSN(lsn_range.second.second)));
+            STORAGE_LOG(WARN, "failed to iterate remote_log", K(ret), K(ls_id), "start lsn",
+                        palf::LSN(lsn_range.second.first), "end lsn",
+                        palf::LSN(lsn_range.second.second));
           }
         } else if (FALSE_IT(archive_scn = tmp_entry.get_scn())) {
         } else if (OB_FAIL(ctx_->limit_and_sleep(tmp_entry.get_group_entry_size()))) {
@@ -1413,8 +1408,8 @@ int ObAdminBackupPieceLogIterationTask::iterate_log_()
       if (OB_FAIL(backup_piece_attr->stat_.add_succeed_lsn_range_count_(1))
           || OB_FAIL(ctx_->global_stat_.add_succeed_lsn_range_count_(1))) {
         STORAGE_LOG(WARN, "failed to add succeed lsn range count", K(ret), K(ls_id));
-      } else if (backup_piece_attr->stat_.scheduled_lsn_range_count_
-                 == backup_piece_attr->stat_.succeed_lsn_range_count_) {
+      } else if (backup_piece_attr->stat_.get_scheduled_lsn_range_count()
+                 == backup_piece_attr->stat_.get_succeed_lsn_range_count()) {
         if (OB_FAIL(ctx_->global_stat_.add_succeed_piece_count_(1))) {
           STORAGE_LOG(WARN, "failed to add succeed piece count", K(ret), K(ls_id));
         }
@@ -2040,47 +2035,48 @@ int ObAdminPrepareDataBackupValidationTask::process()
   } else if (OB_ISNULL(ctx_) || ctx_->aborted_) {
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "aborted", K(ret));
-  }
-  switch (ctx_->validation_type_) {
-  case ObAdminBackupValidationType::DATABASE_VALIDATION: {
-    if (OB_ISNULL(ctx_->log_archive_dest_) || OB_ISNULL(ctx_->data_backup_dest_)) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "log_archive_dest or data_backup_dest is null", K(ret));
-    } else if (OB_FAIL(check_format_file_())) {
-      STORAGE_LOG(WARN, "failed to check backup format file", K(ret));
-    } else if (OB_FAIL(collect_backup_set_())) {
-      STORAGE_LOG(WARN, "failed to collect backup set", K(ret));
-    } else {
-      STORAGE_LOG(INFO, "succeed to collect backup set", K(ret));
-    }
-    break;
-  }
-  case ObAdminBackupValidationType::BACKUPSET_VALIDATION: {
-    if (OB_ISNULL(ctx_->data_backup_dest_) && 0 == ctx_->backup_set_path_array_.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "backup set is empty", K(ret));
-    } else if (OB_NOT_NULL(ctx_->data_backup_dest_)) {
-      if (OB_FAIL(check_format_file_())) {
+  } else {
+    switch (ctx_->validation_type_) {
+    case ObAdminBackupValidationType::DATABASE_VALIDATION: {
+      if (OB_ISNULL(ctx_->log_archive_dest_) || OB_ISNULL(ctx_->data_backup_dest_)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "log_archive_dest or data_backup_dest is null", K(ret));
+      } else if (OB_FAIL(check_format_file_())) {
         STORAGE_LOG(WARN, "failed to check backup format file", K(ret));
       } else if (OB_FAIL(collect_backup_set_())) {
         STORAGE_LOG(WARN, "failed to collect backup set", K(ret));
       } else {
         STORAGE_LOG(INFO, "succeed to collect backup set", K(ret));
       }
-    } else if (ctx_->backup_set_path_array_.count() > 0) {
-      if (OB_FAIL(retrieve_backup_set_())) {
-        STORAGE_LOG(WARN, "failed to retrieve backup set", K(ret));
-      } else {
-        STORAGE_LOG(INFO, "succeed to retrieve backup set", K(ret));
-      }
+      break;
     }
-    break;
-  }
-  default: {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected validation type", K(ret), K(ctx_->validation_type_));
-    break;
-  }
+    case ObAdminBackupValidationType::BACKUPSET_VALIDATION: {
+      if (OB_ISNULL(ctx_->data_backup_dest_) && 0 == ctx_->backup_set_path_array_.count()) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "backup set is empty", K(ret));
+      } else if (OB_NOT_NULL(ctx_->data_backup_dest_)) {
+        if (OB_FAIL(check_format_file_())) {
+          STORAGE_LOG(WARN, "failed to check backup format file", K(ret));
+        } else if (OB_FAIL(collect_backup_set_())) {
+          STORAGE_LOG(WARN, "failed to collect backup set", K(ret));
+        } else {
+          STORAGE_LOG(INFO, "succeed to collect backup set", K(ret));
+        }
+      } else if (ctx_->backup_set_path_array_.count() > 0) {
+        if (OB_FAIL(retrieve_backup_set_())) {
+          STORAGE_LOG(WARN, "failed to retrieve backup set", K(ret));
+        } else {
+          STORAGE_LOG(INFO, "succeed to retrieve backup set", K(ret));
+        }
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected validation type", K(ret), K(ctx_->validation_type_));
+      break;
+    }
+    }
   }
   post_process_(ret);
   return ret;
@@ -2414,9 +2410,13 @@ int ObAdminBackupSetMetaValidationTask::init(int64_t task_id, ObAdminBackupValid
     backup_sys_data_type_.set_sys_data_backup();
     backup_minor_data_type_.set_minor_data_backup();
     backup_major_data_type_.set_major_data_backup();
-    inner_tablet_id_array_.push_back(common::LS_TX_CTX_TABLET);
-    inner_tablet_id_array_.push_back(common::LS_TX_DATA_TABLET);
-    inner_tablet_id_array_.push_back(common::LS_LOCK_TABLET);
+    if (OB_FAIL(inner_tablet_id_array_.push_back(common::LS_TX_CTX_TABLET))) {
+      STORAGE_LOG(WARN, "failed to push back inner tablet id", K(ret));
+    } else if (OB_FAIL(inner_tablet_id_array_.push_back(common::LS_TX_DATA_TABLET))) {
+      STORAGE_LOG(WARN, "failed to push back inner tablet id", K(ret));
+    } else if (OB_FAIL(inner_tablet_id_array_.push_back(common::LS_LOCK_TABLET))) {
+      STORAGE_LOG(WARN, "failed to push back inner tablet id", K(ret));
+    }
   }
   return ret;
 }
@@ -2430,11 +2430,16 @@ int ObAdminBackupSetMetaValidationTask::process()
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "aborted", K(ret));
   } else if (ctx_->processing_backup_set_id_array_.empty()) {
+    ret = OB_ITER_END;
     STORAGE_LOG(INFO, "backup set id is all empty", K(ret), K(task_id_));
   } else if (OB_FAIL(check_backup_set_info_())) {
     STORAGE_LOG(WARN, "failed to check placeholder", K(ret));
+  } else if (OB_FAIL(check_placeholder_())) {
+    STORAGE_LOG(WARN, "failed to check placeholder", K(ret));
   } else if (OB_FAIL(check_locality_file_())) {
     STORAGE_LOG(WARN, "failed to check locality file", K(ret));
+  } else if (OB_FAIL(check_diagnose_file_())) {
+    STORAGE_LOG(WARN, "failed to check diagnose file", K(ret));
   } else if (OB_FAIL(collect_tenant_ls_meta_info_())) {
     STORAGE_LOG(WARN, "failed to collect tenant ls meta info", K(ret));
   } else if (OB_FAIL(collect_inner_tablet_meta_index_())) {
@@ -2519,6 +2524,60 @@ int ObAdminBackupSetMetaValidationTask::check_backup_set_info_()
   }
   return ret;
 }
+int ObAdminBackupSetMetaValidationTask::check_placeholder_()
+{
+  int ret = OB_SUCCESS;
+  int64_t backup_set_id = -1;
+  share::ObBackupPath full_path;
+  ObExternBackupSetPlaceholderDesc placeholder_desc;
+  ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
+  storage::ObBackupDataStore *backup_set_store = nullptr;
+  share::ObBackupStorageInfo *backup_storage_info = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not init", K(ret));
+  } else if (OB_FAIL(ctx_->processing_backup_set_id_array_.at(task_id_, backup_set_id))) {
+    STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(task_id_));
+  } else if (OB_FAIL(ctx_->get_backup_set_attr(backup_set_id, backup_set_attr))) {
+    STORAGE_LOG(WARN, "failed to get backup set store", K(ret), K(backup_set_id));
+  } else if (OB_ISNULL(backup_set_attr)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup set attr is null", K(ret));
+  } else if (OB_ISNULL(backup_set_store = backup_set_attr->backup_set_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup set store is null", K(ret));
+  } else if (OB_ISNULL(backup_storage_info
+                       = backup_set_store->get_backup_set_dest().get_storage_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup storage info is null", K(ret));
+  } else if (OB_ISNULL(backup_set_attr->backup_set_info_desc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup set info desc is null", K(ret));
+  } else {
+    share::SCN min_restore_scn
+        = backup_set_attr->backup_set_info_desc_->backup_set_file_.min_restore_scn_;
+    share::SCN start_replay_scn
+        = backup_set_attr->backup_set_info_desc_->backup_set_file_.start_replay_scn_;
+    if (OB_FAIL(share::ObBackupPathUtil::get_backup_set_inner_placeholder(
+            backup_set_store->get_backup_set_dest(), backup_set_store->get_backup_set_desc(),
+            start_replay_scn, min_restore_scn, full_path))) {
+      STORAGE_LOG(WARN, "failed to get backup set inner placeholder path", K(ret), K(full_path));
+    } /*
+   TODO: backup set placeholder is not correctly persisted, at
+   ObBackupSetTaskMgr::write_backup_set_placeholder_ the start replay scn is not correctly set.
+   else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file( full_path,
+   *backup_storage_info, placeholder_desc, ctx_))) { STORAGE_LOG(WARN, "failed to read backup info
+   file", K(ret), K(full_path));
+      }*/
+    else {
+      STORAGE_LOG(INFO, "succeed to check placeholder", K(ret), K(full_path));
+    }
+  }
+  if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
+    ctx_->go_abort(full_path.get_ptr(), "locality file not correct");
+  }
+  return ret;
+}
 int ObAdminBackupSetMetaValidationTask::check_locality_file_()
 {
   int ret = OB_SUCCESS;
@@ -2556,6 +2615,46 @@ int ObAdminBackupSetMetaValidationTask::check_locality_file_()
   }
   if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
     ctx_->go_abort(full_path.get_ptr(), "locality file not correct");
+  }
+  return ret;
+}
+int ObAdminBackupSetMetaValidationTask::check_diagnose_file_()
+{
+  int ret = OB_SUCCESS;
+  int64_t backup_set_id = -1;
+  share::ObBackupPath full_path;
+  storage::ObExternTenantDiagnoseInfoDesc diagnose_info_desc;
+  ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
+  storage::ObBackupDataStore *backup_set_store = nullptr;
+  share::ObBackupStorageInfo *backup_storage_info = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not init", K(ret));
+  } else if (OB_FAIL(ctx_->processing_backup_set_id_array_.at(task_id_, backup_set_id))) {
+    STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(task_id_));
+  } else if (OB_FAIL(ctx_->get_backup_set_attr(backup_set_id, backup_set_attr))) {
+    STORAGE_LOG(WARN, "failed to get backup set store", K(ret), K(backup_set_id));
+  } else if (OB_ISNULL(backup_set_attr)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup set attr is null", K(ret));
+  } else if (OB_ISNULL(backup_set_store = backup_set_attr->backup_set_store_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup set store is null", K(ret));
+  } else if (OB_ISNULL(backup_storage_info
+                       = backup_set_store->get_backup_set_dest().get_storage_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup storage info is null", K(ret));
+  } else if (OB_FAIL(share::ObBackupPathUtil::get_diagnose_info_path(
+                 backup_set_store->get_backup_set_dest(), full_path))) {
+    STORAGE_LOG(WARN, "failed to get locality info path", K(ret), K(full_path));
+  } else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file(
+                 full_path, *backup_storage_info, diagnose_info_desc, ctx_))) {
+    STORAGE_LOG(WARN, "failed to read backup info file", K(ret), K(full_path));
+  } else {
+    STORAGE_LOG(INFO, "succeed to check diagnose file", K(ret), K(full_path));
+  }
+  if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
+    ctx_->go_abort(full_path.get_ptr(), "diagnose file not correct");
   }
   return ret;
 }
@@ -2656,7 +2755,8 @@ int ObAdminBackupSetMetaValidationTask::collect_inner_tablet_meta_index_()
         STORAGE_LOG(WARN, "failed to get ls backup dir path", K(ret), K(full_path));
       } else if (OB_FAIL(ctx_->get_ls_attr(backup_set_id, ls_meta.ls_id_, ls_attr))) {
         STORAGE_LOG(WARN, "failed to get ls attr", K(ret), K(backup_set_id), K(ls_meta.ls_id_));
-      } else if (FALSE_IT(ls_attr->ls_type_ = ObAdminBackupLSValidationAttr::NORMAL)) {
+      } else if (FALSE_IT(ls_attr->ls_type_
+                          = ObAdminBackupLSValidationAttr::ObAdminLSType::NORMAL)) {
       } else if (OB_FAIL(backup_set_store->get_max_sys_ls_retry_id(full_path, ls_meta.ls_id_,
                                                                    sys_turn_id, sys_retry_id))) {
         STORAGE_LOG(WARN, "failed to get max sys ls retry id", K(ret), K(full_path),
@@ -2771,7 +2871,7 @@ int ObAdminBackupSetMetaValidationTask::inner_assign_meta_index_to_tablet_attr_(
   } else if (OB_FAIL(ctx_->get_tablet_attr(backup_set_id, ls_id /*expected ls*/, data_type,
                                            meta_index.meta_key_.tablet_id_, tablet_attr))) {
     STORAGE_LOG(WARN, "failed to get tablet attr", K(ret), K(ls_id), K(meta_index.meta_key_));
-  } else if (meta_index.turn_id_ == 1 && tablet_attr->ls_id_ != meta_index.ls_id_) {
+  } else if (1 == meta_index.turn_id_ && tablet_attr->ls_id_ != meta_index.ls_id_) {
     // change turn
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected ls id", K(ret), K(ls_id), K(meta_index.ls_id_));
@@ -2928,7 +3028,7 @@ int ObAdminBackupSetMetaValidationTask::collect_consistent_scn_tablet_id_()
           } else if (OB_FAIL(ctx_->get_ls_attr(backup_set_id, ls_id, ls_attr))) {
             STORAGE_LOG(WARN, "failed to get ls attr", K(ret), K(ls_id));
           } else if (FALSE_IT(ls_attr->ls_type_
-                              = ObAdminBackupLSValidationAttr::POST_CONSTRUCTED)) {
+                              = ObAdminBackupLSValidationAttr::ObAdminLSType::POST_CONSTRUCTED)) {
           } else {
             STORAGE_LOG(WARN, "post constructed logstream fixed", K(ret), K(ls_id));
           }
@@ -3069,7 +3169,7 @@ int ObAdminBackupSetMetaValidationTask::collect_minor_tablet_meta_index_()
             } else if (OB_FAIL(ctx_->get_ls_attr(backup_set_id, ls_id, ls_attr))) {
               STORAGE_LOG(WARN, "failed to get ls attr", K(ret), K(ls_id));
             } else if (FALSE_IT(ls_attr->ls_type_
-                                = ObAdminBackupLSValidationAttr::POST_CONSTRUCTED)) {
+                                = ObAdminBackupLSValidationAttr::ObAdminLSType::POST_CONSTRUCTED)) {
             } else {
               STORAGE_LOG(WARN, "post constructed logstream fixed", K(ret), K(ls_id));
             }
@@ -3219,7 +3319,7 @@ int ObAdminBackupSetMetaValidationTask::collect_major_tablet_meta_index_()
             } else if (OB_FAIL(ctx_->get_ls_attr(backup_set_id, ls_id, ls_attr))) {
               STORAGE_LOG(WARN, "failed to get ls attr", K(ret), K(ls_id));
             } else if (FALSE_IT(ls_attr->ls_type_
-                                = ObAdminBackupLSValidationAttr::POST_CONSTRUCTED)) {
+                                = ObAdminBackupLSValidationAttr::ObAdminLSType::POST_CONSTRUCTED)) {
             } else {
               STORAGE_LOG(WARN, "post constructed logstream fixed", K(ret), K(ls_id));
             }
@@ -3450,12 +3550,6 @@ int ObAdminBackupSetMetaValidationTask::check_tenant_tablet_meta_index()
     STORAGE_LOG(WARN, "major tablet id size not equal major tablet map size", K(ret),
                 K(backup_set_attr->major_tablet_id_.count()),
                 K(backup_set_attr->major_tablet_map_.size()));
-  } else if (backup_set_attr->minor_tablet_id_.count()
-             != backup_set_attr->major_tablet_id_.count()) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "minor tablet id size not equal major tablet id size", K(ret),
-                K(backup_set_attr->minor_tablet_id_.count()),
-                K(backup_set_attr->major_tablet_id_.count()));
   } else {
     // cross check tablet, found any may be missing
     for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_attr->minor_tablet_id_.count()
@@ -3502,6 +3596,10 @@ int ObAdminBackupSetMetaValidationTask::check_tenant_tablet_meta_index()
     if (OB_ISNULL(ctx_->sql_proxy_)) {
       // ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "sql proxy is nullptr, skip query check", K(ret));
+      if (OB_FAIL(ctx_->global_stat_.add_scheduled_tablet_count_(-missing_tablet.count()
+                                                                 * 2 /*major+minor*/))) {
+        STORAGE_LOG(WARN, "failed to add scheduled tablet count", K(ret));
+      }
     } else {
       FOREACH_X(missing_tablet_iter, missing_tablet, OB_SUCC(ret))
       {
@@ -3558,6 +3656,7 @@ void ObAdminBackupSetMetaValidationTask::post_process_(int ret)
     tmp_ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret), K(tmp_ret));
   } else if (ctx_->processing_backup_set_id_array_.empty()) {
+    tmp_ret = OB_ITER_END;
     STORAGE_LOG(INFO, "backup set id is all empty", K(ret), K(task_id_));
   } else {
     if (OB_SUCC(ret)) {
@@ -3756,8 +3855,9 @@ int ObAdminBackupTabletValidationDag::add_macro_block(
   ObSpinLockGuard guard(lock_);
   int ret = OB_SUCCESS;
   if (0 == processing_macro_block_array_.count()
-      || processing_macro_block_array_.at(processing_macro_block_array_.count() - 1).count()
-             == ObAdminBackupValidationExecutor::MAX_MACRO_BLOCK_BATCH_COUNT) {
+      || ObAdminBackupValidationExecutor::MAX_MACRO_BLOCK_BATCH_COUNT
+             == processing_macro_block_array_.at(processing_macro_block_array_.count() - 1)
+                    .count()) {
     if (OB_FAIL(processing_macro_block_array_.push_back(
             ObArray<std::pair<backup::ObBackupMacroBlockIDPair, share::ObBackupDataType>>()))) {
       STORAGE_LOG(WARN, "failed to push back", K(ret));
@@ -3801,6 +3901,7 @@ int ObAdminPrepareTabletValidationTask::process()
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "aborted", K(ret));
   } else if (ctx_->processing_backup_set_id_array_.empty()) {
+    ret = OB_ITER_END;
     STORAGE_LOG(INFO, "backup set id is all empty", K(ret), K(task_id_));
   } else if (OB_FAIL(collect_tablet_group_())) {
     STORAGE_LOG(WARN, "failed to collect tablet group", K(ret));
@@ -3947,6 +4048,7 @@ int ObAdminTabletMetaValidationTask::init(int64_t task_id, ObAdminBackupValidati
 int ObAdminTabletMetaValidationTask::generate_next_task(ObITask *&next_task)
 {
   int ret = OB_SUCCESS;
+  next_task = nullptr;
   int64_t next_task_id = task_id_ + 1;
   ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
   ObAdminTabletMetaValidationTask *sibling_task = nullptr;
@@ -4040,7 +4142,7 @@ int ObAdminTabletMetaValidationTask::collect_tablet_meta_info_()
       }
     }
     if (OB_SUCC(ret)) {
-      if (current_group.count() == 2) {
+      if (2 == current_group.count()) {
         // major/minor same tablet
         if (tablet_meta_.at(0)->tablet_id_ != tablet_meta_.at(1)->tablet_id_) {
           ret = OB_ERR_UNEXPECTED;
@@ -4070,7 +4172,7 @@ int ObAdminTabletMetaValidationTask::collect_tablet_meta_info_()
                         K(ret), K(major_snapshot_version), K(minor_snapshot_version));
           }
         }
-      } else if (current_group.count() == 3) {
+      } else if (3 == current_group.count()) {
         // sys tablet in same ls
         const share::ObLSID ls_id = tablet_meta_.at(0)->tablet_meta_.ls_id_;
         for (int64_t i = 0; OB_SUCC(ret) && i < tablet_meta_.count(); i++) {
@@ -4183,6 +4285,7 @@ int ObAdminTabletMetaValidationTask::check_sstable_meta_info_and_prepare_macro_b
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_ISNULL(tablet_validation_dag
                        = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+    ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else if (OB_FAIL(tablet_validation_dag->processing_tablet_group_.at(task_id_, current_group))) {
     ret = OB_ERR_UNEXPECTED;
@@ -4191,6 +4294,7 @@ int ObAdminTabletMetaValidationTask::check_sstable_meta_info_and_prepare_macro_b
     for (int64_t i = 0; OB_SUCC(ret) && i < current_group.count(); i++) {
       ObAdminBackupTabletValidationAttr *tablet_attr = nullptr;
       ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
+      share::SCN last_end_scn; // for minor tablet, check continuity
       if (OB_ISNULL(tablet_attr = current_group.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "tablet attr is null", K(ret));
@@ -4226,7 +4330,17 @@ int ObAdminTabletMetaValidationTask::check_sstable_meta_info_and_prepare_macro_b
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "sstable meta tablet id not match", K(ret),
                         K(sstable_meta.tablet_id_), K(tablet_meta_.at(i)->tablet_id_));
-          } else {
+          } else if (sstable_meta.sstable_meta_.table_key_.is_minor_sstable()) {
+            if (j > 1 && sstable_meta.sstable_meta_.table_key_.get_start_scn() != last_end_scn) {
+              ret = OB_ERR_UNEXPECTED;
+              STORAGE_LOG(WARN, "sstable meta start scn not match", K(ret), "last_end_scn",
+                          last_end_scn, "cur_start_scn",
+                          sstable_meta.sstable_meta_.table_key_.get_start_scn());
+            } else {
+              last_end_scn = sstable_meta.sstable_meta_.table_key_.get_end_scn();
+            }
+          }
+          if (OB_SUCC(ret)) {
             std::sort(id_mapping.id_pair_list_.begin(), id_mapping.id_pair_list_.end());
             std::sort(sstable_meta.logic_id_list_.begin(), sstable_meta.logic_id_list_.end());
             for (int64_t k = 0; OB_SUCC(ret) && k < id_mapping.id_pair_list_.count(); ++k) {
@@ -4296,6 +4410,7 @@ int ObAdminMacroBlockDataValidationTask::init(int64_t task_id, ObAdminBackupVali
 int ObAdminMacroBlockDataValidationTask::generate_next_task(ObITask *&next_task)
 {
   int ret = OB_SUCCESS;
+  next_task = nullptr;
   int64_t next_task_id = task_id_ + 1;
   ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
   ObAdminMacroBlockDataValidationTask *sibling_task = nullptr;
@@ -4451,6 +4566,7 @@ int ObAdminFinishTabletValidationTask::process()
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "aborted", K(ret));
   } else if (ctx_->processing_backup_set_id_array_.empty()) {
+    ret = OB_ITER_END;
     STORAGE_LOG(INFO, "backup set id is all empty", K(ret), K(task_id_));
   } else if (OB_FAIL(check_and_update_stat_())) {
     STORAGE_LOG(WARN, "failed to check and update stat", K(ret));
@@ -4479,12 +4595,12 @@ int ObAdminFinishTabletValidationTask::check_and_update_stat_()
   } else if (OB_ISNULL(backup_set_attr)) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "backup set attr is null", K(ret), K(backup_set_id));
-  } else if (tablet_validation_dag->stat_.succeed_macro_block_count_
-             != tablet_validation_dag->stat_.scheduled_macro_block_count_) {
+  } else if (tablet_validation_dag->stat_.get_succeed_macro_block_count()
+             != tablet_validation_dag->stat_.get_scheduled_macro_block_count()) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "succeed macro block count not match scheduled macro block count", K(ret),
-                K(tablet_validation_dag->stat_.succeed_macro_block_count_),
-                K(tablet_validation_dag->stat_.scheduled_macro_block_count_));
+                K(tablet_validation_dag->stat_.get_succeed_macro_block_count()),
+                K(tablet_validation_dag->stat_.get_scheduled_macro_block_count()));
     char buf[1024];
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(databuff_printf(buf, sizeof(buf) - 1, "Backupset %ld did not finish validation",

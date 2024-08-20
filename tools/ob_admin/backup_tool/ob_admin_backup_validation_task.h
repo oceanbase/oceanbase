@@ -15,8 +15,9 @@
 #include "../ob_admin_executor.h"
 #include "logservice/archiveservice/large_buffer_pool.h"
 #include "logservice/ob_log_external_storage_handler.h"
+#include "logservice/restoreservice/ob_remote_log_source.h"
+#include "logservice/restoreservice/ob_remote_log_source_allocator.h"
 #include "ob_admin_backup_validation_ctx.h"
-
 namespace oceanbase
 {
 namespace tools
@@ -377,22 +378,20 @@ public:
 
 private:
   int check_backup_set_info_();
+  int check_placeholder_();
   int check_locality_file_();
+  int check_diagnose_file_();
 
   int collect_tenant_ls_meta_info_();
-
   int collect_inner_tablet_meta_index_();
-  // int check_inner_tablet_macro_block_range_index_();
   int inner_assign_meta_index_to_tablet_attr_(int64_t backup_set_id, const share::ObLSID &ls_id,
                                               const backup::ObBackupMetaIndex &meta_index,
                                               const share::ObBackupDataType &data_type);
   int check_inner_tablet_meta_index_();
 
   int collect_consistent_scn_tablet_id_();
-  // int collect_minor_tablet_macro_block_range_index_();
   int collect_minor_tablet_meta_index_();
   int collect_major_tablet_id_();
-  // int collect_major_tablet_macro_block_range_index_();
   int collect_major_tablet_meta_index_();
   int inner_check_tablet_meta_index_(const ObArray<backup::ObBackupMetaIndex> &meta_index_list,
                                      const ObArray<backup::ObBackupMetaIndex> &sec_meta_index_list);
@@ -549,8 +548,9 @@ public:
 private:
   int check_backup_piece_info_();
   int collect_and_check_piece_ls_info_();
-  int inner_collect_active_piece_ls_info_(const share::ObPieceKey &backup_piece_key,
-                                          const ObAdminBackupPieceValidationAttr &backup_piece_attr);
+  int inner_collect_active_piece_ls_info_(
+      const share::ObPieceKey &backup_piece_key,
+      const ObAdminBackupPieceValidationAttr &backup_piece_attr);
   int collect_and_check_piece_ls_onefile_length_();
   void post_process_(int ret);
 
@@ -581,6 +581,16 @@ private:
   bool is_inited_;
   int64_t task_id_;
   ObAdminBackupValidationCtx *ctx_;
+  class GetSourceFunctor
+  {
+  public:
+    GetSourceFunctor(logservice::ObRemoteRawPathParent &raw_path_parent);
+    ~GetSourceFunctor();
+    int operator()(const share::ObLSID &id, logservice::ObRemoteSourceGuard &guard);
+
+  private:
+    logservice::ObRemoteRawPathParent &raw_path_parent_;
+  };
   DISALLOW_COPY_AND_ASSIGN(ObAdminBackupPieceLogIterationTask);
 };
 
