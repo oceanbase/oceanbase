@@ -106,7 +106,7 @@ int ObTopKFrequencyHistograms::sort_topk_fre_items(ObIArray<ObTopkItem> &items)
 {
   int ret = OB_SUCCESS;
   Compare cmp;
-  std::sort(&items.at(0),
+  lib::ob_sort(&items.at(0),
             &items.at(0)+ items.count(),
             CopyableComparer(cmp));
   if (OB_FAIL(cmp.ret_)) {

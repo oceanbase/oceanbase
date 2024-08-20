@@ -20,6 +20,7 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/resource/ob_resource_mgr.h"
 #include "lib/allocator/ob_tc_malloc.h"
+#include "lib/utility/ob_sort.h"
 #include <signal.h>
 
 namespace oceanbase

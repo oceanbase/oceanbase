@@ -621,7 +621,7 @@ int ObLSBalanceTaskHelper::generate_task_for_dup_ls_shrink_()
     LOG_WARN("invalid array", KR(ret), K(dup_ls_stat_array_), K(unit_group_balance_array_));
   } else {
     ObLSStatusInfo::Compare cmp;
-    std::sort(dup_ls_stat_array_.begin(), dup_ls_stat_array_.end(), cmp);
+    lib::ob_sort(dup_ls_stat_array_.begin(), dup_ls_stat_array_.end(), cmp);
     const ObLSID dest_ls_id = dup_ls_stat_array_.at(0).get_ls_id(); // smallest dup ls id
     const uint64_t dest_ls_group_id = dup_ls_stat_array_.at(0).get_ls_group_id();
     const uint64_t src_ls_group_id = dup_ls_stat_array_.at(1).get_ls_group_id();

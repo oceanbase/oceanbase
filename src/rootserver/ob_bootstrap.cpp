@@ -79,7 +79,7 @@ ObBaseBootstrap::ObBaseBootstrap(ObSrvRpcProxy &rpc_proxy,
       rs_list_(rs_list),
       config_(config)
 {
-  std::sort(rs_list_.begin(), rs_list_.end());
+  lib::ob_sort(rs_list_.begin(), rs_list_.end());
 }
 
 int ObBaseBootstrap::gen_sys_unit_ids(const ObIArray<ObZone> &zones,
@@ -94,7 +94,7 @@ int ObBaseBootstrap::gen_sys_unit_ids(const ObIArray<ObZone> &zones,
   } else if (OB_FAIL(sorted_zones.assign(zones))) {
     LOG_WARN("assign failed", K(ret));
   } else {
-    std::sort(sorted_zones.begin(), sorted_zones.end());
+    lib::ob_sort(sorted_zones.begin(), sorted_zones.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < zones.count(); ++i) {
       for (int64_t j = 0; OB_SUCC(ret) && j < sorted_zones.count(); ++j) {
         if (sorted_zones.at(j) == zones.at(i)) {
@@ -664,7 +664,7 @@ int ObBootstrap::sort_schema(const ObIArray<ObTableSchema> &table_schemas,
     }
     if (OB_SUCC(ret)) {
       TableIdCompare compare;
-      std::sort(ptr_table_schemas.begin(), ptr_table_schemas.end(), compare);
+      lib::ob_sort(ptr_table_schemas.begin(), ptr_table_schemas.end(), compare);
       if (OB_FAIL(compare.get_ret())) {
         LOG_WARN("fail to sort schema", KR(ret));
       } else {

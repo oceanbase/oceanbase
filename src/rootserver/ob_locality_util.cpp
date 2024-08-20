@@ -365,7 +365,7 @@ int ObLocalityDistribution::ZoneSetReplicaDist::try_set_specific_replica_dist(
         LOG_USER_ERROR(OB_INVALID_ARGUMENT,
                        "locality, nonpaxos replica cannot specify multiple memstore percentage");
       } else {
-        std::sort(replica_attr_set.begin(), replica_attr_set.end());
+        lib::ob_sort(replica_attr_set.begin(), replica_attr_set.end());
       }
     } 
   }
@@ -380,7 +380,7 @@ int ObLocalityDistribution::ZoneSetReplicaDist::replace_zone_set(
   if (OB_FAIL(zone_set_.assign(this_zone_set))) {
     LOG_WARN("fail to assign zone set", K(ret));
   } else {
-    std::sort(zone_set_.begin(), zone_set_.end());
+    lib::ob_sort(zone_set_.begin(), zone_set_.end());
   }
   return ret;
 }
@@ -392,7 +392,7 @@ int ObLocalityDistribution::ZoneSetReplicaDist::append_zone(
   if (OB_FAIL(zone_set_.push_back(this_zone))) {
     LOG_WARN("fail to push back", K(ret));
   } else {
-    std::sort(zone_set_.begin(), zone_set_.end());
+    lib::ob_sort(zone_set_.begin(), zone_set_.end());
   }
   return ret;
 }
@@ -1505,7 +1505,7 @@ int ObLocalityDistribution::output_normalized_locality(
       // failed
     } else {
       bool start_format = false;
-      std::sort(zone_set_replica_dist_array.begin(), zone_set_replica_dist_array.end());
+      lib::ob_sort(zone_set_replica_dist_array.begin(), zone_set_replica_dist_array.end());
       for (int64_t i = 0; i < zone_set_replica_dist_array.count() && OB_SUCC(ret); ++i) {
         if (OB_FAIL(databuff_printf(buf, buf_len, pos, "%s", (start_format ? ", " : "")))) {
           LOG_WARN("fail to format margin", K(ret));
@@ -1690,7 +1690,7 @@ int ObLocalityDistribution::get_zone_replica_attr_array(
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(sort_array.begin(), sort_array.end(), ObZoneReplicaAttrSet::sort_compare_less_than);
+    lib::ob_sort(sort_array.begin(), sort_array.end(), ObZoneReplicaAttrSet::sort_compare_less_than);
     zone_replica_num_array.reset();
     for (int64_t i = 0; OB_SUCC(ret) && i < sort_array.count(); ++i) {
       if (OB_FAIL(zone_replica_num_array.push_back(*sort_array.at(i)))) {

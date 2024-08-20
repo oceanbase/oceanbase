@@ -1047,7 +1047,7 @@ int ObTableStoreUtil::sort_major_tables(ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN
     // no need sort
   } else {
     ObITableSnapshotVersionCompare comp(ret);
-    std::sort(tables.begin(), tables.end(), comp);
+    lib::ob_sort(tables.begin(), tables.end(), comp);
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort tables", K(ret), K(tables));
     }
@@ -1064,7 +1064,7 @@ int ObTableStoreUtil::sort_minor_tables(ObArray<ObITable *> &tables)
   } else {
     // There is an assumption: either all tables are with scn range, or none
     ObITableLogTsRangeCompare comp(ret);
-    std::sort(tables.begin(), tables.end(), comp);
+    lib::ob_sort(tables.begin(), tables.end(), comp);
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort tables", K(ret), K(tables));
     }
@@ -1081,7 +1081,7 @@ int ObTableStoreUtil::reverse_sort_minor_table_handles(ObArray<ObTableHandleV2> 
   } else {
     // There is an assumption: either all tables are with scn range, or none
     ObTableHandleV2LogTsRangeReverseCompare comp(ret);
-    std::sort(table_handles.begin(), table_handles.end(), comp);
+    lib::ob_sort(table_handles.begin(), table_handles.end(), comp);
     if (OB_FAIL(ret)) {
       LOG_ERROR("failed to sort tables", K(ret), K(table_handles));
     }

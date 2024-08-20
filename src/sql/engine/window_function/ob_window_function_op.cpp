@@ -154,7 +154,7 @@ int ObWindowFunctionSpec::rd_generate_patch(ObRDWFPieceMsgCtx &ctx) const
 {
   int ret = OB_SUCCESS;
   // sort by (PBY, OBY, SQC_ID, THREAD_ID)
-  std::sort(ctx.infos_.begin(), ctx.infos_.end(),
+  lib::ob_sort(ctx.infos_.begin(), ctx.infos_.end(),
             [&](ObRDWFPartialInfo *l, ObRDWFPartialInfo *r) {
               int cmp = 0;
               (void)rd_pby_oby_cmp(l->first_row_, r->first_row_, cmp);

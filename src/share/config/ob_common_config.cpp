@@ -92,7 +92,7 @@ void ObBaseConfig::get_sorted_config_items(ConfigItemArray &configs) const
     ConfigItem item(it->first.str(), NULL == it->second ? "" : it->second->str());
     (void)configs.push_back(item);
   }
-  std::sort(configs.begin(), configs.end());
+  lib::ob_sort(configs.begin(), configs.end());
 }
 int ObBaseConfig::load_from_buffer(const char *config_str, const int64_t config_str_len,
                               const int64_t version, const bool check_name)

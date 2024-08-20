@@ -13,6 +13,7 @@
 #ifndef OB_JIT_ALLOCATOR_H
 #define OB_JIT_ALLOCATOR_H
 
+#include <sys/mman.h>
 #include "lib/oblog/ob_log.h"
 #include "lib/alloc/alloc_assist.h"
 #include "lib/utility/ob_print_utils.h"

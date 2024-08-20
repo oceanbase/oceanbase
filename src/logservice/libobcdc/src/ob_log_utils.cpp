@@ -1558,7 +1558,7 @@ int sort_and_unique_lsn_arr(ObLogLSNArray &lsn_arr)
   palf::LSN prev_lsn;
 
   // sort lsn_arr
-  std::sort(lsn_arr.begin(), lsn_arr.end(), CDCLSNComparator());
+  lib::ob_sort(lsn_arr.begin(), lsn_arr.end(), CDCLSNComparator());
   // get duplicate misslog lsn idx
   for(int64_t idx = 0; OB_SUCC(ret) && idx < lsn_arr.count(); idx++) {
     palf::LSN &cur_lsn = lsn_arr[idx];

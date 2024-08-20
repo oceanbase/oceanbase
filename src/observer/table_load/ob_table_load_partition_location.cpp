@@ -312,7 +312,7 @@ int ObTableLoadPartitionLocation::init_all_leader_info()
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(sort_array.begin(), sort_array.end(), [](const ObTableLoadPartitionLocation::LeaderInfoForSort &a,
+    lib::ob_sort(sort_array.begin(), sort_array.end(), [](const ObTableLoadPartitionLocation::LeaderInfoForSort &a,
                  ObTableLoadPartitionLocation::LeaderInfoForSort &b) {
                 return a.addr_ < b.addr_;
               });

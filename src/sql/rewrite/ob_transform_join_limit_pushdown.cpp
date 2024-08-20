@@ -167,7 +167,7 @@ int ObTransformJoinLimitPushDown::sort_pushdown_helpers(ObSEArray<LimitPushDownH
       return l_helper->get_max_table_id() > r_helper->get_max_table_id();
     }
   };
-  std::sort(helpers.begin(), helpers.end(), cmp_func);
+  lib::ob_sort(helpers.begin(), helpers.end(), cmp_func);
   return ret;
 }
 

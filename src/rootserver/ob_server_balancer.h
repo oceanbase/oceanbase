@@ -227,7 +227,7 @@ int Matrix<T>::sort_column_group(
   } else {
     for (int64_t row = 0; OB_SUCC(ret) && row < row_count_; ++row) {
       const int64_t end_column_idx = start_column_idx + column_count;
-      std::sort(inner_array_.begin() + row * column_count_ + start_column_idx,
+      lib::ob_sort(inner_array_.begin() + row * column_count_ + start_column_idx,
                 inner_array_.begin() + row * column_count_ + end_column_idx,
                 func);
       if (OB_FAIL(func.get_ret())) {

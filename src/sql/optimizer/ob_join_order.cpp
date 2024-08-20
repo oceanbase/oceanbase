@@ -3642,7 +3642,7 @@ int ObJoinOrder::get_candi_range_expr(const ObIArray<ColumnItem> &range_columns,
                         if (NULL != lhs && NULL != rhs)
                         { b_ret = lhs->index_ < rhs->index_; }
                         return b_ret; };
-    std::sort(sorted_predicates.begin(), sorted_predicates.end(), compare_op);
+    lib::ob_sort(sorted_predicates.begin(), sorted_predicates.end(), compare_op);
     LOG_TRACE("sort predicates and calc cost", K(min_cost), K(sorted_predicates));
   }
   //for each candi range expr, check scan cost

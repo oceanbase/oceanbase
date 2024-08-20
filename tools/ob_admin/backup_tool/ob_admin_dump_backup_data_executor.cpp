@@ -988,7 +988,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_path_()
     STORAGE_LOG(WARN, "fail to get backup set names", K(ret));
   } else if (!backup_set_array.empty()) {
     storage::ObBackupDataStore::ObBackupSetDescComparator cmp;
-    std::sort(backup_set_array.begin(), backup_set_array.end(), cmp);
+    lib::ob_sort(backup_set_array.begin(), backup_set_array.end(), cmp);
     for (int64_t i = backup_set_array.count() - 1; OB_SUCC(ret) && i >= 0; i--) {
       path.reset();
       const share::ObBackupSetDesc &backup_set_dir = backup_set_array.at(i);

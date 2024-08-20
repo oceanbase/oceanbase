@@ -265,7 +265,7 @@ int ObShowGrants::inner_get_next_row(common::ObNewRow *&row)
               LOG_WARN("push back failed", K(ret));
             }
           }
-          std::sort(priv_key_array.begin(), priv_key_array.end(), PrivKey::cmp);
+          lib::ob_sort(priv_key_array.begin(), priv_key_array.end(), PrivKey::cmp);
           ObArray<std::pair<PrivKey, ObPrivSet>> priv_key_value_set;
           for (int64_t i = 0; OB_SUCC(ret) && i < priv_key_array.count(); i++) {
             bool need_print = false;

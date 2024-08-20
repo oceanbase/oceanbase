@@ -774,7 +774,7 @@ int ObRestoreUtil::sort_backup_piece_array_(ObArray<share::ObSinglePieceDesc> &b
     LOG_WARN("empty backup_piece_array", K(ret));
   } else {
     ObSinglePieceDescComparator cmp;
-    std::sort(backup_piece_array.begin(), backup_piece_array.end(), cmp);
+    lib::ob_sort(backup_piece_array.begin(), backup_piece_array.end(), cmp);
   }
   return ret;
 }
@@ -953,7 +953,7 @@ int ObRestoreUtil::sort_multi_paths_by_backup_set_id_(
   } else {
     multi_path_array.reset();
 
-    std::sort(
+    lib::ob_sort(
       path_set_pairs.get_data(), path_set_pairs.get_data() + path_set_pairs.count(),
       [](const std::pair<ObString, ObBackupSetFileDesc> &a,
          const std::pair<ObString, ObBackupSetFileDesc> &b) { return a.second.backup_set_id_ < b.second.backup_set_id_; });
@@ -1278,7 +1278,7 @@ int ObRestoreUtil::get_all_piece_keys_(const ObIArray<ObString> &multi_path_arra
 
   if (OB_SUCC(ret)) {
     if (!piece_keys.empty()) {
-      std::sort(piece_keys.begin(), piece_keys.end());
+      lib::ob_sort(piece_keys.begin(), piece_keys.end());
     } else {
       ret = OB_RESTORE_SOURCE_NOT_ENOUGH;
       LOG_USER_ERROR(OB_RESTORE_SOURCE_NOT_ENOUGH, "no usable log pieces");

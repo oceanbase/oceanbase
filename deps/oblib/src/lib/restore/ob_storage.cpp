@@ -186,7 +186,7 @@ int ListAppendableObjectFragmentOp::gen_object_meta(ObStorageObjectMeta &obj_met
   int64_t last_end_offset = 0;
   obj_meta.reset();
   obj_meta.type_ = ObStorageObjectMetaType::OB_OBJ_SIMULATE_APPEND;
-  std::sort(meta_arr_.begin(), meta_arr_.end(), ObStorageObjectMeta::fragment_meta_cmp_func);
+  lib::ob_sort(meta_arr_.begin(), meta_arr_.end(), ObStorageObjectMeta::fragment_meta_cmp_func);
   while (OB_SUCC(ret) && i < meta_arr_.size()) {
     ObAppendableFragmentMeta &tmp_meta = meta_arr_[i];
     last_end_offset = tmp_meta.end_;

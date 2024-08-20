@@ -11550,7 +11550,7 @@ int ObLogPlan::sort_pwj_constraint(ObLocationConstraintContext &location_constra
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
     } else {
-      std::sort(&cur_cons->at(0), &cur_cons->at(0) + cur_cons->count());
+      lib::ob_sort(&cur_cons->at(0), &cur_cons->at(0) + cur_cons->count());
     }
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < non_strict_pwj_cons.count(); ++i) {
@@ -11558,7 +11558,7 @@ int ObLogPlan::sort_pwj_constraint(ObLocationConstraintContext &location_constra
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret), K(i));
     } else {
-      std::sort(&cur_cons->at(0), &cur_cons->at(0) + cur_cons->count());
+      lib::ob_sort(&cur_cons->at(0), &cur_cons->at(0) + cur_cons->count());
     }
   }
   return ret;

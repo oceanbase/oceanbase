@@ -117,7 +117,7 @@ int ObTableLoadErrorRowHandler::handle_update_row(
     LOG_WARN("invalid args", KR(ret));
   } else {
     int64_t duplicate_row_count = rows.count() - 1;
-    std::sort(rows.begin(), rows.end(),
+    lib::ob_sort(rows.begin(), rows.end(),
               [](const ObDirectLoadExternalRow *lhs, const ObDirectLoadExternalRow *rhs) {
                 return lhs->seq_no_ < rhs->seq_no_;
               });
@@ -163,7 +163,7 @@ int ObTableLoadErrorRowHandler::handle_update_row(
     LOG_WARN("invalid args", KR(ret));
   } else {
     int64_t duplicate_row_count = rows.count() - 1;
-    std::sort(rows.begin(), rows.end(),
+    lib::ob_sort(rows.begin(), rows.end(),
               [](const ObDirectLoadMultipleDatumRow *lhs, const ObDirectLoadMultipleDatumRow *rhs) {
                 return lhs->seq_no_ < rhs->seq_no_;
               });

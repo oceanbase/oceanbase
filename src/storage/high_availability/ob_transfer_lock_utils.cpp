@@ -60,7 +60,7 @@ int ObMemberListLockUtils::batch_lock_ls_member_list(const uint64_t tenant_id, c
   if (OB_FAIL(sorted_ls_list.assign(lock_ls_list))) {
     LOG_WARN("failed to assign ls list", K(ret));
   } else {
-    std::sort(sorted_ls_list.begin(), sorted_ls_list.end());
+    lib::ob_sort(sorted_ls_list.begin(), sorted_ls_list.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < sorted_ls_list.count(); ++i) {
       const share::ObLSID &ls_id = sorted_ls_list.at(i);
       if (OB_FAIL(lock_ls_member_list(tenant_id, ls_id, task_id, member_list, status, group_id, sql_proxy))) {

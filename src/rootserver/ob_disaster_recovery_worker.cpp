@@ -582,7 +582,7 @@ int ObDRWorker::LocalityAlignment::do_generate_locality_task_from_full_replica(
       }
     } else if (OB_SUCCESS == tmp_ret && nullptr != zone_replica_desc) {
       bool found = false;
-      std::sort(zone_replica_desc->begin(), zone_replica_desc->end());
+      lib::ob_sort(zone_replica_desc->begin(), zone_replica_desc->end());
       for (int64_t i = zone_replica_desc->count() - 1; !found && OB_SUCC(ret) && i >= 0; --i) {
         ReplicaDesc &replica_desc = zone_replica_desc->at(i);
         if (REPLICA_TYPE_FULL == replica_desc.replica_type_) {
@@ -654,7 +654,7 @@ int ObDRWorker::LocalityAlignment::do_generate_locality_task_from_logonly_replic
       }
     } else if (OB_SUCCESS == tmp_ret && nullptr != zone_replica_desc) {
       bool found = false;
-      std::sort(zone_replica_desc->begin(), zone_replica_desc->end());
+      lib::ob_sort(zone_replica_desc->begin(), zone_replica_desc->end());
       // defensive check
       for (int64_t i = zone_replica_desc->count() - 1; !found && OB_SUCC(ret) && i >= 0; --i) {
         ReplicaDesc &replica_desc = zone_replica_desc->at(i);
@@ -700,7 +700,7 @@ int ObDRWorker::LocalityAlignment::do_generate_locality_task_from_encryption_log
       }
     } else if (OB_SUCCESS == tmp_ret && nullptr != zone_replica_desc) {
       bool found = false;
-      std::sort(zone_replica_desc->begin(), zone_replica_desc->end());
+      lib::ob_sort(zone_replica_desc->begin(), zone_replica_desc->end());
       // defensive check
       for (int64_t i = zone_replica_desc->count() - 1; !found && OB_SUCC(ret) && i >= 0; --i) {
         ReplicaDesc &replica_desc = zone_replica_desc->at(i);
@@ -837,7 +837,7 @@ int ObDRWorker::LocalityAlignment::do_generate_locality_task_from_readonly_repli
       }
     } else if (OB_SUCCESS == tmp_ret && OB_NOT_NULL(zone_replica_desc)) {
       bool task_generated = false;
-      std::sort(zone_replica_desc->begin(), zone_replica_desc->end());
+      lib::ob_sort(zone_replica_desc->begin(), zone_replica_desc->end());
       // try to generate type_transform task if needed
       if (OB_FAIL(try_generate_type_transform_task_for_readonly_replica_(
                       *zone_replica_desc, replica_stat_desc, index, task_generated))) {
@@ -1716,7 +1716,7 @@ bool ObDRWorker::LATaskCmp::operator()(const LATask *left, const LATask *right)
 
 int ObDRWorker::LATaskCmp::execute_sort()
 {
-  std::sort(task_array_.begin(), task_array_.end(), *this);
+  lib::ob_sort(task_array_.begin(), task_array_.end(), *this);
   return ret_;
 }
 

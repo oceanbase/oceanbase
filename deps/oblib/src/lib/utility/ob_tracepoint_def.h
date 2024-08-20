@@ -491,4 +491,6 @@ GLOBAL_ERRSIM_POINT_DEF(2302, EN_DISABLE_HASH_BASE_DISTINCT, "");
 
 GLOBAL_ERRSIM_POINT_DEF(2304, EN_TRACEPOINT_TEST, "For testing new versions of tracepoint");
 
+GLOBAL_ERRSIM_POINT_DEF(2501, EN_CHECK_SORT_CMP, "Used to check the legality of the compare method for std::sort");
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/

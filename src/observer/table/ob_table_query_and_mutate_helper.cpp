@@ -296,7 +296,7 @@ int QueryAndMutateHelper::sort_qualifier(common::ObIArray<ColumnIdx> &columns,
     // sort qualifiers
     ColumnIdx *end = &columns.at(columns.count()-1);
     ++end;
-    std::sort(&columns.at(0), end, ColumnIdxComparator());
+    lib::ob_sort(&columns.at(0), end, ColumnIdxComparator());
   }
   if (OB_SUCC(ret)) {
     // check duplicated qualifiers

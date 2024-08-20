@@ -425,8 +425,8 @@ int ObCreateViewHelper::lock_object_id_()
       ret = OB_ERR_PARALLEL_DDL_CONFLICT;
       LOG_WARN("dep objs count not consistent", KR(ret), K(dep_objs_.count()), K(dep_objs_before_lock.count()));
     } else {
-      std::sort(dep_objs_before_lock.begin(), dep_objs_before_lock.end(), dep_compare_func_);
-      std::sort(dep_objs_.begin(), dep_objs_.end(), dep_compare_func_);
+      lib::ob_sort(dep_objs_before_lock.begin(), dep_objs_before_lock.end(), dep_compare_func_);
+      lib::ob_sort(dep_objs_.begin(), dep_objs_.end(), dep_compare_func_);
       for (int64_t i = 0; OB_SUCC(ret) && i < dep_objs_.count(); ++i) {
         if (dep_objs_before_lock.at(i).first != dep_objs_.at(i).first) {
           ret = OB_ERR_PARALLEL_DDL_CONFLICT;

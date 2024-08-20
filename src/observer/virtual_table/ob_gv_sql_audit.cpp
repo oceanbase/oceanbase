@@ -431,7 +431,7 @@ int ObGvSqlAudit::extract_tenant_ids()
       if (is_always_false) {
         tenant_id_array_.reset();
       } else {
-        std::sort(tenant_id_array_.begin(), tenant_id_array_.end());
+        lib::ob_sort(tenant_id_array_.begin(), tenant_id_array_.end());
         SERVER_LOG(DEBUG, "get tenant ids from req mgr map", K(tenant_id_array_));
       }
     }
@@ -499,7 +499,7 @@ int ObGvSqlAudit::extract_tenant_ids()
       if (is_always_false) {
         tenant_id_array_.reset();
       } else {
-        std::sort(tenant_id_array_.begin(), tenant_id_array_.end());
+        lib::ob_sort(tenant_id_array_.begin(), tenant_id_array_.end());
         SERVER_LOG(DEBUG, "get tenant ids from req mgr map", K(tenant_id_array_));
       }
     }

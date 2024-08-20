@@ -1373,7 +1373,7 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
       bucket_part_cnt++;
     }
     comp_.set_cmp_range(0, part_cnt_ + hash_expr_cnt);
-    std::sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
+    lib::ob_sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
     comp_.set_cmp_range(part_cnt_ + hash_expr_cnt, comp_.get_cnt());
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_part_cnt; ++i) {
       int64_t rows_last = rows_idx;
@@ -1393,10 +1393,10 @@ int ObSortOpImpl::do_partition_sort(common::ObIArray<ObChunkDatumStore::StoredRo
           } else {
             enable_encode_sortkey_ = false;
             comp_.enable_encode_sortkey_ = false;
-            std::sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
+            lib::ob_sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
           }
         } else {
-          std::sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
+          lib::ob_sort(&rows.at(0) + rows_last, &rows.at(0) + rows_idx, CopyableComparer(comp_));
         }
       }
     }
@@ -1684,10 +1684,10 @@ int ObSortOpImpl::sort_inmem_data()
         } else {
           enable_encode_sortkey_ = false;
           comp_.enable_encode_sortkey_ = false;
-          std::sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+          lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
         }
       } else {
-        std::sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
+        lib::ob_sort(&rows_->at(begin), &rows_->at(0) + rows_->count(), CopyableComparer(comp_));
       }
       if (OB_SUCCESS != comp_.ret_) {
         ret = comp_.ret_;
@@ -2644,7 +2644,7 @@ int ObPrefixSortImpl::add_immediate_prefix(const common::ObIArray<ObExpr *> &all
                  exec_ctx_, enable_encode_sortkey_ && !(part_cnt_ > 0)))) {
     LOG_WARN("init compare failed", K(ret));
   } else {
-    std::sort(immediate_prefix_rows_ + pos, immediate_prefix_rows_ + pos + selector_size_,
+    lib::ob_sort(immediate_prefix_rows_ + pos, immediate_prefix_rows_ + pos + selector_size_,
               CopyableComparer(comp_));
     if (OB_SUCCESS != comp_.ret_) {
       ret = comp_.ret_;

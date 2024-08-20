@@ -1679,7 +1679,7 @@ int ObTenantRoleTransitionService::check_sync_to_latest_(
     LOG_WARN("unexpect checkpoints count", KR(ret), K(switchover_checkpoints), K(tenant_id), K(tenant_info),
                                        K(all_ls_status_array));
   } else {
-    std::sort(switchover_checkpoints.begin(), switchover_checkpoints.end());
+    lib::ob_sort(switchover_checkpoints.begin(), switchover_checkpoints.end());
     if (OB_FAIL(non_sync_info.init(switchover_checkpoints))) {
       LOG_WARN("fail to init non_sync_info", KR(ret), K(switchover_checkpoints));
     } else {

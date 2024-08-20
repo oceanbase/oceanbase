@@ -538,7 +538,7 @@ int ObArchiveStore::get_round_id(const int64_t dest_id, const SCN &scn, int64_t 
     LOG_WARN("list files failed", K(ret), K(round_prefix), K(backup_dest));
   } else {
     ObArray<int64_t> &result = round_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (result.count() > 0) {
       round_id = result.at(0);
     } else {
@@ -589,7 +589,7 @@ int ObArchiveStore::get_all_round_ids(const int64_t dest_id, ObIArray<int64_t> &
     LOG_WARN("failed to list files", K(ret), K(round_prefix), K(backup_dest));
   } else {
     ObArray<int64_t> &result = round_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (OB_FAIL(roundid_array.assign(result))) {
       LOG_WARN("failed to assign round id array", K(ret));
     }
@@ -617,7 +617,7 @@ int ObArchiveStore::get_all_rounds(const int64_t dest_id, ObIArray<ObRoundEndDes
     LOG_WARN("list files failed", K(ret), K(round_prefix), K(backup_dest));
   } else {
     ObArray<ObRoundEndDesc> &result = round_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (OB_FAIL(rounds.assign(result))) {
       LOG_WARN("failed to assign rounds array", K(ret));
     }
@@ -756,7 +756,7 @@ int ObArchiveStore::get_piece_range(const int64_t dest_id, const int64_t round_i
     LOG_WARN("failed to list files", K(ret), K(piece_prefix), K(backup_dest));
   } else {
     ObArray<int64_t> &result = piece_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (result.count() > 0) {
       min_piece_id = result.at(0);
       max_piece_id = result.at(result.count() - 1);
@@ -1246,7 +1246,7 @@ int ObArchiveStore::get_all_piece_keys(ObIArray<ObPieceKey> &keys)
     LOG_WARN("failed to list files", K(ret), K(piece_prefix), K(backup_dest));
   } else {
     ObArray<ObPieceKey> &result = piece_op.result();
-    std::sort(result.begin(), result.end());
+    lib::ob_sort(result.begin(), result.end());
     if (OB_FAIL(keys.assign(result))) {
       LOG_WARN("failed to assign piece key array", K(ret));
     }
@@ -1573,7 +1573,7 @@ int ObArchiveStore::get_file_range_in_piece(const int64_t dest_id, const int64_t
     ret = OB_ENTRY_NOT_EXIST;
     LOG_WARN("file not exist", K(ret), K(dest_id), K(round_id), K(piece_id), K(ls_id));
   } else {
-    std::sort(filelist.begin(), filelist.end());
+    lib::ob_sort(filelist.begin(), filelist.end());
     min_file_id = filelist.at(0).file_id_;
     max_file_id = filelist.at(filelist.count() - 1).file_id_;
   }

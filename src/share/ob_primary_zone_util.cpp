@@ -179,7 +179,7 @@ int ObPrimaryZoneUtil::construct_zone_array()
         LOG_WARN("fail to push back", K(ret));
       } else {} // no more
     }
-    std::sort(tmp_zone_array.begin(), tmp_zone_array.end());
+    lib::ob_sort(tmp_zone_array.begin(), tmp_zone_array.end());
     for (int64_t i = 0; OB_SUCC(ret) && i < tmp_zone_array.count() - 1; ++i) {
       if (tmp_zone_array.at(i) == tmp_zone_array.at(i + 1)) {
         ret = OB_INVALID_ARGUMENT;
@@ -445,7 +445,7 @@ int ObPrimaryZoneUtil::update_region_score()
     LOG_WARN("zone region list null", K(ret), KP(zone_region_list_));
   } else {
     RegionScoreCmp region_score_cmp;
-    std::sort(normalized_zone_array_.begin(), normalized_zone_array_.end(), region_score_cmp);
+    lib::ob_sort(normalized_zone_array_.begin(), normalized_zone_array_.end(), region_score_cmp);
     ObRegion last_region;
     int64_t last_region_score = INT64_MAX;
     for (int64_t i = 0; i < normalized_zone_array_.count() && OB_SUCC(ret); ++i) {
@@ -465,7 +465,7 @@ int ObPrimaryZoneUtil::construct_full_zone_array()
   int ret = OB_SUCCESS;
   // sorted by region_score,zone_score,zone, the zone priority is determined by now
   FinalCmp final_cmp;
-  std::sort(normalized_zone_array_.begin(), normalized_zone_array_.end(), final_cmp);
+  lib::ob_sort(normalized_zone_array_.begin(), normalized_zone_array_.end(), final_cmp);
   if (OB_UNLIKELY(normalized_zone_array_.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("cannot construct full zone array", K(ret),

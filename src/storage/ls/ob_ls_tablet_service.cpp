@@ -4301,7 +4301,7 @@ int ObLSTabletService::construct_update_idx(
       }
     }
     if (OB_SUCC(ret) && update_idx.count() > 1) {
-      std::sort(update_idx.begin(), update_idx.end());
+      lib::ob_sort(update_idx.begin(), update_idx.end());
     }
   }
 

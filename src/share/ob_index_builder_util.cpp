@@ -639,7 +639,7 @@ int ObIndexBuilderUtil::adjust_fulltext_columns(
     }
   }
   if (OB_SUCC(ret)) {
-    std::sort(ft_columns.begin(), ft_columns.end(), FulltextColumnOrder());
+    lib::ob_sort(ft_columns.begin(), ft_columns.end(), FulltextColumnOrder());
   }
   for (int64_t i = 1; OB_SUCC(ret) && i < ft_columns.count(); ++i) {
     if (ft_columns.at(i).first - ft_columns.at(i - 1).first != 1) {

@@ -547,7 +547,7 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
       LOG_WARN("fail to push back", K(ret));
     }
   }
-  std::sort(zone_set_.begin(), zone_set_.end());
+  lib::ob_sort(zone_set_.begin(), zone_set_.end());
   for (int64_t i = 0;
        OB_SUCC(ret) && i < that.replica_attr_set_.get_full_replica_attr_array().count();
        ++i) {
@@ -556,7 +556,7 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
       LOG_WARN("fail to add full replica num", K(ret));
     }
   }
-  std::sort(replica_attr_set_.get_full_replica_attr_array_for_sort().begin(),
+  lib::ob_sort(replica_attr_set_.get_full_replica_attr_array_for_sort().begin(),
             replica_attr_set_.get_full_replica_attr_array_for_sort().end());
   for (int64_t i = 0;
        OB_SUCC(ret) && i < that.replica_attr_set_.get_logonly_replica_attr_array().count();
@@ -566,7 +566,7 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
       LOG_WARN("fail to add logonly replica num", K(ret));
     }
   }
-  std::sort(replica_attr_set_.get_logonly_replica_attr_array_for_sort().begin(),
+  lib::ob_sort(replica_attr_set_.get_logonly_replica_attr_array_for_sort().begin(),
             replica_attr_set_.get_logonly_replica_attr_array_for_sort().end());
   for (int64_t i = 0;
        OB_SUCC(ret) && i < that.replica_attr_set_.get_readonly_replica_attr_array().count();
@@ -576,7 +576,7 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
       LOG_WARN("fail to add readonly replica num", K(ret));
     }
   }
-  std::sort(replica_attr_set_.get_readonly_replica_attr_array_for_sort().begin(),
+  lib::ob_sort(replica_attr_set_.get_readonly_replica_attr_array_for_sort().begin(),
             replica_attr_set_.get_readonly_replica_attr_array_for_sort().end());
   for (int64_t i = 0;
        OB_SUCC(ret) && i < that.replica_attr_set_.get_encryption_logonly_replica_attr_array().count();
@@ -587,7 +587,7 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
       LOG_WARN("fail to add logonly replica num", K(ret));
     }
   }
-  std::sort(replica_attr_set_.get_encryption_logonly_replica_attr_array_for_sort().begin(),
+  lib::ob_sort(replica_attr_set_.get_encryption_logonly_replica_attr_array_for_sort().begin(),
             replica_attr_set_.get_encryption_logonly_replica_attr_array_for_sort().end());
   return ret;
 }

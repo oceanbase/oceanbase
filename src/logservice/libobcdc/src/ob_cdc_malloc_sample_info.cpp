@@ -37,7 +37,7 @@ int ObCDCMallocSampleInfo::init(const ObMallocSampleMap &sample_map)
   }
 
   if (OB_SUCC(ret)) {
-    std::sort(samples_.begin(), samples_.end(), ObCDCMallocSamplePairCompartor());
+    lib::ob_sort(samples_.begin(), samples_.end(), ObCDCMallocSamplePairCompartor());
   }
 
   return ret;

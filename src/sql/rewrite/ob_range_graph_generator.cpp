@@ -259,7 +259,7 @@ int ObRangeGraphGenerator::and_range_nodes(ObIArray<ObRangeNode*> &range_nodes,
     //  1. always false
     //  2. always true
     //  3. node with smaller min_offset
-    std::sort(&range_nodes.at(0), &range_nodes.at(0) + range_nodes.count(), RangeNodeCmp());
+    lib::ob_sort(&range_nodes.at(0), &range_nodes.at(0) + range_nodes.count(), RangeNodeCmp());
   }
   ObRangeNode *always_true_node = nullptr;
   ObRangeNode *last_node = nullptr;
@@ -541,7 +541,7 @@ int ObRangeGraphGenerator::or_range_nodes(ObExprRangeConverter &range_node_gener
     //  1. always false
     //  2. always true
     //  3. node with smaller min_offset
-    std::sort(&range_nodes.at(0), &range_nodes.at(0) + range_nodes.count(), RangeNodeCmp());
+    lib::ob_sort(&range_nodes.at(0), &range_nodes.at(0) + range_nodes.count(), RangeNodeCmp());
   }
   ObRangeNode *last_node = nullptr;
   ObRangeNode *always_false_node = nullptr;

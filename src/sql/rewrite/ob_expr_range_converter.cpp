@@ -2532,7 +2532,7 @@ int ObExprRangeConverter::sort_range_exprs(const ObIArray<ObRawExpr*> &range_exp
   if (OB_FAIL(out_range_exprs.assign(range_exprs))) {
     LOG_WARN("failed to assign range exprs", K(ret));
   } else if (!range_exprs.empty()) {
-    std::sort(&out_range_exprs.at(0), &out_range_exprs.at(0) + out_range_exprs.count(),
+    lib::ob_sort(&out_range_exprs.at(0), &out_range_exprs.at(0) + out_range_exprs.count(),
               RangeExprCategoryCmp());
   }
   return ret;

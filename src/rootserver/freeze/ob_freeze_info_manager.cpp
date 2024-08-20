@@ -254,7 +254,7 @@ int ObFreezeInfoManager::inner_reload(ObFreezeInfo &freeze_info)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get invalid frozen status", KR(ret), K(global_broadcast_scn));
   } else {
-    std::sort(simple_frozen_statuses.begin(), simple_frozen_statuses.end(),
+    lib::ob_sort(simple_frozen_statuses.begin(), simple_frozen_statuses.end(),
               [](const ObSimpleFrozenStatus &a, const ObSimpleFrozenStatus &b)
                  { return a.frozen_scn_ < b.frozen_scn_; });
   }

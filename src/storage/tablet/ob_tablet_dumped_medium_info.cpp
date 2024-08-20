@@ -130,8 +130,8 @@ int ObTabletDumpedMediumInfo::init_for_mds_table_dump(
       LOG_WARN("failed to assign", K(ret));
     } else {
       // sort first
-      std::sort(array1.begin(), array1.end(), ObTabletDumpedMediumInfo::compare);
-      std::sort(array2.begin(), array2.end(), ObTabletDumpedMediumInfo::compare);
+      lib::ob_sort(array1.begin(), array1.end(), ObTabletDumpedMediumInfo::compare);
+      lib::ob_sort(array2.begin(), array2.end(), ObTabletDumpedMediumInfo::compare);
 
       // merge
       bool contain = false;
@@ -264,7 +264,7 @@ int ObTabletDumpedMediumInfo::append(
     } else if (OB_FAIL(medium_info_list_.push_back(medium_info))) {
       LOG_WARN("failed to push back to array", K(ret));
     } else {
-      std::sort(medium_info_list_.begin(), medium_info_list_.end(), compare);
+      lib::ob_sort(medium_info_list_.begin(), medium_info_list_.end(), compare);
     }
   }
 
@@ -664,7 +664,7 @@ int ObTabletDumpedMediumInfoIterator::init(
     if (OB_FAIL(ret)) {
       reset();
     } else {
-      std::sort(medium_info_list_.begin(), medium_info_list_.end(), ObTabletDumpedMediumInfo::compare);
+      lib::ob_sort(medium_info_list_.begin(), medium_info_list_.end(), ObTabletDumpedMediumInfo::compare);
 
       idx_ = 0;
       allocator_ = &allocator;

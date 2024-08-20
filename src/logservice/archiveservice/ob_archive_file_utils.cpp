@@ -115,7 +115,7 @@ int ObFileListOp::func(const dirent *entry)
 int ObFileListOp::get_file_list(common::ObIArray<int64_t> &array)
 {
   int ret = OB_SUCCESS;
-  std::sort(array_.begin(), array_.end());
+  lib::ob_sort(array_.begin(), array_.end());
   if (array_.empty()) {
     ret = OB_ENTRY_NOT_EXIST;
   } else if (OB_FAIL(array.assign(array_))){

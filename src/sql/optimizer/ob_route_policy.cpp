@@ -44,7 +44,7 @@ int ObRoutePolicy::weak_sort_replicas(ObIArray<CandidateReplica>& candi_replicas
     auto first = &candi_replicas.at(0);
     ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
     ObReplicaCompare replica_cmp(policy_type);
-    std::sort(first, first + candi_replicas.count(), replica_cmp);
+    lib::ob_sort(first, first + candi_replicas.count(), replica_cmp);
     if (OB_FAIL(replica_cmp.get_sort_ret())) {
       LOG_WARN("fail sort", K(candi_replicas), K(ret));
     }

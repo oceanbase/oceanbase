@@ -268,7 +268,7 @@ int ObMajorMergeProgressChecker::check_merge_progress(
           }
         }
         if (OB_SUCC(ret)) {
-          std::sort(all_progress.begin(), all_progress.end());
+          lib::ob_sort(all_progress.begin(), all_progress.end());
         }
       }
 

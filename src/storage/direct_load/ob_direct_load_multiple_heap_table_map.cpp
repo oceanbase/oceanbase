@@ -77,7 +77,7 @@ int ObDirectLoadMultipleHeapTableMap::get_all_key_sorted(ObArray<KeyType> &key_a
     LOG_WARN("fail to get all keys", KR(ret));
   }
   if (OB_SUCC(ret)) {
-    std::sort(key_array.begin(), key_array.end());
+    lib::ob_sort(key_array.begin(), key_array.end());
   }
   return ret;
 }

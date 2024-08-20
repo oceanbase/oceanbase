@@ -529,7 +529,7 @@ int ObSSTableIndexBuilder::sort_roots()
 {
   int ret = OB_SUCCESS;
   ObIndexMicroBlockDescCompare cmp(ret, index_store_desc_.datum_utils_);
-  std::sort(roots_.begin(), roots_.end(), cmp);
+  lib::ob_sort(roots_.begin(), roots_.end(), cmp);
   return ret;
 }
 
@@ -2461,7 +2461,7 @@ int ObIndexBlockRebuilder::close()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "rebuilder not inited", K(ret), K_(is_inited));
-  } else if (FALSE_IT(std::sort(macro_meta_list_->begin(), macro_meta_list_->end(), cmp))) {
+  } else if (FALSE_IT(lib::ob_sort(macro_meta_list_->begin(), macro_meta_list_->end(), cmp))) {
   } else if (OB_FAIL(ret)) {
     STORAGE_LOG(WARN, "fail to sort meta list", K(ret));
   } else if (macro_meta_list_->count() == 0) {

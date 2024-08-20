@@ -1009,7 +1009,7 @@ int ObAlterTableExecutor::filter_and_sort_external_files(const ObString &pattern
       }
     }
     if (OB_SUCC(ret)) {
-      std::sort(file_urls.get_data(), file_urls.get_data() + file_urls.count());
+      lib::ob_sort(file_urls.get_data(), file_urls.get_data() + file_urls.count());
       for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); ++i) {
         int64_t file_size = 0;
         if (OB_FAIL(file_map.get_refactored(file_urls.at(i), file_size))) {
@@ -1118,7 +1118,7 @@ int ObAlterTableExecutor::collect_local_files_on_servers(
 
   if (OB_SUCC(ret)) {
     if (is_absolute_path) {
-      std::sort(all_servers.get_data(), all_servers.get_data() + all_servers.count(),
+      lib::ob_sort(all_servers.get_data(), all_servers.get_data() + all_servers.count(),
                 [](const ObAddr &l, const ObAddr &r) -> bool { return l < r; });
       ObAddr pre_addr;
       for (int64_t i = 0; OB_SUCC(ret) && i < all_servers.count(); i++) {

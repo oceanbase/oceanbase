@@ -235,7 +235,7 @@ public:
       sstable_array.set_tenant_id(MTL_ID());
       // sort sstable
       ObTableLoadParallelMergeSSTableCompare compare;
-      std::sort(tablet_ctx_->sstables_.begin(), tablet_ctx_->sstables_.end(), compare);
+      lib::ob_sort(tablet_ctx_->sstables_.begin(), tablet_ctx_->sstables_.end(), compare);
       // collect merged sstables
       for (int64_t i = 0; OB_SUCC(ret) && i < merge_sstable_count; ++i) {
         ObDirectLoadMultipleSSTable *sstable = tablet_ctx_->sstables_.at(i);

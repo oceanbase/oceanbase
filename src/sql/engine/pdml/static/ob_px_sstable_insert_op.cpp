@@ -174,7 +174,7 @@ int ObPxMultiPartSSTableInsertOp::inner_get_next_row()
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("Table not exist", K(MY_SPEC.plan_->get_ddl_table_id()), K(ret));
   } else {
-    std::sort(tablet_ids.begin(), tablet_ids.end()); // sort in ASC order
+    lib::ob_sort(tablet_ids.begin(), tablet_ids.end()); // sort in ASC order
   }
 
   if (OB_FAIL(ret)) {
@@ -381,7 +381,7 @@ int ObPxMultiPartSSTableInsertOp::get_all_rows_and_count()
         }
       }
       if (OB_SUCC(ret)) {
-        std::sort(tablet_seq_caches_.begin(), tablet_seq_caches_.end());
+        lib::ob_sort(tablet_seq_caches_.begin(), tablet_seq_caches_.end());
         count_rows_finish_ = true;
       }
     }

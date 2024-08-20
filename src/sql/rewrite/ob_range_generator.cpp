@@ -1304,7 +1304,7 @@ int ObRangeGenerator::merge_and_remove_ranges()
       }
     }
   } else {
-    std::sort(&ranges_.at(0), &ranges_.at(0) + ranges_.count(), RangeCmp());
+    lib::ob_sort(&ranges_.at(0), &ranges_.at(0) + ranges_.count(), RangeCmp());
     ObSEArray<ObNewRange *, 16> out_ranges;
     ObNewRange *l_range = ranges_.at(0);
     if (OB_ISNULL(l_range)) {
@@ -1498,7 +1498,7 @@ int ObRangeGenerator::generate_tmp_not_in_param(const ObRangeNode &node,
     } else if (always_false) {
       tmp_in_param->always_false_ = always_false;
     } else {
-      std::sort(&tmp_in_param->in_param_.at(0),
+      lib::ob_sort(&tmp_in_param->in_param_.at(0),
                 &tmp_in_param->in_param_.at(0) + tmp_in_param->in_param_.count(),
                 InParamObjCmp());
     }

@@ -188,9 +188,9 @@ int ObExprCollPred::calc_collection_is_contained_without_null(const pl::ObPLColl
         result = COLL_PRED_FALSE;
       } else {
         const ObObj **first = &c1_copy.at(0);
-        std::sort(first, first + c1_cnt, uc);
+        lib::ob_sort(first, first + c1_cnt, uc);
         first = &c2_copy.at(0);
-        std::sort(first, first + c2_cnt, uc);
+        lib::ob_sort(first, first + c2_cnt, uc);
         for (int64_t i = 0; OB_SUCC(ret) && i < c1_copy.count(); ++i) {
           if (0 != compare_obj(*(c1_copy.at(i)), *(c2_copy.at(i)), cmp_ctx)) {
             result = COLL_PRED_FALSE;

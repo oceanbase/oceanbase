@@ -145,7 +145,7 @@ int BaseLearnerList<MAX_SIZE, T>::add_learner(const T &learner)
   } else if (OB_FAIL(learner_array_.push_back(learner))) {
     COMMON_LOG(ERROR, "learner_array_ push back failed", K(ret), K(learner));
   } else {
-    std::sort(learner_array_.begin(), learner_array_.end(), [](const T &a, const T &b){ return a < b;});
+    lib::ob_sort(learner_array_.begin(), learner_array_.end(), [](const T &a, const T &b){ return a < b;});
   }
   return ret;
 }

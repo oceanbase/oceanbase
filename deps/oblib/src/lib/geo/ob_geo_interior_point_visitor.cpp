@@ -374,7 +374,7 @@ int ObGeoInteriorPointVisitor::visit(ObIWkbGeomPolygon *geo)
       LOG_WARN("crossing_points size should be even", K(ret), K(crossing_points.size()));
     } else {
       double interior_x = 0;
-      std::sort(crossing_points.begin(), crossing_points.end());
+      lib::ob_sort(crossing_points.begin(), crossing_points.end());
       for (int64_t i = 0; OB_SUCC(ret) && i < crossing_points.size(); i += 2) {
         double width = crossing_points[i + 1] - crossing_points[i];
         if (width != 0 && width > max_width_) {

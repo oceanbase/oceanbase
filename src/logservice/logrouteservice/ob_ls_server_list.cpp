@@ -145,12 +145,12 @@ int LSSvrList::get_server_array_for_locate_start_lsn(ObIArray<common::ObAddr> &s
 
 void LSSvrList::sort_by_priority_for_locate_start_log_id_(SvrItemArray &svr_items) const
 {
-  std::sort(svr_items.begin(), svr_items.end(), LocateStartLogIdCompare());
+  lib::ob_sort(svr_items.begin(), svr_items.end(), LocateStartLogIdCompare());
 }
 
 void LSSvrList::sort_by_priority()
 {
-  std::sort(svr_items_.begin(), svr_items_.end(), SvrItemCompare());
+  lib::ob_sort(svr_items_.begin(), svr_items_.end(), SvrItemCompare());
 }
 
 int LSSvrList::filter_by_svr_blacklist(const ObLogSvrBlacklist &svr_blacklist,

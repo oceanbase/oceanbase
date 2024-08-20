@@ -800,7 +800,7 @@ int ObJsonObject::rename_key(const common::ObString &old_key, const common::ObSt
 void ObJsonObject::sort()
 {
   ObJsonKeyCompare cmp;
-  std::sort(object_array_.begin(), object_array_.end(), cmp);
+  lib::ob_sort(object_array_.begin(), object_array_.end(), cmp);
 }
 
 void ObJsonObject::stable_sort()

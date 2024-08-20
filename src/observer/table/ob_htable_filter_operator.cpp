@@ -114,7 +114,7 @@ int ObHTableExplicitColumnTracker::init(const table::ObHTableFilter &htable_filt
     // sort qualifiers
     ColumnCount *end = &columns_.at(columns_.count() - 1);
     ++end;
-      std::sort(&columns_.at(0), end, ColumnCountComparator());
+    lib::ob_sort(&columns_.at(0), end, ColumnCountComparator());
   }
 
   if (OB_SUCC(ret)) {

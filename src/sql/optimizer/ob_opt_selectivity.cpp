@@ -115,7 +115,7 @@ double ObPartialCorrelationModel::combine_filters_selectivity(ObIArray<double> &
   double selectivity = 1.0;
   if (!selectivities.empty()) {
     double exp = 1.0;
-    std::sort(&selectivities.at(0), &selectivities.at(0) + selectivities.count());
+    lib::ob_sort(&selectivities.at(0), &selectivities.at(0) + selectivities.count());
     for (int64_t i = 0; i < selectivities.count(); i ++) {
       selectivity *= std::pow(selectivities.at(i), 1 / exp);
       exp *= 2;
@@ -2934,7 +2934,7 @@ double ObOptSelectivity::combine_ndvs(double ambient_card, ObIArray<double> &ndv
 {
   double ndv = 1.0;
   if (!ndvs.empty()) {
-    std::sort(&ndvs.at(0), &ndvs.at(0) + ndvs.count());
+    lib::ob_sort(&ndvs.at(0), &ndvs.at(0) + ndvs.count());
     ndv = ndvs.at(0);
     for (int64_t i = 1; i < ndvs.count(); i ++) {
       ndv = combine_two_ndvs(ambient_card, ndv, ndvs.at(i));

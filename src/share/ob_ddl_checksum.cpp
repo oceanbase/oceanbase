@@ -476,7 +476,7 @@ int ObDDLChecksumOperator::get_tablet_checksum_record_without_execution_id(
       if (OB_FAIL(batch_tablet_array.push_back(last_tablet_id_id))) {
         LOG_WARN("fail to push back tablet_id_id", K(ret), K(tenant_id), K(ddl_task_id), K(last_tablet_id_id));
       } else {
-        std::sort(batch_tablet_array.begin(), batch_tablet_array.end());
+        lib::ob_sort(batch_tablet_array.begin(), batch_tablet_array.end());
         if ((i != 0 && i % batch_size == 0) /* reach batch size */ || i == tablet_ids.count() - 1 /* reach end */) {
           if (OB_FAIL(sql.assign_fmt(
               "SELECT task_id FROM %s "
