@@ -389,6 +389,7 @@ GLOBAL_ERRSIM_POINT_DEF(740, EN_COMPACTION_SCHEDULE_MEDIUM_MERGE_AFTER_MINI, "")
 
 // please add new trace point after 750
 GLOBAL_ERRSIM_POINT_DEF(751, EN_SESSION_LEAK_COUNT_THRESHOLD, "used to control the threshold of report session leak ERROR");
+GLOBAL_ERRSIM_POINT_DEF(752, EN_PL_MEMORY_ALLOCA_SWITCH, "used to control the strage of obplallocator memory alloc");
 GLOBAL_ERRSIM_POINT_DEF(800, EN_END_PARTICIPANT, "");
 
 //LS Migration Related 900 - 1000

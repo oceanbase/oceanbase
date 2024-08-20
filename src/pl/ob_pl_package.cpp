@@ -245,6 +245,11 @@ int ObPLPackage::instantiate_package_state(const ObPLResolveCtx &resolve_ctx,
     }
     //NOTE: do not remove package user variable! distribute plan will sync it to remote if needed!
     OZ (package_state.add_package_var_val(value, var_type.get_type()));
+    if (OB_NOT_NULL(var) && var->get_type().is_cursor_type() && !var->get_type().is_cursor_var()) {
+      // package ref cursor variable, refrence outside, do not destruct it.
+    } else if (OB_FAIL(ret)) {
+      ObUserDefinedType::destruct_objparam(package_state.get_pkg_allocator(), value, &(resolve_ctx.session_info_));
+    }
   }
   if (OB_SUCC(ret) && !resolve_ctx.is_sync_package_var_) {
     if (OB_FAIL(execute_init_routine(resolve_ctx.allocator_, exec_ctx))) {

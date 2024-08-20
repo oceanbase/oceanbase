@@ -6839,11 +6839,10 @@ int ObAggregateProcessor::get_pl_agg_udf_result(const ObAggrInfo &aggr_info,
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
     }
-
-    int tmp_ret = OB_SUCCESS;
-    if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(pl_agg_udf_obj, eval_ctx_.exec_ctx_.get_my_session())) != OB_SUCCESS) {
-      LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(pl_agg_udf_obj));
-    }
+  }
+  int tmp_ret = OB_SUCCESS;
+  if ((tmp_ret = pl::ObUserDefinedType::destruct_obj(pl_agg_udf_obj, eval_ctx_.exec_ctx_.get_my_session())) != OB_SUCCESS) {
+    LOG_WARN("failed to destruct obj, memory may leak", K(ret), K(tmp_ret), K(pl_agg_udf_obj));
   }
   return ret;
 }

@@ -815,5 +815,36 @@ int ObPLADTService::get_memory_context(ObLLVMType &type)
   return ret;
 }
 
+int ObPLADTService::get_pl_composite_write_value(ObLLVMType &type)
+{
+  int ret = OB_SUCCESS;
+  if (NULL == pl_composite_write_value_.get_v()) {
+    ObLLVMType struct_type;
+    ObSEArray<ObLLVMType, 2> pl_compite_write;
+    ObLLVMType int64_type;
+    if (OB_FAIL(helper_.get_llvm_type(ObIntType, int64_type))) {
+      LOG_WARN("failed to get_llvm_type", K(ret));
+    } else {
+      /*
+        int64_t allocator_;
+        int64_t value_addr_;
+       */
+      if (OB_FAIL(pl_compite_write.push_back(int64_type))) {
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(pl_compite_write.push_back(int64_type))) {
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(helper_.create_struct_type(ObString("pl_composite_write"), pl_compite_write, struct_type))) {
+        LOG_WARN("failed to create struct type", K(ret));
+      } else {
+        pl_composite_write_value_.set_v(struct_type.get_v());
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    type = pl_composite_write_value_;
+  }
+  return ret;
+}
+
 }
 }

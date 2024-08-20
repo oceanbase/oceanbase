@@ -48,10 +48,13 @@ int TriggerHandle::init_trigger_row(
     LOG_WARN("failed to allocate memory", K(ret), K(init_size));
   } else {
     new (record)pl::ObPLRecord(OB_INVALID_ID, rowtype_col_count);
-    ObObj *cells = record->get_element();
-    for (int64_t i = 0; OB_SUCC(ret) && i < rowtype_col_count; i++) {
-      new (&cells[i]) ObObj();
-      cells[i].set_null();
+    OZ (record->init_data(alloc, true));
+    if (OB_SUCC(ret)) {
+      ObObj *cells = record->get_element();
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowtype_col_count; i++) {
+        new (&cells[i]) ObObj();
+        cells[i].set_null();
+      }
     }
   }
   return ret;
@@ -157,6 +160,24 @@ int TriggerHandle::init_trigger_params(
   return ret;
 }
 
+int TriggerHandle::free_trigger_param_memory(ObTrigDMLRtDef &trig_rtdef, bool keep_composite_attr)
+{
+  int ret = OB_SUCCESS;
+  pl::ObPLRecord *old_record = trig_rtdef.old_record_;
+  pl::ObPLRecord *new_record = trig_rtdef.new_record_;
+  ObObj tmp;
+  if (OB_NOT_NULL(old_record)) {
+    tmp.set_extend(reinterpret_cast<int64_t>(old_record), old_record->get_type(), old_record->get_init_size());
+    pl::ObUserDefinedType::destruct_obj(tmp, nullptr, keep_composite_attr);
+  }
+  if (OB_NOT_NULL(new_record)) {
+    tmp.set_extend(reinterpret_cast<int64_t>(new_record), new_record->get_type(), new_record->get_init_size());
+    pl::ObUserDefinedType::destruct_obj(tmp, nullptr, keep_composite_attr);
+  }
+
+  return ret;
+}
+
 int TriggerHandle::init_param_rows(
   ObEvalCtx &eval_ctx,
   const ObTrigDMLCtDef &trig_ctdef,
@@ -183,17 +204,24 @@ int TriggerHandle::init_param_old_row(
     } else if (OB_ISNULL(cells = trig_rtdef.old_record_->get_element())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cells is NULL", K(ret));
+    } else {
+      ObObj tmp;
+      tmp.set_extend(reinterpret_cast<int64_t>(trig_rtdef.old_record_), trig_rtdef.old_record_->get_type(), trig_rtdef.old_record_->get_init_size());
+      pl::ObUserDefinedType::destruct_obj(tmp, nullptr, true);
     }
     for (int64_t i = 0; i < trig_ctdef.old_row_exprs_.count() && OB_SUCC(ret); ++i) {
       ObDatum *datum;
+      ObObj result;
       if (OB_FAIL(trig_ctdef.old_row_exprs_.at(i)->eval(eval_ctx, datum))) {
         LOG_WARN("failed to eval rowid expr", K(ret));
       } else if (OB_ISNULL(datum))  {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("datum is NULL", K(ret));
-      } else if (OB_FAIL(datum->to_obj(cells[i],
+      } else if (OB_FAIL(datum->to_obj(result,
           trig_ctdef.old_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
+      } else if (OB_FAIL(deep_copy_obj(*trig_rtdef.old_record_->get_allocator(), result, cells[i]))) {
+        LOG_WARN("fail to deep copy obj", K(ret));
       }
       LOG_DEBUG("debug init param old expr", K(ret), K(i),
         K(ObToStringExpr(eval_ctx, *trig_ctdef.old_row_exprs_.at(i))));
@@ -226,20 +254,25 @@ int TriggerHandle::init_param_new_row(
     } else if (OB_ISNULL(cells = trig_rtdef.new_record_->get_element())){
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cells is NULL", K(ret));
+    } else {
+      ObObj tmp;
+      tmp.set_extend(reinterpret_cast<int64_t>(trig_rtdef.new_record_), trig_rtdef.new_record_->get_type(), trig_rtdef.new_record_->get_init_size());
+      pl::ObUserDefinedType::destruct_obj(tmp, nullptr, true);
     }
     for (int64_t i = 0; i < trig_ctdef.new_row_exprs_.count() && OB_SUCC(ret); ++i) {
       ObDatum *datum;
+      ObObj result;
       if (OB_FAIL(trig_ctdef.new_row_exprs_.at(i)->eval(eval_ctx, datum))) {
         LOG_WARN("failed to eval rowid expr", K(ret));
       } else if (OB_ISNULL(datum))  {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("datum is NULL", K(ret));
-      } else if (OB_FAIL(datum->to_obj(cells[i],
+      } else if (OB_FAIL(datum->to_obj(result,
           trig_ctdef.new_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
       }
       if (OB_SUCC(ret) && !trig_ctdef.trig_col_info_.get_flags()[i].is_rowid_
-          && (ObCharType == cells[i].get_type() || ObNCharType == cells[i].get_type())) {
+          && (ObCharType == result.get_type() || ObNCharType == result.get_type())) {
         // pad space for char type
         const common::ObObjType &col_type = trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type();
         common::ObAccuracy accuracy;
@@ -249,10 +282,11 @@ int TriggerHandle::init_param_new_row(
                                                           col_type,
                                                           accuracy,
                                                           &eval_ctx.exec_ctx_.get_allocator(),
-                                                          &cells[i]))) {
+                                                          &result))) {
           LOG_WARN("failed to pad space", K(col_type), K(accuracy), K(ret));
         }
       }
+      OZ (deep_copy_obj(*trig_rtdef.new_record_->get_allocator(), result, cells[i]));
       LOG_DEBUG("debug init param new expr", K(ret), K(i),
         K(ObToStringExpr(eval_ctx, *trig_ctdef.new_row_exprs_.at(i))));
     }
@@ -271,16 +305,26 @@ int TriggerHandle::init_param_new_row(
 int TriggerHandle::set_rowid_into_row(
   const ObTriggerColumnsInfo &cols,
   const ObObj &rowid_val,
-  ObObj* cells)
+  pl::ObPLRecord *record)
 {
   int ret = OB_SUCCESS;
+  ObObj* cells = nullptr;
   CK (OB_NOT_NULL(cols.get_flags()));
+  CK (OB_NOT_NULL(record));
+  CK (OB_NOT_NULL(record->get_element()));
+  CK (OB_NOT_NULL(record->get_allocator()));
+  OX (cells = record->get_element());
   // We can't distinguish urowid column and trigger rowid column in ObTriggerColumns,
   // but we can ensure that the trigger rowid column must behind the urowid column if exist,
   // because the trigger rowid column mock in optimizer
   for (int64_t i = cols.get_count() - 1; OB_SUCC(ret) && i >= 0; ++i) {
     if (cols.get_flags()[i].is_rowid_) {
-      cells[i] = rowid_val;
+      void *ptr = cells[i].get_deep_copy_obj_ptr();
+      if (nullptr != ptr) {
+        record->get_allocator()->free(ptr);
+      }
+      cells[i].set_null();
+      OZ (deep_copy_obj(*record->get_allocator(), rowid_val, cells[i]));
       LOG_DEBUG("set_rowid_into_row done", K(ret), K(cells[i]));
       break;
     }
@@ -293,23 +337,36 @@ int TriggerHandle::set_rowid_into_row(
   const ObTriggerColumnsInfo &cols,
   ObEvalCtx &eval_ctx,
   ObExpr *src_expr,
-  ObObj* cells)
+  pl::ObPLRecord *record)
 {
   int ret = OB_SUCCESS;
+  ObObj* cells = nullptr;
   CK (OB_NOT_NULL(cols.get_flags()));
+  CK (OB_NOT_NULL(record));
+  CK (OB_NOT_NULL(record->get_element()));
+  CK (OB_NOT_NULL(record->get_allocator()));
+  OX (cells = record->get_element());
   // We can't distinguish urowid column and trigger rowid column in ObTriggerColumns,
   // but we can ensure that the trigger rowid column must behind the urowid column if exist,
   // because the trigger rowid column mock in optimizer
   for (int64_t i = cols.get_count() - 1; OB_SUCC(ret) && i >= 0; ++i) {
     if (cols.get_flags()[i].is_rowid_) {
       ObDatum *datum;
+      ObObj result;
+      void *ptr = cells[i].get_deep_copy_obj_ptr();
+      if (nullptr != ptr) {
+        record->get_allocator()->free(ptr);
+      }
+      cells[i].set_null();
       if (OB_FAIL(src_expr->eval(eval_ctx, datum))) {
         LOG_WARN("failed to eval expr", K(ret));
       } else if (OB_ISNULL(datum)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("datum is NULL", K(ret));
-      } else if (OB_FAIL(datum->to_obj(cells[i], src_expr->obj_meta_))) {
+      } else if (OB_FAIL(datum->to_obj(result, src_expr->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
+      } else if (OB_FAIL(deep_copy_obj(*record->get_allocator(), result, cells[i]))) {
+        LOG_WARN("fail to deep copy obj", K(ret));
       } else {
         LOG_DEBUG("set_rowid_into_row done", K(ret), K(ObToStringExpr(eval_ctx, *src_expr)));
       }
@@ -338,11 +395,11 @@ int TriggerHandle::do_handle_rowid_before_row(
       LOG_WARN("unexpected status: rowid is null", K(ret));
     } else if (OB_FAIL(TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                           *rowid_val,
-                                          trig_rtdef.old_record_->get_element()))) {
+                                          trig_rtdef.old_record_))) {
       LOG_WARN("failed to set rowid to old record", K(ret));
     } else if (OB_FAIL(TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                           *rowid_val,
-                                          trig_rtdef.new_record_->get_element()))) {
+                                          trig_rtdef.new_record_))) {
       LOG_WARN("failed to set rowid to old record", K(ret));
     }
     LOG_DEBUG("handle rowid before insert success", K(tg_event), K(*rowid_val));
@@ -351,7 +408,7 @@ int TriggerHandle::do_handle_rowid_before_row(
     OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                           dml_op.get_eval_ctx(),
                                           trig_ctdef.rowid_old_expr_,
-                                          trig_rtdef.new_record_->get_element()));
+                                          trig_rtdef.new_record_));
     LOG_DEBUG("handle rowid before delete success", K(tg_event));
   }
   return ret;
@@ -416,18 +473,6 @@ int TriggerHandle::calc_trigger_routine(
   if (exec_ctx.get_my_session()->is_for_trigger_package()) {
     // whether `ret == OB_SUCCESS`, need to restore flag
     exec_ctx.get_my_session()->set_for_trigger_package(old_flag);
-  }
-  if (OB_SUCC(ret)) {
-    bool copy_out_param = lib::is_oracle_mode() ?
-                          (ROUTINE_IDX_BEFORE_ROW == routine_id) : (ROUTINE_IDX_BEFORE_ROW_MYSQL == routine_id);
-    if (copy_out_param) {
-      CK (2 == params.count());
-      if (OB_SUCC(ret)) {
-        pl::ObPLRecord *new_record = reinterpret_cast<pl::ObPLRecord *>(params.at(1).get_ext());
-        CK (OB_NOT_NULL(new_record));
-        OZ (new_record->deep_copy(*new_record, exec_ctx.get_allocator()));
-      }
-    }
   }
   return ret;
 }
@@ -514,16 +559,19 @@ int TriggerHandle::check_and_update_new_row(
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("expr is NULL", K(ret));
         } else {
+          ObObj tmp_obj = new_cells[i];
           ObDatum &write_datum = expr->locate_datum_for_write(eval_ctx);
-          if (OB_FAIL(write_datum.from_obj(new_cells[i]))) {
+          if (OB_FAIL(deep_copy_obj(eval_ctx.exec_ctx_.get_allocator(), new_cells[i], tmp_obj))) {
+            LOG_WARN("failed to deep copy obj", K(ret));
+          } else if (OB_FAIL(write_datum.from_obj(tmp_obj))) {
             LOG_WARN("failed to from obj", K(ret));
-          } else if (is_lob_storage(new_cells[i].get_type()) &&
-                     OB_FAIL(ob_adjust_lob_datum(new_cells[i], expr->obj_meta_,
+          } else if (is_lob_storage(tmp_obj.get_type()) &&
+                     OB_FAIL(ob_adjust_lob_datum(tmp_obj, expr->obj_meta_,
                                                  eval_ctx.exec_ctx_.get_allocator(), write_datum))) {
-          LOG_WARN("adjust lob datum failed", K(ret), K(new_cells[i].get_meta()), K(expr->obj_meta_));
+          LOG_WARN("adjust lob datum failed", K(ret), K(tmp_obj.get_meta()), K(expr->obj_meta_));
         } else {
             expr->set_evaluated_flag(eval_ctx);
-            LOG_DEBUG("trigger write new datum", K(new_cells[i]), K(i),
+            LOG_DEBUG("trigger write new datum", K(tmp_obj), K(i),
               K(ObToStringExpr(eval_ctx, *new_row_exprs.at(i))));
           }
         }
@@ -734,18 +782,18 @@ int TriggerHandle::do_handle_rowid_after_row(
     OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                           dml_op.get_eval_ctx(),
                                           trig_ctdef.rowid_new_expr_,
-                                          trig_rtdef.old_record_->get_element()));
+                                          trig_rtdef.old_record_));
     OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                           dml_op.get_eval_ctx(),
                                           trig_ctdef.rowid_new_expr_,
-                                          trig_rtdef.new_record_->get_element()));
+                                          trig_rtdef.new_record_));
     LOG_DEBUG("handle rowid after insert success", K(tg_event));
   } else if (NULL != trig_ctdef.rowid_old_expr_ && ObTriggerEvents::is_delete_event(tg_event)) {
       // new.rowid should be same with old.rowid
     OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
                                           dml_op.get_eval_ctx(),
                                           trig_ctdef.rowid_old_expr_,
-                                          trig_rtdef.new_record_->get_element()));
+                                          trig_rtdef.new_record_));
     LOG_DEBUG("handle rowid after delete success", K(tg_event));
   }
   return ret;

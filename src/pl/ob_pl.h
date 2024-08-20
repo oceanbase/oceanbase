@@ -38,6 +38,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_call_stack_trace.h"
 #endif
+#include "pl/ob_pl_allocator.h"
 
 namespace test
 {
@@ -65,6 +66,7 @@ typedef uint64_t ObFuncPtr;
 typedef common::ParamStore ParamStore;
 
 class ObPLCacheCtx;
+class ObPLAllocator1;
 
 class ObPLProfilerTimeStack;
 
@@ -97,6 +99,7 @@ public:
                                      bool &not_null,
                                      ObIAllocator *allocator = NULL) const;
   virtual int init_complex_obj(ObIAllocator &allocator,
+                               ObIAllocator &expr_allocator,
                                const ObPLDataType &pl_type,
                                common::ObObjParam &obj,
                                bool set_allocator = false,
@@ -641,7 +644,8 @@ struct ObPLExecCtx : public ObPLINS
               ObPLPackageGuard *guard = NULL) :
     allocator_(allocator), exec_ctx_(exec_ctx), params_(params),
     result_(result), status_(status), func_(func),
-    in_function_(in_function), pl_ctx_(NULL), nocopy_params_(nocopy_params), guard_(guard) {
+    in_function_(in_function), pl_ctx_(NULL), nocopy_params_(nocopy_params), guard_(guard),
+    expr_alloc_("PlBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()) {
       if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
         pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
       }
@@ -654,6 +658,8 @@ struct ObPLExecCtx : public ObPLINS
   static uint32_t pl_ctx_offset_bits() { return offsetof(ObPLExecCtx, pl_ctx_) * 8; }
 
   bool valid();
+
+  ObArenaAllocator *get_top_expr_allocator();
 
   virtual int get_user_type(uint64_t type_id,
                                 const ObUserDefinedType *&user_type,
@@ -670,6 +676,7 @@ struct ObPLExecCtx : public ObPLINS
   ObPLContext *pl_ctx_; // for error stack
   const common::ObIArray<int64_t> *nocopy_params_; //用于描述nocopy参数
   ObPLPackageGuard *guard_; //对应该次执行的package_guard
+  ObArenaAllocator expr_alloc_;
 };
 
 // backup and restore ObExecContext attributes
@@ -689,7 +696,8 @@ class ObPLContext;
 class ObPLExecState
 {
 public:
-  ObPLExecState(common::ObIAllocator &allocator,
+  ObPLExecState(common::ObIAllocator &in_allocator,
+                common::ObIAllocator &allocator,
                 sql::ObExecContext &ctx,
                 ObPLPackageGuard &guard,
                 ObPLFunction &func,
@@ -702,7 +710,7 @@ public:
                 uint64_t loc = 0,
                 bool is_called_from_sql = false) :
     func_(func),
-    phy_plan_ctx_(allocator),
+    phy_plan_ctx_(in_allocator),
     eval_ctx_(ctx),
     result_(result),
     ctx_(&allocator,
@@ -724,7 +732,8 @@ public:
     pure_sql_exec_time_(0),
     pure_plsql_exec_time_(0),
     pure_sub_plsql_exec_time_(0),
-    profiler_time_stack_(nullptr)
+    profiler_time_stack_(nullptr),
+    need_free_()
   { }
   virtual ~ObPLExecState();
 
@@ -736,7 +745,7 @@ public:
   int init_params(const ParamStore *params = NULL, bool is_anonymous = false);
   int execute();
   int final(int ret);
-  int deep_copy_result_if_need();
+  int deep_copy_result_if_need(common::ObIAllocator &allocator);
   int init_complex_obj(common::ObIAllocator &allocator, const ObPLDataType &pl_type, common::ObObjParam &obj, bool set_null = true);
   inline const common::ObObj &get_result() const { return result_; }
   inline common::ObIAllocator *get_allocator() { return ctx_.allocator_; }
@@ -800,6 +809,12 @@ public:
 
   inline ObPLProfilerTimeStack *get_profiler_time_stack() { return profiler_time_stack_; }
 
+  bool need_free_arg(int64_t i)
+  {
+    return need_free_.count() > i ? need_free_.at(i) : false;
+  }
+  ObPLContext *get_top_pl_context() { return top_context_; }
+
   TO_STRING_KV(K_(inner_call),
                K_(top_call),
                K_(need_reset_physical_plan),
@@ -829,6 +844,7 @@ private:
   int64_t pure_plsql_exec_time_;
   int64_t pure_sub_plsql_exec_time_;
   ObPLProfilerTimeStack *profiler_time_stack_;
+  common::ObSEArray<bool,8> need_free_;
 };
 
 class ObPLCallStackTrace;
@@ -838,7 +854,8 @@ class ObPLContext
 public:
   ObPLContext()
 #ifdef OB_BUILD_ORACLE_PL
-      : call_stack_trace_(nullptr)
+      : call_stack_trace_(nullptr),
+        alloc_("PlCallStack", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
 #endif
       { reset(); }
   virtual ~ObPLContext() { reset(); }
@@ -989,6 +1006,7 @@ public:
 
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *get_call_stack_trace();
+  ObIAllocator &get_allocator() { return alloc_; }
 #endif
 
 private:
@@ -1042,6 +1060,7 @@ private:
   common::ObSEArray<ObPLExecState*, 4> exec_stack_;
 #ifdef OB_BUILD_ORACLE_PL
   ObPLCallStackTrace *call_stack_trace_;
+  ObArenaAllocator alloc_;
 #endif
   ObPLContext *parent_stack_ctx_;
   ObPLContext *top_stack_ctx_;

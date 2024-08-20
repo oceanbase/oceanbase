@@ -131,8 +131,9 @@ public:
     return blk_alloc_.can_alloc_block(size);
   }
   void set_limit(int64_t limit) { blk_alloc_.set_limit(limit); }
-  int64_t hold() { return blk_alloc_.hold(); }
+  int64_t hold() const { return blk_alloc_.hold(); }
   int64_t limit() { return blk_alloc_.limit(); }
+  int64_t used() const { return hold(); }
   virtual void* alloc(const int64_t size, const ObMemAttr &attr)
   {
     UNUSED(attr);

@@ -142,6 +142,11 @@ int ObPackageVarSetName::decode(common::ObIAllocator &alloc, const common::ObStr
   return ret;
 }
 
+int ObPLPackageState::init()
+{
+  return inner_allocator_.init(nullptr);
+}
+
 int ObPLPackageState::add_package_var_val(const common::ObObj &value, ObPLType type)
 {
   int ret = OB_SUCCESS;
@@ -160,13 +165,17 @@ void ObPLPackageState::reset(ObSQLSessionInfo *session_info)
   changed_vars_.reset();
   for (int64_t i = 0; i < types_.count(); ++i) {
     if (!vars_.at(i).is_ext()) {
+      void * ptr = vars_.at(i).get_deep_copy_obj_ptr();
+      if (nullptr != ptr) {
+        inner_allocator_.free(ptr);
+      }
     } else if (PL_RECORD_TYPE == types_.at(i)
                || PL_NESTED_TABLE_TYPE == types_.at(i)
                || PL_ASSOCIATIVE_ARRAY_TYPE == types_.at(i)
                || PL_VARRAY_TYPE == types_.at(i)
                || PL_OPAQUE_TYPE == types_.at(i)) {
       int ret = OB_SUCCESS;
-      if (OB_FAIL(ObUserDefinedType::destruct_obj(vars_.at(i), session_info))) {
+      if (OB_FAIL(ObUserDefinedType::destruct_objparam(inner_allocator_, vars_.at(i), session_info))) {
         LOG_WARN("failed to destruct composte obj", K(ret));
       }
     } else if (PL_CURSOR_TYPE == types_.at(i)) {
@@ -191,7 +200,7 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx, const ObObj &va
     LOG_WARN("invalid var index", K(var_idx), K(vars_.count()), K(ret));
   } else {
     // VAR的生命周期是SESSION级, 因此这里需要深拷贝下
-    if (value.need_deep_copy()) {
+    if (value.need_deep_copy() && deep_copy_complex) {
       int64_t pos = 0;
       char *buf = static_cast<char*>(inner_allocator_.alloc(value.get_deep_copy_size()));
       if (OB_ISNULL(buf)) {
@@ -211,7 +220,7 @@ int ObPLPackageState::set_package_var_val(const int64_t var_idx, const ObObj &va
                && types_.at(var_idx) != PL_CURSOR_TYPE
                && types_.at(var_idx) != PL_REF_CURSOR_TYPE) {
       CK (vars_.at(var_idx).get_ext() != 0);
-      OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL));
+      OZ (ObUserDefinedType::destruct_obj(vars_.at(var_idx), NULL, true));
     } else {
       vars_.at(var_idx) = value;
     }

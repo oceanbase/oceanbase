@@ -108,7 +108,7 @@ int ObExprXmlSequence::eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObD
     coll = new(coll)pl::ObPLVArray(info->udt_id_);
     static_cast<pl::ObPLVArray*>(coll)->set_capacity(info->capacity_);
   }
-
+  OZ (coll->init_allocator(allocator, true));
   OZ(expr.eval_param_value(ctx));
 
   if (OB_SUCC(ret)) {

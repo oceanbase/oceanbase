@@ -14,6 +14,7 @@
 #include "sql/engine/dml/ob_dml_ctx_define.h"
 #include "sql/engine/dml/ob_fk_checker.h"
 #include "sql/das/ob_das_utils.h"
+#include "sql/engine/dml/ob_trigger_handler.h"
 namespace oceanbase
 {
 namespace sql
@@ -770,6 +771,7 @@ ObDMLBaseRtDef::~ObDMLBaseRtDef()
     }
   }
   fk_checker_array_.release_array();
+  (void)TriggerHandle::free_trigger_param_memory(trig_rtdef_, false);
 }
 }  // namespace sql
 }  // namespace oceanbase

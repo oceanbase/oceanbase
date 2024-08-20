@@ -498,7 +498,9 @@ public:
   virtual int generate_default_value(ObPLCodeGenerator &generator,
                                      const ObPLINS &ns,
                                      const pl::ObPLStmt *stmt,
-                                     jit::ObLLVMValue &value) const;
+                                     jit::ObLLVMValue &value,
+                                     jit::ObLLVMValue &allocator,
+                                     bool is_top_level) const;
 
   virtual int generate_copy(ObPLCodeGenerator &generator,
                             const ObPLBlockNS &ns,
@@ -512,10 +514,14 @@ public:
   virtual int generate_construct(ObPLCodeGenerator &generator,
                                  const ObPLINS &ns,
                                  jit::ObLLVMValue &value,
+                                 jit::ObLLVMValue &allocator,
+                                 bool is_top_level,
                                  const pl::ObPLStmt *stmt = NULL) const;
   virtual int generate_new(ObPLCodeGenerator &generator,
                                        const ObPLINS &ns,
                                        jit::ObLLVMValue &value,
+                                       jit::ObLLVMValue &allocator,
+                                       bool is_top_level,
                                        const pl::ObPLStmt *stmt = NULL) const;
   virtual int newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64_t &ptr) const;
   virtual int get_size(ObPLTypeSize type, int64_t &size) const;
@@ -525,8 +531,6 @@ public:
                                const sql::ObSqlExpression *default_expr,
                                bool default_construct,
                                common::ObObj &obj) const;
-  virtual int free_session_var(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &obj_allocator, common::ObObj &obj) const;
-  virtual int free_data(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &data_allocator, void *data) const;
   virtual int add_package_routine_schema_param(const ObPLResolveCtx &resolve_ctx,
                                                const ObPLBlockNS &block_ns,
                                                const common::ObString &package_name,

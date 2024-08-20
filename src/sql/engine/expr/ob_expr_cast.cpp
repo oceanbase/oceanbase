@@ -875,6 +875,11 @@ int ObExprCast::construct_collection(const sql::ObExpr &expr,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Unexpected collection type to construct", K(info->type_), K(ret));
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(coll->init_allocator(alloc, true))) {
+      LOG_WARN("failed to init allocator", K(ret));
+    }
+  }
 
   // set collection property
   if (OB_FAIL(ret)) {
@@ -1026,7 +1031,7 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
               static_cast<ObObj*>(coll->get_data())[i] = new_composite;
             }
           } else {
-            static_cast<ObObj*>(coll->get_data())[i] = v;
+            OZ (pl::ObUserDefinedType::deep_copy_obj(*coll->get_allocator(), v, coll->get_data()[i]));
           }
         }
       }
@@ -1036,13 +1041,18 @@ int ObExprCast::fill_element(const sql::ObExpr &expr,
         if (OB_FAIL(ObSPIService::spi_pad_char_or_varchar(session,
                                                           info->elem_type_.get_obj_type(),
                                                           info->elem_type_.get_accuracy(),
-                                                          coll->get_allocator(),
+                                                          &alloc,
                                                           &v))) {
           LOG_WARN("failed to pad", K(ret));
-        } else {
-          static_cast<ObObj*>(coll->get_data())[i] = v;
+        } else if (OB_FAIL(deep_copy_obj(*coll->get_allocator(), v, coll->get_data()[i]))) {
+          LOG_WARN("failed to deep copy", K(ret));
         }
       }
+    }
+  }
+  if (info->elem_type_.get_meta_type().is_ext()) {
+    for (int64_t i = 0; i < data_arr.count(); ++i) {
+      pl::ObUserDefinedType::destruct_obj(data_arr.at(i), nullptr);
     }
   }
 

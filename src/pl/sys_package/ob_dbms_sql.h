@@ -59,6 +59,7 @@ public:
 
   inline lib::MemoryContext &get_dbms_entity() { return entity_; }
   inline const lib::MemoryContext get_dbms_entity() const { return entity_; }
+  ObIAllocator &get_area_allocator() { return entity_->get_arena_allocator(); }
   inline common::ObString &get_ps_sql() { return ps_sql_; }
   inline void set_ps_sql(ObString sql) { ps_sql_ = sql; }
   common::ObString &get_sql_stmt() { return sql_stmt_; }

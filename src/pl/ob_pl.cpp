@@ -116,8 +116,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_process_resignal));
   jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_collection"),
                                 (void*)(sql::ObSPIService::spi_destruct_collection));
-  jit::ObLLVMHelper::add_symbol(ObString("spi_reset_collection"),
-                                (void*)(sql::ObSPIService::spi_reset_collection));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_reset_composite"),
+                                (void*)(sql::ObSPIService::spi_reset_composite));
   jit::ObLLVMHelper::add_symbol(ObString("spi_copy_datum"),
                                 (void*)(sql::ObSPIService::spi_copy_datum));
   jit::ObLLVMHelper::add_symbol(ObString("spi_destruct_obj"),
@@ -205,6 +205,13 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_pl_profiler_after_record));
   jit::ObLLVMHelper::add_symbol(ObString("spi_opaque_assign_null"),
                                 (void*)(sql::ObSPIService::spi_opaque_assign_null));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_init_composite"),
+                                (void*)(sql::ObSPIService::spi_init_composite));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_get_parent_allocator"),
+                                (void*)(sql::ObSPIService::spi_get_parent_allocator));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_get_current_expr_allocator"),
+                                (void*)(sql::ObSPIService::spi_get_current_expr_allocator));
+
   sql_proxy_ = &sql_proxy;
   OZ (codegen_lock_.init(1024));
   OZ (jit_lock_.first.init(1024));
@@ -216,6 +223,7 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
   return ret;
 }
 
+// 存到objects_的obobj, 其内存必须是exec ctx的allocator来分配的
 void ObPLCtx::reset_obj()
 {
   int tmp_ret = OB_SUCCESS;
@@ -292,6 +300,7 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
                             ObCtxIds::DEFAULT_CTX_ID));
     OZ (CURRENT_CONTEXT->CREATE_CONTEXT(mem_context, param));
     CK (OB_NOT_NULL(mem_context));
+    CK (OB_NOT_NULL(ctx.get_top_expr_allocator()));
 
 
     ObSEArray<int64_t, 8> path_array;
@@ -330,7 +339,7 @@ int ObPL::execute_proc(ObPLExecCtx &ctx,
         ctx.exec_ctx_->get_sql_ctx()->schema_guard_ = &schema_guard;
         try {
           if (OB_FAIL(pl.execute(*ctx.exec_ctx_,
-                                 ctx.exec_ctx_->get_allocator(),
+                                 *ctx.get_top_expr_allocator(),
                                  package_id,
                                  proc_id,
                                  path_array,
@@ -649,7 +658,6 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     if (lib::is_mysql_mode()) {
       OX (session_info.set_show_warnings_buf(OB_SUCCESS));
     }
-    OZ (session_info.shrink_package_info());
     OX (cursor_info_.reset());
     OX (cursor_info_.set_implicit());
     OX (sqlcode_info_.reset());
@@ -1522,7 +1530,8 @@ ObPLCallStackTrace* ObPLContext::get_call_stack_trace()
     ObPLCallStackTrace *call_stack_trace = nullptr;
     CK (get_exec_stack().count() > 0);
     CK (OB_NOT_NULL(get_exec_stack().at(0)));
-    CK (OB_NOT_NULL(allocator = get_exec_stack().at(0)->get_allocator()));
+    CK (OB_NOT_NULL(get_exec_stack().at(0)->get_top_pl_context()));
+    CK (OB_NOT_NULL(allocator = &get_exec_stack().at(0)->get_top_pl_context()->get_allocator()));
     OX (call_stack_trace = reinterpret_cast<ObPLCallStackTrace *>(allocator->alloc(sizeof(ObPLCallStackTrace))));
     if (OB_SUCC(ret) && OB_ISNULL(call_stack_trace)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1558,73 +1567,125 @@ int ObPL::execute(ObExecContext &ctx,
   ObObj local_result(ObMaxType);
   int local_status = OB_SUCCESS;
   ObPLASHGuard guard(routine.get_package_id(), routine.get_routine_id(), routine.get_function_name());
-
-  ObPLExecState pl(allocator,
-                   ctx,
-                   package_guard,
-                   routine,
-                   local_result, // 这里不直接传result而是用local_result，是因为调用内部要检查OB_ER_SP_NORETURNEND错误
-                   NULL != status ? *status : local_status,
-                   is_top_stack,
-                   is_inner_call,
-                   is_in_function,
-                   nocopy_params,
-                   loc,
-                   is_called_from_sql);
-  OZ (pl.init(params, is_anonymous));
-  OZ (pl.execute());
-  OZ (pl.deep_copy_result_if_need());
-  pl.final(ret);
-
-  // process out arguments
-  for (int64_t i = 0; OB_SUCC(ret) && i < routine.get_arg_count(); ++i) {
-    if (routine.get_out_args().has_member(i)) {
-      OX (params->at(i) = pl.get_params().at(i));
-    }
-  }
-  // process anonymous out arguments
-  if (OB_SUCC(ret) && is_anonymous && is_inner_call && OB_NOT_NULL(params)) {
-    CK (params->count() <= pl.get_params().count());
-    for (int i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
-      OX (params->at(i) = pl.get_params().at(i));
-    }
-  }
-  if (OB_SUCC(ret) && routine.get_ret_type().is_ref_cursor_type()) {
-    ObPLCursorInfo *ref_cursor = reinterpret_cast<ObPLCursorInfo *>(local_result.get_ext());
-    if (OB_NOT_NULL(ref_cursor)) {
-      CK (1 <= ref_cursor->get_ref_count());
-      if (OB_SUCC(ret)) {
-        ref_cursor->set_is_returning(true);
-        ref_cursor->dec_ref_count();
-        LOG_DEBUG("ref cursor dec ref count in function return",K(*ref_cursor),
-                                                                K(ref_cursor->get_ref_count()));
+  ObArenaAllocator tmp_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObPLAllocator1 pl_sym_allocator(PL_MOD_IDX::OB_PL_SYMBOL_TABLE, &tmp_alloc);
+  OZ (pl_sym_allocator.init(nullptr));
+  if (OB_SUCC(ret)) {
+    ObPLExecState pl(tmp_alloc,
+                    pl_sym_allocator,
+                    ctx,
+                    package_guard,
+                    routine,
+                    local_result, // 这里不直接传result而是用local_result，是因为调用内部要检查OB_ER_SP_NORETURNEND错误
+                    NULL != status ? *status : local_status,
+                    is_top_stack,
+                    is_inner_call,
+                    is_in_function,
+                    nocopy_params,
+                    loc,
+                    is_called_from_sql);
+    OZ (pl.init(params, is_anonymous));
+    OZ (pl.execute());
+    OZ (pl.deep_copy_result_if_need(allocator));
+    pl.final(ret);
+    if (OB_SUCC(ret)) {
+      // process out arguments
+      for (int64_t i = 0; OB_SUCC(ret) && i < routine.get_arg_count(); ++i) {
+        if (routine.get_out_args().has_member(i)) {
+          if (pl.get_params().at(i).is_pl_extend()) {
+            if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+              OX (params->at(i) = pl.get_params().at(i));
+            } else if (pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
+              params->at(i) = pl.get_params().at(i);
+              params->at(i).set_int(0);
+              OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
+              ObUserDefinedType::destruct_objparam(pl_sym_allocator,
+                                                pl.get_params().at(i),
+                                                ctx.get_my_session());
+            }
+          } else {
+            OZ (deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
+            ObUserDefinedType::destruct_objparam(pl_sym_allocator,
+                                                pl.get_params().at(i),
+                                                ctx.get_my_session());
+            //OZ (ObSPIService::spi_process_nocopy_params(&pl.get_exec_ctx(), i, false));
+          }
+        }
       }
-    } else {
-      // do nothing, 有可能return一个null出来
+      // process anonymous out arguments
+      if (OB_SUCC(ret) && is_anonymous && is_inner_call && OB_NOT_NULL(params)) {
+        CK (params->count() <= pl.get_params().count());
+        for (int i = 0; OB_SUCC(ret) && i < params->count(); ++i) {
+          if (pl.get_params().at(i).is_pl_extend()) {
+            if (pl.get_params().at(i).get_meta().get_extend_type() == PL_REF_CURSOR_TYPE) {
+              OX (params->at(i) = pl.get_params().at(i));
+            } else if (pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
+              params->at(i) = pl.get_params().at(i);
+              params->at(i).set_int(0);
+              OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
+              ObUserDefinedType::destruct_objparam(pl_sym_allocator,
+                                                    pl.get_params().at(i),
+                                                    ctx.get_my_session());
+            }
+          } else {
+            OZ (deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
+            ObUserDefinedType::destruct_objparam(pl_sym_allocator,
+                                                pl.get_params().at(i),
+                                                ctx.get_my_session());
+          }
+        }
+      }
+      // 释放参数列表入参基础类型和init param阶段产生的复杂数据类型
+      for (int i = 0; i < routine.get_arg_count(); ++i) {
+        if (!pl.get_params().at(i).is_pl_extend()) {
+          ObUserDefinedType::destruct_objparam(pl_sym_allocator,
+                                               pl.get_params().at(i),
+                                               ctx.get_my_session());
+        } else if (pl.need_free_arg(i)) {
+          ObUserDefinedType::destruct_objparam(pl_sym_allocator,
+                                                pl.get_params().at(i),
+                                                ctx.get_my_session());
+        }
+      }
     }
-  }
-  // process function return value
-  if (OB_SUCC(ret) && local_result.is_valid_type()) {
-    CK (OB_NOT_NULL(result));
-    OX (*result = local_result);
-  }
 
-  //当前层 pl 执行时间
-  int64_t execute_end = ObTimeUtility::current_time();
-  pl.add_pl_exec_time(execute_end - execute_start - pl.get_pure_sql_exec_time(), is_called_from_sql);
+    if (OB_SUCC(ret) && routine.get_ret_type().is_ref_cursor_type()) {
+      ObPLCursorInfo *ref_cursor = reinterpret_cast<ObPLCursorInfo *>(local_result.get_ext());
+      if (OB_NOT_NULL(ref_cursor)) {
+        CK (1 <= ref_cursor->get_ref_count());
+        if (OB_SUCC(ret)) {
+          ref_cursor->set_is_returning(true);
+          ref_cursor->dec_ref_count();
+          LOG_DEBUG("ref cursor dec ref count in function return",K(*ref_cursor),
+                                                                  K(ref_cursor->get_ref_count()));
+        }
+      } else {
+        // do nothing, 有可能return一个null出来
+      }
+    }
+    // process function return value
+    if (OB_SUCC(ret) && local_result.is_valid_type()) {
+      CK (OB_NOT_NULL(result));
+      OX (*result = local_result);
+    }
 
-#ifndef NDEBUG
-    LOG_INFO(">>>>>>>>>Execute Time: ", K(ret),
-      K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
-        K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),
-        K(pl.get_plsql_exec_time()), K(pl.get_sub_plsql_exec_time()));
-#else
-    LOG_DEBUG(">>>>>>>>Execute Time: ", K(ret),
-      K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
-      K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),  K(pl.get_plsql_exec_time()),
-      K(pl.get_sub_plsql_exec_time()));
-#endif
-  OX (routine.update_execute_time(execute_end - execute_start));
+    //当前层 pl 执行时间
+    int64_t execute_end = ObTimeUtility::current_time();
+    pl.add_pl_exec_time(execute_end - execute_start - pl.get_pure_sql_exec_time(), is_called_from_sql);
+
+  #ifndef NDEBUG
+      LOG_INFO(">>>>>>>>>Execute Time: ", K(ret),
+        K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
+          K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),
+          K(pl.get_plsql_exec_time()), K(pl.get_sub_plsql_exec_time()));
+  #else
+      LOG_DEBUG(">>>>>>>>Execute Time: ", K(ret),
+        K(routine.get_package_id()), K(routine.get_routine_id()), K(routine.get_package_name()), K(routine.get_function_name()), K(execute_end - execute_start),
+        K(is_top_stack), K(execute_end - execute_start - pl.get_pure_sql_exec_time()), K(pl.get_pure_sql_exec_time()),  K(pl.get_plsql_exec_time()),
+        K(pl.get_sub_plsql_exec_time()));
+  #endif
+    OX (routine.update_execute_time(execute_end - execute_start));
+  }
 
   return ret;
 }
@@ -1787,7 +1848,7 @@ int ObPL::parameter_anonymous_block(ObExecContext &ctx,
   CK (OB_NOT_NULL(ctx.get_my_session()));
   CK (OB_NOT_NULL(block));
   if (OB_SUCC(ret)) {
-    ObArenaAllocator paramerter_alloc("AnonyParam", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    ObArenaAllocator paramerter_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObString sql(static_cast<int64_t>(block->str_len_), block->str_value_);
     ParseResult parse_result;
     ObPLParser pl_parser(paramerter_alloc,
@@ -1913,7 +1974,7 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
   CK (OB_NOT_NULL(mem_context));
 
   if (OB_SUCC(ret)) {
-    ParamStore exec_params((ObWrapperAllocator(ctx.get_allocator())));
+    ParamStore exec_params((ObWrapperAllocator(mem_context->get_arena_allocator())));
     if (OB_ISNULL(ctx.get_my_session()->get_pl_context())) {
       // set work timeout for compile it only top level store routine
       int64_t pl_block_timeout = 0;
@@ -1928,7 +1989,7 @@ int ObPL::execute(ObExecContext &ctx, ParamStore &params, const ObStmtNodeTree *
 
     if (OB_FAIL(ret)) {
     } else if (!is_forbid_anony_parameter) {
-      OZ (parameter_anonymous_block(ctx, block, exec_params, ctx.get_allocator(), cacheobj_guard));
+      OZ (parameter_anonymous_block(ctx, block, exec_params, mem_context->get_arena_allocator(), cacheobj_guard));
       OX (routine = static_cast<ObPLFunction*>(cacheobj_guard.get_cache_obj()));
       CK (OB_NOT_NULL(routine));
       OX (routine->set_debug_priv());
@@ -2630,6 +2691,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
   ParseNode *block_node = NULL;
   ObPLFunction *routine = NULL;
   ObPLPackageGuard package_guard(ctx.get_my_session()->get_effective_tenant_id());
+  ObArenaAllocator compile_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
 
   int64_t compile_start = ObTimeUtility::current_time();
 
@@ -2644,7 +2706,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
 
   // do parser
   if (OB_SUCC(ret)) {
-    ObParser parser(ctx.get_allocator(),
+    ObParser parser(compile_alloc,
                     ctx.get_my_session()->get_sql_mode(),
                     ctx.get_my_session()->get_charsets4parser());
     ParseResult parse_result;
@@ -2663,7 +2725,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
                KP(parse_result.result_tree_->children_[0]));
     } else if (T_SP_PRE_STMTS == parse_tree->type_) {
       OZ (ObPLResolver::resolve_condition_compile(
-          ctx.get_allocator(),
+          compile_alloc,
           ctx.get_my_session(),
           ctx.get_sql_ctx()->schema_guard_,
           &(package_guard),
@@ -2692,7 +2754,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
 
   // do compile
   if (OB_SUCC(ret)) {
-    ObPLCompiler compiler(ctx.get_allocator(),
+    ObPLCompiler compiler(compile_alloc,
                           *(ctx.get_my_session()),
                           *(ctx.get_sql_ctx()->schema_guard_),
                           *(ctx.get_package_guard()),
@@ -2714,6 +2776,7 @@ int ObPL::generate_pl_function(
 {
   int ret = OB_SUCCESS;
   ObPLFunction *routine = NULL;
+  ObArenaAllocator compile_alloc(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
 
   int64_t compile_start = ObTimeUtility::current_time();
   OZ (ObPLContext::valid_execute_context(ctx));
@@ -2723,7 +2786,7 @@ int ObPL::generate_pl_function(
   OX (routine = static_cast<ObPLFunction *>(cacheobj_guard.get_cache_obj()));
   CK (OB_NOT_NULL(routine));
   if (OB_SUCC(ret)) {
-    ObPLCompiler compiler(ctx.get_allocator(),
+    ObPLCompiler compiler(compile_alloc,
                           *(ctx.get_my_session()),
                           *(ctx.get_sql_ctx()->schema_guard_),
                           *(ctx.get_package_guard()),
@@ -2813,13 +2876,6 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
   CK (OB_NOT_NULL(get_allocator()));
   CK (var_idx >= 0 && var_idx < params->count());
 
-  if (OB_SUCC(ret)
-      && params->at(var_idx).is_pl_extend()
-      && params->at(var_idx).get_ext() != 0
-      && params->at(var_idx).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-    OZ (ObUserDefinedType::destruct_obj(params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
-  }
-
   if (OB_FAIL(ret)) {
   } else if (value.is_pl_extend()
               && value.get_ext() != 0
@@ -2831,52 +2887,56 @@ int ObPLExecState::set_var(int64_t var_idx, const ObObjParam& value)
 
   if (OB_FAIL(ret)) {
   } else if (copy_value.is_null() && params->at(var_idx).is_pl_extend()) {
-    if (params->at(var_idx).get_ext() == 0) {
-      const ObUserDefinedType *user_type = NULL;
-      uint64_t udt_id = params->at(var_idx).get_udt_id();
-      OZ (ctx_.get_user_type(udt_id, user_type), K(udt_id));
-      CK (OB_NOT_NULL(user_type));
-      OZ (init_complex_obj(*get_allocator(), *user_type, params->at(var_idx)));
+    const ObUserDefinedType *user_type = NULL;
+    uint64_t udt_id = params->at(var_idx).get_udt_id();
+    if (params->at(var_idx).get_ext() != 0) {
+      int8_t extend_type = params->at(var_idx).get_meta().get_extend_type();
+      int32_t val_len = params->at(var_idx).get_val_len();
+      OZ (ObUserDefinedType::destruct_objparam(*get_allocator(), params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
+      OX (params->at(var_idx).set_extend(0, extend_type, val_len));
     }
+    OZ (ctx_.get_user_type(udt_id, user_type), K(udt_id));
+    CK (OB_NOT_NULL(user_type));
+    OZ (init_complex_obj(*get_allocator(), *user_type, params->at(var_idx)));
   } else if (!copy_value.is_ext()) {
     bool is_ref_cursor = params->at(var_idx).is_ref_cursor_type();
     copy_value.ObObj::set_scale(params->at(var_idx).get_meta().get_scale());
     copy_value.set_accuracy(params->at(var_idx).get_accuracy());
-    params->at(var_idx) = copy_value;
-    params->at(var_idx).set_is_ref_cursor_type(is_ref_cursor);
-    params->at(var_idx).set_param_meta();
+    OZ (ObUserDefinedType::destruct_objparam(*get_allocator(), params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
+    OX (params->at(var_idx) = copy_value);
+    OX (params->at(var_idx).set_is_ref_cursor_type(is_ref_cursor));
+    OX (params->at(var_idx).set_param_meta());
   } else if (!params->at(var_idx).is_ref_cursor_type()) {
     int64_t udt_id = params->at(var_idx).get_udt_id();
-    params->at(var_idx) = copy_value;
-    params->at(var_idx).set_udt_id(udt_id);
+    if (params->at(var_idx).get_ext() != 0) {
+      OZ (ObUserDefinedType::destruct_objparam(*get_allocator(), params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
+    }
+    OX (params->at(var_idx) = copy_value);
+    OX (params->at(var_idx).set_udt_id(udt_id));
   } else {
-    params->at(var_idx) = copy_value;
+    OZ (ObUserDefinedType::destruct_objparam(*get_allocator(), params->at(var_idx), ctx_.exec_ctx_->get_my_session()));
+    OX (params->at(var_idx) = copy_value);
   }
   OX (params->at(var_idx).set_param_meta());
   return ret;
 }
 
-int ObPLExecState::deep_copy_result_if_need()
+int ObPLExecState::deep_copy_result_if_need(ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   //all composite need to be deep copied and recorded.
   ObObj new_obj;
-  ObIAllocator *allocator = ctx_.allocator_;
   if (func_.get_ret_type().is_composite_type() && result_.is_ext()) {
-    CK (OB_NOT_NULL(allocator));
     CK (OB_NOT_NULL(ctx_.exec_ctx_));
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
-    OZ (ObUserDefinedType::deep_copy_obj(*allocator, result_, new_obj));
-    if (OB_SUCC(ret) && func_.is_pipelined()) {
-      CK (OB_NOT_NULL(ctx_.exec_ctx_));
-      CK (OB_NOT_NULL(ctx_.exec_ctx_->get_my_session()));
-      OZ (ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session()));
-    }
+    OZ (ObUserDefinedType::deep_copy_obj(ctx_.exec_ctx_->get_allocator(), result_, new_obj, false));
+    ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session());
     OZ (ctx_.exec_ctx_->get_pl_ctx()->add(new_obj));
     OX (result_ = new_obj);
   } else if (func_.get_ret_type().is_obj_type() && result_.need_deep_copy()) {
-    CK (OB_NOT_NULL(allocator));
-    OZ (deep_copy_obj(*allocator, result_, new_obj));
+    CK (OB_NOT_NULL(get_allocator()));
+    OZ (deep_copy_obj(ctx_.exec_ctx_->get_allocator(), result_, new_obj));
+    ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session());
     OX (result_ = new_obj);
   }
   return ret;
@@ -2906,6 +2966,11 @@ int ObPLExecState::add_pl_exec_time(int64_t pl_exec_time, bool is_called_from_sq
   return ret;
 }
 
+ObArenaAllocator *ObPLExecCtx::get_top_expr_allocator()
+{
+  return &expr_alloc_;
+}
+
 bool ObPLExecCtx::valid()
 {
   return OB_NOT_NULL(allocator_)
@@ -2922,6 +2987,7 @@ int ObPLExecCtx::get_user_type(uint64_t type_id,
 {
   UNUSED(allocator);
   int ret = OB_SUCCESS;
+  ObIAllocator *expr_alloc = const_cast<ObPLExecCtx *>(this)->get_top_expr_allocator();
   user_type = NULL;
   CK (OB_NOT_NULL(func_));
   for (int64_t i = 0;
@@ -2941,7 +3007,7 @@ int ObPLExecCtx::get_user_type(uint64_t type_id,
       && OB_NOT_NULL(exec_ctx_->get_sql_ctx()->schema_guard_)
       && OB_NOT_NULL(exec_ctx_->get_sql_proxy())
       && OB_NOT_NULL(guard_)) {
-    pl::ObPLResolveCtx resolve_ctx(*allocator_,
+    pl::ObPLResolveCtx resolve_ctx(*expr_alloc,
                                     *(exec_ctx_->get_my_session()),
                                     *(exec_ctx_->get_sql_ctx()->schema_guard_),
                                     *(guard_),
@@ -2966,25 +3032,9 @@ int ObPLExecCtx::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &re
 int ObPLExecState::final(int ret)
 {
   int tmp_ret = OB_SUCCESS;
-  // PL执行失败, 需要将出参的数组也释放, 避免内存泄漏;
-  // 如果是调用栈的顶层, 将入参的数组也释放掉;(PS协议,数组通过序列化协议构造)
+
   for (int64_t i = 0; top_call_ && i < func_.get_arg_count(); ++i) {
-    if (func_.get_variables().at(i).is_composite_type()
-        && i < get_params().count() && get_params().at(i).is_ext()) {
-      // 纯IN参数直接释放
-      // 如果是sql触发的存储过程执行, udf入参处理时不会做深拷, 此处不负责释放入参内存,
-      // 由对应expr将obj挂到pl ctx上, 解决复杂内存的释放问题
-      if (func_.get_in_args().has_member(i) && !func_.get_out_args().has_member(i) && is_called_from_sql_) {
-        // do nothing
-      } else if (func_.get_in_args().has_member(i) && !func_.get_out_args().has_member(i)) {
-        // do nothing
-      } else if (OB_SUCCESS != ret) { // OUT参数在失败的情况下在这里释放
-        if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
-            ctx_.exec_ctx_->get_my_session()))) {
-          LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
-        }
-      }
-    } else if (func_.get_variables().at(i).is_cursor_type()
+    if (func_.get_variables().at(i).is_cursor_type()
       && func_.get_out_args().has_member(i) && !func_.get_in_args().has_member(i)) {
       // the session cursor, be used as a out param should be closed from session when error happen
       if (OB_FAIL(ret)) {
@@ -3008,19 +3058,46 @@ int ObPLExecState::final(int ret)
       }
     }
   }
-  // 1. inner call inout参数会深拷一份, 执行异常时需要释放
+  // 异常场景下，释放参数列表
+  for (int i = 0; OB_SUCCESS != ret && i < func_.get_arg_count() && i < get_params().count(); ++i) {
+    if (!get_params().at(i).is_pl_extend()) {
+      ObUserDefinedType::destruct_objparam(*get_allocator(),
+                                            get_params().at(i),
+                                            ctx_.exec_ctx_->get_my_session());
+    } else if (need_free_arg(i)) {
+      ObUserDefinedType::destruct_objparam(*get_allocator(),
+                                            get_params().at(i),
+                                            ctx_.exec_ctx_->get_my_session());
+    }
+  }
+
+  // 1. inner call inout nocopy参数会深拷一份, 执行异常时需要释放
   // 2. inner call 纯out属性复杂数据类型参数, 会生成一个新的obj, 执行失败时会抛出异常, 不会走到geneate_out_param里面的释放内存逻辑
   // 需要提前释放内存
   for (int64_t i = 0; OB_SUCCESS != ret && inner_call_ && !func_.is_function() && i < func_.get_arg_count(); ++i) {
-    if (OB_NOT_NULL(ctx_.nocopy_params_) &&
-        ctx_.nocopy_params_->count() > i &&
-        OB_INVALID_INDEX == ctx_.nocopy_params_->at(i) &&
-        func_.get_variables().at(i).is_composite_type() &&
+    if (func_.get_variables().at(i).is_composite_type() &&
         i < get_params().count() && get_params().at(i).is_ext()) {
-      if (func_.get_out_args().has_member(i)) {
-        if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
-            ctx_.exec_ctx_->get_my_session()))) {
-          LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
+      if (func_.get_variables().at(i).is_opaque_type()) {
+        if (func_.get_out_args().has_member(i) && !func_.get_in_args().has_member(i)) {
+          if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_objparam(*get_allocator(), get_params().at(i),
+                                                                      ctx_.exec_ctx_->get_my_session()))) {
+            LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
+          }
+        }
+      } else {
+        if (func_.get_out_args().has_member(i) && !func_.get_in_args().has_member(i)) {
+          if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
+                                                                      ctx_.exec_ctx_->get_my_session()))) {
+            LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
+          }
+        } else if (func_.get_out_args().has_member(i) &&
+                  OB_NOT_NULL(ctx_.nocopy_params_) &&
+                  ctx_.nocopy_params_->count() > i &&
+                  OB_INVALID_INDEX == ctx_.nocopy_params_->at(i)) {
+          if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
+                                                                      ctx_.exec_ctx_->get_my_session()))) {
+            LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
+          }
         }
       }
     }
@@ -3028,8 +3105,10 @@ int ObPLExecState::final(int ret)
   for (int64_t i = func_.get_arg_count(); i < func_.get_variables().count(); ++i) {
     if (func_.get_variables().at(i).is_composite_type()
         && i < get_params().count() && get_params().at(i).is_ext()) {
-      if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_obj(get_params().at(i),
-          ctx_.exec_ctx_->get_my_session()))) {
+      if (OB_SUCCESS != (tmp_ret = ObUserDefinedType::destruct_objparam(*get_allocator(),
+                                                                        get_params().at(i),
+                                                                        ctx_.exec_ctx_->get_my_session(),
+                                                                        true))) {
         LOG_WARN("failed to destruct pl object", K(i), K(tmp_ret));
       }
     } else if (func_.get_variables().at(i).is_cursor_type()) {
@@ -3089,11 +3168,15 @@ int ObPLExecState::final(int ret)
           }
         }
       }
+    } else if (func_.get_variables().at(i).is_obj_type() && i < get_params().count()) {
+      ObUserDefinedType::destruct_objparam(*get_allocator(),
+                                            get_params().at(i),
+                                            ctx_.exec_ctx_->get_my_session());
     }
   }
 
-  if (OB_FAIL(ret) && func_.get_ret_type().is_composite_type() && result_.is_ext() && func_.is_pipelined()) {
-    tmp_ret = ObUserDefinedType::destruct_obj(result_, ctx_.exec_ctx_->get_my_session());
+  if (OB_FAIL(ret) && func_.get_ret_type().is_composite_type() && result_.is_ext()) {
+    tmp_ret = ObUserDefinedType::destruct_objparam(*get_allocator(), result_, ctx_.exec_ctx_->get_my_session(), true);
     if (OB_SUCCESS != tmp_ret) {
       LOG_WARN("failed to destruct pl object", K(tmp_ret));
     }
@@ -3142,7 +3225,6 @@ int ObPLExecState::final(int ret)
       //Memory leak
       //Must be reset before free expr_op_ctx!
       ctx_.exec_ctx_->reset_expr_op();
-      ctx_.exec_ctx_->get_allocator().free(ctx_.exec_ctx_->get_expr_op_ctx_store());
     }
     exec_ctx_bak_.restore(*ctx_.exec_ctx_);
   }
@@ -3192,7 +3274,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
       OZ (ns->get_user_type(composite->get_id(), user_type));
       CK (OB_NOT_NULL(user_type));
     } else {
-      ObPLResolveCtx ns(allocator,
+      ObPLResolveCtx ns(get_exec_ctx().expr_alloc_,
                       *session,
                       *schema_guard,
                       *package_guard,
@@ -3210,20 +3292,20 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
     OX (obj.set_extend(0, real_pl_type->get_type()));
   } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
-    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false, set_null));
+    OZ (ns.init_complex_obj(allocator, get_exec_ctx().expr_alloc_, *real_pl_type, obj, false, set_null));
   } else if (OB_NOT_NULL(session->get_pl_context())
       && OB_NOT_NULL(session->get_pl_context()->get_current_ctx())) {
     pl::ObPLINS *ns = session->get_pl_context()->get_current_ctx();
     CK (OB_NOT_NULL(ns));
-    OZ (ns->init_complex_obj(allocator, *real_pl_type, obj, false, set_null));
+    OZ (ns->init_complex_obj(allocator, get_exec_ctx().expr_alloc_, *real_pl_type, obj, false, set_null));
   } else {
-    ObPLResolveCtx ns(allocator,
+    ObPLResolveCtx ns(get_exec_ctx().expr_alloc_,
                       *session,
                       *schema_guard,
                       *package_guard,
                       *sql_proxy,
                       false);
-    OZ (ns.init_complex_obj(allocator, *real_pl_type, obj, false, set_null));
+    OZ (ns.init_complex_obj(allocator, get_exec_ctx().expr_alloc_, *real_pl_type, obj, false, set_null));
   }
   OX (obj.set_udt_id(real_pl_type->get_user_type_id()));
   return ret;
@@ -3317,10 +3399,11 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
 int ObPLExecState::check_anonymous_collection_compatible(ObPLComposite &composite, const ObPLDataType &dest_type, bool &need_cast)
 {
   int ret = OB_SUCCESS;
+  ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const ObUserDefinedType *pl_user_type = NULL;
   const ObCollectionType *coll_type = NULL;
   const ObPLCollection *src_coll = NULL;
-  OZ (ctx_.get_user_type(dest_type.get_user_type_id(), pl_user_type));
+  OZ (ctx_.get_user_type(dest_type.get_user_type_id(), pl_user_type, &tmp_allocator));
   CK (OB_NOT_NULL(coll_type = static_cast<const ObCollectionType *>(pl_user_type)));
   CK (OB_NOT_NULL(src_coll = static_cast<const ObPLCollection *>(&composite)));
   OX (need_cast = src_coll->get_type() != coll_type->get_type());
@@ -3361,7 +3444,7 @@ int ObPLExecState::check_anonymous_collection_compatible(ObPLComposite &composit
 int ObPLExecState::convert_composite(ObObjParam &param, const ObPLDataType &dest_type)
 {
   int ret = OB_SUCCESS;
-
+  ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObSQLSessionInfo *session = NULL;
   share::schema::ObSchemaGetterGuard *schema_guard = NULL;
   common::ObMySQLProxy *sql_proxy = NULL;
@@ -3373,7 +3456,7 @@ int ObPLExecState::convert_composite(ObObjParam &param, const ObPLDataType &dest
   CK (OB_NOT_NULL(sql_proxy = ctx_.exec_ctx_->get_sql_proxy()));
   CK (OB_NOT_NULL(package_guard = ctx_.exec_ctx_->get_package_guard()));
 
-  OZ (ctx_.get_user_type(dest_type.get_user_type_id(), pl_user_type));
+  OZ (ctx_.get_user_type(dest_type.get_user_type_id(), pl_user_type, &tmp_allocator));
   CK (OB_NOT_NULL(pl_user_type));
 
   if (OB_SUCC(ret)) {
@@ -3383,7 +3466,7 @@ int ObPLExecState::convert_composite(ObObjParam &param, const ObPLDataType &dest
     ObObj *src_ptr = &param;
     ObPLResolveCtx resolve_ctx(
       *get_allocator(), *session, *schema_guard, *package_guard, *sql_proxy, false);
-    OZ (pl_user_type->init_obj(*(schema_guard), *get_allocator(), dst, dst_size));
+    OZ (pl_user_type->init_obj(*(schema_guard), ctx_.exec_ctx_->get_allocator(), dst, dst_size));
     OZ (pl_user_type->convert(resolve_ctx, src_ptr, dst_ptr));
     CK (OB_NOT_NULL(ctx_.exec_ctx_->get_pl_ctx()));
     OZ (ctx_.exec_ctx_->get_pl_ctx()->add(dst));
@@ -3570,28 +3653,39 @@ do {                                                                  \
        * In Args of Anonymous, If need_to_check_type_ is true then check to convert.
        *   else It will directly used by static sql, do not need to check.
        */
+      need_free_.push_back(false);
       const ObPLDataType &pl_type = func_.get_variables().at(i);  // formal param type
       if (FAILEDx(defend_stored_routine_change(params->at(i), pl_type))) {
         LOG_WARN("param type not match, procedure/function could have been replaced",
                  K(ret), K(i), K(params->at(i)), K(pl_type));
       } else if (func_.get_in_args().has_member(i)) {
         if (is_anonymous && !func_.get_params_info().at(i).flag_.need_to_check_type_) {
-          OX (get_params().at(i) = params->at(i));
+          if (!params->at(i).is_pl_extend() && params->at(i).need_deep_copy()) {
+            OZ (deep_copy_obj(*ctx_.allocator_, params->at(i), get_params().at(i)));
+          } else {
+            OX (get_params().at(i) = params->at(i));
+          }
         } else if (params->at(i).is_pl_mock_default_param()) { // 使用参数默认值
           ObObjParam result;
           sql::ObSqlExpression *default_expr = func_.get_default_expr(i);
           OV (OB_NOT_NULL(default_expr), OB_ERR_UNEXPECTED, K(i), K(func_.get_default_idxs()));
           OZ (ObSPIService::spi_calc_expr(&ctx_, default_expr, OB_INVALID_INDEX, &result));
-          if (OB_SUCC(ret) && result.is_null()) {
+          if (OB_FAIL(ret)) {
+          } else if (result.is_null()) {
             ObObjMeta null_meta = get_params().at(i).get_meta();
             get_params().at(i).set_null();
             get_params().at(i).set_param_meta(null_meta);
           } else {
-            OX (get_params().at(i) = result);
+            if (!result.is_pl_extend() && result.need_deep_copy()) {
+              OZ (deep_copy_obj(*ctx_.allocator_, result, get_params().at(i)));
+            } else {
+              OX (get_params().at(i) = result);
+            }
           }
           if (pl_type.is_composite_type() && result.is_null()) {
             OZ (init_complex_obj(
               (*get_allocator()), func_.get_variables().at(i), get_params().at(i)));
+            OX (need_free_.at(i) = true);
           }
         } else if (pl_type.is_composite_type()
                    && (params->at(i).is_null()
@@ -3600,6 +3694,9 @@ do {                                                                  \
           OZ (init_complex_obj((*get_allocator()),
                                func_.get_variables().at(i),
                                get_params().at(i)));
+          //if (!func_.get_out_args().has_member(i)) { //纯in场景需要在执行完释放
+            OX (need_free_.at(i) = true);
+          //}
         } else if (pl_type.is_obj_type() // 复杂类型不需要做类型转换(不支持复杂类型的转换), 直接赋值
                    && (params->at(i).get_meta() != get_params().at(i).get_meta()
                       || params->at(i).get_accuracy() != get_params().at(i).get_accuracy())) {
@@ -3620,7 +3717,7 @@ do {                                                                  \
                                                *get_allocator()));
               OX (get_params().at(i) = tmp);
             } else {
-              get_params().at(i) = params->at(i);
+              OZ (deep_copy_obj(*ctx_.allocator_, params->at(i), get_params().at(i)));
             }
           } else if (params->at(i).get_meta().is_ext()) {
             ret = OB_NOT_SUPPORTED;
@@ -3637,14 +3734,14 @@ do {                                                                  \
                       K(params->at(i).get_accuracy()), K(get_params().at(i).get_accuracy()));
             const ObDataTypeCastParams dtc_params =
               ObBasicSessionInfo::create_dtc_params(ctx_.exec_ctx_->get_my_session());
-            ObCastCtx cast_ctx(get_allocator(),
+            ObCastCtx cast_ctx(ctx_.get_top_expr_allocator(),
                                &dtc_params,
                                cast_mode,
                                get_params().at(i).get_collation_type());
             result_type.reset();
             result_type.set_meta(func_.get_variables().at(i).get_data_type()->get_meta_type());
             result_type.set_accuracy(func_.get_variables().at(i).get_data_type()->get_accuracy());
-            ObObj tmp;
+            ObObj tmp, copy_obj;
             // CHARSET_ANY代表接受任何字符集,因此不能改变入参的字符集
             if (CS_TYPE_ANY == result_type.get_collation_type()) {
               if (params->at(i).get_meta().is_string_or_lob_locator_type()) {
@@ -3668,11 +3765,16 @@ do {                                                                  \
             } else if (pl_type.is_pl_integer_type()
                        && OB_FAIL(ObExprPLIntegerChecker::calc(
                          tmp, tmp, pl_type.get_pl_integer_type(), pl_type.get_range(),
-                         *get_allocator()))) {
+                         *ctx_.get_top_expr_allocator()))) {
+              LOG_WARN("failed to copy obj", K(ret));
+            } else if (OB_FAIL(deep_copy_obj(*get_allocator(), tmp, copy_obj))) {
               LOG_WARN("failed to check pls integer value", K(ret));
-            } else if (OB_FAIL(get_params().at(i).apply(tmp))) {
+            } else if (OB_FAIL(get_params().at(i).apply(copy_obj))) {
+              ObUserDefinedType::destruct_objparam(*get_allocator(),
+                                                   copy_obj,
+                                                   ctx_.exec_ctx_->get_my_session());
               LOG_WARN("failed to apply tmp to params",
-                       K(ret), K(tmp), K(i), K(params->count()));
+                       K(ret), K(copy_obj), K(i), K(params->count()));
             } else {
               //
               // 由存储层传入的数据未设置collation_level, 这里设置下
@@ -3713,7 +3815,11 @@ do {                                                                  \
                 null_char_param.set_string(ObNullType,v);
                 get_params().at(i) = null_char_param;
             } else {
-              get_params().at(i) = params->at(i);
+              if (!params->at(i).is_pl_extend() && params->at(i).need_deep_copy()) {
+                OZ (deep_copy_obj(*ctx_.allocator_, params->at(i), get_params().at(i)));
+              } else {
+                OX (get_params().at(i) = params->at(i));
+              }
             }
           }
         }
@@ -3756,6 +3862,11 @@ do {                                                                  \
                                pl_type,
                                get_params().at(i),
                                !(top_call_ && ctx_.exec_ctx_->get_sql_ctx()->is_execute_call_stmt_)));
+          if (OB_SUCC(ret) &&
+              0 == params->at(i).get_ext() &&
+              0 != get_params().at(i).get_ext()) {
+            OX (need_free_.at(i) = true);
+          }
         }
       }
     }
@@ -3785,10 +3896,11 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
   int ret = OB_SUCCESS;
   int64_t query_timeout = 0;
   int64_t total_time = 0;
+  ObIAllocator *expr_alloc = nullptr;
 
   CK (OB_NOT_NULL(ctx_.exec_ctx_));
   OZ (ObPLContext::valid_execute_context(*ctx_.exec_ctx_));
-
+  OX (expr_alloc = ctx_.get_top_expr_allocator());
   OZ (ctx_.exec_ctx_->get_my_session()->get_query_timeout(query_timeout));
   OX (total_time =
     (ctx_.exec_ctx_->get_physical_plan_ctx() != NULL
@@ -3801,13 +3913,13 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
   OX (ctx_.exec_ctx_->set_physical_plan_ctx(&get_physical_plan_ctx()));
   OX (need_reset_physical_plan_ = true);
   if (OB_SUCC(ret) && func_.get_expr_op_size() > 0)  {
-    OZ (ctx_.exec_ctx_->init_expr_op(func_.get_expr_op_size(), ctx_.allocator_));
+    OZ (ctx_.exec_ctx_->init_expr_op(func_.get_expr_op_size(), expr_alloc));
   }
 
   if (OB_SUCC(ret)) {
     // TODO bin.lb: how about the memory?
     //
-    OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, ctx_.allocator_));
+    OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, expr_alloc));
   }
 
   // init params may use exec stack, need append to pl context first
@@ -4297,7 +4409,7 @@ int ObPLExecState::execute()
       }
     }
     if (OB_SUCC(ret) && func_.get_arg_count() > 0) {
-      argv = static_cast<int64_t*>(get_allocator()->alloc(sizeof(int64_t) * func_.get_arg_count()));
+      argv = static_cast<int64_t*>(get_exec_ctx().get_top_expr_allocator()->alloc(sizeof(int64_t) * func_.get_arg_count()));
       if (OB_ISNULL(argv)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate failed", K(sizeof(int64_t) * func_.get_arg_count()), K(ret));
@@ -4727,6 +4839,7 @@ int ObPLINS::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &result
 }
 
 int ObPLINS::init_complex_obj(ObIAllocator &allocator,
+                              ObIAllocator &expr_allocator,
                               const ObPLDataType &pl_type,
                               common::ObObjParam &obj,
                               bool set_allocator,
@@ -4734,13 +4847,14 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
 {
   int ret = OB_SUCCESS;
   int64_t init_size = 0;
+  bool need_construct = false;
   void *ptr = NULL;
   CK (pl_type.is_composite_type());
-  OZ (get_size(PL_TYPE_INIT_SIZE, pl_type, init_size, &allocator));
+  OZ (get_size(PL_TYPE_INIT_SIZE, pl_type, init_size, &expr_allocator));
   // 如果原来已经有值，则不重新分配, 直接在此基础上修改
   if (obj.is_ext() && obj.get_ext() != 0) {
     ObObj out_param = obj;
-    OZ (ObUserDefinedType::destruct_obj(out_param));
+    OZ (ObUserDefinedType::destruct_obj(out_param, nullptr, true));
     CK (OB_NOT_NULL(ptr = reinterpret_cast<void*>(obj.get_ext())));
   } else { // 如果原来没有值, 重新分配内存, PS协议的情况, 前端发过来的纯OUT参数是NULL
     if (OB_SUCC(ret) && OB_ISNULL(ptr = allocator.alloc(init_size))) {
@@ -4748,18 +4862,25 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
       LOG_WARN("failed to allocate memory", K(ret), K(init_size));
     }
     OX (MEMSET(ptr, 0, init_size));
+    OX (need_construct = true);
   }
 
   const ObUserDefinedType *user_type = NULL;
-  OZ (get_user_type(pl_type.get_user_type_id(), user_type, &allocator));
+  OZ (get_user_type(pl_type.get_user_type_id(), user_type, &expr_allocator));
   CK (OB_NOT_NULL(user_type));
 
   if (OB_SUCC(ret) && user_type->is_record_type()) {
     ObPLRecord *record = NULL;
     ObObj *member = NULL;
     const ObRecordType* record_type = static_cast<const ObRecordType*>(user_type);
-    OX (new(ptr)ObPLRecord(user_type->get_user_type_id(), record_type->get_member_count()));
-    OX (record = reinterpret_cast<ObPLRecord*>(ptr));
+    if (need_construct) {
+      OX (new(ptr)ObPLRecord(user_type->get_user_type_id(), record_type->get_member_count()));
+      OX (record = reinterpret_cast<ObPLRecord*>(ptr));
+      OZ (record->init_data(allocator, true));
+    } else {
+      OX (record = reinterpret_cast<ObPLRecord*>(ptr));
+    }
+    CK (OB_NOT_NULL(record->get_allocator()));
     for (int64_t i = 0; OB_SUCC(ret) && i < record_type->get_member_count(); ++i) {
       CK (OB_NOT_NULL(record_type->get_member(i)));
       CK (OB_NOT_NULL(record_type->get_record_member(i)));
@@ -4780,19 +4901,25 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
         }
         if (OB_FAIL(ret)) {
         } else if (record_type->get_member(i)->is_obj_type()) {
-          OZ (deep_copy_obj(allocator, default_v, *member));
+          OZ (deep_copy_obj(*record->get_allocator(), default_v, *member));
         } else {
-          OZ (ObUserDefinedType::deep_copy_obj(allocator, default_v, *member));
+          OZ (ObUserDefinedType::deep_copy_obj(*record->get_allocator(), default_v, *member));
         }
       } else {
         if (!record_type->get_member(i)->is_obj_type()) {
           int64_t init_size = OB_INVALID_SIZE;
           int64_t member_ptr = 0;
           OZ (record_type->get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
-          OZ (record_type->get_member(i)->newx(allocator, this, member_ptr));
+          OZ (record_type->get_member(i)->newx(*record->get_allocator(), this, member_ptr));
           OX (member->set_extend(member_ptr, record_type->get_member(i)->get_type(), init_size));
         }
       }
+    }
+    if (OB_FAIL(ret) && need_construct && OB_NOT_NULL(record->get_allocator())) {
+      ObObj tmp;
+      tmp.set_extend(reinterpret_cast<int64_t>(ptr), user_type->get_type(), init_size);
+      ObUserDefinedType::destruct_obj(tmp, nullptr);
+      allocator.free(record->get_allocator());
     }
     // f(self object_type, p1 out object_type), p1 will be init here, we have to set it null
     // but self can't be set to null.
@@ -4808,12 +4935,12 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     OX (new(ptr)ObPLOpaque());
   }
 
-  if (OB_SUCC(ret) && user_type->is_nested_table_type()) {
+  if (OB_SUCC(ret) && user_type->is_nested_table_type() && need_construct) {
     const ObNestedTableType* nested_type = static_cast<const ObNestedTableType*>(user_type);
     CK (OB_NOT_NULL(nested_type));
     OX (new(ptr)ObPLNestedTable(user_type->get_user_type_id()));
   }
-  if (OB_SUCC(ret) && user_type->is_varray_type()) {
+  if (OB_SUCC(ret) && user_type->is_varray_type() && need_construct) {
     const ObVArrayType* varray_type = static_cast<const ObVArrayType*>(user_type);
     ObPLVArray *varray = reinterpret_cast<ObPLVArray*>(ptr);
     CK (OB_NOT_NULL(varray_type));
@@ -4821,7 +4948,7 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     OX (new(varray)ObPLVArray(varray_type->get_user_type_id()));
     OX (varray->set_capacity(varray_type->get_capacity()));
   }
-  if (OB_SUCC(ret) && user_type->is_associative_array_type()) {
+  if (OB_SUCC(ret) && user_type->is_associative_array_type() && need_construct) {
     const ObAssocArrayType *assoc_type = static_cast<const ObAssocArrayType*>(user_type);
     CK (OB_NOT_NULL(assoc_type));
     CK (OB_NOT_NULL(ptr));
@@ -4834,7 +4961,10 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
     bool not_null;
     const ObCollectionType *coll_type = static_cast<const ObCollectionType*>(user_type);
     CK (OB_NOT_NULL(coll));
-    OX (set_allocator ? coll->set_allocator(&allocator) : coll->set_allocator(NULL));
+    if (OB_SUCC(ret) && need_construct) {
+      OZ (coll->init_allocator(allocator, true));
+    }
+    //OX (set_allocator ? coll->set_allocator(&allocator) : coll->set_allocator(NULL));
     if (OB_FAIL(ret)) {
     } else if (user_type->is_associative_array_type()) {
       OX (coll->set_inited());
@@ -4842,16 +4972,25 @@ int ObPLINS::init_complex_obj(ObIAllocator &allocator,
       OX ((obj.is_ext() && obj.get_ext() != 0) ? (void)NULL : (set_null ? (void)NULL : coll->set_inited()));
     }
     OX (coll->set_type(pl_type.get_type()));
-    OZ (get_element_data_type(pl_type, elem_desc, &allocator));
-    OZ (get_not_null(pl_type, not_null, &allocator));
+    OZ (get_element_data_type(pl_type, elem_desc, &expr_allocator));
+    OZ (get_not_null(pl_type, not_null, &expr_allocator));
     OZ (coll_type->get_element_type().get_field_count(*this, field_cnt));
     OX (elem_desc.set_pl_type(coll_type->get_element_type().get_type()));
     OX (elem_desc.set_field_count(field_cnt));
     OX (elem_desc.set_not_null(not_null));
     OX (elem_desc.set_udt_id(coll_type->get_element_type().get_user_type_id()));
     OX (coll->set_element_desc(elem_desc));
+    if (OB_FAIL(ret) && need_construct && OB_NOT_NULL(coll->get_allocator())) {
+      ObObj tmp;
+      tmp.set_extend(reinterpret_cast<int64_t>(ptr), user_type->get_type(), init_size);
+      ObUserDefinedType::destruct_obj(tmp, nullptr);
+      allocator.free(coll->get_allocator());
+    }
   }
 #endif
+  if (OB_FAIL(ret) && need_construct) {
+    allocator.free(ptr);
+  }
   OX (obj.set_extend(reinterpret_cast<int64_t>(ptr), user_type->get_type(), init_size));
   OX (obj.set_param_meta());
   OX (obj.set_udt_id(pl_type.get_user_type_id()));

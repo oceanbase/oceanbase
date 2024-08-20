@@ -97,7 +97,7 @@ int ObPLCompiler::init_anonymous_ast(
   func_ast.set_ret_type(pl_type);
 
   for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(params) && i < params->count(); ++i) {
-    const ObObjParam &param = params->at(i);
+    const ObObjParam param = params->at(i);
     if (param.is_pl_extend()) {
       if (param.get_udt_id() != OB_INVALID_ID) {
         const ObUserDefinedType *user_type = NULL;
@@ -147,7 +147,7 @@ int ObPLCompiler::init_anonymous_ast(
     } else {
       data_type.reset();
       data_type.set_accuracy(params->at(i).get_accuracy());
-      if (params->at(i).is_null()) {
+      if (params->at(i).is_null() && !params->at(i).get_param_meta().is_ext()) {
         data_type.set_meta_type(params->at(i).get_param_meta());
       } else {
         data_type.set_meta_type(params->at(i).get_meta());
@@ -156,8 +156,8 @@ int ObPLCompiler::init_anonymous_ast(
       int64_t int_value = 0;
       // 参数化整型常量按照会按照numbger来生成param
       if (!is_prepare_protocol
-          && (ObNumberType == param.get_type() || ObUNumberType == param.get_type())
-          && param.get_number().is_valid_int64(int_value)
+          && (ObNumberType == params->at(i).get_type() || ObUNumberType == params->at(i).get_type())
+          && params->at(i).get_number().is_valid_int64(int_value)
           && int_value <= INT32_MAX && int_value >= INT32_MIN) {
         pl_type.set_pl_integer_type(PL_SIMPLE_INTEGER, data_type);
       } else {

@@ -545,7 +545,9 @@ int ObDbmsXplan::set_display_result_for_oracle(sql::ObExecContext &exec_ctx,
     } else {
       new (table)ObPLNestedTable();
       table->set_column_count(1);
-     if (OB_FAIL(ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
+      if (OB_FAIL(table->init_allocator(exec_ctx.get_allocator(), true))) {
+        LOG_WARN("failed to init allocator", K(ret));
+      } else if (OB_FAIL(ObSPIService::spi_set_collection(session->get_effective_tenant_id(),
                                                   NULL,
                                                   exec_ctx.get_allocator(),
                                                   *table,

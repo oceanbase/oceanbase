@@ -176,11 +176,13 @@ void mock_write_sdo_elem_info(ObArray<uint64_t> &elem_info, common::ObIAllocator
 {
   pl::ObPLVArray *elem_array = reinterpret_cast<pl::ObPLVArray *>(ctx_allocator.alloc(sizeof(pl::ObPLVArray)));
   ASSERT_EQ(elem_array != NULL, true);
-  pl::ObPLCollAllocator *coll_allocator = reinterpret_cast<pl::ObPLCollAllocator *>(ctx_allocator.alloc(sizeof(pl::ObPLCollAllocator)));
+  pl::ObPLAllocator1 *coll_allocator = reinterpret_cast<pl::ObPLAllocator1 *>(ctx_allocator.alloc(sizeof(pl::ObPLAllocator1)));
   ASSERT_EQ(coll_allocator != NULL, true);
 
   elem_array = new (elem_array) pl::ObPLVArray(300029);
-  coll_allocator = new (coll_allocator) pl::ObPLCollAllocator(elem_array);
+  coll_allocator = new (coll_allocator) pl::ObPLAllocator1(PL_MOD_IDX::OB_PL_COLLECTION, &ctx_allocator);
+  coll_allocator->init(nullptr);
+  ASSERT_EQ(coll_allocator->is_inited(), true);
   elem_array->set_allocator(coll_allocator);
   ObIAllocator *allocator = coll_allocator->get_allocator();
   uint64_t elem_cnt = elem_info.size();
@@ -211,11 +213,13 @@ void mock_write_sdo_ordinates(ObArray<double> &ordinate, common::ObIAllocator &c
 {
   pl::ObPLVArray *elem_array = reinterpret_cast<pl::ObPLVArray *>(ctx_allocator.alloc(sizeof(pl::ObPLVArray)));
   ASSERT_EQ(elem_array != NULL, true);
-  pl::ObPLCollAllocator *coll_allocator = reinterpret_cast<pl::ObPLCollAllocator *>(ctx_allocator.alloc(sizeof(pl::ObPLCollAllocator)));
+  pl::ObPLAllocator1 *coll_allocator = reinterpret_cast<pl::ObPLAllocator1 *>(ctx_allocator.alloc(sizeof(pl::ObPLAllocator1)));
   ASSERT_EQ(coll_allocator != NULL, true);
 
   elem_array = new (elem_array) pl::ObPLVArray(300028);
-  coll_allocator = new (coll_allocator) pl::ObPLCollAllocator(elem_array);
+  coll_allocator = new (coll_allocator) pl::ObPLAllocator1(PL_MOD_IDX::OB_PL_COLLECTION, &ctx_allocator);
+  coll_allocator->init(nullptr);
+  ASSERT_EQ(coll_allocator->is_inited(), true);
   elem_array->set_allocator(coll_allocator);
   ObIAllocator *allocator = coll_allocator->get_allocator();
   uint64_t ori_size = ordinate.size();

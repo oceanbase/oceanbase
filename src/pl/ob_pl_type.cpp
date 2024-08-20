@@ -627,8 +627,9 @@ int ObPLDataType::generate_assign_with_null(ObPLCodeGenerator &generator,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected type to assign NULL", K(*this), K(ret));
   } else {
+    ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const ObUserDefinedType *user_type = NULL;
-    if (OB_FAIL(ns.get_user_type(get_user_type_id(), user_type))) {
+    if (OB_FAIL(ns.get_user_type(get_user_type_id(), user_type, &tmp_allocator))) {
       LOG_WARN("failed to get user type", K(*this), K(ret));
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
@@ -646,14 +647,16 @@ int ObPLDataType::generate_assign_with_null(ObPLCodeGenerator &generator,
 int ObPLDataType::generate_default_value(ObPLCodeGenerator &generator,
                                          const ObPLINS &ns,
                                          const pl::ObPLStmt *stmt,
-                                         jit::ObLLVMValue &value) const
+                                         jit::ObLLVMValue &value,
+                                         jit::ObLLVMValue &llvm_allocator,
+                                         bool is_top_level) const
 {
   int ret = OB_SUCCESS;
   if (is_obj_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected type to assign NULL", K(*this), K(ret));
   } else {
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const ObUserDefinedType *user_type = NULL;
     if (OB_FAIL(ns.get_user_type(get_user_type_id(), user_type, &allocator))) {
       LOG_WARN("failed to get user type", K(*this), K(ret));
@@ -663,7 +666,9 @@ int ObPLDataType::generate_default_value(ObPLCodeGenerator &generator,
     } else if (OB_FAIL(SMART_CALL(user_type->generate_default_value(generator,
                                                                        ns,
                                                                        stmt,
-                                                                       value)))) {
+                                                                       value,
+                                                                       llvm_allocator,
+                                                                       is_top_level)))) {
       LOG_WARN("failed to generate default value", K(*this), K(ret));
     } else { /*do nothing*/ }
   }
@@ -717,6 +722,8 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
 int ObPLDataType::generate_construct(ObPLCodeGenerator &generator,
                                      const ObPLINS &ns,
                                      jit::ObLLVMValue &value,
+                                     jit::ObLLVMValue &llvm_allocator,
+                                     bool is_top_level,
                                      const pl::ObPLStmt *stmt) const
 {
   int ret = OB_SUCCESS;
@@ -724,11 +731,11 @@ int ObPLDataType::generate_construct(ObPLCodeGenerator &generator,
     ObObj obj(get_obj_type());
     OZ (generator.generate_obj(obj, value));
   } else {
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const ObUserDefinedType *user_type = NULL;
     OZ (ns.get_user_type(get_user_type_id(), user_type, &allocator));
     CK (OB_NOT_NULL(user_type));
-    OZ (SMART_CALL(user_type->generate_construct(generator, ns, value, stmt)));
+    OZ (SMART_CALL(user_type->generate_construct(generator, ns, value, llvm_allocator, is_top_level, stmt)));
   }
   return ret;
 }
@@ -736,6 +743,8 @@ int ObPLDataType::generate_construct(ObPLCodeGenerator &generator,
 int ObPLDataType::generate_new(ObPLCodeGenerator &generator,
                                      const ObPLINS &ns,
                                      jit::ObLLVMValue &value,
+                                     jit::ObLLVMValue &llvm_allocator,
+                                     bool is_top_level,
                                      const pl::ObPLStmt *stmt) const
 {
   int ret = OB_SUCCESS;
@@ -743,11 +752,11 @@ int ObPLDataType::generate_new(ObPLCodeGenerator &generator,
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("NOoooooooo, please don't do that", K(ret));
   } else {
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const ObUserDefinedType *user_type = NULL;
     OZ (ns.get_user_type(get_user_type_id(), user_type, &allocator));
     CK (OB_NOT_NULL(user_type));
-    OZ (SMART_CALL(user_type->generate_new(generator, ns, value, stmt)));
+    OZ (SMART_CALL(user_type->generate_new(generator, ns, value, llvm_allocator, is_top_level, stmt)));
   }
   return ret;
 }
@@ -759,9 +768,10 @@ int ObPLDataType::newx(common::ObIAllocator &allocator, const ObPLINS *ns, int64
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("NOoooooooo, please don't do that", K(type_), K(obj_type_), K(ret));
   } else {
+    ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     CK (OB_NOT_NULL(ns));
     const ObUserDefinedType *user_type = NULL;
-    OZ (ns->get_user_type(get_user_type_id(), user_type, &allocator));
+    OZ (ns->get_user_type(get_user_type_id(), user_type, &tmp_allocator));
     CK (OB_NOT_NULL(user_type));
     OZ (SMART_CALL(user_type->newx(allocator, ns, ptr)));
   }
@@ -786,7 +796,7 @@ int ObPLDataType::get_field_count(const ObPLINS& ns, int64_t &count) const
   int ret = OB_SUCCESS;
   count = 1;
   if (is_record_type()) { //只有record的field是member的个数，其他类型的field都是1
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const ObUserDefinedType *user_type = NULL;
     OZ (ns.get_user_type(get_user_type_id(), user_type, &allocator));
     CK (OB_NOT_NULL(user_type));
@@ -811,7 +821,8 @@ int ObPLDataType::init_session_var(const ObPLResolveCtx &resolve_ctx,
       // do nothing ...
     } else {
       ObObj calc_obj;
-      if (OB_FAIL(ObSQLUtils::calc_sql_expression_without_row(exec_ctx,*default_expr,calc_obj))) {
+      ObArenaAllocator tmp_allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_INIT_SESSION_VAR), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+      if (OB_FAIL(ObSQLUtils::calc_sql_expression_without_row(exec_ctx,*default_expr,calc_obj, &tmp_allocator))) {
         LOG_WARN("calc expr failed", K(ret));
       } else if (calc_obj.need_deep_copy()) {
         char *copy_data = NULL;
@@ -839,79 +850,6 @@ int ObPLDataType::init_session_var(const ObPLResolveCtx &resolve_ctx,
                                     default_expr,
                                     default_construct,
                                     obj), KPC(this));
-  }
-  return ret;
-}
-
-int ObPLDataType::free_session_var(const ObPLResolveCtx &resolve_ctx, ObIAllocator &obj_allocator, ObObj &obj) const
-{
-  int ret = OB_SUCCESS;
-  char *data = NULL;
-  if (is_obj_type()) {
-    if (ob_is_string_tc(get_obj_type()) || ob_is_text_tc(get_obj_type()) || ob_is_raw_tc(get_obj_type())) {
-      data = obj.get_string().ptr();
-    } else if (ob_is_lob_tc(get_obj_type())) {
-      data = reinterpret_cast<char *>(const_cast<ObLobLocator *>(obj.get_lob_locator()));
-    } else if (ob_is_number_tc(get_obj_type())) {
-      data = reinterpret_cast<char *>(obj.get_number().get_digits());
-    } else if (ob_is_otimestampe_tc(get_obj_type())) {
-      //TODO: @ryan.ly
-    } else { }
-    if (OB_FAIL(free_data(resolve_ctx, obj_allocator, data))) {
-      LOG_WARN("free obj type failed", K(ret));
-    } else {
-      obj.set_null();
-    }
-  } else if (is_cursor_type()) {
-    if (is_cursor_var()) {
-      ObPLCursorInfo *cursor = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext());
-      if (OB_NOT_NULL(cursor)) {
-        cursor->~ObPLCursorInfo();
-        cursor = NULL;
-      }
-    } else {
-      // do nothing .. package ref cursor only use for cursor parameters, it will close by geneteror.
-    }
-  } else {
-    ObPL *pl_engine = NULL;
-    if (OB_ISNULL(pl_engine = resolve_ctx.session_info_.get_pl_engine())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("pl engine is null", K(ret));
-    } else {
-      const ObUserDefinedType *user_type = NULL;
-      OZ (get_external_user_type(resolve_ctx, user_type), KPC(this));
-      CK (OB_NOT_NULL(user_type));
-      OZ (user_type->free_session_var(resolve_ctx, obj_allocator, obj), KPC(this));
-    }
-  }
-  return ret;
-}
-
-int ObPLDataType::free_data(const ObPLResolveCtx &resolve_ctx, common::ObIAllocator &data_allocator, void *data) const
-{
-  int ret = OB_SUCCESS;
-  ObPL *pl_engine = NULL;
-  if (OB_ISNULL(pl_engine = resolve_ctx.session_info_.get_pl_engine())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("pl engine invalid", K(ret));
-  } else {
-    if (is_obj_type()) {
-      if (ob_is_string_tc(get_obj_type())
-          || ob_is_number_tc(get_obj_type())
-          || ob_is_text_tc(get_obj_type())
-          || ob_is_lob_tc(get_obj_type())
-          || ob_is_otimestampe_tc(get_obj_type())
-          || ob_is_raw_tc(get_obj_type())) {
-        if (!OB_ISNULL(data)) {
-          data_allocator.free(data);
-        }
-      }
-    } else {
-      const ObUserDefinedType *user_type = NULL;
-      OZ (get_external_user_type(resolve_ctx, user_type), KPC(this));
-      CK (OB_NOT_NULL(user_type));
-      OZ (user_type->free_data(resolve_ctx, data_allocator, data), KPC(this));
-    }
   }
   return ret;
 }
@@ -1158,6 +1096,7 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     uint16_t flags;
     ObScale num_decimals;
     ObObj param;
+    ObArenaAllocator local_allocator;
     if (OB_FAIL(get_size(PL_TYPE_INIT_SIZE, init_size))) {
       LOG_WARN("get base type init size failed", K(ret));
     } else if (OB_ISNULL(dst) || (dst_len - dst_pos < init_size)) {
@@ -1166,16 +1105,16 @@ int ObPLDataType::deserialize(ObSchemaGetterGuard &schema_guard,
     } else if (OB_FAIL(ObSMUtils::get_mysql_type(get_obj_type(), mysql_type, flags, num_decimals))) {
       LOG_WARN("get mysql type failed", K(ret));
     } else if (OB_FAIL(ObMPStmtExecute::parse_basic_param_value(
-        allocator, (uint8_t)mysql_type, charset, ObCharsetType::CHARSET_INVALID, cs_type, ncs_type, src, tz_info, param, true, NULL,
+        local_allocator, (uint8_t)mysql_type, charset, ObCharsetType::CHARSET_INVALID, cs_type, ncs_type, src, tz_info, param, true, NULL,
         NULL == get_data_type() ? false : get_data_type()->get_meta_type().is_unsigned_integer()))) {
       // get_data_type() is null, its a extend type, unsigned need false.
       LOG_WARN("failed to parse basic param value", K(ret));
     } else {
       ObObj *obj = reinterpret_cast<ObObj *>(dst + dst_pos);
-      *obj = param;
-      dst_pos += sizeof(ObObj);
+      OZ (deep_copy_obj(allocator, param, *obj));
+      OX (dst_pos += sizeof(ObObj));
       LOG_DEBUG("deserialize ob pl data type success",
-                K(*this), K(*obj), K(obj), K(dst_pos), K(dst));
+                K(*this), K(*obj), K(obj), K(dst_pos), K(dst), K(ret));
     }
   } else {
     const ObUserDefinedType *user_type = NULL;
@@ -1227,8 +1166,9 @@ int ObPLDataType::convert(ObPLResolveCtx &ctx, ObObj *&src, ObObj *&dst) const
     OX (src ++);
     OX (dst ++);
   } else {
+    ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     const ObUserDefinedType *user_type = NULL;
-    OZ (ctx.get_user_type(get_user_type_id(), user_type));
+    OZ (ctx.get_user_type(get_user_type_id(), user_type, &allocator));
     CK (OB_NOT_NULL(user_type));
     OZ (user_type->convert(ctx, src, dst));
   }
@@ -2190,6 +2130,7 @@ int ObPLCursorInfo::close(sql::ObSQLSessionInfo &session, bool is_reuse)
       if (OB_SUCC(ret) && OB_NOT_NULL(get_spi_cursor())) {
         get_spi_cursor()->~ObSPICursor();
         get_allocator()->free(get_spi_cursor());
+        spi_cursor_ = nullptr;
       }
     }
 #ifdef OB_BUILD_ORACLE_PL

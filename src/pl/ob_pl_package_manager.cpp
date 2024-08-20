@@ -1016,9 +1016,9 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
                                             bool from_proxy)
 {
   int ret = OB_SUCCESS;
-  ObPLPackageState *package_state = NULL;
   bool need_free_new = false;
   bool need_free_old = false;
+  ObPLPackageState *package_state = NULL;
   ObObj old_var_val;
   ObObj new_var_val;
   const ObPLVar *var = NULL;
@@ -1087,10 +1087,17 @@ int ObPLPackageManager::set_package_var_val(const ObPLResolveCtx &resolve_ctx,
     // package ref cursor variable, refrence outside, do not destruct it.
   } else {
     if (OB_FAIL(ret) && need_free_new) {
-      ObUserDefinedType::destruct_obj(new_var_val, &(resolve_ctx.session_info_));
+      ObUserDefinedType::destruct_objparam(package_state->get_pkg_allocator(), new_var_val, &(resolve_ctx.session_info_));
     }
     if (need_free_old) {
-      ObUserDefinedType::destruct_obj(old_var_val, &(resolve_ctx.session_info_));
+      if (new_var_val.is_null() &&
+          old_var_val.is_pl_extend() &&
+          var->get_type().get_type() != PL_CURSOR_TYPE &&
+          var->get_type().get_type() != PL_REF_CURSOR_TYPE) {
+        // do nothing
+      } else {
+        ObUserDefinedType::destruct_objparam(package_state->get_pkg_allocator(), old_var_val, &(resolve_ctx.session_info_));
+      }
     }
   }
   if (!need_deserialize) {
@@ -1553,6 +1560,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
       ObArenaAllocator tmp_allocator;
       OX (exec_ctx_bak.backup(exec_ctx));
       OZ (exec_env_bak.load(resolve_ctx.session_info_, &tmp_allocator));
+      OZ (package_state->init());
       if (OB_SUCC(ret)) {
         OZ (package.get_exec_env().store(resolve_ctx.session_info_));
         sql::ObPhysicalPlanCtx phy_plan_ctx(exec_ctx.get_allocator());
