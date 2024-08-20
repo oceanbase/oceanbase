@@ -159,7 +159,7 @@ class ObServiceNameProxy
 public:
   static constexpr int64_t SERVICE_NAME_MAX_NUM = 1;
   static int check_is_service_name_enabled(const uint64_t tenant_id);
-  static int select_all_service_names(
+  static int select_all_service_names_with_epoch(
     const int64_t tenant_id,
     int64_t &epoch,
     ObIArray<ObServiceName> &all_service_names);
@@ -180,17 +180,24 @@ public:
       ObArray<ObServiceName> &all_service_names);
   static int delete_service_name(const ObServiceName &service_name);
   static int get_tenant_service_name_num(
-    common::ObISQLClient &sql_proxy,
-    const uint64_t tenant_id,
-    int64_t &service_name_num);
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      int64_t &service_name_num);
 
   ObServiceNameProxy() {}
   virtual ~ObServiceNameProxy() {}
 private:
   static int select_all_service_names_(
-    common::ObISQLClient &sql_proxy,
-    const int64_t tenant_id,
-    ObIArray<ObServiceName> &all_service_names);
+      common::ObISQLClient &sql_proxy,
+      const int64_t tenant_id,
+      ObIArray<ObServiceName> &all_service_names);
+  static int select_service_name_sql_helper_(
+      common::ObISQLClient &sql_proxy,
+      const int64_t tenant_id,
+      const bool extract_epoch,
+      ObSqlString &sql,
+      int64_t &epoch,
+      ObIArray<ObServiceName> &all_service_names);
   static int trans_start_and_precheck_(
       ObMySQLTransaction &trans,
       const uint64_t tenant_id,
@@ -202,12 +209,12 @@ private:
       const ObSqlString &sql,
       ObArray<ObServiceName> &all_service_names);
   static int build_service_name_(
-    const common::sqlclient::ObMySQLResult &res,
-    ObServiceName &service_name);
+      const common::sqlclient::ObMySQLResult &res,
+      ObServiceName &service_name);
   static int get_tenant_service_name_num_(
-    common::ObISQLClient &sql_proxy,
-    const uint64_t tenant_id,
-    int64_t &service_name_num);
+      common::ObISQLClient &sql_proxy,
+      const uint64_t tenant_id,
+      int64_t &service_name_num);
   DISALLOW_COPY_AND_ASSIGN(ObServiceNameProxy);
 };
 } // end namespace share

@@ -154,7 +154,7 @@ int ObServiceNameCommand::start_service(
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(service_name_str));
   } else if (OB_FAIL(check_and_get_tenants_servers_(tenant_id, true /* include_temp_offline */, target_servers))) {
     LOG_WARN("fail to execute check_and_get_tenants_servers_", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names(tenant_id, epoch, all_service_names))) {
+  } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names_with_epoch(tenant_id, epoch, all_service_names))) {
     LOG_WARN("fail to select service_name", KR(ret), K(tenant_id), K(service_name_str));
   } else if (OB_FAIL(extract_service_name_(all_service_names, service_name_str, service_name))) {
     LOG_WARN("fail to execute extract_service_name_", KR(ret), K(all_service_names), K(service_name_str));
@@ -202,7 +202,7 @@ int ObServiceNameCommand::stop_service(
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !service_name_str.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(tenant_id), K(service_name_str));
-  } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names(tenant_id, epoch, all_service_names))) {
+  } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names_with_epoch(tenant_id, epoch, all_service_names))) {
     LOG_WARN("fail to select service_name", KR(ret), K(tenant_id), K(service_name_str));
   } else if (OB_FAIL(extract_service_name_(all_service_names, service_name_str, service_name))) {
     LOG_WARN("fail to execute extract_service_name_", KR(ret), K(all_service_names), K(service_name_str));

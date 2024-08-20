@@ -802,7 +802,7 @@ int ObAllServiceNamesCache::refresh_service_name()
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObServiceNameProxy::select_all_service_names(tenant_id_, epoch, all_service_names))) {
+      if (OB_FAIL(ObServiceNameProxy::select_all_service_names_with_epoch(tenant_id_, epoch, all_service_names))) {
         LOG_WARN("fail to load", KR(ret), K(tenant_id_));
       } else if (OB_FAIL(update_service_name(epoch, all_service_names))) {
         LOG_WARN("fail to update service_name", KR(ret), K(all_service_names));

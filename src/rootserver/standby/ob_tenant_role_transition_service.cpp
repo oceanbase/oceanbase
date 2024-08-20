@@ -519,8 +519,8 @@ int ObTenantRoleTransitionService::clear_service_name_()
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names(tenant_id_, epoch, all_service_names))) {
-    LOG_WARN("fail to execute select_all_service_names", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObServiceNameProxy::select_all_service_names_with_epoch(tenant_id_, epoch, all_service_names))) {
+    LOG_WARN("fail to execute select_all_service_names_with_epoch", KR(ret), K(tenant_id_));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < all_service_names.count(); i++) {
       const ObServiceName &service_name = all_service_names.at(i);

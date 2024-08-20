@@ -231,47 +231,30 @@ void ObServiceName::reset()
   service_name_str_.reset();
   service_status_ = INVALID_SERVICE_STATUS;
 }
-int ObServiceNameProxy::select_all_service_names(
+int ObServiceNameProxy::select_all_service_names_with_epoch(
     const int64_t tenant_id,
     int64_t &epoch,
     ObIArray<ObServiceName> &all_service_names)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-  const uint64_t exec_tenant_id = gen_meta_tenant_id(tenant_id);
+  const bool EXTRACT_EPOCH = true;
+  ObSqlString sql;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, exec_tenant_id))) {
-    LOG_WARN("fail to start trans", KR(ret));
-  } else if (OB_FAIL(ObServiceEpochProxy::select_service_epoch_for_update(trans, tenant_id, ObServiceEpochProxy::SERVICE_NAME_EPOCH, epoch))) {
-    LOG_WARN("fail to get service epoch", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(select_all_service_names_(trans, tenant_id, all_service_names))) {
-    LOG_WARN("fail to execute select_all_service_names_", KR(ret), K(tenant_id));
-  }
-  if (OB_UNLIKELY(!trans.is_started())) {
-    LOG_WARN("the transaction is not started");
-  } else {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("fail to commit the transaction", KR(ret), KR(tmp_ret), K(tenant_id));
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-    }
-  }
-  if (OB_SUCC(ret) && SERVICE_NAME_MAX_NUM < all_service_names.count()) {
-    /* Exceeding instances of 'service_name' beyond SERVICE_NAME_MAX_NUM are extracted and logged as warnings.
-      This does not disrupt the main logic flow. Only the earliest SERVICE_NAME_MAX_NUM 'service_name' entries,
-      based on creation time, are retained. */
-    int tmp_ret = OB_INVALID_DATA;
-    LOG_WARN("all_service_names reaches its limit", KR(ret), KR(tmp_ret), K(all_service_names));
-    for (int64_t i = all_service_names.count() - 1; OB_SUCC(ret) && i > SERVICE_NAME_MAX_NUM; i--) {
-      if (OB_FAIL(all_service_names.remove(i))) {
-        LOG_WARN("fail to remove redundant service_name", KR(ret), K(all_service_names), K(i));
-      }
-    }
+  } else if (OB_FAIL(sql.assign_fmt("SELECT s.*, e.value as epoch FROM %s AS s "
+      "JOIN %s AS e ON s.tenant_id = e.tenant_id WHERE s.tenant_id = %lu and e.name='%s' ORDER BY s.gmt_create",
+      OB_ALL_SERVICE_TNAME, OB_ALL_SERVICE_EPOCH_TNAME, tenant_id, ObServiceEpochProxy::SERVICE_NAME_EPOCH))) {
+    // join the two tables to avoid add a row lock on __all_service_epoch
+    // otherwise there might be conflicts and too many retries in tenant_info_loader thread
+    // when the number of observers is large
+    LOG_WARN("sql assign_fmt failed", KR(ret), K(sql));
+  } else if (OB_FAIL(select_service_name_sql_helper_(*GCTX.sql_proxy_, tenant_id, EXTRACT_EPOCH,
+      sql, epoch, all_service_names))) {
+    LOG_WARN("fail to execute select_service_name_sql_helper_", KR(ret), K(tenant_id), K(sql));
   }
   return ret;
 }
@@ -282,22 +265,40 @@ int ObServiceNameProxy::select_all_service_names_(
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
-  ObTimeoutCtx ctx;
-  all_service_names.reset();
-  const int64_t QUERY_TIMEOUT = 5 * GCONF.rpc_timeout; // 10s
+  const bool NOT_EXTRACT_EPOCH = false;
+  int64_t unused_epoch = 0;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, QUERY_TIMEOUT))) {
-    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx), K(QUERY_TIMEOUT));
   } else if (OB_FAIL(sql.assign_fmt("SELECT * FROM %s WHERE TENANT_ID = %lu ORDER BY gmt_create",
       OB_ALL_SERVICE_TNAME, tenant_id))) {
     LOG_WARN("sql assign_fmt failed", KR(ret), K(sql));
+  } else if (OB_FAIL(select_service_name_sql_helper_(sql_proxy, tenant_id, NOT_EXTRACT_EPOCH,
+      sql, unused_epoch, all_service_names))) {
+    LOG_WARN("fail to execute select_service_name_sql_helper_", KR(ret), K(tenant_id), K(sql));
+  }
+  return ret;
+}
+
+int ObServiceNameProxy::select_service_name_sql_helper_(
+    common::ObISQLClient &sql_proxy,
+    const int64_t tenant_id,
+    const bool extract_epoch,
+    ObSqlString &sql,
+    int64_t &epoch,
+    ObIArray<ObServiceName> &all_service_names)
+{
+  int ret = OB_SUCCESS;
+  ObTimeoutCtx ctx;
+  const int64_t QUERY_TIMEOUT = 5 * GCONF.rpc_timeout; // 10s
+  all_service_names.reset();
+  if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, QUERY_TIMEOUT))) {
+    LOG_WARN("fail to get timeout ctx", KR(ret), K(ctx), K(QUERY_TIMEOUT));
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-       ObMySQLResult *result = NULL;
+      ObMySQLResult *result = NULL;
       if (OB_FAIL(sql_proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
-        LOG_WARN("execute sql failed", K(sql), KR(ret));
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
       } else if (NULL == (result = res.get_result())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("execute sql failed", K(sql), KR(ret));
@@ -316,6 +317,9 @@ int ObServiceNameProxy::select_all_service_names_(
             LOG_WARN("fail to build server status", KR(ret));
           } else if (OB_FAIL(all_service_names.push_back(service_name))) {
             LOG_WARN("fail to build service_name", KR(ret));
+          } else if (extract_epoch) {
+            // epoch can only be extracted when __all_service_epoch table is joined
+            EXTRACT_INT_FIELD_MYSQL(*result, "epoch", epoch, int64_t);
           }
         }
       }
@@ -372,6 +376,7 @@ int ObServiceNameProxy::select_service_name(
   }
   return ret;
 }
+
 int ObServiceNameProxy::insert_service_name(
     const uint64_t tenant_id,
     const ObServiceNameString &service_name_str,
