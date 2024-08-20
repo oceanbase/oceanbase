@@ -20,38 +20,17 @@
 #include <stdarg.h>
 #include <execinfo.h>
 
-inline int64_t &bt(const char *msg)
-{
-  int i = 0;
-  static int64_t enable_bt = 0;
-  if (enable_bt > 0) {
-    void *buffer[100];
-    int size = ob_backtrace(buffer, 100);
-    char **strings = backtrace_symbols(buffer, size);
-    _OB_LOG(DEBUG, "%s", msg);
-    if (NULL != strings) {
-      for (i = 0; i < size; i++) {
-        _OB_LOG(DEBUG, "BT[%d] @[%s]", i, strings[i]);
-      }
-      free(strings);
-    }
-  }
-  return enable_bt;
-}
-
 #ifdef __ENABLE_PRELOAD__
 inline int pthread_key_create(pthread_key_t *key, void (*destructor)(void *))
 {
   int (*real_func)(pthread_key_t *key,
                    void (*destructor)(void *)) = (typeof(real_func))dlsym(RTLD_NEXT, "pthread_key_create");
-  bt("pthread_key_create");
   return real_func(key, destructor);
 }
 
 inline int pthread_key_delete(pthread_key_t key)
 {
   int (*real_func)(pthread_key_t key) = (typeof(real_func))dlsym(RTLD_NEXT, "pthread_key_delete");
-  bt("pthread_key_delete");
   return real_func(key);
 }
 #endif /* __ENABLE_PRELOAD__ */

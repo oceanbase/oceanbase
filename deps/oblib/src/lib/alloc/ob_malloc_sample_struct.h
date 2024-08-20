@@ -20,9 +20,6 @@ namespace oceanbase
 {
 namespace lib
 {
-static const int32_t AOBJECT_BACKTRACE_COUNT = 16;
-static const int32_t AOBJECT_BACKTRACE_SIZE = sizeof(void*) * AOBJECT_BACKTRACE_COUNT;
-static const int32_t MAX_BACKTRACE_LENGTH = 512;
 static const int32_t MAX_MALLOC_SAMPLER_NUM = (1<<15) - 1;
 
 class ObMallocSampleLimiter
@@ -100,7 +97,10 @@ inline bool ObMallocSampleLimiter::try_acquire(int64_t alloc_bytes)
 inline bool ObMallocSampleLimiter::malloc_sample_allowed(const int64_t size, const ObMemAttr &attr)
 {
   bool ret = false;
-  if (OB_UNLIKELY(INTERVAL_UPPER_LIMIT == min_malloc_sample_interval)) {
+  if (ObLightBacktraceGuard::is_enabled()) {
+    // light_backtrace can sample all.
+    ret = true;
+  } else if (OB_UNLIKELY(INTERVAL_UPPER_LIMIT == min_malloc_sample_interval)) {
     // Zero sample mode.
   } else if (OB_UNLIKELY(MUST_SAMPLE_SIZE <= size)) {
     // Full sample when size is bigger than 16M.
@@ -159,15 +159,6 @@ inline bool ObMallocSampleKey::operator==(const ObMallocSampleKey &other) const
   return ret;
 }
 
-#define ob_malloc_sample_backtrace(obj, size)                                                                  \
-  {                                                                                                            \
-    if (OB_UNLIKELY(obj->on_malloc_sample_)) {                                                                 \
-      void *addrs[100] = {nullptr};                                                                            \
-      int bt_len = OB_BACKTRACE_M(addrs, ARRAYSIZEOF(addrs));                                                  \
-      STATIC_ASSERT(AOBJECT_BACKTRACE_SIZE < sizeof(addrs), "AOBJECT_BACKTRACE_SIZE must be less than addrs!"); \
-      MEMCPY(&obj->data_[size], (char*)addrs, AOBJECT_BACKTRACE_SIZE);                                         \
-    }                                                                                                          \
-  }
 } // end of namespace lib
 } // end of namespace oceanbase
 

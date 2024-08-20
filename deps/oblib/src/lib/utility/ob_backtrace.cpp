@@ -21,17 +21,45 @@
 #include "lib/utility/ob_defer.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/coro/co_var.h"
+#include "common/ob_common_utility.h"
 
 namespace oceanbase
 {
 namespace common
 {
+int light_backtrace(void **buffer, int size)
+{
+  int64_t rbp = 0;
+#if defined(__x86_64__)
+  asm("mov %%rbp, %0" : "=r"(rbp));
+#elif defined(__aarch64__)
+  asm("mov %0, x29" : "=r"(rbp));
+#endif
+  return light_backtrace(buffer, size, rbp);
+}
 
-int ob_backtrace(void **buffer, int size)
+int light_backtrace(void **buffer, int size, int64_t rbp)
 {
   int rv = 0;
-  if (OB_LIKELY(g_enable_backtrace)) {
-    rv = backtrace(buffer, size);
+  if (rv < size) {
+    int (*fp)(void**, int, int64_t) = light_backtrace;
+    buffer[rv++] = (void*)fp;
+  }
+  void *stack_addr = nullptr;
+  size_t stack_size = 0;
+  if (OB_LIKELY(OB_SUCCESS == get_stackattr(stack_addr, stack_size))) {
+#define addr_in_stack(addr) (addr >= (int64_t)stack_addr && addr < (int64_t)stack_addr + stack_size)
+    while (rbp != 0 && rv < size) {
+      if (!addr_in_stack(*(int64_t*)rbp) &&
+          !FALSE_IT(rbp += 16) &&
+          !addr_in_stack(*(int64_t*)rbp)) {
+        break;
+      } else {
+        int64_t return_addr = rbp + 8;
+        buffer[rv++] = (void*)*(int64_t*)return_addr;
+        rbp = *(int64_t*)rbp;
+      }
+    }
   }
   return rv;
 }
@@ -127,13 +155,13 @@ RLOCAL(ByteBuf<LBT_BUFFER_LENGTH>, buffer);
 
 char *lbt()
 {
-  int size = OB_BACKTRACE_M(addrs, MAX_ADDRS_COUNT);
+  int size = ob_backtrace(addrs, MAX_ADDRS_COUNT);
   return parray(*&buffer, LBT_BUFFER_LENGTH, (int64_t *)addrs, size);
 }
 
 char *lbt(char *buf, int32_t len)
 {
-  int size = OB_BACKTRACE_M(addrs, MAX_ADDRS_COUNT);
+  int size = ob_backtrace(addrs, MAX_ADDRS_COUNT);
   return parray(buf, len, (int64_t *)addrs, size);
 }
 
@@ -178,7 +206,7 @@ void addrs_to_offsets(void **buffer, int size)
 EXTERN_C_BEGIN
 int ob_backtrace_c(void **buffer, int size)
 {
-  return OB_BACKTRACE_M(buffer, size);
+  return ob_backtrace(buffer, size);
 }
 char *parray_c(char *buf, int64_t len, int64_t *array, int size)
 {

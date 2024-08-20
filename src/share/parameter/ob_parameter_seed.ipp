@@ -1820,3 +1820,6 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
                      "\"Disable\" represent disable spm (default value)."
                      "\"OnlineEvolve\" represent evolve plan online.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_memleak_light_backtrace, OB_CLUSTER_PARAMETER, "True",
+        "specifies whether allow memleak to get the backtrace of malloc by light_backtrace",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

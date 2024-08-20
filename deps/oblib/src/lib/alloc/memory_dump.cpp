@@ -14,7 +14,6 @@
 
 #include "lib/alloc/memory_dump.h"
 #include <setjmp.h>
-#include "lib/alloc/ob_free_log_printer.h"
 #include "lib/signal/ob_signal_struct.h"
 #include "lib/rc/context.h"
 #include "lib/utility/utility.h"
@@ -401,12 +400,11 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
     LabelItem *litem = nullptr;
     auto key = std::make_pair(*(uint64_t*)object->label_, *((uint64_t*)object->label_ + 1));
     LabelInfoItem *linfoitem = lmap.get(key);
-    int64_t bt_size = object->on_malloc_sample_ ? AOBJECT_BACKTRACE_SIZE : 0;
     if (NULL != linfoitem) {
       // exist
       litem = linfoitem->litem_;
       litem->hold_ += hold;
-      litem->used_ += (object->alloc_bytes_ - bt_size);
+      litem->used_ += object->alloc_bytes_;
       litem->count_++;
       if (chunk != linfoitem->chunk_) {
         litem->chunk_cnt_ += 1;
@@ -426,7 +424,7 @@ int label_stat(AChunk *chunk, ABlock *block, AObject *object,
         litem->str_[sizeof(litem->str_) - 1] = '\0';
         litem->str_len_ = strlen(litem->str_);
         litem->hold_ = hold;
-        litem->used_ = (object->alloc_bytes_ - bt_size);
+        litem->used_ = object->alloc_bytes_;
         litem->count_ = 1;
         litem->block_cnt_ = 1;
         litem->chunk_cnt_ = 1;
@@ -443,20 +441,20 @@ int malloc_sample_stat(uint64_t tenant_id, uint64_t ctx_id,
 {
   int ret = OB_SUCCESS;
   if (object->in_use_ && object->on_malloc_sample_) {
-    int64_t offset = object->alloc_bytes_ - AOBJECT_BACKTRACE_SIZE;
     ObMallocSampleKey key;
     key.tenant_id_ = tenant_id;
     key.ctx_id_ = ctx_id;
-    MEMCPY((char*)key.bt_, &object->data_[offset], AOBJECT_BACKTRACE_SIZE);
+    MEMCPY((char*)key.bt_, object->bt(), AOBJECT_BACKTRACE_SIZE);
     STRNCPY(key.label_, object->label_, sizeof(key.label_));
     key.label_[sizeof(key.label_) - 1] = '\0';
     ObMallocSampleValue *item = malloc_sample_map.get(key);
     if (NULL != item) {
       item->alloc_count_ += 1;
-      item->alloc_bytes_ += offset;
+      item->alloc_bytes_ += object->alloc_bytes_;
     } else {
+      ObMallocSampleValue value(1, object->alloc_bytes_);
       ObSignalHandlerGuard guard(ob_signal_handler);
-      ret = malloc_sample_map.set_refactored(key, ObMallocSampleValue(1, offset));
+      ret = malloc_sample_map.set_refactored(key, value);
     }
   }
   return ret;
@@ -595,7 +593,6 @@ void ObMemoryDump::handle(void *task)
       ObLatchWGuard guard(iter_lock_, common::ObLatchIds::MEM_DUMP_ITER_LOCK);
       std::swap(r_stat_, w_stat_);
     }
-    ObFreeLogPrinter::get_instance().disable_free_log();
   } else {
     int fd = -1;
     if (-1 == (fd = ::open(LOG_FILE,
