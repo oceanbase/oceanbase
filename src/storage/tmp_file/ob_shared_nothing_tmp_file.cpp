@@ -900,7 +900,9 @@ int ObSharedNothingTmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
       if (OB_FAIL(inner_write_(io_ctx))) {
         if (OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret) {
           ret = OB_SUCCESS;
-          LOG_INFO("alloc mem failed, try to evict pages", K(fd_), K(file_size_), K(io_ctx), KPC(this));
+          if (TC_REACH_COUNT_INTERVAL(10)) {
+            LOG_INFO("alloc mem failed, try to evict pages", K(fd_), K(file_size_), K(io_ctx), KPC(this));
+          }
           if (OB_FAIL(page_cache_controller_->invoke_swap_and_wait(
                   MIN(io_ctx.get_todo_size(), ObTmpFileGlobal::TMP_FILE_WRITE_BATCH_PAGE_NUM * ObTmpFileGlobal::PAGE_SIZE),
                   io_ctx.get_io_timeout_ms()))) {
