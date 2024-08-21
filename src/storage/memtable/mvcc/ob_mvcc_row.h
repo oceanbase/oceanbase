@@ -418,10 +418,11 @@ struct ObMvccRow
                   ObMvccWriteResult &res);
 
   // ===================== ObMvccRow Protection Code =====================
-  // check double insert
-  int check_double_insert_(const share::SCN snapshot_version,
-                           ObMvccTransNode &node,
-                           ObMvccTransNode *prev);
+  // sanity check during mvcc_write
+  int mvcc_sanity_check_(const share::SCN snapshot_version,
+                         const concurrent_control::ObWriteFlag write_flag,
+                         ObMvccTransNode &node,
+                         ObMvccTransNode *prev);
 };
 
 }
