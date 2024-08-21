@@ -77,6 +77,9 @@ public:
   void set_synced() { has_synced_ = true; }
   bool is_synced() const { return has_synced_; }
 
+  void set_has_deserialized_buffer_ctx() { has_deserialized_buffer_ctx_ = true; }
+  bool has_deserialized_buffer_ctx() const { return has_deserialized_buffer_ctx_; }
+
   const share::SCN &get_base_scn() { return mds_base_scn_; }
 
   bool operator==(const ObTxBufferNode &buffer_node) const;
@@ -92,12 +95,14 @@ public:
                K(has_submitted_),
                K(has_synced_),
                "type", ObMultiDataSourcePrinter::to_str_mds_type(type_),
-               K(data_.length()));
+               K(data_.length()),
+               K(has_deserialized_buffer_ctx_));
 private:
   uint64_t register_no_;
   ObTxSEQ seq_no_;
   bool has_submitted_;
   bool has_synced_;
+  bool has_deserialized_buffer_ctx_;// FIXME: for compat issue, should be removed after barrier version
   share::SCN mds_base_scn_;
   ObTxDataSourceType type_;
   common::ObString data_;
@@ -128,6 +133,7 @@ private:
 
 typedef common::ObSEArray<ObTxBufferNode, 1> ObTxBufferNodeArray;
 typedef common::ObSEArray<storage::mds::BufferCtxNode , 1> ObTxBufferCtxArray;
+extern thread_local ObTxBufferNodeArray *TLOCAL_P_TX_BUFFER_NODE_ARRAY;// FIXME: for compat issue, should be removed after barrier version
 
 }
 }

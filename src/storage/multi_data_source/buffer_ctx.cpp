@@ -26,6 +26,7 @@
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "storage/tx/ob_trans_define.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
+#include "storage/tx/ob_trans_define.h"
 
 namespace oceanbase
 {
@@ -117,17 +118,65 @@ int deserialize_<BufferCtxTupleHelper::get_element_size()>(BufferCtx *&ctx_,
   return ret;
 }
 
+/****************************************************for compat********************************************************/
+transaction::ObTxBufferNode *get_current_tx_buffer_node() {
+  transaction::ObTxBufferNode *tx_buffer_node = nullptr;
+  if (transaction::TLOCAL_P_TX_BUFFER_NODE_ARRAY) {
+    transaction::ObTxBufferNodeArray &array = *transaction::TLOCAL_P_TX_BUFFER_NODE_ARRAY;
+    for (int64_t idx = 0; idx < array.count(); ++idx) {
+      if (!array[idx].has_deserialized_buffer_ctx()) {
+        tx_buffer_node = &array[idx];
+        break;
+      }
+    }
+  }
+  return tx_buffer_node;
+}
+int get_ctx_type_id_by_multi_data_source_type_idx(const transaction::ObTxDataSourceType multi_data_source_type, int64_t &ctx_type_idx) {
+  int ret = OB_SUCCESS;
+  switch (multi_data_source_type) {
+    #define NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
+    #define _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENUM_NAME) \
+    case transaction::ObTxDataSourceType::ENUM_NAME:\
+    {\
+      ctx_type_idx = TupleTypeIdx<BufferCtxTupleHelper, BUFFER_CTX_TYPE>::value;\
+    }\
+    break;
+    #include "storage/multi_data_source/compile_utility/mds_register.h"
+    #undef _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_
+    #undef NEED_GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
+    default:// this is an old MDS out of FRAME code, for example: table lock
+    MDS_LOG(INFO, "this multi data source is out of frame", KR(ret), K(ctx_type_idx), K(multi_data_source_type));
+    break;
+  }
+  return ret;
+}
+/**********************************************************************************************************************/
 int BufferCtxNode::deserialize(const char *buf, const int64_t buf_len, int64_t &pos, ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   MDS_TG(10_ms);
-  int64_t type_idx = INVALID_VALUE;
-  if (MDS_FAIL(serialization::decode(buf, buf_len, pos, type_idx))) {
-    MDS_LOG(ERROR, "fail to deserialize buffer ctx id", KR(ret), K(type_idx));
-  } else if (INVALID_VALUE == type_idx) {
-    MDS_LOG(DEBUG, "deserialized INVALD buffer ctx", KR(ret), K(type_idx), K(buf_len), K(pos));
-  } else if (MDS_FAIL(deserialize_<0>(ctx_, type_idx, buf, buf_len, pos, allocator))) {
-    MDS_LOG(WARN, "deserialized buffer ctx failed", KR(ret), K(type_idx));
+  int64_t ctx_type_idx = INVALID_VALUE;
+  transaction::ObTxBufferNode *tx_buffer_node = get_current_tx_buffer_node();
+  if (MDS_FAIL(serialization::decode(buf, buf_len, pos, ctx_type_idx))) {
+    MDS_LOG(ERROR, "fail to deserialize buffer ctx id", KR(ret), K(ctx_type_idx));
+  } else if (INVALID_VALUE == ctx_type_idx) {
+    MDS_LOG(DEBUG, "deserialized INVALD buffer ctx", KR(ret), K(ctx_type_idx), K(buf_len), K(pos));
+  } else {
+    if (tx_buffer_node) {
+      if (OB_FAIL(get_ctx_type_id_by_multi_data_source_type_idx(tx_buffer_node->get_data_source_type(), ctx_type_idx))) {
+        MDS_LOG(ERROR, "fail get_ctx_type_id_by_multi_data_source_type_idx", KR(ret), K(ctx_type_idx));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (MDS_FAIL(deserialize_<0>(ctx_, ctx_type_idx, buf, buf_len, pos, allocator))) {
+      MDS_LOG(WARN, "deserialized buffer ctx failed", KR(ret), K(ctx_type_idx));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (tx_buffer_node) {
+      tx_buffer_node->set_has_deserialized_buffer_ctx();
+    }
   }
   return ret;
 }
