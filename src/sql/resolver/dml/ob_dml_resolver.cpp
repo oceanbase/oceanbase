@@ -8118,14 +8118,15 @@ int ObDMLResolver::add_additional_function_according_to_type(const ColumnItem *c
         OZ(build_padding_expr(session_info_, column, expr));
       }
       if (OB_SUCC(ret)) {
-        bool need_column_convert = true;
-        if (OB_FAIL(check_insert_into_select_need_column_convert(column->get_expr(), expr, need_column_convert))) {
+        bool fast_calc = false;
+        if (OB_FAIL(check_insert_into_select_use_fast_column_convert(column->get_expr(), expr,
+                                                                     fast_calc))) {
           LOG_WARN("fail to check insert into select need column conv expr", K(ret));
-        } else if (need_column_convert && OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
-                                                              *params_.allocator_,
-                                                              *column->get_expr(),
-                                                              expr,
-                                                              session_info_))) {
+        } else if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*params_.expr_factory_,
+                                                                  *params_.allocator_,
+                                                                  *column->get_expr(),
+                                                                  expr,
+                                                                  session_info_))) {
           LOG_WARN("fail to build column conv expr", K(ret));
         } else if (column->is_geo_ && T_FUN_COLUMN_CONV == expr->get_expr_type()) {
           // 1. set geo sub type to cast mode to column covert expr when update
@@ -8141,6 +8142,9 @@ int ObDMLResolver::add_additional_function_according_to_type(const ColumnItem *c
             obj.set_int(ObInt32Type, static_cast<uint32_t>(geo_type) << 16 | ObGeometryType);
             type_expr->set_value(obj);
           }
+        }
+        if (fast_calc && OB_SUCC(ret)) {
+          expr->set_extra(expr->get_extra() | CM_FAST_COLUMN_CONV);
         }
       }
     }
@@ -13744,12 +13748,12 @@ int ObDMLResolver::check_index_table_has_partition_keys(const ObTableSchema *ind
   return ret;
 }
 
-int ObDMLResolver::check_insert_into_select_need_column_convert(const ObColumnRefRawExpr *target_expr,
-                                                                 const ObRawExpr *source_expr,
-                                                                 bool &need_column_convert)
+int ObDMLResolver::check_insert_into_select_use_fast_column_convert(const ObColumnRefRawExpr *target_expr,
+                                                                    const ObRawExpr *source_expr,
+                                                                    bool &fast_calc)
 {
   int ret = OB_SUCCESS;
-  need_column_convert = true;
+  fast_calc = false;
   ObDMLStmt *stmt = get_stmt();
   if (stmt->is_insert_stmt() && GCONF._ob_enable_direct_load) {
     const ObInsertStmt *insert_stmt = reinterpret_cast<ObInsertStmt *>(stmt);
@@ -13810,8 +13814,16 @@ int ObDMLResolver::check_insert_into_select_need_column_convert(const ObColumnRe
             // a.target column is nullable
             // or
             // b.target column is not allowed have NULL and can not read NULL from source column
-            // we just skip allocate column_conv expr
-            need_column_convert = false;
+            // we just allocate fast column_conv expr
+            fast_calc = true;
+          } else if (source_base_table_schema->is_external_table()) {
+            ObArenaAllocator alloc;
+            ObExternalFileFormat format;
+            if (OB_FAIL(format.load_from_string(source_base_table_schema->get_external_file_format(), alloc))) {
+              LOG_WARN("load from string failed", K(ret));
+            } else if (format.format_type_ == ObExternalFileFormat::CSV_FORMAT) {
+              fast_calc = true;
+            }
           }
         }
       }

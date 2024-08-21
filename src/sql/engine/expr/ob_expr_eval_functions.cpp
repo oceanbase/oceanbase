@@ -1240,7 +1240,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprRegexpLike::eval_hs_regexp_like,                     /* 746 */
   NULL, // ObExprRegexpReplace::eval_hs_regexp_replace,               /* 747 */
   NULL, // ObExprRegexpSubstr::eval_hs_regexp_substr,                 /* 748 */
-  NULL, // ObExprColumnConv::column_convert_fast,                     /* 749 */
+  ObExprColumnConv::column_convert_fast,                              /* 749 */
   NULL, //ObExprArrayContains::eval_array_contains_int64_t,           /* 750 */
   NULL, //ObExprArrayContains::eval_array_contains_float,             /* 751 */
   NULL, //ObExprArrayContains::eval_array_contains_double,            /* 752 */
@@ -1386,8 +1386,8 @@ static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
   NULL, // ObExprMinus::minus_vec_vec_batch,                          /* 134 */
   NULL, // ObExprMul::mul_vec_vec_batch,                              /* 135 */
   NULL, // ObExprDiv::div_vec_batch,                                  /* 136 */
-  NULL, // ObExprColumnConv::column_convert_batch,                    /* 137 */
-  NULL, // ObExprColumnConv::column_convert_batch_fast,               /* 138 */
+  ObExprColumnConv::column_convert_batch,                             /* 137 */
+  ObExprColumnConv::column_convert_batch_fast,                        /* 138 */
   NULL, // ObExprArrayContains::eval_array_contains_batch_int64_t,    /* 139 */
   NULL, // ObExprArrayContains::eval_array_contains_batch_float,      /* 140 */
   NULL, // ObExprArrayContains::eval_array_contains_batch_double,     /* 141 */
