@@ -85,15 +85,6 @@ Worker::Status Worker::check_wait()
   return ret_status;
 }
 
-void Worker::set_group_id(int32_t group_id)
-{
-  if (OBCG_DEFAULT_GROUP_ID == group_id_ || (is_user_group(group_id_) && is_valid_resource_group(group_id))) {
-    group_id_ = group_id;
-  } else {
-    LOG_ERROR_RET(OB_INNER_STAT_ERROR, "group_id is unexpected", K(group_id_), K(group_id));
-  }
-}
-
 bool Worker::sched_wait()
 {
   return true;
