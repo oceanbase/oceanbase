@@ -7099,7 +7099,7 @@ int ObTablet::calc_sstable_occupy_size(int64_t &occupy_size, int64_t &pure_backu
     } else {
       const ObSSTableMeta &sstable_meta = meta_handle.get_sstable_meta();
       occupy_size += sstable_meta.get_occupy_size();
-      if (!meta_handle.get_sstable_meta().get_basic_meta().table_flag_.has_local()) {
+      if (!meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_local()) {
         pure_backup_sstable_occupy_size += sstable_meta.get_occupy_size();
       }
     }

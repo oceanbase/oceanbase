@@ -3147,7 +3147,7 @@ int ObCopyRemoteSSTableInfoObProducer::check_need_copy_sstable_(
     need_copy_sstable = true;
   } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
     LOG_WARN("failed to get sstable meta handle", K(ret), KPC(sstable));
-  } else if (sst_meta_hdl.get_sstable_meta().get_table_flag().has_backup()) {
+  } else if (sst_meta_hdl.get_sstable_meta().get_table_backup_flag().has_backup()) {
     need_copy_sstable = true;
   }
 

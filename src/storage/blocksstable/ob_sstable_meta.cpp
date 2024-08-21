@@ -64,8 +64,9 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     master_key_id_(0),
     sstable_logic_seq_(0),
     latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE),
-    table_flag_(),
-    root_macro_seq_(0)
+    root_macro_seq_(0),
+    table_backup_flag_(),
+    table_shared_flag_()
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -118,7 +119,8 @@ bool ObSSTableBasicMeta::check_basic_meta_equality(const ObSSTableBasicMeta &oth
       && master_key_id_ == other.master_key_id_
       && 0 == MEMCMP(encrypt_key_, other.encrypt_key_, sizeof(encrypt_key_))
       && latest_row_store_type_ == other.latest_row_store_type_
-      && table_flag_ == other.table_flag_;
+      && table_backup_flag_ == other.table_backup_flag_
+      && table_shared_flag_ == other.table_shared_flag_;
 }
 
 bool ObSSTableBasicMeta::is_valid() const
@@ -146,7 +148,8 @@ bool ObSSTableBasicMeta::is_valid() const
            && sstable_logic_seq_ >= 0
            && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE
            && is_latest_row_store_type_valid())
-           && table_flag_.is_valid();
+           && table_backup_flag_.is_valid()
+           && table_shared_flag_.is_valid();
   return ret;
 }
 
@@ -186,7 +189,8 @@ void ObSSTableBasicMeta::reset()
   sstable_logic_seq_ = 0;
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
   latest_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
-  table_flag_.reset();
+  table_backup_flag_.reset();
+  table_shared_flag_.reset();
 }
 
 DEFINE_SERIALIZE(ObSSTableBasicMeta)
@@ -243,7 +247,8 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   master_key_id_,
                   sstable_logic_seq_,
                   latest_row_store_type_,
-                  table_flag_);
+                  table_backup_flag_,
+                  table_shared_flag_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -324,7 +329,8 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               master_key_id_,
               sstable_logic_seq_,
               latest_row_store_type_,
-              table_flag_);
+              table_backup_flag_,
+              table_shared_flag_);
   return ret;
 }
 
@@ -366,7 +372,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               master_key_id_,
               sstable_logic_seq_,
               latest_row_store_type_,
-              table_flag_);
+              table_backup_flag_,
+              table_shared_flag_);
   return len;
 }
 
@@ -643,7 +650,8 @@ int ObSSTableMeta::init_base_meta(
     basic_meta_.encrypt_id_ = param.encrypt_id_;
     basic_meta_.master_key_id_ = param.master_key_id_;
     MEMCPY(basic_meta_.encrypt_key_, param.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-    basic_meta_.table_flag_ = param.table_flag_;
+    basic_meta_.table_backup_flag_ = param.table_backup_flag_;
+    basic_meta_.table_shared_flag_ = param.table_shared_flag_;
     basic_meta_.length_ = basic_meta_.get_serialize_size();
     if (OB_FAIL(prepare_column_checksum(param.column_checksums_, allocator))) {
       LOG_WARN("fail to prepare column checksum", K(ret), K(param));
@@ -1389,6 +1397,9 @@ int ObSSTableMetaChecker::check_sstable_basic_meta(
   } else if (new_sstable_basic_meta.column_cnt_ != old_sstable_basic_meta.column_cnt_) {
     ret = OB_INVALID_DATA;
     LOG_WARN("column_cnt_ not match", K(ret), K(old_sstable_basic_meta), K(new_sstable_basic_meta));
+  } else if (new_sstable_basic_meta.table_shared_flag_ != old_sstable_basic_meta.table_shared_flag_) {
+    ret = OB_INVALID_DATA;
+    LOG_WARN("table_shared_flag_ not match", K(ret), K(old_sstable_basic_meta), K(new_sstable_basic_meta));
   }
   return ret;
 }

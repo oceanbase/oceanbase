@@ -668,8 +668,8 @@ void TestIndexTree::mock_compaction(const int64_t test_row_num,
   ASSERT_EQ(sec_blk.original_size_, sec_blk.data_zsize_);
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
   ASSERT_EQ(OB_SUCCESS, sstable_builder->close(res));
-  ASSERT_EQ(false, res.table_flag_.has_backup());
-  ASSERT_EQ(true, res.table_flag_.has_local());
+  ASSERT_EQ(false, res.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res.table_backup_flag_.has_local());
 
   ObSSTableMergeRes tmp_res;
   ASSERT_EQ(OB_ERR_UNEXPECTED, data_writer.close()); // not re-entrant
@@ -677,8 +677,8 @@ void TestIndexTree::mock_compaction(const int64_t test_row_num,
   ASSERT_EQ(tmp_res.root_desc_.buf_, res.root_desc_.buf_);
   ASSERT_EQ(tmp_res.data_root_desc_.buf_, res.data_root_desc_.buf_);
   ASSERT_EQ(tmp_res.data_blocks_cnt_, res.data_blocks_cnt_);
-  ASSERT_EQ(false, tmp_res.table_flag_.has_backup());
-  ASSERT_EQ(true, tmp_res.table_flag_.has_local());
+  ASSERT_EQ(false, tmp_res.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, tmp_res.table_backup_flag_.has_local());
 
   OK(data_write_ctxs.push_back(sstable_builder->roots_[0]->data_write_ctx_));
   roots = &(sstable_builder->roots_);
@@ -802,8 +802,8 @@ void TestIndexTree::mock_cg_compaction(const int64_t test_row_num,
   ASSERT_EQ(sec_blk.original_size_, sec_blk.data_zsize_);
   ASSERT_EQ(OB_SUCCESS, data_writer.close());
   ASSERT_EQ(OB_SUCCESS, sstable_builder->close(res));
-  ASSERT_EQ(false, res.table_flag_.has_backup());
-  ASSERT_EQ(true, res.table_flag_.has_local());
+  ASSERT_EQ(false, res.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res.table_backup_flag_.has_local());
 
   ObSSTableMergeRes tmp_res;
   ASSERT_EQ(OB_ERR_UNEXPECTED, data_writer.close()); // not re-entrant
@@ -811,8 +811,8 @@ void TestIndexTree::mock_cg_compaction(const int64_t test_row_num,
   ASSERT_EQ(tmp_res.root_desc_.buf_, res.root_desc_.buf_);
   ASSERT_EQ(tmp_res.data_root_desc_.buf_, res.data_root_desc_.buf_);
   ASSERT_EQ(tmp_res.data_blocks_cnt_, res.data_blocks_cnt_);
-  ASSERT_EQ(false, tmp_res.table_flag_.has_backup());
-  ASSERT_EQ(true, tmp_res.table_flag_.has_local());
+  ASSERT_EQ(false, tmp_res.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, tmp_res.table_backup_flag_.has_local());
 
   OK(data_write_ctxs.push_back(sstable_builder->roots_[0]->data_write_ctx_));
   roots = &(sstable_builder->roots_);
@@ -991,8 +991,8 @@ TEST_F(TestIndexTree, test_empty_index_tree)
   ASSERT_EQ(0, sstable_builder.roots_.count());
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(res.root_desc_.is_empty());
-  ASSERT_EQ(false, res.table_flag_.has_backup());
-  ASSERT_EQ(false, res.table_flag_.has_local());
+  ASSERT_EQ(false, res.table_backup_flag_.has_backup());
+  ASSERT_EQ(false, res.table_backup_flag_.has_local());
 
   // test rebuild macro blocks
   ASSERT_EQ(OB_SUCCESS, data_writer.open(data_desc.get_desc(), data_seq));
@@ -1006,8 +1006,8 @@ TEST_F(TestIndexTree, test_empty_index_tree)
   ret = sstable_builder.close(res);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(res.root_desc_.is_empty());
-  ASSERT_EQ(false, res.table_flag_.has_backup());
-  ASSERT_EQ(false, res.table_flag_.has_local());
+  ASSERT_EQ(false, res.table_backup_flag_.has_backup());
+  ASSERT_EQ(false, res.table_backup_flag_.has_local());
 
   // test easy index tree
   ObDatumRow row;
@@ -1130,8 +1130,8 @@ TEST_F(TestIndexTree, test_multi_writers_with_close)
   res.reset();
   sstable_builder.index_block_loader_.reset();
   OK(sstable_builder.close(res));
-  ASSERT_EQ(false, res.table_flag_.has_backup());
-  ASSERT_EQ(true, res.table_flag_.has_local());
+  ASSERT_EQ(false, res.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res.table_backup_flag_.has_local());
 
   ObIndexTreeRootBlockDesc &root_desc = res.root_desc_;
   ASSERT_TRUE(root_desc.is_valid());
@@ -1356,8 +1356,8 @@ TEST_F(TestIndexTree, test_meta_builder_mem_and_disk)
   ASSERT_EQ(10, sst_builder->roots_[1]->meta_block_info_.get_row_count());
 
   ASSERT_EQ(OB_SUCCESS, sst_builder->close(res));
-  ASSERT_EQ(false, res.table_flag_.has_backup());
-  ASSERT_EQ(true, res.table_flag_.has_local());
+  ASSERT_EQ(false, res.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res.table_backup_flag_.has_local());
 
 
   ObSSTableMergeRes tmp_res;
@@ -1763,8 +1763,8 @@ TEST_F(TestIndexTree, test_reuse_macro_block)
   for (int64_t i = 0; i < res.data_blocks_cnt_; ++i) {
     ASSERT_EQ(res.data_block_ids_.at(i), reused_res.data_block_ids_.at(i));
   }
-  ASSERT_EQ(false, res.table_flag_.has_backup());
-  ASSERT_EQ(true, res.table_flag_.has_local());
+  ASSERT_EQ(false, res.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res.table_backup_flag_.has_local());
   sst_builder->~ObSSTableIndexBuilder();
 }
 
@@ -1902,8 +1902,8 @@ TEST_F(TestIndexTree, test_rebuilder)
   OK(data_writer.close());
   ObSSTableMergeRes res1;
   OK(sstable_builder1.close(res1));
-  ASSERT_EQ(false, res1.table_flag_.has_backup());
-  ASSERT_EQ(true, res1.table_flag_.has_local());
+  ASSERT_EQ(false, res1.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res1.table_backup_flag_.has_local());
 
   ObIndexBlockRebuilder rebuilder;
   OK(rebuilder.init(sstable_builder2, nullptr, 0));
@@ -1934,8 +1934,8 @@ TEST_F(TestIndexTree, test_rebuilder)
   OK(rebuilder.close());
   ObSSTableMergeRes res2;
   OK(sstable_builder2.close(res2));
-  ASSERT_EQ(false, res2.table_flag_.has_backup());
-  ASSERT_EQ(true, res2.table_flag_.has_local());
+  ASSERT_EQ(false, res2.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res2.table_backup_flag_.has_local());
   // compare merge res
   ASSERT_EQ(res1.root_desc_.height_, res2.root_desc_.height_);
   ASSERT_EQ(res1.root_desc_.height_, 2);
@@ -2128,8 +2128,8 @@ TEST_F(TestIndexTree, test_absolute_offset)
   ObSSTableMergeRes res2;
   OK(sstable_builder.close(res2));
   ASSERT_GT(res2.root_desc_.height_, 2);
-  ASSERT_EQ(false, res2.table_flag_.has_backup());
-  ASSERT_EQ(true, res2.table_flag_.has_local());
+  ASSERT_EQ(false, res2.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res2.table_backup_flag_.has_local());
 
   ObMicroBlockReaderHelper reader_helper;
   ObIMicroBlockReader *micro_reader;
@@ -2227,8 +2227,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_mem)
   OK(data_writer.close());
   ObSSTableMergeRes res1;
   OK(sstable_builder1.close(res1));
-  ASSERT_EQ(false, res1.table_flag_.has_backup());
-  ASSERT_EQ(true, res1.table_flag_.has_local());
+  ASSERT_EQ(false, res1.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res1.table_backup_flag_.has_local());
 
   ObIndexBlockRebuilder rebuilder;
   OK(mock_init_backup_rebuilder(rebuilder, sstable_builder2));
@@ -2265,8 +2265,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_mem)
   ASSERT_EQ(true, rebuilder.index_tree_root_ctx_->index_tree_info_.in_mem());
   rebuilder.~ObIndexBlockRebuilder();
   OK(sstable_builder2.close(res2));
-  ASSERT_EQ(false, res2.table_flag_.has_backup());
-  ASSERT_EQ(true, res2.table_flag_.has_local());
+  ASSERT_EQ(false, res2.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res2.table_backup_flag_.has_local());
   ASSERT_EQ(true, res2.data_root_desc_.is_mem_type());
   ASSERT_EQ(true, res2.root_desc_.is_mem_type());
   // compare merge res
@@ -2336,8 +2336,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_disk)
   OK(data_writer.close());
   ObSSTableMergeRes res1;
   OK(sstable_builder1.close(res1));
-  ASSERT_EQ(false, res1.table_flag_.has_backup());
-  ASSERT_EQ(true, res1.table_flag_.has_local());
+  ASSERT_EQ(false, res1.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res1.table_backup_flag_.has_local());
   ObIndexBlockRebuilder rebuilder;
   OK(mock_init_backup_rebuilder(rebuilder, sstable_builder2));
 
@@ -2374,8 +2374,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_all_disk)
   ObSSTableMergeRes res2;
 
   OK(sstable_builder2.close(res2));
-  ASSERT_EQ(false, res2.table_flag_.has_backup());
-  ASSERT_EQ(true, res2.table_flag_.has_local());
+  ASSERT_EQ(false, res2.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res2.table_backup_flag_.has_local());
   // compare merge res
   ASSERT_EQ(res1.root_desc_.height_, res2.root_desc_.height_);
   // ASSERT_EQ(res1.root_desc_.height_, 2);
@@ -2443,8 +2443,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_mem_and_disk)
   OK(data_writer.close());
   ObSSTableMergeRes res1;
   OK(sstable_builder1.close(res1));
-  ASSERT_EQ(false, res1.table_flag_.has_backup());
-  ASSERT_EQ(true, res1.table_flag_.has_local());
+  ASSERT_EQ(false, res1.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res1.table_backup_flag_.has_local());
   ObIndexBlockRebuilder rebuilder_mem;
   OK(mock_init_backup_rebuilder(rebuilder_mem, sstable_builder2));
   ObIndexBlockRebuilder rebuilder;
@@ -2496,8 +2496,8 @@ TEST_F(TestIndexTree, test_rebuilder_backup_mem_and_disk)
   rebuilder.~ObIndexBlockRebuilder();
   ObSSTableMergeRes res2;
   OK(sstable_builder2.close(res2));
-  ASSERT_EQ(false, res2.table_flag_.has_backup());
-  ASSERT_EQ(true, res2.table_flag_.has_local());
+  ASSERT_EQ(false, res2.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res2.table_backup_flag_.has_local());
 }
 
 TEST_F(TestIndexTree, test_cg_compaction_all_mem)
@@ -2554,8 +2554,8 @@ TEST_F(TestIndexTree, test_cg_compaction_all_mem)
   OK(sstable_builder2.close(res2));
 
 
-  ASSERT_EQ(false, res2.table_flag_.has_backup());
-  ASSERT_EQ(true, res2.table_flag_.has_local());
+  ASSERT_EQ(false, res2.table_backup_flag_.has_backup());
+  ASSERT_EQ(true, res2.table_backup_flag_.has_local());
   ASSERT_EQ(true, res2.data_root_desc_.is_mem_type());
   ASSERT_EQ(true, res2.root_desc_.is_mem_type());
   // compare merge res

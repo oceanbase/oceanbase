@@ -1464,7 +1464,7 @@ int ObTabletTableStore::inner_replace_remote_major_sstable_(
     LOG_WARN("no major table exist", K(ret), K(old_store), KPC(new_table));
   } else if (OB_FAIL(static_cast<ObSSTable *>(new_table)->get_meta(new_sst_meta_hdl))) {
     LOG_WARN("failed to get new sstable meta handle", K(ret), KPC(new_table));
-  } else if (new_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_flag_.has_backup()) {
+  } else if (new_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new table still has backup macro block", K(ret), KPC(new_table), K(new_sst_meta_hdl));
   } else if (OB_FAIL(old_store.major_tables_.get_all_tables(old_tables_array))) {
@@ -1478,7 +1478,7 @@ int ObTabletTableStore::inner_replace_remote_major_sstable_(
       LOG_WARN("get unexpected null table", K(ret), K(old_store));
     } else if (OB_FAIL(static_cast<ObSSTable *>(old_table)->get_meta(old_sst_meta_hdl))) {
       LOG_WARN("failed to get old sstable meta handle", K(ret), KPC(old_table));
-    } else if (old_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_flag_.has_no_backup()) {
+    } else if (old_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_no_backup()) {
       if (OB_FAIL(new_tables_array.push_back(old_table))) {
         LOG_WARN("failed to push back", K(ret));
       }
@@ -2173,14 +2173,14 @@ int ObTabletTableStore::check_new_sstable_can_be_accepted_(
   ObSSTableMetaHandle old_sst_meta_hdl;
   if (OB_FAIL(static_cast<ObSSTable *>(new_table)->get_meta(new_sst_meta_hdl))) {
     LOG_WARN("failed to get new sstable meta handle", K(ret), KPC(new_table));
-  } else if (new_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_flag_.has_backup()) {
+  } else if (new_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
     // compaction during restore, and backup macro block is reused by the new table.
     bool has_remote_sstable = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < old_tables.count(); ++i) {
       old_table = old_tables.at(i);
       if (OB_FAIL(static_cast<ObSSTable *>(old_table)->get_meta(old_sst_meta_hdl))) {
         LOG_WARN("failed to get old sstable meta handle", K(ret), KPC(old_table));
-      } else if (old_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_flag_.has_backup()) {
+      } else if (old_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
         has_remote_sstable = true;
         break;
       }
@@ -2206,7 +2206,7 @@ int ObTabletTableStore::check_new_major_sstable_can_be_accepted_(
   ObSSTableMetaHandle sst_meta_hdl;
   if (OB_FAIL(static_cast<ObSSTable *>(major_table)->get_meta(sst_meta_hdl))) {
     LOG_WARN("failed to get new sstable meta handle", K(ret), KPC(major_table));
-  } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_flag_.has_no_backup()) {
+  } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_no_backup()) {
     // do nothing
   } else if (OB_FAIL(old_store.ddl_sstables_.get_all_tables(ddl_sstables))) {
     LOG_WARN("get ddl dump sstables failed", K(ret), K(old_store));
@@ -2550,7 +2550,7 @@ int ObTabletTableStore::replace_ha_remote_ddl_tables_(
       LOG_WARN("table type is unexpected", K(ret), KPC(major_table));
     } else if (OB_FAIL(static_cast<ObSSTable *>(major_table)->get_meta(major_meta_handle))) {
       LOG_WARN("get major table meta fail", K(ret), KPC(major_table));
-    } else if (major_meta_handle.get_sstable_meta().get_basic_meta().table_flag_.has_backup()) {
+    } else if (major_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
       // This remote major is generated with ddl sstables by ddl commit. In this case, replace cannot
       // continue, should schedule replace remote major action again.
       ret = OB_NO_NEED_MERGE;
@@ -2921,7 +2921,7 @@ int ObTabletTableStore::replace_ha_remote_sstables_(
       LOG_WARN("new table is not sstable", K(ret), KPC(new_table));
     } else if (OB_FAIL(static_cast<ObSSTable *>(new_table)->get_meta(new_meta_handle))) {
       LOG_WARN("get table meta handle fail", K(ret), KPC(new_table));
-    } else if (new_meta_handle.get_sstable_meta().get_basic_meta().table_flag_.has_backup()) {
+    } else if (new_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new table still has backup macro block", K(ret), KPC(new_table), K(new_meta_handle));
     } else {
@@ -2942,7 +2942,7 @@ int ObTabletTableStore::replace_ha_remote_sstables_(
       LOG_WARN("old table is not sstable", K(ret), KPC(old_table));
     } else if (OB_FAIL(static_cast<ObSSTable *>(old_table)->get_meta(old_meta_handle))) {
       LOG_WARN("get table meta handle fail", K(ret), KPC(old_table));
-    } else if (old_meta_handle.get_sstable_meta().get_basic_meta().table_flag_.has_no_backup()) {
+    } else if (old_meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_no_backup()) {
       // this table does not has backup macro block, no need to be replaced.
       if (check_continue && OB_NOT_NULL(last_table) && old_table->get_start_scn() != last_table->get_end_scn()) {
         ret = OB_ERR_UNEXPECTED;
