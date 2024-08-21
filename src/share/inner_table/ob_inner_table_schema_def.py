@@ -14661,6 +14661,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
 # 12504: __all_virtual_function_io_stat
+# 12505: __all_virtual_temp_file
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15168,6 +15169,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat
 # 15484: __all_virtual_function_io_stat
+# 15485: __all_virtual_temp_file
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -35995,6 +35997,8 @@ def_table_schema(
 # 21619: CDB_OB_KV_REDIS_TABLE
 # 21620: GV$OB_FUNCTION_IO_STAT
 # 21621: V$OB_FUNCTION_IO_STAT
+# 21622: DBA_OB_TEMP_FILES
+# 21623: CDB_OB_TEMP_FILES
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -64109,6 +64113,7 @@ left join
 # 28261: DBA_OB_SPM_EVO_RESULT
 # 28262: GV$OB_FUNCTION_IO_STAT
 # 28263: V$OB_FUNCTION_IO_STAT
+# 28264: DBA_OB_TEMP_FILES
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
