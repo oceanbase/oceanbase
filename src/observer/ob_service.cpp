@@ -367,6 +367,10 @@ void ObService::stop()
     FLOG_INFO("begin to stop cluster event instance");
     CLUSTER_EVENT_INSTANCE.stop();
     FLOG_INFO("cluster event instance stopped");
+
+    FLOG_INFO("begin to stop tenant event instance");
+    TENANT_EVENT_INSTANCE.stop();
+    FLOG_INFO("tenant event instance stopped");
   }
   FLOG_INFO("[OBSERVICE_NOTICE] observice finish stop", K_(stopped));
 }
@@ -408,6 +412,10 @@ void ObService::wait()
     FLOG_INFO("begin to wait cluster event instance");
     CLUSTER_EVENT_INSTANCE.wait();
     FLOG_INFO("wait cluster event instance success");
+
+    FLOG_INFO("begin to wait tenant event instance");
+    TENANT_EVENT_INSTANCE.wait();
+    FLOG_INFO("wait tenant event instance success");
   }
   FLOG_INFO("[OBSERVICE_NOTICE] wait ob_service end");
 }
