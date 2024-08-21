@@ -303,8 +303,8 @@ int ObTenantTmpFileManager::aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIO
   } else if (FALSE_IT(io_handle.reset())) {
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
-  } else if (OB_FAIL(io_handle.init_read(io_info, tmp_file_handle))) {
-    LOG_WARN("fail to init io handle", KR(ret), K(io_info), K(tmp_file_handle));
+  } else if (OB_FAIL(io_handle.init_read(io_info))) {
+    LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info));
   }
@@ -332,8 +332,8 @@ int ObTenantTmpFileManager::aio_pread(const ObTmpFileIOInfo &io_info,
   } else if (FALSE_IT(io_handle.reset())) {
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
-  } else if (OB_FAIL(io_handle.init_pread(io_info, offset, tmp_file_handle))) {
-    LOG_WARN("fail to init io handle", KR(ret), K(io_info), K(tmp_file_handle));
+  } else if (OB_FAIL(io_handle.init_pread(io_info, offset))) {
+    LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info));
   }
@@ -359,8 +359,8 @@ int ObTenantTmpFileManager::read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHand
   } else if (FALSE_IT(io_handle.reset())) {
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
-  } else if (OB_FAIL(io_handle.init_read(io_info, tmp_file_handle))) {
-    LOG_WARN("fail to init io handle", KR(ret), K(io_info), K(tmp_file_handle));
+  } else if (OB_FAIL(io_handle.init_read(io_info))) {
+    LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info));
   }
@@ -394,8 +394,8 @@ int ObTenantTmpFileManager::pread(const ObTmpFileIOInfo &io_info, const int64_t 
   } else if (FALSE_IT(io_handle.reset())) {
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
-  } else if (OB_FAIL(io_handle.init_pread(io_info, offset, tmp_file_handle))) {
-    LOG_WARN("fail to init io handle", KR(ret), K(io_info), K(tmp_file_handle));
+  } else if (OB_FAIL(io_handle.init_pread(io_info, offset))) {
+    LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info));
   }
@@ -426,8 +426,8 @@ int ObTenantTmpFileManager::aio_write(const ObTmpFileIOInfo &io_info, ObTmpFileI
     LOG_WARN("invalid argument", KR(ret), K(io_info));
   } else if (OB_FAIL(get_tmp_file(io_info.fd_, tmp_file_handle))) {
     LOG_WARN("fail to get tmp file io handle", KR(ret), K(io_info));
-  } else if (OB_FAIL(io_handle.init_write(io_info, tmp_file_handle))) {
-    LOG_WARN("fail to init io handle", KR(ret), K(io_info), K(tmp_file_handle));
+  } else if (OB_FAIL(io_handle.init_write(io_info))) {
+    LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_write(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio write", KR(ret), K(io_info));
   }
