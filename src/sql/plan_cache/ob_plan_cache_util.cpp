@@ -73,8 +73,9 @@ int ObGetAllCacheIdOp::operator()(common::hash::HashMapPair<ObCacheObjID, ObILib
   if (NULL == key_array_ || OB_ISNULL(entry.second)) {
     ret = common::OB_NOT_INIT;
     SQL_PC_LOG(WARN, "invalid argument", K(ret));
-  } else if (entry.second->get_ns() >= ObLibCacheNameSpace::NS_CRSR
-            && entry.second->get_ns() <= ObLibCacheNameSpace::NS_PKG) {
+  } else if ((entry.second->get_ns() >= ObLibCacheNameSpace::NS_CRSR
+            && entry.second->get_ns() <= ObLibCacheNameSpace::NS_PKG)
+            ||entry.second->get_ns() == ObLibCacheNameSpace::NS_CALLSTMT) {
     if (OB_ISNULL(entry.second)) {
       // do nothing
     } else if (!entry.second->added_lc()) {
