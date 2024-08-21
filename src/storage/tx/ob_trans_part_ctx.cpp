@@ -2258,10 +2258,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "cb arg array is empty", K(ret), KPC(this));
       print_trace_log_();
-#ifdef ENABLE_DEBUG_LOG
-      usleep(5000);
-      ob_abort();
-#endif
+      OB_SAFE_ABORT();
     }
     if (log_cb->is_callbacked()) {
       skip_on_succ_cnt++;
@@ -2283,9 +2280,7 @@ int ObPartTransCtx::on_success(ObTxLogCb *log_cb)
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "callback was missed when tx ctx exiting", K(ret), KPC(log_cb), KPC(this));
         print_trace_log_();
-#ifdef ENABLE_DEBUG_LOG
-        ob_abort();
-#endif
+        OB_SAFE_ABORT();
       }
     } else {
       // save the first error code
@@ -2901,9 +2896,7 @@ int ObPartTransCtx::on_failure(ObTxLogCb *log_cb)
   share::SCN max_committed_scn;
   if (OB_FAIL(ls_tx_ctx_mgr_->get_ls_log_adapter()->get_palf_committed_max_scn(max_committed_scn))) {
     TRANS_LOG(ERROR, "get palf max committed scn fail, need retry", K(ret), KPC(this));
-#ifdef ENABLE_DEBUG_LOG
-    ob_abort(); // fast abort for easy debug
-#endif
+    OB_SAFE_ABORT();
   } else {
     TRANS_LOG(INFO, "succ get palf max_commited_scn", K(max_committed_scn), KPC(log_cb));
   }
@@ -5426,10 +5419,7 @@ int ObPartTransCtx::replay_redo_in_ctx(const ObTxRedoLog &redo_log,
       if (!is_tx_log_queue) {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "serial final redo must be in tx_log_queue", K(ret), KPC(this), K(timestamp));
-#ifdef ENABLE_DEBUG_LOG
-        usleep(50_ms);
-        ob_abort();
-#endif
+        OB_SAFE_ABORT();
       } else if (!exec_info_.serial_final_scn_.is_valid()) {
         ret = switch_to_parallel_logging_(timestamp, max_seq_no);
       }
@@ -5534,10 +5524,7 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
         && !pre_barrier) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(ERROR, "missing pre barrier flag for parallel replay", KR(ret), K(*this));
-#ifdef ENABLE_DEBUG_LOG
-      usleep(5000);
-      ob_abort();
-#endif
+      OB_SAFE_ABORT();
     } else if (OB_FAIL(check_replay_avaliable_(offset, timestamp, part_log_no, need_replay))) {
       TRANS_LOG(WARN, "check replay available failed", KR(ret), K(offset), K(timestamp), K(*this));
     } else if (!need_replay) {
@@ -5591,9 +5578,7 @@ int ObPartTransCtx::replay_rollback_to(const ObTxRollbackToLog &log,
       } else {
         ret = OB_ERR_UNEXPECTED;
         TRANS_LOG(ERROR, "code should not go here", K(ret), K(timestamp), K_(trans_id), KPC(this));
-#ifdef ENABLE_DEBUG_LOG
-        ob_abort();
-#endif
+        OB_SAFE_ABORT();
       }
     }
     if (OB_SUCC(ret) &&
@@ -5758,10 +5743,7 @@ int ObPartTransCtx::replay_commit_info(const ObTxCommitInfoLog &commit_info_log,
   if (is_parallel_logging() && !pre_barrier) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "missing pre barrier flag for parallel replay", KR(ret), K(*this));
-#ifdef ENABLE_DEBUG_LOG
-    usleep(5000);
-    ob_abort();
-#endif
+    OB_SAFE_ABORT();
   } else if (OB_FAIL(check_replay_avaliable_(offset, timestamp, part_log_no, need_replay))) {
     TRANS_LOG(WARN, "check replay available failed", KR(ret), K(offset), K(timestamp), K(*this));
   } else if (!need_replay) {
@@ -5951,6 +5933,10 @@ int ObPartTransCtx::replay_prepare(const ObTxPrepareLog &prepare_log,
   return ret;
 }
 
+ERRSIM_POINT_DEF(TX_REPLAY_COMMIT_FAIL_BEFORE_NOTIFY_TABLELOCK)
+ERRSIM_POINT_DEF(TX_REPLAY_COMMIT_FAIL_AFTER_NOTIFY_TABLELOCK)
+ERRSIM_POINT_DEF(TX_REPLAY_COMMIT_FAIL_AFTER_NOTIFY_ON_COMMIT)
+ERRSIM_POINT_DEF(TX_REPLAY_COMMIT_FAIL_AFTER_COMMIT)
 int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
                                   const palf::LSN &offset,
                                   const SCN &timestamp,
@@ -6034,21 +6020,29 @@ int ObPartTransCtx::replay_commit(const ObTxCommitLog &commit_log,
         (exec_info_.need_checksum_ && replay_completeness_.is_complete() ? commit_log.get_checksum() : 0);
     mt_ctx_.set_replay_compact_version(replay_compact_version);
 
-    if (OB_FAIL(notify_table_lock_(timestamp,
-                                   true,
-                                   exec_info_.multi_data_source_,
-                                   false /* not a force kill */))) {
+    if (OB_FAIL(TX_REPLAY_COMMIT_FAIL_BEFORE_NOTIFY_TABLELOCK)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
+    } else if (OB_FAIL(notify_table_lock_(timestamp,
+                                          true,
+                                          exec_info_.multi_data_source_,
+                                          false /* not a force kill */))) {
       TRANS_LOG(WARN, "notify table lock failed", KR(ret), "context", *this);
+    } else if (OB_FAIL(TX_REPLAY_COMMIT_FAIL_AFTER_NOTIFY_TABLELOCK)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
     } else if (OB_FAIL(notify_data_source_(NotifyType::ON_COMMIT,
                                            timestamp,
                                            true,
                                            exec_info_.multi_data_source_))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(commit_log));
+    } else if (OB_FAIL(TX_REPLAY_COMMIT_FAIL_AFTER_NOTIFY_ON_COMMIT)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
     } else if (OB_FAIL(trans_replay_commit_(ctx_tx_data_.get_commit_version(),
                                             timestamp,
                                             cluster_version_,
                                             checksum))) {
       TRANS_LOG(WARN, "trans replay commit failed", KR(ret), K(commit_log), KPC(this));
+    } else if (OB_FAIL(TX_REPLAY_COMMIT_FAIL_AFTER_COMMIT)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
       TRANS_LOG(WARN, "insert to tx table failed", KR(ret), K(*this));
     } else if (is_local_tx_()) {
@@ -6155,6 +6149,11 @@ int ObPartTransCtx::replay_clear(const ObTxClearLog &clear_log,
   return ret;
 }
 
+ERRSIM_POINT_DEF(TX_REPLAY_ABORT_FAIL_BEFORE_NOTIFY_TX_END)
+ERRSIM_POINT_DEF(TX_REPLAY_ABORT_FAIL_AFTER_NOTIFY_TX_END)
+ERRSIM_POINT_DEF(TX_REPLAY_ABORT_FAIL_AFTER_ABORT)
+ERRSIM_POINT_DEF(TX_REPLAY_ABORT_FAIL_AFTER_CLEAR)
+ERRSIM_POINT_DEF(TX_REPLAY_ABORT_FAIL_AFTER_NOTIFY_ON_ABORT)
 int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
                                  const palf::LSN &offset,
                                  const SCN &timestamp,
@@ -6222,16 +6221,26 @@ int ObPartTransCtx::replay_abort(const ObTxAbortLog &abort_log,
     if (OB_FAIL(mds_cache_.generate_final_notify_array(
             exec_info_.multi_data_source_, true /*need_merge_cache*/, true /*allow_log_overflow*/))) {
       TRANS_LOG(WARN, "gen total mds array failed", K(ret));
+    } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_BEFORE_NOTIFY_TX_END)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
     } else if (OB_FAIL(notify_data_source_(NotifyType::TX_END, timestamp, true,
                                            exec_info_.multi_data_source_))) {
       TRANS_LOG(WARN, "notify data source for TX_END failed", KR(ret), K(*this));
+    } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_NOTIFY_TX_END)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
     } else if (OB_FAIL(trans_replay_abort_(timestamp))) {
       TRANS_LOG(WARN, "transaction replay end error", KR(ret), "context", *this);
+    } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_ABORT)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
     } else if (OB_FAIL(trans_clear_())) {
       TRANS_LOG(WARN, "transaction clear error", KR(ret), "context", *this);
+    } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_CLEAR)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
     } else if (OB_FAIL(notify_data_source_(NotifyType::ON_ABORT, timestamp, true,
                                            mds_cache_.get_final_notify_array()))) {
       TRANS_LOG(WARN, "notify data source failed", KR(ret), K(abort_log));
+    } else if (OB_FAIL(TX_REPLAY_ABORT_FAIL_AFTER_NOTIFY_ON_ABORT)) {
+      TRANS_LOG(WARN, "errsim error", K(ret));
     } else if (!ctx_tx_data_.is_read_only() && OB_FAIL(ctx_tx_data_.add_abort_op(timestamp))) {
       TRANS_LOG(WARN, "add tx data abort_op failed", K(ret), KPC(this));
     } else if ((!ctx_tx_data_.is_read_only()) && OB_FAIL(ctx_tx_data_.insert_into_tx_table())) {
@@ -7659,6 +7668,7 @@ int ObPartTransCtx::notify_data_source_(const NotifyType notify_type,
   return ret;
 }
 
+ERRSIM_POINT_DEF(TX_FORCE_WRITE_CLOG)
 int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_source_type,
                                                const char *buf,
                                                const int64_t len,
@@ -7755,7 +7765,8 @@ int ObPartTransCtx::register_multi_data_source(const ObTxDataSourceType data_sou
 
         TRANS_LOG(WARN, "notify data source for register_succ failed", K(tmp_ret));
       } else if (mds_cache_.get_unsubmitted_size() < ObTxMultiDataSourceLog::MAX_PENDING_BUF_SIZE
-                 && !register_flag.need_flush_redo_instantly_) {
+                 && !register_flag.need_flush_redo_instantly_
+                 && (OB_SUCCESS == TX_FORCE_WRITE_CLOG)) {
         // do nothing
       } else if (OB_SUCCESS
                  != (tmp_ret = submit_log_impl_(ObTxLogType::TX_MULTI_DATA_SOURCE_LOG))) {
@@ -10607,9 +10618,7 @@ inline int ObPartTransCtx::switch_to_parallel_logging_(const share::SCN serial_f
     TRANS_LOG(ERROR, "max seq_no of serial final log is invalid",
               K(ret), K(serial_final_scn), K(max_seq_no), KPC(this));
     print_trace_log_();
-#ifdef ENABLE_DEBUG_LOG
-    ob_abort();
-#endif
+    OB_SAFE_ABORT();
   }
   if (OB_SUCC(ret)) {
     // when start replaying serial final redo log or submitted serial final redo log

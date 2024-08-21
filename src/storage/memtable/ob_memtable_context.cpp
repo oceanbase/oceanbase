@@ -130,15 +130,11 @@ void ObMemtableCtx::reset()
     }
     if (OB_UNLIKELY(callback_alloc_count_ != callback_free_count_)) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback alloc and free count not match", K(*this));
-#ifdef ENABLE_DEBUG_LOG
-      ob_abort();
-#endif
+      OB_SAFE_ABORT();
     }
     if (OB_UNLIKELY(unsubmitted_cnt_ != 0)) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "txn unsubmitted cnt not zero", K(*this), K(unsubmitted_cnt_));
-#ifdef ENABLE_DEBUG_LOG
-      ob_abort();
-#endif
+      OB_SAFE_ABORT();
     }
     if (OB_TRANS_KILLED != end_code_) {
       // _NOTE_: skip when txn was forcedly killed
@@ -150,9 +146,7 @@ void ObMemtableCtx::reset()
       if (OB_UNLIKELY(fill != sync_succ + sync_fail)) {
         TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "redo filled_count != sync_succ + sync_fail", KPC(this),
                     K(fill), K(sync_succ), K(sync_fail));
-#ifdef ENABLE_DEBUG_LOG
-        ob_abort();
-#endif
+        OB_SAFE_ABORT();
       }
     }
     is_inited_ = false;
@@ -525,17 +519,17 @@ int ObMemtableCtx::do_trans_end(
     // and check memory leakage
     if (OB_UNLIKELY(ATOMIC_LOAD(&callback_alloc_count_) != ATOMIC_LOAD(&callback_free_count_))) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback alloc and free count not match", KPC(this));
-#ifdef ENABLE_DEBUG_LOG
-      ob_abort();
-#endif
+      OB_SAFE_ABORT();
     }
-    // release durable table lock
-    if (OB_FAIL(ret)) {
-      UNUSED(final_scn);
-      //commit or abort log ts for clear table lock
-    } else if (OB_FAIL(clear_table_lock_(commit, trans_version, final_scn))) {
-      TRANS_LOG(ERROR, "clear table lock failed.", K(ret), K(*this));
-    }
+  }
+
+  // NOTE: the commit or abort log may replay many times(retry), but this function only do once now.
+  //       we need always clear table lock because the retry process may create a new one.
+  // release durable table lock
+  if (OB_FAIL(ret)) {
+    //commit or abort log ts for clear table lock
+  } else if (OB_FAIL(clear_table_lock_(commit, trans_version, final_scn))) {
+    TRANS_LOG(ERROR, "clear table lock failed.", K(ret), K(*this));
   }
   return ret;
 }
@@ -597,10 +591,7 @@ int ObMemtableCtx::trans_replay_end(const bool commit,
                   "checksum_replayed", checksum_collapsed,
                   "checksum_before_collapse", replay_checksum,
                   K(checksum_signature), KPC(this));
-#ifdef ENABLE_DEBUG_LOG
-        ob_usleep(5000);
-        ob_abort();
-#endif
+        OB_SAFE_ABORT();
       }
     }
   }
@@ -958,12 +949,15 @@ int ObMemtableCtx::update_checksum(const ObIArray<uint64_t> &checksum,
   return trans_mgr_.update_checksum(checksum, checksum_scn);
 }
 
+ERRSIM_POINT_DEF(TX_FORCE_WRITE_CLOG)
 bool ObMemtableCtx::pending_log_size_too_large(const ObTxSEQ &write_seq_no)
 {
   bool ret = true;
 
   if (0 == GCONF._private_buffer_size) {
     ret = false;
+  } else if (TX_FORCE_WRITE_CLOG) {
+    ret = true;
   } else {
     ret = trans_mgr_.pending_log_size_too_large(write_seq_no, GCONF._private_buffer_size);
   }
