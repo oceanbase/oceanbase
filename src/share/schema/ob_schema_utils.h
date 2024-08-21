@@ -114,10 +114,14 @@ public:
   static int construct_tenant_space_full_table(
              const uint64_t tenant_id,
              share::schema::ObTableSchema &table);
+  // table_ids is empty --> construct all inner table schemas
+  // table_ids is not empty --> construct specific inner tables
+  // if table_only, not push its index and lob aux table
   static int construct_inner_table_schemas(
              const uint64_t tenant_id,
-             common::ObSArray<share::schema::ObTableSchema> &tables,
-             common::ObIAllocator &allocator);
+             const ObIArray<uint64_t> &table_ids,
+             const bool include_index_and_lob_aux_schemas,
+             common::ObArray<share::schema::ObTableSchema> &tables);
   static int add_sys_table_lob_aux_table(
              uint64_t tenant_id,
              uint64_t data_table_id,
@@ -178,6 +182,11 @@ public:
       const ObString &column_name,
       bool &exist);
 private:
+  static int push_inner_table_schema_(
+      const uint64_t tenant_id,
+      const bool include_index_and_lob_aux_schemas,
+      const ObTableSchema &tmp_table_schema,
+      ObIArray<ObTableSchema> &table_schemas);
   static int get_tenant_variable(schema::ObSchemaGetterGuard &schema_guard,
                                  uint64_t tenant_id,
                                  share::ObSysVarClassType var_id,

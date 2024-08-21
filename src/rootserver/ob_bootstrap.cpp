@@ -886,6 +886,7 @@ int ObBootstrap::construct_all_schema(ObIArray<ObTableSchema> &table_schemas)
     core_table_schema_creators,
     sys_table_schema_creators,
     virtual_table_schema_creators,
+    virtual_table_index_schema_creators,
     sys_view_schema_creators
   };
 

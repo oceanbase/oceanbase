@@ -237,9 +237,14 @@ public:
   virtual int update_index_status(const obrpc::ObUpdateIndexStatusArg &arg);
 
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
-  virtual int add_table_schema(share::schema::ObTableSchema &table_schema,
+  int batch_upgrade_table_schema(const obrpc::ObBatchUpgradeTableSchemaArg &arg);
+  int batch_upgrade_table_schema(const uint64_t &tenant_id, const ObIArray<uint64_t>& table_ids);
+  virtual int add_table_schema(ObDDLSQLTransaction *trans,
+      share::schema::ObTableSchema &table_schema,
       share::schema::ObSchemaGetterGuard &schema_guard);
-  virtual int drop_inner_table(const share::schema::ObTableSchema &table_schema, const bool delete_priv = true);
+  virtual int drop_inner_table(ObDDLSQLTransaction *trans,
+      const share::schema::ObTableSchema &table_schema,
+      const bool delete_priv = true);
   virtual int create_sys_tenant(const obrpc::ObCreateTenantArg &arg,
                                 share::schema::ObTenantSchema &tenant_schema);
   virtual int create_tenant(const obrpc::ObCreateTenantArg &arg,
@@ -2109,6 +2114,14 @@ private:
                                     bool &need_continue);
 
   const char* ddl_type_str(const share::ObDDLType ddl_type);
+  int add_system_variables_(const bool &update_sys_var,
+      const uint64_t &tenant_id,
+      const ObIArray<share::schema::ObSysVarSchema> &sysvars,
+      const ObString &ddl_stmt_str);
+  int check_add_sys_variable(const bool &update_sys_var,
+      const ObSysVariableSchema &sys_variable_schema,
+      share::schema::ObSysVarSchema &sysvar,
+      bool &execute);
 public:
   int refresh_unit_replica_counter(const uint64 tenant_id);
   int check_restore_point_allow(const int64_t tenant_id, const share::schema::ObTableSchema &table_schema);
@@ -2178,6 +2191,15 @@ private:
   int create_tenant_sys_tablets(
       const uint64_t tenant_id,
       common::ObIArray<share::schema::ObTableSchema> &tables);
+  int batch_upgrade_table_schema_(
+      const uint64_t &tenant_id,
+      const ObIArray<uint64_t>& table_ids);
+  int create_tenant_sys_tablets_in_trans_(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      ObMySQLTransaction &trans,
+      const uint64_t tenant_id,
+      common::ObIArray<share::schema::ObTableSchema> &tables,
+      const share::SCN &frozen_scn);
   int init_tenant_schema(
       const uint64_t tenant_id,
       const share::schema::ObTenantSchema &tenant_schema,
@@ -2583,16 +2605,22 @@ private:
   int check_table_pk(const share::schema::ObTableSchema &orig_table_schema);
   int clean_global_context(const ObContextSchema &context_schema);
 
-  int get_hard_code_system_table_schema_(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      share::schema::ObTableSchema &hard_code_schema);
-  int create_system_table_(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const share::schema::ObTableSchema &hard_code_schema);
-  int alter_system_table_column_(
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const share::schema::ObTableSchema &hard_code_schema);
+  int batch_alter_system_table_column_(
+      ObSchemaGetterGuard &schema_guard,
+      ObDDLSQLTransaction &trans,
+      const uint64_t &tenant_id,
+      const ObIArray<uint64_t> &table_ids);
+  int batch_create_system_table_(
+      ObSchemaGetterGuard &schema_guard,
+      ObDDLSQLTransaction &trans,
+      const uint64_t &tenant_id,
+      const ObIArray<uint64_t> &table_ids);
+  int get_alter_system_table_schema_(
+      const ObTableSchema &orig_schema,
+      const ObTableSchema &hard_code_schema,
+      ObIArray<uint64_t> &add_column_ids,
+      ObIArray<uint64_t> &alter_column_ids,
+      ObTableSchema &new_schema);
   int check_add_system_table_column_(const ObColumnSchemaV2 &column, bool &can_add);
   int get_obj_privs_ora(const uint64_t tenant_id,
                         const uint64_t obj_id,

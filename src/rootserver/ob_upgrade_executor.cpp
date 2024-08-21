@@ -293,6 +293,7 @@ int ObUpgradeExecutor::check_schema_sync_(
 int ObUpgradeExecutor::execute(
     const obrpc::ObUpgradeJobArg &arg)
 {
+  DEBUG_SYNC(BEFORE_UPGRADE_JOB);
   ObCurTraceId::init(GCONF.self_addr_);
   int ret = OB_SUCCESS;
   ObArray<uint64_t> tenant_ids;
@@ -689,6 +690,7 @@ int ObUpgradeExecutor::run_upgrade_system_variable_job_(
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
       FLOG_INFO("[UPGRADE] start to run upgrade system variable job", K(tenant_id));
+      DEBUG_SYNC(BEFORE_UPGRADE_SYS_VARIABLE);
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
       } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
@@ -697,6 +699,7 @@ int ObUpgradeExecutor::run_upgrade_system_variable_job_(
         LOG_WARN("fail to upgrade sys variable", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
+      DEBUG_SYNC(AFTER_UPGRADE_SYS_VARIABLE);
       FLOG_INFO("[UPGRADE] finish run upgrade system variable job",
                 KR(tmp_ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
     } // end for
@@ -721,12 +724,14 @@ int ObUpgradeExecutor::run_upgrade_system_table_job_(
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
       FLOG_INFO("[UPGRADE] start to run upgrade system table job", K(tenant_id));
+      DEBUG_SYNC(BEFORE_UPGRADE_SYSTEM_TABLE);
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
       } else if (OB_TMP_FAIL(upgrade_system_table_(tenant_id))) {
         LOG_WARN("fail to upgrade system table", KR(tmp_ret), K(tenant_id));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
+      DEBUG_SYNC(AFTER_UPGRADE_SYSTEM_TABLE);
       FLOG_INFO("[UPGRADE] finish run upgrade system table job",
                 KR(tmp_ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
     } // end for
@@ -787,32 +792,32 @@ int ObUpgradeExecutor::upgrade_system_table_(const uint64_t tenant_id)
         }
       } // end for
     } // end for
-
-    int tmp_ret = OB_SUCCESS;
-    int backup_ret = OB_SUCCESS;
-    // upgrade system table(create or alter)
-    obrpc::ObUpgradeTableSchemaArg arg;
-    bool upgrade_virtual_schema = false;
-    const int64_t timeout = GCONF._ob_ddl_timeout;
-    for (int64_t i = 0; OB_SUCC(ret) && i < upgrade_table_ids.count(); i++) {
-      const uint64_t table_id = upgrade_table_ids.at(i);
-      int64_t start_ts = ObTimeUtility::current_time();
-      FLOG_INFO("[UPGRADE] start upgrade system table", K(tenant_id), K(table_id));
-      if (OB_FAIL(check_stop())) {
-        LOG_WARN("check_cancel failed", KR(ret));
-      } else if (OB_FAIL(arg.init(tenant_id, table_id, upgrade_virtual_schema))) {
-        LOG_WARN("fail to init arg", KR(ret), K(tenant_id), K(table_id));
-      } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
-        LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
-      } else if (OB_TMP_FAIL(common_rpc_proxy_->timeout(timeout).upgrade_table_schema(arg))) {
-        LOG_WARN("fail to uggrade table schema", KR(tmp_ret), K(timeout), K(arg));
-        backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
-      }
-      FLOG_INFO("[UPGRADE] finish upgrade system table",
-                KR(tmp_ret), K(tenant_id), K(table_id), "cost", ObTimeUtility::current_time() - start_ts);
-    } // end for
-    ret = OB_SUCC(ret) ? backup_ret : ret;
+    if (FAILEDx(batch_upgrade_system_table_(tenant_id, upgrade_table_ids))) {
+      LOG_WARN("failed to batch upgrade system table", KR(ret), K(tenant_id), K(upgrade_table_ids));
+    }
   }
+  return ret;
+}
+
+int ObUpgradeExecutor::batch_upgrade_system_table_(const uint64_t tenant_id,
+    ObIArray<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObBatchUpgradeTableSchemaArg arg;
+  const int64_t timeout = GCONF._ob_ddl_timeout;
+  int64_t start_ts = ObTimeUtility::current_time();
+  FLOG_INFO("[UPGRADE] start to batch upgrade system tables", K(tenant_id), K(table_ids));
+  if (OB_FAIL(check_stop())) {
+    LOG_WARN("check stop failed", KR(ret));
+  } else if (OB_FAIL(arg.init(tenant_id, table_ids))) {
+    LOG_WARN("failed to init arg", KR(ret), K(tenant_id), K(table_ids));
+  } else if (OB_FAIL(check_schema_sync_(tenant_id))) {
+    LOG_WARN("fail to check schema sync", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(common_rpc_proxy_->timeout(timeout).batch_upgrade_table_schema(arg))) {
+    LOG_WARN("fail to batch upgrade table schema", KR(ret), K(tenant_id), K(arg));
+  }
+  FLOG_INFO("[UPGRADE] finish batch upgrade system tables", KR(ret), K(tenant_id), K(table_ids),
+      "cost", ObTimeUtility::current_time() - start_ts);
   return ret;
 }
 
@@ -862,6 +867,7 @@ int ObUpgradeExecutor::run_upgrade_virtual_schema_job_(
       const uint64_t tenant_id = tenant_ids.at(i);
       int64_t start_ts = ObTimeUtility::current_time();
       FLOG_INFO("[UPGRADE] start to run upgrade virtual schema job", K(tenant_id));
+      DEBUG_SYNC(BEFORE_UPGRADE_VIRTUAL_SCHEMA);
       if (OB_FAIL(check_stop())) {
         LOG_WARN("executor should stopped", KR(ret));
       } else if (OB_FAIL(arg.init(tenant_id, invalid_table_id, upgrade_virtual_schema))) {
@@ -872,6 +878,7 @@ int ObUpgradeExecutor::run_upgrade_virtual_schema_job_(
         LOG_WARN("fail to upgrade virtual schema", KR(tmp_ret), K(arg));
         backup_ret = OB_SUCCESS == backup_ret ? tmp_ret : backup_ret;
       }
+      DEBUG_SYNC(AFTER_UPGRADE_VIRTUAL_SCHEMA);
       FLOG_INFO("[UPGRADE] finish run upgrade virtual schema job",
                 KR(tmp_ret), K(tenant_id), "cost", ObTimeUtility::current_time() - start_ts);
     } // end for

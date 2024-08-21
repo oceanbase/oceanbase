@@ -113,6 +113,7 @@ private:
       const uint64_t current_data_version,
       const int64_t buf_len,
       char *buf);
+  int batch_upgrade_system_table_(const uint64_t tenant_id, ObIArray<uint64_t> &table_ids);
 private:
   bool inited_;
   bool stopped_;

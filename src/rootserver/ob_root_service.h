@@ -745,6 +745,7 @@ public:
   int run_job(const obrpc::ObRunJobArg &arg);
   int run_upgrade_job(const obrpc::ObUpgradeJobArg &arg);
   int upgrade_table_schema(const obrpc::ObUpgradeTableSchemaArg &arg);
+  int batch_upgrade_table_schema(const obrpc::ObBatchUpgradeTableSchemaArg &arg);
   int admin_flush_cache(const obrpc::ObAdminFlushCacheArg &arg);
   int admin_upgrade_cmd(const obrpc::Bool &arg);
   int admin_rolling_upgrade_cmd(const obrpc::ObAdminRollingUpgradeArg &arg);

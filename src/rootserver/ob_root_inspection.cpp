@@ -1142,6 +1142,7 @@ int ObRootInspection::check_sys_table_schemas_(
       share::core_table_schema_creators,
       share::sys_table_schema_creators,
       share::virtual_table_schema_creators,
+      share::virtual_table_index_schema_creators,
       share::sys_view_schema_creators,
       share::core_index_table_schema_creators,
       share::sys_index_table_schema_creators,
