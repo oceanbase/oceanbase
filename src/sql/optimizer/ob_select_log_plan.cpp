@@ -4486,9 +4486,12 @@ int ObSelectLogPlan::allocate_plan_top()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(candi_allocate_subplan_filter_for_select_item())) {
         LOG_WARN("failed to allocate subplan filter for subquery in select item", K(ret));
+      } else if (!order_items.empty() &&
+                 OB_FAIL(candi_allocate_order_by_if_losted(order_items))) {
+        LOG_WARN("failed to adjust order by if losted", K(ret), K(order_items));
       } else {
         LOG_TRACE("succeed to allocate subplan filter for subquery in select item",
-            K(candidates_.candidate_plans_.count()));
+                  K(candidates_.candidate_plans_.count()));
       }
     }
 
@@ -7493,6 +7496,37 @@ int ObSelectLogPlan::contain_enum_set_rowkeys(const ObLogTableScan &table_scan, 
       } else if (ob_is_enumset_tc(table_keys.at(i)->get_result_type().get_type())) {
         contain = true;
       }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::candi_allocate_order_by_if_losted(ObIArray<OrderItem> &order_items)
+{
+  int ret = OB_SUCCESS;
+  bool re_allocate_happened = false;
+  ObSEArray<CandidatePlan, 4> order_by_plans;
+  if (!order_items.empty()) {
+    candidates_.is_final_sort_ = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
+      ObLogicalOperator *top = candidates_.candidate_plans_.at(i).plan_tree_;
+      CandidatePlan &plan = candidates_.candidate_plans_.at(i);
+      if (OB_FAIL(create_order_by_plan(plan.plan_tree_, order_items, NULL, false))) {
+        LOG_WARN("failed to create order by plan", K(ret));
+      } else if (OB_FAIL(order_by_plans.push_back(plan))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (top != candidates_.candidate_plans_.at(i).plan_tree_) {
+        re_allocate_happened = true;
+      }
+    }
+    candidates_.is_final_sort_ = false;
+    if (OB_SUCC(ret) && re_allocate_happened) {
+      int64_t check_scope = OrderingCheckScope::CHECK_SET;
+      if (OB_FAIL(update_plans_interesting_order_info(order_by_plans, check_scope))) {
+        LOG_WARN("failed to update plans interesting order info", K(ret));
+      } else if (OB_FAIL(prune_and_keep_best_plans(order_by_plans))) {
+        LOG_WARN("failed to prune and keep best plans", K(ret));
+      } else { /*do nothing*/ }
     }
   }
   return ret;
