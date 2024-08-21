@@ -415,8 +415,15 @@ int ObTabletMeta::init(
     }
 
     ObTabletTableStoreFlag table_store_flag = old_tablet_meta.table_store_flag_;
+    SCN ddl_checkpoint_scn = old_tablet_meta.ddl_checkpoint_scn_;
     if (!table_store_flag.with_major_sstable()) {
-      table_store_flag = OB_ISNULL(tablet_meta) ? table_store_flag : tablet_meta->table_store_flag_;
+      if (OB_ISNULL(tablet_meta)) {
+        //do nothing
+      } else if (tablet_meta->table_store_flag_.with_major_sstable()) {
+        table_store_flag.set_with_major_sstable();
+        ddl_checkpoint_scn = tablet_meta->ddl_checkpoint_scn_;
+        FLOG_INFO("update tablet table store flag with major", KPC(tablet_meta), K(table_store_flag), K(ddl_checkpoint_scn));
+      }
     }
     const SCN mds_checkpoint_scn = OB_ISNULL(tablet_meta) ?
         old_tablet_meta.mds_checkpoint_scn_ : MAX(old_tablet_meta.mds_checkpoint_scn_, tablet_meta->mds_checkpoint_scn_);
@@ -446,7 +453,7 @@ int ObTabletMeta::init(
       create_scn_ = old_tablet_meta.create_scn_;
       start_scn_ = old_tablet_meta.start_scn_;
       clog_checkpoint_scn_ = clog_checkpoint_scn;
-      ddl_checkpoint_scn_ = old_tablet_meta.ddl_checkpoint_scn_;
+      ddl_checkpoint_scn_ = ddl_checkpoint_scn;
       snapshot_version_ = snapshot_version;
       multi_version_start_ = multi_version_start;
       ha_status_ = new_ha_status;
