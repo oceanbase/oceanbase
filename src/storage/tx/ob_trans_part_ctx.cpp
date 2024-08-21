@@ -9500,34 +9500,55 @@ int ObPartTransCtx::handle_trans_ask_state(const ObAskStateMsg &req, ObAskStateR
   if (IS_NOT_INIT) {
     TRANS_LOG(WARN, "ObPartTransCtx not inited");
     ret = OB_NOT_INIT;
-  } else if (is_root()) {
-    if (exec_info_.participants_.empty()) {
-      // if coord not know any participants(before replay commit info log),
-      // fill self state to resp
-      ObStateInfo state_info;
-      state_info.ls_id_ = ls_id_;
-      state_info.state_ = exec_info_.state_;
-      state_info.snapshot_version_ = snapshot;
-      if (ObTxState::INIT == state_info.state_) {
+  } else {
+    ObStateInfo state_info;
+    state_info.ls_id_ = ls_id_;
+    state_info.state_ = exec_info_.state_;
+    state_info.snapshot_version_ = snapshot;
+    resp.state_info_array_.reset();
+
+    switch(exec_info_.state_) {
+      case ObTxState::UNKNOWN:
+      case ObTxState::INIT:
+      case ObTxState::REDO_COMPLETE: {
         if (OB_FAIL(get_ls_replica_readable_scn_(state_info.ls_id_, state_info.version_))) {
           TRANS_LOG(WARN, "get replica readable scn failed", K(ret), K(state_info), K(snapshot));
         } else if (OB_FAIL(resp.state_info_array_.push_back(state_info))) {
           TRANS_LOG(WARN, "push back state info to resp msg failed", K(ret), K(snapshot), KPC(this));
         }
-      } else {
-        ret = OB_STATE_NOT_MATCH;
-        TRANS_LOG(ERROR, "coord should not in other state befroe replay commit info log", K(ret),
-                  KPC(this));
+        break;
       }
-      TRANS_LOG(INFO, "coord not know any participants", K(ret), K(state_info), KPC(this));
-    } else {
-      build_and_post_collect_state_msg_(snapshot);
-      if (OB_FAIL(resp.state_info_array_.assign(state_info_array_))) {
-        TRANS_LOG(WARN, "build ObAskStateRespMsg fail", K(ret), K(snapshot), KPC(this));
+      case ObTxState::PREPARE: {
+        if (is_root()) {
+          build_and_post_collect_state_msg_(snapshot);
+          if (OB_FAIL(resp.state_info_array_.assign(state_info_array_))) {
+            TRANS_LOG(WARN, "build ObAskStateRespMsg fail", K(ret), K(snapshot), KPC(this));
+          }
+        } else {
+          // to find root
+          build_and_post_ask_state_msg_(snapshot, req.ori_ls_id_, req.ori_addr_);
+        }
+        break;
       }
+      case ObTxState::PRE_COMMIT:
+      case ObTxState::COMMIT:
+      case ObTxState::CLEAR: {
+        state_info.version_ = ctx_tx_data_.get_commit_version();
+        if (OB_FAIL(resp.state_info_array_.push_back(state_info))) {
+          TRANS_LOG(WARN, "push back state info to resp msg failed", K(ret), K(snapshot), KPC(this));
+        }
+        break;
+      }
+      case ObTxState::ABORT: {
+        state_info.version_.set_min();
+        if (OB_FAIL(resp.state_info_array_.push_back(state_info))) {
+          TRANS_LOG(WARN, "push back state info to resp msg failed", K(ret), K(snapshot), KPC(this));
+        }
+        break;
+      }
+      default:
+        ret = OB_ERR_UNEXPECTED;
     }
-  } else {
-    build_and_post_ask_state_msg_(snapshot, req.ori_ls_id_, req.ori_addr_);
   }
   TRANS_LOG(INFO, "handle ask state msg", K(ret), K(req), K(resp));
   return ret;
@@ -9687,6 +9708,7 @@ int ObPartTransCtx::handle_trans_collect_state(ObCollectStateRespMsg &resp,
     do {
       state_info.state_ = exec_info_.state_;
       switch (state_info.state_) {
+        case ObTxState::UNKNOWN:
         case ObTxState::INIT:
         case ObTxState::REDO_COMPLETE: {
           if (need_loop) {
