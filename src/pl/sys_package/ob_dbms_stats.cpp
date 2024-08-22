@@ -4695,7 +4695,7 @@ int ObDbmsStats::parser_for_all_clause(const ParseNode *for_all_node,
     MethodOptColConf for_all_conf;
     MethodOptSizeConf size_conf;
     ParseNode *first  = NULL;
-    if (OB_UNLIKELY(2 != for_all_node->num_child_) ||
+    if (OB_UNLIKELY(4 != for_all_node->num_child_) ||
         OB_ISNULL(first  = for_all_node->children_[0]) ||
         OB_UNLIKELY(first->type_ != T_INT) ||
         OB_UNLIKELY(first->value_ < 0 || first->value_ > 2)) {
@@ -4718,9 +4718,23 @@ int ObDbmsStats::parser_for_all_clause(const ParseNode *for_all_node,
         }
       }
     }
+
+    ObSEArray<ObString, 4> ignore_cols;
+    if (OB_SUCC(ret) && NULL != for_all_node->children_[2]) {
+      if (OB_FAIL(parse_ignore_clause(for_all_node->children_[2], ignore_cols))) {
+        LOG_WARN("failed to parse ignore clause", K(ret));
+      }
+    }
+
+    if (OB_SUCC(ret) && NULL != for_all_node->children_[3]) {
+      if (OB_FAIL(parser_for_columns_clause(for_all_node->children_[3], column_params, ignore_cols))) {
+        LOG_WARN("failed to parse for columns clause", K(ret));
+      }
+    }
+
     for (int64_t i = 0; OB_SUCC(ret) && i < column_params.count(); ++i) {
       ObColumnStatParam &col_param = column_params.at(i);
-      if (!is_match_column_option(col_param, for_all_conf)) {
+      if (!is_match_column_option(col_param, for_all_conf, ignore_cols)) {
         // do nothing
       } else if (!col_param.is_valid_opt_col()) {
         // do nothing
@@ -4728,6 +4742,7 @@ int ObDbmsStats::parser_for_all_clause(const ParseNode *for_all_node,
         LOG_WARN("failed to compute histogram size", K(ret));
       }
     }
+
   }
   return ret;
 }
@@ -4828,7 +4843,8 @@ int ObDbmsStats::compute_bucket_num(ObColumnStatParam &param,
 }
 
 bool ObDbmsStats::is_match_column_option(ObColumnStatParam &param,
-                                         const MethodOptColConf &for_all_opt)
+                                         const MethodOptColConf &for_all_opt,
+                                         const ObIArray<ObString> &ignore_cols)
 {
   bool is_match = false;
   if (FOR_ALL == for_all_opt) {
@@ -4838,6 +4854,13 @@ bool ObDbmsStats::is_match_column_option(ObColumnStatParam &param,
   } else if (FOR_HIDDEN == for_all_opt && param.is_hidden_column()) {
     is_match = true;
   }
+
+  for (int64_t i = 0; is_match && i < ignore_cols.count(); ++i) {
+    if (0 == ignore_cols.at(i).case_compare(param.column_name_)) {
+      is_match = false;
+    }
+  }
+
   return is_match;
 }
 
@@ -4915,6 +4938,30 @@ int ObDbmsStats::parse_for_columns(const ParseNode *node,
   } else if (OB_FAIL(record_cols.push_back(node->children_[1]->str_value_))) {
     LOG_WARN("failed to push back column", K(ret));
   }
+  return ret;
+}
+
+int ObDbmsStats::parse_ignore_clause(const ParseNode *node, ObIArray<ObString> &ignore_cols) {
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(node) ||
+      OB_UNLIKELY(node->type_ != T_COLUMN_LIST)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("node is invalid", K(ret), K(node));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      ParseNode *child = node->children_[i];
+      if (OB_ISNULL(child) ||
+          OB_UNLIKELY(child->type_ != T_COLUMN_REF || child->num_child_ != 3) || 
+          OB_ISNULL(child->children_[2])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("node is invalid", K(ret), K(node));
+      } else if (OB_FAIL(ignore_cols.push_back(child->children_[2]->str_value_))) {
+        LOG_WARN("failed to push back column", K(ret));
+      }
+    } 
+  }  
+
   return ret;
 }
 
