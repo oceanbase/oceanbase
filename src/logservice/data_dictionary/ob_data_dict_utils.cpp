@@ -128,21 +128,19 @@ int deep_copy_str_array(
   return ret;
 }
 
-int check_ls_leader(logservice::ObLogHandler *log_handler, bool &is_leader)
+int check_ls_leader(logservice::ObLogHandler *log_handler, bool &is_leader, int64_t &proposal_id)
 {
   int ret = OB_SUCCESS;
   common::ObRole role = common::ObRole::INVALID_ROLE;
-  int64_t proposal_id = 0;
+  proposal_id = 0;
 
   if (OB_ISNULL(log_handler)) {
     ret = OB_ERR_UNEXPECTED;
     DDLOG(WARN, "log_handler_ is invalid", KR(ret));
   } else if (OB_FAIL(log_handler->get_role(role, proposal_id))) {
     DDLOG(WARN, "get ls role fail", K(ret), K(proposal_id));
-  } else if (common::ObRole::LEADER == role) {
-    is_leader = true;
   } else {
-    is_leader = false;
+    is_leader = is_strong_leader(role);
   }
 
   return ret;

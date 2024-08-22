@@ -70,6 +70,11 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     exe_stat_.finish_cg_count_ += cg_cnt;
     exe_stat_.period_finish_cg_count_ += cg_cnt;
   }
+  OB_INLINE void set_batch_finish_for_row_store(const int64_t cg_cnt)
+  {
+    exe_stat_.finish_cg_count_ = cg_cnt;
+    exe_stat_.period_finish_cg_count_ = cg_cnt;
+  }
   OB_INLINE void one_batch_fail()
   {
     ++exe_stat_.error_count_;

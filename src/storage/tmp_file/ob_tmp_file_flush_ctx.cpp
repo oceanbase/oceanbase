@@ -218,7 +218,7 @@ void ObTmpFileBatchFlushContext::record_flush_task(const int64_t data_length)
 
 // -------------- ObTmpFileFlushTask --------------- //
 
-ObTmpFileFlushTask::ObTmpFileFlushTask(ObIAllocator &task_allocator)
+ObTmpFileFlushTask::ObTmpFileFlushTask()
   : inst_handle_(),
     kvpair_(nullptr),
     block_handle_(),
@@ -232,8 +232,7 @@ ObTmpFileFlushTask::ObTmpFileFlushTask(ObIAllocator &task_allocator)
     task_state_(ObTmpFileFlushTaskState::TFFT_INITED),
     tmp_file_block_handle_(),
     handle_(),
-    flush_infos_(),
-    task_allocator_(task_allocator)
+    flush_infos_()
 {
   flush_infos_.set_attr(ObMemAttr(MTL_ID(), "TFFlushInfos"));
 }

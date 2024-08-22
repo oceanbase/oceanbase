@@ -1502,11 +1502,7 @@ int ObBlockManager::mark_tmp_file_blocks(
     const uint64_t tenant_id = mtl_tenant_ids.at(i);
     MTL_SWITCH(tenant_id) {
       ObArray<MacroBlockId> macro_block_list;
-      if (OB_FAIL(set_group_id(tenant_id))) {
-        LOG_WARN("isolate CPU and IOPS failed", K(ret));
-      } else if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set, tmp_status))) {
-        LOG_WARN("fail to mark tenant blocks", K(ret), K(tenant_id));
-      } else if (OB_FALSE_IT(MTL(ObTenantTmpFileManager*)->get_macro_block_list(macro_block_list))) {
+      if (OB_FAIL(MTL(ObTenantTmpFileManager*)->get_macro_block_list(macro_block_list))) {
         LOG_WARN("fail to get macro block list", K(ret));
       } else if (OB_FAIL(update_mark_info(macro_block_list, macro_id_set, mark_info))){
         LOG_WARN("fail to update mark info", K(ret), K(macro_block_list.count()));

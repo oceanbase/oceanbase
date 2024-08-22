@@ -818,9 +818,6 @@ int ObBackupJobOperator::cancel_jobs(common::ObISQLClient &proxy, const uint64_t
     LOG_WARN("[DATA_BACKUP]failed to append sql", K(ret), K(sql));
   } else if (OB_FAIL(proxy.write(get_exec_tenant_id(tenant_id), sql.ptr(), affected_rows))) {
     LOG_WARN("[DATA_BACKUP]failed to exec sql", K(ret), K(sql));
-  } else if (2 < affected_rows) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("[DATA_BACKUP]invalid affected_rows, disallow more than 2 jobs at the same", K(ret), K(affected_rows), K(sql));
   } else {
     LOG_INFO("success cancel the backup jobs of tenant", K(ret), K(tenant_id));
   }

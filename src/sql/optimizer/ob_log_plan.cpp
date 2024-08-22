@@ -5201,7 +5201,7 @@ int ObLogPlan::create_three_stage_group_plan(const ObIArray<ObRawExpr*> &group_b
                                                        helper.rollup_id_expr_))) {
       LOG_WARN("failed to set rollup parallel info", K(ret));
     } else {
-      third_group_by->set_group_by_outline_info(HASH_AGGREGATE == second_aggr_algo, true);
+      third_group_by->set_group_by_outline_info(false, false, HASH_AGGREGATE == second_aggr_algo, true);
     }
   }
   return ret;
@@ -5353,36 +5353,70 @@ int ObLogPlan::candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExpr*> &a
                                              const bool is_from_povit)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<CandidatePlan, 4> best_plans;
+  ObSEArray<CandidatePlan, 4> groupby_plans;
   ObSEArray<ObRawExpr*, 1> dummy_exprs;
   SMART_VAR(GroupingOpHelper, groupby_helper) {
     if (OB_FAIL(init_groupby_helper(dummy_exprs, dummy_exprs, agg_items,
                                     is_from_povit, groupby_helper))) {
       LOG_WARN("failed to init group by helper", K(ret));
-    } else if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, best_plans))) {
-      LOG_WARN("failed to get minimal cost candidate", K(ret));
+    } else if (OB_FAIL(inner_candi_allocate_scala_group_by(agg_items,
+                                                           having_exprs,
+                                                           groupby_helper,
+                                                           groupby_plans))) {
+      LOG_WARN("failed to inner candi allocate scala group by", K(ret));
+    } else if (!groupby_plans.empty()) {
+      LOG_TRACE("succeed to allocate scala group by using hint", K(groupby_plans.count()), K(groupby_helper));
+      OPT_TRACE("success to generate scala group plan with hint");
+    } else if (OB_FAIL(get_log_plan_hint().check_status())) {
+      LOG_WARN("failed to generate plans with hint", K(ret));
+    } else if (OB_FALSE_IT(groupby_helper.set_ignore_hint())) {
+    } else if (OB_FAIL(inner_candi_allocate_scala_group_by(agg_items,
+                                                           having_exprs,
+                                                           groupby_helper,
+                                                           groupby_plans))) {
+      LOG_WARN("failed to inner candi allocate scala group by", K(ret));
     } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < best_plans.count(); i++) {
-        OPT_TRACE("generate scala group by for plan:", best_plans.at(i));
-        if (OB_FAIL(create_scala_group_plan(agg_items,
-                                            having_exprs,
-                                            is_from_povit,
-                                            groupby_helper,
-                                            best_plans.at(i).plan_tree_))) {
-          LOG_WARN("failed to create scala group by plan", K(ret));
-        } else { /*do nothing*/ }
-      }
-      if (OB_SUCC(ret)) {
-        int64_t check_scope = OrderingCheckScope::CHECK_WINFUNC |
-                              OrderingCheckScope::CHECK_DISTINCT |
-                              OrderingCheckScope::CHECK_SET |
-                              OrderingCheckScope::CHECK_ORDERBY;
-        if (OB_FAIL(update_plans_interesting_order_info(best_plans, check_scope))) {
-          LOG_WARN("failed to update plans interesting order info", K(ret));
-        } else if (OB_FAIL(prune_and_keep_best_plans(best_plans))) {
-          LOG_WARN("failed to add plan", K(ret));
-        } else { /*do nothing*/ }
-      }
+      LOG_TRACE("succeed to allocate scala group by ignore hint", K(groupby_plans.count()), K(groupby_helper));
+      OPT_TRACE("success to generate scala group plan without hint");
+    }
+
+    if (OB_SUCC(ret)) {
+      int64_t check_scope = OrderingCheckScope::CHECK_WINFUNC |
+                            OrderingCheckScope::CHECK_DISTINCT |
+                            OrderingCheckScope::CHECK_SET |
+                            OrderingCheckScope::CHECK_ORDERBY;
+      if (OB_FAIL(update_plans_interesting_order_info(groupby_plans, check_scope))) {
+        LOG_WARN("failed to update plans interesting order info", K(ret));
+      } else if (OB_FAIL(prune_and_keep_best_plans(groupby_plans))) {
+        LOG_WARN("failed to add plan", K(ret));
+      } else { /*do nothing*/ }
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::inner_candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExpr*> &agg_items,
+                                                   const ObIArray<ObRawExpr*> &having_exprs,
+                                                   GroupingOpHelper &groupby_helper,
+                                                   ObIArray<CandidatePlan> &groupby_plans)
+
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<CandidatePlan, 4> best_plans;
+  if (OB_FAIL(get_minimal_cost_candidates(candidates_.candidate_plans_, best_plans))) {
+    LOG_WARN("failed to get minimal cost candidate", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < best_plans.count(); i++) {
+      OPT_TRACE("generate scala group by for plan:", best_plans.at(i));
+      if (OB_FAIL(create_scala_group_plan(agg_items,
+                                          having_exprs,
+                                          groupby_helper,
+                                          best_plans.at(i).plan_tree_))) {
+        LOG_WARN("failed to create scala group by plan", K(ret));
+      } else if (NULL != best_plans.at(i).plan_tree_ &&
+                 OB_FAIL(groupby_plans.push_back(best_plans.at(i)))) {
+        LOG_WARN("failed to push merge group by", K(ret));
+      } else { /*do nothing*/ }
     }
   }
   return ret;
@@ -5390,7 +5424,6 @@ int ObLogPlan::candi_allocate_scala_group_by(const ObIArray<ObAggFunRawExpr*> &a
 
 int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                        const ObIArray<ObRawExpr*> &having_exprs,
-                                       const bool is_from_povit,
                                        GroupingOpHelper &groupby_helper,
                                        ObLogicalOperator *&top)
 {
@@ -5411,23 +5444,24 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
     LOG_WARN("failed to push group by into table scan", K(ret));
   } else if (!top->is_distributed()) {
     OPT_TRACE("generate scala group plan without pushdown");
-    if (OB_FAIL(allocate_scala_group_by_as_top(top,
-                                               aggr_items,
-                                               having_exprs,
-                                               is_from_povit,
-                                               origin_child_card))) {
+    if (!groupby_helper.allow_basic()) {
+      top = NULL;
+      OPT_TRACE("ignore basic scala group by hint");
+    } else if (OB_FAIL(allocate_scala_group_by_as_top(top,
+                                                      aggr_items,
+                                                      having_exprs,
+                                                      groupby_helper.is_from_povit_,
+                                                      origin_child_card))) {
       LOG_WARN("failed to allocate scala group by as top", K(ret));
     } else {
-      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false, false);
+      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(true, false, false, false);
     }
   } else if (!groupby_helper.distinct_exprs_.empty() &&
              OB_FAIL(top->check_sharding_compatible_with_reduce_expr(groupby_helper.distinct_exprs_,
                                                                      is_partition_wise))) {
     LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
   } else if (groupby_helper.can_three_stage_pushdown_ &&
-            !(is_partition_wise &&
-            !(top->is_parallel_more_than_part_cnt() &&
-              get_optimizer_context().get_query_ctx()->optimizer_features_enable_version_ > COMPAT_VERSION_4_3_2))) {
+             !(is_partition_wise && groupby_helper.allow_partition_wise(top->is_parallel_more_than_part_cnt()))) {
     OPT_TRACE("generate three stage group plan");
     if (NULL == groupby_helper.aggr_code_expr_ &&
         OB_FAIL(prepare_three_stage_info(dummy_exprs, dummy_exprs, groupby_helper))) {
@@ -5447,7 +5481,7 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
                                          dummy_exprs,
                                          aggr_items,
                                          dummy_exprs,
-                                         is_from_povit,
+                                         groupby_helper.is_from_povit_,
                                          groupby_helper.group_ndv_,
                                          origin_child_card,
                                          is_partition_wise,
@@ -5461,11 +5495,11 @@ int ObLogPlan::create_scala_group_plan(const ObIArray<ObAggFunRawExpr*> &aggr_it
     } else if (OB_FAIL(allocate_scala_group_by_as_top(top,
                                                       aggr_items,
                                                       having_exprs,
-                                                      is_from_povit,
+                                                      groupby_helper.is_from_povit_,
                                                       origin_child_card))) {
       LOG_WARN("failed to allocate scala group by as top", K(ret));
     } else {
-      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false, groupby_helper.can_basic_pushdown_ || is_partition_wise);
+      static_cast<ObLogGroupBy*>(top)->set_group_by_outline_info(false, is_partition_wise, false, groupby_helper.can_basic_pushdown_ || is_partition_wise);
     }
   }
 
@@ -5576,6 +5610,9 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   ObSEArray<ObRawExpr*, 4> group_rollup_exprs;
   bool push_group = false;
   groupby_helper.is_scalar_group_by_ = true;
+  groupby_helper.is_from_povit_ = is_from_povit;
+  groupby_helper.clear_ignore_hint();
+  groupby_helper.optimizer_features_enable_version_ = get_log_plan_hint().optimizer_features_enable_version_;
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan) ||
@@ -5591,7 +5628,10 @@ int ObLogPlan::init_groupby_helper(const ObIArray<ObRawExpr*> &group_exprs,
   } else if (OB_FAIL(get_log_plan_hint().get_aggregation_info(groupby_helper.force_use_hash_,
                                                               groupby_helper.force_use_merge_,
                                                               groupby_helper.force_part_sort_,
-                                                              groupby_helper.force_normal_sort_))) {
+                                                              groupby_helper.force_normal_sort_,
+                                                              groupby_helper.force_basic_,
+                                                              groupby_helper.force_partition_wise_,
+                                                              groupby_helper.force_dist_hash_))) {
     LOG_WARN("failed to get aggregation info from hint", K(ret));
   } else if (OB_FAIL(check_storage_groupby_pushdown(aggr_items,
                                                     group_exprs,
@@ -5696,18 +5736,24 @@ int ObLogPlan::init_distinct_helper(const ObIArray<ObRawExpr*> &distinct_exprs,
   ObSQLSessionInfo *session_info = NULL;
   bool push_distinct = false;
   distinct_helper.can_basic_pushdown_ = false;
-  distinct_helper.force_use_hash_ = get_log_plan_hint().use_hash_distinct();
-  distinct_helper.force_use_merge_ = get_log_plan_hint().use_merge_distinct();
+  distinct_helper.clear_ignore_hint();
+  distinct_helper.optimizer_features_enable_version_ = get_log_plan_hint().optimizer_features_enable_version_;
   if (OB_FAIL(candidates_.get_best_plan(best_plan))) {
     LOG_WARN("failed to get best plan", K(ret));
   } else if (OB_ISNULL(best_plan) || OB_ISNULL(get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (get_log_plan_hint().no_pushdown_distinct()) {
-    OPT_TRACE("hint disable pushdown distinct");
+  } else if (OB_FAIL(get_log_plan_hint().get_distinct_info(distinct_helper.force_use_hash_,
+                                                           distinct_helper.force_use_merge_,
+                                                           distinct_helper.force_basic_,
+                                                           distinct_helper.force_partition_wise_,
+                                                           distinct_helper.force_dist_hash_))) {
+    LOG_WARN("failed to get distinct info from hint", K(ret));
   } else if (OB_FAIL(check_storage_distinct_pushdown(distinct_exprs,
                                                      distinct_helper.can_storage_pushdown_))) {
     LOG_WARN("failed to check can storage distinct pushdown", K(ret));
+  } else if (get_log_plan_hint().no_pushdown_distinct()) {
+    OPT_TRACE("hint disable pushdown distinct");
   } else if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(session_info), K(ret));

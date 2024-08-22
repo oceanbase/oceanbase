@@ -644,7 +644,7 @@ int ObLogDeliver::init(const common::ObAddr &self, const bool is_bootstrap)
   // init_all_propocessor_();
   if (is_bootstrap && OB_FAIL(ObMittestBlacklist::init(self))) {
     SERVER_LOG(WARN, "ObMittestBlacklist init failed", K(ret));
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TEST7, tg_id_))) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::COMMON_QUEUE_THREAD, tg_id_))) {
     SERVER_LOG(WARN, "ObSimpleThreadPool::init failed", K(ret));
   } else {
     is_inited_ = true;

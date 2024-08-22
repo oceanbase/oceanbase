@@ -190,7 +190,7 @@ USE_HASH_AGGREGATION NO_USE_HASH_AGGREGATION
 PARTITION_SORT NO_PARTITION_SORT WF_TOPN
 USE_LATE_MATERIALIZATION NO_USE_LATE_MATERIALIZATION
 PX_JOIN_FILTER NO_PX_JOIN_FILTER PX_PART_JOIN_FILTER NO_PX_PART_JOIN_FILTER
-PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET PQ_SUBQUERY RANDOM_LOCAL BROADCAST BC2HOST LIST
+PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET PQ_SUBQUERY PQ_GBY PQ_DISTINCT RANDOM_LOCAL BROADCAST BC2HOST LIST
 GBY_PUSHDOWN NO_GBY_PUSHDOWN
 USE_HASH_DISTINCT NO_USE_HASH_DISTINCT
 DISTINCT_PUSHDOWN NO_DISTINCT_PUSHDOWN
@@ -11285,6 +11285,14 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix '
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_COLUMN_STORE_HINT, 2, $3, $4);
 }
+| PQ_GBY '(' qb_name_option distribute_method ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_GBY_HINT, 2, $3, $4);
+}
+| PQ_DISTINCT '(' qb_name_option distribute_method ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTINCT_HINT, 2, $3, $4);
+}
 ;
 
 opt_index_prefix:
@@ -11530,6 +11538,10 @@ ALL
 | LIST
 {
   malloc_terminal_node($$, result->malloc_pool_, T_DISTRIBUTE_LIST);
+}
+| BASIC
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_DISTRIBUTE_BASIC);
 }
 ;
 

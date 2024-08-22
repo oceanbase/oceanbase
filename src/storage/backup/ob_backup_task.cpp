@@ -6227,13 +6227,14 @@ int ObLSBackupComplementLogTask::copy_checkpoint_info(const ObTenantArchivePiece
   ObPieceCheckpointDesc desc;
   bool is_exist = false;
   const int64_t file_id = 0;
+  const share::SCN old_ckpt_scn = SCN::min_scn(); //set 0, but will not delete
   if (OB_FAIL(src_store.is_piece_checkpoint_file_exist(src_dest_id, round_id, piece_id, file_id, is_exist))) {
     LOG_WARN("failed to check is piece checkpoint file file exist", K(ret), K(src_dest_id), K(round_id), K(piece_id));
   } else if (!is_exist) {
     // do nothing
   } else if (OB_FAIL(src_store.read_piece_checkpoint(src_dest_id, round_id, piece_id, file_id, desc))) {
     LOG_WARN("failed to read piece checkpoint", K(ret), K(piece_attr));
-  } else if (OB_FAIL(dest_store.write_piece_checkpoint(dest_dest_id, round_id, piece_id, file_id, desc))) {
+  } else if (OB_FAIL(dest_store.write_piece_checkpoint(dest_dest_id, round_id, piece_id, file_id, old_ckpt_scn, desc))) {
     LOG_WARN("failed to write piece checkpoint", K(ret), K(piece_attr));
   }
   return ret;

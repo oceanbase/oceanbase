@@ -10315,7 +10315,7 @@ def_table_schema(
    ('definer', 'varchar:77', 'false', ''),
    ('created', 'timestamp'),
    ('modified', 'timestamp',),
-   ('sql_mode', 'varchar:32', 'false', ''),
+   ('sql_mode', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', ''),
    ('comment', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', ''),
    ('character_set_client', 'varchar:MAX_CHARSET_LENGTH'),
    ('collation_connection', 'varchar:MAX_CHARSET_LENGTH'),
@@ -14660,6 +14660,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12501: __all_virtual_wr_sql_plan
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
+# 12504: __all_virtual_function_io_stat
+# 12505: __all_virtual_temp_file
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15166,7 +15168,8 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15481: __all_virtual_wr_sql_plan
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat
-
+# 15484: __all_virtual_function_io_stat
+# 15485: __all_virtual_temp_file
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -29260,6 +29263,12 @@ def_table_schema(
                                    when 'FLOAT UNSIGNED' then 'FLOAT'
                                    when 'DOUBLE UNSIGNED' then 'DOUBLE'
                                    when 'DECIMAL UNSIGNED' then 'DECIMAL'
+                                   when 'CHAR' then if(rp.param_charset = 1, 'BINARY', 'CHAR')
+                                   when 'VARCHAR' then if(rp.param_charset = 1, 'VARBINARY', 'VARCHAR')
+                                   when 'TINYTEXT' then if(rp.param_charset = 1, 'TINYBLOB', 'TINYTEXT')
+                                   when 'TEXT' then if(rp.param_charset = 1, 'BLOB', 'TEXT')
+                                   when 'MEDIUMTEXT' then if(rp.param_charset = 1, 'MEDIUMBLOB', 'MEDIUMTEXT')
+                                   when 'LONGTEXT' then if(rp.param_charset = 1, 'LONGBLOB', 'LONGTEXT')
                                    else v.data_type_str end) AS CHAR(64)) AS DATA_TYPE,
                         CASE WHEN rp.param_type IN (22, 23, 27, 28, 29, 30) THEN CAST(rp.param_length AS SIGNED)
                           ELSE CAST(NULL AS SIGNED)
@@ -29284,12 +29293,14 @@ def_table_schema(
                           )
                           ELSE CAST(NULL AS SIGNED)
                         END AS CHARACTER_OCTET_LENGTH,
-                        CASE WHEN rp.param_type IN (1, 2, 3, 4, 5, 15, 16, 50)
-                          THEN CAST(rp.param_precision AS UNSIGNED)
+                        CASE WHEN rp.param_type IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 16, 31, 50) THEN CAST(rp.param_precision AS UNSIGNED)
+                          WHEN rp.param_type IN (11, 13) THEN CAST(if(rp.param_scale = -1, 12, rp.param_precision) AS UNSIGNED)
+                          WHEN rp.param_type IN (12, 14) THEN CAST(if(rp.param_scale = -1, 22, rp.param_precision) AS UNSIGNED)
                           ELSE CAST(NULL AS UNSIGNED)
                         END AS NUMERIC_PRECISION,
                         CASE WHEN rp.param_type IN (15, 16, 50) THEN CAST(rp.param_scale AS SIGNED)
-                          WHEN rp.param_type IN (1, 2, 3, 4, 5, 11, 12, 13, 14) THEN CAST(0 AS SIGNED)
+                          WHEN rp.param_type IN (11, 12, 13, 14) THEN CAST(if(rp.param_scale = -1, 0, rp.param_scale) AS SIGNED)
+                          WHEN rp.param_type IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 31) THEN CAST(0 AS SIGNED)
                           ELSE CAST(NULL AS SIGNED)
                         END AS NUMERIC_SCALE,
                         CASE WHEN rp.param_type IN (17, 18, 20) THEN CAST(rp.param_scale AS UNSIGNED)
@@ -29306,19 +29317,52 @@ def_table_schema(
                           ELSE NULL
                         END AS CHAR(64)) AS CHARACTER_SET_NAME,
                         CAST(CASE rp.param_coll_type
-                          WHEN 45 THEN 'utf8mb4_general_ci'
-                          WHEN 46 THEN 'utf8mb4_bin'
-                          WHEN 63 THEN 'binary'
+                        WHEN 8 THEN 'latin1_swedish_ci'
+                        WHEN 11 THEN 'ascii_general_ci'
+                        WHEN 18 THEN 'tis620_thai_ci'
+                        WHEN 28 THEN 'gbk_chinese_ci'
+                        WHEN 45 THEN 'utf8mb4_general_ci'
+                        WHEN 46 THEN 'utf8mb4_bin'
+                        WHEN 47 THEN 'latin1_bin'
+                        WHEN 54 THEN 'utf16_general_ci'
+                        WHEN 55 THEN 'utf16_bin'
+                        WHEN 63 THEN 'binary'
+                        WHEN 65 THEN 'ascii_bin'
+                        WHEN 87 THEN 'gbk_bin'
+                        WHEN 89 THEN 'tis620_bin'
+                        WHEN 101 THEN 'utf16_unicode_ci'
+                        WHEN 216 THEN 'gb18030_2022_bin'
+                        WHEN 217 THEN 'gb18030_2022_chinese_ci'
+                        WHEN 218 THEN 'gb18030_2022_chinese_cs'
+                        WHEN 219 THEN 'gb18030_2022_radical_ci'
+                        WHEN 220 THEN 'gb18030_2022_radical_cs'
+                        WHEN 221 THEN 'gb18030_2022_stroke_ci'
+                        WHEN 222 THEN 'gb18030_2022_stroke_cs'
+                        WHEN 224 THEN 'utf8mb4_unicode_ci'
+                        WHEN 234 THEN 'utf8mb4_czech_ci'
+                        WHEN 245 THEN 'utf8mb4_croatian_ci'
+                        WHEN 246 THEN 'utf8mb4_unicode_520_ci'
+                        WHEN 248 THEN 'gb18030_chinese_ci'
+                        WHEN 249 THEN 'gb18030_bin'
+                        WHEN 255 THEN 'utf8mb4_0900_ai_ci'
                           ELSE NULL
                         END AS CHAR(64)) AS COLLATION_NAME,
-                        CAST(CASE WHEN rp.param_type IN (1, 2, 3, 4, 5)
+                        CAST(CASE WHEN rp.param_type IN (1, 2, 3, 4, 5, 31)
                           THEN CONCAT(lower(v.data_type_str),'(',rp.param_precision,')')
+                          WHEN (rp.param_type in (6, 7, 8, 9, 10) AND rp.param_zero_fill)
+                          THEN CONCAT(lower(v.data_type_str), ' zerofill')
                           WHEN rp.param_type IN (15,16,50)
                           THEN CONCAT(lower(v.data_type_str),'(',rp.param_precision, ',', rp.param_scale,')')
-                          WHEN rp.param_type IN (18, 20)
+                          WHEN rp.param_type IN (17, 18, 20)
                           THEN CONCAT(lower(v.data_type_str),'(', rp.param_scale, ')')
-                          WHEN rp.param_type IN (22, 23)
+                          WHEN (rp.param_type IN (22, 23) AND rp.param_charset != 1)
                           THEN CONCAT(lower(v.data_type_str),'(', rp.param_length, ')')
+                          WHEN (rp.param_type IN (22) AND rp.param_charset = 1)
+                          THEN CONCAT(lower('VARBINARY'),'(', rp.param_length, ')')
+                          WHEN (rp.param_type IN (23) AND rp.param_charset = 1)
+                          THEN CONCAT(lower('BINARY'),'(', rp.param_length, ')')
+                          WHEN (rp.param_type IN (27, 28, 29, 30) AND rp.param_charset = 1)
+                          THEN lower(REPLACE(v.data_type_str, 'TEXT', 'BLOB'))
                           ELSE lower(v.data_type_str) END AS char(4194304)) AS DTD_IDENTIFIER,
                         CAST(CASE WHEN r.routine_type = 1 THEN 'PROCEDURE'
                           WHEN ROUTINE_TYPE = 2 THEN 'FUNCTION'
@@ -35061,7 +35105,7 @@ AND
 # 21558: V$OB_GROUP_IO_STAT
 # 21559: GV$OB_GROUP_IO_STAT
 # 21560: DBA_OB_STORAGE_IO_USAGE
-# 21561: CDB_OB_STROAGE_IO_USAGE
+# 21561: CDB_OB_STORAGE_IO_USAGE
 
 def_table_schema(
   owner = 'chaser.ch',
@@ -35672,7 +35716,21 @@ def_table_schema(
 # 21582: ROLE_TABLE_GRANTS
 # 21583: ROLE_COLUMN_GRANTS
 # 21584: ROLE_ROUTINE_GRANTS
-# 21585: func
+def_table_schema(
+  owner = 'wangbai.wx',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name     = 'func',
+  table_id       = '21585',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT name, ret, dl, type
+    FROM oceanbase.__all_func
+""".replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'gengfu.zpc',
@@ -35937,6 +35995,10 @@ def_table_schema(
 # 21617: CDB_OB_SPM_EVO_RESULT
 # 21618: DBA_OB_KV_REDIS_TABLE
 # 21619: CDB_OB_KV_REDIS_TABLE
+# 21620: GV$OB_FUNCTION_IO_STAT
+# 21621: V$OB_FUNCTION_IO_STAT
+# 21622: DBA_OB_TEMP_FILES
+# 21623: CDB_OB_TEMP_FILES
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -41485,8 +41547,8 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS INSTANTIABLE,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_OWNER,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_NAME,
-      T.LOCAL_ATTRS AS LOCAL_ATTRIBUTES,
-      T.LOCAL_METHODS AS LOCAL_METHODS,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_ATTRIBUTES,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_METHODS,
       T.TYPE_ID AS TYPEID
     FROM
       SYS.ALL_VIRTUAL_TYPE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
@@ -41511,8 +41573,8 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS INSTANTIABLE,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_OWNER,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_NAME,
-      TS.LOCAL_ATTRS AS LOCAL_ATTRIBUTES,
-      TS.LOCAL_METHODS AS LOCAL_METHODS,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_ATTRIBUTES,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_METHODS,
       TS.TYPE_ID AS TYPEID
     FROM
       SYS.ALL_VIRTUAL_TYPE_SYS_AGENT TS
@@ -41546,8 +41608,8 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS INSTANTIABLE,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_OWNER,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_NAME,
-      T.LOCAL_ATTRS AS LOCAL_ATTRIBUTES,
-      T.LOCAL_METHODS AS LOCAL_METHODS,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_ATTRIBUTES,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_METHODS,
       T.TYPE_ID AS TYPEID
     FROM
       SYS.ALL_VIRTUAL_TYPE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
@@ -41574,8 +41636,8 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS INSTANTIABLE,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_OWNER,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_NAME,
-      TS.LOCAL_ATTRS AS LOCAL_ATTRIBUTES,
-      TS.LOCAL_METHODS AS LOCAL_METHODS,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_ATTRIBUTES,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_METHODS,
       TS.TYPE_ID AS TYPEID
     FROM
       SYS.ALL_VIRTUAL_TYPE_SYS_AGENT TS
@@ -41608,8 +41670,8 @@ def_table_schema(
       CAST('YES' AS CHAR(3)) AS INSTANTIABLE,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_OWNER,
       CAST(NULL AS VARCHAR2(30)) AS SUPERTYPE_NAME,
-      T.LOCAL_ATTRS AS LOCAL_ATTRIBUTES,
-      T.LOCAL_METHODS AS LOCAL_METHODS,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_ATTRIBUTES,
+      CAST(NULL AS NUMBER(38)) AS LOCAL_METHODS,
       T.TYPE_ID AS TYPEID
     FROM
       SYS.ALL_VIRTUAL_TYPE_REAL_AGENT T JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT D
@@ -42581,7 +42643,7 @@ def_table_schema(
         WHEN 2 THEN 'FUNCTION'
         WHEN 3 THEN 'PACKAGE'
         WHEN 4 THEN 'TYPE' END AS OBJECT_TYPE,
-      CAST(DECODE(BITAND(R.FLAG, 16384), 16484, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
+      CAST(DECODE(BITAND(R.FLAG, 16384), 16384, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
       CAST(DECODE(BITAND(R.FLAG, 128), 128, 'YES', 'NO') AS VARCHAR2(3)) AS PIPELINED,
       D1.DATABASE_NAME AS IMPLTYPEOWNER,
       T1.TYPE_NAME AS IMPLTYPENAME,
@@ -42630,7 +42692,7 @@ def_table_schema(
         WHEN 2 THEN 'FUNCTION'
         WHEN 3 THEN 'PACKAGE'
         WHEN 4 THEN 'TYPE' END AS OBJECT_TYPE,
-    CAST(DECODE(BITAND(RS.FLAG, 16384), 16484, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
+    CAST(DECODE(BITAND(RS.FLAG, 16384), 16384, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
     CAST(DECODE(BITAND(RS.FLAG, 128), 128, 'YES', 'NO') AS VARCHAR2(3)) AS PIPELINED,
     CAST(CASE WHEN TS1.TYPE_NAME IS NULL THEN NULL ELSE 'SYS' END AS VARCHAR2(30)) AS IMPLTYPEOWNER,
     TS1.TYPE_NAME AS IMPLTYPENAME,
@@ -42644,7 +42706,32 @@ def_table_schema(
     LEFT JOIN SYS.ALL_VIRTUAL_PACKAGE_SYS_AGENT PS ON RS.PACKAGE_ID = PS.PACKAGE_ID
     LEFT JOIN SYS.ALL_VIRTUAL_TYPE_SYS_AGENT TS ON RS.PACKAGE_ID = TS.TYPE_ID
     LEFT JOIN SYS.ALL_VIRTUAL_TYPE_SYS_AGENT TS1 ON RS.TYPE_ID = TS1.TYPE_ID
-  WHERE RS.ROUTINE_TYPE != 1 AND RS.ROUTINE_TYPE != 2 -- sys tenant only have sys package and type.
+  WHERE RS.ROUTINE_TYPE != 1 AND RS.ROUTINE_TYPE != 2
+  UNION ALL
+  SELECT
+    DB.DATABASE_NAME AS OWNER,
+    TRG.TRIGGER_NAME AS OBJECT_NAME,
+    CAST(NULL AS VARCHAR2(128)) AS PROCEDURE_NAME,
+    TRG.TRIGGER_ID AS OBJECT_ID,
+    CAST(1 AS NUMBER) AS SUBPROGRAM_ID,
+    CAST(NULL AS NUMBER) AS OVERLOAD,
+    'TRIGGER' AS OBJECT_TYPE,
+    CAST('NO' AS VARCHAR2(3)) AS AGGREGATE,
+    CAST('NO' AS VARCHAR2(3)) AS PIPELINED,
+    CAST(NULL AS VARCHAR2(128)) AS IMPLTYPEOWNER,
+    CAST(NULL AS VARCHAR2(64)) AS IMPLTYPENAME,
+    CAST('NO' AS VARCHAR2(3)) AS PARALLEL,
+    CAST('NO' AS VARCHAR2(3)) AS INTERFACE,
+    CAST('NO' AS VARCHAR2(3)) AS DETERMINISTIC,
+    CAST('DEFINER' AS VARCHAR2(12)) AS AUTHID,
+    TRG.TENANT_ID AS ORIGIN_CON_ID
+    FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
+       INNER JOIN
+       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+       ON TRG.DATABASE_ID = DB.DATABASE_ID
+          AND TRG.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND DB.IN_RECYCLEBIN = 0
 """.replace("\n", " ")
 )
 
@@ -42890,7 +42977,7 @@ def_table_schema(
         WHEN 2 THEN 'FUNCTION'
         WHEN 3 THEN 'PACKAGE'
         WHEN 4 THEN 'TYPE' END AS OBJECT_TYPE,
-      CAST(DECODE(BITAND(R.FLAG, 16384), 16484, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
+      CAST(DECODE(BITAND(R.FLAG, 16384), 16384, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
       CAST(DECODE(BITAND(R.FLAG, 128), 128, 'YES', 'NO') AS VARCHAR2(3)) AS PIPELINED,
       D1.DATABASE_NAME AS IMPLTYPEOWNER,
       T1.TYPE_NAME AS IMPLTYPENAME,
@@ -42941,7 +43028,7 @@ def_table_schema(
         WHEN 2 THEN 'FUNCTION'
         WHEN 3 THEN 'PACKAGE'
         WHEN 4 THEN 'TYPE' END AS OBJECT_TYPE,
-    CAST(DECODE(BITAND(RS.FLAG, 16384), 16484, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
+    CAST(DECODE(BITAND(RS.FLAG, 16384), 16384, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
     CAST(DECODE(BITAND(RS.FLAG, 128), 128, 'YES', 'NO') AS VARCHAR2(3)) AS PIPELINED,
     CAST(CASE WHEN TS1.TYPE_NAME IS NULL THEN NULL ELSE 'SYS' END AS VARCHAR2(30)) AS IMPLTYPEOWNER,
     TS1.TYPE_NAME AS IMPLTYPENAME,
@@ -42955,7 +43042,34 @@ def_table_schema(
     LEFT JOIN SYS.ALL_VIRTUAL_PACKAGE_SYS_AGENT PS ON RS.PACKAGE_ID = PS.PACKAGE_ID
     LEFT JOIN SYS.ALL_VIRTUAL_TYPE_SYS_AGENT TS ON RS.PACKAGE_ID = TS.TYPE_ID
     LEFT JOIN SYS.ALL_VIRTUAL_TYPE_SYS_AGENT TS1 ON RS.TYPE_ID = TS1.TYPE_ID
-  WHERE RS.ROUTINE_TYPE != 1 AND RS.ROUTINE_TYPE != 2 -- sys tenant only have sys package and type.
+  WHERE RS.ROUTINE_TYPE != 1 AND RS.ROUTINE_TYPE != 2
+  UNION ALL
+  SELECT
+    DB.DATABASE_NAME AS OWNER,
+    TRG.TRIGGER_NAME AS OBJECT_NAME,
+    CAST(NULL AS VARCHAR2(128)) AS PROCEDURE_NAME,
+    TRG.TRIGGER_ID AS OBJECT_ID,
+    CAST(1 AS NUMBER) AS SUBPROGRAM_ID,
+    CAST(NULL AS NUMBER) AS OVERLOAD,
+    'TRIGGER' AS OBJECT_TYPE,
+    CAST('NO' AS VARCHAR2(3)) AS AGGREGATE,
+    CAST('NO' AS VARCHAR2(3)) AS PIPELINED,
+    CAST(NULL AS VARCHAR2(128)) AS IMPLTYPEOWNER,
+    CAST(NULL AS VARCHAR2(64)) AS IMPLTYPENAME,
+    CAST('NO' AS VARCHAR2(3)) AS PARALLEL,
+    CAST('NO' AS VARCHAR2(3)) AS INTERFACE,
+    CAST('NO' AS VARCHAR2(3)) AS DETERMINISTIC,
+    CAST('DEFINER' AS VARCHAR2(12)) AS AUTHID,
+    TRG.TENANT_ID AS ORIGIN_CON_ID
+    FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
+       INNER JOIN
+       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+       ON TRG.DATABASE_ID = DB.DATABASE_ID
+          AND TRG.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND (TRG.DATABASE_ID = USERENV('SCHEMAID')
+              OR USER_CAN_ACCESS_OBJ(1, abs(nvl(TRG.BASE_OBJECT_ID,0)), TRG.DATABASE_ID) = 1)
+          AND DB.IN_RECYCLEBIN = 0
 """.replace("\n", " ")
 )
 
@@ -43211,7 +43325,7 @@ def_table_schema(
         WHEN 2 THEN 'FUNCTION'
         WHEN 3 THEN 'PACKAGE'
         WHEN 4 THEN 'TYPE' END AS OBJECT_TYPE,
-      CAST(DECODE(BITAND(R.FLAG, 16384), 16484, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
+      CAST(DECODE(BITAND(R.FLAG, 16384), 16384, 'YES', 'NO') AS VARCHAR(3)) AS AGGREGATE,
       CAST(DECODE(BITAND(R.FLAG, 128), 128, 'YES', 'NO') AS VARCHAR2(3)) AS PIPELINED,
       D1.DATABASE_NAME AS IMPLTYPEOWNER,
       T1.TYPE_NAME AS IMPLTYPENAME,
@@ -43236,6 +43350,31 @@ def_table_schema(
     WHERE
       D.IN_RECYCLEBIN = 0
       AND R.DATABASE_ID = USERENV('SCHEMAID')
+    UNION ALL
+    SELECT
+      TRG.TRIGGER_NAME AS OBJECT_NAME,
+      CAST(NULL AS VARCHAR2(128)) AS PROCEDURE_NAME,
+      TRG.TRIGGER_ID AS OBJECT_ID,
+      CAST(1 AS NUMBER) AS SUBPROGRAM_ID,
+      CAST(NULL AS NUMBER) AS OVERLOAD,
+      'TRIGGER' AS OBJECT_TYPE,
+      CAST('NO' AS VARCHAR2(3)) AS AGGREGATE,
+      CAST('NO' AS VARCHAR2(3)) AS PIPELINED,
+      CAST(NULL AS VARCHAR2(128)) AS IMPLTYPEOWNER,
+      CAST(NULL AS VARCHAR2(64)) AS IMPLTYPENAME,
+      CAST('NO' AS VARCHAR2(3)) AS PARALLEL,
+      CAST('NO' AS VARCHAR2(3)) AS INTERFACE,
+      CAST('NO' AS VARCHAR2(3)) AS DETERMINISTIC,
+      CAST('DEFINER' AS VARCHAR2(12)) AS AUTHID,
+      TRG.TENANT_ID AS ORIGIN_CON_ID
+    FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
+        INNER JOIN
+        SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT DB
+        ON TRG.DATABASE_ID = DB.DATABASE_ID
+            AND TRG.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND DB.TENANT_ID = EFFECTIVE_TENANT_ID()
+            AND TRG.DATABASE_ID = USERENV('SCHEMAID')
+            AND DB.IN_RECYCLEBIN = 0
 """.replace("\n", " ")
 )
 
@@ -49894,11 +50033,11 @@ SELECT DB1.DATABASE_NAME AS OWNER,
        CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
        TRIGGER_BODY AS TRIGGER_BODY,
        CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
-       CAST('NO' AS VARCHAR2(3)) AS BEFORE_STATEMENT,
-       CAST('NO' AS VARCHAR2(3)) AS BEFORE_ROW,
-       CAST('NO' AS VARCHAR2(3)) AS AFTER_ROW,
-       CAST('NO' AS VARCHAR2(3)) AS AFTER_STATEMENT,
-       CAST('NO' AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 2), 2, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_STATEMENT,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 8), 8, 'YES', 'NO') AS VARCHAR2(3)) AS AFTER_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 16), 16, 'YES', 'NO') AS VARCHAR2(3)) AS AFTER_STATEMENT,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 32), 32, 'YES', 'NO') AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
        CAST('YES' AS VARCHAR2(3)) AS FIRE_ONCE,
        CAST('NO' AS VARCHAR2(3)) AS APPLY_SERVER_ONLY
   FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
@@ -49965,11 +50104,11 @@ SELECT DB1.DATABASE_NAME AS OWNER,
        CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
        TRIGGER_BODY AS TRIGGER_BODY,
        CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
-       CAST('NO' AS VARCHAR2(3)) AS BEFORE_STATEMENT,
-       CAST('NO' AS VARCHAR2(3)) AS BEFORE_ROW,
-       CAST('NO' AS VARCHAR2(3)) AS AFTER_ROW,
-       CAST('NO' AS VARCHAR2(3)) AS AFTER_STATEMENT,
-       CAST('NO' AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 2), 2, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_STATEMENT,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 8), 8, 'YES', 'NO') AS VARCHAR2(3)) AS AFTER_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 16), 16, 'YES', 'NO') AS VARCHAR2(3)) AS AFTER_STATEMENT,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 32), 32, 'YES', 'NO') AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
        CAST('YES' AS VARCHAR2(3)) AS FIRE_ONCE,
        CAST('NO' AS VARCHAR2(3)) AS APPLY_SERVER_ONLY
   FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT TRG
@@ -50034,11 +50173,11 @@ SELECT TRG.TRIGGER_NAME AS TRIGGER_NAME,
        CAST('PL/SQL' AS VARCHAR2(11)) AS ACTION_TYPE,
        TRIGGER_BODY AS TRIGGER_BODY,
        CAST('NO' AS VARCHAR2(7)) AS CROSSEDITION,
-       CAST('NO' AS VARCHAR2(3)) AS BEFORE_STATEMENT,
-       CAST('NO' AS VARCHAR2(3)) AS BEFORE_ROW,
-       CAST('NO' AS VARCHAR2(3)) AS AFTER_ROW,
-       CAST('NO' AS VARCHAR2(3)) AS AFTER_STATEMENT,
-       CAST('NO' AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 2), 2, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_STATEMENT,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 4), 4, 'YES', 'NO') AS VARCHAR2(3)) AS BEFORE_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 8), 8, 'YES', 'NO') AS VARCHAR2(3)) AS AFTER_ROW,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 16), 16, 'YES', 'NO') AS VARCHAR2(3)) AS AFTER_STATEMENT,
+       CAST(DECODE(BITAND(TRG.TIMING_POINTS, 32), 32, 'YES', 'NO') AS VARCHAR2(3)) AS INSTEAD_OF_ROW,
        CAST('YES' AS VARCHAR2(3)) AS FIRE_ONCE,
        CAST('NO' AS VARCHAR2(3)) AS APPLY_SERVER_ONLY
   FROM (SELECT * FROM SYS.ALL_VIRTUAL_TENANT_TRIGGER_REAL_AGENT
@@ -63972,7 +64111,9 @@ left join
 # 28259: DBA_WR_SQL_PLAN
 # 28260: DBA_WR_RES_MGR_SYSSTAT
 # 28261: DBA_OB_SPM_EVO_RESULT
-
+# 28262: GV$OB_FUNCTION_IO_STAT
+# 28263: V$OB_FUNCTION_IO_STAT
+# 28264: DBA_OB_TEMP_FILES
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################

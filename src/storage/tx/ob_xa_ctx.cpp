@@ -2327,6 +2327,7 @@ void ObXACtx::try_exit(const bool need_decrease_ref)
 void ObXACtx::try_exit_()
 {
   if (0 == xa_ref_count_) {
+    (void)unregister_timeout_task_();
     set_exiting_();
   }
 }

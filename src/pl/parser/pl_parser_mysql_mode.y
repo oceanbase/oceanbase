@@ -1844,6 +1844,9 @@ opt_sp_decl_default:
     /*Empty*/ { $$ = NULL; }
   | DEFAULT default_expr
     {
+      if (NULL == $2) {
+        YYERROR;
+      }
       malloc_non_terminal_node($$, parse_ctx->mem_pool_, T_SP_DECL_DEFAULT, 1, $2);
     }
 ;

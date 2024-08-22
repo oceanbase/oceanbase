@@ -99,6 +99,7 @@ public:
         use_hash_aggr_(false),
         has_push_down_(false),
         use_part_sort_(false),
+        dist_method_(T_INVALID),
         is_pushdown_scalar_aggr_(false)
   {}
   virtual ~ObLogGroupBy()
@@ -218,8 +219,17 @@ public:
   { return ObRollupStatus::ROLLUP_COLLECTOR == rollup_adaptive_info_.rollup_status_; }
   inline void set_force_push_down(bool force_push_down)
   { force_push_down_ = force_push_down; }
-  void set_group_by_outline_info(bool use_hash_aggr, bool has_push_down, bool use_part_sort = false)
-  { use_hash_aggr_ = use_hash_aggr; has_push_down_ = has_push_down; use_part_sort_ = use_part_sort; }
+  void set_group_by_outline_info(bool is_basic,
+                                 bool is_partition_wise,
+                                 bool use_hash_aggr,
+                                 bool has_push_down,
+                                 bool use_part_sort = false)
+  {
+    dist_method_ = is_basic ? T_DISTRIBUTE_BASIC : (is_partition_wise ? T_DISTRIBUTE_NONE : T_DISTRIBUTE_HASH);
+    use_hash_aggr_ = use_hash_aggr;
+    has_push_down_ = has_push_down;
+    use_part_sort_ = use_part_sort;
+  }
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
 
@@ -265,6 +275,7 @@ private:
   bool use_hash_aggr_;
   bool has_push_down_;
   bool use_part_sort_;
+  ObItemType dist_method_;
   bool is_pushdown_scalar_aggr_;
 };
 } // end of namespace sql

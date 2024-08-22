@@ -118,7 +118,7 @@ bool ObUpgradeChecker::check_data_version_exist(
 //       For now, just consider the valid upgrade path for 4.x .
 bool ObUpgradeChecker::check_data_version_valid_for_backup(const uint64_t data_version)
 {
-  return DATA_VERSION_4_3_0_0 <= data_version;
+  return DATA_VERSION_4_3_3_0 <= data_version;
 }
 
 //FIXME:(yanmu.ztl) cluster version should be discrete.

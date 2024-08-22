@@ -18,55 +18,82 @@ namespace oceanbase
 namespace storage
 {
 
-ObTableFlag::ObTableFlag()
+ObTableBackupFlag::ObTableBackupFlag()
   : has_backup_flag_(ObTableHasBackupFlag::NO_BACKUP),
     has_local_flag_(ObTableHasLocalFlag::HAS_LOCAL),
-    is_shared_flag_(ObTableIsSharedFlag::IS_NOT_SHARED),
     reserved_(0)
 {
 }
 
-ObTableFlag::ObTableFlag(int64_t flag)
+ObTableBackupFlag::ObTableBackupFlag(int64_t flag)
   : flag_(flag)
 {
 }
 
-ObTableFlag::~ObTableFlag()
+ObTableBackupFlag::~ObTableBackupFlag()
 {
 }
 
-void ObTableFlag::reset()
+void ObTableBackupFlag::reset()
 {
   has_backup_flag_ = ObTableHasBackupFlag::NO_BACKUP;
   has_local_flag_ = ObTableHasLocalFlag::HAS_LOCAL;
-  is_shared_flag_ = ObTableIsSharedFlag::IS_NOT_SHARED;
   reserved_ = 0;
 }
 
-bool ObTableFlag::is_valid() const
+bool ObTableBackupFlag::is_valid() const
 {
   return has_backup_flag_ >= ObTableHasBackupFlag::NO_BACKUP && has_backup_flag_ < ObTableHasBackupFlag::MAX
-      && has_local_flag_ >= ObTableHasLocalFlag::HAS_LOCAL && has_local_flag_ < ObTableHasLocalFlag::MAX
-      && is_shared_flag_ >= ObTableIsSharedFlag::IS_NOT_SHARED && is_shared_flag_ < ObTableIsSharedFlag::MAX;
+      && has_local_flag_ >= ObTableHasLocalFlag::HAS_LOCAL && has_local_flag_ < ObTableHasLocalFlag::MAX;
 }
 
-void ObTableFlag::set_default()
+void ObTableBackupFlag::set_default()
 {
   has_backup_flag_ = ObTableHasBackupFlag::NO_BACKUP;
   has_local_flag_ = ObTableHasLocalFlag::HAS_LOCAL;
-  is_shared_flag_ = ObTableIsSharedFlag::IS_NOT_SHARED;
   reserved_ = 0;
 }
 
-void ObTableFlag::clear()
+void ObTableBackupFlag::clear()
 {
   has_backup_flag_ = ObTableHasBackupFlag::NO_BACKUP;
   has_local_flag_ = ObTableHasLocalFlag::NO_LOCAL;
-  is_shared_flag_ = ObTableIsSharedFlag::IS_NOT_SHARED;
   reserved_ = 0;
 }
 
-OB_SERIALIZE_MEMBER(ObTableFlag, flag_);
+OB_SERIALIZE_MEMBER(ObTableBackupFlag, flag_);
+
+
+
+ObTableSharedFlag::ObTableSharedFlag()
+  : shared_flag_(PRIVATE),
+    reserved_(0)
+{
+}
+
+ObTableSharedFlag::~ObTableSharedFlag()
+{
+}
+
+void ObTableSharedFlag::reset()
+{
+  shared_flag_ = PRIVATE;
+  reserved_ = 0;
+}
+
+bool ObTableSharedFlag::is_valid() const
+{
+  return shared_flag_ >= PRIVATE && shared_flag_ < MAX;
+}
+
+void ObTableSharedFlag::set_default()
+{
+  shared_flag_ = PRIVATE;
+  reserved_ = 0;
+}
+
+OB_SERIALIZE_MEMBER(ObTableSharedFlag, flag_);
+
 
 }
 }

@@ -1160,6 +1160,8 @@ const char* ObHint::get_hint_name(ObItemType type, bool is_enable_hint /* defaul
     case T_USE_DISTRIBUTED_DML:    return is_enable_hint ? "USE_DISTRIBUTED_DML" : "NO_USE_DISTRIBUTED_DML";
     case T_TABLE_DYNAMIC_SAMPLING:    return "DYNAMIC_SAMPLING";
     case T_PQ_SUBQUERY: return "PQ_SUBQUERY";
+    case T_PQ_GBY_HINT: return "PQ_GBY";
+    case T_PQ_DISTINCT_HINT:  return "PQ_DISTINCT";
     default:                    return NULL;
   }
 }
@@ -2526,6 +2528,43 @@ int ObPQSubqueryHint::print_hint_desc(PlanText &plan_text) const
   }
   return ret;
 }
+
+int ObPQHint::assign(const ObPQHint &other)
+{
+  int ret = OB_SUCCESS;
+  dist_method_ = other.dist_method_;
+  if (OB_FAIL(ObOptHint::assign(other))) {
+    LOG_WARN("fail to assign hint", K(ret));
+  }
+  return ret;
+}
+
+int ObPQHint::print_hint_desc(PlanText &plan_text) const
+{
+  int ret = OB_SUCCESS;
+  char *buf = plan_text.buf_;
+  int64_t &buf_len = plan_text.buf_len_;
+  int64_t &pos = plan_text.pos_;
+  const char *str = NULL;
+  if (OB_ISNULL(str = ObPQHint::get_dist_method_str(dist_method_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(dist_method_));
+  } else if (OB_FAIL(BUF_PRINTF(" %s", str))) {
+    LOG_WARN("failed to print dist method", K(ret));
+  }
+  return ret;
+}
+
+const char *ObPQHint::get_dist_method_str(ObItemType dist_method)
+{
+  switch (dist_method) {
+    case T_DISTRIBUTE_BASIC:  return  "BASIC";
+    case T_DISTRIBUTE_NONE:   return  "NONE";
+    case T_DISTRIBUTE_HASH:   return  "HASH";
+    default:  return NULL;
+  }
+  return NULL;
+};
 
 int ObJoinOrderHint::print_hint_desc(PlanText &plan_text) const
 {

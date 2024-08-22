@@ -597,6 +597,15 @@ private:
   int inner_release_memtables(const share::SCN scn);
   int calc_sstable_occupy_size(int64_t &occupy_size, int64_t &pure_backup_sstable_occupy_size);
   inline void set_space_usage_(const ObTabletSpaceUsage &space_usage) { tablet_meta_.set_space_usage_(space_usage); }
+
+  int inner_init_compat_normal_tablet(
+      common::ObArenaAllocator &allocator,
+      const ObTablet &old_tablet,
+      ObTableHandleV2 &mds_mini_sstable);
+  int inner_init_compat_empty_shell(
+      common::ObArenaAllocator &allocator,
+      const ObTablet &old_tablet,
+      ObTableHandleV2 &mds_mini_sstable);
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;

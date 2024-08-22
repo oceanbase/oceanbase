@@ -19,6 +19,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/allocator/ob_malloc.h"
 #include "lib/net/ob_addr.h"
+#include "lib/mysqlclient/ob_mysql_prepared_statement.h"
 namespace oceanbase
 {
 namespace common
@@ -56,7 +57,7 @@ public:
   virtual bool is_closed() const;
   // use user provided the statement
   template<typename T>
-  int create_statement(T &stmt, const uint64_t tenant_id, const char *sql);
+  int create_statement(T &stmt, const uint64_t tenant_id, const char *sql, int64_t param_count = 0);
   int prepare_statement(ObMySQLPreparedStatement &stmt, const char *sql);
   int escape(const char *from, const int64_t from_size, char *to,
       const int64_t to_size, int64_t &out_size);
@@ -91,7 +92,8 @@ public:
                         const share::schema::ObRoutineInfo &routine_info,
                         const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                         const ObTimeZoneInfo *tz_info,
-                        ObObj *result) override;
+                        ObObj *result,
+                        bool is_sql) override;
   virtual int start_transaction(const uint64_t &tenant_id, bool with_snap_shot = false) override;
   virtual int rollback() override;
   virtual int commit() override;
@@ -121,7 +123,22 @@ public:
   // dblink.
   virtual int connect_dblink(const bool use_ssl, int64_t sql_request_level);
 
-
+  int prepare(const char *sql, int64_t param_count, ObIAllocator *allocator);
+  int prepare_proc_stmt(const char *sql, int64_t param_count, ObIAllocator *allocator);
+  int bind_basic_type_by_pos(uint64_t position,
+                             void *param,
+                             int64_t param_size,
+                             int32_t datatype,
+                             int32_t &indicator,
+                             bool is_out_param);
+  int bind_array_type_by_pos(uint64_t position,
+                             void *array,
+                             int32_t *indicators,
+                             int64_t ele_size,
+                             int32_t ele_datatype,
+                             uint64_t array_size,
+                             uint32_t *out_valid_array_size);
+  int execute_proc();
 private:
   int switch_tenant(const uint64_t tenant_id);
   int reset_read_consistency();
@@ -145,6 +162,7 @@ private:
   const char *db_name_;
   uint64_t tenant_id_;
   int64_t read_consistency_;
+  ObMySQLProcStatement proc_stmt_;
   DISALLOW_COPY_AND_ASSIGN(ObMySQLConnection);
 };
 inline bool ObMySQLConnection::is_busy() const
@@ -181,14 +199,14 @@ inline int64_t ObMySQLConnection::connection_version() const
 }
 
 template<typename T>
-int ObMySQLConnection::create_statement(T &stmt, const uint64_t tenant_id, const char *sql)
+int ObMySQLConnection::create_statement(T &stmt, const uint64_t tenant_id, const char *sql, int64_t param_count)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(switch_tenant(tenant_id))) {
     _OB_LOG(WARN, "switch tenant failed, tenant_id=%ld, ret=%d", tenant_id, ret);
   } else if (OB_FAIL(reset_read_consistency())) {
     _OB_LOG(WARN, "fail to set read consistency, ret=%d", ret);
-  } else if (OB_FAIL(stmt.init(*this, sql))) {
+  } else if (OB_FAIL(stmt.init(*this, sql, param_count))) {
     _OB_LOG(WARN, "fail to init statement, ret=%d", ret);
   }
   return ret;

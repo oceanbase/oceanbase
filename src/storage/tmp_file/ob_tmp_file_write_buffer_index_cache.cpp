@@ -292,10 +292,7 @@ int ObTmpFileWBPIndexCache::binary_search(const int64_t target_page_virtual_id, 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
-  } else if (OB_UNLIKELY(is_empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("array is empty", KR(ret), K(fd_), K(size_));
-  } else {
+  } else if (OB_LIKELY(!is_empty())) {
     int64_t left_pos = left_;
     int64_t right_pos = get_logic_tail_();
     ObTmpFilePageIndexBucket *target_bucket = nullptr;

@@ -21,6 +21,7 @@
 #include "lib/string/ob_sql_string.h"
 #include "lib/mysqlclient/ob_mysql_read_context.h"
 #include "lib/mysqlclient/ob_dblink_error_trans.h"
+#include "share/schema/ob_routine_info.h"
 
 namespace oceanbase
 {
@@ -95,7 +96,7 @@ void ObMySQLConnection::reset()
 int ObMySQLConnection::prepare_statement(ObMySQLPreparedStatement &stmt, const char *sql)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(stmt.init(*this, sql))) {
+  if (OB_FAIL(stmt.init(*this, sql, 0))) {
     LOG_WARN("fail to init prepared statement", K(ret));
   }
   return ret;
@@ -518,19 +519,25 @@ int ObMySQLConnection::execute_proc(const uint64_t tenant_id,
                                     const share::schema::ObRoutineInfo &routine_info,
                                     const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                                     const ObTimeZoneInfo *tz_info,
-                                    ObObj *result)
+                                    ObObj *result,
+                                    bool is_sql)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(closed_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("connection not established. call connect first", K(ret));
   } else {
-    ObMySQLProcStatement stmt;
-    if (OB_FAIL(create_statement(stmt, tenant_id, sql.ptr()))) {
+    int64_t real_param_cnt = routine_info.is_function() ? 1 : 0;
+    for (int64_t i = 0; i < params.count(); i++) {
+      if (!params.at(i).is_pl_mock_default_param()) {
+        real_param_cnt++;
+      }
+    }
+    if (OB_FAIL(prepare_proc_stmt(sql.ptr(), real_param_cnt, &allocator))) {
       LOG_WARN("create statement failed", K(sql), K(ret));
-    } else if (OB_FAIL(stmt.execute_proc(allocator, params, routine_info, tz_info))) {
+    } else if (OB_FAIL(proc_stmt_.execute_proc(allocator, params, routine_info, tz_info, result, is_sql))) {
       LOG_WARN("statement execute update failed", K(sql), K(ret));
-    } else if (OB_FAIL(stmt.close())) {
+    } else if (OB_FAIL(proc_stmt_.close())) {
       LOG_WARN("fail to close stmt", K(ret));
     }
   }
@@ -688,6 +695,70 @@ int ObMySQLConnection::connect_dblink(const bool use_ssl, int64_t sql_request_le
     LOG_WARN("root is NULL", K(ret));
   } else if (OB_FAIL(connect(root_->get_db_user(), root_->get_db_pass(), root_->get_db_name(), use_ssl, true, sql_request_level))) {
     LOG_WARN("fail to connect", K(ret));
+  }
+  return ret;
+}
+
+int ObMySQLConnection::prepare(const char *sql, int64_t param_count, ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(prepare_proc_stmt(sql, param_count, allocator))) {
+    LOG_WARN("prepare proc stmt failed", K(ret), KCSTRING(sql));
+  }
+  return ret;
+}
+
+int ObMySQLConnection::prepare_proc_stmt(const char *sql, int64_t param_count, ObIAllocator *allocator)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("allocator is NULL", K(ret));
+  } else if (FALSE_IT(proc_stmt_.set_allocator(allocator))) {
+  } else if (OB_UNLIKELY(closed_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("connection not established. call connect first", K(ret));
+  } else if (OB_FAIL(create_statement(proc_stmt_, OB_INVALID_TENANT_ID, sql, param_count))) {
+    LOG_WARN("create statement failed", K(ret), KCSTRING(sql));
+  }
+  return ret;
+}
+
+int ObMySQLConnection::bind_basic_type_by_pos(uint64_t position,
+                                              void *param,
+                                              int64_t param_size,
+                                              int32_t datatype,
+                                              int32_t &indicator,
+                                              bool is_out_param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(proc_stmt_.bind_basic_type_by_pos(position - 1, param, param_size, datatype, indicator, is_out_param))) {
+    LOG_WARN("bind basic type failed", K(ret), K(position), K(param_size), K(datatype));
+  }
+  return ret;
+}
+
+int ObMySQLConnection::bind_array_type_by_pos(uint64_t position,
+                                              void *array,
+                                              int32_t *indicators,
+                                              int64_t ele_size,
+                                              int32_t ele_datatype,
+                                              uint64_t array_size,
+                                              uint32_t *out_valid_array_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(proc_stmt_.bind_array_type_by_pos(position - 1, array, indicators, ele_size,
+                                                ele_datatype, array_size, out_valid_array_size))) {
+    LOG_WARN("bind array type failed", K(ret), K(position), K(ele_size), K(ele_datatype), K(array_size));
+  }
+  return ret;
+}
+
+int ObMySQLConnection::execute_proc()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(proc_stmt_.execute_proc())) {
+    LOG_WARN("failed to execute proc", K(ret));
   }
   return ret;
 }

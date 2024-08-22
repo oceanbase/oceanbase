@@ -32,6 +32,7 @@ ObTmpFileIOCtx::ObTmpFileIOCtx():
                 todo_size_(-1),
                 read_offset_in_file_(-1),
                 disable_page_cache_(false),
+                disable_block_cache_(false),
                 io_flag_(),
                 io_timeout_ms_(DEFAULT_IO_WAIT_TIME_MS),
                 io_handles_(),
@@ -50,7 +51,8 @@ int ObTmpFileIOCtx::init(const int64_t fd, const int64_t dir_id,
                          const bool is_read,
                          const common::ObIOFlag io_flag,
                          const int64_t io_timeout_ms,
-                         const bool disable_page_cache)
+                         const bool disable_page_cache,
+                         const bool disable_block_cache)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -73,6 +75,7 @@ int ObTmpFileIOCtx::init(const int64_t fd, const int64_t dir_id,
     io_flag_ = io_flag;
     io_timeout_ms_ = io_timeout_ms;
     disable_page_cache_ = disable_page_cache;
+    disable_block_cache_ = disable_block_cache;
     is_inited_ = true;
   }
   return ret;
@@ -91,8 +94,12 @@ void ObTmpFileIOCtx::reuse()
   for (int32_t i = 0; i < page_cache_handles_.count(); i++) {
     page_cache_handles_.at(i).page_handle_.reset();
   }
+  for (int32_t i = 0; i < block_cache_handles_.count(); i++) {
+    block_cache_handles_.at(i).block_handle_.reset();
+  }
   io_handles_.reset();
   page_cache_handles_.reset();
+  block_cache_handles_.reset();
 }
 
 void ObTmpFileIOCtx::reset()
@@ -103,6 +110,7 @@ void ObTmpFileIOCtx::reset()
   fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
   dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
   disable_page_cache_ = false;
+  disable_block_cache_ = false;
   io_flag_.reset();
   io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
 }
@@ -260,7 +268,7 @@ int ObTmpFileIOCtx::do_read_wait_()
       char * read_buf = page_cache_handle.dest_user_read_buf_;
       if (OB_UNLIKELY(!check_buf_range_valid(read_buf, read_size))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid range", KR(ret), K(read_buf), K(read_size), K(buf_size_));
+        LOG_WARN("invalid range", KR(ret), KP(read_buf), KP(buf_), K(read_size), K(buf_size_));
       } else if (OB_UNLIKELY(offset_in_page + read_size > ObTmpFileGlobal::PAGE_SIZE)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("read size is over than page range", KR(ret), KPC(this), K(offset_in_page), K(read_size));
@@ -286,7 +294,7 @@ int ObTmpFileIOCtx::do_read_wait_()
       char * read_buf = block_cache_handle.dest_user_read_buf_;
       if (OB_UNLIKELY(!check_buf_range_valid(read_buf, read_size))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid range", KR(ret), K(read_buf), K(read_size), K(buf_size_));
+        LOG_WARN("invalid range", KR(ret), KP(read_buf), KP(buf_), K(read_size), K(buf_size_));
       } else if (OB_UNLIKELY(offset_in_block + read_size > OB_DEFAULT_MACRO_BLOCK_SIZE)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("read size is over than macro block range", KR(ret), KPC(this), K(offset_in_block), K(read_size));
@@ -315,7 +323,7 @@ int ObTmpFileIOCtx::do_read_wait_()
       char * read_buf = io_handle.dest_user_read_buf_;
       if (OB_UNLIKELY(!check_buf_range_valid(read_buf, size))) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid range", KR(ret), K(read_buf), K(size), K(buf_size_));
+        LOG_WARN("invalid range", KR(ret), KP(read_buf), KP(buf_), K(size), K(buf_size_));
       } else {
         MEMCPY(read_buf, data_buf + offset, size);
         io_handle.handle_.reset();

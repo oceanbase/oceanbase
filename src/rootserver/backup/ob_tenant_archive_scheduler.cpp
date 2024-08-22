@@ -129,7 +129,7 @@ static int record_piece_extend_info(
   return ret;
 }
 
-static int record_piece_checkpoint(const ObTenantArchivePieceAttr &piece_info, const ObArchiveStore &store)
+static int record_piece_checkpoint(const ObTenantArchiveRoundAttr &old_round_info, const ObTenantArchivePieceAttr &piece_info, const ObArchiveStore &store)
 {
   int ret = OB_SUCCESS;
   if (!(piece_info.status_.is_active() 
@@ -147,7 +147,7 @@ static int record_piece_checkpoint(const ObTenantArchivePieceAttr &piece_info, c
     checkpoint_desc.checkpoint_scn_ = piece_info.checkpoint_scn_;
     checkpoint_desc.max_scn_ = piece_info.max_scn_;
     checkpoint_desc.end_scn_ = piece_info.end_scn_;
-    if (OB_FAIL(store.write_piece_checkpoint(piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, 0, checkpoint_desc))) {
+    if (OB_FAIL(store.write_piece_checkpoint(piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, 0, old_round_info.checkpoint_scn_, checkpoint_desc))) {
       LOG_WARN("failed to write piece checkpoint info file", K(ret), K(piece_info), K(checkpoint_desc));
     }
   }
@@ -233,6 +233,7 @@ static int record_piece_inner_placeholder(const ObTenantArchivePieceAttr &piece_
 static int record_single_piece_info(const ObTenantArchivePieceAttr &piece_info, const ObArchiveStore &store)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   bool is_exist = false;
   ObSinglePieceDesc single_piece_desc;
   if (!piece_info.status_.is_frozen()) {
@@ -244,7 +245,7 @@ static int record_single_piece_info(const ObTenantArchivePieceAttr &piece_info, 
   } else if (OB_FAIL(store.write_single_piece(piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, single_piece_desc))) {
     LOG_WARN("failed to write single piece info file", K(ret), K(piece_info), K(single_piece_desc));
   }
-  
+
   return ret;
 }
 
@@ -340,7 +341,7 @@ static int piece_generated_cb(
     LOG_WARN("failed to record piece start", K(ret), K(old_round_info), K(piece));
   } else if (OB_FAIL(record_piece_extend_info(*sql_proxy, old_round_info, result, piece.piece_info_, store))) {
     LOG_WARN("failed to record piece extend info", K(ret));
-  } else if (OB_FAIL(record_piece_checkpoint(piece_info, store))) {
+  } else if (OB_FAIL(record_piece_checkpoint(old_round_info, piece_info, store))) {
     LOG_WARN("failed to record piece checkpoint", K(ret), K(old_round_info), K(piece));
   } else if (OB_FAIL(record_piece_info(piece, store))) {
     LOG_WARN("failed to record piece info", K(ret), K(old_round_info), K(piece));

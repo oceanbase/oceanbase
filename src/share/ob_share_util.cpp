@@ -432,20 +432,24 @@ bool ObShareUtil::is_tenant_enable_rebalance(const uint64_t tenant_id)
 bool ObShareUtil::is_tenant_enable_transfer(const uint64_t tenant_id)
 {
   bool bret = false;
-  if (is_valid_tenant_id(tenant_id)) {
+  if (!is_valid_tenant_id(tenant_id)) {
+    bret = false;
+  } else {
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (OB_UNLIKELY(!tenant_config.is_valid())) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id));
-    } else if (!tenant_config->enable_rebalance) {
-      // if enable_rebalance is disabled, transfer is not allowed
+     if (OB_UNLIKELY(!tenant_config.is_valid())) {
+       LOG_WARN_RET(OB_ERR_UNEXPECTED, "tenant config is invalid", K(tenant_id));
+     } else if (GCONF.in_upgrade_mode()) {
       bret = false;
-    } else {
+      LOG_TRACE("in upgrade, transfer is not allowed", K(tenant_id), K(bret));
+     } else {
       bret = tenant_config->enable_transfer;
-    }
+      LOG_TRACE("show enable_transfer state", K(tenant_id), K(bret),
+          "enable_transfer", tenant_config->enable_transfer);
+     }
   }
+
   return bret;
 }
-
 int ObShareUtil::check_compat_version_for_tenant(
     const uint64_t tenant_id,
     const uint64_t target_data_version,

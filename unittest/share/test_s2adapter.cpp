@@ -236,8 +236,11 @@ void printCellid(ObS2Cellids &cells) {
     S2CellId tmp(it);
     std::cout << "F" << tmp.face();
     std::cout << "/L" << tmp.level() << "/";
-    for (int level = 1; level <= tmp.level(); level++) {
-      std::cout << tmp.child_position(level);
+    for (int level = 1; level <= tmp.level() && !tmp.is_leaf(); level++) {
+       std::cout << tmp.child_position(level);
+     }
+    if (tmp.is_leaf()) {
+      std::cout << tmp.id();
     }
     std::cout << std::endl;
   }

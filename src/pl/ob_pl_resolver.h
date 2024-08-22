@@ -342,16 +342,13 @@ public:
                                     const ObUDFInfo &udf_info,
                                     const ObUserDefinedType &user_type,
                                     ObRawExpr *&expr);
-  int resolve_construct(const sql::ObQualifiedName &q_name,
-                        const sql::ObUDFInfo &udf_info,
-                        ObRawExpr *&expr);
   int resolve_record_construct(const sql::ObQualifiedName &q_name,
                                const sql::ObUDFInfo &udf_info,
                                const ObUserDefinedType *user_type,
                                ObRawExpr *&expr);
   int resolve_object_construct(const sql::ObQualifiedName &q_name,
                                const sql::ObUDFInfo &udf_info,
-                               const ObUserDefinedType *user_type,
+                               const ObUserDefinedType &user_type,
                                ObRawExpr *&expr);
   int resolve_collection_construct(const sql::ObQualifiedName &q_name,
                                    const sql::ObUDFInfo &udf_info,
@@ -468,7 +465,7 @@ public:
                                const ObPLDataType &ret_type);
   static int build_pl_integer_type(ObPLIntegerType type, ObPLDataType &data_type);
   static bool is_question_mark_value(ObRawExpr *into_expr, ObPLBlockNS *ns);
-  static int set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type);
+  static int set_question_mark_type(ObRawExpr *into_expr, ObPLBlockNS *ns, const ObPLDataType *type, bool need_check = false);
 
   static
   int build_obj_access_func_name(const ObIArray<ObObjAccessIdx> &access_idxs,

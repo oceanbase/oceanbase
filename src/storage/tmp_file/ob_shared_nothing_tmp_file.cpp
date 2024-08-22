@@ -490,7 +490,8 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
     int64_t actual_block_read_size = 0;
 
     ObTmpBlockValueHandle block_value_handle;
-    if (OB_SUCC(ObTmpBlockCache::get_instance().get_block(ObTmpBlockCacheKey(block_index, MTL_ID()),
+    if (!io_ctx.is_disable_block_cache() &&
+        OB_SUCC(ObTmpBlockCache::get_instance().get_block(ObTmpBlockCacheKey(block_index, MTL_ID()),
                                                           block_value_handle))) {
       LOG_DEBUG("hit block cache", K(block_index), K(fd_), K(io_ctx));
       char *read_buf = io_ctx.get_todo_buffer();
@@ -511,7 +512,7 @@ int ObSharedNothingTmpFile::inner_read_from_disk_(const int64_t expected_read_di
               K(remain_read_size), K(read_size), K(actual_read_size),
               K(data_items[i]), K(io_ctx));
       }
-    } else if (OB_ENTRY_NOT_EXIST != ret) {
+    } else if (OB_ENTRY_NOT_EXIST != ret && OB_SUCCESS != ret) {
       LOG_WARN("fail to get block", KR(ret), K(fd_), K(block_index));
     } else { // not hit block cache, read page from disk.
       ret = OB_SUCCESS;
@@ -900,7 +901,7 @@ int ObSharedNothingTmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
         if (OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret) {
           ret = OB_SUCCESS;
           if (TC_REACH_COUNT_INTERVAL(10)) {
-            LOG_INFO("alloc mem failed, try to evict pages", K(fd_), K(file_size_), K(io_ctx));
+            LOG_INFO("alloc mem failed, try to evict pages", K(fd_), K(file_size_), K(io_ctx), KPC(this));
           }
           if (OB_FAIL(page_cache_controller_->invoke_swap_and_wait(
                   MIN(io_ctx.get_todo_size(), ObTmpFileGlobal::TMP_FILE_WRITE_BATCH_PAGE_NUM * ObTmpFileGlobal::PAGE_SIZE),
@@ -1609,13 +1610,17 @@ int ObSharedNothingTmpFile::inner_truncate_(const int64_t truncate_offset, const
   } else if (truncate_offset > wbp_begin_offset) {
     const int64_t truncate_page_virtual_id = get_page_virtual_id_from_offset_(truncate_offset,
                                                                               true /*is_open_interval*/);
+    const int64_t truncate_offset_in_page = get_page_offset_from_file_or_block_offset_(truncate_offset);
     if (OB_FAIL(page_idx_cache_.binary_search(truncate_page_virtual_id, truncate_page_id))) {
       LOG_WARN("fail to find page index in array", KR(ret), K(fd_), K(truncate_page_virtual_id));
     } else if (ObTmpFileGlobal::INVALID_PAGE_ID != truncate_page_id) {
       // the page index of truncate_offset is in the range of cached page index.
       // truncate all page indexes whose offset is smaller than truncate_offset.
-      if (OB_FAIL(page_idx_cache_.truncate(truncate_page_virtual_id+1))) {
-        LOG_WARN("fail to truncate page idx cache", KR(ret), K(fd_), K(truncate_page_virtual_id));
+      const int64_t truncate_page_virtual_id_in_cache = truncate_offset_in_page == 0 ?
+                                                        truncate_page_virtual_id + 1 :
+                                                        truncate_page_virtual_id;
+      if (OB_FAIL(page_idx_cache_.truncate(truncate_page_virtual_id_in_cache))) {
+        LOG_WARN("fail to truncate page idx cache", KR(ret), K(fd_), K(truncate_page_virtual_id), K(truncate_page_virtual_id_in_cache));
       }
     } else { // ObTmpFileGlobal::INVALID_PAGE_ID == truncate_page_id
       // the page index of truncate_offset is smaller than the smallest cached page index.
@@ -1636,7 +1641,6 @@ int ObSharedNothingTmpFile::inner_truncate_(const int64_t truncate_offset, const
 
       // truncate the last page
       if (OB_SUCC(ret)) {
-        const int64_t truncate_offset_in_page = get_page_offset_from_file_or_block_offset_(truncate_offset);
         if (OB_UNLIKELY(truncate_page_virtual_id != begin_page_virtual_id_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected begin page virtual id", KR(ret), K(fd_), K(truncate_page_virtual_id), K(begin_page_virtual_id_));
@@ -1992,14 +1996,22 @@ int ObSharedNothingTmpFile::update_meta_after_flush(const int64_t info_idx, cons
               K(end_pos), K(inner_flush_ctx_), KPC(this));
   }
 
-  if (OB_FAIL(inner_flush_ctx_.update_finished_continuous_flush_info_num(is_meta, end_pos))) {
+  if (FAILEDx(inner_flush_ctx_.update_finished_continuous_flush_info_num(is_meta, end_pos))) {
     LOG_WARN("fail to update finished continuous flush info num", KR(ret), K(start_pos), K(end_pos), KPC(this));
-  } else if (inner_flush_ctx_.is_all_finished()) {
-    if (OB_ISNULL(data_flush_node_.get_next()) && OB_FAIL(reinsert_flush_node_(false /*is_meta*/))) {
-      LOG_ERROR("fail to reinsert data flush node", KR(ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
-    } else if (OB_ISNULL(meta_flush_node_.get_next()) && OB_FAIL(reinsert_flush_node_(true /*is_meta*/))) {
-      LOG_ERROR("fail to reinsert meta flush node", KR(ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
-    } else {
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    if (inner_flush_ctx_.is_data_finished()) {
+      if (OB_ISNULL(data_flush_node_.get_next()) && OB_TMP_FAIL(reinsert_flush_node_(false /*is_meta*/))) {
+        LOG_ERROR("fail to reinsert data flush node", KR(tmp_ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
+      }
+    }
+    if (inner_flush_ctx_.is_meta_finished()) {
+      if (OB_ISNULL(meta_flush_node_.get_next()) && OB_TMP_FAIL(reinsert_flush_node_(true /*is_meta*/))) {
+        LOG_ERROR("fail to reinsert meta flush node", KR(tmp_ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
+      }
+    }
+
+    if (inner_flush_ctx_.is_all_finished()) {
       inner_flush_ctx_.reset();
     }
   }
@@ -2680,7 +2692,8 @@ int ObSharedNothingTmpFile::get_physical_page_id_in_wbp(const int64_t virtual_pa
     LOG_WARN("the page doesn't exist in wbp", KR(ret), K(virtual_page_id), K(end_page_virtual_id), K(begin_page_virtual_id_), KPC(this));
   } else if (virtual_page_id == begin_page_virtual_id_) {
     page_id = begin_page_id_;
-  } else if (virtual_page_id < flushed_page_virtual_id_) {
+  } else if (ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID == flushed_page_virtual_id_ ||
+      virtual_page_id < flushed_page_virtual_id_) {
     if (OB_FAIL(wbp_->get_page_id_by_virtual_id(fd_, virtual_page_id, begin_page_id_, page_id))) {
       LOG_WARN("fail to get page id by virtual id", KR(ret), K(virtual_page_id), K(begin_page_id_), KPC(this));
     }

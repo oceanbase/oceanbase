@@ -1637,7 +1637,7 @@ body	varchar(1048576)	NO
 definer	varchar(77)	NO			
 created	timestamp(6)	NO		NULL	
 modified	timestamp(6)	NO		NULL	
-sql_mode	varchar(32)	NO			
+sql_mode	varchar(1048576)	NO			
 comment	varchar(1048576)	NO			
 character_set_client	varchar(128)	NO		NULL	
 collation_connection	varchar(128)	NO		NULL	

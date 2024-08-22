@@ -32,9 +32,9 @@ public:
 
   void set_false_range();
 
-  int compare_with_end(const SimpleRange &r) const;
+  int compare_with_end(const SimpleRange &r, int &cmp) const;
 
-  int compare_with_start(const SimpleRange &r) const;
+  int compare_with_start(const SimpleRange &r, int &cmp) const;
 
   bool intersect(const SimpleRange &r);
 

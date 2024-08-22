@@ -417,7 +417,7 @@ int ObLogDeliver::init()
   } else if (false == blacklist_.created()) {
     SERVER_LOG(WARN, "blacklist_ created failed");
   } else if (OB_FAIL(create_queue_thread(lib::TGDefIDs::LogServerTest, "LogServerQue", req_queue_))) {
-  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::TEST7, tg_id_))) {
+  } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::COMMON_QUEUE_THREAD, tg_id_))) {
     SERVER_LOG(WARN, "ObSimpleThreadPool::init failed", K(ret));
   } else {
     is_inited_ = true;

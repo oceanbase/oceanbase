@@ -147,7 +147,11 @@ int ObPLCompiler::init_anonymous_ast(
     } else {
       data_type.reset();
       data_type.set_accuracy(params->at(i).get_accuracy());
-      data_type.set_meta_type(params->at(i).get_meta());
+      if (params->at(i).is_null()) {
+        data_type.set_meta_type(params->at(i).get_param_meta());
+      } else {
+        data_type.set_meta_type(params->at(i).get_meta());
+      }
       pl_type.reset();
       int64_t int_value = 0;
       // 参数化整型常量按照会按照numbger来生成param

@@ -345,7 +345,7 @@ int ObAccessPathEstimation::choose_best_est_method(ObOptimizerContext &ctx,
   }
 
   // check is complex scene
-  if (OB_SUCC(ret) && !is_simple_scene && !is_complex_scene && (valid_methods | EST_DS_FULL)) {
+  if (OB_SUCC(ret) && !is_simple_scene && !is_complex_scene && (valid_methods & EST_DS_FULL)) {
     ObSelEstimatorFactory factory(ctx.get_session_info()->get_effective_tenant_id());
     const OptSelectivityCtx* sel_ctx = NULL;
     if (OB_UNLIKELY(paths.empty()) ||

@@ -853,7 +853,6 @@ int ObDirectLoadSliceWriter::prepare_iters(
     const int64_t trans_version,
     const ObObjType &obj_type,
     const ObCollationType &cs_type,
-    const ObLobId &lob_id,
     const transaction::ObTransID trans_id,
     const int64_t seq_no,
     const int64_t timeout_ts,
@@ -861,6 +860,7 @@ int ObDirectLoadSliceWriter::prepare_iters(
     const uint64_t src_tenant_id,
     const ObDirectLoadType direct_load_type,
     transaction::ObTxDesc* tx_desc,
+    share::ObTabletCacheInterval &pk_interval,
     ObLobMetaRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
@@ -896,11 +896,11 @@ int ObDirectLoadSliceWriter::prepare_iters(
     if (is_incremental_direct_load(direct_load_type) && OB_ISNULL(tx_desc)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("tx_desc should not be null if is incremental_direct_load", K(ret), K(direct_load_type),
-          K(ls_id), K(tablet_id), K(lob_id), K(trans_version), K(seq_no), K(obj_type), K(cs_type), K(trans_id));
+          K(ls_id), K(tablet_id), K(trans_version), K(seq_no), K(obj_type), K(cs_type), K(trans_id));
     } else if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
-      allocator, tx_desc, ls_id, tablet_id, lob_id, obj_type, cs_type, lob_storage_param, datum,
-      timeout_ts, true/*has_lob_header*/, src_tenant_id, *meta_write_iter_))) {
-      LOG_WARN("fail to insert_lob_col", K(ret), K(ls_id), K(tablet_id), K(lob_id), K(src_tenant_id));
+        allocator, tx_desc, pk_interval, ls_id, tablet_id/* tablet_id of main table */, tablet_direct_load_mgr_->get_tablet_id()/*tablet id of lob meta table*/,
+        obj_type, cs_type, lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, src_tenant_id, *meta_write_iter_))) {
+      LOG_WARN("fail to insert_lob_col", K(ret), K(ls_id), K(tablet_id), K(src_tenant_id));
     } else if (OB_FAIL(row_iterator_->init(meta_write_iter_, trans_id,
         trans_version, seq_no, direct_load_type))) {
       LOG_WARN("fail to lob meta row iterator", K(ret), K(trans_id), K(trans_version), K(seq_no), K(direct_load_type));
@@ -985,17 +985,12 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
     int64_t idx = lob_column_idxs.at(i);
     ObStorageDatum &datum = datum_row.storage_datums_[idx];
     if (!datum.is_nop() && !datum.is_null()) {
-      uint64_t pk_seq = OB_INVALID_ID;
-      if (OB_FAIL(pk_interval.next_value(pk_seq))) {
-        LOG_WARN("fail to get next lob_id", K(ret), K(pk_seq));
-      } else {
-        ObLobId lob_id;
-        lob_id.lob_id_ = pk_seq;
-        lob_id.tablet_id_ = tablet_direct_load_mgr_->get_tablet_id().id(); // lob meta tablet id. 与ObDirectLoadInsertTabletContext::tablet_id_in_lob_id_的取值保持一致
+      {
         ObLobMetaRowIterator *row_iter = nullptr;
         if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
-            info.data_tablet_id_, info.trans_version_, col_types.at(i).get_type(), col_types.at(i).get_collation_type(), lob_id,
-            info.trans_id_, info.seq_no_, timeout_ts, lob_inrow_threshold, info.src_tenant_id_, info.direct_load_type_, info.tx_desc_, row_iter))) {
+            info.data_tablet_id_, info.trans_version_, col_types.at(i).get_type(), col_types.at(i).get_collation_type(),
+            info.trans_id_, info.seq_no_, timeout_ts, lob_inrow_threshold, info.src_tenant_id_, info.direct_load_type_,
+            info.tx_desc_, pk_interval, row_iter))) {
           LOG_WARN("fail to prepare iters", K(ret), KP(row_iter), K(datum));
         } else {
           while (OB_SUCC(ret)) {
@@ -1027,6 +1022,9 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
               ++unused_affected_rows;
               LOG_DEBUG("sstable insert op append row", K(unused_affected_rows), KPC(cur_row));
             }
+          }
+          if (OB_SUCC(ret) && OB_NOT_NULL(meta_write_iter_) && OB_FAIL(meta_write_iter_->check_write_length())) {
+            LOG_WARN("check_write_length fail", K(ret), KPC(meta_write_iter_));
           }
           if (OB_SUCC(ret)) {
             if (OB_NOT_NULL(meta_write_iter_)) {

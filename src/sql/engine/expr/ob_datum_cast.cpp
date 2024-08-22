@@ -11522,7 +11522,7 @@ static int float_range_check(const ObCastMode &cast_mode,
   return ret;
 }
 
-int string_length_check(const ObExpr &expr,
+OB_INLINE int string_length_check(const ObExpr &expr,
                         const ObCastMode &cast_mode,
                         const ObAccuracy &accuracy,
                         const ObObjType type,

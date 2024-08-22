@@ -27,13 +27,14 @@ struct ObTmpFileIOInfo final
   void reset();
   bool is_valid() const;
   TO_STRING_KV(K(fd_), K(dir_id_), KP(buf_), K(size_), K(disable_page_cache_),
-               K(io_timeout_ms_), K(io_desc_));
+               K(disable_block_cache_), K(io_timeout_ms_), K(io_desc_));
 
   int64_t fd_;
   int64_t dir_id_;
   char *buf_;
   int64_t size_;
   bool disable_page_cache_;
+  bool disable_block_cache_;  // only used in ut, to control whether read data from block cache
   common::ObIOFlag io_desc_;
   int64_t io_timeout_ms_;
 };
@@ -43,14 +44,14 @@ class ObTmpFileIOHandle final
 public:
   ObTmpFileIOHandle();
   ~ObTmpFileIOHandle();
-  int init_write(const ObTmpFileIOInfo &io_info, ObTmpFileHandle &tmp_file_handle);
-  int init_read(const ObTmpFileIOInfo &io_info, ObTmpFileHandle &tmp_file_handle);
-  int init_pread(const ObTmpFileIOInfo &io_info, const int64_t read_offset, ObTmpFileHandle &tmp_file_handle);
+  int init_write(const ObTmpFileIOInfo &io_info);
+  int init_read(const ObTmpFileIOInfo &io_info);
+  int init_pread(const ObTmpFileIOInfo &io_info, const int64_t read_offset);
   int wait();
   void reset();
   bool is_valid() const;
 
-  TO_STRING_KV(K(is_inited_), K(tmp_file_handle_), K(ctx_),
+  TO_STRING_KV(K(is_inited_), K(fd_), K(ctx_),
                KP(buf_), K(update_offset_in_file_),
                K(buf_size_), K(done_size_),
                K(read_offset_in_file_));
@@ -65,7 +66,7 @@ private:
 
 private:
   bool is_inited_;
-  ObTmpFileHandle tmp_file_handle_;
+  int64_t fd_;
   ObTmpFileIOCtx ctx_;
   char *buf_;
   bool update_offset_in_file_;

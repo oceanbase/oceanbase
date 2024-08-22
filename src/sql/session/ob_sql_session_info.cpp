@@ -3321,6 +3321,7 @@ int ObSQLSessionInfo::update_sess_sync_info(const SessionSyncInfoType sess_sync_
     LOG_WARN("invalid session sync info encoder", K(ret), K(sess_sync_info_type));
   } else if (OB_FAIL(sess_encoders_[sess_sync_info_type]->deserialize(*this, buf, length, pos))) {
     LOG_WARN("failed to deserialize sess sync info", K(ret), K(sess_sync_info_type), KPHEX(buf, length), K(length), K(pos));
+  } else if (FALSE_IT(sess_encoders_[sess_sync_info_type]->is_changed_ = false)) {
   } else {
     // do nothing
     LOG_DEBUG("get app info", K(client_app_info_.module_name_), K(client_app_info_.action_name_), K(client_app_info_.client_info_));

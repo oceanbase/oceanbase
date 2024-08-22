@@ -430,7 +430,7 @@ public:
   OB_INLINE void set_type_id(int64_t type_id) { type_id_ = type_id; }
   OB_INLINE void set_typecode(int64_t typecode) { typecode_ = typecode; }
   OB_INLINE void set_properties(int64_t properties) { properties_ = properties; }
-  OB_INLINE void set_attributes(int64_t attributes) { UNUSED(attributes);/*attributes_ = attributes;*/ }
+  OB_INLINE void set_attributes(int64_t attributes) { attributes_ = attributes; }
   OB_INLINE void set_methods(int64_t methods) { methods_ = methods; }
   OB_INLINE void set_hiddenmethods(int64_t hiddenmethods) { hiddenmethods_ = hiddenmethods; }
   OB_INLINE void set_supertypes(int64_t supertypes) { supertypes_ = supertypes; }

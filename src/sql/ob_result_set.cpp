@@ -1805,9 +1805,26 @@ int ObResultSet::construct_display_field_name(common::ObField &field,
     } else if (lib::is_oracle_mode()) {
       pos = pos < MAX_COLUMN_CHAR_LENGTH ? pos : MAX_COLUMN_CHAR_LENGTH;
       //field.cname_.assign(buf, pos);
-      if (OB_FAIL(ob_write_string(get_mem_pool(), ObString(pos, buf), field.cname_))) {
-        LOG_WARN("failed to copy paramed cname", K(ret));
+      //if (OB_FAIL(ob_write_string(get_mem_pool(), ObString(pos, buf), field.cname_))) {
+      //  LOG_WARN("failed to copy paramed cname", K(ret));
+      //}
+      ObCollationType connection_collation = CS_TYPE_UTF8MB4_BIN;
+      ObCollationType nls_collation = CS_TYPE_UTF8MB4_BIN;
+      ObCollationType result_collation = CS_TYPE_UTF8MB4_BIN;
+      if (OB_NOT_NULL(get_exec_context().get_my_session())) {
+        ObCharsetType result_charset = CHARSET_INVALID;
+        connection_collation = get_exec_context().get_my_session()->get_local_collation_connection();
+        nls_collation = get_exec_context().get_my_session()->get_nls_collation();
+        get_exec_context().get_my_session()->get_character_set_results(result_charset);
+        if (ObCharset::is_valid_charset(result_charset)) {
+          result_collation = ObCharset::get_default_collation(result_charset);
+        }
       }
+      OZ (ObCharset::charset_convert(get_mem_pool(), ObString(pos, buf), connection_collation,
+            nls_collation, field.cname_, ObCharset::REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET));
+      OZ (ObCharset::charset_convert(get_mem_pool(), field.cname_, nls_collation,
+            result_collation, field.cname_, ObCharset::REPLACE_UNKNOWN_CHARACTER_ON_SAME_CHARSET));
+      LOG_DEBUG("check cname", K(field.cname_));
     } else {
       // do nothing
     }
