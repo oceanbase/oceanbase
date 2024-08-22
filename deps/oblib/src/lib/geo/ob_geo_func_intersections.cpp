@@ -196,9 +196,12 @@ static int apply_bg_intersections(
       std::tuple<MPt, MLs, MPy> bg_result;
       boost::geometry::intersection(*geo1, *geo2, bg_result);
 
-      remove_overlapping(std::get<0>(bg_result), std::get<1>(bg_result),
-                         std::get<2>(bg_result), context, g1->get_srid(), *res);
-      result = res;
+      if (OB_FAIL(remove_overlapping(std::get<0>(bg_result), std::get<1>(bg_result),
+                                     std::get<2>(bg_result), context, g1->get_srid(), *res))){
+        LOG_WARN("fail to remove overlapping geometry", K(ret));
+      } else {
+        result = res;
+      }
     }
   }
   return ret;
@@ -240,9 +243,12 @@ static int apply_bg_intersections_with_strategy(
       std::tuple<MPt, MLs, MPy> bg_result;
       boost::geometry::intersection(*geo1, *geo2, bg_result, cur_strategy);
 
-      remove_overlapping(std::get<0>(bg_result), std::get<1>(bg_result),
-                         std::get<2>(bg_result), context, g1->get_srid(), *res);
-      result = res;
+      if (OB_FAIL(remove_overlapping(std::get<0>(bg_result), std::get<1>(bg_result),
+                                     std::get<2>(bg_result), context, g1->get_srid(), *res))){
+        LOG_WARN("fail to remove overlapping geometry", K(ret));
+      } else {
+        result = res;
+      }
     }
   }
   return ret;
@@ -413,7 +419,7 @@ private:
       if (OB_ISNULL(res_coll)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failt alloc memory for geometry", K(ret));
-      } else if (OB_FAIL(ObGeoTypeUtil::check_empty(geo2, is_g1_empty))) {
+      } else if (OB_FAIL(ObGeoTypeUtil::check_empty(geo1, is_g1_empty))) {
         LOG_WARN("fail to check is g1 empty", K(ret));
       } else if (OB_FAIL(ObGeoTypeUtil::check_empty(geo2, is_g2_empty))) {
         LOG_WARN("fail to check is g2 empty", K(ret));
