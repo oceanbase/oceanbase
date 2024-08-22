@@ -2516,10 +2516,10 @@ int ObSharedNothingTmpFile::insert_meta_tree_item(const ObTmpFileFlushInfo &info
     data_item.virtual_page_id_ = info.flush_virtual_page_id_;
     ObArray<ObSharedNothingTmpFileDataItem> data_items;
 
-    if (OB_FAIL(meta_tree_.prepare_for_insert_items())) {
-      LOG_WARN("fail to prepare for insert items", KR(ret), K(info), K(block_index), KPC(this));
-    } else if (OB_FAIL(data_items.push_back(data_item))) {
+    if (OB_FAIL(data_items.push_back(data_item))) {
       LOG_WARN("fail to push back data item", KR(ret), K(info), K(block_index), KPC(this));
+    } else if (OB_FAIL(meta_tree_.prepare_for_insert_items())) {
+      LOG_WARN("fail to prepare for insert items", KR(ret), K(info), K(block_index), KPC(this));
     } else if (OB_FAIL(meta_tree_.insert_items(data_items))) {
       LOG_WARN("fail to insert data items", KR(ret), K(info), K(block_index), KPC(this));
     }
