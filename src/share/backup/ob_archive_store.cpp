@@ -2028,7 +2028,7 @@ void ObArchiveStore::ObLocateRoundFilter::process_rounds_info_()
 {
   int ret = OB_SUCCESS;
   if (rounds_info_.count() > 0 ) {
-    std::sort(rounds_info_.begin(), rounds_info_.end(), RoundInfoCmp());
+    lib::ob_sort(rounds_info_.begin(), rounds_info_.end(), RoundInfoCmp());
     ARRAY_FOREACH_N(rounds_info_, idx, cnt) {
       ObRoundInfo &round_info = rounds_info_.at(idx);
       int64_t round_id = round_info.round_id_;
