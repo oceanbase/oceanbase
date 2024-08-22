@@ -8233,6 +8233,10 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_EMPTY_FIELD_AS_NULL, 1, $3);
 }
+| COMPRESSION COMP_EQ compression_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION, 1, $3);
+}
 ;
 
 /*****************************************************************************
