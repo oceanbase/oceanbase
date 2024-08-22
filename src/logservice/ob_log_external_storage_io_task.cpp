@@ -129,7 +129,7 @@ int ObLogExternalStorageIOTaskCtx::get_ret_code() const
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; i < total_task_count_; i++) {
-    if (0 == i && OB_SUCCESS != running_status_[i].ret_) {
+    if (OB_SUCCESS != running_status_[i].ret_) {
       ret = running_status_[i].ret_;
       CLOG_LOG(WARN, "asyn task execute failed", KPC(this));
       break;
