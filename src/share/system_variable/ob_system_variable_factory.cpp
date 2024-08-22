@@ -62,6 +62,7 @@ const char *ObSysVarObRoutePolicy::OB_ROUTE_POLICY_NAMES[] = {
   "ONLY_READONLY_ZONE",
   "UNMERGE_ZONE_FIRST",
   "UNMERGE_FOLLOWER_FIRST",
+  "COLUMN_STORE_ONLY",
   0
 };
 const char *ObSysVarObEnableJit::OB_ENABLE_JIT_NAMES[] = {

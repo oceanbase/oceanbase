@@ -16,7 +16,6 @@
 #include "common/ob_region.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_locality_parser.h"
 #include "share/ob_time_utility2.h"
 #include "share/ob_encryption_util.h"
 #ifdef OB_BUILD_TDE_SECURITY
@@ -142,8 +141,40 @@ int ObAlterSystemResolverUtil::resolve_replica_type(const ParseNode *parse_tree,
   } else {
     int64_t len = parse_tree->str_len_;
     const char *str = parse_tree->str_value_;
-    if (OB_FAIL(ObLocalityParser::parse_type(str, len, replica_type))) {
-      // do nothing, error log will print inside parse_type
+    if (OB_ISNULL(str)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid replica type string. null!", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "replica_type, replica_type should not be null");
+    } else {
+      replica_type = share::ObShareUtil::string_to_replica_type(str);
+      if (REPLICA_TYPE_INVALID == replica_type) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid replica type string", K(str), K(ret));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "replica_type, unrecognized replica_type");
+      } else if (! ObReplicaTypeCheck::is_replica_type_valid(replica_type)) {
+        ret = OB_NOT_SUPPORTED;
+        char err_msg[64] = {0};
+        (void)snprintf(err_msg, sizeof(err_msg), "%s replica", ObShareUtil::replica_type_to_string(replica_type));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+      } else {
+        // good, valid replica_type
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAlterSystemResolverUtil::check_compatibility_for_replica_type(const ObReplicaType replica_type, const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (ObReplicaTypeCheck::is_columnstore_replica(replica_type)) {
+    bool is_compatible = false;
+    if (OB_FAIL(ObShareUtil::check_compat_version_for_columnstore_replica(tenant_id, is_compatible))) {
+      LOG_WARN("failed to check compat version for C-replcia", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(!is_compatible)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("data_version lower than 4.3.3, C-replica not supported");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "data_version is lower than 4.3.3, C-replica");
     }
   }
   return ret;
@@ -2984,7 +3015,7 @@ int ObAddLSReplicaResolver::resolve(const ParseNode &parse_tree)
 
     int64_t ls_id = 0;
     common::ObAddr server_addr;
-    common::ObReplicaType replica_type = REPLICA_TYPE_MAX;
+    common::ObReplicaType replica_type = REPLICA_TYPE_INVALID;
     common::ObAddr data_source;
     int64_t paxos_replica_num = 0;
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
@@ -3000,6 +3031,8 @@ int ObAddLSReplicaResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("resolve server failed", KR(ret), KP(server_addr_node));
     } else if (OB_FAIL(Util::resolve_replica_type(replica_type_node, replica_type))) {
       LOG_WARN("resolve replica type failed", KR(ret), KP(replica_type_node));
+    } else if (OB_FAIL(Util::check_compatibility_for_replica_type(replica_type, tenant_id))) {
+      LOG_WARN("check compatibility for replica_type failed", KR(ret), K(replica_type), K(tenant_id));
     } else if (OB_FAIL(Util::check_and_get_data_source(data_source_node, data_source))) {
       LOG_WARN("check and get data source failed", KR(ret), KP(data_source_node));
     } else if (OB_FAIL(Util::check_and_get_paxos_replica_num(paxos_replica_num_node, paxos_replica_num))) {
@@ -3178,7 +3211,7 @@ int ObModifyLSReplicaResolver::resolve(const ParseNode &parse_tree)
     ParseNode *tenant_name_node = parse_tree.children_[4];
     int64_t ls_id = 0;
     common::ObAddr server_addr;
-    common::ObReplicaType replica_type = REPLICA_TYPE_MAX;
+    common::ObReplicaType replica_type = REPLICA_TYPE_INVALID;
     int64_t paxos_replica_num = 0;
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     if (OB_FAIL(Util::do_check_for_alter_ls_replica(tenant_name_node,
@@ -3193,6 +3226,8 @@ int ObModifyLSReplicaResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("resolve server failed", KR(ret), KP(server_addr_node));
     } else if (OB_FAIL(Util::resolve_replica_type(replica_type_node, replica_type))) {
       LOG_WARN("resolve replica type failed", KR(ret), KP(replica_type_node));
+    } else if (OB_FAIL(Util::check_compatibility_for_replica_type(replica_type, tenant_id))) {
+      LOG_WARN("check compatibility for replica_type failed", KR(ret), K(replica_type), K(tenant_id));
     } else if (OB_FAIL(Util::check_and_get_paxos_replica_num(paxos_replica_num_node, paxos_replica_num))) {
       LOG_WARN("check and get paxos replica num failed", KR(ret), KP(paxos_replica_num_node));
     }

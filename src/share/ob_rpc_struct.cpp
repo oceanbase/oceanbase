@@ -4078,7 +4078,7 @@ int ObAdminAlterLSReplicaArg::init_add(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid())
    || OB_UNLIKELY(!server_addr.is_valid())
-   || OB_UNLIKELY(replica_type != REPLICA_TYPE_FULL && replica_type != REPLICA_TYPE_READONLY)
+   || OB_UNLIKELY(!ObReplicaTypeCheck::is_replica_type_valid(replica_type))
    || OB_UNLIKELY(paxos_replica_num < 0)
    || OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     //data_source and paxos_replica_num is optional parameter
@@ -4157,7 +4157,7 @@ int ObAdminAlterLSReplicaArg::init_modify_replica(
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!ls_id.is_valid())
    || OB_UNLIKELY(!server_addr.is_valid())
-   || OB_UNLIKELY(replica_type != REPLICA_TYPE_FULL && replica_type != REPLICA_TYPE_READONLY)
+   || OB_UNLIKELY(!ObReplicaTypeCheck::is_replica_type_valid(replica_type))
    || OB_UNLIKELY(paxos_replica_num < 0)
    || OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
@@ -4218,7 +4218,7 @@ void ObAdminAlterLSReplicaArg::reset()
   ls_id_.reset();
   server_addr_.reset();
   destination_addr_.reset();
-  replica_type_ = common::REPLICA_TYPE_MAX;
+  replica_type_ = common::REPLICA_TYPE_INVALID;
   tenant_id_ = OB_INVALID_TENANT_ID;
   task_id_.reset();
   data_source_.reset();
@@ -6235,98 +6235,6 @@ OB_SERIALIZE_MEMBER(ObSyncPGPartitionMTFinishArg, server_, version_);
 
 OB_SERIALIZE_MEMBER(ObCheckDanglingReplicaFinishArg, server_, version_, dangling_count_);
 
-OB_SERIALIZE_MEMBER(ObMemberListAndLeaderArg,
-                    member_list_,
-                    leader_,
-                    self_,
-                    lower_list_,
-                    replica_type_,
-                    property_,
-                    role_);
-
-bool ObMemberListAndLeaderArg::is_valid() const
-{
-  return member_list_.count() > 0
-         && self_.is_valid()
-         && common::REPLICA_TYPE_MAX != replica_type_
-         && property_.is_valid()
-         && (common::INVALID_ROLE <= role_ && role_ <= common::STANDBY_LEADER);
-}
-
-// If it is a leader, you need to ensure the consistency of role_, leader_/restore_leader_, and self_
-bool ObMemberListAndLeaderArg::check_leader_is_valid() const
-{
-  bool bret = true;
-  if (is_leader_by_election(role_)) {
-    bret = (leader_.is_valid() && self_ == leader_);
-  }
-  return bret;
-}
-
-void ObMemberListAndLeaderArg::reset()
-{
-  member_list_.reset();
-  leader_.reset();
-  self_.reset();
-  lower_list_.reset();
-  replica_type_ = common::REPLICA_TYPE_MAX;
-  role_ = common::INVALID_ROLE;
-}
-
-int ObMemberListAndLeaderArg::assign(const ObMemberListAndLeaderArg &other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(member_list_.assign(other.member_list_))) {
-    LOG_WARN("fail to assign member_list", KR(ret), K_(member_list));
-  } else if (OB_FAIL(lower_list_.assign(other.lower_list_))) {
-    LOG_WARN("fail to assign lower_list", KR(ret), K_(lower_list));
-  } else {
-    leader_ = other.leader_;
-    self_ = other.self_;
-    replica_type_ = other.replica_type_;
-    property_ = other.property_;
-    role_ = other.role_;
-  }
-  return ret;
-}
-
-OB_SERIALIZE_MEMBER(ObGetMemberListAndLeaderResult,
-                    member_list_,
-                    leader_,
-                    self_,
-                    lower_list_,
-                    replica_type_,
-                    property_);
-
-void ObGetMemberListAndLeaderResult::reset()
-{
-  member_list_.reset();
-  leader_.reset();
-  self_.reset();
-  lower_list_.reset();
-  replica_type_ = common::REPLICA_TYPE_MAX;
-}
-
-int ObGetMemberListAndLeaderResult::assign(const ObGetMemberListAndLeaderResult &other)
-{
-  int ret = OB_SUCCESS;
-  reset();
-  if (OB_UNLIKELY(!other.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(other));
-  } else if (OB_FAIL(member_list_.assign(other.member_list_))) {
-    LOG_WARN("failed to assign member list", K(ret));
-  } else if (OB_FAIL(lower_list_.assign(other.lower_list_))) {
-    LOG_WARN("fail to assign member list", K(ret));
-  } else {
-    leader_ = other.leader_;
-    self_ = other.self_;
-    replica_type_ = other.replica_type_;
-    property_ = other.property_;
-  }
-  return ret;
-}
-
 OB_SERIALIZE_MEMBER(ObBatchGetRoleResult, results_);
 
 void ObBatchGetRoleResult::reset()
@@ -7580,7 +7488,7 @@ bool TenantServerUnitConfig::is_valid() const
   return common::OB_INVALID_ID != tenant_id_
          && ((lib::Worker::CompatMode::INVALID != compat_mode_
                && unit_config_.is_valid()
-               && replica_type_ != common::ObReplicaType::REPLICA_TYPE_MAX)
+               && replica_type_ != common::ObReplicaType::REPLICA_TYPE_INVALID)
 #ifdef OB_BUILD_TDE_SECURITY
                // root_key can be invalid
 #endif
@@ -7648,7 +7556,7 @@ void TenantServerUnitConfig::reset()
   unit_id_ = OB_INVALID_ID;
   compat_mode_ = lib::Worker::CompatMode::INVALID;
   unit_config_.reset();
-  replica_type_ = common::ObReplicaType::REPLICA_TYPE_MAX;
+  replica_type_ = common::ObReplicaType::REPLICA_TYPE_INVALID;
   if_not_grant_ = false;
   is_delete_ = false;
 #ifdef OB_BUILD_TDE_SECURITY
@@ -8909,7 +8817,7 @@ bool ObCreateLSArg::is_valid() const
 {
   return OB_INVALID_TENANT_ID != tenant_id_
          && id_.is_valid()
-         && REPLICA_TYPE_MAX != replica_type_
+         && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
          && replica_property_.is_valid()
          && tenant_info_.is_valid()
          && create_scn_.is_valid()
@@ -8921,7 +8829,7 @@ void ObCreateLSArg::reset()
 {
   tenant_id_ = OB_INVALID_TENANT_ID;
   id_.reset();
-  replica_type_ = REPLICA_TYPE_MAX;
+  replica_type_ = REPLICA_TYPE_INVALID;
   replica_property_.reset();
   tenant_info_.reset();
   create_scn_.reset();
@@ -8960,7 +8868,7 @@ int ObCreateLSArg::init(const int64_t tenant_id,
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id
                   ||!id.is_valid()
-                  || REPLICA_TYPE_MAX == replica_type
+                  || !ObReplicaTypeCheck::is_replica_type_valid(replica_type)
                   || !replica_property.is_valid()
                   || !tenant_info.is_valid())) {
     ret = OB_INVALID_ARGUMENT;

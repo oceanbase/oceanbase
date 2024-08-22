@@ -107,6 +107,10 @@ public:
   int get_ls(const share::ObLSID &ls_id,
              ObLSHandle &handle,
              ObLSGetMod mod);
+  int get_ls_replica(
+      const ObLSID &ls_id,
+      ObLSGetMod mod,
+      share::ObLSReplica &replica);
   // @param [in] func, iterate all ls diagnose info
   int iterate_diagnose(const ObFunction<int(const storage::ObLS &ls)> &func);
 
@@ -190,6 +194,7 @@ private:
                        const ObMigrationStatus &migration_status,
                        const share::ObLSRestoreStatus &restore_status,
                        const share::SCN &create_scn,
+                       const ObLSStoreFormat &store_format,
                        ObLS *&ls);
   int inner_del_ls_(ObLS *&ls);
   int add_ls_to_map_(ObLS *ls);
@@ -221,6 +226,13 @@ private:
   int cal_min_phy_resource_needed_(const int64_t ls_cnt,
                                    ObMinPhyResourceResult &min_phy_res);
   int get_resource_constraint_value_(ObResoureConstraintValue &constraint_value);
+  // for get_ls_replica
+  int get_replica_type_(
+      const common::ObAddr &addr,
+      const ObMemberList &ob_member_list,
+      const GlobalLearnerList &learner_list,
+      const common::ObLSStoreFormat &ls_store_format,
+      ObReplicaType &replica_type);
 
 private:
   bool is_inited_;

@@ -88,6 +88,8 @@
 #include "share/ob_heartbeat_handler.h"
 #include "storage/slog/ob_storage_logger_manager.h"
 #include "storage/high_availability/ob_transfer_lock_utils.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
+#include "common/ob_store_format.h"    // ObLSStoreFormat
 
 namespace oceanbase
 {
@@ -2704,7 +2706,17 @@ int ObService::inner_fill_tablet_info_(
     int64_t data_size = 0;
     int64_t required_size = 0;
     ObArray<int64_t> column_checksums;
-    if (OB_FAIL(tablet_handle.get_obj()->get_tablet_report_info(snapshot_version, column_checksums,
+    ObTablet *tablet = tablet_handle.get_obj();
+    bool need_wait_major_convert_in_cs_replica = false;
+    if (OB_ISNULL(tablet)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet is unexpected nullptr", K(ret), K(tenant_id), K(tablet_id), K(tablet_handle));
+    } else if (OB_FAIL(ObCSReplicaUtil::check_need_wait_major_convert(*ls, tablet_id, *tablet, need_wait_major_convert_in_cs_replica))) {
+      LOG_WARN("fail to check need wait major convert in cs replica", K(ret), KPC(ls), K(tablet));
+    } else if (need_wait_major_convert_in_cs_replica) {
+      ret = OB_EAGAIN;
+      LOG_WARN("need wait major convert for cs replica", K(ret), K(tablet_id));
+    } else if (OB_FAIL(tablet->get_tablet_report_info(snapshot_version, column_checksums,
         data_size, required_size, need_checksum))) {
       LOG_WARN("fail to get tablet report info from tablet", KR(ret), K(tenant_id), K(tablet_id));
     } else if (OB_FAIL(tablet_replica.init(
@@ -2788,118 +2800,27 @@ int ObService::fill_tablet_report_info(
   return ret;
 }
 
-int ObService::get_role_from_palf_(
-    logservice::ObLogService &log_service,
-    const share::ObLSID &ls_id,
-    common::ObRole &role,
-    int64_t &proposal_id)
-{
-  int ret = OB_SUCCESS;
-  role = FOLLOWER;
-  proposal_id = 0;
-  palf::PalfHandleGuard palf_handle_guard;
-  if (OB_FAIL(log_service.open_palf(ls_id, palf_handle_guard))) {
-    LOG_WARN("open palf failed", KR(ret), K(ls_id));
-  } else if (OB_FAIL(palf_handle_guard.get_role(role, proposal_id))) {
-    LOG_WARN("get role failed", KR(ret), K(ls_id));
-  }
-  return ret;
-}
-
 int ObService::fill_ls_replica(
     const uint64_t tenant_id,
     const ObLSID &ls_id,
     share::ObLSReplica &replica)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  uint64_t unit_id = common::OB_INVALID_ID;
+  replica.reset();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("service not inited", KR(ret));
-  } else if (!ls_id.is_valid()
-             || OB_INVALID_TENANT_ID == tenant_id
-             || OB_ISNULL(gctx_.config_)) {
+  } else if (!ls_id.is_valid() || OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
-  } else if (OB_FAIL(GCTX.omt_->get_unit_id(tenant_id, unit_id))) {
-    LOG_WARN("get tenant unit id failed", KR(ret), K(tenant_id), K(ls_id));
   } else {
     MTL_SWITCH(tenant_id) {
-      ObLSHandle ls_handle;
-      ObLSService *ls_svr = nullptr;
-      logservice::ObLogService *log_service = nullptr;
-      common::ObRole role = FOLLOWER;
-      ObMemberList ob_member_list;
-      ObLSReplica::MemberList member_list;
-      GlobalLearnerList learner_list;
-      int64_t proposal_id = 0;
-      int64_t paxos_replica_number = 0;
-      ObLSRestoreStatus restore_status;
-      ObReplicaStatus replica_status = REPLICA_STATUS_NORMAL;
-      ObReplicaType replica_type = REPLICA_TYPE_FULL;
-      bool is_compatible_with_readonly_replica = false;
-      ObMigrationStatus migration_status = OB_MIGRATION_STATUS_MAX;
-      if (OB_ISNULL(ls_svr = MTL(ObLSService*))) {
+      ObLSService *ls_svr = MTL(ObLSService*);
+      if (OB_ISNULL(ls_svr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("MTL ObLSService is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(ls_svr->get_ls(
-            ObLSID(ls_id),
-            ls_handle, ObLSGetMod::OBSERVER_MOD))) {
-        LOG_WARN("get ls handle failed", KR(ret));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_paxos_member_list_and_learner_list(ob_member_list, paxos_replica_number, learner_list))) {
-        LOG_WARN("get member list and learner list from ObLS failed", KR(ret));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_restore_status(restore_status))) {
-        LOG_WARN("get restore status failed", KR(ret));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_migration_status(migration_status))) {
-        LOG_WARN("get migration status failed", KR(ret));
-      } else if (OB_FAIL(ls_handle.get_ls()->get_replica_status(replica_status))) {
-        LOG_WARN("get replica status failed", KR(ret));
-      } else if (OB_ISNULL(log_service = MTL(logservice::ObLogService*))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("MTL ObLogService is null", KR(ret), K(tenant_id));
-      } else if (OB_FAIL(get_role_from_palf_(*log_service, ls_id, role, proposal_id))) {
-        LOG_WARN("failed to get role from palf", KR(ret), K(tenant_id), K(ls_id));
-      } else if (OB_SUCCESS != (tmp_ret = ObShareUtil::check_compat_version_for_readonly_replica(
-                                          tenant_id, is_compatible_with_readonly_replica))) {
-        LOG_WARN("fail to check data version for read-only replica", KR(ret), K(tenant_id));
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (!is_compatible_with_readonly_replica) {
-        replica_type = REPLICA_TYPE_FULL;
-      } else if (learner_list.contains(gctx_.self_addr())) {
-        // if replica exists in learner_list, report it as R-replica.
-        // Otherwise, report as F-replica
-        replica_type = REPLICA_TYPE_READONLY;
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObLSReplica::transform_ob_member_list(ob_member_list, member_list))) {
-        LOG_WARN("fail to transfrom ob_member_list into member_list", KR(ret), K(ob_member_list));
-      } else if (OB_FAIL(replica.init(
-            0,          /*create_time_us*/
-            0,          /*modify_time_us*/
-            tenant_id,  /*tenant_id*/
-            ls_id,      /*ls_id*/
-            gctx_.self_addr(),         /*server*/
-            gctx_.config_->mysql_port, /*sql_port*/
-            role,                      /*role*/
-            replica_type,         /*replica_type*/
-            proposal_id,              /*proposal_id*/
-            is_strong_leader(role) ? REPLICA_STATUS_NORMAL : replica_status,/*replica_status*/
-            restore_status,            /*restore_status*/
-            100,                       /*memstore_percent*/
-            unit_id,                   /*unit_id*/
-            gctx_.config_->zone.str(), /*zone*/
-            paxos_replica_number,                    /*paxos_replica_number*/
-            0,                         /*data_size*/
-            0,                         /*required_size*/
-            member_list,
-            learner_list,
-            OB_MIGRATION_STATUS_REBUILD == migration_status /*is_rebuild*/))) {
-        LOG_WARN("fail to init a ls replica", KR(ret), K(tenant_id), K(ls_id), K(role),
-                 K(proposal_id), K(unit_id), K(paxos_replica_number), K(member_list), K(learner_list));
+        LOG_WARN("ObLSService is null", KR(ret));
+      } else if (OB_FAIL(ls_svr->get_ls_replica(ls_id, ObLSGetMod::OBSERVER_MOD, replica))) {
+        LOG_WARN("fail to get_ls_replica", KR(ret), K(ls_id));
       } else {
         LOG_TRACE("finish fill ls replica", KR(ret), K(tenant_id), K(ls_id), K(replica));
       }

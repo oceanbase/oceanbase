@@ -59,6 +59,15 @@ int64_t BaseReplicaAttrSet::get_encryption_logonly_replica_num() const
   return num;
 }
 
+int64_t BaseReplicaAttrSet::get_columnstore_replica_num() const
+{
+  int64_t num = 0;
+  for (int64_t i = 0; i < get_columnstore_replica_attr_array().count(); ++i) {
+    num += get_columnstore_replica_attr_array().at(i).num_;
+  }
+  return num;
+}
+
 int64_t BaseReplicaAttrSet::get_paxos_replica_num() const
 {
   return get_full_replica_num()
@@ -80,6 +89,9 @@ int64_t BaseReplicaAttrSet::get_specific_replica_num() const
   }
   if (ObLocalityDistribution::ALL_SERVER_CNT != get_encryption_logonly_replica_num()) {
     specific_replica_num += get_encryption_logonly_replica_num();
+  }
+  if (ObLocalityDistribution::ALL_SERVER_CNT != get_columnstore_replica_num()) {
+    specific_replica_num += get_columnstore_replica_num();
   }
   return specific_replica_num;
 }
@@ -117,7 +129,8 @@ bool ObReplicaAttrSet::operator==(const ObReplicaAttrSet &that) const
   if (full_replica_attr_array_.count() != that.full_replica_attr_array_.count()
       || logonly_replica_attr_array_.count() != that.logonly_replica_attr_array_.count()
       || readonly_replica_attr_array_.count() != that.readonly_replica_attr_array_.count()
-      || encryption_logonly_replica_attr_array_.count() != that.encryption_logonly_replica_attr_array_.count()) {
+      || encryption_logonly_replica_attr_array_.count() != that.encryption_logonly_replica_attr_array_.count()
+      || columnstore_replica_attr_array_.count() != that.columnstore_replica_attr_array_.count()) {
     equal = false;
   } else {
     for (int64_t i = 0; equal && i < full_replica_attr_array_.count(); ++i) {
@@ -137,6 +150,11 @@ bool ObReplicaAttrSet::operator==(const ObReplicaAttrSet &that) const
     }
     for (int64_t i = 0; equal && i < encryption_logonly_replica_attr_array_.count(); ++i) {
       if (encryption_logonly_replica_attr_array_.at(i) != that.encryption_logonly_replica_attr_array_.at(i)) {
+        equal = false;
+      }
+    }
+    for (int64_t i = 0; equal && i < columnstore_replica_attr_array_.count(); ++i) {
+      if (columnstore_replica_attr_array_.at(i) != that.columnstore_replica_attr_array_.at(i)) {
         equal = false;
       }
     }
@@ -162,6 +180,9 @@ int ObReplicaAttrSet::assign(const BaseReplicaAttrSet &that)
   } else if (OB_FAIL(encryption_logonly_replica_attr_array_.assign(
           that.get_encryption_logonly_replica_attr_array()))) {
     LOG_WARN("fail to assign encryption logonly replica attr array", KR(ret));
+  } else if (OB_FAIL(columnstore_replica_attr_array_.assign(
+          that.get_columnstore_replica_attr_array()))) {
+    LOG_WARN("fail to assign columnstore replica attr array", KR(ret));
   }
   return ret;
 }
@@ -170,7 +191,8 @@ int ObReplicaAttrSet::set_replica_attr_array(
     const common::ObIArray<share::ReplicaAttr> &full_replica_attr_array,
     const common::ObIArray<share::ReplicaAttr> &logonly_replica_attr_array,
     const common::ObIArray<share::ReplicaAttr> &readonly_replica_attr_array,
-    const common::ObIArray<share::ReplicaAttr> &encryption_logonly_replica_attr_array)
+    const common::ObIArray<share::ReplicaAttr> &encryption_logonly_replica_attr_array,
+    const common::ObIArray<share::ReplicaAttr> &columnstore_replica_attr_array)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(full_replica_attr_array_.assign(full_replica_attr_array))) {
@@ -181,6 +203,8 @@ int ObReplicaAttrSet::set_replica_attr_array(
     LOG_WARN("fail to assign readonly replica attr array", KR(ret));
   } else if (OB_FAIL(encryption_logonly_replica_attr_array_.assign(encryption_logonly_replica_attr_array))) {
     LOG_WARN("fail to assign encryption logonly replica attr array", KR(ret));
+  } else if (OB_FAIL(columnstore_replica_attr_array_.assign(columnstore_replica_attr_array))) {
+    LOG_WARN("fail to assign columnstore replica attr array", KR(ret));
   }
   return ret;
 }
@@ -201,12 +225,15 @@ int ObReplicaAttrSet::set_paxos_replica_attr_array(
   return ret;
 }
 
-int ObReplicaAttrSet::set_readonly_replica_attr_array(
-    const common::ObIArray<share::ReplicaAttr> &readonly_replica_attr_array)
+int ObReplicaAttrSet::set_non_paxos_replica_attr_array(
+    const common::ObIArray<share::ReplicaAttr> &readonly_replica_attr_array,
+    const common::ObIArray<share::ReplicaAttr> &columnstore_replica_attr_array)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(readonly_replica_attr_array_.assign(readonly_replica_attr_array))) {
     LOG_WARN("fail to assign full replica attr array", K(ret));
+  } else if (OB_FAIL(columnstore_replica_attr_array_.assign(columnstore_replica_attr_array))) {
+    LOG_WARN("fail to assign columnstore replica attr array", KR(ret));
   }
   return ret;
 }
@@ -261,6 +288,10 @@ bool ObReplicaAttrSet::is_specific_replica_attr() const
   }
   for (int64_t i = 0; !bool_ret && i < encryption_logonly_replica_attr_array_.count(); i++) {
     const ReplicaAttr &replica_attr = encryption_logonly_replica_attr_array_.at(i);
+    bool_ret = 100 != replica_attr.memstore_percent_;
+  }
+  for (int64_t i = 0; !bool_ret && i < columnstore_replica_attr_array_.count(); i++) {
+    const ReplicaAttr &replica_attr = columnstore_replica_attr_array_.at(i);
     bool_ret = 100 != replica_attr.memstore_percent_;
   }
   return bool_ret;
@@ -368,6 +399,30 @@ int ObReplicaAttrSet::add_encryption_logonly_replica_num(const ReplicaAttr &repl
                encryption_logonly_replica_attr_array_.count());
     } else {
       encryption_logonly_replica_attr_array_.at(0).num_ += replica_attr.num_;
+    }
+  }
+  return ret;
+}
+
+int ObReplicaAttrSet::add_columnstore_replica_num(const ReplicaAttr &replica_attr)
+{
+  int ret = OB_SUCCESS;
+  if (replica_attr.num_ > 0) {
+    if (columnstore_replica_attr_array_.count() <= 0) {
+      if (OB_FAIL(columnstore_replica_attr_array_.push_back(
+              ReplicaAttr(0, replica_attr.memstore_percent_)))) {
+        LOG_WARN("fail to push back", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
+      // bypass
+    } else if (columnstore_replica_attr_array_.count() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("index unexpected", K(ret),
+               "columnstore_replica_attr_array_count",
+               columnstore_replica_attr_array_.count());
+    } else {
+      columnstore_replica_attr_array_.at(0).num_ += replica_attr.num_;
     }
   }
   return ret;
@@ -485,56 +540,27 @@ int ObReplicaAttrSet::sub_encryption_logonly_replica_num(const ReplicaAttr &repl
   return ret;
 }
 
-bool ObReplicaAttrSet::has_this_replica(
-     const common::ObReplicaType replica_type,
-     const int64_t memstore_percent)
-{
-  bool found = false;
-  if (common::REPLICA_TYPE_FULL == replica_type) {
-    for (int64_t i = 0; !found && i < full_replica_attr_array_.count(); ++i) {
-      ReplicaAttr &this_replica_attr = full_replica_attr_array_.at(i);
-      if (this_replica_attr.num_ > 0 && memstore_percent == this_replica_attr.memstore_percent_) {
-        found = true;
-      }
-    }
-  } else if (common::REPLICA_TYPE_LOGONLY == replica_type) {
-    for (int64_t i = 0; !found && i < logonly_replica_attr_array_.count(); ++i) {
-      ReplicaAttr &this_replica_attr = logonly_replica_attr_array_.at(i);
-      if (this_replica_attr.num_ > 0 && memstore_percent == this_replica_attr.memstore_percent_) {
-        found = true;
-      }
-    }
-  } else if (common::REPLICA_TYPE_READONLY == replica_type) {
-    for (int64_t i = 0; !found && i < readonly_replica_attr_array_.count(); ++i) {
-      ReplicaAttr &this_replica_attr = readonly_replica_attr_array_.at(i);
-      if (this_replica_attr.num_ > 0 && memstore_percent == this_replica_attr.memstore_percent_) {
-        found = true;
-      }
-    }
-  } else if (common::REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type) {
-    for (int64_t i = 0; !found && i < encryption_logonly_replica_attr_array_.count(); ++i) {
-      ReplicaAttr &this_replica_attr = encryption_logonly_replica_attr_array_.at(i);
-      if (this_replica_attr.num_ > 0 && memstore_percent == this_replica_attr.memstore_percent_) {
-        found = true;
-      }
-    }
-  } else {
-    found = false;
-  }
-  return found;
-}
-
-
-int ObReplicaAttrSet::get_readonly_memstore_percent(int64_t &memstore_percent) const
+int ObReplicaAttrSet::sub_columnstore_replica_num(const ReplicaAttr &replica_attr)
 {
   int ret = OB_SUCCESS;
-  if (readonly_replica_attr_array_.count() <= 0 || readonly_replica_attr_array_.count() > 1) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("readonly replica attr array count unexpected", K(ret),
-             "array_count", readonly_replica_attr_array_.count());
-  } else {
-    const ReplicaAttr &replica_attr = readonly_replica_attr_array_.at(0);
-    memstore_percent = replica_attr.memstore_percent_;
+  if (replica_attr.num_ > 0) {
+    if (columnstore_replica_attr_array_.count() <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("columnstore replica attr array empty", K(ret));
+    } else if (columnstore_replica_attr_array_.at(0).num_ < replica_attr.num_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("columnstore replica num not enough", K(ret),
+               "columnstore_replica_num_in_array",
+               columnstore_replica_attr_array_.at(0).num_,
+               K(replica_attr));
+    } else {
+      columnstore_replica_attr_array_.at(0).num_ -= replica_attr.num_;
+      if (columnstore_replica_attr_array_.at(0).num_ <= 0) {
+        if (OB_FAIL(columnstore_replica_attr_array_.remove(0))) {
+          LOG_WARN("fail to remove", K(ret));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -552,7 +578,7 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
        OB_SUCC(ret) && i < that.replica_attr_set_.get_full_replica_attr_array().count();
        ++i) {
     const ReplicaAttr &this_replica_attr = that.replica_attr_set_.get_full_replica_attr_array().at(i);
-    if (OB_FAIL(add_full_replica_num(this_replica_attr))) {
+    if (OB_FAIL(replica_attr_set_.add_full_replica_num(this_replica_attr))) {
       LOG_WARN("fail to add full replica num", K(ret));
     }
   }
@@ -562,7 +588,7 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
        OB_SUCC(ret) && i < that.replica_attr_set_.get_logonly_replica_attr_array().count();
        ++i) {
     const ReplicaAttr &this_replica_attr = that.replica_attr_set_.get_logonly_replica_attr_array().at(i);
-    if (OB_FAIL(add_logonly_replica_num(this_replica_attr))) {
+    if (OB_FAIL(replica_attr_set_.add_logonly_replica_num(this_replica_attr))) {
       LOG_WARN("fail to add logonly replica num", K(ret));
     }
   }
@@ -572,7 +598,7 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
        OB_SUCC(ret) && i < that.replica_attr_set_.get_readonly_replica_attr_array().count();
        ++i) {
     const ReplicaAttr &this_replica_attr = that.replica_attr_set_.get_readonly_replica_attr_array().at(i);
-    if (OB_FAIL(add_readonly_replica_num(this_replica_attr))) {
+    if (OB_FAIL(replica_attr_set_.add_readonly_replica_num(this_replica_attr))) {
       LOG_WARN("fail to add readonly replica num", K(ret));
     }
   }
@@ -583,12 +609,22 @@ int ObZoneReplicaAttrSet::append(const ObZoneReplicaAttrSet &that)
        ++i) {
     const ReplicaAttr &this_replica_attr
       = that.replica_attr_set_.get_encryption_logonly_replica_attr_array().at(i);
-    if (OB_FAIL(add_encryption_logonly_replica_num(this_replica_attr))) {
+    if (OB_FAIL(replica_attr_set_.add_encryption_logonly_replica_num(this_replica_attr))) {
       LOG_WARN("fail to add logonly replica num", K(ret));
     }
   }
   lib::ob_sort(replica_attr_set_.get_encryption_logonly_replica_attr_array_for_sort().begin(),
             replica_attr_set_.get_encryption_logonly_replica_attr_array_for_sort().end());
+  for (int64_t i = 0;
+       OB_SUCC(ret) && i < that.replica_attr_set_.get_columnstore_replica_attr_array().count();
+       ++i) {
+    const ReplicaAttr &this_replica_attr = that.replica_attr_set_.get_columnstore_replica_attr_array().at(i);
+    if (OB_FAIL(replica_attr_set_.add_columnstore_replica_num(this_replica_attr))) {
+      LOG_WARN("fail to add columnstore replica num", K(ret));
+    }
+  }
+  lib::ob_sort(replica_attr_set_.get_columnstore_replica_attr_array_for_sort().begin(),
+            replica_attr_set_.get_columnstore_replica_attr_array_for_sort().end());
   return ret;
 }
 
@@ -755,36 +791,6 @@ bool ObZoneReplicaAttrSet::check_paxos_num_valid() const
 }
 
 
-void ObReplicaNumSet::set_replica_num(
-    int64_t full_replica_num,
-    int64_t logonly_replica_num,
-    int64_t readonly_replica_num,
-    int64_t encryption_logonly_replica_num)
-{
-  full_replica_num_ = full_replica_num;
-  logonly_replica_num_ = logonly_replica_num;
-  readonly_replica_num_ = readonly_replica_num;
-  encryption_logonly_replica_num_ = encryption_logonly_replica_num;
-}
-
-int64_t ObReplicaNumSet::get_specific_replica_num() const
-{
-  int64_t specific_replica_num = 0;
-  if (ObLocalityDistribution::ALL_SERVER_CNT != full_replica_num_) {
-    specific_replica_num += full_replica_num_;
-  }
-  if (ObLocalityDistribution::ALL_SERVER_CNT != logonly_replica_num_) {
-    specific_replica_num += logonly_replica_num_;
-  }
-  if (ObLocalityDistribution::ALL_SERVER_CNT != readonly_replica_num_) {
-    specific_replica_num += readonly_replica_num_;
-  }
-  if (ObLocalityDistribution::ALL_SERVER_CNT != encryption_logonly_replica_num_) {
-    specific_replica_num += encryption_logonly_replica_num_;
-  }
-  return specific_replica_num;
-}
-
 int64_t SchemaReplicaAttrSet::get_convert_size() const
 {
   int64_t convert_size = sizeof(SchemaReplicaAttrSet);
@@ -796,6 +802,8 @@ int64_t SchemaReplicaAttrSet::get_convert_size() const
   convert_size += readonly_set.count() * static_cast<int64_t>(sizeof(share::ReplicaAttr));
   const ObIArray<ReplicaAttr> &encryption_logonly_set = get_encryption_logonly_replica_attr_array();
   convert_size += encryption_logonly_set.count() * static_cast<int64_t>(sizeof(share::ReplicaAttr));
+  const ObIArray<ReplicaAttr> &columnstore_set = get_columnstore_replica_attr_array();
+  convert_size += columnstore_set.count() * static_cast<int64_t>(sizeof(share::ReplicaAttr));
   return convert_size;
 }
 

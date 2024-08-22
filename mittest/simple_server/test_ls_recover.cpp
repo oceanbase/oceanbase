@@ -267,6 +267,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_without_disk)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   ObLSLockGuard lock_ls(ls);
   const ObLSMeta &ls_meta = ls->get_ls_meta();
@@ -295,6 +296,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_disk)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;
   prepare_palf_base_info(arg, palf_base_info);
@@ -329,6 +331,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_inner_tablet)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;
   prepare_palf_base_info(arg, palf_base_info);
@@ -365,6 +368,7 @@ TEST_F(ObLSBeforeRestartTest, create_unfinished_ls_with_commit_slog)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;
   prepare_palf_base_info(arg, palf_base_info);
@@ -404,6 +408,7 @@ TEST_F(ObLSBeforeRestartTest, create_restore_ls)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::RESTORE_START),
                                                  arg.get_create_scn(),
+                                                 ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;
   prepare_palf_base_info(arg, palf_base_info);
@@ -448,6 +453,7 @@ TEST_F(ObLSBeforeRestartTest, create_rebuild_ls)
                                                  migration_status,
                                                  ObLSRestoreStatus(ObLSRestoreStatus::NONE),
                                                  arg.get_create_scn(),
+                                                 ObLSStoreFormat(ObLSStoreType::OB_LS_STORE_NORMAL),
                                                  ls));
   const bool unused_allow_log_sync = true;
   prepare_palf_base_info(arg, palf_base_info);

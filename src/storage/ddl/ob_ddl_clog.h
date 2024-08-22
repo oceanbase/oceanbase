@@ -196,13 +196,15 @@ public:
            const uint64_t data_format_version,
            const int64_t execution_id,
            const ObDirectLoadType direct_load_type,
-           const ObTabletID &lob_meta_tablet_id);
+           const ObTabletID &lob_meta_tablet_id,
+           const bool with_cs_replica);
   bool is_valid() const { return table_key_.is_valid() && data_format_version_ >= 0 && execution_id_ >= 0 && is_valid_direct_load(direct_load_type_); }
   ObITable::TableKey get_table_key() const { return table_key_; }
   uint64_t get_data_format_version() const { return data_format_version_; }
   int64_t get_execution_id() const { return execution_id_; }
   ObDirectLoadType get_direct_load_type() const { return direct_load_type_; }
   const ObTabletID &get_lob_meta_tablet_id() const { return lob_meta_tablet_id_; }
+  bool get_with_cs_replica() const { return with_cs_replica_; }
   TO_STRING_KV(K_(table_key), K_(data_format_version), K_(execution_id), K_(direct_load_type), K_(lob_meta_tablet_id), K_(with_cs_replica));
 private:
   ObITable::TableKey table_key_; // use table type to distinguish column store, column group id is valid

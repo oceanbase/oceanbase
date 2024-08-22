@@ -8958,14 +8958,17 @@ int ObTableSchema::is_column_group_exist(const ObString &cg_name, bool &exist) c
   return ret;
 }
 
-int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &param, int32_t &cg_idx) const
+int ObTableSchema::get_column_group_index(
+    const share::schema::ObColumnParam &param,
+    const bool need_calculate_cg_idx,
+    int32_t &cg_idx) const
 {
   int ret = OB_SUCCESS;
-  uint64_t column_id = param.get_column_id();
+  const uint64_t column_id = param.get_column_id();
   cg_idx = -1;
-  if (OB_UNLIKELY(1 >= column_group_cnt_)) {
+  if (OB_UNLIKELY(1 >= column_group_cnt_ && !need_calculate_cg_idx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("No column group exist", K(ret), K_(is_column_store_supported), K_(column_group_cnt));
+    LOG_WARN("No column group exist", K(ret), K(need_calculate_cg_idx), K_(is_column_store_supported), K_(column_group_cnt));
   } else if (param.is_virtual_gen_col()) {
     cg_idx = -1;
   } else if (column_id < OB_END_RESERVED_COLUMN_ID_NUM &&
@@ -8974,7 +8977,9 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
       common::OB_HIDDEN_PK_INCREMENT_COLUMN_ID != column_id) { // this has its own column group now
     if (common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id ||
         common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id) {
-      if (OB_FAIL(get_base_rowkey_column_group_index(cg_idx))) {
+      if (need_calculate_cg_idx) {
+        cg_idx = OB_CS_COLUMN_REPLICA_ROWKEY_CG_IDX;
+      } else if (OB_FAIL(get_base_rowkey_column_group_index(cg_idx))) {
         LOG_WARN("Fail to get base/rowkey column group index", K(ret), K(column_id));
       }
     } else {
@@ -8983,6 +8988,10 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
       // common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id
       // common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id
       cg_idx = -1;
+    }
+  } else if (need_calculate_cg_idx) {
+    if (OB_FAIL(calc_column_group_index_(column_id, cg_idx))) {
+      LOG_WARN("Fail to calc_column_group_index", K(ret), K(column_id));
     }
   } else {
     bool found = false;
@@ -9018,6 +9027,29 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
       LOG_WARN("Unexpected, can not find cg idx", K(ret), K(column_id));
     }
   }
+  LOG_TRACE("[CS-Replica] get column group index", K(ret), K(need_calculate_cg_idx), K(cg_idx));
+  return ret;
+}
+
+int ObTableSchema::calc_column_group_index_(const uint64_t column_id, int32_t &cg_idx) const
+{
+  int ret = OB_SUCCESS;
+  cg_idx = -1;
+  // for cs replica, constructed cg schemas start with rowkey cg so the cg idx of row key cg is ALWAYS 0
+  // and cg idx of normal cg is shifted by offset 1.
+  for (int64_t i = 0; i < column_cnt_; i++) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (OB_NOT_NULL(column) && column->get_column_id() == column_id) {
+      cg_idx = i + 1;
+      break;
+    }
+  }
+
+  if (OB_UNLIKELY(-1 == cg_idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected cg idx", K(ret));
+  }
+
   return ret;
 }
 

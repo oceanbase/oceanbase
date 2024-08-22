@@ -1356,24 +1356,20 @@ int ObTabletTableStore::build_major_tables(
                && OB_FAIL(major_tables.push_back(new_table))) {
       LOG_WARN("failed to add table into tables handle", K(ret), K(param));
     } else if (OB_FAIL(inner_build_major_tables_(allocator, old_store, major_tables,
-        param.multi_version_start_, param.allow_duplicate_sstable_, inc_base_snapshot_version))) {
+        param.multi_version_start_, param.allow_duplicate_sstable_, inc_base_snapshot_version, is_convert_co_major_merge(param.merge_type_)))) {
       LOG_WARN("failed to inner build major tables", K(ret), K(param), K(major_tables));
     }
   }
   return ret;
 }
 
-int ObTabletTableStore::inner_build_major_tables_(
-    common::ObArenaAllocator &allocator,
+int ObTabletTableStore::check_and_build_new_major_tables(
     const ObTabletTableStore &old_store,
     const ObIArray<ObITable *> &tables_array,
-    const int64_t multi_version_start,
     const bool allow_duplicate_sstable,
-    int64_t &inc_base_snapshot_version)
+    ObIArray<ObITable *> &major_tables) const
 {
   int ret = OB_SUCCESS;
-  inc_base_snapshot_version = -1;
-  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> major_tables;
   bool need_add = true;
 
   if (!old_store.major_tables_.empty() && OB_FAIL(old_store.major_tables_.get_all_tables(major_tables))) {
@@ -1416,6 +1412,32 @@ int ObTabletTableStore::inner_build_major_tables_(
         LOG_WARN("failed to push new table into array", K(ret), KPC(new_table), K(major_tables));
       }
     }
+  }
+  return ret;
+}
+
+int ObTabletTableStore::inner_build_major_tables_(
+    common::ObArenaAllocator &allocator,
+    const ObTabletTableStore &old_store,
+    const ObIArray<ObITable *> &tables_array,
+    const int64_t multi_version_start,
+    const bool allow_duplicate_sstable,
+    int64_t &inc_base_snapshot_version,
+    bool replace_old_row_store_major /*= false*/)
+{
+  int ret = OB_SUCCESS;
+  inc_base_snapshot_version = -1;
+  ObSEArray<ObITable *, MAX_SSTABLE_CNT_IN_STORAGE> major_tables;
+
+  if (OB_UNLIKELY(!old_store.major_tables_.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("major in old store is invalid", K(ret), K(old_store));
+  } else if (replace_old_row_store_major) {
+    if (OB_FAIL(old_store.major_tables_.replace_twin_majors_and_build_new(tables_array, major_tables))) {
+      LOG_WARN("failed to replace twin row store majors", K(ret), K(old_store), K(tables_array));
+    }
+  } else if (OB_FAIL(check_and_build_new_major_tables(old_store, tables_array, allow_duplicate_sstable, major_tables))) {
+    LOG_WARN("failed to check and add new major tables", K(ret), K(old_store), K(tables_array));
   }
 
   if (OB_FAIL(ret)) {

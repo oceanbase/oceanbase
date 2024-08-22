@@ -1835,6 +1835,12 @@ void ObTenantSchema::reset_zone_replica_attr_array()
         free(encryption_logonly_attr_set.get_base_address());
         encryption_logonly_attr_set.reset();
       }
+      SchemaReplicaAttrArray &columnstore_attr_set
+        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_columnstore_replica_attr_array());
+      if (nullptr != columnstore_attr_set.get_base_address()) {
+        free(columnstore_attr_set.get_base_address());
+        columnstore_attr_set.reset();
+      }
     }
     free(zone_replica_attr_array_.get_base_address());
     zone_replica_attr_array_.reset();
@@ -1906,6 +1912,10 @@ int ObTenantSchema::set_zone_replica_attr_array(
               static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_encryption_logonly_replica_attr_array()),
               src_replica_attr_set.replica_attr_set_.get_encryption_logonly_replica_attr_array()))) {
         LOG_WARN("fail to set specific replica attr array", K(ret));
+      } else if (OB_FAIL(set_specific_replica_attr_array(
+              static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_columnstore_replica_attr_array()),
+              src_replica_attr_set.replica_attr_set_.get_columnstore_replica_attr_array()))) {
+        LOG_WARN("fail to set specific replica attr array", K(ret));
       } else if (OB_FAIL(deep_copy_string_array(src_replica_attr_set.zone_set_, this_schema_set->zone_set_))) {
         LOG_WARN("fail to copy schema replica attr set zone set", K(ret));
       } else {
@@ -1951,6 +1961,10 @@ int ObTenantSchema::set_zone_replica_attr_array(
       } else if (OB_FAIL(set_specific_replica_attr_array(
               static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_encryption_logonly_replica_attr_array()),
               src_replica_attr_set.replica_attr_set_.get_encryption_logonly_replica_attr_array()))) {
+        LOG_WARN("fail to set specific replica attr array", K(ret));
+      } else if (OB_FAIL(set_specific_replica_attr_array(
+              static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_columnstore_replica_attr_array()),
+              src_replica_attr_set.replica_attr_set_.get_columnstore_replica_attr_array()))) {
         LOG_WARN("fail to set specific replica attr array", K(ret));
       } else {
         common::ObArray<common::ObString> zone_set_ptrs;
@@ -2635,267 +2649,6 @@ int ObDatabaseSchema::get_primary_zone_inherit(
   }
   return ret;
 }
-/*-------------------------------------------------------------------------------------------------
- * ------------------------------ObLocality-------------------------------------------
- ----------------------------------------------------------------------------------------------------*/
-void ObLocality::reset_zone_replica_attr_array()
-{
-  if (NULL != schema_ && NULL != zone_replica_attr_array_.get_base_address()) {
-    for (int64_t i = 0; i < zone_replica_attr_array_.count(); ++i) {
-      SchemaZoneReplicaAttrSet &zone_locality = zone_replica_attr_array_.at(i);
-      schema_->reset_string_array(zone_locality.zone_set_);
-      SchemaReplicaAttrArray &full_attr_set
-        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_full_replica_attr_array());
-      if (nullptr != full_attr_set.get_base_address()) {
-        schema_->free(full_attr_set.get_base_address());
-        full_attr_set.reset();
-      }
-      SchemaReplicaAttrArray &logonly_attr_set
-        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_logonly_replica_attr_array());
-      if (nullptr != logonly_attr_set.get_base_address()) {
-        schema_->free(logonly_attr_set.get_base_address());
-        logonly_attr_set.reset();
-      }
-      SchemaReplicaAttrArray &readonly_attr_set
-        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_readonly_replica_attr_array());
-      if (nullptr != readonly_attr_set.get_base_address()) {
-        schema_->free(readonly_attr_set.get_base_address());
-        readonly_attr_set.reset();
-      }
-      SchemaReplicaAttrArray &encryption_logonly_attr_set
-        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_encryption_logonly_replica_attr_array());
-      if (nullptr != encryption_logonly_attr_set.get_base_address()) {
-        schema_->free(encryption_logonly_attr_set.get_base_address());
-        encryption_logonly_attr_set.reset();
-      }
-    }
-    schema_->free(zone_replica_attr_array_.get_base_address());
-    zone_replica_attr_array_.reset();
-  }
-}
-
-int ObLocality::set_specific_replica_attr_array(
-    SchemaReplicaAttrArray &this_schema_set,
-    const common::ObIArray<ReplicaAttr> &src)
-{
-  int ret = OB_SUCCESS;
-  const int64_t count = src.count();
-  if (count > 0) {
-    const int64_t size = count * static_cast<int64_t>(sizeof(share::ReplicaAttr));
-    void *ptr = nullptr;
-    if (nullptr == (ptr = schema_->alloc(size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc failed", K(ret), K(size));
-    } else if (FALSE_IT(this_schema_set.init(count, static_cast<ReplicaAttr *>(ptr), count))) {
-      // shall never by here
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); ++i) {
-        const share::ReplicaAttr &src_replica_attr = src.at(i);
-        ReplicaAttr *dst_replica_attr = &this_schema_set.at(i);
-        if (nullptr == (dst_replica_attr = new (dst_replica_attr) ReplicaAttr(
-                src_replica_attr.num_, src_replica_attr.memstore_percent_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("placement new return nullptr", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocality::set_zone_replica_attr_array(const common::ObIArray<SchemaZoneReplicaAttrSet> &src)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_));
-  } else {
-    reset_zone_replica_attr_array();
-    const int64_t alloc_size = src.count() * static_cast<int64_t>(sizeof(SchemaZoneReplicaAttrSet));
-    void *buf = NULL;
-    if (src.count() <= 0) {
-      // do nothing
-    } else if (NULL == (buf = schema_->alloc(alloc_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc failed", K(ret), K(alloc_size));
-    } else {
-      zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
-      // call construct func in advance to avoid core status
-      //
-      ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
-      for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
-        const SchemaZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
-        SchemaZoneReplicaAttrSet *this_schema_set = &zone_replica_attr_array_.at(i);
-        if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_logonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_logonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_readonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_readonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_encryption_logonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_encryption_logonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(schema_->deep_copy_string_array(
-                src_replica_attr_set.zone_set_, this_schema_set->zone_set_))) {
-          LOG_WARN("fail to copy schema replica attr set zone set", K(ret));
-        } else {
-          this_schema_set->zone_ = src_replica_attr_set.zone_;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocality::set_zone_replica_attr_array(const common::ObIArray<share::ObZoneReplicaAttrSet> &src)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_));
-  } else {
-    reset_zone_replica_attr_array();
-    const int64_t alloc_size = src.count() * static_cast<int64_t>(sizeof(SchemaZoneReplicaAttrSet));
-    void *buf = NULL;
-    if (src.count() <= 0) {
-      // do nothing
-    } else if (NULL == (buf = schema_->alloc(alloc_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc failed", K(ret), K(alloc_size));
-    } else {
-      zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
-      // call construct func in advance to avoid core status
-      //
-      ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
-      for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
-        const share::ObZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
-        SchemaZoneReplicaAttrSet *this_schema_set = &zone_replica_attr_array_.at(i);
-        if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_logonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_logonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_readonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_readonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_encryption_logonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_encryption_logonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else {
-          common::ObArray<common::ObString> zone_set_ptrs;
-          for (int64_t j = 0; OB_SUCC(ret) && j < src_replica_attr_set.zone_set_.count(); ++j) {
-            const common::ObZone &zone = src_replica_attr_set.zone_set_.at(j);
-            if (OB_FAIL(zone_set_ptrs.push_back(common::ObString(zone.size(), zone.ptr())))) {
-               LOG_WARN("fail to push back", K(ret));
-            } else {} // no more to do
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(schema_->deep_copy_string_array(zone_set_ptrs, this_schema_set->zone_set_))) {
-            LOG_WARN("fail to copy schema replica attr set zone set", K(ret));
-          } else {
-            this_schema_set->zone_ = src_replica_attr_set.zone_;
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocality::assign(const ObLocality &other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_));
-  } else if (OB_FAIL(schema_->deep_copy_str(other.locality_str_, locality_str_))) {
-    LOG_WARN("fail to assign locality info", K(ret));
-  } else if (OB_FAIL(set_zone_replica_attr_array(other.zone_replica_attr_array_))) {
-    LOG_WARN("set zone replica attr array failed", K(ret));
-  }
-  return ret;
-}
-
-int ObLocality::set_locality_str(const ObString &other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_));
-  } else if (OB_FAIL(schema_->deep_copy_str(other, locality_str_))) {
-    LOG_WARN("fail to assign locality info", K(ret));
-  }
-  return ret;
-}
-
-int64_t ObLocality::get_convert_size() const
-{
-  int64_t convert_size = sizeof(*this);
-  convert_size += zone_replica_attr_array_.count() * static_cast<int64_t>(sizeof(SchemaZoneReplicaAttrSet));
-  for (int64_t i = 0; i < zone_replica_attr_array_.count(); ++i) {
-    convert_size += zone_replica_attr_array_.at(i).get_convert_size();
-  }
-  convert_size += locality_str_.length() + 1;
-  return convert_size;
-}
-
-void ObLocality::reset()
-{
-  if (OB_ISNULL(schema_)) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid schema info", K(schema_));
-  } else {
-    reset_zone_replica_attr_array();
-    if (!OB_ISNULL(locality_str_.ptr())) {
-      schema_->free(locality_str_.ptr());
-    }
-    locality_str_.reset();
-  }
-}
-
-OB_DEF_SERIALIZE(ObLocality)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, locality_str_);
-  if (OB_FAIL(ret)) {
-    LOG_WARN("func_SERIALIZE failed", K(ret));
-  } else {} // no more to do
-  return ret;
-}
-
-OB_DEF_DESERIALIZE(ObLocality)
-{
-  int ret = OB_SUCCESS;
-  ObString locality;
-  LST_DO_CODE(OB_UNIS_DECODE, locality);
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(schema_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid schema_ info", K(ret), K(schema_));
-  } else if (OB_FAIL(schema_->deep_copy_str(locality, locality_str_))) {
-    LOG_WARN("fail to deep copy str", K(ret));
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE_SIZE(ObLocality)
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, locality_str_);
-  return len;
-}
-
 
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObPrimaryZone-------------------------------------------

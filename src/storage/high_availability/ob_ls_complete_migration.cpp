@@ -1444,7 +1444,7 @@ int ObStartCompleteMigrationTask::change_member_list_()
           LOG_WARN("failed to switch learner to acceptor", K(ret), K(leader_addr), K(ls_transfer_scn));
         }
       } else {
-        // R-replica
+        // R-replica, C-replica
         if (OB_FAIL(replace_learners_for_add_(ls))) {
           LOG_WARN("failed to replace learners for add", K(ret), K(leader_addr), K(ls_transfer_scn));
         }
@@ -1455,7 +1455,7 @@ int ObStartCompleteMigrationTask::change_member_list_()
           LOG_WARN("failed to replace member with learner", K(ret), K(leader_addr), K(ls_transfer_scn));
         }
       } else {
-        // R-replica
+        // R-replica, C-replica
         if (OB_FAIL(replace_learners_for_migration_(ls))) {
           LOG_WARN("failed to replace learners for migration", K(ret), K(leader_addr), K(ls_transfer_scn));
         }

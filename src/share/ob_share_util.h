@@ -78,14 +78,6 @@ public:
   static int check_compat_version_for_arbitration_service(
       const uint64_t tenant_id,
       bool &is_compatible);
-  // check whether sys/meta/user tenant has been promoted to target data version
-  // params[in]  tenant_id, which tenant to check
-  // params[in]  target_data_version, data version to check
-  // params[out] is_compatible, whether tenants are promoted to target data version
-  static int check_compat_version_for_tenant(
-      const uint64_t tenant_id,
-      const uint64_t target_data_version,
-      bool &is_compatible);
   // tenant data version should up to 430 when cloning primary tenant
   // tenant data version should up to 432 when cloning standby tenant
   // params[in]  tenant_id, which tenant to check
@@ -122,6 +114,13 @@ public:
       const uint64_t tenant_id,
       bool &is_compatible);
 
+  // data version must up to 4.3.2 with column-store replica
+  // @params[in]  tenant_id, which tenant to check
+  // @params[out] is_compatible, whether it is over 4.3.2
+  static int check_compat_version_for_columnstore_replica(
+      const uint64_t tenant_id,
+      bool &is_compatible);
+
   static int fetch_current_cluster_version(
              common::ObISQLClient &client,
              uint64_t &cluster_version);
@@ -148,6 +147,16 @@ public:
     SCN &ora_rowscn);
   static bool is_tenant_enable_rebalance(const uint64_t tenant_id);
   static bool is_tenant_enable_transfer(const uint64_t tenant_id);
+  static const char *replica_type_to_string(const ObReplicaType type);
+  static ObReplicaType string_to_replica_type(const char *str);
+  static ObReplicaType string_to_replica_type(const ObString &str);
+private:
+  static int check_compat_data_version_(
+    const uint64_t required_data_version,
+    const bool check_meta_tenant,
+    const bool check_user_tenant,
+    const uint64_t tenant_id,
+    bool &is_compatible);
 };
 }//end namespace share
 }//end namespace oceanbase

@@ -413,6 +413,9 @@ public:
   // read lob的allocator需要保证obj序列化到rpc buffer后才能析构
   static int read_real_lob(common::ObIAllocator &allocator, ObObj &obj);
   int adjust_entity();
+public:
+  // for column store replica query
+  int check_is_cs_replica_query(bool &is_cs_replica_query) const;
 private:
   // for common
   int get_tablet_by_rowkey(const common::ObRowkey &rowkey,

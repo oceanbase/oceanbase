@@ -630,12 +630,16 @@ int ObLogPlan::mock_base_rel_detectors(ObJoinOrder *&base_rel)
 int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_list)
 {
   int ret = OB_SUCCESS;
+  int64_t route_policy = 0;
   ObExecContext *exec_ctx = optimizer_context_.get_exec_ctx();
   ObSEArray<const ObTableLocation*, 1> tbl_loc_list;
   ObSEArray<ObCandiTableLoc*, 1> phy_tbl_loc_info_list;
-  if (OB_ISNULL(exec_ctx)) {
+  ObSQLSessionInfo* session_info = optimizer_context_.get_session_info();
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("exec ctx is NULL", K(ret));
+  } else if (OB_FAIL(session_info->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    LOG_WARN("get route policy failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < tbl_part_info_list.count(); ++i) {
     ObTablePartitionInfo *tbl_part_info = tbl_part_info_list.at(i);
@@ -649,6 +653,8 @@ int ObLogPlan::select_location(ObIArray<ObTablePartitionInfo *> &tbl_part_info_l
                 &tbl_part_info->get_phy_tbl_location_info_for_update()))) {
       LOG_WARN("fail to push back phy tble loc info",
                K(ret), K(tbl_part_info->get_phy_tbl_location_info_for_update()));
+    } else {
+      tbl_part_info->get_table_location().get_loc_meta().route_policy_ = route_policy;
     }
   }
   if (OB_FAIL(ret)) {
@@ -742,6 +748,9 @@ int ObLogPlan::select_replicas(ObExecContext &exec_ctx,
         }
       }
     }
+  } else if (COLUMN_STORE_ONLY == route_policy_type) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, weak read request");
   } else {
     const bool sess_in_retry = session->get_is_in_retry_for_dup_tbl(); //重试状态下不优化复制表的副本选择
     if (OB_FAIL(ObLogPlan::strong_select_replicas(local_server, phy_tbl_loc_info_list, is_hit_partition, sess_in_retry))) {
@@ -13202,6 +13211,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
           info.use_column_store_ = true;
         } else if (OB_FAIL(will_use_column_store(info.table_id_,
                                                  info.index_id_,
+                                                 info.ref_table_id_,
                                                  use_column_store,
                                                  use_row_store))) {
           LOG_WARN("failed to check will use column store", K(ret));
@@ -13359,6 +13369,7 @@ int ObLogPlan::find_possible_join_filter_tables(ObLogicalOperator *op,
 
 int ObLogPlan::will_use_column_store(const uint64_t table_id,
                                     const uint64_t index_id,
+                                    const uint64_t ref_table_id,
                                     bool &use_column_store,
                                     bool &use_row_store)
 {
@@ -13378,6 +13389,10 @@ int ObLogPlan::will_use_column_store(const uint64_t table_id,
       OB_ISNULL(session_info=get_optimizer_context().get_session_info())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("NULL pointer error", K(stmt), K(schema_guard), K(ret));
+  } else if (get_optimizer_context().use_column_store_replica() &&
+             index_id == ref_table_id) {
+    use_column_store = true;
+    use_row_store = false;
   } else if (OB_FALSE_IT(session_disable_column_store=!session_info->is_enable_column_store())) {
   } else if (OB_FALSE_IT(is_link=ObSqlSchemaGuard::is_link_table(stmt, table_id))) {
   } else if (is_link) {

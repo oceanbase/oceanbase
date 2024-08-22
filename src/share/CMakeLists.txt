@@ -127,7 +127,6 @@ ob_set_subtarget(ob_share common
   ob_list_parser.cpp
   ob_local_device.cpp
   ob_locality_info.cpp
-  ob_locality_parser.cpp
   ob_locality_priority.cpp
   ob_locality_table_operator.cpp
   ob_ls_id.cpp

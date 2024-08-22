@@ -2565,14 +2565,10 @@ int ObRootService::create_resource_pool(const obrpc::ObCreateResourcePoolArg &ar
       LOG_USER_ERROR(OB_MISS_ARGUMENT, "unit_num");
     }
     LOG_WARN("missing arg to create resource pool", K(arg), K(ret));
-  } else if (REPLICA_TYPE_LOGONLY != arg.replica_type_
-             && REPLICA_TYPE_FULL != arg.replica_type_) {
+  } else if (REPLICA_TYPE_FULL != arg.replica_type_) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("only full/logonly pool are supported", K(ret), K(arg));
-  } else if (REPLICA_TYPE_LOGONLY == arg.replica_type_
-             && arg.unit_num_> 1) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("logonly resource pool should only have one unit on one zone", K(ret), K(arg));
+    LOG_WARN("only full replica pool are supported", K(ret), K(arg));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "replica_type of resource pool other than FULL replica");
   } else if (0 == arg.unit_.case_compare(OB_STANDBY_UNIT_CONFIG_TEMPLATE_NAME)) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("can not create resource pool use standby unit config template", K(ret), K(arg));
@@ -9374,7 +9370,7 @@ int ObRootService::add_rs_event_for_alter_ls_replica_(
       ROOTSERVICE_EVENT_ADD(ADD_EVENT_FOR_ALTER_LS_REPLICA,
                             "ls_id", arg.get_ls_id().id(),
                             "target_replica", arg.get_server_addr(),
-                            "replica_type", replica_type_to_str(arg.get_replica_type()),
+                            "replica_type", share::ObShareUtil::replica_type_to_string(arg.get_replica_type()),
                             "", NULL,
                             extra_info);
     } else if (arg.get_alter_task_type().is_migrate_task()) {
@@ -9638,6 +9634,31 @@ int ObRootService::check_restore_tenant_valid(const share::ObPhysicalRestoreJob 
               ret = OB_NOT_SUPPORTED;
               LOG_WARN("restore tenant with encrypted zone is not supported", KR(ret), K(info));
             }
+          }
+        }
+      }
+      // check if loclaity contains any C replica
+      ObLocalityDistribution locality_dist;
+      common::ObArray<share::schema::ObZoneRegion> zone_region_list;
+      common::ObArray<share::ObZoneReplicaAttrSet> zone_replica_num_array;
+      if (OB_FAIL(ret)) {
+        // already failed
+      } else if (OB_FAIL(locality_dist.init())) {
+        LOG_WARN("fail to init locality dist", K(ret));
+      } else if (OB_FAIL(ddl_service_.construct_zone_region_list(zone_region_list, zones))) {
+        LOG_WARN("fail to construct zone region list", K(ret));
+      } else if (OB_FAIL(locality_dist.parse_locality(
+              job_info.get_locality(), zones, &zone_region_list))) {
+        LOG_WARN("fail to parse locality", K(ret));
+      } else if (OB_FAIL(locality_dist.get_zone_replica_attr_array(zone_replica_num_array))) {
+        LOG_WARN("fail to get zone region replica num array", K(ret));
+      } else {
+        FOREACH_X(zone_replica_attr, zone_replica_num_array, OB_SUCC(ret)) {
+          if (zone_replica_attr->get_columnstore_replica_num() > 0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("restore tenant with C replica not supported", KR(ret),
+                     "locality_str", job_info.get_locality(), K(zone_replica_num_array));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "restore tenant with COLUMNSTORE replica in locality is");
           }
         }
       }

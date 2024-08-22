@@ -2753,7 +2753,7 @@ private:
       common::ObIArray<common::ObConfigPairs> &init_configs);
 
 private:
-  int check_locality_compatible_(ObTenantSchema &schema);
+  int check_locality_compatible_(ObTenantSchema &schema, const bool for_create_tenant);
 
   int pre_rename_mysql_columns_online(const ObTableSchema &origin_table_schema,
                           const AlterTableSchema &alter_table_schema,

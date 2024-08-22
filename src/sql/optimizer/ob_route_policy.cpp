@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_phy_table_location_info.h"
 #include "sql/optimizer/ob_log_plan.h"
 #include "storage/ob_locality_manager.h"
+#include  "lib/ob_define.h"
 using namespace oceanbase::common;
 using namespace oceanbase::share;
 using namespace oceanbase::storage;
@@ -82,6 +83,8 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
     } else {
       LOG_TRACE("check ls readable", K(ctx), K(ls_id), K(cur_replica.get_server()), K(can_read));
       if ((policy_type == ONLY_READONLY_ZONE && cur_replica.attr_.zone_type_ == ZONE_TYPE_READWRITE)
+          || (policy_type == COLUMN_STORE_ONLY && !ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
+          || (policy_type != COLUMN_STORE_ONLY && ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
           || cur_replica.attr_.zone_status_ == ObZoneStatus::INACTIVE
           || cur_replica.attr_.server_status_ != ObServerStatus::OB_SERVER_ACTIVE
           || cur_replica.attr_.start_service_time_ == 0
@@ -100,6 +103,18 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
         cur_replica.is_filter_ = false;
         need_break = true;
       }
+    }
+  }
+  if (OB_SUCC(ret) && policy_type == COLUMN_STORE_ONLY) {
+    for (int64_t i = candi_replicas.count()-1; OB_SUCC(ret) && i >= 0; --i) {
+      CandidateReplica &cur_replica = candi_replicas.at(i);
+      if (cur_replica.is_filter_ && OB_FAIL(candi_replicas.remove(i))) {
+        LOG_WARN("failed to remove filted replica", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && candi_replicas.count() == 0) {
+      ret = OB_NO_REPLICA_VALID;
+      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
     }
   }
   return ret;

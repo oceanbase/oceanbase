@@ -569,188 +569,6 @@ int ObTenantGroupParser::jump_to_next_ttg(
   return ret;
 }
 
-int ObLocalityTaskHelp::filter_logonly_task(const common::ObIArray<share::ObResourcePoolName> &pools,
-                                            ObUnitManager &unit_mgr,
-                                            ObIArray<share::ObZoneReplicaNumSet> &zone_locality)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObUnitInfo> logonly_unit_infos;
-  ObArray<ObUnitInfo> unit_infos;
-  if (pools.count() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(pools));
-  } else if (OB_FAIL(unit_mgr.get_unit_infos(pools, unit_infos))) {
-    LOG_WARN("fail to get unit infos", K(ret), K(pools));
-  } else {
-    for (int64_t i = 0; i < unit_infos.count() && OB_SUCC(ret); ++i) {
-      if (REPLICA_TYPE_LOGONLY != unit_infos.at(i).unit_.replica_type_) {
-        // only L unit is counted
-      } else if (OB_FAIL(logonly_unit_infos.push_back(unit_infos.at(i)))) {
-        LOG_WARN("fail to push back", K(ret), K(i), K(unit_infos));
-      }
-    }
-    for (int64_t i = 0; i < zone_locality.count() && OB_SUCC(ret); ++i) {
-      share::ObZoneReplicaAttrSet &zone_replica_attr_set = zone_locality.at(i);
-      if (zone_replica_attr_set.get_logonly_replica_num()
-          + zone_replica_attr_set.get_encryption_logonly_replica_num() <= 0) {
-        // no L replica : nothing todo
-      } else if (zone_replica_attr_set.zone_set_.count() <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("zone set unexpected", K(ret), K(zone_replica_attr_set));
-      } else {
-        for (int64_t j = 0; j < logonly_unit_infos.count(); j++) {
-          const ObUnitInfo &unit_info = logonly_unit_infos.at(j);
-          if (!has_exist_in_array(zone_replica_attr_set.zone_set_, unit_info.unit_.zone_)) {
-            // bypass
-          } else if (zone_replica_attr_set.get_logonly_replica_num()
-                     + zone_replica_attr_set.get_encryption_logonly_replica_num() <= 0) {
-            // bypass
-          } else if (zone_replica_attr_set.get_logonly_replica_num() > 0) {
-            ret = zone_replica_attr_set.sub_logonly_replica_num(ReplicaAttr(1, 100));
-          } else {
-            ret = zone_replica_attr_set.sub_encryption_logonly_replica_num(ReplicaAttr(1, 100));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocalityTaskHelp::get_logonly_task_with_logonly_unit(const uint64_t tenant_id,
-                                                           ObUnitManager &unit_mgr,
-                                                           share::schema::ObSchemaGetterGuard &schema_guard,
-                                                           ObIArray<share::ObZoneReplicaNumSet> &zone_locality)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObUnitInfo> logonly_unit_infos;
-  const ObTenantSchema *tenant_schema = NULL;
-  zone_locality.reset();
-  common::ObArray<share::ObZoneReplicaAttrSet> tenant_zone_locality;
-  if (OB_INVALID_ID == tenant_id) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
-    LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
-  } else if (OB_ISNULL(tenant_schema)) {
-    ret = OB_TENANT_NOT_EXIST;
-    LOG_WARN("get invalid tenant schema", K(ret), K(tenant_schema));
-  } else if (OB_FAIL(unit_mgr.get_logonly_unit_by_tenant(tenant_id, logonly_unit_infos))) {
-    LOG_WARN("fail to get logonly unit infos", K(ret), K(tenant_id));
-  } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array(tenant_zone_locality))) {
-    LOG_WARN("fail to get zone replica attr array", K(ret));
-  } else {
-    share::ObZoneReplicaNumSet logonly_set;
-    for (int64_t i = 0; i < logonly_unit_infos.count() && OB_SUCC(ret); i++) {
-      const ObUnitInfo &unit = logonly_unit_infos.at(i);
-      for (int64_t j = 0; j < tenant_zone_locality.count(); j++) {
-        logonly_set.reset();
-        const ObZoneReplicaNumSet &zone_set = tenant_zone_locality.at(j);
-        if (zone_set.zone_ == unit.unit_.zone_
-            && zone_set.get_logonly_replica_num() == 1) {
-          logonly_set.zone_ = zone_set.zone_;
-          if (OB_FAIL(logonly_set.replica_attr_set_.add_logonly_replica_num(ReplicaAttr(1, 100)))) {
-            LOG_WARN("fail to add logonly replica num", K(ret));
-          } else if (OB_FAIL(zone_locality.push_back(logonly_set))) {
-            LOG_WARN("fail to push back", K(ret));
-          }
-        } else if (zone_set.zone_ == unit.unit_.zone_
-            && zone_set.get_encryption_logonly_replica_num() == 1) {
-          logonly_set.zone_ = zone_set.zone_;
-          if (OB_FAIL(logonly_set.replica_attr_set_.add_encryption_logonly_replica_num(ReplicaAttr(1, 100)))) {
-            LOG_WARN("fail to add logonly replica num", K(ret));
-          } else if (OB_FAIL(zone_locality.push_back(logonly_set))) {
-            LOG_WARN("fail to push back", K(ret));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocalityTaskHelp::filter_logonly_task(const uint64_t tenant_id,
-                                            ObUnitManager &unit_mgr,
-                                            share::schema::ObSchemaGetterGuard &schema_guard,
-                                            ObIArray<share::ObZoneReplicaAttrSet> &zone_locality)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObUnitInfo> logonly_unit_infos;
-  if (OB_FAIL(unit_mgr.get_logonly_unit_by_tenant(schema_guard, tenant_id, logonly_unit_infos))) {
-    LOG_WARN("fail to get loggonly unit by tenant", K(ret), K(tenant_id));
-  } else {
-    LOG_DEBUG("get all logonly unit", K(tenant_id), K(logonly_unit_infos), K(zone_locality));
-    for (int64_t i = 0; i < zone_locality.count() && OB_SUCC(ret); ++i) {
-      share::ObZoneReplicaAttrSet &zone_replica_attr_set = zone_locality.at(i);
-      if (zone_replica_attr_set.get_logonly_replica_num()
-          + zone_replica_attr_set.get_encryption_logonly_replica_num() <= 0) {
-        // no L replica : nothing todo
-      } else if (zone_replica_attr_set.zone_set_.count() <= 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("zone set unexpected", K(ret), K(zone_replica_attr_set));
-      } else {
-        for (int64_t j = 0; j < logonly_unit_infos.count(); j++) {
-          const ObUnitInfo &unit_info = logonly_unit_infos.at(j);
-          if (!has_exist_in_array(zone_replica_attr_set.zone_set_, unit_info.unit_.zone_)) {
-            // bypass
-          } else if (zone_replica_attr_set.get_logonly_replica_num()
-             + zone_replica_attr_set.get_encryption_logonly_replica_num() <= 0) {
-            // bypass
-          } else if (zone_replica_attr_set.get_logonly_replica_num() > 0) {
-            ret = zone_replica_attr_set.sub_logonly_replica_num(ReplicaAttr(1, 100));
-          } else {
-            ret = zone_replica_attr_set.sub_encryption_logonly_replica_num(ReplicaAttr(1, 100));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocalityTaskHelp::alloc_logonly_replica(ObUnitManager &unit_mgr,
-                                              const ObIArray<share::ObResourcePoolName> &pools,
-                                              const common::ObIArray<ObZoneReplicaNumSet> &zone_locality,
-                                              ObPartitionAddr &partition_addr)
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObUnitInfo> logonly_units;
-  ObArray<ObUnitInfo> unit_infos;
-  if (OB_FAIL(unit_mgr.get_unit_infos(pools, unit_infos))) {
-    LOG_WARN("fail to get unit infos", K(ret), K(pools));
-  } else {
-    for (int64_t i = 0; i < unit_infos.count() && OB_SUCC(ret); i++) {
-      if (REPLICA_TYPE_LOGONLY != unit_infos.at(i).unit_.replica_type_) {
-        //nothing todo
-      } else if (OB_FAIL(logonly_units.push_back(unit_infos.at(i)))) {
-        LOG_WARN("fail to push back", K(ret), K(i), K(unit_infos));
-      }
-    }
-  }
-  ObReplicaAddr raddr;
-  for (int64_t i = 0; i < logonly_units.count() && OB_SUCC(ret); i++) {
-    for (int64_t j = 0; j < zone_locality.count() && OB_SUCC(ret); j++) {
-      if (zone_locality.at(j).zone_ == logonly_units.at(i).unit_.zone_
-          && (zone_locality.at(j).get_logonly_replica_num() == 1
-              || zone_locality.at(j).get_encryption_logonly_replica_num() == 1)) {
-        raddr.reset();
-        raddr.unit_id_ = logonly_units.at(i).unit_.unit_id_;
-        raddr.addr_ = logonly_units.at(i).unit_.server_;
-        raddr.zone_ = logonly_units.at(i).unit_.zone_;
-        raddr.replica_type_ = zone_locality.at(j).get_logonly_replica_num() == 1
-                              ? REPLICA_TYPE_LOGONLY
-                              : REPLICA_TYPE_ENCRYPTION_LOGONLY;
-        if (OB_FAIL(partition_addr.push_back(raddr))) {
-          LOG_WARN("fail to push back", K(ret), K(raddr));
-        } else {
-          LOG_INFO("alloc partition for logonly replica", K(raddr));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObLocalityCheckHelp::calc_paxos_replica_num(
     const common::ObIArray<share::ObZoneReplicaNumSet> &zone_locality,
     int64_t &paxos_num)
@@ -1562,6 +1380,7 @@ int ObLocalityCheckHelp::check_alter_single_zone_locality_valid(
   int ret = OB_SUCCESS;
   bool is_legal = true;
   // 1. check whether non_paxos member change
+  // check R-replica
   if (!non_paxos_locality_modified) {
     const ObIArray<ReplicaAttr> &pre_readonly_replica = orig_locality.replica_attr_set_.get_readonly_replica_attr_array();
     const ObIArray<ReplicaAttr> &cur_readonly_replica = new_locality.replica_attr_set_.get_readonly_replica_attr_array();
@@ -1577,8 +1396,19 @@ int ObLocalityCheckHelp::check_alter_single_zone_locality_valid(
       }
     }
   }
+  // check C-replica
+  if (new_locality.get_columnstore_replica_num() != orig_locality.get_columnstore_replica_num()) {
+    if (new_locality.get_full_replica_num() != orig_locality.get_full_replica_num()
+        || new_locality.get_readonly_replica_num() != orig_locality.get_readonly_replica_num()) {
+      // transform between R/F and C is illegal
+      is_legal = false;
+    } else {
+      non_paxos_locality_modified = true;
+    }
+  }
   // 2. check whether alter locality is legal.
-  if (new_locality.get_logonly_replica_num() < orig_locality.get_logonly_replica_num()) {
+  if (!is_legal) {
+  } else if (new_locality.get_logonly_replica_num() < orig_locality.get_logonly_replica_num()) {
     // L-replica must not transfrom to other replica type.
     if (new_locality.get_full_replica_num() > orig_locality.get_full_replica_num()) {
       is_legal = false; // maybe L->F

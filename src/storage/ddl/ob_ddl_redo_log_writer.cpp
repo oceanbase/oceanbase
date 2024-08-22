@@ -1175,7 +1175,7 @@ int ObDDLRedoLogWriter::write_start_log(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id), K(data_format_version), K(direct_load_type));
   } else if (OB_FAIL(log.init(table_key, data_format_version, execution_id, direct_load_type,
-          lob_kv_mgr_handle.is_valid() ? lob_kv_mgr_handle.get_obj()->get_tablet_id() : ObTabletID()))) {
+          lob_kv_mgr_handle.is_valid() ? lob_kv_mgr_handle.get_obj()->get_tablet_id() : ObTabletID(), direct_load_mgr_handle.get_obj()->need_process_cs_replica()))) {
     LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), K(data_format_version));
   }  else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
@@ -1528,7 +1528,8 @@ ObDDLRedoLogWriter::~ObDDLRedoLogWriter()
 ObDDLRedoLogWriterCallback::ObDDLRedoLogWriterCallback()
   : is_inited_(false), redo_info_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE),
     table_key_(), macro_block_id_(), task_id_(0), data_format_version_(0),
-    direct_load_type_(DIRECT_LOAD_INVALID), row_id_offset_(-1)
+    direct_load_type_(DIRECT_LOAD_INVALID), row_id_offset_(-1),
+    with_cs_replica_(false), need_submit_io_(true)
 {
 }
 
@@ -1545,7 +1546,9 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
                                      const share::SCN &start_scn,
                                      const uint64_t data_format_version,
                                      const ObDirectLoadType direct_load_type,
-                                     const int64_t row_id_offset/*=-1*/)
+                                     const int64_t row_id_offset/*=-1*/,
+                                     const bool with_cs_replica/*=false*/,
+                                     const bool need_submit_io/*=true*/)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1574,6 +1577,8 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
     data_format_version_ = data_format_version;
     direct_load_type_ = direct_load_type;
     row_id_offset_ = row_id_offset;
+    with_cs_replica_ = with_cs_replica;
+    need_submit_io_ = need_submit_io;
     is_inited_ = true;
   }
   return ret;
@@ -1592,6 +1597,8 @@ void ObDDLRedoLogWriterCallback::reset()
   data_format_version_ = 0;
   direct_load_type_ = DIRECT_LOAD_INVALID;
   row_id_offset_ = -1;
+  with_cs_replica_ = false;
+  need_submit_io_ = true;
 }
 
 bool ObDDLRedoLogWriterCallback::is_column_group_info_valid() const
@@ -1609,9 +1616,9 @@ int ObDDLRedoLogWriterCallback::write(ObMacroBlockHandle &macro_handle,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
-  } else if (OB_UNLIKELY(!macro_handle.is_valid() || !logic_id.is_valid() || nullptr == buf || row_count <= 0)) {
+  } else if (OB_UNLIKELY((!macro_handle.is_valid() && need_submit_io_) || !logic_id.is_valid() || nullptr == buf || row_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(macro_handle), K(logic_id), KP(buf), K(row_count));
+    LOG_WARN("invalid argument", K(ret), K(macro_handle), K_(need_submit_io), K(logic_id), KP(buf), K(row_count));
   } else {
     macro_block_id_ = macro_handle.get_macro_id();
     redo_info_.table_key_ = table_key_;
@@ -1621,6 +1628,7 @@ int ObDDLRedoLogWriterCallback::write(ObMacroBlockHandle &macro_handle,
     redo_info_.start_scn_ = start_scn_;
     redo_info_.data_format_version_ = data_format_version_;
     redo_info_.type_ = direct_load_type_;
+    redo_info_.with_cs_replica_ = with_cs_replica_;
 
     redo_info_.parallel_cnt_ = 0; // TODO @zhuoran.zzr, place holder for shared storage
     redo_info_.cg_cnt_ = 0;

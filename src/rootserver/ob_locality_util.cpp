@@ -40,19 +40,6 @@ using namespace oceanbase::share::schema;
           ret = OB_INVALID_ARGUMENT; \
           LOG_WARN("invalid locality", K(ret)); \
         } while (0)
-// full replica
-const char *const ObLocalityDistribution::FULL_REPLICA_STR = "FULL";
-const char *const ObLocalityDistribution::F_REPLICA_STR = "F";
-// logonly replica
-const char *const ObLocalityDistribution::LOGONLY_REPLICA_STR = "LOGONLY";
-const char *const ObLocalityDistribution::L_REPLICA_STR = "L";
-// readonly replica
-const char *const ObLocalityDistribution::READONLY_REPLICA_STR = "READONLY";
-const char *const ObLocalityDistribution::R_REPLICA_STR = "R";
-// encryption logonly replica
-const char *const ObLocalityDistribution::ENCRYPTION_LOGONLY_REPLICA_STR = "ENCRYPTION_LOGONLY";
-const char *const ObLocalityDistribution::E_REPLICA_STR = "E";
-// some other terminology
 const common::ObZone ObLocalityDistribution::EVERY_ZONE("everyzone");
 const char *const ObLocalityDistribution::ALL_SERVER_STR = "ALL_SERVER";
 const char *const ObLocalityDistribution::MEMSTORE_PERCENT_STR = "MEMSTORE_PERCENT";
@@ -149,6 +136,9 @@ int ObLocalityDistribution::ZoneSetReplicaDist::check_valid_replica_dist(
         for (int64_t i = 0; is_valid && i < all_replica_attr_array_[READONLY_REPLICA].count(); ++i) {
           is_valid = all_replica_attr_array_[READONLY_REPLICA].at(i).num_ >= 0;
         }
+        for (int64_t i = 0; is_valid && i < all_replica_attr_array_[COLUMNSTORE_REPLICA].count(); ++i) {
+          is_valid = all_replica_attr_array_[COLUMNSTORE_REPLICA].at(i).num_ >= 0;
+        }
       }
     } else {
       is_valid = false;  // do not support mixed-zone locality from 3.2.1 and versions to come
@@ -207,6 +197,12 @@ bool ObLocalityDistribution::ZoneSetReplicaDist::has_non_encryption_logonly() co
        !has && i < all_replica_attr_array_[READONLY_REPLICA].count();
        ++i) {
     const ReplicaAttr &attr = all_replica_attr_array_[READONLY_REPLICA].at(i);
+    has = attr.num_ > 0;
+  }
+  for (int64_t i = 0;
+       !has && i < all_replica_attr_array_[COLUMNSTORE_REPLICA].count();
+       ++i) {
+    const ReplicaAttr &attr = all_replica_attr_array_[COLUMNSTORE_REPLICA].at(i);
     has = attr.num_ > 0;
   }
   return has;
@@ -436,6 +432,9 @@ int ObLocalityDistribution::ZoneSetReplicaDist::replica_type_to_str(
     case ENCRYPTION_LOGONLY_REPLICA:
       replica_type_str = "ENCRYPTION_LOGONLY";
       break;
+    case COLUMNSTORE_REPLICA:
+      replica_type_str = "COLUMNSTORE";
+      break;
     default:
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected replica type", K(ret), K(replica_type));
@@ -658,9 +657,11 @@ int ObLocalityDistribution::RawLocalityIter::get_replica_arrangements(
            && OB_SUCC(get_next_replica_arrangement(
                cursor, end, replica_type, replica_num, memstore_percent))) {
       if (OB_UNLIKELY(FULL_REPLICA != replica_type
-                      && READONLY_REPLICA != replica_type)) {
+                      && READONLY_REPLICA != replica_type
+                      && COLUMNSTORE_REPLICA != replica_type)) {
         // TODO: F-replica is supported since 4.0,
         //       R-replica is supported since 4.2,
+        //       C-replica is supported since 4.3.2
         //       other types will be supported later
         INVALID_LOCALITY();
         switch (replica_type) {
@@ -773,6 +774,20 @@ int ObLocalityDistribution::RawLocalityIter::get_replica_type(
         replica_type = READONLY_REPLICA;
         type_found = true;
         cursor += strlen(R_REPLICA_STR);
+      } else {} // not this type
+    }
+    if (!type_found && remain >= strlen(COLUMNSTORE_REPLICA_STR)) {
+      if (0 == strncmp(COLUMNSTORE_REPLICA_STR, &locality_str_[cursor], strlen(COLUMNSTORE_REPLICA_STR))) {
+        replica_type = COLUMNSTORE_REPLICA;
+        type_found = true;
+        cursor += strlen(COLUMNSTORE_REPLICA_STR);
+      } else {} // not this type
+    }
+    if (!type_found && remain >= strlen(C_REPLICA_STR)) {
+      if (0 == strncmp(C_REPLICA_STR, &locality_str_[cursor], strlen(C_REPLICA_STR))) {
+        replica_type = COLUMNSTORE_REPLICA;
+        type_found = true;
+        cursor += strlen(C_REPLICA_STR);
       } else {} // not this type
     }
     if (!type_found && remain >= strlen(ENCRYPTION_LOGONLY_REPLICA_STR)) {
@@ -1591,72 +1606,6 @@ int ObLocalityDistribution::convert_zone_list(
   return ret;
 }
 
-int ObLocalityDistribution::get_zone_replica_num(
-    const common::ObZone &zone,
-    share::ObReplicaNumSet &replica_num_set)
-{
-  int ret = OB_SUCCESS;
-  if (zone.is_empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(zone));
-  } else {
-    bool found = false;
-    for (int64_t i = 0; !found && OB_SUCC(ret) && i < zone_set_replica_dist_array_.count(); ++i) {
-      const ZoneSetReplicaDist &this_dist = zone_set_replica_dist_array_.at(i);
-      if (zone != this_dist.get_zone_set().at(0)) {
-        // bypass
-      } else{
-        replica_num_set.set_replica_num(this_dist.get_full_replica_num(),
-                                        this_dist.get_logonly_replica_num(),
-                                        this_dist.get_readonly_replica_num(),
-                                        this_dist.get_encryption_logonly_replica_num());
-      }
-    }
-    if (OB_FAIL(ret)) {
-      // failed
-    } else if (!found) {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
-  }
-  return ret;
-}
-
-int ObLocalityDistribution::get_zone_replica_num(
-    const common::ObZone &zone,
-    share::ObZoneReplicaAttrSet &zone_replica_attr_set)
-{
-  int ret = OB_SUCCESS;
-  if (zone.is_empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(zone));
-  } else {
-    bool found = false;
-    for (int64_t i = 0; !found && OB_SUCC(ret) && i < zone_set_replica_dist_array_.count(); ++i) {
-      const ZoneSetReplicaDist &this_dist = zone_set_replica_dist_array_.at(i);
-      if (zone != this_dist.get_zone_set().at(0)) {
-        // bypass
-      } else if (OB_FAIL(zone_replica_attr_set.zone_set_.assign(this_dist.get_zone_set()))) {
-        LOG_WARN("fail to assign zone set", K(ret));
-      } else {
-        zone_replica_attr_set.zone_ = zone;
-        if (OB_FAIL(zone_replica_attr_set.replica_attr_set_.set_replica_attr_array(
-            this_dist.get_full_replica_attr(),
-            this_dist.get_logonly_replica_attr(),
-            this_dist.get_readonly_replica_attr(),
-            this_dist.get_encryption_logonly_replica_attr()))) {
-          LOG_WARN("fail to set replica attr array", KR(ret));
-        }
-      }
-    }
-    if (OB_FAIL(ret)) {
-      // failed
-    } else if (!found) {
-      ret = OB_ENTRY_NOT_EXIST;
-    }
-  }
-  return ret;
-}
-
 int ObLocalityDistribution::get_zone_replica_attr_array(
     common::ObIArray<share::ObZoneReplicaAttrSet> &zone_replica_num_array)
 {
@@ -1675,7 +1624,8 @@ int ObLocalityDistribution::get_zone_replica_attr_array(
           this_dist.get_full_replica_attr(),
           this_dist.get_logonly_replica_attr(),
           this_dist.get_readonly_replica_attr(),
-          this_dist.get_encryption_logonly_replica_attr()))) {
+          this_dist.get_encryption_logonly_replica_attr(),
+          this_dist.get_columnstore_replica_attr()))) {
         LOG_WARN("fail to set replica attr array", KR(ret));
       }
     }

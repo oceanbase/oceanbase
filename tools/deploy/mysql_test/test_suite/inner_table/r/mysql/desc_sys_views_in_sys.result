@@ -2360,7 +2360,7 @@ MODIFY_TIME	timestamp(6)	YES
 UNIT_COUNT	bigint(20)	NO		NULL	
 UNIT_CONFIG_ID	bigint(20)	NO		NULL	
 ZONE_LIST	varchar(8192)	NO		NULL	
-REPLICA_TYPE	varchar(18)	NO			
+REPLICA_TYPE	varchar(4)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_RESOURCE_POOLS limit 1);
 cnt
 1

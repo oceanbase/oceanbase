@@ -38,6 +38,7 @@ enum ObRoutePolicyType
   // 即使客户端将请求路由到partition主上, 也在本地执行，
   // 区别在于返回给OCJ && ObProxy的反馈不同;
   UNMERGE_FOLLOWER_FIRST = 4,
+  COLUMN_STORE_ONLY = 5,
   POLICY_TYPE_MAX
 };
 
@@ -228,7 +229,9 @@ protected:
     // 集群为读写zone时, 且ob_route_policy为UNMERGE_FOLLOWER_FIRST时，同样按照READONLY_ZONE_FIRST处理, 但会增加反馈内容
     // 集群为有只读zone时，且ob_route_policy为UNMERGE_FOLLOWER_FIRST时, 同样按照READONLY_ZONE_FIRST处理，此时不会增加反馈内容
     ObRoutePolicyType type = INVALID_POLICY;
-    if (has_readonly_zone_) {
+    if (COLUMN_STORE_ONLY == ctx.policy_type_) {
+      type = ctx.policy_type_;
+    } else if (has_readonly_zone_) {
       if (UNMERGE_FOLLOWER_FIRST == ctx.policy_type_) {
         type = READONLY_ZONE_FIRST;
       } else {

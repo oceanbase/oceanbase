@@ -3413,15 +3413,22 @@ int ObDDLService::set_raw_table_options(
 }
 
 int ObDDLService::check_locality_compatible_(
-    ObTenantSchema &schema)
+    ObTenantSchema &schema,
+    const bool for_create_tenant)
 {
   int ret = OB_SUCCESS;
   common::ObArray<share::ObZoneReplicaAttrSet> zone_locality;
+  const uint64_t tenant_id = for_create_tenant ? OB_SYS_TENANT_ID : schema.get_tenant_id();
   bool is_compatible_with_readonly_replica = false;
+  bool is_compatible_with_columnstore_replica = false;
   if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(
-              schema.get_tenant_id(), is_compatible_with_readonly_replica))) {
+                tenant_id, is_compatible_with_readonly_replica))) {
     LOG_WARN("fail to check compatible with readonly replica", KR(ret), K(schema));
-  } else if (is_compatible_with_readonly_replica) {
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_columnstore_replica(
+                       tenant_id, is_compatible_with_columnstore_replica))) {
+    LOG_WARN("fail to check compatible with columnstore replica", KR(ret), K(schema));
+  } else if (is_compatible_with_readonly_replica && is_compatible_with_columnstore_replica) {
+    // check pass
   } else if (OB_FAIL(schema.get_zone_replica_attr_array(zone_locality))) {
     LOG_WARN("fail to get locality from schema", K(ret), K(schema));
   } else {
@@ -3430,10 +3437,16 @@ int ObDDLService::check_locality_compatible_(
       if (this_set.zone_set_.count() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("zone set count unexpected", K(ret), "zone_set_cnt", this_set.zone_set_.count());
-      } else if (0 != this_set.get_readonly_replica_num()) {
+      } else if (! is_compatible_with_readonly_replica
+                 && 0 != this_set.get_readonly_replica_num()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can not create tenant with read-only replica below data version 4.2", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with R-replica in locality below data version 4.2");
+      } else if (! is_compatible_with_columnstore_replica
+                 && 0 != this_set.get_columnstore_replica_num()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can not create tenant with column-store replica below data version 4.3.3", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with C-replica in locality below data version 4.3.3");
       }
     }
   }
@@ -27298,7 +27311,7 @@ int ObDDLService::set_new_tenant_options(
     } else if (OB_FAIL(parse_and_set_create_tenant_new_locality_options(
             schema_guard, new_tenant_schema, resource_pool_names, zones_in_pool, zone_region_list))) {
       LOG_WARN("fail to parse and set new locality option", K(ret));
-    } else if (OB_FAIL(check_locality_compatible_(new_tenant_schema))) {
+    } else if (OB_FAIL(check_locality_compatible_(new_tenant_schema, false /*for_create_tenant*/))) {
       LOG_WARN("fail to check locality with data version", KR(ret), K(new_tenant_schema));
     } else if (OB_FAIL(check_alter_tenant_locality_type(
             schema_guard, orig_tenant_schema, new_tenant_schema, alter_locality_type))) {
@@ -30301,6 +30314,8 @@ int ObDDLService::check_create_tenant_locality(
     } else if (OB_FAIL(parse_and_set_create_tenant_new_locality_options(
             schema_guard, tenant_schema, pools, pool_zones, zone_region_list))) {
       LOG_WARN("fail to parse and set new locality option", K(ret));
+    } else if (OB_FAIL(check_locality_compatible_(tenant_schema, true /*for_create_tenant*/))) {
+      LOG_WARN("fail to check locality with data version", KR(ret), K(tenant_schema));
     } else if (OB_FAIL(check_pools_unit_num_enough_for_schema_locality(
             pools, schema_guard, tenant_schema))) {
       LOG_WARN("pools unit num is not enough for locality", K(ret));

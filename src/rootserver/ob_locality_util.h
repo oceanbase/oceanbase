@@ -35,7 +35,6 @@ namespace schema
 {
 struct ObZoneRegion;
 class ObSchemaGetterGuard;
-class ObLocality;
 class ObSimpleTableSchemaV2;
 class ObTablegroupSchema;
 class ObTenantSchema;
@@ -80,12 +79,6 @@ public:
       int64_t &pos);
   int get_zone_replica_attr_array(
       common::ObIArray<share::ObZoneReplicaAttrSet> &zone_replica_num_array);
-  int get_zone_replica_num(
-      const common::ObZone &zone,
-      share::ObReplicaNumSet &replica_num_set);
-  int get_zone_replica_num(
-      const common::ObZone &zone,
-      share::ObZoneReplicaAttrSet &zone_replica_num_set);
 public:
   static const int64_t ALL_SERVER_CNT = INT64_MAX;
 private:
@@ -94,24 +87,12 @@ private:
   static const int32_t LOGONLY_REPLICA = 1;
   static const int32_t READONLY_REPLICA = 2;
   static const int32_t ENCRYPTION_LOGONLY_REPLICA = 3;
-  static const int32_t REPLICA_TYPE_MAX = 4;
+  static const int32_t COLUMNSTORE_REPLICA = 4;
+  static const int32_t REPLICA_TYPE_MAX = 5;
 private:
   static const int64_t MAX_BUCKET_NUM = 2 * common::MAX_ZONE_NUM;
   static const int64_t INVALID_CURSOR = -1;
   static const int64_t INVALID_COUNT = -1;
-  // full replica
-  static const char *const FULL_REPLICA_STR;
-  static const char *const F_REPLICA_STR;
-  // logonly replica
-  static const char *const LOGONLY_REPLICA_STR;
-  static const char *const L_REPLICA_STR;
-  // readonly replica
-  static const char *const READONLY_REPLICA_STR;
-  static const char *const R_REPLICA_STR;
-  // encryption logonly replica
-  static const char *const ENCRYPTION_LOGONLY_REPLICA_STR;
-  static const char *const E_REPLICA_STR;
-  // others
   static const common::ObZone EVERY_ZONE;
   static const char *const ALL_SERVER_STR;
   static const char *const MEMSTORE_PERCENT_STR;
@@ -173,6 +154,12 @@ private:
                      : 0);
       return num;
     }
+    inline int64_t get_columnstore_replica_num() const {
+      int64_t num = (all_replica_attr_array_[COLUMNSTORE_REPLICA].count() > 0
+                     ? all_replica_attr_array_[COLUMNSTORE_REPLICA].at(0).num_
+                     : 0);
+      return num;
+    }
     inline const ReplicaAttrArray &get_full_replica_attr() const {
       return all_replica_attr_array_[FULL_REPLICA];
     }
@@ -184,6 +171,9 @@ private:
     }
     inline const ReplicaAttrArray &get_encryption_logonly_replica_attr() const {
       return all_replica_attr_array_[ENCRYPTION_LOGONLY_REPLICA];
+    }
+    inline const ReplicaAttrArray &get_columnstore_replica_attr() const {
+      return all_replica_attr_array_[COLUMNSTORE_REPLICA];
     }
     inline const common::ObIArray<common::ObZone> &get_zone_set() const { return zone_set_; }
   public:
@@ -199,7 +189,8 @@ private:
                  "full_replica_attr", all_replica_attr_array_[FULL_REPLICA],
                  "logonly_replica_attr", all_replica_attr_array_[LOGONLY_REPLICA],
                  "readonly_replica_attr", all_replica_attr_array_[READONLY_REPLICA],
-                 "encryption_logonly_replica_attr", all_replica_attr_array_[ENCRYPTION_LOGONLY_REPLICA]);
+                 "encryption_logonly_replica_attr", all_replica_attr_array_[ENCRYPTION_LOGONLY_REPLICA],
+                 "columnstore_replica_attr", all_replica_attr_array_[COLUMNSTORE_REPLICA]);
   private:
     bool specific_replica_need_format(
         const ReplicaTypeID replica_type) const;

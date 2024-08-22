@@ -3414,7 +3414,7 @@ public:
     CREATE_WITH_PALF,
   };
   ObCreateLSArg() : tenant_id_(OB_INVALID_TENANT_ID), id_(),
-                    replica_type_(REPLICA_TYPE_MAX),
+                    replica_type_(REPLICA_TYPE_INVALID),
                     replica_property_(), tenant_info_(),
                     create_scn_(),
                     compat_mode_(lib::Worker::CompatMode::INVALID),
@@ -4339,7 +4339,7 @@ public:
     : ls_id_(),
       server_addr_(),
       destination_addr_(),
-      replica_type_(common::REPLICA_TYPE_MAX),
+      replica_type_(common::REPLICA_TYPE_INVALID),
       tenant_id_(OB_INVALID_TENANT_ID),
       task_id_(),
       data_source_(),
@@ -4411,7 +4411,7 @@ private:
   bool is_add_valid_() const {
     return ls_id_.is_valid()
         && server_addr_.is_valid()
-        && REPLICA_TYPE_MAX != replica_type_
+        && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
         && is_valid_tenant_id(tenant_id_)
         && paxos_replica_num_ >= 0;
   }
@@ -4430,7 +4430,7 @@ private:
   bool is_modify_replica_valid_() const {
     return ls_id_.is_valid()
         && server_addr_.is_valid()
-        && REPLICA_TYPE_MAX != replica_type_
+        && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
         && is_valid_tenant_id(tenant_id_)
         && paxos_replica_num_ >= 0;
   }
@@ -6916,65 +6916,6 @@ public:
   common::ObAddr server_;
   int64_t version_;
   int64_t dangling_count_;
-};
-
-struct ObGetMemberListAndLeaderResult final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObGetMemberListAndLeaderResult()
-    : member_list_(),
-    leader_(),
-    self_(),
-    lower_list_(),
-    replica_type_(common::REPLICA_TYPE_MAX),
-    property_() {}
-  void reset();
-  inline bool is_valid() const {
-    return member_list_.count() > 0
-      && self_.is_valid()
-      && common::REPLICA_TYPE_MAX != replica_type_
-      && property_.is_valid();
-  }
-
-  int assign(const ObGetMemberListAndLeaderResult &other);
-  TO_STRING_KV(K_(member_list), K_(leader), K_(self), K_(lower_list), K_(replica_type), K_(property));
-
-  common::ObSEArray<common::ObMember, common::OB_MAX_MEMBER_NUMBER,
-      common::ObNullAllocator, false> member_list_; // copy won't fail
-  common::ObAddr leader_;
-  common::ObAddr self_;
-  common::ObSEArray<common::ObReplicaMember, common::OB_MAX_CHILD_MEMBER_NUMBER> lower_list_; //Cascaded downstream information
-  common::ObReplicaType replica_type_; //The type of copy actually stored in the local copy
-  common::ObReplicaProperty property_;
-};
-
-struct ObMemberListAndLeaderArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObMemberListAndLeaderArg()
-    : member_list_(),
-      leader_(),
-      self_(),
-      lower_list_(),
-      replica_type_(common::REPLICA_TYPE_MAX),
-      property_(),
-      role_(common::INVALID_ROLE) {}
-  void reset();
-  bool is_valid() const;
-  bool check_leader_is_valid() const;
-  int assign(const ObMemberListAndLeaderArg &other);
-  TO_STRING_KV(K_(member_list), K_(leader), K_(self), K_(lower_list),
-               K_(replica_type), K_(property), K_(role));
-
-  common::ObSArray<common::ObAddr> member_list_; // copy won't fail
-  common::ObAddr leader_;
-  common::ObAddr self_;
-  common::ObSArray<common::ObReplicaMember> lower_list_; //Cascaded downstream information
-  common::ObReplicaType replica_type_; //The type of copy actually stored in the local copy
-  common::ObReplicaProperty property_;
-  common::ObRole role_;
 };
 
 struct ObBatchGetRoleResult
@@ -9917,7 +9858,7 @@ public:
       unit_id_(common::OB_INVALID_ID),
       compat_mode_(lib::Worker::CompatMode::INVALID),
       unit_config_(),
-      replica_type_(common::ObReplicaType::REPLICA_TYPE_MAX),
+      replica_type_(common::ObReplicaType::REPLICA_TYPE_INVALID),
       if_not_grant_(false),
       is_delete_(false)
 #ifdef OB_BUILD_TDE_SECURITY

@@ -226,6 +226,7 @@ public:
     TASK_TYPE_START_REBUILD_TABLET_TASK = 70,
     TASK_TYPE_TABLET_REBUILD_TASK = 71,
     TASK_TYPE_FINISH_REBUILD_TABLET_TASK = 72,
+    TASK_TYPE_CHECK_CONVERT_TABLET = 73,
     TASK_TYPE_MAX,
   };
 
@@ -599,6 +600,7 @@ public:
   void init_dag_id();
   int set_dag_id(const ObDagId &dag_net_id);
   const ObDagId &get_dag_id() const { return dag_net_id_; }
+  void set_dag_net_id(const ObDagId &dag_net_id) { dag_net_id_ = dag_net_id; }
   void set_add_time() { add_time_ = ObTimeUtility::fast_current_time(); }
   int64_t get_add_time() const { return add_time_; }
   void set_start_time() { start_time_ = ObTimeUtility::fast_current_time(); }

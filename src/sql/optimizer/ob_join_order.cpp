@@ -1933,6 +1933,7 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
     LOG_WARN("unexpect null plan", K(ret));
   } else if (OB_FAIL(get_plan()->will_use_column_store(OB_INVALID_ID,
                                                        ref_id,
+                                                       ref_id,
                                                        index_back_will_use_column_store,
                                                        index_back_will_use_row_store))) {
     LOG_WARN("failed to check will use column store", K(ret));
@@ -2808,6 +2809,7 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
         LOG_WARN("failed to check will use skip scan", K(ret));
       } else if (OB_FAIL(get_plan()->will_use_column_store(table_id,
                                                           valid_index_ids.at(i),
+                                                          ref_table_id,
                                                           use_column_store,
                                                           use_row_store))) {
         LOG_WARN("failed to check will use column store", K(ret));
@@ -10891,6 +10893,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
           info.use_column_store_ = true;
         } else if (OB_FAIL(get_plan()->will_use_column_store(info.table_id_,
                                                             info.index_id_,
+                                                            info.ref_table_id_,
                                                             will_use_column_store,
                                                             will_use_row_store))) {
           LOG_WARN("failed to check will use column store", K(ret));

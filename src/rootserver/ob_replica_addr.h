@@ -35,7 +35,7 @@ struct ObReplicaAddr
         initial_leader_(false),
         addr_(),
         zone_(),
-        replica_type_(common::REPLICA_TYPE_MAX),
+        replica_type_(common::REPLICA_TYPE_INVALID),
         replica_property_() {}
   void reset() { *this = ObReplicaAddr(); }
   int64_t get_memstore_percent() const {return replica_property_.get_memstore_percent();}

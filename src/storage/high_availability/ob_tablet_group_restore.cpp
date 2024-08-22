@@ -136,7 +136,7 @@ ObTabletRestoreCtx::ObTabletRestoreCtx()
     action_(ObTabletRestoreAction::MAX),
     meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
-    replica_type_(ObReplicaType::REPLICA_TYPE_MAX),
+    replica_type_(ObReplicaType::REPLICA_TYPE_INVALID),
     ha_table_info_mgr_(nullptr),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
@@ -174,7 +174,7 @@ void ObTabletRestoreCtx::reset()
   action_ = ObTabletRestoreAction::MAX;
   meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
-  replica_type_ = ObReplicaType::REPLICA_TYPE_MAX;
+  replica_type_ = ObReplicaType::REPLICA_TYPE_INVALID;
   need_check_seq_ = false;
   ls_rebuild_seq_ = -1;
   status_ = ObCopyTabletStatus::MAX_STATUS;
