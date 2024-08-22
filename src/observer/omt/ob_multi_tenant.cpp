@@ -2469,17 +2469,6 @@ int ObMultiTenant::check_if_unit_id_exist(const uint64_t unit_id, bool &exist)
   return ret;
 }
 
-int obmysql::sql_nio_add_cgroup(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
-      nullptr != GCTX.cgroup_ctrl_ &&
-      OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-    ret = GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id, OBCG_SQL_NIO);
-  }
-  return ret;
-}
-
 int ObSrvNetworkFrame::reload_tenant_sql_thread_config(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;

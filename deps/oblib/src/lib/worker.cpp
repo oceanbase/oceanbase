@@ -44,18 +44,34 @@ int __attribute__((weak)) common_yield()
   return OB_SUCCESS;
 }
 
-}
+int __attribute__((weak)) SET_GROUP_ID(uint64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  THIS_WORKER.set_group_id_(group_id);
+  return ret;
 }
 
+int __attribute__((weak)) CONVERT_FUNCTION_TYPE_TO_GROUP_ID(const uint8_t function_type, uint64_t &group_id)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(function_type);
+  group_id = GET_GROUP_ID();
+  return ret;
+}
+
+}  // namespace lib
+}  // namespace oceanbase
 __thread Worker *Worker::self_;
 
 Worker::Worker()
-    : allocator_(nullptr),
+    : group_(nullptr),
+      allocator_(nullptr),
       st_current_priority_(0),
       session_(nullptr),
       cur_request_(nullptr),
       worker_level_(INT32_MAX),
       curr_request_level_(0),
+      is_th_worker_(false),
       group_id_(0),
       rpc_stat_srv_(nullptr),
       timeout_ts_(INT64_MAX),
