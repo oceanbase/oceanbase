@@ -8418,7 +8418,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
   UNUSED($3);
   UNUSED($4);
   UNUSED($5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 12,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 13,
                            NULL,    /* opt_materialized, not support*/
                            $7,    /* view name */
                            $8,    /* column list */
@@ -8427,7 +8427,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
                            $2,
 						               $12,   /* with option */
                            NULL,   /* force view opt */
-                           NULL, NULL, NULL, NULL
+                           NULL, NULL, NULL, NULL, NULL
 						   );
   dup_expr_string($11, result, @11.first_column, @11.last_column);
   $$->reserved_ = 0; /* is create view */
@@ -8439,7 +8439,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
   UNUSED($2);
   UNUSED($3);
   UNUSED($4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 12,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 13,
                            NULL,    /* opt_materialized */
                            $6,    /* view name */
                            $7,    /* column list */
@@ -8448,7 +8448,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
                            NULL,
                            $11,    /* with option */
                            NULL,   /* force view opt */
-                           NULL, NULL, NULL, NULL
+                           NULL, NULL, NULL, NULL, NULL
                );
   dup_expr_string($10, result, @10.first_column, @10.last_column);
   $$->reserved_ = 1; /* is alter view */
@@ -8467,7 +8467,7 @@ AS view_select_stmt opt_check_option
   ParseNode *table_options = NULL;
   merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
 
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 12,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 13,
                            NULL,    /* opt_materialized, not support*/
                            $4,    /* view name */
                            $5,    /* column list */
@@ -8479,9 +8479,34 @@ AS view_select_stmt opt_check_option
                            $8,  /* mview options */
                            $7, /* partition option */
                            table_options, /* table options */
-                           $1 /* hint */
+                           $1, /* hint */
+                           NULL /* column group */
 						   );
   dup_expr_string($10, result, @10.first_column, @10.last_column);
+  $$->reserved_ = 2; /* create materialized view */
+}
+| create_with_opt_hint MATERIALIZED VIEW view_name opt_mv_column_list opt_table_option_list opt_partition_option create_mview_opts with_column_group
+AS view_select_stmt opt_check_option
+{
+  ParseNode *table_options = NULL;
+  merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 13,
+                           NULL,    /* opt_materialized, not support*/
+                           $4,    /* view name */
+                           $5,    /* column list */
+                           NULL, /* table_id */
+                           $11,    /* select_stmt */
+                           NULL,
+						               $12,   /* with option */
+                           NULL,   /* force view opt */
+                           $8,  /* mview options */
+                           $7, /* partition option */
+                           table_options, /* table options */
+                           $1, /* hint */
+                           $9 /* column group */
+						   );
+  dup_expr_string($11, result, @11.first_column, @11.last_column);
   $$->reserved_ = 2; /* create materialized view */
 }
 ;
