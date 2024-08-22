@@ -14537,7 +14537,9 @@ int ObDMLResolver::resolve_transform_hint(const ParseNode &hint_node,
     case T_JOIN_FIRST_UNNEST:
     case T_NO_JOIN_FIRST_UNNEST:
     case T_DECORRELATE:
-    case T_NO_DECORRELATE: {
+    case T_NO_DECORRELATE:
+    case T_USE_LATE_MATERIALIZATION:
+    case T_NO_USE_LATE_MATERIALIZATION: {
       if (OB_FAIL(resolve_normal_transform_hint(hint_node, trans_hint))) {
         LOG_WARN("failed to resolve hint with qb name param.", K(ret));
       }
@@ -14637,8 +14639,6 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
       }
       break;
     }
-    case T_USE_LATE_MATERIALIZATION:
-    case T_NO_USE_LATE_MATERIALIZATION:
     case T_GBY_PUSHDOWN:
     case T_NO_GBY_PUSHDOWN:
     case T_USE_HASH_DISTINCT:

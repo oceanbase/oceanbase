@@ -50,6 +50,7 @@
 #include "sql/rewrite/ob_transform_conditional_aggr_coalesce.h"
 #include "sql/rewrite/ob_transform_mv_rewrite.h"
 #include "sql/rewrite/ob_transform_decorrelate.h"
+#include "sql/rewrite/ob_transform_late_materialization.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
 
@@ -458,6 +459,7 @@ int ObTransformerImpl::transform_rule_set_in_one_iteration(ObDMLStmt *&stmt,
     APPLY_RULE_IF_NEEDED(FASTMINMAX, ObTransformMinMax);
     APPLY_RULE_IF_NEEDED(PREDICATE_MOVE_AROUND, ObTransformPredicateMoveAround);
     APPLY_RULE_IF_NEEDED(OR_EXPANSION, ObTransformOrExpansion);
+    APPLY_RULE_IF_NEEDED(LATE_MATERIALIZATION, ObTransformLateMaterialization);
   }
   return ret;
 }

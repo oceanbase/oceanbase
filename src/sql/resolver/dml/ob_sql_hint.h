@@ -397,7 +397,7 @@ struct ObLogPlanHint
 {
   ObLogPlanHint() { reset(); }
   void reset();
-  int init_normal_hints(const ObIArray<ObHint*> &normal_hints);
+  int init_normal_hints(const ObIArray<ObHint*> &normal_hints, const ObQueryCtx &query_ctx);
 #ifndef OB_BUILD_SPM
   int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
