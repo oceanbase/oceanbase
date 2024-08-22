@@ -335,7 +335,11 @@ int ObAdminPrepareLogArchiveValidationTask::process()
   } else {
     switch (ctx_->validation_type_) {
     case ObAdminBackupValidationType::DATABASE_VALIDATION: {
-      if (OB_ISNULL(ctx_->log_archive_dest_) || OB_ISNULL(ctx_->data_backup_dest_)) {
+      if (!ctx_->processing_backup_piece_key_array_.empty()
+          && (OB_ISNULL(ctx_->log_archive_dest_) || OB_ISNULL(ctx_->data_backup_dest_))) {
+        // already have complement log
+        STORAGE_LOG(INFO, "already have complement log", K(ret));
+      } else if (OB_ISNULL(ctx_->log_archive_dest_) || OB_ISNULL(ctx_->data_backup_dest_)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "log_archive_dest or data_backup_dest is null", K(ret));
       } else if (OB_FAIL(check_format_file_())) {
@@ -425,10 +429,10 @@ int ObAdminPrepareLogArchiveValidationTask::collect_backup_piece_()
     ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
     if (ctx_->backup_piece_key_array_.count()) {
       for (int64_t j = 0; OB_SUCC(ret) && j < ctx_->backup_piece_key_array_.count(); ++j) {
-        const share::ObPieceKey &backup_piece_key = ctx_->backup_piece_key_array_.at(j);
         bool filtered = false;
         for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_array.count(); ++i) {
-          if (backup_piece_key == backup_piece_array.at(i)) {
+          ObAdminPieceKey backup_piece_key = backup_piece_array.at(i);
+          if (backup_piece_key == ctx_->backup_piece_key_array_.at(j)) {
             backup_piece_dest.reset();
             if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(
                     *ctx_->log_archive_dest_, backup_piece_key.dest_id_, backup_piece_key.round_id_,
@@ -459,12 +463,13 @@ int ObAdminPrepareLogArchiveValidationTask::collect_backup_piece_()
         }
         if (!filtered) {
           ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "designated backup piece found", K(ret), K(backup_piece_key));
+          STORAGE_LOG(WARN, "designated backup piece found", K(ret), "backup_piece_key",
+                      ctx_->backup_piece_key_array_.at(j));
         }
       }
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_array.count(); ++i) {
-        const share::ObPieceKey &backup_piece_key = backup_piece_array.at(i);
+        const ObAdminPieceKey &backup_piece_key = backup_piece_array.at(i);
         backup_piece_dest.reset();
         if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(
                 *ctx_->log_archive_dest_, backup_piece_key.dest_id_, backup_piece_key.round_id_,
@@ -501,7 +506,7 @@ int ObAdminPrepareLogArchiveValidationTask::retrieve_backup_piece_()
   void *alc_ptr = nullptr;
   share::ObArchiveStore backup_piece_store;
   ObSinglePieceDesc backup_piece_info;
-  share::ObPieceKey backup_piece_key;
+  ObAdminPieceKey backup_piece_key;
   ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -558,7 +563,8 @@ void ObAdminPrepareLogArchiveValidationTask::post_process_(int ret)
       printf("Succeed found OB backup piece: ");
       FOREACH(iter, ctx_->processing_backup_piece_key_array_)
       {
-        printf("d%ldr%ldp%ld ", iter->dest_id_, iter->round_id_, iter->piece_id_);
+        printf("b%ldd%ldr%ldp%ld ", iter->backup_set_id_, iter->dest_id_, iter->round_id_,
+               iter->piece_id_);
       }
       printf("\n");
     } else {
@@ -598,7 +604,7 @@ int ObAdminBackupPieceValidationDag::fill_info_param(compaction::ObIBasicInfoPar
                                                      ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
-  share::ObPieceKey backup_piece_key;
+  ObAdminPieceKey backup_piece_key;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (OB_FAIL(ctx_->processing_backup_piece_key_array_.at(id_, backup_piece_key))) {
@@ -621,12 +627,12 @@ int ObAdminBackupPieceValidationDag::fill_dag_key(char *buf, const int64_t buf_l
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "get invalid args", K(ret), KP(buf), K(buf_len));
   } else {
-    share::ObPieceKey backup_piece_key;
+    ObAdminPieceKey backup_piece_key;
     if (OB_FAIL(ctx_->processing_backup_piece_key_array_.at(id_, backup_piece_key))) {
       STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(id_));
-    } else if (OB_FAIL(databuff_printf(buf, buf_len, "piece_id: d%ldr%ldp%ld",
-                                       backup_piece_key.dest_id_, backup_piece_key.round_id_,
-                                       backup_piece_key.piece_id_))) {
+    } else if (OB_FAIL(databuff_printf(buf, buf_len, "piece_id: b%ldd%ldr%ldp%ld",
+                                       backup_piece_key.backup_set_id_, backup_piece_key.dest_id_,
+                                       backup_piece_key.round_id_, backup_piece_key.piece_id_))) {
       STORAGE_LOG(WARN, "failed to fill dag key", K(ret));
     }
   }
@@ -769,7 +775,7 @@ int ObAdminBackupPieceMetaValidationTask::check_backup_piece_info_()
 {
   int ret = OB_SUCCESS;
   void *alc_ptr = nullptr;
-  share::ObPieceKey backup_piece_key;
+  ObAdminPieceKey backup_piece_key;
   share::ObBackupPath full_path;
   ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
   share::ObArchiveStore *backup_piece_store = nullptr;
@@ -895,7 +901,7 @@ int ObAdminBackupPieceMetaValidationTask::collect_and_check_piece_ls_info_()
 {
   int ret = OB_SUCCESS;
   void *alc_ptr = nullptr;
-  share::ObPieceKey backup_piece_key;
+  ObAdminPieceKey backup_piece_key;
   share::ObBackupPath full_path;
   ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
   share::ObArchiveStore *backup_piece_store = nullptr;
@@ -993,7 +999,7 @@ int ObAdminBackupPieceMetaValidationTask::collect_and_check_piece_ls_info_()
   return ret;
 }
 int ObAdminBackupPieceMetaValidationTask::inner_collect_active_piece_ls_info_(
-    const share::ObPieceKey &backup_piece_key,
+    const ObAdminPieceKey &backup_piece_key,
     const ObAdminBackupPieceValidationAttr &backup_piece_attr)
 {
   int ret = OB_SUCCESS;
@@ -1060,7 +1066,7 @@ int ObAdminBackupPieceMetaValidationTask::inner_collect_active_piece_ls_info_(
 int ObAdminBackupPieceMetaValidationTask::collect_and_check_piece_ls_onefile_length_()
 {
   int ret = OB_SUCCESS;
-  share::ObPieceKey backup_piece_key;
+  ObAdminPieceKey backup_piece_key;
   share::ObBackupPath full_path;
   ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
   share::ObArchiveStore *backup_piece_store = nullptr;
@@ -1133,7 +1139,7 @@ void ObAdminBackupPieceMetaValidationTask::post_process_(int ret)
   } else if (ctx_->processing_backup_piece_key_array_.empty()) {
     STORAGE_LOG(INFO, "backup piece key is all empty", K(ret), K(task_id_));
   } else {
-    share::ObPieceKey backup_piece_key;
+    ObAdminPieceKey backup_piece_key;
     ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(ctx_->processing_backup_piece_key_array_.at(task_id_, backup_piece_key))) {
@@ -1145,15 +1151,17 @@ void ObAdminBackupPieceMetaValidationTask::post_process_(int ret)
       STORAGE_LOG(WARN, "backup piece attr is null", K(tmp_ret));
     } else if (OB_SUCC(ret)) {
       printf(CLEAR_LINE);
-      printf("%s Backup piece d%ldr%ldp%ld passed meta info validation\n",
+      printf("%s Backup piece b%ldd%ldr%ldp%ld passed meta info validation\n",
              backup_piece_attr->backup_piece_info_desc_->piece_.is_frozen() ? "Frozen" : "Active",
+             ctx_->processing_backup_piece_key_array_.at(task_id_).backup_set_id_,
              ctx_->processing_backup_piece_key_array_.at(task_id_).dest_id_,
              ctx_->processing_backup_piece_key_array_.at(task_id_).round_id_,
              ctx_->processing_backup_piece_key_array_.at(task_id_).piece_id_);
     } else {
       printf(CLEAR_LINE);
-      printf("%s Backup piece d%ldr%ldp%ld has corrupted\n",
+      printf("%s Backup piece b%ldd%ldr%ldp%ld has corrupted\n",
              backup_piece_attr->backup_piece_info_desc_->piece_.is_frozen() ? "Frozen" : "Active",
+             ctx_->processing_backup_piece_key_array_.at(task_id_).backup_set_id_,
              ctx_->processing_backup_piece_key_array_.at(task_id_).dest_id_,
              ctx_->processing_backup_piece_key_array_.at(task_id_).round_id_,
              ctx_->processing_backup_piece_key_array_.at(task_id_).piece_id_);
@@ -1225,7 +1233,7 @@ int ObAdminBackupPieceLogIterationTask::generate_next_task(ObITask *&next_task)
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get piece validation dag", K(ret));
   } else if (0 == task_id_) {
-    share::ObPieceKey backup_piece_key;
+    ObAdminPieceKey backup_piece_key;
     ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
     if (OB_FAIL(ctx_->processing_backup_piece_key_array_.at(piece_validation_dag->get_id(),
                                                             backup_piece_key))) {
@@ -1282,7 +1290,7 @@ int ObAdminBackupPieceLogIterationTask::process()
 int ObAdminBackupPieceLogIterationTask::iterate_log_()
 {
   int ret = OB_SUCCESS;
-  share::ObPieceKey backup_piece_key;
+  ObAdminPieceKey backup_piece_key;
   ObAdminBackupPieceValidationDag *piece_validation_dag = nullptr;
   share::ObBackupPath full_path;
   share::ObLSID ls_id;
@@ -1325,6 +1333,9 @@ int ObAdminBackupPieceLogIterationTask::iterate_log_()
   } else if (FALSE_IT(ls_id = lsn_range.first)) {
   } else if (OB_FAIL(ctx_->get_ls_attr(backup_piece_key, ls_id, ls_attr))) {
     STORAGE_LOG(WARN, "failed to get ls attr", K(ret), K(backup_piece_key), K(ls_id));
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(
+                 backup_piece_store->get_backup_dest(), ls_id, full_path))) {
+    STORAGE_LOG(WARN, "failed to get piece ls log dir path", K(ret), K(backup_piece_key), K(ls_id));
   } else {
     char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
     MEMSET(storage_info_str, 0, sizeof(storage_info_str));
@@ -1415,22 +1426,12 @@ int ObAdminBackupPieceLogIterationTask::iterate_log_()
         }
       }
     } else {
-      char buf[1024];
-      if (OB_FAIL(databuff_printf(buf, sizeof(buf) - 1,
-                                  "Backup Piece in dest_id: %ld, round_id: %ld, piece_id: %ld, "
-                                  "ls_id: %ld",
-                                  backup_piece_attr->backup_piece_info_desc_->piece_.key_.dest_id_,
-                                  backup_piece_attr->backup_piece_info_desc_->piece_.key_.round_id_,
-                                  backup_piece_attr->backup_piece_info_desc_->piece_.key_.piece_id_,
-                                  ls_id.id()))) {
-        STORAGE_LOG(WARN, "failed to print buf", K(ret));
-      } else if (OB_FAIL(ctx_->go_abort(buf, "log piece is corrupted or not consistent"))) {
-        STORAGE_LOG(WARN, "failed to go abort", K(ret));
-      }
+      STORAGE_LOG(WARN, "iterate log failed", K(ret), K(backup_piece_key));
+      ctx_->go_abort(full_path.get_ptr(), "log piece is corrupted or not continuious");
     }
   }
   if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
-    ctx_->go_abort("iterate log failed", "log piece is corrupted or not consistent");
+    ctx_->go_abort("iterate log failed", "log piece is corrupted or not continuious");
   }
   return ret;
 }
@@ -1568,11 +1569,81 @@ int ObAdminFinishLogArchiveValidationTask::process()
   } else if (OB_ISNULL(ctx_) || ctx_->aborted_) {
     ret = OB_CANCELED;
     STORAGE_LOG(WARN, "aborted", K(ret));
+  } else if (OB_FAIL(cross_check_complement_log_coverage_())) {
+    STORAGE_LOG(WARN, "cross check complement log coverage", K(ret));
   } else if (OB_FAIL(cross_check_scn_continuity_())) {
     STORAGE_LOG(WARN, "cross check scn continuity", K(ret));
   } else {
     STORAGE_LOG(INFO, "succeed to process ObAdminFinishLogArchiveValidationTask", K(ret),
                 K(task_id_));
+  }
+  return ret;
+}
+int ObAdminFinishLogArchiveValidationTask::cross_check_complement_log_coverage_()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not init", K(ret));
+  } else if (ctx_->validation_type_ != ObAdminBackupValidationType::DATABASE_VALIDATION) {
+    // no need to cross check
+    ret = OB_SUCCESS;
+  } else {
+    // for each log piece have backup_set_id, do check
+    FOREACH_X(backup_piece_map_iter, ctx_->backup_piece_map_, OB_SUCC(ret))
+    {
+      if (OB_ISNULL(backup_piece_map_iter->second)
+          || OB_ISNULL(backup_piece_map_iter->second->backup_piece_info_desc_)
+          || !backup_piece_map_iter->second->backup_piece_info_desc_->piece_.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "backup_piece_attr is null", K(ret));
+      } else if (backup_piece_map_iter->first.backup_set_id_ != 0) {
+        // do check
+        int64_t backup_set_id = backup_piece_map_iter->first.backup_set_id_;
+        ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
+        share::SCN backup_piece_start_scn;
+        share::SCN backup_piece_end_scn;
+        share::SCN backup_set_start_replay_scn;
+        share::SCN backup_set_min_restore_scn;
+        if (OB_FAIL(ctx_->get_backup_set_attr(backup_set_id, backup_set_attr))) {
+          STORAGE_LOG(WARN, "failed to get backup set attr", K(ret));
+        } else if (OB_ISNULL(backup_set_attr)
+                   || OB_ISNULL(backup_set_attr->backup_set_info_desc_)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "backup_set_attr is null", K(ret));
+        } else if (FALSE_IT(backup_set_start_replay_scn
+                            = backup_set_attr->backup_set_info_desc_->backup_set_file_
+                                  .start_replay_scn_)) {
+        } else if (FALSE_IT(backup_set_min_restore_scn = backup_set_attr->backup_set_info_desc_
+                                                             ->backup_set_file_.min_restore_scn_)) {
+        } else if (backup_piece_map_iter->second->backup_piece_info_desc_->piece_.is_frozen()) {
+          backup_piece_start_scn
+              = backup_piece_map_iter->second->backup_piece_info_desc_->piece_.start_scn_;
+          backup_piece_end_scn
+              = backup_piece_map_iter->second->backup_piece_info_desc_->piece_.end_scn_;
+        } else if (backup_piece_map_iter->second->backup_piece_info_desc_->piece_.is_active()) {
+          backup_piece_start_scn
+              = backup_piece_map_iter->second->backup_piece_info_desc_->piece_.start_scn_;
+          backup_piece_end_scn
+              = backup_piece_map_iter->second->backup_piece_info_desc_->piece_.checkpoint_scn_;
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN, "unexpected piece status", K(ret));
+        }
+        if (OB_SUCC(ret)
+            && (backup_piece_start_scn > backup_set_start_replay_scn
+                || backup_piece_end_scn < backup_set_min_restore_scn)) {
+          ret = OB_ERR_UNEXPECTED;
+          STORAGE_LOG(WARN,
+                      "backup_piece_start_scn is smaller than backup_set_start_replay_scn or "
+                      "backup_piece_end_scn is larger than backup_set_min_restore_scn",
+                      K(ret), K(backup_piece_start_scn), K(backup_piece_end_scn),
+                      K(backup_set_start_replay_scn), K(backup_set_min_restore_scn));
+          ctx_->go_abort("cross check complement log coverage failed",
+                         "given complement piece log cannot cover the backup set");
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1593,48 +1664,49 @@ int ObAdminFinishLogArchiveValidationTask::cross_check_scn_continuity_()
       STORAGE_LOG(WARN, "failed to get backup set scn range", K(ret));
     } else if (OB_FAIL(inner_get_backup_piece_scn_range_(backup_piece_have_scn_range))) {
       STORAGE_LOG(WARN, "failed to get backup piece scn range", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_required_scn_range.count(); ++i) {
-      share::SCN left_scn = backup_set_required_scn_range[i].first;
-      share::SCN right_scn = backup_set_required_scn_range[i].second;
-      int64_t left_idx
-          = std::upper_bound(backup_piece_have_scn_range.begin(), backup_piece_have_scn_range.end(),
-                             std::make_pair(left_scn, share::SCN()))
-            - backup_piece_have_scn_range.begin();
-      if (left_idx >= backup_piece_have_scn_range.count()) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "left_idx is out of range", K(ret));
-      } else {
-        share::SCN piece_start = backup_piece_have_scn_range[left_idx].first;
-        if (piece_start < left_scn) {
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < backup_set_required_scn_range.count(); ++i) {
+        share::SCN left_scn = backup_set_required_scn_range[i].first;
+        share::SCN right_scn = backup_set_required_scn_range[i].second;
+        int64_t left_idx = std::upper_bound(backup_piece_have_scn_range.begin(),
+                                            backup_piece_have_scn_range.end(),
+                                            std::make_pair(left_scn, share::SCN()))
+                           - backup_piece_have_scn_range.begin();
+        if (left_idx >= backup_piece_have_scn_range.count()) {
           ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "piece_start is smaller than left_scn", K(ret));
-        }
-        share::SCN piece_end = backup_piece_have_scn_range[left_idx].second;
-        for (int64_t j = left_idx + 1; OB_SUCC(ret) && j < backup_piece_have_scn_range.count();
-             ++j) {
-          if (piece_end >= backup_piece_have_scn_range[j].first) {
-            piece_end = backup_piece_have_scn_range[j].second;
-          } else {
-            // discontinous
-            break;
+          STORAGE_LOG(WARN, "left_idx is out of range", K(ret));
+        } else {
+          share::SCN piece_start = backup_piece_have_scn_range[left_idx].first;
+          if (piece_start < left_scn) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "piece_start is smaller than left_scn", K(ret));
           }
-          if (piece_end >= right_scn) {
-            break;
+          share::SCN piece_end = backup_piece_have_scn_range[left_idx].second;
+          for (int64_t j = left_idx + 1; OB_SUCC(ret) && j < backup_piece_have_scn_range.count();
+               ++j) {
+            if (piece_end >= backup_piece_have_scn_range[j].first) {
+              piece_end = backup_piece_have_scn_range[j].second;
+            } else {
+              // discontinous
+              break;
+            }
+            if (piece_end >= right_scn) {
+              break;
+            }
           }
-        }
-        if (piece_end < right_scn) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "piece_end is smaller than right_scn", K(ret));
+          if (piece_end < right_scn) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(WARN, "piece_end is smaller than right_scn", K(ret));
+          }
+          if (OB_FAIL(ret)) {
+            STORAGE_LOG(WARN, "cross check scn continuity failed", K(ret), K(left_scn),
+                        K(right_scn), K(piece_start), K(piece_end));
+          }
         }
         if (OB_FAIL(ret)) {
-          STORAGE_LOG(WARN, "cross check scn continuity failed", K(ret), K(left_scn), K(right_scn),
-                      K(piece_start), K(piece_end));
+          ctx_->go_abort("cross check scn continuity failed",
+                         "given piece log cannot cover all backup set");
         }
-      }
-      if (OB_FAIL(ret)) {
-        ctx_->go_abort("cross check scn continuity failed",
-                       "given piece log cannot cover all backup set");
       }
     }
   }
@@ -2510,6 +2582,9 @@ int ObAdminBackupSetMetaValidationTask::check_backup_set_info_()
     ctx_->go_abort(full_path.get_ptr(), "Not Support OB backup version");
     STORAGE_LOG(WARN, "tenant compatible is not current version", K(ret),
                 K(backup_set_info_desc->backup_set_file_.tenant_compatible_));
+  } else if (OB_FAIL(inner_schedule_for_complement_log_(backup_set_store->get_backup_set_dest(),
+                                                        *backup_set_info_desc))) {
+    STORAGE_LOG(WARN, "failed to schedule for complement log", K(ret));
   } else {
     backup_set_attr->backup_set_info_desc_ = backup_set_info_desc;
     backup_set_info_desc = nullptr;
@@ -2521,6 +2596,81 @@ int ObAdminBackupSetMetaValidationTask::check_backup_set_info_()
   }
   if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
     ctx_->go_abort(full_path.get_ptr(), "backup set info file not correct");
+  }
+  return ret;
+}
+int ObAdminBackupSetMetaValidationTask::inner_schedule_for_complement_log_(
+    const share::ObBackupDest &backup_set_dest,
+    const storage::ObExternBackupSetInfoDesc &backup_set_info_desc)
+{
+  int ret = OB_SUCCESS;
+  void *alc_ptr = nullptr;
+  share::ObBackupPath full_path;
+  share::ObBackupDest log_archive_dest;
+  share::ObArchiveStore backup_piece_store;
+  ObArray<share::ObPieceKey> backup_piece_array;
+  ObBackupDest backup_piece_dest;
+  bool is_empty_dir = true;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "not init", K(ret));
+  } /*
+  TODO: plus_archivelog is not correctly persisted, not rely on it temporarily
+  else if (!backup_set_info_desc.backup_set_file_.plus_archivelog_) {
+    STORAGE_LOG(INFO, "no plus archive_log, just skip", K(ret));
+  }*/
+  else if (OB_FAIL(full_path.init(backup_set_dest.get_root_path()))) {
+    STORAGE_LOG(WARN, "failed to init full path", K(ret));
+  } else if (OB_FAIL(full_path.join("complement_log", ObBackupFileSuffix::NONE))) {
+    STORAGE_LOG(WARN, "failed to join complement log", K(ret), K(full_path));
+  } else if (OB_FAIL(ObAdminBackupValidationUtil::check_dir_exist(
+                 full_path.get_ptr(), backup_set_dest.get_storage_info(), is_empty_dir))) {
+    STORAGE_LOG(WARN, "failed to check dir exist", K(ret), K(full_path));
+  } else if (is_empty_dir) {
+    STORAGE_LOG(INFO, "no plus archive_log, just skip", K(ret));
+  } else if (OB_FAIL(
+                 log_archive_dest.set(full_path.get_ptr(), backup_set_dest.get_storage_info()))) {
+    STORAGE_LOG(WARN, "failed to set log archive dest", K(ret));
+  } else if (OB_FAIL(backup_piece_store.init(log_archive_dest))) {
+    STORAGE_LOG(WARN, "failed to init backup piece store", K(ret));
+  } else if (OB_FAIL(backup_piece_store.get_all_piece_keys(backup_piece_array))) {
+    STORAGE_LOG(WARN, "failed to get backup piece array", K(ret));
+  } else if (backup_piece_array.empty()) {
+    ret = OB_INVALID_BACKUP_DEST;
+    STORAGE_LOG(ERROR, "no backup piece found", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_array.count(); ++i) {
+      ObAdminPieceKey backup_piece_key = backup_piece_array.at(i);
+      backup_piece_key.backup_set_id_ = backup_set_info_desc.backup_set_file_.backup_set_id_;
+      ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
+      backup_piece_dest.reset();
+      full_path.reset();
+      if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(log_archive_dest, backup_piece_key.dest_id_,
+                                                        backup_piece_key.round_id_,
+                                                        backup_piece_key.piece_id_, full_path))) {
+        STORAGE_LOG(WARN, "failed to get backup piece dir path", K(ret));
+      } else if (OB_FAIL(backup_piece_dest.set(full_path.get_ptr(),
+                                               log_archive_dest.get_storage_info()))) {
+        STORAGE_LOG(WARN, "failed to set backup piece dest", K(ret));
+      } else if (OB_FAIL(ctx_->add_backup_piece(backup_piece_key))) {
+        STORAGE_LOG(WARN, "failed to add backup piece key", K(ret), K(backup_piece_key));
+      } else if (OB_FAIL(ctx_->get_backup_piece_attr(backup_piece_key, backup_piece_attr))) {
+        STORAGE_LOG(WARN, "failed to get backup piece attr", K(ret), K(backup_piece_key));
+      } else if (OB_ISNULL(backup_piece_attr)) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "backup piece attr is null", K(ret));
+      } else if (OB_ISNULL(alc_ptr = ctx_->allocator_.alloc(sizeof(share::ObArchiveStore)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        STORAGE_LOG(WARN, "failed to alloc backup piece store", K(ret));
+      } else if (FALSE_IT(backup_piece_attr->backup_piece_store_
+                          = new (alc_ptr) share::ObArchiveStore())) {
+      } else if (OB_FAIL(backup_piece_attr->backup_piece_store_->init(backup_piece_dest))) {
+        STORAGE_LOG(WARN, "failed to init backup piece store", K(ret), K(backup_piece_key));
+      } else {
+        ctx_->validation_type_ = ObAdminBackupValidationType::DATABASE_VALIDATION;
+        STORAGE_LOG(INFO, "succeed to init backup piece store", K(ret), K(backup_piece_key));
+      }
+    }
   }
   return ret;
 }
@@ -3669,12 +3819,11 @@ void ObAdminBackupSetMetaValidationTask::post_process_(int ret)
         STORAGE_LOG(WARN, "failed to get backup set store", K(ret), K(backup_set_id));
       } else if (backup_set_attr->backup_set_info_desc_->backup_set_file_.backup_type_
                      .is_full_backup()) {
-        printf("Backup set %ld_%s passed meta info validation\n", backup_set_id, "full");
+        printf("Full Backup set %ld passed meta info validation\n", backup_set_id);
       } else if (backup_set_attr->backup_set_info_desc_->backup_set_file_.backup_type_
                      .is_inc_backup()) {
-        printf("Backup set %ld_%s passed meta info validation\n", backup_set_id, "inc");
+        printf("Inc Backup set %ld passed meta info validation\n", backup_set_id);
       }
-
     } else {
       printf(CLEAR_LINE);
       printf("Backup set %ld has corrupted meta info\n",
@@ -4503,6 +4652,8 @@ int ObAdminMacroBlockDataValidationTask::check_macro_block_data_()
         } else if (OB_TMP_FAIL(ctx_->go_abort(msg, "Dependent Backup Set is Not Given"))) {
           STORAGE_LOG(WARN, "failed to go abort", K(tmp_ret));
         }
+      } else if (blocksstable::CHECK_LEVEL_NONE == ctx_->mb_check_level_) {
+        STORAGE_LOG(DEBUG, "skip check macro block data", K(ret), K(task_id_));
       } else if (OB_FAIL(ObAdminBackupValidationUtil::read_macro_block_data(
                      backup_set_attr->backup_set_store_->get_backup_set_dest(), macro_index,
                      macro_block_id_pair_iter->second, data_buffer, ctx_))) {

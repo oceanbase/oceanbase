@@ -378,6 +378,9 @@ public:
 
 private:
   int check_backup_set_info_();
+  int inner_schedule_for_complement_log_(
+      const share::ObBackupDest &backup_set_dest,
+      const storage::ObExternBackupSetInfoDesc &backup_set_info_desc);
   int check_placeholder_();
   int check_locality_file_();
   int check_diagnose_file_();
@@ -549,7 +552,7 @@ private:
   int check_backup_piece_info_();
   int collect_and_check_piece_ls_info_();
   int inner_collect_active_piece_ls_info_(
-      const share::ObPieceKey &backup_piece_key,
+      const ObAdminPieceKey &backup_piece_key,
       const ObAdminBackupPieceValidationAttr &backup_piece_attr);
   int collect_and_check_piece_ls_onefile_length_();
   void post_process_(int ret);
@@ -611,6 +614,7 @@ private:
       common::ObArray<std::pair<share::SCN, share::SCN>> &scn_range);
   int inner_get_backup_piece_scn_range_(
       common::ObArray<std::pair<share::SCN, share::SCN>> &scn_range);
+  int cross_check_complement_log_coverage_();
 
 private:
   bool is_inited_;

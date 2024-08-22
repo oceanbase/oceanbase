@@ -15,6 +15,15 @@ namespace oceanbase
 {
 namespace tools
 {
+uint64_t ObAdminPieceKey::hash() const
+{
+  uint64_t hash_val = 0;
+  hash_val = murmurhash(&backup_set_id_, sizeof(backup_set_id_), hash_val);
+  hash_val = murmurhash(&dest_id_, sizeof(dest_id_), hash_val);
+  hash_val = murmurhash(&round_id_, sizeof(round_id_), hash_val);
+  hash_val = murmurhash(&piece_id_, sizeof(piece_id_), hash_val);
+  return hash_val;
+}
 ObAdminBackupTabletValidationAttr::ObAdminBackupTabletValidationAttr()
     : ls_id_(), data_type_(), sstable_meta_index_(nullptr), tablet_meta_index_(nullptr),
       macro_block_id_mappings_meta_index_(nullptr), id_mappings_meta_(nullptr)
@@ -125,7 +134,8 @@ int ObAdminBackupSetValidationAttr::init()
   return ret;
 }
 int ObAdminBackupSetValidationAttr::fetch_next_tablet_group(
-    common::ObArray<common::ObArray<ObAdminBackupTabletValidationAttr *>> &tablet_group, int64_t &scheduled_cnt)
+    common::ObArray<common::ObArray<ObAdminBackupTabletValidationAttr *>> &tablet_group,
+    int64_t &scheduled_cnt)
 {
   ObSpinLockGuard guard(lock_);
   tablet_group.reset();
@@ -144,7 +154,8 @@ int ObAdminBackupSetValidationAttr::fetch_next_tablet_group(
         if (OB_ISNULL(ls_map_iter->second)) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "ls map iter is null", K(ret));
-        } else if (ls_map_iter->second->ls_type_ != ObAdminBackupLSValidationAttr::ObAdminLSType::NORMAL) {
+        } else if (ls_map_iter->second->ls_type_
+                   != ObAdminBackupLSValidationAttr::ObAdminLSType::NORMAL) {
           STORAGE_LOG(INFO, "abnormal ls detected, maybe post-construct, skip inner tablet",
                       K(ls_map_iter->second->ls_meta_package_));
         } else {
@@ -218,7 +229,9 @@ bool ObAdminBackupSetValidationAttr::is_all_tablet_done()
   return ls_inner_tablet_done_ && minor_tablet_pos_ >= minor_tablet_id_.count()
          && major_tablet_pos_ >= major_tablet_id_.count();
 }
-ObAdminBackupPieceValidationAttr::ObAdminBackupPieceValidationAttr() : backup_piece_store_(nullptr) {}
+ObAdminBackupPieceValidationAttr::ObAdminBackupPieceValidationAttr() : backup_piece_store_(nullptr)
+{
+}
 ObAdminBackupPieceValidationAttr::~ObAdminBackupPieceValidationAttr()
 {
   if (OB_NOT_NULL(backup_piece_store_)) {
@@ -399,7 +412,8 @@ void ObAdminBackupValidationCtx::print_data_backup_validation_status()
       printf("%c Total Tablets(Scheduled/Succeed): %ld/%ld, Total Marco "
              "Blocks(Scheduled/Succeed): %ld/%ld",
              states_icon_[states_icon_pos_], global_stat_.get_scheduled_tablet_count(),
-             global_stat_.get_succeed_tablet_count(), global_stat_.get_scheduled_macro_block_count(),
+             global_stat_.get_succeed_tablet_count(),
+             global_stat_.get_scheduled_macro_block_count(),
              global_stat_.get_succeed_macro_block_count());
     }
   } else {
@@ -463,8 +477,8 @@ int ObAdminBackupValidationCtx::add_backup_set(int64_t backup_set_id)
   }
   return ret;
 }
-int ObAdminBackupValidationCtx::get_backup_set_attr(int64_t backup_set_id,
-                                                    ObAdminBackupSetValidationAttr *&backup_set_attr)
+int ObAdminBackupValidationCtx::get_backup_set_attr(
+    int64_t backup_set_id, ObAdminBackupSetValidationAttr *&backup_set_attr)
 {
   obsys::ObRLockGuard guard(lock_);
   int ret = OB_SUCCESS;
@@ -725,7 +739,7 @@ int ObAdminBackupValidationCtx::get_tablet_attr(int64_t backup_set_id, const sha
 
   return ret;
 }
-int ObAdminBackupValidationCtx::add_backup_piece(const share::ObPieceKey &backup_piece_key)
+int ObAdminBackupValidationCtx::add_backup_piece(const ObAdminPieceKey &backup_piece_key)
 {
   obsys::ObWLockGuard guard(lock_);
   int ret = OB_SUCCESS;
@@ -759,8 +773,8 @@ int ObAdminBackupValidationCtx::add_backup_piece(const share::ObPieceKey &backup
   }
   return ret;
 }
-int ObAdminBackupValidationCtx::get_backup_piece_attr(const share::ObPieceKey &backup_piece_key,
-                                                      ObAdminBackupPieceValidationAttr *&backup_piece_attr)
+int ObAdminBackupValidationCtx::get_backup_piece_attr(
+    const ObAdminPieceKey &backup_piece_key, ObAdminBackupPieceValidationAttr *&backup_piece_attr)
 {
   obsys::ObRLockGuard guard(lock_);
   int ret = OB_SUCCESS;
@@ -775,7 +789,7 @@ int ObAdminBackupValidationCtx::get_backup_piece_attr(const share::ObPieceKey &b
   }
   return ret;
 }
-int ObAdminBackupValidationCtx::add_ls(const share::ObPieceKey &backup_piece_key,
+int ObAdminBackupValidationCtx::add_ls(const ObAdminPieceKey &backup_piece_key,
                                        const share::ObLSID &ls_id)
 {
   obsys::ObWLockGuard guard(lock_);
@@ -808,8 +822,9 @@ int ObAdminBackupValidationCtx::add_ls(const share::ObPieceKey &backup_piece_key
   }
   return ret;
 }
-int ObAdminBackupValidationCtx::get_ls_attr(const share::ObPieceKey &backup_piece_key,
-                                            const share::ObLSID &ls_id, ObAdminBackupLSValidationAttr *&ls_attr)
+int ObAdminBackupValidationCtx::get_ls_attr(const ObAdminPieceKey &backup_piece_key,
+                                            const share::ObLSID &ls_id,
+                                            ObAdminBackupLSValidationAttr *&ls_attr)
 {
   obsys::ObRLockGuard guard(lock_);
   int ret = OB_SUCCESS;

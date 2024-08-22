@@ -63,17 +63,17 @@ int ObAdminBackupValidationExecutor::execute(int argc, char *argv[])
     STORAGE_LOG(WARN, "failed to init", K(ret));
   } else if (OB_FAIL(parse_cmd_(argc, argv))) {
     STORAGE_LOG(WARN, "failed to parse cmd", K(ret));
-  } else if (validation_type_ != ObAdminBackupValidationType::BACKUPPIECE_VALIDATION
+  } else if (ctx_->validation_type_ != ObAdminBackupValidationType::BACKUPPIECE_VALIDATION
              && OB_FAIL(schedule_data_backup_validation_())) {
     STORAGE_LOG(WARN, "failed to scheudle data backup validation", K(ret));
-  } else if (validation_type_ != ObAdminBackupValidationType::BACKUPPIECE_VALIDATION
+  } else if (ctx_->validation_type_ != ObAdminBackupValidationType::BACKUPPIECE_VALIDATION
              && OB_FAIL(wait_data_backup_validation_())) {
     STORAGE_LOG(WARN, "failed to wait data backup validation", K(ret));
     exit(1);
-  } else if (validation_type_ != ObAdminBackupValidationType::BACKUPSET_VALIDATION
+  } else if (ctx_->validation_type_ != ObAdminBackupValidationType::BACKUPSET_VALIDATION
              && OB_FAIL(schedule_log_archive_validation_())) {
     STORAGE_LOG(WARN, "failed to scheudle log archive validation", K(ret));
-  } else if (validation_type_ != ObAdminBackupValidationType::BACKUPSET_VALIDATION
+  } else if (ctx_->validation_type_ != ObAdminBackupValidationType::BACKUPSET_VALIDATION
              && OB_FAIL(wait_log_archive_validation_())) {
     STORAGE_LOG(WARN, "failed to wait log archive validation", K(ret));
     exit(1);
@@ -293,7 +293,7 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
       } else {
         FOREACH_X(str, str_array, OB_SUCC(ret))
         {
-          share::ObPieceKey backup_piece_key;
+          ObAdminPieceKey backup_piece_key;
           backup_piece_key.reset();
           if (sscanf(str->ptr(), "d%ldr%ldp%ld", &backup_piece_key.dest_id_,
                      &backup_piece_key.round_id_, &backup_piece_key.piece_id_)
@@ -576,10 +576,10 @@ int ObAdminBackupValidationExecutor::wait_log_archive_validation_()
     }
     ctx_->print_log_archive_validation_status();
     if (ctx_->aborted_) {
-      printf("\nData Archive Validation \033[1;31mFailed✘\033[0m");
+      printf("\nLog Archive Validation \033[1;31mFailed✘\033[0m");
       ret = OB_ERR_UNEXPECTED;
     } else {
-      printf("\nData Archive Validation \033[1;32mPassed✔\033[0m");
+      printf("\nLog Archive Validation \033[1;32mPassed✔\033[0m");
       ret = OB_SUCCESS;
     }
     printf("\nTime cost: %ld ms\n", (end_time - start_time) / 1000);

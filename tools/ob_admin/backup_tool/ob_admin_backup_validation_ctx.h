@@ -19,6 +19,101 @@ namespace oceanbase
 {
 namespace tools
 {
+struct ObAdminPieceKey final
+{
+  int64_t backup_set_id_;
+  int64_t dest_id_;
+  int64_t round_id_;
+  int64_t piece_id_;
+
+  ObAdminPieceKey()
+  {
+    backup_set_id_ = 0;
+    dest_id_ = 0;
+    round_id_ = 0;
+    piece_id_ = 0;
+  }
+  ObAdminPieceKey(const int64_t dest_id, const int64_t round_id, const int64_t piece_id)
+      : backup_set_id_(0), dest_id_(dest_id), round_id_(round_id), piece_id_(piece_id)
+  {
+  }
+  ObAdminPieceKey(const int64_t backup_set_id, const int64_t dest_id, const int64_t round_id,
+                  const int64_t piece_id)
+      : backup_set_id_(backup_set_id), dest_id_(dest_id), round_id_(round_id), piece_id_(piece_id)
+  {
+  }
+  ObAdminPieceKey(const share::ObPieceKey &other)
+      : backup_set_id_(0), dest_id_(other.dest_id_), round_id_(other.round_id_),
+        piece_id_(other.piece_id_)
+  {
+  }
+  ObAdminPieceKey(const ObAdminPieceKey &other)
+      : backup_set_id_(other.backup_set_id_), dest_id_(other.dest_id_), round_id_(other.round_id_),
+        piece_id_(other.piece_id_)
+  {
+  }
+
+  uint64_t hash() const;
+
+  int hash(uint64_t &hash_val) const
+  {
+    hash_val = hash();
+    return OB_SUCCESS;
+  }
+  void reset()
+  {
+    backup_set_id_ = 0;
+    dest_id_ = 0;
+    round_id_ = 0;
+    piece_id_ = 0;
+  }
+  share::ObPieceKey to_piece_key() const
+  {
+    share::ObPieceKey piece_key;
+    piece_key.dest_id_ = dest_id_;
+    piece_key.round_id_ = round_id_;
+    piece_key.piece_id_ = piece_id_;
+    return piece_key;
+  }
+  void operator=(const ObAdminPieceKey &other)
+  {
+    backup_set_id_ = other.backup_set_id_;
+    dest_id_ = other.dest_id_;
+    round_id_ = other.round_id_;
+    piece_id_ = other.piece_id_;
+  }
+
+  void operator=(const share::ObPieceKey &other)
+  {
+    backup_set_id_ = 0;
+    dest_id_ = other.dest_id_;
+    round_id_ = other.round_id_;
+    piece_id_ = other.piece_id_;
+  }
+
+  bool operator==(const ObAdminPieceKey &other) const
+  {
+    return backup_set_id_ == other.backup_set_id_ && dest_id_ == other.dest_id_
+           && round_id_ == other.round_id_ && piece_id_ == other.piece_id_;
+  }
+
+  bool operator!=(const ObAdminPieceKey &other) const { return !(*this == other); }
+
+  bool operator<(const ObAdminPieceKey &other) const
+  {
+    bool ret = false;
+    if (backup_set_id_ < other.backup_set_id_) {
+      ret = true;
+    } else if (round_id_ < other.round_id_) {
+      ret = true;
+    } else if (round_id_ == other.round_id_ && piece_id_ < other.piece_id_) {
+      ret = true;
+    }
+    return ret;
+  }
+
+  TO_STRING_KV(K_(backup_set_id), K_(dest_id), K_(round_id), K_(piece_id));
+};
 // lock free
 struct ObAdminBackupValidationStat final
 {
@@ -200,11 +295,11 @@ struct ObAdminBackupValidationCtx final
   int get_tablet_attr(int64_t backup_set_id, const share::ObLSID &ls_id,
                       const share::ObBackupDataType &data_type, const common::ObTabletID &tablet_id,
                       ObAdminBackupTabletValidationAttr *&tablet_attr);
-  int add_backup_piece(const share::ObPieceKey &backup_piece_key);
-  int get_backup_piece_attr(const share::ObPieceKey &backup_piece_key,
+  int add_backup_piece(const ObAdminPieceKey &backup_piece_key);
+  int get_backup_piece_attr(const ObAdminPieceKey &backup_piece_key,
                             ObAdminBackupPieceValidationAttr *&backup_piece_attr);
-  int add_ls(const share::ObPieceKey &backup_piece_key, const share::ObLSID &ls_id);
-  int get_ls_attr(const share::ObPieceKey &backup_piece_key, const share::ObLSID &ls_id,
+  int add_ls(const ObAdminPieceKey &backup_piece_key, const share::ObLSID &ls_id);
+  int get_ls_attr(const ObAdminPieceKey &backup_piece_key, const share::ObLSID &ls_id,
                   ObAdminBackupLSValidationAttr *&ls_attr);
   // fill before validation
   ObAdminBackupValidationType validation_type_;
@@ -212,15 +307,15 @@ struct ObAdminBackupValidationCtx final
   share::ObBackupDest *data_backup_dest_;
   common::ObArray<share::ObBackupDest *> backup_piece_path_array_;
   common::ObArray<share::ObBackupDest *> backup_set_path_array_;
-  common::ObArray<share::ObPieceKey> backup_piece_key_array_;
+  common::ObArray<ObAdminPieceKey> backup_piece_key_array_;
   common::ObArray<int64_t> backup_set_id_array_;
   blocksstable::ObMacroBlockCheckLevel mb_check_level_;
   // fill during validation
   bool aborted_;
   common::hash::ObHashMap<int64_t, ObAdminBackupSetValidationAttr *> backup_set_map_;
-  common::hash::ObHashMap<share::ObPieceKey, ObAdminBackupPieceValidationAttr *> backup_piece_map_;
+  common::hash::ObHashMap<ObAdminPieceKey, ObAdminBackupPieceValidationAttr *> backup_piece_map_;
   common::ObArray<int64_t> processing_backup_set_id_array_;
-  common::ObArray<share::ObPieceKey> processing_backup_piece_key_array_;
+  common::ObArray<ObAdminPieceKey> processing_backup_piece_key_array_;
   // TODO: give a sql_proxy
   common::ObMySQLProxy *sql_proxy_;
   ObAdminBackupValidationStat global_stat_;
