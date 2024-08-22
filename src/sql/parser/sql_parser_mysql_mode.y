@@ -549,6 +549,7 @@ END_P SET_VAR DELIMITER
 %type <node> transfer_partition_stmt transfer_partition_clause part_info cancel_transfer_partition_clause
 %type <node> geometry_collection
 %type <node> mock_stmt
+%type <node> service_name_stmt service_op
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
 %type <node> opt_table_list opt_repair_mode opt_repair_option_list repair_option repair_option_list opt_checksum_option
@@ -727,6 +728,7 @@ stmt:
   | clone_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
   | mock_stmt {$$ = $1; check_question_mark($$, result);}
+  | service_name_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -21158,11 +21160,47 @@ DAY
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
 ;
+/*===========================================================
+ *
+ * 租户 SERVICE_NAME 管理
+ *
+ *===========================================================*/
+service_name_stmt:
+alter_with_opt_hint SYSTEM service_op SERVICE relation_name opt_tenant_name
+{
+  (void)($1);
+   malloc_non_terminal_node($$, result->malloc_pool_, T_SERVICE_NAME, 3,
+                           $3,                   /* service operation */
+                           $5,                   /* service name */
+                           $6);                  /* tenant name */
+}
+;
+service_op :
+CREATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+| DELETE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+}
+| START
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 3;
+}
+| STOP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 4;
+}
+;
 
 /*===========================================================
 *
 *  JSON TABLE
-*
 *============================================================*/
 
 json_table_expr:

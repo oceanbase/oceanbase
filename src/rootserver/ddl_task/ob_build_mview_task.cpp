@@ -484,9 +484,12 @@ int ObBuildMViewTask::enable_mview()
     ObSchemaGetterGuard schema_guard;
     const ObTableSchema *mview_schema = nullptr;
     bool mview_table_exist = false;
-    if (GCTX.is_standby_cluster()) {
+    bool is_primary = false;
+    if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_primary(tenant_id_, is_primary))) {
+      LOG_WARN("fail to execute table_check_if_tenant_role_is_primary", KR(ret), K(tenant_id_));
+    } else if (!is_primary) {
       ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("create mview in slave cluster is not allowed", KR(ret), K(mview_table_id_));
+      LOG_WARN("create mview in non-primary tenant is not allowed", KR(ret), K(tenant_id_), K(is_primary), K(mview_table_id_));
     } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(schema_guard.check_table_exist(tenant_id_, mview_table_id_, mview_table_exist))) {

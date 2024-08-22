@@ -1056,6 +1056,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObCloneTenantStmt, ObCloneTenantExecutor);
         break;
       }
+      case stmt::T_SERVICE_NAME: {
+        DEFINE_EXECUTE_CMD(ObServiceNameStmt, ObServiceNameExecutor);
+        break;
+      }
       case stmt::T_ALTER_SYSTEM_RESET_PARAMETER: {
         DEFINE_EXECUTE_CMD(ObResetConfigStmt, ObResetConfigExecutor);
         break;

@@ -270,6 +270,7 @@ public:
   virtual int post_upgrade() override;
 private:
   int post_upgrade_for_external_table_flag();
+  int post_upgrade_for_service_name();
   int post_upgrade_for_optimizer_stats();
 };
 /* =========== special upgrade processor end   ============= */

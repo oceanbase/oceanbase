@@ -234,17 +234,18 @@ int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_ses
         LOG_WARN("failed to handle_session_exception", KR(ret));
       }
     }
-
     //处理主备库切换的场景，生效过程中发生切换的话，直接返回用户session_killed;
     //后续有备库来处理该索引；
     if (OB_FAIL(ret)) {
     } else if (OB_SYS_TENANT_ID == tenant_id) {
       //no need to process sys tenant
-    } else if (OB_FAIL(handle_switchover())) {
-      if (OB_SESSION_KILLED != ret) {
-        LOG_WARN("fail to handle switchover status", KR(ret));
-      } else {
-        LOG_WARN("fail to add index while swithover", KR(ret));
+    } else {
+      bool is_standby = false;
+      if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+        LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+      } else if (is_standby) {
+        ret = OB_SESSION_KILLED;
+        LOG_WARN("create index while switchoverd, kill session", KR(ret));
       }
     }
 
@@ -265,16 +266,6 @@ int ObCreateIndexExecutor::sync_check_index_status(sql::ObSQLSessionInfo &my_ses
 int ObCreateIndexExecutor::handle_session_exception(ObSQLSessionInfo &session)
 {
   return session.check_session_status();
-}
-
-int ObCreateIndexExecutor::handle_switchover()
-{
-  int ret = OB_SUCCESS;
-  if (GCTX.is_standby_cluster()) {
-    ret = OB_SESSION_KILLED;
-    LOG_INFO("create index while switchoverd, kill session", KR(ret));
-  }
-  return ret;
 }
 
 ObDropIndexExecutor::ObDropIndexExecutor()

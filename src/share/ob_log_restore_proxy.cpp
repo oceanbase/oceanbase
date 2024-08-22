@@ -31,6 +31,7 @@
 #include "share/config/ob_server_config.h"
 #include "logservice/palf/palf_options.h"
 #include "share/oracle_errno.h"
+#include "share/backup/ob_log_restore_struct.h"
 #include <mysql.h>
 
 namespace oceanbase
@@ -262,6 +263,32 @@ int ObLogRestoreProxyUtil::init(const uint64_t tenant_id,
 
   if (OB_FAIL(ret)) {
     destroy();
+  }
+  return ret;
+}
+int ObLogRestoreProxyUtil::init_with_service_attr(
+    const uint64_t tenant_id,
+    const ObRestoreSourceServiceAttr *service_attr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(service_attr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("service_attr is null", KR(ret), KP(service_attr));
+  } else if (OB_UNLIKELY(!service_attr->is_valid() || !is_valid_tenant_id(tenant_id))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("service attr or tenant id is invalid", KR(ret), KPC(service_attr), K(tenant_id));
+  } else {
+    const char *db_name = service_attr->user_.mode_ == common::ObCompatibilityMode::MYSQL_MODE ? OB_SYS_DATABASE_NAME : OB_ORA_SYS_SCHEMA_NAME;
+    ObSqlString user;
+    char passwd[OB_MAX_PASSWORD_LENGTH + 1] = {0};
+    if (OB_FAIL(service_attr->get_password(passwd, sizeof(passwd)))) {
+      LOG_WARN("fail to get password", KR(ret), K(service_attr));
+    } else if (OB_FAIL(service_attr->get_user_str_(user))) {
+      LOG_WARN("fail to get user str", KR(ret), K(service_attr));
+    } else if (OB_FAIL(init(tenant_id, service_attr->addr_,
+        user.ptr(), passwd, db_name))) {
+      LOG_WARN("fail to init proxy_util", KR(ret), KPC(service_attr));
+    }
   }
   return ret;
 }
@@ -640,11 +667,12 @@ bool ObLogRestoreProxyUtil::is_user_changed_(const char *user_name, const char *
   return changed;
 }
 
-int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantStatus &status)
+int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantStatus &status, ObTenantSwitchoverStatus &switchover_status)
 {
   int ret = OB_SUCCESS;
   const char *TENANT_ROLE = "TENANT_ROLE";
   const char *TENANT_STATUS = "STATUS";
+  const char *SWITCHOVER_STATUS = "SWITCHOVER_STATUS";
   common::ObMySQLProxy *proxy = &sql_proxy_;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
@@ -653,8 +681,8 @@ int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantS
       SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = NULL;
         common::ObSqlString sql;
-        const char *GET_TENANT_INFO_SQL = "SELECT %s, %s FROM %s";
-        if (OB_FAIL(sql.append_fmt(GET_TENANT_INFO_SQL, TENANT_ROLE, TENANT_STATUS, OB_DBA_OB_TENANTS_TNAME))) {
+        const char *GET_TENANT_INFO_SQL = "SELECT %s, %s, %s FROM %s";
+        if (OB_FAIL(sql.append_fmt(GET_TENANT_INFO_SQL, TENANT_ROLE, TENANT_STATUS, SWITCHOVER_STATUS, OB_DBA_OB_TENANTS_TNAME))) {
           LOG_WARN("append_fmt failed");
         } else if (OB_FAIL(proxy->read(res, sql.ptr()))) {
           LOG_WARN("excute sql failed", K(sql));
@@ -664,13 +692,20 @@ int ObLogRestoreProxyUtil::get_tenant_info(ObTenantRole &role, schema::ObTenantS
         } else if (OB_FAIL(result->next())) {
           LOG_WARN("next failed");
         } else {
+          ObString switchover_status_str;
           ObString status_str;
           ObString role_str;
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, TENANT_ROLE, role_str);
           EXTRACT_VARCHAR_FIELD_MYSQL(*result, TENANT_STATUS, status_str);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, SWITCHOVER_STATUS, switchover_status_str);
+          ObTenantSwitchoverStatus so_status(switchover_status_str);
+          switchover_status = so_status;
           if (OB_SUCC(ret)) {
             if (OB_FAIL(schema::get_tenant_status(status_str, status))) {
               LOG_WARN("get tenant status failed");
+            } else if (OB_UNLIKELY(!switchover_status.is_valid())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("invalid switchover status", KR(ret), K(switchover_status_str), K(so_status), K(switchover_status));
             } else {
               role = ObTenantRole(role_str.ptr());
             }

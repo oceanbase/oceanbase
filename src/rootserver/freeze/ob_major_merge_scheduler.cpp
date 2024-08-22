@@ -844,7 +844,7 @@ void ObMajorMergeScheduler::check_merge_interval_time(const bool is_merging)
                                                                false, tenant_info))) {
               LOG_WARN("fail to load tenant info", KR(ret), K_(tenant_id));
             } else if (tenant_info.is_standby()
-                       && (tenant_info.get_standby_scn() >= tenant_info.get_recovery_until_scn())) {
+                       && (tenant_info.get_readable_scn() >= tenant_info.get_recovery_until_scn())) {
               LOG_INFO("standby tenant do not sync from primary tenant any more, and do not"
                        " major freeze any more");
             } else {

@@ -265,6 +265,7 @@ public:
   RPC_S(PR5 cancel_gather_stats, OB_CANCEL_GATHER_STATS, (ObCancelGatherStatsArg));
   RPC_S(PR5 force_set_tenant_log_disk, OB_LOG_FORCE_SET_TENANT_LOG_DISK, (obrpc::ObForceSetTenantLogDiskArg));
   RPC_S(PR5 dump_server_usage, OB_FORCE_DUMP_SERVER_USAGE, (obrpc::ObDumpServerUsageRequest), obrpc::ObDumpServerUsageResult);
+  RPC_AP(PR5 refresh_service_name, OB_REFRESH_SERVICE_NAME, (obrpc::ObRefreshServiceNameArg), obrpc::ObRefreshServiceNameRes);
   RPC_AP(PR5 get_tenant_logical_resource, OB_CAL_STANDBY_TENANT_PHY_RESOURCE, (obrpc::ObGetTenantResArg), obrpc::ObTenantLogicalRes);
   RPC_S(PR5 phy_res_calculate_by_unit, OB_CAL_UNIT_PHY_RESOURCE, (obrpc::Int64), share::ObMinPhyResourceResult);
   RPC_S(PR5 rpc_reverse_keepalive, OB_RPC_REVERSE_KEEPALIVE, (obrpc::ObRpcReverseKeepaliveArg), obrpc::ObRpcReverseKeepaliveResp);

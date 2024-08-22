@@ -812,10 +812,6 @@ int ObBaseUpgradeProcessor::check_inner_stat() const
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid processor status",
              KR(ret), K_(data_version), K_(tenant_id), K_(mode));
-  } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id_) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("run upgrade job for non-sys tenant in standby cluster is not supported",
-             KR(ret), K_(tenant_id));
   } else if (OB_ISNULL(check_stop_provider_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("check_stop_provider is null", KR(ret));
@@ -1462,6 +1458,8 @@ int ObUpgradeFor4330Processor::post_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_external_table_flag())) {
     LOG_WARN("fail to alter log external table flag", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_service_name())) {
+    LOG_WARN("post upgrade for service name failed", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_optimizer_stats())) {
     LOG_WARN("fail to upgrade optimizer stats", KR(ret));
   }
@@ -1482,6 +1480,28 @@ int ObUpgradeFor4330Processor::post_upgrade_for_external_table_flag()
   return ret;
 }
 
+int ObUpgradeFor4330Processor::post_upgrade_for_service_name()
+{
+  int ret = OB_SUCCESS;
+  int64_t affected_rows = 0;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("error unexpected", KR(ret), KP(sql_proxy_));
+  } else if (!is_meta_tenant(tenant_id_)) {
+    LOG_INFO("not meta tenant, skip", K(tenant_id_));
+  } else {
+    ObSqlString sql;
+    uint64_t user_tenant_id = gen_user_tenant_id(tenant_id_);
+    if (OB_FAIL(sql.assign_fmt("INSERT IGNORE INTO %s (tenant_id, name, value) VALUES (%lu, '%s', 0)",
+        OB_ALL_SERVICE_EPOCH_TNAME, user_tenant_id, ObServiceEpochProxy::SERVICE_NAME_EPOCH))) {
+      LOG_WARN("fail to assign sql assign", KR(ret));
+    } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute sql", KR(ret), K(sql));
+    } else {}
+  }
+  FLOG_INFO("insert service name epoch", KR(ret), K(tenant_id_), K(affected_rows));
+  return ret;
+}
 int ObUpgradeFor4330Processor::post_upgrade_for_optimizer_stats()
 {
   int ret = OB_SUCCESS;
@@ -1519,6 +1539,5 @@ int ObUpgradeFor4330Processor::post_upgrade_for_optimizer_stats()
 
 /* =========== 4330 upgrade processor end ============= */
 
-/* =========== special upgrade processor end   ============= */
 } // end share
 } // end oceanbase
