@@ -124,9 +124,7 @@ void LSFetchCtx::reset()
   progress_.reset();
   start_parameters_.reset();
   fetch_info_.reset();
-  //svr_list_need_update_ = true;
-  //TODO tmp test
-  svr_list_need_update_ = false;
+  svr_list_need_update_ = true;
   start_lsn_locate_req_.reset();
   end_lsn_locate_req_.reset();
   FetchTaskListNode::reset();
@@ -802,7 +800,9 @@ bool LSFetchCtx::need_update_svr_list()
   if (is_direct_fetching_mode(fetching_mode_)) {
     bool_ret = false;
   } else if(is_integrated_fetching_mode(fetching_mode_)) {
-    if (OB_FAIL(get_log_route_service_(log_route_service))) {
+    if (svr_list_need_update_) {
+      bool_ret = true;
+    } else if (OB_FAIL(get_log_route_service_(log_route_service))) {
       LOG_ERROR("get_log_route_service_ failed", KR(ret));
     } else if (OB_FAIL(log_route_service->get_server_count(tls_id_.get_tenant_id(), tls_id_.get_ls_id(),
         avail_svr_count))) {
@@ -811,12 +811,13 @@ bool LSFetchCtx::need_update_svr_list()
       } else {
         bool_ret = true;
       }
-    } else {
       // If no server is available, or if a proactive update is requested, an update is required
-      // if (avail_svr_count <= 0 || svr_list_need_update_) {
-      if (avail_svr_count <= 0) {
-        bool_ret = true;
-      }
+    } else if (avail_svr_count <= 0) {
+      bool_ret = true;
+    }
+
+    if (bool_ret) {
+      mark_svr_list_update_flag(false); // will request svr_list, mark svr_list_need_update_ to false
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -868,6 +869,7 @@ int LSFetchCtx::update_svr_list(const bool need_print_info)
       LOG_ERROR("ObLogRouteService async_server_query_req failed", KR(ret), K(tls_id_));
     }
   } else {
+    mark_svr_list_update_flag(false);
     LOG_DEBUG("async_server_query_req succ", K_(tls_id));
   }
 
