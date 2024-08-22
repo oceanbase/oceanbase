@@ -27,13 +27,6 @@ ObAdminBackupValidationExecutor::ObAdminBackupValidationExecutor(
     ObAdminBackupValidationType validation_type)
     : is_inited_(false), validation_type_(validation_type), ctx_(nullptr), allocator_("ObAdmBakVal")
 {
-  // Currently only support 4.2.1
-  if (4 != OB_VSN_MAJOR(DATA_CURRENT_VERSION) || 2 != OB_VSN_MINOR(DATA_CURRENT_VERSION)
-      || 1 != OB_VSN_MAJOR_PATCH(DATA_CURRENT_VERSION)) {
-    int ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "only support 4.2.1", K(ret));
-    exit(1);
-  }
 }
 ObAdminBackupValidationExecutor::~ObAdminBackupValidationExecutor()
 {
@@ -47,8 +40,8 @@ ObAdminBackupValidationExecutor::~ObAdminBackupValidationExecutor()
 int ObAdminBackupValidationExecutor::execute(int argc, char *argv[])
 {
   int ret = OB_SUCCESS;
-  lib::set_memory_limit(16 * 1024 * 1024 * 1024LL);
-  lib::set_tenant_memory_limit(OB_SERVER_TENANT_ID, 16 * 1024 * 1024 * 1024LL);
+  lib::set_memory_limit(4 * 1024 * 1024 * 1024LL);
+  lib::set_tenant_memory_limit(OB_SERVER_TENANT_ID, 4 * 1024 * 1024 * 1024LL);
 
 #ifdef OB_BUILD_TDE_SECURITY
   // The root_key is set to ensure the successful parsing of backup_dest,
@@ -69,14 +62,12 @@ int ObAdminBackupValidationExecutor::execute(int argc, char *argv[])
   } else if (ctx_->validation_type_ != ObAdminBackupValidationType::BACKUPPIECE_VALIDATION
              && OB_FAIL(wait_data_backup_validation_())) {
     STORAGE_LOG(WARN, "failed to wait data backup validation", K(ret));
-    exit(1);
   } else if (ctx_->validation_type_ != ObAdminBackupValidationType::BACKUPSET_VALIDATION
              && OB_FAIL(schedule_log_archive_validation_())) {
     STORAGE_LOG(WARN, "failed to scheudle log archive validation", K(ret));
   } else if (ctx_->validation_type_ != ObAdminBackupValidationType::BACKUPSET_VALIDATION
              && OB_FAIL(wait_log_archive_validation_())) {
     STORAGE_LOG(WARN, "failed to wait log archive validation", K(ret));
-    exit(1);
   }
 
   return ret;
@@ -144,258 +135,249 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
   common::ObArray<common::ObString> str_array;
 
   while (OB_SUCC(ret) && -1 != (opt = getopt_long(argc, argv, "", longopts, &index))) {
-    switch (opt) {
-    case 0: {
+    if (OB_ISNULL(optarg)) {
       print_usage_();
-      exit(0);
-    }
-    case 1: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      } else if (ObAdminBackupValidationType::BACKUPSET_VALIDATION == validation_type_
-                 || OB_NOT_NULL(backuppiece_path_str) || OB_NOT_NULL(backuppiece_key_str)) {
+      ret = OB_INVALID_ARGUMENT;
+      STORAGE_LOG(WARN, "invalid argument", K(ret));
+    } else {
+      switch (opt) {
+      case 0: {
         print_usage_();
-        exit(1);
-      } else if (OB_ISNULL(log_archive_dest_str
-                           = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (FALSE_IT(ctx_->log_archive_dest_ = new (alc_ptr) share::ObBackupDest())) {
-      } else if (OB_FAIL(databuff_printf(log_archive_dest_str, common::OB_MAX_URI_LENGTH, "%s",
-                                         optarg))) {
-        STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
-      } else if (OB_FAIL(ctx_->log_archive_dest_->set(log_archive_dest_str))) {
-        STORAGE_LOG(WARN, "failed to set log archive dest", K(ret));
+        exit(0);
       }
-      break;
-    }
-    case 2: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      } else if (ObAdminBackupValidationType::BACKUPPIECE_VALIDATION == validation_type_
-                 || OB_NOT_NULL(backupset_path_str) || OB_NOT_NULL(backupset_id_str)) {
-        print_usage_();
-        exit(1);
-      } else if (OB_ISNULL(data_backup_dest_str
-                           = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (FALSE_IT(ctx_->data_backup_dest_ = new (alc_ptr) share::ObBackupDest())) {
-      } else if (OB_FAIL(databuff_printf(data_backup_dest_str, common::OB_MAX_URI_LENGTH, "%s",
-                                         optarg))) {
-        STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
-      } else if (OB_FAIL(ctx_->data_backup_dest_->set(data_backup_dest_str))) {
-        STORAGE_LOG(WARN, "failed to set data backup dest", K(ret));
+      case 1: {
+        if (ObAdminBackupValidationType::BACKUPSET_VALIDATION == validation_type_
+            || OB_NOT_NULL(backuppiece_path_str) || OB_NOT_NULL(backuppiece_key_str)) {
+          print_usage_();
+          exit(1);
+        } else if (OB_ISNULL(log_archive_dest_str = static_cast<char *>(
+                                 tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+        } else if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+        } else if (FALSE_IT(ctx_->log_archive_dest_ = new (alc_ptr) share::ObBackupDest())) {
+        } else if (OB_FAIL(databuff_printf(log_archive_dest_str, common::OB_MAX_URI_LENGTH, "%s",
+                                           optarg))) {
+          STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
+        } else if (OB_FAIL(ctx_->log_archive_dest_->set(log_archive_dest_str))) {
+          STORAGE_LOG(WARN, "failed to set log archive dest", K(ret));
+        }
+        break;
       }
-      break;
-    }
-    case 3: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      } else if (ObAdminBackupValidationType::BACKUPSET_VALIDATION == validation_type_
-                 || OB_NOT_NULL(log_archive_dest_str) || OB_NOT_NULL(backuppiece_key_str)) {
-        print_usage_();
-        exit(1);
-      } else if (OB_ISNULL(backuppiece_path_str = static_cast<char *>(
-                               tmp_allocator.alloc(common::OB_MAX_URI_LENGTH * 128)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (OB_FAIL(databuff_printf(backuppiece_path_str, common::OB_MAX_URI_LENGTH * 128,
-                                         "%s", optarg))) {
-        STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
-      } else if (FALSE_IT(str_array.reset())) {
-      } else if (OB_FAIL(ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
-                     backuppiece_path_str, str_array))) {
-        STORAGE_LOG(WARN, "failed to convert_comma_spearated_string_to_array", K(ret));
-      } else {
-        FOREACH_X(str, str_array, OB_SUCC(ret))
-        {
-          share::ObBackupDest *backup_piece_path = nullptr;
-          if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-          } else if (FALSE_IT(backup_piece_path = new (alc_ptr) share::ObBackupDest())) {
-          } else if (OB_FAIL(backup_piece_path->set(*str))) {
-            STORAGE_LOG(WARN, "failed to set backup set path", K(ret));
-          } else if (OB_FAIL(ctx_->backup_piece_path_array_.push_back(backup_piece_path))) {
-            STORAGE_LOG(WARN, "failed to push back backup_piece_path", K(ret));
+      case 2: {
+        if (ObAdminBackupValidationType::BACKUPPIECE_VALIDATION == validation_type_
+            || OB_NOT_NULL(backupset_path_str) || OB_NOT_NULL(backupset_id_str)) {
+          print_usage_();
+          exit(1);
+        } else if (OB_ISNULL(data_backup_dest_str = static_cast<char *>(
+                                 tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+        } else if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+        } else if (FALSE_IT(ctx_->data_backup_dest_ = new (alc_ptr) share::ObBackupDest())) {
+        } else if (OB_FAIL(databuff_printf(data_backup_dest_str, common::OB_MAX_URI_LENGTH, "%s",
+                                           optarg))) {
+          STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
+        } else if (OB_FAIL(ctx_->data_backup_dest_->set(data_backup_dest_str))) {
+          STORAGE_LOG(WARN, "failed to set data backup dest", K(ret));
+        }
+        break;
+      }
+      case 3: {
+        if (ObAdminBackupValidationType::BACKUPSET_VALIDATION == validation_type_
+            || OB_NOT_NULL(log_archive_dest_str) || OB_NOT_NULL(backuppiece_key_str)) {
+          print_usage_();
+          exit(1);
+        } else if (OB_ISNULL(backuppiece_path_str = static_cast<char *>(
+                                 tmp_allocator.alloc(common::OB_MAX_URI_LENGTH * 128)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+        } else if (OB_FAIL(databuff_printf(backuppiece_path_str, common::OB_MAX_URI_LENGTH * 128,
+                                           "%s", optarg))) {
+          STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
+        } else if (FALSE_IT(str_array.reset())) {
+        } else if (OB_FAIL(ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
+                       backuppiece_path_str, str_array))) {
+          STORAGE_LOG(WARN, "failed to convert_comma_spearated_string_to_array", K(ret));
+        } else {
+          FOREACH_X(str, str_array, OB_SUCC(ret))
+          {
+            share::ObBackupDest *backup_piece_path = nullptr;
+            if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+            } else if (FALSE_IT(backup_piece_path = new (alc_ptr) share::ObBackupDest())) {
+            } else if (OB_FAIL(backup_piece_path->set(*str))) {
+              STORAGE_LOG(WARN, "failed to set backup set path", K(ret));
+            } else if (OB_FAIL(ctx_->backup_piece_path_array_.push_back(backup_piece_path))) {
+              STORAGE_LOG(WARN, "failed to push back backup_piece_path", K(ret));
+            }
           }
         }
+        break;
       }
-      break;
-    }
-    case 4: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      } else if (ObAdminBackupValidationType::BACKUPPIECE_VALIDATION == validation_type_
-                 || OB_NOT_NULL(data_backup_dest_str) || OB_NOT_NULL(backupset_id_str)) {
-        print_usage_();
-        exit(1);
-      } else if (OB_ISNULL(backupset_path_str = static_cast<char *>(
-                               tmp_allocator.alloc(common::OB_MAX_URI_LENGTH * 128)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (OB_FAIL(databuff_printf(backupset_path_str, common::OB_MAX_URI_LENGTH * 128, "%s",
-                                         optarg))) {
-        STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
-      } else if (FALSE_IT(str_array.reset())) {
-      } else if (OB_FAIL(ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
-                     backupset_path_str, str_array))) {
-        STORAGE_LOG(WARN, "failed to convert_comma_spearated_string_to_array", K(ret));
-      } else {
-        FOREACH_X(str, str_array, OB_SUCC(ret))
-        {
-          share::ObBackupDest *backup_set_path = nullptr;
-          if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-          } else if (FALSE_IT(backup_set_path = new (alc_ptr) share::ObBackupDest())) {
-          } else if (OB_FAIL(backup_set_path->set(*str))) {
-            STORAGE_LOG(WARN, "failed to set backup set path", K(ret));
-          } else if (OB_FAIL(ctx_->backup_set_path_array_.push_back(backup_set_path))) {
-            STORAGE_LOG(WARN, "failed to push back backup_set_path", K(ret));
+      case 4: {
+        if (ObAdminBackupValidationType::BACKUPPIECE_VALIDATION == validation_type_
+            || OB_NOT_NULL(data_backup_dest_str) || OB_NOT_NULL(backupset_id_str)) {
+          print_usage_();
+          exit(1);
+        } else if (OB_ISNULL(backupset_path_str = static_cast<char *>(
+                                 tmp_allocator.alloc(common::OB_MAX_URI_LENGTH * 128)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+        } else if (OB_FAIL(databuff_printf(backupset_path_str, common::OB_MAX_URI_LENGTH * 128,
+                                           "%s", optarg))) {
+          STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
+        } else if (FALSE_IT(str_array.reset())) {
+        } else if (OB_FAIL(ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
+                       backupset_path_str, str_array))) {
+          STORAGE_LOG(WARN, "failed to convert_comma_spearated_string_to_array", K(ret));
+        } else {
+          FOREACH_X(str, str_array, OB_SUCC(ret))
+          {
+            share::ObBackupDest *backup_set_path = nullptr;
+            if (OB_ISNULL(alc_ptr = allocator_.alloc(sizeof(share::ObBackupDest)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+            } else if (FALSE_IT(backup_set_path = new (alc_ptr) share::ObBackupDest())) {
+            } else if (OB_FAIL(backup_set_path->set(*str))) {
+              STORAGE_LOG(WARN, "failed to set backup set path", K(ret));
+            } else if (OB_FAIL(ctx_->backup_set_path_array_.push_back(backup_set_path))) {
+              STORAGE_LOG(WARN, "failed to push back backup_set_path", K(ret));
+            }
           }
         }
+        break;
       }
+      case 5: {
+        if (ObAdminBackupValidationType::BACKUPSET_VALIDATION == validation_type_
+            || ObAdminBackupValidationType::DATABASE_VALIDATION == validation_type_
+            || OB_NOT_NULL(backuppiece_path_str)) {
+          print_usage_();
+          exit(1);
+        } else if (OB_ISNULL(backuppiece_key_str = static_cast<char *>(
+                                 tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+        } else if (OB_FAIL(databuff_printf(backuppiece_key_str, common::OB_MAX_URI_LENGTH, "%s",
+                                           optarg))) {
+          STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
+        } else if (FALSE_IT(str_array.reset())) {
+        } else if (OB_FAIL(ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
+                       backuppiece_key_str, str_array))) {
+          STORAGE_LOG(WARN, "failed to convert_comma_spearated_string_to_array", K(ret));
+        } else {
+          FOREACH_X(str, str_array, OB_SUCC(ret))
+          {
+            ObAdminPieceKey backup_piece_key;
+            backup_piece_key.reset();
+            if (sscanf(str->ptr(), "d%ldr%ldp%ld", &backup_piece_key.dest_id_,
+                       &backup_piece_key.round_id_, &backup_piece_key.piece_id_)
+                != 3) {
+              ret = OB_INVALID_ARGUMENT;
+              STORAGE_LOG(WARN, "invalid argument", K(ret));
+            } else if (OB_FAIL(ctx_->backup_piece_key_array_.push_back(backup_piece_key))) {
+              STORAGE_LOG(WARN, "failed to push back backup_piece_key", K(ret));
+            }
+          }
+        }
+        break;
+      }
+      case 6: {
+        if (ObAdminBackupValidationType::BACKUPPIECE_VALIDATION == validation_type_
+            || ObAdminBackupValidationType::DATABASE_VALIDATION == validation_type_
+            || OB_NOT_NULL(backupset_path_str)) {
+          print_usage_();
+          exit(1);
+        } else if (OB_ISNULL(backupset_id_str = static_cast<char *>(
+                                 tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
+        } else if (OB_FAIL(databuff_printf(backupset_id_str, common::OB_MAX_URI_LENGTH, "%s",
+                                           optarg))) {
+          STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
+        } else if (FALSE_IT(str_array.reset())) {
+        } else if (OB_FAIL(ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
+                       backupset_id_str, str_array))) {
+          STORAGE_LOG(WARN, "failed to convert_comma_spearated_string_to_array", K(ret));
+        } else {
+          FOREACH_X(str, str_array, OB_SUCC(ret))
+          {
+            int64_t backup_set_id = strtoll(str->ptr(), NULL, 10);
+            if (backup_set_id <= 0) {
+              ret = OB_INVALID_ARGUMENT;
+              STORAGE_LOG(WARN, "invalid argument", K(ret));
+            } else if (OB_FAIL(ctx_->backup_set_id_array_.push_back(backup_set_id))) {
+              STORAGE_LOG(WARN, "failed to push back backup_set_id", K(ret));
+            }
+          }
+        }
+        break;
+      }
+      case 8: {
+        if (0 == STRCASECMP(optarg, "none")) {
+          ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_NONE;
+        } else if (0 == STRCASECMP(optarg, "physical")) {
+          ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
+        } else if (0 == STRCASECMP(optarg, "logical")) {
+          ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_LOGICAL;
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "invalid argument", K(ret));
+        }
 
-      break;
-    }
-    case 5: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      } else if (ObAdminBackupValidationType::BACKUPSET_VALIDATION == validation_type_
-                 || ObAdminBackupValidationType::DATABASE_VALIDATION == validation_type_
-                 || OB_NOT_NULL(backuppiece_path_str)) {
+        break;
+      }
+      case 9: {
+        char *endptr = nullptr;
+        int64_t tmp_concurrency = 0;
+        if (OB_FAIL(ob_strtoll(optarg, endptr, tmp_concurrency))) {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "invalid argument", K(ret));
+        } else if (tmp_concurrency <= 0 || tmp_concurrency > 256 /*max concurrency*/) {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "invalid argument", K(ret));
+        } else {
+          concurrency_ = tmp_concurrency;
+        }
+        break;
+      }
+      case 10: {
+        char *endptr = nullptr;
+        int64_t tmp_io_bandwidth_limit = 0;
+        if (OB_FAIL(ob_strtoll(optarg, endptr, tmp_io_bandwidth_limit))) {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "invalid argument", K(ret));
+        } else if (tmp_io_bandwidth_limit <= 0) {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "invalid argument", K(ret));
+        } else if (OB_FAIL(ctx_->set_io_bandwidth(tmp_io_bandwidth_limit))) {
+          STORAGE_LOG(WARN, "failed to set io bandwidth", K(ret));
+        }
+        break;
+      }
+      default: {
+        STORAGE_LOG(WARN, "unknown option", K(opt));
         print_usage_();
         exit(1);
-      } else if (OB_ISNULL(backuppiece_key_str
-                           = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (OB_FAIL(databuff_printf(backuppiece_key_str, common::OB_MAX_URI_LENGTH, "%s",
-                                         optarg))) {
-        STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
-      } else if (FALSE_IT(str_array.reset())) {
-      } else if (OB_FAIL(ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
-                     backuppiece_key_str, str_array))) {
-        STORAGE_LOG(WARN, "failed to convert_comma_spearated_string_to_array", K(ret));
-      } else {
-        FOREACH_X(str, str_array, OB_SUCC(ret))
-        {
-          ObAdminPieceKey backup_piece_key;
-          backup_piece_key.reset();
-          if (sscanf(str->ptr(), "d%ldr%ldp%ld", &backup_piece_key.dest_id_,
-                     &backup_piece_key.round_id_, &backup_piece_key.piece_id_)
-              != 3) {
-            ret = OB_INVALID_ARGUMENT;
-            STORAGE_LOG(WARN, "invalid argument", K(ret));
-          } else if (OB_FAIL(ctx_->backup_piece_key_array_.push_back(backup_piece_key))) {
-            STORAGE_LOG(WARN, "failed to push back backup_piece_key", K(ret));
-          }
-        }
       }
-      break;
-    }
-    case 6: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      } else if (ObAdminBackupValidationType::BACKUPPIECE_VALIDATION == validation_type_
-                 || ObAdminBackupValidationType::DATABASE_VALIDATION == validation_type_
-                 || OB_NOT_NULL(backupset_path_str)) {
-        print_usage_();
-        exit(1);
-      } else if (OB_ISNULL(backupset_id_str
-                           = static_cast<char *>(tmp_allocator.alloc(common::OB_MAX_URI_LENGTH)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
-      } else if (OB_FAIL(
-                     databuff_printf(backupset_id_str, common::OB_MAX_URI_LENGTH, "%s", optarg))) {
-        STORAGE_LOG(WARN, "failed to databuff printf", K(ret));
-      } else if (FALSE_IT(str_array.reset())) {
-      } else if (OB_FAIL(ObAdminBackupValidationUtil::convert_comma_separated_string_to_array(
-                     backupset_id_str, str_array))) {
-        STORAGE_LOG(WARN, "failed to convert_comma_spearated_string_to_array", K(ret));
-      } else {
-        FOREACH_X(str, str_array, OB_SUCC(ret))
-        {
-          int64_t backup_set_id = strtoll(str->ptr(), NULL, 10);
-          if (backup_set_id <= 0) {
-            ret = OB_INVALID_ARGUMENT;
-            STORAGE_LOG(WARN, "invalid argument", K(ret));
-          } else if (OB_FAIL(ctx_->backup_set_id_array_.push_back(backup_set_id))) {
-            STORAGE_LOG(WARN, "failed to push back backup_set_id", K(ret));
-          }
-        }
       }
-      break;
-    }
-    case 8: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      }
-      if (0 != STRCASECMP(optarg, "none") && 0 != STRCASECMP(optarg, "physical")
-          && 0 != STRCASECMP(optarg, "logical")) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      }
-      if (0 == STRCASECMP(optarg, "none")) {
-        ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_NONE;
-      } else if (0 == STRCASECMP(optarg, "physical")) {
-        ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
-      } else if (0 == STRCASECMP(optarg, "logical")) {
-        ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_LOGICAL;
-      }
-
-      break;
-    }
-    case 9: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      }
-      int64_t concurrency = strtoll(optarg, NULL, 10);
-      if (concurrency <= 0) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      } else {
-        concurrency_ = concurrency;
-      }
-      break;
-    }
-    case 10: {
-      if (OB_ISNULL(optarg)) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      }
-      int64_t io_bandwidth_limit = strtoll(optarg, NULL, 10);
-      if (io_bandwidth_limit <= 0) {
-        ret = OB_INVALID_ARGUMENT;
-        STORAGE_LOG(WARN, "invalid argument", K(ret));
-      } else if (OB_FAIL(ctx_->set_io_bandwidth(io_bandwidth_limit))) {
-      }
-      break;
-    }
-    default: {
-      STORAGE_LOG(WARN, "unknown option", K(opt));
-      print_usage_();
-      exit(1);
-    }
     }
   }
   if (OB_SUCC(ret)) {
+    // reload memory limit
+    int64_t memory_limit = OB_MAX(4 * 1024 * 1024 * 1024LL, concurrency_ * 256L * 1024 * 1024LL);
+    lib::set_memory_limit(memory_limit);
+    lib::set_tenant_memory_limit(OB_SERVER_TENANT_ID, memory_limit);
+    STORAGE_LOG(INFO, "succeed to set memory limit", K(memory_limit));
+    printf("Memory limit set to \033[1;32m%.2lf GB\033[0m\n",
+           memory_limit / 1024.0 / 1024.0 / 1024.0);
+    fflush(stdout);
+    // reload currency
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
     if (tenant_config.is_valid()) {
       char *ha_high_thread_score = nullptr;
@@ -433,12 +415,11 @@ int ObAdminBackupValidationExecutor::print_usage_()
     printf(HELP_FMT, "--log_archive_dest", "OB log archive dest with storage info");
     printf(HELP_FMT, "--data_backup_dest", "OB data backup dest with storage info");
     printf(HELP_FMT, "--backup_piece_path",
-           "OB log archive piece path with storage info, comma separated "
-           "without "
-           "space, shall not be used together with data_backup_dest");
+           "OB log archive piece path with storage info, comma separated without "
+           "space, shall not be used together with --log_archive_dest");
     printf(HELP_FMT, "--backup_set_path",
-           "OB data backup set path with storage info, comma separated without "
-           "space, shall not be used together with data_backup_dest");
+           "OB data backup set path with storage info, comma separated without space, shall not be "
+           "used together with --data_backup_dest");
     break;
   case ObAdminBackupValidationType::BACKUPPIECE_VALIDATION:
     printf("Usage: ob_admin validate_backuppiece [command args] [options]\n");
@@ -447,11 +428,11 @@ int ObAdminBackupValidationExecutor::print_usage_()
     printf("options:\n");
     printf(HELP_FMT, "--log_archive_dest", "OB log archive dest with storage info");
     printf(HELP_FMT, "--backup_piece_key",
-           "OB log archive piece key, comma separated without space, ");
+           "OB log archive piece key, comma separated without space, shall used together with "
+           "--log_archive_dest");
     printf(HELP_FMT, "--backup_piece_path",
-           "OB log archive piece path with storage info, comma separated "
-           "without "
-           "space, shall not be used together with data_backup_dest");
+           "OB log archive piece path with storage info, comma separated without space, shall not "
+           "be used together with --log_archive_dest");
 
     break;
   case ObAdminBackupValidationType::BACKUPSET_VALIDATION:
@@ -460,17 +441,21 @@ int ObAdminBackupValidationExecutor::print_usage_()
     printf(HELP_FMT, "--help", "display this message.");
     printf("options:\n");
     printf(HELP_FMT, "--data_backup_dest", "OB data backup dest with storage info");
-    printf(HELP_FMT, "--backup_set_id", "OB data backup set id, comma separated without space");
+    printf(HELP_FMT, "--backup_set_id",
+           "OB data backup set id, comma separated without space, shall used together with "
+           "--data_backup_dest");
     printf(HELP_FMT, "--backup_set_path",
-           "OB data backup set path with storage info, comma separated without "
-           "space, shall not be used together with data_backup_dest");
+           "OB data backup set path with storage info, comma separated without space, shall not be "
+           "used together with --data_backup_dest");
     break;
   default:
     break;
   }
-  printf(HELP_FMT, "--check_level", "check level, [none, physical, logical]");
-  printf(HELP_FMT, "--concurrency", "default is 1, recommend increasing when using remote storage");
-  printf(HELP_FMT, "--io_bandwidth_limit", "default is ulimited, adjust as needed");
+  printf(HELP_FMT, "--check_level", "macro block check level, [none, physical, logical]");
+  printf(HELP_FMT, "--concurrency",
+         "default is 1, no more than 256, recommend increasing when using remote storage");
+  printf(HELP_FMT, "--io_bandwidth_limit", "default is ulimited, adjust if needed");
+  fflush(stdout);
   return ret;
 }
 int ObAdminBackupValidationExecutor::schedule_data_backup_validation_()
@@ -505,7 +490,7 @@ int ObAdminBackupValidationExecutor::wait_data_backup_validation_()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "dag_scheduler is null", K(ret));
   } else {
-    while (!MTL(ObTenantDagScheduler *)->is_empty()) {
+    while (!dag_scheduler->is_empty()) {
       ctx_->print_data_backup_validation_status();
       usleep(500_ms);
     }
@@ -519,11 +504,11 @@ int ObAdminBackupValidationExecutor::wait_data_backup_validation_()
     }
     ctx_->print_data_backup_validation_status();
     if (ctx_->aborted_) {
-      printf("\nData Backup Validation \033[1;31mFailed✘\033[0m");
       ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "data backup validation failed", K(ret));
+      printf("\nData Backup Validation \033[1;31mFailed✘\033[0m");
     } else {
       printf("\nData Backup Validation \033[1;32mPassed✔\033[0m");
-      ret = OB_SUCCESS;
     }
     printf("\nTime cost: %ld ms\n", (end_time - start_time) / 1000);
     fflush(stdout);
@@ -562,7 +547,7 @@ int ObAdminBackupValidationExecutor::wait_log_archive_validation_()
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "dag_scheduler is null", K(ret));
   } else {
-    while (!MTL(ObTenantDagScheduler *)->is_empty()) {
+    while (!dag_scheduler->is_empty()) {
       ctx_->print_log_archive_validation_status();
       usleep(500_ms);
     }
@@ -576,11 +561,11 @@ int ObAdminBackupValidationExecutor::wait_log_archive_validation_()
     }
     ctx_->print_log_archive_validation_status();
     if (ctx_->aborted_) {
-      printf("\nLog Archive Validation \033[1;31mFailed✘\033[0m");
       ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "log archive validation failed", K(ret));
+      printf("\nLog Archive Validation \033[1;31mFailed✘\033[0m");
     } else {
       printf("\nLog Archive Validation \033[1;32mPassed✔\033[0m");
-      ret = OB_SUCCESS;
     }
     printf("\nTime cost: %ld ms\n", (end_time - start_time) / 1000);
     fflush(stdout);

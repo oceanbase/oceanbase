@@ -237,8 +237,7 @@ struct ObAdminBackupSetValidationAttr final
   storage::ObBackupDataStore *backup_set_store_;
   storage::ObExternBackupSetInfoDesc *backup_set_info_desc_;
   common::hash::ObHashMap<share::ObLSID, ObAdminBackupLSValidationAttr *> ls_map_;
-  ObArray<common::ObTabletID> minor_tablet_id_; // not incluing sys
-  ObArray<common::ObTabletID> major_tablet_id_; // not incluing sys
+  ObArray<common::ObTabletID> user_tablet_id_; // not incluing sys
   common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *>
       minor_tablet_map_;
   common::hash::ObHashMap<common::ObTabletID, ObAdminBackupTabletValidationAttr *>
@@ -253,8 +252,7 @@ struct ObAdminBackupSetValidationAttr final
 
 private:
   bool ls_inner_tablet_done_;
-  int64_t minor_tablet_pos_; // [0, minor_tablet_pos_) already done
-  int64_t major_tablet_pos_; // [0, major_tablet_pos_) already done
+  int64_t user_tablet_pos_; // [0, user_tablet_pos_) already done
   ObSpinLock lock_;
   DISALLOW_COPY_AND_ASSIGN(ObAdminBackupSetValidationAttr);
 };

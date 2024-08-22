@@ -78,7 +78,7 @@ int ObAdminBackupLSValidationAttr::init()
 }
 ObAdminBackupSetValidationAttr::ObAdminBackupSetValidationAttr()
     : backup_set_store_(nullptr), backup_set_info_desc_(nullptr), ls_inner_tablet_done_(false),
-      minor_tablet_pos_(0), major_tablet_pos_(0), lock_(ObLatchIds::BACKUP_LOCK)
+      user_tablet_pos_(0), lock_(ObLatchIds::BACKUP_LOCK)
 {
 }
 ObAdminBackupSetValidationAttr::~ObAdminBackupSetValidationAttr()
@@ -141,10 +141,9 @@ int ObAdminBackupSetValidationAttr::fetch_next_tablet_group(
   tablet_group.reset();
   int ret = OB_SUCCESS;
   scheduled_cnt = 0;
-  if (ls_inner_tablet_done_ && minor_tablet_pos_ >= minor_tablet_id_.count()
-      && major_tablet_pos_ >= major_tablet_id_.count()) {
-    STORAGE_LOG(INFO, "all tablet done", K(ret));
+  if (ls_inner_tablet_done_ && user_tablet_pos_ >= user_tablet_id_.count()) {
     ret = OB_ITER_END;
+    STORAGE_LOG(INFO, "all tablet done", K(ret));
   } else {
     common::ObArray<ObAdminBackupTabletValidationAttr *> inner_group;
     if (!ls_inner_tablet_done_) {
@@ -180,25 +179,22 @@ int ObAdminBackupSetValidationAttr::fetch_next_tablet_group(
     }
     while (OB_SUCC(ret)
            && scheduled_cnt + 2 <= ObAdminBackupValidationExecutor::MAX_TABLET_BATCH_COUNT
-           && minor_tablet_pos_ < minor_tablet_id_.count()
-           && major_tablet_pos_ < major_tablet_id_.count()) {
+           && user_tablet_pos_ < user_tablet_id_.count()) {
       ObAdminBackupTabletValidationAttr *minor_tablet_attr = nullptr;
       ObAdminBackupTabletValidationAttr *major_tablet_attr = nullptr;
       inner_group.reuse();
-      if (OB_FAIL(minor_tablet_map_.get_refactored(minor_tablet_id_.at(minor_tablet_pos_),
+      if (OB_FAIL(minor_tablet_map_.get_refactored(user_tablet_id_.at(user_tablet_pos_),
                                                    minor_tablet_attr))) {
         STORAGE_LOG(WARN, "failed to get tablet attr", K(ret),
-                    K(minor_tablet_id_.at(minor_tablet_pos_)));
-      } else if (OB_FAIL(major_tablet_map_.get_refactored(major_tablet_id_.at(major_tablet_pos_),
+                    K(user_tablet_id_.at(user_tablet_pos_)));
+      } else if (OB_FAIL(major_tablet_map_.get_refactored(user_tablet_id_.at(user_tablet_pos_),
                                                           major_tablet_attr))) {
         STORAGE_LOG(WARN, "failed to get tablet attr", K(ret),
-                    K(major_tablet_id_.at(major_tablet_pos_)));
+                    K(user_tablet_id_.at(user_tablet_pos_)));
       } else if (OB_ISNULL(minor_tablet_attr->tablet_meta_index_)
                  || OB_ISNULL(major_tablet_attr->tablet_meta_index_)) {
-        // incompelete tablet, skip validation
-        ++minor_tablet_pos_;
-        ++major_tablet_pos_;
-        continue;
+        // incompelete tablet, should already marked as skipped
+        STORAGE_LOG(WARN, "incompelete tablet, skip validation", K(ret));
       } else if (OB_FAIL(inner_group.push_back(minor_tablet_attr))) {
         STORAGE_LOG(WARN, "failed to push back tablet attr", K(ret));
       } else if (OB_FAIL(inner_group.push_back(major_tablet_attr))) {
@@ -207,27 +203,23 @@ int ObAdminBackupSetValidationAttr::fetch_next_tablet_group(
         STORAGE_LOG(WARN, "failed to push back tablet group", K(ret));
       } else {
         scheduled_cnt += inner_group.count();
-        ++minor_tablet_pos_;
-        ++major_tablet_pos_;
       }
+      ++user_tablet_pos_;
     }
 
-    if (OB_SUCC(ret) && ls_inner_tablet_done_ && minor_tablet_pos_ >= minor_tablet_id_.count()
-        && major_tablet_pos_ >= major_tablet_id_.count()) {
+    if (OB_SUCC(ret) && ls_inner_tablet_done_ && user_tablet_pos_ >= user_tablet_id_.count()) {
       ret = OB_ITER_END;
       STORAGE_LOG(INFO, "all tablet done", K(ret));
     }
     STORAGE_LOG(INFO, "succeed to fetch next tablet group", K(ret), K(ls_inner_tablet_done_),
-                K(minor_tablet_pos_), K(major_tablet_pos_), K(minor_tablet_id_.count()),
-                K(major_tablet_id_.count()));
+                K(user_tablet_pos_), K(user_tablet_id_.count()));
   }
   return ret;
 }
 bool ObAdminBackupSetValidationAttr::is_all_tablet_done()
 {
   ObSpinLockGuard guard(lock_);
-  return ls_inner_tablet_done_ && minor_tablet_pos_ >= minor_tablet_id_.count()
-         && major_tablet_pos_ >= major_tablet_id_.count();
+  return ls_inner_tablet_done_ && user_tablet_pos_ >= user_tablet_id_.count();
 }
 ObAdminBackupPieceValidationAttr::ObAdminBackupPieceValidationAttr() : backup_piece_store_(nullptr)
 {
@@ -263,7 +255,6 @@ int ObAdminBackupPieceValidationAttr::split_lsn_range(
     ObArray<std::pair<share::ObLSID, std::pair<palf::LSN, palf::LSN>>> &lsn_range_array)
 {
   int ret = OB_SUCCESS;
-
   FOREACH_X(ls_map_iter, ls_map_, OB_SUCC(ret))
   {
     const share::ObLSID ls_id = ls_map_iter->second->single_ls_info_desc_->ls_id_;
@@ -337,14 +328,6 @@ ObAdminBackupValidationCtx::~ObAdminBackupValidationCtx()
   }
   backup_piece_map_.destroy();
   throttle_.destroy();
-  if (OB_NOT_NULL(fail_file_)) {
-    delete fail_file_;
-    fail_file_ = nullptr;
-  }
-  if (OB_NOT_NULL(fail_reason_)) {
-    delete fail_reason_;
-    fail_file_ = nullptr;
-  }
 }
 int ObAdminBackupValidationCtx::init()
 {
@@ -473,7 +456,8 @@ int ObAdminBackupValidationCtx::add_backup_set(int64_t backup_set_id)
       }
     }
   } else {
-    ret = OB_HASH_EXIST;
+    ret = OB_ENTRY_EXIST;
+    STORAGE_LOG(WARN, "backup set id already exist", K(ret), K(backup_set_id));
   }
   return ret;
 }
@@ -485,12 +469,13 @@ int ObAdminBackupValidationCtx::get_backup_set_attr(
   if (OB_FAIL(backup_set_map_.get_refactored(backup_set_id, backup_set_attr))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_ENTRY_NOT_EXIST;
+      STORAGE_LOG(WARN, "fail to get backup set attr", K(ret), K(backup_set_id));
     } else {
       STORAGE_LOG(WARN, "unexpected fail to get backup set id", K(ret), K(backup_set_id));
     }
   } else if (OB_ISNULL(backup_set_attr)) {
-    STORAGE_LOG(WARN, "unexpected null backup set attr", K(ret), K(backup_set_id));
     ret = OB_ERR_NULL_VALUE;
+    STORAGE_LOG(WARN, "unexpected null backup set attr", K(ret), K(backup_set_id));
   }
   return ret;
 }
@@ -525,7 +510,8 @@ int ObAdminBackupValidationCtx::add_ls(int64_t backup_set_id, const share::ObLSI
       STORAGE_LOG(WARN, "unexpected fail to get ls id", K(ret), K(ls_id));
     }
   } else {
-    ret = OB_HASH_EXIST;
+    ret = OB_ENTRY_EXIST;
+    STORAGE_LOG(WARN, "ls id already exist", K(ret), K(ls_id));
   }
   return ret;
 }
@@ -598,7 +584,8 @@ int ObAdminBackupValidationCtx::add_tablet(int64_t backup_set_id, const share::O
           STORAGE_LOG(WARN, "unexpected fail to get tablet attr", K(ret), K(tablet_id));
         }
       } else {
-        ret = OB_HASH_EXIST;
+        ret = OB_ENTRY_EXIST;
+        STORAGE_LOG(WARN, "tablet id already exist", K(ret), K(tablet_id));
       }
       break;
     }
@@ -615,7 +602,7 @@ int ObAdminBackupValidationCtx::add_tablet(int64_t backup_set_id, const share::O
           } else if (OB_FAIL(backup_set_attr->minor_tablet_map_.set_refactored(tablet_id,
                                                                                tablet_attr))) {
             STORAGE_LOG(WARN, "fail to set tablet attr", K(ret), K(tablet_id));
-          } else if (OB_FAIL(backup_set_attr->minor_tablet_id_.push_back(tablet_id))) {
+          } else if (OB_FAIL(backup_set_attr->user_tablet_id_.push_back(tablet_id))) {
             STORAGE_LOG(WARN, "fail to push back tablet id", K(ret), K(tablet_id));
           } else if (OB_FAIL(global_stat_.add_scheduled_tablet_count_(1))) {
             STORAGE_LOG(WARN, "fail to add scheduled tablet count", K(ret));
@@ -629,7 +616,8 @@ int ObAdminBackupValidationCtx::add_tablet(int64_t backup_set_id, const share::O
           STORAGE_LOG(WARN, "unexpected fail to get tablet id", K(ret), K(tablet_id));
         }
       } else {
-        ret = OB_HASH_EXIST;
+        ret = OB_ENTRY_EXIST;
+        STORAGE_LOG(WARN, "tablet id already exist", K(ret), K(tablet_id));
       }
       break;
     }
@@ -646,8 +634,6 @@ int ObAdminBackupValidationCtx::add_tablet(int64_t backup_set_id, const share::O
           } else if (OB_FAIL(backup_set_attr->major_tablet_map_.set_refactored(tablet_id,
                                                                                tablet_attr))) {
             STORAGE_LOG(WARN, "fail to set tablet id", K(ret), K(tablet_id));
-          } else if (OB_FAIL(backup_set_attr->major_tablet_id_.push_back(tablet_id))) {
-            STORAGE_LOG(WARN, "fail to push back tablet id", K(ret), K(tablet_id));
           } else if (OB_FAIL(global_stat_.add_scheduled_tablet_count_(1))) {
             STORAGE_LOG(WARN, "fail to add scheduled tablet count", K(ret));
           } else if (OB_FAIL(backup_set_attr->stat_.add_scheduled_tablet_count_(1))) {
@@ -660,13 +646,16 @@ int ObAdminBackupValidationCtx::add_tablet(int64_t backup_set_id, const share::O
           STORAGE_LOG(WARN, "unexpected fail to get tablet id", K(ret), K(tablet_id));
         }
       } else {
-        ret = OB_HASH_EXIST;
+        ret = OB_ENTRY_EXIST;
+        STORAGE_LOG(WARN, "tablet id already exist", K(ret), K(tablet_id));
       }
       break;
     }
-    default:
+    default: {
       ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected data type", K(ret), K(data_type));
       break;
+    }
     }
   }
 
@@ -691,11 +680,13 @@ int ObAdminBackupValidationCtx::get_tablet_attr(int64_t backup_set_id, const sha
       if (OB_FAIL(ls_attr->sys_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_ENTRY_NOT_EXIST;
+          STORAGE_LOG(WARN, "fail to get tablet attr", K(ret), K(tablet_id));
         } else {
           STORAGE_LOG(WARN, "unexpected fail to get tablet attr", K(ret), K(tablet_id));
         }
       } else if (OB_ISNULL(tablet_attr)) {
         ret = OB_ERR_NULL_VALUE;
+        STORAGE_LOG(WARN, "unexpected null tablet attr", K(ret), K(tablet_id));
       }
       break;
     }
@@ -703,15 +694,16 @@ int ObAdminBackupValidationCtx::get_tablet_attr(int64_t backup_set_id, const sha
       if (OB_FAIL(backup_set_attr->minor_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_ENTRY_NOT_EXIST;
+          STORAGE_LOG(WARN, "fail to get tablet attr", K(ret), K(tablet_id));
         } else {
           STORAGE_LOG(WARN, "unexpected fail to get tablet attr", K(ret), K(tablet_id));
         }
       } else if (OB_ISNULL(tablet_attr)) {
         ret = OB_ERR_NULL_VALUE;
+        STORAGE_LOG(WARN, "unexpected null tablet attr", K(ret), K(tablet_id));
       } else if (tablet_attr->ls_id_ != ls_id) {
         // transfer detected
         STORAGE_LOG(WARN, "unmatched ls id maybe transfered", K(ret), K(ls_id));
-        ret = OB_SUCCESS;
       }
       break;
     }
@@ -719,21 +711,24 @@ int ObAdminBackupValidationCtx::get_tablet_attr(int64_t backup_set_id, const sha
       if (OB_FAIL(backup_set_attr->major_tablet_map_.get_refactored(tablet_id, tablet_attr))) {
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_ENTRY_NOT_EXIST;
+          STORAGE_LOG(WARN, "fail to get tablet attr", K(ret), K(tablet_id));
         } else {
           STORAGE_LOG(WARN, "unexpected fail to get tablet attr", K(ret), K(tablet_id));
         }
       } else if (OB_ISNULL(tablet_attr)) {
         ret = OB_ERR_NULL_VALUE;
+        STORAGE_LOG(WARN, "unexpected null tablet attr", K(ret), K(tablet_id));
       } else if (tablet_attr->ls_id_ != ls_id) {
         // transfer detected
         STORAGE_LOG(WARN, "unmatched ls id maybe transfered", K(ret), K(ls_id));
-        ret = OB_SUCCESS;
       }
       break;
     }
-    default:
+    default: {
       ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected data type", K(ret), K(data_type));
       break;
+    }
     }
   }
 
@@ -769,7 +764,8 @@ int ObAdminBackupValidationCtx::add_backup_piece(const ObAdminPieceKey &backup_p
       }
     }
   } else {
-    ret = OB_HASH_EXIST;
+    ret = OB_ENTRY_EXIST;
+    STORAGE_LOG(WARN, "unexpected to get backup piece attr", K(ret), K(backup_piece_key));
   }
   return ret;
 }
@@ -781,11 +777,13 @@ int ObAdminBackupValidationCtx::get_backup_piece_attr(
   if (OB_FAIL(backup_piece_map_.get_refactored(backup_piece_key, backup_piece_attr))) {
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_ENTRY_NOT_EXIST;
+      STORAGE_LOG(WARN, "fail to get backup piece attr", K(ret), K(backup_piece_key));
     } else {
       STORAGE_LOG(WARN, "unexpected fail to get backup piece attr", K(ret), K(backup_piece_key));
     }
   } else if (OB_ISNULL(backup_piece_attr)) {
-    return OB_ERR_NULL_VALUE;
+    ret = OB_ERR_NULL_VALUE;
+    STORAGE_LOG(WARN, "unexpected null backup piece attr", K(ret), K(backup_piece_key));
   }
   return ret;
 }
@@ -818,7 +816,8 @@ int ObAdminBackupValidationCtx::add_ls(const ObAdminPieceKey &backup_piece_key,
       }
     }
   } else {
-    ret = OB_HASH_EXIST;
+    ret = OB_ENTRY_EXIST;
+    STORAGE_LOG(WARN, "unexpected to get ls attr", K(ret), K(ls_id));
   }
   return ret;
 }
@@ -838,7 +837,7 @@ int ObAdminBackupValidationCtx::get_ls_attr(const ObAdminPieceKey &backup_piece_
       STORAGE_LOG(WARN, "unexpected fail to get ls attr", K(ret), K(ls_id));
     }
   } else if (nullptr == ls_attr) {
-    return OB_ERR_NULL_VALUE;
+    ret = OB_ERR_NULL_VALUE;
     STORAGE_LOG(WARN, "unexpected null ls attr", K(ret), K(backup_piece_key), K(ls_id));
   }
   return ret;
