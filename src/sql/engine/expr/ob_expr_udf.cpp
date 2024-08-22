@@ -138,7 +138,7 @@ int ObExprUDF::calc_result_typeN(ObExprResType &type,
         if (lib::is_oracle_mode()) {
           type.set_length(OB_MAX_ORACLE_VARCHAR_LENGTH);
         } else {
-          type.set_length(OB_MAX_VARCHAR_LENGTH);
+          type.set_length(result_type_.get_length());
         }
       }
     }
