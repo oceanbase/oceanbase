@@ -340,8 +340,8 @@ int ObTableApiScanExecutor::close()
     } else if (OB_NOT_NULL(mgr)) {
       mgr->update(tb_ctx_.get_tenant_id(), tb_ctx_.get_index_table_id());
     }
+    is_opened_ = false;
   }
-
   return ret;
 }
 
@@ -396,6 +396,7 @@ int ObTableApiScanRowIterator::open(ObTableApiScanExecutor *executor)
     LOG_WARN("fail to open scan executor", K(ret));
   } else {
     scan_executor_ = executor;
+    is_opened_ = true;
   }
 
   return ret;
@@ -503,14 +504,16 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row, common::ObIAllocator
 int ObTableApiScanRowIterator::close()
 {
   int ret = OB_SUCCESS;
-
-  if (OB_ISNULL(scan_executor_)) {
+  if (!is_opened_){
+    // do nothing
+  } else if (OB_ISNULL(scan_executor_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("scan executor is null", K(ret));
   } else if (OB_FAIL(scan_executor_->close())) {
     LOG_WARN("fail to close scan executor", K(ret));
   } else {
     row_allocator_.reset();
+    is_opened_ = false;
   }
 
   return ret;

@@ -98,7 +98,8 @@ class ObTableApiScanRowIterator
 public:
   ObTableApiScanRowIterator()
       : scan_executor_(nullptr),
-        row_allocator_("TbScanRowIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID())
+        row_allocator_("TbScanRowIter", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        is_opened_(false)
   {
   }
   virtual ~ObTableApiScanRowIterator() {};
@@ -111,6 +112,7 @@ public:
 private:
   ObTableApiScanExecutor *scan_executor_;
   common::ObArenaAllocator row_allocator_; // alloc the memory of result row
+  bool is_opened_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiScanRowIterator);
 };
