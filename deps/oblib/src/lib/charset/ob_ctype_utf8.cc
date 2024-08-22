@@ -24,8 +24,14 @@
 #include "lib/charset/mb_wc.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "lib/charset/ob_ctype_utf8_tab.h"
+#include "common/ob_target_specific.h"
+#if OB_USE_MULTITARGET_CODE
+#include <emmintrin.h>
+#include <immintrin.h>
+#endif
 
 #define IS_CONTINUATION_BYTE(code) (((code) >> 6) == 0x02)
+#define RET_ERR_IDX 1 
 
 static int ob_valid_mbcharlen_utf8mb3(const uchar *s, const uchar *e)
 {
@@ -97,25 +103,712 @@ static uint ob_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused))
   return 0; /* Illegal mb head */;
 }
 
+static inline int ascii_u64(const uint8_t *data, int len)
+{
+    uint8_t orall = 0;
+
+    if (len >= 16) {
+
+        uint64_t or1 = 0, or2 = 0;
+        const uint8_t *data2 = data+8;
+
+        do {
+            or1 |= *(const uint64_t *)data;
+            or2 |= *(const uint64_t *)data2;
+            data += 16;
+            data2 += 16;
+            len -= 16;
+        } while (len >= 16);
+
+        /*
+         * Idea from Benny Halevy <bhalevy@scylladb.com>
+         * - 7-th bit set   ==> orall = !(non-zero) - 1 = 0 - 1 = 0xFF
+         * - 7-th bit clear ==> orall = !0 - 1          = 1 - 1 = 0x00
+         */
+        orall = !((or1 | or2) & 0x8080808080808080ULL) - 1;
+    }
+
+    while (len--)
+        orall |= *data++;
+
+    return orall < 0x80;
+}
+
+
+OB_DECLARE_DEFAULT_CODE(
+  static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
+                                         const char *b, const char *e,
+                                         size_t pos, int *error)
+  {
+    // int len = (int)(e-b);
+    // if (OB_UNLIKELY(len <= 0)) {
+    //   return 0;
+    // } else if (len>=15 && ascii_u64((const uint8_t *)b, len)) {
+    //   return (size_t)len;
+    // }
+    const char *b_start= b;
+    *error= 0;
+    while (pos)
+    {
+      int mb_len;
+      if ((mb_len= ob_valid_mbcharlen_utf8mb4(cs, (uchar*) b, (uchar*) e)) <= 0)
+      {
+        *error= b < e ? 1 : 0;
+        break;
+      }
+      b+= mb_len;
+      pos--;
+    }
+    return (size_t) (b - b_start);
+    
+  }
+)
+
+static int inline utf8_naive(const unsigned char *data, int len)
+{
+    int err_pos = 1;
+
+    while (len) {
+        int bytes;
+        const unsigned char byte1 = data[0];
+
+        /* 00..7F */
+        if (byte1 <= 0x7F) {
+            bytes = 1;
+        /* C2..DF, 80..BF */
+        } else if (len >= 2 && byte1 >= 0xC2 && byte1 <= 0xDF &&
+                (signed char)data[1] <= (signed char)0xBF) {
+            bytes = 2;
+        } else if (len >= 3) {
+            const unsigned char byte2 = data[1];
+
+            /* Is byte2, byte3 between 0x80 ~ 0xBF */
+            const int byte2_ok = (signed char)byte2 <= (signed char)0xBF;
+            const int byte3_ok = (signed char)data[2] <= (signed char)0xBF;
+
+            if (byte2_ok && byte3_ok &&
+                     /* E0, A0..BF, 80..BF */
+                    ((byte1 == 0xE0 && byte2 >= 0xA0) ||
+                     /* E1..EC, 80..BF, 80..BF */
+                     (byte1 >= 0xE1 && byte1 <= 0xEC) ||
+                     /* ED, 80..9F, 80..BF */
+                     (byte1 == 0xED && byte2 <= 0x9F) ||
+                     /* EE..EF, 80..BF, 80..BF */
+                     (byte1 >= 0xEE && byte1 <= 0xEF))) {
+                bytes = 3;
+            } else if (len >= 4) {
+                /* Is byte4 between 0x80 ~ 0xBF */
+                const int byte4_ok = (signed char)data[3] <= (signed char)0xBF;
+
+                if (byte2_ok && byte3_ok && byte4_ok &&
+                         /* F0, 90..BF, 80..BF, 80..BF */
+                        ((byte1 == 0xF0 && byte2 >= 0x90) ||
+                         /* F1..F3, 80..BF, 80..BF, 80..BF */
+                         (byte1 >= 0xF1 && byte1 <= 0xF3) ||
+                         /* F4, 80..8F, 80..BF, 80..BF */
+                         (byte1 == 0xF4 && byte2 <= 0x8F))) {
+                    bytes = 4;
+                } else {
+                    return err_pos;
+                }
+            } else {
+                return err_pos;
+            }
+        } else {
+            return err_pos;
+        }
+
+        len -= bytes;
+        err_pos += bytes;
+        data += bytes;
+    }
+
+    return 0;
+}
+
+OB_DECLARE_SSE42_SPECIFIC_CODE(
+
+static inline int ascii_simd(const uint8_t *data, int len) {
+  if (len >= 32) {
+    const uint8_t *data2 = data + 16;
+
+    __m128i or1 = _mm_set1_epi8(0), or2 = or1;
+
+    while (len >= 32) {
+      __m128i input1 = _mm_loadu_si128((const __m128i *)data);
+      __m128i input2 = _mm_loadu_si128((const __m128i *)data2);
+
+      or1 = _mm_or_si128(or1, input1);
+      or2 = _mm_or_si128(or2, input2);
+
+      data += 32;
+      data2 += 32;
+      len -= 32;
+    }
+
+    or1 = _mm_or_si128(or1, or2);
+    if (_mm_movemask_epi8(_mm_cmplt_epi8(or1, _mm_set1_epi8(0)))) return 0;
+  }
+
+  return ascii_u64(data, len);
+}
+
+static const int8_t _first_len_tbl[] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3,
+};
+
+/* Map "First Byte" to 8-th item of range table (0xC2 ~ 0xF4) */
+static const int8_t _first_range_tbl[] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8,
+};
+
+/*
+ * Range table, map range index to min and max values
+ * Index 0    : 00 ~ 7F (First Byte, ascii)
+ * Index 1,2,3: 80 ~ BF (Second, Third, Fourth Byte)
+ * Index 4    : A0 ~ BF (Second Byte after E0)
+ * Index 5    : 80 ~ 9F (Second Byte after ED)
+ * Index 6    : 90 ~ BF (Second Byte after F0)
+ * Index 7    : 80 ~ 8F (Second Byte after F4)
+ * Index 8    : C2 ~ F4 (First Byte, non ascii)
+ * Index 9~15 : illegal: i >= 127 && i <= -128
+ */
+static const uint8_t _range_min_tbl[] = {
+    0x00, 0x80, 0x80, 0x80, 0xA0, 0x80, 0x90, 0x80,
+    0xC2, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
+};
+static const uint8_t _range_max_tbl[] = {
+    0x7F, 0xBF, 0xBF, 0xBF, 0xBF, 0x9F, 0xBF, 0x8F,
+    0xF4, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+};
+
+/*
+ * Tables for fast handling of four special First Bytes(E0,ED,F0,F4), after
+ * which the Second Byte are not 80~BF. It contains "range index adjustment".
+ * +------------+---------------+------------------+----------------+
+ * | First Byte | original range| range adjustment | adjusted range |
+ * +------------+---------------+------------------+----------------+
+ * | E0         | 2             | 2                | 4              |
+ * +------------+---------------+------------------+----------------+
+ * | ED         | 2             | 3                | 5              |
+ * +------------+---------------+------------------+----------------+
+ * | F0         | 3             | 3                | 6              |
+ * +------------+---------------+------------------+----------------+
+ * | F4         | 4             | 4                | 8              |
+ * +------------+---------------+------------------+----------------+
+ */
+/* index1 -> E0, index14 -> ED */
+static const int8_t _df_ee_tbl[] = {
+    0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0,
+};
+/* index1 -> F0, index5 -> F4 */
+static const int8_t _ef_fe_tbl[] = {
+    0, 3, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+
+/* 5x faster than naive method */
+/* Return 0 - success, -1 - error, >0 - first error char(if RET_ERR_IDX = 1) */
+int utf8_range(const unsigned char *data, int len)
+{
+#if  RET_ERR_IDX
+    int err_pos = 1;
+#endif
+
+    if (len >= 16) {
+        __m128i prev_input = _mm_set1_epi8(0);
+        __m128i prev_first_len = _mm_set1_epi8(0);
+
+        /* Cached tables */
+        const __m128i first_len_tbl =
+            _mm_loadu_si128((const __m128i *)_first_len_tbl);
+        const __m128i first_range_tbl =
+            _mm_loadu_si128((const __m128i *)_first_range_tbl);
+        const __m128i range_min_tbl =
+            _mm_loadu_si128((const __m128i *)_range_min_tbl);
+        const __m128i range_max_tbl =
+            _mm_loadu_si128((const __m128i *)_range_max_tbl);
+        const __m128i df_ee_tbl =
+            _mm_loadu_si128((const __m128i *)_df_ee_tbl);
+        const __m128i ef_fe_tbl =
+            _mm_loadu_si128((const __m128i *)_ef_fe_tbl);
+
+        __m128i error = _mm_set1_epi8(0);
+
+        while (len >= 16) {
+            const __m128i input = _mm_loadu_si128((const __m128i *)data);
+
+            /* high_nibbles = input >> 4 */
+            const __m128i high_nibbles =
+                _mm_and_si128(_mm_srli_epi16(input, 4), _mm_set1_epi8(0x0F));
+
+            /* first_len = legal character length minus 1 */
+            /* 0 for 00~7F, 1 for C0~DF, 2 for E0~EF, 3 for F0~FF */
+            /* first_len = first_len_tbl[high_nibbles] */
+            __m128i first_len = _mm_shuffle_epi8(first_len_tbl, high_nibbles);
+
+            /* First Byte: set range index to 8 for bytes within 0xC0 ~ 0xFF */
+            /* range = first_range_tbl[high_nibbles] */
+            __m128i range = _mm_shuffle_epi8(first_range_tbl, high_nibbles);
+
+            /* Second Byte: set range index to first_len */
+            /* 0 for 00~7F, 1 for C0~DF, 2 for E0~EF, 3 for F0~FF */
+            /* range |= (first_len, prev_first_len) << 1 byte */
+            range = _mm_or_si128(
+                    range, _mm_alignr_epi8(first_len, prev_first_len, 15));
+
+            /* Third Byte: set range index to saturate_sub(first_len, 1) */
+            /* 0 for 00~7F, 0 for C0~DF, 1 for E0~EF, 2 for F0~FF */
+            __m128i tmp;
+            /* tmp = (first_len, prev_first_len) << 2 bytes */
+            tmp = _mm_alignr_epi8(first_len, prev_first_len, 14);
+            /* tmp = saturate_sub(tmp, 1) */
+            tmp = _mm_subs_epu8(tmp, _mm_set1_epi8(1));
+            /* range |= tmp */
+            range = _mm_or_si128(range, tmp);
+
+            /* Fourth Byte: set range index to saturate_sub(first_len, 2) */
+            /* 0 for 00~7F, 0 for C0~DF, 0 for E0~EF, 1 for F0~FF */
+            /* tmp = (first_len, prev_first_len) << 3 bytes */
+            tmp = _mm_alignr_epi8(first_len, prev_first_len, 13);
+            /* tmp = saturate_sub(tmp, 2) */
+            tmp = _mm_subs_epu8(tmp, _mm_set1_epi8(2));
+            /* range |= tmp */
+            range = _mm_or_si128(range, tmp);
+
+            /*
+             * Now we have below range indices caluclated
+             * Correct cases:
+             * - 8 for C0~FF
+             * - 3 for 1st byte after F0~FF
+             * - 2 for 1st byte after E0~EF or 2nd byte after F0~FF
+             * - 1 for 1st byte after C0~DF or 2nd byte after E0~EF or
+             *         3rd byte after F0~FF
+             * - 0 for others
+             * Error cases:
+             *   9,10,11 if non ascii First Byte overlaps
+             *   E.g., F1 80 C2 90 --> 8 3 10 2, where 10 indicates error
+             */
+
+            /* Adjust Second Byte range for special First Bytes(E0,ED,F0,F4) */
+            /* Overlaps lead to index 9~15, which are illegal in range table */
+            __m128i shift1, pos, range2;
+            /* shift1 = (input, prev_input) << 1 byte */
+            shift1 = _mm_alignr_epi8(input, prev_input, 15);
+            pos = _mm_sub_epi8(shift1, _mm_set1_epi8(0xEF));
+            /*
+             * shift1:  | EF  F0 ... FE | FF  00  ... ...  DE | DF  E0 ... EE |
+             * pos:     | 0   1      15 | 16  17           239| 240 241    255|
+             * pos-240: | 0   0      0  | 0   0            0  | 0   1      15 |
+             * pos+112: | 112 113    127|       >= 128        |     >= 128    |
+             */
+            tmp = _mm_subs_epu8(pos, _mm_set1_epi8(0xF0));
+            range2 = _mm_shuffle_epi8(df_ee_tbl, tmp);
+            tmp = _mm_adds_epu8(pos, _mm_set1_epi8(0x70));
+            range2 = _mm_add_epi8(range2, _mm_shuffle_epi8(ef_fe_tbl, tmp));
+
+            range = _mm_add_epi8(range, range2);
+
+            /* Load min and max values per calculated range index */
+            __m128i minv = _mm_shuffle_epi8(range_min_tbl, range);
+            __m128i maxv = _mm_shuffle_epi8(range_max_tbl, range);
+
+            /* Check value range */
+#if RET_ERR_IDX
+            error = _mm_cmplt_epi8(input, minv);
+            error = _mm_or_si128(error, _mm_cmpgt_epi8(input, maxv));
+            /* 5% performance drop from this conditional branch */
+            if (!_mm_testz_si128(error, error))
+                break;
+#else
+            /* error |= (input < minv) | (input > maxv) */
+            tmp = _mm_or_si128(
+                      _mm_cmplt_epi8(input, minv),
+                      _mm_cmpgt_epi8(input, maxv)
+                  );
+            error = _mm_or_si128(error, tmp);
+#endif
+
+            prev_input = input;
+            prev_first_len = first_len;
+
+            data += 16;
+            len -= 16;
+#if RET_ERR_IDX
+            err_pos += 16;
+#endif
+        }
+
+#if RET_ERR_IDX
+        /* Error in first 16 bytes */
+        if (err_pos == 1)
+            goto do_naive;
+#else
+        if (!_mm_testz_si128(error, error))
+            return -1;
+#endif
+
+        /* Find previous token (not 80~BF) */
+        int32_t token4 = _mm_extract_epi32(prev_input, 3);
+        const int8_t *token = (const int8_t *)&token4;
+        int lookahead = 0;
+        if (token[3] > (int8_t)0xBF)
+            lookahead = 1;
+        else if (token[2] > (int8_t)0xBF)
+            lookahead = 2;
+        else if (token[1] > (int8_t)0xBF)
+            lookahead = 3;
+
+        data -= lookahead;
+        len += lookahead;
+#if RET_ERR_IDX
+        err_pos -= lookahead;
+#endif
+    }
+
+    /* Check remaining bytes with naive method */
+#if RET_ERR_IDX
+    int err_pos2;
+do_naive:
+    err_pos2 = utf8_naive(data, len);
+    if (err_pos2)
+        return err_pos + err_pos2 - 1;
+    return 0;
+#else
+    return utf8_naive(data, len);
+#endif
+}
 static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
                                          const char *b, const char *e,
                                          size_t pos, int *error)
 {
-  const char *b_start= b;
-  *error= 0;
-  while (pos)
-  {
-    int mb_len;
-    if ((mb_len= ob_valid_mbcharlen_utf8mb4(cs, (uchar*) b, (uchar*) e)) <= 0)
-    {
-      *error= b < e ? 1 : 0;
-      break;
-    }
-    b+= mb_len;
-    pos--;
+    int len = (int)(e-b);
+  if (OB_UNLIKELY(len <= 0)) {
+    return 0;
+  } else if (len>=15 && ascii_simd((const uint8_t *)b, len)) {
+    return (size_t)len;
   }
-  return (size_t) (b - b_start);
+  int err_pos = utf8_range((unsigned char *)b, len);
+  if (err_pos == 0) {
+    return len;
+  } else {
+    if (err_pos > 0){
+      *error = 1;
+      return err_pos - 1;
+    }
+      
+  }
+  return 0;
+  
 }
+
+)
+
+OB_DECLARE_AVX2_SPECIFIC_CODE(
+
+static inline int ascii_simd(const uint8_t *data, int len) {
+  if (len >= 32) {
+    const uint8_t *data2 = data + 16;
+
+    __m128i or1 = _mm_set1_epi8(0), or2 = or1;
+
+    while (len >= 32) {
+      __m128i input1 = _mm_loadu_si128((const __m128i *)data);
+      __m128i input2 = _mm_loadu_si128((const __m128i *)data2);
+
+      or1 = _mm_or_si128(or1, input1);
+      or2 = _mm_or_si128(or2, input2);
+
+      data += 32;
+      data2 += 32;
+      len -= 32;
+    }
+
+    or1 = _mm_or_si128(or1, or2);
+    if (_mm_movemask_epi8(_mm_cmplt_epi8(or1, _mm_set1_epi8(0)))) return 0;
+  }
+
+  return ascii_u64(data, len);
+}
+  /*
+ * Map high nibble of "First Byte" to legal character length minus 1
+ * 0x00 ~ 0xBF --> 0
+ * 0xC0 ~ 0xDF --> 1
+ * 0xE0 ~ 0xEF --> 2
+ * 0xF0 ~ 0xFF --> 3
+ */
+static const int8_t _first_len_tbl[] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 2, 3,
+};
+
+/* Map "First Byte" to 8-th item of range table (0xC2 ~ 0xF4) */
+static const int8_t _first_range_tbl[] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 8, 8, 8,
+};
+
+/*
+ * Range table, map range index to min and max values
+ * Index 0    : 00 ~ 7F (First Byte, ascii)
+ * Index 1,2,3: 80 ~ BF (Second, Third, Fourth Byte)
+ * Index 4    : A0 ~ BF (Second Byte after E0)
+ * Index 5    : 80 ~ 9F (Second Byte after ED)
+ * Index 6    : 90 ~ BF (Second Byte after F0)
+ * Index 7    : 80 ~ 8F (Second Byte after F4)
+ * Index 8    : C2 ~ F4 (First Byte, non ascii)
+ * Index 9~15 : illegal: i >= 127 && i <= -128
+ */
+static const uint8_t _range_min_tbl[] = {
+    0x00, 0x80, 0x80, 0x80, 0xA0, 0x80, 0x90, 0x80,
+    0xC2, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
+    0x00, 0x80, 0x80, 0x80, 0xA0, 0x80, 0x90, 0x80,
+    0xC2, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F, 0x7F,
+};
+static const uint8_t _range_max_tbl[] = {
+    0x7F, 0xBF, 0xBF, 0xBF, 0xBF, 0x9F, 0xBF, 0x8F,
+    0xF4, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+    0x7F, 0xBF, 0xBF, 0xBF, 0xBF, 0x9F, 0xBF, 0x8F,
+    0xF4, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+};
+
+/*
+ * Tables for fast handling of four special First Bytes(E0,ED,F0,F4), after
+ * which the Second Byte are not 80~BF. It contains "range index adjustment".
+ * +------------+---------------+------------------+----------------+
+ * | First Byte | original range| range adjustment | adjusted range |
+ * +------------+---------------+------------------+----------------+
+ * | E0         | 2             | 2                | 4              |
+ * +------------+---------------+------------------+----------------+
+ * | ED         | 2             | 3                | 5              |
+ * +------------+---------------+------------------+----------------+
+ * | F0         | 3             | 3                | 6              |
+ * +------------+---------------+------------------+----------------+
+ * | F4         | 4             | 4                | 8              |
+ * +------------+---------------+------------------+----------------+
+ */
+/* index1 -> E0, index14 -> ED */
+static const int8_t _df_ee_tbl[] = {
+    0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0,
+    0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0,
+};
+/* index1 -> F0, index5 -> F4 */
+static const int8_t _ef_fe_tbl[] = {
+    0, 3, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 3, 0, 0, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+};
+
+static inline __m256i push_last_byte_of_a_to_b(__m256i a, __m256i b) {
+  return _mm256_alignr_epi8(b, _mm256_permute2x128_si256(a, b, 0x21), 15);
+}
+
+static inline __m256i push_last_2bytes_of_a_to_b(__m256i a, __m256i b) {
+  return _mm256_alignr_epi8(b, _mm256_permute2x128_si256(a, b, 0x21), 14);
+}
+
+static inline __m256i push_last_3bytes_of_a_to_b(__m256i a, __m256i b) {
+  return _mm256_alignr_epi8(b, _mm256_permute2x128_si256(a, b, 0x21), 13);
+}
+
+/* 5x faster than naive method */
+/* Return 0 - success, -1 - error, >0 - first error char(if RET_ERR_IDX = 1) */
+int utf8_range_avx2(const unsigned char *data, int len)
+{
+#if  RET_ERR_IDX
+    int err_pos = 1;
+#endif
+
+    if (len >= 32) {
+        __m256i prev_input = _mm256_set1_epi8(0);
+        __m256i prev_first_len = _mm256_set1_epi8(0);
+
+        /* Cached tables */
+        const __m256i first_len_tbl =
+            _mm256_loadu_si256((const __m256i *)_first_len_tbl);
+        const __m256i first_range_tbl =
+            _mm256_loadu_si256((const __m256i *)_first_range_tbl);
+        const __m256i range_min_tbl =
+            _mm256_loadu_si256((const __m256i *)_range_min_tbl);
+        const __m256i range_max_tbl =
+            _mm256_loadu_si256((const __m256i *)_range_max_tbl);
+        const __m256i df_ee_tbl =
+            _mm256_loadu_si256((const __m256i *)_df_ee_tbl);
+        const __m256i ef_fe_tbl =
+            _mm256_loadu_si256((const __m256i *)_ef_fe_tbl);
+
+#if !RET_ERR_IDX
+        __m256i error1 = _mm256_set1_epi8(0);
+        __m256i error2 = _mm256_set1_epi8(0);
+#endif
+
+        while (len >= 32) {
+            const __m256i input = _mm256_loadu_si256((const __m256i *)data);
+
+            /* high_nibbles = input >> 4 */
+            const __m256i high_nibbles =
+                _mm256_and_si256(_mm256_srli_epi16(input, 4), _mm256_set1_epi8(0x0F));
+
+            /* first_len = legal character length minus 1 */
+            /* 0 for 00~7F, 1 for C0~DF, 2 for E0~EF, 3 for F0~FF */
+            /* first_len = first_len_tbl[high_nibbles] */
+            __m256i first_len = _mm256_shuffle_epi8(first_len_tbl, high_nibbles);
+
+            /* First Byte: set range index to 8 for bytes within 0xC0 ~ 0xFF */
+            /* range = first_range_tbl[high_nibbles] */
+            __m256i range = _mm256_shuffle_epi8(first_range_tbl, high_nibbles);
+
+            /* Second Byte: set range index to first_len */
+            /* 0 for 00~7F, 1 for C0~DF, 2 for E0~EF, 3 for F0~FF */
+            /* range |= (first_len, prev_first_len) << 1 byte */
+            range = _mm256_or_si256(
+                    range, push_last_byte_of_a_to_b(prev_first_len, first_len));
+
+            /* Third Byte: set range index to saturate_sub(first_len, 1) */
+            /* 0 for 00~7F, 0 for C0~DF, 1 for E0~EF, 2 for F0~FF */
+            __m256i tmp1, tmp2;
+
+            /* tmp1 = (first_len, prev_first_len) << 2 bytes */
+            tmp1 = push_last_2bytes_of_a_to_b(prev_first_len, first_len);
+            /* tmp2 = saturate_sub(tmp1, 1) */
+            tmp2 = _mm256_subs_epu8(tmp1, _mm256_set1_epi8(1));
+
+            /* range |= tmp2 */
+            range = _mm256_or_si256(range, tmp2);
+
+            /* Fourth Byte: set range index to saturate_sub(first_len, 2) */
+            /* 0 for 00~7F, 0 for C0~DF, 0 for E0~EF, 1 for F0~FF */
+            /* tmp1 = (first_len, prev_first_len) << 3 bytes */
+            tmp1 = push_last_3bytes_of_a_to_b(prev_first_len, first_len);
+            /* tmp2 = saturate_sub(tmp1, 2) */
+            tmp2 = _mm256_subs_epu8(tmp1, _mm256_set1_epi8(2));
+            /* range |= tmp2 */
+            range = _mm256_or_si256(range, tmp2);
+
+            /*
+             * Now we have below range indices caluclated
+             * Correct cases:
+             * - 8 for C0~FF
+             * - 3 for 1st byte after F0~FF
+             * - 2 for 1st byte after E0~EF or 2nd byte after F0~FF
+             * - 1 for 1st byte after C0~DF or 2nd byte after E0~EF or
+             *         3rd byte after F0~FF
+             * - 0 for others
+             * Error cases:
+             *   9,10,11 if non ascii First Byte overlaps
+             *   E.g., F1 80 C2 90 --> 8 3 10 2, where 10 indicates error
+             */
+
+            /* Adjust Second Byte range for special First Bytes(E0,ED,F0,F4) */
+            /* Overlaps lead to index 9~15, which are illegal in range table */
+            __m256i shift1, pos, range2;
+            /* shift1 = (input, prev_input) << 1 byte */
+            shift1 = push_last_byte_of_a_to_b(prev_input, input);
+            pos = _mm256_sub_epi8(shift1, _mm256_set1_epi8(0xEF));
+            /*
+             * shift1:  | EF  F0 ... FE | FF  00  ... ...  DE | DF  E0 ... EE |
+             * pos:     | 0   1      15 | 16  17           239| 240 241    255|
+             * pos-240: | 0   0      0  | 0   0            0  | 0   1      15 |
+             * pos+112: | 112 113    127|       >= 128        |     >= 128    |
+             */
+            tmp1 = _mm256_subs_epu8(pos, _mm256_set1_epi8(static_cast<uint8_t>(240)));
+            range2 = _mm256_shuffle_epi8(df_ee_tbl, tmp1);
+            tmp2 = _mm256_adds_epu8(pos, _mm256_set1_epi8(112));
+            range2 = _mm256_add_epi8(range2, _mm256_shuffle_epi8(ef_fe_tbl, tmp2));
+
+            range = _mm256_add_epi8(range, range2);
+
+            /* Load min and max values per calculated range index */
+            __m256i minv = _mm256_shuffle_epi8(range_min_tbl, range);
+            __m256i maxv = _mm256_shuffle_epi8(range_max_tbl, range);
+
+            /* Check value range */
+#if RET_ERR_IDX
+            __m256i error = _mm256_cmpgt_epi8(minv, input);
+            error = _mm256_or_si256(error, _mm256_cmpgt_epi8(input, maxv));
+            /* 5% performance drop from this conditional branch */
+            if (!_mm256_testz_si256(error, error))
+                break;
+#else
+            error1 = _mm256_or_si256(error1, _mm256_cmpgt_epi8(minv, input));
+            error2 = _mm256_or_si256(error2, _mm256_cmpgt_epi8(input, maxv));
+#endif
+
+            prev_input = input;
+            prev_first_len = first_len;
+
+            data += 32;
+            len -= 32;
+#if RET_ERR_IDX
+            err_pos += 32;
+#endif
+        }
+
+#if RET_ERR_IDX
+        /* Error in first 16 bytes */
+        if (err_pos == 1)
+            goto do_naive;
+#else
+        __m256i error = _mm256_or_si256(error1, error2);
+        if (!_mm256_testz_si256(error, error))
+            return -1;
+#endif
+
+        /* Find previous token (not 80~BF) */
+        int32_t token4 = _mm256_extract_epi32(prev_input, 7);
+        const int8_t *token = (const int8_t *)&token4;
+        int lookahead = 0;
+        if (token[3] > (int8_t)0xBF)
+            lookahead = 1;
+        else if (token[2] > (int8_t)0xBF)
+            lookahead = 2;
+        else if (token[1] > (int8_t)0xBF)
+            lookahead = 3;
+
+        data -= lookahead;
+        len += lookahead;
+#if RET_ERR_IDX
+        err_pos -= lookahead;
+#endif
+    }
+
+    /* Check remaining bytes with naive method */
+#if RET_ERR_IDX
+    int err_pos2;
+do_naive:
+    err_pos2 = utf8_naive(data, len);
+    if (err_pos2)
+        return err_pos + err_pos2 - 1;
+    return 0;
+#else
+    return utf8_naive(data, len);
+#endif
+}
+
+static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
+                                         const char *b, const char *e,
+                                         size_t pos, int *error)
+{
+  int len = (int)(e-b);
+  if (OB_UNLIKELY(len <= 0)) {
+    return 0;
+  } else if (len>=15 && ascii_simd((const uint8_t *)b, len)) {
+    return (size_t)len;
+  }
+  int err_pos = utf8_range_avx2((unsigned char *)b, len);
+  if (err_pos == 0) {
+    return len;
+  } else {
+    if (err_pos > 0){
+      *error = 1;
+      return err_pos - 1;
+    }
+  }
+  return 0;
+  
+}
+)
+
+
 
 static int ob_mb_wc_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)),
                  ob_wc_t * pwc, const uchar *s, const uchar *e)
@@ -941,6 +1634,21 @@ int ob_mb_wc_utf8mb4_thunk(const ObCharsetInfo *cs __attribute__((unused)),
   return ob_mb_wc_utf8mb4(cs, pwc, s, e);
 }
 
+typedef size_t (*well_formed_len_ptr)(const struct ObCharsetInfo *, const char *, const char *, size_t, int *);
+
+well_formed_len_ptr select_well_formed_len() {
+#if OB_USE_MULTITARGET_CODE
+  if (oceanbase::common::is_arch_supported(oceanbase::ObTargetArch::AVX2)) {
+    return specific::avx2::ob_well_formed_len_utf8mb4;
+  } else if (oceanbase::common::is_arch_supported(oceanbase::ObTargetArch::SSE42)) {
+    return specific::sse42::ob_well_formed_len_utf8mb4;
+  } else {
+    return specific::normal::ob_well_formed_len_utf8mb4;
+  }
+#else
+  return specific::normal::ob_well_formed_len_utf8mb4;
+#endif
+}
 
 ObCharsetHandler ob_charset_utf8mb4_handler=
 {
@@ -949,7 +1657,7 @@ ObCharsetHandler ob_charset_utf8mb4_handler=
   ob_numchars_mb,
   ob_charpos_mb,
   ob_max_bytes_charpos_mb,
-  ob_well_formed_len_utf8mb4,
+  select_well_formed_len(),
   ob_lengthsp_8bit,
   ob_mb_wc_utf8mb4,
   ob_wc_mb_utf8mb4,
