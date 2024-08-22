@@ -1908,7 +1908,7 @@ int ObMulValueIndexBuilderUtil::is_multivalue_index_type(
         is_multi_value_index = true;
       } else {
         is_multi_value_index = false;
-        std::regex pattern1(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*MULTIVALUE\s*\))", std::regex_constants::icase);
+        std::regex pattern1(R"(JSON_QUERY\s*\(\s*.*\s*ASIS\s*.*\s*\))", std::regex_constants::icase);
         if (std::regex_match(buf, pattern1)) {
           is_multi_value_index = true;
         }
