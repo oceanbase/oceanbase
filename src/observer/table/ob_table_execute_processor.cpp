@@ -248,7 +248,11 @@ int ObTableApiExecuteP::try_process()
         ret = process_dml_op<TABLE_API_EXEC_REPLACE>();
         break;
       case ObTableOperationType::INCREMENT:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INCREMENT;
+        ret = process_incr_or_append_op();
+        break;
       case ObTableOperationType::APPEND:
+        stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_APPEND;
         ret = process_incr_or_append_op();
         break;
       default:
