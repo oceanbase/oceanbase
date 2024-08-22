@@ -37,7 +37,7 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-  template<typename MLS, typename PT>
+  template<typename LsType, typename PtType>
   static int get_sub_point(const ObGeometry *g,
                            const int N,
                            bool& is_null_result,

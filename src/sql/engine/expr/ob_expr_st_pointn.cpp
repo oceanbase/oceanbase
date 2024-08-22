@@ -73,20 +73,15 @@ int ObExprSTPointN::eval_st_pointn(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   common::ObArenaAllocator &tmp_alloc = tmp_alloc_g.get_allocator();
   bool is_null_result = false;
 
-  if (ob_is_null(expr.args_[0]->datum_meta_.type_) 
-      && !ob_is_null(expr.args_[1]->datum_meta_.type_)) {
+  if (ob_is_null(expr.args_[0]->datum_meta_.type_) ||
+      ob_is_null(expr.args_[1]->datum_meta_.type_)) {
     is_null_result = true;
-  } else if (ob_is_null(expr.args_[0]->datum_meta_.type_) 
-            || ob_is_null(expr.args_[1]->datum_meta_.type_)) {
-    is_null_result = true;
-    ret = OB_ERR_PARAM_SIZE;    
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum))) {
     LOG_WARN("eval geo arg failed", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, datum2))) {
     LOG_WARN("eval index arg failed", K(ret));
   } else if (gis_datum->is_null() || datum2->is_null()) {
     is_null_result = true;
-    ret = OB_ERR_PARAM_SIZE;
   } else {
     ObString wkb = gis_datum->get_string();
 
@@ -102,8 +97,7 @@ int ObExprSTPointN::eval_st_pointn(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_alloc, wkb, src_geo, srs, N_ST_POINTN, 
                                                       ObGeoBuildFlag::GEO_DEFAULT))) {
       LOG_WARN("failed to parse wkb", K(ret));        // ObIWkbGeom
-    } else if ((src_geo->type() <= ObGeoType::GEOMETRY) 
-                || (src_geo->type() >= ObGeoType::GEOTYPEMAX)) {
+    } else if ((src_geo->type() <= ObGeoType::GEOMETRY) || (src_geo->type() >= ObGeoType::GEOTYPEMAX)) {
       ret = OB_ERR_INVALID_GEOMETRY_TYPE;
       LOG_WARN("unknown geometry type", K(ret), K(src_geo->type()));
     } else if (src_geo->type() != ObGeoType::LINESTRING) {
@@ -138,7 +132,7 @@ int ObExprSTPointN::eval_st_pointn(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
   return ret;
 }
 
-template<typename MLS, typename PT>
+template<typename LsType, typename PtType>
 int ObExprSTPointN::get_sub_point(const ObGeometry *g,
                                   const int N,
                                   bool& is_null_result,
@@ -146,19 +140,19 @@ int ObExprSTPointN::get_sub_point(const ObGeometry *g,
                                   ObGeometry *&sub_geo) 
 {
   int ret = OB_SUCCESS;
-  const MLS *src_geo = reinterpret_cast<const MLS *>(const_cast<char *>(g->val()));
+  const LsType *src_geo = reinterpret_cast<const LsType *>(const_cast<char *>(g->val()));
   if (N >= src_geo->size()) {
     is_null_result = true;
   } else {
-    typename MLS::iterator iter = src_geo->begin();
+    typename LsType::iterator iter = src_geo->begin();
     for (uint32 i = 0; i < N; ++i) {
       iter++;
     }
-    typename MLS::const_pointer sub_ptr = iter.operator->();
-    PT *pt = OB_NEWx(PT, &allocator, 
-                    sub_ptr->template get<0>(),
-                    sub_ptr->template get<1>(), 
-                    g->get_srid(), &allocator);
+    typename LsType::const_pointer sub_ptr = iter.operator->();
+    PtType *pt = OB_NEWx(PtType, &allocator, 
+                         sub_ptr->template get<0>(),
+                         sub_ptr->template get<1>(), 
+                         g->get_srid(), &allocator);
     if (OB_ISNULL(pt)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(ret));
