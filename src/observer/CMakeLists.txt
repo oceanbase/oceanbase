@@ -175,6 +175,7 @@ ob_set_subtarget(ob_server table
   table/ob_table_move_response.cpp
   table/ob_table_connection_mgr.cpp
   table/redis/ob_redis_meta.cpp
+  table/ob_table_mode_control.cpp
 )
 
 ob_set_subtarget(ob_server table_load
