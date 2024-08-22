@@ -1135,6 +1135,10 @@ TEST_F(TestLSTabletService, test_empty_shell_mds_compat)
   ASSERT_TRUE(nullptr == upgrade_tablet.mds_data_);
   ASSERT_TRUE(ObTabletStatus::Status::DELETED == upgrade_tablet.tablet_meta_.last_persisted_committed_tablet_status_.tablet_status_);
 
+  // release tmp memory and tablet
+  empty_shell_tablet.mds_data_->~ObTabletMdsData();
+  compat_allocator.free(empty_shell_tablet.mds_data_);
+  empty_shell_tablet.mds_data_ = nullptr;
   ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
   ASSERT_EQ(OB_SUCCESS, ret);
 }
