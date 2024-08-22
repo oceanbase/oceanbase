@@ -572,7 +572,7 @@ public: // API
       ret = _alloc(lib::align_up2(sz, 8) + 8);
       if (ret != NULL) {
         SANITY_UNPOISON(ret, sz);
-        SANITY_POISON((void*)lib::align_up2((uint64_t)ret + sz, 8), 8);
+        SANITY_POISON((void*)((uint64_t)ret + sz), 8);
       }
     }
     return ret;
@@ -647,7 +647,7 @@ public: // API
       ret = _alloc_aligned(lib::align_up2(sz, 8) + 8, alignment);
       if (ret != NULL) {
         SANITY_UNPOISON(ret, sz);
-        SANITY_POISON((void*)lib::align_up2((uint64_t)ret + sz, 8), 8);
+        SANITY_POISON((void*)((uint64_t)ret + sz), 8);
       }
     }
     return ret;

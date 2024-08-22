@@ -12,10 +12,130 @@
 
 #ifndef ENABLE_SANITY
 #else
+#define USING_LOG_PREFIX LIB
 #include "lib/alloc/memory_sanity.h"
+#include "lib/oblog/ob_log.h"
 #include "lib/utility/utility.h"
 
-__thread bool enable_sanity_check = true;
+bool is_range_mapped(int64_t start, int64_t end)
+{
+  FILE *maps_file = fopen("/proc/self/maps", "r");
+  if (maps_file == NULL) {
+    perror("fopen");
+    return false;
+  }
+
+  char line[256];
+  while (fgets(line, sizeof(line), maps_file)) {
+    int64_t addr_start, addr_end;
+    if (sscanf(line, "%" PRIxPTR "-%" PRIxPTR, &addr_start, &addr_end) != 2) {
+      continue;
+    }
+
+    if ((start < addr_end) && (end > addr_start)) {
+      fclose(maps_file);
+      return true;
+    }
+  }
+
+  fclose(maps_file);
+  return false;
+}
+
+int64_t global_addr = 0;
+
+void *sanity_mmap(size_t size)
+{
+  if (0 == global_addr) return NULL;
+  void *ret = NULL;
+  void *ptr = (void*)ATOMIC_FAA(&global_addr, size);
+  if (!sanity_addr_in_range(ptr, size)) {
+    ATOMIC_FAA(&global_addr, -size);
+    LOG_WARN_RET(OB_ERR_SYS, "sanity address exhausted", KP(ptr));
+  } else {
+    void *shadow_ptr = sanity_to_shadow(ptr);
+    size_t shadow_size = sanity_to_shadow_size(size);
+    if (MAP_FAILED == mmap(ptr, size,
+          PROT_READ | PROT_WRITE,
+          MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0)) {
+      LOG_WARN_RET(OB_ERR_SYS, "mmap failed", K(errno));
+    } else if (MAP_FAILED == mmap(shadow_ptr, shadow_size,
+          PROT_READ | PROT_WRITE,
+          MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0)) {
+      LOG_WARN_RET(OB_ERR_SYS, "mmap shadow failed", K(errno));
+    } else {
+      ret = ptr;
+    }
+  }
+  return ret;
+}
+
+void sanity_munmap(void *ptr, size_t size)
+{
+  void *shadow_ptr = sanity_to_shadow((void*)ptr);
+  size_t shadow_size = sanity_to_shadow_size(size);
+  int rc = 0;
+  if (0 == rc) while (-1 == (rc = ::madvise(ptr, size, MADV_DONTNEED)) && EAGAIN == errno);
+  if (0 == rc) while (-1 == (rc = ::madvise(ptr, size, MADV_DONTDUMP)) && EAGAIN == errno);
+  if (0 == rc) while (-1 == (rc = ::madvise(shadow_ptr, shadow_size, MADV_DONTNEED)) && EAGAIN == errno);
+  if (0 == rc) while (-1 == (rc = ::madvise(shadow_ptr, shadow_size, MADV_DONTDUMP)) && EAGAIN == errno);
+  if (rc != 0) {
+    LOG_WARN_RET(OB_ERR_SYS, "madvise failed", K(errno));
+  }
+}
+
+bool init_sanity()
+{
+  set_ob_mem_mgr_path();
+  DEFER(unset_ob_mem_mgr_path(););
+  bool succ = false;
+  int64_t maxs[] = {0x600000000000, 0x500000000000, 0x400000000000};
+  int64_t mins[] = {0, 0, 0};
+  int N = sizeof(maxs)/sizeof(maxs[0]);
+  for (int i = 0; i < N; i++) {
+    int64_t max = maxs[i];
+    int64_t min = max>>3;
+    int64_t step = 128L<<30;
+    do {
+      if (!is_range_mapped(min, max) &&
+          !is_range_mapped(sanity_to_shadow_size(min), sanity_to_shadow_size(max))) {
+        mins[i] = min;
+        break;
+      }
+      min += step;
+    } while (min < max);
+  }
+  int64_t max = 0;
+  int64_t min = 0;
+  for (int i = 0; i < N; i++) {
+    if (mins[i] && maxs[i] - mins[i] > max - min) {
+      max = maxs[i];
+      min = mins[i];
+    }
+  }
+  if (0 == min) {
+    LOG_WARN_RET(OB_ERR_SYS, "search region failed");
+  } else if (MAP_FAILED == mmap((void*)min, max - min,
+                                PROT_NONE,
+                                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0)) {
+    LOG_WARN_RET(OB_ERR_SYS, "reserve region failed", K(errno));
+  } else if (MAP_FAILED == mmap(sanity_to_shadow((void*)min), sanity_to_shadow_size(max - min),
+                                PROT_READ | PROT_WRITE,
+                                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1, 0)) {
+    LOG_WARN_RET(OB_ERR_SYS, "reserve shadow region failed", K(errno));
+  } else if (-1 == madvise((void*)min, max - min, MADV_DONTDUMP)) {
+    LOG_WARN_RET(OB_ERR_SYS, "suggest region nodump failed", K(errno));
+  } else if (-1 == madvise(sanity_to_shadow((void*)min), sanity_to_shadow_size(max - min), MADV_DONTDUMP)) {
+    LOG_WARN_RET(OB_ERR_SYS, "suggest shadow region nodump failed", K(errno));
+  } else {
+    sanity_max_addr = max;
+    sanity_min_addr = min;
+    global_addr = sanity_min_addr;
+    succ = true;
+  }
+  return succ;
+}
+
 struct t_vip {
 public:
   typedef char t_func[128];
@@ -113,163 +233,4 @@ void memory_sanity_abort()
     }
   }
 }
-
-template <class Tp>
-inline void DoNotOptimize(Tp const& value)
-{
-  asm volatile("" : : "g"(value) : "memory");
-}
-
-EXTERN_C_BEGIN
-
-void *memset(void *s, int c, size_t n)
-{
-  static void *(*real_func)(void *, int, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "memset");
-  sanity_check_range(s, n);
-  return real_func(s, c, n);
-}
-
-void bzero(void *s, size_t n)
-{
-  static void (*real_func)(void *, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "bzero");
-  sanity_check_range(s, n);
-  return real_func(s, n);
-}
-
-void *memcpy(void *dest, const void *src, size_t n)
-{
-  static void *(*real_func)(void *, const void *, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "memcpy");
-  sanity_check_range(dest, n);
-  sanity_check_range(src, n);
-  return real_func(dest, src, n);
-}
-
-void *memmove(void *dest, const void *src, size_t n)
-{
-  static void *(*real_func)(void *, const void *, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "memmove");
-  sanity_check_range(dest, n);
-  sanity_check_range(src, n);
-  return real_func(dest, src, n);
-}
-
-int memcmp(const void *s1, const void *s2, size_t n)
-{
-  static int (*real_func)(const void *, const void *, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "memcmp");
-  sanity_check_range(s1, n);
-  sanity_check_range(s2, n);
-  return real_func(s1, s2, n);
-}
-
-size_t strlen(const char *s)
-{
-  static size_t (*real_func)(const char *)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "strlen");
-  size_t len = real_func(s);
-  sanity_check_range(s, len + 1); // include the terminating null byte
-  return len;
-}
-
-size_t strnlen(const char *s, size_t maxlen)
-{
-  static size_t (*real_func)(const char *, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "strnlen");
-  size_t len = real_func(s, maxlen);
-  sanity_check_range(s, len);
-  return len;
-}
-
-char *strcpy(char *dest, const char *src)
-{
-  static char *(*real_func)(char *, const char *)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "strcpy");
-  sanity_check_range(dest, strlen(src) + 1); // invoke strlen directly, utilize checker within strlen
-  return real_func(dest, src);
-}
-
-char *strncpy(char *dest, const char *src, size_t n)
-{
-  static char *(*real_func)(char *, const char *, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "strncpy");
-  sanity_check_range(dest, strnlen(src, n));
-  return real_func(dest, src, n);
-}
-
-int strcmp(const char *s1, const char *s2)
-{
-  static int (*real_func)(const char *, const char *)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "strcmp");
-  DoNotOptimize(strlen(s1));
-  DoNotOptimize(strlen(s2));
-  return real_func(s1, s2);
-}
-
-int strncmp(const char *s1, const char *s2, size_t n)
-{
-  static int (*real_func)(const char *, const char *, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "strncmp");
-  DoNotOptimize(strnlen(s1, n));
-  DoNotOptimize(strnlen(s2, n));
-  return real_func(s1, s2, n);
-}
-
-int strcasecmp(const char *s1, const char *s2)
-{
-  static int (*real_func)(const char *, const char *)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "strcasecmp");
-  DoNotOptimize(strlen(s1));
-  DoNotOptimize(strlen(s2));
-  return real_func(s1, s2);
-}
-
-int strncasecmp(const char *s1, const char *s2, size_t n)
-{
-  static int (*real_func)(const char *, const char *, size_t)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "strncasecmp");
-  DoNotOptimize(strnlen(s1, n));
-  DoNotOptimize(strnlen(s2, n));
-  return real_func(s1, s2, n);
-}
-
-int vsprintf(char *str, const char *format, va_list ap)
-{
-  static int (*real_func)(char *, const char *, va_list)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "vsprintf");
-  int n = real_func(str, format, ap);
-  sanity_check_range(str, n + 1);
-  return n;
-}
-
-int vsnprintf(char *str, size_t size, const char *format, va_list ap)
-{
-  static int (*real_func)(char *, size_t, const char *, va_list)
-    = (__typeof__(real_func)) dlsym(RTLD_NEXT, "vsnprintf");
-  int n = real_func(str, size, format, ap);
-  sanity_check_range(str, OB_LIKELY((n + 1) < size) ? (n + 1) : size);
-  return n;
-}
-
-int sprintf(char *str, const char *format, ...)
-{
-  va_list ap;
-  va_start(ap, format);
-  int n = vsprintf(str, format, ap);
-  va_end(ap);
-  return n;
-}
-
-int snprintf(char *str, size_t size, const char *format, ...)
-{
-  va_list ap;
-  va_start(ap, format);
-  int n = vsnprintf(str, size, format, ap);
-  va_end(ap);
-  return n;
-}
-
-EXTERN_C_END
 #endif
