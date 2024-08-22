@@ -1760,7 +1760,9 @@ int ObTableLockService::batch_pre_check_lock_(ObTableLockCtx &ctx,
   int last_ret = OB_SUCCESS;
   int64_t USLEEP_TIME = 100; // 0.1 ms
   bool need_retry = false;
-  ObBatchLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_lock_obj);
+  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
+  rpc_proxy.set_detect_session_killed(true);
+  ObBatchLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::batch_lock_obj);
   // only used in LOCK_TABLE/LOCK_PARTITION
   if (LOCK_TABLE == ctx.task_type_ ||
       LOCK_PARTITION == ctx.task_type_) {
@@ -1864,7 +1866,9 @@ int ObTableLockService::pre_check_lock_old_version_(ObTableLockCtx &ctx,
   ObRetryCtx retry_ctx;
   ObAddr addr;
   ObTableLockTaskRequest request;
-  ObTableLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::lock_table);
+  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
+  rpc_proxy.set_detect_session_killed(true);
+  ObTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::lock_table);
   // only used in LOCK_TABLE/LOCK_PARTITION
   if (LOCK_TABLE == ctx.task_type_ ||
       LOCK_PARTITION == ctx.task_type_) {
@@ -2306,11 +2310,13 @@ int ObTableLockService::inner_process_obj_lock_batch_(ObTableLockCtx &ctx,
                                                       const ObTableLockOwnerID lock_owner)
 {
   int ret = OB_SUCCESS;
+  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
+  rpc_proxy.set_detect_session_killed(true);
   if (ctx.is_unlock_task()) {
-    ObHighPriorityBatchLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_unlock_obj);
+    ObHighPriorityBatchLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::batch_unlock_obj);
     ret = batch_rpc_handle_(proxy_batch, ctx, lock_map, lock_mode, lock_owner);
   } else {
-    ObBatchLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_lock_obj);
+    ObBatchLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::batch_lock_obj);
     ret = batch_rpc_handle_(proxy_batch, ctx, lock_map, lock_mode, lock_owner);
   }
 
@@ -2324,12 +2330,14 @@ int ObTableLockService::inner_process_obj_lock_old_version_(ObTableLockCtx &ctx,
                                                             const ObTableLockOwnerID lock_owner)
 {
   int ret = OB_SUCCESS;
+  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
+  rpc_proxy.set_detect_session_killed(true);
   // TODO: yanyuan.cxf we process the rpc one by one and do parallel later.
   if (ctx.is_unlock_task()) {
-    ObHighPriorityTableLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::unlock_table);
+    ObHighPriorityTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::unlock_table);
     ret = parallel_rpc_handle_(proxy_batch, ctx, lock_map, ls_lock_map, lock_mode, lock_owner);
   } else {
-    ObTableLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::lock_table);
+    ObTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::lock_table);
     ret = parallel_rpc_handle_(proxy_batch, ctx, lock_map, ls_lock_map, lock_mode, lock_owner);
   }
 
