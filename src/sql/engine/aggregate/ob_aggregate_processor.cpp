@@ -8454,7 +8454,8 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
     ObGeometrycollection *gc = NULL;
     ObGeometry *cur_geo = NULL;
 
-    bool has_pt = false, has_ls = false, has_py = false, has_other = false;
+    bool need_narrow = true;
+    ObGeoType pre_geo_type = ObGeoType::GEOTYPEMAX;
 
     while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
       if (OB_ISNULL(storted_row)) {
@@ -8478,10 +8479,12 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
                                                             ObGeoBuildFlag::GEO_DEFAULT))) {
             LOG_WARN("failed to parse wkb", K(ret));        // ObIWkbGeom
           } else if (!is_inited) {
-            is_inited = true;
             if (OB_FAIL(ObGeometrycollection::create_collection(cur_geo->crs(), srid,
                                                                 tmp_alloc, gc))) {
               LOG_WARN("fail to create geometry collection", K(ret), K(wkb));
+            } else {
+              pre_geo_type = cur_geo->type();
+              is_inited = true;
             }
           }
 
@@ -8491,29 +8494,18 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
               LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS_AGGREGATION, N_ST_COLLECT, gc->get_srid(), srid);
               LOG_WARN("geometry in collection must in the same SRS", K(ret));
             } else {
-              switch (cur_geo->type()) {  // flags for narrow collection
-                case common::ObGeoType::POINT: {
-                  has_pt = TRUE;
-                  break;
+              if (need_narrow) {
+                if ((cur_geo->type() != pre_geo_type) || 
+                    (cur_geo->type() >= ObGeoType::MULTIPOINT)) {
+                  need_narrow = false;
                 }
-                case common::ObGeoType::LINESTRING: {
-                  has_ls = TRUE;
-                  break;
-                }
-                case common::ObGeoType::POLYGON: {
-                  has_py = TRUE;
-                  break;
-                }
-                default: {
-                  has_other = TRUE;
-                  break;
-                }
-              } // end switch
+                pre_geo_type = cur_geo->type();
+              }
               ObGeoToTreeVisitor visitor(&tmp_alloc);
               if (OB_FAIL(cur_geo->do_visit(visitor))) {
                 LOG_WARN("failed to convert bin to tree", K(ret));
-              } else {
-                gc->push_back(*(visitor.get_geometry()));
+              } else if (OB_FAIL(gc->push_back(*(visitor.get_geometry())))) {
+                LOG_WARN("failed to push geometry into collection", K(ret));
               }
             }
           } // end if (OB_SUCC(ret))
@@ -8530,9 +8522,7 @@ int ObAggregateProcessor::get_st_collect_result(const ObAggrInfo &aggr_info,
       } else {
         ObString res_wkb;
         ObGeometry* narrow_gc = static_cast<ObGeometry *>(gc);
-        if (!has_other && ((has_pt && !has_ls && !has_py)
-            || (!has_pt && has_ls && !has_py)
-            || (!has_pt && !has_ls && has_py))) {
+        if (need_narrow) {
           if (narrow_gc->crs() == ObGeoCRS::Geographic && 
               OB_FAIL(ObGeoFuncUtils::narrow_st_collect_result<ObGeographGeometrycollection>(
                                                                 tmp_alloc, narrow_gc, srs))) {

@@ -73,20 +73,14 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
   common::ObArenaAllocator &tmp_alloc = tmp_alloc_g.get_allocator();
   bool is_null_result = false;
 
-  if (ob_is_null(expr.args_[0]->datum_meta_.type_) 
-      && !ob_is_null(expr.args_[1]->datum_meta_.type_)) {
+  if (ob_is_null(expr.args_[0]->datum_meta_.type_) || ob_is_null(expr.args_[1]->datum_meta_.type_)) {
     is_null_result = true;
-  } else if (ob_is_null(expr.args_[0]->datum_meta_.type_) 
-            || ob_is_null(expr.args_[1]->datum_meta_.type_)) {
-    is_null_result = true;
-    ret = OB_ERR_PARAM_SIZE;    
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, gis_datum))) {
     LOG_WARN("eval geo arg failed", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval(ctx, datum2))) {
     LOG_WARN("eval index arg failed", K(ret));
   } else if (gis_datum->is_null() || datum2->is_null()) {
     is_null_result = true;
-    ret = OB_ERR_PARAM_SIZE;
   } else {
     ObString wkb = gis_datum->get_string();
 
@@ -102,13 +96,9 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
     } else if (OB_FAIL(ObGeoExprUtils::build_geometry(tmp_alloc, wkb, src_geo, srs, N_ST_GEOMETRYN, 
                                                       ObGeoBuildFlag::GEO_DEFAULT ^ ObGeoBuildFlag::GEO_CORRECT))) {
       LOG_WARN("failed to parse wkb", K(ret));        // ObIWkbGeom
-    } else if ((src_geo->type() <= ObGeoType::GEOMETRY) 
-                || (src_geo->type() >= ObGeoType::GEOTYPEMAX)) {
+    } else if ((src_geo->type() <= ObGeoType::GEOMETRY) || (src_geo->type() >= ObGeoType::GEOTYPEMAX)) {
       ret = OB_ERR_INVALID_GEOMETRY_TYPE;
       LOG_WARN("unknown geometry type", K(ret), K(src_geo->type()));
-    } else if (src_geo->type() <= ObGeoType::POLYGON) {
-      ret = OB_ERR_BAD_FIELD_ERROR;
-      LOG_WARN("The type of geometry should be collection", K(ret));
     } else {
       const int N = datum2->get_int() - 1;
       if (N >= 0) { // N should be a no-negative number
@@ -154,8 +144,11 @@ int ObExprSTGeometryN::eval_st_geometryn(const ObExpr &expr, ObEvalCtx &ctx, ObD
             }
             break;
           }
-          default:
+          default:{
+            ret = OB_ERR_BAD_FIELD_ERROR;
+            LOG_WARN("The type of geometry should be collection", K(ret));
             break;
+          }
         } // end switch
 
         if (OB_SUCC(ret) && !is_null_result) {
