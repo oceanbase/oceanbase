@@ -477,7 +477,11 @@ int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row, common::ObIAllocator
   int ret = OB_SUCCESS;
   ObNewRow *inner_row = nullptr;
   if (OB_FAIL(get_next_row(inner_row))) {
-    LOG_WARN("fail to get next row", KR(ret));
+    if (OB_ITER_END != ret) {
+      LOG_WARN("fail to get next row", KR(ret));
+    } else {
+      LOG_DEBUG("iter is end", KR(ret));
+    }
   } else if (OB_ISNULL(inner_row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("new row is null", KR(ret));
