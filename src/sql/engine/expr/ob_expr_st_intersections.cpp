@@ -58,81 +58,6 @@ int ObExprSTIntersections::calc_result_type2(ObExprResType &type,
   return ret;
 }
 
-int ObExprSTIntersections::process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx,
-    ObIAllocator &allocator, ObGeometry *&geo1, ObGeometry *&geo2, bool &is_null_res,
-    const ObSrsItem *&srs)
-{
-  INIT_SUCC(ret);
-  ObDatum *gis_datum1 = nullptr;
-  ObDatum *gis_datum2 = nullptr;
-  ObExpr *gis_arg1 = expr.args_[0];
-  ObExpr *gis_arg2 = expr.args_[1];
-  ObObjType input_type1 = gis_arg1->datum_meta_.type_;
-  ObObjType input_type2 = gis_arg2->datum_meta_.type_;
-  is_null_res = false;
-  if (OB_FAIL(gis_arg1->eval(ctx, gis_datum1)) || OB_FAIL(gis_arg2->eval(ctx, gis_datum2))) {
-    LOG_WARN("eval geo args failed", K(ret));
-  } else if (gis_datum1->is_null() || gis_datum2->is_null()) {
-    is_null_res = true;
-  } else {
-    ObGeoType type1;
-    ObGeoType type2;
-    uint32_t srid1;
-    uint32_t srid2;
-    ObString wkb1 = gis_datum1->get_string();
-    ObString wkb2 = gis_datum2->get_string();
-    omt::ObSrsCacheGuard srs_guard;
-    bool is_geo1_valid = false;
-    bool is_geo2_valid = false;
-    if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
-            *gis_datum1,
-            gis_arg1->datum_meta_,
-            gis_arg1->obj_meta_.has_lob_header(),
-            wkb1))) {
-      LOG_WARN("fail to get real string data", K(ret), K(wkb1));
-    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator,
-                   *gis_datum2,
-                   gis_arg2->datum_meta_,
-                   gis_arg2->obj_meta_.has_lob_header(),
-                   wkb2))) {
-      LOG_WARN("fail to get real string data", K(ret), K(wkb2));
-    } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb1, type1, srid1))) {
-      if (ret == OB_ERR_GIS_INVALID_DATA) {
-        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_INTERSECTIONS);
-      }
-      LOG_WARN("get type and srid from wkb failed", K(wkb1), K(ret));
-    } else if (OB_FAIL(ObGeoTypeUtil::get_type_srid_from_wkb(wkb2, type2, srid2))) {
-      if (ret == OB_ERR_GIS_INVALID_DATA) {
-        LOG_USER_ERROR(OB_ERR_GIS_INVALID_DATA, N_ST_INTERSECTIONS);
-      }
-      LOG_WARN("get type and srid from wkb failed", K(wkb2), K(ret));
-    } else if (srid1 != srid2) {
-      ret = OB_ERR_GIS_DIFFERENT_SRIDS;
-      LOG_WARN("srid not the same", K(ret), K(srid1), K(srid2));
-      LOG_USER_ERROR(OB_ERR_GIS_DIFFERENT_SRIDS, N_ST_INTERSECTIONS, srid1, srid2);
-    } else if (OB_FAIL(ObGeoExprUtils::get_srs_item(
-                   ctx, srs_guard, wkb1, srs, true, N_ST_INTERSECTIONS))) {
-      LOG_WARN("fail to get srs item", K(ret), K(wkb1));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(allocator,
-                   wkb1,
-                   geo1,
-                   srs,
-                   N_ST_INTERSECTIONS,
-                   ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | GEO_RESERVE_3D))) {
-      LOG_WARN("get first geo by wkb failed", K(ret));
-    } else if (OB_FAIL(ObGeoExprUtils::build_geometry(allocator,
-                   wkb2,
-                   geo2,
-                   srs,
-                   N_ST_INTERSECTIONS,
-                   ObGeoBuildFlag::GEO_ALLOW_3D_DEFAULT | GEO_RESERVE_3D))) {
-      LOG_WARN("get second geo by wkb failed", K(ret));
-    }
-  } // end else
-
-  return ret;
-}
-
 int ObExprSTIntersections::eval_st_intersections(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
 {
   INIT_SUCC(ret);
@@ -147,8 +72,8 @@ int ObExprSTIntersections::eval_st_intersections(const ObExpr &expr, ObEvalCtx &
   ObGeometry *diff_res = nullptr;
   bool is_empty_res = false;
 
-  if (OB_FAIL(
-        process_input_geometry(expr, ctx, temp_allocator, geo1_3d, geo2_3d, is_null_res, srs))) {
+  if (OB_FAIL(ObGeoExprUtils::process_input_geometry(expr, ctx, temp_allocator, 
+                                geo1_3d, geo2_3d, is_null_res, srs, N_ST_INTERSECTIONS))) {
     LOG_WARN("fail to process input geometry", K(ret));
   } else if (!is_null_res) {
     ObGeometry *geo1 = nullptr;
@@ -191,7 +116,7 @@ int ObExprSTIntersections::eval_st_intersections(const ObExpr &expr, ObEvalCtx &
       } else if (OB_FAIL(ObGeoExprUtils::check_empty(diff_res, is_empty_res))) {
         LOG_WARN("check geo empty failed", K(ret));
       }
-    } // else
+    } // end else
 
     if (OB_FAIL(ret)) {
       // do nothing
@@ -226,9 +151,8 @@ int ObExprSTIntersections::eval_st_intersections(const ObExpr &expr, ObEvalCtx &
           LOG_WARN("failed get geometry 3D", K(ret));
         }
       }
-    } // else
-
-  } // else if(!is_null_res)
+    } // end else
+  } // end else if(!is_null_res)
 
   if (OB_FAIL(ret)) {
     // do nothing

@@ -382,7 +382,6 @@ static int apply_brute_force_intersections_geog(const ObGeometry *g1, const ObGe
   return ret;
 }
 
-/**************************************  Impl  **************************************/
 class ObGeoFuncIntersectionsImpl : public ObIGeoDispatcher<ObGeometry *, ObGeoFuncIntersectionsImpl>
 {
 public:
@@ -400,8 +399,8 @@ public:
 
 private:
   template<typename GcTreeType, typename PtType, typename GcBinType>
-  static int eval_intersections_gc(
-      const ObGeometry *g1, const ObGeometry *g2, const ObGeoEvalCtx &context, ObGeometry *&result)
+  static int eval_intersections_gc(const ObGeometry *g1, const ObGeometry *g2, 
+                                   const ObGeoEvalCtx &context, ObGeometry *&result)
   {
     INIT_SUCC(ret);
     
@@ -535,9 +534,7 @@ private:
 
 };
 
-/*********************************** bin cartesian **************************************/
-
-// intersection(Cartesian_point, *)
+// Cartesian_point
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomPoint, ObWkbGeomPoint, ObGeometry *)
 {
   return apply_bg_intersections<ObCartesianMultipoint, ObCartesianMultilinestring, ObCartesianMultipolygon,
@@ -586,9 +583,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomPoint, ObWkbG
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Cartesian_linestring, *)
+// Cartesian_linestring
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomLineString, ObWkbGeomPoint, ObGeometry *)
 {
   return apply_bg_intersections<ObCartesianMultipoint, ObCartesianMultilinestring, ObCartesianMultipolygon,
@@ -605,7 +600,6 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomLineString, O
 }
 OB_GEO_FUNC_END;
 
-// TODO: fix this in boost geometry
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomLineString, ObWkbGeomPolygon, ObGeometry *)
 {
   return apply_brute_force_intersections_cart<ObWkbGeomLineString, ObWkbGeomPolygon>(
@@ -629,7 +623,6 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomLineString, O
 }
 OB_GEO_FUNC_END;
 
-// TODO: fix this in boost geometry
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomLineString, ObWkbGeomMultiPolygon, ObGeometry *)
 {
   return apply_brute_force_intersections_cart<ObWkbGeomLineString, ObWkbGeomMultiPolygon>(
@@ -637,9 +630,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomLineString, O
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Cartesian_polygon, *)
+// Cartesian_polygon
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomPolygon, ObWkbGeomPoint, ObGeometry *)
 {
   return apply_bg_intersections<ObCartesianMultipoint, ObCartesianMultilinestring, ObCartesianMultipolygon,
@@ -648,7 +639,6 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomPolygon, ObWk
 }
 OB_GEO_FUNC_END;
 
-// TODO: fix this in boost geometry
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomPolygon, ObWkbGeomLineString, ObGeometry *)
 {
   return apply_brute_force_intersections_cart<ObWkbGeomLineString, ObWkbGeomPolygon>(
@@ -672,7 +662,6 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomPolygon, ObWk
 }
 OB_GEO_FUNC_END;
 
-// TODO: fix this in boost geometry
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomPolygon, ObWkbGeomMultiLineString, ObGeometry *)
 {
   return apply_brute_force_intersections_cart<ObWkbGeomPolygon, ObWkbGeomMultiLineString>(
@@ -688,9 +677,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomPolygon, ObWk
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Cartesian_geometrycollection, *)
+// Cartesian_geometrycollection
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomCollection, ObWkbGeomCollection, ObGeometry *)
 {
   return eval_intersections_gc<ObCartesianGeometrycollection, ObCartesianPoint, ObWkbGeomCollection>(
@@ -712,9 +699,7 @@ OB_GEO_CART_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomCollecti
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Cartesian_multipoint, *)
+// Cartesian_multipoint
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiPoint, ObWkbGeomPoint, ObGeometry *)
 {
   return apply_bg_intersections<ObCartesianMultipoint, ObCartesianMultilinestring, ObCartesianMultipolygon,
@@ -763,10 +748,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiPoint, O
 }
 OB_GEO_FUNC_END;
 
-
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Cartesian_multilinestring, *)
+// Cartesian_multilinestring
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiLineString, ObWkbGeomPoint, ObGeometry *)
 {
   return apply_bg_intersections<ObCartesianMultipoint, ObCartesianMultilinestring, ObCartesianMultipolygon,
@@ -783,7 +765,6 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiLineStri
 }
 OB_GEO_FUNC_END;
 
-// TODO: fix this in boost geometry
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiLineString, ObWkbGeomPolygon, ObGeometry *)
 {
   return apply_brute_force_intersections_cart<ObWkbGeomPolygon, ObWkbGeomMultiLineString>(
@@ -807,7 +788,6 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiLineStri
 }
 OB_GEO_FUNC_END;
 
-// TODO: fix this in boost geometry
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiLineString, ObWkbGeomMultiPolygon, ObGeometry *)
 {
   return apply_brute_force_intersections_cart<ObWkbGeomMultiLineString, ObWkbGeomMultiPolygon>(
@@ -815,9 +795,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiLineStri
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Cartesian_multipolygon, *)
+// Cartesian_multipolygon
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiPolygon, ObWkbGeomPoint, ObGeometry *)
 {
   return apply_bg_intersections<ObCartesianMultipoint, ObCartesianMultilinestring, ObCartesianMultipolygon,
@@ -826,7 +804,6 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiPolygon,
 }
 OB_GEO_FUNC_END;
 
-// TODO: fix this in boost geometry
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiPolygon, ObWkbGeomLineString, ObGeometry *)
 {
   return apply_brute_force_intersections_cart<ObWkbGeomLineString, ObWkbGeomMultiPolygon>(
@@ -850,7 +827,6 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiPolygon,
 }
 OB_GEO_FUNC_END;
 
-// TODO: fix this in boost geometry
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiPolygon, ObWkbGeomMultiLineString, ObGeometry *)
 {
   return apply_brute_force_intersections_cart<ObWkbGeomMultiLineString, ObWkbGeomMultiPolygon>(
@@ -866,9 +842,7 @@ OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeomMultiPolygon,
 }
 OB_GEO_FUNC_END;
 
-/*********************************** bin geography **************************************/
-
-// intersection(Geographic_point, *)
+// Geographic_point
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogPoint, ObWkbGeogPoint, ObGeometry *)
 {
   return apply_bg_intersections<ObGeographMultipoint, ObGeographMultilinestring, ObGeographMultipolygon,
@@ -917,9 +891,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogPoint, ObWkbG
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Geographic_linestring, *)
+// Geographic_linestring
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogLineString, ObWkbGeogPoint, ObGeometry *)
 {
   return apply_bg_intersections_with_strategy<ObGeographMultipoint, ObGeographMultilinestring, ObGeographMultipolygon, ObPlPaStrategy,
@@ -966,9 +938,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogLineString, O
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Geographic_polygon, *)
+// Geographic_polygon
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogPolygon, ObWkbGeogPoint, ObGeometry *)
 {
   return apply_bg_intersections_with_strategy<ObGeographMultipoint, ObGeographMultilinestring, ObGeographMultipolygon, ObPlPaStrategy,
@@ -1015,9 +985,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogPolygon, ObWk
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Geographic_geometrycollection, *)
+// Geographic_geometrycollection
 OB_GEO_CART_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogCollection, ObWkbGeogCollection, ObGeometry *)
 {
   return eval_intersections_gc<ObGeographGeometrycollection, ObGeographPoint, ObWkbGeogCollection>(
@@ -1039,9 +1007,7 @@ OB_GEO_CART_BINARY_FUNC_GEO2_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogCollecti
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Geographic_multipoint, *)
+// Geographic_multipoint
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogMultiPoint, ObWkbGeogPoint, ObGeometry *)
 {
   return apply_bg_intersections<ObGeographMultipoint, ObGeographMultilinestring, ObGeographMultipolygon,
@@ -1090,9 +1056,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogMultiPoint, O
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Geographic_multilinestring, *)
+// Geographic_multilinestring
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogMultiLineString, ObWkbGeogPoint, ObGeometry *)
 {
   return apply_bg_intersections_with_strategy<ObGeographMultipoint, ObGeographMultilinestring, ObGeographMultipolygon, ObPlPaStrategy,
@@ -1139,9 +1103,7 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogMultiLineStri
 }
 OB_GEO_FUNC_END;
 
-//////////////////////////////////////////////////////////////////////////////
-
-// intersection(Geographic_multipolygon, *)
+// Geographic_multipolygon
 OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogMultiPolygon, ObWkbGeogPoint, ObGeometry *)
 {
   return apply_bg_intersections_with_strategy<ObGeographMultipoint, ObGeographMultilinestring, ObGeographMultipolygon, ObPlPaStrategy,
@@ -1187,8 +1149,6 @@ OB_GEO_GEOG_BINARY_FUNC_BEGIN(ObGeoFuncIntersectionsImpl, ObWkbGeogMultiPolygon,
       g1, g2, context, result);
 }
 OB_GEO_FUNC_END;
-
-/****************************************************************************/
 
 int ObGeoFuncIntersections::eval(const ObGeoEvalCtx &gis_context, ObGeometry *&result)
 {

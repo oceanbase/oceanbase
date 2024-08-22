@@ -35,8 +35,6 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
 private:
-  static int process_input_geometry(const ObExpr &expr, ObEvalCtx &ctx, ObIAllocator &allocator,
-      ObGeometry *&geo1, ObGeometry *&geo2, bool &is_null_res, const ObSrsItem *&srs);
   DISALLOW_COPY_AND_ASSIGN(ObExprSTIntersections);
 };
 } // sql
