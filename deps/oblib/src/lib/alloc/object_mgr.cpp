@@ -248,6 +248,7 @@ SubObjectMgr *ObjectMgr::create_sub_mgr()
   if (OB_NOT_NULL(ptr)) {
     sub_mgr = new (ptr) SubObjectMgr(CTX_ATTR(ctx_id_).enable_no_log_, tenant_id_, ctx_id_,
         ablock_size_, enable_dirty_list_, blk_mgr_);
+    sub_mgr->set_tenant_ctx_allocator(ta_);
   }
   return sub_mgr;
 }
