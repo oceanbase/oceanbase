@@ -14148,6 +14148,30 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_scheduler_job_run_detail_v2',
   keywords = all_def_keywords['__all_scheduler_job_run_detail_v2']))
 
+def_table_schema(
+  owner      = 'wuguangxin.wgx',
+  table_name = '__all_virtual_kv_client_info',
+  table_id = '12500',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  in_tenant_space = True,
+  rowkey_columns = [],
+  normal_columns = [
+    ('client_id', 'uint'),
+    ('client_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('client_port', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('tenant_id', 'int'),
+    ('user_name', 'varchar:OB_MAX_USER_NAME_LENGTH'),
+    ('first_login_ts', 'timestamp'),
+    ('last_login_ts', 'timestamp'),
+    ('client_info', 'varchar:2048')
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
 # End of Mysql Virtual Table (10000, 15000]
@@ -35413,6 +35437,62 @@ def_table_schema(
   WHERE
     0 = 1
 """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'GV$OB_KV_CLIENT_INFO',
+  table_id        = '21607',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    client_id AS CLIENT_ID,
+    client_ip AS CLIENT_IP,
+    client_port AS CLIENT_PORT,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    user_name AS USER_NAME,
+    first_login_ts AS FIRST_LOGIN_TS,
+    last_login_ts AS LAST_LOGIN_TS,
+    client_info AS CLIENT_INFO
+  FROM
+    oceanbase.__all_virtual_kv_client_info
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'wuguangxin.wgx',
+  table_name      = 'V$OB_KV_CLIENT_INFO',
+  table_id        = '21608',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  SELECT
+    client_id AS CLIENT_ID,
+    client_ip AS CLIENT_IP,
+    client_port AS CLIENT_PORT,
+    svr_ip AS SVR_IP,
+    svr_port AS SVR_PORT,
+    tenant_id AS TENANT_ID,
+    user_name AS USER_NAME,
+    first_login_ts AS FIRST_LOGIN_TS,
+    last_login_ts AS LAST_LOGIN_TS,
+    client_info AS CLIENT_INFO
+  FROM
+     oceanbase.GV$OB_KV_CLIENT_INFO
+  WHERE
+    SVR_IP=HOST_IP()
+  AND
+    SVR_PORT=RPC_PORT()
+  """.replace("\n", " ")
 )
 
 # 余留位置（此行之前占位）

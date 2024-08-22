@@ -35,6 +35,7 @@
 #include "observer/mysql/obmp_base.h"
 #include "lib/stat/ob_session_stat.h"
 #include "ob_table_mode_control.h"
+#include "ob_table_client_info_mgr.h"
 
 using namespace oceanbase::observer;
 using namespace oceanbase::common;
@@ -89,8 +90,11 @@ int ObTableLoginP::process()
       LOG_WARN("failed to generate credential", K(ret), K(login));
     } else {
       MTL_SWITCH(credential_.tenant_id_) {
+        const ObAddr &cli_addr = ObCurTraceId::get_addr();
         if (OB_FAIL(TABLEAPI_SESS_POOL_MGR->update_sess(credential_))) {
           LOG_WARN("failed to update session pool", K(ret), K_(credential));
+        } else if (!login.client_info_.empty() && OB_FAIL(TABLEAPI_CLI_INFO_MGR->record(login, cli_addr))) {
+          LOG_WARN("failed to record login client info", K(ret), K(login));
         }
       }
       result_.reserved1_ = 0;

@@ -228,6 +228,7 @@
 #include "observer/virtual_table/ob_all_virtual_tenant_scheduler_running_job.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_resource_limit.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_resource_limit_detail.h"
+#include "observer/virtual_table/ob_all_virtual_kv_client_info.h"
 
 namespace oceanbase
 {
@@ -2716,6 +2717,18 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
               if (OB_FAIL(all_virtual_resource_limit_detail->set_addr(addr_)))
               {
                 LOG_WARN("set addr failed", K(ret), K(addr_));
+              }
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_KV_CLIENT_INFO_TID:
+          {
+            ObAllVirtualKvClientInfo *all_virtual_kv_client_info = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualKvClientInfo, all_virtual_kv_client_info))) {
+              vt_iter = static_cast<ObAllVirtualKvClientInfo *>(all_virtual_kv_client_info);
+              if (OB_FAIL(all_virtual_kv_client_info->set_svr_addr(addr_)))
+              {
+                LOG_WARN("set server addr failed", K(ret), K(addr_));
               }
             }
             break;

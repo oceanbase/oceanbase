@@ -212,7 +212,7 @@ int ObTableBatchService::get_result_index(const ObNewRow &row,
     ObRowkey entity_rowkey = entity.get_rowkey();
     ObRowkey row_rowkey(row.cells_, entity_rowkey.get_obj_cnt());
     bool equal = false;
-    if (row_rowkey.equal(entity_rowkey, equal)) {
+    if (OB_FAIL(row_rowkey.equal(entity_rowkey, equal))) {
       LOG_WARN("fail to compare rowkey", K(row_rowkey), K(entity_rowkey));
     } else if (equal && OB_FAIL(indexs.push_back(i))) {
       LOG_WARN("fail to push_back index", K(row_rowkey), K(indexs), K(i));

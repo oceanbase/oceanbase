@@ -376,7 +376,7 @@ int ObKvSchemaCacheGuard::create_schema_cache_obj(ObSchemaGetterGuard &schema_gu
     if (OB_ISNULL(cache_obj = static_cast<ObKvSchemaCacheObj *>(cache_guard_.get_cache_obj()))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cache obj is NULL", K(ret));
-    } else if (cache_obj->cons_table_info(table_schema)) {
+    } else if (OB_FAIL(cache_obj->cons_table_info(table_schema))) {
       LOG_WARN("fail to construct table info", K(ret));
     } else if (OB_FAIL(cache_obj->cons_index_info(&schema_guard, MTL_ID(), table_schema->get_table_id()))) {
       LOG_WARN("fail to construct index info", K(ret));

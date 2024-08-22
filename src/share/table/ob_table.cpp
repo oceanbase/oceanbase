@@ -39,7 +39,7 @@ int ObTableSingleOpEntity::construct_column_names(const ObTableBitMap &names_bit
       if (OB_UNLIKELY(names_pos[idx] >= all_keys_count)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("names_pos idx greater than all_keys_count", K(ret), K(all_keys_count), K(names_pos));
-      } else if (dictionary.at(names_pos[idx], column_name)) {
+      } else if (OB_FAIL(dictionary.at(names_pos[idx], column_name))) {
         LOG_WARN("failed to get real_names", K(ret), K(idx), K(dictionary), K(names_pos));
       } else if (OB_FAIL(column_names.push_back(column_name))) {
         LOG_WARN("failed to push real_names", K(ret), K(idx));
@@ -2571,9 +2571,9 @@ int ObTableSingleOpEntity::deep_copy(common::ObIAllocator &allocator, const ObIT
         } else {
           for (int64_t i = 0; i < other_prop_name_bp->get_block_count(); ++i) {
             ObTableBitMap::size_type block_val;
-            if (other_prop_name_bp->get_block_value(i, block_val)) {
+            if (OB_FAIL(other_prop_name_bp->get_block_value(i, block_val))) {
               LOG_WARN("failed to get_block_value", K(ret), K(i), KPC(other_prop_name_bp));
-            } else if (properties_names_bp_.push_block_data(block_val)) {
+            } else if (OB_FAIL(properties_names_bp_.push_block_data(block_val))) {
               LOG_WARN("failed to push_block_data", K(ret), K(i), K(block_val), K(properties_names_bp_));
             }
           }

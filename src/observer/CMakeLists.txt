@@ -195,6 +195,7 @@ ob_set_subtarget(ob_server table
   table/redis/operator/ob_redis_string_operator.cpp
   table/ob_table_audit.cpp
   table/ob_table_mode_control.cpp
+  table/ob_table_client_info_mgr.cpp
 )
 
 ob_set_subtarget(ob_server table_load
@@ -463,6 +464,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_tenant_scheduler_running_job.cpp
   virtual_table/ob_all_virtual_tenant_resource_limit.cpp
   virtual_table/ob_all_virtual_tenant_resource_limit_detail.cpp
+  virtual_table/ob_all_virtual_kv_client_info.cpp
 )
 
 ob_server_add_target(ob_server)
