@@ -1854,7 +1854,7 @@ void ObTenant::lq_end(ObThWorker &w)
 {
   int ret = OB_SUCCESS;
   if (w.is_lq_yield()) {
-    if (OB_FAIL(cgroup_ctrl_.add_self_to_cgroup_(id_, w.get_group_id()))) {
+    if (OB_FAIL(SET_GROUP_ID(share::OBCG_DEFAULT))) {
       LOG_WARN("move thread from lq group failed", K(ret), K(id_));
     } else {
       w.set_lq_yield(false);
@@ -1889,7 +1889,7 @@ int ObTenant::lq_yield(ObThWorker &w)
     }
   } else if (w.is_lq_yield()) {
     // avoid duplicate change group
-  } else if (OB_FAIL(cgroup_ctrl_.add_self_to_cgroup_(id_, share::OBCG_LQ))) {
+  } else if (OB_FAIL(SET_GROUP_ID(share::OBCG_LQ))) {
     LOG_WARN("move thread to lq group failed", K(ret), K(id_));
   } else {
     w.set_lq_yield();
