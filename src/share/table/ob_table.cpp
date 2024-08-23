@@ -1076,7 +1076,8 @@ OB_UNIS_DEF_SERIALIZE(ObTableQuery,
                       max_result_size_,
                       htable_filter_,
                       scan_range_columns_,
-                      aggregations_);
+                      aggregations_,
+                      ob_params_);
 
 OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            key_ranges_,
@@ -1090,7 +1091,8 @@ OB_UNIS_DEF_SERIALIZE_SIZE(ObTableQuery,
                            max_result_size_,
                            htable_filter_,
                            scan_range_columns_,
-                           aggregations_);
+                           aggregations_,
+                           ob_params_);
 
 OB_DEF_DESERIALIZE(ObTableQuery,)
 {
@@ -1134,7 +1136,8 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
                 max_result_size_,
                 htable_filter_,
                 scan_range_columns_,
-                aggregations_
+                aggregations_,
+                ob_params_
                 );
   }
   return ret;
@@ -1774,3 +1777,76 @@ OB_SERIALIZE_MEMBER(ObTableMoveReplicaInfo,
 OB_SERIALIZE_MEMBER(ObTableMoveResult,
                     replica_info_,
                     reserved_);
+
+int ObParams::serialize(char *buf, const int64_t buf_len, int64_t &pos) {
+  int ret = OK_;
+  OB_UNIS_ENCODE(UNIS_VERSION);
+  if (OB_SUCC(ret)) {
+    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+    int64_t pos_bak = (pos += size_nbytes);
+    if (OB_SUCC(ret)) {
+      if (param_type == ParamType::HBase) {
+        ObHBaseParams ob_hbase_params = dynamic_cast<ObHBaseParams>(this);
+        if (OB_FAIL(ob_habase_params.serialize_(buf, buf_len, pos))) {
+          RPC_WARN("serialize fail", K(ret));
+        }
+      }
+    }
+    int64_t serial_size = pos - pos_bak;
+    int64_t tmp_pos = 0;
+    CHECK_SERIALIZE_SIZE(CLS, serial_size);
+    if (OB_SUCC(ret)) {
+      ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,
+      size_nbytes, tmp_pos, serial_size);
+    }
+  }
+  return ret; 
+}
+
+int ObParams::deserialize(const char *buf, const int64_t data_len, int64_t &pos){
+  int ret = OK_;          
+  int64_t version = 0;    
+  int64_t len = 0;        
+  if (OB_SUCC(ret)) {
+    OB_UNIS_DECODE(version);
+    OB_UNIS_DECODE(len);
+    CHECK_VERSION_LENGTH(CLS, version, len);
+  }                      
+  if (OB_SUCC(ret)) {
+    int64_t pos_orig = pos;
+    pos = 0;
+    int8_t param_type = 0;
+    ret = serialization::decode(buf + pos_orig, len, pos, param_type);
+    if (OB_FAIL(ret)) {
+      RPC_WARN("decode object fail", "name", MSTR(param_type), K(data_len), K(pos), K(ret));
+    } else if (param_type >= 0 && param_type <= 1) {
+      param_type_ = static_cast<ParamType>(param_type)
+    }
+    if (param_type_ == ParamType::HBase) {
+      ObHBaseParams ob_hbase_params = dynamic_cast<ObHBaseParams>(this);
+      if (OB_FAIL(ob_hbase_params.deserialize_(buf + pos_orig, len, pos))) {
+        RPC_WARN("deserialize_ fail", "slen", len, K(pos), K(ret));
+      } else if (param_type == ParamType::Redis) {
+        ret = OB_NOT_SUPPORTED;
+        RPC_WARN("currently not support redis params", "slen", len, K(pos), K(ret));
+      }
+    }
+    pos = pos_orig + len;
+    }
+  return ret;
+}
+
+int64_t ObParams::get_serialize_size() const {
+  
+  if (param_type_ == ParamType::HBase) {
+    ObHBaseParams ob_hbase_params = dynamic_cast<ObHBaseParams>(this);
+  }
+  int64_t len = get_serialize_size_();
+  OB_UNIS_ADD_LEN(UNIS_VERSION);
+  len += NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
+  return len;
+}
+
+OB_SERIALIZE_NOHEADER(ObHBaseParams, EmptyParent, _, caching_, call_timeout_, flag)
+OB_DESERIALIZE_NOHEADER(ObHBaseParams, EmptyParent, _, caching_, call_timeout_, flag)
+OB_SERIALIZE_SIZE_NOHEADER(ObHBaseParams, EmptyParent, _, caching, call_timeout_, flag)

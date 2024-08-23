@@ -232,6 +232,7 @@ enum class ObQueryOperationType : int {
   QUERY_START = 0,
   QUERY_NEXT = 1,
   QUERY_END = 2,
+  KEEP_ALIVE = 3,
   QUERY_MAX
 };
 
@@ -737,7 +738,8 @@ public:
       max_result_size_(-1),
       htable_filter_(),
       scan_range_columns_(),
-      aggregations_()
+      aggregations_(),
+      ob_params_()
   {}
   ~ObTableQuery() = default;
   void reset();
@@ -767,6 +769,8 @@ public:
   /// The default is -1; this means that no specific maximum result size will be set for this query.
   /// @param max_result_size - The maximum result size in bytes.
   int set_max_result_size(int64_t max_result_size);
+  /// @brief set ob_params for hbase or redis
+  int set_ob_params(ObParams ob_params);
 
   const ObIArray<ObString> &get_select_columns() const { return select_columns_; }
   const ObIArray<common::ObNewRange> &get_scan_ranges() const { return key_ranges_; }
@@ -777,6 +781,7 @@ public:
   const ObHTableFilter& get_htable_filter() const { return htable_filter_; }
   int32_t get_batch() const { return batch_size_; }
   int64_t get_max_result_size() const { return max_result_size_; }
+  const ObParams& get_ob_params() {return ob_params_;}
   int64_t get_range_count() const { return key_ranges_.count(); }
   uint64_t get_checksum() const;
   const ObString &get_filter_string() const { return filter_string_; }
@@ -815,6 +820,7 @@ private:
   ObHTableFilter htable_filter_;
   ObSEArray<ObString, 8> scan_range_columns_;
   ObSEArray<ObTableAggregation, 8> aggregations_;
+  ObParams ob_params_;
 };
 
 /// result for ObTableQuery
@@ -1080,6 +1086,45 @@ private:
   uint64_t reserved_;
 };
 
+class ObParams {
+public:
+  enum class ParamType : int8_t {
+    HBase = 0,
+    Redis = 1
+  };
+
+  ParamType param_type_;
+  OB_INLINE ParamType get_param_type() { return param_type_; }
+}
+
+class ObHBaseParams : ObParams {
+public:
+  ObHBaseParams()
+      : caching_(0),
+        call_timeout_(0),
+        is_raw_(false),
+        allow_partial_results_(false),
+        is_cache_block_(false),
+        check_existence_only_(false)
+  {}
+  ~ObHBaseParams() {}
+
+  OB_INLINE ParamType get_param_type() { return ParamType::HBase; }
+  OB_INLINE void set_caching(const int32_t caching ) { caching_ = caching; }
+  OB_INLINE void set_call_timeout_(const int32_t call_timeout) { call_timeout_ = call_timeout; }
+  OB_INLINE void set_is_raw(const bool is_raw) { is_raw_ = is_raw; }
+  OB_INLINE void set_allow_partial_results(const bool allow_partial_results) { allow_partial_results_ = allow_partial_results; }
+  OB_INLINE void set_is_cache_block(const bool is_cache_block) { is_cache_block_ = is_cache_block; }
+  OB_INLINE void set_check_existence_only(const bool check_existence_only) {check_existence_only_ = check_existence_only; }
+public:
+  int32_t caching_;
+  int32_t call_timeout_;
+  int8_t flag;      // All bool type data is stored in one byte
+  bool is_raw_;
+  bool allow_partial_results_;
+  bool is_cache_block_;
+  bool check_existence_only_;
+}
 
 } // end namespace table
 } // end namespace oceanbase
