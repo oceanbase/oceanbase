@@ -37,9 +37,9 @@ ObExprSTIntersections::~ObExprSTIntersections()
 {}
 
 int ObExprSTIntersections::calc_result_type2(ObExprResType &type,
-                                          ObExprResType &type1,
-                                          ObExprResType &type2,
-                                          common::ObExprTypeCtx &type_ctx) const
+                                             ObExprResType &type1,
+                                             ObExprResType &type2,
+                                             common::ObExprTypeCtx &type_ctx) const
 {
   UNUSED(type_ctx);
   INIT_SUCC(ret);
@@ -66,13 +66,14 @@ int ObExprSTIntersections::eval_st_intersections(const ObExpr &expr, ObEvalCtx &
   ObGeometry *geo1_3d = nullptr;
   ObGeometry *geo2_3d = nullptr;
   bool is_null_res = false;
+  omt::ObSrsCacheGuard srs_guard;
   const ObSrsItem *srs = nullptr;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
   ObGeometry *diff_res = nullptr;
   bool is_empty_res = false;
 
-  if (OB_FAIL(ObGeoExprUtils::process_input_geometry(expr, ctx, temp_allocator, 
+  if (OB_FAIL(ObGeoExprUtils::process_input_geometry(srs_guard, expr, ctx, temp_allocator, 
                                 geo1_3d, geo2_3d, is_null_res, srs, N_ST_INTERSECTIONS))) {
     LOG_WARN("fail to process input geometry", K(ret));
   } else if (!is_null_res) {
