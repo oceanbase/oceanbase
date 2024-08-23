@@ -440,6 +440,10 @@ int ObTableLoadInstance::start_redef_table(
     LOG_WARN("failed to assign tablet ids", KR(ret), K(param.load_level_), K(tablet_ids));
   } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *stmt_ctx_.session_info_))) {
     LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
+    // rewrite error code for concurrency of direct load and offline ddl
+    if (OB_TABLE_NOT_EXIST == ret) {
+      ret = OB_SCHEMA_NOT_UPTODATE;
+    }
   } else {
     ddl_param.dest_table_id_ = start_res.dest_table_id_;
     ddl_param.task_id_ = start_res.task_id_;

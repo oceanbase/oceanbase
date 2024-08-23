@@ -118,14 +118,14 @@ int ObTableDirectInsertCtx::init(
         tablet_ids.reset();
         param.tenant_id_ = MTL_ID();
         param.table_id_ = table_id;
-        param.batch_size_ = 100;
         param.parallel_ = parallel;
         param.session_count_ = parallel;
+        param.batch_size_ = 100;
+        param.max_error_row_count_ = 0;
         param.column_count_ = column_ids.count();
+        param.need_sort_ = table_schema->is_heap_table() ? phy_plan.get_direct_load_need_sort() : true;
         param.px_mode_ = true;
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
-        param.need_sort_ = table_schema->is_heap_table() ? phy_plan.get_direct_load_need_sort() : true;
-        param.max_error_row_count_ = 0;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE
                                                 : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
         param.method_ = method;
