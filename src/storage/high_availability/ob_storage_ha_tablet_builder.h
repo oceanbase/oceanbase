@@ -154,6 +154,11 @@ private:
   int hold_local_tablet_(
       common::ObIArray<ObTabletHandle> &tablet_handle_array);
 private:
+  struct MajorSSTableSnapshotVersionCmp
+  {
+    bool operator()(const ObSSTableWrapper &lhs, const ObSSTableWrapper &rhs) const;
+  };
+
   bool is_inited_;
   ObStorageHATabletsBuilderParam param_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilder);
