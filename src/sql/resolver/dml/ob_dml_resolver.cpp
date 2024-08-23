@@ -11605,6 +11605,13 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_PQ_GBY_HINT:
+    case T_PQ_DISTINCT_HINT:  {
+      if (OB_FAIL(resolve_normal_pq_hint(hint_node, opt_hint))) {
+        LOG_WARN("failed to resolve normal pq hint.", K(ret));
+      }
+      break;
+    }
     case T_USE_LATE_MATERIALIZATION:
     case T_NO_USE_LATE_MATERIALIZATION:
     case T_GBY_PUSHDOWN:
@@ -12087,6 +12094,34 @@ int ObDMLResolver::resolve_pq_subquery_hint(const ParseNode &hint_node,
         opt_hint = pq_subquery_hint;
       }
     }
+  }
+  return ret;
+}
+
+int ObDMLResolver::resolve_normal_pq_hint(const ParseNode &hint_node,
+                                          ObOptHint *&opt_hint)
+{
+  int ret = OB_SUCCESS;
+  opt_hint = NULL;
+  const ParseNode *dist_method_node = NULL;
+  ObPQHint *pq_hint = NULL;
+  ObString qb_name;
+  if (OB_UNLIKELY(T_PQ_GBY_HINT != hint_node.type_ && T_PQ_DISTINCT_HINT != hint_node.type_)
+      || OB_UNLIKELY(2 != hint_node.num_child_)
+      || OB_ISNULL(dist_method_node = hint_node.children_[1])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected pq_gby/pq_distinct hint node", K(ret), K(hint_node.num_child_),
+                                                          K(get_type_name(hint_node.type_)));
+  } else if (NULL == ObPQHint::get_dist_method_str(dist_method_node->type_)) {
+    LOG_TRACE("invalid normal pq hint dist_method_node", K(get_type_name(dist_method_node->type_)));
+  } else if (OB_FAIL(ObQueryHint::create_hint(allocator_, hint_node.type_, pq_hint))) {
+    LOG_WARN("failed to create hint", K(ret));
+  } else if (OB_FAIL(resolve_qb_name_node(hint_node.children_[0], qb_name))) {
+    LOG_WARN("failed to resolve query block name", K(ret));
+  } else {
+    pq_hint->set_qb_name(qb_name);
+    pq_hint->set_dist_method(dist_method_node->type_);
+    opt_hint = pq_hint;
   }
   return ret;
 }

@@ -448,6 +448,7 @@ public:
       HINT_PQ_SET,
       HINT_JOIN_FILTER,
       HINT_TABLE_DYNAMIC_SAMPLING,
+      HINT_PQ
     };
 
   static const int64_t MAX_EXPR_STR_LENGTH_IN_HINT = 1024;
@@ -888,7 +889,7 @@ public:
   const ObTableInHint &get_table() const { return table_; }
   int64_t get_parallel() const { return parallel_; }
   void set_parallel(int64_t parallel) { parallel_ = parallel; }
-  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(table), K_(parallel));
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(table), K_(parallel));
 
 private:
   ObTableInHint table_;
@@ -1008,6 +1009,31 @@ class ObPQSubqueryHint : public ObOptHint
 private:
   DistAlgo dist_algo_;
   QbNameList sub_qb_names_;
+};
+
+// normal pq hint for single child op: group by/distinct
+class ObPQHint : public ObOptHint
+{
+  public:
+  ObPQHint(ObItemType hint_type)
+    : ObOptHint(hint_type),
+      dist_method_(T_INVALID)
+  {
+    set_hint_class(HINT_PQ);
+  }
+  int assign(const ObPQHint &other);
+  virtual ~ObPQHint() {}
+  virtual int print_hint_desc(PlanText &plan_text) const override;
+  static const char* get_dist_method_str(ObItemType dist_method);
+  void set_dist_method(ObItemType dist_method) { dist_method_ = dist_method; }
+  inline bool is_dist_method_match(ObItemType dist_method)  const { return dist_method_ == dist_method; }
+  inline bool is_force_basic()  const { return T_DISTRIBUTE_BASIC == dist_method_; }
+  inline bool is_force_partition_wise()  const { return T_DISTRIBUTE_NONE == dist_method_; }
+  inline bool is_force_dist_hash()  const { return T_DISTRIBUTE_HASH == dist_method_; }
+
+  INHERIT_TO_STRING_KV("ObHint", ObHint, K_(dist_method));
+private:
+  ObItemType dist_method_;
 };
 
 class ObJoinOrderHint : public ObOptHint {

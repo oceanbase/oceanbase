@@ -1370,7 +1370,7 @@ void ObLogPlanHint::reset()
   table_hints_.reuse();
   join_hints_.reuse();
   normal_hints_.reuse();
-  enable_index_prefix_ = false;
+  optimizer_features_enable_version_ = LASTED_COMPAT_VERSION;
 }
 
 #ifndef OB_BUILD_SPM
@@ -1390,7 +1390,7 @@ int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
 #ifdef OB_BUILD_SPM
   is_spm_evolution_ = is_spm_evolution;
 #endif
-  enable_index_prefix_ = (stmt.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_3);
+  optimizer_features_enable_version_ = stmt.get_query_ctx()->optimizer_features_enable_version_;
   const ObStmtHint &stmt_hint = stmt.get_stmt_hint();
   if (OB_FAIL(join_order_.init_leading_info(stmt, query_hint, stmt_hint.get_normal_hint(T_LEADING)))) {
     LOG_WARN("failed to get leading hint info", K(ret));
@@ -1682,14 +1682,22 @@ bool ObLogPlanHint::has_disable_hint(ObItemType hint_type) const
 int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
                                         bool &force_use_merge,
                                         bool &force_part_sort,
-                                        bool &force_normal_sort) const
+                                        bool &force_normal_sort,
+                                        bool &force_basic,
+                                        bool &force_partition_wise,
+                                        bool &force_dist_hash) const
 {
   int ret = OB_SUCCESS;
   force_use_hash = false;
   force_use_merge = false;
   force_part_sort = false;
   force_normal_sort = false;
+  force_basic = false;
+  force_partition_wise = false;
+  force_dist_hash = false;
   const ObAggHint *agg_hint = static_cast<const ObAggHint*>(get_normal_hint(T_USE_HASH_AGGREGATE));
+  const ObPQHint *pq_hint = static_cast<const ObPQHint*>(get_normal_hint(T_PQ_GBY_HINT));
+  const bool enable_pq_hint = COMPAT_VERSION_4_2_4 < optimizer_features_enable_version_;
   if (NULL != agg_hint) {
     force_use_hash = agg_hint->is_enable_hint();
     force_use_merge = agg_hint->is_disable_hint();
@@ -1701,6 +1709,50 @@ int ObLogPlanHint::get_aggregation_info(bool &force_use_hash,
   } else if (is_outline_data_) {
     force_use_merge = true;
     force_normal_sort = true;
+  }
+  if (OB_FAIL(ret) || !enable_pq_hint) {
+  } else if (NULL != pq_hint) {
+    force_basic = pq_hint->is_force_basic();
+    force_partition_wise = pq_hint->is_force_partition_wise();
+    force_dist_hash = pq_hint->is_force_dist_hash();
+  } else if (is_outline_data_) {
+    force_basic = true;
+    force_partition_wise = false;
+    force_dist_hash = false;
+  }
+  return ret;
+}
+
+int ObLogPlanHint::get_distinct_info(bool &force_use_hash,
+                                     bool &force_use_merge,
+                                     bool &force_basic,
+                                     bool &force_partition_wise,
+                                     bool &force_dist_hash) const
+{
+  int ret = OB_SUCCESS;
+  force_use_hash = false;
+  force_use_merge = false;
+  force_basic = false;
+  force_partition_wise = false;
+  force_dist_hash = false;
+  const ObHint *method_hint = static_cast<const ObAggHint*>(get_normal_hint(T_USE_HASH_DISTINCT));
+  const ObPQHint *pq_hint = static_cast<const ObPQHint*>(get_normal_hint(T_PQ_DISTINCT_HINT));
+  const bool enable_pq_hint = COMPAT_VERSION_4_2_4 < optimizer_features_enable_version_;
+  if (NULL != method_hint) {
+    force_use_hash = method_hint->is_enable_hint();
+    force_use_merge = method_hint->is_disable_hint();
+  } else if (is_outline_data_) {
+    force_use_merge = true;
+  }
+  if (OB_FAIL(ret) || !enable_pq_hint) {
+  } else if (NULL != pq_hint) {
+    force_basic = pq_hint->is_force_basic();
+    force_partition_wise = pq_hint->is_force_partition_wise();
+    force_dist_hash = pq_hint->is_force_dist_hash();
+  } else if (is_outline_data_) {
+    force_basic = true;
+    force_partition_wise = false;
+    force_dist_hash = false;
   }
   return ret;
 }
@@ -1886,7 +1938,8 @@ int ObLogPlanHint::get_index_prefix(const uint64_t table_id,
 {
   int ret = OB_SUCCESS;
   const LogTableHint *log_table_hint = NULL;
-  if (!enable_index_prefix_ || OB_ISNULL(log_table_hint = get_index_hint(table_id))) {
+  if (optimizer_features_enable_version_ < COMPAT_VERSION_4_2_3
+      || OB_ISNULL(log_table_hint = get_index_hint(table_id))) {
     //do nothing
   } else if (!log_table_hint->is_use_index_hint()) {
     //do nothing
