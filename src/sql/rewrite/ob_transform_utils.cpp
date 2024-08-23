@@ -7245,10 +7245,6 @@ int ObTransformUtils::adjust_updatable_view(ObRawExprFactory &expr_factory,
           merge_table_info->source_table_id_ = view_table_item.table_id_;
         }
       }
-      TableItem *base_item = view_stmt->get_table_item_by_id(table_info->table_id_);
-      if (NULL != base_item) {
-        view_table_item.view_base_item_ = base_item;
-      }
       table_info->table_id_ = view_table_item.table_id_;
       uint64_t loc_table_id = table_info->loc_table_id_;
       // create partition exprs for index dml infos

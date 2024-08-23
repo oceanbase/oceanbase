@@ -12307,6 +12307,7 @@ int ObLogPlan::get_table_for_update_info(const uint64_t table_id,
     ObSEArray<ObRawExpr*, 4> temp_rowkeys;
     if (OB_UNLIKELY(!table->is_basic_table()) || OB_UNLIKELY(is_virtual_table(table->ref_id_))) {
       // invalid usage
+      // bad case: select * from (select /*+no_merge*/ * from t1) for update
       ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
       LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
     } else if (OB_FAIL(get_rowkey_exprs(table->table_id_, table->ref_id_, temp_rowkeys))) {
@@ -12322,7 +12323,7 @@ int ObLogPlan::get_table_for_update_info(const uint64_t table_id,
     } else {
       index_dml_info = new (index_dml_info) IndexDMLInfo();
       index_dml_info->table_id_ = table->table_id_;
-      index_dml_info->loc_table_id_ = table->get_base_table_item().table_id_;
+      index_dml_info->loc_table_id_ = table->table_id_;
       index_dml_info->ref_table_id_ = table->ref_id_;
       index_dml_info->distinct_algo_ = T_DISTINCT_NONE;
       index_dml_info->rowkey_cnt_ = temp_rowkeys.count();
