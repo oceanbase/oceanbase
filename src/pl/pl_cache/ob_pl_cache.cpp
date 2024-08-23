@@ -656,36 +656,10 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
           }
         }
       } else if (lib::is_oracle_mode()) {
-        if (pcv_schema->is_explicit_db_name_) {
-          //In oracle mode, if mark database name，use table id search schema directly.
           if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
                       pcv_schema->schema_id_, table_schema))) {
             LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
           } else { /* do nothing */ }
-        } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-                                                                database_id,
-                                                                pcv_schema->table_name_,
-                                                                false,
-                                                                table_schema))) {
-          LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
-        } else if (nullptr == table_schema && OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-                                                                pcv_schema->database_id_,
-                                                                pcv_schema->table_name_,
-                                                                false,
-                                                                table_schema))) {
-          LOG_WARN("failed to get table schema",
-                  K(ret), K(pcv_schema->tenant_id_), K(pcv_schema->database_id_),
-                  K(pcv_schema->table_name_));
-        } else if (nullptr == table_schema && OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-                                                                                           common::OB_ORA_SYS_DATABASE_ID,
-                                                                                           pcv_schema->table_name_,
-                                                                                           false,
-                                                                                           table_schema))) { // finaly,find sys tenand
-          LOG_WARN("failed to get table schema", K(ret), K(tenant_id),
-                   K(pcv_schema->table_name_));
-        } else {
-          // do nothing
-        }
       } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
                                                               pcv_schema->database_id_,
                                                               pcv_schema->table_name_,
