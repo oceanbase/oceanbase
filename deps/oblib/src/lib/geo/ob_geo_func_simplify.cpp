@@ -164,9 +164,10 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncSimplifyImpl, ObWkbGeomMultiLineString, ObGeome
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
       const int fliter_num = 2;   // for LineString's size of point
-      for (int i = 0; i < tmp->size(); ++i) {
-        if ((*tmp)[i].size() >= fliter_num) {
-          res->push_back((*tmp)[i]);
+      for (int i = 0; i < tmp->size() && OB_SUCC(ret); ++i) {
+        if (((*tmp)[i].size() >= fliter_num) &&
+            OB_FAIL(res->push_back((*tmp)[i]))) {
+          LOG_WARN("fail to push back geometry", K(ret), K(i));
         }
       }
       tmp->clear();
@@ -186,6 +187,10 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncSimplifyImpl, ObWkbGeomPolygon, ObGeometry *)
     if (tmp->exterior_ring().size() < fliter_num) {
       context.get_allocator()->free(tmp);
       result = OB_NEWx(ObCartesianPolygon, context.get_allocator());
+      if (OB_ISNULL(result)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to create geo by type", K(ret));
+      }
     }
   }
   return ret;
@@ -204,9 +209,10 @@ OB_GEO_UNARY_FUNC_BEGIN(ObGeoFuncSimplifyImpl, ObWkbGeomMultiPolygon, ObGeometry
       LOG_WARN("fail to create geo by type", K(ret));
     } else {
       const int fliter_num = 4;  // for Polygon's size of exterior_ring
-      for (int i = 0; i < tmp->size(); ++i) {
-        if ((*tmp)[i].exterior_ring().size() >= fliter_num) {
-          res->push_back((*tmp)[i]);
+      for (int i = 0; i < tmp->size() && OB_SUCC(ret); ++i) {
+        if (((*tmp)[i].exterior_ring().size() >= fliter_num) &&
+            OB_FAIL(res->push_back((*tmp)[i]))) {
+          LOG_WARN("fail to push back geometry", K(ret), K(i));
         }
       }
       tmp->clear();
