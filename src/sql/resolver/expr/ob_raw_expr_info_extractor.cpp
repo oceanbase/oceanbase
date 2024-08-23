@@ -234,6 +234,12 @@ int ObRawExprInfoExtractor::visit(ObOpRawExpr &expr)
           LOG_WARN("failed to add flag IS_CONNECT_BY_ROOT", K(ret));
         }
         break;
+      case T_OP_EXISTS:
+      case T_OP_NOT_EXISTS:
+        if (OB_FAIL(expr.add_flag(IS_EXISTS))) {
+          LOG_WARN("failed to add flag IS_EXISTS", K(ret));
+        }
+        break;
       default:
         break;
     }
