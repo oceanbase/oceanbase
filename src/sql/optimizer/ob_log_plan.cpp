@@ -211,36 +211,6 @@ int64_t ObLogPlan::to_string(char *buf,
   return 0;
 }
 
-/*
- * 找出from items中对应的table items
- */
-int ObLogPlan::get_from_table_items(const ObIArray<FromItem> &from_items,
-                                    ObIArray<TableItem *> &table_items)
-{
-  int ret = OB_SUCCESS;
-  const ObDMLStmt *stmt = NULL;
-  if (OB_ISNULL(stmt = get_stmt())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("null stmt", K(stmt), K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < from_items.count(); i++) {
-      const FromItem &from_item = from_items.at(i);
-      TableItem *temp_table_item = NULL;
-      if (!from_item.is_joined_) {
-        //如果是基表或SubQuery
-        temp_table_item = stmt->get_table_item_by_id(from_item.table_id_);
-      } else {
-        //如果是Joined table
-        temp_table_item = stmt->get_joined_table(from_item.table_id_);
-      }
-      if (OB_FAIL(table_items.push_back(temp_table_item))) {
-        LOG_WARN("failed to push back table item", K(ret));
-      } else { /*do nothing*/ }
-    }
-  }
-  return ret;
-}
-
 int ObLogPlan::get_base_table_items(const ObDMLStmt &stmt,
                                     const ObIArray<TableItem*> &table_items,
                                     const ObIArray<SemiInfo*> &semi_infos,
@@ -290,14 +260,15 @@ int ObLogPlan::generate_join_orders()
   ObSEArray<ObRawExpr*, 8> quals;
   ObSEArray<TableItem*, 8> from_table_items;
   ObSEArray<TableItem*, 8> base_table_items;
+  ObSEArray<ObSEArray<ObRawExpr*,4>, 8> baserel_filters;
   JoinOrderArray base_level;
   int64_t join_level = 0;
   common::ObArray<JoinOrderArray> join_rels;
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(stmt), K(ret));
-  } else if (OB_FAIL(get_from_table_items(stmt->get_from_items(), from_table_items))) {
-      LOG_WARN("failed to get table items", K(ret));
+  } else if (OB_FAIL(stmt->get_from_tables(from_table_items))) {
+    LOG_WARN("failed to get table items", K(ret));
   } else if (OB_FAIL(get_base_table_items(*stmt,
                                           from_table_items,
                                           stmt->get_semi_infos(),
@@ -314,6 +285,7 @@ int ObLogPlan::generate_join_orders()
                                           get_optimizer_context().get_expr_factory(),
                                           get_optimizer_context().get_session_info(),
                                           onetime_copier_,
+                                          true,
                                           table_depend_infos_,
                                           bushy_tree_infos_,
                                           new_or_quals_);
@@ -337,9 +309,11 @@ int ObLogPlan::generate_join_orders()
                                                              from_table_items,
                                                              stmt->get_semi_infos(),
                                                              quals,
-                                                             base_level,
+                                                             baserel_filters,
                                                              conflict_detectors_))) {
       LOG_WARN("failed to generate conflict detectors", K(ret));
+    } else if (OB_FAIL(distribute_filters_to_baserels(base_level, baserel_filters))) {
+      LOG_WARN("failed to distribute filters to baserels", K(ret));
     } else {
       //初始化动规数据结构
       join_level = base_level.count(); //需要连接的层次数
@@ -408,6 +382,31 @@ int ObLogPlan::generate_join_orders()
                         ",interesting path count:", join_order_->get_interesting_paths().count());
       OPT_TRACE_TIME_USED;
       OPT_TRACE_MEM_USED;
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::distribute_filters_to_baserels(ObIArray<ObJoinOrder*> &base_level,
+                                              ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < base_level.count(); ++i) {
+    ObJoinOrder *cur_rel= base_level.at(i);
+    ObSEArray<int64_t, 1> rel_id;
+    if (OB_ISNULL(cur_rel)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), K(i));
+    } else if (OB_FAIL(cur_rel->get_tables().to_array(rel_id))) {
+      LOG_WARN("failed to get rel id", K(ret));
+    } else if (OB_UNLIKELY(1 != rel_id.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected rel id count", K(ret), K(rel_id.count()));
+    } else if (OB_UNLIKELY(rel_id.at(0) < 1 || rel_id.at(0) > baserel_filters.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected rel id", K(ret), K(rel_id.at(0)), K(baserel_filters.count()));
+    } else if (OB_FAIL(append(cur_rel->get_restrict_infos(), baserel_filters.at(rel_id.at(0) - 1)))) {
+      LOG_WARN("failed to append restrict infos", K(ret));
     }
   }
   return ret;
@@ -1488,7 +1487,7 @@ int ObLogPlan::generate_join_levels_with_orgleading(common::ObIArray<JoinOrderAr
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(stmt), K(ret));
-  } else if (OB_FAIL(get_from_table_items(stmt->get_from_items(), table_items))) {
+  } else if (OB_FAIL(stmt->get_from_tables(table_items))) {
       LOG_WARN("failed to get table items", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_semi_infos().count(); ++i) {
@@ -2021,11 +2020,15 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
       is_valid_join = true;
       OPT_TRACE(left_tree, right_tree,
       " is legal, and has join path cache, no need to generate join path");
-    } else if (OB_FAIL(choose_join_info(left_tree,
-                                        right_tree,
-                                        valid_detectors,
-                                        delay_cross_product,
-                                        is_strict_order))) {
+    } else if (OB_FAIL(ObConflictDetector::choose_detectors(left_tree->get_tables(),
+                                                            right_tree->get_tables(),
+                                                            left_tree->get_conflict_detectors(),
+                                                            right_tree->get_conflict_detectors(),
+                                                            table_depend_infos_,
+                                                            conflict_detectors_,
+                                                            valid_detectors,
+                                                            delay_cross_product,
+                                                            is_strict_order))) {
       LOG_WARN("failed to choose join info", K(ret));
     } else if (valid_detectors.empty()) {
       OPT_TRACE("there is no valid join condition for ", left_tree, "join", right_tree);
@@ -2037,14 +2040,14 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
                                             valid_detectors,
                                             join_tree,
                                             is_detector_valid))) {
-        LOG_WARN("failed to check detector valid", K(ret));
-      } else if (!is_detector_valid) {
-        OPT_TRACE("join tree will be remove: ", left_tree, "join", right_tree);
-      } else if (OB_FAIL(merge_join_info(left_tree,
-                                       right_tree,
-                                       valid_detectors,
-                                       join_info))) {
+      LOG_WARN("failed to check detector valid", K(ret));
+    } else if (!is_detector_valid) {
+      OPT_TRACE("join tree will be remove: ", left_tree, "join", right_tree);
+    } else if (OB_FAIL(ObConflictDetector::merge_join_info(valid_detectors,
+                                                           join_info))) {
       LOG_WARN("failed to merge join info", K(ret));
+    } else if (OB_FAIL(process_join_pred(left_tree, right_tree, join_info))) {
+      LOG_WARN("failed to preocess join pred", K(ret));
     } else if (NULL != join_tree && level <= 1 && !hint_force_order) {
       //level==1的时候，左右树都是单表，如果已经生成过AB的话，BA的path也已经生成了，没必要再次生成一遍BA
       is_valid_join = true;
@@ -2103,215 +2106,6 @@ int ObLogPlan::inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
   return ret;
 }
 
-int ObLogPlan::is_detector_used(ObJoinOrder *left_tree,
-                                ObJoinOrder *right_tree,
-                                ObConflictDetector *detector,
-                                bool &is_used)
-{
-  int ret = OB_SUCCESS;
-  is_used = false;
-  if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree) || OB_ISNULL(detector)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect null param", K(ret));
-  } else if (INNER_JOIN == detector->get_join_info().join_type_ &&
-             detector->get_join_info().where_conditions_.empty()) {
-    //笛卡尔积的冲突检测器可以重复使用
-  }else if (ObOptimizerUtil::find_item(left_tree->get_conflict_detectors(), detector)) {
-    is_used = true;
-  } else if (ObOptimizerUtil::find_item(right_tree->get_conflict_detectors(), detector)) {
-    is_used = true;
-  }
-  return ret;
-}
-
-/**
- * 为左右连接树选择合法的连接条件
- * is_strict_order：
- * true：left join right是合法的，right join left是非法的
- * false：left join right是非法的，right join left是合法的
- */
-int ObLogPlan::choose_join_info(ObJoinOrder *left_tree,
-                                ObJoinOrder *right_tree,
-                                ObIArray<ObConflictDetector*> &valid_detectors,
-                                bool delay_cross_product,
-                                bool &is_strict_order)
-{
-  int ret = OB_SUCCESS;
-  bool is_legal = false;
-  ObRelIds combined_relids;
-  if (OB_ISNULL(left_tree) || OB_ISNULL(right_tree)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect empty conflict detectors", K(ret));
-  } else if (OB_FAIL(combined_relids.add_members(left_tree->get_tables()))) {
-    LOG_WARN("failed to add left relids into combined relids", K(ret));
-  } else if (OB_FAIL(combined_relids.add_members(right_tree->get_tables()))) {
-    LOG_WARN("failed to add right relids into combined relids", K(ret));
-  }
-  is_strict_order = true;
-  for (int64_t i = 0; OB_SUCC(ret) && i < conflict_detectors_.count(); ++i) {
-    ObConflictDetector *detector = conflict_detectors_.at(i);
-    bool is_used = false;
-    if (OB_ISNULL(detector)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("conflict detector is null", K(ret));
-    } else if (OB_FAIL(is_detector_used(left_tree,
-                                        right_tree,
-                                        detector,
-                                        is_used))) {
-      LOG_WARN("failed to check detector is used", K(ret));
-    } else if (is_used) {
-      //do nothing
-    } else if (OB_FAIL(detector->check_join_legal(left_tree->get_tables(),
-                                                  right_tree->get_tables(),
-                                                  combined_relids,
-                                                  delay_cross_product,
-                                                  table_depend_infos_,
-                                                  is_legal))) {
-      LOG_WARN("failed to check join legal", K(ret));
-    } else if (!is_legal) {
-      //对于可交换的join如inner join，既left join right合法
-      //也right join left合法，但是我们只需要保存left inner join right
-      //因为在generate join path的时候会生成right inner join left的path
-      //并且不可能存在一种join，既有left join1 right合法，又有right join2 left合法
-      LOG_TRACE("left tree join right tree is not legal", K(left_tree->get_tables()),
-                K(right_tree->get_tables()), K(*detector));
-      //尝试right tree join left tree
-      if (OB_FAIL(detector->check_join_legal(right_tree->get_tables(),
-                                             left_tree->get_tables(),
-                                             combined_relids,
-                                             delay_cross_product,
-                                             table_depend_infos_,
-                                             is_legal))) {
-        LOG_WARN("failed to check join legal", K(ret));
-      } else if (!is_legal) {
-        LOG_TRACE("right tree join left tree is not legal", K(right_tree->get_tables()),
-                K(left_tree->get_tables()), K(*detector));
-      } else if (OB_FAIL(valid_detectors.push_back(detector))) {
-        LOG_WARN("failed to push back detector", K(ret));
-      } else {
-        is_strict_order = false;
-        LOG_TRACE("succeed to find join info for ", K(left_tree->get_tables()),
-                  K(right_tree->get_tables()), K(left_tree->get_conflict_detectors()),
-                  K(right_tree->get_conflict_detectors()), K(*detector));
-      }
-    } else if (OB_FAIL(valid_detectors.push_back(detector))) {
-      LOG_WARN("failed to push back detector", K(ret));
-    } else {
-      LOG_TRACE("succeed to find join info for ", K(left_tree->get_tables()),
-                  K(right_tree->get_tables()), K(left_tree->get_conflict_detectors()),
-                  K(right_tree->get_conflict_detectors()), K(*detector));
-    }
-  }
-  return ret;
-}
-
-/**
- * 只允许多个inner join叠加成一个join info
- * 例如：select * from A, B where A.c1 = B.c1 and A.c2 = B.c2
- * 或者单个OUTER JOIN加上多个inner join info，inner join info作为join qual
- * 例如：select * from A left join B on A.c1 = B.c1 where A.c2 = B.c2
- */
-int ObLogPlan::check_join_info(const ObIArray<ObConflictDetector*> &valid_detectors,
-                               ObJoinType &join_type,
-                               bool &is_valid)
-{
-  int ret = OB_SUCCESS;
-  ObConflictDetector *detector = NULL;
-  bool has_non_inner_join = false;
-  is_valid = true;
-  join_type = INNER_JOIN;
-  if (valid_detectors.empty()) {
-    is_valid = false;
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < valid_detectors.count(); ++i) {
-    detector = valid_detectors.at(i);
-    if (OB_ISNULL(detector)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null detectors", K(ret));
-    } else if (INNER_JOIN == detector->get_join_info().join_type_) {
-      //do nothing
-    } else if (has_non_inner_join) {
-      //不允许出现多个非inner join的join info
-      is_valid = false;
-    } else {
-      has_non_inner_join = true;
-      join_type = detector->get_join_info().join_type_;
-    }
-  }
-  return ret;
-}
-
-int ObLogPlan::merge_join_info(ObJoinOrder *left_tree,
-                               ObJoinOrder *right_tree,
-                               const ObIArray<ObConflictDetector*> &valid_detectors,
-                               JoinInfo &join_info)
-{
-  int ret = OB_SUCCESS;
-  bool is_valid = false;
-  if (OB_FAIL(check_join_info(valid_detectors,
-                              join_info.join_type_,
-                              is_valid))) {
-    LOG_WARN("failed to check join info", K(ret));
-  } else if (!is_valid) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect different join info", K(valid_detectors), K(ret));
-  } else {
-    ObConflictDetector *detector = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < valid_detectors.count(); ++i) {
-      detector = valid_detectors.at(i);
-      if (OB_ISNULL(detector)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpect null detectors", K(ret));
-      } else if (OB_FAIL(join_info.table_set_.add_members(detector->get_join_info().table_set_))) {
-        LOG_WARN("failed to add members", K(ret));
-      } else if (OB_FAIL(append_array_no_dup(join_info.where_conditions_, detector->get_join_info().where_conditions_))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else if (INNER_JOIN == join_info.join_type_ &&
-                 OB_FAIL(append_array_no_dup(join_info.where_conditions_, detector->get_join_info().on_conditions_))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      } else if (INNER_JOIN != join_info.join_type_ &&
-                 OB_FAIL(append_array_no_dup(join_info.on_conditions_, detector->get_join_info().on_conditions_))) {
-        LOG_WARN("failed to append exprs", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      // TODO: need to optimize this hotspot
-      if (OB_FAIL(remove_redundancy_pred(left_tree, right_tree, join_info))) {
-        LOG_WARN("failed to remove redundancy pred", K(ret));
-      }
-    }
-    //抽取简单join condition
-    if (OB_SUCC(ret)) {
-      if (INNER_JOIN == join_info.join_type_) {
-        for (int64_t i = 0; OB_SUCC(ret) && i < join_info.where_conditions_.count(); ++i) {
-          ObRawExpr *qual = join_info.where_conditions_.at(i);
-          if (OB_ISNULL(qual)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect null join qual", K(ret));
-          } else if (!qual->has_flag(IS_JOIN_COND)) {
-            //do nothing
-          } else if (OB_FAIL(join_info.equal_join_conditions_.push_back(qual))) {
-            LOG_WARN("failed to push back join qual", K(ret));
-          }
-        }
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < join_info.on_conditions_.count(); ++i) {
-          ObRawExpr *qual = join_info.on_conditions_.at(i);
-          if (OB_ISNULL(qual)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpect null join qual", K(ret));
-          } else if (!qual->has_flag(IS_JOIN_COND)) {
-            //do nothing
-          } else if (OB_FAIL(join_info.equal_join_conditions_.push_back(qual))) {
-            LOG_WARN("failed to push back join qual", K(ret));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObLogPlan::check_detector_valid(ObJoinOrder *left_tree,
                                     ObJoinOrder *right_tree,
                                     const ObIArray<ObConflictDetector*> &valid_detectors,
@@ -2341,6 +2135,8 @@ int ObLogPlan::check_detector_valid(ObJoinOrder *left_tree,
 }
 
 /**
+ * Remove redundant join conditions and extract equal join conditions
+ *
  * Try keep EQ preds that join same two tables.
  * For example, we will keep the two preds which join t1 and t3 in the below case.
  * (t1 join t2 on t1.c1 = t2.c1)
@@ -2357,11 +2153,12 @@ int ObLogPlan::check_detector_valid(ObJoinOrder *left_tree,
  * (t1 where c1 = 1) join (t2 where c2 = 1) on t1.c1 = t2.c1
  *  => (t1 where c1 = 1) join (t2 where c2 = 1) on true
  * */
-int ObLogPlan::remove_redundancy_pred(ObJoinOrder *left_tree,
-                                      ObJoinOrder *right_tree,
-                                      JoinInfo &join_info)
+int ObLogPlan::process_join_pred(ObJoinOrder *left_tree,
+                                 ObJoinOrder *right_tree,
+                                 JoinInfo &join_info)
 {
   int ret = OB_SUCCESS;
+  // remove redundancy pred
   if (INNER_JOIN == join_info.join_type_ ||
       LEFT_SEMI_JOIN == join_info.join_type_ ||
       LEFT_ANTI_JOIN == join_info.join_type_ ||
@@ -2374,15 +2171,43 @@ int ObLogPlan::remove_redundancy_pred(ObJoinOrder *left_tree,
                                       join_info.where_conditions_;
     EqualSets input_equal_sets;
     if (OB_FAIL(ObEqualAnalysis::merge_equal_set(&allocator_,
-                                                        left_tree->get_output_equal_sets(),
-                                                        right_tree->get_output_equal_sets(),
-                                                        input_equal_sets))) {
+                                                 left_tree->get_output_equal_sets(),
+                                                 right_tree->get_output_equal_sets(),
+                                                 input_equal_sets))) {
       LOG_WARN("failed to compute equal sets for inner join", K(ret));
     } else if (OB_FAIL(inner_remove_redundancy_pred(join_pred,
                                                     input_equal_sets,
                                                     left_tree,
                                                     right_tree))) {
       LOG_WARN("failed to inner remove redundancy pred", K(ret));
+    }
+  }
+  // extract equal join conditions
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (INNER_JOIN == join_info.join_type_) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < join_info.where_conditions_.count(); ++i) {
+      ObRawExpr *qual = join_info.where_conditions_.at(i);
+      if (OB_ISNULL(qual)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null join qual", K(ret));
+      } else if (!qual->has_flag(IS_JOIN_COND)) {
+        //do nothing
+      } else if (OB_FAIL(join_info.equal_join_conditions_.push_back(qual))) {
+        LOG_WARN("failed to push back join qual", K(ret));
+      }
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < join_info.on_conditions_.count(); ++i) {
+      ObRawExpr *qual = join_info.on_conditions_.at(i);
+      if (OB_ISNULL(qual)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null join qual", K(ret));
+      } else if (!qual->has_flag(IS_JOIN_COND)) {
+        //do nothing
+      } else if (OB_FAIL(join_info.equal_join_conditions_.push_back(qual))) {
+        LOG_WARN("failed to push back join qual", K(ret));
+      }
     }
   }
   return ret;

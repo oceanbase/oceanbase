@@ -50,6 +50,7 @@
 #include "sql/rewrite/ob_transform_conditional_aggr_coalesce.h"
 #include "sql/rewrite/ob_transform_mv_rewrite.h"
 #include "sql/rewrite/ob_transform_decorrelate.h"
+#include "sql/rewrite/ob_transform_mv_rewrite_prepare.h"
 #include "sql/rewrite/ob_transform_late_materialization.h"
 #include "common/ob_smart_call.h"
 #include "sql/engine/ob_exec_context.h"
@@ -82,6 +83,8 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed to formalize query ref exprs");
   } else if (OB_FAIL(stmt->formalize_stmt_expr_reference(ctx_->expr_factory_, ctx_->session_info_))) {
     LOG_WARN("failed to formalize stmt reference", K(ret));
+  } else if (OB_FAIL(do_prepare_mv_rewrite(stmt))) {
+    LOG_WARN("failed to do prepare mv rewrite", K(ret));
   } else if (OB_FAIL(do_transform(stmt))) {
     LOG_WARN("failed to do transform", K(ret));
   } else if (OB_FAIL(do_transform_dblink_read(stmt))) {
@@ -339,6 +342,24 @@ int ObTransformerImpl::do_transform_pre_precessing(ObDMLStmt *&stmt)
       LOG_WARN("failed to do transform pre processing", K(ret));
     } else {
       LOG_TRACE("succeed to do transform pre processing");
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::do_prepare_mv_rewrite(const ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt) || OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(stmt), K(ret));
+  } else {
+    ObTransformMVRewritePrepare trans(ctx_);
+    OPT_TRACE_TITLE("start prepare mv rewrite info");
+    if (OB_FAIL(trans.prepare_mv_rewrite_info(stmt))) {
+      LOG_WARN("failed to do transform mv rewrite prepare", K(ret));
+    } else {
+      LOG_TRACE("succeed to do transform mv rewrite prepare");
     }
   }
   return ret;

@@ -8171,7 +8171,7 @@ int ObDDLService::update_generated_column_schema(
     const ObColumnSchemaV2 &orig_column_schema,
     const ObTableSchema &origin_table_schema,
     const ObTimeZoneInfoWrap &tz_info_wrap,
-    const share::schema::ObLocalSessionVar *local_session_var,
+    const sql::ObLocalSessionVar *local_session_var,
     ObTableSchema &new_table_schema,
     const bool need_update_default_value,
     const bool need_update_session_var,
@@ -8305,7 +8305,7 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
                                                     const ObObjType origin_type,
                                                     const AlterColumnSchema &new_column_schema,
                                                     const ObTableSchema &table_schema,
-                                                    const share::schema::ObLocalSessionVar *local_session_var) {
+                                                    const sql::ObLocalSessionVar *local_session_var) {
   int ret = OB_SUCCESS;
   if (generated_column.is_generated_column()
       && origin_type != new_column_schema.get_data_type()) {
@@ -8353,7 +8353,7 @@ int ObDDLService::modify_generated_column_local_vars(ObColumnSchemaV2 &generated
         dst_type.set_collation_level(CS_LEVEL_IMPLICIT);
         ObSQLMode sql_mode = default_session.get_sql_mode();
         if (NULL != local_session_var) {
-          share::schema::ObSessionSysVar *sys_var = NULL;
+          sql::ObSessionSysVar *sys_var = NULL;
           if (OB_FAIL(local_session_var->get_local_var(share::SYS_VAR_SQL_MODE, sys_var))) {
             LOG_WARN("fail to get sys var", K(ret));
           } else if (NULL != sys_var) {
@@ -9611,7 +9611,7 @@ int ObDDLService::add_new_column_to_table_schema(
     const AlterTableSchema &alter_table_schema,
     const common::ObTimeZoneInfoWrap &tz_info_wrap,
     const common::ObString &nls_formats,
-    share::schema::ObLocalSessionVar &local_session_var,
+    sql::ObLocalSessionVar &local_session_var,
     obrpc::ObSequenceDDLArg &sequence_ddl_arg,
     common::ObIAllocator &allocator,
     ObTableSchema &new_table_schema,

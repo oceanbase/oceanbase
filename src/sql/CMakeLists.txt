@@ -1347,6 +1347,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_union_find.cpp
   rewrite/ob_transform_decorrelate.cpp
   rewrite/ob_transform_late_materialization.cpp
+  rewrite/ob_transform_mv_rewrite_prepare.cpp
 )
 
 ob_set_subtarget(ob_sql session
@@ -1357,6 +1358,7 @@ ob_set_subtarget(ob_sql session
   session/ob_sys_params_mgr.cpp
   session/ob_user_resource_mgr.cpp
   session/ob_sess_info_verify.cpp
+  session/ob_local_session_var.cpp
 )
 
 ob_set_subtarget(ob_sql udr

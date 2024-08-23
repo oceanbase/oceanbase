@@ -3843,7 +3843,7 @@ int ObTransformJoinElimination::add_is_not_null_if_needed(ObDMLStmt *stmt,
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); ++i) {
     bool is_not_null = true;
-    ObOpRawExpr *is_not_expr = NULL;
+    ObRawExpr *is_not_expr = NULL;
     if (OB_ISNULL(col_exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
@@ -3857,9 +3857,8 @@ int ObTransformJoinElimination::add_is_not_null_if_needed(ObDMLStmt *stmt,
         LOG_WARN("failed to add param not null constraint", K(ret));
       }
     } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_,
-                                                          stmt,
-                                                          col_exprs.at(i),
-                                                          is_not_expr))) {
+                                                         col_exprs.at(i),
+                                                         is_not_expr))) {
       LOG_WARN("failed to add is not null for col", K(ret));
     } else if (OB_FAIL(cond_exprs.push_back(is_not_expr))) {
       LOG_WARN("failed to add is_not_expr into condition", K(ret));

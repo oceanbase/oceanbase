@@ -4119,7 +4119,7 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
         }
 
         if (OB_FAIL(ret)) {
-        } else if (!stmt->is_select_stmt() &&
+        } else if (!stmt->is_select_stmt() && !is_update_for_mv_fast_refresh(*stmt) &&
                   OB_FAIL(check_stmt_has_flashback_query(table_item->ref_query_, false, has_flashback_query))) {
           LOG_WARN("failed to find stmt refer to flashback query", K(ret));
         } else if (has_flashback_query) {
@@ -4199,6 +4199,23 @@ int ObDMLResolver::resolve_table(const ParseNode &parse_tree,
   }
 
   return ret;
+}
+
+//  allowed flashback query in mview fast refresh update/insert operator in mysql mode.
+//  specific update stmt is used as below:
+//  update mv1, (... inline view use flashback query, mv1 is not used in this view ...) v1
+//  set mv1.cnt = mv1.cnt + v.cnt
+//  where mv1.c1 = v.c1;
+bool ObDMLResolver::is_update_for_mv_fast_refresh(const ObDMLStmt &stmt)
+{
+  bool is_refresh_stmt = false;
+  if (lib::is_mysql_mode() && stmt.is_update_stmt() && 2 == stmt.get_table_size()) {
+    const TableItem *table1 = stmt.get_table_item(0);
+    const TableItem *table2 = stmt.get_table_item(1);
+    is_refresh_stmt = (NULL != table1 && NULL != table2 && MATERIALIZED_VIEW == table1->table_type_
+                      && table2->is_generated_table());
+  }
+  return is_refresh_stmt;
 }
 
 int ObDMLResolver::check_table_item_with_gen_col_using_udf(const TableItem *table_item, bool &ans)
@@ -8461,7 +8478,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       LOG_WARN("add local session var failed", K(ret));
     } else if (!session_info->is_inner() && lib::is_mysql_mode()) {
       //print user warnings
-      ObSEArray<const share::schema::ObSessionSysVar *, 4> var_array;
+      ObSEArray<const ObSessionSysVar *, 4> var_array;
       if (OB_FAIL(local_vars.get_local_vars(var_array))) {
         LOG_WARN("extract sysvars failed", K(ret));
       } else {

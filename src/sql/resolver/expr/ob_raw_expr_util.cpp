@@ -6769,6 +6769,8 @@ int ObRawExprUtils::create_equal_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("set param expr failed", K(ret));
   } else if (OB_FAIL(equal_expr->formalize(session_info))) {
     LOG_WARN("formalize equal expr failed", K(ret));
+  } else if (OB_FAIL(equal_expr->pull_relation_id())) {
+    LOG_WARN("pull expr relation ids failed", K(ret));
   } else {}
   return ret;
 }
@@ -9721,7 +9723,7 @@ int ObRawExprUtils::extract_local_vars_for_gencol(ObRawExpr *expr,
 {
   int ret = OB_SUCCESS;
   ObSEArray<ObRawExpr*, 4> dep_columns;
-  ObSEArray<const share::schema::ObSessionSysVar *, 4> var_array;
+  ObSEArray<const ObSessionSysVar *, 4> var_array;
   if (OB_FAIL(expr->extract_local_session_vars_recursively(var_array))) {
     LOG_WARN("extract sysvars failed", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(expr, dep_columns))) {

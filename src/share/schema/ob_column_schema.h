@@ -45,7 +45,6 @@ const char *const STR_COLUMN_TYPE_RAW = "raw";
 const char *const STR_COLUMN_TYPE_UNKNOWN = "unknown";
 
 class ObTableSchema;
-class ObLocalSessionVar;
 class ObColumnSchemaV2 : public ObSchema
 {
   OB_UNIS_VERSION_V(1);
@@ -339,8 +338,8 @@ int assign(const ObColumnSchemaV2 &src_schema);
   }
 
   int get_each_column_group_name(ObString &cg_name) const;
-  inline ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
-  inline const ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
+  inline sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
+  inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
@@ -394,7 +393,7 @@ private:
   uint64_t sub_type_;
   ObSkipIndexColumnAttr skip_index_attr_;
   int64_t lob_chunk_size_;
-  ObLocalSessionVar local_session_vars_;
+  sql::ObLocalSessionVar local_session_vars_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

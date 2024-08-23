@@ -49,7 +49,9 @@ bool ObTransformerCtx::is_valid()
          NULL != stmt_factory_ &&
          NULL != sql_schema_guard_ &&
          NULL != sql_schema_guard_->get_schema_guard() &&
-         NULL != self_addr_;
+         NULL != self_addr_ &&
+         NULL != stmt_need_privs_ &&
+         NULL != stmt_ora_need_privs_;
 }
 
 void ObTransformerCtx::reset()
@@ -71,6 +73,8 @@ void ObTransformerCtx::reset()
   is_spm_outline_ = false;
   push_down_filters_.reset();
   iteration_level_ = 0;
+  mv_infos_.reset();
+  mv_stmt_gen_count_ = 0;
 }
 
 int ObTransformerCtx::add_src_hash_val(const ObString &src_str)
@@ -931,8 +935,10 @@ int ObTryTransHelper::fill_helper(const ObQueryCtx *query_ctx)
     LOG_WARN("failed to get qb name info", K(ret));
   } else {
     available_tb_id_ = query_ctx->available_tb_id_;
+    stmt_count_ = query_ctx->stmt_count_;
     subquery_count_ = query_ctx->subquery_count_;
     temp_table_count_ = query_ctx->temp_table_count_;
+    anonymous_view_count_ = query_ctx->anonymous_view_count_;
   }
   return ret;
 }
@@ -955,8 +961,10 @@ int ObTryTransHelper::recover(ObQueryCtx *query_ctx)
   } else {
     unique_key_provider_ = NULL;
     query_ctx->available_tb_id_ = available_tb_id_;
+    query_ctx->stmt_count_ = stmt_count_;
     query_ctx->subquery_count_ = subquery_count_;
     query_ctx->temp_table_count_ = temp_table_count_;
+    query_ctx->anonymous_view_count_ = anonymous_view_count_;
   }
   return ret;
 }

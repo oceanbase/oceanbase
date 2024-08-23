@@ -3295,7 +3295,7 @@ int ObSQLUtils::wrap_column_convert_ctx(const ObExprCtx &expr_ctx, ObCastCtx &co
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_collation(const share::schema::ObLocalSessionVar &session_vars_snapshot,
+int ObSQLUtils::merge_solidified_var_into_collation(const ObLocalSessionVar &session_vars_snapshot,
                                                      ObCollationType &cs_type) {
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret) && lib::is_mysql_mode()) {
@@ -3369,7 +3369,7 @@ int ObSQLUtils::merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_dtc_params(const share::schema::ObLocalSessionVar *local_vars,
+int ObSQLUtils::merge_solidified_var_into_dtc_params(const ObLocalSessionVar *local_vars,
                                                 const ObTimeZoneInfo *local_timezone,
                                                 ObDataTypeCastParams &dtc_param)
 {
@@ -3405,7 +3405,7 @@ int ObSQLUtils::merge_solidified_var_into_dtc_params(const share::schema::ObLoca
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_sql_mode(const share::schema::ObLocalSessionVar *local_vars,
+int ObSQLUtils::merge_solidified_var_into_sql_mode(const ObLocalSessionVar *local_vars,
                                                     ObSQLMode &sql_mode) {
   int ret = OB_SUCCESS;
   ObSessionSysVar *local_var = NULL;
@@ -3426,7 +3426,7 @@ int ObSQLUtils::merge_solidified_var_into_sql_mode(const share::schema::ObLocalS
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_max_allowed_packet(const share::schema::ObLocalSessionVar *local_vars,
+int ObSQLUtils::merge_solidified_var_into_max_allowed_packet(const ObLocalSessionVar *local_vars,
                                                              int64_t &max_allowed_packet)
 {
   int ret = OB_SUCCESS;
@@ -3446,7 +3446,7 @@ int ObSQLUtils::merge_solidified_var_into_max_allowed_packet(const share::schema
   return ret;
 }
 
-int ObSQLUtils::merge_solidified_var_into_compat_version(const share::schema::ObLocalSessionVar *local_vars,
+int ObSQLUtils::merge_solidified_var_into_compat_version(const ObLocalSessionVar *local_vars,
                                                          uint64_t &compat_version)
 {
   int ret = OB_SUCCESS;

@@ -2517,6 +2517,19 @@ TableItem *ObDMLStmt::create_table_item(ObIAllocator &allocator)
   return table_item;
 }
 
+JoinedTable *ObDMLStmt::create_joined_table(ObIAllocator &allocator)
+{
+  JoinedTable *table_item = NULL;
+  void *ptr = NULL;
+  if (NULL == (ptr = allocator.alloc(sizeof(JoinedTable)))) {
+    LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "alloc joined table failed");
+  } else {
+    table_item = new(ptr) JoinedTable();
+    table_item->type_ = TableItem::JOINED_TABLE;
+  }
+  return table_item;
+}
+
 int ObDMLStmt::add_table_item(const ObSQLSessionInfo *session_info, TableItem *table_item)
 {
   int ret = OB_SUCCESS;

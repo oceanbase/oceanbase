@@ -896,26 +896,57 @@ int ObSelectStmt::remove_useless_sharable_expr(ObRawExprFactory *expr_factory,
 
 bool ObSelectStmt::is_spj() const
 {
+  int ret = OB_SUCCESS;
+  bool bret = false;
   bool has_rownum_expr = false;
-  bool ret = !(has_distinct()
-               || has_group_by()
-               || is_set_stmt()
-               || has_rollup()
-               || has_order_by()
-               || has_limit()
-               || get_aggr_item_size() != 0
-               || get_from_item_size() == 0
-               || is_contains_assignment()
-               || has_window_function()
-               || has_sequence()
-               || is_hierarchical_query());
-  if (!ret) {
+  bret = !(has_distinct()
+           || has_group_by()
+           || is_set_stmt()
+           || has_rollup()
+           || has_order_by()
+           || has_limit()
+           || get_aggr_item_size() != 0
+           || get_from_item_size() == 0
+           || is_contains_assignment()
+           || has_window_function()
+           || has_sequence()
+           || is_hierarchical_query());
+  if (!bret) {
+    // do nothing
   } else if (OB_FAIL(has_rownum(has_rownum_expr))) {
-    ret = false;
+    LOG_WARN("failed to check has rownum", K(ret));
+    bret = false;
   } else {
-    ret = !has_rownum_expr;
+    bret = !has_rownum_expr;
   }
-  return ret;
+  return bret;
+}
+
+bool ObSelectStmt::is_spjg() const
+{
+  int ret = OB_SUCCESS;
+  bool bret = false;
+  bool has_rownum_expr = false;
+  bret = !(has_distinct()
+           || has_having()
+           || is_set_stmt()
+           || has_rollup()
+           || has_order_by()
+           || has_limit()
+           || get_from_item_size() == 0
+           || is_contains_assignment()
+           || has_window_function()
+           || has_sequence()
+           || is_hierarchical_query());
+  if (!bret) {
+    // do nothing
+  } else if (OB_FAIL(has_rownum(has_rownum_expr))) {
+    LOG_WARN("failed to check has rownum", K(ret));
+    bret = false;
+  } else {
+    bret = !has_rownum_expr;
+  }
+  return bret;
 }
 
 int ObSelectStmt::get_select_exprs(ObIArray<ObRawExpr*> &select_exprs,

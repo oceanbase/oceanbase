@@ -1624,17 +1624,16 @@ int ObTransformUtils::is_aggr_query(const ObSelectStmt *stmt,
 }
 
 int ObTransformUtils::add_is_not_null(ObTransformerCtx *ctx,
-                                      const ObDMLStmt *stmt,
                                       ObRawExpr *child_expr,
-                                      ObOpRawExpr *&is_not_expr)
+                                      ObRawExpr *&is_not_expr)
 {
   int ret = OB_SUCCESS;
   ObRawExprFactory *expr_factory = NULL;
   is_not_expr = NULL;
   ObRawExpr* tmp_is_not_expr = NULL;
-  if (OB_ISNULL(stmt) || OB_ISNULL(ctx)) {
+  if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("parameters have null", K(ret), K(stmt), K(ctx));
+    LOG_WARN("parameters have null", K(ret), K(ctx));
   } else if (OB_ISNULL(ctx->session_info_)
              || OB_ISNULL(expr_factory = ctx->expr_factory_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1649,7 +1648,7 @@ int ObTransformUtils::add_is_not_null(ObTransformerCtx *ctx,
   } else if (OB_FAIL(tmp_is_not_expr->pull_relation_id())) {
     LOG_WARN("pull expr relation ids failed", K(ret));
   } else {
-    is_not_expr = static_cast<ObOpRawExpr *>(tmp_is_not_expr);
+    is_not_expr = tmp_is_not_expr;
   }
   return ret;
 }
@@ -2378,7 +2377,7 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
   if (OB_ISNULL(stmt = ctx.stmt_) || OB_ISNULL(expr) ||
       OB_ISNULL(table = stmt->get_table_item_by_id(expr->get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("table item is null", K(ret), K(expr), K(stmt));
+    LOG_WARN("table item is null", K(ret), KPC(expr), KPC(stmt), KPC(table));
   } else if (is_virtual_table(table->ref_id_)) {
     // 'NOT NULL' of the virtual table is unreliable
   } else if (ObOptimizerUtil::find_item(ctx.right_table_ids_, table->table_id_)) {
@@ -7835,6 +7834,33 @@ int ObTransformUtils::pushdown_qualify_filters(ObSelectStmt *stmt)
   return ret;
 }
 
+int ObTransformUtils::create_aggr_expr(ObTransformerCtx *ctx,
+                                       ObItemType type,
+                                       ObAggFunRawExpr *&agg_expr,
+                                       ObRawExpr *child_expr)
+{
+  int ret = OB_SUCCESS;
+  ObRawExprFactory *expr_factory = NULL;
+  if (OB_ISNULL(ctx) || OB_ISNULL(expr_factory = ctx->expr_factory_) ||
+      OB_ISNULL(ctx->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(ctx), K(expr_factory), K(agg_expr));
+  } else if (OB_FAIL(expr_factory->create_raw_expr(type,
+                                                   agg_expr))) {
+    LOG_WARN("create raw expr failed", K(ret));
+  } else if (OB_ISNULL(agg_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid argument", K(ret), K(agg_expr));
+  } else if (OB_FAIL(agg_expr->add_real_param_expr(child_expr))) {
+    LOG_WARN("fail to set partition exprs", K(ret));
+  } else if (OB_FAIL(agg_expr->formalize(ctx->session_info_))) {
+    LOG_WARN("failed to formalize windown function", K(ret));
+  } else if (OB_FAIL(agg_expr->pull_relation_id())) {
+    LOG_WARN("failed to pull relation id and levels", K(ret));
+  }
+  return ret;
+}
+
 // stmt should call formalize_stmt after generate select_list,
 // and ref_query inside ths table has no need  to call formalize again
 int ObTransformUtils::generate_select_list(ObTransformerCtx *ctx,
@@ -8517,13 +8543,13 @@ int ObTransformUtils::build_case_when_expr(ObDMLStmt &stmt,
 {
   int ret = OB_SUCCESS;
   ObCaseOpRawExpr *case_expr = NULL;
-  ObOpRawExpr *is_not_expr = NULL;
+  ObRawExpr *is_not_expr = NULL;
   if (OB_ISNULL(ctx) || OB_ISNULL(ctx->expr_factory_) || OB_ISNULL(ctx->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("param expr is null", K(ret), K(ctx));
   } else if (OB_FAIL(ctx->expr_factory_->create_raw_expr(T_OP_CASE, case_expr))) {
     LOG_WARN("failed to create case expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx, &stmt, expr, is_not_expr))) {
+  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx, expr, is_not_expr))) {
     LOG_WARN("failed to build is not null expr", K(ret));
   } else if (OB_FAIL(case_expr->add_when_param_expr(is_not_expr))) {
     LOG_WARN("failed to add when param expr", K(ret));
@@ -14497,13 +14523,7 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(ctx), KPC(rt_mv_table));
   } else {
-    const uint64_t OB_MAX_SUBQUERY_NAME_LENGTH = 64;
-    const char *EXPAND_VIEW_PREFIX = "RT_";
     ObString expand_view;
-    ObString expand_view_name;
-    int64_t pos = 0;
-    char buf[OB_MAX_SUBQUERY_NAME_LENGTH];
-    int64_t buf_len = OB_MAX_SUBQUERY_NAME_LENGTH;
     ObSelectStmt *view_stmt = NULL;
     OPT_TRACE("expand real time materialized view: ", rt_mv_table->get_object_name());
     OPT_TRACE_BEGIN_SECTION;
@@ -14519,15 +14539,9 @@ int ObTransformUtils::expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper
       LOG_WARN("failed to push back", K(ret));
     } else if (OB_FAIL(set_expand_mview_flag(view_stmt))) {
       LOG_WARN("fail to set expand mview flag", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("%s", EXPAND_VIEW_PREFIX))) {
-      LOG_WARN("append expand view prefix to buf error", K(ret));
-    } else if (OB_FAIL(BUF_PRINTF("%.*s", rt_mv_table->get_object_name().length(), rt_mv_table->get_object_name().ptr()))) {
-      LOG_WARN("append mv table name to buf error", K(ret));
-    } else if (OB_FALSE_IT(expand_view_name = common::ObString::make_string(buf))) {
-    } else if (OB_FAIL(ob_write_string(*ctx->allocator_,
-                                       expand_view_name,
-                                       rt_mv_table->table_name_))) {
-      LOG_WARN("failed to write string", K(ret));
+    } else if (OB_FAIL(upper_stmt->generate_view_name(*ctx->allocator_,
+                                                      rt_mv_table->table_name_))) {
+      LOG_WARN("failed to generate view name", K(ret));
     } else if (OB_FAIL(adjust_col_and_sel_for_expand_mview(ctx,
                                                            upper_stmt->get_column_items(),
                                                            view_stmt->get_select_items(),
@@ -15249,7 +15263,8 @@ int ObTransformUtils::check_fulltext_index_match_column(const ColumnReferenceSet
 }
 
 int ObTransformUtils::add_aggr_winfun_expr(ObSelectStmt *stmt,
-                                           ObRawExpr *expr)
+                                           ObRawExpr *expr,
+                                           bool need_strict_check /* = true */)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(expr) || OB_ISNULL(stmt)) {
@@ -15257,17 +15272,22 @@ int ObTransformUtils::add_aggr_winfun_expr(ObSelectStmt *stmt,
     LOG_WARN("get unexpected null", K(ret), K(expr), K(stmt));
   } else if (expr->is_aggr_expr()) {
     ObAggFunRawExpr *agg_expr = static_cast<ObAggFunRawExpr*>(expr);
-    if (OB_FAIL(ObExpandAggregateUtils::add_aggr_item(stmt->get_aggr_items(), agg_expr))) {
+    if (OB_FAIL(ObExpandAggregateUtils::add_aggr_item(stmt->get_aggr_items(),
+                                                      agg_expr,
+                                                      need_strict_check))) {
       LOG_WARN("failed to add agg item", K(ret), KPC(agg_expr));
     }
-  } else if (expr->is_win_func_expr()) {
-    ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(expr);
-    if (OB_FAIL(ObExpandAggregateUtils::add_win_expr(stmt->get_window_func_exprs(), win_expr))) {
-      LOG_WARN("failed to add win func expr", K(ret), KPC(win_expr));
-    }
   } else {
+    if (expr->is_win_func_expr()) {
+      ObWinFunRawExpr *win_expr = static_cast<ObWinFunRawExpr*>(expr);
+      if (OB_FAIL(ObExpandAggregateUtils::add_win_expr(stmt->get_window_func_exprs(),
+                                                       win_expr,
+                                                       need_strict_check))) {
+        LOG_WARN("failed to add win func expr", K(ret), KPC(win_expr));
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(add_aggr_winfun_expr(stmt, expr->get_param_expr(i))))) {
+      if (OB_FAIL(SMART_CALL(add_aggr_winfun_expr(stmt, expr->get_param_expr(i), need_strict_check)))) {
         LOG_WARN("failed to add aggr winfun expr", K(ret), KPC(expr->get_param_expr(i)));
       }
     }

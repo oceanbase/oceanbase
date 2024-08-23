@@ -2325,7 +2325,7 @@ public:
   bool foreign_key_checks_;
   bool is_add_to_scheduler_;
   common::ObAddr inner_sql_exec_addr_;
-  ObLocalSessionVar local_session_var_;
+  sql::ObLocalSessionVar local_session_var_;
   ObMViewRefreshInfo mview_refresh_info_;
   AlterAlgorithm alter_algorithm_;
   bool alter_auto_partition_attr_;
@@ -2773,7 +2773,7 @@ public:
   ObSQLMode sql_mode_;
   common::ObAddr inner_sql_exec_addr_;
   common::ObArenaAllocator allocator_;
-  ObLocalSessionVar local_session_var_;
+  sql::ObLocalSessionVar local_session_var_;
   bool exist_all_column_group_;
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;

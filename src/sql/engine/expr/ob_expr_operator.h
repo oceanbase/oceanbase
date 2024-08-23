@@ -40,7 +40,7 @@
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
 #include "lib/hash/ob_hashset.h"
-#include "share/schema/ob_schema_struct.h"
+#include "sql/session/ob_local_session_var.h"
 
 
 #define GET_EXPR_CTX(ClassType, ctx, id) static_cast<ClassType *>((ctx).get_expr_op_ctx(id))
@@ -290,15 +290,15 @@ protected:
 
 #define DECLARE_SET_LOCAL_SESSION_VARS \
   virtual int set_local_session_vars(ObRawExpr *raw_expr, \
-                                    const share::schema::ObLocalSessionVar *local_session_vars, \
+                                    const ObLocalSessionVar *local_session_vars, \
                                     const ObBasicSessionInfo *session, \
-                                    share::schema::ObLocalSessionVar &local_vars)
+                                    ObLocalSessionVar &local_vars)
 
 #define DEF_SET_LOCAL_SESSION_VARS(TypeName, raw_expr) \
   int TypeName::set_local_session_vars(ObRawExpr *raw_expr, \
-                                      const share::schema::ObLocalSessionVar *local_session_vars, \
+                                      const ObLocalSessionVar *local_session_vars, \
                                       const ObBasicSessionInfo *session, \
-                                      share::schema::ObLocalSessionVar &local_vars)
+                                      ObLocalSessionVar &local_vars)
 
 class ObExprOperator : public common::ObDLinkBase<ObExprOperator>
 {
@@ -683,7 +683,7 @@ public:
   static int check_first_param_not_time(const common::ObIArray<ObRawExpr *> &exprs, bool &not_time);
   //Extract the info of sys vars which need to be used in resolving or excuting into local_sys_vars.
   DECLARE_SET_LOCAL_SESSION_VARS;
-  static int add_local_var_to_expr(share::ObSysVarClassType var_type, const share::schema::ObLocalSessionVar *local_session_var, const ObBasicSessionInfo *session, share::schema::ObLocalSessionVar &local_vars);
+  static int add_local_var_to_expr(share::ObSysVarClassType var_type, const ObLocalSessionVar *local_session_var, const ObBasicSessionInfo *session, ObLocalSessionVar &local_vars);
 protected:
   ObExpr *get_rt_expr(const ObRawExpr &raw_expr) const;
 

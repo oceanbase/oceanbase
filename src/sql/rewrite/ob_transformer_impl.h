@@ -56,6 +56,7 @@ public:
   int transform(ObDMLStmt *&stmt);
   int do_transform(ObDMLStmt *&stmt);
   int do_transform_pre_precessing(ObDMLStmt *&stmt);
+  int do_prepare_mv_rewrite(const ObDMLStmt *stmt);
   int do_transform_dblink_write(ObDMLStmt *&stmt, bool &trans_happened);
   int do_transform_dblink_read(ObDMLStmt *&stmt);
   int transform_heuristic_rule(ObDMLStmt *&stmt);

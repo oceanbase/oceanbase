@@ -160,6 +160,7 @@
 #include "sql/engine/set/ob_hash_union_vec_op.h"
 #include "sql/engine/set/ob_hash_intersect_vec_op.h"
 #include "sql/engine/set/ob_hash_except_vec_op.h"
+#include "sql/resolver/mv/ob_mv_provider.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "share/ob_master_key_getter.h"
 #endif
@@ -8353,6 +8354,9 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
              || OB_ISNULL(exec_ctx->get_stmt_factory()->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid query_ctx", K(ret));
+  } else if (my_session->get_ddl_info().is_refreshing_mview()
+             && OB_FAIL(check_refreshing_mview_session_var(*schema_guard, *my_session, log_plan.get_stmt()))) {
+    LOG_WARN("failed to check refreshing mview session var", K(ret));
   } else {
     ret = phy_plan.set_params_info(*(log_plan.get_optimizer_context().get_params()));
   }
@@ -8723,6 +8727,33 @@ int ObStaticEngineCG::set_other_properties(const ObLogPlan &log_plan, ObPhysical
 
   if (OB_SUCC(ret)) {
     phy_plan_->calc_whether_need_trans();
+  }
+  return ret;
+}
+
+int ObStaticEngineCG::check_refreshing_mview_session_var(ObSchemaGetterGuard &schema_guard,
+                                                         ObSQLSessionInfo &session,
+                                                         const ObDMLStmt *dml_stmt)
+{
+  int ret = OB_SUCCESS;
+  bool is_same = false;
+  uint64_t mview_id = OB_INVALID_ID;
+  const share::schema::ObTableSchema *mview_schema = NULL;
+  const ObDelUpdStmt *del_up_stmt = dynamic_cast<const ObDelUpdStmt*>(dml_stmt);
+  bool is_vars_matched = false;
+  if (!session.get_ddl_info().is_refreshing_mview() || OB_ISNULL(del_up_stmt)) {
+    /* do nothing */
+  } else if (OB_FAIL(del_up_stmt->get_modified_materialized_view_id(mview_id))) {
+    LOG_WARN("fail to get modified mview_id", K(ret), K(mview_id));
+  } else if (OB_INVALID_ID == mview_id) {
+    /* do nothing */
+  } else if (OB_FAIL(schema_guard.get_table_schema(session.get_effective_tenant_id(), mview_id, mview_schema))) {
+    LOG_WARN("fail to get mview schema", K(ret), K(mview_id));
+  } else if (OB_ISNULL(mview_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("fail to get mview schema", K(ret), K(mview_id));
+  } else if (OB_FAIL(ObMVProvider::check_mview_dep_session_vars(*mview_schema, session, true, is_vars_matched))) {
+    LOG_WARN("failed to check mview dep session vars", K(ret));
   }
   return ret;
 }

@@ -998,7 +998,7 @@ int ObTransformOrExpansion::add_filter_to_stmt(ObSelectStmt *stmt,
   int ret = OB_SUCCESS;
   ObConstRawExpr *const_one = NULL;
   ObRawExpr *equal_expr = NULL;
-  ObOpRawExpr *is_not_null = NULL;
+  ObRawExpr *is_not_null = NULL;
   ObSEArray<ObRawExpr*, 2> conds;
   ObRawExpr *or_expr = NULL;
   if (OB_ISNULL(stmt) ||  OB_ISNULL(ctx_) ||  OB_ISNULL(ctx_->expr_factory_)
@@ -1018,7 +1018,7 @@ int ObTransformOrExpansion::add_filter_to_stmt(ObSelectStmt *stmt,
     LOG_WARN("failed to build common binary op expr", K(ret));
   } else if (OB_FAIL(conds.push_back(equal_expr))) {
     LOG_WARN("failed to push back expr", K(ret));
-  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, stmt, flag_exprs.at(0),
+  } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, flag_exprs.at(0),
                                                        is_not_null))) {
     LOG_WARN("failed to add is not null", K(ret));
   } else if (OB_FAIL(conds.push_back(is_not_null))) {

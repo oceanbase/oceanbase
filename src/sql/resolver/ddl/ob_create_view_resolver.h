@@ -146,6 +146,12 @@ private:
                                                 ObSEArray<ObConstraint,4>& csts);
   int resolve_primary_key_node(ParseNode &pk_node, ObTableSchema &table_schema);
   int check_on_query_computation_supported(const ObSelectStmt *stmt);
+  int load_mview_dep_session_vars(ObSQLSessionInfo &session_info,
+                                  ObSelectStmt *stmt,
+                                  ObLocalSessionVar &dep_vars);
+  int get_dep_session_vars_from_stmt(ObSQLSessionInfo &session_info,
+                                     ObSelectStmt *stmt,
+                                     ObLocalSessionVar &dep_vars);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCreateViewResolver);
 };

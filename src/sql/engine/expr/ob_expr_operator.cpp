@@ -2480,12 +2480,12 @@ DEF_SET_LOCAL_SESSION_VARS(ObExprOperator, raw_expr) {
 }
 
 int ObExprOperator::add_local_var_to_expr(ObSysVarClassType var_type,
-                                          const share::schema::ObLocalSessionVar *local_session_var,
+                                          const ObLocalSessionVar *local_session_var,
                                           const ObBasicSessionInfo *session,
-                                          share::schema::ObLocalSessionVar &local_vars)
+                                          ObLocalSessionVar &local_vars)
 {
   int ret = OB_SUCCESS;
-  share::schema::ObSessionSysVar *sys_var = NULL;
+  ObSessionSysVar *sys_var = NULL;
   if (NULL != local_session_var) {
     if (OB_FAIL(local_session_var->get_local_var(var_type, sys_var))) {
       LOG_WARN("fail to get sys var", K(ret), K(var_type));

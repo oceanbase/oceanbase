@@ -35,6 +35,7 @@
 #include "share/cache/ob_kv_storecache.h" // ObKVCacheHandle
 #include "lib/hash/ob_pointer_hashmap.h"
 #include "lib/string/ob_sql_string.h"
+#include "sql/session/ob_local_session_var.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -59,6 +60,7 @@ namespace sql
 {
 class ObSQLSessionInfo;
 class ObPartitionExecutorUtils;
+class ObLocalSessionVar;
 }
 namespace rootserver
 {
@@ -9299,55 +9301,6 @@ struct GetIndexNameKey<ObIndexSchemaHashWrapper, ObIndexNameInfo*>
 };
 
 typedef common::hash::ObPointerHashMap<ObIndexSchemaHashWrapper, ObIndexNameInfo*, GetIndexNameKey, 1024> ObIndexNameMap;
-
-struct ObSessionSysVar {
-  OB_UNIS_VERSION(1);
-public:
-  TO_STRING_KV(K_(type), K_(val));
-  bool is_equal(const ObObj &other_val) const;
-  int64_t get_deep_copy_size() const;
-  ObSysVarClassType type_;
-  ObObj val_;
-};
-
-class ObLocalSessionVar {
-  OB_UNIS_VERSION(1);
-public:
-  ObLocalSessionVar(ObIAllocator *alloc)
-    :alloc_(alloc),
-    local_session_vars_(alloc) {
-    }
-  ObLocalSessionVar ()
-    :alloc_(NULL) {
-    }
-  ~ObLocalSessionVar() { reset(); }
-  void set_allocator(ObIAllocator *allocator) {
-    alloc_ = allocator;
-    local_session_vars_.set_allocator(allocator);
-  }
-  void reset();
-  int set_local_var_capacity(int64_t sz);
-  template<class T>
-  int set_local_vars(T &var_array);
-  int add_local_var(ObSysVarClassType var_type, const ObObj &value);
-  int add_local_var(const ObSessionSysVar *var);
-  int get_local_var(ObSysVarClassType var_type, ObSessionSysVar *&sys_var) const;
-  int get_local_vars(ObIArray<const ObSessionSysVar *> &var_array) const;
-  int load_session_vars(const sql::ObBasicSessionInfo *session);
-  int update_session_vars_with_local(sql::ObBasicSessionInfo &session) const;
-  int remove_vars_same_with_session(const sql::ObBasicSessionInfo *session);
-  int deep_copy(const ObLocalSessionVar &other);
-  int deep_copy_self();
-  int assign(const ObLocalSessionVar &other);
-  bool operator == (const ObLocalSessionVar& other) const;
-  int64_t get_deep_copy_size() const ;
-  int64_t get_var_count() const { return local_session_vars_.count(); }
-  DECLARE_TO_STRING;
-private:
-  const static ObSysVarClassType ALL_LOCAL_VARS[];
-  common::ObIAllocator *alloc_;
-  ObFixedArray<ObSessionSysVar *, common::ObIAllocator> local_session_vars_;
-};
 
 }//namespace schema
 }//namespace share

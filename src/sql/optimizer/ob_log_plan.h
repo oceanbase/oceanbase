@@ -320,9 +320,6 @@ public:
   int sort_pwj_constraint(ObLocationConstraintContext &location_constraint) const;
   int resolve_dup_tab_constraint(ObLocationConstraintContext &location_constraint) const;
 
-  int get_from_table_items(const ObIArray<FromItem> &from_items,
-                          ObIArray<TableItem *> &table_items);
-
   int get_current_semi_infos(const ObIArray<SemiInfo*> &semi_infos,
                              const ObIArray<TableItem*> &table_items,
                              ObIArray<SemiInfo*> &current_semi_infos);
@@ -1533,35 +1530,16 @@ protected:
                                 bool &is_valid_join,
                                 ObJoinOrder *&join_tree);
 
-  int is_detector_used(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      ObConflictDetector *detector,
-                      bool &is_used);
-
-  int choose_join_info(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      ObIArray<ObConflictDetector*> &valid_detectors,
-                      bool delay_cross_product,
-                      bool &is_strict_order);
-
-  int check_join_info(const ObIArray<ObConflictDetector*> &valid_detectors,
-                      ObJoinType &join_type,
-                      bool &is_valid);
-
-  int merge_join_info(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      const ObIArray<ObConflictDetector*> &valid_detectors,
-                      JoinInfo &join_info);
-
   int check_detector_valid(ObJoinOrder *left_tree,
                           ObJoinOrder *right_tree,
                           const ObIArray<ObConflictDetector*> &valid_detectors,
                           ObJoinOrder *cur_tree,
                           bool &is_valid);
 
-  int remove_redundancy_pred(ObJoinOrder *left_tree,
-                            ObJoinOrder *right_tree,
-                            JoinInfo &join_info);
+  int process_join_pred(ObJoinOrder *left_tree,
+                        ObJoinOrder *right_tree,
+                        JoinInfo &join_info);
+
 
   int try_keep_pred_join_same_tables(ObJoinOrder *left_tree,
                                      ObJoinOrder *right_tree,
@@ -1700,6 +1678,8 @@ protected:
 
   int init_lateral_table_depend_info(const ObIArray<TableItem*> &table_items);
 private: // member functions
+  static int distribute_filters_to_baserels(ObIArray<ObJoinOrder*> &base_level,
+                                            ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters);
   static int strong_select_replicas(const common::ObAddr &local_server,
                                     common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                     bool &is_hit_partition,

@@ -29,6 +29,7 @@ enum ObMVRefreshableType
     OB_MV_COMPLETE_REFRESH,         // can not fast refresh
     OB_MV_FAST_REFRESH_SIMPLE_MAV, // fast refresh for single table MAV
     OB_MV_FAST_REFRESH_SIMPLE_MJV, // fast refresh for inner join MJV
+    OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV, // fast refresh for inner join MAV
   };
 
 struct FastRefreshableNotes
@@ -78,7 +79,9 @@ private:
   int check_mv_stmt_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_join_type(const ObSelectStmt &stmt, bool &join_type_valid);
   bool is_mv_join_type_valid(const TableItem *table);
-  int check_select_contains_all_tables_primary_key(const ObSelectStmt &stmt, bool &contain_all_rowkey);
+  int check_select_contains_all_tables_primary_key(const ObSelectStmt &stmt,
+                                                   bool &all_table_exists_rowkey,
+                                                   bool &contain_all_rowkey);
   int check_mv_stmt_use_special_expr(const ObSelectStmt &stmt, bool &has_special_expr);
   int check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool &is_valid);
   int check_mv_duplicated_exprs(const ObSelectStmt &stmt, bool &has_dup_exprs);
@@ -111,6 +114,9 @@ private:
                              const ObIArray<ObAggFunRawExpr*> &aggrs,
                              const ObAggFunRawExpr *&target_aggr);
   int check_mjv_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
+  int check_join_mv_fast_refresh_valid(const ObSelectStmt &stmt,
+                                       const bool for_join_mav,
+                                       bool &is_valid);
   void append_fast_refreshable_note(const char *str, const ObMVRefreshableType type = OB_MV_COMPLETE_REFRESH);
 
   const ObSelectStmt &stmt_;

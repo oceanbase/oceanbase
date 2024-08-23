@@ -770,7 +770,7 @@ public:
   int get_stmt_by_stmt_id(int64_t stmt_id, ObDMLStmt *&stmt);
 
   int64_t get_from_item_size() const { return from_items_.count(); }
-  void clear_from_items() { from_items_.reset(); }
+  void clear_from_items() { from_items_.reuse(); }
   int add_from_item(uint64_t tid, bool is_joined = false)
   {
     int ret = common::OB_SUCCESS;
@@ -790,7 +790,8 @@ public:
   int remove_joined_table_item(const JoinedTable *joined_table);
   int remove_joined_table_item(uint64_t tid, bool *remove_happened = NULL);
 
-  TableItem *create_table_item(common::ObIAllocator &allocator);
+  static TableItem *create_table_item(common::ObIAllocator &allocator);
+  static JoinedTable *create_joined_table(common::ObIAllocator &allocator);
   int merge_from_items(const ObDMLStmt &stmt);
   const FromItem &get_from_item(int64_t index) const { return from_items_[index]; }
   FromItem &get_from_item(int64_t index) { return from_items_[index]; }

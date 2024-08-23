@@ -438,6 +438,8 @@ public:
                                                into_item_->into_type_ == T_INTO_OUTFILE; }
   // check if the stmt is a Select-Project-Join(SPJ) query
   bool is_spj() const;
+  // is_spj + normal group by or scalar group by
+  bool is_spjg() const;
 
   ObRawExpr *get_expr(uint64_t expr_id);
   inline bool is_single_table_stmt() const { return (1 == get_table_size()
