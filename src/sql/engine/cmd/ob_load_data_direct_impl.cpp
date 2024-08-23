@@ -2218,6 +2218,7 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
                                                                      execute_param_.method_,
                                                                      execute_param_.insert_mode_,
                                                                      ObDirectLoadMode::LOAD_DATA,
+                                                                     ObDirectLoadLevel::TABLE,
                                                                      execute_param_.column_ids_))) {
       LOG_WARN("fail to check support direct load", KR(ret));
     } else if (OB_FAIL(init_execute_context())) {
@@ -2504,6 +2505,7 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.method_ = execute_param_.method_;
   load_param.insert_mode_ = execute_param_.insert_mode_;
   load_param.load_mode_ = ObDirectLoadMode::LOAD_DATA;
+  load_param.load_level_ = ObDirectLoadLevel::TABLE;
 
   double online_sample_percent = 100.;
   if (OB_SUCC(ret)) {

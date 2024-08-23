@@ -561,6 +561,7 @@ public:
    *    step5: rename hidden table name to orig table name and modify the state to non-hidden
    */
   int swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter_table_arg);
+  int swap_orig_and_hidden_table_partitions(obrpc::ObAlterTableArg &alter_table_arg);
 
   /**
    * The function is designed for the recover restore table ddl, which is to check whether the object

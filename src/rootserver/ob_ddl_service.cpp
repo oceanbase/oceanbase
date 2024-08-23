@@ -123,6 +123,7 @@
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "rootserver/restore/ob_tenant_clone_util.h"
 #include "rootserver/mview/ob_mview_dependency_service.h"
+#include "rootserver/direct_load/ob_direct_load_partition_exchange.h"
 
 namespace oceanbase
 {
@@ -14388,8 +14389,23 @@ int ObDDLService::create_hidden_table(
               LOG_WARN("param init failed", K(ret));
             } else if (OB_FAIL(root_service->get_ddl_scheduler().prepare_alter_table_arg(param, &new_table_schema, alter_table_arg))) {
               LOG_WARN("prepare alter table arg fail", K(ret));
-            } else {
-              LOG_DEBUG("alter table arg preparation complete!", K(ret), K(alter_table_arg));
+            } else if (!create_hidden_table_arg.get_tablet_ids().empty()){
+              const ObIArray<ObTabletID> &tablet_ids = create_hidden_table_arg.get_tablet_ids();
+              alter_table_arg.alter_table_schema_.reset_partition_array();
+              for (int64_t i = 0; OB_SUCC(ret) && (i < tablet_ids.count()); ++i) {
+                ObPartition part;
+                if (OB_FALSE_IT(part.set_tablet_id(tablet_ids.at(i)))) {
+                } else if (OB_FAIL(alter_table_arg.alter_table_schema_.add_partition(part))) {
+                  LOG_WARN("failed to add partition", KR(ret), K(part));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                alter_table_arg.is_direct_load_partition_ = true;
+              }
+            }
+
+            LOG_DEBUG("alter table arg preparation complete!", K(ret), K(alter_table_arg));
+            if (OB_SUCC(ret)) {
               ObCreateDDLTaskParam param(tenant_id,
                                         create_hidden_table_arg.get_ddl_type(),
                                         orig_table_schema,
@@ -19982,6 +19998,140 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
   return ret;
 }
 
+int ObDDLService::swap_orig_and_hidden_table_partitions(obrpc::ObAlterTableArg &alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+  const uint64_t tenant_id = alter_table_schema.get_tenant_id();
+  ObPartition** part_array = alter_table_schema.get_part_array();
+  ObArray<ObTabletID> tablet_ids;
+  ObArray<ObTabletID> inc_tablet_ids;
+
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("variable is not init", K(ret));
+  } else if (OB_NOT_NULL(part_array)) {
+    for (int64_t i = 0; OB_SUCC(ret) && (i < alter_table_schema.get_partition_num()); ++i) {
+      ObPartition *part = part_array[i];
+      if (OB_NOT_NULL(part)) {
+        if (OB_FAIL(tablet_ids.push_back(part->get_tablet_id()))) {
+          LOG_WARN("failed to add tablet id", KR(ret));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !tablet_ids.empty()) {
+    ObDDLSQLTransaction trans(schema_service_);
+    const ObTableSchema *orig_table_schema = nullptr;
+    const ObTableSchema *hidden_table_schema = nullptr;
+    HEAP_VARS_2((ObTableSchema, new_orig_table_schema),
+                (ObTableSchema, new_hidden_table_schema)) {
+      int64_t refreshed_schema_version = 0;
+      ObSchemaGetterGuard schema_guard;
+      schema_guard.set_session_id(alter_table_arg.session_id_);
+      if (OB_FAIL(get_tenant_schema_guard_with_version_in_inner_table(tenant_id, schema_guard))) {
+        LOG_WARN("failed to get schema guard with version in inner table", K(ret), K(tenant_id));
+      } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(get_orig_and_hidden_table_schema(alter_table_arg,
+                                                          schema_guard,
+                                                          schema_guard,
+                                                          alter_table_schema,
+                                                          orig_table_schema,
+                                                          hidden_table_schema))) {
+        LOG_WARN("failed to get orig and hidden table schema", KR(ret), K(alter_table_arg));
+      } else if (OB_ISNULL(orig_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("failed to get orig table schema", KR(ret), K(alter_table_arg), KP(orig_table_schema));
+      } else if (OB_ISNULL(hidden_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("failed to get hidden table schema", KR(ret), K(alter_table_arg), KP(hidden_table_schema));
+      } else if (OB_FAIL(new_orig_table_schema.assign(*orig_table_schema))
+                || OB_FAIL(new_hidden_table_schema.assign(*hidden_table_schema))) {
+        LOG_WARN("failed to assign schema", KR(ret), KPC(orig_table_schema), KPC(hidden_table_schema));
+      } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
+        LOG_WARN("failed to start trans, ", KR(ret), K(tenant_id), K(refreshed_schema_version));
+      } else if (OB_FAIL(check_hidden_table_constraint_exist(hidden_table_schema,
+                                                             orig_table_schema,
+                                                             schema_guard))) {
+        LOG_WARN("failed to check hidden table constraint existence", KR(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && (i < tablet_ids.count()); ++i) {
+          const ObTabletID &orig_tablet_id = tablet_ids.at(i);
+          int64_t part_idx = OB_INVALID_INDEX;
+          int64_t subpart_idx = OB_INVALID_INDEX;
+          ObTabletID inc_tablet_id;
+          ObObjectID inc_object_id;
+          ObObjectID first_level_part_id;
+          if (OB_FAIL(orig_table_schema->get_part_idx_by_tablet(orig_tablet_id, part_idx, subpart_idx))) {
+            LOG_WARN("failed to get part idx by tablet", KR(ret), K(orig_tablet_id));
+          } else if (OB_FAIL(hidden_table_schema->get_tablet_and_object_id_by_index(
+              part_idx, subpart_idx, inc_tablet_id, inc_object_id, first_level_part_id))) {
+            LOG_WARN("failed to get tablet and object id by index", KR(ret), K(part_idx), K(subpart_idx));
+          } else if (OB_FAIL(inc_tablet_ids.push_back(inc_tablet_id))) {
+            LOG_WARN("failed to add inc tablet id", KR(ret), K(inc_tablet_id));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+          LOG_WARN("get min data version failed", K(ret), K(tenant_id));
+        } else {
+          ObDirectLoadPartitionExchange dl_part_exchange(*this, tenant_data_version);
+          new_orig_table_schema.set_in_offline_ddl_white_list(true);
+          new_hidden_table_schema.set_in_offline_ddl_white_list(true);
+          if (OB_FAIL(dl_part_exchange.exchange_multipart_table_partitions(
+              tenant_id,
+              trans,
+              schema_guard,
+              new_orig_table_schema,
+              new_hidden_table_schema,
+              tablet_ids,
+              inc_tablet_ids))) {
+            LOG_WARN("failed to exchange multipart table partitions", KR(ret));
+          }
+        }
+      }
+
+      if (OB_SUCC(ret)) {
+        ObTableLockOwnerID owner_id;
+        if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, alter_table_arg.task_id_))) {
+          LOG_WARN("failed to get owner id", K(ret), K(alter_table_arg.task_id_));
+        } else if (OB_FAIL(ObDDLLock::unlock_for_offline_ddl(tenant_id,
+                                                              orig_table_schema->get_table_id(),
+                                                              owner_id,
+                                                              trans))) {
+          LOG_WARN("failed to unlock ddl", K(ret));
+        }
+      }
+    }
+
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_FAIL(ret)) {
+  } else if (OB_SUCCESS != (tmp_ret = publish_schema(tenant_id))) {
+    LOG_WARN("publish_schema failed", K(tmp_ret));
+  }
+  if (OB_SUCC(ret)) {
+    ret = tmp_ret;
+  }
+  if (OB_NO_NEED_UPDATE == ret) {
+    ret = OB_SUCCESS;
+  }
+
+  return ret;
+}
+
 int ObDDLService::check_and_replace_default_index_name_on_demand(
     const bool is_oracle_mode,
     common::ObIAllocator &allocator,
@@ -20687,9 +20837,16 @@ int ObDDLService::cleanup_garbage(ObAlterTableArg &alter_table_arg)
       }
       if (OB_SUCC(ret)) {
         if (ddl_succ) {
-          if (OB_FAIL(new_orig_table_schema.assign(*hidden_table_schema))
-                || OB_FAIL(new_hidden_table_schema.assign(*orig_table_schema))) {
-            LOG_WARN("fail to assign schema", K(ret));
+          if (alter_table_arg.is_direct_load_partition_) {
+            if (OB_FAIL(new_orig_table_schema.assign(*orig_table_schema))
+                  || OB_FAIL(new_hidden_table_schema.assign(*hidden_table_schema))) {
+              LOG_WARN("fail to assign schema", K(ret));
+            }
+          } else {
+            if (OB_FAIL(new_orig_table_schema.assign(*hidden_table_schema))
+                  || OB_FAIL(new_hidden_table_schema.assign(*orig_table_schema))) {
+              LOG_WARN("fail to assign schema", K(ret));
+            }
           }
         } else {
           if (OB_FAIL(new_orig_table_schema.assign(*orig_table_schema))

@@ -721,7 +721,8 @@ int ObCreateHiddenTableArg::init(const uint64_t tenant_id, const uint64_t dest_t
                                  const int64_t parallelism, const share::ObDDLType ddl_type, const ObSQLMode sql_mode,
                                  const ObTimeZoneInfo &tz_info, const common::ObString &local_nls_date,
                                  const common::ObString &local_nls_timestamp, const common::ObString &local_nls_timestamp_tz,
-                                 const ObTimeZoneInfoWrap &tz_info_wrap, const bool need_reorder_column_id)
+                                 const ObTimeZoneInfoWrap &tz_info_wrap, const ObIArray<ObTabletID> &tablet_ids,
+                                 const bool need_reorder_column_id)
 {
   int ret = OB_SUCCESS;
   reset();
@@ -733,6 +734,8 @@ int ObCreateHiddenTableArg::init(const uint64_t tenant_id, const uint64_t dest_t
     // do nothing
   } else if (FALSE_IT(nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ].assign_ptr(local_nls_timestamp_tz.ptr(), static_cast<int32_t>(local_nls_timestamp_tz.length())))) {
     // do nothing
+  } else if (OB_FAIL(tablet_ids_.assign(tablet_ids))) {
+    LOG_WARN("failed to assign tablet ids", KR(ret), K(tablet_ids));
   } else {
     exec_tenant_id_ = exec_tenant_id;
     tenant_id_ = tenant_id;

@@ -67,6 +67,17 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
                               ObTableLoadExecCtx *execute_ctx)
 {
   int ret = OB_SUCCESS;
+  ObArray<ObTabletID> tablet_ids;
+  tablet_ids.reset();
+  return init(param, column_ids, tablet_ids, execute_ctx);
+}
+
+int ObTableLoadInstance::init(ObTableLoadParam &param,
+                              const ObIArray<uint64_t> &column_ids,
+                              const ObIArray<ObTabletID> &tablet_ids,
+                              ObTableLoadExecCtx *execute_ctx)
+{
+  int ret = OB_SUCCESS;
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTableLoadInstance init twice", KR(ret), KP(this));
@@ -74,6 +85,10 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
                          column_ids.count() != param.column_count_ || !execute_ctx->is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(param), K(column_ids), KPC(execute_ctx));
+  } else if ((ObDirectLoadLevel::PARTITION == param.load_level_)
+              && OB_UNLIKELY(!is_valid_tablet_ids(tablet_ids))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet ids", KR(ret), K(param.load_level_), K(tablet_ids));
   } else {
     DISABLE_SQL_MEMLEAK_GUARD;
     execute_ctx_ = execute_ctx;
@@ -86,14 +101,15 @@ int ObTableLoadInstance::init(ObTableLoadParam &param,
       LOG_WARN("fail to check tenant", KR(ret), K(param.tenant_id_));
     }
     // start stmt
-    else if (OB_FAIL(start_stmt(param))) {
-      LOG_WARN("fail to start stmt", KR(ret), K(param));
+    else if (OB_FAIL(start_stmt(param, tablet_ids))) {
+      LOG_WARN("fail to start stmt", KR(ret), K(param), K(tablet_ids));
     }
     // double check support for concurrency of direct load and ddl
     else if (OB_FAIL(ObTableLoadService::check_support_direct_load(param.table_id_,
                                                                    param.method_,
                                                                    param.insert_mode_,
                                                                    param.load_mode_,
+                                                                   param.load_level_,
                                                                    column_ids))) {
       LOG_WARN("fail to check support direct load", KR(ret), K(param));
     }
@@ -160,7 +176,9 @@ int ObTableLoadInstance::px_commit_ddl()
   return ret;
 }
 
-int ObTableLoadInstance::start_stmt(const ObTableLoadParam &param)
+int ObTableLoadInstance::start_stmt(
+    const ObTableLoadParam &param,
+    const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   stmt_ctx_.reset();
@@ -186,8 +204,8 @@ int ObTableLoadInstance::start_stmt(const ObTableLoadParam &param)
       }
     }
   } else {
-    if (OB_FAIL(start_redef_table(param))) {
-      LOG_WARN("fail to start redef table", KR(ret), K(param));
+    if (OB_FAIL(start_redef_table(param, tablet_ids))) {
+      LOG_WARN("fail to start redef table", KR(ret), K(param), K(tablet_ids));
     }
   }
   if (OB_SUCC(ret)) {
@@ -404,7 +422,9 @@ int ObTableLoadInstance::init_ddl_param_for_inc_direct_load()
   return ret;
 }
 
-int ObTableLoadInstance::start_redef_table(const ObTableLoadParam &param)
+int ObTableLoadInstance::start_redef_table(
+    const ObTableLoadParam &param,
+    const ObIArray<ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
   ObTableLoadDDLParam &ddl_param = stmt_ctx_.ddl_param_;
@@ -415,7 +435,10 @@ int ObTableLoadInstance::start_redef_table(const ObTableLoadParam &param)
   start_arg.parallelism_ = param.parallel_;
   start_arg.is_load_data_ = !param.px_mode_;
   start_arg.is_insert_overwrite_ = ObDirectLoadMode::is_insert_overwrite(param.load_mode_);
-  if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *stmt_ctx_.session_info_))) {
+  if ((ObDirectLoadLevel::PARTITION == param.load_level_)
+      && OB_FAIL(start_arg.tablet_ids_.assign(tablet_ids))) {
+    LOG_WARN("failed to assign tablet ids", KR(ret), K(param.load_level_), K(tablet_ids));
+  } else if (OB_FAIL(ObTableLoadRedefTable::start(start_arg, start_res, *stmt_ctx_.session_info_))) {
     LOG_WARN("fail to start redef table", KR(ret), K(start_arg));
   } else {
     ddl_param.dest_table_id_ = start_res.dest_table_id_;
@@ -759,6 +782,22 @@ int ObTableLoadInstance::write_trans(TransCtx &trans_ctx, int32_t session_id,
     }
   }
   return ret;
+}
+
+bool ObTableLoadInstance::is_valid_tablet_ids(const ObIArray<ObTabletID> &tablet_ids)
+{
+  bool is_valid = true;
+  if (tablet_ids.empty()) {
+    is_valid = false;
+  } else {
+    for (int64_t i = 0; is_valid && (i < tablet_ids.count()); ++i) {
+      const ObTabletID &tablet_id = tablet_ids.at(i);
+      if (OB_UNLIKELY(!tablet_id.is_valid())) {
+        is_valid = false;
+      }
+    }
+  }
+  return is_valid;
 }
 
 } // namespace observer

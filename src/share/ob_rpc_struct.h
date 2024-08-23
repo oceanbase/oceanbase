@@ -1930,7 +1930,7 @@ public:
            const ObSQLMode sql_mode, const ObTimeZoneInfo &tz_info,
            const common::ObString &local_nls_date, const common::ObString &local_nls_timestamp,
            const common::ObString &local_nls_timestamp_tz, const ObTimeZoneInfoWrap &tz_info_wrap,
-           const bool need_reorder_column_id);
+           const common::ObIArray<common::ObTabletID> &tablet_ids, const bool need_reorder_column_id);
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_table_id() const { return table_id_; }
   int64_t get_consumer_group_id() const { return consumer_group_id_; }
@@ -1944,6 +1944,7 @@ public:
   common::ObTimeZoneInfo get_tz_info() const { return tz_info_; }
   const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
   const common::ObString *get_nls_formats() const { return nls_formats_; }
+  const common::ObIArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
   bool get_need_reorder_column_id() const { return need_reorder_column_id_; }
 private:
   uint64_t tenant_id_;
