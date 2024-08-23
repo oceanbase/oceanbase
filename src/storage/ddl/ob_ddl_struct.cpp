@@ -359,6 +359,21 @@ bool ObDDLMacroBlockRedoInfo::is_column_group_info_valid() const
   return table_key_.is_column_store_sstable() && end_row_id_ >= 0;
 }
 
+bool ObDDLMacroBlockRedoInfo::is_not_compat_cs_replica() const
+{
+  return !with_cs_replica_;
+}
+
+bool ObDDLMacroBlockRedoInfo::is_cs_replica_row_store() const
+{
+  return with_cs_replica_ && !table_key_.is_column_store_sstable();
+}
+
+bool ObDDLMacroBlockRedoInfo::is_cs_replica_column_store() const
+{
+  return with_cs_replica_ && table_key_.is_column_store_sstable();
+}
+
 OB_SERIALIZE_MEMBER(ObDDLMacroBlockRedoInfo,
                     table_key_,
                     data_buffer_,

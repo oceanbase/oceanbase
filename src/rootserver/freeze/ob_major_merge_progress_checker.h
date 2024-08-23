@@ -149,10 +149,10 @@ private:
   // record each table compaction/verify status
   compaction::ObTableCompactionInfoMap table_compaction_map_; // <table_id, compaction_info>
   ObFTSGroupArray fts_group_array_;
+  share::ObCompactionLocalityCache ls_locality_cache_;
   ObChecksumValidator ckm_validator_;
   compaction::ObUncompactInfo uncompact_info_;
   // cache of ls_infos in __all_ls_meta_table
-  share::ObCompactionLocalityCache ls_locality_cache_;
   // statistics section
   compaction::ObRSCompactionTimeGuard total_time_guard_;
   compaction::ObCkmValidatorStatistics validator_statistics_;

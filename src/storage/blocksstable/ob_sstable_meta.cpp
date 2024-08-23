@@ -64,9 +64,9 @@ ObSSTableBasicMeta::ObSSTableBasicMeta()
     master_key_id_(0),
     sstable_logic_seq_(0),
     latest_row_store_type_(ObRowStoreType::MAX_ROW_STORE),
-    root_macro_seq_(0),
     table_backup_flag_(),
-    table_shared_flag_()
+    table_shared_flag_(),
+    root_macro_seq_(0)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
 }
@@ -248,7 +248,8 @@ DEFINE_SERIALIZE(ObSSTableBasicMeta)
                   sstable_logic_seq_,
                   latest_row_store_type_,
                   table_backup_flag_,
-                  table_shared_flag_);
+                  table_shared_flag_,
+                  root_macro_seq_);
       if (OB_FAIL(ret)) {
       } else if (OB_UNLIKELY(length_ != pos - start_pos)) {
         ret = OB_ERR_UNEXPECTED;
@@ -330,7 +331,8 @@ int ObSSTableBasicMeta::decode_for_compat(const char *buf, const int64_t data_le
               sstable_logic_seq_,
               latest_row_store_type_,
               table_backup_flag_,
-              table_shared_flag_);
+              table_shared_flag_,
+              root_macro_seq_);
   return ret;
 }
 
@@ -373,7 +375,8 @@ DEFINE_GET_SERIALIZE_SIZE(ObSSTableBasicMeta)
               sstable_logic_seq_,
               latest_row_store_type_,
               table_backup_flag_,
-              table_shared_flag_);
+              table_shared_flag_,
+              root_macro_seq_);
   return len;
 }
 

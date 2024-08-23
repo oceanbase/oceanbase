@@ -417,33 +417,17 @@ int ObSimpleTableSchemaV2::get_zone_replica_attr_array_inherit(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = get_tenant_id();
-  bool use_tenant_locality = !is_sys_tenant(tenant_id) && GCTX.is_standby_cluster();
   locality.reuse();
-  if (!has_partition()) {
-    // No partition, no concept of locality
-  } else if (!use_tenant_locality) {
-    const share::schema::ObSimpleTenantSchema *simple_tenant = nullptr;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_locality = simple_tenant->is_restore();
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else {
-    // Locality is not set when creating table, take tenant's fill
-    const ObTenantSchema *tenant_schema = NULL;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
-      LOG_WARN("fail to get tenant schema", K(ret), K(table_id_), K(tenant_id));
-    } else if (OB_UNLIKELY(NULL == tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant schema null", K(ret), K(table_id_), K(tenant_id), KP(tenant_schema));
-    } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array_inherit(schema_guard, locality))) {
-      LOG_WARN("fail to get zone replica num array", K(ret), K(table_id_), K(tenant_id));
-    }
+
+  // Locality is not set when creating table, take tenant's fill
+  const ObTenantSchema *tenant_schema = NULL;
+  if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", K(ret), K(table_id_), K(tenant_id));
+  } else if (OB_UNLIKELY(NULL == tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant schema null", K(ret), K(table_id_), K(tenant_id), KP(tenant_schema));
+  } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array_inherit(schema_guard, locality))) {
+    LOG_WARN("fail to get zone replica num array", K(ret), K(table_id_), K(tenant_id));
   }
   return ret;
 }
@@ -454,32 +438,15 @@ int ObSimpleTableSchemaV2::get_primary_zone_inherit(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = get_tenant_id();
-  const uint64_t tablegroup_id = get_tablegroup_id();
-  const uint64_t database_id = get_database_id();
-  bool use_tenant_primary_zone = !is_sys_tenant(tenant_id) && GCTX.is_standby_cluster();
   primary_zone.reset();
-  if (!use_tenant_primary_zone) {
-    const share::schema::ObSimpleTenantSchema *simple_tenant = nullptr;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_primary_zone = simple_tenant->is_restore();
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (use_tenant_primary_zone) {
-    const ObTenantSchema *tenant_schema = NULL;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
-      LOG_WARN("fail to get tenant schema", K(ret), K(database_id), K(tenant_id));
-    } else if (OB_UNLIKELY(NULL == tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant schema null", K(ret), K(database_id), K(tenant_id), KP(tenant_schema));
-    } else if (OB_FAIL(tenant_schema->get_primary_zone_inherit(schema_guard, primary_zone))) {
-      LOG_WARN("fail to get primary zone array", K(ret), K(database_id), K(tenant_id));
-    }
+  const ObTenantSchema *tenant_schema = NULL;
+  if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", K(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(NULL == tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant schema null", K(ret), K(tenant_id), KP(tenant_schema));
+  } else if (OB_FAIL(tenant_schema->get_primary_zone_inherit(schema_guard, primary_zone))) {
+    LOG_WARN("fail to get primary zone array", K(ret), K(tenant_id));
   }
   return ret;
 }
@@ -1035,24 +1002,8 @@ int ObSimpleTableSchemaV2::get_locality_str_inherit(
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = get_tenant_id();
-  bool use_tenant_locality = !is_sys_tenant(tenant_id) && GCTX.is_standby_cluster();
   locality_str = NULL;
-  if (OB_INVALID_ID == get_table_id()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid table_id", K(ret), K_(table_id));
-  } else if (!use_tenant_locality) {
-    const share::schema::ObSimpleTenantSchema *simple_tenant = nullptr;
-    if (OB_FAIL(guard.get_tenant_info(tenant_id, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_locality = simple_tenant->is_restore();
-    }
-  }
   if (OB_FAIL(ret)) {
-  } else if (!OB_ISNULL(locality_str) && !locality_str->empty()) {
   } else {
     const ObSimpleTenantSchema *tenant = NULL;
     if (OB_FAIL(guard.get_tenant_info(get_tenant_id(), tenant))) {
@@ -8958,14 +8909,17 @@ int ObTableSchema::is_column_group_exist(const ObString &cg_name, bool &exist) c
   return ret;
 }
 
-int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &param, int32_t &cg_idx) const
+int ObTableSchema::get_column_group_index(
+    const share::schema::ObColumnParam &param,
+    const bool need_calculate_cg_idx,
+    int32_t &cg_idx) const
 {
   int ret = OB_SUCCESS;
-  uint64_t column_id = param.get_column_id();
+  const uint64_t column_id = param.get_column_id();
   cg_idx = -1;
-  if (OB_UNLIKELY(1 >= column_group_cnt_)) {
+  if (OB_UNLIKELY(1 >= column_group_cnt_ && !need_calculate_cg_idx)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("No column group exist", K(ret), K_(is_column_store_supported), K_(column_group_cnt));
+    LOG_WARN("No column group exist", K(ret), K(need_calculate_cg_idx), K_(is_column_store_supported), K_(column_group_cnt));
   } else if (param.is_virtual_gen_col()) {
     cg_idx = -1;
   } else if (column_id < OB_END_RESERVED_COLUMN_ID_NUM &&
@@ -8974,7 +8928,9 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
       common::OB_HIDDEN_PK_INCREMENT_COLUMN_ID != column_id) { // this has its own column group now
     if (common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == column_id ||
         common::OB_HIDDEN_SQL_SEQUENCE_COLUMN_ID == column_id) {
-      if (OB_FAIL(get_base_rowkey_column_group_index(cg_idx))) {
+      if (need_calculate_cg_idx) {
+        cg_idx = OB_CS_COLUMN_REPLICA_ROWKEY_CG_IDX;
+      } else if (OB_FAIL(get_base_rowkey_column_group_index(cg_idx))) {
         LOG_WARN("Fail to get base/rowkey column group index", K(ret), K(column_id));
       }
     } else {
@@ -8983,6 +8939,10 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
       // common::OB_HIDDEN_LOGICAL_ROWID_COLUMN_ID == column_id
       // common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == column_id
       cg_idx = -1;
+    }
+  } else if (need_calculate_cg_idx) {
+    if (OB_FAIL(calc_column_group_index_(column_id, cg_idx))) {
+      LOG_WARN("Fail to calc_column_group_index", K(ret), K(column_id));
     }
   } else {
     bool found = false;
@@ -9018,6 +8978,29 @@ int ObTableSchema::get_column_group_index(const share::schema::ObColumnParam &pa
       LOG_WARN("Unexpected, can not find cg idx", K(ret), K(column_id));
     }
   }
+  LOG_TRACE("[CS-Replica] get column group index", K(ret), K(need_calculate_cg_idx), K(cg_idx));
+  return ret;
+}
+
+int ObTableSchema::calc_column_group_index_(const uint64_t column_id, int32_t &cg_idx) const
+{
+  int ret = OB_SUCCESS;
+  cg_idx = -1;
+  // for cs replica, constructed cg schemas start with rowkey cg so the cg idx of row key cg is ALWAYS 0
+  // and cg idx of normal cg is shifted by offset 1.
+  for (int64_t i = 0; i < column_cnt_; i++) {
+    ObColumnSchemaV2 *column = column_array_[i];
+    if (OB_NOT_NULL(column) && column->get_column_id() == column_id) {
+      cg_idx = i + 1;
+      break;
+    }
+  }
+
+  if (OB_UNLIKELY(-1 == cg_idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected cg idx", K(ret));
+  }
+
   return ret;
 }
 

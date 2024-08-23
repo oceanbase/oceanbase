@@ -91,7 +91,7 @@ ObLSMeta::ObLSMeta(const ObLSMeta &ls_meta)
     rebuild_info_(ls_meta.rebuild_info_),
     transfer_meta_info_(ls_meta.transfer_meta_info_),
     major_mv_merge_info_(ls_meta.major_mv_merge_info_),
-    store_format_()
+    store_format_(ls_meta.store_format_)
 {
   all_id_meta_.update_all_id_meta(ls_meta.all_id_meta_);
 }
@@ -289,7 +289,8 @@ bool ObLSMeta::is_valid() const
       && OB_MIGRATION_STATUS_MAX != migration_status_
       && ObGCHandler::is_valid_ls_gc_state(gc_state_)
       && restore_status_.is_valid()
-      && rebuild_seq_ >= 0;
+      && rebuild_seq_ >= 0
+      && store_format_.is_valid();
 }
 
 int64_t ObLSMeta::get_rebuild_seq() const
@@ -708,7 +709,8 @@ int ObLSMeta::init(
     const share::ObLSID &ls_id,
     const ObMigrationStatus &migration_status,
     const share::ObLSRestoreStatus &restore_status,
-    const SCN &create_scn)
+    const SCN &create_scn,
+    const ObLSStoreFormat &store_format)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == tenant_id || !ls_id.is_valid()
@@ -728,6 +730,7 @@ int ObLSMeta::init(
     gc_state_ = LSGCState::NORMAL;
     restore_status_ = restore_status;
     transfer_scn_ = SCN::min_scn();
+    store_format_ = store_format;
   }
   return ret;
 }
@@ -889,6 +892,11 @@ int ObLSMeta::check_ls_need_online(bool &need_online) const
     need_online = false;
   }
   return ret;
+}
+
+ObLSStoreFormat ObLSMeta::get_store_format() const
+{
+  return store_format_;
 }
 
 ObLSMeta::ObReentrantWLockGuard::ObReentrantWLockGuard(ObLatch &lock,

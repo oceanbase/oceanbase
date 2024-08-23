@@ -59,7 +59,8 @@ ObTableIterParam::ObTableIterParam()
       auto_split_filter_type_(OB_INVALID_ID),
       auto_split_filter_(nullptr),
       auto_split_params_(nullptr),
-      is_tablet_spliting_(false)
+      is_tablet_spliting_(false),
+      is_column_replica_table_(false)
 {
 }
 
@@ -111,6 +112,7 @@ void ObTableIterParam::reset()
   auto_split_filter_ = nullptr;
   auto_split_params_ = nullptr;
   is_tablet_spliting_ = false;
+  is_column_replica_table_ = false;
   ObSSTableIndexFilterFactory::destroy_sstable_index_filter(sstable_index_filter_);
 }
 
@@ -316,6 +318,7 @@ int ObTableAccessParam::init(
       iter_param_.table_scan_opt_.storage_rowsets_size_ = 1;
     }
     iter_param_.pushdown_filter_ = scan_param.pd_storage_filters_;
+    iter_param_.is_column_replica_table_ = table_param.is_column_replica_table();
      // disable blockscan if scan order is KeepOrder(for iterator iterator and table api)
      // disable blockscan if use index skip scan as no large range to scan
     if (OB_UNLIKELY(ObQueryFlag::KeepOrder == scan_param.scan_flag_.scan_order_ ||

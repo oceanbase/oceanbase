@@ -92,6 +92,7 @@ public:
   uint32_t full_column_cnt_;
 };
 
+
 enum ObCOSSTableBaseType : int32_t
 {
   INVALID_TYPE = 0,
@@ -102,10 +103,11 @@ enum ObCOSSTableBaseType : int32_t
 
 enum ObCOMajorSSTableStatus: uint8_t {
   INVALID_CO_MAJOR_SSTABLE_STATUS = 0,
-  COL_WITH_ALL, // all cg + normal cg
-  COL_ONLY_ALL, // all cg only (schema have all cg)
-  PURE_COL, // rowkey cg + normal cg
-  PURE_COL_ONLY_ALL, // all cg only (schema do not have all cg)
+  COL_WITH_ALL = 1, // all cg + normal cg
+  COL_ONLY_ALL = 2, // all cg only (schema have all cg)
+  PURE_COL = 3, // rowkey cg + normal cg
+  PURE_COL_ONLY_ALL = 4, // all cg only (schema do not have all cg)
+  COL_REPLICA_MAJOR = 5, // temp status, row store major from F/R replica for column store replica
   MAX_CO_MAJOR_SSTABLE_STATUS
 };
 /*
@@ -119,6 +121,8 @@ enum ObCOMajorSSTableStatus: uint8_t {
   |     PURE_COL    |     EACH      |      EACH     |  YES  |
   +-----------------+---------------+---------------+-------+
   |PURE_COL_ONLY_ALL|     EACH      |      ALL      |   NO  |
+  +-----------------+---------------+---------------+-------+
+  |COL_REPLICA_MAJOR|    ROW STORE  |   ROW STORE   |  YES  |
   +-----------------+---------------+---------------+-------+
 */
 inline bool is_valid_co_major_sstable_status(const ObCOMajorSSTableStatus& major_sstable_status)

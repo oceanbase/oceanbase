@@ -109,6 +109,7 @@ void TestMetaPointerMap::FakeLs(ObLS &ls)
   ls.ls_meta_.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   ls.ls_meta_.restore_status_ = ObLSRestoreStatus::NONE;
   ls.ls_meta_.rebuild_seq_ = 0;
+  ls.ls_meta_.store_format_ = common::ObLSStoreType::OB_LS_STORE_NORMAL;
 }
 
 class CalculateSize final

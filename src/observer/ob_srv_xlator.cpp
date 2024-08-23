@@ -203,6 +203,8 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
   } else {
     if (req.is_in_connected_phase()) {
       ret = get_mp_connect_processor(processor);
+    } else if (OB_FAIL(check_service_name_(req))) {
+      LOG_WARN("fail to execute check_service_name_", KR(ret));
     } else {
       const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket &>(req.get_packet());
       if (pkt.get_cmd() == obmysql::COM_QUERY) {
@@ -335,6 +337,36 @@ int ObSrvMySQLXlator::translate(rpc::ObRequest &req, ObReqProcessor *&processor)
     }
   }
 
+  return ret;
+}
+
+int ObSrvMySQLXlator::check_service_name_(rpc::ObRequest &req)
+{
+  int ret = OB_SUCCESS;
+  ObSMConnection *conn = reinterpret_cast<ObSMConnection* >(SQL_REQ_OP.get_sql_session(&req));
+  ObSQLSessionInfo *session = NULL;
+  uint32_t sess_id = 0;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_ISNULL(conn) || OB_ISNULL(GCTX.session_mgr_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KR(ret), KP(conn), KP(GCTX.session_mgr_), K(tenant_id));
+  } else if (!conn->has_service_name_) {
+    // do nothing
+  } else if (FALSE_IT(sess_id = conn->sessid_)) {
+  } else if (FALSE_IT(tenant_id = conn->tenant_id_)) {
+  } else if (!is_user_tenant(tenant_id)) {
+    // do nothing
+  } else if (OB_FAIL(GCTX.session_mgr_->get_session(sess_id, session))) {
+    LOG_WARN("fail to get session", KR(ret), K(sess_id), K(tenant_id));
+  } else if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", KR(ret), KP(session), K(tenant_id));
+  } else if (OB_FAIL(session->check_service_name_and_failover_mode())) {
+    LOG_WARN("fail to execute check_service_name_and_failover_mode", KR(ret), K(tenant_id));
+  }
+  if (NULL != session) {
+    GCTX.session_mgr_->revert_session(session);
+  }
   return ret;
 }
 

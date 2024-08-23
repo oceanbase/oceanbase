@@ -18,6 +18,7 @@
 #include "storage/ddl/ob_ddl_clog.h"
 #include "storage/ddl/ob_ddl_inc_clog.h"
 #include "storage/ddl/ob_ddl_struct.h"
+#include "storage/ddl/ob_direct_load_struct.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
 
 namespace oceanbase
@@ -93,7 +94,11 @@ protected:
   // @return other error codes, failed to replay.
   int do_replay_(ObTabletHandle &handle) override;
   int replay_ddl_start(ObTabletHandle &handle, const bool is_lob_meta_tablet);
-
+  int pre_process_for_cs_replica(
+      ObTabletDirectLoadInsertParam &direct_load_param,
+      ObITable::TableKey &table_key,
+      ObTabletHandle &tablet_handle,
+      const ObTabletID &tablet_id);
 private:
   const ObDDLStartLog *log_;
 };
@@ -124,6 +129,10 @@ private:
       ObTabletHandle &tablet_handle,
       blocksstable::ObMacroBlockWriteInfo &write_info,
       storage::ObDDLMacroBlock &macro_block);
+  int filter_redo_log_(
+      const ObDDLMacroBlockRedoInfo &redo_info,
+      const ObTabletHandle &tablet_handle,
+      bool &can_skip);
 private:
   const ObDDLRedoLog *log_;
 };

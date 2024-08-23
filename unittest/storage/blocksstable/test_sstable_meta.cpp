@@ -630,6 +630,7 @@ TEST_F(TestSSTableMeta, test_sstable_meta_deep_copy)
   const int64_t buf_size = 8 << 10; //8K
   int64_t pos = 0;
   char *flat_buf_1 = (char*)ob_malloc(buf_size, ObMemAttr());
+  MEMSET(flat_buf_1, 0, buf_size);
   int64_t deep_copy_size = src_meta.get_deep_copy_size();
   ObSSTableMeta *flat_meta_1;
   ret = src_meta.deep_copy(flat_buf_1, deep_copy_size, pos, flat_meta_1);
@@ -637,11 +638,10 @@ TEST_F(TestSSTableMeta, test_sstable_meta_deep_copy)
   ASSERT_EQ(deep_copy_size, pos);
   OB_LOG(INFO, "cooper", K(src_meta), K(sizeof(ObSSTableMeta)), K(deep_copy_size));
   OB_LOG(INFO, "cooper", K(*flat_meta_1));
-  // can't use MEMCMP between dynamic memory and flat memory, because one is stack, the other is heap
   ASSERT_EQ(src_meta.basic_meta_, flat_meta_1->basic_meta_);
-  // ASSERT_EQ(0, MEMCMP((char*)&src_meta.data_root_info_, (char*)&flat_meta_1->data_root_info_, sizeof(src_meta.data_root_info_)));
-  // ASSERT_EQ(0, MEMCMP((char*)&src_meta.macro_info_, (char*)&dst_meta->macro_info_, sizeof(src_meta.macro_info_)));
-  // ASSERT_EQ(0, MEMCMP((char*)&src_meta.cg_sstables_, (char*)&dst_meta->cg_sstables_, sizeof(src_meta.cg_sstables_)));
+  ASSERT_EQ(0, MEMCMP((char*)&src_meta.data_root_info_, (char*)&flat_meta_1->data_root_info_, sizeof(src_meta.data_root_info_)));
+  ASSERT_EQ(0, MEMCMP((char*)&src_meta.macro_info_, (char*)&flat_meta_1->macro_info_, sizeof(src_meta.macro_info_)));
+  // ASSERT_EQ(0, MEMCMP((char*)&src_meta.cg_sstables_, (char*)&flat_meta_1->cg_sstables_, sizeof(src_meta.cg_sstables_)));
   ASSERT_EQ(0, MEMCMP(src_meta.column_checksums_, flat_meta_1->column_checksums_, src_meta.column_checksum_count_ * sizeof(int64_t)));
   ASSERT_EQ(src_meta.tx_ctx_.len_, flat_meta_1->tx_ctx_.len_);
   ASSERT_EQ(src_meta.tx_ctx_.count_, flat_meta_1->tx_ctx_.count_);
@@ -650,6 +650,7 @@ TEST_F(TestSSTableMeta, test_sstable_meta_deep_copy)
   // test deep copy from flat memory meta to flat memory meta
   pos = 0;
   char *flat_buf_2 = (char*)ob_malloc_align(4<<10, buf_size, ObMemAttr());
+  MEMSET(flat_buf_2, 0, buf_size);
   deep_copy_size = flat_meta_1->get_deep_copy_size();
   ObSSTableMeta *flat_meta_2;
   ret = flat_meta_1->deep_copy(flat_buf_2, deep_copy_size, pos, flat_meta_2);

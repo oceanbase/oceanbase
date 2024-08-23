@@ -183,7 +183,9 @@ int ObCOMergePrepareTask::create_schedule_dag(ObCOTabletMergeCtx &ctx)
   ObGetMergeTablesResult result;
   bool schedule_minor = false;
 
-  if (OB_FAIL(ctx.check_need_schedule_minor(schedule_minor))) {
+  if (is_convert_co_major_merge(ctx.get_merge_type())) {
+    // convert co major merge only rely on major sstable
+  } else if (OB_FAIL(ctx.check_need_schedule_minor(schedule_minor))) {
     LOG_WARN("failed to check need chedule minor", K(ret), K(schedule_minor));
   } else if (schedule_minor) {
     ObTableHandleV2 tmp_table_handle;
@@ -1056,6 +1058,7 @@ int ObCOMergeDagNet::init_by_param(const ObIDagInitParam *param)
     merge_type_ = merge_param->merge_type_;
     ls_id_ = merge_param->ls_id_;
     tablet_id_ = merge_param->tablet_id_;
+    (void) set_dag_net_id(merge_param->dag_net_id_);
     is_inited_ = true;
   }
   return ret;
@@ -1317,7 +1320,7 @@ int ObCOMergeDagNet::inner_create_row_store_dag(
     common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array)
 {
   int ret = OB_SUCCESS;
-  LOG_DEBUG("chengkong debug: build row store in this compaction", "co_major_merge_type_",
+  LOG_DEBUG("build row store in this compaction", "co_major_merge_type_",
     ObCOMajorMergePolicy::co_major_merge_type_to_str(co_merge_ctx_->static_param_.co_major_merge_type_));
 
   dag = nullptr;

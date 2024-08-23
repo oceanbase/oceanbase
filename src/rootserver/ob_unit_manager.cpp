@@ -2744,7 +2744,7 @@ int ObUnitManager::check_old_pool_name_condition(
     common::ObIArray<share::ObResourcePool*> &old_pool)
 {
   int ret = OB_SUCCESS;
-  common::ObReplicaType replica_type = REPLICA_TYPE_MAX;
+  common::ObReplicaType replica_type = REPLICA_TYPE_INVALID;
   uint64_t tenant_id = OB_INVALID_ID;
   share::ObUnitConfig *unit_config = NULL;
   int64_t unit_count = 0;

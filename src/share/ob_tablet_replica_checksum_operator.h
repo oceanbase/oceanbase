@@ -83,6 +83,7 @@ public:
   bool is_valid() const;
   bool is_same_tablet(const ObTabletReplicaChecksumItem &other) const;
   int verify_checksum(const ObTabletReplicaChecksumItem &other) const;
+  int verify_column_checksum(const ObTabletReplicaChecksumItem &other) const;
   int assign_key(const ObTabletReplicaChecksumItem &other);
   int assign(const ObTabletReplicaChecksumItem &other);
   int set_tenant_id(const uint64_t tenant_id);
@@ -270,6 +271,18 @@ int ObTabletReplicaChecksumOperator::construct_batch_get_sql_str_(
   return ret;
 }
 
+class ObTabletDataChecksumChecker
+{
+public:
+  ObTabletDataChecksumChecker();
+  ~ObTabletDataChecksumChecker();
+  void reset();
+  int check_data_checksum(const ObTabletReplicaChecksumItem& curr_item, bool is_cs_replica);
+  TO_STRING_KV(KPC_(normal_ckm_item), KPC_(cs_replica_ckm_item));
+private:
+  const ObTabletReplicaChecksumItem *normal_ckm_item_;
+  const ObTabletReplicaChecksumItem *cs_replica_ckm_item_;
+};
 
 } // share
 } // oceanbase

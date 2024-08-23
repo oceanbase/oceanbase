@@ -7455,6 +7455,7 @@ int ObDMLResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subquer
     subquery_resolver.set_current_level(current_level_ + 1);
     subquery_resolver.set_current_view_level(current_view_level_);
     subquery_resolver.set_parent_namespace_resolver(this);
+    subquery_resolver.set_in_exists_subquery(info.parents_expr_info_.has_member(IS_EXISTS));
     set_query_ref_exec_params(info.ref_expr_ == NULL ? NULL : &info.ref_expr_->get_exec_params());
     if (OB_FAIL(add_cte_table_to_children(subquery_resolver))) {
       LOG_WARN("add CTE table to children failed", K(ret));
@@ -14536,7 +14537,9 @@ int ObDMLResolver::resolve_transform_hint(const ParseNode &hint_node,
     case T_JOIN_FIRST_UNNEST:
     case T_NO_JOIN_FIRST_UNNEST:
     case T_DECORRELATE:
-    case T_NO_DECORRELATE: {
+    case T_NO_DECORRELATE:
+    case T_USE_LATE_MATERIALIZATION:
+    case T_NO_USE_LATE_MATERIALIZATION: {
       if (OB_FAIL(resolve_normal_transform_hint(hint_node, trans_hint))) {
         LOG_WARN("failed to resolve hint with qb name param.", K(ret));
       }
@@ -14636,8 +14639,6 @@ int ObDMLResolver::resolve_optimize_hint(const ParseNode &hint_node,
       }
       break;
     }
-    case T_USE_LATE_MATERIALIZATION:
-    case T_NO_USE_LATE_MATERIALIZATION:
     case T_GBY_PUSHDOWN:
     case T_NO_GBY_PUSHDOWN:
     case T_USE_HASH_DISTINCT:

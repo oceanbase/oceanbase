@@ -86,6 +86,21 @@ void ObMember::reset_migrating()
   flag_ &= ~(1UL << MIGRATING_FLAG_BIT);
 }
 
+bool ObMember::is_columnstore() const
+{
+  return (flag_ >> COLUMNSTORE_FLAG_BIT) & 1U;
+}
+
+void ObMember::set_columnstore()
+{
+  flag_ |= (1UL << COLUMNSTORE_FLAG_BIT);
+}
+
+void ObMember::reset_columnstore()
+{
+  flag_ &= ~(1UL << COLUMNSTORE_FLAG_BIT);
+}
+
 OB_SERIALIZE_MEMBER(ObMember, server_, timestamp_, flag_);
 
 bool ObReplicaMember::is_readonly_replica() const
@@ -93,19 +108,63 @@ bool ObReplicaMember::is_readonly_replica() const
   return REPLICA_TYPE_READONLY == replica_type_;
 }
 
+int ObReplicaMember::init(
+    const common::ObAddr &server,
+    const int64_t timestamp,
+    const common::ObReplicaType replica_type)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY(!server.is_valid()
+                  || !ObReplicaTypeCheck::is_replica_type_valid(replica_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), K(server), K(replica_type));
+  } else {
+    server_ = server;
+    timestamp_ = timestamp;
+    replica_type_ = replica_type;
+    if (REPLICA_TYPE_COLUMNSTORE == replica_type) {
+      ObMember::set_columnstore();
+    }
+  }
+  return ret;
+}
+
+int ObReplicaMember::init(
+    const ObMember &member,
+    const common::ObReplicaType replica_type)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  if (OB_UNLIKELY(!member.is_valid()
+                  || !ObReplicaTypeCheck::is_replica_type_valid(replica_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), K(member), K(replica_type));
+  } else if (OB_FAIL(ObMember::assign(member))) {
+    COMMON_LOG(WARN, "failed to assign member", K(ret), K(member));
+  } else if (OB_FALSE_IT(replica_type_ = replica_type)) {
+    // should never be here
+  } else if (OB_UNLIKELY(! is_valid())) { // check flag_ and replica_type_ correct
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid argument", K(ret), K(member), K(replica_type), KPC(this));
+  }
+  return ret;
+}
+
 void ObReplicaMember::reset()
 {
   ObMember::reset();
   replica_type_ = REPLICA_TYPE_FULL;
-  region_ = DEFAULT_REGION_NAME;
   memstore_percent_ = 100;
 }
 
 bool ObReplicaMember::is_valid() const
 {
+  // columnstore bit is 1 if and only if replica_type is C
+  bool is_flag_valid = (is_columnstore() == (REPLICA_TYPE_COLUMNSTORE == replica_type_));
   return ObMember::is_valid()
          && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
-         && !region_.is_empty()
+         && is_flag_valid
          && memstore_percent_ <= 100
          && memstore_percent_ >= 0;
 }
@@ -113,46 +172,6 @@ bool ObReplicaMember::is_valid() const
 common::ObReplicaType ObReplicaMember::get_replica_type() const
 {
   return replica_type_;
-}
-
-int ObReplicaMember::set_replica_type(const common::ObReplicaType replica_type)
-{
-  int ret = OB_SUCCESS;
-  if (!ObReplicaTypeCheck::is_replica_type_valid(replica_type)) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    replica_type_ = replica_type;
-  }
-  return ret;
-}
-
-const common::ObRegion &ObReplicaMember::get_region() const
-{
-  return region_;
-}
-
-int ObReplicaMember::set_member(const ObMember &member)
-{
- int ret = OB_SUCCESS;
-
- if (!member.is_valid()) {
-   ret = OB_INVALID_ARGUMENT;
-   COMMON_LOG(WARN, "invalid args", K(ret), K(member));
- } else if (OB_FAIL(ObMember::assign(member))) {
-   COMMON_LOG(WARN, "failed to assign member", K(ret), K(member));
- }
- return ret;
-}
-
-int ObReplicaMember::set_region(const common::ObRegion &region)
-{
-  int ret = OB_SUCCESS;
-  if (region.is_empty()) {
-    ret = OB_INVALID_ARGUMENT;
-  } else {
-    region_ = region;
-  }
-  return ret;
 }
 
 ObReplicaMember &ObReplicaMember::operator=(const ObReplicaMember &rhs)

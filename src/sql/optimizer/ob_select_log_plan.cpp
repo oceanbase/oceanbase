@@ -4550,7 +4550,11 @@ int ObSelectLogPlan::allocate_plan_top()
 
     // step. allocate late materialization if needed
     if (OB_SUCC(ret) && select_stmt->has_limit()) {
-      if (OB_FAIL(candi_allocate_late_materialization())) {
+      if ((optimizer_context_.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_2_5 &&
+           optimizer_context_.get_query_ctx()->optimizer_features_enable_version_ < COMPAT_VERSION_4_3_0) ||
+          (optimizer_context_.get_query_ctx()->optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_3)) {
+        /* rewrite will enhance late materialization */
+      } else if (OB_FAIL(candi_allocate_late_materialization())) {
         LOG_WARN("failed to allocate late-materialization operator", K(ret));
       } else {
         LOG_TRACE("succeed to allocate late-materialization operator",

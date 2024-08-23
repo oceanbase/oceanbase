@@ -157,6 +157,10 @@ public:
     OB_INLINE bool is_normal_cg_sstable() const { return ObITable::is_normal_cg_sstable(table_type_); }
     OB_INLINE bool is_cg_sstable() const { return ObITable::is_cg_sstable(table_type_); }
     OB_INLINE bool is_column_store_sstable() const { return is_co_sstable() || is_cg_sstable(); }
+    OB_INLINE bool is_row_store_major_sstable() const { return ObITable::is_row_store_major_sstable(table_type_); }
+    OB_INLINE bool is_column_store_major_sstable() const { return ObITable::is_column_store_major_sstable(table_type_); }
+    OB_INLINE bool is_true_major_sstable() const { return is_row_store_major_sstable() || is_column_store_major_sstable(); }
+
     OB_INLINE const common::ObTabletID &get_tablet_id() const { return tablet_id_; }
     share::SCN get_start_scn() const { return scn_range_.start_scn_; }
     share::SCN get_end_scn() const { return scn_range_.end_scn_; }
@@ -462,9 +466,33 @@ public:
   {
     return is_mds_mini_sstable(table_type) || is_mds_minor_sstable(table_type);
   }
+  static bool is_row_store_major_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::MAJOR_SSTABLE == table_type;
+  }
+  static bool is_column_store_major_sstable(const TableType table_type)
+  {
+    return ObITable::TableType::COLUMN_ORIENTED_SSTABLE == table_type;
+  }
+  static bool is_valid_ddl_table_type(const TableType table_type)
+  {
+    return ObITable::DDL_MEM_SSTABLE == table_type
+        || ObITable::MAJOR_SSTABLE == table_type
+        || ObITable::DDL_DUMP_SSTABLE == table_type
+        || ObITable::COLUMN_ORIENTED_SSTABLE == table_type
+        || ObITable::DDL_MERGE_CO_SSTABLE;
+  }
   static bool is_table_with_scn_range(const TableType table_type)
   {
     return is_multi_version_table(table_type) || is_meta_major_sstable(table_type);
+  }
+  // row store sstable and corresponding column store sstable
+  static bool is_twin_major_sstable(const TableKey &rs_key, const TableKey &cs_key)
+  {
+    return rs_key.is_true_major_sstable()
+        && cs_key.is_true_major_sstable()
+        && rs_key.tablet_id_ == cs_key.tablet_id_
+        && rs_key.scn_range_ == cs_key.scn_range_;
   }
   OB_INLINE static const char* get_table_type_name(const TableType &table_type)
   {

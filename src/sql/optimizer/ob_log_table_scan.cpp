@@ -2059,6 +2059,8 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
           LOG_WARN("unexpected idx", K(ret), K(idx), K(table_hint->index_list_));
         } else if (!is_skip_scan() && T_INDEX_SS_HINT == hint->get_hint_type()) {
           /* is not index skip scan but exist index_ss hint */
+        } else if (hint->is_trans_added()) {
+          //do nothing
         } else if (OB_FAIL(hint->print_hint(plan_text))) {
           LOG_WARN("failed to print index hint", K(ret), K(*hint));
         }

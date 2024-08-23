@@ -298,10 +298,7 @@ int ObTenantBase::pre_run()
 {
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(this);
-  ObCgroupCtrl *cgroup_ctrl = get_cgroup();
-  if (cgroup_ctrl != nullptr && cgroup_ctrl->is_valid()) {
-    ret = cgroup_ctrl->add_self_to_cgroup(id_);
-  }
+  ret = lib::SET_GROUP_ID(OBCG_DEFAULT);
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
     lib::ObMutexGuard guard(thread_list_lock_);
@@ -320,9 +317,6 @@ int ObTenantBase::end_run()
   int ret = OB_SUCCESS;
   ObTenantEnv::set_tenant(nullptr);
   ObCgroupCtrl *cgroup_ctrl = get_cgroup();
-  if (cgroup_ctrl != nullptr && cgroup_ctrl->is_valid()) {
-    ret = cgroup_ctrl->remove_self_from_cgroup(id_);
-  }
   {
     ThreadListNode *node = lib::Thread::current().get_thread_list_node();
     lib::ObMutexGuard guard(thread_list_lock_);

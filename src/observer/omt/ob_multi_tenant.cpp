@@ -110,7 +110,7 @@
 #include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
 #include "rootserver/ob_create_standby_from_net_actor.h" // ObCreateStandbyFromNetActor
 #include "rootserver/ob_primary_ls_service.h"//ObLSService
-#include "rootserver/ob_recovery_ls_service.h"//ObRecoveryLSService
+#include "rootserver/standby/ob_recovery_ls_service.h"//ObRecoveryLSService
 #include "rootserver/ob_common_ls_service.h"//ObCommonLSService
 #include "rootserver/restore/ob_restore_service.h" //ObRestoreService
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
@@ -2465,17 +2465,6 @@ int ObMultiTenant::check_if_unit_id_exist(const uint64_t unit_id, bool &exist)
       exist = true;
       break;
     }
-  }
-  return ret;
-}
-
-int obmysql::sql_nio_add_cgroup(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
-      nullptr != GCTX.cgroup_ctrl_ &&
-      OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-    ret = GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id, OBCG_SQL_NIO);
   }
   return ret;
 }

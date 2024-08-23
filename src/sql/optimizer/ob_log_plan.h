@@ -1396,6 +1396,7 @@ public:
 
   int will_use_column_store(const uint64_t table_id,
                             const uint64_t index_id,
+                            const uint64_t ref_table_id,
                             bool &use_column_store,
                             bool &use_row_store);
 

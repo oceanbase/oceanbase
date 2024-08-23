@@ -254,34 +254,6 @@ const char *ob_disaster_recovery_task_type_strs(const rootserver::ObDRTaskType t
   return str;
 }
 
-const char *ob_replica_type_strs(const ObReplicaType type)
-{
-  const char *str = NULL;
-  switch (type) {
-    case ObReplicaType::REPLICA_TYPE_FULL: {
-      str = "FULL";
-      break;
-    }
-    case ObReplicaType::REPLICA_TYPE_LOGONLY: {
-      str = "LOGONLY";
-      break;
-    }
-    case ObReplicaType::REPLICA_TYPE_READONLY: {
-      str = "READONLY";
-      break;
-    }
-    case ObReplicaType::REPLICA_TYPE_ENCRYPTION_LOGONLY: {
-      str = "ENCRYPTION_LOGONLY";
-      break;
-    }
-    default: {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid replica type", K(type));
-      break;
-    }
-  }
-  return str;
-}
-
 bool ObDRTaskKey::is_valid() const
 {
   return key_type_ > ObDRTaskKeyType::INVALID
@@ -558,8 +530,7 @@ int ObMigrateLSReplicaTask::get_execute_transmit_size(
   int ret = OB_SUCCESS;
   execute_transmit_size = 0;
   ObReplicaType dst_replica_type = dst_replica_.get_replica_type();
-  if (REPLICA_TYPE_FULL == dst_replica_type
-      || REPLICA_TYPE_READONLY == dst_replica_type) {
+  if (ObReplicaTypeCheck::is_replica_type_valid(dst_replica_type)) {
     execute_transmit_size = transmit_data_size_;
   } else if (REPLICA_TYPE_LOGONLY == dst_replica_type
       || REPLICA_TYPE_ENCRYPTION_LOGONLY == dst_replica_type) {
@@ -717,11 +688,11 @@ int ObMigrateLSReplicaTask::fill_dml_splicer(
           || OB_FAIL(dml_splicer.add_column("target_replica_svr_ip", dest_ip))
           || OB_FAIL(dml_splicer.add_column("target_replica_svr_port", get_dst_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("target_paxos_replica_number", get_paxos_replica_number()))
-          || OB_FAIL(dml_splicer.add_column("target_replica_type", ob_replica_type_strs(get_dst_replica().get_member().get_replica_type())))
+          || OB_FAIL(dml_splicer.add_column("target_replica_type", ObShareUtil::replica_type_to_string(get_dst_replica().get_member().get_replica_type())))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_ip", src_ip))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_port", get_src_member().get_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("source_paxos_replica_number", get_paxos_replica_number()))
-          || OB_FAIL(dml_splicer.add_column("source_replica_type", ob_replica_type_strs(get_src_member().get_replica_type())))
+          || OB_FAIL(dml_splicer.add_column("source_replica_type", ObShareUtil::replica_type_to_string(get_src_member().get_replica_type())))
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_ip", dest_ip))
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_port", get_dst_server().get_port()))) {
     LOG_WARN("add column failed", KR(ret));
@@ -991,6 +962,7 @@ int ObMigrateLSReplicaTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_replica_svr_port", dest_port);
   (void)GET_COL_IGNORE_NULL(res.get_int, "source_paxos_replica_number", src_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
+  // TODO(cangming.zl): get src_replica_type and dest_replica_type from result
   EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_port", data_source_port,
     int64_t, true/*skip null error*/, true/*skip column error*/, 0);
   EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_ip", data_source_ip,
@@ -1081,8 +1053,7 @@ int ObAddLSReplicaTask::get_execute_transmit_size(
   int ret = OB_SUCCESS;
   execute_transmit_size = 0;
   ObReplicaType dst_replica_type = dst_replica_.get_replica_type();
-  if (REPLICA_TYPE_FULL == dst_replica_type
-      || REPLICA_TYPE_READONLY == dst_replica_type) {
+  if (ObReplicaTypeCheck::is_replica_type_valid(dst_replica_type)) {
     execute_transmit_size = transmit_data_size_;
   } else if (REPLICA_TYPE_LOGONLY == dst_replica_type
       || REPLICA_TYPE_ENCRYPTION_LOGONLY == dst_replica_type) {
@@ -1224,11 +1195,11 @@ int ObAddLSReplicaTask::fill_dml_splicer(
           || OB_FAIL(dml_splicer.add_column("target_replica_svr_ip", dest_ip))
           || OB_FAIL(dml_splicer.add_column("target_replica_svr_port", get_dst_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("target_paxos_replica_number", get_paxos_replica_number()))
-          || OB_FAIL(dml_splicer.add_column("target_replica_type", ob_replica_type_strs(get_dst_replica().get_member().get_replica_type())))
+          || OB_FAIL(dml_splicer.add_column("target_replica_type", ObShareUtil::replica_type_to_string(get_dst_replica().get_member().get_replica_type())))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_ip", src_ip))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_port", get_data_src_member().get_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("source_paxos_replica_number", get_orig_paxos_replica_number()))
-          || OB_FAIL(dml_splicer.add_column("source_replica_type", ob_replica_type_strs(get_dst_replica().get_member().get_replica_type())))
+          || OB_FAIL(dml_splicer.add_column("source_replica_type", ObShareUtil::replica_type_to_string(get_dst_replica().get_member().get_replica_type())))
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_ip", dest_ip))
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_port", get_dst_server().get_port()))) {
     LOG_WARN("add column failed", KR(ret));
@@ -1505,6 +1476,7 @@ int ObAddLSReplicaTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_int, "source_paxos_replica_number", src_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_paxos_replica_number", dest_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
+  // TODO(cangming.zl): get src_replica_type and dest_replica_type from result
   EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_port", data_source_port,
     int64_t, true/*skip null error*/, true/*skip column error*/, 0);
   EXTRACT_VARCHAR_FIELD_MYSQL_WITH_DEFAULT_VALUE(res, "data_source_svr_ip", data_source_ip,
@@ -1751,11 +1723,11 @@ int ObLSTypeTransformTask::fill_dml_splicer(
           || OB_FAIL(dml_splicer.add_column("target_replica_svr_ip", dest_ip))
           || OB_FAIL(dml_splicer.add_column("target_replica_svr_port", get_dst_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("target_paxos_replica_number", get_paxos_replica_number()))
-          || OB_FAIL(dml_splicer.add_column("target_replica_type", ob_replica_type_strs(get_dst_replica().get_member().get_replica_type())))
+          || OB_FAIL(dml_splicer.add_column("target_replica_type", ObShareUtil::replica_type_to_string(get_dst_replica().get_member().get_replica_type())))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_ip", src_ip))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_port", get_src_member().get_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("source_paxos_replica_number", get_orig_paxos_replica_number()))
-          || OB_FAIL(dml_splicer.add_column("source_replica_type", ob_replica_type_strs(get_src_member().get_replica_type())))
+          || OB_FAIL(dml_splicer.add_column("source_replica_type", ObShareUtil::replica_type_to_string(get_src_member().get_replica_type())))
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_ip", dest_ip))
           || OB_FAIL(dml_splicer.add_column("task_exec_svr_port", get_dst_server().get_port()))) {
     LOG_WARN("add column failed", KR(ret));
@@ -1985,8 +1957,8 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
   int64_t transmit_data_size = 0;
   int64_t src_paxos_replica_number = OB_INVALID_COUNT;
   int64_t dest_paxos_replica_number = OB_INVALID_COUNT;
-  common::ObString src_type;
-  common::ObString dest_type;
+  common::ObString src_type_str;
+  common::ObString dest_type_str;
   int64_t schedule_time_us = 0;
   int64_t generate_time_us = 0;
   common::ObString comment;
@@ -2010,8 +1982,8 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_replica_svr_port", dest_port);
   (void)GET_COL_IGNORE_NULL(res.get_int, "source_paxos_replica_number", src_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_paxos_replica_number", dest_paxos_replica_number);
-  (void)GET_COL_IGNORE_NULL(res.get_varchar, "source_replica_type", src_type);
-  (void)GET_COL_IGNORE_NULL(res.get_varchar, "target_replica_type", dest_type);
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "source_replica_type", src_type_str);
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "target_replica_type", dest_type_str);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
   EXTRACT_BOOL_FIELD_MYSQL_SKIP_RET(res, "is_manual", is_manual);
   //STEP2_0: make necessary members to build a task
@@ -2020,8 +1992,8 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
   common::ObAddr dest_server;
   common::ObString zone;
   rootserver::ObDRTaskPriority priority_to_set;
-  ObReplicaType src_type_to_set = REPLICA_TYPE_MAX;
-  ObReplicaType dest_type_to_set = REPLICA_TYPE_MAX;
+  ObReplicaType src_type_to_set = ObShareUtil::string_to_replica_type(src_type_str);
+  ObReplicaType dest_type_to_set = ObShareUtil::string_to_replica_type(dest_type_str);
   ObDstReplica dst_replica;
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
@@ -2048,18 +2020,6 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid server address", K(dest_ip), K(dest_port));
   } else {
-    //transform replica_type(string) -> src_type_to_set(ObReplicaType)
-    if (src_type == common::ObString("FULL")) {
-      src_type_to_set = REPLICA_TYPE_FULL;
-    } else if (src_type == common::ObString("READONLY")) {
-      src_type_to_set = REPLICA_TYPE_READONLY;
-    }
-    //transform replica_type(string) -> dest_type_to_set(ObReplicaType)
-    if (dest_type == common::ObString("FULL")) {
-      dest_type_to_set = REPLICA_TYPE_FULL;
-    } else if (dest_type == common::ObString("READONLY")) {
-      dest_type_to_set = REPLICA_TYPE_READONLY;
-    }
     //transform priority(int) -> priority_to_set(ObDRTaskPriority)
     if (priority == 0) {
       priority_to_set = ObDRTaskPriority::HIGH_PRI;
@@ -2068,12 +2028,12 @@ int ObLSTypeTransformTask::build_task_from_sql_result(
     } else {
       priority_to_set = ObDRTaskPriority::MAX_PRI;
     }
-    ObReplicaMember src_member(src_server, 0);
-    ObReplicaMember dest_member(dest_server, 0);
-    if (OB_FAIL(src_member.set_replica_type(src_type_to_set))) {
-      LOG_WARN("fail to set src replica type", KR(ret), K(src_type_to_set));
-    } else if (OB_FAIL(dest_member.set_replica_type(dest_type_to_set))) {
-      LOG_WARN("fail to set dest replica type", KR(ret), K(dest_type_to_set));
+    ObReplicaMember src_member;
+    ObReplicaMember dest_member;
+    if (OB_FAIL(src_member.init(src_server, 0, src_type_to_set))) {
+      LOG_WARN("failed to init src_member", KR(ret), K(src_server), K(src_type_str), K(src_type_to_set));
+    } else if (OB_FAIL(dest_member.init(dest_server, 0, dest_type_to_set))) {
+      LOG_WARN("failed to init dest_member", KR(ret), K(dest_server), K(dest_type_str), K(dest_type_to_set));
     } else if (OB_FAIL(dst_replica.assign(
                     0/*unit id*/,
                     0/*unit group id*/,
@@ -2251,7 +2211,7 @@ int ObRemoveLSReplicaTask::fill_dml_splicer(
           || OB_FAIL(dml_splicer.add_column("target_replica_svr_ip", target_ip))
           || OB_FAIL(dml_splicer.add_column("target_replica_svr_port", get_remove_server().get_server().get_port()))
           || OB_FAIL(dml_splicer.add_column("target_paxos_replica_number", get_paxos_replica_number()))
-          || OB_FAIL(dml_splicer.add_column("target_replica_type", ob_replica_type_strs(get_remove_server().get_replica_type())))
+          || OB_FAIL(dml_splicer.add_column("target_replica_type", ObShareUtil::replica_type_to_string(get_remove_server().get_replica_type())))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_ip", src_ip))
           || OB_FAIL(dml_splicer.add_column("source_replica_svr_port", 0))
           || OB_FAIL(dml_splicer.add_column("source_paxos_replica_number", get_orig_paxos_replica_number()))
@@ -2374,7 +2334,7 @@ int ObRemoveLSReplicaTask::simple_build(
                || !remove_server.is_valid()
                || orig_paxos_replica_number <= 0
                || paxos_replica_number <= 0
-               || REPLICA_TYPE_MAX == replica_type)) {
+               || !ObReplicaTypeCheck::is_replica_type_valid(replica_type))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id), K(task_id),
              K(leader), K(remove_server), K(orig_paxos_replica_number),
@@ -2422,7 +2382,7 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
   int64_t schedule_time_us = 0;
   int64_t generate_time_us = 0;
   common::ObString comment;
-  ObReplicaType replica_type = REPLICA_TYPE_MAX;
+  common::ObString replica_type_str;
   bool is_manual = false;
   //STEP1_0: read certain members from sql result
   EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
@@ -2442,6 +2402,7 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
   (void)GET_COL_IGNORE_NULL(res.get_int, "task_exec_svr_port", dest_port);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "target_replica_svr_ip", target_ip);
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_replica_svr_port", target_port);
+  (void)GET_COL_IGNORE_NULL(res.get_varchar, "target_replica_type", replica_type_str);
   (void)GET_COL_IGNORE_NULL(res.get_int, "source_paxos_replica_number", src_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_int, "target_paxos_replica_number", dest_paxos_replica_number);
   (void)GET_COL_IGNORE_NULL(res.get_varchar, "comment", comment);
@@ -2453,7 +2414,7 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
   rootserver::ObDRTaskPriority priority_to_set;
   share::ObTaskId task_id_to_set;
   ObSqlString comment_to_set;
-  ObSqlString task_id_sqlstring_format;
+  ObSqlString task_id_sqlstring_format; // for adding trailing null
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(comment_to_set.assign(comment))) {
@@ -2484,13 +2445,21 @@ int ObRemoveLSReplicaTask::build_task_from_sql_result(
     } else {
       priority_to_set = ObDRTaskPriority::MAX_PRI;
     }
-    //transform task_type(string) -> replica_type(ObReplicaType)
+    // get replica_type_ from replica_type_str and check whether or not match with task_type.
+    replica_type_ = ObShareUtil::string_to_replica_type(replica_type_str);
     if (0 == task_type.case_compare(ob_disaster_recovery_task_type_strs(ObDRTaskType::LS_REMOVE_PAXOS_REPLICA))) {
-      replica_type_ = ObReplicaType::REPLICA_TYPE_FULL;
+      if (OB_UNLIKELY(REPLICA_TYPE_FULL != replica_type_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task_type and replica_type do not match", KR(ret), K(task_type), K(replica_type_));
+      }
     } else if (0 == task_type.case_compare(ob_disaster_recovery_task_type_strs(ObDRTaskType::LS_REMOVE_NON_PAXOS_REPLICA))) {
-      replica_type_ = ObReplicaType::REPLICA_TYPE_READONLY;
+      if (OB_UNLIKELY(! ObReplicaTypeCheck::is_non_paxos_replica(replica_type_))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task_type and replica_type do not match", KR(ret), K(task_type), K(replica_type_));
+      }
     } else {
-      replica_type_ = ObReplicaType::REPLICA_TYPE_MAX;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected task_type", KR(ret), K(task_type));
     }
   }
   //STEP3_0: to build a task

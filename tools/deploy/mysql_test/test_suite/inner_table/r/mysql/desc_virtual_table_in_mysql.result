@@ -4984,6 +4984,17 @@ enable_versions	longtext	NO		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_compatibility_control;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_service;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+service_name_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+service_name	varchar(64)	NO		NULL	
+service_status	varchar(64)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_service;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_resource_limit;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

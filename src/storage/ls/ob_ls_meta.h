@@ -58,7 +58,8 @@ public:
            const share::ObLSID &ls_id,
            const ObMigrationStatus &migration_status,
            const share::ObLSRestoreStatus &restore_status,
-           const int64_t create_scn);
+           const int64_t create_scn,
+           const ObLSStoreFormat &store_format);
   void reset();
   bool is_valid() const;
   int set_start_work_state();
@@ -112,13 +113,15 @@ public:
   int get_rebuild_info(ObLSRebuildInfo &rebuild_info) const;
   int get_create_type(int64_t &create_type) const;
   int check_ls_need_online(bool &need_online) const;
+  ObLSStoreFormat get_store_format() const;
 
   int init(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &restore_status,
-      const share::SCN &create_scn);
+      const share::SCN &create_scn,
+      const ObLSStoreFormat &store_format);
 
   ObReplicaType get_replica_type() const
   { return unused_replica_type_; }
@@ -206,7 +209,7 @@ private:
   ObLSRebuildInfo rebuild_info_;
   ObLSTransferMetaInfo transfer_meta_info_; //transfer_dml_ctrl_42x # placeholder
   ObMajorMVMergeInfo major_mv_merge_info_;
-  common::ObLSStoreFormat store_format_;    //not used, only as placeholder
+  common::ObLSStoreFormat store_format_;    // set on initialization and then remain unchanged
 };
 
 }  // namespace storage

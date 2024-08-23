@@ -385,6 +385,7 @@ static int mock_valid_ls_meta(obrpc::ObFetchLSMetaInfoResp &res)
   res.ls_meta_package_.ls_meta_.clog_checkpoint_scn_.set_base();
   res.ls_meta_package_.ls_meta_.migration_status_ = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   res.ls_meta_package_.ls_meta_.restore_status_ = share::ObLSRestoreStatus::NONE;
+  res.ls_meta_package_.ls_meta_.store_format_ = common::ObLSStoreType::OB_LS_STORE_NORMAL;
   res.ls_meta_package_.dup_ls_meta_.ls_id_ = ls_id;
   const palf::LSN lsn(184467440737095516);
   res.ls_meta_package_.palf_meta_.prev_log_info_.lsn_ = lsn;

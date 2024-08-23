@@ -26,6 +26,8 @@ using namespace oceanbase::blocksstable;
 using namespace oceanbase::storage;
 using namespace oceanbase::share;
 
+ERRSIM_POINT_DEF(EN_REPLAY_REDO_DDL_LOG_WAIT);
+
 ObDDLReplayExecutor::ObDDLReplayExecutor()
   : logservice::ObTabletReplayExecutor(), ls_(nullptr), scn_()
 {}
@@ -265,7 +267,10 @@ int ObDDLStartReplayExecutor::replay_ddl_start(ObTabletHandle &tablet_handle, co
     } else {
       table_key = log_->get_table_key();
     }
-    if (OB_FAIL(tenant_direct_load_mgr->replay_create_tablet_direct_load(tablet_handle, log_->get_execution_id(), direct_load_param))) {
+
+    if (!is_lob_meta_tablet && ls_->is_cs_replica() && OB_FAIL(pre_process_for_cs_replica(direct_load_param, table_key, tablet_handle, tablet_id))) {
+      LOG_WARN("pre process for cs replica failed", K(ret), K(direct_load_param), K(table_key), K(tablet_id));
+    } else if (OB_FAIL(tenant_direct_load_mgr->replay_create_tablet_direct_load(tablet_handle, log_->get_execution_id(), direct_load_param))) {
       LOG_WARN("create tablet manager failed", K(ret));
     } else if (OB_FAIL(tenant_direct_load_mgr->get_tablet_mgr_and_check_major(
             ls_->get_ls_id(),
@@ -284,7 +289,8 @@ int ObDDLStartReplayExecutor::replay_ddl_start(ObTabletHandle &tablet_handle, co
             direct_load_param))) {
       LOG_WARN("update direct load mgr failed", K(ret));
     } else if (OB_FAIL(direct_load_mgr_handle.get_full_obj()->start(*tablet_handle.get_obj(),
-            table_key, scn_, log_->get_data_format_version(), log_->get_execution_id(), SCN::min_scn()/*checkpoint_scn*/))) {
+            table_key, scn_, log_->get_data_format_version(), log_->get_execution_id(), SCN::min_scn()/*checkpoint_scn*/,
+            direct_load_param.common_param_.replay_normal_in_cs_replica_))) {
       LOG_WARN("direct load start failed", K(ret));
       if (OB_TASK_EXPIRED != ret) {
         LOG_WARN("start ddl log failed", K(ret), K_(log), K_(scn));
@@ -299,6 +305,48 @@ int ObDDLStartReplayExecutor::replay_ddl_start(ObTabletHandle &tablet_handle, co
   return ret;
 }
 
+int ObDDLStartReplayExecutor::pre_process_for_cs_replica(
+    ObTabletDirectLoadInsertParam &direct_load_param,
+    ObITable::TableKey &table_key,
+    ObTabletHandle &tablet_handle,
+    const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (log_->get_with_cs_replica()) {
+    if (log_->get_table_key().is_row_store_major_sstable()) {
+      table_key.table_type_ = ObITable::COLUMN_ORIENTED_SSTABLE; // for passing defence
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid table key for replay ddl start in cs replica", K(ret), K_(log));
+    }
+  } else {
+    // ddl is concurrent with adding C replica
+    const ObTablet *tablet = nullptr;
+    ObStorageSchema *schema_on_tablet = nullptr;
+    ObArenaAllocator tmp_arena("RplyStartTmp");
+    if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet handle is invalid", K(ret), K(tablet_handle));
+    } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet is null", K(ret), K(tablet_id));
+    } else if (tablet->is_row_store()) {
+      // not be created to column store tablet in cs replica, means this tablet is not user data tablet, ignore
+    } else if (log_->get_table_key().is_column_store_major_sstable()) {
+      // column store tablet originally, ignore
+    } else if (OB_FAIL(tablet->load_storage_schema(tmp_arena, schema_on_tablet))) {
+      LOG_WARN("load storage schema failed", K(ret), KPC(tablet));
+    } else if (schema_on_tablet->is_cs_replica_compat()) {
+      direct_load_param.common_param_.replay_normal_in_cs_replica_ = true;
+      LOG_TRACE("[CS-Replica] process concurrent ddl and ls migration", K(ret), K(tablet_id), KPC(tablet));
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid storage schema status", K(ret), KPC(tablet), KPC(schema_on_tablet));
+    }
+    ObTabletObjLoadHelper::free(tmp_arena, schema_on_tablet);
+  }
+  return ret;
+}
 
 // ObDDLRedoReplayExecutor
 ObDDLRedoReplayExecutor::ObDDLRedoReplayExecutor()
@@ -344,6 +392,7 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     const ObDDLMacroBlockRedoInfo &redo_info = log_->get_redo_info();
     ObMacroBlockWriteInfo write_info;
     ObDDLMacroBlock macro_block;
+    bool can_skip = false;
     write_info.buffer_ = redo_info.data_buffer_.ptr();
     write_info.size_= redo_info.data_buffer_.length();
     write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_COMPACT_WRITE);
@@ -368,6 +417,9 @@ int ObDDLRedoReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
           ret = OB_EAGAIN;
         }
       }
+    } else if (OB_FAIL(filter_redo_log_(redo_info, tablet_handle, can_skip))) {
+      LOG_WARN("fail to filter redo log", K(ret), K(redo_info), K_(ls));
+    } else if (can_skip) {
     } else {
       if (OB_FAIL(do_full_replay_(tablet_handle, write_info, macro_block))) {
         LOG_WARN("fail to do full replay", K(ret));
@@ -488,6 +540,43 @@ int ObDDLRedoReplayExecutor::do_full_replay_(
   }
   FLOG_INFO("finish replay ddl full redo log", K(ret), K(need_replay), KPC_(log), K(macro_block), "ddl_event_info", ObDDLEventInfo());
 
+  return ret;
+}
+
+int ObDDLRedoReplayExecutor::filter_redo_log_(
+    const ObDDLMacroBlockRedoInfo &redo_info,
+    const ObTabletHandle &tablet_handle,
+    bool &can_skip)
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = nullptr;
+  bool is_cs_replica = ls_->is_cs_replica();
+  can_skip = false;
+  if (redo_info.is_not_compat_cs_replica()) {
+    // normal
+  } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", K(ret), K(tablet_handle));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is null", K(ret), K(tablet_handle));
+  } else if (is_cs_replica && redo_info.is_cs_replica_row_store()) {
+    can_skip = true;
+  } else if (!is_cs_replica && redo_info.is_cs_replica_column_store()) {
+    can_skip = true;
+  } else if (is_cs_replica && redo_info.is_cs_replica_column_store() && tablet->is_row_store()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected tablet status", K(ret), K(redo_info), "ls_meta", ls_->get_ls_meta(), KPC(tablet));
+  }
+  LOG_TRACE("[CS-Replica] Finish filter redo log", K(ret), K(redo_info), K(is_cs_replica), K(can_skip), KPC(tablet), K(ls_));
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_REPLAY_REDO_DDL_LOG_WAIT;
+    if (OB_FAIL(ret)) {
+      LOG_INFO("EN_REPLAY_REDO_DDL_LOG_WAIT replay ddl redo failed", K(ret), K(redo_info), K(can_skip));
+    }
+  }
+#endif
   return ret;
 }
 

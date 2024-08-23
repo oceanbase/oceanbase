@@ -1429,7 +1429,7 @@ int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
   const ObStmtHint &stmt_hint = stmt.get_stmt_hint();
   if (OB_FAIL(join_order_.init_leading_info(stmt, query_hint, stmt_hint.get_normal_hint(T_LEADING)))) {
     LOG_WARN("failed to get leading hint info", K(ret));
-  } else if (OB_FAIL(init_normal_hints(stmt_hint.normal_hints_))) {
+  } else if (OB_FAIL(init_normal_hints(stmt_hint.normal_hints_, *stmt.get_query_ctx()))) {
     LOG_WARN("failed to init normal hints", K(ret));
   } else if (OB_FAIL(init_other_opt_hints(schema_guard, stmt, query_hint,
                                           stmt_hint.other_opt_hints_))) {
@@ -1440,17 +1440,25 @@ int ObLogPlanHint::init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
   return ret;
 }
 
-int ObLogPlanHint::init_normal_hints(const ObIArray<ObHint*> &normal_hints)
+int ObLogPlanHint::init_normal_hints(const ObIArray<ObHint*> &normal_hints,
+                                     const ObQueryCtx &query_ctx)
 {
   int ret = OB_SUCCESS;
   const ObHint *hint = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < normal_hints.count(); ++i) {
+    bool need_add = true;
     if (OB_ISNULL(hint = normal_hints.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(i), K(normal_hints));
+    } else if (hint->get_hint_type() == T_USE_LATE_MATERIALIZATION &&
+               (query_ctx.optimizer_features_enable_version_ < COMPAT_VERSION_4_2_5 ||
+                (query_ctx.optimizer_features_enable_version_ >= COMPAT_VERSION_4_3_0 &&
+                 query_ctx.optimizer_features_enable_version_ < COMPAT_VERSION_4_3_3))) {
+      /* need_add = true */
     } else if (hint->is_transform_hint() || hint->is_join_order_hint()) {
-      /* do nothing */
-    } else if (OB_FAIL(normal_hints_.push_back(hint))) {
+      need_add = false;
+    }
+    if (OB_SUCC(ret) && need_add && OB_FAIL(normal_hints_.push_back(hint))) {
       LOG_WARN("failed to push back", K(ret));
     }
   }

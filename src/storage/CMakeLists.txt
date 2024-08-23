@@ -235,6 +235,7 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_ls_block_tx_service.cpp
   high_availability/ob_storage_ha_diagnose_mgr.cpp
   high_availability/ob_storage_ha_diagnose_service.cpp
+  high_availability/ob_cs_replica_migration.cpp
 )
 
 ob_set_subtarget(ob_storage restore
@@ -516,6 +517,7 @@ ob_set_subtarget(ob_storage column_store
   column_store/ob_virtual_cg_scanner.cpp
   column_store/ob_column_store_util.cpp
   column_store/ob_cg_group_by_scanner.cpp
+  column_store/ob_column_store_replica_util.cpp
 )
 
 ob_set_subtarget(ob_storage access

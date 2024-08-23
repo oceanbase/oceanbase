@@ -7278,7 +7278,26 @@ def_table_schema(**gen_history_table_def(515, all_user_proxy_role_info_def))
 # 513 : __all_user_proxy_info_history
 # 514 : __all_user_proxy_role_info
 # 515 : __all_user_proxy_role_info_history
-# 516 : __all_service
+def_table_schema(
+  owner = 'linqiucen.lqc',
+  table_name    = '__all_service',
+  table_id = '516',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('service_name_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('service_name', 'varchar:OB_SERVICE_NAME_LENGTH'),
+    ('service_status', 'varchar:64', 'false'),
+  ],
+)
+
 # 517 : __all_storage_io_usage
 
 def_table_schema(
@@ -14559,7 +14578,11 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12478: __all_virtual_tablet_reorganize_history
 # 12479: __all_virtual_res_mgr_directive
-# 12480: __all_virtual_service
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12480',
+  table_name = '__all_virtual_service',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_service']))
 
 def_table_schema(
   owner = 'yanyuan.cxf',
@@ -15131,7 +15154,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15445'
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15446', all_def_keywords['__all_user_proxy_info'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('15447', all_def_keywords['__all_user_proxy_role_info'])))
 # 15448: idx_user_proxy_info_proxy_user_id_real_agent
-# 15449: __all_virtual_service
+def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15449', all_def_keywords['__all_virtual_service'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15450', all_def_keywords['__all_virtual_tenant_resource_limit'])))
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15451', all_def_keywords['__all_virtual_tenant_resource_limit_detail'])))
 
@@ -19630,9 +19653,6 @@ SELECT RESOURCE_POOL_ID,
        ZONE_LIST,
        CASE replica_type
           WHEN 0 THEN "FULL"
-          WHEN 5 THEN "LOGONLY"
-          WHEN 16 THEN "READONLY"
-          WHEN 261 THEN "ENCRYPTION LOGONLY"
           ELSE NULL
        END AS REPLICA_TYPE
 FROM oceanbase.__all_resource_pool
@@ -19889,6 +19909,7 @@ def_table_schema(
           WHEN 5   THEN "LOGONLY"
           WHEN 16  THEN "READONLY"
           WHEN 261 THEN "ENCRYPTION LOGONLY"
+          WHEN 1040 THEN "COLUMNSTORE"
           ELSE NULL END) AS REPLICA_TYPE,
          (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE "" END) AS LEARNER_LIST,
          (CASE REBUILD
@@ -19915,6 +19936,7 @@ def_table_schema(
           WHEN 5   THEN "LOGONLY"
           WHEN 16  THEN "READONLY"
           WHEN 261 THEN "ENCRYPTION LOGONLY"
+          WHEN 1040  THEN "COLUMNSTORE"
           ELSE NULL END) AS REPLICA_TYPE,
          (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE "" END) AS LEARNER_LIST,
          (CASE REBUILD
@@ -19954,6 +19976,7 @@ def_table_schema(
           WHEN 5   THEN "LOGONLY"
           WHEN 16  THEN "READONLY"
           WHEN 261 THEN "ENCRYPTION LOGONLY"
+          WHEN 1040  THEN "COLUMNSTORE"
           ELSE NULL END) AS REPLICA_TYPE,
          (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE "" END) AS LEARNER_LIST,
          (CASE REBUILD
@@ -19979,6 +20002,7 @@ def_table_schema(
           WHEN 5   THEN "LOGONLY"
           WHEN 16  THEN "READONLY"
           WHEN 261 THEN "ENCRYPTION LOGONLY"
+          WHEN 1040  THEN "COLUMNSTORE"
           ELSE NULL END) AS REPLICA_TYPE,
          (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE "" END) AS LEARNER_LIST,
          (CASE REBUILD
@@ -24048,8 +24072,9 @@ SELECT
   IN_BYTES,
   OUT_BYTES,
   USER_CLIENT_PORT,
-  cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
   PROXY_USER,
+  SERVICE_NAME,
+  cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
   TOP_INFO
 FROM oceanbase.__all_virtual_processlist
 """.replace("\n", " ")
@@ -24100,8 +24125,9 @@ def_table_schema(
     IN_BYTES,
     OUT_BYTES,
     USER_CLIENT_PORT,
-    cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
     PROXY_USER,
+    SERVICE_NAME,
+    cast(total_cpu_time as SIGNED) as TOTAL_CPU_TIME,
     TOP_INFO
     FROM oceanbase.GV$OB_PROCESSLIST
     WHERE SVR_IP = host_ip() AND SVR_PORT = rpc_port()
@@ -28107,15 +28133,18 @@ def_table_schema(
          TABLET_ID
   FROM
     (
-      SELECT TENANT_ID,
-             TABLET_ID,
-             ROW_COUNT,
-             DATA_CHECKSUM,
-             B_COLUMN_CHECKSUMS,
-             COMPACTION_SCN
-      FROM OCEANBASE.__ALL_VIRTUAL_TABLET_REPLICA_CHECKSUM
+      SELECT CKM.TENANT_ID,
+             CKM.TABLET_ID,
+             CKM.ROW_COUNT,
+             CKM.DATA_CHECKSUM,
+             CKM.B_COLUMN_CHECKSUMS,
+             CKM.COMPACTION_SCN,
+             M.REPLICA_TYPE
+      FROM OCEANBASE.__ALL_VIRTUAL_TABLET_REPLICA_CHECKSUM CKM
+      JOIN OCEANBASE.__ALL_VIRTUAL_LS_META_TABLE M
+      ON CKM.TENANT_ID = M.TENANT_ID AND CKM.LS_ID = M.LS_ID AND CKM.SVR_IP = M.SVR_IP AND CKM.SVR_PORT = M.SVR_PORT
     ) J
-  GROUP BY J.TENANT_ID, J.TABLET_ID, J.COMPACTION_SCN
+  GROUP BY J.TENANT_ID, J.TABLET_ID, J.COMPACTION_SCN, J.REPLICA_TYPE
   HAVING MIN(J.DATA_CHECKSUM) != MAX(J.DATA_CHECKSUM)
          OR MIN(J.ROW_COUNT) != MAX(J.ROW_COUNT)
          OR MIN(J.B_COLUMN_CHECKSUMS) != MAX(J.B_COLUMN_CHECKSUMS)
@@ -35004,8 +35033,49 @@ def_table_schema(
 )
 # 21546: DBA_OB_RSRC_DIRECTIVES
 # 21547: CDB_OB_RSRC_DIRECTIVES
-# 21548: DBA_OB_SERVICES
-# 21549: CDB_OB_SERVICES
+
+def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'DBA_OB_SERVICES',
+  table_id        = '21548',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    gmt_create AS CREATE_TIME,
+    gmt_modified AS MODIFIED_TIME,
+    SERVICE_NAME_ID,
+    SERVICE_NAME,
+    SERVICE_STATUS
+  FROM oceanbase.__all_virtual_service
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'CDB_OB_SERVICES',
+  table_id        = '21549',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+    TENANT_ID,
+    gmt_create AS `CREATE_TIME`,
+    gmt_modified AS 'MODIFIED_TIME',
+    SERVICE_NAME_ID,
+    SERVICE_NAME,
+    SERVICE_STATUS
+  FROM oceanbase.__all_virtual_service
+  """.replace("\n", " ")
+)
 
 def_table_schema(
   owner = 'cxf262476',
@@ -50752,6 +50822,7 @@ def_table_schema(
           WHEN 5   THEN 'LOGONLY'
           WHEN 16  THEN 'READONLY'
           WHEN 261 THEN 'ENCRYPTION LOGONLY'
+          WHEN 1040  THEN 'COLUMNSTORE'
           ELSE NULL END) AS REPLICA_TYPE,
          (CASE ROLE WHEN 1 THEN LEARNER_LIST ELSE NULL END) AS LEARNER_LIST,
          (CASE REBUILD
@@ -56286,7 +56357,6 @@ def_table_schema(
 )
 
 # 25301: PROXY_USERS
-# 25302: DBA_OB_SERVICES
 # 25303: DBA_OB_STORAGE_IO_USAGE
 def_table_schema(
   owner = 'mingye.swj',
@@ -56330,8 +56400,29 @@ where U1.TENANT_ID = U2.TENANT_ID
   and V.CLIENT_USER_ID = P.CLIENT_USER_ID
 """.replace("\n", " ")
 )
-
-
+def_table_schema(
+  owner           = 'linqiucen.lqc',
+  table_name      = 'DBA_OB_SERVICES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '25302',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    gmt_create AS "CREATE_TIME",
+    gmt_modified AS "MODIFIED_TIME",
+    SERVICE_NAME_ID,
+    SERVICE_NAME,
+    SERVICE_STATUS
+  FROM SYS.ALL_VIRTUAL_SERVICE
+  WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
+  """.replace("\n", " ")
+)
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -60991,6 +61082,7 @@ SELECT
   OUT_BYTES,
   USER_CLIENT_PORT,
   PROXY_USER,
+  SERVICE_NAME,
   CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME,
   TOP_INFO
 FROM SYS.ALL_VIRTUAL_PROCESSLIST
@@ -61045,6 +61137,7 @@ def_table_schema(
   OUT_BYTES,
   USER_CLIENT_PORT,
   PROXY_USER,
+  SERVICE_NAME,
   CAST(total_cpu_time AS INT) as TOTAL_CPU_TIME,
   TOP_INFO
     FROM SYS.GV$OB_PROCESSLIST

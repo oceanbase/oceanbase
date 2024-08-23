@@ -29,6 +29,7 @@ const static char * ObMergeTypeStr[] = {
     "BACKFILL_TX_MERGE",
     "MDS_MINI_MERGE",
     "MDS_MINOR_MERGE",
+    "CONVERT_CO_MAJOR_MERGE",
     "EMPTY_MERGE_TYPE"
 };
 

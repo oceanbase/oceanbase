@@ -1102,14 +1102,12 @@ int ObILSRestoreState::follower_fill_tablet_group_restore_arg_(
       LOG_WARN("fail to get location", K(ret), KPC(ls_));
     } else if (OB_FAIL(location.get_leader(leader))) {
       LOG_WARN("fail to get leader location", K(ret), K(location));
-    } else if (OB_FAIL(tablet_group_restore_arg.src_.set_replica_type(leader.get_replica_type()))) {
-      LOG_WARN("fail to set src replica type", K(ret), K(leader));
-    } else if (OB_FAIL(tablet_group_restore_arg.src_.set_member(ObMember(leader.get_server(), 0/*invalid timestamp is ok*/)))) {
-      LOG_WARN("fail to set src member", K(ret));
-    } else if (OB_FAIL(tablet_group_restore_arg.dst_.set_replica_type(REPLICA_TYPE_FULL))) {
-      LOG_WARN("fail to set dst replica type", K(ret));
-    } else if (OB_FAIL(tablet_group_restore_arg.dst_.set_member(ObMember(GCTX.self_addr(), 0/*invalid timestamp is ok*/)))) {
-      LOG_WARN("fail to set dst member", K(ret), "server", GCTX.self_addr());
+    } else if (OB_FAIL(tablet_group_restore_arg.src_.init(
+                        leader.get_server(), 0/*invalid timestamp is ok*/, leader.get_replica_type()))) {
+      LOG_WARN("fail to init src_", K(ret), K(leader));
+    } else if (OB_FAIL(tablet_group_restore_arg.dst_.init(
+                        GCTX.self_addr(), 0/*invalid timestamp is ok*/, REPLICA_TYPE_FULL))) {
+      LOG_WARN("fail to init dst_", K(ret), K(GCTX.self_addr()));
     } else if (OB_FAIL(append(tablet_group_restore_arg.tablet_id_array_, tablet_need_restore))) {
       LOG_WARN("fail to append tablet id", K(ret), K(tablet_need_restore));
     } else if (OB_FAIL(tablet_group_restore_arg.restore_base_info_.copy_from(*ls_restore_arg_))) {
@@ -1163,7 +1161,7 @@ int ObILSRestoreState::get_follower_server_(ObIArray<ObStorageHASrcInfo> &follow
   common::ObMemberList member_list;
   GlobalLearnerList learner_list;
   int64_t full_replica_count = 0;
-  int64_t readonly_replica_count = 0;
+  int64_t non_paxos_replica_count = 0;
   if (OB_ISNULL(log_handler = ls_->get_log_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log handler should not be NULL", K(ret));
@@ -1171,12 +1169,12 @@ int ObILSRestoreState::get_follower_server_(ObIArray<ObStorageHASrcInfo> &follow
     LOG_WARN("failed to get paxos member list and learner list", K(ret));
   } else if (OB_FAIL(location_service_->get(follower_info.cluster_id_, tenant_id, ls_->get_ls_id(), expire_renew_time, is_cache_hit, location))) {
     LOG_WARN("fail to get location", K(ret), KPC(ls_));
-  } else if (OB_FAIL(location.get_replica_count(full_replica_count, readonly_replica_count))) {
-    LOG_WARN("fail to get replica count in location", KR(ret), K(location), K(full_replica_count), K(readonly_replica_count));
-  } else if (full_replica_count != paxos_replica_num || readonly_replica_count != learner_list.get_member_number()) {
+  } else if (OB_FAIL(location.get_replica_count(full_replica_count, non_paxos_replica_count))) {
+    LOG_WARN("fail to get replica count in location", KR(ret), K(location), K(full_replica_count), K(non_paxos_replica_count));
+  } else if (full_replica_count != paxos_replica_num || non_paxos_replica_count != learner_list.get_member_number()) {
     ret = OB_REPLICA_NUM_NOT_MATCH;
     LOG_WARN("replica num not match, ls may in migration", K(ret), K(location), K(full_replica_count),
-             K(readonly_replica_count), K(member_list), K(paxos_replica_num), K(learner_list));
+             K(non_paxos_replica_count), K(member_list), K(paxos_replica_num), K(learner_list));
   } else {
     const ObIArray<share::ObLSReplicaLocation> &replica_locations = location.get_replica_locations();
     for (int64_t i = 0; OB_SUCC(ret) && i < replica_locations.count(); ++i) {
@@ -1990,14 +1988,10 @@ int ObLSRestoreSysTabletState::follower_fill_ls_restore_arg_(ObLSRestoreArg &arg
     LOG_WARN("fail to get location", K(ret), KPC(ls_));
   } else if (OB_FAIL(location.get_leader(leader))) {
     LOG_WARN("fail to get leader location", K(ret), K(location));
-  } else if (OB_FAIL(arg.src_.set_replica_type(leader.get_replica_type()))) {
-    LOG_WARN("fail to set src replica type", K(ret), K(leader));
-  } else if (OB_FAIL(arg.src_.set_member(ObMember(leader.get_server(), 0/*invalid timestamp is ok*/)))) {
-    LOG_WARN("fail to set src member", K(ret));
-  } else if (OB_FAIL(arg.dst_.set_replica_type(REPLICA_TYPE_FULL))) {
-    LOG_WARN("fail to set dst replica type", K(ret));
-  } else if (OB_FAIL(arg.dst_.set_member(ObMember(GCTX.self_addr(), 0/*invalid timestamp is ok*/)))) {
-    LOG_WARN("fail to set dst member", K(ret), "server", GCTX.self_addr());
+  } else if (OB_FAIL(arg.src_.init(leader.get_server(), 0/*invalid timestamp is ok*/, leader.get_replica_type()))) {
+    LOG_WARN("fail to init src_", K(ret), K(leader));
+  } else if (OB_FAIL(arg.dst_.init(GCTX.self_addr(), 0/*invalid timestamp is ok*/, REPLICA_TYPE_FULL))) {
+    LOG_WARN("fail to init dst_", K(ret), K(GCTX.self_addr()));
   } else if (OB_FAIL(arg.restore_base_info_.copy_from(*ls_restore_arg_))) {
     LOG_WARN("fail to fill restore base info from ls restore args", K(ret), KPC(ls_restore_arg_));
   }

@@ -187,10 +187,10 @@ public:
   int16_t sstable_logic_seq_;
   common::ObRowStoreType latest_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
-  int64_t root_macro_seq_; // placeholder, will be used after palf branch merged
   storage::ObTableBackupFlag table_backup_flag_;  //cannot add backup flag to ObSSTableMetaChecker
                                                   //quick restore with rebuild replace major will has same key sstable
   storage::ObTableSharedFlag table_shared_flag_;
+  int64_t root_macro_seq_; // placeholder, will be used after palf branch merged
   //Add new variable need consider ObSSTableMetaChecker
 };
 

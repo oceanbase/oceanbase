@@ -1287,7 +1287,6 @@ int ObReferenceObjTable::fill_rowkey_pairs(
 
 int ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const int64_t new_schema_version,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObMySQLTransaction &trans,
@@ -1299,8 +1298,6 @@ int ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (is_standby) {
-    // do nothing
   } else {
     ObSqlString sql;
     ObDMLSqlSplicer dml;
@@ -1345,7 +1342,6 @@ int ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(
 
 int ObReferenceObjTable::batch_execute_delete_obj_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObMySQLTransaction &trans)
 {
@@ -1354,8 +1350,6 @@ int ObReferenceObjTable::batch_execute_delete_obj_dependency(
   if (OB_INVALID_ID == tenant_id) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), K(tenant_id));
-  } else if (is_standby) {
-    // do nothing
   } else {
     share::ObDMLSqlSplicer dml;
     ObSqlString sql;
@@ -1510,7 +1504,11 @@ int ObReferenceObjTable::process_reference_obj_table(const uint64_t tenant_id,
                                                      sql::ObMaintainDepInfoTaskQueue &task_queue)
 {
   int ret = OB_SUCCESS;
-  if (!is_inited() || GCTX.is_standby_cluster()) {
+  share::ObTenantRole::Role tenant_role;
+  bool is_standby = false;
+  if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!is_inited() || is_standby)) {
     if (OB_INVALID_ID != dep_obj_id) {
       OZ (task_queue.erase_view_id_from_set(dep_obj_id));
     }

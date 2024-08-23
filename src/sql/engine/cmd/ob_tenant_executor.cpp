@@ -24,7 +24,7 @@
 #include "share/ls/ob_ls_operator.h"
 #include "share/ob_leader_election_waiter.h"
 #include "share/ls/ob_ls_status_operator.h"       //ObLSStatusInfo, ObLSStatusOperator
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "sql/session/ob_sql_session_info.h"
 #include "sql/resolver/ddl/ob_create_tenant_stmt.h"
 #include "sql/resolver/ddl/ob_drop_tenant_stmt.h"
@@ -250,7 +250,7 @@ int ObCreateStandbyTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStm
   } else if (OB_ISNULL(common_rpc_proxy = task_exec_ctx->get_common_rpc())) {
     ret = OB_NOT_INIT;
     LOG_WARN("get common rpc proxy failed");
-  } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.check_can_create_standby_tenant(
+  } else if (OB_FAIL(OB_STANDBY_SERVICE.check_can_create_standby_tenant(
                          create_tenant_arg.log_restore_source_, compat_mode))) {
     LOG_WARN("check can create standby_tenant failed", KR(ret), K(create_tenant_arg));
   } else {
@@ -264,7 +264,7 @@ int ObCreateStandbyTenantExecutor::execute(ObExecContext &ctx, ObCreateTenantStm
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("if_not_exist not set and tenant_id invalid tenant_id", KR(ret), K(create_tenant_arg), K(tenant_id));
   } else if (OB_INVALID_ID != tenant_id) {
-    if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.wait_create_standby_tenant_end(tenant_id))) {
+    if (OB_FAIL(OB_STANDBY_SERVICE.wait_create_standby_tenant_end(tenant_id))) {
       LOG_WARN("failed to wait user create end", KR(ret), K(tenant_id));
     }
   }

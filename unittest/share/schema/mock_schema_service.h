@@ -110,10 +110,9 @@ public:
     int ret = OB_SUCCESS;
 
     UNUSED(force_fallback);
-    bool is_standby_cluster = false;
     if (OB_FAIL(guard.reset())) {
       SHARE_SCHEMA_LOG(WARN, "fail to reset guard", K(ret));
-    } else if (OB_FAIL(guard.init(is_standby_cluster))) {
+    } else if (OB_FAIL(guard.init())) {
       SHARE_SCHEMA_LOG(WARN, "fail to init guard", K(ret));
     } else {
       ObArray<const ObSimpleTenantSchema *> tenant_schemas;

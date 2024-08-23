@@ -78,6 +78,7 @@
 #include "share/tenant_snapshot/ob_tenant_snapshot_id.h"
 #include "share/location_cache/ob_location_update_task.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"//ObUserResourceCalculateArg
+#include "share/ob_service_name_proxy.h"
 #include "share/ob_heartbeat_handler.h"
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 
@@ -3414,7 +3415,7 @@ public:
     CREATE_WITH_PALF,
   };
   ObCreateLSArg() : tenant_id_(OB_INVALID_TENANT_ID), id_(),
-                    replica_type_(REPLICA_TYPE_MAX),
+                    replica_type_(REPLICA_TYPE_INVALID),
                     replica_property_(), tenant_info_(),
                     create_scn_(),
                     compat_mode_(lib::Worker::CompatMode::INVALID),
@@ -4339,7 +4340,7 @@ public:
     : ls_id_(),
       server_addr_(),
       destination_addr_(),
-      replica_type_(common::REPLICA_TYPE_MAX),
+      replica_type_(common::REPLICA_TYPE_INVALID),
       tenant_id_(OB_INVALID_TENANT_ID),
       task_id_(),
       data_source_(),
@@ -4411,7 +4412,7 @@ private:
   bool is_add_valid_() const {
     return ls_id_.is_valid()
         && server_addr_.is_valid()
-        && REPLICA_TYPE_MAX != replica_type_
+        && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
         && is_valid_tenant_id(tenant_id_)
         && paxos_replica_num_ >= 0;
   }
@@ -4430,7 +4431,7 @@ private:
   bool is_modify_replica_valid_() const {
     return ls_id_.is_valid()
         && server_addr_.is_valid()
-        && REPLICA_TYPE_MAX != replica_type_
+        && ObReplicaTypeCheck::is_replica_type_valid(replica_type_)
         && is_valid_tenant_id(tenant_id_)
         && paxos_replica_num_ >= 0;
   }
@@ -6918,65 +6919,6 @@ public:
   int64_t dangling_count_;
 };
 
-struct ObGetMemberListAndLeaderResult final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObGetMemberListAndLeaderResult()
-    : member_list_(),
-    leader_(),
-    self_(),
-    lower_list_(),
-    replica_type_(common::REPLICA_TYPE_MAX),
-    property_() {}
-  void reset();
-  inline bool is_valid() const {
-    return member_list_.count() > 0
-      && self_.is_valid()
-      && common::REPLICA_TYPE_MAX != replica_type_
-      && property_.is_valid();
-  }
-
-  int assign(const ObGetMemberListAndLeaderResult &other);
-  TO_STRING_KV(K_(member_list), K_(leader), K_(self), K_(lower_list), K_(replica_type), K_(property));
-
-  common::ObSEArray<common::ObMember, common::OB_MAX_MEMBER_NUMBER,
-      common::ObNullAllocator, false> member_list_; // copy won't fail
-  common::ObAddr leader_;
-  common::ObAddr self_;
-  common::ObSEArray<common::ObReplicaMember, common::OB_MAX_CHILD_MEMBER_NUMBER> lower_list_; //Cascaded downstream information
-  common::ObReplicaType replica_type_; //The type of copy actually stored in the local copy
-  common::ObReplicaProperty property_;
-};
-
-struct ObMemberListAndLeaderArg
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObMemberListAndLeaderArg()
-    : member_list_(),
-      leader_(),
-      self_(),
-      lower_list_(),
-      replica_type_(common::REPLICA_TYPE_MAX),
-      property_(),
-      role_(common::INVALID_ROLE) {}
-  void reset();
-  bool is_valid() const;
-  bool check_leader_is_valid() const;
-  int assign(const ObMemberListAndLeaderArg &other);
-  TO_STRING_KV(K_(member_list), K_(leader), K_(self), K_(lower_list),
-               K_(replica_type), K_(property), K_(role));
-
-  common::ObSArray<common::ObAddr> member_list_; // copy won't fail
-  common::ObAddr leader_;
-  common::ObAddr self_;
-  common::ObSArray<common::ObReplicaMember> lower_list_; //Cascaded downstream information
-  common::ObReplicaType replica_type_; //The type of copy actually stored in the local copy
-  common::ObReplicaProperty property_;
-  common::ObRole role_;
-};
-
 struct ObBatchGetRoleResult
 {
   OB_UNIS_VERSION(1);
@@ -8184,6 +8126,9 @@ public:
 
   bool is_valid() const;
   bool operator==(const obrpc::ObCheckpoint &r) const;
+  bool operator < (const ObCheckpoint &that) {
+    return this->cur_sync_scn_ < that.cur_sync_scn_;
+  }
   share::ObLSID get_ls_id() const
   {
     return ls_id_;
@@ -8203,7 +8148,8 @@ public:
             && cur_sync_scn_.is_valid_and_not_min() && cur_restore_source_max_scn_.is_valid_and_not_min());
   }
 
-  TO_STRING_KV(K_(ls_id), K_(cur_sync_scn), K_(cur_restore_source_max_scn));
+  TO_STRING_KV("ls_id", ls_id_.id(), "cur_sync_scn", cur_sync_scn_.get_val_for_inner_table_field(),
+      "cur_restore_source_max_scn", cur_restore_source_max_scn_.get_val_for_inner_table_field());
 
   share::ObLSID ls_id_;
   share::SCN cur_sync_scn_;
@@ -9917,7 +9863,7 @@ public:
       unit_id_(common::OB_INVALID_ID),
       compat_mode_(lib::Worker::CompatMode::INVALID),
       unit_config_(),
-      replica_type_(common::ObReplicaType::REPLICA_TYPE_MAX),
+      replica_type_(common::ObReplicaType::REPLICA_TYPE_INVALID),
       if_not_grant_(false),
       is_delete_(false)
 #ifdef OB_BUILD_TDE_SECURITY
@@ -12179,6 +12125,70 @@ public:
   TO_STRING_KV(K_(server_health_status));
 private:
   share::ObServerHealthStatus server_health_status_;
+};
+
+struct ObRefreshServiceNameArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRefreshServiceNameArg()
+    : tenant_id_(OB_INVALID_TENANT_ID),
+      epoch_(0),
+      from_server_(),
+      target_service_name_id_(),
+      service_name_list_(),
+      service_op_(share::ObServiceNameArg::INVALID_SERVICE_OP),
+      update_tenant_info_arg_() {}
+  ~ObRefreshServiceNameArg() {}
+  int init(
+      const uint64_t tenant_id,
+      const uint64_t epoch,
+      const ObAddr &from_server,
+      const share::ObServiceNameID &target_service_name_id,
+      const common::ObIArray<share::ObServiceName> &service_name_list,
+      const share::ObServiceNameArg::ObServiceOp &service_op,
+      const share::ObAllTenantInfo &tenant_info,
+      const int64_t ora_rowscn);
+  bool is_valid() const;
+  int assign(const ObRefreshServiceNameArg &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  uint64_t get_epoch() const { return epoch_; }
+  const ObAddr &get_from_server() const { return from_server_; }
+  const share::ObServiceNameID &get_target_service_name_id() const { return target_service_name_id_; }
+  const common::ObSArray<share::ObServiceName> &get_service_name_list() const { return service_name_list_; }
+  const ObUpdateTenantInfoCacheArg &get_update_tenant_info_arg() const { return update_tenant_info_arg_; }
+  bool is_start_service() const {return share::ObServiceNameArg::START_SERVICE == service_op_; }
+  bool is_stop_service() const {return share::ObServiceNameArg::STOP_SERVICE == service_op_; }
+  TO_STRING_KV(K_(tenant_id), K_(epoch), K_(from_server),
+      "target_service_name_id", target_service_name_id_.id(), K_(service_name_list),
+      "service_op_to_str", share::ObServiceNameArg::service_op_to_str(service_op_), K_(update_tenant_info_arg));
+private:
+  uint64_t tenant_id_;
+  uint64_t epoch_; // __all_service snapshot corresponding epoch
+  ObAddr from_server_; // the server which sends broadcasting request
+  share::ObServiceNameID target_service_name_id_; // indicate which service name to operate
+  common::ObSArray<share::ObServiceName> service_name_list_; // __all_service snapshot
+  share::ObServiceNameArg::ObServiceOp service_op_; // the operation which triggered broadcasting
+  ObUpdateTenantInfoCacheArg update_tenant_info_arg_; // only used if the op is START_SERVICE
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRefreshServiceNameArg);
+};
+
+struct ObRefreshServiceNameRes
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRefreshServiceNameRes() : tenant_id_(OB_INVALID_TENANT_ID) {}
+  ~ObRefreshServiceNameRes() {}
+  int init(const uint64_t tenant_id);
+  bool is_valid() const;
+  int assign(const ObRefreshServiceNameRes &other);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  TO_STRING_KV(K_(tenant_id));
+private:
+  uint64_t tenant_id_;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObRefreshServiceNameRes);
 };
 }//end namespace obrpc
 }//end namespace oceanbase

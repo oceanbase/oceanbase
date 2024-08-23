@@ -2390,6 +2390,7 @@ int ObTransformUtils::is_column_expr_not_null(ObNotNullContext &ctx,
       is_not_null = expr->get_result_type().has_result_flag(NOT_NULL_FLAG);
     }
   } else if (table->is_generated_table() || table->is_temp_table() || table->is_lateral_table()) {
+    // TODO RUINAO NOTE : every col expr will go this path, and we can modify this logic oneday
     int64_t idx = expr->get_column_id() - OB_APP_MIN_COLUMN_ID;
     ObRawExpr *child_expr = NULL;
     ObSelectStmt *child_stmt = table->ref_query_;

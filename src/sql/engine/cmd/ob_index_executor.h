@@ -48,7 +48,6 @@ private:
         common::ObIAllocator &allocator,
         bool is_update_global_indexes = false);
   int handle_session_exception(ObSQLSessionInfo &session);
-  int handle_switchover();
 };
 
 class ObDropIndexStmt;

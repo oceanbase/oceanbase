@@ -162,6 +162,8 @@ public:
                                   obrpc::ObEstBlockRes &res) const;
   int update_tenant_info_cache(const obrpc::ObUpdateTenantInfoCacheArg &arg,
                                   obrpc::ObUpdateTenantInfoCacheRes &result);
+  int refresh_service_name(const obrpc::ObRefreshServiceNameArg &arg,
+                           obrpc::ObRefreshServiceNameRes &result);
   ////////////////////////////////////////////////////////////////
   // ObRpcMinorFreezeP @RS minor freeze
   int minor_freeze(const obrpc::ObMinorFreezeArg &arg,
@@ -269,11 +271,6 @@ public:
   int check_server_empty(bool &server_empty);
 
 private:
-  int get_role_from_palf_(
-      logservice::ObLogService &log_service,
-      const share::ObLSID &ls_id,
-      common::ObRole &role,
-      int64_t &proposal_id);
   int inner_fill_tablet_info_(
       const int64_t tenant_id,
       const ObTabletID &tablet_id,

@@ -218,10 +218,11 @@ int ObDBMSJobUtils::check_job_can_running(int64_t tenant_id, bool &can_running)
   OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, guard));
   OZ (guard.check_tenant_is_restore(tenant_id, is_restore));
 
-  // job can not run in standy cluster and restore.
-  if (OB_SUCC(ret) && job_queue_processor > 0
-      && !GCTX.is_standby_cluster()
-      && !is_restore) {
+  // job can not run in standy and restore tenant.
+  bool is_primary = false;
+  if (FAILEDx(ObShareUtil::table_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+    LOG_WARN("fail to execute table_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+  } else if (is_primary && job_queue_processor > 0) {
     SMART_VAR(ObMySQLProxy::MySQLResult, result) {
       if (OB_FAIL(sql_proxy_->read(result, tenant_id, sql.ptr()))) {
         LOG_WARN("execute query failed", K(ret), K(sql), K(tenant_id));

@@ -119,7 +119,8 @@ public:
         max_process_handler_time_(0), compressor_type_(common::INVALID_COMPRESSOR),
         src_cluster_id_(common::OB_INVALID_CLUSTER_ID),
         dst_cluster_id_(common::OB_INVALID_CLUSTER_ID), init_(false),
-        active_(true), is_trace_time_(false), do_ratelimit_(false), is_bg_flow_(0), rcode_() {}
+        active_(true), is_trace_time_(false), do_ratelimit_(false),
+        do_detect_session_killed_(false), is_bg_flow_(0), rcode_() {}
   virtual ~ObRpcProxy() = default;
 
   int init(const rpc::frame::ObReqTransport *transport,
@@ -133,6 +134,8 @@ public:
   int64_t get_timeout() const                   { return timeout_; }
   void set_trace_time(const bool is_trace_time) { is_trace_time_ = is_trace_time; }
   void set_ratelimit(const bool do_ratelimit)   { do_ratelimit_ = do_ratelimit; }
+  void set_detect_session_killed(const bool do_detect)   { do_detect_session_killed_ = do_detect; }
+  bool is_detect_session_killed() const  { return do_detect_session_killed_; }
   void set_bg_flow(const int8_t is_bg_flow)    { is_bg_flow_ = is_bg_flow;}
   void set_max_process_handler_time(const uint32_t max_process_handler_time)
   { max_process_handler_time_ = max_process_handler_time; }
@@ -261,6 +264,7 @@ protected:
   bool active_;
   bool is_trace_time_;
   bool do_ratelimit_;
+  bool do_detect_session_killed_;
   int8_t is_bg_flow_;
   ObRpcResultCode rcode_;
 };
@@ -389,6 +393,11 @@ extern ObRpcProxy::NoneT None;
   inline CLS& ratelimit(const bool do_ratelimit)                        \
   {                                                                     \
     set_ratelimit(do_ratelimit);                                        \
+    return *this;                                                       \
+  }                                                                     \
+  inline CLS& detect_session_killed(const bool do_detect)               \
+  {                                                                     \
+    set_detect_session_killed(do_detect);                               \
     return *this;                                                       \
   }                                                                     \
   inline CLS& bg_flow(const uint32_t is_bg_flow)                        \
