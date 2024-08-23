@@ -64,8 +64,7 @@ comment          ({sql_comment})
 start_identifier        (([A-Za-z0-9$_]*[A-Za-z$_][A-Za-z0-9$_]*|{NOTASCII_GB_CHAR})+)
 identifier        (([A-Za-z0-9$_]|{NOTASCII_GB_CHAR})+)
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
-user_variable    (@([A-Za-z0-9_\.$]|{NOTASCII_GB_CHAR})*)|(@['\"](['\"A-Za-z0-9_\.$/%]|{NOTASCII_GB_CHAR})*)
-
+user_variable    (@([A-Za-z0-9_\.$]|{NOTASCII_GB_CHAR})*)|(@[`'\"]([`'\"A-Za-z0-9_\.$/%]|{NOTASCII_GB_CHAR})*)
 version_num      ([0-9]+\.+[0-9]*)
 int_num          [0-9]+
 client_version   \([0-9]+(\.[0-9]+)*\)
