@@ -221,6 +221,8 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         const char *checksum_type_str = token + strlen(CHECKSUM_TYPE);
         if (OB_FAIL(set_checksum_type_(checksum_type_str))) {
           OB_LOG(WARN, "fail to set checksum type", K(ret), K(checksum_type_str));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("fail to set checksum type into extension", K(ret), K(token));
         }
       } else {
       }
@@ -346,9 +348,7 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   } else if (OB_STORAGE_FILE != device_type_) {
     if (OB_FAIL(get_access_key_(key, sizeof(key)))) {
       LOG_WARN("failed to get access key", K(ret));
-    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s&%s%s",
-                                       endpoint_, access_id_, key,
-                                       CHECKSUM_TYPE, get_checksum_type_str()))) {
+    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s", endpoint_, access_id_, key))) {
       LOG_WARN("failed to set storage info", K(ret), K(info_len));
     }
   }
