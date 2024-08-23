@@ -54,7 +54,7 @@ ObMySQLConnection *ObMySQLStatement::get_connection()
   return conn_;
 }
 
-int ObMySQLStatement::init(ObMySQLConnection &conn, const char *sql)
+int ObMySQLStatement::init(ObMySQLConnection &conn, const char *sql, int64_t param_count)
 {
   int ret = OB_SUCCESS;
   conn_ = &conn;

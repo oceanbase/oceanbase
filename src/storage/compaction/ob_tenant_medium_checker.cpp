@@ -122,11 +122,10 @@ int ObTenantMediumChecker::refresh_ls_status()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   lib::ObMutexGuard guard(lock_);
-  if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality(true/*force_refresh*/))) {
-    LOG_WARN("failed to refresh ls locality", K(tmp_ret));
-  }
   common::ObSEArray<share::ObLSID, LS_ID_ARRAY_CNT> ls_ids;
-  if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(ls_ids))) {
+  if (OB_FAIL(ls_locality_cache_.refresh_ls_locality(true/*force_refresh*/))) {
+    LOG_WARN("failed to refresh ls locality", K(ret));
+  } else if (OB_FAIL(MTL(ObLSService *)->get_ls_ids(ls_ids))) {
     LOG_WARN("failed to get all ls id", K(ret));
   } else {
     ls_info_map_.reuse();
@@ -155,19 +154,18 @@ int ObTenantMediumChecker::refresh_ls_status()
 int ObTenantMediumChecker::check_ls_status(const share::ObLSID &ls_id, bool &is_leader, bool need_check)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   is_leader = false;
   if (need_check
       && CHECK_LS_LOCALITY_INTERVAL < ObTimeUtility::fast_current_time() - last_check_timestamp_) {
-    if (OB_TMP_FAIL(refresh_ls_status())) {
-      LOG_WARN("failed to refresh ls locality", K(tmp_ret));
+    if (OB_FAIL(refresh_ls_status())) {
+      LOG_WARN("failed to refresh ls locality", K(ret));
     } else {
       last_check_timestamp_ = ObTimeUtility::fast_current_time();
     }
   }
   lib::ObMutexGuard guard(lock_);
   ObLSInfo ls_info;
-  if (OB_FAIL(ls_info_map_.get_refactored(ls_id, ls_info))) {
+  if (FAILEDx(ls_info_map_.get_refactored(ls_id, ls_info))) {
     if (OB_HASH_NOT_EXIST != ret) {
       LOG_WARN("fail to get map", K(ret), K(ls_id));
     } else {
@@ -219,16 +217,12 @@ int ObTenantMediumChecker::check_medium_finish_schedule()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTenantMediumChecker is not inited", K(ret));
+  } else if (OB_FAIL(ls_locality_cache_.refresh_ls_locality(false /*force_refresh*/))) {
+    LOG_WARN("failed to refresh ls locality");
+    ADD_COMMON_SUSPECT_INFO(MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
+        SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, ret);
   } else {
-    // refresh ls locality cache
-    if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality(false /*force_refresh*/))) {
-      LOG_WARN("failed to refresh ls locality", K(tmp_ret));
-      ADD_COMMON_SUSPECT_INFO(MEDIUM_MERGE, share::ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
-        SUSPECT_FAILED_TO_REFRESH_LS_LOCALITY, tmp_ret);
-    } else {
-      DEL_SUSPECT_INFO(MEDIUM_MERGE, UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
-    }
-
+    DEL_SUSPECT_INFO(MEDIUM_MERGE, UNKNOW_LS_ID, UNKNOW_TABLET_ID, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE);
     TabletLSArray tablet_ls_infos;
     tablet_ls_infos.set_attr(ObMemAttr(MTL_ID(), "CheckInfos"));
     TabletLSArray batch_tablet_ls_infos;
@@ -319,7 +313,7 @@ int ObTenantMediumChecker::check_medium_finish(
     ObCompactionScheduleTimeGuard time_guard;
     stat.filter_cnt_ += (end_idx - start_idx - check_tablet_ls_infos.count());
     if (FAILEDx(ObMediumCompactionScheduleFunc::batch_check_medium_finish(
-        ls_info_map_, finish_tablet_ls_infos, check_tablet_ls_infos, time_guard))) {
+        ls_info_map_, finish_tablet_ls_infos, check_tablet_ls_infos, time_guard, ls_locality_cache_.get_cs_replica_cache()))) {
       LOG_WARN("failed to batch check medium finish", K(ret), K(tablet_ls_infos.count()), K(check_tablet_ls_infos.count()),
         K(tablet_ls_infos), K(check_tablet_ls_infos));
       stat.fail_cnt_ += check_tablet_ls_infos.count();

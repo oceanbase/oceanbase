@@ -1711,6 +1711,9 @@ int ObTransformSubqueryCoalesce::get_subquery_assign_exprs(ObIArray<ObRawExpr*> 
     } else if (alias_exprs.count() > 1 || query_ref_exprs.count() > 1) {
       //disable subquery coalescing in this scenes
       is_valid = false;
+    } else if ((query_ref_exprs.count() == 1 && query_ref_exprs.at(0)->get_ref_count() > 1) ||
+               (alias_exprs.count() == 1 && alias_exprs.at(0)->get_ref_count() > 1)) {
+      is_valid = false;
     }
     for (int64_t j = 0; OB_SUCC(ret) && is_valid && j < query_ref_exprs.count(); ++j) {
       ObQueryRefRawExpr *query_ref_expr = query_ref_exprs.at(j);

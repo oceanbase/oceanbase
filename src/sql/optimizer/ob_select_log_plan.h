@@ -83,7 +83,6 @@ private:
 
   int get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_exprs,
                           const GroupingOpHelper &groupby_helper,
-                          const bool ignore_hint,
                           bool &use_hash_valid,
                           bool &use_merge_valid,
                           bool &part_sort_valid,
@@ -96,9 +95,7 @@ private:
                                      const ObIArray<ObOrderDirection> &rollup_directions,
                                      const ObIArray<ObRawExpr*> &having_exprs,
                                      const ObIArray<ObAggFunRawExpr*> &aggr_items,
-                                     const bool is_from_povit,
                                      GroupingOpHelper &groupby_helper,
-                                     const bool ignore_hint,
                                      ObIArray<CandidatePlan> &groupby_plans);
 
   int candi_allocate_three_stage_group_by(const ObIArray<ObRawExpr*> &reduce_exprs,
@@ -108,7 +105,6 @@ private:
                                           const ObIArray<ObOrderDirection> &rollup_directions,
                                           const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                           const ObIArray<ObRawExpr*> &having_exprs,
-                                          const bool is_from_povit,
                                           GroupingOpHelper &groupby_helper,
                                           ObIArray<CandidatePlan> &groupby_plans);
 
@@ -117,7 +113,6 @@ private:
                              const ObIArray<ObRawExpr*> &rollup_exprs,
                              const ObIArray<ObAggFunRawExpr*> &aggr_items,
                              const ObIArray<ObRawExpr*> &having_exprs,
-                             const bool is_from_povit,
                              GroupingOpHelper &groupby_helper,
                              ObLogicalOperator *&top);
 
@@ -159,7 +154,6 @@ private:
                               const ObIArray<ObOrderDirection> &rollup_directions,
                               const ObIArray<ObAggFunRawExpr*> &aggr_items,
                               const ObIArray<ObRawExpr*> &having_exprs,
-                              const bool is_from_povit,
                               GroupingOpHelper &groupby_helper,
                               CandidatePlan &candidate_plan,
                               ObIArray<CandidatePlan> &candidate_plans,
@@ -186,17 +180,20 @@ private:
                          common::ObIArray <ObRawExpr *> &reduce_exprs,
                          common::ObIArray <ObRawExpr *> &distinct_exprs);
 
+  int inner_candi_allocate_distinct(const GroupingOpHelper &distinct_helper,
+                                    const ObIArray<ObRawExpr*> &reduce_exprs,
+                                    const ObIArray<ObRawExpr*> &distinct_exprs,
+                                    ObIArray<CandidatePlan> &distinct_plans);
+
   int create_hash_distinct_plan(ObLogicalOperator *&top,
-                                GroupingOpHelper &distinct_helper,
-                                ObIArray<ObRawExpr*> &reduce_exprs,
-                                ObIArray<ObRawExpr*> &distinct_exprs);
+                                const GroupingOpHelper &distinct_helper,
+                                const ObIArray<ObRawExpr*> &reduce_exprs,
+                                const ObIArray<ObRawExpr*> &distinct_exprs);
 
   int create_merge_distinct_plan(ObLogicalOperator *&top,
-                                 GroupingOpHelper &distinct_helper,
-                                 ObIArray<ObRawExpr*> &reduce_exprs,
-                                 ObIArray<ObRawExpr*> &distinct_exprs,
-                                 ObIArray<ObOrderDirection> &directions,
-                                 bool &is_plan_valid,
+                                 const GroupingOpHelper &distinct_helper,
+                                 const ObIArray<ObRawExpr*> &reduce_exprs,
+                                 const ObIArray<ObRawExpr*> &distinct_exprs,
                                  bool can_ignore_merge_plan = false);
 
   int allocate_distinct_as_top(ObLogicalOperator *&top,
@@ -485,7 +482,8 @@ private:
                     const ObIArray<ObRawExpr*> &const_exprs,
                     const double card,
                     const bool is_at_most_one_row,
-                    const ObIArray<ObRawExpr*> &qualify_filters)
+                    const ObIArray<ObRawExpr*> &qualify_filters,
+                    const ObIArray<double> &ambient_card)
       : all_win_func_exprs_(all_win_func_exprs),
         win_dist_hint_(win_dist_hint),
         explicit_hint_(explicit_hint),
@@ -507,7 +505,8 @@ private:
         enable_topn_(false),
         topn_const_(NULL),
         is_fetch_with_ties_(false),
-        origin_sort_card_(0.0)
+        origin_sort_card_(0.0),
+        ambient_card_(ambient_card)
     {
     }
     virtual ~WinFuncOpHelper() {}
@@ -545,6 +544,7 @@ private:
     ObRawExpr* topn_const_;
     bool is_fetch_with_ties_;
     double origin_sort_card_;
+    const ObIArray<double> &ambient_card_;
 
     TO_STRING_KV(K_(win_dist_method),
                  K_(win_op_idx),
@@ -557,6 +557,7 @@ private:
                  K_(ordered_win_func_exprs),
                  K_(win_dist_hint),
                  K_(explicit_hint),
+                 K_(ambient_card),
                  K_(enable_topn),
                  K_(topn_const),
                  K_(is_fetch_with_ties),
@@ -920,7 +921,6 @@ int generate_window_functions_plan(WinFuncOpHelper &win_func_helper,
                                     const ObIArray<ObOrderDirection> &rollup_directions,
                                     const ObIArray<ObAggFunRawExpr*> &aggr_items,
                                     const ObIArray<ObRawExpr*> &having_exprs,
-                                    const bool is_from_povit,
                                     GroupingOpHelper &groupby_helper,
                                     ObLogicalOperator *&top,
                                     bool use_part_sort,

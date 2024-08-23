@@ -34,6 +34,8 @@ using namespace storage;
 
 namespace compaction
 {
+ERRSIM_POINT_DEF(EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED);
+
 ObCOMergeDagParam::ObCOMergeDagParam()
   : ObTabletMergeDagParam(),
     start_cg_idx_(0),
@@ -181,7 +183,9 @@ int ObCOMergePrepareTask::create_schedule_dag(ObCOTabletMergeCtx &ctx)
   ObGetMergeTablesResult result;
   bool schedule_minor = false;
 
-  if (OB_FAIL(ctx.check_need_schedule_minor(schedule_minor))) {
+  if (is_convert_co_major_merge(ctx.get_merge_type())) {
+    // convert co major merge only rely on major sstable
+  } else if (OB_FAIL(ctx.check_need_schedule_minor(schedule_minor))) {
     LOG_WARN("failed to check need chedule minor", K(ret), K(schedule_minor));
   } else if (schedule_minor) {
     ObTableHandleV2 tmp_table_handle;
@@ -1054,6 +1058,7 @@ int ObCOMergeDagNet::init_by_param(const ObIDagInitParam *param)
     merge_type_ = merge_param->merge_type_;
     ls_id_ = merge_param->ls_id_;
     tablet_id_ = merge_param->tablet_id_;
+    (void) set_dag_net_id(merge_param->dag_net_id_);
     is_inited_ = true;
   }
   return ret;
@@ -1177,6 +1182,25 @@ int ObCOMergeDagNet::choose_merge_batch_size(const int64_t column_group_cnt)
   return ret;
 }
 
+int ObCOMergeDagNet::init_cg_schedule_status_for_row_store()
+{
+  int ret = OB_SUCCESS;
+  const int64_t max_cg_idx = co_merge_ctx_->get_schema()->get_column_group_count();
+  int32_t start_cg_idx = OB_INVALID_INDEX;
+
+  if (!co_merge_ctx_->is_build_row_store()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid co merge type", KPC_(co_merge_ctx));
+  } else if (OB_FAIL(co_merge_ctx_->get_schema()->get_base_rowkey_column_group_index(start_cg_idx))) {
+    LOG_WARN("failed to get all cg or rowkey cg in cg schemas", K(ret), KPC_(co_merge_ctx));
+  } else {
+    MARK_CG_SCHEDULE_STATUS(0, max_cg_idx, ObCOTabletMergeCtx::CG_SCHE_STATUS_FINISHED);
+    co_merge_ctx_->cg_schedule_status_array_[start_cg_idx] = ObCOTabletMergeCtx::CG_SCHE_STATUS_IDLE;
+    co_merge_ctx_->set_batch_finish_for_row_store(max_cg_idx - 1);
+  }
+  return ret;
+}
+
 int ObCOMergeDagNet::inner_schedule_finish_dag(ObIDag *parent_dag)
 {
   int ret = OB_SUCCESS;
@@ -1246,9 +1270,15 @@ int ObCOMergeDagNet::inner_create_and_schedule_dags(ObIDag *parent_dag)
    */
   if (OB_NOT_NULL(parent_dag)
   && (co_merge_ctx_->is_build_row_store() || max_cg_idx < DELAY_SCHEDULE_FINISH_DAG_CG_CNT)) {
+#ifdef ERRSIM
+    if (EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED) {
+      ret = EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED;
+      LOG_INFO("ERRSIM EN_COMPACTION_ADD_CO_MREGE_FINISH_DAG_INTO_DAG_NET_FAILED", K(ret), KPC(parent_dag));
+    }
+#endif
     // add into dag_scheduler after parent-child relation generated
-    if (OB_FAIL(create_dag<ObCOMergeFinishDag>(0, 0, finish_dag_, parent_dag/*parent*/, false/*add_scheduler_flag*/))) {
-      LOG_WARN("failed to create finish dag", K(ret));
+    if (FAILEDx(create_dag<ObCOMergeFinishDag>(0, 0, finish_dag_, parent_dag/*parent*/, false/*add_scheduler_flag*/))) {
+      LOG_WARN("failed to create finish dag", K(ret), K_(finish_dag));
     }
   }
   // refine merge_batch_size_ with tenant memory
@@ -1290,7 +1320,7 @@ int ObCOMergeDagNet::inner_create_row_store_dag(
     common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array)
 {
   int ret = OB_SUCCESS;
-  LOG_DEBUG("chengkong debug: build row store in this compaction", "co_major_merge_type_",
+  LOG_DEBUG("build row store in this compaction", "co_major_merge_type_",
     ObCOMajorMergePolicy::co_major_merge_type_to_str(co_merge_ctx_->static_param_.co_major_merge_type_));
 
   dag = nullptr;
@@ -1299,13 +1329,9 @@ int ObCOMergeDagNet::inner_create_row_store_dag(
 
   if (OB_FAIL(co_merge_ctx_->get_schema()->get_base_rowkey_column_group_index(start_cg_idx))) {
     LOG_WARN("failed to get all cg or rowkey cg in cg schemas", K(ret));
-  } else if (OB_NOT_NULL(parent_dag)) {
-    // in schedule state, firstly into inner_create_and_schedule_dags
-    MARK_CG_SCHEDULE_STATUS(0, max_cg_idx, ObCOTabletMergeCtx::CG_SCHE_STATUS_FINISHED);
-    co_merge_ctx_->cg_schedule_status_array_[start_cg_idx] = ObCOTabletMergeCtx::CG_SCHE_STATUS_IDLE;
-    co_merge_ctx_->one_batch_finish(max_cg_idx - 1);
-  }
-  if (OB_FAIL(ret) || !ObCOTabletMergeCtx::is_cg_could_schedule(co_merge_ctx_->cg_schedule_status_array_[start_cg_idx])) {
+  } else if (!ObCOTabletMergeCtx::is_cg_could_schedule(co_merge_ctx_->cg_schedule_status_array_[start_cg_idx])) {
+  } else if (OB_FAIL(init_cg_schedule_status_for_row_store())) {
+    LOG_WARN("failed to init cg schedule status", K(ret));
   } else if (OB_FAIL(inner_create_exe_dags(start_cg_idx, start_cg_idx + 1, max_cg_idx, allowed_schedule_dag_count_place_holder,
         dag, exe_dag_array))) {
     LOG_WARN("failed to create or add cg dag", K(ret), K(start_cg_idx));

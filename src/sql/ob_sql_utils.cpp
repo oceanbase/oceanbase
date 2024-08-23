@@ -5265,6 +5265,7 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
     ObObj *data = NULL;
     if (OB_UNLIKELY(!obj.is_ext())) {
       OZ (obj_params.push_back(obj));
+      OZ (ObSql::add_param_to_param_store(obj, obj_params));
     } else {
       CK (OB_NOT_NULL(coll = reinterpret_cast<pl::ObPLCollection*>(obj.get_ext())));
       CK (coll->get_count() > actual_pos);
@@ -5278,7 +5279,7 @@ int ObSQLUtils::get_one_group_params(int64_t &actual_pos, ParamStore &src, Param
             ++actual_pos;
           }
         }
-        OX (obj_params.push_back(*(data + actual_pos)));
+        OZ (ObSql::add_param_to_param_store(*(data + actual_pos), obj_params));
       }
     }
   }

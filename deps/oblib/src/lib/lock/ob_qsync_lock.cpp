@@ -86,5 +86,23 @@ int ObQSyncLock::try_rdlock()
   }
   return ret;
 }
+
+int ObQSyncLock::try_wrlock()
+{
+  int ret = OB_SUCCESS;
+  if (!ATOMIC_BCAS(&write_flag_, 0, 1)) {
+    ret = OB_EAGAIN;
+  } else {
+    bool sync_success = false;
+    for (int64_t i = 0; !sync_success && i < TRY_SYNC_COUNT; i++) {
+      sync_success = qsync_.try_sync();
+    }
+    if (!sync_success) {
+      ATOMIC_STORE(&write_flag_, 0);
+      ret = OB_EAGAIN;
+    }
+  }
+  return ret;
+}
 }
 }

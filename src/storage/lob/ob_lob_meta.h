@@ -179,6 +179,8 @@ public:
   int close();
   void set_end() { is_end_ = true; }
   void reuse();
+  // only used by ddl when write done
+  int check_write_length();
 
   TO_STRING_KV(K_(seq_id), K_(offset), K_(lob_id), K_(piece_id), K_(coll_type), K_(piece_block_size),
                K_(scan_iter), K_(padding_size), K_(seq_id_end), K_(last_info), K_(is_store_char_len));

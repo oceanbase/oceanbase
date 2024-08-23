@@ -51,7 +51,7 @@ int ObLSReplicaAddr::init(const common::ObAddr &addr,
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!addr.is_valid()
-                  || common::REPLICA_TYPE_MAX == replica_type)) {
+                  || common::REPLICA_TYPE_INVALID == replica_type)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(addr), K(replica_type));
   } else {
@@ -662,6 +662,12 @@ int ObLSCreator::check_create_ls_result_(
             if (OB_FAIL(learner_list.add_learner(ObMember(addr, timestamp)))) {
               LOG_WARN("failed to add member", KR(ret), K(addr));
             }
+          } else if (result->get_replica_type() == REPLICA_TYPE_COLUMNSTORE) {
+            ObMember member(addr, timestamp);
+            member.set_columnstore();
+            if (OB_FAIL(learner_list.add_learner(member))) {
+              LOG_WARN("failed to add member", KR(ret), K(addr), K(member));
+            }
           }
           LOG_TRACE("create ls result", KR(ret), K(i), K(addr), KPC(result));
         }
@@ -991,7 +997,9 @@ int ObLSCreator::construct_ls_addrs_according_to_locality_(
     for (int64_t i = 0; OB_SUCC(ret) && i < zone_locality_array.count(); ++i) {
       const share::ObZoneReplicaAttrSet &zone_locality = zone_locality_array.at(i);
       ObLSReplicaAddr replica_addr;
-      if (OB_FAIL(alloc_zone_ls_addr(is_sys_ls, zone_locality, unit_info_array, replica_addr))) {
+      if (is_sys_ls && zone_locality.get_columnstore_replica_num() > 0) {
+        // ignore, C-replica not applicable for sys-ls
+      } else if (OB_FAIL(alloc_zone_ls_addr(is_sys_ls, zone_locality, unit_info_array, replica_addr))) {
         LOG_WARN("fail to alloc zone ls addr", KR(ret), K(zone_locality), K(unit_info_array));
       } else if (OB_FAIL(ls_addr.push_back(replica_addr))) {
         LOG_WARN("fail to push back", KR(ret), K(replica_addr));
@@ -1106,11 +1114,9 @@ int ObLSCreator::alloc_duplicate_ls_addr_(
   } else if (OB_FAIL(construct_ls_addrs_according_to_locality_(
                          zone_locality_array,
                          unit_info_array,
-                         true/*is_sys_ls*/,
+                         false/*is_sys_ls*/,
                          true/*is_duplicate_ls*/,
                          ls_addr))) {
-    // although duplicate log stream is a user log steam, we use the same logic to alloc addrs as sys log stream
-    // so set is_sys_ls to true when execute construct_ls_addrs_according_to_locality_
     LOG_WARN("fail to construct ls addrs for tenant user ls", KR(ret), K(zone_locality_array),
              K(unit_info_array), K(ls_addr));
   }
@@ -1129,6 +1135,14 @@ int ObLSCreator::compensate_zone_readonly_replica_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(unit_info_array));
   } else {
+    ObReplicaType replica_type_to_add = ObReplicaType::REPLICA_TYPE_INVALID;
+    if (zlocality.get_columnstore_replica_num() > 0) {
+      // For C zone locality, compensate C-replica.
+      replica_type_to_add = ObReplicaType::REPLICA_TYPE_COLUMNSTORE;
+    } else {
+      // For other zone locality (F/R), compensate R-replica
+      replica_type_to_add = ObReplicaType::REPLICA_TYPE_READONLY;
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < unit_info_array.count(); ++i) {
       const share::ObUnit &unit = unit_info_array.at(i);
       if (locality_zone != unit.zone_) {
@@ -1142,7 +1156,7 @@ int ObLSCreator::compensate_zone_readonly_replica_(
         ObLSReplicaAddr ls_replica_addr;
         if (OB_FAIL(ls_replica_addr.init(
                       unit.server_,
-                      ObReplicaType::REPLICA_TYPE_READONLY))) {
+                      replica_type_to_add))) {
           LOG_WARN("fail to init ls replica addr", KR(ret), K(unit), K(locality_zone));
         } else if (OB_FAIL(ls_addr.push_back(ls_replica_addr))) {
           LOG_WARN("fail to push back", KR(ret), K(ls_replica_addr));
@@ -1174,25 +1188,31 @@ int ObLSCreator::alloc_zone_ls_addr(
           if (OB_FAIL(ls_replica_addr.init(
                   unit.server_,
                   ObReplicaType::REPLICA_TYPE_FULL))) {
-            LOG_WARN("fail to init ls replica addr", KR(ret));
+            LOG_WARN("fail to init ls replica addr", KR(ret), K(unit.server_));
           }
         } else if (zlocality.replica_attr_set_.get_logonly_replica_attr_array().count() > 0) {
           if (OB_FAIL(ls_replica_addr.init(
                   unit.server_,
                   ObReplicaType::REPLICA_TYPE_LOGONLY))) {
-            LOG_WARN("fail to init ls replica addr", KR(ret));
+            LOG_WARN("fail to init ls replica addr", KR(ret), K(unit.server_));
           }
         } else if (zlocality.replica_attr_set_.get_encryption_logonly_replica_attr_array().count() > 0) {
           if (OB_FAIL(ls_replica_addr.init(
                   unit.server_,
                   ObReplicaType::REPLICA_TYPE_ENCRYPTION_LOGONLY))) {
-            LOG_WARN("fail to init ls replica addr", KR(ret));
+            LOG_WARN("fail to init ls replica addr", KR(ret), K(unit.server_));
           }
         } else if (zlocality.replica_attr_set_.get_readonly_replica_attr_array().count() > 0) {
           if (OB_FAIL(ls_replica_addr.init(
                   unit.server_,
                   ObReplicaType::REPLICA_TYPE_READONLY))) {
-            LOG_WARN("fail to init ls replica addr", KR(ret));
+            LOG_WARN("fail to init ls replica addr", KR(ret), K(unit.server_));
+          }
+        } else if (zlocality.replica_attr_set_.get_columnstore_replica_attr_array().count() > 0) {
+          if (OB_FAIL(ls_replica_addr.init(
+                  unit.server_,
+                  ObReplicaType::REPLICA_TYPE_COLUMNSTORE))) {
+            LOG_WARN("fail to init ls replica addr", KR(ret), K(unit.server_));
           }
         } else {  // zone locality shall has a paxos replica in 4.0 by
                   // now(2021.10.25)

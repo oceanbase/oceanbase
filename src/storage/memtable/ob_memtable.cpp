@@ -430,18 +430,6 @@ int ObMemtable::multi_set(
     if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
       TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
     }
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    if (param.is_non_unique_local_index_) {
-      // no need to detect deadlock for non-unique local index table
-    } else {
-      for (int64_t idx = 0; idx < mtk_generator.count(); ++idx) {
-        MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                             mtk_generator[idx],
-                                             context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-      }
-    }
-    /***********************/
   }
   return ret;
 }
@@ -595,17 +583,6 @@ int ObMemtable::set(
     if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
       TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
     }
-
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    if (param.is_non_unique_local_index_) {
-      // no need to detect deadlock for non-unique local index table
-    } else {
-       MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                            mtk_generator[0],
-                                            context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    }
-    /***********************/
   }
   return ret;
 }
@@ -667,16 +644,6 @@ int ObMemtable::set(
     if (OB_TMP_FAIL(try_report_dml_stat_(param.table_id_))) {
       TRANS_LOG_RET(WARN, tmp_ret, "fail to report dml stat", K_(reported_dml_stat));
     }
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    if (param.is_non_unique_local_index_) {
-      // no need to detect deadlock for local index table
-    } else {
-      MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                           mtk_generator[0],
-                                           context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    }
-    /***********************/
   }
   return ret;
 }
@@ -725,15 +692,6 @@ int ObMemtable::lock(
   if (OB_FAIL(ret) && (OB_TRY_LOCK_ROW_CONFLICT != ret)) {
     TRANS_LOG(WARN, "lock fail", K(ret), K(row), K(mtk));
   }
-
-  if (OB_SUCC(ret)) {
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                         mtk,
-                                         context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    /***********************/
-  }
   return ret;
 }
 
@@ -776,15 +734,6 @@ int ObMemtable::lock(
 
   if (OB_FAIL(ret) && (OB_TRY_LOCK_ROW_CONFLICT != ret) && (OB_TRANSACTION_SET_VIOLATION != ret)) {
     TRANS_LOG(WARN, "lock fail", K(ret), K(rowkey));
-  }
-
-  if (OB_SUCC(ret)) {
-    /*****[for deadlock]*****/
-    // recored this row is hold by this trans for deadlock detector
-    MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
-                                         mtk,
-                                         context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
-    /***********************/
   }
   return ret;
 }
@@ -1287,10 +1236,6 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
       TRANS_LOG(WARN, "get next row error", K(ret));
     }
   } else if (FALSE_IT(timeguard.click("mutator_row copy"))) {
-  } else if (OB_FAIL(check_standby_cluster_schema_condition_(ctx, table_id, table_version))) {
-    TRANS_LOG(WARN, "failed to check standby_cluster_schema_condition", K(ret), K(table_id),
-              K(table_version));
-  } else if (FALSE_IT(timeguard.click("check_standby_cluster_schema_condition"))) {
   } else if (OB_UNLIKELY(dml_flag == blocksstable::ObDmlFlag::DF_NOT_EXIST)) {
     ret = OB_ERR_UNEXPECTED;
     TRANS_LOG(ERROR, "Unexpected not exist trans node", K(ret), K(dml_flag), K(rowkey));
@@ -1914,11 +1859,15 @@ bool ObMemtable::ready_for_flush_()
         TRANS_LOG(WARN, "fail to get current right boundary", K(ret));
       }
       if ((bool_ret = (current_right_boundary >= get_max_end_scn()))) {
+        int tmp_ret = OB_SUCCESS;
         resolve_right_boundary();
         if (!get_resolved_active_memtable_left_boundary()) {
-          resolve_left_boundary_for_active_memtable_();
+          if (OB_TMP_FAIL(resolve_left_boundary_for_active_memtable_())) {
+            TRANS_LOG(WARN, "fail to resolve left boundary for active memtable",
+                      K(tmp_ret), KPC(this));
+          }
         }
-        bool_ret = (is_empty() || get_resolved_active_memtable_left_boundary());
+        bool_ret = get_resolved_active_memtable_left_boundary();
       }
       if (bool_ret) {
         set_freeze_state(TabletMemtableFreezeState::READY_FOR_FLUSH);
@@ -2488,44 +2437,6 @@ void ObMemtable::set_minor_merged()
   minor_merged_time_ = ObTimeUtility::current_time();
 }
 
-int ObMemtable::check_standby_cluster_schema_condition_(ObStoreCtx &ctx,
-                                                        const int64_t table_id,
-                                                        const int64_t table_version)
-{
-  int ret = OB_SUCCESS;
-#ifdef ERRSIM
-  ret = OB_E(EventTable::EN_CHECK_STANDBY_CLUSTER_SCHEMA_CONDITION) OB_SUCCESS;
-  if (OB_FAIL(ret) && !common::is_inner_table(table_id)) {
-    TRANS_LOG(WARN, "ERRSIM, replay row failed", K(ret));
-    return ret;
-  }
-#endif
-  if (GCTX.is_standby_cluster()) {
-    //only stand_by cluster need to be check
-    uint64_t tenant_id = MTL_ID();
-    if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "invalid tenant_id", K(ret), K(tenant_id), K(table_id), K(table_version));
-    } else if (OB_SYS_TENANT_ID == tenant_id) {
-      //sys tenant do not need check
-    } else {
-      int64_t tenant_schema_version = 0;
-      if (OB_FAIL(GSCHEMASERVICE.get_tenant_refreshed_schema_version(tenant_id, tenant_schema_version))) {
-        TRANS_LOG(WARN, "get_tenant_schema_version failed", K(ret), K(tenant_id),
-                  K(table_id), K(tenant_id), K(table_version));
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          // tenant schema hasn't been flushed in the case of restart, rewrite OB_ENTRY_NOT_EXIST
-          ret = OB_TRANS_WAIT_SCHEMA_REFRESH;
-        }
-      } else if (table_version > tenant_schema_version) {
-        // replay is not allowed when data's table version is greater than tenant's schema version
-        //remove by msy164651, in 4.0 no need to check schema version
-      } else {/*do nothing*/}
-    }
-  }
-  return ret;
-}
-
 int64_t ObMemtable::get_upper_trans_version() const
 {
   return INT64_MAX;
@@ -2663,6 +2574,18 @@ int ObMemtable::multi_set_(
 
   if (OB_SUCC(ret)) {
     mvcc_engine_.finish_kvs(mvcc_rows);
+    /*****[for deadlock]*****/
+    // recored this row is hold by this trans for deadlock detector
+    if (param.is_non_unique_local_index_) {
+      // no need to detect deadlock for non-unique local index table
+    } else {
+      for (int64_t idx = 0; idx < memtable_keys.count(); ++idx) {
+        MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                             memtable_keys[idx],
+                                             context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
+      }
+    }
+    /***********************/
   }
 
   if (OB_TRANSACTION_SET_VIOLATION == ret) {
@@ -2953,6 +2876,16 @@ int ObMemtable::mvcc_write_(
     TRANS_LOG(WARN, "register row commit failed", K(ret));
   } else if (nullptr == mvcc_row && res.has_insert()) {
     (void)mvcc_engine_.finish_kv(res);
+    /*****[for deadlock]*****/
+    // recored this row is hold by this trans for deadlock detector
+    if (param.is_non_unique_local_index_) {
+      // no need to detect deadlock for non-unique local index table
+    } else {
+      MTL(ObLockWaitMgr*)->set_hash_holder(key_.get_tablet_id(),
+                                            *key,
+                                            context.store_ctx_->mvcc_acc_ctx_.get_mem_ctx()->get_tx_id());
+    }
+    /***********************/
   }
 
   // cannot be serializable when transaction set violation

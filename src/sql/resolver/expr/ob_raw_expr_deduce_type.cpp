@@ -583,6 +583,13 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
         LOG_WARN("fail to calc result type with const arguments", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      // refine result type precision and scale here
+      if (lib::is_mysql_mode() && result_type.is_decimal_int()) {
+        result_type.set_precision(MIN(result_type.get_precision(),
+                                      OB_MAX_DECIMAL_POSSIBLE_PRECISION));
+      }
+    }
     if (OB_FAIL(ret) && my_session_->is_varparams_sql_prepare()) {
       // the ps prepare stage does not do type deduction, and directly gives a default type.
       result_type.set_null();

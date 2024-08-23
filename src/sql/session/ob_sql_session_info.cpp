@@ -59,6 +59,7 @@
 #include "ob_sess_info_verify.h"
 #include "share/schema/ob_schema_utils.h"
 #include "share/config/ob_config_helper.h"
+#include "rootserver/ob_tenant_info_loader.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -207,7 +208,9 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       current_dblink_sequence_id_(0),
       client_non_standard_(false),
       is_session_sync_support_(false),
-      job_info_(nullptr)
+      job_info_(nullptr),
+      failover_mode_(false),
+      service_name_()
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -405,6 +408,8 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
   need_send_feedback_proxy_info_ = false;
   is_lock_session_ = false;
   job_info_ = nullptr;
+  failover_mode_ = false;
+  service_name_.reset();
 }
 
 void ObSQLSessionInfo::clean_status()
@@ -986,32 +991,6 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
   return ret;
 }
 
-//清理oracle临时表中数据来源和当前session id相同, 但属于被重用的旧的session数据
-int ObSQLSessionInfo::drop_reused_oracle_temp_tables()
-{
-  int ret = OB_SUCCESS;
-  //obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
-  if (false == get_is_deserialized()
-      && !is_inner()
-      && !GCTX.is_standby_cluster()) {
-    obrpc::ObDropTableArg drop_table_arg;
-    drop_table_arg.if_exist_ = true;
-    drop_table_arg.to_recyclebin_ = false;
-    drop_table_arg.table_type_ = share::schema::TMP_TABLE_ORA_SESS;
-    drop_table_arg.session_id_ = get_sessid_for_table();
-    drop_table_arg.tenant_id_ = get_effective_tenant_id();
-    drop_table_arg.sess_create_time_ = get_sess_create_time();
-    //common_rpc_proxy = GCTX.rs_rpc_proxy_;
-    if (OB_FAIL(delete_from_oracle_temp_tables(drop_table_arg))) {
-    //if (OB_FAIL(common_rpc_proxy->drop_table(drop_table_arg))) {
-      LOG_WARN("failed to drop reused temporary table", K(drop_table_arg), K(ret));
-    } else {
-      LOG_DEBUG("succeed to delete old rows for oracle temporary table", K(drop_table_arg));
-    }
-  }
-  return ret;
-}
-
 //proxy方式下session创建、断开和后台定时task检查:
 //如果距离上次更新此session->last_refresh_temp_table_time_ 超过1hr
 //则更新session创建的临时表最后活动时间SESSION_ACTIVE_TIME
@@ -1498,7 +1477,7 @@ ObPLCursorInfo *ObSQLSessionInfo::get_cursor(int64_t cursor_id)
 {
   ObPLCursorInfo *cursor = NULL;
   if (OB_SUCCESS != pl_cursor_cache_.pl_cursor_map_.get_refactored(cursor_id, cursor)) {
-    LOG_WARN_RET(OB_ERR_UNEXPECTED, "get cursor info failed", K(cursor_id), K(get_sessid()));
+    LOG_INFO("get cursor info failed", K(cursor_id), K(get_sessid()));
   }
   return cursor;
 }
@@ -3321,6 +3300,7 @@ int ObSQLSessionInfo::update_sess_sync_info(const SessionSyncInfoType sess_sync_
     LOG_WARN("invalid session sync info encoder", K(ret), K(sess_sync_info_type));
   } else if (OB_FAIL(sess_encoders_[sess_sync_info_type]->deserialize(*this, buf, length, pos))) {
     LOG_WARN("failed to deserialize sess sync info", K(ret), K(sess_sync_info_type), KPHEX(buf, length), K(length), K(pos));
+  } else if (FALSE_IT(sess_encoders_[sess_sync_info_type]->is_changed_ = false)) {
   } else {
     // do nothing
     LOG_DEBUG("get app info", K(client_app_info_.module_name_), K(client_app_info_.action_name_), K(client_app_info_.client_info_));
@@ -4719,4 +4699,52 @@ int ObSQLSessionInfo::get_dblink_sequence_schema(int64_t sequence_id, const ObSe
   }
   LOG_TRACE("get dblink sequence schema", K(sequence_id), K(dblink_sequence_schemas_));
   return ret;
+}
+
+int ObSQLSessionInfo::set_service_name(const ObString& service_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(service_name_.init(service_name))) {
+    LOG_WARN("fail to init service_name", KR(ret), K(service_name));
+  }
+  return ret;
+}
+int ObSQLSessionInfo::check_service_name_and_failover_mode(const uint64_t tenant_id) const
+{
+  // if failover_mode is on, and the session is created via service_name
+  // the tenant should be primary
+  // service name must exist and service status must be started
+  // if service_name is not empty, the version must be >= 4240
+  int ret = OB_SUCCESS;
+  bool is_sts_ready = false;
+  if (service_name_.is_empty()) {
+    // do nothing
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else {
+    MTL_SWITCH(tenant_id) {
+      rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
+      if (OB_ISNULL(tenant_info_loader)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant_info_loader is null", KR(ret), KP(tenant_info_loader));
+      } else if (OB_FAIL(tenant_info_loader->check_if_sts_is_ready(is_sts_ready))) {
+        LOG_WARN("fail to execute check_if_sts_is_ready", KR(ret));
+      } else if (failover_mode_ && is_sts_ready) {
+        // 'sts_ready' indicates that the 'access_mode' is 'RAW_WRITE'
+        // The reason for using 'sts_ready' is that we believe all connections intending to reach the
+        // primary tenant should be accepted before the 'access_mode' switches to 'RAW_WRITE'.
+        ret = OB_NOT_PRIMARY_TENANT;
+        LOG_WARN("the tenant is not primary, the request is not allowed", KR(ret), K(is_sts_ready));
+      } else if (OB_FAIL(tenant_info_loader->check_if_the_service_name_is_stopped(service_name_))) {
+        LOG_WARN("fail to execute check_if_the_service_name_is_stopped", KR(ret), K(service_name_));
+      }
+    }
+  }
+  return ret;
+}
+int ObSQLSessionInfo::check_service_name_and_failover_mode() const
+{
+  uint64_t tenant_id = get_effective_tenant_id();
+  return check_service_name_and_failover_mode(tenant_id);
 }

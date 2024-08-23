@@ -5435,10 +5435,8 @@ void PalfHandleImpl::report_switch_learner_to_acceptor_(const common::ObMember &
       "member", member_buf,
       "curr_member_list", member_list_buf,
       "curr_replica_num", curr_replica_num);
-  char replica_readonly_name_[common::MAX_REPLICA_TYPE_LENGTH];
-  char replica_full_name_[common::MAX_REPLICA_TYPE_LENGTH];
-  replica_type_to_string(ObReplicaType::REPLICA_TYPE_READONLY, replica_readonly_name_, sizeof(replica_readonly_name_));
-  replica_type_to_string(ObReplicaType::REPLICA_TYPE_FULL, replica_full_name_, sizeof(replica_full_name_));
+  const char *replica_readonly_name_ = ObShareUtil::replica_type_to_string(ObReplicaType::REPLICA_TYPE_READONLY);
+  const char *replica_full_name_ = ObShareUtil::replica_type_to_string(ObReplicaType::REPLICA_TYPE_FULL);
   plugins_.record_replica_type_change_event(palf_id_, config_version, replica_readonly_name_, replica_full_name_, EXTRA_INFOS);
 }
 
@@ -5457,10 +5455,8 @@ void PalfHandleImpl::report_switch_acceptor_to_learner_(const common::ObMember &
       "member", member_buf,
       "curr_member_list", member_list_buf,
       "curr_replica_num", curr_replica_num);
-  char replica_readonly_name_[common::MAX_REPLICA_TYPE_LENGTH];
-  char replica_full_name_[common::MAX_REPLICA_TYPE_LENGTH];
-  replica_type_to_string(ObReplicaType::REPLICA_TYPE_READONLY, replica_readonly_name_, sizeof(replica_readonly_name_));
-  replica_type_to_string(ObReplicaType::REPLICA_TYPE_FULL, replica_full_name_, sizeof(replica_full_name_));
+  const char *replica_readonly_name_ = ObShareUtil::replica_type_to_string(ObReplicaType::REPLICA_TYPE_READONLY);
+  const char *replica_full_name_ = ObShareUtil::replica_type_to_string(ObReplicaType::REPLICA_TYPE_FULL);
   plugins_.record_replica_type_change_event(palf_id_, config_version, replica_full_name_, replica_readonly_name_, EXTRA_INFOS);
 }
 

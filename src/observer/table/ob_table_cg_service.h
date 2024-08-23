@@ -362,7 +362,8 @@ public:
 private:
   static int generate_das_tsc_ctdef(const ObTableCtx &ctx,
                                     ObIAllocator &allocator,
-                                    sql::ObDASScanCtDef &das_tsc_ctdef);
+                                    sql::ObDASScanCtDef &das_tsc_ctdef,
+                                    const bool query_cs_replica = false);
   static int replace_gen_col_exprs(const ObTableCtx &ctx,
                                   common::ObIArray<sql::ObRawExpr*> &access_exprs);
   static int generate_output_exprs(const ObTableCtx &ctx,
@@ -371,7 +372,8 @@ private:
                                    ObIAllocator &allocator,
                                    sql::ObDASScanCtDef &das_tsc_ctdef);
   static int generate_table_param(const ObTableCtx &ctx,
-                                  sql::ObDASScanCtDef &das_tsc_ctdef);
+                                  sql::ObDASScanCtDef &das_tsc_ctdef,
+                                  const bool query_cs_replica = false);
   static OB_INLINE bool is_in_array(const common::ObIArray<sql::ObRawExpr*> &array,
                                     const sql::ObRawExpr *expr)
   {

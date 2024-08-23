@@ -1273,8 +1273,6 @@ private:
 
 void get_addr_by_proxy_sessid(const uint64_t session_id, ObAddr &addr);
 
-const char *replica_type_to_str(const ObReplicaType &type);
-
 int ob_atoll(const char *str, int64_t &res);
 int ob_strtoll(const char *str, char *&endptr, int64_t &res);
 int ob_strtoull(const char *str, char *&endptr, uint64_t &res);

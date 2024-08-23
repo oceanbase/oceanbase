@@ -784,6 +784,20 @@ int ObTableCtx::adjust_entity()
   return ret;
 }
 
+int ObTableCtx::check_is_cs_replica_query(bool &is_cs_replica_query) const
+{
+  int ret = OB_SUCCESS;
+  is_cs_replica_query = false;
+  if (ObRoutePolicyType::INVALID_POLICY == loc_meta_.route_policy_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid route policy", K(ret));
+  } else {
+    is_cs_replica_query = ObRoutePolicyType::COLUMN_STORE_ONLY == loc_meta_.route_policy_;
+  }
+  LOG_TRACE("[CS-Replica] check cs replica query", K(ret), K(is_cs_replica_query), K_(loc_meta));
+  return ret;
+}
+
 bool ObTableCtx::has_exist_in_columns(const ObIArray<ObString> &columns,
                                       const ObString &name,
                                       int64_t *idx /* =nullptr */) const

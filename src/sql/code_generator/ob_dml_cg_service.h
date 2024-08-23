@@ -125,10 +125,10 @@ private:
                                        ObTableID index_tid,
                                        ObDASUpdCtDef &das_upd_ctdef,
                                        const IndexDMLInfo &index_dml_info,
+                                       const ObIArray<uint64_t> &upd_cids,
                                        bool is_primary_index,
                                        bool &need_all_columns,
                                        ObIArray<uint64_t> &minimal_column_ids);
-
 
   int append_upd_old_row_cid(ObLogicalOperator &op,
                              ObSchemaGetterGuard *schema_guard,
@@ -141,7 +141,7 @@ private:
   int check_upd_need_all_columns(ObLogDelUpd &op,
                                  ObSchemaGetterGuard *schema_guard,
                                  const ObTableSchema *table_schema,
-                                 const IndexDMLInfo &index_dml_info,
+                                 const ObIArray<uint64_t> &upd_cids,
                                  bool is_primary_index,
                                  bool &need_all_columns);
 
@@ -160,7 +160,7 @@ private:
 
   int check_has_upd_rowkey(ObLogicalOperator &op,
                            const ObTableSchema *table_schema,
-                           const IndexDMLInfo &index_dml_info,
+                           const ObIArray<uint64_t> &upd_cids,
                            bool &upd_rowkey);
 
   int append_udt_hidden_column_id(const ObTableSchema *table_schema,
@@ -170,7 +170,7 @@ private:
 
   int check_unique_key_is_updated(ObSchemaGetterGuard *schema_guard,
                                   const ObTableSchema *table_schema,
-                                  const IndexDMLInfo &index_dml_info,
+                                  const ObIArray<uint64_t> &upd_cids,
                                   bool &is_updated);
 
   int append_time_type_column_id(const ObTableSchema *table_schema,

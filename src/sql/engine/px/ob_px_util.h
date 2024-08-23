@@ -616,7 +616,8 @@ class ObPxErrorUtil
 public:
   static inline void update_qc_error_code(int &current_error_code,
                                            const int new_error_code,
-                                           const ObPxUserErrorMsg &from)
+                                           const ObPxUserErrorMsg &from,
+                                           const common::ObAddr &exec_addr)
   {
     int ret = OB_SUCCESS;
     // **replace** error code & error msg
@@ -626,6 +627,8 @@ public:
            OB_GOT_SIGNAL_ABORTING == current_error_code) &&
            OB_SUCCESS != new_error_code) {
         current_error_code = new_error_code;
+        SQL_LOG(WARN, "QC update the error code. Please visit the corresponding address for more details.",
+            K(new_error_code), K(exec_addr));
         FORWARD_USER_ERROR(new_error_code, from.msg_);
       }
     }

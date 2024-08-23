@@ -17,10 +17,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "observer/table_load/ob_table_load_client_service.h"
 #include "observer/table_load/ob_table_load_client_task.h"
-#include "observer/table_load/ob_table_load_exec_ctx.h"
-#include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_service.h"
-#include "sql/resolver/dml/ob_hint.h"
 
 namespace oceanbase
 {
@@ -37,7 +34,7 @@ using namespace table;
 int ObTableDirectLoadBeginExecutor::check_args()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(arg_.table_name_.empty() || arg_.parallel_ <= 0 ||
+  if (OB_UNLIKELY(arg_.table_name_.empty() || arg_.parallel_ <= 0 || arg_.max_error_row_count_ < 0 ||
                   arg_.dup_action_ == ObLoadDupActionType::LOAD_INVALID_MODE ||
                   arg_.timeout_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -64,8 +61,8 @@ int ObTableDirectLoadBeginExecutor::process()
   ObTableLoadClientTask *client_task = nullptr;
   if (OB_FAIL(ObTableLoadService::check_tenant())) {
     LOG_WARN("fail to check tenant", KR(ret));
-  } else if (OB_FAIL(resolve_param(param))) {
-    LOG_WARN("fail to resolve param", KR(ret));
+  } else if (OB_FAIL(init_param(param))) {
+    LOG_WARN("fail to init param", KR(ret));
   } else if (OB_FAIL(ObTableLoadClientService::alloc_task(client_task))) {
     LOG_WARN("fail to alloc client task", KR(ret));
   } else if (OB_FAIL(client_task->init(param))) {
@@ -80,6 +77,7 @@ int ObTableDirectLoadBeginExecutor::process()
     ObTableLoadClientStatus client_status = ObTableLoadClientStatus::MAX_STATUS;
     int client_error_code = OB_SUCCESS;
     while (OB_SUCC(ret) && ObTableLoadClientStatus::RUNNING != client_status) {
+      client_task->heart_beat(); // 保持心跳
       if (OB_UNLIKELY(THIS_WORKER.is_timeout())) {
         ret = OB_TIMEOUT;
         LOG_WARN("worker timeout", KR(ret));
@@ -94,7 +92,8 @@ int ObTableDirectLoadBeginExecutor::process()
             break;
           case ObTableLoadClientStatus::ERROR:
           case ObTableLoadClientStatus::ABORT:
-            ret = OB_SUCCESS == client_error_code ? OB_CANCELED : client_error_code;
+            ret = client_error_code;
+            LOG_WARN("client status error", KR(ret), K(client_status), K(client_error_code));
             break;
           default:
             ret = OB_ERR_UNEXPECTED;
@@ -107,8 +106,8 @@ int ObTableDirectLoadBeginExecutor::process()
 
   // fill res
   if (OB_SUCC(ret)) {
-    res_.table_id_ = client_task->param_.get_table_id();
-    res_.task_id_ = client_task->task_id_;
+    res_.table_id_ = client_task->get_table_id();
+    res_.task_id_ = client_task->get_task_id();
     client_task->get_status(res_.status_, res_.error_code_);
   }
   if (nullptr != client_task) {
@@ -118,64 +117,23 @@ int ObTableDirectLoadBeginExecutor::process()
   return ret;
 }
 
-int ObTableDirectLoadBeginExecutor::resolve_param(ObTableLoadClientTaskParam &param)
+int ObTableDirectLoadBeginExecutor::init_param(ObTableLoadClientTaskParam &param)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = ctx_.get_tenant_id();
-  const uint64_t database_id = ctx_.get_database_id();
-  uint64_t table_id = 0;
-  ObLoadDupActionType dup_action = arg_.dup_action_;
-  ObDirectLoadMethod::Type method = ObDirectLoadMethod::INVALID_METHOD;
-  ObDirectLoadInsertMode::Type insert_mode = ObDirectLoadInsertMode::INVALID_INSERT_MODE;
   param.reset();
-  if (OB_FAIL(ObTableLoadSchema::get_table_id(tenant_id, database_id, arg_.table_name_,
-                                                     table_id))) {
-    LOG_WARN("fail to get table id", KR(ret), K(tenant_id), K(database_id), K_(arg));
-  } else if (arg_.load_method_.empty()) {
-    method = ObDirectLoadMethod::FULL;
-    insert_mode = ObDirectLoadInsertMode::NORMAL;
-  } else {
-    ObDirectLoadHint::LoadMethod load_method = ObDirectLoadHint::get_load_method_value(arg_.load_method_);
-    switch (load_method) {
-      case ObDirectLoadHint::FULL:
-        method = ObDirectLoadMethod::FULL;
-        insert_mode = ObDirectLoadInsertMode::NORMAL;
-        break;
-      case ObDirectLoadHint::INC:
-        method = ObDirectLoadMethod::INCREMENTAL;
-        insert_mode = ObDirectLoadInsertMode::NORMAL;
-        break;
-      case ObDirectLoadHint::INC_REPLACE:
-        if (OB_UNLIKELY(ObLoadDupActionType::LOAD_STOP_ON_DUP != dup_action)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("replace or ignore for inc_replace load method not supported", KR(ret),
-                   K(arg_.load_method_), K(arg_.dup_action_));
-        } else {
-          dup_action = ObLoadDupActionType::LOAD_REPLACE; //rewrite dup action
-          method = ObDirectLoadMethod::INCREMENTAL;
-          insert_mode = ObDirectLoadInsertMode::INC_REPLACE;
-        }
-        break;
-      default:
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid load method", KR(ret), K(arg_.load_method_));
-        break;
-    }
-  }
-  if (OB_SUCC(ret)) {
-    param.set_client_addr(ctx_.get_user_client_addr());
-    param.set_tenant_id(tenant_id);
-    param.set_user_id(ctx_.get_user_id());
-    param.set_database_id(database_id);
-    param.set_table_id(table_id);
-    param.set_parallel(arg_.parallel_);
-    param.set_max_error_row_count(arg_.max_error_row_count_);
-    param.set_dup_action(dup_action);
-    param.set_timeout_us(arg_.timeout_);
-    param.set_heartbeat_timeout_us(arg_.heartbeat_timeout_);
-    param.set_method(method);
-    param.set_insert_mode(insert_mode);
-  }
+  OX(param.set_task_id(ObTableLoadClientService::generate_task_id()));
+  OX(param.set_client_addr(ctx_.get_user_client_addr()));
+  OX(param.set_tenant_id(ctx_.get_tenant_id()));
+  OX(param.set_user_id(ctx_.get_user_id()));
+  OX(param.set_database_id(ctx_.get_database_id()));
+  OZ(param.set_table_name(arg_.table_name_));
+  OX(param.set_parallel(arg_.parallel_));
+  OX(param.set_max_error_row_count(arg_.max_error_row_count_));
+  OX(param.set_dup_action(arg_.dup_action_));
+  OX(param.set_timeout_us(arg_.timeout_));
+  OX(param.set_heartbeat_timeout_us(arg_.heartbeat_timeout_));
+  OZ(param.set_load_method(arg_.load_method_));
+  OZ(param.set_column_names(arg_.column_names_));
   return ret;
 }
 
@@ -196,9 +154,23 @@ int ObTableDirectLoadCommitExecutor::process()
   int ret = OB_SUCCESS;
   LOG_INFO("table direct load commit", K_(arg));
   ObTableLoadClientTask *client_task = nullptr;
+  ObTableLoadClientTaskBrief *client_task_brief = nullptr;
   ObTableLoadUniqueKey key(arg_.table_id_, arg_.task_id_);
   if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
-    LOG_WARN("fail to get client task", KR(ret), K(key));
+    if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+      LOG_WARN("fail to get client task", KR(ret), K(key));
+    } else {
+      // 处理重试场景
+      ret = OB_SUCCESS;
+      if (OB_FAIL(ObTableLoadClientService::get_task_brief(key, client_task_brief))) {
+        LOG_WARN("fail to get client task brief", KR(ret), K(key));
+      } else if (ObTableLoadClientStatus::COMMIT == client_task_brief->client_status_) {
+        LOG_INFO("client task is commit", KR(ret));
+      } else {
+        ret = client_task_brief->error_code_;
+        LOG_WARN("client task is failed", KR(ret), KPC(client_task_brief));
+      }
+    }
   } else if (OB_FAIL(client_task->commit())) {
     LOG_WARN("fail to commit client task", KR(ret), K(key));
   }
@@ -264,9 +236,7 @@ int ObTableDirectLoadGetStatusExecutor::process()
     } else {
       ret = OB_SUCCESS;
       if (OB_FAIL(ObTableLoadClientService::get_task_brief(key, client_task_brief))) {
-        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-          LOG_WARN("fail to get client task brief", KR(ret), K(key));
-        }
+        LOG_WARN("fail to get client task brief", KR(ret), K(key));
       } else {
         res_.status_ = client_task_brief->client_status_;
         res_.error_code_ = client_task_brief->error_code_;
@@ -374,7 +344,7 @@ int ObTableDirectLoadHeartBeatExecutor::process()
   if (OB_FAIL(ObTableLoadClientService::get_task(key, client_task))) {
     LOG_WARN("fail to get client task", KR(ret), K(key));
   } else {
-    client_task->get_exec_ctx()->last_heartbeat_time_ = ObTimeUtil::current_time();
+    client_task->heart_beat();
     client_task->get_status(res_.status_, res_.error_code_);
   }
   if (nullptr != client_task) {

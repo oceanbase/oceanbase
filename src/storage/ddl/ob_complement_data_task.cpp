@@ -2059,7 +2059,7 @@ int ObLocalScan::construct_access_param(
   } else if (!has_all_cg) {
     for (int64_t i = 0; i < col_params_.count(); i++) {
       int32_t tmp_cg_idx = -1;
-      if (OB_FAIL(data_table_schema.get_column_group_index(*col_params_.at(i), tmp_cg_idx))) {
+      if (OB_FAIL(data_table_schema.get_column_group_index(*col_params_.at(i), false /*need_calculate_cg_idx*/, tmp_cg_idx))) {
         LOG_WARN("fail to get column group idx", K(ret), K(data_table_schema));
       } else if (OB_FAIL(cg_idxs.push_back(tmp_cg_idx))) {
         LOG_WARN("fail to push back cg idx", K(ret));

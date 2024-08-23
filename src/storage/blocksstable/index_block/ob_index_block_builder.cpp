@@ -170,11 +170,11 @@ ObSSTableMergeRes::ObSSTableMergeRes()
     master_key_id_(0),
     nested_offset_(0),
     nested_size_(0),
-    table_flag_(),
+    table_backup_flag_(),
     root_row_store_type_(ObRowStoreType::MAX_ROW_STORE)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-  table_flag_.clear();
+  table_backup_flag_.clear();
   if (share::is_reserve_mode()) {
     ObMemAttr attr(MTL_ID(), "SSTMrgeResArr", ObCtxIds::MERGE_RESERVE_CTX_ID);
     data_block_ids_.set_attr(attr);
@@ -225,7 +225,7 @@ void ObSSTableMergeRes::reset()
   master_key_id_ = 0;
   nested_offset_ = 0;
   nested_size_ = 0;
-  table_flag_.clear();
+  table_backup_flag_.clear();
   root_row_store_type_ = ObRowStoreType::MAX_ROW_STORE;
 }
 
@@ -239,7 +239,7 @@ bool ObSSTableMergeRes::is_valid() const
       && data_column_cnt_ > 0
       && nested_offset_ >= 0
       && nested_size_ >= 0
-      && table_flag_.is_valid()
+      && table_backup_flag_.is_valid()
       && root_row_store_type_ < ObRowStoreType::MAX_ROW_STORE;
 }
 
@@ -259,7 +259,7 @@ int ObSSTableMergeRes::assign(const ObSSTableMergeRes &src)
     row_count_ = src.row_count_;
     max_merged_trans_version_ = src.max_merged_trans_version_;
     contain_uncommitted_row_ = src.contain_uncommitted_row_;
-    table_flag_ = src.table_flag_;
+    table_backup_flag_ = src.table_backup_flag_;
     occupy_size_ = src.occupy_size_;
     original_size_ = src.original_size_;
     data_checksum_ = src.data_checksum_;
@@ -327,27 +327,27 @@ int ObSSTableMergeRes::fill_column_checksum_for_empty_major(
 
 void ObSSTableMergeRes::set_table_flag_with_macro_id_array()
 {
-  table_flag_.set_no_backup();
-  table_flag_.set_no_local();
+  table_backup_flag_.set_no_backup();
+  table_backup_flag_.set_no_local();
   for (int64_t i = 0; i < other_block_ids_.count(); ++i) {
     const MacroBlockId &block_id = other_block_ids_.at(i);
     if (block_id.is_local_id()) {
-      table_flag_.set_has_local();
+      table_backup_flag_.set_has_local();
     } else if (block_id.is_backup_id()) {
-      table_flag_.set_has_backup();
+      table_backup_flag_.set_has_backup();
     }
-    if (table_flag_.has_backup() && table_flag_.has_local()) {
+    if (table_backup_flag_.has_backup() && table_backup_flag_.has_local()) {
       break;
     }
   }
   for (int64_t j = 0; j < data_block_ids_.count(); ++j) {
     const MacroBlockId &block_id = data_block_ids_.at(j);
     if (block_id.is_local_id()) {
-      table_flag_.set_has_local();
+      table_backup_flag_.set_has_local();
     } else if (block_id.is_backup_id()) {
-      table_flag_.set_has_backup();
+      table_backup_flag_.set_has_backup();
     }
-    if (table_flag_.has_backup() && table_flag_.has_local()) {
+    if (table_backup_flag_.has_backup() && table_backup_flag_.has_local()) {
       break;
     }
   }
@@ -772,7 +772,7 @@ int ObSSTableIndexBuilder::merge_index_tree(ObSSTableMergeRes &res)
       case REBUILD_BACKUP_TASK:
       case REBUILD_BACKUP_DDL_TASK:
         for (int64_t i = 0; i < roots_.count(); ++i) {
-          if (roots_[i]->meta_block_info_.in_disk()) {
+          if (roots_[i]->index_tree_info_.in_disk()) {
             all_in_mem = false;
             break;
           }

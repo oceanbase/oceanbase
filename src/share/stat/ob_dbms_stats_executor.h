@@ -202,6 +202,13 @@ private:
                                     char *&svr_ip,
                                     int32_t &svr_port);
 
+  static int adjsut_async_gather_param(const PartitionIdBlockMap &partition_id_block_map,
+                                       ObTableStatParam &param,
+                                       bool &need_split_part);
+
+  static bool is_async_gather_partition_id(const int64_t partition_id,
+                                           const ObIArray<int64_t> *async_partition_ids);
+
 
 };
 

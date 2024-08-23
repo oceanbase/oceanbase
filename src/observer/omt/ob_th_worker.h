@@ -74,8 +74,6 @@ public:
     set_run_wrapper(MTL_CTX());
   }
 
-  OB_INLINE void set_group(ObResourceGroup *group) { group_ = group; }
-
   void worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t &worker_level);
   void run(int64_t idx) override;
 
@@ -87,8 +85,6 @@ public:
 
   OB_INLINE bool large_query() const { return large_query_; }
   OB_INLINE void set_large_query(bool v=true) { large_query_ = v; }
-
-  OB_INLINE bool is_group_worker() const { return OB_NOT_NULL(group_); }
   OB_INLINE bool is_level_worker() const { return get_worker_level() > 0; }
   OB_INLINE void set_priority_limit(uint8_t limit) { priority_limit_ = limit; }
   OB_INLINE bool is_high_priority() const { return priority_limit_ == QQ_HIGH; }
@@ -100,7 +96,6 @@ public:
   OB_INLINE int64_t get_query_start_time() const { return query_start_time_; }
   OB_INLINE int64_t get_query_enqueue_time() const { return query_enqueue_time_; }
   OB_INLINE ObTenant* get_tenant() { return tenant_; }
-  OB_INLINE ObResourceGroup* get_group() { return group_; }
   OB_INLINE bool is_lq_yield() const { return is_lq_yield_; }
   OB_INLINE void set_lq_yield(bool v=true) { is_lq_yield_ = v; }
   OB_INLINE int64_t get_last_wakeup_ts() { return last_wakeup_ts_; }
@@ -118,7 +113,6 @@ private:
   bool is_inited_;
 
   ObTenant *tenant_;
-  ObResourceGroup *group_;
   common::ObThreadCond run_cond_;
 
   bool pause_flag_;
@@ -134,8 +128,6 @@ private:
   bool can_retry_;
   // if upper scheduler support retry, need this request retry?
   bool need_retry_;
-
-  bool has_add_to_cgroup_;
 
   int64_t last_wakeup_ts_;
   int64_t* blocking_ts_;
@@ -156,7 +148,6 @@ inline void ObThWorker::reset()
   query_enqueue_time_ = 0;
   can_retry_ = true;
   need_retry_ = false;
-  has_add_to_cgroup_ = false;
   last_wakeup_ts_ = 0;
 }
 
@@ -168,7 +159,7 @@ group_id: set worker's group_id
 level: set worker's level, in ObResourceGroup level = INT32_MAX, in ObTenant level = 0,
 group: set worker's group, in ObResourceGroup level = this, in ObTenant level = nullptr,
 */
-int create_worker(ObThWorker* &worker, ObTenant *tenant, int32_t group_id,
+int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
                   int32_t level = INT32_MAX, bool force = false, ObResourceGroup *group = nullptr);
                     // defalut level=INT32_MAX, group=nullptr
 int destroy_worker(ObThWorker *worker);

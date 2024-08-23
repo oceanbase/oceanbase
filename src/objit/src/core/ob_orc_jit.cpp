@@ -35,7 +35,6 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Mangler.h"
 #include "llvm/IR/Verifier.h"
-#include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/AsmParser/Parser.h"
@@ -56,94 +55,139 @@ namespace jit
 namespace core
 {
 
-#ifndef ORC2
+DenseMap<StringRef, JITTargetAddress> ObJitGlobalSymbolGenerator::symbol_table;
+
 ObOrcJit::ObOrcJit(common::ObIAllocator &Allocator)
   : DebugBuf(nullptr),
     DebugLen(0),
     JITAllocator(),
     NotifyLoaded(Allocator, DebugBuf, DebugLen, SoObject),
-    TheContext(),
-    ObResolver(createLegacyLookupResolver(
-             ObES,
-             [this](StringRef Name) { return findMangledSymbol(std::string(Name)); },
-             [](Error Err) { cantFail(std::move(Err), "lookupFlags failed"); })),
     ObTM(EngineBuilder().selectTarget()),
     ObDL(ObTM->createDataLayout()),
-    ObObjectLayer(AcknowledgeORCv1Deprecation,
-                  ObES,
-                  [this](ObVModuleKey) {
-                    return ObObjLayerT::Resources{
-                      std::make_shared<ObJitMemoryManager>(JITAllocator), ObResolver}; },
-                  NotifyLoaded),
-    ObCompileLayer(AcknowledgeORCv1Deprecation, ObObjectLayer, SimpleCompiler(*ObTM))
+    ObEngineBuilder(),
+    ObJitEngine()
 { }
 
-ObVModuleKey ObOrcJit::addModule(std::unique_ptr<Module> M)
+int ObOrcJit::init()
 {
-  auto Key = ObES.allocateVModule();
-  cantFail(ObCompileLayer.addModule(Key, std::move(M)));
-  ObModuleKeys.push_back(Key);
-  return Key;
+  int ret = OB_SUCCESS;
+
+    ObEngineBuilder.setObjectLinkingLayerCreator(
+    [this](ExecutionSession &ES, const Triple &TT) {
+      auto ObjLinkingLayer =
+          std::make_unique<RTDyldObjectLinkingLayer>(
+            ES,
+            [&]() {
+              return std::make_unique<ObJitMemoryManager>(JITAllocator);
+          });
+
+#ifndef NDEBUG
+      ObjLinkingLayer->registerJITEventListener(
+          *JITEventListener::createGDBRegistrationListener());
+#endif // NDEBUG
+      ObjLinkingLayer->registerJITEventListener(NotifyLoaded);
+      return ObjLinkingLayer;
+    });
+
+    auto tm_builder_wrapper = JITTargetMachineBuilder::detectHost();
+
+    if (!tm_builder_wrapper) {
+      Error err = tm_builder_wrapper.takeError();
+      std::string msg = toString(std::move(err));
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get target machine", K(msg.c_str()));
+    } else {
+      ObEngineBuilder.setJITTargetMachineBuilder(*tm_builder_wrapper);
+    }
+
+  return ret;
 }
 
-ObJITSymbol ObOrcJit::lookup(std::string Name)
+int ObOrcJit::addModule(std::unique_ptr<Module> M, std::unique_ptr<ObLLVMContext> TheContext)
 {
-  return findMangledSymbol(mangle(Name));
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(create_jit_engine())) {
+    LOG_WARN("failed to create jit engine", K(ret));
+  } else if (OB_ISNULL(ObJitEngine)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL jit engine", K(ret), K(lbt()));
+  } else {
+    Error err = ObJitEngine->addIRModule(ThreadSafeModule{std::move(M), std::move(TheContext)});
+
+    if (err) {
+      std::string msg = toString(std::move(err));
+
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to add module to jit engine",
+               K(ret), K(msg.c_str()));
+    }
+  }
+
+  return ret;
 }
 
-uint64_t ObOrcJit::get_function_address(const std::string Name)
+int ObOrcJit::lookup(const std::string &name, ObJITSymbol &symbol)
 {
-  return static_cast<uint64_t>(cantFail(lookup(Name).getAddress()));
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(ObJitEngine)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL jit engine", K(ret), K(lbt()));
+  } else {
+    auto value = ObJitEngine->lookup(name);
+
+    if (!value) {
+      Error err = value.takeError();
+
+      if (err.isA<SymbolsNotFound>()) {
+        ret = OB_ENTRY_NOT_EXIST;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+      }
+
+      std::string msg = toString(std::move(err));
+      LOG_WARN("failed to lookup symbol in jit engine",
+        K(ret),
+        "name", name.c_str(),
+        "msg", msg.c_str());
+    } else {
+      symbol = *value;
+    }
+  }
+
+  return ret;
 }
 
-#else
-static ExitOnError ExitOnErr;
-
-ObOrcJit::ObOrcJit(ObIAllocator &Allocator, JITTargetMachineBuilder JTMB, ObDataLayout ObDL)
-  : DebugBuf(nullptr),
-    DebugLen(0),
-    JITAllocator(),
-    NotifyLoaded(Allocator, DebugBuf, DebugLen),
-    ObObjectLayer(ObES,
-                [this]() { return std::make_unique<ObJitMemoryManager>(JITAllocator); }),
-    ObCompileLayer(ObES,
-                 ObObjectLayer,
-                 std::make_unique<ConcurrentIRCompiler>(std::move(JTMB))),
-    ObDL(std::move(ObDL)),
-    Mangle(ObES, this->ObDL),
-    Ctx(std::make_unique<ObLLVMContext>()),
-    MainJD(ObES.createBareJITDylib("<main>"))
+int ObOrcJit::get_function_address(const std::string &name, uint64_t &addr)
 {
-  /*
-  MainJD.define(absoluteSymbols({
-    { Mangle("eh_personality"), pointerToJITTargetAddress(&ObPLEH::eh_personality) }
-  }));
-  */
-  MainJD.addGenerator(
-        cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(
-            ObDL.getGlobalPrefix())));
+  int ret = OB_SUCCESS;
+
+  ObJITSymbol sym = nullptr;
+
+  if (OB_FAIL(lookup(name, sym))) {
+    LOG_WARN("failed to lookup symbol addr", K(name.c_str()));
+  } else {
+    auto value = sym.getAddress();
+
+    if (!value) {
+      Error err = value.takeError();
+      std::string msg = toString(std::move(err));
+
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get symbol address",
+               K(ret),
+               "name", name.c_str(),
+               "msg", msg.c_str());
+    } else {
+      addr = static_cast<uint64_t>(*value);
+    }
+  }
+
+  return ret;
 }
 
-Error ObOrcJit::addModule(std::unique_ptr<Module> M)
-{
-  return ObCompileLayer.add(MainJD, ThreadSafeModule(std::move(M), Ctx));
-}
-
-Expected<JITEvaluatedSymbol> ObOrcJit::lookup(StringRef Name)
-{
-  return ObES.lookup({&MainJD}, Mangle(Name.str()));
-}
-
-uint64_t ObOrcJit::get_function_address(const std::string Name)
-{
-  std::cerr << "get_function_address : " << Name << std::endl;
-  auto Sym = ExitOnErr(lookup(Name));
-  std::cerr << "get_function_address finish : " << Name << std::endl;
-  return static_cast<uint64_t>(Sym.getAddress());
-}
-#endif
-
-void ObNotifyLoaded::operator()(
+void ObNotifyLoaded::notifyObjectLoaded(
   ObVModuleKey Key,
   const object::ObjectFile &Obj,
   const RuntimeDyld::LoadedObjectInfo &Info)
@@ -169,13 +213,29 @@ void ObNotifyLoaded::operator()(
   // }
 }
 
-void ObOrcJit::add_compiled_object(size_t length, const char *ptr)
+int ObOrcJit::add_compiled_object(size_t length, const char *ptr)
 {
-  ObVModuleKey Key = ObES.allocateVModule();
+  int ret = OB_SUCCESS;
 
-  cantFail(ObObjectLayer.addObject(
-      Key, MemoryBuffer::getMemBuffer(StringRef(ptr, length), "", false)));
-  ObModuleKeys.push_back(Key);
+  if (OB_FAIL(create_jit_engine())) {
+    LOG_WARN("failed to create jit engine", K(ret));
+  } else if (OB_ISNULL(ObJitEngine)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL jit engine", K(ret), K(lbt()));
+  } else {
+    Error err =ObJitEngine->addObjectFile(
+                MemoryBuffer::getMemBuffer(StringRef(ptr, length), "", false));
+
+    if (err) {
+      std::string msg = toString(std::move(err));
+
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to add compile result to jit engine",
+               K(ret), K(msg.c_str()), K(length), K(ptr));
+    }
+  }
+
+  return ret;
 }
 
 int ObOrcJit::set_optimize_level(ObPLOptLevel level)
@@ -187,14 +247,53 @@ int ObOrcJit::set_optimize_level(ObPLOptLevel level)
     LOG_WARN("unexpected PLSQL_OPTIMIZE_LEVEL", K(ret), K(level), K(lbt()));
   }
 
-  if (OB_SUCC(ret) && OB_ISNULL(ObTM)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected NULL TM", K(ret), K(ObTM.get()), K(lbt()));
+  if (OB_SUCC(ret) && level == ObPLOptLevel::O0) {
+    auto &tm_builder = ObEngineBuilder.getJITTargetMachineBuilder();
+    if (!tm_builder.hasValue()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL JITTargetMachineBuilder", K(ret), K(lbt()));
+    } else {
+      auto &builder = *tm_builder;
+      builder.setCodeGenOptLevel(CodeGenOpt::Level::None);
+      builder.getOptions().EnableFastISel = true;
+    }
   }
 
-  if (OB_SUCC(ret) && level == ObPLOptLevel::O0) {
-    ObTM->setOptLevel(CodeGenOpt::Level::None);
-    ObTM->setFastISel(true);
+  return ret;
+}
+
+int ObOrcJit::create_jit_engine()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(ObJitEngine)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NOT NULL jit engine", K(ret), K(lbt()));
+  } else {
+    std::unique_ptr<ObJitGlobalSymbolGenerator> symbol_generator = nullptr;
+
+    auto engine_wrapper = ObEngineBuilder.create();
+
+    if (!engine_wrapper) {
+      Error err = engine_wrapper.takeError();
+      std::string msg = toString(std::move(err));
+
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to build LLVM JIT engine", K(msg.c_str()));
+    } else {
+      ObJitEngine = std::move(*engine_wrapper);
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_ISNULL(ObJitEngine)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected NULL jit engine", K(ret));
+    } else if (OB_FAIL(ob_jit_make_unique(symbol_generator))) {
+      LOG_WARN("failed to make ObJitGlobalSymbolGenerator unique_ptr", K(ret));
+    } else {
+      ObJitEngine->getMainJITDylib().addGenerator(std::move(symbol_generator));
+    }
   }
 
   return ret;

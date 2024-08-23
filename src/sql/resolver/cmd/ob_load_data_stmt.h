@@ -37,14 +37,6 @@ enum class ObLoadFileLocation {
   OSS,
 };
 
-enum class ObLoadCompressionFormat
-{
-  NONE,
-  GZIP,
-  DEFLATE,
-  ZSTD,
-};
-
 class ObLoadFileIterator
 {
 public:

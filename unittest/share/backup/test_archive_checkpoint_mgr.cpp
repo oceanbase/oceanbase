@@ -245,17 +245,17 @@ int TestArchiveCheckpointMgr::test_write_and_read_checkpoint(const ObStorageType
     uint64_t checkpoint = 0;
     if (OB_FAIL(mgr.init(root_path, OB_STR_CHECKPOINT_FILE_NAME, ObBackupFileSuffix::ARCHIVE, &storage_info_))) {
       LOG_WARN("failed to init checkpoint mgr", K(ret), K(root_path));
-    } else if (OB_FAIL(mgr.write(10))) {
+    } else if (OB_FAIL(mgr.write(10, 9))) {
       LOG_WARN("failed to write files", K(ret), K(root_path));
-    } else if (OB_FAIL(mgr.write(9))) {
+    } else if (OB_FAIL(mgr.write(9, 8))) {
       LOG_WARN("failed to write files", K(ret), K(root_path));
     } else if (OB_FAIL(mgr.read(checkpoint))) {
       LOG_WARN("failed to read files", K(ret));
     } else if (checkpoint != 10) {
       ret = OB_ERROR;
-    } else if (OB_FAIL(mgr.write(100))) {
+    } else if (OB_FAIL(mgr.write(100, 99))) {
       LOG_WARN("failed to write files", K(ret), K(root_path));
-    } else if (OB_FAIL(mgr.write(50))) {
+    } else if (OB_FAIL(mgr.write(50, 49))) {
       LOG_WARN("failed to write files", K(ret), K(root_path));
     } else if (OB_FAIL(mgr.read(checkpoint))) {
       LOG_WARN("failed to read files", K(ret));

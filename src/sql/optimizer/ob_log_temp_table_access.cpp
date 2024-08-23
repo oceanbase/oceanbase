@@ -98,6 +98,7 @@ int ObLogTempTableAccess::do_re_est_cost(EstimateCostInfo &param, double &card, 
   cost = get_cost();
   double selectivity = 1.0;
   const int64_t parallel = param.need_parallel_;
+  get_plan()->get_selectivity_ctx().init_op_ctx(NULL, -1);
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()),K(ret));

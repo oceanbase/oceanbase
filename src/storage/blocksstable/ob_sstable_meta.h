@@ -36,6 +36,14 @@ class ObTxContext final
 public:
   struct ObTxDesc final
   {
+    ObTxDesc()
+      : tx_id_(0),
+        row_count_(0)
+    {}
+    ObTxDesc(const int64_t tx_id, const int64_t row_count)
+      : tx_id_(tx_id),
+        row_count_(row_count)
+    {}
     int64_t tx_id_;
     int64_t row_count_;
     int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
@@ -140,7 +148,7 @@ public:
       K(ddl_scn_), K(filled_tx_scn_),
       K(contain_uncommitted_row_), K(status_), K_(root_row_store_type), K_(compressor_type),
       K_(encrypt_id), K_(master_key_id), K_(sstable_logic_seq), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(latest_row_store_type), K_(table_flag));
+      K_(latest_row_store_type), K_(table_backup_flag), K_(table_shared_flag));
 
 public:
   int32_t version_;
@@ -179,7 +187,10 @@ public:
   int16_t sstable_logic_seq_;
   common::ObRowStoreType latest_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
-  storage::ObTableFlag table_flag_;
+  storage::ObTableBackupFlag table_backup_flag_;  //cannot add backup flag to ObSSTableMetaChecker
+                                                  //quick restore with rebuild replace major will has same key sstable
+  storage::ObTableSharedFlag table_shared_flag_;
+  int64_t root_macro_seq_; // placeholder, will be used after palf branch merged
   //Add new variable need consider ObSSTableMetaChecker
 };
 
@@ -271,7 +282,7 @@ public:
   OB_INLINE int64_t get_progressive_merge_step() const { return basic_meta_.progressive_merge_step_; }
   OB_INLINE const ObRootBlockInfo &get_root_info() const { return data_root_info_; }
   OB_INLINE const ObSSTableMacroInfo &get_macro_info() const { return macro_info_; }
-  OB_INLINE const ObTableFlag &get_table_flag() const { return basic_meta_.table_flag_; }
+  OB_INLINE const ObTableBackupFlag &get_table_backup_flag() const { return basic_meta_.table_backup_flag_; }
   int load_root_block_data(common::ObArenaAllocator &allocator); //TODO:@jinzhu remove me after using kv cache.
   inline int transform_root_block_extra_buf(common::ObArenaAllocator &allocator)
   {

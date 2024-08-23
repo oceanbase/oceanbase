@@ -417,7 +417,7 @@ protected:
   // ************* memtable flag inner operator *************
 
 protected:
-  void resolve_left_boundary_for_active_memtable_();
+  int resolve_left_boundary_for_active_memtable_();
   int get_ls_current_right_boundary_(share::SCN &current_right_boundary);
   int set_memtable_mgr_(ObTabletMemtableMgr *mgr);
   int64_t inc_unsubmitted_cnt_();

@@ -29,10 +29,10 @@ struct ObExecFeedbackNode final
 public:
   ObExecFeedbackNode(int64_t op_id) : op_id_(op_id), output_row_count_(0),
       op_open_time_(INT64_MAX), op_close_time_(0), op_first_row_time_(INT64_MAX),
-      op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0) {}
+      op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0), pdml_op_write_rows_(0) {}
   ObExecFeedbackNode() : op_id_(OB_INVALID_ID), output_row_count_(0),
       op_open_time_(INT64_MAX), op_close_time_(0), op_first_row_time_(INT64_MAX),
-      op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0) {}
+      op_last_row_time_(0), db_time_(0),  block_time_(0), worker_count_(0), pdml_op_write_rows_(0) {}
   ~ObExecFeedbackNode() {}
   TO_STRING_KV(K_(op_id), K_(output_row_count), K_(op_open_time),
                K_(op_close_time), K_(op_first_row_time), K_(op_last_row_time),
@@ -47,6 +47,7 @@ public:
   int64_t db_time_;    // rdtsc cpu cycles spend on this op, include cpu instructions & io
   int64_t block_time_; // rdtsc cpu cycles wait for network, io etc
   int64_t worker_count_;
+  int64_t pdml_op_write_rows_;
 };
 
 class ObExecFeedbackInfo final

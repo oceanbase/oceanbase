@@ -640,7 +640,7 @@ int ObMLogBuilder::set_basic_infos(
     } else if (OB_FAIL(mlog_schema.set_table_name(mlog_table_name))) {
       LOG_WARN("failed to set table name", KR(ret), K(mlog_table_name));
     } else {
-      mlog_schema.set_table_mode(base_table_schema.get_table_mode_flag());
+      mlog_schema.set_table_mode_flag(ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME);
       mlog_schema.set_table_type(MATERIALIZED_VIEW_LOG);
       mlog_schema.set_index_status(ObIndexStatus::INDEX_STATUS_UNAVAILABLE);
       mlog_schema.set_duplicate_scope(base_table_schema.get_duplicate_scope());

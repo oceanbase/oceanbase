@@ -3826,14 +3826,15 @@ int ObDtlChannelUtil::get_sm_transmit_dtl_channel_set(
     ObAddr &dst_addr = ch_total_info.receive_exec_server_.exec_addrs_.at(0);
     bool is_local = true;
     int64_t chid = 0;
-    for (int64_t i = 0; i < transmit_task_cnt && OB_SUCC(ret); ++i) {
+    for (int64_t i = 0; i < receive_task_cnt && OB_SUCC(ret); ++i) {
       ObDtlChannelInfo ch_info;
       chid = ch_total_info.start_channel_id_ + receive_task_cnt * task_id + i;
       ObDtlChannelGroup::make_transmit_channel(ch_total_info.tenant_id_, dst_addr, chid, ch_info, is_local);
       OZ(ch_set.add_channel_info(ch_info));
     }
   }
-  LOG_DEBUG("get sm receive dtl channel set", K(sqc_id), K(task_id), K(ch_total_info), K(ch_set));
+  LOG_DEBUG("get sm receive dtl channel set", K(sqc_id), K(task_id), K(transmit_task_cnt),
+           K(receive_task_cnt), K(ch_total_info), K(ch_set));
   return ret;
 }
 

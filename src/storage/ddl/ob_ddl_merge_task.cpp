@@ -473,6 +473,8 @@ int ObDDLTableMergeTask::merge_full_direct_load_ddl_kvs(ObLSHandle &ls_handle, O
     if (OB_SUCC(ret) && merge_param_.is_commit_ && is_major_exist) {
       if (OB_FAIL(MTL(ObTabletTableUpdater*)->submit_tablet_update_task(merge_param_.ls_id_, merge_param_.tablet_id_))) {
         LOG_WARN("fail to submit tablet update task", K(ret), K(tenant_id), K(merge_param_));
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->release_ddl_kvs(SCN::max_scn()))) {
+        LOG_WARN("release all ddl kv failed", K(ret), K(ddl_param));
       } else if (OB_FAIL(tenant_direct_load_mgr->remove_tablet_direct_load(ObTabletDirectLoadMgrKey(merge_param_.tablet_id_, true)))) {
         if (OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
@@ -912,6 +914,13 @@ int ObTabletDDLUtil::update_ddl_table_store(
       table_store_param.ddl_info_.data_format_version_ = ddl_param.data_format_version_;
       table_store_param.ddl_info_.ddl_commit_scn_ = ddl_param.commit_scn_;
       table_store_param.ddl_info_.ddl_checkpoint_scn_ = sstable->is_ddl_dump_sstable() ? sstable->get_end_scn() : ddl_param.commit_scn_;
+      if (ddl_param.table_key_.is_ddl_dump_sstable()) {
+        // data is not complete, now update ddl table store only for reducing count of ddl dump sstable.
+        table_store_param.ddl_info_.ddl_table_type_ = ddl_param.table_key_.table_type_;
+      } else {
+        // data is complete, make ddl table type to major sstable instead of ddl dump sstable (mark ddl finished).
+        table_store_param.ddl_info_.ddl_table_type_ = ddl_param.table_key_.is_co_sstable() ? ObITable::COLUMN_ORIENTED_SSTABLE : ObITable::MAJOR_SSTABLE;
+      }
     } else { // incremental direct load
       table_store_param.clog_checkpoint_scn_ = sstable->get_end_scn();
       table_store_param.need_check_transfer_seq_ = true;

@@ -1345,6 +1345,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_transform_mv_rewrite.cpp
   rewrite/ob_union_find.cpp
   rewrite/ob_transform_decorrelate.cpp
+  rewrite/ob_transform_late_materialization.cpp
 )
 
 ob_set_subtarget(ob_sql session

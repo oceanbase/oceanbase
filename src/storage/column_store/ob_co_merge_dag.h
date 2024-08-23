@@ -322,6 +322,7 @@ private:
       ObCOMergeBatchExeDag *&dag,
       common::ObIArray<ObCOMergeBatchExeDag *> &exe_dag_array);
   int choose_merge_batch_size(const int64_t column_group_cnt);
+  int init_cg_schedule_status_for_row_store();
   int inner_schedule_finish_dag(ObIDag *parent_dag = nullptr);
   void try_update_merge_batch_size(const int64_t column_group_cnt);
   int inner_create_and_schedule_dags(ObIDag *parent_dag = nullptr);

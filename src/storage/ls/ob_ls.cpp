@@ -38,7 +38,7 @@
 #include "rootserver/ob_create_standby_from_net_actor.h"
 #include "rootserver/ob_heartbeat_service.h"
 #include "rootserver/ob_primary_ls_service.h"
-#include "rootserver/ob_recovery_ls_service.h"
+#include "rootserver/standby/ob_recovery_ls_service.h"
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
 #include "rootserver/ob_tenant_balance_service.h"
 #include "rootserver/restore/ob_restore_service.h"
@@ -84,6 +84,8 @@ using namespace rootserver;
 
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_LS_NOT_SEE_CS_REPLICA);
+
 using namespace checkpoint;
 using namespace mds;
 
@@ -123,6 +125,7 @@ int ObLS::init(const share::ObLSID &ls_id,
                const ObMigrationStatus &migration_status,
                const ObLSRestoreStatus &restore_status,
                const SCN &create_scn,
+               const ObLSStoreFormat &store_format,
                observer::ObIMetaReport *reporter)
 {
   int ret = OB_SUCCESS;
@@ -149,7 +152,8 @@ int ObLS::init(const share::ObLSID &ls_id,
                                    ls_id,
                                    migration_status,
                                    restore_status,
-                                   create_scn))) {
+                                   create_scn,
+                                   store_format))) {
     LOG_WARN("failed to init ls meta", K(ret), K(tenant_id), K(ls_id));
   } else {
     rs_reporter_ = reporter;
@@ -475,6 +479,42 @@ bool ObLS::is_restore_first_step() const
     bool_ret = restore_status.is_restore_first_step();
   }
   return bool_ret;
+}
+
+bool ObLS::is_cs_replica() const
+{
+  return ls_meta_.get_store_format().is_columnstore();
+}
+
+int ObLS::check_has_cs_replica(bool &has_cs_replica) const
+{
+  int ret = OB_SUCCESS;
+  has_cs_replica = false;
+  ObMemberList member_list;
+  GlobalLearnerList learner_list;
+  int64_t paxos_replica_number = 0;
+  if (OB_FAIL(get_paxos_member_list_and_learner_list(member_list, paxos_replica_number, learner_list))) {
+    LOG_WARN("fail to get member list and learner list", K(ret), K(ls_meta_.ls_id_));
+  } else {
+    for (int64_t i = 0; i < learner_list.get_member_number(); i++) {
+      const ObMember &learner = learner_list.get_learner(i);
+      if (learner.is_columnstore()) {
+        has_cs_replica = true;
+        break;
+      }
+    }
+  }
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (EN_LS_NOT_SEE_CS_REPLICA) {
+      has_cs_replica = false;
+      LOG_INFO("ERRSIM EN_LS_NOT_SEE_CS_REPLICA", K(ret), K(has_cs_replica));
+    }
+  }
+#endif
+
+  return ret;
 }
 
 int ObLS::start()
@@ -1858,10 +1898,15 @@ int ObLS::logstream_freeze(const int64_t trace_id, const bool is_sync, const int
     const int64_t abs_timeout_ts = (0 == input_abs_timeout_ts)
                                        ? ObClockGenerator::getClock() + ObFreezer::SYNC_FREEZE_DEFAULT_RETRY_TIME
                                        : input_abs_timeout_ts;
-    ret = logstream_freeze_task(trace_id, abs_timeout_ts);
+    ObLSHandle ls_handle;
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_meta_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      STORAGE_LOG(WARN, "get ls handle failed. stop async freeze task", KR(ret), K(ls_meta_.ls_id_));
+    } else {
+      ret = logstream_freeze_task(trace_id, abs_timeout_ts);
+    }
   } else {
     const bool is_ls_freeze = true;
-    (void)ls_freezer_.commit_an_async_freeze_task(trace_id, is_ls_freeze);
+    (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
   return ret;
 }
@@ -1963,14 +2008,10 @@ int ObLS::tablet_freeze(const int64_t trace_id,
       is_not_timeout = current_time < abs_timeout_ts;
     } while (is_retry_code && is_not_timeout);
   } else {
+    //Async tablet freeze. Must record tablet ids before submit task
+    const bool is_ls_freeze = false;
     (void)record_async_freeze_tablets_(tablet_ids, freeze_epoch);
-
-    if (ls_freezer_.is_async_tablet_freeze_task_running()) {
-      // do not need another async batch freeze task
-    } else {
-      const bool is_ls_freeze = false;
-      (void)ls_freezer_.commit_an_async_freeze_task(trace_id, is_ls_freeze);
-    }
+    (void)ls_freezer_.submit_an_async_freeze_task(trace_id, is_ls_freeze);
   }
   return ret;
 }

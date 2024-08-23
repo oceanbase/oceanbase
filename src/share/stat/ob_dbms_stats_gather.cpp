@@ -42,6 +42,8 @@ int ObDbmsStatsGather::gather_stats(ObExecContext &ctx,
     LOG_WARN("get unexpected error", K(ret), K(param.allocator_));
   } else if (OB_FAIL(init_opt_stats(*param.allocator_, param, opt_stats))) {
     LOG_WARN("failed to init opt stats", K(ret));
+  } else if (OB_FAIL(refine_sample_block_for_async_gather(opt_stats, const_cast<ObOptStatGatherParam&>(param)))) {
+    LOG_WARN("failed to refine sample block for async gather", K(ret));
   } else if (!opt_stats.empty()) {
     //1.firstly esimate basic stat
     ObBasicStatsEstimator basic_est(ctx, *param.allocator_);
@@ -244,6 +246,41 @@ int ObDbmsStatsGather::gather_index_stats(ObExecContext &ctx,
         } else if (OB_FAIL(all_index_stats.push_back(opt_stats.at(i).table_stat_))) {
           LOG_WARN("failed to append", K(ret));
         } else {/*do nothing*/}
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsGather::refine_sample_block_for_async_gather(const ObIArray<ObOptStat> &opt_stats,
+                                                            ObOptStatGatherParam &param)
+{
+  int ret = OB_SUCCESS;
+  if (param.is_async_gather_ && !param.sample_info_.is_specify_sample()) {
+    int64_t sstable_row_cnt = 0;
+    int64_t memtable_row_cnt = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < opt_stats.count(); ++i) {
+      if (OB_ISNULL(opt_stats.at(i).table_stat_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error", K(ret), K(opt_stats.at(i).table_stat_));
+      } else {
+        sstable_row_cnt += opt_stats.at(i).table_stat_->get_sstable_row_count();
+        memtable_row_cnt += opt_stats.at(i).table_stat_->get_memtable_row_count();
+      }
+    }
+    if (OB_UNLIKELY(opt_stats.count() > 1 &&
+                    sstable_row_cnt + memtable_row_cnt > DEFAULT_ASYNC_MAX_SCAN_ROWCOUNT)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected error", K(sstable_row_cnt), K(memtable_row_cnt), K(opt_stats), K(param));
+    } else if (opt_stats.count() == 1) {
+      if (param.async_full_table_size_ < sstable_row_cnt + memtable_row_cnt) {
+        double sample_ratio = 100.0;
+        sample_ratio = 1.0 * param.async_gather_sample_size_ / (sstable_row_cnt + memtable_row_cnt) * 100.0;
+        if (sample_ratio > 0.0 && sample_ratio < 100.0) {
+          param.sample_info_.set_percent(sample_ratio);
+          param.sample_info_.set_is_block_sample(true);
+        }
+        LOG_INFO("decide async gather stats need sample", K(param), K(opt_stats));
       }
     }
   }

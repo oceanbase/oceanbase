@@ -124,10 +124,10 @@ public:
   int64_t get_trx_timeout() const {
     return trx_timeout_;
   }
-  void set_consumer_group_id(const int64_t consumer_group_id) {
+  void set_consumer_group_id(const uint64_t consumer_group_id) {
     consumer_group_id_ = consumer_group_id;
   }
-  int64_t get_consumer_group_id() const {
+  uint64_t get_consumer_group_id() const {
     return consumer_group_id_;
   }
   inline int set_tz_info_wrap(const ObTimeZoneInfoWrap &other) { return tz_info_wrap_.deep_copy(other); }
@@ -184,7 +184,7 @@ private:
   bool is_load_data_exec_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
   bool use_external_session_;
-  int64_t consumer_group_id_;
+  uint64_t consumer_group_id_;
 };
 
 class ObInnerSQLTransmitResult

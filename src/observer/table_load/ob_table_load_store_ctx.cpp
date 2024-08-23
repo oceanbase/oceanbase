@@ -103,7 +103,9 @@ int ObTableLoadStoreCtx::init(
     if (OB_SUCC(ret)) {
       table_data_desc_.rowkey_column_num_ =
         (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.rowkey_column_count_ : 0);
-      table_data_desc_.column_count_ = ctx_->param_.column_count_;
+      table_data_desc_.column_count_ =
+        (!ctx_->schema_.is_heap_table_ ? ctx_->schema_.store_column_count_
+                                       : ctx_->schema_.store_column_count_ - 1);
       table_data_desc_.external_data_block_size_ = ObDirectLoadDataBlock::DEFAULT_DATA_BLOCK_SIZE;
       table_data_desc_.sstable_index_block_size_ =
         ObDirectLoadSSTableIndexBlock::DEFAULT_INDEX_BLOCK_SIZE;

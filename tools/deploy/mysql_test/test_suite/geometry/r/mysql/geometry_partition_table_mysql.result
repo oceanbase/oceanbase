@@ -61,10 +61,10 @@ Query Plan
 =============================================================
 |ID|OPERATOR                 |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |PX COORDINATOR           |        |1       |543         |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000|1       |542         |
-|2 |  └─PX PARTITION ITERATOR|        |1       |541         |
-|3 |    └─TABLE FULL SCAN    |t1(idx) |1       |541         |
+|0 |PX COORDINATOR           |        |2       |544         |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000|2       |543         |
+|2 |  └─PX PARTITION ITERATOR|        |2       |541         |
+|3 |    └─TABLE FULL SCAN    |t1(idx) |2       |541         |
 =============================================================
 Outputs & filters:
 -------------------------------------

@@ -685,6 +685,26 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
   } while(false)
 #endif
 
+#ifndef ENABLE_DEBUG_LOG
+#define OB_SAFE_ASSERT(x)                                                                   \
+    do{                                                                                     \
+    bool v=(x);                                                                             \
+    if(OB_UNLIKELY(!(v))) {                                                                 \
+      _OB_LOG_RET(ERROR, oceanbase::common::OB_ERROR, "assert fail, exp=%s", #x);           \
+      BACKTRACE_RET(ERROR, oceanbase::common::OB_ERROR, 1, "assert fail");                  \
+    }                                                                                       \
+  } while(false)
+#else
+#define OB_SAFE_ASSERT(x)                                                                   \
+    do{                                                                                     \
+    bool v=(x);                                                                             \
+    if(OB_UNLIKELY(!(v))) {                                                                 \
+      _OB_LOG_RET(ERROR, oceanbase::common::OB_ERROR, "assert fail, exp=%s", #x);           \
+      BACKTRACE_RET(ERROR, oceanbase::common::OB_ERROR, 1, "assert fail");                  \
+      assert(v);                                                                            \
+    }                                                                                       \
+  } while(false)
+#endif
 
 #define OB_ASSERT_MSG(x, msg...)                      \
   do{                                                 \
@@ -709,6 +729,13 @@ for (__typeof__((c).at(0)) *it = ((extra_condition) && (c).count() > 0 ? &(c).at
 
 //#define ob_assert(x) OB_ASSERT(x)
 #define ob_assert(x) ob_release_assert(x)
+
+#ifndef ENABLE_DEBUG_LOG
+#define OB_SAFE_ABORT()
+#else
+#define OB_SAFE_ABORT() ob_abort()
+#endif
+
 ////////////////////////////////////////////////////////////////
 // interval
 

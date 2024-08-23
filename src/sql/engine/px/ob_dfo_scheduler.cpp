@@ -307,7 +307,7 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
       } else if (parent->is_root_dfo() && !parent->is_thread_inited() &&
           OB_FAIL(ObPXServerAddrUtil::alloc_by_local_distribution(ctx, *parent))) {
         LOG_WARN("fail to alloc local distribution", K(ret));
-      } else if (!parent->is_root_dfo() &&
+      } else if (!parent->is_root_dfo() && !parent->is_thread_inited() &&
                  ObPQDistributeMethod::PARTITION_HASH == child->get_dist_method()) {
         if (OB_FAIL(ObPXServerAddrUtil::alloc_by_reference_child_distribution(
             coord_info_.pruning_table_location_,

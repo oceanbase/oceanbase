@@ -431,10 +431,10 @@ public:
   static int extract_column_exprs(const ObRawExpr *expr,
                                   ObIArray<const ObRawExpr*> &column_exprs);
   static int extract_column_exprs(ObRawExpr* expr,
-                                  ObRelIds &rel_ids,
+                                  const ObRelIds &rel_ids,
                                   ObIArray<ObRawExpr*> &column_exprs);
   static int extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
-                                  ObRelIds &rel_ids,
+                                  const ObRelIds &rel_ids,
                                   ObIArray<ObRawExpr*> &column_exprs);
   static int extract_contain_exprs(ObRawExpr *raw_expr,
                                    const common::ObIArray<ObRawExpr*> &src_exprs,
@@ -1251,6 +1251,16 @@ public:
                                            const ObSQLMode sql_mode,
                                            ObColumnSchemaV2 &gen_col);
   static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
+  /*
+    in mysql mode: ret left_expr <=> right_expr
+    in oracle mode: ret (left_expr = right_expr) or (left_expr is null and right_expr is null)
+  */
+  static int create_null_safe_equal_expr(ObRawExprFactory &expr_factory,
+                                         const ObSQLSessionInfo *session_info,
+                                         const bool is_mysql_mode,
+                                         ObRawExpr *left_expr,
+                                         ObRawExpr *right_expr,
+                                         ObRawExpr *&expr);
 
   static int copy_and_formalize(ObRawExpr *&expr,
                                 ObRawExprCopier *copier,

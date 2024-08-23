@@ -205,6 +205,7 @@ int ObCommonSqlProxy::write(const uint64_t tenant_id, const ObString sql,
     conn->set_is_load_data_exec(param->is_load_data_exec_);
     conn->set_use_external_session(param->use_external_session_);
     conn->set_group_id(param->consumer_group_id_);
+    conn->set_ob_enable_pl_cache(param->enable_pl_cache_);
     if (param->is_load_data_exec_) {
       is_user_sql = true;
     }
@@ -643,13 +644,16 @@ int ObDbLinkProxy::dblink_execute_proc(ObISQLConnection *dblink_conn)
 }
 
 
-int ObDbLinkProxy::dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const char *sql)
+int ObDbLinkProxy::dblink_prepare(sqlclient::ObISQLConnection *dblink_conn,
+                                  const char *sql,
+                                  int64_t param_count,
+                                  ObIAllocator *allocator)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn) || OB_ISNULL(sql)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), KP(dblink_conn), KP(sql));
-  } else if (OB_FAIL(dblink_conn->prepare(sql))) {
+  } else if (OB_FAIL(dblink_conn->prepare(sql, param_count, allocator))) {
     LOG_WARN("prepare to dblink failed", K(ret), K(ObString(sql)));
   }
   return ret;
@@ -660,13 +664,14 @@ int ObDbLinkProxy::dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *db
                                                  void *param,
                                                  int64_t param_size,
                                                  int32_t datatype,
-                                                 int32_t &indicator)
+                                                 int32_t &indicator,
+                                                 bool is_out_param)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), KP(dblink_conn));
-  } else if (OB_FAIL(dblink_conn->bind_basic_type_by_pos(position, param, param_size, datatype, indicator))) {
+  } else if (OB_FAIL(dblink_conn->bind_basic_type_by_pos(position, param, param_size, datatype, indicator, is_out_param))) {
     LOG_WARN("bind_basic_type_by_pos to dblink failed", K(ret));
   } else {
     LOG_DEBUG("succ to bind_basic_type_by_pos dblink", K(ret));
@@ -740,14 +745,15 @@ int ObDbLinkProxy::dblink_execute_proc(const uint64_t tenant_id,
                                        const share::schema::ObRoutineInfo &routine_info,
                                        const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                                        const ObTimeZoneInfo *tz_info,
-                                       ObObj *result)
+                                       ObObj *result,
+                                       bool is_sql)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(dblink_conn) || sql.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null ptr", K(ret), KP(dblink_conn), K(sql));
   } else if (OB_FAIL(dblink_conn->execute_proc(tenant_id, allocator, params, sql,
-                                               routine_info, udts, tz_info, result))) {
+                                               routine_info, udts, tz_info, result, is_sql))) {
     LOG_WARN("call procedure to dblink failed", K(ret), K(dblink_conn), K(sql));
   } else {
     LOG_DEBUG("succ to call procedure by dblink", K(sql));

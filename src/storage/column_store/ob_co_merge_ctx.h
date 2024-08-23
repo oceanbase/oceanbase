@@ -70,6 +70,11 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
     exe_stat_.finish_cg_count_ += cg_cnt;
     exe_stat_.period_finish_cg_count_ += cg_cnt;
   }
+  OB_INLINE void set_batch_finish_for_row_store(const int64_t cg_cnt)
+  {
+    exe_stat_.finish_cg_count_ = cg_cnt;
+    exe_stat_.period_finish_cg_count_ = cg_cnt;
+  }
   OB_INLINE void one_batch_fail()
   {
     ++exe_stat_.error_count_;
@@ -131,6 +136,7 @@ struct ObCOTabletMergeCtx : public ObBasicTabletMergeCtx
   { return ObBasicTabletMergeCtx::swap_tablet(get_merge_table_result); }
   int prepare_mocked_row_store_cg_schema();
   bool should_mock_row_store_cg_schema();
+  int prepare_cs_replica_param();
   OB_INLINE bool is_build_row_store_from_rowkey_cg() const { return static_param_.is_build_row_store_from_rowkey_cg(); }
   OB_INLINE bool is_build_row_store() const { return static_param_.is_build_row_store(); }
   int get_cg_schema_for_merge(const int64_t idx, const ObStorageColumnGroupSchema *&cg_schema_ptr);

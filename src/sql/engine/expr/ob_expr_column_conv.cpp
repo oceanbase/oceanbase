@@ -347,12 +347,27 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
                                 | CM_CHARSET_CONVERT_IGNORE_ERR;
     }
     enumset_info->cast_mode_ |= CM_COLUMN_CONVERT;
-    rt_expr.eval_func_ = column_convert;
+    if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0
+        && (enumset_info->cast_mode_ & CM_FAST_COLUMN_CONV)
+        && !ob_is_enum_or_set_type(rt_expr.datum_meta_.type_)) {
+      rt_expr.eval_func_ = column_convert_fast;
+      if (rt_expr.args_[4]->is_batch_result()) {
+        rt_expr.eval_batch_func_ = column_convert_batch_fast;
+      }
+    } else {
+      rt_expr.eval_func_ = column_convert;
+      if (rt_expr.args_[4]->is_batch_result()
+          && !ob_is_enum_or_set_type(rt_expr.datum_meta_.type_)
+          && !is_lob_storage(rt_expr.datum_meta_.type_)
+          && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
+        rt_expr.eval_batch_func_ = column_convert_batch;
+      }
+    }
   }
   return ret;
 }
 
-static inline int column_convert_datum_accuracy_check(const ObExpr &expr,
+static OB_INLINE int column_convert_datum_accuracy_check(const ObExpr &expr,
                                                       ObEvalCtx &ctx,
                                                       bool has_lob_header,
                                                       ObDatum &datum,
@@ -560,6 +575,101 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
     }
   }
 
+  return ret;
+}
+
+int ObExprColumnConv::column_convert_fast(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          ObDatum &datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *val = nullptr;
+  if (OB_FAIL(expr.args_[4]->eval(ctx, val))) {
+    LOG_WARN("evaluate parameter failed", K(ret));
+  } else {
+    datum.set_datum(*val);
+  }
+  return ret;
+}
+
+int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
+                                           ObEvalCtx &ctx,
+                                           const ObBitVector &skip,
+                                           const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  ObObjType out_type = expr.datum_meta_.type_;
+  ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
+  const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
+  const uint64_t cast_mode = enumset_info->cast_mode_;
+  bool is_strict = CM_IS_STRICT_MODE(cast_mode);
+  if (OB_FAIL(expr.args_[4]->eval_batch(ctx, skip, batch_size))) {
+    LOG_WARN("failed to eval batch vals", K(ret));
+  } else {
+    ObDatum *vals = expr.args_[4]->locate_batch_datums(ctx);
+    ObDatum *results = expr.locate_batch_datums(ctx);
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    bool is_string_type = ob_is_string_type(out_type);
+    ObAccuracy accuracy;
+    accuracy.set_length(expr.max_length_);
+    accuracy.set_scale(expr.datum_meta_.scale_);
+    const ObObjTypeClass &dst_tc = ob_obj_type_class(expr.datum_meta_.type_);
+    const ObLength max_accuracy_len = accuracy.get_length();
+    if (is_string_type) {
+      accuracy.set_length_semantics(expr.datum_meta_.length_semantics_);
+    }
+    ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+    batch_info_guard.set_batch_size(batch_size);
+    for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      }
+      if (vals[i].is_null()) {
+        results[i].set_null();
+      } else {
+        batch_info_guard.set_batch_idx(i);
+        if (is_string_type) {
+          ObString str = vals[i].get_string();
+          if (OB_FAIL(string_collation_check(is_strict, out_cs_type, out_type, str))) {
+            LOG_WARN("fail to check collation", K(ret), K(str), K(is_strict), K(expr));
+          } else {
+            vals[i].set_string(str);
+          }
+        }
+        bool no_need_check_length = is_string_type && max_accuracy_len > 0 && vals[i].len_ < max_accuracy_len;
+        if (OB_FAIL(ret)) {
+        } else if (no_need_check_length) {
+          results[i].set_datum(vals[i]);
+        } else if (OB_FAIL(column_convert_datum_accuracy_check(expr, ctx, false, results[i], cast_mode, vals[i]))) {
+          LOG_WARN("fail do datum_accuracy_check for lob res", K(ret), K(expr));
+        }
+      }
+      eval_flags.set(i);
+    }
+  }
+  return ret;
+}
+
+int ObExprColumnConv::column_convert_batch_fast(const ObExpr &expr,
+                                                ObEvalCtx &ctx,
+                                                const ObBitVector &skip,
+                                                const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[4]->eval_batch(ctx, skip, batch_size))) {
+    LOG_WARN("failed to eval batch vals", K(ret));
+  } else {
+    ObDatum *vals = expr.args_[4]->locate_batch_datums(ctx);
+    ObDatum *results = expr.locate_batch_datums(ctx);
+    ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+    for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
+      if (skip.at(i) || eval_flags.at(i)) {
+        continue;
+      }
+      results[i].set_datum(vals[i]);
+      eval_flags.set(i);
+    }
+  }
   return ret;
 }
 

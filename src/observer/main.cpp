@@ -398,7 +398,7 @@ static int check_uid_before_start(const char *dir_path)
   return ret;
 }
 
-static void print_all_thread(const char* desc)
+void print_all_thread(const char* desc, uint64_t tenant_id)
 {
   MPRINT("============= [%s] begin to show unstopped thread =============", desc);
   DIR *dir = opendir("/proc/self/task");
@@ -415,13 +415,22 @@ static void print_all_thread(const char* desc)
         if (file == NULL) {
           MPRINT("fail to print thread tid: %s", tid);
         } else {
-          char name[256];
-          fgets(name, 256, file);
-          size_t len = strlen(name);
-          if (len > 0 && name[len - 1] == '\n') {
-            name[len - 1] = '\0';
+          char thread_name[256];
+          if (fgets(thread_name, sizeof(thread_name), file) != nullptr) {
+            size_t len = strlen(thread_name);
+            if (len > 0 && thread_name[len - 1] == '\n') {
+              thread_name[len - 1] = '\0';
+            }
+            if (!is_server_tenant(tenant_id)) {
+              char tenant_id_str[20];
+              snprintf(tenant_id_str, sizeof(tenant_id_str), "T%lu_", tenant_id);
+              if (0 == strncmp(thread_name, tenant_id_str, strlen(tenant_id_str))) {
+                MPRINT("[CHECK_KILL_GRACEFULLY][T%lu][%s] detect unstopped thread, tid: %s, name: %s", tenant_id, desc, tid, thread_name);
+              }
+            } else {
+              MPRINT("[CHECK_KILL_GRACEFULLY][%s] detect unstopped thread, tid: %s, name: %s", desc, tid, thread_name);
+            }
           }
-          MPRINT("[%s] detect unstopped thread, tid: %s, name: %s", desc, tid, name);
           fclose(file);
         }
       }
@@ -598,7 +607,7 @@ int main(int argc, char *argv[])
       } else if (OB_FAIL(observer.wait())) {
         LOG_ERROR("observer wait fail", K(ret));
       }
-      print_all_thread("BEFORE_DESTROY");
+      print_all_thread("BEFORE_DESTROY", OB_SERVER_TENANT_ID);
       observer.destroy();
     }
     curl_global_cleanup();
@@ -606,6 +615,6 @@ int main(int argc, char *argv[])
   }
 
   LOG_INFO("observer exits", "observer_version", PACKAGE_STRING);
-  print_all_thread("AFTER_DESTROY");
+  print_all_thread("AFTER_DESTROY", OB_SERVER_TENANT_ID);
   return ret;
 }

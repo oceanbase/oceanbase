@@ -76,7 +76,8 @@ ObTabletCreateSSTableParam::ObTabletCreateSSTableParam()
     nested_size_(0),
     data_block_ids_(),
     other_block_ids_(),
-    table_flag_(),
+    table_backup_flag_(),
+    table_shared_flag_(),
     uncommitted_tx_id_(0)
 {
   MEMSET(encrypt_key_, 0, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
@@ -91,9 +92,9 @@ bool ObTabletCreateSSTableParam::is_valid() const
   } else if (OB_UNLIKELY(!table_mode_.is_valid())) {
     ret = false;
     LOG_WARN("invalid table mode", K(table_mode_));
-  } else if (OB_UNLIKELY(!table_flag_.is_valid())) {
+  } else if (OB_UNLIKELY(!table_backup_flag_.is_valid() || !table_shared_flag_.is_valid())) {
     ret = false;
-    LOG_WARN("invalid table flag", K_(table_flag));
+    LOG_WARN("invalid table backup flag or invalid table shared flag", K_(table_backup_flag), K_(table_shared_flag));
   } else if (!(schema_version_ >= 0
                && sstable_logic_seq_ >= 0
                && create_snapshot_version_ >= 0
@@ -170,7 +171,7 @@ int ObTabletCreateSSTableParam::inner_init_with_merge_res(const blocksstable::Ob
   STATIC_ASSERT(ARRAYSIZEOF(res.encrypt_key_) == share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH,
   "ObSSTableMergeRes encrypt_key_ array size mismatch OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH");
   MEMCPY(encrypt_key_, res.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-  table_flag_ = res.table_flag_;
+  table_backup_flag_ = res.table_backup_flag_;
 
   if (OB_FAIL(data_block_ids_.assign(res.data_block_ids_))) {
     LOG_WARN("fail to fill data block ids", K(ret), K(res.data_block_ids_));
@@ -205,7 +206,7 @@ int ObTabletCreateSSTableParam::init_for_small_sstable(const blocksstable::ObSST
   max_merged_trans_version_ = res.max_merged_trans_version_;
   nested_offset_ = block_info.nested_offset_;
   nested_size_ = block_info.nested_size_;
-  table_flag_ = res.table_flag_;
+  table_shared_flag_.reset();
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to inner init with merge res", K(ret), K(res));
   } else if (table_key_.is_major_sstable()) {
@@ -285,7 +286,7 @@ int ObTabletCreateSSTableParam::init_for_merge(const compaction::ObBasicTabletMe
     nested_size_ = res.nested_size_;
     nested_offset_ = res.nested_offset_;
     ddl_scn_.set_min();
-    table_flag_ = res.table_flag_;
+    table_shared_flag_.reset();
 
     if (OB_FAIL(inner_init_with_merge_res(res))) {
       LOG_WARN("fail to init with merge res", K(ret), K(res.data_block_ids_));
@@ -390,7 +391,7 @@ int ObTabletCreateSSTableParam::init_for_ddl(blocksstable::ObSSTableIndexBuilder
       max_merged_trans_version_ = ddl_param.snapshot_version_;
       nested_size_ = res.nested_size_;
       nested_offset_ = res.nested_offset_;
-      table_flag_ = res.table_flag_;
+      table_shared_flag_.reset();
 
       if (OB_FAIL(inner_init_with_merge_res(res))) {
         LOG_WARN("fail to inner init with merge res", K(ret), K(res));
@@ -450,7 +451,7 @@ int ObTabletCreateSSTableParam::init_for_ha(
   max_merged_trans_version_ = res.max_merged_trans_version_;
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
-  table_flag_ = res.table_flag_;
+  table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
@@ -500,7 +501,8 @@ int ObTabletCreateSSTableParam::init_for_ha(const blocksstable::ObMigrationSSTab
   data_block_macro_meta_addr_.set_none_addr();
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   MEMCPY(encrypt_key_, sstable_param.basic_meta_.encrypt_key_, share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH);
-  table_flag_ = sstable_param.basic_meta_.table_flag_;
+  table_backup_flag_ = sstable_param.basic_meta_.table_backup_flag_;
+  table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
     is_co_table_without_cgs_ = table_key_.is_ddl_sstable() ? false : true;
@@ -554,6 +556,7 @@ int ObTabletCreateSSTableParam::init_for_remote(const blocksstable::ObMigrationS
 
   rowkey_column_cnt_ = sstable_param.basic_meta_.rowkey_column_count_;
   ddl_scn_ = sstable_param.basic_meta_.ddl_scn_;
+  table_shared_flag_ = sstable_param.basic_meta_.table_shared_flag_;
   if (table_key_.is_co_sstable()) {
     column_group_cnt_ = sstable_param.column_group_cnt_;
     full_column_cnt_ = sstable_param.full_column_cnt_;
@@ -610,6 +613,7 @@ int ObTabletCreateSSTableParam::init_for_mds(
   nested_size_ = res.nested_size_;
   nested_offset_ = res.nested_offset_;
   ddl_scn_.set_min();
+  table_shared_flag_.reset();
 
   if (OB_FAIL(inner_init_with_merge_res(res))) {
     LOG_WARN("fail to init with merge res", K(ret), K(res.data_block_ids_));

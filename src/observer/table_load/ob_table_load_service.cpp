@@ -350,7 +350,7 @@ void ObTableLoadService::ObClientTaskAutoAbortTask::runTimerTask()
       for (int64_t i = 0; i < client_task_array.count(); ++i) {
         ObTableLoadClientTask *client_task = client_task_array.at(i);
         if (OB_UNLIKELY(ObTableLoadClientStatus::ERROR == client_task->get_status() ||
-                        client_task->get_exec_ctx()->check_status() != OB_SUCCESS)) {
+                        client_task->check_status() != OB_SUCCESS)) {
           client_task->abort();
         }
         ObTableLoadClientService::revert_task(client_task);
@@ -433,7 +433,8 @@ int ObTableLoadService::check_support_direct_load(
     const uint64_t table_id,
     const ObDirectLoadMethod::Type method,
     const ObDirectLoadInsertMode::Type insert_mode,
-    const storage::ObDirectLoadMode::Type load_mode)
+    const ObDirectLoadMode::Type load_mode,
+    const ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -447,7 +448,7 @@ int ObTableLoadService::check_support_direct_load(
           ObTableLoadSchema::get_table_schema(tenant_id, table_id, schema_guard, table_schema))) {
       LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode);
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, column_ids);
     }
   }
   return ret;
@@ -457,7 +458,8 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                   uint64_t table_id,
                                                   const ObDirectLoadMethod::Type method,
                                                   const ObDirectLoadInsertMode::Type insert_mode,
-                                                  const storage::ObDirectLoadMode::Type load_mode)
+                                                  const ObDirectLoadMode::Type load_mode,
+                                                  const ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_ID == table_id)) {
@@ -472,7 +474,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       ret = OB_TABLE_NOT_EXIST;
       LOG_WARN("table schema is null", KR(ret));
     } else {
-      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode);
+      ret = check_support_direct_load(schema_guard, table_schema, method, insert_mode, load_mode, column_ids);
     }
   }
   return ret;
@@ -484,15 +486,17 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
                                                   const ObTableSchema *table_schema,
                                                   const ObDirectLoadMethod::Type method,
                                                   const ObDirectLoadInsertMode::Type insert_mode,
-                                                  const storage::ObDirectLoadMode::Type load_mode)
+                                                  const ObDirectLoadMode::Type load_mode,
+                                                  const ObIArray<uint64_t> &column_ids)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == table_schema ||
                   !ObDirectLoadMethod::is_type_valid(method) ||
-                  !ObDirectLoadInsertMode::is_type_valid(insert_mode)) ||
-                  !ObDirectLoadMode::is_type_valid(load_mode)) {
+                  !ObDirectLoadInsertMode::is_type_valid(insert_mode) ||
+                  !ObDirectLoadMode::is_type_valid(load_mode) ||
+                  column_ids.empty())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode));
+    LOG_WARN("invalid args", KR(ret), KP(table_schema), K(method), K(insert_mode), K(column_ids));
   } else {
     const uint64_t tenant_id = MTL_ID();
     bool trigger_enabled = false;
@@ -501,6 +505,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
     bool has_multivalue_index = false;
     bool has_invisible_column = false;
     bool has_unused_column = false;
+    bool has_roaringbitmap_column = false;
     // check if it is a user table
     const char *tmp_prefix = ObDirectLoadMode::is_insert_overwrite(load_mode) ? InsertOverwritePrefix : EmptyPrefix;
 
@@ -574,6 +579,14 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       LOG_WARN("direct-load does not support table has unused column", KR(ret));
       FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has unused column", tmp_prefix);
     }
+    // check has roaringbitmap column
+    else if (OB_FAIL(ObTableLoadSchema::check_has_roaringbitmap_column(table_schema, has_roaringbitmap_column))) {
+      LOG_WARN("fail to check has roaringbitmap column", KR(ret));
+    } else if (has_roaringbitmap_column) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("direct-load does not support table has roaringbitmap column", KR(ret));
+      FORWARD_USER_ERROR_MSG(ret, "%sdirect-load does not support table has roaringbitmap column", tmp_prefix);
+    }
     // check if table has mlog
     else if (table_schema->has_mlog_table()) {
       ret = OB_NOT_SUPPORTED;
@@ -620,6 +633,56 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("insert overwrite with incremental direct-load does not support table with foreign keys", KR(ret));
           FORWARD_USER_ERROR_MSG(ret, "insert overwrite with direct-load does not support table with foreign keys");
+        }
+      }
+    }
+    // check default column
+    if (OB_SUCC(ret)) {
+      ObArray<ObColDesc> column_descs;
+      if (OB_FAIL(table_schema->get_column_ids(column_descs))) {
+        STORAGE_LOG(WARN, "fail to get column descs", KR(ret), KPC(table_schema));
+      } else if (column_ids.count() == (table_schema->is_heap_table() ? column_descs.count() - 1
+                                                                      : column_descs.count())) {
+        // non default column
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
+          const ObColDesc &col_desc = column_descs.at(i);
+          bool found_column = ObColumnSchemaV2::is_hidden_pk_column_id(col_desc.col_id_);
+          for (int64_t j = 0; !found_column && j < column_ids.count(); ++j) {
+            if (col_desc.col_id_ == column_ids.at(j)) {
+              found_column = true;
+            }
+          }
+          if (!found_column) {
+            const ObColumnSchemaV2 *column_schema = table_schema->get_column_schema(col_desc.col_id_);
+            if (OB_ISNULL(column_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected null column schema", KR(ret), K(col_desc));
+            }
+            // 自增列
+            else if (column_schema->is_autoincrement() || column_schema->is_identity_column()) {
+            }
+            // 默认值是表达式
+            else if (OB_UNLIKELY(lib::is_mysql_mode() && column_schema->get_cur_default_value().is_ext())) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("direct-load does not support column default value is ext", KR(ret),
+                       KPC(column_schema), K(column_schema->get_cur_default_value()));
+              FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is ext");
+            } else if (OB_UNLIKELY(lib::is_oracle_mode() && column_schema->is_default_expr_v2_column())) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("direct-load does not support column default value is expr", KR(ret),
+                       KPC(column_schema), K(column_schema->get_cur_default_value()));
+              FORWARD_USER_ERROR_MSG(ret, "direct-load does not support column default value is expr");
+            }
+            // 没有默认值, 且为NOT NULL
+            // 例外:枚举类型默认为第一个
+            else if (OB_UNLIKELY(column_schema->is_not_null_for_write() &&
+                                   column_schema->get_cur_default_value().is_null() &&
+                                   !column_schema->get_meta_type().is_enum())) {
+              ret = OB_ERR_NO_DEFAULT_FOR_FIELD;
+              LOG_WARN("column doesn't have a default value", KR(ret), KPC(column_schema));
+            }
+          }
         }
       }
     }

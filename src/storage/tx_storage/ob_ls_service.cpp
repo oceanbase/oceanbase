@@ -14,6 +14,7 @@
 
 #include "lib/guard/ob_shared_guard.h"
 #include "logservice/ob_garbage_collector.h"
+#include "logservice/ob_log_service.h"
 #include "observer/ob_service.h"
 #include "observer/ob_srv_network_frame.h"
 #include "share/rc/ob_tenant_module_init_ctx.h"
@@ -421,6 +422,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                                   const ObMigrationStatus &migration_status,
                                   const ObLSRestoreStatus &restore_status,
                                   const SCN &create_scn,
+                                  const ObLSStoreFormat &store_format,
                                   ObLS *&ls)
 {
   int ret = OB_SUCCESS;
@@ -438,6 +440,7 @@ int ObLSService::inner_create_ls_(const share::ObLSID &lsid,
                               migration_status,
                               restore_status,
                               create_scn,
+                              store_format,
                               rs_reporter_))) {
     LOG_WARN("fail to init ls", K(ret), K(lsid));
   }
@@ -980,6 +983,7 @@ int ObLSService::replay_create_ls_(const ObLSMeta &ls_meta)
                                       migration_status,
                                       restore_status,
                                       ls_meta.get_clog_checkpoint_scn(),
+                                      ls_meta.get_store_format(),
                                       ls))) {
     LOG_WARN("fail to inner create ls", K(ret), K(ls_meta.ls_id_));
   } else if (FALSE_IT(state = ObLSCreateState::CREATE_STATE_INNER_CREATED)) {
@@ -1033,6 +1037,86 @@ int ObLSService::get_ls(
     }
   }
 
+  return ret;
+}
+
+int ObLSService::get_ls_replica(
+    const ObLSID &ls_id,
+    ObLSGetMod mod,
+    share::ObLSReplica &replica)
+{
+  int ret = OB_SUCCESS;
+  replica.reset();
+  const uint64_t tenant_id = MTL_ID();
+  ObLSHandle ls_handle;
+  ObLS *ls = NULL;
+  ObLogService *log_service = MTL(ObLogService*);
+  common::ObRole role = FOLLOWER;
+  ObMemberList ob_member_list;
+  ObLSReplica::MemberList member_list;
+  GlobalLearnerList learner_list;
+  int64_t proposal_id = 0;
+  int64_t paxos_replica_number = 0;
+  ObLSRestoreStatus restore_status;
+  ObReplicaStatus replica_status = REPLICA_STATUS_NORMAL;
+  ObReplicaType replica_type = REPLICA_TYPE_FULL;
+  ObMigrationStatus migration_status = OB_MIGRATION_STATUS_MAX;
+  uint64_t unit_id = common::OB_INVALID_ID;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id));
+  } else if (OB_ISNULL(log_service) || OB_ISNULL(GCTX.config_) || OB_ISNULL(GCTX.omt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("null ptr", KR(ret), KP(log_service), KP(GCTX.config_), KP(GCTX.omt_));
+  } else if (OB_FAIL(get_ls(ls_id, ls_handle, mod))) {
+    LOG_WARN("get ls handle failed", KR(ret), K(ls_id), K(mod));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is null", KR(ret), K(ls_id), KP(ls));
+  } else if (OB_FAIL(ls->get_paxos_member_list_and_learner_list(ob_member_list, paxos_replica_number, learner_list))) {
+    LOG_WARN("get member list and learner list from ObLS failed", KR(ret));
+  } else if (OB_FAIL(ls->get_restore_status(restore_status))) {
+    LOG_WARN("get restore status failed", KR(ret));
+  } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+    LOG_WARN("get migration status failed", KR(ret));
+  } else if (OB_FAIL(ls->get_replica_status(replica_status))) {
+    LOG_WARN("get replica status failed", KR(ret));
+  } else if (OB_FAIL(log_service->get_palf_role(ls_id, role, proposal_id))) {
+    LOG_WARN("failed to get role from palf", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(get_replica_type_(GCTX.self_addr(), ob_member_list, learner_list,
+                                       ls->get_store_format(), replica_type))) {
+    LOG_WARN("fail to get replica_type by member and learner list", KR(ret));
+  } else if (OB_FAIL(ObLSReplica::transform_ob_member_list(ob_member_list, member_list))) {
+    LOG_WARN("fail to transfrom ob_member_list into member_list", KR(ret), K(ob_member_list));
+  } else if (OB_FAIL(GCTX.omt_->get_unit_id(tenant_id, unit_id))) {
+    LOG_WARN("get tenant unit id failed", KR(ret), K(tenant_id), K(ls_id));
+  } else if (OB_FAIL(replica.init(
+        0,          /*create_time_us*/
+        0,          /*modify_time_us*/
+        tenant_id,  /*tenant_id*/
+        ls_id,      /*ls_id*/
+        GCTX.self_addr(),         /*server*/
+        GCTX.config_->mysql_port, /*sql_port*/
+        role,                      /*role*/
+        replica_type,         /*replica_type*/
+        proposal_id,              /*proposal_id*/
+        is_strong_leader(role) ? REPLICA_STATUS_NORMAL : replica_status,/*replica_status*/
+        restore_status,            /*restore_status*/
+        100,                       /*memstore_percent*/
+        unit_id,                   /*unit_id*/
+        GCTX.config_->zone.str(), /*zone*/
+        paxos_replica_number,                    /*paxos_replica_number*/
+        0,                         /*data_size*/
+        0,                         /*required_size*/
+        member_list,
+        learner_list,
+        OB_MIGRATION_STATUS_REBUILD == migration_status /*is_rebuild*/))) {
+    LOG_WARN("fail to init a ls replica", KR(ret), K(tenant_id), K(ls_id), K(role),
+              K(proposal_id), K(unit_id), K(paxos_replica_number), K(member_list), K(learner_list));
+  }
   return ret;
 }
 
@@ -1219,6 +1303,9 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
   bool ls_exist = false;
   bool waiting_destroy = false;
   int64_t process_point = 0;
+  const ObLSStoreFormat ls_store_format = (REPLICA_TYPE_COLUMNSTORE == arg.replica_type_) ?
+                                          common::ObLSStoreType::OB_LS_STORE_COLUMN_ONLY
+                                          : common::ObLSStoreType::OB_LS_STORE_NORMAL;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -1254,8 +1341,9 @@ int ObLSService::create_ls_(const ObCreateLSCommonArg &arg,
                                               arg.migration_status_,
                                               arg.restore_status_,
                                               arg.create_scn_,
+                                              ls_store_format,
                                               ls))) {
-      LOG_WARN("create ls failed", K(ret), K(arg.ls_id_));
+      LOG_WARN("create ls failed", K(ret), K(arg.ls_id_), K(ls_store_format));
     } else {
       state = ObLSCreateState::CREATE_STATE_INNER_CREATED;
       ObLSLockGuard lock_ls(ls);
@@ -1643,6 +1731,36 @@ int ObLSService::dump_ls_info()
       LOG_WARN("fail to get ls meta", K(ret));
     } else {
       FLOG_INFO("dump ls info", K(ls_meta));
+    }
+  }
+  return ret;
+}
+
+// this function is expected to not fail
+int ObLSService::get_replica_type_(
+    const common::ObAddr &addr,
+    const ObMemberList &ob_member_list,
+    const GlobalLearnerList &learner_list,
+    const common::ObLSStoreFormat &ls_store_format,
+    ObReplicaType &replica_type)
+{
+  int ret = OB_SUCCESS;
+  const bool is_columnstore = ls_store_format.is_columnstore();
+  const bool in_member_list = ob_member_list.contains(addr);
+  const bool in_learner_list = learner_list.contains(addr);
+  if (is_columnstore) {
+    replica_type = REPLICA_TYPE_COLUMNSTORE;
+    if (in_member_list) {
+      LOG_WARN("columnstore replica member in member_list is unexpected",
+               K(addr), K(ob_member_list), K(learner_list));
+    }
+  } else {
+    // if replica exists in learner_list, report it as R-replica.
+    // Otherwise, report as F-replica
+    if (in_learner_list) {
+      replica_type = REPLICA_TYPE_READONLY;
+    } else {
+      replica_type = REPLICA_TYPE_FULL;
     }
   }
   return ret;

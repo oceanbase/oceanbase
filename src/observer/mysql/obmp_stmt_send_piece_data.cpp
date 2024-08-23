@@ -81,7 +81,7 @@ int ObMPStmtSendPieceData::before_process()
     is_null_ = (1 == is_null);
     ObMySQLUtil::get_int8(pos, buffer_len_);
     if (stmt_id_ < 1 || buffer_len_ < 0) {
-      ret = OB_ERR_PARAM_INVALID;
+      ret = OB_ERR_MALFORMED_PS_PACKET;
       LOG_WARN("send_piece receive unexpected params", K(ret), K(stmt_id_), K(buffer_len_));
     } else if (param_id_ >= OB_PARAM_ID_OVERFLOW_RISK_THRESHOLD) {
       LOG_WARN("param_id_ has the risk of overflow", K(ret), K(stmt_id_), K(param_id_));
@@ -96,6 +96,13 @@ int ObMPStmtSendPieceData::before_process()
     LOG_INFO("resolve send_piece protocol packet",
              K(ret), K(stmt_id_), K(param_id_), K(buffer_len_), K(piece_mode_), K(is_null_));
   }
+
+  if (OB_FAIL(ret)) {
+    send_error_packet(ret, nullptr);
+    force_disconnect();
+    LOG_WARN("force disconnect connection", K(ret));
+  }
+
   return ret;
 }
 

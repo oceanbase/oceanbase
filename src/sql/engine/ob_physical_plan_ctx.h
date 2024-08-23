@@ -689,6 +689,7 @@ private:
   int64_t total_memstore_read_row_count_;
   int64_t total_ssstore_read_row_count_;
   bool is_direct_insert_plan_; // for direct load: insert into/overwrite select
+  bool check_pdml_affected_rows_; // now only worked for pdml checking affected_rows
 };
 
 }

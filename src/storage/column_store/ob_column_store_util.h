@@ -28,6 +28,7 @@ typedef int64_t ObCSRowId;
 const ObCSRowId OB_INVALID_CS_ROW_ID = -1;
 const uint32_t OB_CS_INVALID_CG_IDX = INT32_MAX;
 const uint32_t OB_CS_VIRTUAL_CG_IDX = INT32_MAX - 1;
+const uint32_t OB_CS_COLUMN_REPLICA_ROWKEY_CG_IDX = 0;
 
 OB_INLINE bool is_virtual_cg(const uint32_t cg_idx)
 {

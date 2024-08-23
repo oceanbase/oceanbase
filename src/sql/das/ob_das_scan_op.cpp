@@ -313,6 +313,7 @@ int ObDASScanOp::init_scan_param()
         }
       }
       scan_param_.external_file_format_.csv_format_.file_column_nums_ = static_cast<int64_t>(max_idx);
+      scan_param_.external_file_format_.csv_format_.ignore_extra_fields_ = true;
     }
   }
   LOG_DEBUG("init scan param", K(ret), K(scan_param_));

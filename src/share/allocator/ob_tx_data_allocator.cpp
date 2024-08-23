@@ -16,6 +16,7 @@
 
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "share/rc/ob_tenant_base.h"
+#include "storage/tx_storage/ob_ls_service.h"
 #include "storage/tx/ob_tx_data_define.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
@@ -109,8 +110,10 @@ void *ObTenantTxDataAllocator::alloc(const bool enable_throttle, const int64_t a
   return res;
 }
 
-ObTxDataThrottleGuard::ObTxDataThrottleGuard(const bool for_replay, const int64_t abs_expire_time)
-    : for_replay_(for_replay), abs_expire_time_(abs_expire_time)
+ObTxDataThrottleGuard::ObTxDataThrottleGuard(const ObLSID ls_id,
+                                             const bool for_replay,
+                                             const int64_t abs_expire_time)
+    : ls_id_(ls_id), for_replay_(for_replay), abs_expire_time_(abs_expire_time)
 {
   throttle_tool_ = &(MTL(ObSharedMemAllocMgr *)->share_resource_throttle_tool());
   if (0 == abs_expire_time) {
@@ -122,18 +125,28 @@ ObTxDataThrottleGuard::ObTxDataThrottleGuard(const bool for_replay, const int64_
 
 ObTxDataThrottleGuard::~ObTxDataThrottleGuard()
 {
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   ObThrottleInfoGuard share_ti_guard;
   ObThrottleInfoGuard module_ti_guard;
 
   if (OB_ISNULL(throttle_tool_)) {
     MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "throttle tool is unexpected nullptr", KP(throttle_tool_));
   } else if (throttle_tool_->is_throttling<ObTenantTxDataAllocator>(share_ti_guard, module_ti_guard)) {
-    (void)TxShareMemThrottleUtil::do_throttle<ObTenantTxDataAllocator>(for_replay_,
-                                                                       abs_expire_time_,
-                                                                       share::tx_data_throttled_alloc(),
-                                                                       *throttle_tool_,
-                                                                       share_ti_guard,
-                                                                       module_ti_guard);
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      STORAGE_LOG(WARN, "get ls handle failed", KR(ret), K(ls_id_));
+    } else if (OB_ISNULL(ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "get ls handle failed", KR(ret), K(ls_id_));
+    } else {
+      (void)TxShareMemThrottleUtil::do_throttle<ObTenantTxDataAllocator>(for_replay_,
+                                                                         abs_expire_time_,
+                                                                         share::tx_data_throttled_alloc(),
+                                                                         *(ls_handle.get_ls()),
+                                                                         *throttle_tool_,
+                                                                         share_ti_guard,
+                                                                         module_ti_guard);
+    }
 
     if (throttle_tool_->still_throttling<ObTenantTxDataAllocator>(share_ti_guard, module_ti_guard)) {
       (void)throttle_tool_->skip_throttle<ObTenantTxDataAllocator>(

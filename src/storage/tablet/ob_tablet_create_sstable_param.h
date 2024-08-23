@@ -128,7 +128,8 @@ public:
       K_(nested_offset),
       K_(nested_size),
       KPHEX_(encrypt_key, sizeof(encrypt_key_)),
-      K_(table_flag),
+      K_(table_backup_flag),
+      K_(table_shared_flag),
       K_(uncommitted_tx_id));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
@@ -179,7 +180,8 @@ public:
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> data_block_ids_;
   common::ObSEArray<blocksstable::MacroBlockId, DEFAULT_MACRO_BLOCK_CNT> other_block_ids_;
-  storage::ObTableFlag table_flag_;
+  storage::ObTableBackupFlag table_backup_flag_; //ObTableBackupFlag will be updated by ObSSTableMergeRes
+  storage::ObTableSharedFlag table_shared_flag_; //ObTableSharedFlag will be updated by ObTabletCreateSSTableParam
   int64_t uncommitted_tx_id_;
 };
 

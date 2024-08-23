@@ -22,9 +22,10 @@ namespace lib
 class ObMallocTimeMonitor
 {
 public:
-  static volatile int64_t WARN_THRESHOLD;
-  static constexpr const int64_t TIME_SLOT[] = {10, 100, 1000, 10000, 100000, 1000000, INT64_MAX};
-  static const int64_t TIME_SLOT_NUM = ARRAYSIZEOF(TIME_SLOT);
+  static const int64_t WARN_THRESHOLD = 100000;
+  static const int64_t RECORD_THRESHOLD = 1000;
+  static constexpr const int64_t TIME_SLOT[] = {1000, 10000, 100000, 1000000, INT64_MAX};
+  static const int64_t TIME_SLOT_NUM = ARRAYSIZEOF(TIME_SLOT) - 1;
   ObMallocTimeMonitor()
   {
     MEMSET(this, 0, sizeof(*this));
@@ -35,28 +36,32 @@ public:
     static ObMallocTimeMonitor instance;
     return instance;
   }
+
   void inc(int64_t cost_time)
   {
     for (int i = 0; i < TIME_SLOT_NUM; ++i) {
-      if (cost_time < TIME_SLOT[i]) {
+      if (cost_time < TIME_SLOT[i + 1]) {
         total_cost_times_[i].inc(cost_time);
         counts_[i].inc(1);
         break;
       }
     }
   }
+
   void record_malloc_time(ObBasicTimeGuard& time_guard, const int64_t size, const ObMemAttr& attr)
   {
     const int64_t cost_time = time_guard.get_diff();
-    inc(cost_time);
-    if (OB_UNLIKELY(cost_time > WARN_THRESHOLD)) {
-      const int64_t buf_len = 1024;
-      char buf[buf_len] = {'\0'};
-      int64_t pos = attr.to_string(buf, buf_len);
-      (void)logdata_printf(buf, buf_len, pos, ", size=%ld, ", size);
-      pos += time_guard.to_string(buf + pos, buf_len - pos);
-      int64_t tid = GETTID();
-      fprintf(stderr, "[%ld]OB_MALLOC COST TOO MUCH TIME, cost_time=%ld, %.*s\n", tid, cost_time, static_cast<int>(pos), buf);
+    if (OB_UNLIKELY(cost_time >= RECORD_THRESHOLD)) {
+      inc(cost_time);
+      if (OB_UNLIKELY(cost_time > WARN_THRESHOLD)) {
+        const int64_t buf_len = 1024;
+        char buf[buf_len] = {'\0'};
+        int64_t pos = attr.to_string(buf, buf_len);
+        (void)logdata_printf(buf, buf_len, pos, ", size=%ld, ", size);
+        pos += time_guard.to_string(buf + pos, buf_len - pos);
+        int64_t tid = GETTID();
+        fprintf(stderr, "[%ld]OB_MALLOC COST TOO MUCH TIME, cost_time=%ld, %.*s\n", tid, cost_time, static_cast<int>(pos), buf);
+      }
     }
   }
   void print();

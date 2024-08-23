@@ -15,6 +15,7 @@
 
 #include "storage/ob_i_store.h"
 #include "storage/blocksstable/ob_datum_range.h"
+#include "ob_sstable_index_filter.h"
 #include "common/ob_tablet_id.h"
 #include "share/ob_i_tablet_scan.h"
 #include "share/schema/ob_table_param.h"
@@ -51,6 +52,7 @@ public:
   bool enable_fuse_row_cache(const ObQueryFlag &query_flag) const;
   //temp solution
   int get_cg_column_param(const share::schema::ObColumnParam *&column_param) const;
+  int build_index_filter_for_row_store(common::ObIAllocator *allocator);
   const ObITableReadInfo *get_read_info(const bool is_get = false) const
   {
 	  return is_get ? rowkey_read_info_ : read_info_;
@@ -228,6 +230,7 @@ public:
   const sql::ObExpr *auto_split_filter_;
   sql::ExprFixedArray *auto_split_params_;
   bool is_tablet_spliting_;
+  bool is_column_replica_table_;
 };
 
 struct ObTableAccessParam

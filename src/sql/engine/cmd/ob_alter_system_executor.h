@@ -84,6 +84,8 @@ DEF_SIMPLE_EXECUTOR(ObClearMergeError);
 
 DEF_SIMPLE_EXECUTOR(ObMigrateUnit);
 
+DEF_SIMPLE_EXECUTOR(ObAlterLSReplica);
+
 DEF_SIMPLE_EXECUTOR(ObAddArbitrationService);
 
 DEF_SIMPLE_EXECUTOR(ObRemoveArbitrationService);
@@ -140,8 +142,9 @@ DEF_SIMPLE_EXECUTOR(ObResetConfig);
 
 DEF_SIMPLE_EXECUTOR(ObCancelClone);
 
-DEF_SIMPLE_EXECUTOR(ObTransferPartition);
 
+DEF_SIMPLE_EXECUTOR(ObTransferPartition);
+DEF_SIMPLE_EXECUTOR(ObServiceName);
 class ObCancelTaskExecutor
 {
 public:

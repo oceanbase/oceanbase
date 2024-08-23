@@ -483,11 +483,24 @@ public:
   {
     // sql which in pl will local retry first. see ObInnerSQLConnection::process_retry.
     // sql which not in pl use the same strategy to avoid never getting the lock.
-    if (v.force_local_retry_ || (v.local_retry_times_ <= 1 && !v.result_.is_pl_stmt(v.result_.get_stmt_type()))) {
-      v.retry_type_ = RETRY_TYPE_LOCAL;
+    if (v.is_from_pl_) {
+      if (v.local_retry_times_ <= 1 ||
+          !v.session_.get_pl_can_retry() ||
+          ObSQLUtils::is_in_autonomous_block(v.session_.get_cur_exec_ctx())) {
+        v.no_more_test_ = true;
+        v.retry_type_ = RETRY_TYPE_LOCAL;
+      } else {
+        v.no_more_test_ = true;
+        v.retry_type_ = RETRY_TYPE_NONE;
+        v.client_ret_ = v.err_;
+      }
     } else {
-      const ObMultiStmtItem &multi_stmr_item = v.ctx_.multi_stmt_item_;
-      try_packet_retry(v);
+      if (v.force_local_retry_ || (v.local_retry_times_ <= 1 && !v.result_.is_pl_stmt(v.result_.get_stmt_type()))) {
+        v.retry_type_ = RETRY_TYPE_LOCAL;
+      } else {
+        const ObMultiStmtItem &multi_stmr_item = v.ctx_.multi_stmt_item_;
+        try_packet_retry(v);
+      }
     }
   }
 };

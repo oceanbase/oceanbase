@@ -80,7 +80,7 @@ LATCH_DEF(SERVER_STATUS_LOCK, 53, "server status lock", LATCH_READ_PREFER, 2000,
 LATCH_DEF(SERVER_MAINTAINCE_LOCK, 54, "server maintaince lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(UNIT_MANAGER_LOCK, 55, "unit manager lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(ZONE_MANAGER_LOCK, 56, "zone manager maintaince lock", LATCH_READ_PREFER, 2000, 0, true)
-LATCH_DEF(ALLOC_OBJECT_LOCK, 57, "object set lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(ALLOC_OBJECT_LOCK, 57, "object set lock", LATCH_READ_PREFER, 1, 0, true)
 LATCH_DEF(ALLOC_BLOCK_LOCK, 58, "block set lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(TRACE_RECORDER_LOCK, 59, "normal trace recorder lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SESSION_TRACE_RECORDER_LOCK, 60, "session trace recorder lock", LATCH_FIFO, 2000, 0, true)
@@ -290,9 +290,9 @@ LATCH_DEF(ARCHIVE_ROUND_MGR_LOCK, 263, "archive round mgr lock", LATCH_FIFO, 200
 LATCH_DEF(ARCHIVE_PERSIST_MGR_LOCK, 264, "archive persist mgr lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(ARCHIVE_TASK_QUEUE_LOCK, 265, "archive task queue lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(EXT_SVR_BLACKLIST_LOCK, 266, "external server blacklist lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(SSTABLE_INSERT_TABLE_CONTEXT_LOCK, 267, "direct insert table context lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(SSTABLE_INSERT_TABLET_CONTEXT_LOCK, 268, "direct insert tablet context lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(SSTABLE_INSERT_TABLE_MANAGER_LOCK, 269, "direct insert table manager lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(SSTABLE_INSERT_TABLE_CONTEXT_LOCK, 267, "direct insert table context lock", LATCH_FIFO, 2000, 0, false)
+LATCH_DEF(SSTABLE_INSERT_TABLET_CONTEXT_LOCK, 268, "direct insert tablet context lock", LATCH_FIFO, 2000, 0, false)
+LATCH_DEF(SSTABLE_INSERT_TABLE_MANAGER_LOCK, 269, "direct insert table manager lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(COMPLEMENT_DATA_CONTEXT_LOCK, 270, "complement data context lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TABLET_DDL_KV_MGR_LOCK, 271, "tablet ddl kv mgr lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TABLET_AUTO_INCREMENT_MGR_LOCK, 272, "tablet auto increment mgr lock", LATCH_FIFO, 2000, 0, true)
@@ -374,7 +374,12 @@ LATCH_DEF(DI_SUMMARY_LOCK, 340, "diagnostic info summary lock", LATCH_FIFO, 2000
 LATCH_DEF(DI_ALLOCATE_LOCK, 341, "diagnostic info allocator lock", LATCH_FIFO, 2000, 0, false)
 LATCH_DEF(DI_COLLECTOR_LOCK, 342, "diagnostic info collector lock", LATCH_FIFO, 2000, 0, false)
 
-LATCH_DEF(LATCH_END, 343, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DAG_NET_SCHEDULER, 343, "dag net scheduler lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(DAG_PRIO_SCHEDULER, 344, "dag prio scheduler lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LS_RESERVED_SNAPSHOT_LOCK, 345, "ls reserved snapshot lock", LATCH_FIFO, 2000, 0, true)
+
+LATCH_DEF(LATCH_END, 346, "latch end", LATCH_FIFO, 2000, 0, true)
+
 
 #endif
 

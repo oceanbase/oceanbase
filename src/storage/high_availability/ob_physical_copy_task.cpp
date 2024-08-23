@@ -917,7 +917,7 @@ int ObSSTableCopyFinishTask::get_space_optimization_mode_(
     mode = ObSSTableIndexBuilder::DISABLE;
   } else if (sstable_param->is_small_sstable_) {
     mode = ObSSTableIndexBuilder::ENABLE;
-  } else if (sstable_param->basic_meta_.table_flag_.has_backup()) {
+  } else if (sstable_param->basic_meta_.table_backup_flag_.has_backup()) {
     mode = ObSSTableIndexBuilder::ENABLE;
   } else {
     mode = ObSSTableIndexBuilder::DISABLE;
@@ -1140,14 +1140,14 @@ int ObSSTableCopyFinishTask::build_create_empty_sstable_param_(
   } else if (ObTabletRestoreAction::is_restore_remote_sstable(copy_ctx_.restore_action_)) {
     // Donot set has no local, otherwise, the sstable cannot be scheduled to restore. Then column sstable
     // cannot be restored.
-    param.table_flag_.set_no_local();
-    param.table_flag_.set_has_backup();
+    param.table_backup_flag_.set_no_local();
+    param.table_backup_flag_.set_has_backup();
   } else if (ObTabletRestoreAction::is_restore_replace_remote_sstable(copy_ctx_.restore_action_)) {
-    param.table_flag_.set_has_local();
-    param.table_flag_.set_no_backup();
+    param.table_backup_flag_.set_has_local();
+    param.table_backup_flag_.set_no_backup();
   } else {
     // for migration
-    param.table_flag_ = sstable_param_->basic_meta_.table_flag_;
+    param.table_backup_flag_ = sstable_param_->basic_meta_.table_backup_flag_;
   }
   return ret;
 }
@@ -1264,8 +1264,8 @@ int ObSSTableCopyFinishTask::build_create_pure_remote_sstable_param_(
   } else if (OB_FAIL(param.init_for_remote(*sstable_param_))) {
     LOG_WARN("failed to init for remote", K(ret));
   } else {
-    param.table_flag_.set_has_backup();
-    param.table_flag_.set_no_local();
+    param.table_backup_flag_.set_has_backup();
+    param.table_backup_flag_.set_no_local();
   }
   return ret;
 }

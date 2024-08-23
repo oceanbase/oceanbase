@@ -340,24 +340,34 @@ void ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedItemHandle::reset()
   if (nullptr != item_) {
     if (0 == item_->dec_ref()) {
       item_->~ObDDLCtrlSpeedItem();
+      ObDDLCtrlSpeedHandle::get_instance().get_allocator().free(item_);
     }
     item_ = nullptr;
   }
 }
 
 ObDDLCtrlSpeedHandle::ObDDLCtrlSpeedHandle()
-  : is_inited_(false), speed_handle_map_(), allocator_(SET_USE_500("DDLClogCtrl")),
+  : is_inited_(false), speed_handle_map_(),
     bucket_lock_(), refreshTimerTask_()
 {
 }
 
 ObDDLCtrlSpeedHandle::~ObDDLCtrlSpeedHandle()
 {
-  bucket_lock_.destroy();
+  int ret = OB_SUCCESS;
   if (speed_handle_map_.created()) {
+    ObArray<SpeedHandleKey> remove_items;
+    common::hash::ObHashMap<SpeedHandleKey, ObDDLCtrlSpeedItem*>::const_iterator iter = speed_handle_map_.begin();
+    for (; iter != speed_handle_map_.end(); ++iter) {
+      if (OB_FAIL(remove_items.push_back(iter->first))) {
+        LOG_WARN("push back failed", K(ret), "key", iter->first);
+      }
+    }
+    (void)remove_ctrl_speed_item(remove_items);
     speed_handle_map_.destroy();
   }
-  allocator_.reset();
+  bucket_lock_.destroy();
+  allocator_.destroy();
 }
 
 ObDDLCtrlSpeedHandle &ObDDLCtrlSpeedHandle::get_instance()
@@ -371,6 +381,7 @@ int ObDDLCtrlSpeedHandle::init()
   int ret = OB_SUCCESS;
   lib::ObMemAttr attr(OB_SERVER_TENANT_ID, "DDLSpeedCtrl");
   SET_USE_500(attr);
+  const int64_t memory_limit = 1024L * 1024L * 1024L * 1L; // 1GB
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("inited twice", K(ret));
@@ -381,13 +392,14 @@ int ObDDLCtrlSpeedHandle::init()
     LOG_WARN("init bucket lock failed", K(ret));
   } else if (OB_FAIL(speed_handle_map_.create(MAP_BUCKET_NUM, attr, attr))) {
     LOG_WARN("fail to create speed handle map", K(ret));
+  } else if (OB_FAIL(allocator_.init(OB_MALLOC_NORMAL_BLOCK_SIZE,
+      attr.label_, OB_SERVER_TENANT_ID, memory_limit))) {
+    LOG_WARN("init alloctor failed", K(ret));
+  } else if (OB_FAIL(refreshTimerTask_.init(lib::TGDefIDs::ServerGTimer))) {
+    LOG_WARN("fail to init refreshTimerTask", K(ret));
   } else {
     is_inited_ = true;
-    if (OB_FAIL(refreshTimerTask_.init(lib::TGDefIDs::ServerGTimer))) {
-      LOG_WARN("fail to init refreshTimerTask", K(ret));
-    } else {
-      LOG_INFO("succeed to init ObDDLCtrlSpeedHandle", K(ret));
-    }
+    LOG_INFO("succeed to init ObDDLCtrlSpeedHandle", K(ret));
   }
   return ret;
 }
@@ -502,7 +514,7 @@ int ObDDLCtrlSpeedHandle::add_ctrl_speed_item(
 int ObDDLCtrlSpeedHandle::remove_ctrl_speed_item(const ObIArray<SpeedHandleKey> &remove_items)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < remove_items.count(); i++) {
+  for (int64_t i = 0; i < remove_items.count(); i++) { // ignore ret, to free more items.
     const SpeedHandleKey &speed_handle_key = remove_items.at(i);
     common::ObBucketHashWLockGuard guard(bucket_lock_, speed_handle_key.hash());
     char *buf = nullptr;
@@ -526,6 +538,7 @@ int ObDDLCtrlSpeedHandle::remove_ctrl_speed_item(const ObIArray<SpeedHandleKey> 
     } else {
       if (0 == speed_handle_item->dec_ref()) {
         speed_handle_item->~ObDDLCtrlSpeedItem();
+        allocator_.free(speed_handle_item);
         speed_handle_item = nullptr;
       }
     }
@@ -1162,7 +1175,7 @@ int ObDDLRedoLogWriter::write_start_log(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", K(ret), K(table_key), K(execution_id), K(data_format_version), K(direct_load_type));
   } else if (OB_FAIL(log.init(table_key, data_format_version, execution_id, direct_load_type,
-          lob_kv_mgr_handle.is_valid() ? lob_kv_mgr_handle.get_obj()->get_tablet_id() : ObTabletID()))) {
+          lob_kv_mgr_handle.is_valid() ? lob_kv_mgr_handle.get_obj()->get_tablet_id() : ObTabletID(), direct_load_mgr_handle.get_obj()->need_process_cs_replica()))) {
     LOG_WARN("fail to init DDLStartLog", K(ret), K(table_key), K(execution_id), K(data_format_version));
   }  else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::DDL_MOD))) {
     LOG_WARN("get ls failed", K(ret), K(ls_id_));
@@ -1515,7 +1528,8 @@ ObDDLRedoLogWriter::~ObDDLRedoLogWriter()
 ObDDLRedoLogWriterCallback::ObDDLRedoLogWriterCallback()
   : is_inited_(false), redo_info_(), block_type_(ObDDLMacroBlockType::DDL_MB_INVALID_TYPE),
     table_key_(), macro_block_id_(), task_id_(0), data_format_version_(0),
-    direct_load_type_(DIRECT_LOAD_INVALID), row_id_offset_(-1)
+    direct_load_type_(DIRECT_LOAD_INVALID), row_id_offset_(-1),
+    with_cs_replica_(false), need_submit_io_(true)
 {
 }
 
@@ -1532,7 +1546,9 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
                                      const share::SCN &start_scn,
                                      const uint64_t data_format_version,
                                      const ObDirectLoadType direct_load_type,
-                                     const int64_t row_id_offset/*=-1*/)
+                                     const int64_t row_id_offset/*=-1*/,
+                                     const bool with_cs_replica/*=false*/,
+                                     const bool need_submit_io/*=true*/)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -1561,6 +1577,8 @@ int ObDDLRedoLogWriterCallback::init(const share::ObLSID &ls_id,
     data_format_version_ = data_format_version;
     direct_load_type_ = direct_load_type;
     row_id_offset_ = row_id_offset;
+    with_cs_replica_ = with_cs_replica;
+    need_submit_io_ = need_submit_io;
     is_inited_ = true;
   }
   return ret;
@@ -1579,6 +1597,8 @@ void ObDDLRedoLogWriterCallback::reset()
   data_format_version_ = 0;
   direct_load_type_ = DIRECT_LOAD_INVALID;
   row_id_offset_ = -1;
+  with_cs_replica_ = false;
+  need_submit_io_ = true;
 }
 
 bool ObDDLRedoLogWriterCallback::is_column_group_info_valid() const
@@ -1596,9 +1616,9 @@ int ObDDLRedoLogWriterCallback::write(ObMacroBlockHandle &macro_handle,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogWriterCallback is not inited", K(ret));
-  } else if (OB_UNLIKELY(!macro_handle.is_valid() || !logic_id.is_valid() || nullptr == buf || row_count <= 0)) {
+  } else if (OB_UNLIKELY((!macro_handle.is_valid() && need_submit_io_) || !logic_id.is_valid() || nullptr == buf || row_count <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(macro_handle), K(logic_id), KP(buf), K(row_count));
+    LOG_WARN("invalid argument", K(ret), K(macro_handle), K_(need_submit_io), K(logic_id), KP(buf), K(row_count));
   } else {
     macro_block_id_ = macro_handle.get_macro_id();
     redo_info_.table_key_ = table_key_;
@@ -1608,6 +1628,13 @@ int ObDDLRedoLogWriterCallback::write(ObMacroBlockHandle &macro_handle,
     redo_info_.start_scn_ = start_scn_;
     redo_info_.data_format_version_ = data_format_version_;
     redo_info_.type_ = direct_load_type_;
+    redo_info_.with_cs_replica_ = with_cs_replica_;
+
+    redo_info_.parallel_cnt_ = 0; // TODO @zhuoran.zzr, place holder for shared storage
+    redo_info_.cg_cnt_ = 0;
+
+    redo_info_.macro_block_id_ = MacroBlockId::mock_valid_macro_id();
+
     if (is_column_group_info_valid()) {
       redo_info_.end_row_id_ = row_id_offset_ + row_count - 1;
       row_id_offset_ += row_count;

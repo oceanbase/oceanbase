@@ -50,10 +50,14 @@ private:
   int handle_partition_with_autoinc_identity(SessionContext &session_ctx,
                                              table::ObTableLoadObjRowArray &obj_rows,
                                              const uint64_t &sql_mode, int32_t session_id);
-  int handle_autoinc_column(blocksstable::ObStorageDatum &datum, const ObObjTypeClass &tc,
-                            int32_t session_id, const uint64_t &sql_mode);
+  int handle_autoinc_column(const share::schema::ObColumnSchemaV2 *column_schema,
+                            const common::ObObj &obj,
+                            common::ObObj &out_obj,
+                            int32_t session_id,
+                            const uint64_t &sql_mode);
   int handle_identity_column(const share::schema::ObColumnSchemaV2 *column_schema,
-                             blocksstable::ObStorageDatum &datum,
+                             const common::ObObj &obj,
+                             common::ObObj &out_obj,
                              common::ObArenaAllocator &cast_allocator);
   // 非分区表
   int write_for_non_partitioned(SessionContext &session_ctx,
@@ -70,6 +74,7 @@ private:
   const ObTableLoadParam &param_;
   common::ObArenaAllocator allocator_;
   bool is_partitioned_;
+  int64_t column_count_;
   common::ObCastMode cast_mode_;
   struct SessionContext
   {

@@ -176,6 +176,12 @@ private:
       const obrpc::ObInnerSQLTransmitArg::InnerSQLOperationType operation_type,
       observer::ObInnerSQLConnection *conn);
   static int get_org_cluster_id_(sql::ObSQLSessionInfo *session, int64_t &org_cluster_id);
+  static int set_to_mysql_compat_mode_(observer::ObInnerSQLConnection *conn,
+                                       bool &need_reset_sess_mode,
+                                       bool &need_reset_conn_mode);
+  static int reset_compat_mode_(observer::ObInnerSQLConnection *conn,
+                                const bool need_reset_sess_mode,
+                                const bool need_reset_conn_mode);
 };
 
 } // tablelock

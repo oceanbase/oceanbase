@@ -68,13 +68,16 @@ public:
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
   static int get_mds_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-
+  static int get_convert_co_major_merge_tables(
+      const storage::ObGetMergeTablesParam &param,
+      storage::ObLS &ls,
+      const storage::ObTablet &tablet,
+      storage::ObGetMergeTablesResult &result);
   static int not_support_merge_type(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,

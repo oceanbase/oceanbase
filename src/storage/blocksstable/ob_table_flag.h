@@ -45,32 +45,21 @@ public:
   };
 };
 
-class ObTableIsSharedFlag final
-{
-public:
-  enum FLAG
-  {
-    IS_NOT_SHARED = 0,
-    IS_SHARED = 1,
-    MAX
-  };
-};
-
-struct ObTableFlag final
+struct ObTableBackupFlag final
 {
   OB_UNIS_VERSION(1);
 public:
-  ObTableFlag();
+  ObTableBackupFlag();
   // TODO: yangyi.yyy to Refactor
-  ObTableFlag(int64_t flag);
-  ~ObTableFlag();
+  ObTableBackupFlag(int64_t flag);
+  ~ObTableBackupFlag();
   void reset();
   bool is_valid() const;
-  OB_INLINE bool operator==(const ObTableFlag &other) const;
-  OB_INLINE bool operator!=(const ObTableFlag &other) const;
+  OB_INLINE bool operator==(const ObTableBackupFlag &other) const;
+  OB_INLINE bool operator!=(const ObTableBackupFlag &other) const;
   void set_default();
   void clear();
-  TO_STRING_KV(K_(has_backup_flag), K_(has_local_flag), K_(is_shared_flag));
+  TO_STRING_KV(K_(has_backup_flag), K_(has_local_flag));
 
 public:
   bool has_backup() const { return ObTableHasBackupFlag::HAS_BACKUP == has_backup_flag_; }
@@ -84,32 +73,84 @@ public:
 private:
   static const uint64_t SF_BIT_HAS_BACKUP = 1;
   static const uint64_t SF_BIT_HAS_LOCAL = 1;
-  static const uint64_t SF_BIT_IS_SHARED = 1;
-  static const uint64_t SF_BIT_RESERVED = 61;
+  static const uint64_t SF_BIT_RESERVED = 30;
 
 public:
   union {
-    int64_t flag_;
+    int32_t flag_;
     struct {
       ObTableHasBackupFlag::FLAG has_backup_flag_ : SF_BIT_HAS_BACKUP;
       ObTableHasLocalFlag::FLAG has_local_flag_   : SF_BIT_HAS_LOCAL;
-      ObTableIsSharedFlag::FLAG is_shared_flag_   : SF_BIT_IS_SHARED;
       int64_t reserved_: SF_BIT_RESERVED;
     };
   };
 };
 
-bool ObTableFlag::operator==(const ObTableFlag &other) const
+bool ObTableBackupFlag::operator==(const ObTableBackupFlag &other) const
 {
-  return has_backup_flag_ == other.has_backup_flag_
-      && has_local_flag_ == other.has_local_flag_
-      && is_shared_flag_ == other.is_shared_flag_;
+  return flag_ == other.flag_;
 }
 
-bool ObTableFlag::operator!=(const ObTableFlag &other) const
+bool ObTableBackupFlag::operator!=(const ObTableBackupFlag &other) const
 {
   return !(this->operator==(other));
 }
+
+struct ObTableSharedFlag final
+{
+  OB_UNIS_VERSION(1);
+public:
+  enum FLAG : uint8_t
+  {
+    PRIVATE = 0,                     //share nothing
+    SHARED_SSTABLE = 1,              //sstable is public data, including meta tree and data
+    SHARED_MACRO_BLOCKS = 2,         //only macro block is public data, meta tree is private
+    MAX
+  };
+public:
+  ObTableSharedFlag();
+  ~ObTableSharedFlag();
+  void reset();
+  bool is_valid() const;
+  OB_INLINE bool operator==(const ObTableSharedFlag &other) const;
+  OB_INLINE bool operator!=(const ObTableSharedFlag &other) const;
+  void set_default();
+  void clear();
+
+  void set_private() { shared_flag_ = PRIVATE; }
+  void set_shared_sstable() { shared_flag_ = SHARED_SSTABLE; }
+  void set_share_macro_blocks() { shared_flag_ = SHARED_MACRO_BLOCKS; }
+  bool is_shared_macro_blocks() const {
+    return SHARED_SSTABLE == shared_flag_
+        || SHARED_MACRO_BLOCKS == shared_flag_; }
+  bool is_shared_sstable() const { return SHARED_SSTABLE == shared_flag_; }
+  bool is_only_shared_macro_blocks() const {
+    return SHARED_SSTABLE != shared_flag_
+        && SHARED_MACRO_BLOCKS == shared_flag_; }
+  TO_STRING_KV(K_(shared_flag), K_(reserved));
+
+private:
+  static const uint64_t SF_BIT_IS_SHARED = 8;
+  static const uint64_t SF_BIT_RESERVED = 24;
+  union {
+    int32_t flag_;
+    struct {;
+      FLAG shared_flag_ : SF_BIT_IS_SHARED;
+      int32_t reserved_: SF_BIT_RESERVED;
+    };
+  };
+};
+
+bool ObTableSharedFlag::operator==(const ObTableSharedFlag &other) const
+{
+  return flag_ == other.flag_;
+}
+
+bool ObTableSharedFlag::operator!=(const ObTableSharedFlag &other) const
+{
+  return !(this->operator==(other));
+}
+
 
 }
 }

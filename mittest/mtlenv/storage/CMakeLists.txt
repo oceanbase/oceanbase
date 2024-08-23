@@ -42,5 +42,6 @@ add_subdirectory(checkpoint)
 add_subdirectory(blocksstable)
 add_subdirectory(tenant_snapshot)
 add_subdirectory(tablet_memtable)
+add_subdirectory(tmp_file)
 
 target_link_libraries(test_memtable PUBLIC mock_tx_ctx mock_tx_log_adapter)

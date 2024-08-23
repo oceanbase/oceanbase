@@ -182,6 +182,7 @@ enum TRANSFORM_TYPE {
   DECORRELATE                   ,
   CONDITIONAL_AGGR_COALESCE     ,
   MV_REWRITE                    ,
+  LATE_MATERIALIZATION          ,
   TRANSFORM_TYPE_COUNT_PLUS_ONE ,
 };
 
@@ -288,7 +289,8 @@ public:
       (1L << GROUPBY_PULLUP) |
       (1L << SUBQUERY_COALESCE) |
       (1L << SEMI_TO_INNER) |
-      (1L << MV_REWRITE);
+      (1L << MV_REWRITE) |
+      (1L << LATE_MATERIALIZATION);
 
   ObTransformRule(ObTransformerCtx *ctx,
                   TransMethod transform_method,
@@ -405,7 +407,11 @@ protected:
                            ObRawExprFactory &expr_factory,
                            ObIArray<ObSelectStmt*> &old_temp_table_stmts,
                            ObIArray<ObSelectStmt*> &new_temp_table_stmts);
-
+  int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
+                              ObDMLStmt *stmt,
+                              ObDMLStmt *&orgin_stmt,
+                              ObDMLStmt *&root_stmt);
+  void reset_stmt_cost() { stmt_cost_ = -1; }
 private:
   // pre-order transformation
   int transform_pre_order(common::ObIArray<ObParentDMLStmt> &parent_stmts,
@@ -428,10 +434,6 @@ private:
   int transform_temp_tables(ObIArray<ObParentDMLStmt> &parent_stmts,
                             const int64_t current_level,
                             ObDMLStmt *&stmt);
-  int adjust_transformed_stmt(common::ObIArray<ObParentDMLStmt> &parent_stmts,
-                              ObDMLStmt *stmt,
-                              ObDMLStmt *&orgin_stmt,
-                              ObDMLStmt *&root_stmt);
 
   int evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stms,
                     ObDMLStmt *&stmt,

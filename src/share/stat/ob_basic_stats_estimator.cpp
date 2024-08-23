@@ -1407,5 +1407,78 @@ int ObBasicStatsEstimator::get_gather_table_type_list(ObSqlString &gather_table_
   return ret;
 }
 
+
+
+int ObBasicStatsEstimator::get_async_gather_stats_tables(ObExecContext &ctx,
+                                                         const int64_t tenant_id,
+                                                         const int64_t max_table_cnt,
+                                                         ObIArray<AsyncStatTable> &stat_tables)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString select_sql;
+  if (OB_FAIL(select_sql.append_fmt("SELECT table_id, "\
+                                    "        partition_id "\
+                                    "  FROM   %s"\
+                                    "  WHERE  table_id IN (SELECT DISTINCT table_id "\
+                                    "                      FROM   %s "\
+                                    "                      WHERE  tenant_id = %lu "\
+                                    "                            AND stale_stats = 1 "\
+                                    "                            AND stattype_locked = 0 limit %lu) "\
+                                    "        AND tenant_id = %lu "\
+                                    "        AND stale_stats = 1 "\
+                                    "        AND stattype_locked = 0 order by 1, 2",
+                                    share::OB_ALL_TABLE_STAT_TNAME,
+                                    share::OB_ALL_TABLE_STAT_TNAME,
+                                    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                    max_table_cnt,
+                                    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    ObCommonSqlProxy *sql_proxy = ctx.get_sql_proxy();
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, select_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(select_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
+          int64_t idx_col1 = 0;
+          int64_t idx_col2 = 1;
+          ObObj obj;
+          int64_t table_id = 0;
+          int64_t partition_id = 0;
+          if (OB_FAIL(client_result->get_obj(idx_col1, obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(obj.get_int(table_id))) {
+            LOG_WARN("failed to get int", K(ret), K(obj));
+          } else if (OB_FAIL(client_result->get_obj(idx_col2, obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(obj.get_int(partition_id))) {
+            LOG_WARN("failed to get int", K(ret), K(obj));
+          } else if ((stat_tables.empty() || table_id != (stat_tables.at(stat_tables.count() - 1).table_id_)) &&
+                     OB_FAIL(stat_tables.push_back(AsyncStatTable(table_id)))) {
+            LOG_WARN("failed to push back", K(ret));
+          } else if (OB_FAIL(stat_tables.at(stat_tables.count() - 1).partition_ids_.push_back(partition_id))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+        ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+    LOG_TRACE("succeed to get async gather stats tables", K(ret), K(stat_tables));
+  }
+  return ret;
+}
+
 } // end of common
 } // end of oceanbase

@@ -383,8 +383,8 @@ TEST_F(TestIndexDumper, get_from_disk)
     }
   }
   // close
-  ObTableFlag table_flag;
-  table_flag.clear();
+  ObTableBackupFlag table_backup_flag;
+  table_backup_flag.clear();
   ASSERT_EQ(OB_SUCCESS, macro_meta_dumper.close(meta_block_info));
   STORAGE_LOG(INFO, "test print meta block info", K(meta_block_info));
   ASSERT_FALSE(meta_block_info.in_mem_);
