@@ -56,7 +56,6 @@ public:
   {
     reset_autocommit_ = false;
     has_inner_dml_write_ = false;
-    need_close_conn_ = false;
     have_saved_session_ = false;
     has_autonomous_tx_ = false;
     old_worker_timeout_ts_ = 0;
@@ -67,6 +66,7 @@ public:
     database_name_.reset();
     sql_proxy_ = nullptr;
     inner_conn_ = nullptr;
+    store_inner_conn_ = nullptr;
     session_info_ = nullptr;
     my_exec_ctx_ = nullptr;
     saved_session_.reset();
@@ -97,7 +97,6 @@ private:
   friend class ObGetLockExecutor;
   bool reset_autocommit_;
   bool has_inner_dml_write_;
-  bool need_close_conn_;
   bool have_saved_session_;
   bool has_autonomous_tx_;
   int64_t old_worker_timeout_ts_;
@@ -108,6 +107,7 @@ private:
   ObSqlString database_name_;
   common::ObMySQLProxy *sql_proxy_;
   observer::ObInnerSQLConnection *inner_conn_;
+  observer::ObInnerSQLConnection *store_inner_conn_;
   sql::ObSQLSessionInfo *session_info_;
   sql::ObExecContext *my_exec_ctx_; //my exec context
   sql::ObBasicSessionInfo::TransSavedValue saved_session_;

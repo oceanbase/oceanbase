@@ -654,6 +654,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
         DEFINE_EXECUTE_CMD(ObMigrateUnitStmt, ObMigrateUnitExecutor);
         break;
       }
+      case stmt::T_ALTER_LS_REPLICA: {
+        DEFINE_EXECUTE_CMD(ObAlterLSReplicaStmt, ObAlterLSReplicaExecutor);
+        break;
+      }
       case stmt::T_ADD_ARBITRATION_SERVICE: {
         DEFINE_EXECUTE_CMD(ObAddArbitrationServiceStmt, ObAddArbitrationServiceExecutor);
         break;
@@ -1050,6 +1054,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_CLONE_TENANT: {
         DEFINE_EXECUTE_CMD(ObCloneTenantStmt, ObCloneTenantExecutor);
+        break;
+      }
+      case stmt::T_SERVICE_NAME: {
+        DEFINE_EXECUTE_CMD(ObServiceNameStmt, ObServiceNameExecutor);
         break;
       }
       case stmt::T_ALTER_SYSTEM_RESET_PARAMETER: {

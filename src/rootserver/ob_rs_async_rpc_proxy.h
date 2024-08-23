@@ -90,6 +90,7 @@ RPC_F(obrpc::OB_TRIM_KEY_LIST, obrpc::ObTrimKeyListArg, obrpc::ObTrimKeyListResu
 RPC_F(obrpc::OB_INNER_CREATE_TENANT_SNAPSHOT, obrpc::ObInnerCreateTenantSnapshotArg, obrpc::ObInnerCreateTenantSnapshotResult, ObTenantSnapshotCreatorProxy);
 RPC_F(obrpc::OB_INNER_DROP_TENANT_SNAPSHOT, obrpc::ObInnerDropTenantSnapshotArg, obrpc::ObInnerDropTenantSnapshotResult, ObTenantSnapshotDropperProxy);
 RPC_F(obrpc::OB_FLUSH_LS_ARCHIVE, obrpc::ObFlushLSArchiveArg, obrpc::Int64, ObFlushLSArchiveProxy);
+RPC_F(obrpc::OB_REFRESH_SERVICE_NAME, obrpc::ObRefreshServiceNameArg, obrpc::ObRefreshServiceNameRes, ObRefreshServiceNameProxy);
 RPC_F(obrpc::OB_CAL_STANDBY_TENANT_PHY_RESOURCE, obrpc::ObGetTenantResArg, obrpc::ObTenantLogicalRes, ObGetTenantResProxy);
 RPC_F(obrpc::OB_KILL_QUERY_CLIENT_SESSION, obrpc::ObKillQueryClientSessionArg, obrpc::Int64, ObKillQueryClientSessionProxy);
 

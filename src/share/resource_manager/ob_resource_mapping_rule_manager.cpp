@@ -27,7 +27,7 @@ int ObResourceMappingRuleManager::init()
   int rule_bucket_size = 4096;
   int group_bucket_size = 512;
   if (user_rule_map_.created() || group_id_name_map_.created() ||
-      function_rule_map_.created() || group_name_id_map_.created()) {
+      function_rule_map_.created() || group_name_id_map_.created() || group_id_type_map_.created()) {
     ret = OB_INIT_TWICE;
     LOG_WARN("mapping rule manager should not init multiple times", K(ret));
   } else if (OB_FAIL(user_rule_map_.create(rule_bucket_size, "UsrRuleMap", "UsrRuleMapNode"))) {
@@ -40,7 +40,7 @@ int ObResourceMappingRuleManager::init()
     LOG_WARN("fail create function rule map", K(ret));
   } else if (OB_FAIL(group_name_id_map_.create(group_bucket_size, "GrpNameIdMap", "GrpNameIdNode"))) {
     LOG_WARN("fail create name id map", K(ret));
-  }
+  } else if (OB_FAIL(group_id_type_map_.create(group_bucket_size, "GrpIdTypeMap", "GrpIdTypeNode")))
   LOG_INFO("resource mapping rule manager init ok");
   return ret;
 }
@@ -155,6 +155,10 @@ int ObResourceMappingRuleManager::refresh_resource_user_mapping_rule(
                   1 /* overwrite on dup key */))) {
         LOG_WARN("fail set user mapping rule to rule_map", K(rule), K(ret));
       }
+      if (OB_SUCC(ret) && OB_FAIL(group_id_type_map_.set_refactored(
+                              share::ObTenantGroupIdKey(rule.tenant_id_, group_id), ResourceGroupType::USER_GROUP))) {
+        LOG_WARN("group_id_type_map_ set_refactored failed", K(ret), K(group_id));
+      }
     }
     LOG_INFO("refresh resource user mapping rule", K(tenant_id), K(plan), K(user_rules));
   }
@@ -191,6 +195,10 @@ int ObResourceMappingRuleManager::refresh_resource_function_mapping_rule(
                   rule.group_id_, /* group id */
                   1 /* overwrite on dup key */))) {
         LOG_WARN("fail set user mapping rule to rule_map", K(rule), K(ret));
+      }
+      if (OB_SUCC(ret) && OB_FAIL(group_id_type_map_.set_refactored(
+                              share::ObTenantGroupIdKey(rule.tenant_id_, group_id), ResourceGroupType::FUNCTION_GROUP))) {
+        LOG_WARN("group_id_type_map_ set_refactored failed", K(ret), K(group_id));
       }
     }
     LOG_INFO("refresh_resource_function_mapping_rule", K(tenant_id), K(plan), K(rules));

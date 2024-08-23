@@ -94,7 +94,8 @@ public:
   {
   public:
     AsyncCB(int pcode)
-        : low_level_cb_(NULL), dst_(), timeout_(0), tenant_id_(0),
+        : low_level_cb_(NULL), gtid_(0), pkt_id_(0),
+          dst_(), timeout_(0), tenant_id_(0),
           err_(0), pcode_(pcode), send_ts_(0), payload_(0)
     {}
     virtual ~AsyncCB() {}
@@ -110,7 +111,10 @@ public:
     virtual bool get_cloned() = 0;
 
     // invoke when get a valid packet on protocol level, but can't decode it.
-    virtual void on_invalid() { RPC_FRAME_LOG_RET(ERROR, common::OB_INVALID_ARGUMENT, "invalid packet"); }
+    virtual void on_invalid() {
+      int ret = err_;
+      RPC_FRAME_LOG(ERROR, "rpc response decode failed, tenant oom or deserialization failed", K_(pcode), K_(tenant_id), K_(dst));
+    }
     // invoke when can't get a valid or completed packet.
     virtual void on_timeout() { RPC_FRAME_LOG(DEBUG, "packet timeout"); }
     virtual int on_error(int err);
@@ -127,6 +131,8 @@ public:
     obrpc::ObRpcPacketCode get_pcode() const { return static_cast<obrpc::ObRpcPacketCode>(pcode_); }
 
     void* low_level_cb_;
+    uint64_t gtid_;
+    uint32_t pkt_id_;
   private:
     static const int64_t REQUEST_ITEM_COST_RT = 100 * 1000; // 100ms
   protected:

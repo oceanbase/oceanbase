@@ -14,7 +14,7 @@
 #define STORAGE_LOG_STREAM_BACKUP_TMP_FILE_H_
 
 #include "storage/backup/ob_backup_data_struct.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/blocksstable/ob_data_buffer.h"
 
 namespace oceanbase {
@@ -49,7 +49,7 @@ public:
   TO_STRING_KV(K_(is_opened), K_(tenant_id), K_(file_dir), K_(file_fd), K_(file_size));
 
 private:
-  int get_io_info_(const char *buf, const int64_t size, const int64_t timeout_ms, blocksstable::ObTmpFileIOInfo &io_info);
+  int get_io_info_(const char *buf, const int64_t size, const int64_t timeout_ms, tmp_file::ObTmpFileIOInfo &io_info);
 
 private:
   bool is_opened_;
@@ -139,10 +139,9 @@ int ObBackupIndexBufferNode::get_backup_index(T &backup_index)
   backup_index.reset();
   const int64_t need_read_size = sizeof(T);
   const int64_t timeout_ms = 5000;
-  blocksstable::ObTmpFileIOInfo io_info;
-  blocksstable::ObTmpFileIOHandle handle;
+  tmp_file::ObTmpFileIOInfo io_info;
+  tmp_file::ObTmpFileIOHandle handle;
   io_info.fd_ = tmp_file_.get_fd();
-  io_info.tenant_id_ = tmp_file_.get_tenant_id();
   io_info.io_desc_.set_wait_event(2);
   io_info.size_ = std::min(need_read_size, estimate_size_ - read_offset_);
   io_info.io_timeout_ms_ = timeout_ms;
@@ -158,7 +157,7 @@ int ObBackupIndexBufferNode::get_backup_index(T &backup_index)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     OB_LOG(WARN, "failed to alloc memory", K(ret), K(need_read_size));
   } else if (FALSE_IT(io_info.buf_ = buf)) {
-  } else if (OB_FAIL(blocksstable::ObTmpFileManager::get_instance().pread(io_info, read_offset_, handle))) {
+  } else if (OB_FAIL(tmp_file::ObTenantTmpFileManager::get_instance().pread(io_info, read_offset_, handle))) {
     OB_LOG(WARN, "failed to pread from tmp file", K(ret), K(io_info), K_(read_offset), K(need_read_size));
   } else {
     blocksstable::ObBufferReader buffer_reader(buf, need_read_size);

@@ -148,7 +148,7 @@ int ObStorageHATabletsBuilder::init(const ObStorageHATabletsBuilderParam &param)
   return ret;
 }
 
-int ObStorageHATabletsBuilder::create_or_update_tablets()
+int ObStorageHATabletsBuilder::create_or_update_tablets(ObIDagNet *dag_net)
 {
   int ret = OB_SUCCESS;
   ObLS *ls = nullptr;
@@ -160,6 +160,9 @@ int ObStorageHATabletsBuilder::create_or_update_tablets()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (OB_ISNULL(dag_net)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argumnet", K(ret), KP(dag_net));
   } else if (OB_ISNULL(ls = param_.ls_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
@@ -168,7 +171,13 @@ int ObStorageHATabletsBuilder::create_or_update_tablets()
   } else {
     while (OB_SUCC(ret)) {
       tablet_info.reset();
-      if (OB_FAIL(reader->fetch_tablet_info(tablet_info))) {
+      if (OB_ISNULL(dag_net)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argumnet", K(ret), KP(dag_net));
+      } else if (dag_net->is_cancel()) {
+        ret = OB_CANCELED;
+        LOG_WARN("task is cancelled", K(ret));
+      } else if (OB_FAIL(reader->fetch_tablet_info(tablet_info))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
@@ -202,6 +211,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablets()
 int ObStorageHATabletsBuilder::create_all_tablets(
     const bool need_check_tablet_limit,
     ObICopyLSViewInfoReader *reader,
+    ObIDagNet *dag_net,
     common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
     common::ObIArray<ObLogicTabletID> &data_tablet_id_list,
     CopyTabletSimpleInfoMap &simple_info_map)
@@ -218,9 +228,9 @@ int ObStorageHATabletsBuilder::create_all_tablets(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
-  } else if (OB_ISNULL(reader)) {
+  } else if (OB_ISNULL(reader) || OB_ISNULL(dag_net)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("create all tablets get invalid argument", K(ret), KP(reader));
+    LOG_WARN("create all tablets get invalid argument", K(ret), KP(reader), KP(dag_net));
   } else if (OB_ISNULL(ls = param_.ls_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
@@ -231,7 +241,13 @@ int ObStorageHATabletsBuilder::create_all_tablets(
       tablet_info.reset();
       tablet_simple_info.reset();
       logic_tablet_id.reset();
-      if (OB_FAIL(reader->get_next_tablet_info(tablet_info))) {
+      if (OB_ISNULL(dag_net)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+      } else if (dag_net->is_cancel()) {
+        ret = OB_CANCELED;
+        LOG_WARN("task is cancelled", K(ret));
+      } else if (OB_FAIL(reader->get_next_tablet_info(tablet_info))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
@@ -280,6 +296,7 @@ int ObStorageHATabletsBuilder::create_all_tablets(
 }
 
 int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
+    ObIDagNet *dag_net,
     CopyTabletSimpleInfoMap &simple_info_map,
     common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
     common::ObIArray<ObLogicTabletID> &data_tablet_id_list)
@@ -298,6 +315,9 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (OB_ISNULL(dag_net)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("create all tablets get invalid argument", K(ret), KP(dag_net));
   } else if (OB_ISNULL(ls = param_.ls_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls), K(param_));
@@ -307,7 +327,13 @@ int ObStorageHATabletsBuilder::create_all_tablets_with_4_1_rpc(
     while (OB_SUCC(ret)) {
       tablet_info.reset();
       logic_tablet_id.reset();
-      if (OB_FAIL(reader->fetch_tablet_info(tablet_info))) {
+      if (OB_ISNULL(dag_net)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+      } else if (dag_net->is_cancel()) {
+        ret = OB_CANCELED;
+        LOG_WARN("task is cancelled", K(ret));
+      } else if (OB_FAIL(reader->fetch_tablet_info(tablet_info))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;
@@ -591,7 +617,7 @@ int ObStorageHATabletsBuilder::create_or_update_tablet_(
   return ret;
 }
 
-int ObStorageHATabletsBuilder::build_tablets_sstable_info()
+int ObStorageHATabletsBuilder::build_tablets_sstable_info(ObIDagNet *dag_net)
 {
   int ret = OB_SUCCESS;
   ObICopySSTableInfoReader *reader = nullptr;
@@ -603,6 +629,9 @@ int ObStorageHATabletsBuilder::build_tablets_sstable_info()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("storage ha tablets builder do not init", K(ret));
+  } else if (OB_ISNULL(dag_net)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("build_tablets_sstable_info get invalid argument", K(ret), KP(dag_net));
   } else if (OB_ISNULL(ls = param_.ls_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("log stream should not be NULL", K(ret), KP(ls));
@@ -617,8 +646,13 @@ int ObStorageHATabletsBuilder::build_tablets_sstable_info()
     while (OB_SUCC(ret)) {
       sstable_info.reset();
       copy_header.reset();
-
-      if (OB_FAIL(reader->get_next_tablet_sstable_header(copy_header))) {
+      if (OB_ISNULL(dag_net)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net should not be nullptr", K(ret), KP(dag_net));
+      } else if (dag_net->is_cancel()) {
+        ret = OB_CANCELED;
+        LOG_WARN("task is cancelled", K(ret));
+      } else if (OB_FAIL(reader->get_next_tablet_sstable_header(copy_header))) {
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;
           break;

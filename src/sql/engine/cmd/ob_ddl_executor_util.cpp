@@ -32,15 +32,19 @@ namespace sql
 int ObDDLExecutorUtil::handle_session_exception(ObSQLSessionInfo &session)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = session.get_effective_tenant_id();
+  bool is_standby = false;
   if (OB_UNLIKELY(session.is_query_killed())) {
     ret = OB_ERR_QUERY_INTERRUPTED;
     LOG_WARN("query is killed", K(ret));
   } else if (OB_UNLIKELY(session.is_zombie())) {
     ret = OB_SESSION_KILLED;
     LOG_WARN("session is killed", K(ret));
-  } else if (GCTX.is_standby_cluster()) {
+  } else if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+  } else if (is_standby) {
     ret = OB_SESSION_KILLED;
-    LOG_INFO("cluster switchoverd, kill session", KR(ret));
+    LOG_WARN("session is killed", KR(ret));
   }
   return ret;
 }

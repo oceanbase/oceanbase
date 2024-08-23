@@ -52,7 +52,7 @@ struct ObLSReplicaAddr
 
   ObLSReplicaAddr()
       : addr_(),
-        replica_type_(common::REPLICA_TYPE_MAX) {}
+        replica_type_(common::REPLICA_TYPE_INVALID) {}
   void reset() { *this = ObLSReplicaAddr(); }
   int init(const common::ObAddr &addr,
            const common::ObReplicaType replica_type);

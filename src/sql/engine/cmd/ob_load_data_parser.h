@@ -40,6 +40,7 @@ struct ObCSVGeneralFormat {
     cs_type_(common::CHARSET_INVALID),
     skip_header_lines_(0),
     skip_blank_lines_(false),
+    ignore_extra_fields_(false),
     trim_space_(false),
     null_if_(),
     empty_field_as_null_(false),
@@ -65,6 +66,7 @@ struct ObCSVGeneralFormat {
   common::ObCharsetType cs_type_; // charset type of format strings
   int64_t skip_header_lines_;
   bool skip_blank_lines_;
+  bool ignore_extra_fields_;
   bool trim_space_;
   common::ObArrayWrap<common::ObString> null_if_;
   bool empty_field_as_null_;
@@ -442,7 +444,8 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
     }
     if (OB_LIKELY(find_new_line) || is_end_file) {
       if (!format_.skip_blank_lines_ || field_idx > 0) {
-        if (field_idx != format_.file_column_nums_) {
+        if (field_idx < format_.file_column_nums_
+            || (field_idx > format_.file_column_nums_ && !format_.ignore_extra_fields_)) {
           ret = handle_irregular_line(field_idx, line_no, errors);
         }
         if (OB_SUCC(ret)) {
@@ -486,6 +489,26 @@ struct ObOriginFileFormat
   common::ObString origin_null_if_str_;
 };
 
+enum class ObLoadCompressionFormat
+{
+  INVALID,
+  NONE,
+  AUTO,
+  GZIP,
+  DEFLATE,
+  ZSTD,
+};
+
+const char *compression_format_to_string(ObLoadCompressionFormat compression_format);
+int compression_format_from_string(ObString compression_name, ObLoadCompressionFormat &compression_format);
+
+/**
+ * guess compression format from filename suffix
+ *
+ * Return NONE if none of the known compression format matches.
+ */
+int compression_format_from_suffix(ObString filename, ObLoadCompressionFormat &compression_format);
+
 struct ObExternalFileFormat
 {
   struct StringData {
@@ -509,7 +532,7 @@ struct ObExternalFileFormat
     OPT_BINARY_AS_TEXT = 1 << 1,
   };
 
-  ObExternalFileFormat() : format_type_(INVALID_FORMAT) {}
+  ObExternalFileFormat() : format_type_(INVALID_FORMAT), compression_format_(ObLoadCompressionFormat::NONE) {}
 
   int64_t to_string(char* buf, const int64_t buf_len) const;
   int load_from_string(const common::ObString &str, common::ObIAllocator &allocator);
@@ -518,6 +541,7 @@ struct ObExternalFileFormat
   ObOriginFileFormat origin_file_format_str_;
   FormatType format_type_;
   sql::ObCSVGeneralFormat csv_format_;
+  ObLoadCompressionFormat compression_format_;
   uint64_t options_;
 
   static const char *FORMAT_TYPE_STR[];

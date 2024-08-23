@@ -119,6 +119,12 @@ public:
       const uint64_t tenant_id,
       const bool only_for_display,
       int64_t &acc_dr_task);
+  int do_add_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_remove_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_migrate_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_modify_ls_replica_type_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_modify_ls_paxos_replica_num_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
+  int do_cancel_ls_replica_task(const obrpc::ObAdminAlterLSReplicaArg &arg);
   static int check_tenant_locality_match(
       const uint64_t tenant_id,
       ObZoneManager &zone_mgr,
@@ -129,6 +135,133 @@ public:
       common::ObSArray<ObLSReplicaTaskDisplayInfo> &task_plan);
 
 private:
+
+  // add task in queue in mgr and execute task
+  // @param [in] task, the task to execute
+  int add_task_in_queue_and_execute_(const ObDRTask &task);
+  // check ls exist and init dr_ls_info
+  // @param [in] arg, task info
+  // @param [out] dr_ls_info, target dr_ls_info to init
+  int check_and_init_info_for_alter_ls_(
+      const obrpc::ObAdminAlterLSReplicaArg& arg,
+      DRLSInfo& dr_ls_info);
+  // check ls exist and get ls_info and ls_status_info
+  // @param [in] ls_id, which ls to check
+  // @param [in] tenant_id, which user does the ls to check belong to
+  // @param [out] ls_info, target ls_info
+  // @param [out] ls_status_info, target ls_status_info
+  int check_ls_exist_and_get_ls_info_(
+      const share::ObLSID& ls_id,
+      const int64_t tenant_id,
+      share::ObLSInfo& ls_info,
+      share::ObLSStatusInfo& ls_status_info);
+  // check unit exist and get unit
+  // @param [in] task_execute_server, the unit in which server
+  // @param [in] tenant_id, which user does the unit to check belong to
+  // @param [in] is_migrate_source_valid, is unit migration valid on the source server
+  // @param [out] unit, target unit
+  int check_unit_exist_and_get_unit_(
+      const common::ObAddr &task_execute_server,
+      const uint64_t tenant_id,
+      const bool is_migrate_source_valid,
+      share::ObUnit& unit);
+  // check task execute server status
+  // @param [in] task_execute_server, the task execute in which server
+  // @param [in] need_check_can_migrate_in, if need to check can_migrate_in flag
+  int check_task_execute_server_status_(
+      const common::ObAddr &task_execute_server,
+      const bool need_check_can_migrate_in);
+  // get replica type by leader
+  // @param [in] server_addr, the replica in which server
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] replica_type, the replica_type of replica in server_addr
+  int get_replica_type_by_leader_(
+      const common::ObAddr& server_addr,
+      const DRLSInfo &dr_ls_info,
+      common::ObReplicaType& replica_type);
+  // build a add replica task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] add_replica_task, target task
+  int build_add_replica_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      const DRLSInfo &dr_ls_info,
+      ObAddLSReplicaTask &add_replica_task);
+  // build a remove replica task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] remove_replica_task, target task
+  int build_remove_replica_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      DRLSInfo &dr_ls_info,
+      ObRemoveLSReplicaTask &remove_replica_task);
+  // build a modify replica task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] modify_replica_task, target task
+  int build_modify_replica_type_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      DRLSInfo &dr_ls_info,
+      ObLSTypeTransformTask &modify_replica_task);
+  // build a migrate replica task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] migrate_replica_task, target task
+  int build_migrate_replica_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      const DRLSInfo &dr_ls_info,
+      ObMigrateLSReplicaTask &migrate_replica_task);
+  // build a modify paxos_replica_num task by task info
+  // @param [in] arg, the task info
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] modify_paxos_replica_number_task, target task
+  int build_modify_paxos_replica_num_task_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      DRLSInfo &dr_ls_info,
+      ObLSModifyPaxosReplicaNumberTask &modify_paxos_replica_number_task);
+  // check if provide data source available and init data_source
+  // @param [in] arg, the task info
+  // @param [in] replica_type, source replica type
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] data_source, target data_source
+  int check_data_source_available_and_init_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      const common::ObReplicaType &replica_type,
+      const DRLSInfo &dr_ls_info,
+      ObReplicaMember &data_source);
+  // if provided paxos_replica_num is valid, check it. otherwise generate new paxos_replica_num
+  // @param [in] arg, the task info
+  // @param [in] replica_type, target replica's type
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] new_p, new paxos_replica_num
+  int check_and_generate_new_paxos_replica_num_(
+      const obrpc::ObAdminAlterLSReplicaArg &arg,
+      const common::ObReplicaType &replica_type,
+      const DRLSInfo &dr_ls_info,
+      int64_t &new_p);
+  // check whether the values of member list count and new paxs_replica_num are legal in alter full replica
+  // @param [in] member_list_count, count of leader member list after alter full replica
+  // @param [in] new_p, new paxos_replica_num
+  int check_for_alter_full_replica_(
+      const int64_t member_list_count,
+      const int64_t new_p);
+  // check if majority is satisfied when remove replica
+  // @param [in] server_addr, target replica to remove in which server
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [in] new_p, new paxos_replica_num
+  int check_majority_for_remove_(
+      const common::ObAddr& server_addr,
+      const DRLSInfo &dr_ls_info,
+      const int64_t new_p);
+  // check the count of inactive server except desti_server_addr
+  // @param [in] desti_server_addr, except desti_server_addr
+  // @param [in] dr_ls_info, dr_ls_info
+  // @param [out] other_inactive_server_count, except desti_server_addr inactive server count
+  int check_other_inactive_server_count_(
+      const common::ObAddr& desti_server_addr,
+      const DRLSInfo &dr_ls_info,
+      int64_t& other_inactive_server_count);
+
   struct TaskCountStatistic
   {
   public:
@@ -177,7 +310,7 @@ private:
     LA_P_ADD_LOGONLY,
     LA_P_ADD_ENCRYPTION,
     LA_P_FULL_TO_LOGONLY,
-    LA_P_ADD_READONLY,
+    LA_P_ADD_NON_PAXOS,
     LA_P_REMOVE_NON_PAXOS,
     LA_P_FULL_TO_READONLY,
     LA_P_REMOVE_PAXOS,
@@ -215,7 +348,7 @@ private:
     RemoveReplicaLATask()
       : LATask(),
         remove_server_(),
-        replica_type_(REPLICA_TYPE_MAX),
+        replica_type_(REPLICA_TYPE_INVALID),
         memstore_percent_(100),
         member_time_us_(-1),
         orig_paxos_replica_number_(0),
@@ -256,7 +389,7 @@ private:
         dst_server_(),
         unit_id_(OB_INVALID_ID),
         unit_group_id_(OB_INVALID_ID),
-        replica_type_(REPLICA_TYPE_MAX),
+        replica_type_(REPLICA_TYPE_INVALID),
         memstore_percent_(100),
         member_time_us_(-1),
         orig_paxos_replica_number_(0),
@@ -272,8 +405,8 @@ private:
         priority = LATaskPrio::LA_P_ADD_LOGONLY;
       } else if (common::REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type_) {
         priority = LATaskPrio::LA_P_ADD_ENCRYPTION;
-      } else if (common::REPLICA_TYPE_READONLY == replica_type_) {
-        priority = LATaskPrio::LA_P_ADD_READONLY;
+      } else if (ObReplicaTypeCheck::is_non_paxos_replica(replica_type_)) {
+        priority = LATaskPrio::LA_P_ADD_NON_PAXOS;
       } else {} // default priority value
       return priority;
     }
@@ -309,10 +442,10 @@ private:
         dst_server_(),
         unit_id_(OB_INVALID_ID),
         unit_group_id_(OB_INVALID_ID),
-        src_replica_type_(REPLICA_TYPE_MAX),
+        src_replica_type_(REPLICA_TYPE_INVALID),
         src_memstore_percent_(100),
         src_member_time_us_(-1),
-        dst_replica_type_(REPLICA_TYPE_MAX),
+        dst_replica_type_(REPLICA_TYPE_INVALID),
         dst_memstore_percent_(100),
         dst_member_time_us_(-1),
         orig_paxos_replica_number_(0),
@@ -394,7 +527,7 @@ private:
         memstore_percent_(memstore_percent),
         replica_num_(replica_num) {}
     ReplicaDesc()
-      : replica_type_(REPLICA_TYPE_MAX),
+      : replica_type_(REPLICA_TYPE_INVALID),
         memstore_percent_(100),
         replica_num_(0) {}
     TO_STRING_KV(K(replica_type_),
@@ -402,14 +535,16 @@ private:
                  K(replica_num_));
     int64_t cast(const common::ObReplicaType replica_type) {
       int64_t ret_val = 0;
-      if (REPLICA_TYPE_READONLY == replica_type) {
+      if (REPLICA_TYPE_COLUMNSTORE == replica_type) {
         ret_val = 1;
-      } else if (REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type) {
+      } else if (REPLICA_TYPE_READONLY == replica_type) {
         ret_val = 2;
-      } else if (REPLICA_TYPE_LOGONLY == replica_type) {
+      } else if (REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type) {
         ret_val = 3;
-      } else if (REPLICA_TYPE_FULL == replica_type) {
+      } else if (REPLICA_TYPE_LOGONLY == replica_type) {
         ret_val = 4;
+      } else if (REPLICA_TYPE_FULL == replica_type) {
+        ret_val = 5;
       } else {
         ret_val = 0; // invalid type, put it at the beginning
       }
@@ -447,35 +582,6 @@ private:
              && nullptr != unit_stat_info_
              && nullptr != unit_in_group_stat_info_;
     }
-    int64_t cast(const common::ObReplicaType replica_type) {
-      int64_t ret_val = 0;
-      if (REPLICA_TYPE_READONLY == replica_type) {
-        ret_val = 1;
-      } else if (REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type) {
-        ret_val = 2;
-      } else if (REPLICA_TYPE_LOGONLY == replica_type) {
-        ret_val = 3;
-      } else if (REPLICA_TYPE_FULL == replica_type) {
-        ret_val = 4;
-      } else {
-        ret_val = 0; // invalid type, put it at the beginning
-      }
-      return ret_val;
-    }
-    bool operator<(const ReplicaStatDesc &that) {
-      bool bool_ret = true;
-      if (nullptr == this->replica_ && nullptr != that.replica_) {
-        bool_ret = true;
-      } else if (nullptr != this->replica_ && nullptr == that.replica_) {
-        bool_ret = false;
-      } else if (nullptr == this->replica_ && nullptr == that.replica_) {
-        bool_ret = true;
-      } else {
-        bool_ret = cast(this->replica_->get_replica_type())
-                   < cast(that.replica_->get_replica_type());
-      }
-      return bool_ret;
-    }
     TO_STRING_KV(KPC(replica_),
                  KPC(server_stat_info_),
                  KPC(unit_stat_info_),
@@ -492,10 +598,22 @@ private:
   public:
     ReplicaDescArray() : common::ObSEArrayImpl<ReplicaDesc, 7>(),
                          is_readonly_all_server_(false),
-                         readonly_memstore_percent_(100) {}
-  public:
+                         is_columnstore_all_server_(false) {}
+    void set_readonly_all_server() {
+      is_readonly_all_server_ = true;
+      is_columnstore_all_server_ = false;
+    }
+    void set_columnstore_all_server() {
+      is_columnstore_all_server_ = true;
+      is_readonly_all_server_ = false;
+    }
+    bool is_readonly_all_server() { return is_readonly_all_server_; }
+    bool is_columnstore_all_server() { return is_columnstore_all_server_; }
+    int64_t get_readonly_memstore_percent() { return readonly_memstore_percent_; }
+  private:
     bool is_readonly_all_server_;
-    int64_t readonly_memstore_percent_;
+    bool is_columnstore_all_server_;
+    const int64_t readonly_memstore_percent_ = 100;   // obsolete
   };
 
 
@@ -566,13 +684,17 @@ private:
         ReplicaStatDesc &replica_stat_desc,
         share::ObLSReplica &replica,
         const int64_t index);
+    int do_generate_locality_task_from_columnstore_replica(
+        ReplicaStatDesc &replica_stat_desc,
+        share::ObLSReplica &replica,
+        const int64_t index);
 
-    int try_generate_type_transform_task_for_readonly_replica_(
+    int try_generate_task_for_readonly_replica_(
         ReplicaDescArray &zone_replica_desc_in_locality,
         ReplicaStatDesc &replica_stat_desc,
         const int64_t index,
         bool &task_generated);
-    int try_generate_remove_readonly_task_for_duplicate_log_stream_(
+    int try_generate_remove_redundant_replica_task_for_dup_ls_(
         ReplicaStatDesc &replica_stat_desc,
         share::ObLSReplica &replica,
         const int64_t index);
@@ -600,7 +722,7 @@ private:
         ReplicaDesc &replica_desc);
     int generate_modify_paxos_replica_number_task();
     // private func for get_next_locality_alignment_task
-    int try_get_readonly_all_server_locality_alignment_task(
+    int try_get_readonly_or_columnstore_all_server_locality_alignment_task(
         UnitProvider &unit_provider,
         const LATask *&task);
     int try_get_normal_locality_alignment_task(
@@ -800,7 +922,7 @@ private:
       bool &is_paxos_replica_related,
       bool &need_generate);
 
-  int construct_extra_info_to_build_cancael_migration_task(
+  int construct_extra_info_to_build_cancel_migration_task(
       const bool &is_paxos_replica_related,
       DRLSInfo &dr_ls_info,
       const share::ObLSReplica &ls_replica,
@@ -910,7 +1032,7 @@ private:
   // @params[in]  only_for_display, whether just to display this task
   // @params[in]  dr_ls_info, disaster recovery infos of this log stream
   // @params[out] acc_dr_task, accumulated disaster recovery task count
-  int try_remove_readonly_replica_for_deleting_unit_(
+  int try_remove_non_paxos_replica_for_deleting_unit_(
       const share::ObLSReplica &ls_replica,
       const bool &only_for_display,
       DRLSInfo &dr_ls_info,

@@ -141,6 +141,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
 
   share::schema::ObTableSchema table_schema;
   TestDmlCommon::build_data_table_schema(tenant_id_, table_schema);
+  table_schema.set_tablet_id(tablet_id_);
 
   ObSEArray<const ObTableSchema *, 4> index_schema_array;
 
@@ -181,6 +182,7 @@ void TestTableScanPureDataTable::table_scan(
   // prepare table schema
   share::schema::ObTableSchema table_schema;
   TestDmlCommon::build_data_table_schema(tenant_id_, table_schema);
+  table_schema.set_tablet_id(tablet_id_);
 
   // 1. get tx desc
   transaction::ObTxDesc *tx_desc = nullptr;

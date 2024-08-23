@@ -58,7 +58,8 @@ public:
     const compaction::ObMergeType merge_type,
     const int64_t snapshot_version,
     const share::SCN &end_scn,
-    const int64_t cluster_version);
+    const int64_t cluster_version,
+    const bool need_submit_io = true);
   bool is_valid() const;
   void reset();
   int assign(const ObStaticDataStoreDesc &desc);
@@ -78,7 +79,8 @@ public:
       K_(master_key_id),
       KPHEX_(encrypt_key, sizeof(encrypt_key_)),
       K_(major_working_cluster_version),
-      K_(progressive_merge_round));
+      K_(progressive_merge_round),
+      K_(need_submit_io));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -106,6 +108,9 @@ public:
   int64_t encrypt_id_;
   int64_t master_key_id_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
+  // For ddl redo log for cs replica, leader write only macro block data in memory but do not flush to disk.
+  // indicate whether to submit io to write maroc block data to disk.
+  bool need_submit_io_;
 };
 
 // ObColDataStoreDesc is same for every parallel task
@@ -253,6 +258,7 @@ public:
   STATIC_DESC_FUNC(ObCompressorType, compressor_type);
   STATIC_DESC_FUNC(int64_t, major_working_cluster_version);
   STATIC_DESC_FUNC(const char *, encrypt_key);
+  STATIC_DESC_FUNC(bool, need_submit_io);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
   COL_DESC_FUNC(int64_t, row_column_count);
@@ -335,7 +341,8 @@ struct ObWholeDataStoreDesc
     const int64_t cluster_version,
     const share::SCN &end_scn = share::SCN::invalid_scn(),
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
-    const uint16_t table_cg_idx = 0);
+    const uint16_t table_cg_idx = 0,
+    const bool need_submit_io = true);
   int gen_index_store_desc(const ObDataStoreDesc &data_desc);
   int assign(const ObDataStoreDesc &desc);
   ObStaticDataStoreDesc &get_static_desc() { return static_desc_; }

@@ -29,6 +29,46 @@ class ObMySQLResult;
 namespace share
 {
 
+struct ObLSReplicaUniItem
+{
+  ObLSReplicaUniItem();
+  ObLSReplicaUniItem(const ObLSID &ls_id, const common::ObAddr &server);
+  ~ObLSReplicaUniItem();
+  void reset();
+  uint64_t hash() const;
+  int hash(uint64_t &hash_val) const;
+  bool is_valid() const;
+  bool operator == (const ObLSReplicaUniItem &other) const;
+  bool operator != (const ObLSReplicaUniItem &other) const;
+  TO_STRING_KV(K_(ls_id), K_(server));
+
+  share::ObLSID ls_id_;
+  common::ObAddr server_;
+};
+
+class ObLSColumnReplicaCache
+{
+public:
+  ObLSColumnReplicaCache();
+  ~ObLSColumnReplicaCache();
+  int init();
+  void destroy();
+  void reuse();
+  int check_contains_ls(const ObLSID &ls_id, bool &contained) const;
+  int mark_ls_finished(const ObLSID &ls_id);
+  int add_cs_replica(const ObLSReplicaUniItem &ls_item);
+  int update(const ObLSID &ls_id, const ObAddr &server);
+  int check_is_cs_replica(const ObLSReplicaUniItem &ls_item, bool &is_cs_replica) const;
+  TO_STRING_KV(K_(is_inited), K_(ls_id_set), K_(ls_replica_set));
+private:
+  const static int64_t BUCKET_NUM_OF_LS_ID_SET = 15;
+  const static int64_t BUCKET_NUM_OF_LS_REPLICA_SET = 31;
+private:
+  bool is_inited_;
+  hash::ObHashSet<ObLSID, hash::NoPthreadDefendMode> ls_id_set_; // pre-wamred ls id, unused
+  hash::ObHashSet<ObLSReplicaUniItem, hash::NoPthreadDefendMode> ls_replica_set_; // cs-prelica ls
+};
+
 class ObCompactionLocalityCache
 {
 public:
@@ -39,6 +79,7 @@ public:
   bool empty() const { return ls_infos_map_.empty(); }
   int refresh_ls_locality(const bool force_refresh);
   int get_ls_info(const share::ObLSID &ls_id, share::ObLSInfo &ls_info);
+  const share::ObLSColumnReplicaCache& get_cs_replica_cache() const { return ls_cs_replica_cache_; }
   TO_STRING_KV(K_(is_inited), K_(tenant_id));
 
 private:
@@ -62,6 +103,7 @@ private:
   uint64_t tenant_id_;
   rootserver::ObMajorMergeInfoManager *merge_info_mgr_;
   common::hash::ObHashMap<share::ObLSID, share::ObLSInfo> ls_infos_map_;
+  share::ObLSColumnReplicaCache ls_cs_replica_cache_;
 };
 
 } // namespace share

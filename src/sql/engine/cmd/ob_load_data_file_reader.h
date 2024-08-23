@@ -18,6 +18,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/file/ob_file.h"
 #include "sql/resolver/cmd/ob_load_data_stmt.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 #include "share/backup/ob_backup_struct.h"
 #include "observer/mysql/obmp_packet_sender.h"
 
@@ -92,6 +93,7 @@ public:
    * A file reader factory
    */
   static int open(const ObFileReadParam &param, ObIAllocator &allocator, ObFileReader *& file_reader);
+  static void destroy(ObFileReader *file_reader);
 
 private:
   static int open_decompress_reader(const ObFileReadParam &param,
@@ -224,7 +226,10 @@ public:
   virtual int  decompress(const char *src, int64_t src_size, int64_t &consumed_size,
                           char *dest, int64_t dest_capacity, int64_t &decompressed_size) = 0;
 
+  virtual ObLoadCompressionFormat compression_format() const = 0;
+
   static int create(ObLoadCompressionFormat format, ObIAllocator &allocator, ObDecompressor *&decompressor);
+  static void destroy(ObDecompressor *decompressor);
 
 protected:
   ObIAllocator &allocator_;
@@ -270,7 +275,7 @@ protected:
 class ObZlibDecompressor : public ObDecompressor
 {
 public:
-  explicit ObZlibDecompressor(ObIAllocator &allocator);
+  explicit ObZlibDecompressor(ObIAllocator &allocator, ObLoadCompressionFormat compression_format);
   virtual ~ObZlibDecompressor();
 
   int  init() override;
@@ -279,9 +284,13 @@ public:
   int decompress(const char *src, int64_t src_size, int64_t &consumed_size,
                  char *dest, int64_t dest_capacity, int64_t &decompressed_size) override;
 
+  ObLoadCompressionFormat compression_format() const override { return compression_format_; }
+
 private:
   void *zlib_stream_ptr_    = nullptr;
   bool  zstream_need_reset_ = false; // the zstreamptr should be reset if we got Z_STREAM_END
+
+  ObLoadCompressionFormat compression_format_;
 };
 
 /**
@@ -299,6 +308,7 @@ public:
   int decompress(const char *src, int64_t src_size, int64_t &consumed_size,
                  char *dest, int64_t dest_capacity, int64_t &decompressed_size) override;
 
+  ObLoadCompressionFormat compression_format() const override { return ObLoadCompressionFormat::ZSTD; }
 private:
   void *zstd_stream_context_ = nullptr;
 };

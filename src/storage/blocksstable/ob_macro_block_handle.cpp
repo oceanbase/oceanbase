@@ -221,18 +221,20 @@ int ObMacroBlockHandle::async_write(const ObMacroBlockWriteInfo &write_info)
   return ret;
 }
 
-int ObMacroBlockHandle::wait()
+int ObMacroBlockHandle::wait(const int64_t wait_timeout_ms)
 {
   int ret = OB_SUCCESS;
   if (io_handle_.is_empty()) {
     // do nothing
-  } else if (OB_FAIL(io_handle_.wait())) {
-    LOG_WARN("fail to wait block io, may be retry", K(macro_id_), K(ret));
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = report_bad_block())) {
-      LOG_WARN("fail to report bad block", K(tmp_ret), K(ret));
+  } else if (OB_FAIL(io_handle_.wait(wait_timeout_ms))) {
+    if (OB_EAGAIN != ret) {
+      LOG_WARN("fail to wait block io, may be retry", K(macro_id_), K(ret));
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = report_bad_block())) {
+        LOG_WARN("fail to report bad block", K(tmp_ret), K(ret));
+      }
+      io_handle_.reset();
     }
-    io_handle_.reset();
   }
   return ret;
 }

@@ -23,11 +23,13 @@ ObReplicaCompare::ObReplicaCompare(ObRoutePolicyType policy_type)
      policy_type_(policy_type),
      readonly_zone_first_{IS_OTHER_REGION, ZONE_TYPE, MERGE_STATUS, POS_TYPE},
      only_readonly_zone_{ZONE_TYPE, IS_OTHER_REGION, MERGE_STATUS, POS_TYPE,},
-     unmerge_zone_first_{IS_OTHER_REGION, MERGE_STATUS, ZONE_TYPE, POS_TYPE}
+     unmerge_zone_first_{IS_OTHER_REGION, MERGE_STATUS, ZONE_TYPE, POS_TYPE},
+     column_store_only_{ZONE_TYPE, IS_OTHER_REGION, MERGE_STATUS, POS_TYPE}
       {
         static_assert(sizeof(readonly_zone_first_) == sizeof(only_readonly_zone_), "invalid array size");
         static_assert(sizeof(readonly_zone_first_) == sizeof(unmerge_zone_first_), "invalid array size");
         static_assert((sizeof(readonly_zone_first_)/sizeof(CompareType)) == (sizeof(cmp_func_array_)/sizeof(CmpFuncPtr)), "invalid array size");
+        static_assert(sizeof(readonly_zone_first_) == sizeof(column_store_only_), "invalid array size");
 
         cmp_func_array_[IS_OTHER_REGION] = &ObReplicaCompare::compare_other_region;
         cmp_func_array_[ZONE_TYPE] = &ObReplicaCompare::compare_zone_type;
@@ -50,6 +52,8 @@ bool ObReplicaCompare::operator()(const ObRoutePolicy::CandidateReplica &replica
       cmp_type_array = only_readonly_zone_;
     } else if (UNMERGE_ZONE_FIRST == policy_type_) {
       cmp_type_array = unmerge_zone_first_;
+    } else if (COLUMN_STORE_ONLY == policy_type_) {
+      cmp_type_array = column_store_only_;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected policy type", K(policy_type_), K(ret));

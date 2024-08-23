@@ -16,6 +16,7 @@
 
 #include "share/ob_define.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h"   // for OB_ALL_LS_REPLICA_TASK_TNAME
+#include "ob_disaster_recovery_task_table_operator.h" //for ObLSReplicaTaskTableOperator
 #include "rootserver/ob_disaster_recovery_task_mgr.h"  // for ObDRTaskMgr
 #include "share/schema/ob_multi_version_schema_service.h" // for GSCHEMASERVICE
 
@@ -271,12 +272,9 @@ int ObDRTaskTableUpdater::process_task_(
   int ret = OB_SUCCESS;
   DEBUG_SYNC(BEFORE_DELETE_DRTASK_FROM_INNER_TABLE);
   common::ObMySQLTransaction trans;
-  int64_t affected_rows = 0;
   const uint64_t sql_tenant_id = gen_meta_tenant_id(task.get_tenant_id());
-  char task_id_to_set[OB_TRACE_STAT_BUFFER_SIZE] = "";
-  ObSqlString sql;
   bool has_dropped = false;
-
+  ObLSReplicaTaskTableOperator task_operator;
   if (OB_FAIL(check_inner_stat_())) {
     LOG_WARN("fail to check inner stat", KR(ret), K_(inited), K_(stopped));
   } else if (OB_ISNULL(sql_proxy_) || OB_ISNULL(task_mgr_)) {
@@ -285,9 +283,6 @@ int ObDRTaskTableUpdater::process_task_(
   } else if (!task.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(task));
-  } else if (false == task.get_task_id().to_string(task_id_to_set, sizeof(task_id_to_set))) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("convert task id to string failed", KR(ret), "task_id", task.get_task_id());
   } else if (OB_UNLIKELY(!is_valid_tenant_id(task.get_tenant_id()))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), "tenant_id", task.get_tenant_id());
@@ -298,22 +293,8 @@ int ObDRTaskTableUpdater::process_task_(
     if (has_dropped) {
     } else if (OB_FAIL(trans.start(sql_proxy_, sql_tenant_id))) {
       LOG_WARN("start transaction failed", KR(ret), K(sql_tenant_id));
-    } else {
-      if (OB_FAIL(sql.assign_fmt("DELETE FROM %s WHERE tenant_id = %lu AND ls_id = %lu "
-          "AND task_type = '%s' AND task_id = '%s'",
-          share::OB_ALL_LS_REPLICA_TASK_TNAME,
-          task.get_tenant_id(),
-          task.get_ls_id().id(),
-          ob_disaster_recovery_task_type_strs(task.get_task_type()),
-          task_id_to_set))) {
-        LOG_WARN("assign sql string failed", KR(ret), K(task));
-      } else if (OB_FAIL(sql_proxy_->write(sql_tenant_id, sql.ptr(), affected_rows))) {
-        LOG_WARN("execute sql failed", KR(ret), "sql", sql.ptr(), K(task), K(sql_tenant_id));
-      } else if (!is_single_row(affected_rows)) {
-        // ignore affected row check for task not exist
-        LOG_INFO("expected deleted single row",
-            K(affected_rows), K(sql), K(task), K(sql_tenant_id));
-      }
+    } else if (OB_FAIL(task_operator.finish_task(trans, task))) {
+      LOG_WARN("task_operator get_task failed", KR(ret), K(task));
     }
     if (FAILEDx(task_mgr_->do_cleaning(
                      task.get_task_id(),
@@ -325,7 +306,7 @@ int ObDRTaskTableUpdater::process_task_(
       LOG_WARN("fail to clean task info inside memory", KR(ret), K(task));
     } else {
       LOG_INFO("success to delete row from ls disaster task table and do cleaning",
-               K(affected_rows), K(sql), K(task), K(sql_tenant_id));
+              K(task), K(sql_tenant_id));
     }
     if (trans.is_started()) {
       int trans_ret = trans.end(OB_SUCCESS == ret);

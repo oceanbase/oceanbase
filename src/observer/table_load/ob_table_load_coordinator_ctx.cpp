@@ -353,10 +353,9 @@ int ObTableLoadCoordinatorCtx::init_column_idxs(const ObIArray<uint64_t> &column
   int ret = OB_SUCCESS;
   idx_array_.reset();
   const ObIArray<ObColDesc> &column_descs = ctx_->schema_.column_descs_;
-  bool found_column = true;
-  for (int64_t i = 0; OB_SUCC(ret) && OB_LIKELY(found_column) && i < column_descs.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < column_descs.count(); ++i) {
     const ObColDesc &col_desc = column_descs.at(i);
-    found_column = (ctx_->schema_.is_heap_table_ && i == 0); // skip hidden pk in heap table
+    bool found_column = (ctx_->schema_.is_heap_table_ && i == 0); // skip hidden pk in heap table
     // 在源数据的列数组中找到对应的列
     for (int64_t j = 0; OB_SUCC(ret) && OB_LIKELY(!found_column) && j < column_ids.count(); ++j) {
       const uint64_t column_id = column_ids.at(j);
@@ -368,10 +367,14 @@ int ObTableLoadCoordinatorCtx::init_column_idxs(const ObIArray<uint64_t> &column
         }
       }
     }
-  }
-  if (OB_SUCC(ret) && OB_UNLIKELY(!found_column)) {
-    ret = OB_SCHEMA_NOT_UPTODATE;
-    LOG_WARN("column not found", KR(ret), K(idx_array_), K(column_descs), K(column_ids));
+    if (OB_SUCC(ret) && !found_column) {
+      if (OB_UNLIKELY(ctx_->param_.px_mode_)) {
+        ret = OB_SCHEMA_NOT_UPTODATE;
+        LOG_WARN("column not found", KR(ret), K(idx_array_), K(column_descs), K(column_ids));
+      } else if (OB_FAIL(idx_array_.push_back(-1))) {
+        LOG_WARN("fail to push back column idx", KR(ret), K(idx_array_), K(i), K(col_desc));
+      }
+    }
   }
   return ret;
 }

@@ -941,7 +941,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |1       |5           |
+|0 |MERGE UNION DISTINCT|             |2       |5           |
 |1 |├─TABLE FULL SCAN   |t1(idx_a_b_c)|1       |3           |
 |2 |└─TABLE FULL SCAN   |t2(idx_x_y_z)|1       |3           |
 =============================================================
@@ -961,7 +961,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |1       |5           |
+|0 |MERGE UNION DISTINCT|             |2       |5           |
 |1 |├─TABLE FULL SCAN   |t1(idx_a_b_c)|1       |3           |
 |2 |└─TABLE FULL SCAN   |t2(idx_x_y_z)|1       |3           |
 =============================================================
@@ -981,7 +981,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |1       |5           |
+|0 |MERGE UNION DISTINCT|             |2       |5           |
 |1 |├─TABLE RANGE SCAN  |t1(idx_b_c_a)|1       |3           |
 |2 |└─TABLE RANGE SCAN  |t2(idx_x_y_z)|1       |3           |
 =============================================================
@@ -1003,7 +1003,7 @@ Query Plan
 =============================================================
 |ID|OPERATOR            |NAME         |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|             |1       |5           |
+|0 |MERGE UNION DISTINCT|             |2       |5           |
 |1 |├─TABLE RANGE SCAN  |t1(idx_b_c_a)|1       |3           |
 |2 |└─TABLE RANGE SCAN  |t2(idx_x_y_z)|1       |3           |
 =============================================================
@@ -1466,7 +1466,7 @@ Query Plan
 ================================================================
 |ID|OPERATOR               |NAME         |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT   |             |1       |7           |
+|0 |MERGE UNION DISTINCT   |             |2       |7           |
 |1 |├─TABLE FULL SCAN      |t2(idx_x_y_z)|1       |3           |
 |2 |└─SORT                 |             |1       |5           |
 |3 |  └─MERGE JOIN         |             |1       |5           |
@@ -3080,7 +3080,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |1       |5           |
+|0 |MERGE UNION DISTINCT|                 |2       |5           |
 |1 |├─TABLE RANGE SCAN  |t6(idx_b_e_d_c_a)|1       |3           |
 |2 |└─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |3           |
 =================================================================
@@ -3101,7 +3101,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |1       |5           |
+|0 |MERGE UNION DISTINCT|                 |2       |5           |
 |1 |├─TABLE FULL SCAN   |t6(idx_b_e_d_c_a)|1       |3           |
 |2 |└─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |3           |
 =================================================================
@@ -3121,7 +3121,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |1       |10          |
+|0 |MERGE UNION DISTINCT|                 |2       |10          |
 |1 |├─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |3           |
 |2 |└─SORT              |                 |1       |8           |
 |3 |  └─TABLE FULL SCAN |t6(idx_b_c)      |1       |8           |
@@ -3144,7 +3144,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |1       |10          |
+|0 |MERGE UNION DISTINCT|                 |2       |10          |
 |1 |├─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |3           |
 |2 |└─SORT              |                 |1       |8           |
 |3 |  └─TABLE FULL SCAN |t6(idx_b_a_c)    |1       |8           |
@@ -3167,7 +3167,7 @@ Query Plan
 =================================================================
 |ID|OPERATOR            |NAME             |EST.ROWS|EST.TIME(us)|
 -----------------------------------------------------------------
-|0 |MERGE UNION DISTINCT|                 |1       |5           |
+|0 |MERGE UNION DISTINCT|                 |2       |5           |
 |1 |├─TABLE FULL SCAN   |t6(idx_b_e_d_c_a)|1       |3           |
 |2 |└─TABLE FULL SCAN   |tmp(idx_c1_c2_c3)|1       |3           |
 =================================================================
@@ -3762,7 +3762,7 @@ Optimization Info:
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
       unstable_index_name:[t10]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -3812,7 +3812,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       unstable_index_name:[t10]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -3861,7 +3861,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -3910,7 +3910,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i3]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -3958,7 +3958,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4009,7 +4009,7 @@ Optimization Info:
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1]
       unstable_index_name:[t10]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4061,7 +4061,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i3]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4113,7 +4113,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i2, t10i3]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4165,7 +4165,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i3]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4217,7 +4217,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t10i1, t10i2, t10i3, t10]
       pruned_index_name:[t10i1, t10i2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4266,7 +4266,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4315,7 +4315,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4365,7 +4365,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4415,7 +4415,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4467,7 +4467,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4518,7 +4518,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4569,7 +4569,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4618,7 +4618,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4668,7 +4668,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4723,7 +4723,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
       pruned_index_name:[t11i1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4772,7 +4772,7 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4821,7 +4821,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1, t12i2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4870,7 +4870,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:
@@ -4919,7 +4919,7 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t12i1, t12i2, t12]
       pruned_index_name:[t12i1, t12i2]
-      stats version:0
+      stats info:[version=0, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]
   Plan Type:

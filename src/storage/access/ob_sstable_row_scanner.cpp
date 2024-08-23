@@ -14,7 +14,9 @@
 #include "ob_sstable_row_scanner.h"
 #include "ob_sstable_index_filter.h"
 #include "ob_block_row_store.h"
+#include "storage/access/ob_store_row_iterator.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "storage/blocksstable/ob_micro_block_row_lock_checker.h"
 #include "storage/column_store/ob_co_sstable_rows_filter.h"
 #include "lib/statistic_event/ob_stat_event.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -376,6 +378,11 @@ int ObSSTableRowScanner<PrefetchType>::fetch_row(ObSSTableReadHandle &read_handl
           LOG_WARN("Fail to get next row", K(ret));
         } else if (prefetcher_.cur_micro_data_fetch_idx_ >= read_handle.micro_end_idx_) {
           ret = OB_ITER_END;
+          if (ObStoreRowIterator::IteratorRowLockAndDuplicationCheck == type_ ||
+              ObStoreRowIterator::IteratorRowLockCheck == type_) {
+            ObMicroBlockRowLockChecker *checker = static_cast<ObMicroBlockRowLockChecker *>(micro_scanner_);
+            checker->inc_empty_read(read_handle.get_rowkey().get_datum_cnt());
+          }
           LOG_DEBUG("[INDEX BLOCK] Open data block handle iter end", K(ret),
                     K(prefetcher_.cur_micro_data_fetch_idx_), K(read_handle));
         } else if (FALSE_IT(prefetcher_.inc_cur_micro_data_fetch_idx())) {

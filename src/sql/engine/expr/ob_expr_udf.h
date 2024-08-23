@@ -161,7 +161,7 @@ public:
                                 const common::ObIArray<ObUDFParamDesc> &params_desc,
                                 const common::ObIArray<ObExprResType> &params_type);
 
-  static int is_child_of(ObObj &parent, ObObj &child, bool &is_child);
+  static int is_child_of(const ObObj &parent, const ObObj &child, bool &is_child);
   static int process_singal_out_param(int64_t i,
                                       ObIArray<bool> &dones,
                                       const ObObj *objs_stack,

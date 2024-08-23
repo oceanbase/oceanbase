@@ -21,8 +21,6 @@ namespace oceanbase
 namespace observer
 {
 class ObTableLoadClientTaskParam;
-class ObTableLoadClientTask;
-class ObTableLoadTableCtx;
 
 template <table::ObTableDirectLoadOperationType pcode>
 class ObTableDirectLoadRpcExecutor
@@ -73,7 +71,7 @@ protected:
   int process() override;
 
 private:
-  int resolve_param(ObTableLoadClientTaskParam &param);
+  int init_param(ObTableLoadClientTaskParam &param);
 };
 
 // commit

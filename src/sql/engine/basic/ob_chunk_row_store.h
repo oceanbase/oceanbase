@@ -20,7 +20,7 @@
 #include "lib/list/ob_dlist.h"
 #include "common/row/ob_row.h"
 #include "common/row/ob_row_iterator.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "sql/engine/basic/ob_sql_mem_callback.h"
 
 namespace oceanbase
@@ -494,7 +494,7 @@ private:
   int64_t dumped_row_cnt_;
 
   //int fd_;
-  blocksstable::ObTmpFileIOInfo io_;
+  tmp_file::ObTmpFileIOInfo io_;
   int64_t file_size_;
   int64_t n_block_in_file_;
 

@@ -428,6 +428,7 @@ int ObSqlTransControl::rollback_trans(ObSQLSessionInfo *session,
   return ret;
 }
 
+ERRSIM_POINT_DEF(SQL_DO_END_TX_FAIL)
 int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
                                      const bool is_rollback,
                                      const bool is_explicit,
@@ -455,6 +456,8 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
   if (!session->is_inner() && session->associated_xa() && !is_explicit) {
     ret = OB_TRANS_XA_RMFAIL;
     LOG_ERROR("executing do end trans in xa", K(ret), K(session->get_xid()), KPC(tx_ptr));
+  } else if (OB_FAIL(SQL_DO_END_TX_FAIL)) {
+    LOG_WARN("do end trans failed", K(ret));
   } else {
     /*
      * normal transaction control
@@ -684,6 +687,14 @@ int ObSqlTransControl::dblink_xa_prepare(ObExecContext &exec_ctx)
         } else if (OB_FAIL(session->get_dblink_context().get_dblink_conn(dblink_id, dblink_conn))) {
           LOG_WARN("failed to get dblink connection from session", K(dblink_id), K(sessid), K(ret));
         } else if (OB_NOT_NULL(dblink_conn)) {
+          if (OB_FAIL(ObTMService::tm_rm_start(exec_ctx, // some conn get from session may not in xa trasaction, use tm_rm_start make sure it in xa
+                                              static_cast<common::sqlclient::DblinkDriverProto>(dblink_schema->get_driver_proto()),
+                                              dblink_conn,
+                                              session->get_dblink_context().get_tx_id()))) {
+            LOG_WARN("failed to tm_rm_start", K(ret), K(dblink_id), K(dblink_conn), K(sessid));
+          } else {
+            LOG_TRACE("link succ to prepare xa connection", KP(plan_ctx), K(ret), K(dblink_id));
+          }
           ObDblinkCtxInSession::revert_dblink_conn(dblink_conn); // release rlock locked by get_dblink_conn
         } else {
           common::sqlclient::dblink_param_ctx dblink_param_ctx;

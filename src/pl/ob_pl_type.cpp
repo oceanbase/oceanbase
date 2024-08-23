@@ -678,6 +678,7 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
                                 jit::ObLLVMValue &allocator,
                                 jit::ObLLVMValue &src,
                                 jit::ObLLVMValue &dest,
+                                uint64_t location,
                                 bool in_notfound,
                                 bool in_warning,
                                 uint64_t package_id) const
@@ -709,7 +710,7 @@ int ObPLDataType::generate_copy(ObPLCodeGenerator &generator,
     jit::ObLLVMValue ret_err;
     if (OB_FAIL(generator.get_helper().create_call(ObString("spi_copy_datum"), generator.get_spi_service().spi_copy_datum_, args, ret_err))) {
       LOG_WARN("failed to create call", K(ret));
-    } else if (OB_FAIL(generator.check_success(ret_err, OB_INVALID_ID, in_notfound, in_warning))) {
+    } else if (OB_FAIL(generator.check_success(ret_err, location, in_notfound, in_warning))) {
       LOG_WARN("failed to check success", K(ret));
     } else { /*do nothing*/ }
   }
@@ -2389,10 +2390,13 @@ int ObPLCursorInfo::prepare_spi_result(ObPLExecCtx *ctx, ObSPIResultSet *&spi_re
     }
     OX (spi_cursor_ = get_allocator()->alloc(sizeof(ObSPIResultSet)));
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
+  } else {
+    CK (OB_NOT_NULL(static_cast<ObSPIResultSet*>(spi_cursor_)));
+    OX ((static_cast<ObSPIResultSet*>(spi_cursor_))->~ObSPIResultSet());
   }
   OX (spi_result = new (spi_cursor_) ObSPIResultSet());
-  OZ (spi_result->init(*ctx->exec_ctx_->get_my_session()));
   OX (last_stream_cursor_ = true);
+  OZ (spi_result->init(*ctx->exec_ctx_->get_my_session()));
   return ret;
 }
 
@@ -2413,6 +2417,14 @@ int ObPLCursorInfo::prepare_spi_cursor(ObSPICursor *&spi_cursor,
       : sizeof(ObSPICursor);
     OX (spi_cursor_ = spi_allocator->alloc(alloc_size));
     OV (OB_NOT_NULL(spi_cursor_), OB_ALLOCATE_MEMORY_FAILED);
+  } else {
+    if (last_stream_cursor_) {
+      CK (OB_NOT_NULL(static_cast<ObSPIResultSet*>(spi_cursor_)));
+      OX (static_cast<ObSPIResultSet*>(spi_cursor_)->~ObSPIResultSet());
+    } else {
+      CK (OB_NOT_NULL(static_cast<ObSPICursor*>(spi_cursor_)));
+      OX (static_cast<ObSPICursor*>(spi_cursor_)->~ObSPICursor());
+    }
   }
   OX (spi_cursor = new (spi_cursor_) ObSPICursor(*spi_allocator, session_info));
   OX (last_stream_cursor_ = false);

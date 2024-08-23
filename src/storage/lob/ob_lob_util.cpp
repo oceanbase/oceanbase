@@ -294,9 +294,10 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
 
 int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                transaction::ObTxDesc *tx_desc,
+                                               share::ObTabletCacheInterval &lob_id_geneator,
                                                const share::ObLSID ls_id,
                                                const common::ObTabletID tablet_id,
-                                               const ObLobId &lob_id,
+                                               const common::ObTabletID lob_meta_tablet_id,
                                                const ObObjType &obj_type,
                                                const ObCollationType collation_type,
                                                const ObLobStorageParam &lob_storage_param,
@@ -351,7 +352,8 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       lob_param.timeout_ = timeout_ts;
       lob_param.scan_backward_ = false;
       lob_param.offset_ = 0;
-      lob_param.spec_lob_id_ = lob_id;
+      lob_param.lob_meta_tablet_id_ = lob_meta_tablet_id;
+      lob_param.lob_id_geneator_ = &lob_id_geneator;
       lob_param.inrow_threshold_ = lob_storage_param.inrow_threshold_;
       lob_param.src_tenant_id_ = src_tenant_id;
       if (!src.is_valid()) {

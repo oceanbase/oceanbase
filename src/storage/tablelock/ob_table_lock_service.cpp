@@ -1760,7 +1760,9 @@ int ObTableLockService::batch_pre_check_lock_(ObTableLockCtx &ctx,
   int last_ret = OB_SUCCESS;
   int64_t USLEEP_TIME = 100; // 0.1 ms
   bool need_retry = false;
-  ObBatchLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_lock_obj);
+  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
+  rpc_proxy.set_detect_session_killed(true);
+  ObBatchLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::batch_lock_obj);
   // only used in LOCK_TABLE/LOCK_PARTITION
   if (LOCK_TABLE == ctx.task_type_ ||
       LOCK_PARTITION == ctx.task_type_) {
@@ -1864,7 +1866,9 @@ int ObTableLockService::pre_check_lock_old_version_(ObTableLockCtx &ctx,
   ObRetryCtx retry_ctx;
   ObAddr addr;
   ObTableLockTaskRequest request;
-  ObTableLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::lock_table);
+  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
+  rpc_proxy.set_detect_session_killed(true);
+  ObTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::lock_table);
   // only used in LOCK_TABLE/LOCK_PARTITION
   if (LOCK_TABLE == ctx.task_type_ ||
       LOCK_PARTITION == ctx.task_type_) {
@@ -2306,11 +2310,13 @@ int ObTableLockService::inner_process_obj_lock_batch_(ObTableLockCtx &ctx,
                                                       const ObTableLockOwnerID lock_owner)
 {
   int ret = OB_SUCCESS;
+  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
+  rpc_proxy.set_detect_session_killed(true);
   if (ctx.is_unlock_task()) {
-    ObHighPriorityBatchLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_unlock_obj);
+    ObHighPriorityBatchLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::batch_unlock_obj);
     ret = batch_rpc_handle_(proxy_batch, ctx, lock_map, lock_mode, lock_owner);
   } else {
-    ObBatchLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::batch_lock_obj);
+    ObBatchLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::batch_lock_obj);
     ret = batch_rpc_handle_(proxy_batch, ctx, lock_map, lock_mode, lock_owner);
   }
 
@@ -2324,12 +2330,14 @@ int ObTableLockService::inner_process_obj_lock_old_version_(ObTableLockCtx &ctx,
                                                             const ObTableLockOwnerID lock_owner)
 {
   int ret = OB_SUCCESS;
+  obrpc::ObSrvRpcProxy rpc_proxy(*GCTX.srv_rpc_proxy_);
+  rpc_proxy.set_detect_session_killed(true);
   // TODO: yanyuan.cxf we process the rpc one by one and do parallel later.
   if (ctx.is_unlock_task()) {
-    ObHighPriorityTableLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::unlock_table);
+    ObHighPriorityTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::unlock_table);
     ret = parallel_rpc_handle_(proxy_batch, ctx, lock_map, ls_lock_map, lock_mode, lock_owner);
   } else {
-    ObTableLockProxy proxy_batch(*GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::lock_table);
+    ObTableLockProxy proxy_batch(rpc_proxy, &obrpc::ObSrvRpcProxy::lock_table);
     ret = parallel_rpc_handle_(proxy_batch, ctx, lock_map, ls_lock_map, lock_mode, lock_owner);
   }
 
@@ -2558,20 +2566,14 @@ int ObTableLockService::check_op_allowed_(const uint64_t table_id,
     // all the tmp table is a normal table now, deal it as a normal user table
     // table lock not support virtual table/sys table(not in white list) etc.
     is_allowed = false;
-  } else if (GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id) {
-    is_allowed = false;
-  } else if (!GCTX.is_standby_cluster()) {
-    bool is_restore = false;
-    ObMultiVersionSchemaService *schema_service = MTL(ObTenantSchemaService*)->get_schema_service();
-    if (OB_FAIL(schema_service->check_tenant_is_restore(NULL,
-                                                        tenant_id,
-                                                        is_restore))) {
-      LOG_WARN("failed to check tenant restore", K(ret), K(table_id));
-    } else if (is_restore) {
+  } else {
+    bool is_primary = true;
+    if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+      LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+    } else if (!is_primary) {
       is_allowed = false;
     }
   }
-
   return ret;
 }
 

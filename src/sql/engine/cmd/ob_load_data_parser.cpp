@@ -336,6 +336,54 @@ int ObOriginFileFormat::load_from_json_data(json::Pair *&node, ObIAllocator &all
   return ret;
 }
 
+const char *compression_format_to_string(ObLoadCompressionFormat compression_format)
+{
+  switch (compression_format) {
+    case ObLoadCompressionFormat::NONE:    return "NONE";
+    case ObLoadCompressionFormat::AUTO:    return "AUTO";
+    case ObLoadCompressionFormat::GZIP:    return "GZIP";
+    case ObLoadCompressionFormat::DEFLATE: return "DEFLATE";
+    case ObLoadCompressionFormat::ZSTD:    return "ZSTD";
+    default:                               return "INVALID";
+  }
+}
+
+int compression_format_from_string(ObString compression_name, ObLoadCompressionFormat &compression_format)
+{
+  int ret = OB_SUCCESS;
+
+  if (compression_name.length() == 0 ||
+      0 == compression_name.case_compare("none")) {
+    compression_format = ObLoadCompressionFormat::NONE;
+  } else if (0 == compression_name.case_compare("gzip")) {
+    compression_format = ObLoadCompressionFormat::GZIP;
+  } else if (0 == compression_name.case_compare("deflate")) {
+    compression_format = ObLoadCompressionFormat::DEFLATE;
+  } else if (0 == compression_name.case_compare("zstd")) {
+    compression_format = ObLoadCompressionFormat::ZSTD;
+  } else if (0 == compression_name.case_compare("auto")) {
+    compression_format = ObLoadCompressionFormat::AUTO;
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    compression_format = ObLoadCompressionFormat::INVALID;
+  }
+  return ret;
+}
+
+int compression_format_from_suffix(ObString filename, ObLoadCompressionFormat &compression_format)
+{
+  int ret = OB_SUCCESS;
+  if (filename.suffix_match_ci(".gz")) {
+    compression_format = ObLoadCompressionFormat::GZIP;
+  } else if (filename.suffix_match_ci(".deflate")) {
+    compression_format = ObLoadCompressionFormat::DEFLATE;
+  } else if (filename.suffix_match_ci(".zst") || filename.suffix_match_ci(".zstd")) {
+    compression_format = ObLoadCompressionFormat::ZSTD;
+  } else {
+    compression_format = ObLoadCompressionFormat::NONE;
+  }
+  return ret;
+}
 int64_t ObExternalFileFormat::to_string(char *buf, const int64_t buf_len) const
 {
   int64_t pos = 0;
@@ -352,6 +400,11 @@ int64_t ObExternalFileFormat::to_string(char *buf, const int64_t buf_len) const
       break;
     default:
       pos += 0;
+  }
+
+  if (compression_format_ != ObLoadCompressionFormat::NONE) {
+    J_COMMA();
+    databuff_print_kv(buf, buf_len, pos, "\"COMPRESSION\"", compression_format_to_string(compression_format_));
   }
 
   J_OBJ_END();
@@ -399,6 +452,13 @@ int ObExternalFileFormat::load_from_string(const ObString &str, ObIAllocator &al
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid format type", K(ret), K(format_type_str));
           break;
+      }
+
+      if (OB_SUCC(ret) && OB_NOT_NULL(format_type_node)
+          && 0 == format_type_node->name_.case_compare("COMPRESSION")
+          && format_type_node->value_->get_type() == json::JT_STRING) {
+        ObString compression_format_str = format_type_node->value_->get_string();
+        OZ(compression_format_from_string(compression_format_str, compression_format_));
       }
     }
   }

@@ -174,7 +174,8 @@ int ObPxMsgProc::on_sqc_init_msg(ObExecContext &ctx, const ObPxInitSqcResultMsg 
   } else {
     if (OB_SUCCESS != pkt.rc_) {
       ret = pkt.rc_;
-      ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
+      ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
+          pkt.rc_, pkt.err_msg_, sqc->get_exec_addr());
       LOG_WARN("fail init sqc, please check remote server log for details",
                "remote_server", sqc->get_exec_addr(), K(pkt), KP(ret));
     } else if (pkt.task_count_ <= 0) {
@@ -410,7 +411,8 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
    * 发送这个finish消息的sqc（包括它的worker）其实已经结束了，需要将它
    * 但是因为出错了，后续的调度流程不需要继续了，后面流程会进行错误处理。
    */
-  ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
+  ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
+      pkt.rc_, pkt.err_msg_, sqc->get_exec_addr());
   if (OB_SUCC(ret)) {
     if (OB_FAIL(pkt.rc_)) {
       DAS_CTX(ctx).get_location_router().save_cur_exec_status(pkt.rc_);
@@ -618,7 +620,8 @@ int ObPxTerminateMsgProc::on_sqc_init_msg(ObExecContext &ctx, const ObPxInitSqcR
     if (pkt.rc_ != OB_SUCCESS) {
       LOG_DEBUG("receive error code from sqc init msg", K(coord_info_.first_error_code_), K(pkt.rc_));
     }
-    ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
+    ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
+        pkt.rc_, pkt.err_msg_, sqc->get_exec_addr());
   }
 
   if (OB_SUCC(ret)) {
@@ -687,7 +690,8 @@ int ObPxTerminateMsgProc::on_sqc_finish_msg(ObExecContext &ctx, const ObPxFinish
     if (pkt.rc_ != OB_SUCCESS) {
       LOG_DEBUG("receive error code from sqc finish msg", K(coord_info_.first_error_code_), K(pkt.rc_));
     }
-    ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_, pkt.rc_, pkt.err_msg_);
+    ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
+        pkt.rc_, pkt.err_msg_, sqc->get_exec_addr());
 
     NG_TRACE_EXT(sqc_finish,
                  OB_ID(dfo_id), sqc->get_dfo_id(),

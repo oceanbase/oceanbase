@@ -234,6 +234,8 @@ int ObDDLMacroBlockClogCb::on_success()
     if (is_data_buffer_freed_) {
       LOG_INFO("data buffer is freed, do not need to callback");
     } else if (OB_FAIL(ret)) {
+    } else if (redo_info_.with_cs_replica_ && redo_info_.table_key_.is_column_store_sstable()) {
+      LOG_TRACE("[CS-Replica] skip replay cs replica redo clog in leader", K(ret), K_(redo_info));
     } else if (OB_FAIL(macro_block.block_handle_.set_block_id(macro_block_id_))) {
       LOG_WARN("set macro block id failed", K(ret), K(macro_block_id_));
     } else {
@@ -406,7 +408,8 @@ int ObDDLStartLog::init(
     const uint64_t data_format_version,
     const int64_t execution_id,
     const ObDirectLoadType direct_load_type,
-    const ObTabletID &lob_meta_tablet_id)
+    const ObTabletID &lob_meta_tablet_id,
+    const bool with_cs_replica)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!table_key.is_valid() || execution_id < 0 || data_format_version <= 0 || !is_valid_direct_load(direct_load_type)
@@ -419,7 +422,7 @@ int ObDDLStartLog::init(
     execution_id_ = execution_id;
     direct_load_type_ = direct_load_type;
     lob_meta_tablet_id_ = lob_meta_tablet_id;
-    with_cs_replica_ = false; // TODO(chengkong): placeholder for column store replica feature
+    with_cs_replica_ = with_cs_replica;
   }
   return ret;
 }

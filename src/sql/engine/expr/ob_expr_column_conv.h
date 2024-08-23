@@ -134,6 +134,17 @@ public:
   static int column_convert(const ObExpr &expr,
                             ObEvalCtx &ctx,
                             ObDatum &datum);
+  static int column_convert_fast(const ObExpr &expr,
+                            ObEvalCtx &ctx,
+                            ObDatum &datum);
+  static int column_convert_batch(const ObExpr &expr,
+                                  ObEvalCtx &ctx,
+                                  const ObBitVector &skip,
+                                  const int64_t batch_size);
+  static int column_convert_batch_fast(const ObExpr &expr,
+                                       ObEvalCtx &ctx,
+                                       const ObBitVector &skip,
+                                       const int64_t batch_size);
 
   virtual bool need_rt_ctx() const override
   { return ob_is_enum_or_set_type(result_type_.get_type()); }

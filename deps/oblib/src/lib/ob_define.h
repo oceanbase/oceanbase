@@ -409,6 +409,7 @@ const int64_t OB_MAX_DIRECTORY_NAME_LENGTH = 128; // Compatible with Oracle
 const int64_t OB_MAX_DIRECTORY_PATH_LENGTH = 4000; // Compatible with Oracle
 const uint64_t OB_MAX_INTERVAL_PARTITIONS = 1048575; // interval parted table max partitions
 const int64_t OB_MAX_BALANCE_GROUP_NAME_LENGTH = 512;
+const int64_t OB_SERVICE_NAME_LENGTH = 64;
 
 //plan cache
 const int64_t OB_PC_NOT_PARAM_COUNT = 8;
@@ -1525,6 +1526,11 @@ const char *const OB_MYSQL_PROXY_VEERSION = "__proxy_version";
 const char *const OB_MYSQL_CLIENT_VERSION = "__ob_client_version";
 const char *const OB_MYSQL_CLIENT_NAME = "__ob_client_name";
 
+const char *const OB_MYSQL_FAILOVER_MODE = "__proxy_failover_mode";
+const char *const OB_MYSQL_FAILOVER_MODE_OFF = "off";
+const char *const OB_MYSQL_FAILOVER_MODE_ON = "on";
+const char *const OB_MYSQL_SERVICE_NAME = "__proxy_service_name";
+
 const char *const OB_MYSQL_JDBC_CLIENT_NAME = "OceanBase Connector/J";
 const char *const OB_MYSQL_OCI_CLIENT_NAME = "OceanBase Connector/C";
 // for java client
@@ -2084,17 +2090,19 @@ enum ObFreezeStatus
 };
 
 /*
- * |---- 2 bits ---|--- 4 bits ---|--- 2 bits ---|--- 2 bits ---| LSB
- * |-- encryption--|---  clog  ---|-- SSStore ---|--- MemStore--| LSB
+ * |---- 2 bits ---|---- 2 bits ---|--- 4 bits ---|--- 2 bits ---|--- 2 bits ---| LSB
+ * |--column-store-|-- encryption--|---  clog  ---|-- SSStore ---|--- MemStore--| LSB
  */
 const int64_t MEMSTORE_BITS_SHIFT = 0;
 const int64_t SSSTORE_BITS_SHIFT = 2;
 const int64_t CLOG_BITS_SHIFT = 4;
 const int64_t ENCRYPTION_BITS_SHIFT = 8;
+const int64_t COLUMNSTORE_BITS_SHIFT = 10;
 const int64_t REPLICA_TYPE_MEMSTORE_MASK = (0x3UL << MEMSTORE_BITS_SHIFT);
 const int64_t REPLICA_TYPE_SSSTORE_MASK = (0x3UL << SSSTORE_BITS_SHIFT);
 const int64_t REPLICA_TYPE_CLOG_MASK = (0xFUL << CLOG_BITS_SHIFT);
 const int64_t REPLICA_TYPE_ENCRYPTION_MASK = (0x3UL << ENCRYPTION_BITS_SHIFT);
+const int64_t REPLICA_TYPE_COLUMNSTORE_MASK = (0x3UL << COLUMNSTORE_BITS_SHIFT);
 // replica type associated with memstore
 const int64_t WITH_MEMSTORE = 0;
 const int64_t WITHOUT_MEMSTORE = 1;
@@ -2107,16 +2115,22 @@ const int64_t ASYNC_CLOG = 1 << CLOG_BITS_SHIFT;
 // replica type associated with encryption
 const int64_t WITHOUT_ENCRYPTION = 0 << ENCRYPTION_BITS_SHIFT;
 const int64_t WITH_ENCRYPTION = 1 << ENCRYPTION_BITS_SHIFT;
+// replica type associated with columnstore
+const int64_t NOT_COLUMNSTORE = 0 << COLUMNSTORE_BITS_SHIFT;
+const int64_t COLUMNSTORE = 1 << COLUMNSTORE_BITS_SHIFT;
 
 // tracepoint, refer to OB_MAX_CONFIG_xxx
 const int64_t OB_MAX_TRACEPOINT_NAME_LEN = 128;
 const int64_t OB_MAX_TRACEPOINT_DESCRIBE_LEN = 4096;
 
-// Need to manually maintain the replica_type_to_str function in utility.cpp,
-// Currently there are only three types: REPLICA_TYPE_FULL, REPLICA_TYPE_READONLY, and REPLICA_TYPE_LOGONLY
+// Please modify the replica_type_to_string and string_to_replica_type function
+// in ob_share_util.cpp when adding new replica_type.
 enum ObReplicaType
 {
-  // Almighty copy: is a member of paxos; has ssstore; has memstore
+  // Invalid replica_type, value of which is -1.
+  // Attention: Please DO use REPLICA_TYPE_INVALID as initial value. DO NOT use REPLICA_TYPE_MAX.
+  REPLICA_TYPE_INVALID = -1,
+  // Fully functional copy: is a member of paxos; has ssstore; has memstore
   REPLICA_TYPE_FULL = (SYNC_CLOG | WITH_SSSTORE | WITH_MEMSTORE), // 0
   // Backup copy: Paxos member; ssstore; no memstore
   REPLICA_TYPE_BACKUP = (SYNC_CLOG | WITH_SSSTORE | WITHOUT_MEMSTORE), // 1
@@ -2133,54 +2147,44 @@ enum ObReplicaType
   REPLICA_TYPE_ARBITRATION = (ASYNC_CLOG | WITHOUT_SSSTORE | WITHOUT_MEMSTORE), // 21
   // Encrypted log copy: encrypted; paxos member; no sstore; no memstore
   REPLICA_TYPE_ENCRYPTION_LOGONLY = (WITH_ENCRYPTION | SYNC_CLOG | WITHOUT_SSSTORE | WITHOUT_MEMSTORE), // 261
-  // invalid value
+  // Column-store copy: column-store, not a member of paxos; ssstore; memstore
+  REPLICA_TYPE_COLUMNSTORE = (COLUMNSTORE | ASYNC_CLOG | WITH_SSSTORE | WITH_MEMSTORE), // 1040
+  // max value
   REPLICA_TYPE_MAX,
 };
 
-static inline int replica_type_to_string(const ObReplicaType replica_type, char *name_str, const int64_t str_len)
-{
-  int ret = OB_SUCCESS;
-  switch(replica_type) {
-  case REPLICA_TYPE_FULL: {
-    strncpy(name_str ,"FULL", str_len);
-    break;
-  }
-  case REPLICA_TYPE_BACKUP: {
-    strncpy(name_str ,"BACKUP", str_len);
-    break;
-  }
-  case REPLICA_TYPE_LOGONLY: {
-    strncpy(name_str ,"LOGONLY", str_len);
-    break;
-  }
-  case REPLICA_TYPE_READONLY: {
-    strncpy(name_str ,"READONLY", str_len);
-    break;
-  }
-  case REPLICA_TYPE_MEMONLY: {
-    strncpy(name_str ,"MEMONLY", str_len);
-    break;
-  }
-  case REPLICA_TYPE_ENCRYPTION_LOGONLY: {
-    strncpy(name_str ,"ENCRYPTION_LOGONLY", str_len);
-    break;
-  }
-  default: {
-    ret = OB_INVALID_ARGUMENT;
-    strncpy(name_str ,"INVALID", str_len);
-    break;
-  } // default
-  } // switch
-  return ret;
-}
+// full replica
+const char *const FULL_REPLICA_STR = "FULL";
+const char *const F_REPLICA_STR = "F";
+// logonly replica
+const char *const LOGONLY_REPLICA_STR = "LOGONLY";
+const char *const L_REPLICA_STR = "L";
+// backup replica
+const char *const BACKUP_REPLICA_STR = "BACKUP";
+const char *const B_REPLICA_STR = "B";
+// readonly replica
+const char *const READONLY_REPLICA_STR = "READONLY";
+const char *const R_REPLICA_STR = "R";
+// memonly replica
+const char *const MEMONLY_REPLICA_STR = "MEMONLY";
+const char *const M_REPLICA_STR = "M";
+// encryption logonly replica
+const char *const ENCRYPTION_LOGONLY_REPLICA_STR = "ENCRYPTION_LOGONLY";
+const char *const E_REPLICA_STR = "E";
+// columnstore replica
+const char *const COLUMNSTORE_REPLICA_STR = "COLUMNSTORE";
+const char *const C_REPLICA_STR = "C";
 
 class ObReplicaTypeCheck
 {
 public:
+  // Currently only three types are valid,
+  // including REPLICA_TYPE_FULL, REPLICA_TYPE_READONLY, and REPLICA_TYPE_COLUMNSTORE
   static bool is_replica_type_valid(const int32_t replica_type)
   {
     return REPLICA_TYPE_FULL == replica_type
-           || REPLICA_TYPE_READONLY == replica_type;
+           || REPLICA_TYPE_READONLY == replica_type
+           || REPLICA_TYPE_COLUMNSTORE == replica_type;
   }
   static bool is_can_elected_replica(const int32_t replica_type)
   {
@@ -2193,6 +2197,10 @@ public:
   static bool is_readonly_replica(const int32_t replica_type)
   {
     return (REPLICA_TYPE_READONLY == replica_type);
+  }
+  static bool is_columnstore_replica(const int32_t replica_type)
+  {
+    return (REPLICA_TYPE_COLUMNSTORE == replica_type);
   }
   static bool is_log_replica(const int32_t replica_type)
   {
@@ -2208,13 +2216,18 @@ public:
     return (replica_type >= REPLICA_TYPE_FULL && replica_type <= REPLICA_TYPE_LOGONLY)
             || (REPLICA_TYPE_ENCRYPTION_LOGONLY == replica_type);
   }
+  static bool is_non_paxos_replica(const int32_t replica_type)
+  {
+    return (REPLICA_TYPE_READONLY == replica_type || REPLICA_TYPE_COLUMNSTORE == replica_type);
+  }
   static bool is_writable_replica(const int32_t replica_type)
   {
     return (REPLICA_TYPE_FULL == replica_type);
   }
   static bool is_readable_replica(const int32_t replica_type)
   {
-    return (REPLICA_TYPE_FULL == replica_type || REPLICA_TYPE_READONLY == replica_type);
+    return (REPLICA_TYPE_FULL == replica_type || REPLICA_TYPE_READONLY == replica_type
+            || REPLICA_TYPE_COLUMNSTORE == replica_type);
   }
   static bool is_replica_with_memstore(const ObReplicaType replica_type)
   {
@@ -2228,15 +2241,11 @@ public:
   {
     return (REPLICA_TYPE_FULL == replica_type || REPLICA_TYPE_READONLY == replica_type);
   }
-  static bool can_as_data_source(const int32_t dest_replica_type, const int32_t src_replica_type)
-  {
-    return  (dest_replica_type == src_replica_type
-             || REPLICA_TYPE_FULL == src_replica_type); // TODO temporarily only supports the same type or F as the data source
-  }
   //Currently only copies of F and R can be used for machine reading, not L
   static bool can_slave_read_replica(const int32_t replica_type)
   {
-    return (REPLICA_TYPE_FULL == replica_type || REPLICA_TYPE_READONLY == replica_type);
+    return (REPLICA_TYPE_FULL == replica_type || REPLICA_TYPE_READONLY == replica_type
+            || REPLICA_TYPE_COLUMNSTORE == replica_type);
   }
 
   static bool change_replica_op_allow(const ObReplicaType source, const ObReplicaType target)
@@ -2244,6 +2253,8 @@ public:
     bool bool_ret = false;
 
     if (REPLICA_TYPE_LOGONLY == source || REPLICA_TYPE_LOGONLY == target) {
+      bool_ret = false;
+    } else if (REPLICA_TYPE_COLUMNSTORE == source || REPLICA_TYPE_COLUMNSTORE == target) {
       bool_ret = false;
     } else if (REPLICA_TYPE_FULL == source) {
       bool_ret = true;

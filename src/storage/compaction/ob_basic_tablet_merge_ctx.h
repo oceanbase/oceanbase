@@ -11,6 +11,7 @@
 #define OB_STORAGE_COMPACTION_BASIC_TABLET_MERGE_CTX_H_
 #include "storage/compaction/ob_tablet_merge_info.h"
 #include "storage/compaction/ob_partition_parallel_merge_ctx.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 #include "storage/compaction/ob_progressive_merge_helper.h"
 namespace oceanbase
 {
@@ -60,9 +61,9 @@ public:
       "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(merge_reason_),
       "co_major_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(co_major_merge_type_),
       K_(sstable_logic_seq), K_(tables_handle), K_(is_rebuild_column_store), K_(is_schema_changed), K_(is_tenant_major_merge),
-      K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
+      K_(is_cs_replica), K_(read_base_version), K_(merge_scn), K_(need_parallel_minor_merge),
       K_(schema_version), KP_(schema), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
-      K_(ls_handle), K_(snapshot_info), KP_(report), K_(is_backfill));
+      K_(ls_handle), K_(snapshot_info), KP_(report), K_(is_backfill), K_(tablet_schema_guard));
 
   ObTabletMergeDagParam &dag_param_;
   bool is_full_merge_; // full merge or increment merge
@@ -70,6 +71,7 @@ public:
   bool is_schema_changed_;
   bool need_parallel_minor_merge_;
   bool is_tenant_major_merge_;
+  bool is_cs_replica_;
   bool is_backfill_;
   ObMergeLevel merge_level_;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
@@ -94,6 +96,7 @@ public:
   ObStorageSnapshotInfo snapshot_info_;
   int64_t tx_id_;
   common::ObSEArray<share::schema::ObColDesc, 2 * OB_ROW_DEFAULT_COLUMNS_COUNT> multi_version_column_descs_;
+  storage::ObCSReplicaStorageSchemaGuard tablet_schema_guard_; // original storage schema on tablet, used only in cs replcia
   DISALLOW_COPY_AND_ASSIGN(ObStaticMergeParam);
 };
 
@@ -205,6 +208,7 @@ public:
   STATIC_PARAM_FUNC(bool, is_tenant_major_merge);
   STATIC_PARAM_FUNC(bool, is_full_merge);
   STATIC_PARAM_FUNC(bool, need_parallel_minor_merge);
+  STATIC_PARAM_FUNC(bool, is_cs_replica);
   STATIC_PARAM_FUNC(int64_t, read_base_version);
   STATIC_PARAM_FUNC(int64_t, ls_rebuild_seq);
   STATIC_PARAM_FUNC(const storage::ObTablesHandleArray &, tables_handle);
@@ -266,6 +270,7 @@ protected:
   int get_medium_compaction_info(); // for major
   int swap_tablet(ObGetMergeTablesResult &get_merge_table_result); // for major
   int get_meta_compaction_info(); // for meta major
+  int get_convert_compaction_info(); // for convert co major merge
   static const int64_t LARGE_VOLUME_DATA_ROW_COUNT_THREASHOLD = 1000L * 1000L; // 100w
   static const int64_t LARGE_VOLUME_DATA_MACRO_COUNT_THREASHOLD = 300L;
 public:

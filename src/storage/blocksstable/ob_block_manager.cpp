@@ -27,7 +27,7 @@
 #include "storage/blocksstable/ob_block_manager.h"
 #include "storage/blocksstable/ob_macro_block_struct.h"
 #include "storage/blocksstable/ob_sstable_meta.h"
-#include "storage/blocksstable/ob_tmp_file_store.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/slog_ckpt/ob_server_checkpoint_slog_handler.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/meta_mem/ob_tenant_meta_mem_mgr.h"
@@ -41,6 +41,7 @@
 using namespace oceanbase::common;
 using namespace oceanbase::common::hash;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::tmp_file;
 using namespace oceanbase::storage;
 using namespace oceanbase::share;
 
@@ -1111,9 +1112,9 @@ int ObBlockManager::mark_macro_blocks(
       const uint64_t tenant_id = mtl_tenant_ids.at(i);
       MacroBlockId macro_id;
       MTL_SWITCH(tenant_id) {
-        if (OB_FAIL(set_group_id(tenant_id))) {
-          LOG_WARN("isolate CPU and IOPS failed", K(ret));
-        } else if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set, tmp_status))) {
+        CONSUMER_GROUP_FUNC_GUARD(ObFunctionType::PRIO_OTHER_BACKGROUND);
+        if (OB_FAIL(mark_tenant_blocks(mark_info, macro_id_set,
+                                              tmp_status))) {
           LOG_WARN("fail to mark tenant blocks", K(ret), K(tenant_id));
         } else if (OB_FALSE_IT(MTL(ObSharedMacroBlockMgr*)->get_cur_shared_block(macro_id))) {
         } else if (OB_FAIL(mark_held_shared_block(macro_id, mark_info, macro_id_set, tmp_status))) {
@@ -1493,18 +1494,25 @@ int ObBlockManager::mark_tmp_file_blocks(
     ObMacroBlockMarkerStatus &tmp_status)
 {
   int ret = OB_SUCCESS;
-  ObArray<MacroBlockId> macro_block_list;
+  omt::ObMultiTenant *omt = GCTX.omt_;
+  common::ObSEArray<uint64_t, 8> mtl_tenant_ids;
 
-  if (OB_FAIL(macro_block_list.reserve(DEFAULT_PENDING_FREE_COUNT))) {
-    LOG_WARN("fail to reserve macro block list", K(ret));
-  } else if (OB_FAIL(OB_TMP_FILE_STORE.get_macro_block_list(macro_block_list))) {
-    LOG_WARN("fail to get macro block list", K(ret));
-  } else if (OB_FAIL(update_mark_info(macro_block_list, macro_id_set, mark_info))){
-    LOG_WARN("fail to update mark info", K(ret), K(macro_block_list.count()));
-  } else {
-    tmp_status.tmp_file_count_ += macro_block_list.count();
-    tmp_status.hold_count_ -= macro_block_list.count();
+  omt->get_mtl_tenant_ids(mtl_tenant_ids);
+  for (int64_t i = 0; OB_SUCC(ret) && i < mtl_tenant_ids.count(); i++) {
+    const uint64_t tenant_id = mtl_tenant_ids.at(i);
+    MTL_SWITCH(tenant_id) {
+      ObArray<MacroBlockId> macro_block_list;
+      if (OB_FAIL(MTL(ObTenantTmpFileManager*)->get_macro_block_list(macro_block_list))) {
+        LOG_WARN("fail to get macro block list", K(ret));
+      } else if (OB_FAIL(update_mark_info(macro_block_list, macro_id_set, mark_info))){
+        LOG_WARN("fail to update mark info", K(ret), K(macro_block_list.count()));
+      } else {
+        tmp_status.tmp_file_count_ += macro_block_list.count();
+        tmp_status.hold_count_ -= macro_block_list.count();
+      }
+    }
   }
+
   return ret;
 }
 
@@ -1585,34 +1593,6 @@ int ObBlockManager::update_mark_info(const MacroBlockId &macro_id,
 
     if (OB_FAIL(mark_info.insert_or_update(macro_id, false))) {
       LOG_WARN("fail to insert or update mark info", K(ret), K(macro_id));
-    }
-  }
-  return ret;
-}
-
-int ObBlockManager::set_group_id(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(tenant_id <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
-  } else {
-    uint64_t consumer_group_id = 0;
-    if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_function_type(tenant_id, ObFunctionType::PRIO_OTHER_BACKGROUND, consumer_group_id))) {
-      //function level
-      LOG_WARN("fail to get group id by function", K(ret), K(tenant_id), K(consumer_group_id));
-    } else if (consumer_group_id != group_id_) {
-      // for CPU isolation, depend on cgroup
-      if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && GCTX.cgroup_ctrl_->is_valid() &&
-          OB_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id,
-              consumer_group_id,
-              GCONF.enable_global_background_resource_isolation ? BACKGROUND_CGROUP : ""))) {
-        LOG_WARN("bind back thread to group failed", K(ret), K(GETTID()), K(tenant_id), K(consumer_group_id));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      group_id_ = consumer_group_id;
-      THIS_WORKER.set_group_id(static_cast<int32_t>(consumer_group_id));
     }
   }
   return ret;

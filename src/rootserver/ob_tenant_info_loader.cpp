@@ -56,6 +56,7 @@ int ObTenantInfoLoader::init()
     sql_proxy_ = GCTX.sql_proxy_;
     tenant_id_ = MTL_ID();
     tenant_info_cache_.reset();
+    service_names_cache_.reset();
     ATOMIC_STORE(&broadcast_times_, 0);
     ATOMIC_STORE(&rpc_update_times_, 0);
     ATOMIC_STORE(&sql_update_times_, 0);
@@ -65,6 +66,8 @@ int ObTenantInfoLoader::init()
     } else if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy is null", KR(ret));
+    } else if (OB_FAIL(service_names_cache_.init(tenant_id_))) {
+      LOG_WARN("fail to init service_name_cache_", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(create(thread_cnt, "TenantInf"))) {
       LOG_WARN("failed to create tenant info loader thread", KR(ret), K(thread_cnt));
     }
@@ -83,6 +86,7 @@ void ObTenantInfoLoader::destroy()
   is_inited_ = false;
   tenant_id_ = OB_INVALID_TENANT_ID;
   tenant_info_cache_.reset();
+  service_names_cache_.reset();
   sql_proxy_ = NULL;
   ATOMIC_STORE(&broadcast_times_, 0);
   ATOMIC_STORE(&rpc_update_times_, 0);
@@ -148,8 +152,8 @@ void ObTenantInfoLoader::run2()
       const int64_t refresh_time_interval_us = act_as_standby_() && is_sys_ls_leader ?
                 ObTenantRoleTransitionConstants::STS_TENANT_INFO_REFRESH_TIME_US :
                 ObTenantRoleTransitionConstants::DEFAULT_TENANT_INFO_REFRESH_TIME_US;
-
-      if (need_refresh(refresh_time_interval_us)
+      bool need_refresh_tenant_info = need_refresh(refresh_time_interval_us);
+      if (need_refresh_tenant_info
           && OB_FAIL(tenant_info_cache_.refresh_tenant_info(tenant_id_, sql_proxy_, content_changed))) {
         LOG_WARN("failed to update tenant info", KR(ret), K_(tenant_id), KP(sql_proxy_));
       }
@@ -168,7 +172,21 @@ void ObTenantInfoLoader::run2()
       if (content_changed) {
         (void)dump_tenant_info_(sql_update_cost_time, is_sys_ls_leader, broadcast_cost_time, end_time_us, last_dump_time_us);
       }
-      const int64_t idle_time = max(10 * 1000, refresh_time_interval_us - cost_time_us);
+
+      // Positioned last to reduce the impact on tenant_info_cache.
+      int tmp_ret = OB_SUCCESS;
+      const int64_t start_time_us_service_name = ObTimeUtility::current_time();
+      bool need_refresh_service_name = service_names_cache_.need_refresh();
+      if (need_refresh_service_name
+          && OB_TMP_FAIL(service_names_cache_.refresh_service_name())) {
+        LOG_WARN("failed to refresh service_names", KR(ret), KR(tmp_ret), K_(tenant_id), KP(sql_proxy_));
+      }
+      const int64_t cost_time_us_service_name = ObTimeUtility::current_time() - start_time_us_service_name;
+
+      LOG_TRACE("tenant info loader cost info", KR(ret), K(need_refresh_tenant_info),
+          "cost_time_us_tenant_info", cost_time_us,
+          K(need_refresh_service_name), K(cost_time_us_service_name));
+      const int64_t idle_time = max(10 * 1000, refresh_time_interval_us - cost_time_us - cost_time_us_service_name);
       //At least sleep 10ms, allowing the thread to release the lock
       if (!stop_) {
         get_cond().wait_us(idle_time);
@@ -434,7 +452,7 @@ int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time_us, sha
     ret = OB_NEED_WAIT;
     LOG_TRACE("sts can not work for current tenant status", KR(ret), K(tenant_info));
   } else {
-    standby_scn = tenant_info.get_standby_scn();
+    standby_scn = tenant_info.get_readable_scn();
   }
 
   const int64_t PRINT_INTERVAL = 3 * 1000 * 1000L;
@@ -442,6 +460,22 @@ int ObTenantInfoLoader::get_valid_sts_after(const int64_t specified_time_us, sha
     LOG_INFO("get_valid_sts_after", KR(ret), K(specified_time_us), K(last_sql_update_time), K(tenant_info));
   }
 
+  return ret;
+}
+
+int ObTenantInfoLoader::check_if_sts_is_ready(bool &is_ready)
+{
+  int ret = OB_SUCCESS;
+  is_ready = false;
+  if (is_user_tenant(tenant_id_)) {
+    // user tenant
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      is_ready = tenant_info.is_sts_ready();
+    }
+  }
   return ret;
 }
 
@@ -490,6 +524,25 @@ int ObTenantInfoLoader::check_is_primary_normal_status(bool &is_primary_normal_s
       LOG_WARN("failed to get tenant info", KR(ret));
     } else {
       is_primary_normal_status = tenant_info.is_primary() && tenant_info.is_normal_status();
+    }
+  }
+  return ret;
+}
+
+int ObTenantInfoLoader::check_is_prepare_flashback_for_switch_to_primary_status(bool &is_prepare)
+{
+  int ret = OB_SUCCESS;
+  is_prepare = false;
+
+  if (OB_SYS_TENANT_ID == MTL_ID() || is_meta_tenant(MTL_ID())) {
+    is_prepare = false;
+  } else {
+    // user tenant
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(tenant_info_cache_.get_tenant_info(tenant_info))) {
+      LOG_WARN("failed to get tenant info", KR(ret));
+    } else {
+      is_prepare = tenant_info.is_prepare_flashback_for_switch_to_primary_status();
     }
   }
   return ret;
@@ -612,6 +665,30 @@ int ObTenantInfoLoader::refresh_tenant_info()
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(tenant_info_cache_.refresh_tenant_info(tenant_id_, sql_proxy_, content_changed))) {
     LOG_WARN("failed to refresh_tenant_info", KR(ret), K_(tenant_id), KP(sql_proxy_));
+  }
+  return ret;
+}
+
+int ObTenantInfoLoader::refresh_service_name()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(service_names_cache_.refresh_service_name())) {
+    LOG_WARN("failed to refresh_service_name", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObTenantInfoLoader::update_service_name(const int64_t epoch, const common::ObIArray<share::ObServiceName> &service_name_list)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret));
+  } else if (OB_FAIL(service_names_cache_.update_service_name(epoch, service_name_list))) {
+    LOG_WARN("fail to update_service_name", KR(ret), K_(tenant_id), K(service_name_list));
   }
   return ret;
 }
@@ -909,6 +986,130 @@ int ObAllTenantInfoCache::get_tenant_info(share::ObAllTenantInfo &tenant_info)
   }
   return ret;
 }
+int ObAllServiceNamesCache::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arg", KR(ret), K(tenant_id));
+  } else {
+    epoch_ = 0;
+    tenant_id_ = tenant_id;
+    all_service_names_.reset();
+    last_refresh_time_ = OB_INVALID_TIMESTAMP;
+    ATOMIC_SET(&is_service_name_enabled_, false);
+  }
+  return ret;
+}
 
+int ObAllServiceNamesCache::refresh_service_name()
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObServiceName> all_service_names;
+  int64_t epoch = 0;
+  if (!is_user_tenant(tenant_id_)) {
+    // do nothing
+  } else {
+    if (!ATOMIC_LOAD(&is_service_name_enabled_)) {
+      if (OB_FAIL(ObServiceNameProxy::check_is_service_name_enabled(tenant_id_))) {
+        LOG_WARN("fail to check whether service_name is enabled", KR(ret), K(tenant_id_));
+      } else {
+        ATOMIC_SET(&is_service_name_enabled_, true);
+        LOG_INFO("service_name is enabled now", KR(ret), K(is_service_name_enabled_));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObServiceNameProxy::select_all_service_names_with_epoch(tenant_id_, epoch, all_service_names))) {
+        LOG_WARN("fail to load", KR(ret), K(tenant_id_));
+      } else if (OB_FAIL(update_service_name(epoch, all_service_names))) {
+        LOG_WARN("fail to update service_name", KR(ret), K(all_service_names));
+      }
+      if (dump_service_names_interval_.reach()) {
+        LOG_INFO("refresh service_names", KR(ret), K(tenant_id_), K(epoch_), K(all_service_names_));
+      }
+    }
+  }
+  return ret;
+}
+int ObAllServiceNamesCache::update_service_name(const int64_t epoch, const common::ObIArray<share::ObServiceName> &service_name_list)
+{
+  int ret = OB_SUCCESS;
+  SpinWLockGuard guard(lock_);
+  if (epoch <= epoch_) {
+    // do nothing
+  } else {
+    LOG_INFO("try to update service_name", KR(ret), "local epoch", epoch_,
+        "local cache", all_service_names_, "new epoch", epoch, "new cache", service_name_list);
+    epoch_ = epoch;
+    all_service_names_.reset();
+    if (OB_FAIL(all_service_names_.assign(service_name_list))) {
+      LOG_WARN("fail to assign all_service_names_", KR(ret), K(service_name_list));
+    }
+    last_refresh_time_ = ObTimeUtility::current_time();
+  }
+  return ret;
+}
+bool ObAllServiceNamesCache::need_refresh()
+{
+  bool need = false;
+  const int64_t now = ObTimeUtility::current_time();
+  if (now - last_refresh_time_ >= REFRESH_INTERVAL) {
+    need = true;
+  }
+  return need;
+}
+void ObAllServiceNamesCache::reset()
+{
+  SpinWLockGuard guard(lock_);
+  all_service_names_.reset();
+  last_refresh_time_ = OB_INVALID_TIMESTAMP;
+  ATOMIC_SET(&is_service_name_enabled_, false);
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  epoch_ = 0;
+}
+int ObAllServiceNamesCache::check_if_the_service_name_is_stopped(const ObServiceNameString &service_name_str) const
+{
+  int ret = OB_SUCCESS;
+  bool is_found = false;
+  SpinRLockGuard guard(lock_);
+  for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < all_service_names_.size(); i++) {
+    if (all_service_names_.at(i).get_service_name_str().equal_to(service_name_str)) {
+      const ObServiceName & service_name = all_service_names_.at(i);
+      is_found = true;
+      if (service_name.is_stopped() || service_name.is_stopping()) {
+        ret = OB_SERVICE_STOPPED;
+        LOG_WARN("service_status is stopped", KR(ret), K(service_name), K(epoch_), K(all_service_names_));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_found) {
+    ret = OB_SERVICE_NAME_NOT_FOUND;
+    LOG_WARN("service_name_str is not found", KR(ret), K(service_name_str), K(epoch_), K(all_service_names_));
+  }
+  return ret;
+}
+
+int ObAllServiceNamesCache::get_service_name(
+    const ObServiceNameID &service_name_id,
+    ObServiceName &service_name) const
+{
+  int ret = OB_SUCCESS;
+  bool is_found = false;
+  SpinRLockGuard guard(lock_);
+  for (int64_t i = 0; OB_SUCC(ret) && !is_found && i < all_service_names_.size(); ++i) {
+    const ObServiceName & tmp_service_name = all_service_names_.at(i);
+    if (service_name_id == tmp_service_name.get_service_name_id()) {
+      is_found = true;
+      if (OB_FAIL(service_name.assign(tmp_service_name))) {
+        LOG_WARN("fail to assign service_name", KR(ret), K(tmp_service_name));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !is_found) {
+    ret = OB_SERVICE_NAME_NOT_FOUND;
+    LOG_WARN("fail to find service_name", KR(ret), K(service_name_id), K(all_service_names_));
+  }
+  return ret;
+}
 }
 }

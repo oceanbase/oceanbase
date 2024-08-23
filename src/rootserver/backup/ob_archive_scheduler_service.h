@@ -17,6 +17,7 @@
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "lib/container/ob_iarray.h"
 #include "share/backup/ob_backup_struct.h"
+#include "share/backup/ob_archive_struct.h"
 
 namespace oceanbase
 {
@@ -41,8 +42,7 @@ public:
   const int64_t RESERVED_FETCH_US = 10 * 1000 * 1000; // 10s, used for fetch observer log archive status
   const int64_t MIN_IDLE_INTERVAL_US = 2 * 1000 * 1000; // 2s
   const int64_t FAST_IDLE_INTERVAL_US = 10 * 1000 * 1000; // 10s, used during BEGINNING or STOPPING
-  //const int64_t MAX_IDLE_INTERVAL_US = 60 * 1000 * 1000; // 60s
-  const int64_t MAX_IDLE_INTERVAL_US = 10 * 1000 * 1000; // 60s
+  const int64_t MAX_IDLE_INTERVAL_US = 60 * 1000 * 1000; // 60s
   DEFINE_MTL_FUNC(ObArchiveSchedulerService);
   int init();
   void run2() override;
@@ -64,7 +64,7 @@ public:
   int stop_archive(const uint64_t tenant_id, const common::ObIArray<uint64_t> &archive_tenant_ids);
 
 private:
-  int process_();
+  int process_(share::ObArchiveRoundState &round_state);
   int start_tenant_archive_(const uint64_t tenant_id);
   // Return the first error that failed to start archive if force_start is true. Otherwise,
   // ignore all error.
@@ -75,7 +75,7 @@ private:
   int stop_tenant_archive_(const uint64_t tenant_id);
   int get_all_tenant_ids_(common::ObIArray<uint64_t> &tenantid_array);
 
-  void set_checkpoint_interval_(const int64_t interval_us);
+  void set_checkpoint_interval_(const int64_t interval_us, const share::ObArchiveRoundState &round_state);
   int open_tenant_archive_mode_(const common::ObIArray<uint64_t> &tenant_ids_array);
   int open_tenant_archive_mode_(const uint64_t tenant_id);
   int close_tenant_archive_mode_(const common::ObIArray<uint64_t> &tenant_ids_array);

@@ -35,7 +35,8 @@ const char *get_storage_checksum_type_str(const ObStorageChecksumType &type)
 
 //***********************ObObjectStorageInfo***************************
 ObObjectStorageInfo::ObObjectStorageInfo()
-  : device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
+  : delete_mode_(ObIStorageUtil::DELETE),
+    device_type_(ObStorageType::OB_STORAGE_MAX_TYPE),
     checksum_type_(ObStorageChecksumType::OB_MD5_ALGO)
 {
   endpoint_[0] = '\0';
@@ -51,6 +52,7 @@ ObObjectStorageInfo::~ObObjectStorageInfo()
 
 void ObObjectStorageInfo::reset()
 {
+  delete_mode_ = ObIStorageUtil::DELETE;
   device_type_ = ObStorageType::OB_STORAGE_MAX_TYPE;
   checksum_type_ = ObStorageChecksumType::OB_MD5_ALGO;
   endpoint_[0] = '\0';
@@ -221,6 +223,8 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
         const char *checksum_type_str = token + strlen(CHECKSUM_TYPE);
         if (OB_FAIL(set_checksum_type_(checksum_type_str))) {
           OB_LOG(WARN, "fail to set checksum type", K(ret), K(checksum_type_str));
+        } else if (OB_FAIL(set_storage_info_field_(token, extension_, sizeof(extension_)))) {
+          LOG_WARN("fail to set checksum type into extension", K(ret), K(token));
         }
       } else {
       }
@@ -228,8 +232,8 @@ int ObObjectStorageInfo::parse_storage_info_(const char *storage_info, bool &has
   }
   return ret;
 }
-
-int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode) const
+//TODO(shifagndan): define delete mode as enum
+int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(delete_mode)) {
@@ -238,6 +242,10 @@ int ObObjectStorageInfo::check_delete_mode_(const char *delete_mode) const
   } else if (0 != strcmp(delete_mode, "delete") && 0 != strcmp(delete_mode, "tagging")) {
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "delete mode is invalid", K(ret), K(delete_mode));
+  } else if (0 == strcmp(delete_mode, "delete")) {
+    delete_mode_ = ObIStorageUtil::DELETE;
+  } else {
+    delete_mode_ = ObIStorageUtil::TAGGING;
   }
   return ret;
 }
@@ -322,6 +330,7 @@ int ObObjectStorageInfo::set_storage_info_field_(const char *info, char *field, 
 int ObObjectStorageInfo::assign(const ObObjectStorageInfo &storage_info)
 {
   int ret = OB_SUCCESS;
+  delete_mode_ = storage_info.delete_mode_;
   device_type_ = storage_info.device_type_;
   checksum_type_ = storage_info.checksum_type_;
   MEMCPY(endpoint_, storage_info.endpoint_, sizeof(endpoint_));
@@ -346,9 +355,7 @@ int ObObjectStorageInfo::get_storage_info_str(char *storage_info, const int64_t 
   } else if (OB_STORAGE_FILE != device_type_) {
     if (OB_FAIL(get_access_key_(key, sizeof(key)))) {
       LOG_WARN("failed to get access key", K(ret));
-    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s&%s%s",
-                                       endpoint_, access_id_, key,
-                                       CHECKSUM_TYPE, get_checksum_type_str()))) {
+    } else if (OB_FAIL(databuff_printf(storage_info, info_len, "%s&%s&%s", endpoint_, access_id_, key))) {
       LOG_WARN("failed to set storage info", K(ret), K(info_len));
     }
   }

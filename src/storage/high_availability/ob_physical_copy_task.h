@@ -146,7 +146,8 @@ private:
   int record_server_event_();
 
 private:
-  static const int64_t MAX_RETRY_TIMES = 3;
+  // For rebuilder can not retry, define MAX_RETRY_TIMES as 1.
+  static const int64_t MAX_RETRY_TIMES = 1;
   static const int64_t OB_FETCH_MAJOR_BLOCK_RETRY_INTERVAL = 1 * 1000 * 1000L;// 1s
   bool is_inited_;
   ObPhysicalCopyCtx *copy_ctx_;

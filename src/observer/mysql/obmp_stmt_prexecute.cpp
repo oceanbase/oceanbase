@@ -478,12 +478,16 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       ObPLExecCtx pl_ctx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
                         NULL/*result*/, &ret, NULL/*func*/, true);
       get_ctx().cur_sql_ = sql_;
-      if (
+      int64_t orc_max_ret_rows = INT64_MAX;
+      if (lib::is_oracle_mode()
+          && OB_FAIL(session.get_oracle_sql_select_limit(orc_max_ret_rows))) {
+        LOG_WARN("failed to get sytem variable _oracle_sql_select_limit", K(ret));
+      } else if (
 #ifdef ERRSIM
           OB_FAIL(common::EventTable::COM_STMT_PREXECUTE_PS_CURSOR_OPEN_ERROR) ||
 #endif
-          OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))
-      ) {
+          OB_FAIL(ObSPIService::dbms_dynamic_open(
+                     &pl_ctx, *cursor, false, orc_max_ret_rows))) {
         LOG_WARN("cursor open faild.", K(cursor->get_id()));
         // select do not support arraybinding
         if (!THIS_WORKER.need_retry()) {

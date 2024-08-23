@@ -120,6 +120,7 @@ public:
     return bret;
   }
   int check_user_access(const ObString &credential_str);
+  int check_mode(const sql::ObSQLSessionInfo &sess_info);
   // transaction control
   int start_trans(bool is_readonly, const sql::stmt::StmtType stmt_type,
                   const table::ObTableConsistencyLevel consistency_level, uint64_t table_id,
@@ -156,6 +157,7 @@ protected:
   virtual void set_req_has_wokenup() = 0;
   virtual bool is_kv_processor() = 0;
   virtual void reset_ctx();
+  virtual table::ObTableEntityType get_entity_type() = 0;
   int get_ls_id(const ObTabletID &tablet_id, share::ObLSID &ls_id);
   int process_with_retry(const ObString &credential, const int64_t timeout_ts);
 

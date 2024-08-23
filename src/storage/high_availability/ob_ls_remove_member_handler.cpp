@@ -326,7 +326,6 @@ int ObLSRemoveMemberHandler::check_task_exist(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tenant dag scheduler should not be NULL", K(ret), KP(scheduler));
   } else {
-    ObMember mock_member(MYADDR, OB_INVALID_TIMESTAMP);
     mock_remove_member_arg.tenant_id_ = MTL_ID();
     mock_remove_member_arg.ls_id_ = ls_->get_ls_id();
     mock_remove_member_arg.task_id_ = task_id;
@@ -334,8 +333,8 @@ int ObLSRemoveMemberHandler::check_task_exist(
     mock_remove_member_arg.type_ = ObLSChangeMemberType::LS_REMOVE_MEMBER;
     param.arg_ = mock_remove_member_arg;
 
-    if (OB_FAIL(mock_remove_member_arg.remove_member_.set_member(mock_member))) {
-      LOG_WARN("failed to set member", K(ret), K(mock_member), K(mock_remove_member_arg));
+    if (OB_FAIL(mock_remove_member_arg.remove_member_.init(MYADDR, OB_INVALID_TIMESTAMP, REPLICA_TYPE_FULL))) {
+      LOG_WARN("failed to init remove_member_", K(ret), K(MYADDR), K(mock_remove_member_arg));
     } else if (OB_FAIL(scheduler->create_dag(&param, exist_dag))) {
       LOG_WARN("failed to create ls remove member dag", K(ret));
     } else if (OB_FAIL(scheduler->check_dag_exist(exist_dag, is_exist))) {

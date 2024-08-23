@@ -40,7 +40,14 @@ bool ObTableLoadClientService::ClientTaskBriefEraseIfExpired::operator()(
  * ObTableLoadClientService
  */
 
-ObTableLoadClientService::ObTableLoadClientService() : next_task_id_(1), is_inited_(false) {}
+int64_t ObTableLoadClientService::next_task_sequence_ = 0;
+
+int64_t ObTableLoadClientService::generate_task_id()
+{
+  return ObTimeUtil::current_time() * 1000 + ATOMIC_FAA(&next_task_sequence_, 1) % 1000;
+}
+
+ObTableLoadClientService::ObTableLoadClientService() : is_inited_(false) {}
 
 ObTableLoadClientService::~ObTableLoadClientService() {}
 
@@ -92,7 +99,6 @@ int ObTableLoadClientService::alloc_task(ObTableLoadClientTask *&client_task)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new ObTableLoadClientTask", KR(ret));
     } else {
-      new_client_task->task_id_ = service->get_client_service().generate_task_id();
       client_task = new_client_task;
       client_task->inc_ref_count();
     }
@@ -125,9 +131,7 @@ void ObTableLoadClientService::revert_task(ObTableLoadClientTask *client_task)
     const int64_t ref_count = client_task->dec_ref_count();
     OB_ASSERT(ref_count >= 0);
     if (0 == ref_count) {
-      const int64_t task_id = client_task->task_id_;
-      const uint64_t table_id = client_task->param_.get_table_id();
-      LOG_INFO("free client task", K(task_id), K(table_id), KP(client_task));
+      LOG_INFO("free client task", KPC(client_task));
       free_task(client_task);
       client_task = nullptr;
     }
@@ -141,8 +145,11 @@ int ObTableLoadClientService::add_task(ObTableLoadClientTask *client_task)
   if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
+  } else if (OB_ISNULL(client_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(client_task));
   } else {
-    ObTableLoadUniqueKey key(client_task->param_.get_table_id(), client_task->task_id_);
+    ObTableLoadUniqueKey key(client_task->get_table_id(), client_task->get_task_id());
     ret = service->get_client_service().add_client_task(key, client_task);
   }
   return ret;
@@ -155,8 +162,11 @@ int ObTableLoadClientService::remove_task(ObTableLoadClientTask *client_task)
   if (OB_ISNULL(service = MTL(ObTableLoadService *))) {
     ret = OB_ERR_SYS;
     LOG_WARN("null table load service", KR(ret));
+  } else if (OB_ISNULL(client_task)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(client_task));
   } else {
-    ObTableLoadUniqueKey key(client_task->param_.get_table_id(), client_task->task_id_);
+    ObTableLoadUniqueKey key(client_task->get_table_id(), client_task->get_task_id());
     ret = service->get_client_service().remove_client_task(key, client_task);
   }
   return ret;
@@ -236,10 +246,10 @@ int ObTableLoadClientService::remove_client_task(const ObTableLoadUniqueKey &key
       if (OB_FAIL(client_task_brief_map_.create(key, client_task_brief))) {
         LOG_WARN("fail to create client task brief", KR(ret), K(key));
       } else {
-        client_task_brief->task_id_ = client_task->task_id_;
-        client_task_brief->table_id_ = client_task->param_.get_table_id();
+        client_task_brief->task_id_ = client_task->get_task_id();
+        client_task_brief->table_id_ = client_task->get_table_id();
         client_task->get_status(client_task_brief->client_status_, client_task_brief->error_code_);
-        client_task_brief->result_info_ = client_task->result_info_;
+        client_task_brief->result_info_ = client_task->get_result_info();
         client_task_brief->active_time_ = ObTimeUtil::current_time();
       }
       if (nullptr != client_task_brief) {

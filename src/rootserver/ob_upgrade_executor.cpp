@@ -18,7 +18,7 @@
 #include "observer/ob_server_struct.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/ob_tenant_info_proxy.h" //ObAllTenantInfoProxy
 #include "observer/ob_service.h"
 
@@ -650,7 +650,7 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
       LOG_WARN("fail to update target data version",
                KR(ret), K(tenant_id), "version", DVP(DATA_CURRENT_VERSION));
     } else if (is_user_tenant(tenant_id)
-               && OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_barrier_log(
+               && OB_FAIL(OB_STANDBY_SERVICE.write_upgrade_barrier_log(
                                                      trans, tenant_id, DATA_CURRENT_VERSION))) {
       LOG_WARN("fail to write_upgrade_barrier_log",
                KR(ret), K(tenant_id), "version", DVP(DATA_CURRENT_VERSION));
@@ -915,17 +915,18 @@ int ObUpgradeExecutor::upgrade_mysql_system_package_job_()
   int64_t timeout = GCONF._ob_ddl_timeout;
   const char *create_package_sql =
         "CREATE OR REPLACE PACKAGE __DBMS_UPGRADE \
-           PROCEDURE UPGRADE(package_name VARCHAR(1024)); \
-           PROCEDURE UPGRADE_ALL(); \
+           PROCEDURE UPGRADE(package_name VARCHAR(1024), \
+                             load_from_file BOOLEAN DEFAULT TRUE); \
+           PROCEDURE UPGRADE_ALL(load_from_file BOOLEAN DEFAULT TRUE); \
          END;";
   const char *create_package_body_sql =
         "CREATE OR REPLACE PACKAGE BODY __DBMS_UPGRADE \
-           PROCEDURE UPGRADE(package_name VARCHAR(1024)); \
+           PROCEDURE UPGRADE(package_name VARCHAR(1024), load_from_file BOOLEAN); \
              PRAGMA INTERFACE(c, UPGRADE_SINGLE); \
-           PROCEDURE UPGRADE_ALL(); \
+           PROCEDURE UPGRADE_ALL(load_from_file BOOLEAN); \
              PRAGMA INTERFACE(c, UPGRADE_ALL); \
          END;";
-  const char *upgrade_sql = "CALL __DBMS_UPGRADE.UPGRADE_ALL();";
+  const char *upgrade_sql = "CALL __DBMS_UPGRADE.UPGRADE_ALL(FALSE);";
   ObTimeoutCtx ctx;
   int64_t affected_rows = 0;
   if (OB_FAIL(check_inner_stat_())) {
@@ -974,17 +975,18 @@ int ObUpgradeExecutor::upgrade_oracle_system_package_job_()
   int64_t timeout = GCONF._ob_ddl_timeout;
   const char *create_package_sql =
         "CREATE OR REPLACE PACKAGE \"__DBMS_UPGRADE\" IS \
-           PROCEDURE UPGRADE(package_name VARCHAR2); \
-           PROCEDURE UPGRADE_ALL; \
+           PROCEDURE UPGRADE(package_name VARCHAR2, \
+                             load_from_file BOOLEAN DEFAULT TRUE); \
+           PROCEDURE UPGRADE_ALL(load_from_file BOOLEAN DEFAULT TRUE); \
          END;";
   const char *create_package_body_sql =
         "CREATE OR REPLACE PACKAGE BODY \"__DBMS_UPGRADE\" IS \
-           PROCEDURE UPGRADE(package_name VARCHAR2); \
+           PROCEDURE UPGRADE(package_name VARCHAR2, load_from_file BOOLEAN); \
              PRAGMA INTERFACE(c, UPGRADE_SINGLE); \
-           PROCEDURE UPGRADE_ALL; \
+           PROCEDURE UPGRADE_ALL(load_from_file BOOLEAN); \
              PRAGMA INTERFACE(c, UPGRADE_ALL); \
          END;";
-  const char *upgrade_sql = "CALL \"__DBMS_UPGRADE\".UPGRADE_ALL();";
+  const char *upgrade_sql = "BEGIN \"__DBMS_UPGRADE\".UPGRADE_ALL(FALSE); END;";
   ObTimeoutCtx ctx;
   int64_t affected_rows = 0;
   if (OB_FAIL(check_inner_stat_())) {
@@ -1017,9 +1019,9 @@ int ObUpgradeExecutor::upgrade_oracle_system_package_job_()
              OB_SYS_TENANT_ID, upgrade_sql,
              affected_rows, static_cast<int64_t>(mode)))) {
     LOG_WARN("fail to execute sql", KR(ret), "sql", upgrade_sql);
-  } else if (0 != affected_rows) {
+  } else if (1 != affected_rows) { // default value of oracle anonymous block affected_rows is 1
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("affected_rows expected to be zero", KR(ret), K(affected_rows));
+    LOG_WARN("affected_rows expected to be 1", KR(ret), K(affected_rows));
   }
   FLOG_INFO("[UPGRADE] finish run upgrade oracle system package job",
             KR(ret), "cost", ObTimeUtility::current_time() - start_ts);
@@ -1123,7 +1125,7 @@ int ObUpgradeExecutor::update_final_current_data_version_(const uint64_t tenant_
     if (OB_FAIL(end_proxy.update_current_data_version(version))) {
       LOG_WARN("fail to update current data version", KR(ret), K(tenant_id), KDV(version));
     } else if (is_user_tenant(tenant_id) &&
-               OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_data_version_barrier_log(
+               OB_FAIL(OB_STANDBY_SERVICE.write_upgrade_data_version_barrier_log(
                    trans, tenant_id, version))) {
       LOG_WARN("fail to write_upgrade_data_version_barrier_log", KR(ret), K(tenant_id), KDV(version));
     }

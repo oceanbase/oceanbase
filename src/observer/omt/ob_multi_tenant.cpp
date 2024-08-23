@@ -110,7 +110,7 @@
 #include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
 #include "rootserver/ob_create_standby_from_net_actor.h" // ObCreateStandbyFromNetActor
 #include "rootserver/ob_primary_ls_service.h"//ObLSService
-#include "rootserver/ob_recovery_ls_service.h"//ObRecoveryLSService
+#include "rootserver/standby/ob_recovery_ls_service.h"//ObRecoveryLSService
 #include "rootserver/ob_common_ls_service.h"//ObCommonLSService
 #include "rootserver/restore/ob_restore_service.h" //ObRestoreService
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
@@ -165,6 +165,7 @@
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
 
 using namespace oceanbase;
@@ -186,6 +187,7 @@ using namespace oceanbase::archive;
 using namespace oceanbase::observer;
 using namespace oceanbase::rootserver;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::tmp_file;
 
 #define OB_TENANT_LOCK_BUCKET_NUM 10000L
 
@@ -447,6 +449,7 @@ int ObMultiTenant::init(ObAddr myaddr,
 
   if (OB_SUCC(ret) && mtl_bind_flag) {
     MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
+    MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
     // base mtl
     MTL_BIND2(mtl_new_default, storage::mds::ObTenantMdsService::mtl_init, storage::mds::ObTenantMdsService::mtl_start, storage::mds::ObTenantMdsService::mtl_stop, storage::mds::ObTenantMdsService::mtl_wait, mtl_destroy_default);
@@ -2462,17 +2465,6 @@ int ObMultiTenant::check_if_unit_id_exist(const uint64_t unit_id, bool &exist)
       exist = true;
       break;
     }
-  }
-  return ret;
-}
-
-int obmysql::sql_nio_add_cgroup(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
-      nullptr != GCTX.cgroup_ctrl_ &&
-      OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-    ret = GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id, OBCG_SQL_NIO);
   }
   return ret;
 }

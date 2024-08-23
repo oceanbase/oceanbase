@@ -44,27 +44,11 @@ ObFileReadParam::ObFileReadParam()
 int ObFileReadParam::parse_compression_format(ObString compression_name, ObString filename, ObLoadCompressionFormat &compression_format)
 {
   int ret = OB_SUCCESS;
-  if (compression_name.length() == 0 ||
-      0 == compression_name.case_compare("none")) {
+  if (compression_name.length() == 0) {
     compression_format = ObLoadCompressionFormat::NONE;
-  } else if (0 == compression_name.case_compare("gzip")) {
-    compression_format = ObLoadCompressionFormat::GZIP;
-  } else if (0 == compression_name.case_compare("deflate")) {
-    compression_format = ObLoadCompressionFormat::DEFLATE;
-  } else if (0 == compression_name.case_compare("zstd")) {
-    compression_format = ObLoadCompressionFormat::ZSTD;
-  } else if (0 == compression_name.case_compare("auto")) {
-    if (filename.suffix_match_ci(".gz")) {
-      compression_format = ObLoadCompressionFormat::GZIP;
-    } else if (filename.suffix_match_ci(".deflate")) {
-      compression_format = ObLoadCompressionFormat::DEFLATE;
-    } else if (filename.suffix_match_ci(".zst") || filename.suffix_match_ci(".zstd")) {
-      compression_format = ObLoadCompressionFormat::ZSTD;
-    } else {
-      ret = OB_INVALID_ARGUMENT;
-    }
-  } else {
-    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(compression_format_from_string(compression_name, compression_format))) {
+  } else if (ObLoadCompressionFormat::AUTO == compression_format) {
+    ret = compression_format_from_suffix(filename, compression_format);
   }
   return ret;
 }
@@ -130,6 +114,13 @@ int ObFileReader::open(const ObFileReadParam &param, ObIAllocator &allocator, Ob
   }
 
   return ret;
+}
+
+void ObFileReader::destroy(ObFileReader *file_reader)
+{
+  if (OB_NOT_NULL(file_reader)) {
+    OB_DELETE(ObFileReader, MEMORY_ATTR, file_reader);
+  }
 }
 
 int ObFileReader::open_decompress_reader(const ObFileReadParam &param,
@@ -556,7 +547,7 @@ int ObDecompressor::create(ObLoadCompressionFormat format, ObIAllocator &allocat
 
     case ObLoadCompressionFormat::GZIP:
     case ObLoadCompressionFormat::DEFLATE: {
-      decompressor = OB_NEW(ObZlibDecompressor, MEMORY_ATTR, allocator);
+      decompressor = OB_NEW(ObZlibDecompressor, MEMORY_ATTR, allocator, format);
     } break;
 
     case ObLoadCompressionFormat::ZSTD: {
@@ -572,12 +563,20 @@ int ObDecompressor::create(ObLoadCompressionFormat format, ObIAllocator &allocat
   if (OB_SUCC(ret) && OB_NOT_NULL(decompressor)) {
     if (OB_FAIL(decompressor->init())) {
       LOG_WARN("failed to init decompressor", KR(ret));
-      decompressor->destroy();
-      OB_DELETE(ObDecompressor, MEMORY_ATTR, decompressor);
+      ObDecompressor::destroy(decompressor);
+      decompressor = nullptr;
     }
   }
 
   return ret;
+}
+
+void ObDecompressor::destroy(ObDecompressor *decompressor)
+{
+  if (OB_NOT_NULL(decompressor)) {
+    decompressor->destroy();
+    OB_DELETE(ObDecompressor, MEMORY_ATTR, decompressor);
+  }
 }
 
 /**
@@ -596,7 +595,7 @@ ObDecompressFileReader::~ObDecompressFileReader()
   }
 
   if (OB_NOT_NULL(decompressor_)) {
-    OB_DELETE(ObDecompressor, MEMORY_ATTR, decompressor_);
+    ObDecompressor::destroy(decompressor_);
   }
 
   if (OB_NOT_NULL(compressed_data_)) {
@@ -714,8 +713,8 @@ void zlib_free(voidpf opaque, voidpf address)
   }
 }
 
-ObZlibDecompressor::ObZlibDecompressor(ObIAllocator &allocator)
-    : ObDecompressor(allocator)
+ObZlibDecompressor::ObZlibDecompressor(ObIAllocator &allocator, ObLoadCompressionFormat compression_format)
+    : ObDecompressor(allocator), compression_format_(compression_format)
 {}
 
 ObZlibDecompressor::~ObZlibDecompressor()

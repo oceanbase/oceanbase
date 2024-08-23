@@ -17,6 +17,7 @@
 #include "share/throttle/ob_share_throttle_define.h"
 #include "storage/multi_data_source/runtime_utility/mds_tenant_service.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
+#include "storage/tx_storage/ob_ls_service.h"
 
 using namespace oceanbase::storage::mds;
 
@@ -171,7 +172,8 @@ void ObTenantBufferCtxAllocator::free(void *ptr)
   MTL(ObTenantMdsService*)->erase_alloc_backtrace(ptr);
 }
 
-ObMdsThrottleGuard::ObMdsThrottleGuard(const bool for_replay, const int64_t abs_expire_time) : for_replay_(for_replay), abs_expire_time_(abs_expire_time)
+ObMdsThrottleGuard::ObMdsThrottleGuard(const share::ObLSID ls_id, const bool for_replay, const int64_t abs_expire_time)
+    : ls_id_(ls_id), for_replay_(for_replay), abs_expire_time_(abs_expire_time)
 {
   throttle_tool_ = &(MTL(ObSharedMemAllocMgr *)->share_resource_throttle_tool());
   if (0 == abs_expire_time) {
@@ -183,14 +185,29 @@ ObMdsThrottleGuard::ObMdsThrottleGuard(const bool for_replay, const int64_t abs_
 
 ObMdsThrottleGuard::~ObMdsThrottleGuard()
 {
+  int ret = OB_SUCCESS;
+  ObLSHandle ls_handle;
   ObThrottleInfoGuard share_ti_guard;
   ObThrottleInfoGuard module_ti_guard;
 
   if (OB_ISNULL(throttle_tool_)) {
     MDS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "throttle tool is unexpected nullptr", KP(throttle_tool_));
   } else if (throttle_tool_->is_throttling<ObTenantMdsAllocator>(share_ti_guard, module_ti_guard)) {
-    (void)TxShareMemThrottleUtil::do_throttle<ObTenantMdsAllocator>(
-        for_replay_, abs_expire_time_, share::mds_throttled_alloc(), *throttle_tool_, share_ti_guard, module_ti_guard);
+
+    if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      STORAGE_LOG(WARN, "get ls handle failed", KR(ret), K(ls_id_));
+    } else if (OB_ISNULL(ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "get ls handle failed", KR(ret), K(ls_id_));
+    } else {
+      (void)TxShareMemThrottleUtil::do_throttle<ObTenantMdsAllocator>(for_replay_,
+                                                                      abs_expire_time_,
+                                                                      share::mds_throttled_alloc(),
+                                                                      *(ls_handle.get_ls()),
+                                                                      *throttle_tool_,
+                                                                      share_ti_guard,
+                                                                      module_ti_guard);
+    }
 
     if (throttle_tool_->still_throttling<ObTenantMdsAllocator>(share_ti_guard, module_ti_guard)) {
       (void)throttle_tool_->skip_throttle<ObTenantMdsAllocator>(

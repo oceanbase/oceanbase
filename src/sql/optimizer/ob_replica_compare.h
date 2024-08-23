@@ -59,6 +59,7 @@ private:
   CompareType readonly_zone_first_[CMP_CNT];
   CompareType only_readonly_zone_[CMP_CNT];
   CompareType unmerge_zone_first_[CMP_CNT];
+  CompareType column_store_only_[CMP_CNT];
 };
 
 

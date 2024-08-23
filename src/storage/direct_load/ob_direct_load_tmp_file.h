@@ -12,7 +12,7 @@
 #pragma once
 
 #include "observer/table_load/ob_table_load_object_allocator.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 
 namespace oceanbase
 {
@@ -110,8 +110,6 @@ public:
   int aio_write(char *buf, int64_t size);
   int wait();
   OB_INLINE void cancel() { is_cancel_ = true; }
-  static int seek(const ObDirectLoadTmpFileHandle &file_handle, int64_t offset, int whence);
-  static int sync(const ObDirectLoadTmpFileHandle &file_handle, int64_t timeout_ms);
   static bool is_retry_err(int ret_code) { return OB_TIMEOUT == ret_code; }
   TO_STRING_KV(K_(file_handle), K_(io_info));
 private:
@@ -119,8 +117,8 @@ private:
 private:
   ObDirectLoadTmpFileHandle file_handle_;
   ObDirectLoadTmpFile *tmp_file_;
-  blocksstable::ObTmpFileIOInfo io_info_;
-  blocksstable::ObTmpFileIOHandle file_io_handle_;
+  tmp_file::ObTmpFileIOInfo io_info_;
+  tmp_file::ObTmpFileIOHandle file_io_handle_;
   bool is_cancel_;
   DISABLE_COPY_ASSIGN(ObDirectLoadTmpFileIOHandle);
 };

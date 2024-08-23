@@ -45,6 +45,15 @@ ObSQLSessionInfo *ObTableLoadExecCtx::get_session_info()
   return session_info;
 }
 
+ObSchemaGetterGuard *ObTableLoadExecCtx::get_schema_guard()
+{
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  if (nullptr != exec_ctx_ && nullptr != exec_ctx_->get_sql_ctx()) {
+    schema_guard = exec_ctx_->get_sql_ctx()->schema_guard_;
+  }
+  return schema_guard;
+}
+
 int ObTableLoadExecCtx::check_status()
 {
   int ret = OB_SUCCESS;
@@ -74,11 +83,23 @@ int ObTableLoadClientExecCtx::check_status()
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObTableLoadExecCtx::check_status())) {
     LOG_WARN("fail to check status", KR(ret));
-  } else if (OB_UNLIKELY(ObTimeUtil::current_time() - last_heartbeat_time_ > heartbeat_timeout_us_)) {
+  } else if (OB_UNLIKELY(last_heartbeat_time_ + heartbeat_timeout_us_ <
+                         ObTimeUtil::current_time())) {
     ret = OB_TIMEOUT;
     LOG_WARN("heartbeat is timeout", KR(ret), K(last_heartbeat_time_), K(heartbeat_timeout_us_));
   }
   return ret;
+}
+
+void ObTableLoadClientExecCtx::init_heart_beat(const int64_t heartbeat_timeout_us)
+{
+  heartbeat_timeout_us_ = heartbeat_timeout_us;
+  last_heartbeat_time_ = ObTimeUtil::current_time();
+}
+
+void ObTableLoadClientExecCtx::heart_beat()
+{
+  last_heartbeat_time_ = ObTimeUtil::current_time();
 }
 
 } // namespace observer

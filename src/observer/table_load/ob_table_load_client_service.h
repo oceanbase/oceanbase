@@ -70,11 +70,11 @@ public:
     return ObTableDirectLoadRpcProxy::dispatch(ctx, request, result);
   }
 
-private:
-  OB_INLINE int64_t generate_task_id() { return ATOMIC_FAA(&next_task_id_, 1); }
+  static int64_t generate_task_id();
 
 private:
   static const int64_t CLIENT_TASK_RETENTION_PERIOD = 24LL * 60 * 60 * 1000 * 1000; // 1day
+  static int64_t next_task_sequence_;
   // key => client_task
   typedef common::hash::ObHashMap<ObTableLoadUniqueKey, ObTableLoadClientTask *,
                                   common::hash::NoPthreadDefendMode>
@@ -116,7 +116,6 @@ private:
   mutable obsys::ObRWLock rwlock_;
   ClientTaskMap client_task_map_;
   ClientTaskBriefMap client_task_brief_map_; // thread safety
-  int64_t next_task_id_;
   bool is_inited_;
 };
 

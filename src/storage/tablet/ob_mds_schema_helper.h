@@ -54,6 +54,8 @@ public:
   const share::schema::ObTableSchema *get_table_schema() const;
   const ObStorageSchema *get_storage_schema() const;
   const ObRowkeyReadInfo *get_rowkey_read_info() const;
+public:
+  static bool is_mds_schema(const ObTableSchema &table_schema);
 private:
   static int build_table_schema(
       const uint64_t tenant_id,

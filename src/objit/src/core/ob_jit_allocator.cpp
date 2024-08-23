@@ -82,14 +82,7 @@ public:
 
   // set memory protection state.
   static int protect_mapped_memory(const ObJitMemoryBlock &block, int64_t p_flags);
-
-  static bool aarch64_addr_safe(void *addr, int64_t size);
 };
-
-bool ObJitMemory::aarch64_addr_safe(void *addr, int64_t size)
-{
-  return reinterpret_cast<int64_t>(addr) >> 32 == (reinterpret_cast<int64_t>(addr)+size) >> 32;
-}
 
 ObJitMemoryBlock ObJitMemory::allocate_mapped_memory(int64_t num_bytes,
                                                      int64_t p_flags)
@@ -107,25 +100,11 @@ ObJitMemoryBlock ObJitMemory::allocate_mapped_memory(int64_t num_bytes,
   do {
     addr = ::mmap(reinterpret_cast<void*>(start), page_size*num_pages,
                   p_flags, mm_flags, fd, 0);
-    if (MAP_FAILED == addr
-#if defined(__aarch64__)
-        || !aarch64_addr_safe(addr, page_size*num_pages)
-#endif
-    ) {
+    if (MAP_FAILED == addr) {
       if (REACH_TIME_INTERVAL(10000000)) { //间隔10s打印日志
         LOG_ERROR_RET(common::OB_ALLOCATE_MEMORY_FAILED, "allocate jit memory failed", K(addr), K(num_bytes), K(page_size), K(num_pages));
       }
       ::usleep(100000); //100ms
-#if defined(__aarch64__)
-      if (MAP_FAILED != addr) {
-        if (0 != ::munmap(addr, page_size*num_pages)) {
-          LOG_WARN_RET(OB_ERR_SYS, "jit block munmap failed", K(addr), K(page_size*num_pages));
-        }
-        start = reinterpret_cast<int64_t>(addr) + UINT32_MAX - page_size*num_pages; //先向上移4G，再移动此次分配的大小，以保证此次分配的地址高16位一致
-        LOG_INFO("aarch64 memory allocated not safe, try again", K(addr), K(start), K(page_size), K(num_pages));
-        addr = MAP_FAILED;
-      }
-#endif
     } else {
       LOG_DEBUG("allocate mapped memory success!",
                 K(addr), K(start),
@@ -370,6 +349,7 @@ void ObJitAllocator::reserve(const JitMemType mem_type, int64_t sz, int64_t alig
   }
 }
 
+// Returns true if an error occurred, false otherwise.
 bool ObJitAllocator::finalize()
 {
   int ret = OB_SUCCESS;
@@ -384,7 +364,7 @@ bool ObJitAllocator::finalize()
     LOG_WARN("fail to finalize code memory", K(ret));
   }
 
-  return OB_SUCC(ret);
+  return OB_FAIL(ret);
 }
 
 void ObJitAllocator::free() {

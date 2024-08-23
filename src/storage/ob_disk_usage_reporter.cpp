@@ -13,7 +13,7 @@
 #include "storage/ob_disk_usage_reporter.h"
 
 #include "share/ob_disk_usage_table_operator.h"
-#include "storage/blocksstable/ob_tmp_file_store.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "observer/omt/ob_multi_tenant.h"
 
 #include "share/rc/ob_tenant_base.h"
@@ -33,6 +33,7 @@ namespace oceanbase
 using namespace common;
 using namespace share;
 using namespace logservice;
+using namespace tmp_file;
 namespace storage
 {
 
@@ -399,19 +400,31 @@ int ObDiskUsageReportTask::count_tenant_tmp()
   int ret = OB_SUCCESS;
   ObDiskUsageReportKey report_key;
   int64_t macro_block_cnt = 0;
-  common::ObArray<blocksstable::ObTmpFileStore::TenantTmpBlockCntPair> tenant_block_cnt_pairs;
-  if (OB_FAIL(OB_TMP_FILE_STORE.get_macro_block_list(tenant_block_cnt_pairs))) {
-    STORAGE_LOG(WARN, "failed to get tenant tmp macro block list", K(ret));
+  common::ObArray<uint64_t> tenant_ids;
+
+  if (OB_FAIL(GCTX.omt_->get_mtl_tenant_ids(tenant_ids))) {
+    STORAGE_LOG(WARN, "fail to get_mtl_tenant_ids", KR(ret));
   } else {
     report_key.file_type_ = ObDiskReportFileType::TENANT_TMP_DATA;
-    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_block_cnt_pairs.count(); ++i) {
-      report_key.tenant_id_ = tenant_block_cnt_pairs.at(i).first;
-      macro_block_cnt = tenant_block_cnt_pairs.at(i).second;
-      int64_t tenant_tmp_size = macro_block_cnt * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
-      if (OB_FAIL(result_map_.set_refactored(report_key, std::make_pair(tenant_tmp_size, tenant_tmp_size), 1))) {
-        STORAGE_LOG(WARN, "failed to set tenant tmp usage into result map", K(ret), K(report_key), K(macro_block_cnt));
+    for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.size(); i++) {
+      if (GCTX.omt_->is_available_tenant(tenant_ids.at(i))) {
+        MTL_SWITCH(tenant_ids.at(i)) {
+          ObTenantTmpFileManager* tmp_file_manager = MTL(ObTenantTmpFileManager*);
+          report_key.tenant_id_ = tenant_ids.at(i);
+          if (OB_ISNULL(tmp_file_manager)) {
+            ret = OB_ERR_UNEXPECTED;
+            STORAGE_LOG(ERROR, "unexpected null", KR(ret));
+          } else if (OB_FAIL(tmp_file_manager->get_macro_block_count(macro_block_cnt))) {
+            STORAGE_LOG(WARN, "fail to get_macro_block_count", KR(ret));
+          } else {
+            int64_t tenant_tmp_size = macro_block_cnt * common::OB_DEFAULT_MACRO_BLOCK_SIZE;
+            if (OB_FAIL(result_map_.set_refactored(report_key, std::make_pair(tenant_tmp_size, tenant_tmp_size), 1))) {
+              STORAGE_LOG(WARN, "failed to set tenant tmp usage into result map", K(ret), K(report_key), K(macro_block_cnt));
+            }
+          }
+        } // end MTL_SWITCH
       }
-    }
+    } // end for
   }
   return ret;
 }

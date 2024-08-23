@@ -1181,7 +1181,8 @@ do {                                                                            
               GET_CONST_EXPR_VALUE(f_expr->get_param_expr(1), var_id);
             }
             OZ (udf_raw_expr->add_param_desc(
-                ObUDFParamDesc(ObUDFParamDesc::OBJ_ACCESS_OUT, var_id, OB_INVALID_ID, pkg_id)));
+                ObUDFParamDesc(pl::ObPLRoutineParamMode::PL_PARAM_OUT == mode ? ObUDFParamDesc::OBJ_ACCESS_OUT : ObUDFParamDesc::OBJ_ACCESS_INOUT,
+                              var_id, OB_INVALID_ID, pkg_id)));
           } else if (T_QUESTIONMARK == iexpr->get_expr_type()) {
             ObConstRawExpr *c_expr = static_cast<ObConstRawExpr*>(iexpr);
             pl::ObPLDataType param_type;
@@ -3680,7 +3681,7 @@ int ObRawExprUtils::extract_contain_exprs(ObRawExpr *raw_expr,
 }
 
 int ObRawExprUtils::extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
-                                         ObRelIds &rel_ids,
+                                         const ObRelIds &rel_ids,
                                          ObIArray<ObRawExpr*> &column_exprs)
 {
   int ret = OB_SUCCESS;
@@ -3696,7 +3697,7 @@ int ObRawExprUtils::extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
 }
 
 int ObRawExprUtils::extract_column_exprs(ObRawExpr* expr,
-                                         ObRelIds &rel_ids,
+                                         const ObRelIds &rel_ids,
                                          ObIArray<ObRawExpr*> &column_exprs)
 {
   int ret = OB_SUCCESS;
@@ -4122,8 +4123,10 @@ int ObRawExprUtils::try_add_cast_expr_above(ObRawExprFactory *expr_factory,
     if (T_FUN_SYS_CAST == expr.get_expr_type()
         && expr.has_flag(IS_OP_OPERAND_IMPLICIT_CAST)
         && !ignore_dup_cast_error
-        && !((src_type.is_user_defined_sql_type()|| src_type.is_collection_sql_type())
-                  && (dst_type.is_character_type() || dst_type.is_null()))) {
+        && !(((src_type.is_user_defined_sql_type()|| src_type.is_collection_sql_type())
+                  && (dst_type.is_character_type() || dst_type.is_null()))
+            || (src_type.is_character_type() && dst_type.is_character_type())))
+      {
       // cases like: select xmltype(var)||xmltype(var) as "res1" from t1 t;
       // xmltype is a lp constructor, an implicit cast is added to cast PL xmltype to SQL xmltype
       // when deduce concat, another cast is needed to cast SQL xmltype to string
@@ -6757,6 +6760,66 @@ int ObRawExprUtils::create_equal_expr(ObRawExprFactory &expr_factory,
   } else if (OB_FAIL(equal_expr->formalize(session_info))) {
     LOG_WARN("formalize equal expr failed", K(ret));
   } else {}
+  return ret;
+}
+
+int ObRawExprUtils::create_null_safe_equal_expr(ObRawExprFactory &expr_factory,
+                                                const ObSQLSessionInfo *session_info,
+                                                const bool is_mysql_mode,
+                                                ObRawExpr *left_expr,
+                                                ObRawExpr *right_expr,
+                                                ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(left_expr) || OB_ISNULL(right_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (is_mysql_mode) {
+    // left <=> right
+    ObOpRawExpr *nseq_expr = NULL;
+    if (OB_FAIL(expr_factory.create_raw_expr(T_OP_NSEQ, nseq_expr))) {
+      LOG_WARN("failed to create raw expr", K(ret));
+    } else if (OB_ISNULL(expr = nseq_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(nseq_expr->set_param_exprs(left_expr, right_expr))) {
+      LOG_WARN("failed to add param expr", K(ret));
+    } else if (OB_FAIL(expr->formalize(session_info))) {
+      LOG_WARN("formalize equal expr failed", K(ret));
+    }
+  } else {
+    // (left == right) or (left is null and right is null)
+    ObOpRawExpr *or_expr = NULL;
+    ObRawExpr *left_equal_expr = NULL;
+    ObOpRawExpr *and_expr = NULL;
+    ObRawExpr *left_is_null = NULL;
+    ObRawExpr *right_is_null = NULL;
+    if (OB_FAIL(expr_factory.create_raw_expr(T_OP_OR, or_expr))) {
+      LOG_WARN("failed to create raw expr", K(ret));
+    } else if (OB_ISNULL(expr = or_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(create_equal_expr(expr_factory, session_info,
+                                         left_expr, right_expr, left_equal_expr))) {
+      LOG_WARN("failed to create equal expr", K(ret));
+    } else if (OB_FAIL(or_expr->add_param_expr(left_equal_expr))) {
+      LOG_WARN("add param expr to or expr failed", K(ret));
+    } else if (OB_FAIL(build_is_not_null_expr(expr_factory, left_expr, false, left_is_null))) {
+      LOG_WARN("failed to build is not null expr", K(ret));
+    } else if (OB_FAIL(build_is_not_null_expr(expr_factory, right_expr, false, right_is_null))) {
+      LOG_WARN("failed to build is not null expr", K(ret));
+    } else if (OB_FAIL(expr_factory.create_raw_expr(T_OP_AND, and_expr))) {
+      LOG_WARN("failed to create a new expr", K(ret));
+    } else if (OB_FAIL(and_expr->add_param_expr(left_is_null))) {
+      LOG_WARN("add param expr to or expr failed", K(ret));
+    } else if (OB_FAIL(and_expr->add_param_expr(right_is_null))) {
+      LOG_WARN("add param expr to or expr failed", K(ret));
+    } else if (OB_FAIL(or_expr->add_param_expr(and_expr))) {
+      LOG_WARN("add param expr to or expr failed", K(ret));
+    } else if (OB_FAIL(expr->formalize(session_info))) {
+      LOG_WARN("formalize equal expr failed", K(ret));
+    }
+  }
   return ret;
 }
 

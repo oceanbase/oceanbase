@@ -75,7 +75,7 @@ function variables_prepare {
 function copy_sh {
   if [[ -f copy.sh ]]
   then
-  sh copy.sh $BUILD_PATH
+  bash copy.sh $BUILD_PATH
   else
   echo 'can not find copy.sh'
   fi

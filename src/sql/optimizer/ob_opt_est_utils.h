@@ -49,7 +49,14 @@ public:
   //such as, c1 > 1 and c1 < 2, c1 between 1 and 1000, c1 > 100 or c1 < 10000
   //@param in qual
   //@param out is_range
-  static int is_range_expr(const ObRawExpr *qual, bool &is_simple_filter, const int64_t level = 0);
+  static int is_range_expr(const ObRawExpr *qual, bool &is_simple_filter);
+
+  static int extract_var_op_const(const ObRawExpr *qual,
+                                  const ObRawExpr *&var_expr,
+                                  const ObRawExpr *&const_expr1,
+                                  const ObRawExpr *&const_expr2,
+                                  ObItemType &type,
+                                  bool &is_valid);
 
   //extract column exprs with simple operator check.
   //level must be initialized with 0(default value)

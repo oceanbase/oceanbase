@@ -18,6 +18,7 @@
 #include "share/ob_server_status.h"
 #include "share/schema/ob_schema_utils.h"
 #include "rootserver/ob_root_service.h"
+#include "rootserver/ob_tenant_info_loader.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "lib/stat/ob_diagnose_info.h"
@@ -546,7 +547,11 @@ bool ObTTLUtil::check_can_do_work() {
   int ret = OB_SUCCESS;
   int64_t tenant_id = MTL_ID();
   uint64_t tenant_data_version = 0;;
-  if (GCTX.is_standby_cluster()) {
+  bool is_primary = true;
+  if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
+    bret = false;
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
+  } else if (!is_primary) {
     bret = false;
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
     bret = false;

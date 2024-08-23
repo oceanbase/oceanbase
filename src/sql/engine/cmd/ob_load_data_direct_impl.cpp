@@ -466,7 +466,7 @@ ObLoadDataDirectImpl::DataReader::DataReader()
 ObLoadDataDirectImpl::DataReader::~DataReader()
 {
   if (OB_NOT_NULL(file_reader_)) {
-    file_reader_->~ObFileReader();
+    ObFileReader::destroy(file_reader_);
     file_reader_ = nullptr;
   }
 }
@@ -502,7 +502,10 @@ int ObLoadDataDirectImpl::DataReader::init(const DataAccessParam &data_access_pa
       file_read_param.filename_           = data_desc.filename_;
       file_read_param.compression_format_ = data_access_param.compression_format_;
       file_read_param.access_info_        = data_access_param.access_info_;
-      file_read_param.packet_handle_      = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
+      file_read_param.packet_handle_      = nullptr;
+      if (OB_NOT_NULL(execute_ctx.exec_ctx_.get_session_info()) && OB_NOT_NULL(execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender())) {
+        file_read_param.packet_handle_ = &execute_ctx.exec_ctx_.get_session_info()->get_pl_query_sender()->get_packet_sender();
+      }
       file_read_param.session_            = execute_ctx.exec_ctx_.get_session_info();
       file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 
@@ -902,8 +905,7 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     }
 
     if (OB_NOT_NULL(file_reader)) {
-      file_reader->~ObFileReader();
-      allocator.free(file_reader);
+      ObFileReader::destroy(file_reader);
     }
   }
   return ret;
@@ -1551,7 +1553,7 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
   if (OB_FAIL(data_reader_.init(execute_param_->data_access_param_, *execute_ctx_,
                                 handle_->data_desc_, true))) {
     LOG_WARN("fail to init data reader", KR(ret));
-  } else if (0 == handle_->data_desc_.file_idx_ && 0 == handle_->data_desc_.start_) {
+  } else if (0 == handle_->data_desc_.start_) {
     if (OB_FAIL(skip_ignore_rows(current_line_count))) {
       LOG_WARN("fail to skip ignore rows", KR(ret));
     } else if (OB_UNLIKELY(current_line_count < execute_param_->ignore_row_num_)) {
@@ -2215,7 +2217,8 @@ int ObLoadDataDirectImpl::execute(ObExecContext &ctx, ObLoadDataStmt &load_stmt)
                                                                      execute_param_.table_id_,
                                                                      execute_param_.method_,
                                                                      execute_param_.insert_mode_,
-                                                                     ObDirectLoadMode::LOAD_DATA))) {
+                                                                     ObDirectLoadMode::LOAD_DATA,
+                                                                     execute_param_.column_ids_))) {
       LOG_WARN("fail to check support direct load", KR(ret));
     } else if (OB_FAIL(init_execute_context())) {
       LOG_WARN("fail to init execute context", KR(ret), K(ctx), K(load_stmt));
@@ -2422,31 +2425,55 @@ int ObLoadDataDirectImpl::init_execute_param()
     ObSchemaGetterGuard *schema_guard = ctx_->get_sql_ctx()->schema_guard_;
     int64_t column_count = 0;
     execute_param_.column_ids_.reset();
-    if (is_backup) {
+    if (is_backup) { // 备份数据导入
       if (OB_FAIL(ObTableLoadSchema::get_column_ids(*schema_guard,
-                                                   execute_param_.tenant_id_,
-                                                   execute_param_.table_id_,
-                                                   execute_param_.column_ids_))) {
-          LOG_WARN("fail to get column ids for backup", KR(ret));
+                                                    execute_param_.tenant_id_,
+                                                    execute_param_.table_id_,
+                                                    execute_param_.column_ids_))) {
+        LOG_WARN("fail to get column ids for backup", KR(ret));
       }
-    } else {
-      if (OB_FAIL(ObTableLoadSchema::get_user_column_count(*schema_guard,
-                                                           execute_param_.tenant_id_,
-                                                           execute_param_.table_id_,
-                                                           column_count))) {
-        LOG_WARN("fail to get user column count", KR(ret));
-      } else if (OB_UNLIKELY(column_count != field_or_var_list.count())) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("not contain all columns is not supported", KR(ret), K(column_count),
-                 K(field_or_var_list));
+    } else if (load_stmt_->get_default_table_columns()) { // 默认列导入
+      if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(*schema_guard,
+                                                          execute_param_.tenant_id_,
+                                                          execute_param_.table_id_,
+                                                          execute_param_.column_ids_))) {
+        LOG_WARN("fail to get user column ids", KR(ret));
+      }
+    } else { // 指定列导入
+      const static uint64_t INVALID_COLUMN_ID = UINT64_MAX;
+      const ObTableSchema *table_schema = nullptr;
+      ObArray<uint64_t> user_column_ids;
+      if (OB_FAIL(ObTableLoadSchema::get_table_schema(*schema_guard,
+                                                      execute_param_.tenant_id_,
+                                                      execute_param_.table_id_,
+                                                      table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret), K(execute_param_));
+      } else if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(table_schema, user_column_ids))) {
+        LOG_WARN("fail to get user column ids", KR(ret));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < field_or_var_list.count(); ++i) {
         const ObLoadDataStmt::FieldOrVarStruct &field_or_var_struct = field_or_var_list.at(i);
         if (OB_UNLIKELY(!field_or_var_struct.is_table_column_)) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("var is not supported", KR(ret), K(field_or_var_struct), K(i), K(field_or_var_list));
-        } else if (OB_FAIL(execute_param_.column_ids_.push_back(field_or_var_struct.column_id_))) {
-          LOG_WARN("fail to push back column id", KR(ret));
+          LOG_WARN("var is not supported", KR(ret), K(field_or_var_struct), K(i),
+                   K(field_or_var_list));
+        } else {
+          const uint64_t column_id = field_or_var_struct.column_id_;
+          int64_t found_column_idx = -1;
+          for (int64_t j = 0; found_column_idx == -1 && j < user_column_ids.count(); ++j) {
+            const uint64_t user_column_id = user_column_ids.at(j);
+            if (column_id == user_column_id) {
+              found_column_idx = j;
+            }
+          }
+          if (OB_UNLIKELY(found_column_idx == -1)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unknow column", KR(ret), K(user_column_ids), K(field_or_var_struct));
+          } else if (OB_FAIL(execute_param_.column_ids_.push_back(column_id))) {
+            LOG_WARN("fail to push back column id", KR(ret));
+          } else {
+            user_column_ids.at(found_column_idx) = INVALID_COLUMN_ID;
+          }
         }
       }
     }

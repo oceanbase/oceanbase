@@ -84,6 +84,8 @@ public:
   void destroy();
   void stop();
   void wait(bool &wait_finished);
+  int cancel_task(const share::ObTaskId &task_id, bool &is_exist);
+  bool is_cancel() const;
 
 private:
   void reuse_();
@@ -130,6 +132,9 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       share::ObLSInfo &ls_info);
+  int get_ls_migration_task_with_nolock_(ObLSMigrationTask &task) const;
+  int check_task_exist_with_nolock_(const share::ObTaskId &task_id, bool &is_exist) const;
+  int switch_next_stage_with_nolock_(const int32_t result);
 
 private:
   bool is_inited_;
@@ -146,6 +151,7 @@ private:
   ObLSMigrationHandlerStatus status_;
   int32_t result_;
   bool is_stop_;
+  bool is_cancel_;
   DISALLOW_COPY_AND_ASSIGN(ObLSMigrationHandler);
 };
 

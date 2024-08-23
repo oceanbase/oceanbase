@@ -186,9 +186,7 @@ public:
   {
     if (OB_UNLIKELY(ATOMIC_LOAD(&free_count_) != ATOMIC_LOAD(&alloc_count_))) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "query allocator leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-#ifdef ENABLE_DEBUG_LOG
-      ob_abort();
-#endif
+      OB_SAFE_ABORT();
     }
     if (!only_check) {
       allocator_.reset();
@@ -278,9 +276,7 @@ public:
   {
     if (OB_UNLIKELY(free_count_ != alloc_count_)) {
       TRANS_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "callback memory leak found", K(alloc_count_), K(free_count_), K(alloc_size_));
-#ifdef ENABLE_DEBUG_LOG
-      ob_abort();
-#endif
+      OB_SAFE_ABORT();
     }
     if (!only_check) {
       allocator_.reset();

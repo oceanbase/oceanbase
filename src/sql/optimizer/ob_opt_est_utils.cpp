@@ -75,26 +75,103 @@ int ObOptEstUtils::extract_column_exprs_with_op_check(
 }
 
 
-int ObOptEstUtils::is_range_expr(const ObRawExpr *qual, bool &is_simple_filter, const int64_t level)
+int ObOptEstUtils::is_range_expr(const ObRawExpr *qual, bool &is_simple_filter)
 {
   int ret = OB_SUCCESS;
-  if (0 == level) {
-    is_simple_filter = true;
-  }
+  is_simple_filter = true;
   if (OB_ISNULL(qual)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("qual is null", K(ret));
-  } else if (IS_RANGE_CMP_OP(qual->get_expr_type()) && qual->has_flag(IS_RANGE_COND)) {
-    // c1 > 1 , 1 < c1 do nothing
+  } else if (IS_RANGE_CMP_OP(qual->get_expr_type()) ||
+             T_OP_BTW == qual->get_expr_type() ||
+             T_OP_NOT_BTW == qual->get_expr_type()) {
+    // c1 > 1 , 1 < c1, c1 (not) between 1 and '2'
+    const ObRawExpr *var = NULL;
+    const ObRawExpr *const_expr1 = NULL;
+    const ObRawExpr *const_expr2 = NULL;
+    ObItemType dummy = T_INVALID;
+    if (OB_FAIL(extract_var_op_const(qual, var, const_expr1, const_expr2, dummy, is_simple_filter))) {
+      LOG_WARN("failed to extract var", K(ret));
+    } else if (!is_simple_filter) {
+      // do nothing
+    } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(var, var))) {
+      LOG_WARN("failed to get expr without lossless cast", K(ret));
+    } else if (!var->is_column_ref_expr()) {
+      is_simple_filter = false;
+    }
   } else if (T_OP_AND == qual->get_expr_type() || T_OP_OR == qual->get_expr_type()) {
     const ObOpRawExpr *op_expr = static_cast<const ObOpRawExpr *>(qual);
     for (int idx = 0 ; idx < op_expr->get_param_count() && is_simple_filter && OB_SUCC(ret); ++idx) {
-      if (OB_FAIL(is_range_expr(op_expr->get_param_expr(idx), is_simple_filter, level + 1))) {
+      if (OB_FAIL(is_range_expr(op_expr->get_param_expr(idx), is_simple_filter))) {
         LOG_WARN("failed to judge if expr is range", K(ret));
       }
     }
   } else {
     is_simple_filter = false;
+  }
+  return ret;
+}
+
+int ObOptEstUtils::extract_var_op_const(const ObRawExpr *qual,
+                                        const ObRawExpr *&var_expr,
+                                        const ObRawExpr *&const_expr1,
+                                        const ObRawExpr *&const_expr2,
+                                        ObItemType &type,
+                                        bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  type = T_INVALID;
+  is_valid = false;
+  var_expr = NULL;
+  const_expr1 = NULL;
+  const_expr2 = NULL;
+  if (OB_ISNULL(qual)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (FALSE_IT(type = qual->get_expr_type())) {
+  } else if (IS_RANGE_CMP_OP(type) || T_OP_EQ == type || T_OP_NSEQ == type || T_OP_NE == type) {
+    if (OB_UNLIKELY(qual->get_param_count() != 2) ||
+        OB_ISNULL(qual->get_param_expr(0)) ||
+        OB_ISNULL(qual->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param", KPC(qual));
+    } else if (!qual->get_param_expr(0)->is_const_expr() &&
+               qual->get_param_expr(1)->is_const_expr()) {
+      var_expr = qual->get_param_expr(0);
+      const_expr1 = qual->get_param_expr(1);
+      is_valid = true;
+    } else if (!qual->get_param_expr(1)->is_const_expr() &&
+               qual->get_param_expr(0)->is_const_expr()) {
+      var_expr = qual->get_param_expr(1);
+      const_expr1 = qual->get_param_expr(0);
+      is_valid = true;
+      type = get_opposite_compare_type(type);
+    }
+  } else if (T_OP_IS == type || T_OP_IS_NOT == type) {
+    if (OB_UNLIKELY(qual->get_param_count() != 2) ||
+        OB_ISNULL(qual->get_param_expr(0)) ||
+        OB_ISNULL(qual->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param", KPC(qual));
+    } else if (!qual->get_param_expr(0)->is_const_expr() &&
+               qual->get_param_expr(1)->is_const_expr()) {
+      var_expr = qual->get_param_expr(0);
+      const_expr1 = qual->get_param_expr(1);
+      is_valid = true;
+    }
+  } else if (T_OP_BTW == type || T_OP_NOT_BTW == type) {
+    if (OB_UNLIKELY(3 != qual->get_param_count()) || OB_ISNULL(qual->get_param_expr(0)) ||
+        OB_ISNULL(qual->get_param_expr(1)) || OB_ISNULL(qual->get_param_expr(2))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected param", K(ret), KPC(qual));
+    } else if (!qual->get_param_expr(0)->is_const_expr() &&
+               qual->get_param_expr(1)->is_const_expr() &&
+               qual->get_param_expr(2)->is_const_expr()) {
+      var_expr = qual->get_param_expr(0);
+      const_expr1 = qual->get_param_expr(1);
+      const_expr2 = qual->get_param_expr(2);
+      is_valid = true;
+    }
   }
   return ret;
 }
@@ -205,7 +282,7 @@ int ObOptEstUtils::if_expr_start_with_patten_sign(const ParamStore *params,
   is_start_with = false;
   all_is_percent_sign = false;
   bool get_value = false;
-  bool empty_escape = false;
+  bool valid_escape = true;
   char escape;
   ObObj value;
   ObObj esp_value;
@@ -218,32 +295,48 @@ int ObOptEstUtils::if_expr_start_with_patten_sign(const ParamStore *params,
   } else if (!get_value || !esp_value.is_string_type()) {
     // do nothing
   } else {
-    if (esp_value.get_char().length() > 0) {
-      escape = esp_value.get_char()[0];
-    } else {
-      empty_escape = true;
+    size_t escape_length = ObCharset::strlen_char(esp_expr->get_collation_type(),
+                                                  esp_value.get_string().ptr(),
+                                                  esp_value.get_string().length());
+    int32_t escape_wc = 0;
+    if (1 != escape_length) {
+      valid_escape = false;
+    } else if (OB_FAIL(ObCharset::mb_wc(esp_expr->get_collation_type(), esp_value.get_string(), escape_wc))) {
+      ret = OB_SUCCESS;
+      valid_escape = false;
     }
     if (OB_FAIL(get_expr_value(params, *expr, exec_ctx, allocator, get_value, value))) {
       LOG_WARN("Failed to get expr value", K(ret));
     } else if (get_value && value.is_string_type() && value.get_string().length() > 0) {
       // 1. patten not start with `escape sign`
       // 2. patten start with `%` or `_` && `%` or `_` is not `escape sign`
-      char start_c = value.get_string()[0];
-      if (empty_escape) {
-        is_start_with = ('%' == start_c || '_' == start_c);
-      } else {
-        is_start_with = (escape != start_c && ('%' == start_c || '_' == start_c));
+      ObStringScanner scanner(value.get_string(), expr->get_collation_type());
+      ObString encoding;
+      int32_t wc = 0;
+      ObString first_c;
+      bool is_first_char = true;
+      all_is_percent_sign = true;
+      while (OB_SUCC(ret)
+            && scanner.next_character(encoding, wc, ret)
+            && all_is_percent_sign) {
+        if (is_first_char) {
+          bool is_wild = (static_cast<int32_t>('%') == wc || static_cast<int32_t>('_') == wc);
+          if (!valid_escape) {
+            is_start_with = is_wild;
+          } else {
+            is_start_with = (escape_wc != wc && is_wild);
+          }
+          is_first_char = false;
+        }
+        if (static_cast<int32_t>('%') != wc) {
+          all_is_percent_sign = false;
+        }
       }
-    } else { /* do nothing */ }
-  }
-  if (OB_SUCC(ret) && is_start_with) {
-    all_is_percent_sign = true;
-    const ObString &expr_str = value.get_string();
-    for (int64_t i = 0; all_is_percent_sign && i < expr_str.length(); i++) {
-      if (expr_str[i] != '%') {
+      if (OB_FAIL(ret)) {
+        ret = OB_SUCCESS;
         all_is_percent_sign = false;
       }
-    }
+    } else { /* do nothing */ }
   }
   return ret;
 }

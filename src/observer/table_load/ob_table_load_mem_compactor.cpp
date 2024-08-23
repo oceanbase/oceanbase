@@ -290,7 +290,9 @@ int ObTableLoadMemCompactor::inner_init()
       mem_ctx_.table_data_desc_ = store_ctx_->table_data_desc_;
       mem_ctx_.datum_utils_ = &(store_ctx_->ctx_->schema_.datum_utils_);
       mem_ctx_.need_sort_ = param_->need_sort_;
-      mem_ctx_.column_count_ = param_->column_count_;
+      mem_ctx_.column_count_ = (store_ctx_->ctx_->schema_.is_heap_table_
+                                  ? store_ctx_->ctx_->schema_.store_column_count_ - 1
+                                  : store_ctx_->ctx_->schema_.store_column_count_);
     }
 
     mem_ctx_.mem_load_task_count_ = param_->session_count_;

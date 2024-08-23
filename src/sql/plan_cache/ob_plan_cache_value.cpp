@@ -1954,13 +1954,21 @@ int ObPlanCacheValue::get_all_dep_schema(ObPlanCacheCtx &pc_ctx,
           tenant_id = get_tenant_id_by_object_id(stored_schema_objs_.at(i)->schema_id_);
         } else if (SYNONYM_SCHEMA == pcv_schema->schema_type_) {
           const ObSimpleSynonymSchema *synonym_schema = nullptr;
+          const ObSimpleTableSchemaV2 *sn_table_schema = nullptr; // table with the same name
           uint64_t synonym_database_id =
             OB_PUBLIC_SCHEMA_ID == pcv_schema->database_id_ ? database_id : pcv_schema->database_id_;
-          if (OB_FAIL(schema_guard.get_synonym_info(tenant_id, synonym_database_id,
-                                                    pcv_schema->table_name_, synonym_schema))) {
+          if (OB_FAIL(schema_guard.get_simple_table_schema(
+                tenant_id, synonym_database_id, pcv_schema->table_name_, false, sn_table_schema))) {
+            LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
+          } else if (nullptr != sn_table_schema) {
+            ret = OB_OLD_SCHEMA_VERSION;
+            LOG_INFO("a table with the same name exists. regenerate the plan", K(ret),
+                     K(synonym_database_id), K(pcv_schema->table_name_));
+          } else if (OB_FAIL(schema_guard.get_synonym_info(
+                       tenant_id, synonym_database_id, pcv_schema->table_name_, synonym_schema))) {
             LOG_WARN("failed to get private synonym", K(ret));
           } else if (OB_ISNULL(synonym_schema)
-                      && OB_FAIL(schema_guard.get_synonym_info(tenant_id, OB_PUBLIC_SCHEMA_ID,
+                     && OB_FAIL(schema_guard.get_synonym_info(tenant_id, OB_PUBLIC_SCHEMA_ID,
                                                               pcv_schema->table_name_,
                                                               synonym_schema))) {
             LOG_WARN("failed to get public synonym", K(ret));

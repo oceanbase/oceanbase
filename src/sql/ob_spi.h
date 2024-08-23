@@ -35,6 +35,7 @@ using common::ObPsStmtId;
 namespace pl
 {
 class ObDbmsCursorInfo;
+class ObPLSqlCodeInfo;
 }
 
 namespace sql
@@ -56,6 +57,40 @@ struct ObPLSPITraceIdGuard
   const ObString ps_sql_;
   ObSQLSessionInfo& session_;
   int &ret_;
+};
+
+class ObSPIRetryCtrlGuard
+{
+public:
+  ObSPIRetryCtrlGuard(
+    observer::ObQueryRetryCtrl &retry_ctrl,
+    ObSPIResultSet &spi_result,
+    ObSQLSessionInfo &session_info,
+    int &ret,
+    bool for_fetch = false);
+  ~ObSPIRetryCtrlGuard();
+
+  void test();
+
+private:
+  observer::ObQueryRetryCtrl &retry_ctrl_;
+  ObSPIResultSet &spi_result_;
+  ObSQLSessionInfo &session_info_;
+  pl::ObPLSqlCodeInfo save_sqlcode_info_;
+  int &ret_;
+  bool init_;
+};
+
+class ObSPIExecEnvGuard
+{
+public:
+  ObSPIExecEnvGuard(ObSQLSessionInfo &session_info, ObSPIResultSet &spi_result);
+  ~ObSPIExecEnvGuard();
+private:
+  ObSQLSessionInfo &session_info_;
+  ObSPIResultSet &spi_result_;
+  int64_t query_start_time_bk_;
+  pl::ObPLSqlCodeInfo *sqlcode_info_bk_;
 };
 
 struct ObSPICursor
@@ -201,7 +236,7 @@ public:
   sql::ObSqlCtx &get_sql_ctx() { return sql_ctx_; }
   ObResultSet *get_result_set() { return result_set_; }
   ObSPIOutParams &get_out_params() { return out_params_; }
-  ObIAllocator &get_allocaor() { return allocator_; }
+  ObIAllocator &get_allocator() { return allocator_; }
   int destruct_exec_params(ObSQLSessionInfo &session);
 private:
   enum EndStmtType
@@ -512,6 +547,55 @@ public:
                                    bool is_returning = false,
                                    bool is_type_record = false);
 
+  static int check_dynamic_sql_legal(pl::ObPLExecCtx *ctx,
+                                     ObSqlString &sql_str,
+                                     stmt::StmtType stmt_type,
+                                     int64_t into_count,
+                                     int64_t inner_into_count,
+                                     common::ObObjParam **params,
+                                     int64_t param_count,
+                                     const int64_t *params_mode,
+                                     bool is_returning,
+                                     bool for_update,
+                                     int64_t &exec_param_cnt,
+                                     common::ObIArray<ObObjParam*> &out_using_params);
+
+  static int prepare_dynamic_sql_params(pl::ObPLExecCtx *ctx,
+                                        ObSPIResultSet &spi_result,
+                                        common::ObIAllocator &allocator,
+                                        int64_t exec_param_cnt,
+                                        ObObjParam **params,
+                                        ParamStore *&exec_params);
+
+  static int inner_open(pl::ObPLExecCtx *ctx,
+                        ObIAllocator &param_allocator, //用于拷贝执行期参数
+                        const ObString &sql,
+                        const ObString &ps_sql,
+                        int64_t type,
+                        void *params,
+                        int64_t param_count,
+                        const ObSqlExpression **into_exprs,
+                        int64_t into_count,
+                        ObSPIResultSet &spi_result,
+                        ObSPIOutParams &out_params,
+                        bool is_forall,
+                        bool is_dynamic_sql,
+                        bool is_dbms_sql);
+
+  static int prepare_static_sql_params(pl::ObPLExecCtx *ctx,
+                                       ObIAllocator &param_allocator,
+                                       const ObString &sql,
+                                       const ObString &ps_sql,
+                                       int64_t type,
+                                       const ObSqlExpression **params,
+                                       int64_t param_count,
+                                       const ObSqlExpression **into_exprs,
+                                       int64_t into_count,
+                                       ObSPIResultSet &spi_result,
+                                       ObSPIOutParams &out_params,
+                                       bool is_forall,
+                                       ParamStore *&curr_params);
+
   static int spi_get_subprogram_cursor_info(pl::ObPLExecCtx *ctx,
                                  uint64_t package_id,
                                  uint64_t routine_id,
@@ -581,7 +665,8 @@ public:
                               const ObString &ps_sql,
                               int64_t stmt_type,
                               bool for_update,
-                              bool has_hidden_rowid);
+                              bool has_hidden_rowid,
+                              int64_t orc_max_ret_rows = INT64_MAX);
   static int spi_dynamic_open(pl::ObPLExecCtx *ctx,
                               const int64_t sql_idx,
                               const int64_t *sql_param_exprs_idx,
@@ -591,7 +676,8 @@ public:
                               int64_t cursor_index);
   static int dbms_dynamic_open(pl::ObPLExecCtx *ctx,
                                pl::ObDbmsCursorInfo &cursor,
-                               bool is_dbms_sql = false);
+                               bool is_dbms_sql = false,
+                               int64_t orc_max_ret_rows = INT64_MAX);
   static int dbms_cursor_fetch(pl::ObPLExecCtx *ctx,
                               pl::ObDbmsCursorInfo &cursor,
                               bool is_server_cursor = false);
@@ -725,7 +811,7 @@ public:
                                           ObIAllocator *allocator,
                                           ObObj *result);
 
-  static int spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, bool is_pop_warning_buf);
+  static int spi_set_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t code, bool is_pop_warning_buf, int level);
 
   static int spi_get_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t *code);
 
@@ -807,10 +893,14 @@ public:
                         int64_t stmt_type,
                         ParamStore &exec_params,
                         ObSPIResultSet &spi_result,
-                        ObSPIOutParams &out_params);
+                        ObSPIOutParams &out_params,
+                        bool is_dynamic_sql = false);
 
   static void adjust_pl_status_for_xa(sql::ObExecContext &ctx, int &result);
-  static int fill_cursor(ObResultSet &result_set, ObSPICursor *cursor, int64_t new_query_start_time);
+  static int fill_cursor(ObResultSet &result_set,
+                         ObSPICursor *cursor,
+                         int64_t new_query_start_time,
+                         int64_t orc_max_ret_rows = INT64_MAX);
 
   static int spi_opaque_assign_null(int64_t opaque_ptr);
 
@@ -897,7 +987,7 @@ private:
                                const char *sql,
                                const char *ps_sql,
                                int64_t type,
-                               const ObSqlExpression **param_exprs,
+                               void *params,
                                int64_t param_count,
                                const ObSqlExpression **into_exprs,
                                int64_t into_count,
@@ -908,7 +998,10 @@ private:
                                int64_t is_bulk,
                                bool is_forall = false,
                                bool is_type_record = false,
-                               bool for_update = false);
+                               bool for_update = false,
+                               bool is_dynamic_sql = false,
+                               ObIArray<ObObjParam*> *using_out_params = nullptr,
+                               bool is_dbms_sql = false);
 
   static int dbms_cursor_execute(pl::ObPLExecCtx *ctx,
                                  const ObString ps_sql,
@@ -940,22 +1033,8 @@ private:
                                    ObSPIOutParams &out_params,
                                    bool is_forall = false);
 
-  static int inner_open(pl::ObPLExecCtx *ctx,
-                        ObIAllocator &param_allocator, //用于拷贝执行期参数
-                        const char* sql,
-                        const char* ps_sql,
-                        int64_t type,
-                        const ObSqlExpression **param_exprs,
-                        int64_t param_count,
-                        const ObSqlExpression **into_exprs,
-                        int64_t into_count,
-                        ObSPIResultSet &spi_result,
-                        ObSPIOutParams &out_params,
-                        observer::ObQueryRetryCtrl *retry_ctrl = nullptr,
-                        bool is_forall = false);
-
   static int inner_fetch(pl::ObPLExecCtx *ctx,
-                         observer::ObQueryRetryCtrl &retry_ctrl,
+                         bool &can_retry,
                          ObSPIResultSet &spi_result,
                          const ObSqlExpression **into_exprs,
                          int64_t into_count,
@@ -1136,9 +1215,11 @@ private:
   static int calc_dynamic_sqlstr(
     pl::ObPLExecCtx *ctx, const ObSqlExpression *sql, ObSqlString &sqlstr);
 
-  static int dynamic_out_params(
-    common::ObIAllocator &allocator,
-    ObResultSet *result, common::ObObjParam **params, int64_t param_count);
+  static int dynamic_out_params(common::ObIAllocator &allocator,
+                                ObResultSet *result,
+                                void *params,
+                                int64_t param_count,
+                                bool is_dbms_sql);
 
   static int cursor_close_impl(pl::ObPLExecCtx *ctx,
                                    pl::ObPLCursorInfo *cursor,
@@ -1177,7 +1258,35 @@ private:
                                     const ObSqlExpression **actual_param_exprs,
                                     int64_t cursor_param_count);
   static bool is_sql_type_into_pl(ObObj &dest_addr, ObIArray<ObObj> &obj_array);
-private:
+
+  static int streaming_cursor_open(pl::ObPLExecCtx *ctx,
+                                   pl::ObPLCursorInfo &cursor,
+                                   ObSQLSessionInfo &session_info,
+                                   const ObString &sql,
+                                   const ObString &ps_sql,
+                                   int64_t type,
+                                   void *params,
+                                   int64_t sql_param_count,
+                                   bool is_server_cursor,
+                                   bool is_for_update,
+                                   bool has_hidden_rowid,
+                                   bool is_dbms_cursor = false);
+
+  static int unstreaming_cursor_open(pl::ObPLExecCtx *ctx,
+                                     pl::ObPLCursorInfo &cursor,
+                                     ObSQLSessionInfo &session_info,
+                                     const ObString &sql,
+                                     const ObString &ps_sql,
+                                     int64_t type,
+                                     void *params,
+                                     int64_t sql_param_count,
+                                     bool is_server_cursor,
+                                     bool for_update,
+                                     bool has_hidden_rowid,
+                                     bool is_dbms_cursor = false,
+                                     int64_t orc_max_ret_rows = INT64_MAX);
+  static int store_params_string(pl::ObPLExecCtx *ctx, ObSPIResultSet &spi_result, ParamStore *exec_params);
+
   static int setup_cursor_snapshot_verify_(pl::ObPLCursorInfo *cursor, ObSPIResultSet *spi_result);
 };
 

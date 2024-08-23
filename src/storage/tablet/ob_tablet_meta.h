@@ -149,7 +149,8 @@ public:
                K_(extra_medium_info),
                K_(last_persisted_committed_tablet_status),
                K_(create_schema_version),
-               K_(space_usage));
+               K_(space_usage),
+               K_(ddl_table_type));
 
 public:
   int32_t version_;
@@ -185,6 +186,13 @@ public:
   ObTabletCreateDeleteMdsUserData last_persisted_committed_tablet_status_; // quick access for tablet status in sstables
   ObTabletSpaceUsage space_usage_; // calculated by tablet persist, ObMigrationTabletParam doesn't need it
   int64_t create_schema_version_; // add after 4.2, record schema_version when first create tablet. NEED COMPAT
+  // add after 4.3.3, is used to decide storage type for replaying ddl clog and create ddl dump sstable in cs replica.
+  // when offline ddl is concurrent with adding C-Replica, it may write row store clog, but storage schema in C-Replica is columnar.
+  // so need persist a field in tablet when replaying start log to decide table_type when restart from a checkpoint, or migrating, etc.
+  // - DDL_MEM_SSTABLE: initial state, tablet not doing offline ddl. only take this type for inital, unrelated to memtable.
+  // - DDL_DUMP_SSTABLE/DDL_MERGE_CO_SSTABLE: tablet is doing offline ddl, indicate target storage type for ddl dump sstable.
+  // - MAJOR_SSTABLE/COLUMN_ORIENTED_SSTABLE: tablet finish offline ddl, set when ddl merge task create major sstable.
+  ObITable::TableType ddl_table_type_;
   //ATTENTION : Add a new variable need consider ObMigrationTabletParam
   // and tablet meta init interface for migration.
   // yuque :
@@ -322,6 +330,7 @@ public:
   ObTabletFullMemoryMdsData mds_data_;
   ObTabletTransferInfo transfer_info_;
   int64_t create_schema_version_;
+  ObITable::TableType ddl_table_type_;
 
   // Add new serialization member before this line, below members won't serialize
   common::ObArenaAllocator allocator_; // for storage schema

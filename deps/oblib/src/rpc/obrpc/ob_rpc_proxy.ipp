@@ -55,7 +55,7 @@ int SSHandle<pcodeStruct>::get_more(typename pcodeStruct::Response &result)
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode_));
     ObRpcMemPool pool(src_tenant_id, pcode_label);
-    ObSyncRespCallback cb(pool);
+    ObSyncRespCallback cb(pool, proxy_);
     char* pnio_req = NULL;
     int64_t pnio_req_sz = 0, resp_sz = 0;
     const char* resp = NULL;
@@ -205,7 +205,7 @@ int SSHandle<pcodeStruct>::abort()
     auto &set = obrpc::ObRpcPacketSet::instance();
     const char* pcode_label = set.name_of_idx(set.idx_of_pcode(pcode_));
     ObRpcMemPool pool(src_tenant_id, pcode_label);
-    ObSyncRespCallback cb(pool);
+    ObSyncRespCallback cb(pool, proxy_);
     char* pnio_req = NULL;
     int64_t pnio_req_sz = 0, resp_sz = 0;
     const char* resp = NULL;

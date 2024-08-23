@@ -1409,9 +1409,9 @@ int ObCloneScheduler::check_sys_tenant_(const uint64_t tenant_id)
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null schema service", KR(ret), KP(GCTX.schema_service_));
-  } else if (GCTX.is_standby_cluster() || GCONF.in_upgrade_mode()) {
+  } else if (GCONF.in_upgrade_mode()) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("clone tenant while in standby cluster or in upgrade mode is not allowed", KR(ret));
+    LOG_WARN("clone tenant while in upgrade mode is not allowed", KR(ret));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
                 OB_SYS_TENANT_ID, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret));

@@ -1333,6 +1333,17 @@ const char *ob_obj_type_str(ObObjType type);
 const char *inner_obj_type_str(ObObjType type);
 const char *ob_sql_type_str(ObObjType type);
 
+//such as “char(20) CHARSET utf8mb4" or "char(20) CHARSET utf8mb4 COLLATE utf8mb4_bin". with charset and collate
+int ob_sql_type_str_with_coll(char *buff,
+    int64_t buff_length,
+    int64_t &pos,
+    ObObjType type,
+    int64_t length,
+    int64_t precision,
+    int64_t scale,
+    ObCollationType coll_type,
+    const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX));
+
 //such as "double(10,7)". with accuracy
 int ob_sql_type_str(char *buff,
                     int64_t buff_length,

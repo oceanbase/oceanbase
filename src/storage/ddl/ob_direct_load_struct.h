@@ -200,13 +200,13 @@ struct ObDirectInsertCommonParam final
 {
 public:
   ObDirectInsertCommonParam()
-    : ls_id_(), tablet_id_(), direct_load_type_(DIRECT_LOAD_INVALID), data_format_version_(0), read_snapshot_(0)
+    : ls_id_(), tablet_id_(), direct_load_type_(DIRECT_LOAD_INVALID), data_format_version_(0), read_snapshot_(0), replay_normal_in_cs_replica_(false)
   {}
   ~ObDirectInsertCommonParam() = default;
   bool is_valid() const { return ls_id_.is_valid() && tablet_id_.is_valid()
       && data_format_version_ >= 0 && read_snapshot_ >= 0 && DIRECT_LOAD_INVALID <= direct_load_type_ && direct_load_type_ <= DIRECT_LOAD_MAX;
   }
-  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(data_format_version), K_(read_snapshot));
+  TO_STRING_KV(K_(ls_id), K_(tablet_id), K_(direct_load_type), K_(data_format_version), K_(read_snapshot), K_(replay_normal_in_cs_replica));
 public:
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
@@ -215,6 +215,7 @@ public:
   // read_snapshot_ is used to scan the source data.
   // For full direct load task, it is also the commit version of the target macro block.
   int64_t read_snapshot_;
+  bool replay_normal_in_cs_replica_; // when ddl and add cs replica are concurrent, leader may write normal clog
 };
 
 // only used in runtime execution
@@ -453,7 +454,7 @@ class ObMacroBlockSliceStore: public ObTabletSliceStore
 {
 public:
   ObMacroBlockSliceStore()
-   : is_inited_(false), ddl_redo_callback_(nullptr) {}
+   : is_inited_(false), need_process_cs_replica_(false), ddl_redo_callback_(nullptr) {}
   virtual ~ObMacroBlockSliceStore() {
     if (ddl_redo_callback_ != nullptr) {
       common::ob_delete(ddl_redo_callback_);
@@ -462,15 +463,49 @@ public:
   int init(
       ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const blocksstable::ObMacroDataSeq &data_seq,
-      const share::SCN &start_scn);
+      const share::SCN &start_scn,
+      const bool need_process_cs_replica = false);
   virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
   virtual int close() override;
   virtual int64_t get_next_block_start_seq() const override { return macro_block_writer_.get_last_macro_seq(); }
-  TO_STRING_KV(K(is_inited_), K(macro_block_writer_));
+  TO_STRING_KV(K(is_inited_), K_(need_process_cs_replica), K(macro_block_writer_));
 private:
   bool is_inited_;
+  bool need_process_cs_replica_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;
   blocksstable::ObMacroBlockWriter macro_block_writer_;
+};
+
+class ObMultiSliceStore : public ObTabletSliceStore
+{
+public:
+  ObMultiSliceStore();
+  virtual ~ObMultiSliceStore();
+  int init(
+      ObArenaAllocator &allocator,
+      ObTabletDirectLoadMgr *tablet_direct_load_mgr,
+      const blocksstable::ObMacroDataSeq &data_seq,
+      const share::SCN &start_scn,
+      const int64_t rowkey_column_count,
+      const ObStorageSchema *storage_schema,
+      const ObIArray<ObColumnSchemaItem> &col_schema,
+      const int64_t dir_id,
+      const int64_t parallelism);
+  virtual int append_row(const blocksstable::ObDatumRow &datum_row) override;
+  virtual int close() override;
+  virtual int64_t get_row_count() const override;
+  virtual int64_t get_next_block_start_seq() const override;
+  void reset();
+  const ObChunkSliceStore *get_column_slice_store() const { return column_slice_store_; }
+  TO_STRING_KV(K_(is_inited), KPC_(cs_replica_schema), KPC_(row_slice_store), KPC_(column_slice_store));
+private:
+  void free_memory(ObArenaAllocator &allocator);
+private:
+  bool is_inited_;
+  ObArenaAllocator *arena_allocator_;
+  ObStorageSchema *cs_replica_schema_;
+  ObMacroBlockSliceStore *row_slice_store_;
+  ObChunkSliceStore *column_slice_store_;
 };
 
 class ObTabletDirectLoadMgr;
@@ -490,6 +525,14 @@ public:
 class ObCOSliceWriter;
 class ObDirectLoadSliceWriter final
 {
+public:
+  enum class ObDirectLoadSliceWriterType: uint8_t
+  {
+    ROW_STORE_WRITER   = 0,
+    COL_STORE_WRITER   = 1,
+    COL_REPLICA_WRITER = 2,
+    WRITER_TYPE_MAX    = 3
+  };
 public:
   ObDirectLoadSliceWriter();
   ~ObDirectLoadSliceWriter();
@@ -541,11 +584,15 @@ public:
   int64_t get_row_offset() const { return row_offset_; }
   blocksstable::ObMacroDataSeq &get_start_seq() { return start_seq_; }
   bool is_empty() const { return 0 == get_row_count(); }
-  bool need_column_store() const { return need_column_store_; }
+  bool is_row_store_writer() const { return ObDirectLoadSliceWriterType::ROW_STORE_WRITER == writer_type_; }
+  bool is_col_store_writer() const { return ObDirectLoadSliceWriterType::COL_STORE_WRITER == writer_type_; }
+  bool is_cs_replica_write() const { return ObDirectLoadSliceWriterType::COL_REPLICA_WRITER == writer_type_; }
+  bool need_column_store() const { return is_col_store_writer() || is_cs_replica_write(); }
   ObTabletSliceStore *get_slice_store() const { return slice_store_; }
+  ObDirectLoadSliceWriterType get_writer_type() const { return writer_type_; }
   void cancel() { ATOMIC_SET(&is_canceled_, true); }
   int64_t get_next_block_start_seq() const { return nullptr == slice_store_ ? start_seq_.get_data_seq() /*slice empty*/ : slice_store_->get_next_block_start_seq(); }
-  TO_STRING_KV(K(is_inited_), K(need_column_store_), K(is_canceled_), K(start_seq_), KPC(slice_store_), K(row_offset_));
+  TO_STRING_KV(K(is_inited_), K(writer_type_), K(is_canceled_), K(start_seq_), KPC(slice_store_), K(row_offset_));
 private:
   int fill_lob_into_memtable( // for version < 4.3.0.0
       ObIAllocator &allocator,
@@ -591,7 +638,6 @@ private:
       const int64_t trans_version,
       const ObObjType &obj_type,
       const ObCollationType &cs_type,
-      const ObLobId &lob_id,
       const transaction::ObTransID trans_id,
       const int64_t seq_no,
       const int64_t timeout_ts,
@@ -599,11 +645,17 @@ private:
       const uint64_t src_tenant_id,
       const ObDirectLoadType direct_load_type,
       transaction::ObTxDesc* tx_desc,
+      share::ObTabletCacheInterval &pk_interval,
       ObLobMetaRowIterator *&row_iter);
   int mock_chunk_store(const int64_t row_cnt);
+  int inner_fill_column_group(
+      const ObChunkSliceStore *chunk_slice_store,
+      const ObStorageSchema *storage_schema,
+      const share::SCN &start_scn,
+      ObInsertMonitor *monitor_node = NULL);
 private:
   bool is_inited_;
-  bool need_column_store_;
+  ObDirectLoadSliceWriterType writer_type_;
   bool is_canceled_;
   blocksstable::ObMacroDataSeq start_seq_;
   ObTabletDirectLoadMgr *tablet_direct_load_mgr_;
@@ -625,7 +677,8 @@ public:
       ObTabletDirectLoadMgr *tablet_direct_load_mgr,
       const blocksstable::ObMacroDataSeq &start_seq,
       const int64_t row_id_offset,
-      const share::SCN &start_scn);
+      const share::SCN &start_scn,
+      const bool with_cs_replica);
   void reset();
   int append_row(
       const sql::ObChunkDatumStore::StoredRow *stored_row);
