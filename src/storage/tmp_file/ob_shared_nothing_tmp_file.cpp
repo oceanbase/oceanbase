@@ -2042,7 +2042,7 @@ int ObSharedNothingTmpFile::remove_useless_page_in_data_flush_infos_(const int64
   } else {
     // skip truncated flush infos
     for (int64_t i = start_pos; OB_SUCC(ret) && i < end_pos; i++) {
-      int64_t flushed_start_offset = get_page_begin_offset_by_virtual_id_(flush_infos_[start_pos].flush_virtual_page_id_);
+      int64_t flushed_start_offset = get_page_begin_offset_by_virtual_id_(flush_infos_[i].flush_virtual_page_id_);
       int64_t flushed_end_offset = flushed_start_offset +
                                    flush_infos_[i].flush_data_page_num_ * ObTmpFileGlobal::PAGE_SIZE;
       if (truncated_offset_ <= flushed_start_offset) {
