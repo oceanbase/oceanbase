@@ -227,7 +227,7 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
 
     for (int64_t i = 0; OB_SUCC(ret) && i < filter_items.count(); ++i) {
       const ObTabletReplicaChecksumItem &item = filter_items.at(i);
-      if (OB_FAIL(ls_cs_replica_cache.update(item.ls_id_, item.server_))) {
+      if (OB_FAIL(ls_cs_replica_cache.update(item.ls_id_))) {
         LOG_WARN("fail to update ls replica status", K(ret), K(item));
       }
     }
@@ -237,7 +237,15 @@ int ObStorageHAUtils::check_tablet_replica_checksum_(const uint64_t tenant_id, c
       const ObTabletReplicaChecksumItem &item = filter_items.at(i);
       const ObLSReplicaUniItem ls_item(item.ls_id_, item.server_);
       bool is_cs_replica = false;
-      if (OB_FAIL(ls_cs_replica_cache.check_is_cs_replica(ls_item, is_cs_replica))) {
+      bool can_skip = false;
+      const ObLSReplica *replica = nullptr;
+
+      if (OB_FAIL(ls_cs_replica_cache.check_can_skip(ls_item, can_skip))) {
+        LOG_WARN("failed to get ls replica", K(ret), K(ls_item), K(ls_cs_replica_cache));
+      } else if (can_skip) {
+        LOG_INFO("cur ls item can be skip", K(ret), K(ls_item), K(ls_cs_replica_cache));
+        continue;
+      } else if (OB_FAIL(ls_cs_replica_cache.check_is_cs_replica(ls_item, is_cs_replica))) {
         LOG_WARN("fail to check is cs replica", K(ret), K(ls_item), K(ls_cs_replica_cache));
       } else if (OB_FAIL(data_checksum_checker.check_data_checksum(item, is_cs_replica))) {
         LOG_ERROR("failed to verify data checksum", K(ret), K(tenant_id), K(tablet_id),
