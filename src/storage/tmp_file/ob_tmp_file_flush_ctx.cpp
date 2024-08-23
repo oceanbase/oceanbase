@@ -116,9 +116,9 @@ int ObTmpFileBatchFlushContext::clear_flush_ctx(ObTmpFileFlushPriorityManager &p
   }
 
   if (OB_FAIL(ret)) {
-  } else if (flush_seq_ctx_.send_io_succ_cnt_ == flush_seq_ctx_.create_flush_task_cnt_) {
+  } else if (flush_seq_ctx_.prepare_finished_cnt_ == flush_seq_ctx_.create_flush_task_cnt_) {
     LOG_DEBUG("reset flush_seq_ctx_", KPC(this));
-    flush_seq_ctx_.send_io_succ_cnt_ = 0;
+    flush_seq_ctx_.prepare_finished_cnt_ = 0;
     flush_seq_ctx_.create_flush_task_cnt_ = 0;
     flush_seq_ctx_.flush_sequence_ += 1;
     // remove the files that have already been successfully flushed(recorded in file_ctx_hash_)
@@ -130,10 +130,10 @@ int ObTmpFileBatchFlushContext::clear_flush_ctx(ObTmpFileFlushPriorityManager &p
     } else {
       file_ctx_hash_.clear();
     }
-  } else if (flush_seq_ctx_.send_io_succ_cnt_ < flush_seq_ctx_.create_flush_task_cnt_) {
+  } else if (flush_seq_ctx_.prepare_finished_cnt_ < flush_seq_ctx_.create_flush_task_cnt_) {
     // likely to occur when write buffer pool is full and need to fast flush meta page
     LOG_WARN("flush_seq_ctx_ could not increase flush sequence", KPC(this));
-  } else if (OB_UNLIKELY(flush_seq_ctx_.send_io_succ_cnt_ > flush_seq_ctx_.create_flush_task_cnt_)) {
+  } else if (OB_UNLIKELY(flush_seq_ctx_.prepare_finished_cnt_ > flush_seq_ctx_.create_flush_task_cnt_)) {
     LOG_ERROR("unexpected flush_seq_ctx_", KPC(this));
   }
 
@@ -184,13 +184,22 @@ void ObTmpFileBatchFlushContext::destroy()
   file_ctx_hash_.destroy();
 }
 
-void ObTmpFileBatchFlushContext::update_ctx_by_flush_task(const ObTmpFileFlushTask &flush_task)
+void ObTmpFileBatchFlushContext::update_actual_flush_size(const ObTmpFileFlushTask &flush_task)
 {
   actual_flush_size_ += flush_task.get_data_length();
+}
 
-  if (ObTmpFileFlushTask::TFFT_WAIT == flush_task.get_state() || flush_task.get_data_length() == 0) {
-    // we will free task if its data_length == 0, therefore we count it as succ here
-    flush_seq_ctx_.send_io_succ_cnt_ += 1;
+void ObTmpFileBatchFlushContext::try_update_prepare_finished_cnt(const ObTmpFileFlushTask &flush_task, bool& recorded)
+{
+  int ret = OB_SUCCESS;
+
+  recorded = false;
+  if (OB_UNLIKELY(flush_seq_ctx_.prepare_finished_cnt_ >= flush_seq_ctx_.create_flush_task_cnt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("unexpected flush_seq_ctx_", KPC(this));
+  } else if (ObTmpFileFlushTask::TFFT_WAIT == flush_task.get_state() || flush_task.get_data_length() == 0) {
+    ++flush_seq_ctx_.prepare_finished_cnt_;
+    recorded = true;
   }
 }
 
@@ -229,6 +238,7 @@ ObTmpFileFlushTask::ObTmpFileFlushTask()
     create_ts_(-1),
     is_io_finished_(false),
     fast_flush_tree_page_(false),
+    recorded_as_prepare_finished_(false),
     task_state_(ObTmpFileFlushTaskState::TFFT_INITED),
     tmp_file_block_handle_(),
     handle_(),
@@ -249,6 +259,7 @@ void ObTmpFileFlushTask::destroy()
   create_ts_ = -1;
   is_io_finished_ = false;
   fast_flush_tree_page_ = false;
+  recorded_as_prepare_finished_ = false;
   task_state_ = ObTmpFileFlushTaskState::TFFT_INITED;
   flush_infos_.reset();
 }
