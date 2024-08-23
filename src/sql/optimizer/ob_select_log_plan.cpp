@@ -198,17 +198,18 @@ int ObSelectLogPlan::get_groupby_rollup_exprs(const ObLogicalOperator *top,
                                                   reduce_exprs,
                                                   group_by_exprs))) {
         LOG_WARN("failed to simplify group exprs", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::find_stmt_expr_direction(*stmt,
-                                                                   group_by_exprs,
-                                                                   top->get_output_equal_sets(),
-                                                                   group_directions))) {
       } else if (OB_FAIL(rollup_exprs.assign(stmt->get_rollup_exprs()))) {
         LOG_WARN("failed to assign to rollup exprs.", K(ret));
       } else if (rollup_exprs.count() > 0) {
         bool has_rollup_dir = stmt->has_rollup_dir();
+        ObSEArray<ObRawExpr *, 4> tmp_exprs;
         if (OB_UNLIKELY(has_rollup_dir && (stmt->get_rollup_dir_size() != rollup_exprs.count()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to check rollup exprs and directions count.", K (ret));
+        } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(rollup_exprs, reduce_exprs, tmp_exprs))) {
+          LOG_WARN("failed to get intersect exprs", K (ret));
+        } else if (OB_FAIL(append_array_no_dup(group_by_exprs, tmp_exprs))) {
+          LOG_WARN("failed to append array no dup", K (ret));
         } else {/* do nothing. */}
         for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs.count(); i++) {
           ObOrderDirection dir = has_rollup_dir ? stmt->get_rollup_dirs().at(i) : default_asc_direction();
@@ -218,7 +219,14 @@ int ObSelectLogPlan::get_groupby_rollup_exprs(const ObLogicalOperator *top,
         }
       } // do nothing
     }
-    if (OB_SUCC(ret)) {
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObOptimizerUtil::find_stmt_expr_direction(*stmt,
+                                                                 group_by_exprs,
+                                                                 top->get_output_equal_sets(),
+                                                                 group_directions))) {
+      LOG_WARN("failed to find stmt expr direction", K (ret));
+    } else {
       LOG_TRACE("succeed to get group by exprs and rollup exprs", K(reduce_exprs), K(group_by_exprs), K(rollup_exprs));
     }
   }
