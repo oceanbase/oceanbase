@@ -149,6 +149,8 @@ alter system flush plan cache;
 sleep 1;
 --enable_query_log
 
+select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+
 alter system major freeze;
 --source mysql_test/include/wait_daily_merge.inc
 
