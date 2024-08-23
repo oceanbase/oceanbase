@@ -1528,7 +1528,7 @@ int fill_column_schema_default_value(T &result,
   lib::CompatModeGuard guard(compat_mode);
   EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value, default_type,
                                     column,false, false, tenant_id);
-  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, cur_default_value, default_type,
+  EXTRACT_DEFAULT_VALUE_FIELD_MYSQL_V2(result, default_type,
                                     column, true, false, tenant_id);
   EXTRACT_DEFAULT_VALUE_FIELD_MYSQL(result, orig_default_value_v2, default_type,
                                     column, false, true, tenant_id);
@@ -1911,12 +1911,16 @@ int ObSchemaRetrieveUtils::fill_user_schema(
     ObPrivSet priv_others = 0;
     EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "priv_others", priv_others, uint64_t, true /* skip null error*/,
                                                ignore_column_error, 0);
-    user_info.set_priv((priv_others & 1) != 0 ? OB_PRIV_EXECUTE : 0);
-    user_info.set_priv((priv_others & 2) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
-    user_info.set_priv((priv_others & 4) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
-    user_info.set_priv((priv_others & 8) != 0 ? OB_PRIV_CREATE_TABLESPACE : 0);
-    user_info.set_priv((priv_others & 16) != 0 ? OB_PRIV_SHUTDOWN : 0);
-    user_info.set_priv((priv_others & 32) != 0 ? OB_PRIV_RELOAD : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_EXECUTE) != 0 ? OB_PRIV_EXECUTE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_ALTER_ROUTINE) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROUTINE) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_TABLESPACE) != 0 ? OB_PRIV_CREATE_TABLESPACE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_SHUTDOWN) != 0 ? OB_PRIV_SHUTDOWN : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_RELOAD) != 0 ? OB_PRIV_RELOAD : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_REFERENCES) != 0 ? OB_PRIV_REFERENCES : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROLE) != 0 ? OB_PRIV_CREATE_ROLE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_DROP_ROLE) != 0 ? OB_PRIV_DROP_ROLE : 0);
+    user_info.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
 
     if (OB_SUCC(ret)) {
       int64_t default_flags = 0;
@@ -2215,9 +2219,11 @@ int ObSchemaRetrieveUtils::fill_db_priv_schema(
                                                ignore_column_error, 0);
     if (OB_FAIL(ret)) {
     } else {
-      db_priv.set_priv((priv_others & 1) != 0 ? OB_PRIV_EXECUTE : 0);
-      db_priv.set_priv((priv_others & 2) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
-      db_priv.set_priv((priv_others & 4) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_EXECUTE) != 0 ? OB_PRIV_EXECUTE : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_ALTER_ROUTINE) != 0 ? OB_PRIV_ALTER_ROUTINE : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_CREATE_ROUTINE) != 0 ? OB_PRIV_CREATE_ROUTINE : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_REFERENCES) != 0 ? OB_PRIV_REFERENCES : 0);
+      db_priv.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
     }
   }
 
@@ -2272,6 +2278,15 @@ int ObSchemaRetrieveUtils::fill_table_priv_schema(
     EXTRACT_PRIV_FROM_MYSQL_RESULT(result, priv_create_view, table_priv, PRIV_CREATE_VIEW);
     EXTRACT_PRIV_FROM_MYSQL_RESULT(result, priv_show_view, table_priv, PRIV_SHOW_VIEW);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL(result, schema_version, table_priv, int64_t);
+    bool ignore_column_error = true;
+    ObPrivSet priv_others = 0;
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, "priv_others", priv_others, uint64_t, true /* skip null error*/,
+                                               ignore_column_error, 0);
+    if (OB_FAIL(ret)) {
+    } else {
+      table_priv.set_priv((priv_others & OB_PRIV_OTHERS_REFERENCES) != 0 ? OB_PRIV_REFERENCES : 0);
+      table_priv.set_priv((priv_others & OB_PRIV_OTHERS_TRIGGER) != 0 ? OB_PRIV_TRIGGER : 0);
+    }
   }
 
   return ret;

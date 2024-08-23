@@ -3767,7 +3767,7 @@ int ObDMLResolver::resolve_basic_table_without_cte(const ParseNode &parse_tree, 
             !is_oracle_mapping_real_virtual_table(table_item->ref_id_)) {
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "sampling virtual table");
-        } else if (OB_FAIL(resolve_sample_clause(sample_node, table_item->table_id_))) {
+        } else if (OB_FAIL(resolve_sample_clause(sample_node, *table_item))) {
           LOG_WARN("resolve sample clause failed", K(ret));
         } else { }
       }
@@ -3965,7 +3965,7 @@ int ObDMLResolver::resolve_flashback_query_node(const ParseNode *time_node, Tabl
       } else if (TableItem::USING_SCN == table_item->flashback_query_type_
                  && ObUInt64Type != expr->get_result_type().get_type()) {
         ObExprResType res_type;
-        res_type.set_type(ObUInt64Type);
+        res_type.set_uint64();
         res_type.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][ObUInt64Type]);
         OZ(ObRawExprUtils::create_cast_expr(*params_.expr_factory_, expr, res_type, dst_expr,
                                             session_info_, use_default_cm, cm));
@@ -6570,9 +6570,21 @@ int ObDMLResolver::resolve_special_expr(ObRawExpr *&expr, ObStmtScope scope)
         LOG_WARN("resolve special expr failed", K(ret), K(i));
       }
     }
-}
+  }
   if (OB_SUCC(ret) && expr->has_flag(CNT_CUR_TIME)) {
     stmt->get_query_ctx()->fetch_cur_time_ = true;
+  }
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (stmt->is_select_stmt() && T_FIELD_LIST_SCOPE == scope) {
+    // do nothing
+  } else if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr->get_expr_type() ||
+             T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr->get_expr_type() ||
+             T_FUN_SYS_AUDIT_LOG_SET_USER == expr->get_expr_type() ||
+             T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr->get_expr_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("use audit log function in dml stmt is not supported", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in dml stmt");
   }
   return ret;
 }
@@ -11049,11 +11061,11 @@ int ObDMLResolver::build_prefix_index_compare_expr(ObRawExpr &column_expr,
 }
 
 int ObDMLResolver::resolve_sample_clause(const ParseNode *sample_node,
-                                         const uint64_t table_id)
+                                         TableItem &table_item)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *stmt;
-  if (OB_ISNULL(get_stmt())) {
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt should not be NULL", K(ret));
   } else if (OB_UNLIKELY(!get_stmt()->is_select_stmt())) {
@@ -11062,13 +11074,19 @@ int ObDMLResolver::resolve_sample_clause(const ParseNode *sample_node,
   } else {
     stmt = static_cast<ObSelectStmt *>(get_stmt());
     enum SampleNode { METHOD = 0, PERCENT = 1, SEED = 2, SCOPE = 3};
-    if (OB_ISNULL(sample_node) || OB_ISNULL(sample_node->children_[METHOD])
-        || OB_ISNULL(sample_node->children_[PERCENT])) {
+    void *buf = allocator_->alloc(sizeof(SampleInfo));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for sample info", K(ret));
+    } else if (OB_ISNULL(sample_node)
+               || OB_ISNULL(sample_node->children_[METHOD])
+               || OB_ISNULL(sample_node->children_[PERCENT])) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sample node should not be NULL", K(ret));
     } else {
-      SampleInfo sample_info;
-      sample_info.table_id_ = table_id;
+      SampleInfo *samp_ptr = new(buf)SampleInfo();
+      SampleInfo &sample_info = *samp_ptr;
+      sample_info.table_id_ = table_item.table_id_;
       if (sample_node->children_[METHOD]->value_ == 2) {
         sample_info.method_ = SampleInfo::BLOCK_SAMPLE;
       } else {
@@ -11115,8 +11133,8 @@ int ObDMLResolver::resolve_sample_clause(const ParseNode *sample_node,
         }
         if (OB_FAIL(ret)) {
           // do nothing
-        } else if (OB_FAIL(stmt->add_sample_info(sample_info))) {
-          LOG_WARN("add sample info failed", K(ret), K(sample_info));
+        } else {
+          table_item.sample_info_ = samp_ptr;
         }
       }
       if (OB_FAIL(ret)) {
@@ -17394,11 +17412,12 @@ int ObDMLResolver::get_values_res_types(const ObIArray<ObExprResType> &cur_value
     LOG_WARN("get unexpected error", K(res_types), K(cur_values_types),
                                      K(session_info_), K(allocator_), K(ret));
   } else {
+    ObExprTypeCtx type_ctx;
+    ObSQLUtils::init_type_ctx(session_info_, type_ctx);
     for (int64_t i = 0; OB_SUCC(ret) && i < res_types.count(); ++i) {
       ObExprVersion dummy_op(*allocator_);
       ObExprResType new_res_type;
       ObSEArray<ObExprResType, 2> tmp_types;
-      const ObLengthSemantics length_semantics = session_info_->get_actual_nls_length_semantics();
       ObCollationType coll_type = CS_TYPE_INVALID;
       if (OB_FAIL(tmp_types.push_back(res_types.at(i))) ||
           OB_FAIL(tmp_types.push_back(cur_values_types.at(i)))) {
@@ -17406,8 +17425,8 @@ int ObDMLResolver::get_values_res_types(const ObIArray<ObExprResType> &cur_value
       } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))) {
         LOG_WARN("fail to get_collation_connection", K(ret));
       } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type, &tmp_types.at(0),
-                                                                  tmp_types.count(), coll_type, false,
-                                                                  length_semantics))) {
+                                                                  tmp_types.count(), false,
+                                                                  type_ctx))) {
         LOG_WARN("failed to aggregate result type for merge", K(ret));
       } else {
         res_types.at(i) = new_res_type;

@@ -3484,8 +3484,10 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
   void *tmp_ptr = NULL;
   ObQueryRange *query_range = NULL;
   const ParamStore *params = NULL;
+  ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx) || OB_ISNULL(ctx->exec_ctx_)
-      || OB_ISNULL(ctx->exec_ctx_->get_physical_plan_ctx())) {
+      || OB_ISNULL(ctx->exec_ctx_->get_physical_plan_ctx())
+      || OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(ctx));
   } else {
@@ -3505,6 +3507,7 @@ int ObTransformUtils::check_index_extract_query_range(const ObDMLStmt *stmt,
                                                                     predicate_exprs,
                                                                     dtc_params,
                                                                     ctx->exec_ctx_,
+                                                                    query_ctx,
                                                                     NULL,
                                                                     params))) {
       LOG_WARN("failed to extract query range", K(ret));

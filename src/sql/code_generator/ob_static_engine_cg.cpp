@@ -3678,13 +3678,20 @@ int ObStaticEngineCG::generate_spec(ObLogJoinFilter &op, ObJoinFilterSpec &spec,
       || (min_ver > MOCK_CLUSTER_VERSION_4_2_1_4 && min_ver < CLUSTER_VERSION_4_2_2_0)) {
     spec.bloom_filter_ratio_ = GCONF._bloom_filter_ratio;
     spec.send_bloom_filter_size_ = GCONF._send_bloom_filter_size;
+    if (OB_ISNULL(opt_ctx_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("opt_ctx_ is null", K(ret));
+    } else if (OB_FAIL(opt_ctx_->get_global_hint().opt_params_.get_integer_opt_param(ObOptParamHint::BLOOM_FILTER_RATIO, spec.bloom_filter_ratio_))) {
+      LOG_WARN("failed to get opt param bloom filter ratio", K(ret));
+    }
   } else {
     // for compatibility, if the cluseter is upgrading, set them as default value 0
     spec.bloom_filter_ratio_ = 0;
     spec.send_bloom_filter_size_ = 0;
   }
 
-  if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(spec.join_keys_.init(op.get_join_exprs().count()))) {
     LOG_WARN("failed to init join keys", K(ret));
   } else if (OB_NOT_NULL(op.get_tablet_id_expr()) &&
       OB_FAIL(generate_calc_part_id_expr(*op.get_tablet_id_expr(), nullptr, spec.calc_tablet_id_expr_))) {

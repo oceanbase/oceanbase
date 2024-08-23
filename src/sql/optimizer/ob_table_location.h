@@ -973,6 +973,7 @@ private:
                              bool &is_range_get,
                              const common::ObDataTypeCastParams &dtc_params,
                              ObExecContext *exec_ctx,
+                             ObQueryCtx *query_ctx,
                              const bool is_in_range_optimization_enabled);
 
   int analyze_filter(const common::ObIArray<ColumnItem> &partition_columns,
@@ -992,6 +993,7 @@ private:
                            ObPartLocCalcNode *&calc_node,
                            const common::ObDataTypeCastParams &dtc_params,
                            ObExecContext *exec_ctx,
+                           ObQueryCtx *query_ctx,
                            const bool is_in_range_optimization_enabled);
 
   int extract_eq_op(ObExecContext *exec_ctx,

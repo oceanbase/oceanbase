@@ -234,7 +234,7 @@ collation(replace(null, b, 'a'))
 binary
 select collation(replace(uc, b, ub)) from coll_test;
 collation(replace(uc, b, ub))
-binary
+utf8mb4_general_ci
 select collation(replace(ub, uc, ub)) from coll_test;
 collation(replace(ub, uc, ub))
 utf8mb4_bin
@@ -252,7 +252,7 @@ collation(replace(null, b, 'a'))
 binary
 select collation(replace(uc, b, ub)) from coll_test;
 collation(replace(uc, b, ub))
-binary
+utf8mb4_general_ci
 select collation(replace(ub, uc, ub)) from coll_test;
 collation(replace(ub, uc, ub))
 utf8mb4_bin

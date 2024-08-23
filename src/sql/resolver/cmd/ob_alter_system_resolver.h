@@ -246,6 +246,7 @@ public:
 private:
   int check_param_valid(int64_t tenant_id,
       const common::ObString &name_node, const common::ObString &value_node);
+  int convert_param_value(ObAdminSetConfigItem &item);
 };
 class ObTransferPartitionResolver : public ObSystemCmdResolver
 {

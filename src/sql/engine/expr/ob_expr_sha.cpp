@@ -47,7 +47,7 @@ int ObExprSha::calc_result_type1(ObExprResType &type,
   type.set_collation_type(type_ctx.get_coll_type());
   type.set_collation_level(common::CS_LEVEL_COERCIBLE);
   type1.set_calc_type(ObVarcharType);
-  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx.get_coll_type()));
+  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx));
   OX (type1.set_calc_collation_type(tmp_type.get_collation_type()));
   OX (type1.set_calc_collation_level(tmp_type.get_collation_level()));
 
@@ -69,6 +69,9 @@ int ObExprSha::eval_sha(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
   ObDatum *arg = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
     LOG_WARN("evaluate parameter value failed", K(ret));
+  } else if (OB_ISNULL(arg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("arg is null", K(ret));
   } else if (arg->is_null()) {
     expr_datum.set_null();
   } else {
@@ -113,7 +116,7 @@ int ObExprSha2::calc_result_type2(ObExprResType &type,
   type.set_collation_type(type_ctx.get_coll_type());
   type.set_collation_level(common::CS_LEVEL_COERCIBLE);
   type1.set_calc_type(ObVarcharType);
-  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx.get_coll_type()));
+  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx));
   OX (type1.set_calc_collation_type(tmp_type.get_collation_type()));
   OX (type1.set_calc_collation_level(tmp_type.get_collation_level()));
   OX (type2.set_calc_type(ObIntType));
@@ -136,6 +139,9 @@ int ObExprSha2::eval_sha2(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
   ObDatum *arg1 = NULL;
   if (OB_FAIL(expr.eval_param_value(ctx, arg0, arg1))) {
     LOG_WARN("evaluate parameter value failed", K(ret));
+  } else if (OB_ISNULL(arg0) || OB_ISNULL(arg1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("arg is null", K(ret));
   } else if (arg0->is_null() || arg1->is_null()) {
     expr_datum.set_null();
   } else {
@@ -162,6 +168,70 @@ int ObExprSha2::eval_sha2(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
 }
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprSha2, raw_expr) {
+  int ret = OB_SUCCESS;
+  SET_LOCAL_SYSVAR_CAPACITY(1);
+  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  return ret;
+}
+
+
+ObExprSm3::ObExprSm3(ObIAllocator &alloc)
+    : ObStringExprOperator(alloc, T_FUN_SYS_SM3, N_SM3, 1, VALID_FOR_GENERATED_COL) { }
+
+ObExprSm3::~ObExprSm3() { }
+
+int ObExprSm3::calc_result_type1(ObExprResType &type,
+                                 ObExprResType &type1,
+                                 common::ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  ObExprResType tmp_type;
+  int64_t length = 0;
+  type.set_varchar();
+  type.set_collation_type(type_ctx.get_coll_type());
+  type.set_collation_level(common::CS_LEVEL_COERCIBLE);
+  type1.set_calc_type(ObVarcharType);
+  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx));
+  OX (type1.set_calc_collation_type(tmp_type.get_collation_type()));
+  OX (type1.set_calc_collation_level(tmp_type.get_collation_level()));
+  OZ (ObHashUtil::get_hash_output_len(OB_HASH_SM3, length));
+  OX (type.set_length(length * 2));
+  return ret;
+}
+
+int ObExprSm3::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) const
+{
+  int ret = OB_SUCCESS;
+  rt_expr.eval_func_ = &ObExprSm3::eval_sm3;
+  return ret;
+}
+
+int ObExprSm3::eval_sm3(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *arg = NULL;
+  if (OB_FAIL(expr.eval_param_value(ctx, arg))) {
+    LOG_WARN("evaluate parameter value failed", K(ret));
+  } else if (OB_ISNULL(arg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("arg is null", K(ret));
+  } else if (arg->is_null()) {
+    expr_datum.set_null();
+  } else {
+    ObString text = arg->get_string();
+    ObString sha_str;
+    ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+    if (OB_FAIL(ObHashUtil::hash(OB_HASH_SM3, text, alloc_guard.get_allocator(), sha_str))) {
+      LOG_WARN("fail to calc sha", K(text), K(ret));
+    } else if (OB_FAIL(ObDatumHexUtils::hex(expr, sha_str, ctx, alloc_guard.get_allocator(),
+                                            expr_datum, false))) {
+      LOG_WARN("fail to conver sha_str to hex", K(sha_str), K(ret));
+    }
+  }
+  return ret;
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprSm3, raw_expr) {
   int ret = OB_SUCCESS;
   SET_LOCAL_SYSVAR_CAPACITY(1);
   EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);

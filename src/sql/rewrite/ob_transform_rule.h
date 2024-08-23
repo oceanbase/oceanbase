@@ -68,6 +68,9 @@ struct ObTransformerCtx
     outline_trans_hints_(),
     used_trans_hints_(),
     groupby_pushdown_stmts_(),
+    is_groupby_placement_enabled_(true),
+    is_force_inline_(false),
+    is_force_materialize_(false),
     is_spm_outline_(false),
     push_down_filters_(),
     in_accept_transform_(false),
@@ -130,6 +133,12 @@ struct ObTransformerCtx
   ObSEArray<const ObHint*, 8> used_trans_hints_;
   ObSEArray<uint64_t, 4> groupby_pushdown_stmts_;
   /* end used for hint and outline below */
+
+  // used for transform parameters
+  bool is_groupby_placement_enabled_;
+  bool is_force_inline_;
+  bool is_force_materialize_;
+
   bool is_spm_outline_;
   ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> push_down_filters_;
   bool in_accept_transform_;

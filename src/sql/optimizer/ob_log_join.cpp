@@ -1349,14 +1349,15 @@ int ObLogJoin::check_and_set_use_batch()
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   ObLogPlan *plan = NULL;
+  ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(plan = get_plan())
-      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
+      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())
+      || OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
+    LOG_WARN("unexpected null", K(ret), K(plan), K(session_info), K(query_ctx));
   } else if (!can_use_batch_nlj_) {
     // do nothing
-  } else if (OB_FAIL(session_info->get_nlj_batching_enabled(can_use_batch_nlj_))) {
-    LOG_WARN("failed to get enable batch variable", K(ret));
+  } else if (OB_FALSE_IT(can_use_batch_nlj_ = plan->get_optimizer_context().get_nlj_batching_enabled())) {
   } else if (NESTED_LOOP_JOIN != get_join_algo()) {
     can_use_batch_nlj_ = false;
   }

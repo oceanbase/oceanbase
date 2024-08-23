@@ -38,6 +38,8 @@ enum ObCharsetType
   CHARSET_GB18030 = 5,
   CHARSET_LATIN1 = 6,
   CHARSET_GB18030_2022 = 7,
+  CHARSET_ASCII = 8,
+  CHARSET_TIS620 = 9,
   CHARSET_MAX,
 };
 
@@ -49,21 +51,25 @@ enum ObCharsetType
 *there is no possibly to reach AGGREGATE_2CHARSET[CHARSET_UTF8MB4][CHARSET_UTF8MB4] and so on
 */
 static const int AGGREGATE_2CHARSET[CHARSET_MAX][CHARSET_MAX] = {
-                                //CHARSET_INVALI,CHARSET_UTF8MB4...
-{0,0,0,0,0,0,0,0},//CHARSET_INVALI
-{0,0,0,0,0,0,0,0},//CHARSET_BINARY
-{0,0,0,1,2,1,1,1},//CHARSET_UTF8MB4
-{0,0,2,0,2,0,1,0},//CHARSET_GBK
-{0,0,1,1,0,1,1,1},//CHARSET_UTF16
-{0,0,2,0,2,0,1,0},//CHARSET_GB18030
-{0,0,2,2,2,2,0,2},//CHARSET_LATIN1
-{0,0,2,0,2,0,1,0} //CHARSET_GB18030_2022
+//CHARSET_INVALI,CHARSET_UTF8MB4...
+  {0,0,0,0,0,0,0,0,0,0},//CHARSET_INVALI
+  {0,0,0,0,0,0,0,0,0,0},//CHARSET_BINARY
+  {0,0,0,1,2,1,1,1,1,1},//CHARSET_UTF8MB4
+  {0,0,2,0,2,0,1,0,1,0},//CHARSET_GBK
+  {0,0,1,1,0,1,1,1,1,1},//CHARSET_UTF16
+  {0,0,2,0,2,0,1,0,1,0},//CHARSET_GB18030
+  {0,0,2,2,2,2,0,2,1,0},//CHARSET_LATIN1
+  {0,0,2,0,2,0,1,0,1,0}, //CHARSET_GB18030_2022
+  {0,0,2,2,2,2,2,2,0,2},//CHARSET_ASCII
+  {0,0,2,0,2,0,0,0,1,0},//CHARSET_TIS620
 };
 
 enum ObCollationType
 {
   CS_TYPE_INVALID = 0,
   CS_TYPE_LATIN1_SWEDISH_CI = 8,
+  CS_TYPE_ASCII_GENERAL_CI = 11,
+  CS_TYPE_TIS620_THAI_CI = 18,
   CS_TYPE_GBK_CHINESE_CI = 28,
   CS_TYPE_UTF8MB4_GENERAL_CI = 45,
   CS_TYPE_UTF8MB4_BIN = 46,
@@ -71,7 +77,9 @@ enum ObCollationType
   CS_TYPE_UTF16_GENERAL_CI = 54,
   CS_TYPE_UTF16_BIN = 55,
   CS_TYPE_BINARY = 63,
+  CS_TYPE_ASCII_BIN = 65,
   CS_TYPE_GBK_BIN = 87,
+  CS_TYPE_TIS620_BIN = 89,
   CS_TYPE_COLLATION_FREE = 100, // mysql中间没有使用这个
   CS_TYPE_UTF16_UNICODE_CI = 101,
   CS_TYPE_ANY = 125, // unused in mysql
@@ -83,10 +91,14 @@ enum ObCollationType
   CS_TYPE_GB18030_2022_STROKE_CI = 221, // unused in mysql
   CS_TYPE_GB18030_2022_STROKE_CS = 222, // unused in mysql
   CS_TYPE_UTF8MB4_UNICODE_CI = 224,
+  CS_TYPE_UTF8MB4_CZECH_CI = 234,
+  CS_TYPE_UTF8MB4_CROATIAN_CI = 245,
+  CS_TYPE_UTF8MB4_UNICODE_520_CI = 246,
   CS_TYPE_GB18030_CHINESE_CI = 248,
   CS_TYPE_GB18030_BIN = 249,
   CS_TYPE_GB18030_CHINESE_CS = 251,
 
+  CS_TYPE_UTF8MB4_0900_AI_CI = 255,
   CS_TYPE_EXTENDED_MARK = 256, //the cs types below can not used for storing
   CS_TYPE_UTF8MB4_0900_BIN, //309 in mysql 8.0
 
@@ -96,24 +108,33 @@ enum ObCollationType
   CS_TYPE_GBK_ZH_0900_AS_CS,
   CS_TYPE_UTF16_ZH_0900_AS_CS,
   CS_TYPE_GB18030_ZH_0900_AS_CS,
-  CS_TYPE_latin1_ZH_0900_AS_CS, //invaid, not really used
+  CS_TYPE_LATIN1_ZH_0900_AS_CS,
   CS_TYPE_GB18030_2022_ZH_0900_AS_CS,
+  CS_TYPE_ASCII_ZH_0900_AS_CS,
+  CS_TYPE_TIS620_ZH_0900_AS_CS,
+
   //radical-stroke order
   CS_TYPE_RADICAL_BEGIN_MARK,
   CS_TYPE_UTF8MB4_ZH2_0900_AS_CS,
   CS_TYPE_GBK_ZH2_0900_AS_CS,
   CS_TYPE_UTF16_ZH2_0900_AS_CS,
   CS_TYPE_GB18030_ZH2_0900_AS_CS,
-  CS_TYPE_latin1_ZH2_0900_AS_CS ,//invaid
+  CS_TYPE_LATIN1_ZH2_0900_AS_CS,
   CS_TYPE_GB18030_2022_ZH2_0900_AS_CS,
+  CS_TYPE_ASCII_ZH2_0900_AS_CS,
+  CS_TYPE_TIS620_ZH2_0900_AS_CS,
+
   //stroke order
   CS_TYPE_STROKE_BEGIN_MARK,
   CS_TYPE_UTF8MB4_ZH3_0900_AS_CS,
   CS_TYPE_GBK_ZH3_0900_AS_CS,
   CS_TYPE_UTF16_ZH3_0900_AS_CS,
   CS_TYPE_GB18030_ZH3_0900_AS_CS,
-  CS_TYPE_latin1_ZH3_0900_AS_CS, //invaid
+  CS_TYPE_LATIN1_ZH3_0900_AS_CS,
   CS_TYPE_GB18030_2022_ZH3_0900_AS_CS,
+  CS_TYPE_ASCII_ZH3_0900_AS_CS,
+  CS_TYPE_TIS620_ZH3_0900_AS_CS,
+
   CS_TYPE_MAX
 };
 
@@ -122,7 +143,9 @@ enum ObCollationType
 enum ObNlsCharsetId
 {
   CHARSET_INVALID_ID = 0,
+  CHARSET_US7ASCII_ID = 1,
   CHARSET_WE8MSWIN1252_ID=31,
+  CHARSET_TH8TISASCII_ID = 41,
   CHARSET_ZHS16GBK_ID = 852,
   CHARSET_ZHS32GB18030_ID = 854,
   CHARSET_ZHS32GB18030_2022_ID = 859, // not used in oracle
@@ -211,8 +234,8 @@ public:
   //比如latin1 1byte ,utf8mb4 4byte,转换因子为4，也可以理解为最多使用4字节存储一个字符
   static const int32_t CharConvertFactorNum = 4;
 
-  static const int64_t VALID_CHARSET_TYPES = 7;
-  static const int64_t VALID_COLLATION_TYPES = 20;
+  static const int64_t VALID_CHARSET_TYPES = 9;
+  static const int64_t VALID_COLLATION_TYPES = 31;
 
   static int init_charset();
   // strntodv2 is an enhanced version of strntod,
@@ -393,7 +416,9 @@ public:
       || CHARSET_UTF16 == charset_type
       || CHARSET_GB18030 == charset_type
       || CHARSET_GB18030_2022 == charset_type
-      || CHARSET_LATIN1 == charset_type;
+      || CHARSET_LATIN1 == charset_type
+      || CHARSET_ASCII == charset_type
+      || CHARSET_TIS620 == charset_type;
   }
   static bool is_gb18030_2022(int64_t coll_type_int) {
     ObCollationType coll_type = static_cast<ObCollationType>(coll_type_int);
@@ -422,12 +447,24 @@ public:
                               const ObCollationType type2,
                               ObCollationLevel &res_level,
                               ObCollationType &res_type);
-  static int aggregate_collation(const ObCollationLevel level1,
+  static int aggregate_collation_old(const ObCollationLevel level1,
                                  const ObCollationType type1,
                                  const ObCollationLevel level2,
                                  const ObCollationType type2,
                                  ObCollationLevel &res_level,
                                  ObCollationType &res_type);
+  static int aggregate_collation_new(
+                                const ObCollationLevel collation_level1,
+                                const ObCollationType collation_type1,
+                                const ObCollationLevel collation_level2,
+                                const ObCollationType collation_type2,
+                                ObCollationLevel &res_level,
+                                ObCollationType &res_type,
+                                uint32_t flags);
+  static bool left_is_superset(const ObCollationLevel collation_level1,
+                               const ObCollationType collation_type1,
+                               const ObCollationLevel collation_level2,
+                               const ObCollationType collation_type2);
   static bool is_bin_sort(ObCollationType collation_type);
 
   static bool is_ci_collate(ObCollationType collation_type);
@@ -552,6 +589,8 @@ public:
   static ObNlsCharsetId charset_type_to_ora_charset_id(ObCharsetType cs_type);
   static ObCharsetType ora_charset_type_to_charset_type(ObNlsCharsetId charset_id);
   static bool is_valid_nls_collation(ObNLSCollation nls_collation);
+  static bool is_valid_ora_charset_id(ObNlsCharsetId charset_id);
+  static ObCollationType ora_charset_type_to_coll_type(ObNlsCharsetId charset_id);
   static ObCollationType get_coll_type_by_nlssort_param(ObCharsetType charset_type,
                                                         const ObString &nlssort_param);
 private:
@@ -599,12 +638,9 @@ public:
         if (OB_ERR_INCORRECT_STRING_VALUE == ret && ignore_invalid_character) {
           ret = common::OB_SUCCESS;
           wchar = INT32_MAX;
-          length = ObCharset::is_mbchar(collation_type, temp_str.ptr(), temp_str.ptr() + temp_str.length());
-          if (length <= 0) {
-            int64_t min_len = 0;
-            ObCharset::get_mbminlen_by_coll(collation_type, min_len);
-            length = static_cast<int32_t>(min_len);
-          }
+          int64_t min_len = 0;
+          ObCharset::get_mbminlen_by_coll(collation_type, min_len);
+          length = static_cast<int32_t>(min_len);
         }
       }
       if (OB_SUCC(ret)) {

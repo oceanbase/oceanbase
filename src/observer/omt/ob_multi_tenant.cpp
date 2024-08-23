@@ -167,6 +167,10 @@
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_logger.h"
+#include "sql/audit/ob_audit_log_mgr.h"
+#endif
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -591,6 +595,10 @@ int ObMultiTenant::init(ObAddr myaddr,
 #endif
     MTL_BIND2(mtl_new_default, storage::ObTenantRestoreInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObGlobalIteratorPool::mtl_init, nullptr, nullptr, nullptr, ObGlobalIteratorPool::mtl_destroy);
+#ifdef OB_BUILD_AUDIT_SECURITY
+    MTL_BIND2(mtl_new_default, ObAuditLogger::mtl_init, ObAuditLogger::mtl_start, ObAuditLogger::mtl_stop, ObAuditLogger::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObAuditLogUpdater::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+#endif
   }
 
   if (OB_SUCC(ret)) {
@@ -1343,6 +1351,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_checkpoint_diagnose_config())) {
         LOG_WARN("failed to update tenant ddl config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_tenant_audit_log_config())) {
+        LOG_WARN("failed to update tenant audit log config", K(tmp_ret), K(tenant_id));
+      }
     }
   }
   LOG_INFO("update_tenant_config success", K(tenant_id));
@@ -1471,6 +1482,23 @@ int ObMultiTenant::update_tenant_decode_resource(const uint64_t tenant_id)
   } else if (OB_FAIL(decode_resource_pool->reload_config())) {
     LOG_WARN("fail to update tenant decode resource", K(ret), K(tenant_id));
   }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_audit_log_config()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_AUDIT_SECURITY
+  ObAuditLogger *audit_logger = MTL(ObAuditLogger*);
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(audit_logger)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("audit logger should not be null", K(ret));
+  } else {
+    audit_logger->reload_config();
+  }
+#endif
   return ret;
 }
 

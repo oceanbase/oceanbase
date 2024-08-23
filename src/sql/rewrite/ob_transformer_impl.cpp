@@ -68,6 +68,8 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
+  } else if (OB_FAIL(set_transformation_parameters(stmt->get_query_ctx()))) {
+    LOG_WARN("failed to extract trans ctx param", K(ret));
   } else if (OB_FAIL(do_transform_dblink_write(stmt, trans_happended))) {
     LOG_WARN("failed to do transform dblink write", K(ret));
   } else if (trans_happended) {
@@ -90,6 +92,39 @@ int ObTransformerImpl::transform(ObDMLStmt *&stmt)
     LOG_WARN("failed deal after transform", K(ret));
   } else {
     print_trans_stat();
+  }
+  return ret;
+}
+
+int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  bool enable_group_by_placement_transform = false;
+  bool opt_param_exists = false;
+  int64_t opt_param_val = 0;
+  if (OB_ISNULL(query_ctx) || OB_ISNULL(ctx_) || OB_ISNULL(session_info = ctx_->session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(query_ctx), K(ctx_));
+  } else if (OB_FAIL(session_info->is_groupby_placement_transformation_enabled(enable_group_by_placement_transform))) {
+    LOG_WARN("failed to check group by placement transform enabled", K(ret));
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::OPTIMIZER_GROUP_BY_PLACEMENT, enable_group_by_placement_transform))) {
+    LOG_WARN("fail to check opt param group by placement", K(ret));
+  } else {
+    ctx_->is_groupby_placement_enabled_ = enable_group_by_placement_transform;
+  }
+
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_integer_opt_param(ObOptParamHint::WITH_SUBQUERY, opt_param_val, opt_param_exists))) {
+    LOG_WARN("fail to check opt param with subquery", K(ret));
+  } else if (opt_param_exists) {
+    ctx_->is_force_inline_ = 2 == opt_param_val;
+    ctx_->is_force_materialize_ = 1 == opt_param_val;
+  } else if (OB_FAIL(session_info->is_force_temp_table_inline(ctx_->is_force_inline_))) {
+    LOG_WARN("failed to check temp table force inline", K(ret));
+  } else if (OB_FAIL(session_info->is_force_temp_table_materialize(ctx_->is_force_materialize_))) {
+    LOG_WARN("failed to check temp table force materialize", K(ret));
   }
   return ret;
 }

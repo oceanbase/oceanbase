@@ -53,11 +53,12 @@ int ObExprMakeSet::calc_result_typeN(ObExprResType &type,
     // set expected type of results
     type.set_varchar();
     type.set_length(max_len);
-    if OB_FAIL(aggregate_charsets_for_string_result(type, &types[1], param_num - 1, type_ctx.get_coll_type())) {
+    if OB_FAIL(aggregate_charsets_for_string_result(type, &types[1], param_num - 1, type_ctx)) {
       LOG_WARN("aggregate charset for string result failed", K(ret));
     } else {
       for (int64_t i = 1; i < param_num; i++) {
         types[i].set_calc_collation_type(type.get_collation_type());
+        types[i].set_calc_collation_level(type.get_collation_level());
       }
     }
   }

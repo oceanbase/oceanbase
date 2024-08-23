@@ -3461,6 +3461,8 @@ int ObTransformOrExpansion::check_stmt_valid_for_expansion(ObDMLStmt *stmt, bool
     } else if (table_item->is_fake_cte_table()) {
       is_stmt_valid = false;
       OPT_TRACE("contain fake cte table");
+    } else if (table_item->is_has_sample_info()) {
+      is_stmt_valid = false;
     }
   }
   return ret;

@@ -952,6 +952,10 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_LABEL_SE_SESSION_LABEL == type_
       || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
       || T_FUN_SYS_LAST_REFRESH_SCN == type_
+      || T_FUN_SYS_AUDIT_LOG_SET_FILTER == type_
+      || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == type_
+      || T_FUN_SYS_AUDIT_LOG_SET_USER == type_
+      || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == type_
       || (T_FUN_UDF == type_
           && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())
       || T_FUN_SYS_GET_LOCK == type_
@@ -1062,7 +1066,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_IS_USED_LOCK == type_
           || T_FUN_SYS_RELEASE_LOCK == type_
           || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
-          || T_FUN_SYS_CURRENT_ROLE == type_) {
+          || T_FUN_SYS_CURRENT_ROLE == type_
+          || T_FUN_SYS_IS_ENABLED_ROLE == type_) {
       is_non_pure = true;
     }
   }

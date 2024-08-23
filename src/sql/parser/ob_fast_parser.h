@@ -383,7 +383,7 @@ protected:
 	void reset_parser_node(ParseNode *node);
 	int64_t notascii_gb_char(const int64_t pos);
 	//{U}
-	int64_t is_latin1_char(const int64_t pos);
+	int64_t is_single_byte_char(const int64_t pos);
 	// ({U_2}{U}|{U_3}{U}{U}|{U_4}{U}{U}{U}
 	int64_t is_utf8_char(const int64_t pos);
 	// NOTES: No boundary check, the caller guarantees safety!!!
@@ -446,7 +446,7 @@ protected:
 		return 	is_valid_char(ch) &&
 				(static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF);
 	}
-    inline bool is_latin1(char ch)
+    inline bool is_single_byte(char ch)
 	{
 		return is_valid_char(ch) &&
 		static_cast<uint8_t>(ch) >= 0x80 && static_cast<uint8_t>(ch) <= 0xFF;

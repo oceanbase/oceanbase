@@ -722,6 +722,7 @@ public:
   static bool is_data_version_ge_422_or_431(uint64_t data_version);
   static bool is_data_version_ge_423_or_431(uint64_t data_version);
   static bool is_data_version_ge_423_or_432(uint64_t data_version);
+  static bool is_data_version_ge_424_or_433(uint64_t data_version);
 
   static int get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
                                             const ObIArray<uint64_t> &role_id_option_array,

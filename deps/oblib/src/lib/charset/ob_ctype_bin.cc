@@ -384,10 +384,16 @@ void ob_hash_sort_bin(const ObCharsetInfo *cs __attribute__((unused)),
   }
 }
 
- 
+extern "C" {
+static bool ob_coll_init_8bit_bin(ObCharsetInfo *cs, ObCharsetLoader *loader) {
+  cs->max_sort_char = 255;
+  return false;
+}
+}
 
 static ObCharsetHandler ob_charset_handler=
 {
+  NULL,
   NULL,
   ob_mbcharlen_8bit,
   ob_numchars_8bit,
@@ -412,7 +418,7 @@ static ObCharsetHandler ob_charset_handler=
 
 ObCollationHandler ob_collation_8bit_bin_handler =
 {
-  NULL,			/* init */
+  ob_coll_init_8bit_bin,			/* init */
   NULL,			/* uninit */
   ob_strnncoll_8bit_bin,
   ob_strnncollsp_8bit_bin,
@@ -457,6 +463,8 @@ ObCharsetInfo ob_charset_bin =
   ctype_bin,
   bin_char_array,
   bin_char_array,
+  NULL,
+  NULL,
   NULL,
   NULL,
   &ob_unicase_default,

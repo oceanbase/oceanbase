@@ -5522,7 +5522,6 @@ int ObRevokeTableArg::assign(const ObRevokeTableArg &other)
   revoke_all_ora_ = other.revoke_all_ora_;
   grantor_ = other.grantor_;
   grantor_host_ = other.grantor_host_;
-
   if (OB_FAIL(ObDDLArg::assign(other))) {
     LOG_WARN("fail to assign ddl arg", K(ret));
   } else if (OB_FAIL(obj_priv_array_.assign(other.obj_priv_array_))) {

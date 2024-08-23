@@ -65,6 +65,9 @@ void ObTransformerCtx::reset()
   outline_trans_hints_.reset();
   used_trans_hints_.reset();
   groupby_pushdown_stmts_.reset();
+  is_groupby_placement_enabled_ = true;
+  is_force_inline_ = false;
+  is_force_materialize_ = false;
   is_spm_outline_ = false;
   push_down_filters_.reset();
   iteration_level_ = 0;
