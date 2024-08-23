@@ -3165,7 +3165,7 @@ int ObRawExprUtils::build_generated_column_expr(const ObString &expr_str,
     expected_type.set_meta(gen_col_schema.get_meta_type());
     expected_type.set_accuracy(gen_col_schema.get_accuracy());
     expected_type.set_result_flag(calc_column_result_flag(gen_col_schema));
-    if (ObRawExprUtils::need_column_conv(expected_type, *expr)) {
+    if (ObRawExprUtils::need_column_conv(expected_type, *expr, true)) {
       if (OB_FAIL(build_column_conv_expr(expr_factory, &gen_col_schema, expr, &session_info,
                                         &gen_col_schema.get_local_session_var()))) {
         LOG_WARN("create cast expr failed", K(ret));
@@ -5156,7 +5156,9 @@ int ObRawExprUtils::create_param_expr(ObRawExprFactory &expr_factory, int64_t pa
   return ret;
 }
 
-bool ObRawExprUtils::need_column_conv(const ObExprResType &expected_type, const ObRawExpr &expr)
+bool ObRawExprUtils::need_column_conv(const ObExprResType &expected_type,
+                                      const ObRawExpr &expr,
+                                      bool strict_type_check)
 {
   int bret = true;
   if (expected_type.get_type() == expr.get_data_type()) {
@@ -5173,35 +5175,18 @@ bool ObRawExprUtils::need_column_conv(const ObExprResType &expected_type, const 
       bret = false;
     }
   }
-  return bret;
-}
-
-bool ObRawExprUtils::need_column_conv(const ColumnItem &column, ObRawExpr &expr)
-{
-  int bret = true;
-  if (column.get_expr() != NULL
-    && (column.get_expr()->is_fulltext_column()
-       || column.get_expr()->is_spatial_generated_column()
-       || column.get_expr()->is_multivalue_generated_column()
-       || column.get_expr()->is_multivalue_generated_array_column())) {
-    //全文索引的生成列是内部生成的隐藏列，不需要做column convert
-    bret = false;
-  } else if (column.get_column_type() != NULL) {
-    const ObExprResType &column_type = *column.get_column_type();
-    if (column_type.get_type() == expr.get_data_type()
-        && column_type.get_collation_type() == expr.get_collation_type()
-        && column_type.get_accuracy().get_accuracy() == expr.get_accuracy().get_accuracy()) {
-      //类型相同，满足不做类型转换的条件
-      if (column.is_not_null_for_write() && expr.is_not_null_for_read()) {
-        //从表达式可以判断两个类型都为not null
-        //类型相同，并且唯一性约束满足，不需要加column convert检查
-        bret = false;
-      } else if (!column.is_not_null_for_write()) {
-        //column没有唯一性约束限制
-        bret = false;
-      } else { /*do nothing*/ }
-    } else { /*do nothing*/ }
-  } else { /*do nothing*/ }
+  // the precision of the data stored in datum may exceed that of inferenced type, so column_convert must be added.
+  // e.g. 1/3 requires storing data with precision beyond inference to ensure that 1/3 * 3 equals 1 and not 0.9999
+  if (!bret && strict_type_check) {
+    if ((expected_type.get_type() == ObNumberType ||
+         expected_type.get_type() == ObNumberFloatType) &&
+         expected_type.get_scale() == NUMBER_SCALE_UNKNOWN_YET &&
+         expected_type.get_precision() == PRECISION_UNKNOWN_YET) {
+      // do nothing
+    } else {
+      bret = true;
+    }
+  }
   return bret;
 }
 
