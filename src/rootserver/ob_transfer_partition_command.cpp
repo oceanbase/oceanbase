@@ -19,7 +19,7 @@
 #include "share/balance/ob_balance_job_table_operator.h"//ObBalanceJobTableOperator
 #include "share/transfer/ob_transfer_task_operator.h"//ObTransferTask
 #include "share/ob_tenant_info_proxy.h"
-#include "share/ob_primary_standby_service.h"
+#include "rootserver/standby/ob_standby_service.h"
 #include "observer/omt/ob_tenant_config_mgr.h" // ObTenantConfigGuard
 #include "share/ls/ob_ls_i_life_manager.h"//START/END_TRANSACTION
 #include "storage/tablelock/ob_lock_utils.h"//table_lock
@@ -226,19 +226,15 @@ int ObTransferPartitionCommand::execute_transfer_partition_(const ObTransferPart
 int ObTransferPartitionCommand::check_data_version_and_config_(const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
   uint64_t compat_version = 0;
   bool bret = false;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tenant_id is invalid", KR(ret), K(tenant_id));
-  } else if (OB_UNLIKELY(!tenant_config.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant config is invalid", KR(ret), K(tenant_id));
-  } else if (!(bret = tenant_config->enable_transfer)) {
+  } else if (!(bret = ObShareUtil::is_tenant_enable_transfer(tenant_id))) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("enable_transfer is off", KR(ret));
-    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Transfer is disabled, transfer partition is");
+    LOG_WARN("transfer is disabled or tenant is in upgrade mode", KR(ret));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Transfer is disabled or tenant is in upgrade mode, transfer partition is");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
     LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
   } else if (compat_version < DATA_VERSION_4_2_1_2
@@ -262,7 +258,7 @@ int ObTransferPartitionCommand::check_tenant_status_(const uint64_t tenant_id)
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.get_tenant_status(tenant_id, tenant_status))) {
+  } else if (OB_FAIL(OB_STANDBY_SERVICE.get_tenant_status(tenant_id, tenant_status))) {
     LOG_WARN("fail to get tenant status", KR(ret), K(tenant_id));
   } else if (OB_UNLIKELY(!is_tenant_normal(tenant_status))) {
     ret = OB_OP_NOT_ALLOW;

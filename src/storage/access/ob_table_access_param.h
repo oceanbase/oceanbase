@@ -230,6 +230,7 @@ public:
   const sql::ObExpr *auto_split_filter_;
   sql::ExprFixedArray *auto_split_params_;
   bool is_tablet_spliting_;
+  bool is_column_replica_table_;
 };
 
 struct ObTableAccessParam

@@ -52,7 +52,7 @@ static int ob_valid_mbcharlen_utf8mb3(const uchar *s, const uchar *e)
   return 3;
 }
 
-static int ob_valid_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)), const uchar *s, const uchar *e)
+static inline int ob_valid_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)), const uchar *s, const uchar *e)
 {
   uchar c;
   if (s >= e)
@@ -97,7 +97,7 @@ static uint ob_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused))
   return 0; /* Illegal mb head */;
 }
 
-static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
+static inline size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
                                          const char *b, const char *e,
                                          size_t pos, int *error)
 {

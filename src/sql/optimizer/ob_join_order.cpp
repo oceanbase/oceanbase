@@ -1933,6 +1933,7 @@ int ObJoinOrder::init_column_store_est_info(const uint64_t table_id,
     LOG_WARN("unexpect null plan", K(ret));
   } else if (OB_FAIL(get_plan()->will_use_column_store(OB_INVALID_ID,
                                                        ref_id,
+                                                       ref_id,
                                                        index_back_will_use_column_store,
                                                        index_back_will_use_row_store))) {
     LOG_WARN("failed to check will use column store", K(ret));
@@ -2808,6 +2809,7 @@ int ObJoinOrder::create_access_paths(const uint64_t table_id,
         LOG_WARN("failed to check will use skip scan", K(ret));
       } else if (OB_FAIL(get_plan()->will_use_column_store(table_id,
                                                           valid_index_ids.at(i),
+                                                          ref_table_id,
                                                           use_column_store,
                                                           use_row_store))) {
         LOG_WARN("failed to check will use column store", K(ret));
@@ -9758,7 +9760,9 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   ObShardingInfo *left_sharding = NULL;
   ObShardingInfo *right_sharding = NULL;
   distributed_methods = path_info.distributed_methods_;
-  bool use_shared_hash_join = right_path.parallel_ > ObGlobalHint::DEFAULT_PARALLEL;
+  const bool is_force_dist_method = !path_info.ignore_hint_
+                                    && (distributed_methods == get_dist_algo(distributed_methods));
+  bool use_shared_hash_join = false;
   ObSQLSessionInfo *session = NULL;
   int64_t max_path_parallel = max(left_path.parallel_, right_path.parallel_);
   can_slave_mapping =
@@ -9773,7 +9777,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(get_plan()), K(left_sharding),
                 K(right_sharding), K(left_path.parent_), K(ret));
-  } else if (use_shared_hash_join && OB_FAIL(session->get_px_shared_hash_join( use_shared_hash_join))) {
+  } else if (OB_FAIL(session->get_px_shared_hash_join(use_shared_hash_join))) {
     LOG_WARN("get force parallel ddl dop failed", K(ret));
   } else if (HASH_JOIN == join_algo && is_naaj) {
     distributed_methods &= ~DIST_PARTITION_WISE;
@@ -9791,14 +9795,20 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
   }
   if (OB_SUCC(ret)) {
     if (HASH_JOIN == join_algo) {
-      if (use_shared_hash_join) {
-        distributed_methods &= ~DIST_BROADCAST_NONE;
-        distributed_methods &= ~DIST_ALL_NONE;
-        OPT_TRACE("shared hash join will not use BROADCAST");
+      if (use_shared_hash_join && right_path.parallel_ > ObGlobalHint::DEFAULT_PARALLEL) {
+        if (is_force_dist_method && (DIST_BROADCAST_NONE == distributed_methods
+                                     || DIST_ALL_NONE == distributed_methods)) {
+          /* do nothing */
+        } else {
+          distributed_methods &= ~DIST_BROADCAST_NONE;
+          distributed_methods &= ~DIST_ALL_NONE;
+          OPT_TRACE("shared hash join will not use BROADCAST");
+        }
         if (IS_LEFT_STYLE_JOIN(path_info.join_type_)) {
           distributed_methods &= ~DIST_BC2HOST_NONE;
         }
       } else {
+        use_shared_hash_join = false;
         distributed_methods &= ~DIST_BC2HOST_NONE;
         OPT_TRACE("hash join will not use BC2HOST");
       }
@@ -10883,6 +10893,7 @@ int ObJoinOrder::find_possible_join_filter_tables(const ObLogPlanHint &log_plan_
           info.use_column_store_ = true;
         } else if (OB_FAIL(get_plan()->will_use_column_store(info.table_id_,
                                                             info.index_id_,
+                                                            info.ref_table_id_,
                                                             will_use_column_store,
                                                             will_use_row_store))) {
           LOG_WARN("failed to check will use column store", K(ret));

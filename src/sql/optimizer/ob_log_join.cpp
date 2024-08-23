@@ -627,7 +627,8 @@ int ObLogJoin::print_used_hint(PlanText &plan_text)
       if (OB_ISNULL(hint = used_hints.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected NULL", K(ret), K(hint));
-      } else if (OB_FAIL(hint->print_hint(plan_text))) {
+      } else if (!hint->is_trans_added() &&
+                 OB_FAIL(hint->print_hint(plan_text))) {
         LOG_WARN("failed to print hint in log join", K(ret), K(*hint));
       }
     }

@@ -190,7 +190,7 @@ USE_HASH_AGGREGATION NO_USE_HASH_AGGREGATION
 PARTITION_SORT NO_PARTITION_SORT WF_TOPN
 USE_LATE_MATERIALIZATION NO_USE_LATE_MATERIALIZATION
 PX_JOIN_FILTER NO_PX_JOIN_FILTER PX_PART_JOIN_FILTER NO_PX_PART_JOIN_FILTER
-PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET PQ_SUBQUERY RANDOM_LOCAL BROADCAST BC2HOST LIST
+PQ_MAP PQ_DISTRIBUTE PQ_DISTRIBUTE_WINDOW PQ_SET PQ_SUBQUERY PQ_GBY PQ_DISTINCT RANDOM_LOCAL BROADCAST BC2HOST LIST
 GBY_PUSHDOWN NO_GBY_PUSHDOWN
 USE_HASH_DISTINCT NO_USE_HASH_DISTINCT
 DISTINCT_PUSHDOWN NO_DISTINCT_PUSHDOWN
@@ -549,6 +549,7 @@ END_P SET_VAR DELIMITER
 %type <node> transfer_partition_stmt transfer_partition_clause part_info cancel_transfer_partition_clause
 %type <node> geometry_collection
 %type <node> mock_stmt
+%type <node> service_name_stmt service_op
 %type <node> ttl_definition ttl_expr ttl_unit
 %type <node> id_dot_id id_dot_id_dot_id
 %type <node> opt_table_list opt_repair_mode opt_repair_option_list repair_option repair_option_list opt_checksum_option
@@ -727,6 +728,7 @@ stmt:
   | clone_tenant_stmt   { $$ = $1; check_question_mark($$, result); }
   | transfer_partition_stmt { $$ = $1; check_question_mark($$, result); }
   | mock_stmt {$$ = $1; check_question_mark($$, result);}
+  | service_name_stmt { $$ = $1; check_question_mark($$, result); }
   ;
 
 /*****************************************************************************
@@ -1673,10 +1675,6 @@ simple_expr collation %prec NEG
 }
 | EXISTS select_with_parens
 {
-  /* mysql 允许 select * from dual 出现在 exists 中, 此处更改 from dual 的 select list 为常量 1 */
-  if (NULL == $2->children_[PARSE_SELECT_FROM]) {
-    $2->value_ = 2;
-  }
   malloc_non_terminal_node($$, result->malloc_pool_, T_OP_EXISTS, 1, $2);
 }
 | MATCH '(' column_list ')' AGAINST '(' search_expr opt_mode_flag ')'
@@ -8246,6 +8244,10 @@ TYPE COMP_EQ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_EMPTY_FIELD_AS_NULL, 1, $3);
 }
+| COMPRESSION COMP_EQ compression_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_COMPRESSION, 1, $3);
+}
 ;
 
 /*****************************************************************************
@@ -8425,7 +8427,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
   UNUSED($3);
   UNUSED($4);
   UNUSED($5);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 12,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 13,
                            NULL,    /* opt_materialized, not support*/
                            $7,    /* view name */
                            $8,    /* column list */
@@ -8434,7 +8436,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
                            $2,
 						               $12,   /* with option */
                            NULL,   /* force view opt */
-                           NULL, NULL, NULL, NULL
+                           NULL, NULL, NULL, NULL, NULL
 						   );
   dup_expr_string($11, result, @11.first_column, @11.last_column);
   $$->reserved_ = 0; /* is create view */
@@ -8446,7 +8448,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
   UNUSED($2);
   UNUSED($3);
   UNUSED($4);
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 12,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 13,
                            NULL,    /* opt_materialized */
                            $6,    /* view name */
                            $7,    /* column list */
@@ -8455,7 +8457,7 @@ create_with_opt_hint opt_replace opt_algorithm opt_definer opt_sql_security VIEW
                            NULL,
                            $11,    /* with option */
                            NULL,   /* force view opt */
-                           NULL, NULL, NULL, NULL
+                           NULL, NULL, NULL, NULL, NULL
                );
   dup_expr_string($10, result, @10.first_column, @10.last_column);
   $$->reserved_ = 1; /* is alter view */
@@ -8474,7 +8476,7 @@ AS view_select_stmt opt_check_option
   ParseNode *table_options = NULL;
   merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
 
-  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 12,
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 13,
                            NULL,    /* opt_materialized, not support*/
                            $4,    /* view name */
                            $5,    /* column list */
@@ -8486,9 +8488,34 @@ AS view_select_stmt opt_check_option
                            $8,  /* mview options */
                            $7, /* partition option */
                            table_options, /* table options */
-                           $1 /* hint */
+                           $1, /* hint */
+                           NULL /* column group */
 						   );
   dup_expr_string($10, result, @10.first_column, @10.last_column);
+  $$->reserved_ = 2; /* create materialized view */
+}
+| create_with_opt_hint MATERIALIZED VIEW view_name opt_mv_column_list opt_table_option_list opt_partition_option create_mview_opts with_column_group
+AS view_select_stmt opt_check_option
+{
+  ParseNode *table_options = NULL;
+  merge_nodes(table_options, result, T_TABLE_OPTION_LIST, $6);
+
+  malloc_non_terminal_node($$, result->malloc_pool_, T_CREATE_VIEW, 13,
+                           NULL,    /* opt_materialized, not support*/
+                           $4,    /* view name */
+                           $5,    /* column list */
+                           NULL, /* table_id */
+                           $11,    /* select_stmt */
+                           NULL,
+						               $12,   /* with option */
+                           NULL,   /* force view opt */
+                           $8,  /* mview options */
+                           $7, /* partition option */
+                           table_options, /* table options */
+                           $1, /* hint */
+                           $9 /* column group */
+						   );
+  dup_expr_string($11, result, @11.first_column, @11.last_column);
   $$->reserved_ = 2; /* create materialized view */
 }
 ;
@@ -11034,6 +11061,14 @@ NO_REWRITE opt_qb_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_COALESCE_AGGR, 1, $2);
 }
+| USE_LATE_MATERIALIZATION opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_USE_LATE_MATERIALIZATION, 1, $2);
+}
+| NO_USE_LATE_MATERIALIZATION opt_qb_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_LATE_MATERIALIZATION, 1, $2);
+}
 ;
 
 multi_qb_name_list:
@@ -11172,14 +11207,6 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix '
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_HASH_AGGREGATE, 1, $3);
   $$->value_ = 1;
 }
-| USE_LATE_MATERIALIZATION opt_qb_name
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_USE_LATE_MATERIALIZATION, 1, $2);
-}
-| NO_USE_LATE_MATERIALIZATION opt_qb_name
-{
-  malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_LATE_MATERIALIZATION, 1, $2);
-}
 | PX_JOIN_FILTER '(' qb_name_option relation_factor_in_hint opt_relation_factor_in_hint_list ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_PX_JOIN_FILTER, 4, $3, $4, $5, NULL);
@@ -11293,6 +11320,14 @@ INDEX_HINT '(' qb_name_option relation_factor_in_hint NAME_OB opt_index_prefix '
 | NO_USE_COLUMN_STORE_HINT '(' qb_name_option relation_factor_in_hint ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_NO_USE_COLUMN_STORE_HINT, 2, $3, $4);
+}
+| PQ_GBY '(' qb_name_option distribute_method ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_GBY_HINT, 2, $3, $4);
+}
+| PQ_DISTINCT '(' qb_name_option distribute_method ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_PQ_DISTINCT_HINT, 2, $3, $4);
 }
 ;
 
@@ -11539,6 +11574,10 @@ ALL
 | LIST
 {
   malloc_terminal_node($$, result->malloc_pool_, T_DISTRIBUTE_LIST);
+}
+| BASIC
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_DISTRIBUTE_BASIC);
 }
 ;
 
@@ -21155,11 +21194,47 @@ DAY
   dup_expr_string($$, result, @1.first_column, @1.last_column);
 }
 ;
+/*===========================================================
+ *
+ * 租户 SERVICE_NAME 管理
+ *
+ *===========================================================*/
+service_name_stmt:
+alter_with_opt_hint SYSTEM service_op SERVICE relation_name opt_tenant_name
+{
+  (void)($1);
+   malloc_non_terminal_node($$, result->malloc_pool_, T_SERVICE_NAME, 3,
+                           $3,                   /* service operation */
+                           $5,                   /* service name */
+                           $6);                  /* tenant name */
+}
+;
+service_op :
+CREATE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 1;
+}
+| DELETE
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 2;
+}
+| START
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 3;
+}
+| STOP
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_INT);
+  $$->value_ = 4;
+}
+;
 
 /*===========================================================
 *
 *  JSON TABLE
-*
 *============================================================*/
 
 json_table_expr:

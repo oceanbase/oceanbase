@@ -1658,33 +1658,6 @@ int long_to_str10(int64_t val,char *dst, const int64_t buf_len, const bool is_si
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-const char *replica_type_to_str(const ObReplicaType &type)
-{
-  const char *str = "";
-
-  switch (type) {
-  case REPLICA_TYPE_FULL:
-    str = "REPLICA_TYPE_FULL";
-    break;
-  case REPLICA_TYPE_BACKUP:
-    str = "REPLICA_TYPE_BACKUP";
-    break;
-  case REPLICA_TYPE_LOGONLY:
-    str = "REPLICA_TYPE_LOGONLY";
-    break;
-  case REPLICA_TYPE_READONLY:
-    str = "REPLICA_TYPE_READONLY";
-    break;
-  case REPLICA_TYPE_MEMONLY:
-    str = "REPLICA_TYPE_MEMONLY";
-    break;
-  default:
-    str = "REPLICA_TYPE_UNKNOWN";
-  }
-  return str;
-}
-
 bool ez2ob_addr(ObAddr &addr, easy_addr_t& ez)
 {
   bool ret = false;

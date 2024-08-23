@@ -227,7 +227,7 @@ public:
 struct ObTmpFileFlushTask : public common::ObSpLinkQueue::Link
 {
 public:
-  ObTmpFileFlushTask(ObIAllocator &task_allocator);
+  ObTmpFileFlushTask();
   ~ObTmpFileFlushTask() { destroy(); }
   enum ObTmpFileFlushTaskState
   {
@@ -297,7 +297,6 @@ private:
   ObTmpFileBlockHandle tmp_file_block_handle_;// hold a reference to the corresponding tmp file block to prevent it from being released
   blocksstable::ObMacroBlockHandle handle_;
   ObArray<ObTmpFileFlushInfo> flush_infos_;   // multi file flush into one block if size > 0
-  ObIAllocator &task_allocator_;              // ref to ObTmpFilePageCacheController::task_allocator_, used to free data_buf_
 };
 
 }  // end namespace tmp_file

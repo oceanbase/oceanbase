@@ -66,6 +66,7 @@ int ObDelHisCheckpointFileOp::func(const dirent *entry)
     ret = OB_INVALID_ARGUMENT;
     OB_LOG(WARN, "invalid list entry, d_name is null", K(ret));
   } else {
+    handled_file_num_++;
     uint64_t checkpoint_scn = 0;
     ObBackupPath full_path = path_;
     ObBackupIoAdapter io_util;
@@ -135,13 +136,16 @@ int ObArchiveCheckpointMgr::check_is_tagging_(const ObBackupStorageInfo *storage
 {
   int ret = OB_SUCCESS;
   is_tagging = false;
-  if (OB_STORAGE_OSS == storage_info_ -> device_type_) {
-    //TODO(zhixing.yh) Adapt the analytic interface in storage_info
+  if (OB_ISNULL(storage_info)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("storage info is nullptr", K(ret));
+  } else if (ObIStorageUtil::TAGGING == storage_info->get_delete_mode()) {
+    is_tagging = true;
   }
   return ret;
 }
 
-int ObArchiveCheckpointMgr::write(const uint64_t checkpoint_scn) const
+int ObArchiveCheckpointMgr::write(const uint64_t old_checkpoint_scn, const uint64_t checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -149,24 +153,23 @@ int ObArchiveCheckpointMgr::write(const uint64_t checkpoint_scn) const
   ObBackupPath full_path = path_; //checkpoint scn file path
   ObBackupPath dir_path = path_; //checkpoint dir file path
   ObBackupIoAdapter io_util;
-  bool is_tagging = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Archive checkpoint mgr not init", K(ret));
   } else if (checkpoint_scn <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(checkpoint_scn));
-  } else if (OB_FAIL(check_is_tagging_(storage_info_, is_tagging))) {
-    LOG_WARN("failed to judge delete mode", K(ret));
+  } else if (old_checkpoint_scn >= checkpoint_scn) { //do nothing
   } else if (OB_FAIL(full_path.join_checkpoint_info_file(file_name_, checkpoint_scn, type_))) {
     LOG_WARN("failed to get piece checkpoint file path",
         K(ret), K(checkpoint_scn), KP(file_name_), K(full_path), K(type_));
   } else if (OB_FAIL(write_checkpoint_file_(full_path))) {
     LOG_WARN("failed to write checkpoint file", K(ret), K(full_path));
-  }
-  //if the delete mode is not 'tagging', need to list files for deleting smaller checkpoint scn files
-  if (OB_SUCC(ret) && !is_tagging && OB_TMP_FAIL(del_history_files_(dir_path, checkpoint_scn))) {
-    LOG_WARN("failed to delete files", K(ret), K(dir_path), K(checkpoint_scn), K(tmp_ret));
+    // delete only the last ckpt file:
+    // 1. reduce listing requests
+    // 2. guarantee all expired files can be eventually removed
+  } else if (OB_TMP_FAIL(del_last_ckpt_file_(dir_path, old_checkpoint_scn))) {
+    LOG_WARN("failed to delete last ckpt file", K(ret), K(dir_path), K(old_checkpoint_scn), K(tmp_ret));
   }
 
   return ret;
@@ -202,16 +205,40 @@ int ObArchiveCheckpointMgr::get_max_checkpoint_scn_(
   return ret;
 }
 
-int ObArchiveCheckpointMgr::del_history_files_(
+int ObArchiveCheckpointMgr::del_last_ckpt_file_(
     const ObBackupPath &dir_path,
+    const uint64_t old_checkpoint_scn) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupIoAdapter io_util;
+  ObBackupPath file_path = dir_path;
+
+  if (dir_path.is_empty()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("dir path is empty", K(ret), K(dir_path));
+  } else if (0 == old_checkpoint_scn) { // 0 is reserved
+  } else if (OB_FAIL(file_path.join_checkpoint_info_file(file_name_, old_checkpoint_scn, type_))) {
+    LOG_WARN("fail to join checkpoint info file", K(ret), K(old_checkpoint_scn));
+  } else if (OB_FAIL(io_util.del_file(file_path.get_obstr(), storage_info_))) {
+    LOG_WARN("fail to delete file", K(ret), K(file_path));
+  }
+  return ret;
+}
+
+int ObArchiveCheckpointMgr::del_history_files(
     const uint64_t write_checkpoint_scn) const
 {
   int ret = OB_SUCCESS;
   ObBackupIoAdapter io_util;
-  ObDelHisCheckpointFileOp del_his_file_op(write_checkpoint_scn, dir_path, file_name_, type_, storage_info_);
-  if (OB_FAIL(io_util.list_files(dir_path.get_ptr(), storage_info_, del_his_file_op))) {
-    LOG_WARN("failed to del history checkpoint file",
-        K(ret), K(dir_path), K(write_checkpoint_scn), K(path_), KP(file_name_), K(type_));
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveCheckpointMgr not inited", K(ret));
+  } else {
+    ObDelHisCheckpointFileOp del_his_file_op(write_checkpoint_scn, path_, file_name_, type_, storage_info_);
+    if (OB_FAIL(io_util.list_files(path_.get_ptr(), storage_info_, del_his_file_op))) {
+      LOG_WARN("failed to del history checkpoint file",
+          K(ret), K(path_), K(write_checkpoint_scn), K(path_), KP(file_name_), K(type_));
+    }
   }
   return ret;
 }

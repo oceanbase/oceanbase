@@ -114,6 +114,9 @@ sys.argv[0] + """ [OPTIONS]""" +\
 '                    that all modules should be run. They are splitted by ",".\n' +\
 '                    For example: -m all, or --module=ddl,normal_dml,special_action\n' +\
 '-l, --log-file=name Log file path. If log file path is not given it\'s ' + os.path.splitext(sys.argv[0])[0] + '.log\n' +\
+'-arc, --cpu-arch=name CPU architecture. Whether machine in cluster support AVX2 arch or not.\n' +\
+'                      \'avx2\' for x86 avx2 instruction set supported\n' +\
+'                      \'avx2_not_support\' for x86 avx2 instruction set not supported\n' +\
 '\n\n' +\
 'Maybe you want to run cmd like that:\n' +\
 sys.argv[0] + ' -h 127.0.0.1 -P 3306 -u admin -p admin\n'
@@ -173,7 +176,8 @@ Option('p', 'password', True, False, ''),\
 # 要跑哪个模块，默认全跑
 Option('m', 'module', True, False, 'all'),\
 # 日志文件路径，不同脚本的main函数中中会改成不同的默认值
-Option('l', 'log-file', True, False)
+Option('l', 'log-file', True, False),\
+Option('C', 'cpu-arch', True, False, 'unknown')
 ]\
 
 def change_opt_defult_value(opt_long_name, opt_default_val):
@@ -283,6 +287,12 @@ def get_opt_log_file():
   global g_opts
   for opt in g_opts:
     if 'log-file' == opt.get_long_name():
+      return opt.get_value()
+
+def get_opt_cpu_arch():
+  global g_opts
+  for opt in g_opts:
+    if 'cpu-arch' == opt.get_long_name():
       return opt.get_value()
 #### ---------------end----------------------
 
@@ -878,9 +888,19 @@ def is_x86_arch():
 
 # 检查cs_encoding格式是否兼容，对小于4.3.3版本的cpu不支持avx2指令集的集群，我们要求升级前schema上不存在cs_encoding的存储格式
 # 注意：这里对混布集群 / schema上row_format进行了ddl变更的场景无法做到完全的防御
-def check_cs_encoding_arch_dependency_compatiblity(query_cur):
+def check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch):
   can_upgrade = True
   need_check_schema = False
+  is_arch_support_avx2 = False
+  if 'unknown' == cpu_arch:
+    is_arch_support_avx2 = arch_support_avx2()
+  elif 'avx2' == cpu_arch:
+    is_arch_support_avx2 = True
+  elif 'avx2_not_support' == cpu_arch:
+    is_arch_support_avx2 = False
+  else:
+    fail_list.append("unexpected cpu_arch option value: {0}".format(cpu_arch))
+
   sql = """select distinct value from GV$OB_PARAMETERS where name='min_observer_version'"""
   (desc, results) = query_cur.exec_query(sql)
   if len(results) != 1:
@@ -890,7 +910,7 @@ def check_cs_encoding_arch_dependency_compatiblity(query_cur):
   else:
     min_cluster_version = get_version(results[0][0])
     if min_cluster_version < get_version("4.3.3.0"):
-      if (arch_support_avx2()):
+      if (is_arch_support_avx2):
         logging.info("current cpu support avx2 inst, no need to check cs_encoding format")
       else:
         get_data_version_sql = """select distinct value from oceanbase.__all_virtual_tenant_parameter_info where name='compatible'"""
@@ -937,7 +957,7 @@ def check_cs_encoding_arch_dependency_compatiblity(query_cur):
     logging.info("check upgrade for arch-dependant cs_encoding format failed")
 
 # 开始升级前的检查
-def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
+def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
   try:
     conn = mysql.connector.connect(user = my_user,
                                    password = my_passwd,
@@ -975,7 +995,7 @@ def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params):
       check_variable_binlog_row_image(query_cur)
       check_oracle_standby_replication_exist(query_cur)
       check_disk_space_for_mds_sstable_compat(query_cur)
-      check_cs_encoding_arch_dependency_compatiblity(query_cur)
+      check_cs_encoding_arch_dependency_compatiblity(query_cur, cpu_arch)
       # all check func should execute before check_fail_list
       check_fail_list()
       modify_server_permanent_offline_time(cur)
@@ -1010,9 +1030,10 @@ if __name__ == '__main__':
       user = get_opt_user()
       password = get_opt_password()
       timeout = int(get_opt_timeout())
+      cpu_arch = get_opt_cpu_arch()
       logging.info('parameters from cmd: host=\"%s\", port=%s, user=\"%s\", password=\"%s\", timeout=\"%s\", log-file=\"%s\"',\
           host, port, user, password.replace('"', '\\"'), timeout, log_filename)
-      do_check(host, port, user, password, timeout, upgrade_params)
+      do_check(host, port, user, password, timeout, upgrade_params, cpu_arch)
     except mysql.connector.Error as e:
       logging.exception('mysql connctor error')
       raise

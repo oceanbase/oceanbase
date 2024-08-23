@@ -1087,6 +1087,62 @@ TEST_F(TestLSTabletService, update_tablet_ddl_commit_scn)
   ASSERT_EQ(OB_SUCCESS, ret);
 }
 
+
+TEST_F(TestLSTabletService, test_empty_shell_mds_compat)
+{
+  // create an empty shell tablet
+  int ret = OB_SUCCESS;
+  ObTabletID tablet_id(10000009);
+  share::schema::ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+  ObLSHandle ls_handle;
+  ObLSService *ls_svr = MTL(ObLSService*);
+  ret = ls_svr->get_ls(ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = TestTabletHelper::create_tablet(ls_handle, tablet_id, schema, allocator_, ObTabletStatus::Status::DELETED);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = ls_tablet_service_->update_tablet_to_empty_shell(tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTabletHandle tablet_handle;
+  ret = ls_tablet_service_->get_tablet(tablet_id, tablet_handle, 0, ObMDSGetTabletMode::READ_WITHOUT_CHECK);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObTablet &empty_shell_tablet = *tablet_handle.get_obj();
+  ASSERT_TRUE(empty_shell_tablet.is_empty_shell());
+  ASSERT_TRUE(nullptr == empty_shell_tablet.mds_data_);
+  ASSERT_TRUE(ObTabletStatus::Status::DELETED == empty_shell_tablet.tablet_meta_.last_persisted_committed_tablet_status_.tablet_status_);
+
+  ObArenaAllocator compat_allocator;
+  ObTableHandleV2 empty_mds_sstable_hdl;
+  ObTablet upgrade_tablet;
+  ret = upgrade_tablet.init_for_compat(compat_allocator, empty_shell_tablet, empty_mds_sstable_hdl);
+  // mds data is null
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ret);
+
+  // mock an old tablet
+  empty_shell_tablet.version_ = ObTablet::VERSION_V3;
+  empty_shell_tablet.mds_data_ = OB_NEWx(ObTabletMdsData, &compat_allocator);
+  ASSERT_TRUE(nullptr != empty_shell_tablet.mds_data_);
+  empty_shell_tablet.mds_data_->tablet_status_cache_.assign(empty_shell_tablet.tablet_meta_.last_persisted_committed_tablet_status_);
+  empty_shell_tablet.tablet_meta_.last_persisted_committed_tablet_status_.on_init();
+  ASSERT_TRUE(ObTabletStatus::Status::DELETED == empty_shell_tablet.mds_data_->tablet_status_cache_.tablet_status_);
+
+  // compat to new format
+  upgrade_tablet.assign_pointer_handle(empty_shell_tablet.get_pointer_handle());
+  upgrade_tablet.log_handler_ = empty_shell_tablet.log_handler_;
+  ret = upgrade_tablet.init_for_compat(compat_allocator, empty_shell_tablet, empty_mds_sstable_hdl);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(ObTablet::VERSION_V4 == upgrade_tablet.version_);
+  ASSERT_TRUE(nullptr == upgrade_tablet.mds_data_);
+  ASSERT_TRUE(ObTabletStatus::Status::DELETED == upgrade_tablet.tablet_meta_.last_persisted_committed_tablet_status_.tablet_status_);
+
+  // release tmp memory and tablet
+  empty_shell_tablet.mds_data_->~ObTabletMdsData();
+  compat_allocator.free(empty_shell_tablet.mds_data_);
+  empty_shell_tablet.mds_data_ = nullptr;
+  ret = ls_tablet_service_->do_remove_tablet(ls_id_, tablet_id);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
 } // end storage
 } // end oceanbase
 

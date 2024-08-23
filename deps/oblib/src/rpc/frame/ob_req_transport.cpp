@@ -97,6 +97,7 @@ int async_cb(easy_request_t *r)
 
       ret = OB_LIBEASY_ERROR;
     } else if (OB_FAIL(cb->decode(r->ipacket))) {
+      cb->set_error(ret);
       cb->on_invalid();
       LOG_WARN("decode failed", K(ret), K(pcode));
     } else if (OB_PACKET_CLUSTER_ID_NOT_MATCH == cb->get_rcode()) {

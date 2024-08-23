@@ -543,6 +543,8 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("fail to check enable pdml", K(ret));
   } else if (OB_FAIL(init_parallel_policy(stmt, *session_info))) { // call after check pdml enabled
     LOG_WARN("fail to check enable pdml", K(ret));
+  } else if (OB_FAIL(init_replica_policy(stmt, *session_info))) {
+    LOG_WARN("fail to check enable column store replica", K(ret));
   } else if (OB_FAIL(init_correlation_model(stmt, *session_info))) {
     LOG_WARN("failed to init correlation model", K(ret));
   }
@@ -690,6 +692,24 @@ int ObOptimizer::init_parallel_policy(ObDMLStmt &stmt, const ObSQLSessionInfo &s
     LOG_TRACE("succeed to init parallel policy", K(session.is_user_session()),
                         K(ctx_.can_use_pdml()), K(ctx_.get_parallel_rule()), K(ctx_.get_parallel()),
                         K(ctx_.get_auto_dop_params()));
+  }
+  return ret;
+}
+
+int ObOptimizer::init_replica_policy(ObDMLStmt &dml_stmt, const ObSQLSessionInfo &session)
+{
+  int ret = OB_SUCCESS;
+  int64_t route_policy_type = 0;
+  if (OB_FAIL(session.get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
+    LOG_WARN("fail to get sys variable", K(ret));
+  } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
+    if (dml_stmt.get_query_ctx()->has_dml_write_stmt_ ||
+        dml_stmt.get_query_ctx()->is_contain_select_for_update_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, read query request");
+    } else {
+      ctx_.set_use_column_store_replica(true);
+    }
   }
   return ret;
 }

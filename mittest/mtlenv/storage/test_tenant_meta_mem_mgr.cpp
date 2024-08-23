@@ -718,7 +718,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
 
   ObTabletID empty_tablet_id;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
-      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, true/*need_create_empty_major_sstable*/, &freezer);
+      create_scn, create_scn.get_val_for_tx(), create_tablet_schema, true/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
   ObTabletPersister persister;
@@ -817,7 +817,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   bool make_empty_co_sstable = true;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -927,7 +927,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   bool make_empty_co_sstable = false;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -1024,7 +1024,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   bool make_empty_co_sstable = true;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 
@@ -1152,7 +1152,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
   bool make_empty_co_sstable = false;
   ret = tablet->init_for_first_time_creation(allocator_, ls_id_, tablet_id, tablet_id,
       create_scn, create_scn.get_val_for_tx(), create_tablet_schema,
-      make_empty_co_sstable/*need_create_empty_major_sstable*/, &freezer);
+      make_empty_co_sstable/*need_create_empty_major_sstable*/, false/*need_generate_cs_replica_cg_array*/, &freezer);
   ASSERT_EQ(common::OB_SUCCESS, ret);
   ASSERT_EQ(1, tablet->get_ref());
 

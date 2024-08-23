@@ -176,6 +176,18 @@ public:
   ~ObDDLMacroBlockRedoInfo() = default;
   bool is_valid() const;
   bool is_column_group_info_valid() const;
+  /*
+   * For tow conditions:
+   *   1. column store table, unnessasery to generate double redo clog.
+   *   2. row store table, but unnessasery to process cs replica.
+   *     (a) cs replica not exist, may not be created or is creating.
+   *     (b) table is not user data table.
+   */
+  bool is_not_compat_cs_replica() const;
+  // If cs replica exist, this redo clog is suitable for F/R replica.
+  bool is_cs_replica_row_store() const;
+  // If cs replica exist, this redo clog is suitable for C replica.
+  bool is_cs_replica_column_store() const;
   void reset();
   TO_STRING_KV(K_(table_key),
                K_(data_buffer),

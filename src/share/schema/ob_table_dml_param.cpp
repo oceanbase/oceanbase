@@ -212,7 +212,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     if (OB_SUCC(ret)) {
       if (OB_FAIL(tmp_cols_index.push_back(col_index))) {
         LOG_WARN("fail to push_back col_index", K(ret));
-      } else if (use_cs && OB_FAIL(schema->get_column_group_index(*column, cg_idx))) {
+      } else if (use_cs && OB_FAIL(schema->get_column_group_index(*column, false /*need_calculate_cg_idx*/, cg_idx))) {
         LOG_WARN("Fail to get column group index", K(ret));
       } else if (use_cs && OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
         LOG_WARN("Fail to push back cg idx", K(ret));

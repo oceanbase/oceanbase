@@ -18,6 +18,8 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/tablet/ob_tablet_common.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/compaction/ob_tenant_tablet_scheduler.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 #include "logservice/ob_log_service.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/time/ob_time_utility.h"
@@ -30,6 +32,7 @@
 #include "share/ob_cluster_version.h"
 #include "ob_storage_ha_utils.h"
 #include "ob_storage_ha_src_provider.h"
+#include "ob_cs_replica_migration.h"
 
 namespace oceanbase
 {
@@ -41,6 +44,7 @@ ERRSIM_POINT_DEF(EN_DATA_TABLETS_MIGRATION_TASK_FATAL_FAILURE);
 ERRSIM_POINT_DEF(EN_BUILD_SYS_TABLETS_DAG_FAILED);
 ERRSIM_POINT_DEF(EN_UPDATE_LS_MIGRATION_STATUS_FAILED);
 ERRSIM_POINT_DEF(EN_JOIN_LEARNER_LIST_FAILED);
+ERRSIM_POINT_DEF(EN_DATA_TABLET_MIGRATION_DAG_OUT_OF_RETRY);
 
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
@@ -2045,7 +2049,8 @@ ObTabletMigrationDag::ObTabletMigrationDag()
     is_inited_(false),
     ls_handle_(),
     copy_tablet_ctx_(),
-    tablet_group_ctx_(nullptr)
+    tablet_group_ctx_(nullptr),
+    tablet_type_(ObTabletType::MAX_TYPE)
 {
 }
 
@@ -2126,7 +2131,8 @@ int ObTabletMigrationDag::init(
     const common::ObTabletID &tablet_id,
     ObTabletHandle &tablet_handle,
     ObIDagNet *dag_net,
-    ObHATabletGroupCtx *tablet_group_ctx)
+    ObHATabletGroupCtx *tablet_group_ctx /*=nullptr*/,
+    ObTabletType tablet_type /*=ObTabletType::SYS_TABLET_TYPE*/)
 {
   int ret = OB_SUCCESS;
   ObMigrationDagNet *migration_dag_net = nullptr;
@@ -2162,7 +2168,36 @@ int ObTabletMigrationDag::init(
   } else {
     compat_mode_ = copy_tablet_ctx_.tablet_handle_.get_obj()->get_tablet_meta().compat_mode_;
     tablet_group_ctx_ = tablet_group_ctx;
+    tablet_type_ = tablet_type;
     is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObTabletMigrationDag::get_tablet_group_ctx(ObHATabletGroupCtx *&tablet_group_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration dag do not init", K(ret));
+  } else if (OB_ISNULL(tablet_group_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("only data tablet has tablet group ctx", K(ret), K_(tablet_type));
+  } else {
+    tablet_group_ctx = tablet_group_ctx_;
+  }
+  return ret;
+}
+
+int ObTabletMigrationDag::check_is_migrate_data_tablet(bool &is_migrate_data_tablet)
+{
+  int ret = OB_SUCCESS;
+  is_migrate_data_tablet = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("tablet migration dag do not init", K(ret));
+  } else if (ObTabletType::DATA_TABLET_TYPE == tablet_type_) {
+    is_migrate_data_tablet = true;
   }
   return ret;
 }
@@ -2279,6 +2314,10 @@ int ObTabletMigrationDag::generate_next_dag(share::ObIDag *&dag)
       } else if (OB_FAIL(ls->ha_get_tablet(logic_tablet_id.tablet_id_, tablet_handle))) {
         if (OB_TABLET_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
+          if (ls->is_cs_replica()
+              && OB_FAIL(ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(tablet_group_ctx_, logic_tablet_id.tablet_id_))) {
+            LOG_WARN("failed to update deleted tablet status", K(ret));
+          }
         } else {
           LOG_WARN("failed to get tablet", K(ret), K(logic_tablet_id));
         }
@@ -2291,10 +2330,14 @@ int ObTabletMigrationDag::generate_next_dag(share::ObIDag *&dag)
             K(ret), K(logic_tablet_id), KPC(tablet));
       } else if (logic_tablet_id.transfer_seq_ < tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
         LOG_INFO("local tablet transfer seq is bigger than remote tablet, no need copy", K(logic_tablet_id), KPC(tablet));
+        if (ls->is_cs_replica()
+            && OB_FAIL(ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(tablet_group_ctx_, logic_tablet_id.tablet_id_))) {
+          LOG_WARN("failed to update deleted tablet status", K(ret));
+        }
       } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_migration_dag))) {
         LOG_WARN("failed to alloc tablet migration dag", K(ret));
       } else {
-        if (OB_FAIL(tablet_migration_dag->init(logic_tablet_id.tablet_id_, tablet_handle, dag_net, tablet_group_ctx_))) {
+        if (OB_FAIL(tablet_migration_dag->init(logic_tablet_id.tablet_id_, tablet_handle, dag_net, tablet_group_ctx_, ObTabletMigrationDag::ObTabletType::DATA_TABLET_TYPE))) {
           LOG_WARN("failed to init tablet migration migration dag", K(ret), K(logic_tablet_id));
         } else if (FALSE_IT(dag_id.init(MYADDR))) {
         } else if (OB_FAIL(tablet_migration_dag->set_dag_id(dag_id))) {
@@ -3007,6 +3050,20 @@ int ObTabletMigrationTask::update_ha_expected_status_(
         LOG_WARN("failed to update tablet ha expected status", K(ret), K(expected_status), KPC(copy_tablet_ctx_));
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (ls->is_cs_replica()) {
+      bool is_migrate_data_tablet = false;
+      ObHATabletGroupCtx *tablet_group_ctx = nullptr;
+      if (OB_FAIL(dag->check_is_migrate_data_tablet(is_migrate_data_tablet))) {
+        LOG_WARN("failed to check tablet type", K(ret));
+      } else if (!is_migrate_data_tablet) {
+        // skip sys tablet migration
+      } else if (OB_FAIL(dag->get_tablet_group_ctx(tablet_group_ctx))) {
+        LOG_WARN("failed to get tablet group ctx", K(ret), KPC(dag));
+      } else if (OB_FAIL(ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(tablet_group_ctx, copy_tablet_ctx_->tablet_id_))) {
+        LOG_WARN("failed to update deleted tablet status", K(ret), KPC(tablet_group_ctx), KPC(copy_tablet_ctx_));
+      }
+    }
   }
   return ret;
 }
@@ -3176,6 +3233,9 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("migration tablet maybe deleted, skip it", K(ret), KPC(copy_tablet_ctx_));
         ret = OB_SUCCESS;
+        if (OB_FAIL(update_co_convert_status_for_cs_replica(true /*tablet_is_deleted*/))) {
+          LOG_WARN("failed update convert status for cs replica", K(ret), KPC_(copy_tablet_ctx));
+        }
       } else {
         LOG_WARN("failed to update tablet ha expected status", K(ret), K(expected_status), KPC(copy_tablet_ctx_));
       }
@@ -3197,15 +3257,35 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
         STORAGE_LOG(ERROR, "fake EN_UPDATE_TABLET_HA_STATUS_FAILED", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      ObTabletMigrationDag *tablet_migration_dag = nullptr;
+      bool is_migrate_data_tablet = false;
+      if (OB_ISNULL(dag_) || OB_UNLIKELY(ObDagType::DAG_TYPE_TABLET_MIGRATION != dag_->get_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid null or wrong type", K(ret), KPC_(dag));
+      } else if (FALSE_IT(tablet_migration_dag = static_cast<ObTabletMigrationDag *>(dag_))) {
+      } else if (OB_FAIL(tablet_migration_dag->check_is_migrate_data_tablet(is_migrate_data_tablet))) {
+        LOG_ERROR("failed to check is migrate data tablet", K(ret));
+      } else if (!is_migrate_data_tablet) {
+      } else if (EN_DATA_TABLET_MIGRATION_DAG_OUT_OF_RETRY) {
+        ret = EN_DATA_TABLET_MIGRATION_DAG_OUT_OF_RETRY;
+        LOG_INFO("ERRSIM EN_DATA_TABLET_MIGRATION_DAG_OUT_OF_RETRY", K(ret));
+      }
+    }
 #endif
     const ObTabletDataStatus::STATUS data_status = ObTabletDataStatus::COMPLETE;
-    if (OB_FAIL(ls_->update_tablet_ha_data_status(copy_tablet_ctx_->tablet_id_, data_status))) {
+    if (FAILEDx(ls_->update_tablet_ha_data_status(copy_tablet_ctx_->tablet_id_, data_status))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         LOG_INFO("migration tablet maybe deleted, skip it", K(ret), KPC(copy_tablet_ctx_));
         ret = OB_SUCCESS;
+        if (OB_FAIL(update_co_convert_status_for_cs_replica(true /*tablet_is_deleted*/))) {
+          LOG_WARN("failed update convert status for cs replica", K(ret), KPC_(copy_tablet_ctx));
+        }
       } else {
         LOG_WARN("[HA]failed to update tablet ha data status", K(ret), KPC(copy_tablet_ctx_), K(data_status));
       }
+    } else if (OB_FAIL(update_co_convert_status_for_cs_replica(false /*tablet_is_deleted*/))) {
+      LOG_WARN("failed to schedule convert merge if needed", K(ret), KPC_(copy_tablet_ctx));
     } else {
       LOG_INFO("update tablet ha data status", KPC(copy_tablet_ctx_), K(data_status));
       SERVER_EVENT_ADD("storage_ha", "tablet_finish_migration_task",
@@ -3218,6 +3298,98 @@ int ObTabletFinishMigrationTask::update_data_and_expected_status_()
     }
   }
   return ret;
+}
+
+int ObTabletFinishMigrationTask::prepare_co_convert_ctx(bool &is_migrate_data_tablet, ObHATabletGroupCOConvertCtx *&group_convert_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMigrationDag *tablet_migration_dag = nullptr;
+  ObHATabletGroupCtx *ctx = nullptr;
+  is_migrate_data_tablet = false;
+  group_convert_ctx = nullptr;
+
+  if (OB_ISNULL(dag_) || OB_UNLIKELY(ObDagType::DAG_TYPE_TABLET_MIGRATION != dag_->get_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null or wrong type", K(ret), KPC_(dag));
+  } else if (FALSE_IT(tablet_migration_dag = static_cast<ObTabletMigrationDag *>(dag_))) {
+  } else if (OB_FAIL(tablet_migration_dag->check_is_migrate_data_tablet(is_migrate_data_tablet))) {
+    LOG_WARN("failed to check tablet type", K(ret));
+  } else if (!is_migrate_data_tablet) {
+    // skip sys tablet migration
+  } else if (OB_FAIL(tablet_migration_dag->get_tablet_group_ctx(ctx))) {
+    LOG_WARN("failed to get tablet group ctx", K(ret), KPC(tablet_migration_dag));
+  } else if (OB_ISNULL(ctx) || OB_UNLIKELY(!ctx->is_cs_replica_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null ctx or invalid type", K(ret), KPC(ctx));
+  } else {
+    group_convert_ctx = static_cast<ObHATabletGroupCOConvertCtx *>(ctx);
+  }
+  return ret;
+}
+
+int ObTabletFinishMigrationTask::update_co_convert_status_for_cs_replica(const bool tablet_is_deleted) {
+  int ret = OB_SUCCESS;
+  bool is_migrate_data_tablet = false;
+  ObHATabletGroupCOConvertCtx *group_convert_ctx = nullptr;
+
+  if (!ls_->is_cs_replica()) {
+    // skip F/R replica
+  } else if (OB_FAIL(prepare_co_convert_ctx(is_migrate_data_tablet, group_convert_ctx))) {
+    LOG_WARN("failed to prepare convert ctx", K(ret));
+  } else if (!is_migrate_data_tablet) {
+  } else if (OB_ISNULL(group_convert_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("convert ctx is null", K(ret));
+  } else if (!tablet_is_deleted) {
+    (void) schedule_convert_co_merge(group_convert_ctx); // ignore ret
+    (void) group_convert_ctx->inc_finish_migration_cnt();
+  } else if (OB_FAIL(group_convert_ctx->set_convert_finsih(copy_tablet_ctx_->tablet_id_))) {
+    LOG_WARN("failed to set convert finish", K(ret), K_(copy_tablet_ctx));
+  } else {
+    (void) group_convert_ctx->inc_finish_migration_cnt();
+  }
+  return ret;
+}
+
+void ObTabletFinishMigrationTask::schedule_convert_co_merge(
+    ObHATabletGroupCOConvertCtx *group_convert_ctx)
+{
+  int ret = OB_SUCCESS;
+  const ObLSID &ls_id = ls_->get_ls_id();
+  const ObTabletID &tablet_id = copy_tablet_ctx_->tablet_id_;
+  ObTablet *tablet = nullptr;
+  ObTabletHandle tablet_handle;
+  ObTabletCOConvertCtx *convert_ctx = nullptr;
+  bool need_convert = false;
+
+  if (OB_FAIL(ls_->get_tablet(tablet_id, tablet_handle))) {
+    if (OB_TABLET_NOT_EXIST == ret) {
+      LOG_INFO("tablet maybe deleted, skip it", K(ret), K(ls_id), K(tablet_id));
+      ret = OB_SUCCESS;
+      if (OB_FAIL(group_convert_ctx->set_convert_finsih(tablet_id))) {
+        LOG_WARN("failed to set convert finish", K(ret), K(tablet_id));
+      }
+    } else {
+      LOG_WARN("failed to get tablet handle", K(ret), K(ls_id), K(tablet_id));
+    }
+  } else if (FALSE_IT(tablet = tablet_handle.get_obj())) {
+  } else if (OB_FAIL(ObHATabletGroupCOConvertCtx::check_need_convert(*tablet, need_convert))) {
+  } else if (need_convert) {
+    DEBUG_SYNC(BEFROE_UPDATE_MIG_TABLET_CONVERT_CO_PROGRESSING);
+    LOG_INFO("[CS-Replica] Start schedule co merge dag to switch row to column store", K(ls_id), K(tablet_id));
+    // Specific dag net id for co merge dag net to convert row store tablet into columnar store one.
+    // Use ObDataTabletsCheckCOConvertDag to check the convert result and re-schedule dag net if it failed, with the same dag net id.
+    ObDagId co_dag_net_id;
+    if (OB_FAIL(group_convert_ctx->get_co_dag_net_id(tablet_id, co_dag_net_id))) {
+      LOG_WARN("failed to get convert ctx", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(compaction::ObTenantTabletScheduler::schedule_convert_co_merge_dag_net(ls_id, *tablet, 0 /*retry_times*/, co_dag_net_id))) {
+      LOG_WARN("failed to schedule convert co merge for cs replica", K(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(group_convert_ctx->set_convert_progressing(tablet_id))) {
+      LOG_WARN("failed to set convert progressing", K(ret), K(tablet_id));
+    }
+  } else if (OB_FAIL(group_convert_ctx->set_convert_finsih(tablet_id))) {
+    LOG_WARN("failed to set convert finish", K(ret), K(tablet_id));
+  }
 }
 
 /******************ObDataTabletsMigrationDag*********************/
@@ -3463,6 +3635,8 @@ int ObDataTabletsMigrationTask::process()
 
     if (FAILEDx(generate_tablet_group_dag_())) {
       LOG_WARN("failed to generate tablet group dag", K(ret), KPC(ctx_));
+    } else if (OB_FAIL(generate_check_co_convert_dag_if_needed())) {
+      LOG_WARN("failed to generate check convert dag", K(ret), KPC(ctx_));
     }
   }
 
@@ -3588,17 +3762,22 @@ int ObDataTabletsMigrationTask::build_tablet_group_info_()
   ObArray<ObLogicTabletID> tablet_group_id_array;
   ObArray<ObLogicTabletID> tablet_id_array;
   hash::ObHashSet<ObTabletID> remove_tablet_set;
-
+  ObLS *ls = nullptr;
   DEBUG_SYNC(BEFORE_BUILD_TABLET_GROUP_INFO);
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("data tablets migration task do not init", K(ret));
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is nullptr", K(ret), K_(ls_handle));
   } else {
     ctx_->tablet_group_mgr_.reuse();
     const hash::ObHashMap<common::ObTabletID, ObCopyTabletSimpleInfo> &tablet_simple_info_map =
         ctx_->tablet_simple_info_map_;
-
+    const ObHATabletGroupCtx::TabletGroupCtxType type = ls->is_cs_replica()
+                                                      ? ObHATabletGroupCtx::TabletGroupCtxType::CS_REPLICA_TYPE
+                                                      : ObHATabletGroupCtx::TabletGroupCtxType::NORMAL_TYPE;
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->data_tablet_id_array_.count(); ++i) {
       tablet_simple_info.reset();
       const ObLogicTabletID &logic_tablet_id = ctx_->data_tablet_id_array_.at(i);
@@ -3618,7 +3797,7 @@ int ObDataTabletsMigrationTask::build_tablet_group_info_()
           && ObCopyTabletStatus::TABLET_EXIST == tablet_simple_info.status_) {
         if (OB_FAIL(tablet_group_id_array.push_back(logic_tablet_id))) {
           LOG_WARN("failed to push tablet id into array", K(ret), K(logic_tablet_id));
-        } else if (OB_FAIL(ctx_->tablet_group_mgr_.build_tablet_group_ctx(tablet_group_id_array))) {
+        } else if (OB_FAIL(ctx_->tablet_group_mgr_.build_tablet_group_ctx(tablet_group_id_array, type))) {
           LOG_WARN("failed to build tablet group ctx", K(ret), KPC(ctx_));
         } else {
           LOG_INFO("succeed build tablet group ctx", K(tablet_group_id_array));
@@ -3680,7 +3859,7 @@ int ObDataTabletsMigrationTask::build_tablet_group_info_()
             }
 
             if (OB_SUCC(ret)) {
-              if (OB_FAIL(ctx_->tablet_group_mgr_.build_tablet_group_ctx(tablet_group_id_array))) {
+              if (OB_FAIL(ctx_->tablet_group_mgr_.build_tablet_group_ctx(tablet_group_id_array, type))) {
                 LOG_WARN("failed to build tablet group ctx", K(ret), K(tablet_group_id_array), KPC(ctx_));
               } else {
                 LOG_INFO("succeed build tablet group ctx", K(tablet_group_id_array), "count", tablet_group_id_array.count());
@@ -3758,6 +3937,75 @@ int ObDataTabletsMigrationTask::generate_tablet_group_dag_()
       }
     }
   }
+  return ret;
+}
+
+int ObDataTabletsMigrationTask::generate_check_co_convert_dag_if_needed() {
+  int ret = OB_SUCCESS;
+  ObLS *ls = nullptr;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("data tablets migration task do not init", K(ret));
+  } else if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx is nullptr", K(ret));
+  } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls is nullptr", K(ret), K_(ls_handle));
+  } else if (!ls->is_cs_replica()) {
+  } else if (OB_FAIL(inner_generate_check_co_convert_dag(ls))) {
+    LOG_WARN("failed to generate check convert dag", K(ret));
+  } else {
+    LOG_INFO("[CS-Replica] Finish generate check convert dag", K(ret), KPC(ls));
+    SERVER_EVENT_ADD("storage_ha", "generage_check_co_convert_dag",
+      "tenant_id", MTL_ID(),
+      "ls_id", ctx_->arg_.ls_id_.id(),
+      "src", ctx_->arg_.src_.get_server(),
+      "dst", ctx_->arg_.dst_.get_server(),
+      "task_id", ctx_->task_id_);
+  }
+  return ret;
+}
+
+int ObDataTabletsMigrationTask::inner_generate_check_co_convert_dag(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler =  MTL(ObTenantDagScheduler*);
+  ObDataTabletsCheckCOConvertDag *tablet_check_convert_dag = nullptr;
+  ObIDagNet *dag_net = nullptr;
+  ObMigrationDagNet *migration_dag_net = nullptr;
+
+  if (OB_ISNULL(ls) || OB_ISNULL(dag_) || OB_ISNULL(dag_net = dag_->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid nullptr", K(ret), KP(ls), KP_(dag), KP(dag_net));
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(dag_->get_priority(), tablet_check_convert_dag))) {
+    LOG_WARN("failed to alloc dag", K(ret));
+  } else if (OB_UNLIKELY(ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
+  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet *>(dag_net))) {
+  } else if (OB_FAIL(tablet_check_convert_dag->init(migration_dag_net->get_migration_ctx(), ls))) {
+    LOG_WARN("failed to init tablet check convert dag", K(ret), "ls_id", ls->get_ls_id());
+  } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*(tablet_check_convert_dag)))) {
+    LOG_WARN("failed to add dag into dag net", K(ret));
+  } else if (OB_FAIL(dag_->add_child_without_inheritance(*tablet_check_convert_dag))) {
+    LOG_WARN("failed to add child dag", K(ret), KPC(tablet_check_convert_dag), KPC_(dag));
+  } else if (OB_FAIL(tablet_check_convert_dag->create_first_task())) {
+    LOG_WARN("failed to create first task", K(ret));
+  } else if (OB_FAIL(tablet_check_convert_dag->add_child_without_inheritance(*finish_dag_))) {
+    LOG_WARN("failed to add finish dag as child", K(ret), KPC(tablet_check_convert_dag), KPC_(finish_dag));
+  } else if (OB_FAIL(scheduler->add_dag(tablet_check_convert_dag))) {
+    LOG_WARN("failed to add tablet check convert dag", K(ret), KPC(tablet_check_convert_dag));
+    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+      LOG_WARN("Fail to add dag", K(ret), "ls_id", ls->get_ls_id());
+      ret = OB_EAGAIN;
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(tablet_check_convert_dag)) {
+    scheduler->free_dag(*tablet_check_convert_dag);
+    tablet_check_convert_dag = nullptr;
+  }
+
   return ret;
 }
 
@@ -4286,6 +4534,10 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
       } else if (OB_FAIL(ls->ha_get_tablet(logic_tablet_id.tablet_id_, tablet_handle))) {
         if (OB_TABLET_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
+          if (ls->is_cs_replica()
+              && OB_FAIL(ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(tablet_group_ctx_, logic_tablet_id.tablet_id_))) {
+            LOG_WARN("failed to update deleted tablet status", K(ret));
+          }
         } else {
           LOG_WARN("failed to get tablet", K(ret), K(logic_tablet_id));
         }
@@ -4298,9 +4550,13 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
             K(ret), K(logic_tablet_id), KPC(tablet));
       } else if (logic_tablet_id.transfer_seq_ < tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
         LOG_INFO("local tablet transfer seq is bigger than remote tablet, no need copy", K(logic_tablet_id), KPC(tablet));
+        if (ls->is_cs_replica()
+            && OB_FAIL(ObHATabletGroupCOConvertCtx::update_deleted_data_tablet_status(tablet_group_ctx_, logic_tablet_id.tablet_id_))) {
+          LOG_WARN("failed to update deleted tablet status", K(ret));
+        }
       } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_migration_dag))) {
         LOG_WARN("failed to alloc tablet migration dag ", K(ret));
-      } else if (OB_FAIL(tablet_migration_dag->init(logic_tablet_id.tablet_id_, tablet_handle, dag_net, tablet_group_ctx_))) {
+      } else if (OB_FAIL(tablet_migration_dag->init(logic_tablet_id.tablet_id_, tablet_handle, dag_net, tablet_group_ctx_, ObTabletMigrationDag::ObTabletType::DATA_TABLET_TYPE))) {
         LOG_WARN("failed to init tablet migration migration dag", K(ret), K(*ctx_));
       } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*tablet_migration_dag))) {
         LOG_WARN("failed to add dag into dag net", K(ret), K(*ctx_));

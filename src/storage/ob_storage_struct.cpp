@@ -338,7 +338,8 @@ ObDDLTableStoreParam::ObDDLTableStoreParam()
     ddl_checkpoint_scn_(SCN::min_scn()),
     ddl_snapshot_version_(0),
     ddl_execution_id_(-1),
-    data_format_version_(0)
+    data_format_version_(0),
+    ddl_table_type_(ObITable::MAX_TABLE_TYPE)
 {
 
 }
@@ -350,7 +351,8 @@ bool ObDDLTableStoreParam::is_valid() const
     && ddl_checkpoint_scn_.is_valid()
     && ddl_snapshot_version_ >= 0
     && ddl_execution_id_ >= 0
-    && data_format_version_ >= 0;
+    && data_format_version_ >= 0
+    && ObITable::is_valid_ddl_table_type(ddl_table_type_);
 }
 
 UpdateUpperTransParam::UpdateUpperTransParam()

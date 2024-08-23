@@ -65,7 +65,7 @@ int ObTmpFileFlushManager::alloc_flush_task(ObTmpFileFlushTask *&flush_task)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "fail to allocate memory for flush callback", KR(ret));
   } else {
-    flush_task = new (task_buf) ObTmpFileFlushTask(task_allocator_);
+    flush_task = new (task_buf) ObTmpFileFlushTask();
   }
   return ret;
 }

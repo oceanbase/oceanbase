@@ -905,8 +905,7 @@ int ObLoadDataDirectImpl::SimpleDataSplitUtils::split(const DataAccessParam &dat
     }
 
     if (OB_NOT_NULL(file_reader)) {
-      file_reader->~ObFileReader();
-      allocator.free(file_reader);
+      ObFileReader::destroy(file_reader);
     }
   }
   return ret;
@@ -1554,7 +1553,7 @@ int ObLoadDataDirectImpl::MultiFilesLoadTaskProcessor::process()
   if (OB_FAIL(data_reader_.init(execute_param_->data_access_param_, *execute_ctx_,
                                 handle_->data_desc_, true))) {
     LOG_WARN("fail to init data reader", KR(ret));
-  } else if (0 == handle_->data_desc_.file_idx_ && 0 == handle_->data_desc_.start_) {
+  } else if (0 == handle_->data_desc_.start_) {
     if (OB_FAIL(skip_ignore_rows(current_line_count))) {
       LOG_WARN("fail to skip ignore rows", KR(ret));
     } else if (OB_UNLIKELY(current_line_count < execute_param_->ignore_row_num_)) {

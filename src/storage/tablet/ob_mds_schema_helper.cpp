@@ -141,6 +141,14 @@ const ObRowkeyReadInfo *ObMdsSchemaHelper::get_rowkey_read_info() const
   return ptr;
 }
 
+bool ObMdsSchemaHelper::is_mds_schema(const ObTableSchema &table_schema)
+{
+  bool bret = false;
+  const ObString &table_name = table_schema.get_table_name_str();
+  const uint64_t table_id = table_schema.get_table_id();
+  return MDS_TABLE_ID == table_id && 0 == table_name.case_compare(MDS_TABLE_NAME);
+}
+
 int ObMdsSchemaHelper::build_table_schema(
     const uint64_t tenant_id,
     const int64_t database_id,

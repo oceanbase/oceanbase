@@ -30,6 +30,7 @@ namespace common
 
 namespace sql {
 class ObExprRegexpSessionVariables;
+class ObDecompressor;
 
 class ObExternalDataAccessDriver
 {
@@ -62,6 +63,63 @@ private:
   ObIOFd fd_;
 };
 
+class ObExternalStreamFileReader final
+{
+public:
+  // ObExternalStreamFileReader();
+  ~ObExternalStreamFileReader();
+  void reset();
+
+  int init(const common::ObString &location,
+           const ObString &access_info,
+           ObLoadCompressionFormat compression_format,
+           ObIAllocator &allocator);
+
+  int open(const ObString &filename);
+  void close();
+
+  /**
+   * read data into buffer. decompress source data if need
+   */
+  int read(char *buf, int64_t buf_len, int64_t &read_size);
+  bool eof();
+
+  common::ObStorageType get_storage_type() { return data_access_driver_.get_storage_type(); }
+
+  ObExternalDataAccessDriver &get_data_access_driver() { return data_access_driver_; }
+
+private:
+  int read_from_driver(char *buf, int64_t buf_len, int64_t &read_size);
+  int read_decompress(char *buf, int64_t buf_len, int64_t &read_size);
+  int read_compressed_data(); // read data from driver into compressed buffer
+
+  /**
+   * create the decompressor if need
+   *
+   * It's no need to create new decompressor if the compression_format is the seem as decompressor's.
+   */
+  int create_decompressor(ObLoadCompressionFormat compression_format);
+
+private:
+  ObExternalDataAccessDriver data_access_driver_;
+  bool    is_file_end_ = true;
+  int64_t file_offset_ = 0;
+  int64_t file_size_   = 0;
+
+  ObDecompressor *decompressor_ = nullptr;
+  char *  compressed_data_      = nullptr; /// compressed data buffer
+  int64_t compress_data_size_   = 0;       /// the valid data size in compressed data buffer
+  int64_t consumed_data_size_   = 0;       /// handled buffer size in the compressed data buffer
+  int64_t uncompressed_size_    = 0;       /// decompressed size from compressed data
+
+  ObIAllocator *allocator_ = nullptr;
+
+  /// the compression format specified in `create external table` statement
+  ObLoadCompressionFormat compression_format_ = ObLoadCompressionFormat::NONE;
+
+  static const char * MEMORY_LABEL;
+  static const int64_t COMPRESSED_DATA_BUFFER_SIZE;
+};
 
 class ObExternalTableRowIterator : public common::ObNewRowIterator {
 public:
@@ -109,7 +167,7 @@ public:
     StateValues() :
       buf_(nullptr), buf_len_(OB_MALLOC_NORMAL_BLOCK_SIZE),
       pos_(nullptr), data_end_(nullptr), escape_buf_(nullptr), escape_buf_end_(nullptr),
-      is_end_file_(true), file_idx_(0), file_offset_(0), file_size_(0), skip_lines_(0),
+      file_idx_(0), skip_lines_(0),
       cur_file_id_(MIN_EXTERNAL_TABLE_FILE_ID), cur_line_number_(MIN_EXTERNAL_TABLE_LINE_NUMBER),
       line_count_limit_(INT64_MAX), part_id_(0), part_list_val_(), ip_port_buf_(NULL), ip_port_len_(0), file_with_url_() {}
     char *buf_;
@@ -118,10 +176,7 @@ public:
     const char *data_end_;
     char *escape_buf_;
     char *escape_buf_end_;
-    bool is_end_file_;
     int64_t file_idx_;
-    int64_t file_offset_;
-    int64_t file_size_;
     int64_t skip_lines_;
     common::ObString cur_file_name_;
     int64_t cur_file_id_;
@@ -135,10 +190,7 @@ public:
     void reuse() {
       pos_ = buf_;
       data_end_ = buf_;
-      is_end_file_ = true;
       file_idx_ = 0;
-      file_offset_ = 0;
-      file_size_ = 0;
       skip_lines_ = 0;
       cur_file_name_.reset();
       cur_file_id_ = MIN_EXTERNAL_TABLE_FILE_ID;
@@ -149,8 +201,8 @@ public:
       ip_port_len_ = 0;
       file_with_url_.reset();
     }
-    TO_STRING_KV(KP(buf_), K(buf_len_), KP(pos_), KP(data_end_), K(is_end_file_), K(file_idx_),
-                 K(file_offset_), K(file_size_), K(skip_lines_), K(line_count_limit_),
+    TO_STRING_KV(KP(buf_), K(buf_len_), KP(pos_), KP(data_end_), K(file_idx_),
+                 K(skip_lines_), K(line_count_limit_),
                  K(cur_file_name_), K(cur_file_id_), K(cur_line_number_), K(line_count_limit_), K_(part_id), K_(ip_port_len), K_(file_with_url));
   };
 
@@ -186,7 +238,7 @@ private:
   common::ObMalloc malloc_alloc_; //for internal data buffers
   common::ObArenaAllocator arena_alloc_;
   ObCSVGeneralParser parser_;
-  ObExternalDataAccessDriver data_access_driver_;
+  ObExternalStreamFileReader file_reader_;
   ObSqlString url_;
   ObExpr *file_name_expr_;
 };

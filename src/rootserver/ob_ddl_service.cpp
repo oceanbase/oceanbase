@@ -52,7 +52,7 @@
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_freeze_info_proxy.h"
 #include "share/ob_service_epoch_proxy.h"
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "sql/resolver/ob_stmt_type.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_modify_column_name.h"
@@ -257,7 +257,6 @@ int ObDDLService::get_zones_in_region(
 int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(const uint64_t tenant_id, ObSchemaGetterGuard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  bool is_standby = false;
   bool is_restore = false;
   bool use_local = false;
   int64_t version_in_inner_table = OB_INVALID_VERSION;
@@ -268,11 +267,9 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(const uint
   } else if (OB_ISNULL(schema_service_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is null", K(ret));
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("failed to get is standby cluster", K(ret));
   } else if (OB_FAIL(schema_service_->check_tenant_is_restore(NULL, tenant_id, is_restore))) {
     LOG_WARN("fail to check tenant is restore", KR(ret), K(tenant_id));
-  } else if ((is_standby || is_restore) && OB_SYS_TENANT_ID != tenant_id) {
+  } else if (is_restore && OB_SYS_TENANT_ID != tenant_id) {
     ObSchemaStatusProxy *schema_status_proxy = GCTX.schema_status_proxy_;
     if (OB_ISNULL(schema_status_proxy)) {
       ret = OB_ERR_UNEXPECTED;
@@ -280,12 +277,8 @@ int ObDDLService::get_tenant_schema_guard_with_version_in_inner_table(const uint
     } else if (OB_FAIL(schema_status_proxy->get_refresh_schema_status(tenant_id, schema_status))) {
       LOG_WARN("failed to get tenant refresh schema status", KR(ret), K(tenant_id));
     } else if (OB_INVALID_VERSION == schema_status.readable_schema_version_) {
-      // 1. The standalone cluster: the schema status has been reset, it can use the internal table to refresh,
-      //    in this time the standalone cluster already has a leader
-      // 2. The second of physical recovery, after reset schema status, modify_schema can be modified
+      // The second of physical recovery, after reset schema status, modify_schema can be modified
       use_local = false;
-    } else if (is_standby) {
-      use_local = true;
     } else if (is_restore) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("tenant is still restoring, ddl not supported", KR(ret), K(tenant_id), K(schema_status));
@@ -2466,11 +2459,8 @@ int ObDDLService::create_tables_in_trans(const bool if_not_exist,
   uint64_t tenant_data_version = 0;
   ObArenaAllocator allocator(ObModIds::OB_RS_PARTITION_TABLE_TEMP);
   RS_TRACE(create_tables_in_trans_begin);
-  bool is_standby = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("faile to get is standby cluster", K(ret));
   } else if (table_schemas.count() < 1) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table_schemas have no element", K(ret));
@@ -3413,15 +3403,22 @@ int ObDDLService::set_raw_table_options(
 }
 
 int ObDDLService::check_locality_compatible_(
-    ObTenantSchema &schema)
+    ObTenantSchema &schema,
+    const bool for_create_tenant)
 {
   int ret = OB_SUCCESS;
   common::ObArray<share::ObZoneReplicaAttrSet> zone_locality;
+  const uint64_t tenant_id = for_create_tenant ? OB_SYS_TENANT_ID : schema.get_tenant_id();
   bool is_compatible_with_readonly_replica = false;
+  bool is_compatible_with_columnstore_replica = false;
   if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(
-              schema.get_tenant_id(), is_compatible_with_readonly_replica))) {
+                tenant_id, is_compatible_with_readonly_replica))) {
     LOG_WARN("fail to check compatible with readonly replica", KR(ret), K(schema));
-  } else if (is_compatible_with_readonly_replica) {
+  } else if (OB_FAIL(ObShareUtil::check_compat_version_for_columnstore_replica(
+                       tenant_id, is_compatible_with_columnstore_replica))) {
+    LOG_WARN("fail to check compatible with columnstore replica", KR(ret), K(schema));
+  } else if (is_compatible_with_readonly_replica && is_compatible_with_columnstore_replica) {
+    // check pass
   } else if (OB_FAIL(schema.get_zone_replica_attr_array(zone_locality))) {
     LOG_WARN("fail to get locality from schema", K(ret), K(schema));
   } else {
@@ -3430,10 +3427,16 @@ int ObDDLService::check_locality_compatible_(
       if (this_set.zone_set_.count() <= 0) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("zone set count unexpected", K(ret), "zone_set_cnt", this_set.zone_set_.count());
-      } else if (0 != this_set.get_readonly_replica_num()) {
+      } else if (! is_compatible_with_readonly_replica
+                 && 0 != this_set.get_readonly_replica_num()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can not create tenant with read-only replica below data version 4.2", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with R-replica in locality below data version 4.2");
+      } else if (! is_compatible_with_columnstore_replica
+                 && 0 != this_set.get_columnstore_replica_num()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("can not create tenant with column-store replica below data version 4.3.3", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "Create tenant with C-replica in locality below data version 4.3.3");
       }
     }
   }
@@ -17258,7 +17261,6 @@ int ObDDLService::truncate_oracle_temp_table(const ObString &db_name,
 int ObDDLService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLArg &arg)
 {
   int ret = OB_SUCCESS;
-  bool is_standby = false;
   const uint64_t tenant_id = arg.tenant_id_;
   ObSchemaService *schema_service = schema_service_->get_schema_service();
   ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
@@ -17270,8 +17272,6 @@ int ObDDLService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLAr
   } else if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service must not null", K(ret));
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("failed to get is standby cluster", K(ret));
   } else {
     ObDDLSQLTransaction trans(schema_service_);
     ObSchemaGetterGuard schema_guard;
@@ -17283,15 +17283,15 @@ int ObDDLService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLAr
     } else if (OB_FAIL(trans.start(sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to start trans, ", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else if (!arg.update_dep_objs_.empty()
-      && OB_FAIL(process_schema_object_dependency(tenant_id, is_standby, arg.update_dep_objs_,
+      && OB_FAIL(process_schema_object_dependency(tenant_id, arg.update_dep_objs_,
       schema_guard, trans, ddl_operator, ObReferenceObjTable::UPDATE_OP))) {
       LOG_WARN("failed to process update object dependency", K(ret));
     } else if (!arg.insert_dep_objs_.empty()
-      && OB_FAIL(process_schema_object_dependency(tenant_id, is_standby, arg.insert_dep_objs_,
+      && OB_FAIL(process_schema_object_dependency(tenant_id, arg.insert_dep_objs_,
       schema_guard, trans, ddl_operator, ObReferenceObjTable::INSERT_OP))) {
       LOG_WARN("failed to process insert object dependency", K(ret));
     } else if (!arg.delete_dep_objs_.empty()
-      && OB_FAIL(process_schema_object_dependency(tenant_id, is_standby, arg.delete_dep_objs_,
+      && OB_FAIL(process_schema_object_dependency(tenant_id, arg.delete_dep_objs_,
       schema_guard, trans, ddl_operator, ObReferenceObjTable::DELETE_OP))) {
       LOG_WARN("failed to process delete object dependency", K(ret));
     } else if (arg.schema_.is_valid() && OB_FAIL(recompile_view(arg.schema_, arg.reset_view_column_infos_, trans))) {
@@ -17318,7 +17318,6 @@ int ObDDLService::maintain_obj_dependency_info(const obrpc::ObDependencyObjDDLAr
 
 int ObDDLService::process_schema_object_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObSchemaGetterGuard &schema_guard,
     ObMySQLTransaction &trans,
@@ -17335,12 +17334,11 @@ int ObDDLService::process_schema_object_dependency(
     switch (op) {
     case ObReferenceObjTable::INSERT_OP:
     case ObReferenceObjTable::UPDATE_OP:
-      OZ (ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(tenant_id, is_standby,
+      OZ (ObReferenceObjTable::batch_execute_insert_or_update_obj_dependency(tenant_id,
       new_schema_version, dep_objs, trans, schema_guard, ddl_operator));
       break;
     case ObReferenceObjTable::DELETE_OP:
-      OZ (ObReferenceObjTable::batch_execute_delete_obj_dependency(tenant_id, is_standby,
-      dep_objs, trans));
+      OZ (ObReferenceObjTable::batch_execute_delete_obj_dependency(tenant_id, dep_objs, trans));
       break;
     default:
       break;
@@ -23813,30 +23811,23 @@ int ObDDLService::purge_recyclebin_tenant(
     ddl_stmt.reset();
     const ObRecycleObject &recycle_obj = recycle_objs.at(i);
     if (ObRecycleObject::TENANT == recycle_obj.get_type()) {
-      bool is_standby = false;
-      if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-        LOG_WARN("fail to get", K(ret));
-      } else if (!is_standby) {
-        if (tenant_id != OB_SYS_TENANT_ID) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("purge tenant only in sys tenant", K(ret));
-        } else if (OB_FAIL(ddl_stmt.assign_fmt("PURGE TENANT %.*s",
-                                               recycle_obj.get_object_name().length(),
-                                               recycle_obj.get_object_name().ptr()))) {
-          LOG_WARN("append sql failed", K(ret));
+      if (tenant_id != OB_SYS_TENANT_ID) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("purge tenant only in sys tenant", K(ret));
+      } else if (OB_FAIL(ddl_stmt.assign_fmt("PURGE TENANT %.*s",
+                                              recycle_obj.get_object_name().length(),
+                                              recycle_obj.get_object_name().ptr()))) {
+        LOG_WARN("append sql failed", K(ret));
+      } else {
+        ObPurgeTenantArg purge_tenant_arg;
+        purge_tenant_arg.tenant_id_ = OB_SYS_TENANT_ID;
+        purge_tenant_arg.tenant_name_ = recycle_obj.get_object_name();
+        purge_tenant_arg.ddl_stmt_str_ = ddl_stmt.string();
+        if (OB_FAIL(purge_tenant(purge_tenant_arg))) {
+          LOG_WARN("purge tenant failed", K(purge_tenant_arg), K(recycle_obj), K(ret));
         } else {
-          ObPurgeTenantArg purge_tenant_arg;
-          purge_tenant_arg.tenant_id_ = OB_SYS_TENANT_ID;
-          purge_tenant_arg.tenant_name_ = recycle_obj.get_object_name();
-          purge_tenant_arg.ddl_stmt_str_ = ddl_stmt.string();
-          if (OB_FAIL(purge_tenant(purge_tenant_arg))) {
-            LOG_WARN("purge tenant failed", K(purge_tenant_arg), K(recycle_obj), K(ret));
-          } else {
-            ++purged_objects;
-          }
+          ++purged_objects;
         }
-      } else {  // standalone cluster is not executed, but it should be counted normally
-        ++purged_objects;
       }
     }
   }
@@ -25317,7 +25308,8 @@ int ObDDLService::create_sys_tenant(
           0, /*freeze_service_epoch*/
           0, /*arbitration_service_epoch*/
           0, /*server_zone_op_service_epoch*/
-          0 /*heartbeat_service_epoch*/))) {
+          0, /*heartbeat_service_epoch*/
+          0 /* service_name_epoch */))) {
         LOG_WARN("fail to init service epoch", KR(ret));
       }
       if (trans.is_started()) {
@@ -26753,11 +26745,11 @@ int ObDDLService::init_tenant_schema(
           LOG_WARN("fail to set tenant init global stat", KR(ret), K(tenant_id),
                   K(core_schema_version), K(baseline_schema_version),
                   K(snapshot_gc_scn), K(ddl_epoch), K(data_version));
-        } else if (is_user_tenant(tenant_id) && OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_barrier_log(
+        } else if (is_user_tenant(tenant_id) && OB_FAIL(OB_STANDBY_SERVICE.write_upgrade_barrier_log(
                                                         trans, tenant_id, data_version))) {
           LOG_WARN("fail to write_upgrade_barrier_log", KR(ret), K(tenant_id), K(data_version));
         } else if (is_user_tenant(tenant_id) &&
-                   OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_data_version_barrier_log(
+                   OB_FAIL(OB_STANDBY_SERVICE.write_upgrade_data_version_barrier_log(
                            trans, tenant_id, data_version))) {
           LOG_WARN("fail to write_upgrade_data_version_barrier_log", KR(ret),
                    K(tenant_id), K(data_version));
@@ -26802,7 +26794,8 @@ int ObDDLService::init_tenant_schema(
           0, /*freeze_service_epoch*/
           0, /*arbitration_service_epoch*/
           0, /*server_zone_op_service_epoch*/
-          0 /*heartbeat_service_epoch*/))) {
+          0, /*heartbeat_service_epoch*/
+          0 /* service_name_epoch */))) {
         LOG_WARN("fail to init service epoch", KR(ret));
       } else if (is_creating_standby && OB_FAIL(set_log_restore_source(gen_user_tenant_id(tenant_id), log_restore_source, trans))) {
         LOG_WARN("fail to set_log_restore_source", KR(ret), K(tenant_id), K(log_restore_source));
@@ -27298,7 +27291,7 @@ int ObDDLService::set_new_tenant_options(
     } else if (OB_FAIL(parse_and_set_create_tenant_new_locality_options(
             schema_guard, new_tenant_schema, resource_pool_names, zones_in_pool, zone_region_list))) {
       LOG_WARN("fail to parse and set new locality option", K(ret));
-    } else if (OB_FAIL(check_locality_compatible_(new_tenant_schema))) {
+    } else if (OB_FAIL(check_locality_compatible_(new_tenant_schema, false /*for_create_tenant*/))) {
       LOG_WARN("fail to check locality with data version", KR(ret), K(new_tenant_schema));
     } else if (OB_FAIL(check_alter_tenant_locality_type(
             schema_guard, orig_tenant_schema, new_tenant_schema, alter_locality_type))) {
@@ -28081,11 +28074,8 @@ int ObDDLService::modify_tenant(const ObModifyTenantArg &arg)
   const ObTenantSchema *orig_tenant_schema = NULL;
   const ObString &tenant_name = arg.tenant_schema_.get_tenant_name();
   bool is_restore = false;
-  bool is_standby = false;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("variable is not init");
-  } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-    LOG_WARN("failed to get is standby", K(ret));
   } else if (0 != arg.sys_var_list_.count() &&
              !arg.alter_option_bitset_.is_empty()) {
     // After the schema is split, because __all_sys_variable is split under the tenant, in order to avoid
@@ -28125,13 +28115,13 @@ int ObDDLService::modify_tenant(const ObModifyTenantArg &arg)
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(modify_tenant_inner_phase(arg, orig_tenant_schema, schema_guard, is_standby, is_restore))) {
+  } else if (OB_FAIL(modify_tenant_inner_phase(arg, orig_tenant_schema, schema_guard, is_restore))) {
     LOG_WARN("modify_tenant_inner_phase fail", K(ret));
   }
   return ret;
 }
 
-int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const ObTenantSchema *orig_tenant_schema, ObSchemaGetterGuard &schema_guard, bool is_standby, bool is_restore)
+int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const ObTenantSchema *orig_tenant_schema, ObSchemaGetterGuard &schema_guard, bool is_restore)
 {
   int ret = OB_SUCCESS;
   if (OB_GTS_TENANT_ID == orig_tenant_schema->get_tenant_id()) {
@@ -28146,7 +28136,7 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
     ObDDLSQLTransaction trans(schema_service_);
     ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
     bool value_changed = false;
-    if ((is_standby || is_restore) && is_user_tenant(tenant_id)) {
+    if (is_restore && is_user_tenant(tenant_id)) {
       ret = OB_OP_NOT_ALLOW;
       LOG_WARN("ddl operation is not allowed in standby cluster", K(ret));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "ddl operation in standby cluster");
@@ -28324,11 +28314,6 @@ int ObDDLService::modify_tenant_inner_phase(const ObModifyTenantArg &arg, const 
       LOG_WARN("rename tenant while tenant is in physical restore status is not allowed",
                KR(ret), KPC(orig_tenant_schema));
       LOG_USER_ERROR(OB_OP_NOT_ALLOW, "rename tenant while tenant is in physical restore status is");
-    } else if (is_standby && is_user_tenant(orig_tenant_schema->get_tenant_id())
-               && !arg.is_sync_from_primary()) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("rename user tenant in standby is not allowed", KR(ret), K(arg));
-      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "rename user tenant in standby cluster");
     } else if (orig_tenant_schema->get_tenant_id() <= OB_MAX_RESERVED_TENANT_ID) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("rename special tenant not supported",
@@ -30301,6 +30286,8 @@ int ObDDLService::check_create_tenant_locality(
     } else if (OB_FAIL(parse_and_set_create_tenant_new_locality_options(
             schema_guard, tenant_schema, pools, pool_zones, zone_region_list))) {
       LOG_WARN("fail to parse and set new locality option", K(ret));
+    } else if (OB_FAIL(check_locality_compatible_(tenant_schema, true /*for_create_tenant*/))) {
+      LOG_WARN("fail to check locality with data version", KR(ret), K(tenant_schema));
     } else if (OB_FAIL(check_pools_unit_num_enough_for_schema_locality(
             pools, schema_guard, tenant_schema))) {
       LOG_WARN("pools unit num is not enough for locality", K(ret));
@@ -36216,13 +36203,9 @@ int ObDDLService::check_create_schema_replica_options(
   }
   if (OB_SUCC(ret)) {
     int64_t paxos_num = 0;
-    bool is_standby = false;
     if (OB_FAIL(schema.get_paxos_replica_num(schema_guard, paxos_num))) {
       LOG_WARN("fail to get paxos replica num", K(ret));
-    } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-      LOG_WARN("failed to get is standby cluster", K(ret));
-    } else if ((!is_standby && paxos_num <= 0)
-               || paxos_num > common::OB_MAX_MEMBER_NUMBER) {
+    } else if (paxos_num <= 0 || paxos_num > common::OB_MAX_MEMBER_NUMBER) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid paxos replica num", K(ret), K(schema));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality paxos replica num");
@@ -36273,13 +36256,9 @@ int ObDDLService::check_alter_schema_replica_options(
 
   if (OB_SUCC(ret)) {
     int64_t paxos_num = 0;
-    bool is_standby = false;
     if (OB_FAIL(new_schema.get_paxos_replica_num(schema_guard, paxos_num))) {
       LOG_WARN("fail to get paxos replica num", K(ret));
-    } else if (OB_FAIL(get_is_standby_cluster(is_standby))) {
-      LOG_WARN("failed to get is standby cluster", K(ret));
-    } else if ((!is_standby && paxos_num <= 0)
-               || paxos_num > common::OB_MAX_MEMBER_NUMBER) {
+    } else if (paxos_num <= 0 || paxos_num > common::OB_MAX_MEMBER_NUMBER) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid paxos replica num", K(ret));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "locality paxos replica num");
@@ -36454,13 +36433,6 @@ int ObDDLService::construct_zone_region_list(
       }
     }
   }
-  return ret;
-}
-
-int ObDDLService::get_is_standby_cluster(bool &is_standby) const
-{
-  int ret = OB_SUCCESS;
-  is_standby = false;
   return ret;
 }
 

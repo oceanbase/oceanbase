@@ -16,7 +16,6 @@
 #include "common/ob_region.h"
 #include "lib/string/ob_sql_string.h"
 #include "share/schema/ob_schema_getter_guard.h"
-#include "share/ob_locality_parser.h"
 #include "share/ob_time_utility2.h"
 #include "share/ob_encryption_util.h"
 #ifdef OB_BUILD_TDE_SECURITY
@@ -142,8 +141,40 @@ int ObAlterSystemResolverUtil::resolve_replica_type(const ParseNode *parse_tree,
   } else {
     int64_t len = parse_tree->str_len_;
     const char *str = parse_tree->str_value_;
-    if (OB_FAIL(ObLocalityParser::parse_type(str, len, replica_type))) {
-      // do nothing, error log will print inside parse_type
+    if (OB_ISNULL(str)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid replica type string. null!", K(ret));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "replica_type, replica_type should not be null");
+    } else {
+      replica_type = share::ObShareUtil::string_to_replica_type(str);
+      if (REPLICA_TYPE_INVALID == replica_type) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid replica type string", K(str), K(ret));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "replica_type, unrecognized replica_type");
+      } else if (! ObReplicaTypeCheck::is_replica_type_valid(replica_type)) {
+        ret = OB_NOT_SUPPORTED;
+        char err_msg[64] = {0};
+        (void)snprintf(err_msg, sizeof(err_msg), "%s replica", ObShareUtil::replica_type_to_string(replica_type));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg);
+      } else {
+        // good, valid replica_type
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAlterSystemResolverUtil::check_compatibility_for_replica_type(const ObReplicaType replica_type, const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (ObReplicaTypeCheck::is_columnstore_replica(replica_type)) {
+    bool is_compatible = false;
+    if (OB_FAIL(ObShareUtil::check_compat_version_for_columnstore_replica(tenant_id, is_compatible))) {
+      LOG_WARN("failed to check compat version for C-replcia", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(!is_compatible)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("data_version lower than 4.3.3, C-replica not supported");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "data_version is lower than 4.3.3, C-replica");
     }
   }
   return ret;
@@ -2041,7 +2072,10 @@ static int set_reset_check_param_valid_oracle_mode(uint64_t tenant_id ,
         ret = OB_OBJECT_NAME_NOT_EXIST;
         LOG_WARN("fail to get keystore schema", K(ret));
       } else if (0 != keystore_schema->get_master_key_id()) {
-        if (!GCTX.is_standby_cluster()) {
+        bool is_standby = false;
+        if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+          LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+        } else if (!is_standby) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("alter tde method is not support", K(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
@@ -2439,7 +2473,10 @@ int ObSetConfigResolver::check_param_valid(int64_t tenant_id ,
           ret = OB_OBJECT_NAME_NOT_EXIST;
           LOG_WARN("fail to get keystore schema", K(ret));
         } else if (0 != keystore_schema->get_master_key_id()) {
-          if (!GCTX.is_standby_cluster()) {
+          bool is_standby = false;
+          if (OB_FAIL(ObShareUtil::table_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+            LOG_WARN("fail to execute table_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+          } else if (!is_standby) {
             ret = OB_NOT_SUPPORTED;
             LOG_WARN("alter tde method is not support", K(ret));
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter tde method with master key exists");
@@ -2984,7 +3021,7 @@ int ObAddLSReplicaResolver::resolve(const ParseNode &parse_tree)
 
     int64_t ls_id = 0;
     common::ObAddr server_addr;
-    common::ObReplicaType replica_type = REPLICA_TYPE_MAX;
+    common::ObReplicaType replica_type = REPLICA_TYPE_INVALID;
     common::ObAddr data_source;
     int64_t paxos_replica_num = 0;
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
@@ -3000,6 +3037,8 @@ int ObAddLSReplicaResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("resolve server failed", KR(ret), KP(server_addr_node));
     } else if (OB_FAIL(Util::resolve_replica_type(replica_type_node, replica_type))) {
       LOG_WARN("resolve replica type failed", KR(ret), KP(replica_type_node));
+    } else if (OB_FAIL(Util::check_compatibility_for_replica_type(replica_type, tenant_id))) {
+      LOG_WARN("check compatibility for replica_type failed", KR(ret), K(replica_type), K(tenant_id));
     } else if (OB_FAIL(Util::check_and_get_data_source(data_source_node, data_source))) {
       LOG_WARN("check and get data source failed", KR(ret), KP(data_source_node));
     } else if (OB_FAIL(Util::check_and_get_paxos_replica_num(paxos_replica_num_node, paxos_replica_num))) {
@@ -3178,7 +3217,7 @@ int ObModifyLSReplicaResolver::resolve(const ParseNode &parse_tree)
     ParseNode *tenant_name_node = parse_tree.children_[4];
     int64_t ls_id = 0;
     common::ObAddr server_addr;
-    common::ObReplicaType replica_type = REPLICA_TYPE_MAX;
+    common::ObReplicaType replica_type = REPLICA_TYPE_INVALID;
     int64_t paxos_replica_num = 0;
     uint64_t tenant_id = OB_INVALID_TENANT_ID;
     if (OB_FAIL(Util::do_check_for_alter_ls_replica(tenant_name_node,
@@ -3193,6 +3232,8 @@ int ObModifyLSReplicaResolver::resolve(const ParseNode &parse_tree)
       LOG_WARN("resolve server failed", KR(ret), KP(server_addr_node));
     } else if (OB_FAIL(Util::resolve_replica_type(replica_type_node, replica_type))) {
       LOG_WARN("resolve replica type failed", KR(ret), KP(replica_type_node));
+    } else if (OB_FAIL(Util::check_compatibility_for_replica_type(replica_type, tenant_id))) {
+      LOG_WARN("check compatibility for replica_type failed", KR(ret), K(replica_type), K(tenant_id));
     } else if (OB_FAIL(Util::check_and_get_paxos_replica_num(paxos_replica_num_node, paxos_replica_num))) {
       LOG_WARN("check and get paxos replica num failed", KR(ret), KP(paxos_replica_num_node));
     }
@@ -7007,6 +7048,69 @@ int ret = OB_SUCCESS;
       LOG_WARN("fail to init stmt rpc arg", KR(ret), K(target_tenant_id));
   } else {
     stmt_ = stmt;
+  }
+  return ret;
+}
+
+int ObServiceNameResolver::resolve(const ParseNode &parse_tree)
+{
+  int ret = OB_SUCCESS;
+  ObServiceNameStmt *stmt = create_stmt<ObServiceNameStmt>();
+  uint64_t target_tenant_id = OB_INVALID_TENANT_ID;
+  ObString service_name_str;
+  if (OB_UNLIKELY(T_SERVICE_NAME != parse_tree.type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node, type is not T_SERVICE_NAME", KR(ret), "type",
+        get_type_name(parse_tree.type_));
+  } else if (OB_ISNULL(stmt)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("create stmt fail", KR(ret));
+  } else if (3 != parse_tree.num_child_
+      || OB_ISNULL(parse_tree.children_[0])
+      || OB_ISNULL(parse_tree.children_[1])
+      || OB_ISNULL(session_info_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parse tree or session info", KR(ret), "num_child", parse_tree.num_child_,
+        KP(parse_tree.children_[0]), KP(parse_tree.children_[1]), KP(session_info_));
+  } else if (OB_FAIL(get_and_verify_tenant_name(
+      parse_tree.children_[2],
+      session_info_->get_effective_tenant_id(),
+      target_tenant_id,
+      "Service name related command"))) {
+    LOG_WARN("fail to execute get_and_verify_tenant_name", KR(ret),
+        K(session_info_->get_effective_tenant_id()), KP(parse_tree.children_[1]));
+  } else if (OB_UNLIKELY(T_INT != parse_tree.children_[0]->type_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parse node, service_op is not T_INT", K(parse_tree.children_[0]->type_));
+  } else if (OB_FAIL(Util::resolve_relation_name(parse_tree.children_[1], service_name_str))) {
+    LOG_WARN("fail to resolve service_name_str", KR(ret));
+  } else {
+    ObServiceNameArg::ObServiceOp service_op =
+        static_cast<ObServiceNameArg::ObServiceOp>(parse_tree.children_[0]->value_);
+    if (OB_FAIL(stmt->get_arg().init(service_op, target_tenant_id, service_name_str))) {
+      LOG_WARN("fail to init ObServiceNameArg", KR(ret), K(service_op), K(target_tenant_id), K(service_name_str));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    stmt_ = stmt;
+  }
+  if (OB_SUCC(ret) && ObSchemaChecker::is_ora_priv_check()) {
+    if (OB_ISNULL(schema_checker_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", K(ret));
+    } else if (OB_FAIL(schema_checker_->check_ora_ddl_priv(
+      session_info_->get_effective_tenant_id(),
+      session_info_->get_priv_user_id(),
+      ObString(""),
+      // why use T_ALTER_SYSTEM_SET_PARAMETER?
+      // because T_ALTER_SYSTEM_SET_PARAMETER has following traits:
+      // T_ALTER_SYSTEM_SET_PARAMETER can allow dba to do an operation
+      // and prohibit other user to do this operation
+      // so we reuse this.
+      stmt::T_ALTER_SYSTEM_SET_PARAMETER,
+      session_info_->get_enable_role_array()))) {
+      LOG_WARN("failed to check privilege", K(session_info_->get_effective_tenant_id()), K(session_info_->get_user_id()));
+    }
   }
   return ret;
 }

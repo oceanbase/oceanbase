@@ -919,9 +919,9 @@ private:
                                            bool &has_part_key);
 
   //This funcion used to optimize Bypass Import scenario so far
-  int check_insert_into_select_need_column_convert(const ObColumnRefRawExpr *target_expr,
-                                                   const ObRawExpr *source_expr,
-                                                   bool &need_column_convert);
+  int check_insert_into_select_use_fast_column_convert(const ObColumnRefRawExpr *target_expr,
+                                                       const ObRawExpr *source_expr,
+                                                       bool &fast_calc);
 
   ///////////functions for sql hint/////////////
   int resolve_global_hint(const ParseNode &hint_node,
@@ -946,6 +946,7 @@ private:
   int resolve_pq_distribute_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_pq_set_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_pq_subquery_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+  int resolve_normal_pq_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_filter_hint(const ParseNode &join_node, ObOptHint *&opt_hint);
   int resolve_aggregation_hint(const ParseNode &hint_node, ObOptHint *&hint);
   int resolve_normal_transform_hint(const ParseNode &hint_node, ObTransHint *&hint);

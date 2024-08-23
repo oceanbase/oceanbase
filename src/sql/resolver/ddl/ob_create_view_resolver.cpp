@@ -27,12 +27,15 @@
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "observer/virtual_table/ob_table_columns.h"
 #include "sql/rewrite/ob_transformer_impl.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
+#include "common/ob_store_format.h"
 
 namespace oceanbase
 {
 using namespace common;
 using namespace obrpc;
 using namespace share::schema;
+using namespace omt;
 namespace sql
 {
 ObCreateViewResolver::ObCreateViewResolver(ObResolverParams &params) : ObCreateTableResolverBase(params)
@@ -399,6 +402,8 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
       ObMVAdditionalInfo *mv_ainfo = NULL;
       ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
       ObSEArray<ObConstraint,4> &csts = create_table_stmt->get_create_table_arg().constraint_list_;
+      ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+      ObTableStoreType table_store_type = OB_TABLE_STORE_INVALID;
       if (OB_FAIL(ObResolverUtils::check_schema_valid_for_mview(table_schema))) {
         LOG_WARN("failed to check schema valid for mview", KR(ret), K(table_schema));
       } else if (OB_FAIL(resolve_table_options(parse_tree.children_[TABLE_OPTION_NODE], false))) {
@@ -418,10 +423,26 @@ int ObCreateViewResolver::resolve(const ParseNode &parse_tree)
                                             mv_ainfo->mv_refresh_info_,
                                             table_schema))) {
         LOG_WARN("fail to resolve mv options", K(ret));
-      } else if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE], *stmt, mv_ainfo->container_table_schema_))) {
-        LOG_WARN("resolve hints failed", K(ret));
-      } else {
-        mv_ainfo->mv_refresh_info_.parallel_ = stmt->get_parallelism();
+      } else if (!tenant_config.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tenant config is invalid", KR(ret));
+      } else if (OB_FAIL(ObTableStoreFormat::find_table_store_type(
+                  tenant_config->default_table_store_format.get_value_string(),
+                  table_store_type))) {
+        LOG_WARN("fail to find table store type", KR(ret));
+      } else if (ObTableStoreFormat::is_with_column(table_store_type)
+                 || OB_NOT_NULL(parse_tree.children_[COLUMN_GROUP_NODE])) {
+        if (OB_FAIL(resolve_column_group_helper(parse_tree.children_[COLUMN_GROUP_NODE],
+                    mv_ainfo->container_table_schema_))) {
+          LOG_WARN("fail to resolve column group", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(resolve_hints(parse_tree.children_[HINT_NODE], *stmt, mv_ainfo->container_table_schema_))) {
+          LOG_WARN("resolve hints failed", K(ret));
+        } else {
+          mv_ainfo->mv_refresh_info_.parallel_ = stmt->get_parallelism();
+        }
       }
     }
 

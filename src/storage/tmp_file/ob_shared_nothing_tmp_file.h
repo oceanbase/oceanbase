@@ -85,10 +85,14 @@ public:
         }
     void reset();
     int update_finished_continuous_flush_info_num(const bool is_meta, const int64_t end_pos);
-    bool is_all_finished() const
+    bool is_all_finished() const { return is_data_finished() && is_meta_finished(); }
+    bool is_data_finished() const
     {
-      return data_flush_infos_.size() == data_finished_continuous_flush_info_num_ &&
-             meta_flush_infos_.size() == meta_finished_continuous_flush_info_num_;
+      return data_flush_infos_.size() == data_finished_continuous_flush_info_num_;
+    }
+    bool is_meta_finished() const
+    {
+      return meta_flush_infos_.size() == meta_finished_continuous_flush_info_num_;
     }
     bool is_flushing() const
     {

@@ -211,6 +211,14 @@ void TestParallelExternalSort::SetUp()
 void TestParallelExternalSort::TearDown()
 {
   allocator_.reuse();
+  // ObTenantTmpFileManager uses ObServerBlockManager, which is destroyed in TestDataFilePrepare::TearDown()
+  // so we need to destroy ObTenantTmpFileManager first
+  tmp_file::ObTenantTmpFileManager *tmp_file_mgr = MTL(tmp_file::ObTenantTmpFileManager *);
+  if (OB_NOT_NULL(tmp_file_mgr)) {
+    tmp_file_mgr->stop();
+    tmp_file_mgr->wait();
+    tmp_file_mgr->destroy();
+  }
   tmp_file::ObTmpBlockCache::get_instance().destroy();
   tmp_file::ObTmpPageCache::get_instance().destroy();
   TestDataFilePrepare::TearDown();

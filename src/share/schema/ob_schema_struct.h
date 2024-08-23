@@ -1413,7 +1413,6 @@ typedef common::ObArray<ObZoneScore> ObPrimaryZoneArray;
 class ObSchema
 {
 public:
-  friend class ObLocality;
   friend class ObPrimaryZone;
   ObSchema();
   //explicit ObSchema(common::ObDataBuffer &buffer);
@@ -1528,31 +1527,6 @@ struct SchemaObj
   ObSchema *schema_;
   common::ObKVCacheHandle handle_;
   TO_STRING_KV(K_(schema_type), K_(tenant_id), K_(schema_id), KP_(schema));
-};
-
-class ObLocality
-{
-  OB_UNIS_VERSION(1);
-public:
-  explicit ObLocality(ObSchema *schema) : schema_(schema) {}
-  int assign(const ObLocality &other);
-  int set_locality_str(const common::ObString &locality);
-  int set_zone_replica_attr_array(
-      const common::ObIArray<share::ObZoneReplicaAttrSet> &src);
-  int set_zone_replica_attr_array(
-      const common::ObIArray<share::SchemaZoneReplicaAttrSet> &src);
-  int set_specific_replica_attr_array(
-      share::SchemaReplicaAttrArray &schema_replica_set,
-      const common::ObIArray<ReplicaAttr> &src);
-  void reset_zone_replica_attr_array();
-  int64_t get_convert_size() const;
-  inline const common::ObString &get_locality_str() const { return locality_str_; }
-  void reset();
-  TO_STRING_KV(K_(locality_str), K_(zone_replica_attr_array));
-public:
-  common::ObString locality_str_;
-  ZoneLocalityArray zone_replica_attr_array_;
-  ObSchema *schema_;
 };
 
 class ObPrimaryZone

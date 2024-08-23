@@ -45,7 +45,8 @@ class ObCreateViewResolver : public ObCreateTableResolverBase
   static const int64_t PARTITION_NODE = 9;
   static const int64_t TABLE_OPTION_NODE = 10;
   static const int64_t HINT_NODE = 11;
-  static const int64_t ROOT_NUM_CHILD = 12;
+  static const int64_t COLUMN_GROUP_NODE = 12;
+  static const int64_t ROOT_NUM_CHILD = 13;
 
 public:
   explicit ObCreateViewResolver(ObResolverParams &params);

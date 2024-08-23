@@ -36,7 +36,6 @@ namespace schema
 {
 class ObMultiVersionSchemaService;
 class ObTableSchema;
-class ObLocality;
 class ObSchemaGetterGuard;
 }
 }
@@ -392,35 +391,6 @@ public:
     my_seed = (tmp_seed < 0 ? -tmp_seed : tmp_seed);
     return my_seed;
   }
-};
-
-class ObLocalityTaskHelp
-{
-public:
-  ObLocalityTaskHelp() {}
-  virtual ~ObLocalityTaskHelp() {}
-  static int filter_logonly_task(
-      const common::ObIArray<share::ObResourcePoolName> &pools,
-      ObUnitManager &unit_mgr,
-      common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality);
-
-  static int filter_logonly_task(
-      const uint64_t tenant_id,
-      ObUnitManager &unit_manager,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality);
-
-  static int alloc_logonly_replica(
-      ObUnitManager &unit_manager,
-      const common::ObIArray<share::ObResourcePoolName> &pools,
-      const common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality,
-      ObPartitionAddr &partition_addr);
-
-  static int get_logonly_task_with_logonly_unit(
-      const uint64_t tenant_id,
-      ObUnitManager &unit_mgr,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      common::ObIArray<share::ObZoneReplicaAttrSet> &zone_locality);
 };
 
 enum PaxosReplicaNumberTaskType

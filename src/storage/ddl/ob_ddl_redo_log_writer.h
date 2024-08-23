@@ -375,7 +375,9 @@ public:
       const share::SCN &start_scn,
       const uint64_t data_format_version,
       const storage::ObDirectLoadType direct_load_type,
-      const int64_t row_id_offset = -1);
+      const int64_t row_id_offset = -1,
+      const bool with_cs_replica = false,
+      const bool need_submit_io = true);
   void reset();
   int write(
       blocksstable::ObMacroBlockHandle &macro_handle,
@@ -403,6 +405,8 @@ private:
   // if current macro block finish with 50 rows, current macro block's end_row_offset will be 149.
   // end_row_offset = ddl_start_row_offset + curr_row_count - 1.
   int64_t row_id_offset_;
+  bool with_cs_replica_;
+  bool need_submit_io_;
 };
 
 }  // end namespace storage

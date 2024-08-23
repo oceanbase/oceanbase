@@ -46,6 +46,7 @@ public:
 
   static int resolve_replica_type(const ParseNode *parse_tree,
                                   common::ObReplicaType &replica_type);
+  static int check_compatibility_for_replica_type(const ObReplicaType replica_type, const uint64_t tenant_id);
   static int resolve_memstore_percent(const ParseNode *parse_tree,
                                       ObReplicaProperty &replica_property);
   static int resolve_string(const ParseNode *parse_tree, common::ObString &string);
@@ -184,8 +185,7 @@ DEF_SIMPLE_CMD_RESOLVER(ObBackupSetDecryptionResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObAddRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObClearRestoreSourceResolver);
 DEF_SIMPLE_CMD_RESOLVER(ObCheckpointSlogResolver);
-
-
+DEF_SIMPLE_CMD_RESOLVER(ObServiceNameResolver);
 int resolve_restore_until(const ParseNode &time_node,
                           const ObSQLSessionInfo *session_info,
                           share::SCN &recovery_until_scn,

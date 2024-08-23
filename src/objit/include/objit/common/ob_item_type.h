@@ -2591,6 +2591,11 @@ typedef enum ObItemType
   //restore sts
   T_RESTORE_WITH_CONFIG_LIST = 4732,
   T_STS_CREDENTIAL = 4733,
+  // optimizer hint
+  T_PQ_GBY_HINT = 4734,
+  T_PQ_DISTINCT_HINT = 4735,
+  T_DISTRIBUTE_BASIC = 4736,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

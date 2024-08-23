@@ -18,7 +18,7 @@
 #include "observer/ob_server_struct.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
-#include "share/ob_primary_standby_service.h" // ObPrimaryStandbyService
+#include "rootserver/standby/ob_standby_service.h" // ObStandbyService
 #include "share/ob_tenant_info_proxy.h" //ObAllTenantInfoProxy
 #include "observer/ob_service.h"
 
@@ -650,7 +650,7 @@ int ObUpgradeExecutor::run_upgrade_begin_action_(
       LOG_WARN("fail to update target data version",
                KR(ret), K(tenant_id), "version", DVP(DATA_CURRENT_VERSION));
     } else if (is_user_tenant(tenant_id)
-               && OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_barrier_log(
+               && OB_FAIL(OB_STANDBY_SERVICE.write_upgrade_barrier_log(
                                                      trans, tenant_id, DATA_CURRENT_VERSION))) {
       LOG_WARN("fail to write_upgrade_barrier_log",
                KR(ret), K(tenant_id), "version", DVP(DATA_CURRENT_VERSION));
@@ -1125,7 +1125,7 @@ int ObUpgradeExecutor::update_final_current_data_version_(const uint64_t tenant_
     if (OB_FAIL(end_proxy.update_current_data_version(version))) {
       LOG_WARN("fail to update current data version", KR(ret), K(tenant_id), KDV(version));
     } else if (is_user_tenant(tenant_id) &&
-               OB_FAIL(OB_PRIMARY_STANDBY_SERVICE.write_upgrade_data_version_barrier_log(
+               OB_FAIL(OB_STANDBY_SERVICE.write_upgrade_data_version_barrier_log(
                    trans, tenant_id, version))) {
       LOG_WARN("fail to write_upgrade_data_version_barrier_log", KR(ret), K(tenant_id), KDV(version));
     }

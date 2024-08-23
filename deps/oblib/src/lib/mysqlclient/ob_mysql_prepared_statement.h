@@ -29,30 +29,37 @@ namespace sqlclient
 struct ObBindParam
 {
   ObBindParam() : col_idx_(-1), buffer_type_(enum_field_types::MAX_NO_FIELD_TYPES), buffer_(nullptr),
-                  buffer_len_(0), length_(0), is_unsigned_(0), is_null_(0)
+                  buffer_len_(0), length_(0), is_unsigned_(0), is_null_(0), array_buffer_(nullptr),
+                  ele_size_(0), max_array_size_(0), out_valid_array_size_(nullptr)
   {
   }
   ObBindParam(int64_t col_idx, enum_field_types buffer_type,
               void *buffer, int64_t buffer_len, unsigned long length)
     : col_idx_(col_idx), buffer_type_(buffer_type), buffer_(buffer), buffer_len_(buffer_len),
-      length_(length), is_unsigned_(0), is_null_(0)
+      length_(length), is_unsigned_(0), is_null_(0), array_buffer_(nullptr),
+      ele_size_(0), max_array_size_(0), out_valid_array_size_(nullptr)
   {
   }
   ObBindParam(int64_t col_idx, enum_field_types buffer_type,
               void *buffer, int64_t buffer_len, unsigned long length,
               my_bool is_unsigned, my_bool is_null)
     : col_idx_(col_idx), buffer_type_(buffer_type), buffer_(buffer), buffer_len_(buffer_len),
-      length_(length), is_unsigned_(is_unsigned), is_null_(is_null)
+      length_(length), is_unsigned_(is_unsigned), is_null_(is_null), array_buffer_(nullptr),
+      ele_size_(0), max_array_size_(0), out_valid_array_size_(nullptr)
   {
   }
-  int assign(const ObBindParam &other);
+  void assign(const ObBindParam &other);
   TO_STRING_KV(K_(col_idx),
                K_(buffer_type),
                K_(buffer),
                K_(buffer_len),
                K_(length),
                K_(is_unsigned),
-               K_(is_null));
+               K_(is_null),
+               K_(array_buffer),
+               K_(ele_size),
+               K_(max_array_size),
+               K_(out_valid_array_size));
 
 public:
   int64_t col_idx_;
@@ -62,6 +69,10 @@ public:
   unsigned long length_;
   my_bool is_unsigned_;
   my_bool is_null_;
+  void *array_buffer_;
+  int64_t ele_size_;
+  int64_t max_array_size_;
+  uint32_t *out_valid_array_size_;
 };
 
 class ObBindParamEncode
@@ -70,9 +81,10 @@ public:
   #define ENCODE_FUNC_ARG_DECL const int64_t col_idx,           \
                                const bool is_output_param,      \
                                const ObTimeZoneInfo &tz_info,   \
-                               ObObjParam &param,               \
+                               ObObj &param,               \
                                ObBindParam &bind_param,         \
-                               ObIAllocator &allocator
+                               ObIAllocator &allocator,          \
+                               enum_field_types buffer_type
   #define DEF_ENCODE_FUNC(name)   \
   static int encode_##name(ENCODE_FUNC_ARG_DECL);
   using EncodeFunc = int (*)(ENCODE_FUNC_ARG_DECL);
@@ -87,10 +99,12 @@ public:
   DEF_ENCODE_FUNC(number);
   DEF_ENCODE_FUNC(unumber);
   DEF_ENCODE_FUNC(datetime);
+  DEF_ENCODE_FUNC(timestamp);
   DEF_ENCODE_FUNC(date);
   DEF_ENCODE_FUNC(time);
   DEF_ENCODE_FUNC(year);
   DEF_ENCODE_FUNC(string);
+  DEF_ENCODE_FUNC(number_float);
   static int encode_not_supported(ENCODE_FUNC_ARG_DECL);
 
 public:
@@ -103,7 +117,7 @@ public:
   #define DECODE_FUNC_ARG_DECL const enum_field_types field_type,       \
                                const ObTimeZoneInfo &tz_info,           \
                                const ObBindParam &bind_param,           \
-                               ObObjParam &param,                       \
+                               ObObj &param,                       \
                                ObIAllocator &allocator
   #define DEF_DECODE_FUNC(name)  \
   static int decode_##name(DECODE_FUNC_ARG_DECL);
@@ -119,9 +133,11 @@ public:
   DEF_DECODE_FUNC(number);
   DEF_DECODE_FUNC(unumber);
   DEF_DECODE_FUNC(datetime);
+  DEF_DECODE_FUNC(timestamp);
   DEF_DECODE_FUNC(time);
   DEF_DECODE_FUNC(year);
   DEF_DECODE_FUNC(string);
+  DEF_DECODE_FUNC(number_float);
   static int decode_not_supported(DECODE_FUNC_ARG_DECL);
 
 public:
@@ -133,14 +149,15 @@ class ObMySQLPreparedStatement
 public:
   ObMySQLPreparedStatement();
   virtual ~ObMySQLPreparedStatement();
-  ObIAllocator &get_allocator();
+  ObIAllocator *get_allocator();
+  void set_allocator(ObIAllocator *alloc);
   ObMySQLConnection *get_connection();
   MYSQL_STMT *get_stmt_handler();
   MYSQL *get_conn_handler();
-  int close();
-  int init(ObMySQLConnection &conn, const char *sql);
-  int bind_param(const ObBindParam &param);
-  int bind_result(const ObBindParam &param);
+  virtual int close();
+  virtual int init(ObMySQLConnection &conn, const char *sql, int64_t param_count);
+  int bind_param(ObBindParam &param);
+  int bind_result(ObBindParam &param);
   int bind_param_int(const int64_t col_idx, int64_t *out_buf);
   int bind_param_varchar(const int64_t col_idx, char *out_buf, unsigned long res_len);
 
@@ -188,39 +205,78 @@ protected:
 class ObMySQLProcStatement : public ObMySQLPreparedStatement
 {
 public:
-  ObMySQLProcStatement()
+  ObMySQLProcStatement() : ObMySQLPreparedStatement()
   {
+    in_out_map_.reset();
+    proc_ = NULL;
   }
   ~ObMySQLProcStatement()
   {
+    in_out_map_.reset();
+    proc_ = NULL;
   }
+  virtual int init(ObMySQLConnection &conn, const char *sql, int64_t param_count);
+  virtual int close();
+  virtual void free_resouce();
+  virtual int close_mysql_stmt();
   int execute_proc(ObIAllocator &allocator,
                    ParamStore &params,
                    const share::schema::ObRoutineInfo &routine_info,
-                   const ObTimeZoneInfo *tz_info);
+                   const ObTimeZoneInfo *tz_info,
+                   ObObj *result,
+                   bool is_sql);
+  int execute_proc();
+  int bind_basic_type_by_pos(uint64_t position,
+                             void *param_buffer,
+                             int64_t param_size,
+                             int32_t datatype,
+                             int32_t &indicator,
+                             bool is_out_param);
+  int bind_array_type_by_pos(uint64_t position,
+                             void *array,
+                             int32_t *indicators,
+                             int64_t ele_size,
+                             int32_t ele_datatype,
+                             uint64_t array_size,
+                             uint32_t *out_valid_array_size);
+  inline void set_proc(const char *sql) { proc_ = sql; }
+
 
 private:
   int bind_proc_param(ObIAllocator &allocator,
                       ParamStore &params,
                       const share::schema::ObRoutineInfo &routine_info,
-                      common::ObIArray<int64_t> &basic_out_param,
-                      const ObTimeZoneInfo *tz_info);
+                      common::ObIArray<std::pair<int64_t, int64_t>> &basic_out_param,
+                      const ObTimeZoneInfo *tz_info,
+                      ObObj *result,
+                      bool is_sql);
   int bind_param(const int64_t col_idx,
+                 const int64_t param_idx,
                  const bool is_output_param,
                  const ObTimeZoneInfo *tz_info,
-                 ObObjParam &obj,
+                 ObObj &obj,
                  const share::schema::ObRoutineInfo &routine_info,
                  ObIAllocator &allocator);
   int process_proc_output_params(ObIAllocator &allocator,
                                  ParamStore &params,
                                  const share::schema::ObRoutineInfo &routine_info,
-                                 common::ObIArray<int64_t> &basic_out_param,
-                                 const ObTimeZoneInfo *tz_info);
-  int convert_proc_output_param_result(const ObTimeZoneInfo &tz_info,
+                                 common::ObIArray<std::pair<int64_t, int64_t>> &basic_out_param,
+                                 const ObTimeZoneInfo *tz_info,
+                                 ObObj *result,
+                                 bool is_sql);
+  int convert_proc_output_param_result(int64_t out_param_idx,
+                                       const ObTimeZoneInfo &tz_info,
                                        const ObBindParam &bind_param,
-                                       ObObjParam &param,
+                                       ObObj *param,
                                        const share::schema::ObRoutineInfo &routine_info,
-                                       ObIAllocator &allocator);
+                                       ObIAllocator &allocator,
+                                       bool is_return_value);
+  int execute_stmt_v2_interface();
+  int handle_data_truncated(ObIAllocator &allocator);
+private:
+  common::ObSEArray<bool, 8> in_out_map_;
+  const char * proc_;
+
 };
 } //namespace sqlclient
 }

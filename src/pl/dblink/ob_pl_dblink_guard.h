@@ -148,6 +148,9 @@ private:
                               const common::ObString &udt_name,
                               const pl::ObUserDefinedType *&udt);
 
+  int check_remote_version(common::ObDbLinkProxy &dblink_proxy,
+                           common::sqlclient::ObISQLConnection &dblink_conn);
+
 private:
   uint64_t next_link_object_id_;
   common::ObArenaAllocator &alloc_;

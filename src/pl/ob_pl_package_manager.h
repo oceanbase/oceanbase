@@ -33,6 +33,8 @@ class ObSQLSessionInfo;
 class ObSqlExpression;
 class ObBasicSessionInfo;
 class ObSessionVariable;
+class ObRawExprFactory;
+class ObRawExpr;
 }
 
 namespace share
@@ -93,6 +95,8 @@ public:
 
   int get_package_expr(const ObPLResolveCtx &resolve_ctx,
                        uint64_t package_id, int64_t expr_idx, sql::ObSqlExpression *&expr);
+  int get_package_expr(const ObPLResolveCtx &resolve_ctx, sql::ObRawExprFactory &expr_factory,
+                       uint64_t package_id, int64_t expr_idx, sql::ObRawExpr *&expr);
 
   int get_package_cursor(const ObPLResolveCtx &resolve_ctx,
                          uint64_t package_id,

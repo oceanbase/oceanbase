@@ -975,6 +975,8 @@ public:
   inline bool is_mlog_table() const { return is_mlog_table(table_type_); }
   inline static bool is_mlog_table(share::schema::ObTableType table_type)
   { return MATERIALIZED_VIEW_LOG == table_type; }
+  inline static bool is_user_data_table(share::schema::ObTableType table_type)
+  { return USER_TABLE == table_type; }
   inline bool is_in_recyclebin() const
   { return common::OB_RECYCLEBIN_SCHEMA_ID == database_id_; }
   virtual inline bool is_external_table() const override { return EXTERNAL_TABLE == table_type_; }
@@ -1681,8 +1683,9 @@ public:
   int get_all_cg_type_column_group(const ObColumnGroupSchema *&column_group) const;
   int get_each_column_group(ObIArray<ObColumnGroupSchema*> &each_cgs) const;
   int is_partition_key_match_rowkey_prefix(bool &is_prefix) const;
-  int get_column_group_index(const share::schema::ObColumnParam &param, int32_t &cg_idx) const;
-
+  int get_column_group_index(const share::schema::ObColumnParam &param,
+                             const bool need_calculate_cg_idx,
+                             int32_t &cg_idx) const;
   int is_column_group_exist(const common::ObString &cg_name, bool &exist) const;
 
   int get_all_column_ids(ObIArray<uint64_t> &column_ids) const;
@@ -1877,6 +1880,7 @@ private:
       ObRowkeyInfo &rowkey_info);
   int alter_view_column_internal(ObColumnSchemaV2 &column_schema);
   int get_base_rowkey_column_group_index(int32_t &cg_idx) const;
+  int calc_column_group_index_(const uint64_t column_id, int32_t &cg_idx) const;
 
 protected:
   uint64_t max_used_column_id_;

@@ -1036,7 +1036,7 @@ public:
         schema_version_(common::OB_INVALID_VERSION),
         tablet_id_(common::ObTabletID::INVALID_TABLET_ID),
         role_(common::ObRole::INVALID_ROLE),
-        replica_type_(common::ObReplicaType::REPLICA_TYPE_MAX),
+        replica_type_(common::ObReplicaType::REPLICA_TYPE_INVALID),
         part_renew_time_(0),
         reserved_(0)
   {}

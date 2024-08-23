@@ -577,7 +577,12 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         break;
       }
       case T_OP_EXISTS:
-        //fall through
+        if (OB_FAIL(ctx_.parents_expr_info_.add_member(IS_EXISTS))) {
+          LOG_WARN("failed to add member", K(ret));
+        } else if (OB_FAIL(process_any_or_all_node(node, expr))) {
+          LOG_WARN("fail to process exists node", K(ret), K(node));
+        }
+        break;
       case T_ANY:
         //fall through
       case T_ALL: {
@@ -7086,7 +7091,7 @@ int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &ud
             }
           }
         } else if (has_assign_expr) {
-          ret = OB_ERR_UNEXPECTED;
+          ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
           LOG_WARN("can not get parameter after assign", K(ret));
         } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node, param_expr)))) {
           LOG_WARN("fail to recursive resolve udf parameters", K(ret), K(param_node));

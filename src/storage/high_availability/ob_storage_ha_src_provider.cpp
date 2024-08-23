@@ -307,7 +307,7 @@ int ObStorageHASrcProvider::get_replica_addr_list(
   } else {
     if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()) {
       need_learner_list = false;
-    } else if (common::ObReplicaType::REPLICA_TYPE_READONLY == dst.get_replica_type()) {
+    } else if (ObReplicaTypeCheck::is_non_paxos_replica(dst.get_replica_type())) {
       need_learner_list = true;
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -379,18 +379,28 @@ int ObStorageHASrcProvider::check_replica_type_(
   if (!addr.is_valid() || !dst.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ret), K(addr), K(dst));
-  } else if (learner_list.is_valid() && learner_list.contains(addr)) { // src is R
-    if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()) { // dst is F
-      is_replica_type_valid = false;
-    } else if (common::ObReplicaType::REPLICA_TYPE_READONLY == dst.get_replica_type()) {
-      is_replica_type_valid = true;
+  } else if (learner_list.is_valid() && learner_list.contains(addr)) {
+    // src is R/C
+    ObMember src;
+    if (OB_FAIL(learner_list.get_learner_by_addr(addr, src))) {
+      LOG_WARN("failed to get learner by addr", KR(ret), K(addr));
+    } else if (src.is_columnstore()) {
+      // src is C, dst can only be C as well
+      is_replica_type_valid = REPLICA_TYPE_COLUMNSTORE == dst.get_replica_type();
     } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected dst replica type", K(ret), K(dst), K(learner_list));
+      // src is R, dst can be non-paxos replica-type (R or C)
+      if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()) { // dst is F
+        is_replica_type_valid = false;
+      } else if (ObReplicaTypeCheck::is_non_paxos_replica(dst.get_replica_type())) {
+        is_replica_type_valid = true;
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected dst replica type", K(ret), K(dst), K(learner_list));
+      }
     }
-  } else { // src is F
-    if (common::ObReplicaType::REPLICA_TYPE_FULL == dst.get_replica_type()
-        || common::ObReplicaType::REPLICA_TYPE_READONLY == dst.get_replica_type()) {
+  } else {
+    // src is F, dst can be all replica-type (F/R/C)
+    if (ObReplicaTypeCheck::is_replica_type_valid(dst.get_replica_type())) {
       is_replica_type_valid = true;
     } else {
       ret = OB_ERR_UNEXPECTED;
@@ -480,7 +490,7 @@ int ObStorageHASrcProvider::get_palf_parent_addr_(const uint64_t tenant_id, cons
     if (OB_FAIL(member_helper_->get_ls_leader(tenant_id, ls_id, parent_addr))) {
       LOG_WARN("failed to get leader addr", K(ret), K(tenant_id), K(ls_id));
     }
-  } else if (common::ObReplicaType::REPLICA_TYPE_READONLY == replica_type) {
+  } else if (ObReplicaTypeCheck::is_non_paxos_replica(replica_type)) {
     if (OB_FAIL(ls->get_log_handler()->get_parent(parent_addr))) {
       LOG_WARN("failed to get parent addr", K(ret), K(tenant_id), K(ls_id));
     }
