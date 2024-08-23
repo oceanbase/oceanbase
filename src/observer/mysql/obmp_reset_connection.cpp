@@ -44,6 +44,7 @@ int ObMPResetConnection::process()
 {
   int ret = OB_SUCCESS;
   bool need_disconnect = false;
+  bool need_response_error = false;
   ObSQLSessionInfo *session = NULL;
   ObSMConnection *conn = NULL;
   ObSchemaGetterGuard schema_guard;
@@ -65,11 +66,16 @@ int ObMPResetConnection::process()
     ObWaitEventStat total_wait_desc;
     ObMaxWaitGuard max_wait_guard(NULL);
     ObTotalWaitGuard total_wait_guard(NULL);
+    const ObMySQLRawPacket &pkt = reinterpret_cast<const ObMySQLRawPacket&>(req_->get_packet());
     session->update_last_active_time();
     session->set_query_start_time(ObTimeUtility::current_time());
     LOG_DEBUG("begin reset connection. ", K(session->get_sessid()), K(session->get_effective_tenant_id()));
     tenant_id = session->get_effective_tenant_id();
-    if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    session->set_txn_free_route(pkt.txn_free_route());
+    if (OB_FAIL(process_extra_info(*session, pkt, need_response_error))) {
+      LOG_WARN("fail get process extra info", K(ret));
+    } else if (FALSE_IT(session->post_sync_session_info())) {
+    } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
       OB_LOG(WARN,"fail get schema guard", K(ret));
     } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id, sys_variable_schema))) {
       LOG_WARN("get sys variable schema failed", K(ret));
@@ -118,8 +124,13 @@ int ObMPResetConnection::process()
 
     // 1. Rolls back any active transactions and resets autocommit mode.
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObSqlTransControl::kill_tx(session, OB_TRANS_IDLE_TIMEOUT))) {
-        OB_LOG(WARN, "fail to rollback trans for change user", K(ret), K(need_disconnect));
+      // for XA trans, can not rollback it directly, use kill_tx to abort it
+      if (session->associated_xa()) {
+        if (OB_FAIL(ObSqlTransControl::kill_tx(session, OB_TRANS_ROLLBACKED))) {
+          OB_LOG(WARN, "fail to kill xa trans for reset connection", K(ret));
+        }
+      } else if (OB_FAIL(ObSqlTransControl::rollback_trans(session, need_disconnect))) {
+        OB_LOG(WARN, "fail to rollback trans for reset connection", K(ret), K(need_disconnect));
       }
     }
 

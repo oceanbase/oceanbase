@@ -1264,6 +1264,7 @@ public:
                                         uint64_t seq_id);
   void reuse_all_sequence_value()
   {
+    sequence_currval_encoder_.is_changed_ = !sequence_currval_map_.empty() || !dblink_sequence_id_map_.empty();
     sequence_currval_map_.reuse();
     dblink_sequence_id_map_.reuse();
   }
