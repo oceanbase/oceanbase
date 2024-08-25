@@ -717,6 +717,88 @@ private:
   common::ObString column_; // e.g. age
 };
 
+enum class ParamType : int8_t {
+    HBase = 0,
+    Redis = 1
+};
+
+class ObParamsBase {
+public:
+  virtual ~ObParamsBase() {};
+  OB_INLINE ParamType get_param_type() { return param_type_; }
+  virtual int serialize(char *buf, const int64_t buf_len, int64_t &pos) const = 0;
+  virtual int deserialize(const char *buf, const int64_t data_len, int64_t &pos) = 0;
+  virtual int64_t get_serialize_size() const = 0;
+  virtual int deep_copy(ObParamsBase *ob_params) const = 0;
+  virtual int64_t to_string(char* buf, const int64_t buf_len) const = 0;
+  ParamType param_type_;
+protected:
+  const static int64_t UNIS_VERSION = 1;
+};
+
+class ObHBaseParams : public ObParamsBase {
+public:
+  ObHBaseParams()
+      : caching_(0),
+        call_timeout_(0),
+        is_raw_(false),
+        allow_partial_results_(false),
+        is_cache_block_(false),
+        check_existence_only_(false)
+  {
+    param_type_ = ParamType::HBase;
+  }
+  ~ObHBaseParams() {}
+
+  OB_INLINE ParamType get_param_type() { return ParamType::HBase; }
+  OB_INLINE void set_caching(const int32_t caching ) { caching_ = caching; }
+  OB_INLINE void set_call_timeout_(const int32_t call_timeout) { call_timeout_ = call_timeout; }
+  OB_INLINE void set_is_raw(const bool is_raw) { is_raw_ = is_raw; }
+  OB_INLINE void set_allow_partial_results(const bool allow_partial_results) { allow_partial_results_ = allow_partial_results; }
+  OB_INLINE void set_is_cache_block(const bool is_cache_block) { is_cache_block_ = is_cache_block; }
+  OB_INLINE void set_check_existence_only(const bool check_existence_only) {check_existence_only_ = check_existence_only; }
+  int8_t bool_to_byte() const;
+  void byte_to_bool(int8_t flag);
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const override;
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos) override;
+  int64_t get_serialize_size() const override;
+  int deep_copy(ObParamsBase *ob_params) const;
+  TO_STRING_KV( K_(param_type),
+              K_(caching),
+              K_(call_timeout),
+              K_(is_raw),
+              K_(allow_partial_results),
+              K_(is_cache_block),
+              K_(check_existence_only));
+public:
+  int32_t caching_;
+  int32_t call_timeout_;
+  bool is_raw_;
+  bool allow_partial_results_;
+  bool is_cache_block_;
+  bool check_existence_only_;
+};
+
+class ObParams {
+public:
+  int deserialize(const char *buf, const int64_t data_len, int64_t &pos);
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int64_t get_serialize_size() const;
+  int deep_copy(ObParams &ob_params) const;
+
+  ObParamsBase* get_ob_params(ParamType param_type) {
+    if (param_type == ParamType::HBase) {
+      return new ObHBaseParams();
+    }
+    return nullptr;
+  };
+  TO_STRING_KV(K_(ob_params));
+
+  ObParamsBase* ob_params_;
+protected:
+  const static int64_t UNIS_VERSION = 1;
+};
+
 /// A table query
 /// 1. support multi range scan
 /// 2. support reverse scan
@@ -1085,46 +1167,6 @@ private:
   ObTableMoveReplicaInfo replica_info_;
   uint64_t reserved_;
 };
-
-class ObParams {
-public:
-  enum class ParamType : int8_t {
-    HBase = 0,
-    Redis = 1
-  };
-
-  ParamType param_type_;
-  OB_INLINE ParamType get_param_type() { return param_type_; }
-}
-
-class ObHBaseParams : ObParams {
-public:
-  ObHBaseParams()
-      : caching_(0),
-        call_timeout_(0),
-        is_raw_(false),
-        allow_partial_results_(false),
-        is_cache_block_(false),
-        check_existence_only_(false)
-  {}
-  ~ObHBaseParams() {}
-
-  OB_INLINE ParamType get_param_type() { return ParamType::HBase; }
-  OB_INLINE void set_caching(const int32_t caching ) { caching_ = caching; }
-  OB_INLINE void set_call_timeout_(const int32_t call_timeout) { call_timeout_ = call_timeout; }
-  OB_INLINE void set_is_raw(const bool is_raw) { is_raw_ = is_raw; }
-  OB_INLINE void set_allow_partial_results(const bool allow_partial_results) { allow_partial_results_ = allow_partial_results; }
-  OB_INLINE void set_is_cache_block(const bool is_cache_block) { is_cache_block_ = is_cache_block; }
-  OB_INLINE void set_check_existence_only(const bool check_existence_only) {check_existence_only_ = check_existence_only; }
-public:
-  int32_t caching_;
-  int32_t call_timeout_;
-  int8_t flag;      // All bool type data is stored in one byte
-  bool is_raw_;
-  bool allow_partial_results_;
-  bool is_cache_block_;
-  bool check_existence_only_;
-}
 
 } // end namespace table
 } // end namespace oceanbase
