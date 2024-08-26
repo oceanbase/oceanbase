@@ -108,7 +108,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     frame_cnt_(0),
     op_kit_store_(),
     convert_allocator_(nullptr),
-    pwj_map_(nullptr),
+    group_pwj_map_(nullptr),
     calc_type_(CALC_NORMAL),
     fixed_id_(OB_INVALID_ID),
     check_status_times_(0),
@@ -169,9 +169,9 @@ ObExecContext::~ObExecContext()
     package_guard_->~ObPLPackageGuard();
     package_guard_ = NULL;
   }
-  if (OB_NOT_NULL(pwj_map_)) {
-    pwj_map_->destroy();
-    pwj_map_ = NULL;
+  if (OB_NOT_NULL(group_pwj_map_)) {
+    group_pwj_map_->destroy();
+    group_pwj_map_ = nullptr;
   }
   if (OB_NOT_NULL(vt_ift_)) {
     vt_ift_->~ObIVirtualTableIteratorFactory();
@@ -840,24 +840,50 @@ int ObExecContext::add_row_id_list(const common::ObIArray<int64_t> *row_id_list)
   return ret;
 }
 
-int ObExecContext::get_pwj_map(PWJTabletIdMap *&pwj_map)
+int ObExecContext::get_group_pwj_map(GroupPWJTabletIdMap *&group_pwj_map)
 {
   int ret = OB_SUCCESS;
-  pwj_map = nullptr;
-  if (nullptr == pwj_map_) {
-    void *buf = allocator_.alloc(sizeof(PWJTabletIdMap));
+  group_pwj_map = nullptr;
+  if (nullptr == group_pwj_map_) {
+    void *buf = allocator_.alloc(sizeof(GroupPWJTabletIdMap));
     if (nullptr == buf) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Failed to allocate memories", K(ret));
-    } else if (FALSE_IT(pwj_map_ = new(buf) PWJTabletIdMap())) {
-    } else if (OB_FAIL(pwj_map_->create(PARTITION_WISE_JOIN_TSC_HASH_BUCKET_NUM, /* assume no more than 8 table scan in a plan */
-                                        ObModIds::OB_SQL_PX))) {
-      LOG_WARN("Failed to create gi task map", K(ret));
     } else {
-      pwj_map = pwj_map_;
+      group_pwj_map_ = new (buf) GroupPWJTabletIdMap();
+      /* assume no more than 8table scan in a plan */
+      if (OB_FAIL(group_pwj_map_->create(PARTITION_WISE_JOIN_TSC_HASH_BUCKET_NUM, ObModIds::OB_SQL_PX))) {
+        LOG_WARN("Failed to create group_pwj_map_", K(ret));
+      } else {
+        group_pwj_map = group_pwj_map_;
+      }
     }
   } else {
-    pwj_map = pwj_map_;
+    group_pwj_map = group_pwj_map_;
+  }
+  return ret;
+}
+
+int ObExecContext::deep_copy_group_pwj_map(const GroupPWJTabletIdMap *src)
+{
+  int ret = OB_SUCCESS;
+  GroupPWJTabletIdMap *des = nullptr;
+  if (OB_ISNULL(src)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null");
+  } else if (OB_FAIL(get_group_pwj_map(des))) {
+    LOG_WARN("failed to get_group_pwj_map");
+  } else if (des->size() > 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("size should be 0", K(des->size()), K(src->size()));
+  } else {
+    FOREACH_X(iter, *src, OB_SUCC(ret)) {
+      const uint64_t table_id = iter->first;
+      const GroupPWJTabletIdInfo &group_pwj_tablet_id_info = iter->second;
+      if (OB_FAIL(des->set_refactored(table_id, group_pwj_tablet_id_info))) {
+        LOG_WARN("failed to set refactored", K(table_id));
+      }
+    }
   }
   return ret;
 }
@@ -1038,6 +1064,78 @@ DEFINE_GET_SERIALIZE_SIZE(ObExecContext)
     OB_UNIS_ADD_LEN(*sql_ctx_);
   }
   return len;
+}
+
+int64_t ObExecContext::get_group_pwj_map_serialize_size() const
+{
+  int64_t len = 0;
+  // add serialize size for group_pwj_map_
+  int64_t pwj_map_element_count = 0;
+  if (group_pwj_map_ != nullptr) {
+    pwj_map_element_count = group_pwj_map_->size();
+    OB_UNIS_ADD_LEN(pwj_map_element_count);
+    FOREACH(iter, *group_pwj_map_) {
+      const uint64_t table_id = iter->first;
+      const GroupPWJTabletIdInfo &group_pwj_tablet_id_info = iter->second;
+      OB_UNIS_ADD_LEN(table_id);
+      OB_UNIS_ADD_LEN(group_pwj_tablet_id_info);
+    }
+  } else {
+    OB_UNIS_ADD_LEN(pwj_map_element_count);
+  }
+  return len;
+}
+
+int ObExecContext::serialize_group_pwj_map(char *buf, const int64_t buf_len, int64_t &pos) const
+{
+  int ret = OB_SUCCESS;
+  // serialize group_pwj_map_
+  int64_t pwj_map_element_count = 0;
+  if (OB_SUCC(ret)) {
+    if (group_pwj_map_ != nullptr) {
+      pwj_map_element_count = group_pwj_map_->size();
+      OB_UNIS_ENCODE(pwj_map_element_count);
+      FOREACH_X(iter, *group_pwj_map_, OB_SUCC(ret)) {
+        const uint64_t table_id = iter->first;
+        const GroupPWJTabletIdInfo &group_pwj_tablet_id_info = iter->second;
+        OB_UNIS_ENCODE(table_id);
+        OB_UNIS_ENCODE(group_pwj_tablet_id_info);
+      }
+    } else {
+      OB_UNIS_ENCODE(pwj_map_element_count);
+    }
+  }
+  return ret;
+}
+
+int ObExecContext::deserialize_group_pwj_map(const char *buf, const int64_t data_len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  // deserialize size for group_pwj_map_
+  int64_t pwj_map_element_count = 0;
+  OB_UNIS_DECODE(pwj_map_element_count);
+  if (OB_SUCC(ret) && pwj_map_element_count > 0) {
+    GroupPWJTabletIdMap *group_pwj_map = nullptr;
+    uint64_t table_id;
+    GroupPWJTabletIdInfo group_pwj_tablet_id_info;
+    if (OB_FAIL(get_group_pwj_map(group_pwj_map))) {
+      LOG_WARN("failed to get_group_pwj_map");
+    } else {
+      for (int64_t i = 0; i < pwj_map_element_count && OB_SUCC(ret); ++i) {
+        OB_UNIS_DECODE(table_id);
+        OB_UNIS_DECODE(group_pwj_tablet_id_info);
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(group_pwj_map->set_refactored(table_id, group_pwj_tablet_id_info))) {
+          LOG_WARN("failed to set refactored", K(table_id), K(pwj_map_element_count),
+                   K(group_pwj_map->size()));
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      group_pwj_map_ = group_pwj_map;
+    }
+  }
+  return ret;
 }
 
 int ObExecContext::get_sqludt_meta_by_subschema_id(uint16_t subschema_id, ObSqlUDTMeta &udt_meta)

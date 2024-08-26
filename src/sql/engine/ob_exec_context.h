@@ -452,8 +452,13 @@ public:
 
   ObIArray<ObSqlTempTableCtx>& get_temp_table_ctx() { return temp_ctx_; }
 
-  int get_pwj_map(PWJTabletIdMap *&pwj_map);
-  PWJTabletIdMap *get_pwj_map() { return pwj_map_; }
+  int get_group_pwj_map(GroupPWJTabletIdMap *&group_pwj_map);
+  inline GroupPWJTabletIdMap *get_group_pwj_map() { return group_pwj_map_; }
+  int deep_copy_group_pwj_map(const GroupPWJTabletIdMap *src);
+  int64_t get_group_pwj_map_serialize_size() const;
+  int serialize_group_pwj_map(char *buf, const int64_t buf_len, int64_t &pos) const;
+  int deserialize_group_pwj_map(const char *buf, const int64_t data_len, int64_t &pos);
+
   void set_partition_id_calc_type(PartitionIdCalcType calc_type) { calc_type_ = calc_type; }
   PartitionIdCalcType get_partition_id_calc_type() { return calc_type_; }
   void set_fixed_id(ObObjectID fixed_id) { fixed_id_ = fixed_id; }
@@ -648,7 +653,7 @@ protected:
 
   // just for convert charset in query response result
   lib::MemoryContext convert_allocator_;
-  PWJTabletIdMap* pwj_map_;
+  GroupPWJTabletIdMap *group_pwj_map_;
   // the following two parameters only used in calc_partition_id expr
   PartitionIdCalcType calc_type_;
   ObObjectID fixed_id_;    // fixed part id or fixed subpart ids

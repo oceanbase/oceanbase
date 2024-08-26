@@ -11494,15 +11494,11 @@ int ObLogPlan::calc_and_set_exec_pwj_map(ObLocationConstraintContext &location_c
     ObIArray<LocationConstraint> &base_location_cons = location_constraint.base_table_constraints_;
     ObIArray<ObPwjConstraint *> &strict_cons = location_constraint.strict_constraints_;
     const int64_t tbl_count = location_constraint.base_table_constraints_.count();
-    ObSEArray<PwjTable, 4> pwj_tables;
     SMART_VAR(ObStrictPwjComparer, strict_pwj_comparer) {
       PWJTabletIdMap pwj_map;
-      if (OB_FAIL(pwj_tables.prepare_allocate(tbl_count))) {
-        LOG_WARN("failed to prepare allocate pwj tables", K(ret));
-      } else if (OB_FAIL(pwj_map.create(8, ObModIds::OB_PLAN_EXECUTE))) {
+      if (OB_FAIL(pwj_map.create(8, ObModIds::OB_PLAN_EXECUTE))) {
         LOG_WARN("create pwj map failed", K(ret));
       }
-
       for (int64_t i = 0; OB_SUCC(ret) && i < strict_cons.count(); ++i) {
         const ObPwjConstraint *pwj_cons = strict_cons.at(i);
         if (OB_ISNULL(pwj_cons) || OB_UNLIKELY(pwj_cons->count() <= 1)) {
@@ -11515,25 +11511,32 @@ int ObLogPlan::calc_and_set_exec_pwj_map(ObLocationConstraintContext &location_c
       }
 
       if (OB_SUCC(ret)) {
-        PWJTabletIdMap *exec_pwj_map = NULL;
-        if (OB_FAIL(exec_ctx->get_pwj_map(exec_pwj_map))) {
-          LOG_WARN("failed to get exec pwj map", K(ret));
-        } else if (OB_FAIL(exec_pwj_map->reuse())) {
-          LOG_WARN("failed to reuse pwj map", K(ret));
+        GroupPWJTabletIdMap *group_pwj_map = nullptr;
+        if (OB_FAIL(exec_ctx->get_group_pwj_map(group_pwj_map))) {
+          LOG_WARN("failed to get exec group pwj map", K(ret));
+        } else if (OB_FAIL(group_pwj_map->reuse())) {
+          LOG_WARN("failed to reuse group pwj map", K(ret));
         }
-        for (int64_t i = 0; OB_SUCC(ret) && i < base_location_cons.count(); ++i) {
-          if (!base_location_cons.at(i).is_multi_part_insert()) {
-            TabletIdArray tablet_id_array;
-            if (OB_FAIL(pwj_map.get_refactored(i, tablet_id_array))) {
-              if (OB_HASH_NOT_EXIST == ret) {
-                // 没找到说明当前表不需要做partition wise join
-                ret = OB_SUCCESS;
-              } else {
-                LOG_WARN("failed to get refactored", K(ret));
+        GroupPWJTabletIdInfo group_pwj_tablet_id_info;
+        TabletIdArray &tablet_id_array = group_pwj_tablet_id_info.tablet_id_array_;
+        for (int64_t group_id = 0; OB_SUCC(ret) && group_id < strict_cons.count(); ++group_id) {
+          group_pwj_tablet_id_info.group_id_ = group_id;
+          const ObPwjConstraint *pwj_cons = strict_cons.at(group_id);
+          for (int64_t i = 0; OB_SUCC(ret) && i < pwj_cons->count(); ++i) {
+            const int64_t table_idx = pwj_cons->at(i);
+            uint64_t table_id = base_location_cons.at(table_idx).key_.table_id_;
+            tablet_id_array.reset();
+            if (!base_location_cons.at(table_idx).is_multi_part_insert()) {
+              if (OB_FAIL(pwj_map.get_refactored(table_idx, tablet_id_array))) {
+                if (OB_HASH_NOT_EXIST == ret) {
+                  // means this is not a partition wise join table
+                  ret = OB_SUCCESS;
+                } else {
+                  LOG_WARN("failed to get refactored", K(ret));
+                }
+              } else if (OB_FAIL(group_pwj_map->set_refactored(table_id, group_pwj_tablet_id_info))) {
+                LOG_WARN("failed to set refactored", K(ret));
               }
-            } else if (OB_FAIL(exec_pwj_map->set_refactored(base_location_cons.at(i).key_.table_id_,
-                                                            tablet_id_array))) {
-              LOG_WARN("failed to set refactored", K(ret));
             }
           }
         }
