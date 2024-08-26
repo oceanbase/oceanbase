@@ -889,6 +889,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_index_lookup_op_impl.cpp
   engine/table/ob_table_scan_with_index_back_op.cpp
   engine/table/ob_external_table_access_service.cpp
+  engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp
 )
 

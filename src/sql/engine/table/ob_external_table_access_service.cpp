@@ -23,6 +23,7 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
+#include "sql/engine/table/ob_orc_table_row_iter.h"
 
 namespace oceanbase
 {
@@ -558,9 +559,14 @@ int ObExternalTableAccessService::table_scan(
         LOG_WARN("alloc memory failed", K(ret));
       }
       break;
-
     case ObExternalFileFormat::PARQUET_FORMAT:
       if (OB_ISNULL(row_iter = OB_NEWx(ObParquetTableRowIterator, (scan_param.allocator_)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc memory failed", K(ret));
+      }
+      break;
+    case ObExternalFileFormat::ORC_FORMAT:
+      if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("alloc memory failed", K(ret));
       }
@@ -594,6 +600,7 @@ int ObExternalTableAccessService::table_rescan(ObVTableScanParam &param, ObNewRo
     switch (param.external_file_format_.format_type_) {
       case ObExternalFileFormat::CSV_FORMAT:
       case ObExternalFileFormat::PARQUET_FORMAT:
+      case ObExternalFileFormat::ORC_FORMAT:
         result->reset();
         break;
       default:

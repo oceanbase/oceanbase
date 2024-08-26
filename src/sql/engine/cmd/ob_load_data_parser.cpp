@@ -32,10 +32,9 @@ const char INVALID_TERM_CHAR = '\xff';
 const char * ObExternalFileFormat::FORMAT_TYPE_STR[] = {
   "CSV",
   "PARQUET",
+  "ORC",
 };
-
-static_assert(array_elements(ObExternalFileFormat::FORMAT_TYPE_STR) == ObExternalFileFormat::MAX_FORMAT,
-              "Not enough initializer for ObExternalFileFormat");
+static_assert(array_elements(ObExternalFileFormat::FORMAT_TYPE_STR) == ObExternalFileFormat::MAX_FORMAT, "Not enough initializer for ObExternalFileFormat");
 
 int ObCSVGeneralFormat::init_format(const ObDataInFileStruct &format,
                                     int64_t file_column_nums,
@@ -391,7 +390,7 @@ int64_t ObExternalFileFormat::to_string(char *buf, const int64_t buf_len) const
 
   J_OBJ_START();
 
-  databuff_print_kv(buf, buf_len, pos, "\"TYPE\"", is_valid_format ? FORMAT_TYPE_STR[format_type_] : "INVALID");
+  databuff_print_kv(buf, buf_len, pos, "\"TYPE\"", is_valid_format ? ObExternalFileFormat::FORMAT_TYPE_STR[format_type_] : "INVALID");
 
   switch (format_type_) {
     case CSV_FORMAT:
@@ -434,8 +433,8 @@ int ObExternalFileFormat::load_from_string(const ObString &str, ObIAllocator &al
       LOG_WARN("unexpected json format", K(ret), K(str));
     } else {
       ObString format_type_str = format_type_node->value_->get_string();
-      for (int i = 0; i < array_elements(FORMAT_TYPE_STR); ++i) {
-        if (format_type_str.case_compare(FORMAT_TYPE_STR[i]) == 0) {
+      for (int i = 0; i < array_elements(ObExternalFileFormat::FORMAT_TYPE_STR); ++i) {
+        if (format_type_str.case_compare(ObExternalFileFormat::FORMAT_TYPE_STR[i]) == 0) {
           format_type_ = static_cast<FormatType>(i);
           break;
         }
@@ -447,6 +446,7 @@ int ObExternalFileFormat::load_from_string(const ObString &str, ObIAllocator &al
           OZ (origin_file_format_str_.load_from_json_data(format_type_node, allocator));
           break;
         case PARQUET_FORMAT:
+        case ORC_FORMAT:
           break;
         default:
           ret = OB_ERR_UNEXPECTED;

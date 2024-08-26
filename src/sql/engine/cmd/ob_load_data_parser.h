@@ -524,6 +524,7 @@ struct ObExternalFileFormat
     INVALID_FORMAT = -1,
     CSV_FORMAT,
     PARQUET_FORMAT,
+    ORC_FORMAT,
     MAX_FORMAT
   };
 
@@ -543,7 +544,6 @@ struct ObExternalFileFormat
   sql::ObCSVGeneralFormat csv_format_;
   ObLoadCompressionFormat compression_format_;
   uint64_t options_;
-
   static const char *FORMAT_TYPE_STR[];
 };
 

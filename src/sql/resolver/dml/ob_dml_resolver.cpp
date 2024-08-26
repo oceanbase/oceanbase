@@ -8247,9 +8247,20 @@ int ObDMLResolver::resolve_external_table_generated_column(
     ObExternalFileFormat format;
     if (OB_FAIL(format.load_from_string(table_schema->get_external_file_format(), *params_.allocator_))) {
       LOG_WARN("load from string failed", K(ret));
+    } else if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT && lib::is_oracle_mode()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support orc in oracle mode", K(ret));
+      LOG_USER_WARN(OB_NOT_SUPPORTED, "orc in oracle mode");
     } else if (format.format_type_ != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
-      ret = OB_WRONG_COLUMN_NAME;
-      LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, col.col_name_.length(), col.col_name_.ptr());
+      if (format.format_type_ == ObExternalFileFormat::ORC_FORMAT &&
+          ObExternalFileFormat::PARQUET_FORMAT != ObResolverUtils::resolve_external_file_column_type(col.col_name_)) {
+        ret = OB_WRONG_COLUMN_NAME;
+        LOG_WARN("wrong column name", K(format.format_type_));
+        LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, col.col_name_.length(), col.col_name_.ptr());
+      }
+    }
+
+    if (OB_FAIL(ret)) {
     } else if (ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
       if (OB_FAIL(ObResolverUtils::calc_file_column_idx(col.col_name_, file_column_idx))) {
         LOG_WARN("fail to calc file column idx", K(ret));
@@ -8263,7 +8274,8 @@ int ObDMLResolver::resolve_external_table_generated_column(
           LOG_WARN("fail to build external table file column expr", K(ret));
         }
       }
-    } else if (ObExternalFileFormat::PARQUET_FORMAT == format.format_type_) {
+    } else if (ObExternalFileFormat::PARQUET_FORMAT == format.format_type_ ||
+               ObExternalFileFormat::ORC_FORMAT == format.format_type_ ) {
       ObRawExpr *cast_expr = NULL;
       ObRawExpr *get_path_expr = NULL;
       ObRawExpr *cast_type_expr = NULL;
