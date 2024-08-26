@@ -881,6 +881,17 @@ private:
   int setup_next_scanner();
   int get_next_row_from_cur_scanner(const common::ObNewRow *&row);
 
+  uint64_t get_tenant_id_for_result_memory() const {
+    /* The actual innersql caller tenant alloctes the memory of ObRemoteResultSet.
+     * Currently set to user tenant or 500 tenant.
+     * For example, table recovery uses inner_sql's remote execution to query the data on the target
+     * tenant from（physically restored）auxiliary tenant in parallel. The innersql caller needs a large
+     * amount of memory to obtain the remote execution results. It's more appropriate for the innersql
+     * caller (user tenant or 500 tenant) to allocate this block of memory. */
+    return OB_INVALID_TENANT_ID != MTL_ID() && is_user_tenant(MTL_ID())
+            ? MTL_ID() : OB_SERVER_TENANT_ID;
+  }
+
   /* variables */
   common::ObIAllocator &mem_pool_;
   obrpc::ObInnerSqlRpcStreamHandle *remote_resp_handler_;

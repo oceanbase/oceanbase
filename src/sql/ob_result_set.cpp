@@ -1963,7 +1963,8 @@ int ObRemoteResultSet::reset_and_init_remote_resp_handler()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for ObInnerSqlRpcStreamHandle", K(ret));
   } else {
-    remote_resp_handler_ = new (buffer) ObInnerSqlRpcStreamHandle();
+    remote_resp_handler_ = new (buffer) ObInnerSqlRpcStreamHandle("InnerSqlRpcStream",
+                                                                  get_tenant_id_for_result_memory());
   }
 
   return ret;
@@ -2040,8 +2041,7 @@ int ObRemoteResultSet::setup_next_scanner()
         } else if (OB_ISNULL(transmit_result = remote_resp_handler_->get_result())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("succ to alloc result, but result scanner is NULL", K(ret));
-        } else if (FALSE_IT(transmit_result->set_tenant_id(
-                     OB_INVALID_TENANT_ID != MTL_ID() ? MTL_ID() : OB_SERVER_TENANT_ID))) {
+        } else if (FALSE_IT(transmit_result->set_tenant_id(get_tenant_id_for_result_memory()))) {
         } else if (OB_FAIL(handle.get_more(*transmit_result))) {
           LOG_WARN("fail wait response", K(ret));
         } else {
