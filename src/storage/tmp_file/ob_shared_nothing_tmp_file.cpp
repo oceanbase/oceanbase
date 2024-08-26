@@ -28,6 +28,74 @@ namespace oceanbase
 {
 namespace tmp_file
 {
+
+int ObSNTmpFileInfo::init(
+    const ObCurTraceId::TraceId &trace_id,
+    const uint64_t tenant_id,
+    const int64_t dir_id,
+    const int64_t fd,
+    const int64_t file_size,
+    const int64_t truncated_offset,
+    const bool is_deleting,
+    const int64_t cached_page_num,
+    const int64_t write_back_data_page_num,
+    const int64_t flushed_data_page_num,
+    const int64_t ref_cnt,
+    const int64_t write_req_cnt,
+    const int64_t unaligned_write_req_cnt,
+    const int64_t read_req_cnt,
+    const int64_t unaligned_read_req_cnt,
+    const int64_t total_read_size,
+    const int64_t last_access_ts,
+    const int64_t last_modify_ts,
+    const int64_t birth_ts)
+{
+  int ret = OB_SUCCESS;
+  trace_id_ = trace_id;
+  tenant_id_ = tenant_id;
+  dir_id_ = dir_id;
+  fd_ = fd;
+  file_size_ = file_size;
+  truncated_offset_ = truncated_offset;
+  is_deleting_ = is_deleting;
+  cached_page_num_ = cached_page_num;
+  write_back_data_page_num_ = write_back_data_page_num;
+  flushed_data_page_num_ = flushed_data_page_num;
+  ref_cnt_ = ref_cnt;
+  write_req_cnt_ = write_req_cnt;
+  unaligned_write_req_cnt_ = unaligned_write_req_cnt;
+  read_req_cnt_ = read_req_cnt;
+  unaligned_read_req_cnt_ = unaligned_read_req_cnt;
+  total_read_size_ = total_read_size;
+  last_access_ts_ = last_access_ts;
+  last_modify_ts_ = last_modify_ts;
+  birth_ts_ = birth_ts;
+  return ret;
+}
+
+void ObSNTmpFileInfo::reset()
+{
+  trace_id_.reset();
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  dir_id_ = ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID;
+  fd_ = ObTmpFileGlobal::INVALID_TMP_FILE_FD;
+  file_size_ = 0;
+  truncated_offset_ = 0;
+  is_deleting_ = false;
+  cached_page_num_ = 0;
+  write_back_data_page_num_ = 0;
+  flushed_data_page_num_ = 0;
+  ref_cnt_ = 0;
+  write_req_cnt_ = 0;
+  unaligned_write_req_cnt_ = 0;
+  read_req_cnt_ = 0;
+  unaligned_read_req_cnt_ = 0;
+  total_read_size_ = 0;
+  last_access_ts_ = -1;
+  last_modify_ts_ = -1;
+  birth_ts_ = -1;
+}
+
 ObTmpFileHandle::ObTmpFileHandle(ObSharedNothingTmpFile *tmp_file)
   : ptr_(tmp_file)
 {
@@ -188,7 +256,16 @@ ObSharedNothingTmpFile::ObSharedNothingTmpFile()
       last_page_lock_(common::ObLatchIds::TMP_FILE_LOCK),
       multi_write_lock_(common::ObLatchIds::TMP_FILE_LOCK),
       truncate_lock_(common::ObLatchIds::TMP_FILE_LOCK),
-      inner_flush_ctx_()
+      inner_flush_ctx_(),
+      trace_id_(),
+      write_req_cnt_(0),
+      unaligned_write_req_cnt_(0),
+      read_req_cnt_(0),
+      unaligned_read_req_cnt_(0),
+      total_read_size_(0),
+      last_access_ts_(-1),
+      last_modify_ts_(-1),
+      birth_ts_(-1)
 {
 }
 
@@ -233,6 +310,15 @@ int ObSharedNothingTmpFile::init(const uint64_t tenant_id, const int64_t fd, con
     tenant_id_ = tenant_id;
     dir_id_ = dir_id;
     fd_ = fd;
+    ObCurTraceId::TraceId *cur_trace_id = ObCurTraceId::get_trace_id();
+    if (nullptr != cur_trace_id) {
+      trace_id_ = *cur_trace_id;
+    } else {
+      trace_id_.init(GCONF.self_addr_);
+    }
+    last_access_ts_ = ObTimeUtility::current_time();
+    last_modify_ts_ = ObTimeUtility::current_time();
+    birth_ts_ = ObTimeUtility::current_time();
   }
 
   LOG_INFO("tmp file init over", KR(ret), K(fd), K(dir_id));
@@ -314,6 +400,17 @@ void ObSharedNothingTmpFile::reset()
   data_eviction_node_.unlink();
   meta_eviction_node_.unlink();
   inner_flush_ctx_.reset();
+  /******for virtual table begin******/
+  trace_id_.reset();
+  write_req_cnt_ = 0;
+  unaligned_write_req_cnt_ = 0;
+  read_req_cnt_ = 0;
+  unaligned_read_req_cnt_ = 0;
+  total_read_size_ = 0;
+  last_access_ts_ = -1;
+  last_modify_ts_ = -1;
+  birth_ts_ = -1;
+  /******for virtual table end******/
 }
 
 bool ObSharedNothingTmpFile::is_deleting()
@@ -359,6 +456,10 @@ int ObSharedNothingTmpFile::aio_pread(ObTmpFileIOCtx &io_ctx)
     common::TCRWLock::RLockGuard guard(meta_lock_);
     if (io_ctx.get_read_offset_in_file() < 0) {
       io_ctx.set_read_offset_in_file(read_offset_);
+    }
+    if (0 != io_ctx.get_read_offset_in_file() % ObTmpFileGlobal::PAGE_SIZE
+        || 0 != io_ctx.get_todo_size() % ObTmpFileGlobal::PAGE_SIZE) {
+      io_ctx.set_is_unaligned_read(true);
     }
 
     LOG_DEBUG("start to inner read tmp file", K(fd_), K(io_ctx.get_read_offset_in_file()),
@@ -898,6 +999,8 @@ int ObSharedNothingTmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("attempt to write a deleting file", KR(ret), K(fd_));
   } else {
+    bool is_unaligned_write = 0 != file_size_ % ObTmpFileGlobal::PAGE_SIZE
+                  || 0 != io_ctx.get_todo_size() % ObTmpFileGlobal::PAGE_SIZE;
     while (OB_SUCC(ret) && io_ctx.get_todo_size() > 0) {
       if (OB_FAIL(inner_write_(io_ctx))) {
         if (OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret) {
@@ -915,6 +1018,13 @@ int ObSharedNothingTmpFile::aio_write(ObTmpFileIOCtx &io_ctx)
         }
       }
     } // end while
+    if (OB_SUCC(ret)) {
+      write_req_cnt_++;
+      if (is_unaligned_write) {
+        unaligned_write_req_cnt_++;
+      }
+      last_modify_ts_ = ObTimeUtility::current_time();
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -1594,6 +1704,7 @@ int ObSharedNothingTmpFile::truncate(const int64_t truncate_offset)
       LOG_WARN("fail to truncate data page", KR(ret), K(fd_), K(truncate_offset), KPC(this));
     } else {
       truncated_offset_ = truncate_offset;
+      last_modify_ts_ = ObTimeUtility::current_time();
     }
   }
 
@@ -1815,6 +1926,36 @@ int64_t ObSharedNothingTmpFile::cal_wbp_begin_offset_() const
 
   return res;
 }
+
+void ObSharedNothingTmpFile::set_read_stats_vars(const bool is_unaligned_read, const int64_t read_size)
+{
+  common::TCRWLock::WLockGuard guard(meta_lock_);
+  read_req_cnt_++;
+  if (is_unaligned_read) {
+    unaligned_read_req_cnt_++;
+  }
+  total_read_size_ += read_size;
+  last_access_ts_ = ObTimeUtility::current_time();
+}
+
+int ObSharedNothingTmpFile::copy_info_for_virtual_table(ObSNTmpFileInfo &tmp_file_info)
+{
+  int ret = OB_SUCCESS;
+  common::TCRWLock::RLockGuardWithTimeout lock_guard(meta_lock_, 100 * 1000L, ret);
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(tmp_file_info.init(trace_id_, tenant_id_,
+                                        dir_id_, fd_, file_size_,
+                                        truncated_offset_, is_deleting_,
+                                        cached_page_nums_, write_back_data_page_num_,
+                                        flushed_data_page_num_, ref_cnt_,
+                                        write_req_cnt_, unaligned_write_req_cnt_,
+                                        read_req_cnt_, unaligned_read_req_cnt_,
+                                        total_read_size_, last_access_ts_,
+                                        last_modify_ts_, birth_ts_))) {
+    LOG_WARN("fail to init tmp_file_info", KR(ret), KPC(this));
+  }
+  return ret;
+};
 
 int ObSharedNothingTmpFile::remove_flush_node(const bool is_meta)
 {

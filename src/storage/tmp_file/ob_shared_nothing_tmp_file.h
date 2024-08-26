@@ -40,6 +40,79 @@ class ObTmpFileFlushManager;
 class ObTmpFileTreeFlushContext;
 class ObTmpFileDataFlushContext;
 
+//for virtual table show
+class ObSNTmpFileInfo
+{
+public:
+  ObSNTmpFileInfo() :
+    trace_id_(),
+    tenant_id_(OB_INVALID_TENANT_ID),
+    dir_id_(ObTmpFileGlobal::INVALID_TMP_FILE_DIR_ID),
+    fd_(ObTmpFileGlobal::INVALID_TMP_FILE_FD),
+    file_size_(0),
+    truncated_offset_(0),
+    is_deleting_(false),
+    cached_page_num_(0),
+    write_back_data_page_num_(0),
+    flushed_data_page_num_(0),
+    ref_cnt_(0),
+    write_req_cnt_(0),
+    unaligned_write_req_cnt_(0),
+    read_req_cnt_(0),
+    unaligned_read_req_cnt_(0),
+    total_read_size_(0),
+    last_access_ts_(-1),
+    last_modify_ts_(-1),
+    birth_ts_(-1) {}
+  int init(const ObCurTraceId::TraceId &trace_id,
+           const uint64_t tenant_id,
+           const int64_t dir_id,
+           const int64_t fd,
+           const int64_t file_size,
+           const int64_t truncated_offset,
+           const bool is_deleting,
+           const int64_t cached_page_num,
+           const int64_t write_back_data_page_num,
+           const int64_t flushed_data_page_num,
+           const int64_t ref_cnt,
+           const int64_t write_req_cnt,
+           const int64_t unaligned_write_req_cnt,
+           const int64_t read_req_cnt,
+           const int64_t unaligned_read_req_cnt,
+           const int64_t total_read_size,
+           const int64_t last_access_ts,
+           const int64_t last_modify_ts,
+           const int64_t birth_ts);
+  void reset();
+public:
+  common::ObCurTraceId::TraceId trace_id_;
+  uint64_t tenant_id_;
+  int64_t dir_id_;
+  int64_t fd_;
+  int64_t file_size_;
+  int64_t truncated_offset_;
+  bool is_deleting_;
+  int64_t cached_page_num_;
+  int64_t write_back_data_page_num_;
+  int64_t flushed_data_page_num_;
+  int64_t ref_cnt_;
+  int64_t write_req_cnt_;
+  int64_t unaligned_write_req_cnt_;
+  int64_t read_req_cnt_;
+  int64_t unaligned_read_req_cnt_;
+  int64_t total_read_size_;
+  int64_t last_access_ts_;
+  int64_t last_modify_ts_;
+  int64_t birth_ts_;
+
+  TO_STRING_KV(K(trace_id_), K(tenant_id_), K(dir_id_), K(fd_), K(file_size_),
+               K(truncated_offset_), K(is_deleting_), K(cached_page_num_),
+               K(write_back_data_page_num_), K(flushed_data_page_num_),
+               K(ref_cnt_), K(write_req_cnt_), K(unaligned_write_req_cnt_),
+               K(read_req_cnt_), K(unaligned_read_req_cnt_), K(total_read_size_),
+               K(last_access_ts_), K(last_modify_ts_), K(birth_ts_));
+};
+
 class ObSharedNothingTmpFile final
 {
 public:
@@ -143,7 +216,10 @@ public:
                KP(meta_flush_node_.get_next()),
                K(is_in_data_eviction_list_), K(is_in_meta_eviction_list_),
                KP(data_eviction_node_.get_next()),
-               KP(meta_eviction_node_.get_next()));
+               KP(meta_eviction_node_.get_next()), K(trace_id_),
+               K(write_req_cnt_), K(unaligned_write_req_cnt_), K(read_req_cnt_),
+               K(unaligned_read_req_cnt_), K(total_read_size_),
+               K(last_access_ts_), K(last_modify_ts_), K(birth_ts_));
 // XXX Currently, K(tmp_file) is used to print the ObSharedNothingTmpFile structure without holding
 // the file lock. Before adding the print field, make sure it is thread-safe.
 
@@ -209,6 +285,8 @@ public:
   void get_dirty_meta_page_num(int64_t &non_rightmost_dirty_page_num, int64_t &rightmost_dirty_page_num) const;
   void get_dirty_meta_page_num_with_lock(int64_t &non_rightmost_dirty_page_num, int64_t &rightmost_dirty_page_num);
   int64_t cal_wbp_begin_offset();
+  void set_read_stats_vars(const bool is_unaligned_read, const int64_t read_size);
+  int copy_info_for_virtual_table(ObSNTmpFileInfo &tmp_file_info);
 
 private:
   int inner_read_truncated_part_(ObTmpFileIOCtx &io_ctx);
@@ -360,6 +438,17 @@ private:
   ObSpinLock multi_write_lock_; // handle conflicts between multiple writes
   SpinRWLock truncate_lock_; // handle conflicts between truncate and flushing
   InnerFlushContext inner_flush_ctx_; // file-level flush context
+  /********for virtual table begin********/
+  common::ObCurTraceId::TraceId trace_id_;
+  int64_t write_req_cnt_;
+  int64_t unaligned_write_req_cnt_;
+  int64_t read_req_cnt_;
+  int64_t unaligned_read_req_cnt_;
+  int64_t total_read_size_;
+  int64_t last_access_ts_;
+  int64_t last_modify_ts_;
+  int64_t birth_ts_;
+  /********for virtual table end********/
 };
 
 class ObTmpFileHandle final

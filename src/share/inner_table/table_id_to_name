@@ -1137,6 +1137,7 @@
 # 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 12490: __all_virtual_spatial_reference_systems
 # 12490: __all_spatial_reference_systems  # BASE_TABLE_NAME
+# 12505: __all_virtual_temp_file
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1748,6 +1749,8 @@
 # 15458: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 15459: ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT
 # 15459: __all_spatial_reference_systems  # BASE_TABLE_NAME
+# 15485: ALL_VIRTUAL_TEMP_FILE
+# 15485: __all_virtual_temp_file  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2208,6 +2211,8 @@
 # 21603: INNODB_SYS_FIELDS
 # 21604: INNODB_SYS_FOREIGN
 # 21605: INNODB_SYS_FOREIGN_COLS
+# 21622: DBA_OB_TEMP_FILES
+# 21623: CDB_OB_TEMP_FILES
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2675,6 +2680,7 @@
 # 28230: GV$OB_NIC_INFO
 # 28231: V$OB_NIC_INFO
 # 28234: DBA_OB_SPATIAL_COLUMNS
+# 28264: DBA_OB_TEMP_FILES
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

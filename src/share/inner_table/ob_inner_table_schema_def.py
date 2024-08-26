@@ -14730,7 +14730,43 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
 # 12504: __all_virtual_function_io_stat
-# 12505: __all_virtual_temp_file
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name     = '__all_virtual_temp_file',
+  table_id       = '12505',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('file_id', 'int'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false'),
+    ('dir_id', 'int'),
+    ('bytes', 'int'),
+    ('start_offset', 'int'),
+    ('is_deleting', 'bool'),
+    ('cached_page_num', 'int'),
+    ('write_back_page_num', 'int'),
+    ('flushed_page_num', 'int'),
+    ('ref_cnt', 'int'),
+    ('total_writes', 'int'),
+    ('unaligned_writes', 'int'),
+    ('total_reads', 'int'),
+    ('unaligned_reads', 'int'),
+    ('total_read_bytes', 'int'),
+    ('last_access_time', 'timestamp'),
+    ('last_modify_time', 'timestamp'),
+    ('birth_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15238,7 +15274,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat
 # 15484: __all_virtual_function_io_stat
-# 15485: __all_virtual_temp_file
+
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15485', all_def_keywords['__all_virtual_temp_file']))
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -36427,8 +36465,66 @@ def_table_schema(
 # 21619: CDB_OB_KV_REDIS_TABLE
 # 21620: GV$OB_FUNCTION_IO_STAT
 # 21621: V$OB_FUNCTION_IO_STAT
-# 21622: DBA_OB_TEMP_FILES
-# 21623: CDB_OB_TEMP_FILES
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'DBA_OB_TEMP_FILES',
+  table_id        = '21622',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+    SVR_IP,
+    SVR_PORT,
+    FILE_ID,
+    TRACE_ID,
+    DIR_ID,
+    BYTES,
+    START_OFFSET,
+    TOTAL_WRITES,
+    UNALIGNED_WRITES,
+    TOTAL_READS,
+    UNALIGNED_READS,
+    TOTAL_READ_BYTES,
+    LAST_ACCESS_TIME,
+    LAST_MODIFY_TIME,
+    BIRTH_TIME
+  FROM oceanbase.__all_virtual_temp_file
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'CDB_OB_TEMP_FILES',
+  table_id        = '21623',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """SELECT
+    TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    FILE_ID,
+    TRACE_ID,
+    DIR_ID,
+    BYTES,
+    START_OFFSET,
+    TOTAL_WRITES,
+    UNALIGNED_WRITES,
+    TOTAL_READS,
+    UNALIGNED_READS,
+    TOTAL_READ_BYTES,
+    LAST_ACCESS_TIME,
+    LAST_MODIFY_TIME,
+    BIRTH_TIME
+  FROM oceanbase.__all_virtual_temp_file
+""".replace("\n", " ")
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -64566,7 +64662,39 @@ left join
 # 28261: DBA_OB_SPM_EVO_RESULT
 # 28262: GV$OB_FUNCTION_IO_STAT
 # 28263: V$OB_FUNCTION_IO_STAT
-# 28264: DBA_OB_TEMP_FILES
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'DBA_OB_TEMP_FILES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28264',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+    SVR_IP,
+    SVR_PORT,
+    FILE_ID,
+    TRACE_ID,
+    DIR_ID,
+    BYTES,
+    START_OFFSET,
+    TOTAL_WRITES,
+    UNALIGNED_WRITES,
+    TOTAL_READS,
+    UNALIGNED_READS,
+    TOTAL_READ_BYTES,
+    LAST_ACCESS_TIME,
+    LAST_MODIFY_TIME,
+    BIRTH_TIME
+  FROM SYS.ALL_VIRTUAL_TEMP_FILE
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " "),
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
