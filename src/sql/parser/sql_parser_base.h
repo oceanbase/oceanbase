@@ -29,6 +29,8 @@
 #include "parse_malloc.h"
 #include "ob_non_reserved_keywords.h"
 #include "parse_define.h"
+#include "ob_parser_charset_utils.h"
+
 
 #define MAX_VARCHAR_LENGTH 4194303
 #define INT16NUM_OVERFLOW INT16_MAX

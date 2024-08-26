@@ -471,6 +471,8 @@ inline int64_t ObFastParserBase::is_identifier_flags(const int64_t pos)
     idf_pos = is_gbk_char(pos);
   } else if (charset_info_->mbmaxlen == 1) {
     idf_pos = is_single_byte_char(pos);
+  } else if (CHARSET_HKSCS == charset_type_ || CHARSET_HKSCS31 == charset_type_) {
+    idf_pos = is_hk_char(pos);
   }
   return idf_pos;
 }
@@ -1075,6 +1077,47 @@ inline int64_t ObFastParserBase::is_utf8_multi_byte_right_parenthesis(
   return idf_pos;
 }
 
+inline int64_t ObFastParserBase::is_hk_multi_byte_space(const char *str, const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (0xa1 == static_cast<uint8_t>(str[pos]) &&
+      0x40 == static_cast<uint8_t>(str[pos + 1])) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+inline int64_t ObFastParserBase::is_hk_multi_byte_comma(const char *str, const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (0xa1 == static_cast<uint8_t>(str[pos]) &&
+      0x41 == static_cast<uint8_t>(str[pos + 1])) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+
+inline int64_t ObFastParserBase::is_hk_multi_byte_left_parenthesis(
+                                 const char *str, const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (0xa1 == static_cast<uint8_t>(str[pos]) &&
+      0x5d == static_cast<uint8_t>(str[pos + 1])) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+
+inline int64_t ObFastParserBase::is_hk_multi_byte_right_parenthesis(
+                                 const char *str, const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (0xa1 == static_cast<uint8_t>(str[pos]) &&
+      0x5e == static_cast<uint8_t>(str[pos + 1])) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+
 // ([\\\xa1][\\\xa1])
 inline int64_t ObFastParserBase::is_gbk_multi_byte_space(const char *str, const int64_t pos)
 {
@@ -1133,6 +1176,22 @@ inline int64_t ObFastParserBase::is_gbk_char(const int64_t pos)
       -1 != is_gbk_multi_byte_right_parenthesis(raw_sql_.raw_sql_, pos))) {
     raw_sql_.scan(2);
   } else if (is_gb1(raw_sql_.char_at(pos)) && is_gb2(raw_sql_.char_at(pos + 1))) {
+    idf_pos = pos + 2;
+  }
+  return idf_pos;
+}
+
+inline int64_t ObFastParserBase::is_hk_char(const int64_t pos)
+{
+  int64_t idf_pos = -1;
+  if (is_oracle_mode_ &&
+     pos + 2 < raw_sql_.raw_sql_len_ &&
+     (-1 != is_hk_multi_byte_space(raw_sql_.raw_sql_, pos) ||
+      -1 != is_hk_multi_byte_comma(raw_sql_.raw_sql_, pos) ||
+      -1 != is_hk_multi_byte_left_parenthesis(raw_sql_.raw_sql_, pos) ||
+      -1 != is_hk_multi_byte_right_parenthesis(raw_sql_.raw_sql_, pos))) {
+    raw_sql_.scan(2);
+  } else if (is_hk1(raw_sql_.char_at(pos)) && is_hk2(raw_sql_.char_at(pos + 1))) {
     idf_pos = pos + 2;
   }
   return idf_pos;
@@ -1410,6 +1469,27 @@ char *ObFastParserBase::parse_strdup_with_replace_multi_byte_char(
       } else {
         out_str[len++] = str[i];
       }
+    } else if (
+       charset_type_ == 152
+       || charset_type_ == 153) {
+       if (i + 1 < dup_len) {
+         if (str[i] == (char)0xa1 && str[i+1] == (char)0x40) {//hkscs multi byte space
+           out_str[len++] = ' ';
+           ++i;
+         } else if (str[i] == (char)0xa1 && str[i+1] == (char)0x5d) {
+           //hkscs multi byte left parenthesis
+           out_str[len++] = '(';
+           ++i;
+         } else if (str[i] == (char)0xa1 && str[i+1] == (char)0x5e) {
+           //hkscs multi byte right parenthesis
+           out_str[len++] = ')';
+           ++i;
+         } else {
+           out_str[len++] = str[i];
+         }
+       } else {
+         out_str[len++] = str[i];
+       }
     } else {
       out_str[len++] = str[i];
     }
@@ -1636,6 +1716,8 @@ inline int64_t ObFastParserBase::is_first_identifier_flags(const int64_t pos)
     idf_pos = is_gbk_char(pos);
   } else if (charset_info_->mbmaxlen == 1) {
     idf_pos = is_single_byte_char(pos);
+  } else if (CHARSET_HKSCS == charset_type_ || CHARSET_HKSCS31 == charset_type_) {
+    idf_pos = is_hk_char(pos);
   }
   return idf_pos;
 }

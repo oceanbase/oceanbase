@@ -634,13 +634,25 @@ int ObSQLUtils::is_collation_data_version_valid(ObCollationType collation_type, 
 #endif
   if (OB_SUCC(ret)) {
     if (data_version < DATA_VERSION_4_2_4_0
-              && (CS_TYPE_UTF8MB4_CROATIAN_CI == collation_type
+              && (CS_TYPE_UTF8MB4_CROATIAN_UCA_CI == collation_type
                   || CS_TYPE_UTF8MB4_UNICODE_520_CI == collation_type
-                  || CS_TYPE_UTF8MB4_CZECH_CI == collation_type
+                  || CS_TYPE_UTF8MB4_CZECH_UCA_CI == collation_type
                   || CS_TYPE_UTF8MB4_0900_AI_CI == collation_type)) {
       ret = OB_NOT_SUPPORTED;
       SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_4_0", K(collation_type), K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.4, collation is");
+    } else if (data_version < DATA_VERSION_4_2_5_0
+              && (CS_TYPE_UTF8MB4_ZH_0900_AS_CS != collation_type &&
+                 CS_TYPE_UTF8MB4_CROATIAN_UCA_CI != collation_type &&
+                 CS_TYPE_UTF8MB4_UNICODE_520_CI != collation_type &&
+                 CS_TYPE_UTF8MB4_CZECH_UCA_CI != collation_type &&
+                 CS_TYPE_UTF8MB4_0900_AI_CI != collation_type &&
+                 ((CS_TYPE_UTF8MB4_0900_AI_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_MN_CYRL_0900_AS_CS)
+                  || (CS_TYPE_UTF16_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF16_VIETNAMESE_CI)
+                  || (CS_TYPE_UTF8MB4_ICELANDIC_UCA_CI <= collation_type && collation_type <= CS_TYPE_UTF8MB4_VIETNAMESE_CI)))) {
+      ret = OB_NOT_SUPPORTED;
+      SQL_LOG(WARN, "Unicode collation not supported when data_version < 4_2_5_0", K(collation_type), K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.2.5, collation is");
     }
   }
   return ret;
@@ -1207,31 +1219,37 @@ int ObSQLUtils::check_and_convert_table_name(const ObCollationType cs_type,
     char origin_name[OB_MAX_USER_TABLE_NAME_LENGTH_ORACLE * OB_MAX_CHAR_LEN + 1] = {'\0'};
     MEMCPY(origin_name, name_str, name_len);
     if (!preserve_lettercase) {
-      ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, name);
-    }
-    bool check_for_path_chars = false;
-    int64_t max_ident_len = max_user_table_name_length;
-    if ((stmt::T_SELECT == stmt_type || stmt::T_INSERT == stmt_type) && is_index_table) {
-      //索引表会有额外前缀,因此查询时长度限制用OB_MAX_TABLE_NAME_LENGTH
-      max_ident_len = OB_MAX_TABLE_NAME_LENGTH;
-    }
-    if (OB_ERR_WRONG_IDENT_NAME == (ret = check_ident_name(CS_TYPE_UTF8MB4_GENERAL_CI,
-                                                           name,
-                                                           check_for_path_chars,
-                                                           max_ident_len))) {
-      if (lib::is_oracle_mode()) {
-        // It allows the last char of table name and index name is space in oracle mode
-        ret = OB_SUCCESS;
-      } else {
+      size_t sz = ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, name);
+      if (sz == 0) {
         ret = OB_WRONG_TABLE_NAME;
-        LOG_USER_ERROR(OB_WRONG_TABLE_NAME, (int)strlen(origin_name), origin_name);
-        LOG_WARN("Incorrect table name", K(origin_name), K(ret));
+        LOG_WARN("fail to convert table name to lower case", K(name), K(ret));
       }
-    } else if (OB_ERR_TOO_LONG_IDENT == ret) {
-      LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, (int)strlen(origin_name), origin_name);
-      LOG_WARN("table name is too long", K(origin_name), K(max_ident_len), K(ret), K(stmt_type), K(is_index_table));
-    } else if (OB_FAIL(ret)) {
-      LOG_WARN("fail to check ident name", K(origin_name), K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      bool check_for_path_chars = false;
+      int64_t max_ident_len = max_user_table_name_length;
+      if ((stmt::T_SELECT == stmt_type || stmt::T_INSERT == stmt_type) && is_index_table) {
+        //索引表会有额外前缀,因此查询时长度限制用OB_MAX_TABLE_NAME_LENGTH
+        max_ident_len = OB_MAX_TABLE_NAME_LENGTH;
+      }
+      if (OB_ERR_WRONG_IDENT_NAME == (ret = check_ident_name(CS_TYPE_UTF8MB4_GENERAL_CI,
+                                                            name,
+                                                            check_for_path_chars,
+                                                            max_ident_len))) {
+        if (lib::is_oracle_mode()) {
+          // It allows the last char of table name and index name is space in oracle mode
+          ret = OB_SUCCESS;
+        } else {
+          ret = OB_WRONG_TABLE_NAME;
+          LOG_USER_ERROR(OB_WRONG_TABLE_NAME, (int)strlen(origin_name), origin_name);
+          LOG_WARN("Incorrect table name", K(origin_name), K(ret));
+        }
+      } else if (OB_ERR_TOO_LONG_IDENT == ret) {
+        LOG_USER_ERROR(OB_ERR_TOO_LONG_IDENT, (int)strlen(origin_name), origin_name);
+        LOG_WARN("table name is too long", K(origin_name), K(max_ident_len), K(ret), K(stmt_type), K(is_index_table));
+      } else if (OB_FAIL(ret)) {
+        LOG_WARN("fail to check ident name", K(origin_name), K(ret));
+      }
     }
   }
   return ret;

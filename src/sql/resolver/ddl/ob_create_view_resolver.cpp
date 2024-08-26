@@ -908,6 +908,7 @@ int ObCreateViewResolver::print_star_expanded_view_stmt(common::ObString &expand
         LOG_WARN("failed to append comma", K(ret));
       } else {
         ObSqlString column_name;
+        ObString column_name_copy;
         if (start_pos != end_pos && OB_FAIL(expanded_str.append(table_name))) {
           LOG_WARN("failed to append table_name", K(ret));
         } else if (OB_FAIL(column_name.append("\""))) {
@@ -916,7 +917,11 @@ int ObCreateViewResolver::print_star_expanded_view_stmt(common::ObString &expand
           LOG_WARN("failed to append column name", K(ret));
         } else if (OB_FAIL(column_name.append("\""))) {
           LOG_WARN("failed to append quote", K(ret));
-        } else if (OB_FAIL(expanded_str.append(column_name.string()))) {
+        } else if (OB_FAIL(ob_write_string(*allocator_, column_name.string(), column_name_copy, true))) {
+          LOG_WARN("failed to write string", K(ret));
+        } else if (OB_FAIL(ObSQLUtils::convert_sql_text_from_schema_for_resolve(*allocator_, session_info_->get_dtc_params(), column_name_copy))) {
+          LOG_WARN("failed to convert sql text", K(ret));
+        } else if (OB_FAIL(expanded_str.append(column_name_copy))) {
           LOG_WARN("failed to append column name", K(ret));
         }
       }

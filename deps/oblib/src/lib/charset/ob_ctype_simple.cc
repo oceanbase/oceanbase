@@ -764,7 +764,7 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
   const unsigned char *end;
   unsigned char data[HASH_BUFFER_LENGTH];
   int length = 0;
-  end= calc_end_space ? key + len : skip_trailing_space(key, len, 0);
+  end= calc_end_space ? key + len : cs->cset->skip_trailing_space(cs, key, len); // used in gbk sjis tis620
 
   if (NULL == hash_algo) {
     for (; key < (unsigned char*) end ; key++) {
@@ -786,10 +786,10 @@ void ob_hash_sort_simple(const ObCharsetInfo *cs,
 
 #define SPACE_INT 0x20202020
 
-const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bool is_utf16 /*false*/)
+const unsigned char *skip_trailing_space(const struct ObCharsetInfo *cs __attribute__((unused)),const unsigned char *ptr,size_t len)
 {
   const unsigned char *end= ptr + len;
-  if (len > 20 && !is_utf16) {
+  if (len > 20) {
     const unsigned char *end_words= (const unsigned char *)(int_ptr)
       (((ulonglong)(int_ptr)end) / SIZEOF_INT * SIZEOF_INT);
     const unsigned char *start_words= (const unsigned char *)(int_ptr)
@@ -806,13 +806,26 @@ const unsigned char *skip_trailing_space(const unsigned char *ptr,size_t len, bo
       }
     }
   }
-  if (is_utf16) {
-      while (end - 1 > ptr && end[-2] == 0x00 && end[-1] == 0x20)
-        end-=2;
-  } else {
-    while (end > ptr && end[-1] == 0x20)
-      end--;
-  }
+  while (end > ptr && end[-1] == 0x20)
+    end--;
+  return (end);
+}
+
+const unsigned char *skip_trailing_space_utf16(const struct ObCharsetInfo *  __attribute__((unused)), const unsigned char *ptr,size_t len)
+{
+  const unsigned char *end= ptr + len;
+  while (end - 1 > ptr && end[-2] == 0x00 && end[-1] == 0x20)
+    end-=2;
+
+  return (end);
+}
+
+const unsigned char *skip_trailing_space_utf16le(const struct ObCharsetInfo *  __attribute__((unused)), const unsigned char *ptr,size_t len)
+{
+  const unsigned char *end= ptr + len;
+  while (end - 1 > ptr && end[-2] == 0x20 && end[-1] == 0x00)
+    end-=2;
+
   return (end);
 }
 

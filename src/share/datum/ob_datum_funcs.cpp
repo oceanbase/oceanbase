@@ -643,7 +643,7 @@ static uint64_t datum_varchar_hash_utf8mb4_bin(
     const uchar *key = reinterpret_cast<const uchar *>(str_ptr);
     const uchar *pos = key;
     int length = str_len;
-    key = skip_trailing_space(key, str_len, 0);
+    key = skip_trailing_space(&ob_charset_utf8mb4_bin, key, str_len); // use in utf8mb4 use false false
     length = (int)(key - pos);
     ret = T::hash((void*)pos, length, seed);
   }

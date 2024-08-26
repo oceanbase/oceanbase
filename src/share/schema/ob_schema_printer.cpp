@@ -356,8 +356,7 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
                         oceanbase::common::ObCharsetType::CHARSET_BINARY == charset_type) {
                       // observer perform no conversion of result sets or error messages, you can see more detail the official website of MySQL
                     } else {
-                      ObCollationType collation_type = ObCharset::get_default_collation(charset_type);
-                      if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), collation_type, out_str))) {
+                      if (OB_FAIL(ObCharset::charset_convert(allocator, default_value.get_string(), default_value.get_collation_type(), ObCharset::get_system_collation(), out_str))) {
                         SHARE_SCHEMA_LOG(WARN, "fail to convert charset", K(ret));
                       }
                     }

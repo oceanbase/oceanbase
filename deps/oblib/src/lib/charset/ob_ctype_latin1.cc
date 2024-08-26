@@ -67,7 +67,8 @@ static ObCharsetHandler ob_charset_latin1_handler=
   ob_strntod_8bit,
   //ob_strtoll10_8bit,
   ob_strntoull10rnd_8bit,
-  ob_scan_8bit
+  ob_scan_8bit,
+  skip_trailing_space
 };
 
 ObCharsetInfo ob_charset_latin1 = {

@@ -142,7 +142,7 @@ TEST_F(TestCharset, sortkey)
 
   char space[10] = "  ";
   size1 = ObCharset::sortkey(CS_TYPE_UTF8MB4_GENERAL_CI, space, strlen(space), aa1, 10, is_valid_unicode);
-  ASSERT_EQ(size1, 2);
+  ASSERT_EQ(size1, 4);
   ASSERT_TRUE(is_valid_unicode);
 
   char empty[10] = "";
@@ -155,7 +155,7 @@ TEST_F(TestCharset, sortkey)
   invalid[1] = char(0x80);
   invalid[2] = '\0';
   size1 = ObCharset::sortkey(CS_TYPE_UTF8MB4_GENERAL_CI, invalid, strlen(invalid), aa1, 10, is_valid_unicode);
-  ASSERT_EQ(size1, 1);
+  ASSERT_EQ(size1, 2);
   ASSERT_FALSE(is_valid_unicode);
 
   //std::map<int, int> charset{
@@ -196,11 +196,11 @@ TEST_F(TestCharset, sortkey)
   std::vector<std::vector<int>>result{
     {0,1,1,1,1},
     {1,4,1,1,0},
-    {2,6,1,0,0},
+    {2,4,1,0,0},
     {3,6,1,0,0},
     {4,1,1,1,1},
     {5,4,1,0,0},
-    {6,4,1,0,0},
+    {6,6,1,0,0},
     {7,1,1,1,1},
     {8,4,1,1,1},
     {9,10,1,10,1},
@@ -606,7 +606,8 @@ TEST_F(TestCharset, tolower)
   fprintf(stdout, "ret:%p, %d\n", y1.ptr(), y1.length() );
   for (int cs_i = CHARSET_INVALID; cs_i < CHARSET_MAX; ++cs_i) {
     auto charset_type = static_cast<ObCharsetType>(cs_i);
-    if (!ObCharset::is_valid_charset(charset_type) || CHARSET_UTF16 == charset_type || CHARSET_BINARY == charset_type)
+    if (!ObCharset::is_valid_charset(charset_type) || CHARSET_UTF16 == charset_type
+        || CHARSET_UTF16LE == charset_type || CHARSET_BINARY == charset_type)
       continue;
     ObCollationType cs_type = ObCharset::get_default_collation(charset_type);
     ASSERT_TRUE(ObCharset::is_valid_collation(cs_type));
@@ -641,7 +642,8 @@ TEST_F(TestCharset, toupper)
   fprintf(stdout, "ret:%p, %d\n", y1.ptr(), y1.length() );
   for (int cs_i = CHARSET_INVALID; cs_i < CHARSET_MAX; ++cs_i) {
     auto charset_type = static_cast<ObCharsetType>(cs_i);
-    if (!ObCharset::is_valid_charset(charset_type) || CHARSET_UTF16 == charset_type || CHARSET_BINARY == charset_type)
+    if (!ObCharset::is_valid_charset(charset_type) || CHARSET_UTF16 == charset_type
+    || CHARSET_UTF16LE == charset_type || CHARSET_BINARY == charset_type)
       continue;
     ObCollationType cs_type = ObCharset::get_default_collation(charset_type);
     ASSERT_TRUE(ObCharset::is_valid_collation(cs_type));
@@ -824,12 +826,12 @@ TEST_F(TestCharset, check_gb18030_2022)
   }
 }
 
-std::vector<const char *> test_strings = {"1", "abcdef", "ab1dc4", "你好", "b今a天", "1abad    "};
+std::vector<const char *> test_strings = {"1", "abcdef", "ab1dc4", "好", "b今a天", "1abad    "};
 
 TEST_F(TestCharset, basic_collation_handler_test)
 {
   ObArenaAllocator alloc;
-  for (int i = CS_TYPE_INVALID; i < CS_TYPE_EXTENDED_MARK; i++) {
+  for (int i = CS_TYPE_INVALID; i < CS_TYPE_PINYIN_BEGIN_MARK; i++) {
     ObCollationType coll = static_cast<ObCollationType>(i);
     const ObCharsetInfo * cs = ObCharset::get_charset(coll);
       const char *coll_name = ObCharset::collation_name(coll);
