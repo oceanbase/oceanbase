@@ -73,8 +73,6 @@ public:
       external_properties_(alloc),
       external_partition_(alloc)
   {
-    compression_algorithm_ = 0; /* parquet::Compression::UNCOMPRESSED */
-    per_row_group_size_ = DEFAULT_MAX_FILE_SIZE;
     cs_type_ = ObCharset::get_system_collation();
   }
 
@@ -97,8 +95,6 @@ public:
   bool is_overwrite_;
   ObExternalFileFormat::StringData external_properties_;
   ObExternalFileFormat::StringData external_partition_;
-  int64_t per_row_group_size_;
-  int64_t compression_algorithm_;
   static const int64_t DEFAULT_MAX_FILE_SIZE = 256LL * 1024 * 1024;
   static const int64_t DEFAULT_BUFFER_SIZE = 1LL * 1024 * 1024;
 };
