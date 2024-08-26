@@ -1321,6 +1321,11 @@ int ObCreateViewResolver::resolve_mv_options(const ObSelectStmt *stmt,
              && OB_FAIL(ObMVChecker::check_mv_fast_refresh_valid(stmt, params_.stmt_factory_,
                                                                  params_.expr_factory_,
                                                                  params_.session_info_))) {
+    // When creating an MV, which can not be fast refreshed, with both fast refresh
+    // and on query computation, we should return CAN_NOT_ON_QUERY_COMPUTE
+    if (table_schema.mv_on_query_computation() && OB_ERR_MVIEW_CAN_NOT_FAST_REFRESH == ret) {
+      ret = OB_ERR_MVIEW_CAN_NOT_ON_QUERY_COMPUTE;
+    }
     LOG_WARN("fail to check fast refresh valid", K(ret));
   } else if (table_schema.mv_on_query_computation()
              && OB_FAIL(check_on_query_computation_supported(stmt))) {
