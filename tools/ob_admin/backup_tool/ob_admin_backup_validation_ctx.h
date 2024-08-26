@@ -214,7 +214,6 @@ struct ObAdminBackupTabletValidationAttr final
   backup::ObBackupMetaIndex *sstable_meta_index_;
   backup::ObBackupMetaIndex *tablet_meta_index_;
   backup::ObBackupMetaIndex *macro_block_id_mappings_meta_index_;
-  backup::ObBackupMacroBlockIDMappingsMeta *id_mappings_meta_;
   TO_STRING_KV(KP(tablet_meta_index_));
   DISALLOW_COPY_AND_ASSIGN(ObAdminBackupTabletValidationAttr);
 };
@@ -314,8 +313,6 @@ struct ObAdminBackupValidationCtx final
   common::hash::ObHashMap<ObAdminPieceKey, ObAdminBackupPieceValidationAttr *> backup_piece_map_;
   common::ObArray<int64_t> processing_backup_set_id_array_;
   common::ObArray<ObAdminPieceKey> processing_backup_piece_key_array_;
-  // TODO: give a sql_proxy
-  common::ObMySQLProxy *sql_proxy_;
   ObAdminBackupValidationStat global_stat_;
   common::ObSafeArenaAllocator allocator_;
 

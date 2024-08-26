@@ -381,7 +381,6 @@ private:
   int inner_schedule_for_complement_log_(
       const share::ObBackupDest &backup_set_dest,
       const storage::ObExternBackupSetInfoDesc &backup_set_info_desc);
-  int check_placeholder_();
   int check_locality_file_();
   int check_diagnose_file_();
 
@@ -398,6 +397,18 @@ private:
   int collect_major_tablet_meta_index_();
   int inner_check_tablet_meta_index_(const ObArray<backup::ObBackupMetaIndex> &meta_index_list,
                                      const ObArray<backup::ObBackupMetaIndex> &sec_meta_index_list);
+  int inner_split_meta_index_(
+      const ObArray<backup::ObBackupMetaIndex> &meta_index_list,
+      const ObArray<backup::ObBackupMetaIndex> &sec_meta_index_list,
+      ObArray<const backup::ObBackupMetaIndex *> &sstable_meta_index_list,
+      ObArray<const backup::ObBackupMetaIndex *> &tablet_meta_index_list,
+      ObArray<const backup::ObBackupMetaIndex *> &macro_block_id_mappings_meta_index_list);
+  int inner_check_tablet_meta_index_with_macro_block_id_mapping_meta_index_(
+      const backup::ObBackupMetaIndex &tablet_meta_index,
+      const backup::ObBackupMetaIndex &macro_block_id_mappings_meta_index);
+  int inner_check_sstable_meta_index_with_macro_block_id_mapping_meta_index_(
+      const backup::ObBackupMetaIndex &sstable_meta_index,
+      const backup::ObBackupMetaIndex &macro_block_id_mappings_meta_index);
   int check_tenant_tablet_meta_index(); // cross check between minor and major
   void post_process_(int ret);
 
@@ -453,6 +464,12 @@ private:
   int collect_tablet_meta_info_();
   int collect_sstable_meta_info_();
   int check_sstable_meta_info_and_prepare_macro_block_();
+  int inner_check_sstable_meta_with_macro_block_id_mapping_(
+      const backup::ObBackupTabletMeta &tablet_meta,
+      const backup::ObBackupSSTableMeta &sstable_meta,
+      const backup::ObBackupMacroBlockIDMapping &macro_block_id_mapping, share::SCN &last_end_scn);
+  int inner_check_macro_block_id_(const backup::ObBackupMacroBlockIDPair &macro_block_id_pair,
+                                  const blocksstable::ObLogicMacroBlockId &logic_macro_block_id);
 
 private:
   bool is_inited_;

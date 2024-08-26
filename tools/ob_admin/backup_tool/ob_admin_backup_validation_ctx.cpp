@@ -26,7 +26,7 @@ uint64_t ObAdminPieceKey::hash() const
 }
 ObAdminBackupTabletValidationAttr::ObAdminBackupTabletValidationAttr()
     : ls_id_(), data_type_(), sstable_meta_index_(nullptr), tablet_meta_index_(nullptr),
-      macro_block_id_mappings_meta_index_(nullptr), id_mappings_meta_(nullptr)
+      macro_block_id_mappings_meta_index_(nullptr)
 {
 }
 ObAdminBackupTabletValidationAttr::~ObAdminBackupTabletValidationAttr()
@@ -42,10 +42,6 @@ ObAdminBackupTabletValidationAttr::~ObAdminBackupTabletValidationAttr()
   if (OB_NOT_NULL(macro_block_id_mappings_meta_index_)) {
     macro_block_id_mappings_meta_index_->~ObBackupMetaIndex();
     macro_block_id_mappings_meta_index_ = nullptr;
-  }
-  if (OB_NOT_NULL(id_mappings_meta_)) {
-    id_mappings_meta_->~ObBackupMacroBlockIDMappingsMeta();
-    id_mappings_meta_ = nullptr;
   }
 }
 ObAdminBackupLSValidationAttr::ObAdminBackupLSValidationAttr()
@@ -257,36 +253,43 @@ int ObAdminBackupPieceValidationAttr::split_lsn_range(
   int ret = OB_SUCCESS;
   FOREACH_X(ls_map_iter, ls_map_, OB_SUCC(ret))
   {
-    const share::ObLSID ls_id = ls_map_iter->second->single_ls_info_desc_->ls_id_;
-    palf::LSN start_lsn(ls_map_iter->second->single_ls_info_desc_->min_lsn_);
-    const palf::LSN end_lsn(ls_map_iter->second->single_ls_info_desc_->max_lsn_);
-    if (backup_piece_info_desc_->piece_.is_active()) {
-      if (OB_FAIL(lsn_range_array.push_back(
-              std::make_pair(ls_id, std::make_pair(start_lsn, end_lsn))))) {
-        STORAGE_LOG(WARN, "failed to push back lsn range", K(ret));
-        break;
-      } else {
-        continue;
+    if (OB_ISNULL(ls_map_iter->second)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "ls map iter is null", K(ret));
+    } else if (OB_ISNULL(ls_map_iter->second->single_ls_info_desc_)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "single ls info desc is null", K(ret));
+    } else {
+      const share::ObLSID ls_id = ls_map_iter->second->single_ls_info_desc_->ls_id_;
+      palf::LSN start_lsn(ls_map_iter->second->single_ls_info_desc_->min_lsn_);
+      const palf::LSN end_lsn(ls_map_iter->second->single_ls_info_desc_->max_lsn_);
+      if (backup_piece_info_desc_->piece_.is_active()) {
+        if (OB_FAIL(lsn_range_array.push_back(
+                std::make_pair(ls_id, std::make_pair(start_lsn, end_lsn))))) {
+          STORAGE_LOG(WARN, "failed to push back lsn range", K(ret));
+          break;
+        } else {
+          continue;
+        }
       }
-    }
-    while (OB_SUCC(ret) && start_lsn < end_lsn) {
-      palf::LSN partial_lsn = start_lsn + palf::PALF_BLOCK_SIZE;
-      if (partial_lsn > end_lsn) {
-        partial_lsn = end_lsn;
-      }
-      if (OB_FAIL(lsn_range_array.push_back(
-              std::make_pair(ls_id, std::make_pair(start_lsn, partial_lsn))))) {
-        STORAGE_LOG(WARN, "failed to push back lsn range", K(ret));
-      } else {
-        start_lsn = partial_lsn;
+      while (OB_SUCC(ret) && start_lsn < end_lsn) {
+        palf::LSN partial_lsn = start_lsn + palf::PALF_BLOCK_SIZE;
+        if (partial_lsn > end_lsn) {
+          partial_lsn = end_lsn;
+        }
+        if (OB_FAIL(lsn_range_array.push_back(
+                std::make_pair(ls_id, std::make_pair(start_lsn, partial_lsn))))) {
+          STORAGE_LOG(WARN, "failed to push back lsn range", K(ret));
+        } else {
+          start_lsn = partial_lsn;
+        }
       }
     }
   }
   return ret;
 }
 ObAdminBackupValidationCtx::ObAdminBackupValidationCtx(ObArenaAllocator &arena)
-    : aborted_(false), sql_proxy_(nullptr), global_stat_(), allocator_(arena), throttle_(),
-      states_icon_pos_(0)
+    : aborted_(false), global_stat_(), allocator_(arena), throttle_(), states_icon_pos_(0)
 {
 }
 ObAdminBackupValidationCtx::~ObAdminBackupValidationCtx()

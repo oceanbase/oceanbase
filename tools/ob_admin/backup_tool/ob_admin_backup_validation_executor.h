@@ -55,6 +55,7 @@ private:
   ObAdminBackupValidationType validation_type_;
   ObAdminBackupValidationCtx *ctx_;
   common::ObArenaAllocator allocator_;
+  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupValidationExecutor);
 };
 
 }; // namespace tools

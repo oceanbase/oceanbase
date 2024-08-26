@@ -165,6 +165,7 @@ public:
         if (OB_FAIL(backup_struct.deserialize(buf, sizeof(backup_struct), pos))) {
           STORAGE_LOG(WARN, "failed to deserialize", K(ret), K(file_path));
         } else if (!backup_struct.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "failed to check is valid", K(ret), K(backup_struct));
         } else {
           STORAGE_LOG(INFO, "succeed to read backup struct", K(file_path));

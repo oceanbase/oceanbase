@@ -14,6 +14,7 @@
 #include "ob_admin_backup_validation_executor.h"
 #include "ob_admin_backup_validation_util.h"
 #include "share/backup/ob_archive_checkpoint_mgr.h"
+#include "share/ob_upgrade_utils.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #define CLEAR_LINE "\033[1K\033[0G"
 namespace oceanbase
@@ -154,8 +155,8 @@ int ObAdminLogArchiveValidationDagNet::start_running()
   ObAdminBackupPieceValidationDag *backup_piece_validation_dag = nullptr;
   ObAdminFinishLogArchiveValidationDag *finish_log_archive_validation_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
-  // TODO: jiangshichao.jsc handle state cancelation when encounter error
-  // create dag and connections
+  // TODO: if schedule dag failure, ob_admin process will exit. No need to cancel and recovery state
+  // here create dag and connections
   if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "scheduler is null", K(ret));
@@ -440,11 +441,11 @@ int ObAdminPrepareLogArchiveValidationTask::collect_backup_piece_()
     STORAGE_LOG(INFO, "succeed to get backup piece names", K(ret), K(backup_piece_array));
     ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
     if (ctx_->backup_piece_key_array_.count()) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < ctx_->backup_piece_key_array_.count(); ++j) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->backup_piece_key_array_.count(); ++i) {
         bool filtered = false;
-        for (int64_t i = 0; OB_SUCC(ret) && i < backup_piece_array.count(); ++i) {
-          ObAdminPieceKey backup_piece_key = backup_piece_array.at(i);
-          if (backup_piece_key == ctx_->backup_piece_key_array_.at(j)) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < backup_piece_array.count(); ++j) {
+          ObAdminPieceKey backup_piece_key = backup_piece_array.at(j);
+          if (backup_piece_key == ctx_->backup_piece_key_array_.at(i)) {
             backup_piece_dest.reset();
             if (OB_FAIL(ObArchivePathUtil::get_piece_dir_path(
                     *ctx_->log_archive_dest_, backup_piece_key.dest_id_, backup_piece_key.round_id_,
@@ -476,7 +477,7 @@ int ObAdminPrepareLogArchiveValidationTask::collect_backup_piece_()
         if (!filtered) {
           ret = OB_ERR_UNEXPECTED;
           STORAGE_LOG(WARN, "designated backup piece found", K(ret), "backup_piece_key",
-                      ctx_->backup_piece_key_array_.at(j));
+                      ctx_->backup_piece_key_array_.at(i));
         }
       }
     } else {
@@ -577,8 +578,12 @@ void ObAdminPrepareLogArchiveValidationTask::post_process_(int ret)
       printf("Succeed found OB backup piece: ");
       FOREACH(iter, ctx_->processing_backup_piece_key_array_)
       {
-        printf("b%ldd%ldr%ldp%ld ", iter->backup_set_id_, iter->dest_id_, iter->round_id_,
-               iter->piece_id_);
+        if (iter->backup_set_id_ == 0) {
+          printf("d%ldr%ldp%ld ", iter->dest_id_, iter->round_id_, iter->piece_id_);
+        } else {
+          printf("d%ldr%ldp%ld(from backup set %ld) ", iter->dest_id_, iter->round_id_,
+                 iter->piece_id_, iter->backup_set_id_);
+        }
       }
       printf("\n");
     } else {
@@ -713,8 +718,6 @@ int ObAdminBackupPieceValidationDag::create_first_task()
 int ObAdminBackupPieceValidationDag::generate_next_dag(ObIDag *&next_dag)
 {
   int ret = OB_SUCCESS;
-  // TODO: due the the pre-allocation of log archive, the generate cannot not be too agressive, slow
-  // it down or make a trade off between speed and memory
   ObTenantDagScheduler *scheduler = nullptr;
   ObAdminBackupPieceValidationDag *sibling_dag = nullptr;
   int64_t next_id = id_ + 1;
@@ -826,86 +829,88 @@ int ObAdminBackupPieceMetaValidationTask::check_backup_piece_info_()
   } else if (OB_FAIL(ObAdminBackupValidationUtil::check_file_exist(
                  full_path.get_ptr(), backup_storage_info, is_single_piece_file_exist))) {
     STORAGE_LOG(WARN, "failed to check file exist", K(ret), K(full_path));
-  }
-  if (is_single_piece_file_exist) {
-    // forzen piece
-    if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file(
-            full_path, *backup_storage_info, *backup_piece_attr->backup_piece_info_desc_, ctx_))) {
-      STORAGE_LOG(WARN, "failed to read single piece file info", K(ret), K(full_path));
-    } else if (!backup_piece_attr->backup_piece_info_desc_->piece_.is_valid()
-               || !backup_piece_attr->backup_piece_info_desc_->piece_.is_frozen()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "not a forzon piece", K(ret),
-                  K(*backup_piece_attr->backup_piece_info_desc_));
-    } else {
-      STORAGE_LOG(INFO, "succeed to read single piece file info", K(ret), K(full_path),
-                  K(*backup_piece_attr->backup_piece_info_desc_));
-    }
   } else {
-    STORAGE_LOG(INFO, "single piece file info is not exist, not a forzon piece", K(ret),
-                K(full_path));
-    full_path.reset();
-    ObPieceCheckpointDesc checkpoint_desc;
-    ObTenantArchivePieceInfosDesc extend_desc;
-    share::ObArchiveCheckpointMgr mgr;
-    uint64_t max_checkpoint_scn = 0;
-    bool is_piece_checkpoint_file_exist = false;
-    if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_file_path(
-            backup_piece_store->get_backup_dest(), 0, full_path))) {
-      STORAGE_LOG(WARN, "failed to get piece checkpoint file info path", K(ret),
-                  K(backup_piece_store->get_backup_dest()));
-    } else if (OB_FAIL(ObAdminBackupValidationUtil::check_file_exist(
-                   full_path.get_ptr(), backup_storage_info, is_piece_checkpoint_file_exist))) {
-      STORAGE_LOG(WARN, "failed to check file exist", K(ret), K(full_path));
-    } else if (!is_piece_checkpoint_file_exist) {
-      STORAGE_LOG(INFO, "empty piece checkpoint file", K(ret), K(full_path));
-    } else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file(
-                   full_path, *backup_storage_info, checkpoint_desc, ctx_))) {
-      STORAGE_LOG(WARN, "failed to read single piece file info", K(ret), K(full_path));
-    } else if (FALSE_IT(full_path.reset())) {
-    } else if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_dir_path(
-                   backup_piece_store->get_backup_dest(), full_path))) {
-      STORAGE_LOG(WARN, "failed to get piece checkpoint file info path", K(ret),
-                  K(backup_piece_store->get_backup_dest()));
-    } else if (OB_FAIL(mgr.init(full_path, OB_STR_CHECKPOINT_FILE_NAME, ObBackupFileSuffix::ARCHIVE,
-                                backup_storage_info))) {
-      STORAGE_LOG(WARN, "failed to init archive checkpoint mgr", K(ret), K(full_path));
-    } else if (OB_FAIL(mgr.read(max_checkpoint_scn))) {
-      STORAGE_LOG(WARN, "failed to read archive checkpoint mgr", K(ret), K(full_path));
-    } else if (0 == max_checkpoint_scn) {
-      // do nothing, archive is not started yet
-    } else if (OB_FAIL(checkpoint_desc.checkpoint_scn_.convert_for_inner_table_field(
-                   max_checkpoint_scn))) {
-      STORAGE_LOG(WARN, "failed to convert checkpoint scn", K(ret), K(max_checkpoint_scn));
-    } else if (OB_FAIL(
-                   checkpoint_desc.max_scn_.convert_for_inner_table_field(max_checkpoint_scn))) {
-      STORAGE_LOG(WARN, "failed to convert checkpoint scn", K(ret), K(max_checkpoint_scn));
-    } else if (FALSE_IT(full_path.reset())) {
-    } else if (OB_FAIL(ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(
-                   backup_piece_store->get_backup_dest(), full_path))) {
-    } else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file(
-                   full_path, *backup_storage_info, extend_desc, ctx_))) {
-      STORAGE_LOG(WARN, "failed to read check piece extend info file info", K(ret), K(full_path));
+    if (is_single_piece_file_exist) {
+      // forzen piece
+      if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file(
+              full_path, *backup_storage_info, *backup_piece_attr->backup_piece_info_desc_,
+              ctx_))) {
+        STORAGE_LOG(WARN, "failed to read single piece file info", K(ret), K(full_path));
+      } else if (!backup_piece_attr->backup_piece_info_desc_->piece_.is_valid()
+                 || !backup_piece_attr->backup_piece_info_desc_->piece_.is_frozen()) {
+        ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "not a forzon piece", K(ret),
+                    K(*backup_piece_attr->backup_piece_info_desc_));
+      } else {
+        STORAGE_LOG(INFO, "succeed to read single piece file info", K(ret), K(full_path),
+                    K(*backup_piece_attr->backup_piece_info_desc_));
+      }
     } else {
-      // merge static piece attr with dynamic attr.
-      backup_piece_attr->backup_piece_info_desc_->piece_.key_.tenant_id_ = extend_desc.tenant_id_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.key_.dest_id_ = extend_desc.dest_id_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.key_.round_id_ = extend_desc.round_id_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.key_.piece_id_ = extend_desc.piece_id_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.incarnation_ = extend_desc.incarnation_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.dest_no_ = extend_desc.dest_no_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.start_scn_ = extend_desc.start_scn_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.checkpoint_scn_
-          = checkpoint_desc.checkpoint_scn_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.max_scn_ = checkpoint_desc.max_scn_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.end_scn_ = extend_desc.end_scn_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.compatible_ = extend_desc.compatible_;
-      backup_piece_attr->backup_piece_info_desc_->piece_.status_.set_active();
-      backup_piece_attr->backup_piece_info_desc_->piece_.file_status_
-          = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
-      backup_piece_attr->backup_piece_info_desc_->piece_.path_ = extend_desc.path_;
-      STORAGE_LOG(INFO, "succeed to merge static piece attr with dynamic attr", K(ret),
-                  K(full_path), K(*backup_piece_attr->backup_piece_info_desc_));
+      STORAGE_LOG(INFO, "single piece file info is not exist, not a forzon piece", K(ret),
+                  K(full_path));
+      full_path.reset();
+      ObPieceCheckpointDesc checkpoint_desc;
+      ObTenantArchivePieceInfosDesc extend_desc;
+      share::ObArchiveCheckpointMgr mgr;
+      uint64_t max_checkpoint_scn = 0;
+      bool is_piece_checkpoint_file_exist = false;
+      if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_file_path(
+              backup_piece_store->get_backup_dest(), 0, full_path))) {
+        STORAGE_LOG(WARN, "failed to get piece checkpoint file info path", K(ret),
+                    K(backup_piece_store->get_backup_dest()));
+      } else if (OB_FAIL(ObAdminBackupValidationUtil::check_file_exist(
+                     full_path.get_ptr(), backup_storage_info, is_piece_checkpoint_file_exist))) {
+        STORAGE_LOG(WARN, "failed to check file exist", K(ret), K(full_path));
+      } else if (!is_piece_checkpoint_file_exist) {
+        STORAGE_LOG(INFO, "empty piece checkpoint file", K(ret), K(full_path));
+      } else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file(
+                     full_path, *backup_storage_info, checkpoint_desc, ctx_))) {
+        STORAGE_LOG(WARN, "failed to read single piece file info", K(ret), K(full_path));
+      } else if (FALSE_IT(full_path.reset())) {
+      } else if (OB_FAIL(ObArchivePathUtil::get_piece_checkpoint_dir_path(
+                     backup_piece_store->get_backup_dest(), full_path))) {
+        STORAGE_LOG(WARN, "failed to get piece checkpoint file info path", K(ret),
+                    K(backup_piece_store->get_backup_dest()));
+      } else if (OB_FAIL(mgr.init(full_path, OB_STR_CHECKPOINT_FILE_NAME,
+                                  ObBackupFileSuffix::ARCHIVE, backup_storage_info))) {
+        STORAGE_LOG(WARN, "failed to init archive checkpoint mgr", K(ret), K(full_path));
+      } else if (OB_FAIL(mgr.read(max_checkpoint_scn))) {
+        STORAGE_LOG(WARN, "failed to read archive checkpoint mgr", K(ret), K(full_path));
+      } else if (0 == max_checkpoint_scn) {
+        // do nothing, archive is not started yet
+      } else if (OB_FAIL(checkpoint_desc.checkpoint_scn_.convert_for_inner_table_field(
+                     max_checkpoint_scn))) {
+        STORAGE_LOG(WARN, "failed to convert checkpoint scn", K(ret), K(max_checkpoint_scn));
+      } else if (OB_FAIL(
+                     checkpoint_desc.max_scn_.convert_for_inner_table_field(max_checkpoint_scn))) {
+        STORAGE_LOG(WARN, "failed to convert checkpoint scn", K(ret), K(max_checkpoint_scn));
+      } else if (FALSE_IT(full_path.reset())) {
+      } else if (OB_FAIL(ObArchivePathUtil::get_tenant_archive_piece_infos_file_path(
+                     backup_piece_store->get_backup_dest(), full_path))) {
+      } else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file(
+                     full_path, *backup_storage_info, extend_desc, ctx_))) {
+        STORAGE_LOG(WARN, "failed to read check piece extend info file info", K(ret), K(full_path));
+      } else {
+        // merge static piece attr with dynamic attr.
+        backup_piece_attr->backup_piece_info_desc_->piece_.key_.tenant_id_ = extend_desc.tenant_id_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.key_.dest_id_ = extend_desc.dest_id_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.key_.round_id_ = extend_desc.round_id_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.key_.piece_id_ = extend_desc.piece_id_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.incarnation_ = extend_desc.incarnation_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.dest_no_ = extend_desc.dest_no_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.start_scn_ = extend_desc.start_scn_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.checkpoint_scn_
+            = checkpoint_desc.checkpoint_scn_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.max_scn_ = checkpoint_desc.max_scn_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.end_scn_ = extend_desc.end_scn_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.compatible_ = extend_desc.compatible_;
+        backup_piece_attr->backup_piece_info_desc_->piece_.status_.set_active();
+        backup_piece_attr->backup_piece_info_desc_->piece_.file_status_
+            = ObBackupFileStatus::STATUS::BACKUP_FILE_AVAILABLE;
+        backup_piece_attr->backup_piece_info_desc_->piece_.path_ = extend_desc.path_;
+        STORAGE_LOG(INFO, "succeed to merge static piece attr with dynamic attr", K(ret),
+                    K(full_path), K(*backup_piece_attr->backup_piece_info_desc_));
+      }
     }
   }
   if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
@@ -1149,40 +1154,59 @@ int ObAdminBackupPieceMetaValidationTask::collect_and_check_piece_ls_onefile_len
 void ObAdminBackupPieceMetaValidationTask::post_process_(int ret)
 {
   int tmp_ret = OB_SUCCESS;
+  ObAdminPieceKey backup_piece_key;
   if (IS_NOT_INIT) {
     tmp_ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret), K(tmp_ret));
   } else if (OB_CANCELED == ret) {
     STORAGE_LOG(INFO, "backup piece meta validation task is canceled", K(ret), K(task_id_));
   } else if (ctx_->processing_backup_piece_key_array_.empty()) {
+    tmp_ret = OB_ITER_END;
     STORAGE_LOG(INFO, "backup piece key is all empty", K(ret), K(task_id_));
+  } else if (OB_TMP_FAIL(ctx_->processing_backup_piece_key_array_.at(task_id_, backup_piece_key))) {
+    STORAGE_LOG(WARN, "failed to get backup piece key", K(tmp_ret), K(task_id_));
   } else {
-    ObAdminPieceKey backup_piece_key;
-    ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(ctx_->processing_backup_piece_key_array_.at(task_id_, backup_piece_key))) {
-      STORAGE_LOG(WARN, "failed to get backup piece key", K(tmp_ret), K(task_id_));
-    } else if (OB_TMP_FAIL(ctx_->get_backup_piece_attr(backup_piece_key, backup_piece_attr))) {
-      STORAGE_LOG(WARN, "failed to get backup piece attr", K(tmp_ret), K(backup_piece_key));
-    } else if (OB_ISNULL(backup_piece_attr)) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "backup piece attr is null", K(tmp_ret));
-    } else if (OB_SUCC(ret)) {
-      printf(CLEAR_LINE);
-      printf("%s Backup piece b%ldd%ldr%ldp%ld passed meta info validation\n",
-             backup_piece_attr->backup_piece_info_desc_->piece_.is_frozen() ? "Frozen" : "Active",
-             ctx_->processing_backup_piece_key_array_.at(task_id_).backup_set_id_,
-             ctx_->processing_backup_piece_key_array_.at(task_id_).dest_id_,
-             ctx_->processing_backup_piece_key_array_.at(task_id_).round_id_,
-             ctx_->processing_backup_piece_key_array_.at(task_id_).piece_id_);
+    if (OB_SUCC(ret)) {
+      ObAdminBackupPieceValidationAttr *backup_piece_attr = nullptr;
+      if (OB_TMP_FAIL(ctx_->get_backup_piece_attr(backup_piece_key, backup_piece_attr))) {
+        STORAGE_LOG(WARN, "failed to get backup piece attr", K(tmp_ret), K(backup_piece_key));
+      } else if (OB_ISNULL(backup_piece_attr)
+                 || OB_ISNULL(backup_piece_attr->backup_piece_info_desc_)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "backup piece attr is null", K(tmp_ret));
+      } else if (backup_piece_attr->backup_piece_info_desc_->piece_.is_frozen()) {
+        printf(CLEAR_LINE);
+        if (backup_piece_key.backup_set_id_ == 0) {
+          printf("Frozen Backup piece d%ldr%ldp%ld passed meta info validation\n",
+                 backup_piece_key.dest_id_, backup_piece_key.round_id_, backup_piece_key.piece_id_);
+        } else {
+          printf(
+              "Frozen Backup piece d%ldr%ldp%ld(from backup set %ld) passed meta info validation\n",
+              backup_piece_key.dest_id_, backup_piece_key.round_id_, backup_piece_key.piece_id_,
+              backup_piece_key.backup_set_id_);
+        }
+      } else if (backup_piece_attr->backup_piece_info_desc_->piece_.is_active()) {
+        printf(CLEAR_LINE);
+        if (backup_piece_key.backup_set_id_ == 0) {
+          printf("Active Backup piece d%ldr%ldp%ld passed meta info validation\n",
+                 backup_piece_key.dest_id_, backup_piece_key.round_id_, backup_piece_key.piece_id_);
+        } else {
+          printf(
+              "Active Backup piece d%ldr%ldp%ld(from backup set %ld) passed meta info validation\n",
+              backup_piece_key.dest_id_, backup_piece_key.round_id_, backup_piece_key.piece_id_,
+              backup_piece_key.backup_set_id_);
+        }
+      }
     } else {
       printf(CLEAR_LINE);
-      printf("%s Backup piece b%ldd%ldr%ldp%ld has corrupted\n",
-             backup_piece_attr->backup_piece_info_desc_->piece_.is_frozen() ? "Frozen" : "Active",
-             ctx_->processing_backup_piece_key_array_.at(task_id_).backup_set_id_,
-             ctx_->processing_backup_piece_key_array_.at(task_id_).dest_id_,
-             ctx_->processing_backup_piece_key_array_.at(task_id_).round_id_,
-             ctx_->processing_backup_piece_key_array_.at(task_id_).piece_id_);
+      if (backup_piece_key.backup_set_id_ == 0) {
+        printf("Backup piece d%ldr%ldp%ld has corrupted meta info\n", backup_piece_key.dest_id_,
+               backup_piece_key.round_id_, backup_piece_key.piece_id_);
+      } else {
+        printf("Backup piece d%ldr%ldp%ld(from backup set %ld) has corrupted meta info\n",
+               backup_piece_key.dest_id_, backup_piece_key.round_id_, backup_piece_key.piece_id_,
+               backup_piece_key.backup_set_id_);
+      }
     }
   }
   fflush(stdout);
@@ -1357,18 +1381,18 @@ int ObAdminBackupPieceLogIterationTask::iterate_log_()
   } else {
     char storage_info_str[OB_MAX_BACKUP_STORAGE_INFO_LENGTH];
     MEMSET(storage_info_str, 0, sizeof(storage_info_str));
-    logservice::DirArray dir_array;
     logservice::DirInfo dir_info;
     dir_info.first = backup_piece_store->get_backup_dest().get_root_path();
     backup_storage_info->get_storage_info_str(storage_info_str, sizeof(storage_info_str));
     dir_info.second = storage_info_str;
-    dir_array.push_back(dir_info);
-
+    logservice::DirArray dir_array;
     share::SCN archive_scn;
     share::SCN restore_scn;
     palf::LSN tmp_lsn;
     logservice::ObRemoteRawPathParent raw_path_parent(ls_id);
-    if (backup_piece_attr->backup_piece_info_desc_->piece_.is_active()) {
+    if (OB_FAIL(dir_array.push_back(dir_info))) {
+      STORAGE_LOG(WARN, "failed to push back dir info", K(ret));
+    } else if (backup_piece_attr->backup_piece_info_desc_->piece_.is_active()) {
       STORAGE_LOG(INFO, "iterate active piece", K(ret), K(backup_piece_key), K(*storage_info_str));
       raw_path_parent.set(dir_array, ls_attr->single_ls_info_desc_->checkpoint_scn_);
       logservice::ObLogRawPathPieceContext *log_raw_path_piece_context = nullptr;
@@ -1950,8 +1974,8 @@ int ObAdminDataBackupValidationDagNet::start_running()
   ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
   ObAdminFinishDataBackupValidationDag *finish_data_backup_validation_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
-  // TODO: jiangshichao.jsc handle state cancelation when encounter error
-  // create dag and connections
+  // TODO: if schedule dag failure, ob_admin process will exit. No need to cancel and recovery state
+  // here create dag and connections
   if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "scheduler is null", K(ret));
@@ -2517,6 +2541,8 @@ int ObAdminBackupSetMetaValidationTask::init(int64_t task_id, ObAdminBackupValid
     backup_sys_data_type_.set_sys_data_backup();
     backup_minor_data_type_.set_minor_data_backup();
     backup_major_data_type_.set_major_data_backup();
+    // currently use OB_DEFAULT_TABLET_ID_COUNT = 3
+    // if any new ls inner tablet is added, consider update here.
     if (OB_FAIL(inner_tablet_id_array_.push_back(common::LS_TX_CTX_TABLET))) {
       STORAGE_LOG(WARN, "failed to push back inner tablet id", K(ret));
     } else if (OB_FAIL(inner_tablet_id_array_.push_back(common::LS_TX_DATA_TABLET))) {
@@ -2541,8 +2567,6 @@ int ObAdminBackupSetMetaValidationTask::process()
     STORAGE_LOG(INFO, "backup set id is all empty", K(ret), K(task_id_));
   } else if (OB_FAIL(check_backup_set_info_())) {
     STORAGE_LOG(WARN, "failed to check backup set info", K(ret));
-  } else if (OB_FAIL(check_placeholder_())) {
-    STORAGE_LOG(WARN, "failed to check placeholder", K(ret));
   } else if (OB_FAIL(check_locality_file_())) {
     STORAGE_LOG(WARN, "failed to check locality file", K(ret));
   } else if (OB_FAIL(check_diagnose_file_())) {
@@ -2606,17 +2630,14 @@ int ObAdminBackupSetMetaValidationTask::check_backup_set_info_()
   } else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file(
                  full_path, *backup_storage_info, *backup_set_info_desc, ctx_))) {
     STORAGE_LOG(WARN, "failed to read backup info file", K(ret), K(full_path));
-  } else if (OB_VSN_MAJOR(backup_set_info_desc->backup_set_file_.tenant_compatible_)
-                 != OB_VSN_MAJOR(DATA_CURRENT_VERSION)
-             || OB_VSN_MINOR(backup_set_info_desc->backup_set_file_.tenant_compatible_)
-                    != OB_VSN_MINOR(DATA_CURRENT_VERSION)
-             || OB_VSN_MAJOR_PATCH(backup_set_info_desc->backup_set_file_.tenant_compatible_)
-                    != OB_VSN_MAJOR_PATCH(DATA_CURRENT_VERSION)) {
-    // major, minor, major patch should be the same
-    ret = OB_ERR_UNEXPECTED;
-    ctx_->go_abort(full_path.get_ptr(), "Not Support OB backup version");
-    STORAGE_LOG(WARN, "tenant compatible is not current version", K(ret),
-                K(backup_set_info_desc->backup_set_file_.tenant_compatible_));
+  } else if (!ObUpgradeChecker::check_cluster_version_exist(
+                 backup_set_info_desc->backup_set_file_.cluster_version_)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "cluster version not valid", K(ret));
+  } else if (!ObUpgradeChecker::check_data_version_exist(
+                 backup_set_info_desc->backup_set_file_.tenant_compatible_)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "data version not valid", K(ret));
   } else if (OB_FAIL(inner_schedule_for_complement_log_(backup_set_store->get_backup_set_dest(),
                                                         *backup_set_info_desc))) {
     STORAGE_LOG(WARN, "failed to schedule for complement log", K(ret));
@@ -2649,14 +2670,12 @@ int ObAdminBackupSetMetaValidationTask::inner_schedule_for_complement_log_(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
-  } /*
-  TODO: plus_archivelog is not correctly persisted, not rely on it temporarily
-  else if (!backup_set_info_desc.backup_set_file_.plus_archivelog_) {
-    STORAGE_LOG(INFO, "no plus archive_log, just skip", K(ret));
-  }*/
+  }
+  /* TODO: share::ObBackupSetFileDesc::plus_archivelog_ is not correctly persisted,
+  so we not rely on it, use dir check bypass */
   else if (OB_FAIL(full_path.init(backup_set_dest.get_root_path()))) {
     STORAGE_LOG(WARN, "failed to init full path", K(ret));
-  } else if (OB_FAIL(full_path.join("complement_log", ObBackupFileSuffix::NONE))) {
+  } else if (OB_FAIL(full_path.join(OB_STR_COMPLEMENT_LOG, ObBackupFileSuffix::NONE))) {
     STORAGE_LOG(WARN, "failed to join complement log", K(ret), K(full_path));
   } else if (OB_FAIL(ObAdminBackupValidationUtil::check_dir_exist(
                  full_path.get_ptr(), backup_set_dest.get_storage_info(), is_empty_dir))) {
@@ -2706,60 +2725,6 @@ int ObAdminBackupSetMetaValidationTask::inner_schedule_for_complement_log_(
         STORAGE_LOG(INFO, "succeed to init backup piece store", K(ret), K(backup_piece_key));
       }
     }
-  }
-  return ret;
-}
-int ObAdminBackupSetMetaValidationTask::check_placeholder_()
-{
-  int ret = OB_SUCCESS;
-  int64_t backup_set_id = -1;
-  share::ObBackupPath full_path;
-  ObExternBackupSetPlaceholderDesc placeholder_desc;
-  ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
-  storage::ObBackupDataStore *backup_set_store = nullptr;
-  share::ObBackupStorageInfo *backup_storage_info = nullptr;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    STORAGE_LOG(WARN, "not init", K(ret));
-  } else if (OB_FAIL(ctx_->processing_backup_set_id_array_.at(task_id_, backup_set_id))) {
-    STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(task_id_));
-  } else if (OB_FAIL(ctx_->get_backup_set_attr(backup_set_id, backup_set_attr))) {
-    STORAGE_LOG(WARN, "failed to get backup set store", K(ret), K(backup_set_id));
-  } else if (OB_ISNULL(backup_set_attr)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "backup set attr is null", K(ret));
-  } else if (OB_ISNULL(backup_set_store = backup_set_attr->backup_set_store_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "backup set store is null", K(ret));
-  } else if (OB_ISNULL(backup_storage_info
-                       = backup_set_store->get_backup_set_dest().get_storage_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "backup storage info is null", K(ret));
-  } else if (OB_ISNULL(backup_set_attr->backup_set_info_desc_)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "backup set info desc is null", K(ret));
-  } else {
-    share::SCN min_restore_scn
-        = backup_set_attr->backup_set_info_desc_->backup_set_file_.min_restore_scn_;
-    share::SCN start_replay_scn
-        = backup_set_attr->backup_set_info_desc_->backup_set_file_.start_replay_scn_;
-    if (OB_FAIL(share::ObBackupPathUtil::get_backup_set_inner_placeholder(
-            backup_set_store->get_backup_set_dest(), backup_set_store->get_backup_set_desc(),
-            start_replay_scn, min_restore_scn, full_path))) {
-      STORAGE_LOG(WARN, "failed to get backup set inner placeholder path", K(ret), K(full_path));
-    } /*
-   TODO: backup set placeholder is not correctly persisted, at
-   ObBackupSetTaskMgr::write_backup_set_placeholder_ the start replay scn is not correctly set.
-   else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_info_file( full_path,
-   *backup_storage_info, placeholder_desc, ctx_))) { STORAGE_LOG(WARN, "failed to read backup info
-   file", K(ret), K(full_path));
-      }*/
-    else {
-      STORAGE_LOG(INFO, "succeed to check placeholder", K(ret), K(full_path));
-    }
-  }
-  if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
-    ctx_->go_abort(full_path.get_ptr(), "locality file not correct");
   }
   return ret;
 }
@@ -2954,9 +2919,9 @@ int ObAdminBackupSetMetaValidationTask::collect_inner_tablet_meta_index_()
                      full_path, *backup_storage_info, meta_index_list, index_index_list, ctx_))) {
         STORAGE_LOG(WARN, "failed to read backup meta index file", K(ret), K(full_path));
       } else if (FALSE_IT(full_path.reset())) {
-      } else if (ObBackupPathUtil::get_ls_meta_index_backup_path(
+      } else if (OB_FAIL(ObBackupPathUtil::get_ls_meta_index_backup_path(
                      backup_set_store->get_backup_set_dest(), ls_meta.ls_id_, backup_sys_data_type_,
-                     sys_turn_id, sys_retry_id, true /*is_sec_meta*/, full_path)) {
+                     sys_turn_id, sys_retry_id, true /*is_sec_meta*/, full_path))) {
         STORAGE_LOG(WARN, "failed to get ls sec meta index backup path", K(ret), K(full_path));
       } else if (FALSE_IT(index_index_list.reuse())) {
       } else if (OB_FAIL(ObAdminBackupValidationUtil::read_backup_index_file(
@@ -3569,6 +3534,82 @@ int ObAdminBackupSetMetaValidationTask::inner_check_tablet_meta_index_(
   ObArray<const backup::ObBackupMetaIndex *> sstable_meta_index_list;
   ObArray<const backup::ObBackupMetaIndex *> tablet_meta_index_list;
   ObArray<const backup::ObBackupMetaIndex *> macro_block_id_mappings_meta_index_list;
+  if (OB_FAIL(inner_split_meta_index_(meta_index_list, sec_meta_index_list, sstable_meta_index_list,
+                                      tablet_meta_index_list,
+                                      macro_block_id_mappings_meta_index_list))) {
+    STORAGE_LOG(WARN, "failed to split meta index", K(ret));
+  } else if (tablet_meta_index_list.count() != macro_block_id_mappings_meta_index_list.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN,
+                "tablet meta index list size not equal macro block id mapping "
+                "meta index list size",
+                K(ret), K(tablet_meta_index_list.count()),
+                K(macro_block_id_mappings_meta_index_list.count()));
+  } else if (sstable_meta_index_list.count() > tablet_meta_index_list.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "sstable meta index list size not equal tablet meta index list size", K(ret),
+                K(sstable_meta_index_list.count()), K(tablet_meta_index_list.count()));
+  } else {
+    uint64_t i = 0; // sstable_meta_index_list idx
+    uint64_t j = 0; // tablet_meta_index_list
+    uint64_t k = 0; // macro_block_id_mappings_meta_index_list
+    while (OB_SUCC(ret) && j < tablet_meta_index_list.count()
+           && k < macro_block_id_mappings_meta_index_list.count()) {
+      // split to a inner func for check.
+      const backup::ObBackupMetaIndex *tablet_meta_index = tablet_meta_index_list.at(j);
+      const backup::ObBackupMetaIndex *macro_block_id_mappings_meta_index
+          = macro_block_id_mappings_meta_index_list.at(k);
+      if (OB_FAIL(inner_check_tablet_meta_index_with_macro_block_id_mapping_meta_index_(
+              *tablet_meta_index, *macro_block_id_mappings_meta_index))) {
+        STORAGE_LOG(WARN,
+                    "failed to check tablet meta index with macro block id mapping meta index",
+                    K(ret), K(*tablet_meta_index), K(*macro_block_id_mappings_meta_index));
+      } else {
+        // till here tablet_meta and macro_block_id_mapping_meta
+        // is match advance i
+        while (i + 1 < sstable_meta_index_list.count()
+               && sstable_meta_index_list.at(i + 1)->meta_key_.tablet_id_
+                      <= tablet_meta_index->meta_key_.tablet_id_) {
+          i++;
+        }
+        if (i < sstable_meta_index_list.count()
+            && sstable_meta_index_list.at(i)->meta_key_.tablet_id_
+                   == tablet_meta_index->meta_key_.tablet_id_) {
+          // this tablet have sstable
+          const backup::ObBackupMetaIndex *sstable_meta_index = sstable_meta_index_list.at(i);
+          if (OB_FAIL(inner_check_sstable_meta_index_with_macro_block_id_mapping_meta_index_(
+                  *sstable_meta_index, *macro_block_id_mappings_meta_index))) {
+            STORAGE_LOG(WARN,
+                        "failed to check sstable meta index with macro block id mapping meta index",
+                        K(ret), K(*sstable_meta_index), K(*macro_block_id_mappings_meta_index));
+          } else {
+            i++;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          j++;
+          k++;
+        }
+      }
+    }
+    if (OB_FAIL(ret) || i != sstable_meta_index_list.count() || j != tablet_meta_index_list.count()
+        || k != macro_block_id_mappings_meta_index_list.count()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "process not finish", K(ret), K(i), K(j), K(k));
+    } else {
+      STORAGE_LOG(INFO, "check tablet meta index finish", K(ret), K(i), K(j), K(k));
+    }
+  }
+  return ret;
+}
+int ObAdminBackupSetMetaValidationTask::inner_split_meta_index_(
+    const ObArray<backup::ObBackupMetaIndex> &meta_index_list,
+    const ObArray<backup::ObBackupMetaIndex> &sec_meta_index_list,
+    ObArray<const backup::ObBackupMetaIndex *> &sstable_meta_index_list,
+    ObArray<const backup::ObBackupMetaIndex *> &tablet_meta_index_list,
+    ObArray<const backup::ObBackupMetaIndex *> &macro_block_id_mappings_meta_index_list)
+{
+  int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < meta_index_list.count(); ++i) {
     const backup::ObBackupMetaIndex *meta_index = &meta_index_list.at(i);
     if (!meta_index->meta_key_.is_valid()) {
@@ -3605,106 +3646,66 @@ int ObAdminBackupSetMetaValidationTask::inner_check_tablet_meta_index_(
       STORAGE_LOG(WARN, "unexpected meta type", K(ret), K(*meta_index));
     }
   }
-
-  if (tablet_meta_index_list.count() != macro_block_id_mappings_meta_index_list.count()) {
+  return ret;
+}
+int ObAdminBackupSetMetaValidationTask::
+    inner_check_tablet_meta_index_with_macro_block_id_mapping_meta_index_(
+        const backup::ObBackupMetaIndex &tablet_meta_index,
+        const backup::ObBackupMetaIndex &macro_block_id_mappings_meta_index)
+{
+  int ret = OB_SUCCESS;
+  if (tablet_meta_index.meta_key_.tablet_id_
+      != macro_block_id_mappings_meta_index.meta_key_.tablet_id_) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN,
-                "tablet meta index list size not equal macro block id mapping "
-                "meta index list size",
-                K(ret), K(tablet_meta_index_list.count()),
-                K(macro_block_id_mappings_meta_index_list.count()));
-  } else if (sstable_meta_index_list.count() > tablet_meta_index_list.count()) {
+    STORAGE_LOG(WARN, "tablet id not match", K(ret), K(tablet_meta_index.meta_key_.tablet_id_),
+                K(macro_block_id_mappings_meta_index.meta_key_.tablet_id_));
+  } else if (tablet_meta_index.backup_set_id_
+             != macro_block_id_mappings_meta_index.backup_set_id_) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "sstable meta index list size not equal tablet meta index list size", K(ret),
-                K(sstable_meta_index_list.count()), K(tablet_meta_index_list.count()));
-  } else {
-    uint64_t i = 0; // sstable_meta_index_list idx
-    uint64_t j = 0; // tablet_meta_index_list
-    uint64_t k = 0; // macro_block_id_mappings_meta_index_list
-    while (OB_SUCC(ret) && j < tablet_meta_index_list.count()
-           && k < macro_block_id_mappings_meta_index_list.count()) {
-      if (tablet_meta_index_list.at(j)->meta_key_.tablet_id_
-          != macro_block_id_mappings_meta_index_list.at(k)->meta_key_.tablet_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "tablet id not match", K(ret),
-                    K(tablet_meta_index_list.at(j)->meta_key_.tablet_id_),
-                    K(macro_block_id_mappings_meta_index_list.at(k)->meta_key_.tablet_id_));
-      } else if (tablet_meta_index_list.at(j)->backup_set_id_
-                 != macro_block_id_mappings_meta_index_list.at(k)->backup_set_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "backup set id not match", K(ret),
-                    K(tablet_meta_index_list.at(j)->backup_set_id_),
-                    K(macro_block_id_mappings_meta_index_list.at(k)->backup_set_id_));
-      } else if (tablet_meta_index_list.at(j)->ls_id_
-                 != macro_block_id_mappings_meta_index_list.at(k)->ls_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "ls id not match", K(ret), K(tablet_meta_index_list.at(j)->ls_id_),
-                    K(macro_block_id_mappings_meta_index_list.at(k)->ls_id_));
-      } else if (tablet_meta_index_list.at(j)->turn_id_
-                 != macro_block_id_mappings_meta_index_list.at(k)->turn_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "turn id not match", K(ret), K(tablet_meta_index_list.at(j)->turn_id_),
-                    K(macro_block_id_mappings_meta_index_list.at(k)->turn_id_));
-      } else if (tablet_meta_index_list.at(j)->retry_id_
-                 != macro_block_id_mappings_meta_index_list.at(k)->retry_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        STORAGE_LOG(WARN, "retry id not match", K(ret), K(tablet_meta_index_list.at(j)->retry_id_),
-                    K(macro_block_id_mappings_meta_index_list.at(k)->retry_id_));
-      } else {
-        // till here tablet_meta and macro_block_id_mapping_meta
-        // is match advance i
-        while (i + 1 < sstable_meta_index_list.count()
-               && sstable_meta_index_list.at(i + 1)->meta_key_.tablet_id_
-                      <= tablet_meta_index_list.at(j)->meta_key_.tablet_id_) {
-          i++;
-        }
-        if (i < sstable_meta_index_list.count()
-            && sstable_meta_index_list.at(i)->meta_key_.tablet_id_
-                   == tablet_meta_index_list.at(j)->meta_key_.tablet_id_) {
-          // this tablet have sstable
-          if (sstable_meta_index_list.at(i)->backup_set_id_
-              != macro_block_id_mappings_meta_index_list.at(k)->backup_set_id_) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "backup set id not match", K(ret),
-                        K(sstable_meta_index_list.at(i)->backup_set_id_),
-                        K(macro_block_id_mappings_meta_index_list.at(k)->backup_set_id_));
-          } else if (sstable_meta_index_list.at(i)->ls_id_
-                     != macro_block_id_mappings_meta_index_list.at(k)->ls_id_) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "ls id not match", K(ret), K(sstable_meta_index_list.at(i)->ls_id_),
-                        K(macro_block_id_mappings_meta_index_list.at(k)->ls_id_));
-          } else if (sstable_meta_index_list.at(i)->turn_id_
-                     != macro_block_id_mappings_meta_index_list.at(k)->turn_id_) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "turn id not match", K(ret),
-                        K(sstable_meta_index_list.at(i)->turn_id_),
-                        K(macro_block_id_mappings_meta_index_list.at(k)->turn_id_));
-          } else if (sstable_meta_index_list.at(i)->retry_id_
-                     != macro_block_id_mappings_meta_index_list.at(k)->retry_id_) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "retry id not match", K(ret),
-                        K(sstable_meta_index_list.at(i)->retry_id_),
-                        K(macro_block_id_mappings_meta_index_list.at(k)->retry_id_));
-          } else {
-            i++;
-          }
-        }
-        if (OB_SUCC(ret)) {
-          j++;
-          k++;
-        }
-      }
-    }
-    if (OB_FAIL(ret) || i != sstable_meta_index_list.count() || j != tablet_meta_index_list.count()
-        || k != macro_block_id_mappings_meta_index_list.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "process not finish", K(ret), K(i), K(j), K(k));
-    } else {
-      STORAGE_LOG(INFO, "check tablet meta index finish", K(ret), K(i), K(j), K(k));
-    }
+    STORAGE_LOG(WARN, "backup set id not match", K(ret), K(tablet_meta_index.backup_set_id_),
+                K(macro_block_id_mappings_meta_index.backup_set_id_));
+  } else if (tablet_meta_index.ls_id_ != macro_block_id_mappings_meta_index.ls_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls id not match", K(ret), K(tablet_meta_index.ls_id_),
+                K(macro_block_id_mappings_meta_index.ls_id_));
+  } else if (tablet_meta_index.turn_id_ != macro_block_id_mappings_meta_index.turn_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "turn id not match", K(ret), K(tablet_meta_index.turn_id_),
+                K(macro_block_id_mappings_meta_index.turn_id_));
+  } else if (tablet_meta_index.retry_id_ != macro_block_id_mappings_meta_index.retry_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "retry id not match", K(ret), K(tablet_meta_index.retry_id_),
+                K(macro_block_id_mappings_meta_index.retry_id_));
   }
   return ret;
 }
+
+int ObAdminBackupSetMetaValidationTask::
+    inner_check_sstable_meta_index_with_macro_block_id_mapping_meta_index_(
+        const backup::ObBackupMetaIndex &sstable_meta_index,
+        const backup::ObBackupMetaIndex &macro_block_id_mappings_meta_index)
+{
+  int ret = OB_SUCCESS;
+  if (sstable_meta_index.backup_set_id_ != macro_block_id_mappings_meta_index.backup_set_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "backup set id not match", K(ret), K(sstable_meta_index.backup_set_id_),
+                K(macro_block_id_mappings_meta_index.backup_set_id_));
+  } else if (sstable_meta_index.ls_id_ != macro_block_id_mappings_meta_index.ls_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "ls id not match", K(ret), K(sstable_meta_index.ls_id_),
+                K(macro_block_id_mappings_meta_index.ls_id_));
+  } else if (sstable_meta_index.turn_id_ != macro_block_id_mappings_meta_index.turn_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "turn id not match", K(ret), K(sstable_meta_index.turn_id_),
+                K(macro_block_id_mappings_meta_index.turn_id_));
+  } else if (sstable_meta_index.retry_id_ != macro_block_id_mappings_meta_index.retry_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "retry id not match", K(ret), K(sstable_meta_index.retry_id_),
+                K(macro_block_id_mappings_meta_index.retry_id_));
+  }
+  return ret;
+}
+
 int ObAdminBackupSetMetaValidationTask::check_tenant_tablet_meta_index()
 {
   // cross check between tenant minor/major meta index from initial to end
@@ -3758,67 +3759,19 @@ int ObAdminBackupSetMetaValidationTask::check_tenant_tablet_meta_index()
         }
       } else if (OB_ISNULL(minor_tablet_attr->tablet_meta_index_)
                  && OB_NOT_NULL(major_tablet_attr->tablet_meta_index_)) {
-        // bug
+        // must be a bug
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "minor tablet meta should exist but got lost", K(ret));
       }
     }
   }
   if (OB_SUCC(ret) && missing_tablet.count() > 0) {
-    // query __all_backup_skipped_tablet_history
+    // TODO: check if tablet is deleted instead of missing.
     STORAGE_LOG(WARN, "missing tablet", K(ret), K(missing_tablet));
-    common::ObSqlString sql;
-    ObMySQLProxy::MySQLResult res;
-    sqlclient::ObMySQLResult *result = nullptr;
-    if (OB_ISNULL(ctx_->sql_proxy_)) {
-      // ret = OB_ERR_UNEXPECTED;
-      STORAGE_LOG(WARN, "sql proxy is nullptr, skip query check", K(ret));
-      if (OB_FAIL(ctx_->global_stat_.add_scheduled_tablet_count_(-missing_tablet.count()
-                                                                 * 2 /*major+minor*/))) {
-        STORAGE_LOG(WARN, "failed to add scheduled tablet count", K(ret));
-      }
-    } else {
-      FOREACH_X(missing_tablet_iter, missing_tablet, OB_SUCC(ret))
-      {
-        sql.reset();
-        res.reset();
-        result = nullptr;
-        if (OB_FAIL(sql.assign_fmt(
-                "SELECT * FROM %s WHERE tenant_id = %ld AND backup_set_id = %ld AND ls_id = %ld "
-                "AND "
-                "tablet_id = %ld",
-                OB_ALL_BACKUP_SKIPPED_TABLET_HISTORY_TNAME,
-                backup_set_attr->backup_set_info_desc_->backup_set_file_.tenant_id_,
-                backup_set_attr->backup_set_info_desc_->backup_set_file_.backup_set_id_,
-                missing_tablet_iter->first.id(), missing_tablet_iter->second.id()))) {
-          STORAGE_LOG(WARN, "failed to assign sql", K(ret));
-        } else if (OB_FAIL(ctx_->sql_proxy_->read(res, OB_SYS_TENANT_ID, sql.ptr()))) {
-          STORAGE_LOG(WARN, "failed to read sql", K(ret));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "result is null", K(ret));
-        } else {
-          if (OB_FAIL(result->next())) {
-            if (OB_ITER_END != ret) {
-              STORAGE_LOG(WARN, "failed to next", K(ret));
-            } else {
-              // no such a deletion tablet
-              STORAGE_LOG(WARN, "missing tablet is not normal deleted", K(ret),
-                          K(missing_tablet_iter->second));
-              int tmp_ret = OB_SUCCESS;
-              char buf[1024];
-              if (OB_TMP_FAIL(databuff_printf(
-                      buf, sizeof(buf) - 1, "Tablet %ld in Backup Set %ld is missing",
-                      missing_tablet_iter->second.id(),
-                      backup_set_attr->backup_set_info_desc_->backup_set_file_.backup_set_id_))) {
-                STORAGE_LOG(WARN, "failed to print buf", K(tmp_ret));
-              } else if (OB_TMP_FAIL(ctx_->go_abort(buf, "missing tablet is not normal deleted"))) {
-                STORAGE_LOG(WARN, "failed to go abort", K(tmp_ret));
-              }
-            }
-          }
-        }
-      }
+    if (OB_FAIL(ctx_->global_stat_.add_scheduled_tablet_count_(-missing_tablet.count()
+                                                               * 2 /*major+minor*/))) {
+      // cancel schedule
+      STORAGE_LOG(WARN, "failed to add scheduled tablet count", K(ret));
     }
   }
   if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
@@ -3829,6 +3782,7 @@ int ObAdminBackupSetMetaValidationTask::check_tenant_tablet_meta_index()
 void ObAdminBackupSetMetaValidationTask::post_process_(int ret)
 {
   int tmp_ret = OB_SUCCESS;
+  int64_t backup_set_id = -1;
   if (IS_NOT_INIT) {
     tmp_ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret), K(tmp_ret));
@@ -3837,20 +3791,23 @@ void ObAdminBackupSetMetaValidationTask::post_process_(int ret)
   } else if (ctx_->processing_backup_set_id_array_.empty()) {
     tmp_ret = OB_ITER_END;
     STORAGE_LOG(INFO, "backup set id is all empty", K(ret), K(task_id_));
+  } else if (OB_TMP_FAIL(ctx_->processing_backup_set_id_array_.at(task_id_, backup_set_id))) {
+    STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(task_id_));
   } else {
     if (OB_SUCC(ret)) {
-      printf(CLEAR_LINE);
-      int64_t backup_set_id = -1;
       ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
-      if (OB_TMP_FAIL(ctx_->processing_backup_set_id_array_.at(task_id_, backup_set_id))) {
-        STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(task_id_));
-      } else if (OB_TMP_FAIL(ctx_->get_backup_set_attr(backup_set_id, backup_set_attr))) {
+      if (OB_TMP_FAIL(ctx_->get_backup_set_attr(backup_set_id, backup_set_attr))) {
         STORAGE_LOG(WARN, "failed to get backup set store", K(ret), K(backup_set_id));
+      } else if (OB_ISNULL(backup_set_attr) || OB_ISNULL(backup_set_attr->backup_set_info_desc_)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        STORAGE_LOG(WARN, "backup set attr is null", K(tmp_ret));
       } else if (backup_set_attr->backup_set_info_desc_->backup_set_file_.backup_type_
                      .is_full_backup()) {
+        printf(CLEAR_LINE);
         printf("Full Backup set %ld passed meta info validation\n", backup_set_id);
       } else if (backup_set_attr->backup_set_info_desc_->backup_set_file_.backup_type_
                      .is_inc_backup()) {
+        printf(CLEAR_LINE);
         printf("Inc Backup set %ld passed meta info validation\n", backup_set_id);
       }
     } else {
@@ -4322,25 +4279,21 @@ int ObAdminTabletMetaValidationTask::collect_tablet_meta_info_()
     if (OB_SUCC(ret)) {
       if (2 == current_group.count()) {
         // major/minor same tablet
-        if (tablet_meta_.at(0)->tablet_id_ != tablet_meta_.at(1)->tablet_id_) {
+        backup::ObBackupTabletMeta *minor_meta = tablet_meta_.at(0);
+        backup::ObBackupTabletMeta *major_meta = tablet_meta_.at(1);
+        if (minor_meta->tablet_id_ != major_meta->tablet_id_) {
           ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "tablet id is not same", K(ret), K(tablet_meta_.at(0)->tablet_id_),
-                      K(tablet_meta_.at(1)->tablet_id_));
-        } else if (tablet_meta_.at(0)->tablet_meta_.clog_checkpoint_scn_
-                   > tablet_meta_.at(1)->tablet_meta_.clog_checkpoint_scn_) {
-          ret = OB_ERR_UNEXPECTED;
-          STORAGE_LOG(WARN, "minor tablet clog checkpoint scn is larger than major tablet", K(ret),
-                      K(tablet_meta_.at(0)->tablet_meta_.clog_checkpoint_scn_),
-                      K(tablet_meta_.at(1)->tablet_meta_.clog_checkpoint_scn_));
+          STORAGE_LOG(WARN, "tablet id is not same", K(ret), K(minor_meta->tablet_id_),
+                      K(major_meta->tablet_id_));
         } else {
           const int64_t major_snapshot_version
-              = tablet_meta_.at(1)->tablet_meta_.report_status_.merge_snapshot_version_;
+              = major_meta->tablet_meta_.report_status_.merge_snapshot_version_;
           const int64_t minor_snapshot_version
-              = tablet_meta_.at(0)->tablet_meta_.report_status_.merge_snapshot_version_;
+              = minor_meta->tablet_meta_.report_status_.merge_snapshot_version_;
           if ((minor_snapshot_version <= 0
-               && tablet_meta_.at(0)->tablet_meta_.table_store_flag_.with_major_sstable())
+               && minor_meta->tablet_meta_.table_store_flag_.with_major_sstable())
               || (major_snapshot_version <= 0
-                  && tablet_meta_.at(1)->tablet_meta_.table_store_flag_.with_major_sstable())) {
+                  && major_meta->tablet_meta_.table_store_flag_.with_major_sstable())) {
             ret = OB_ERR_UNEXPECTED;
             STORAGE_LOG(WARN, "snapshot version is invalid", K(ret), K(minor_snapshot_version),
                         K(major_snapshot_version));
@@ -4350,8 +4303,8 @@ int ObAdminTabletMetaValidationTask::collect_tablet_meta_info_()
                         K(ret), K(major_snapshot_version), K(minor_snapshot_version));
           }
         }
-      } else if (3 == current_group.count()) {
-        // sys tablet in same ls
+      } else if (OB_DEFAULT_TABLET_ID_COUNT == current_group.count()) {
+        // ls inner tablet
         const share::ObLSID ls_id = tablet_meta_.at(0)->tablet_meta_.ls_id_;
         for (int64_t i = 0; OB_SUCC(ret) && i < tablet_meta_.count(); i++) {
           if (!tablet_meta_.at(i)->tablet_id_.is_ls_inner_tablet()) {
@@ -4472,7 +4425,6 @@ int ObAdminTabletMetaValidationTask::check_sstable_meta_info_and_prepare_macro_b
     for (int64_t i = 0; OB_SUCC(ret) && i < current_group.count(); i++) {
       ObAdminBackupTabletValidationAttr *tablet_attr = nullptr;
       ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
-      share::SCN last_end_scn; // for minor tablet, check continuity
       if (OB_ISNULL(tablet_attr = current_group.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "tablet attr is null", K(ret));
@@ -4491,34 +4443,17 @@ int ObAdminTabletMetaValidationTask::check_sstable_meta_info_and_prepare_macro_b
       } else if (0 == id_mappings_meta_.at(i)->sstable_count_) {
         STORAGE_LOG(DEBUG, "empty tablet", K(ret));
       } else {
+        share::SCN last_end_scn; // for minor tablet, check continuity
         for (int64_t j = 0; OB_SUCC(ret) && j < id_mappings_meta_.at(i)->sstable_count_; ++j) {
+          const backup::ObBackupTabletMeta &tablet_meta = *tablet_meta_.at(i);
           backup::ObBackupMacroBlockIDMapping &id_mapping
               = id_mappings_meta_.at(i)->id_map_list_[j];
           backup::ObBackupSSTableMeta &sstable_meta = sstable_metas_.at(i).at(j);
-          if (id_mapping.table_key_ != sstable_meta.sstable_meta_.table_key_) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "sstable meta table key not match", K(ret), K(id_mapping.table_key_),
-                        K(sstable_meta.sstable_meta_.table_key_));
-          } else if (id_mapping.id_pair_list_.count() != sstable_meta.logic_id_list_.count()) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "sstable meta logic id count not match", K(ret),
-                        K(id_mapping.id_pair_list_.count()),
-                        K(sstable_meta.logic_id_list_.count()));
-          } else if (sstable_meta.tablet_id_ != tablet_meta_.at(i)->tablet_id_) {
-            ret = OB_ERR_UNEXPECTED;
-            STORAGE_LOG(WARN, "sstable meta tablet id not match", K(ret),
-                        K(sstable_meta.tablet_id_), K(tablet_meta_.at(i)->tablet_id_));
-          } else if (sstable_meta.sstable_meta_.table_key_.is_minor_sstable()) {
-            if (j > 1 && sstable_meta.sstable_meta_.table_key_.get_start_scn() != last_end_scn) {
-              ret = OB_ERR_UNEXPECTED;
-              STORAGE_LOG(WARN, "sstable meta start scn not match", K(ret), "last_end_scn",
-                          last_end_scn, "cur_start_scn",
-                          sstable_meta.sstable_meta_.table_key_.get_start_scn());
-            } else {
-              last_end_scn = sstable_meta.sstable_meta_.table_key_.get_end_scn();
-            }
-          }
-          if (OB_SUCC(ret)) {
+          if (OB_FAIL(inner_check_sstable_meta_with_macro_block_id_mapping_(
+                  tablet_meta, sstable_meta, id_mapping, last_end_scn))) {
+            STORAGE_LOG(WARN, "failed to check sstable meta with macro block id mapping", K(ret),
+                        K(tablet_meta), K(sstable_meta), K(id_mapping));
+          } else {
             std::sort(id_mapping.id_pair_list_.begin(), id_mapping.id_pair_list_.end());
             std::sort(sstable_meta.logic_id_list_.begin(), sstable_meta.logic_id_list_.end());
             for (int64_t k = 0; OB_SUCC(ret) && k < id_mapping.id_pair_list_.count(); ++k) {
@@ -4526,19 +4461,9 @@ int ObAdminTabletMetaValidationTask::check_sstable_meta_info_and_prepare_macro_b
                   = id_mapping.id_pair_list_.at(k);
               const blocksstable::ObLogicMacroBlockId &logic_macro_block_id
                   = sstable_meta.logic_id_list_.at(k);
-              if (!logic_macro_block_id.is_valid()) {
-                ret = OB_ERR_UNEXPECTED;
-                STORAGE_LOG(WARN, "logic macro block id is not valid", K(ret));
-              } else if (!macro_block_id_pair.logic_id_.is_valid()) {
-                ret = OB_ERR_UNEXPECTED;
-                STORAGE_LOG(WARN, "macro block id pair is not valid", K(ret));
-              } else if (macro_block_id_pair.logic_id_ != logic_macro_block_id) {
-                ret = OB_ERR_UNEXPECTED;
-                STORAGE_LOG(WARN, "sstable meta logic id not match", K(ret),
-                            K(macro_block_id_pair.logic_id_), K(logic_macro_block_id));
-              } else if (!macro_block_id_pair.physical_id_.is_valid()) {
-                ret = OB_ERR_UNEXPECTED;
-                STORAGE_LOG(WARN, "macro block id pair is not valid", K(ret));
+              if (OB_FAIL(inner_check_macro_block_id_(macro_block_id_pair, logic_macro_block_id))) {
+                STORAGE_LOG(WARN, "failed to check macro block id", K(ret), K(macro_block_id_pair),
+                            K(logic_macro_block_id));
               } else if (OB_FAIL(tablet_validation_dag->add_macro_block(macro_block_id_pair,
                                                                         tablet_attr->data_type_))) {
                 STORAGE_LOG(WARN, "failed to push back macro block id pair", K(ret),
@@ -4562,6 +4487,57 @@ int ObAdminTabletMetaValidationTask::check_sstable_meta_info_and_prepare_macro_b
   }
   if (OB_NOT_NULL(ctx_) && OB_FAIL(ret)) {
     ctx_->go_abort("Macro Block meta info", "Macro Block meta info is not complete");
+  }
+  return ret;
+}
+int ObAdminTabletMetaValidationTask::inner_check_sstable_meta_with_macro_block_id_mapping_(
+    const backup::ObBackupTabletMeta &tablet_meta, const backup::ObBackupSSTableMeta &sstable_meta,
+    const backup::ObBackupMacroBlockIDMapping &macro_block_id_mapping, share::SCN &last_end_scn)
+{
+  int ret = OB_SUCCESS;
+  if (macro_block_id_mapping.table_key_ != sstable_meta.sstable_meta_.table_key_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "sstable meta table key not match", K(ret),
+                K(macro_block_id_mapping.table_key_), K(sstable_meta.sstable_meta_.table_key_));
+  } else if (macro_block_id_mapping.id_pair_list_.count() != sstable_meta.logic_id_list_.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "sstable meta logic id count not match", K(ret),
+                K(macro_block_id_mapping.id_pair_list_.count()),
+                K(sstable_meta.logic_id_list_.count()));
+  } else if (sstable_meta.tablet_id_ != tablet_meta.tablet_id_) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "sstable meta tablet id not match", K(ret), K(sstable_meta.tablet_id_),
+                K(tablet_meta.tablet_id_));
+  } else if (sstable_meta.sstable_meta_.table_key_.is_minor_sstable()) {
+    if (last_end_scn.is_valid()
+        && sstable_meta.sstable_meta_.table_key_.get_start_scn() != last_end_scn) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "sstable meta start scn not match", K(ret), "last_end_scn", last_end_scn,
+                  "cur_start_scn", sstable_meta.sstable_meta_.table_key_.get_start_scn());
+    } else {
+      last_end_scn = sstable_meta.sstable_meta_.table_key_.get_end_scn();
+    }
+  }
+  return ret;
+}
+int ObAdminTabletMetaValidationTask::inner_check_macro_block_id_(
+    const backup::ObBackupMacroBlockIDPair &macro_block_id_pair,
+    const blocksstable::ObLogicMacroBlockId &logic_macro_block_id)
+{
+  int ret = OB_SUCCESS;
+  if (!logic_macro_block_id.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "logic macro block id is not valid", K(ret));
+  } else if (!macro_block_id_pair.logic_id_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "macro block id pair is not valid", K(ret));
+  } else if (macro_block_id_pair.logic_id_ != logic_macro_block_id) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "sstable meta logic id not match", K(ret), K(macro_block_id_pair.logic_id_),
+                K(logic_macro_block_id));
+  } else if (!macro_block_id_pair.physical_id_.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "macro block id pair is not valid", K(ret));
   }
   return ret;
 }
@@ -4653,7 +4629,6 @@ int ObAdminMacroBlockDataValidationTask::check_macro_block_data_()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc buf", K(ret));
   } else if (FALSE_IT(data_buffer.assign(buf, OB_DEFAULT_MACRO_BLOCK_SIZE))) {
-    STORAGE_LOG(WARN, "failed to assign data buffer", K(ret));
   } else if (task_id_ >= tablet_validation_dag->processing_macro_block_array_.count()) {
     STORAGE_LOG(INFO, "tablet group is all empty tablet, no sstable", K(ret), K(task_id_));
   } else {

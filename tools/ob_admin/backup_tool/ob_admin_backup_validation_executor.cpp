@@ -323,8 +323,6 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
           ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_NONE;
         } else if (0 == STRCASECMP(optarg, "physical")) {
           ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_PHYSICAL;
-        } else if (0 == STRCASECMP(optarg, "logical")) {
-          ctx_->mb_check_level_ = blocksstable::ObMacroBlockCheckLevel::CHECK_LEVEL_LOGICAL;
         } else {
           ret = OB_INVALID_ARGUMENT;
           STORAGE_LOG(WARN, "invalid argument", K(ret));
@@ -451,7 +449,7 @@ int ObAdminBackupValidationExecutor::print_usage_()
   default:
     break;
   }
-  printf(HELP_FMT, "--check_level", "macro block check level, [none, physical, logical]");
+  printf(HELP_FMT, "--check_level", "macro block check level, [none, physical]");
   printf(HELP_FMT, "--concurrency",
          "default is 1, no more than 256, recommend increasing when using remote storage");
   printf(HELP_FMT, "--io_bandwidth_limit", "default is ulimited, adjust if needed");
