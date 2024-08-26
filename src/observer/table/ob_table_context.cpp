@@ -346,11 +346,12 @@ int ObTableCtx::inner_init_common(const ObTabletID &arg_tablet_id,
     } else { // dml场景使用rowkey计算出tablet id
       if (!simple_table_schema_->is_partitioned_table()) {
         tablet_id = simple_table_schema_->get_tablet_id();
-      } else if (OB_ISNULL(entity_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("entity is null", K(ret));
-      } else if (OB_FAIL(get_tablet_by_rowkey(entity_->get_rowkey(), tablet_id))) {
-        LOG_WARN("fail to get tablet id by rowkey", K(ret), K(entity_->get_rowkey()));
+      } else {
+        // trigger client to refresh table entry
+        // maybe drop a non-partitioned table and create a
+        // partitioned table with same name
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
       }
     }
   }
@@ -914,9 +915,11 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
     index_table_id_ = ref_table_id_;
     if (!index_tablet_id_.is_valid()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid tablet id in partition table when do scan");
-      LOG_WARN("query by primary index, but tablet id is invalid", K(ret), K(index_tablet_id_));
+      // trigger client to refresh table entry
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
     }
     is_index_back_ = false;
   } else {
@@ -1861,8 +1864,11 @@ int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_t
             if (!index_schema_->is_partitioned_table()) {
               index_tablet_id_ = index_schema_->get_tablet_id();
             } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("tablet id is invalid", K(ret));
+              // trigger client to refresh table entry
+              // maybe drop a non-partitioned table and create a
+              // partitioned table with same name
+              ret = OB_SCHEMA_ERROR;
+              LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
             }
           }
         }
