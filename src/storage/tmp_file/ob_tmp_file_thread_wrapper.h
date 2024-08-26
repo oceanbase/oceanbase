@@ -74,6 +74,7 @@ private:
   int pop_retry_list_(ObTmpFileFlushTask *&flush_task);
   int push_finished_list_(ObTmpFileFlushTask *flush_task);
   int pop_finished_list_(ObTmpFileFlushTask *&flush_task);
+  void flush_task_finished_(ObTmpFileFlushTask *flush_task);
 private:
   bool is_inited_;
   RUNNING_MODE mode_;

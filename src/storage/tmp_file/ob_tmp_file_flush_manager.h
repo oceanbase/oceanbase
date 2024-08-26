@@ -110,6 +110,7 @@ private:
   int evict_pages_and_retry_insert_(ObTmpFileFlushTask &flush_task,
                                     ObTmpFileFlushInfo &flush_info,
                                     const int64_t logic_block_index);
+  void try_remove_unused_flush_info_(ObTmpFileFlushTask &flush_task);
   DISALLOW_COPY_AND_ASSIGN(ObTmpFileFlushManager);
 private:
   bool is_inited_;

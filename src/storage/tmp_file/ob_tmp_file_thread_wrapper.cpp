@@ -382,7 +382,10 @@ int ObTmpFileFlushTG::retry_task_()
       }
       // push task into wait_list_/retry_list_ according to task state, ignore error code
       FlushState state = flush_task->get_state();
-      if (FlushState::TFFT_WAIT == state) {
+      if (FlushState::TFFT_ABORT == state) {
+        STORAGE_LOG(INFO, "free abort flush task", KPC(flush_task));
+        flush_task_finished_(flush_task);
+      } else if (FlushState::TFFT_WAIT == state) {
         push_wait_list_(flush_task);
       } else if (FlushState::TFFT_FILL_BLOCK_BUF < state) {
         push_retry_list_(flush_task);
@@ -455,27 +458,35 @@ int ObTmpFileFlushTG::check_flush_task_io_finished_()
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "flush task is nullptr", KR(ret));
     } else {
-      bool is_flush_tree_page = flush_task->get_is_fast_flush_tree();
       STORAGE_LOG(DEBUG, "flush task io complete", K(flushing_block_num_), KPC(flush_task));
       // if the update fails, it will be retried during the next wakeup
       if (OB_FAIL(flush_mgr_.update_file_meta_after_flush(*flush_task))) {
         STORAGE_LOG(WARN, "fail to drive flush state machine", KR(ret), KPC(flush_task));
         push_finished_list_(flush_task);
       } else {
-        flush_mgr_.free_flush_task(flush_task);
-        ATOMIC_DEC(&flushing_block_num_);
-        fast_flush_meta_task_cnt_ -= is_flush_tree_page ? 1 : 0;
-        if (fast_flush_meta_task_cnt_ == 0) {
-          // reset is_fast_flush_meta_ flag to resume retry task and flush
-          is_fast_flush_meta_ = false;
-        } else if (OB_UNLIKELY(fast_flush_meta_task_cnt_ < 0)) {
-          STORAGE_LOG(ERROR, "fast_flush_meta_task_cnt_ is negative", KPC(this));
-        }
-        signal_io_finish();
+        flush_task_finished_(flush_task);
       }
     }
   }
   return ret;
+}
+
+void ObTmpFileFlushTG::flush_task_finished_(ObTmpFileFlushTask *flush_task)
+{
+  int ret = OB_SUCCESS;
+
+  bool is_flush_tree_page = flush_task->get_is_fast_flush_tree();
+  flush_mgr_.free_flush_task(flush_task);
+  ATOMIC_DEC(&flushing_block_num_);
+  fast_flush_meta_task_cnt_ -= is_flush_tree_page ? 1 : 0;
+  if (fast_flush_meta_task_cnt_ == 0) {
+    // reset is_fast_flush_meta_ flag to resume retry task and flush
+    is_fast_flush_meta_ = false;
+  } else if (OB_UNLIKELY(fast_flush_meta_task_cnt_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "fast_flush_meta_task_cnt_ is negative", KR(ret), KPC(this));
+  }
+  signal_io_finish();
 }
 
 int ObTmpFileFlushTG::push_wait_list_(ObTmpFileFlushTask *flush_task)

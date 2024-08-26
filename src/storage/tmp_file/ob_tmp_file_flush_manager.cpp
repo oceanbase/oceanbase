@@ -650,6 +650,27 @@ int ObTmpFileFlushManager::drive_flush_task_prepare_(ObTmpFileFlushTask &flush_t
   return ret;
 }
 
+void ObTmpFileFlushManager::try_remove_unused_flush_info_(ObTmpFileFlushTask &flush_task)
+{
+  int ret = OB_SUCCESS;
+
+  ObArray<ObTmpFileFlushInfo> &flush_infos = flush_task.get_flush_infos();
+  for (int64_t i = 0; OB_SUCC(ret) && i >= 0 && i < flush_infos.count(); ++i) {
+    ObTmpFileFlushInfo &flush_info = flush_infos.at(i);
+    ObSharedNothingTmpFile *file = flush_info.file_handle_.get();
+    if (OB_ISNULL(file)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "file is nullptr", KR(ret), K(flush_info));
+    } else if (file->is_deleting()) {
+      STORAGE_LOG(INFO, "the file is deleting, abort this flush info",
+          KR(ret), K(flush_info), K(flush_task));
+      flush_info.reset();
+      flush_infos.remove(i);
+      --i;
+    }
+  }
+}
+
 int ObTmpFileFlushManager::drive_flush_task_retry_(
     ObTmpFileFlushTask &flush_task,
     const FlushState state,
@@ -664,7 +685,11 @@ int ObTmpFileFlushManager::drive_flush_task_retry_(
       }
       break;
     case FlushState::TFFT_ASYNC_WRITE:
-      if (OB_FAIL(handle_async_write_(flush_task, next_state))) {
+      try_remove_unused_flush_info_(flush_task);
+      if (0 == flush_task.get_flush_infos().count()) {
+        STORAGE_LOG(INFO, "all flush info is aborted", KR(ret), K(flush_task));
+        next_state = FlushState::TFFT_ABORT;
+      } else if (OB_FAIL(handle_async_write_(flush_task, next_state))) {
         STORAGE_LOG(WARN, "fail to handle flush task async write", KR(ret), K(flush_task));
       }
       break;
@@ -710,7 +735,7 @@ int ObTmpFileFlushManager::retry(ObTmpFileFlushTask &flush_task)
     } else if (OB_FAIL(advance_status_(flush_task, next_state))) {
       STORAGE_LOG(WARN, "fail to advance status", KR(ret), K(state), K(next_state), K(flush_task));
     }
-  } while (OB_SUCC(ret) && FlushState::TFFT_WAIT != next_state);
+  } while (OB_SUCC(ret) && FlushState::TFFT_WAIT != next_state && FlushState::TFFT_ABORT != next_state);
 
   if (!flush_task.get_recorded_as_prepare_finished()) {
     if (flush_task.get_flush_seq() != flush_ctx_.get_flush_sequence()) {

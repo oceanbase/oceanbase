@@ -197,7 +197,9 @@ void ObTmpFileBatchFlushContext::try_update_prepare_finished_cnt(const ObTmpFile
   if (OB_UNLIKELY(flush_seq_ctx_.prepare_finished_cnt_ >= flush_seq_ctx_.create_flush_task_cnt_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("unexpected flush_seq_ctx_", KPC(this));
-  } else if (ObTmpFileFlushTask::TFFT_WAIT == flush_task.get_state() || flush_task.get_data_length() == 0) {
+  } else if (ObTmpFileFlushTask::TFFT_WAIT == flush_task.get_state() ||
+      ObTmpFileFlushTask::TFFT_ABORT == flush_task.get_state() ||
+      flush_task.get_data_length() == 0) {
     ++flush_seq_ctx_.prepare_finished_cnt_;
     recorded = true;
   }

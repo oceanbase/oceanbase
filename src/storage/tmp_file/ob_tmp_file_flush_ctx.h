@@ -240,6 +240,7 @@ public:
     TFFT_ASYNC_WRITE = 5,
     TFFT_WAIT = 6,
     TFFT_FINISH = 7,
+    TFFT_ABORT = 8,
   };
 public:
   void destroy();
