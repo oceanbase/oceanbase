@@ -7,9 +7,9 @@ gbk_chinese_ci	gbk	28	Yes	Yes	1
 gbk_bin	gbk	87		Yes	1
 utf16_general_ci	utf16	54	Yes	Yes	1
 utf16_bin	utf16	55		Yes	1
-utf8mb4_unicode_ci	utf8mb4	224		Yes	1
-utf16_unicode_ci	utf16	101		Yes	1
-gb18030_chinese_ci	gb18030	248	Yes	Yes	1
+utf8mb4_unicode_ci	utf8mb4	224		Yes	8
+utf16_unicode_ci	utf16	101		Yes	8
+gb18030_chinese_ci	gb18030	248	Yes	Yes	2
 gb18030_bin	gb18030	249		Yes	1
 latin1_swedish_ci	latin1	8	Yes	Yes	1
 latin1_bin	latin1	47		Yes	1
@@ -20,6 +20,14 @@ gb18030_2022_radical_ci	gb18030_2022	219		Yes	1
 gb18030_2022_radical_cs	gb18030_2022	220		Yes	1
 gb18030_2022_stroke_ci	gb18030_2022	221		Yes	1
 gb18030_2022_stroke_cs	gb18030_2022	222		Yes	1
+utf8mb4_croatian_ci	utf8mb4	245		Yes	8
+utf8mb4_unicode_520_ci	utf8mb4	246		Yes	8
+utf8mb4_czech_ci	utf8mb4	234		Yes	8
+ascii_general_ci	ascii	11	Yes	Yes	1
+ascii_bin	ascii	65		Yes	1
+tis620_thai_ci	tis620	18	Yes	Yes	1
+tis620_bin	tis620	89		Yes	1
+utf8mb4_0900_ai_ci	utf8mb4	255		Yes	1
 show collation;
 Collation	Charset	Id	Default	Compiled	Sortlen
 utf8mb4_general_ci	utf8mb4	45	Yes	Yes	1
@@ -29,9 +37,9 @@ gbk_chinese_ci	gbk	28	Yes	Yes	1
 gbk_bin	gbk	87		Yes	1
 utf16_general_ci	utf16	54	Yes	Yes	1
 utf16_bin	utf16	55		Yes	1
-utf8mb4_unicode_ci	utf8mb4	224		Yes	1
-utf16_unicode_ci	utf16	101		Yes	1
-gb18030_chinese_ci	gb18030	248	Yes	Yes	1
+utf8mb4_unicode_ci	utf8mb4	224		Yes	8
+utf16_unicode_ci	utf16	101		Yes	8
+gb18030_chinese_ci	gb18030	248	Yes	Yes	2
 gb18030_bin	gb18030	249		Yes	1
 latin1_swedish_ci	latin1	8	Yes	Yes	1
 latin1_bin	latin1	47		Yes	1
@@ -42,6 +50,14 @@ gb18030_2022_radical_ci	gb18030_2022	219		Yes	1
 gb18030_2022_radical_cs	gb18030_2022	220		Yes	1
 gb18030_2022_stroke_ci	gb18030_2022	221		Yes	1
 gb18030_2022_stroke_cs	gb18030_2022	222		Yes	1
+utf8mb4_croatian_ci	utf8mb4	245		Yes	8
+utf8mb4_unicode_520_ci	utf8mb4	246		Yes	8
+utf8mb4_czech_ci	utf8mb4	234		Yes	8
+ascii_general_ci	ascii	11	Yes	Yes	1
+ascii_bin	ascii	65		Yes	1
+tis620_thai_ci	tis620	18	Yes	Yes	1
+tis620_bin	tis620	89		Yes	1
+utf8mb4_0900_ai_ci	utf8mb4	255		Yes	1
 show collation test;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'test' at line 1
 SHOW CHARACTER SET;
@@ -53,6 +69,8 @@ utf16	UTF-16 Unicode	utf16_general_ci	2
 gb18030	GB18030 charset	gb18030_chinese_ci	4
 latin1	cp1252 West European	latin1_swedish_ci	1
 gb18030_2022	GB18030-2022 charset	gb18030_2022_chinese_ci	4
+ascii	US ASCII	ascii_general_ci	1
+tis620	TIS620 Thai	tis620_thai_ci	1
 SHOW CHARACTER SET;
 Charset	Description	Default collation	Maxlen
 binary	Binary pseudo charset	binary	1
@@ -62,6 +80,8 @@ utf16	UTF-16 Unicode	utf16_general_ci	2
 gb18030	GB18030 charset	gb18030_chinese_ci	4
 latin1	cp1252 West European	latin1_swedish_ci	1
 gb18030_2022	GB18030-2022 charset	gb18030_2022_chinese_ci	4
+ascii	US ASCII	ascii_general_ci	1
+tis620	TIS620 Thai	tis620_thai_ci	1
 SHOW CHARACTER SET test;
 ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'test' at line 1
 set names utf8;

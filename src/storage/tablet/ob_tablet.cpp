@@ -1652,7 +1652,7 @@ int ObTablet::check_sstable_column_checksum() const
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
       } else {
-        ObSSTable *cur = reinterpret_cast<ObSSTable *>(table);
+        ObSSTable *cur = static_cast<ObSSTable *>(table);
         ObSSTableMetaHandle meta_handle;
         if (OB_FAIL(cur->get_meta(meta_handle))) {
           LOG_WARN("fail to get sstable meta", K(ret), KPC(cur), KPC(this));
@@ -1667,6 +1667,45 @@ int ObTablet::check_sstable_column_checksum() const
     }
   }
   ObTabletObjLoadHelper::free(allocator, storage_schema);
+  return ret;
+}
+
+int ObTablet::check_no_backup_data() const
+{
+  int ret = OB_SUCCESS;
+  ObTableStoreIterator iter;
+
+  if (!tablet_meta_.ha_status_.is_none()) {
+    // skip
+  } else if (OB_FAIL(inner_get_all_sstables(iter, true /* need_unpack */))) {
+    LOG_WARN("fail to get all sstables", K(ret));
+  } else {
+    ObITable *table = nullptr;
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(iter.get_next(table))) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+          break;
+        } else {
+          LOG_WARN("failed to get next table", K(ret), KPC(this));
+        }
+      } else if (OB_ISNULL(table) || OB_UNLIKELY(!table->is_sstable())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected error, table is nullptr", K(ret), KPC(table));
+      } else {
+        ObSSTable *cur = static_cast<ObSSTable *>(table);
+        ObSSTableMetaHandle meta_handle;
+        if (OB_FAIL(cur->get_meta(meta_handle))) {
+          LOG_WARN("fail to get sstable meta", K(ret), KPC(cur), KPC(this));
+        } else if (OB_UNLIKELY(meta_handle.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("The sstable has backup data, but restore status is full.",
+              K(ret), KPC(cur), KPC(this), K(tablet_meta_.ha_status_));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -7680,6 +7719,8 @@ int ObTablet::inner_check_valid(const bool ignore_ha_status) const
     LOG_WARN("failed to check medium list", K(ret), KPC(this));
   } else if (OB_FAIL(check_sstable_column_checksum())) {
     LOG_WARN("failed to check sstable column checksum", K(ret), KPC(this));
+  } else if (OB_FAIL(check_no_backup_data())) {
+    LOG_WARN("failed to check no backup data", K(ret), KPC(this));
   }
   return ret;
 }

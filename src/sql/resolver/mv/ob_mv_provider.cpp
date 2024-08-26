@@ -303,6 +303,7 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
   resolver_ctx.query_ctx_ = stmt_factory.get_query_ctx();
   ObSelectStmt *sel_stmt = NULL;
   ObSelectResolver select_resolver(resolver_ctx);
+  bool is_vars_matched = false;
   if (OB_ISNULL(resolver_ctx.query_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(resolver_ctx.query_ctx_));
@@ -312,6 +313,8 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected mv schema", K(ret), KPC(mv_schema));
     mv_schema = NULL;
+  } else if (OB_FAIL(check_mview_dep_session_vars(*mv_schema, session_info, true, is_vars_matched))) {
+    LOG_WARN("failed to check mview dep session vars", K(ret));
   } else if (OB_FAIL(ObSQLUtils::generate_view_definition_for_resolve(alloc,
                                                                 session_info.get_local_collation_connection(),
                                                                 mv_schema->get_view_schema(),
@@ -333,6 +336,78 @@ int ObMVProvider::generate_mv_stmt(ObIAllocator &alloc,
   } else {
     view_stmt = sel_stmt;
     LOG_DEBUG("generate mv stmt", KPC(view_stmt));
+  }
+  return ret;
+}
+
+int ObMVProvider::check_mview_dep_session_vars(const ObTableSchema &mv_schema,
+                                               const ObSQLSessionInfo &session,
+                                               const bool gen_error,
+                                               bool &is_vars_matched)
+{
+  int ret = OB_SUCCESS;
+  is_vars_matched = false;
+  ObSEArray<const ObSessionSysVar*, 8> local_diff_vars;
+  ObSEArray<ObObj, 8> cur_var_vals;
+  if (OB_UNLIKELY(!mv_schema.is_materialized_view())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected table schema", K(ret), K(mv_schema));
+  } else if (OB_FAIL(mv_schema.get_local_session_var().get_different_vars_from_session(&session,
+                                                                                       local_diff_vars,
+                                                                                       cur_var_vals))) {
+    LOG_WARN("failed to check vars same with session ", K(ret), K(mv_schema.get_local_session_var()));
+  } else if (local_diff_vars.empty()) {
+    is_vars_matched = true;
+  } else if (OB_UNLIKELY(local_diff_vars.count() != cur_var_vals.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected array size", K(ret), K(local_diff_vars.count()), K(cur_var_vals.count()));
+  } else {
+    is_vars_matched = false;
+    ObArenaAllocator alloc;
+    ObString var_name;
+    ObString local_var_val;
+    ObString cur_var_val;
+    const ObSessionSysVar *sys_var = NULL;
+    const ObString &mview_name = mv_schema.get_table_name();
+    OPT_TRACE_BEGIN_SECTION;
+    OPT_TRACE_TITLE("some session variables differ from values used when the mview was created: ", mview_name);
+    if (gen_error) {
+      LOG_WARN("some session variables differ from values used when the mview was created. ", K(mview_name));
+    } else {
+      LOG_TRACE("some session variables differ from values used when the mview was created. ", K(mview_name));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < local_diff_vars.count(); ++i) {
+      if (OB_ISNULL(sys_var = local_diff_vars.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(sys_var));
+      } else if (OB_FAIL(ObSysVarFactory::get_sys_var_name_by_id(sys_var->type_, var_name))) {
+        LOG_WARN("get sysvar name failed", K(ret));
+      } else if (OB_FAIL(ObSessionSysVar::get_sys_var_val_str(sys_var->type_, sys_var->val_, alloc, local_var_val))) {
+        LOG_WARN("failed to get sys var str", K(ret));
+      } else if (OB_FAIL(ObSessionSysVar::get_sys_var_val_str(sys_var->type_, cur_var_vals.at(i), alloc, cur_var_val))) {
+        LOG_WARN("failed to get sys var str", K(ret));
+      } else {
+        OPT_TRACE(i, ".", var_name, ",  old value:", local_var_val, ",  current value:", cur_var_val);
+        if (gen_error) {
+          LOG_WARN("session variable changed", K(i), K(var_name), K(local_var_val), K(cur_var_val));
+        } else {
+          LOG_TRACE("session variable changed", K(i), K(var_name), K(local_var_val), K(cur_var_val));
+        }
+      }
+    }
+
+    OPT_TRACE_END_SECTION;
+
+    if (!gen_error) {
+      ret = OB_SUCCESS;
+    } else {
+      // show user error use the last different sys variables
+      ret = OB_ERR_SESSION_VAR_CHANGED;
+      LOG_USER_ERROR(OB_ERR_SESSION_VAR_CHANGED,
+                        var_name.length(), var_name.ptr(),
+                        mv_schema.get_table_name_str().length(), mv_schema.get_table_name_str().ptr(),
+                        local_var_val.length(), local_var_val.ptr());
+    }
   }
   return ret;
 }

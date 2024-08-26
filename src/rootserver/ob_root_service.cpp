@@ -4129,7 +4129,12 @@ int ObRootService::execute_ddl_task(const obrpc::ObAlterTableArg &arg,
         break;
       }
       case share::MAKE_DDL_TAKE_EFFECT_TASK: {
-        if (OB_FAIL(ddl_service_.swap_orig_and_hidden_table_state(
+        if (arg.is_direct_load_partition_) {
+          if (OB_FAIL(ddl_service_.swap_orig_and_hidden_table_partitions(
+              const_cast<obrpc::ObAlterTableArg &>(arg)))) {
+            LOG_WARN("failed to swap orig and hidden table partitions", K(ret));
+          }
+        } else if (OB_FAIL(ddl_service_.swap_orig_and_hidden_table_state(
             const_cast<obrpc::ObAlterTableArg &>(arg)))) {
           LOG_WARN("failed to swap orig and hidden table state", K(ret));
         }
@@ -6568,7 +6573,7 @@ int ObRootService::revoke_routine(const ObRevokeRoutineArg &arg)
                             (arg.obj_type_ == (int64_t)ObObjectType::PROCEDURE) ? ObRoutineType::ROUTINE_PROCEDURE_TYPE
                            : (arg.obj_type_ == (int64_t)ObObjectType::FUNCTION) ? ObRoutineType::ROUTINE_FUNCTION_TYPE
                            : ObRoutineType::INVALID_ROUTINE_TYPE);
-    OZ (ddl_service_.revoke_routine(routine_priv_key, arg.priv_set_));
+    OZ (ddl_service_.revoke_routine(routine_priv_key, arg.priv_set_, arg.grantor_, arg.grantor_host_));
   }
   return ret;
 }

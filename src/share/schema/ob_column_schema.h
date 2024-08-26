@@ -45,7 +45,6 @@ const char *const STR_COLUMN_TYPE_RAW = "raw";
 const char *const STR_COLUMN_TYPE_UNKNOWN = "unknown";
 
 class ObTableSchema;
-class ObLocalSessionVar;
 class ObColumnSchemaV2 : public ObSchema
 {
   OB_UNIS_VERSION_V(1);
@@ -130,7 +129,10 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline void set_collation_type(const common::ObCollationType type) { meta_type_.set_collation_type(type); }
   inline int set_orig_default_value(const common::ObObj default_value) { return deep_copy_obj(default_value, orig_default_value_); }
   inline int set_orig_default_value_v2(const common::ObObj default_value) { return deep_copy_obj(default_value, orig_default_value_); }
-  inline int set_cur_default_value(const common::ObObj default_value) { return deep_copy_obj(default_value, cur_default_value_); }
+  inline int set_cur_default_value(const common::ObObj default_value, bool is_default_expr_v2) {
+    add_or_del_column_flag(DEFAULT_EXPR_V2_COLUMN_FLAG, is_default_expr_v2);
+    return deep_copy_obj(default_value, cur_default_value_);
+  }
   inline int set_cur_default_value_v2(const common::ObObj default_value) { return deep_copy_obj(default_value, cur_default_value_); }
   inline int set_column_name(const char *col_name) { return deep_copy_str(col_name, column_name_); }
   inline int set_column_name(const common::ObString &col_name) { return deep_copy_str(col_name, column_name_); }
@@ -336,8 +338,8 @@ int assign(const ObColumnSchemaV2 &src_schema);
   }
 
   int get_each_column_group_name(ObString &cg_name) const;
-  inline ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
-  inline const ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
+  inline sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
+  inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
 
   DECLARE_VIRTUAL_TO_STRING;
 private:
@@ -391,7 +393,7 @@ private:
   uint64_t sub_type_;
   ObSkipIndexColumnAttr skip_index_attr_;
   int64_t lob_chunk_size_;
-  ObLocalSessionVar local_session_vars_;
+  sql::ObLocalSessionVar local_session_vars_;
 };
 
 inline int32_t ObColumnSchemaV2::get_data_length() const

@@ -1516,7 +1516,8 @@ struct NullAwareAntiJoinInfo {
                                OptSkipScanState use_skip_scan);
 
     int init_sample_info_for_access_path(AccessPath *ap,
-                                         const uint64_t table_id);
+                                         const uint64_t table_id,
+                                         const TableItem *table_item);
 
     int init_filter_selectivity(ObCostTableScanInfo &est_cost_info);
 

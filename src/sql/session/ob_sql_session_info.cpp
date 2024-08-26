@@ -60,6 +60,9 @@
 #include "share/schema/ob_schema_utils.h"
 #include "share/config/ob_config_helper.h"
 #include "rootserver/ob_tenant_info_loader.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_log_utils.h"
+#endif
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -3006,6 +3009,14 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
                                            K(effective_tenant_id),
                                            K(lbt()));
       }
+#ifdef OB_BUILD_AUDIT_SECURITY
+      audit_log_enable_ = tenant_config->audit_log_enable;
+      if (OB_SUCCESS != (tmp_ret = ObAuditLogUtils::parse_query_sql_conf(
+                                                      tenant_config->audit_log_query_sql.str(),
+                                                      audit_log_query_sql_))) {
+        LOG_WARN_RET(tmp_ret, "fail parse query sql conf", "ret", tmp_ret, K(lbt()));
+      }
+#endif
       // 6. enable extended SQL syntax in the MySQL mode
       enable_sql_extension_ = tenant_config->enable_sql_extension;
       px_join_skew_handling_ = tenant_config->_px_join_skew_handling;
@@ -4747,4 +4758,15 @@ int ObSQLSessionInfo::check_service_name_and_failover_mode() const
 {
   uint64_t tenant_id = get_effective_tenant_id();
   return check_service_name_and_failover_mode(tenant_id);
+}
+
+int ObSQLSessionInfo::set_audit_filter_name(const common::ObString &filter_name)
+{
+  int ret = OB_SUCCESS;
+  if (filter_name.empty()) {
+    audit_filter_name_.reset();
+  } else if (OB_FAIL(sess_level_name_pool_.write_string(filter_name, &audit_filter_name_))) {
+    LOG_WARN("failed to write filter_name to string_buf_", K(ret));
+  }
+  return ret;
 }

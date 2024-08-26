@@ -302,7 +302,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_abs.cpp
   engine/expr/ob_expr_acos.cpp
   engine/expr/ob_expr_add.cpp
-  engine/expr/ob_expr_aes_encrypt.cpp
+  engine/expr/ob_expr_symmetric_encrypt.cpp
   engine/expr/ob_expr_agg_param_list.cpp
   engine/expr/ob_expr_and.cpp
   engine/expr/ob_expr_any_value.cpp
@@ -313,6 +313,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_at_time_zone.cpp
   engine/expr/ob_expr_atan.cpp
   engine/expr/ob_expr_atan2.cpp
+  engine/expr/ob_expr_audit_log_func.cpp
   engine/expr/ob_expr_autoinc_nextval.cpp
   engine/expr/ob_expr_benchmark.cpp
   engine/expr/ob_expr_between.cpp
@@ -706,6 +707,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_st_contains.cpp
   engine/expr/ob_expr_st_within.cpp
   engine/expr/ob_expr_sql_mode_convert.cpp
+  engine/expr/ob_expr_can_access_trigger.cpp
   engine/expr/ob_expr_prefix_pattern.cpp
   engine/expr/ob_expr_sys_makexml.cpp
   engine/expr/ob_expr_xml_func_helper.cpp
@@ -1347,6 +1349,7 @@ ob_set_subtarget(ob_sql rewrite
   rewrite/ob_union_find.cpp
   rewrite/ob_transform_decorrelate.cpp
   rewrite/ob_transform_late_materialization.cpp
+  rewrite/ob_transform_mv_rewrite_prepare.cpp
 )
 
 ob_set_subtarget(ob_sql session
@@ -1357,6 +1360,7 @@ ob_set_subtarget(ob_sql session
   session/ob_sys_params_mgr.cpp
   session/ob_user_resource_mgr.cpp
   session/ob_sess_info_verify.cpp
+  session/ob_local_session_var.cpp
 )
 
 ob_set_subtarget(ob_sql udr

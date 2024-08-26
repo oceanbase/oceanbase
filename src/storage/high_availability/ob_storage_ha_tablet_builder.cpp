@@ -937,8 +937,17 @@ int ObStorageHATabletsBuilder::get_major_sstable_max_snapshot_(
   } else if (major_sstable_array.count() > 0 && OB_FAIL(major_sstable_array.get_all_table_wrappers(sstables))) {
     LOG_WARN("failed to get all tables", K(ret), K(param_));
   } else {
+    ObSSTableMetaHandle sst_meta_hdl;
+    MajorSSTableSnapshotVersionCmp cmp;
+
+    // step 1: sort major sstables by snapshot version
+    lib::ob_sort(sstables.begin(), sstables.end(), cmp);
+
+    // step 2: get the major that has maximun snapshot version
+    // and all major snapshot version lower than it has no backup
     for (int64_t i = 0; OB_SUCC(ret) && i < sstables.count(); ++i) {
-      const ObITable *table = sstables.at(i).get_sstable();
+      ObITable *table = sstables.at(i).get_sstable();
+      sst_meta_hdl.reset();
 
       if (OB_ISNULL(table)) {
         ret = OB_ERR_UNEXPECTED;
@@ -946,6 +955,11 @@ int ObStorageHATabletsBuilder::get_major_sstable_max_snapshot_(
       } else if (!table->is_major_sstable()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("sstable type is unexpected", K(ret), KP(table), K(param_));
+      } else if (OB_FAIL(static_cast<ObSSTable *>(table)->get_meta(sst_meta_hdl))) {
+        LOG_WARN("failed to get sstable meta handle", K(ret), K(table));
+      } else if (sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
+        // stop at first major sstable that has backup
+        break;
       } else {
         max_snapshot_version = std::max(max_snapshot_version, table->get_key().get_snapshot_version());
       }
@@ -1311,6 +1325,19 @@ int ObStorageHATabletsBuilder::hold_local_tablet_(
     }
   }
   return ret;
+}
+
+bool ObStorageHATabletsBuilder::MajorSSTableSnapshotVersionCmp::operator()(const ObSSTableWrapper &lhs, const ObSSTableWrapper &rhs) const
+{
+  int ret = OB_SUCCESS;
+  int result = false;
+  if (!lhs.is_valid() || !rhs.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid sstable wrapper", K(ret), K(lhs), K(rhs));
+  } else {
+    result = lhs.get_sstable()->get_snapshot_version() < rhs.get_sstable()->get_snapshot_version();
+  }
+  return result;
 }
 
 /******************ObStorageHATabletTableInfoMgr*********************/

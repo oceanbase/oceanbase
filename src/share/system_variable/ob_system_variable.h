@@ -838,6 +838,11 @@ public:
                                                   const ObBasicSysVar &sys_var,
                                                   const common::ObObj &in_val,
                                                   common::ObObj &out_val);
+  static int check_default_value_for_utf8mb4(sql::ObExecContext &ctx,
+                                            const ObSetVar &set_var,
+                                            const ObBasicSysVar &sys_var,
+                                            const ObObj &in_val,
+                                            ObObj &out_val);
   static int check_and_convert_tx_isolation(sql::ObExecContext &ctx,
                                             const ObSetVar &set_var,
                                             const ObBasicSysVar &sys_var,
@@ -950,6 +955,11 @@ public:
                                        const common::ObObj &in_val,
                                        const uint64_t tenant_id,
                                        uint64_t &version);
+  static int check_and_convert_block_encryption_mode(sql::ObExecContext &ctx,
+                                                     const ObSetVar &set_var,
+                                                     const ObBasicSysVar &sys_var,
+                                                     const common::ObObj &in_val,
+                                                     common::ObObj &out_val);
 private:
   static int check_session_readonly(sql::ObExecContext &ctx,
                                     const ObSetVar &set_var,

@@ -288,6 +288,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(node->type_, c_expr))) {
           LOG_WARN("fail to create raw expr", K(ret));
         } else {
+          ObObj val;
+          val.set_null();
+          c_expr->set_value(val);
+          c_expr->set_param(val);
           expr = c_expr;
         }
         break;
@@ -617,12 +621,24 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         break;
       }
       case T_OP_AND:
-      case T_OP_OR:
+      case T_OP_OR: {
+        ObOpRawExpr *m_expr = NULL;
+        if (OB_FAIL(process_node_with_children(node, node->num_child_, m_expr, is_root_expr))) {
+          LOG_WARN("fail to process node with children", K(ret), K(node));
+        } else if (OB_ISNULL(ctx_.session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session_info_ is NULL", K(ret));
+        } else if (OB_FAIL(ObRawExprUtils::try_add_bool_expr(m_expr, ctx_.expr_factory_))) {
+          LOG_WARN("try_add_bool_expr for add or expr failed", K(ret));
+        } else {
+          expr = m_expr;
+        }
+        break;
+      }
       case T_OP_XOR: {
         ObOpRawExpr *m_expr = NULL;
         int64_t num_child = 2;
-        if (OB_FAIL(process_node_with_children(node, num_child, m_expr,
-                                               node->type_ == T_OP_XOR ? false : is_root_expr))) {
+        if (OB_FAIL(process_node_with_children(node, num_child, m_expr, false))) {
           LOG_WARN("fail to process node with children", K(ret), K(node));
         } else if (OB_ISNULL(ctx_.session_info_)) {
           ret = OB_ERR_UNEXPECTED;
@@ -1106,7 +1122,7 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       }
       case T_FUN_SYS_REGEXP_LIKE:
       case T_FUN_SYS: {
-        if (OB_FAIL(process_fun_sys_node(node, expr))) {
+        if (OB_FAIL(process_fun_sys_node(node, expr, is_root_expr))) {
           if (ret != OB_ERR_FUNCTION_UNKNOWN) {
             LOG_WARN("fail to process system function node", K(ret), K(node));
           } else if (OB_FAIL(process_dll_udf_node(node, expr))) {
@@ -2538,7 +2554,7 @@ int ObRawExprResolverImpl::resolve_func_node_of_obj_access_idents(const ParseNod
           } else if (func_node.type_ == T_FUN_ORA_XMLAGG) {
             OZ (process_agg_node(&func_node, func_expr));
           }else {
-            OZ (process_fun_sys_node(&func_node, func_expr));
+            OZ (process_fun_sys_node(&func_node, func_expr, false));
           }
           CK (OB_NOT_NULL(func_expr));
           OX (access_ident.sys_func_expr_ = func_expr);
@@ -6770,7 +6786,9 @@ int ObRawExprResolverImpl::cast_accuracy_check(const ParseNode *node, const char
   return ret;
 }
 
-int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr *&expr)
+int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
+                                                ObRawExpr *&expr,
+                                                const bool is_root_expr)
 {
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *func_expr = NULL;
@@ -6927,6 +6945,18 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node, ObRawExpr
     }
   }
 
+  if (OB_SUCC(ret)) {
+    if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == func_expr->get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == func_expr->get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_SET_USER == func_expr->get_expr_type()
+        || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == func_expr->get_expr_type()) {
+      if (OB_UNLIKELY(!is_root_expr)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function as param is");
+      }
+    }
+  }
+
   //mark expr is deterministic or not(default deterministic)
   if (OB_SUCC(ret)) {
     //bug:
@@ -7021,6 +7051,21 @@ int ObRawExprResolverImpl::process_sys_func_params(ObSysFunRawExpr &func_expr, i
             LOG_WARN("the func expr3 is null or not const expr", K(ret));
           }
         }
+      break;
+    case T_FUN_SYS_AUDIT_LOG_SET_FILTER:
+    case T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER:
+    case T_FUN_SYS_AUDIT_LOG_SET_USER:
+    case T_FUN_SYS_AUDIT_LOG_REMOVE_USER:
+      for (int64_t i = 0; OB_SUCC(ret) && i < func_expr.get_param_count(); ++i) {
+        ObRawExpr *param_expr = func_expr.get_param_expr(i);
+        if (OB_ISNULL(param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null epxr", K(ret));
+        } else if (OB_UNLIKELY(!param_expr->is_const_raw_expr())) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const param of audit log function");
+        }
+      }
       break;
     default:
       break;
@@ -8565,8 +8610,8 @@ int ObRawExprResolverImpl::check_internal_function(const ObString &name)
   bool is_internal = false;
   if (OB_FAIL(ret)) {
   } else if (ctx_.session_info_->is_inner()
-             || is_sys_view(ctx_.view_ref_id_)
-             || ctx_.is_from_show_resolver_) {
+            || ctx_.is_in_system_view_
+            || ctx_.is_from_show_resolver_) {
     // ignore
   } else if (FALSE_IT(ObExprOperatorFactory::get_internal_info_by_name(name, exist, is_internal))) {
   } else if (exist && is_internal) {

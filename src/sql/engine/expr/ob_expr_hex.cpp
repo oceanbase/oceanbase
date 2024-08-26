@@ -92,7 +92,7 @@ int ObExprHex::calc_result_type1(ObExprResType &type,
         text.set_calc_type(ObVarcharType);
       }
       ObExprResType tmp_type;
-      OZ(aggregate_charsets_for_string_result(tmp_type, &text, 1, type_ctx.get_coll_type()));
+      OZ(aggregate_charsets_for_string_result(tmp_type, &text, 1, type_ctx));
       if (OB_SUCC(ret)) {
         text.set_calc_collation_type(tmp_type.get_collation_type());
         text.set_calc_collation_level(tmp_type.get_collation_level());

@@ -7268,14 +7268,15 @@ int ObSelectLogPlan::adjust_late_materialization_plan_structure(ObLogicalOperato
                                                                       is_in_range_optimization_enabled))) {
           LOG_WARN("failed to check in range optimization enabled", K(ret));
         } else if (OB_FAIL(query_range->preliminary_extract_query_range(range_columns,
-                                                                 join_conditions,
-                                                                 dtc_params,
-                                                                 optimizer_context_.get_exec_ctx(),
-                                                                 NULL,
-                                                                 params,
-                                                                 false,
-                                                                 true,
-                                                                 is_in_range_optimization_enabled))) {
+                                                                        join_conditions,
+                                                                        dtc_params,
+                                                                        optimizer_context_.get_exec_ctx(),
+                                                                        optimizer_context_.get_query_ctx(),
+                                                                        NULL,
+                                                                        params,
+                                                                        false,
+                                                                        true,
+                                                                        is_in_range_optimization_enabled))) {
           LOG_WARN("failed to preliminary extract query range", K(ret));
         } else if (OB_FAIL(table_scan->set_range_columns(range_columns))) {
           LOG_WARN("failed to set range columns", K(ret));

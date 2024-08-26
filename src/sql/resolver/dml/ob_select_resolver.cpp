@@ -1497,6 +1497,11 @@ int ObSelectResolver::resolve_normal_query(const ParseNode &parse_tree)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(check_audit_log_stmt(select_stmt))) {
+      LOG_WARN("failed to check audit log stmt");
+    }
+  }
   return ret;
 }
 
@@ -3969,11 +3974,11 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
       } else if (OB_FAIL(session_info_->get_collation_connection(coll_type))) {
         LOG_WARN("fail to get_collation_connection", K(ret));
       } else {
-        const ObLengthSemantics default_ls = session_info_->get_actual_nls_length_semantics();
         ObSEArray<ObExprResType, 16> types;
         ObExprResType res_type;
         ObExprVersion dummy_op(*allocator_);
-
+        ObExprTypeCtx type_ctx;
+        ObSQLUtils::init_type_ctx(session_info_, type_ctx);
         for (int64_t colum_idx = 0; OB_SUCC(ret) && colum_idx < new_column_count; colum_idx++) {
           res_type.reset();
           types.reset();
@@ -4024,9 +4029,8 @@ int ObSelectResolver::gen_unpivot_target_column(const int64_t table_count,
             } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(res_type,
                                                                         &types.at(0),
                                                                         types.count(),
-                                                                        coll_type,
                                                                         true,
-                                                                        default_ls))) {
+                                                                        type_ctx))) {
               LOG_WARN("fail to aggregate_result_type_for_merge", K(ret), K(types));
             }
           }
@@ -7285,6 +7289,39 @@ int ObSelectResolver::check_listagg_aggr_param_valid(ObAggFunRawExpr *aggr_expr)
                                                        check_separator_exprs,
                                                        OB_ERR_ARGUMENT_SHOULD_CONSTANT_OR_GROUP_EXPR))) {
       LOG_WARN("fail to check by expr", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSelectResolver::check_audit_log_stmt(ObSelectStmt *select_stmt)
+{
+  int ret = OB_SUCCESS;
+  bool is_contain = false;
+  if (OB_ISNULL(select_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (lib::is_mysql_mode()) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < select_stmt->get_select_item_size(); i++) {
+      ObRawExpr *expr = select_stmt->get_select_item(i).expr_;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (T_FUN_SYS_AUDIT_LOG_SET_FILTER == expr->get_expr_type() ||
+                 T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == expr->get_expr_type() ||
+                 T_FUN_SYS_AUDIT_LOG_SET_USER == expr->get_expr_type() ||
+                 T_FUN_SYS_AUDIT_LOG_REMOVE_USER == expr->get_expr_type()) {
+        is_contain = true;
+      }
+    }
+    if (OB_SUCC(ret) && is_contain) {
+      if (current_level_ > 0 || is_substmt() || select_stmt->get_table_size() > 0 ||
+          select_stmt->get_condition_size() > 0 || select_stmt->has_group_by() ||
+          select_stmt->has_having() || select_stmt->get_select_item_size() > 1 ||
+          select_stmt->has_order_by() || select_stmt->has_limit()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in complex query");
+      }
     }
   }
   return ret;

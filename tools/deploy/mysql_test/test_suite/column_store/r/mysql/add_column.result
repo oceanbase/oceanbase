@@ -189,6 +189,9 @@ alter system flush plan cache;
 select count(c2), min(c2), max(c2) from t3 where c1 < 256;
 count(c2)	min(c2)	max(c2)
 16384	中文                                                          	中文                                                          
+select count(c2), min(c2), max(c2) from t3 where c1 < 256;
+count(c2)	min(c2)	max(c2)
+16384	中文	中文
 alter system major freeze;
 alter table t2 add column c4 bigint default 10, add column c5 bigint unsigned default 20;
 alter table t2 add column c6 bigint default null;

@@ -65,7 +65,7 @@ inline int ObExprReverse::calc_result_type1(ObExprResType &type,
         type.set_length(type1.get_length());
       }
     }
-    ret = aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type());
+    ret = aggregate_charsets_for_string_result(type, &type1, 1, type_ctx);
   } else {
     if (ob_is_character_type(type1.get_type(), type1.get_collation_type())
         || ob_is_varbinary_or_binary(type1.get_type(), type1.get_collation_type())

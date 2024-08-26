@@ -942,6 +942,16 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
              K(session->get_txn_free_route_ctx()), KPC(session));       \
   }
 
+#define CHECK_EXPLICIT_SAVEPOINT_TXN_FREE_ROUTE_ALLOWED(savepoint)      \
+  if (OB_SUCC(ret) && !session->is_inner() && session->is_txn_free_route_temp()) { \
+    if (pl::PL_IMPLICIT_SAVEPOINT != savepoint) {                       \
+      ret = OB_TRANS_FREE_ROUTE_NOT_SUPPORTED;                          \
+      LOG_WARN("create savepoint is not allowed executed on txn tmp node", K(ret), \
+               K(savepoint), K(session->get_txn_free_route_ctx()), KPC(session)); \
+    }                                                                   \
+  }
+
+
 #define CHECK_DEFAULT_SAVEPOINTNAME_ALLOWED(sp_name)                            \
   if (OB_SUCC(ret) && (sp_name == DBLINK_DEFAULT_SAVEPOINT || sp_name == PL_DBLINK_DEFAULT_SAVEPOINT)) { \
     ret = OB_ERR_INVALID_CHARACTER_STRING;                              \
@@ -957,7 +967,7 @@ int ObSqlTransControl::create_savepoint(ObExecContext &exec_ctx,
   ObTransService *txs = NULL;
   CK (OB_NOT_NULL(session));
   CHECK_SESSION (session);
-  CHECK_TXN_FREE_ROUTE_ALLOWED();
+  CHECK_EXPLICIT_SAVEPOINT_TXN_FREE_ROUTE_ALLOWED(sp_name);
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
   // for dblink trans
@@ -1106,7 +1116,7 @@ int ObSqlTransControl::rollback_savepoint(ObExecContext &exec_ctx,
 
   CK (OB_NOT_NULL(session), OB_NOT_NULL(plan_ctx));
   CHECK_SESSION (session);
-  CHECK_TXN_FREE_ROUTE_ALLOWED();
+  CHECK_EXPLICIT_SAVEPOINT_TXN_FREE_ROUTE_ALLOWED(sp_name);
   OZ (get_tx_service(session, txs));
   OZ (acquire_tx_if_need_(txs, *session));
   OX (stmt_expire_ts = get_stmt_expire_ts(plan_ctx, *session));
@@ -1169,7 +1179,7 @@ int ObSqlTransControl::release_savepoint(ObExecContext &exec_ctx,
   ObTransService *txs = NULL;
   CK (OB_NOT_NULL(session));
   CHECK_SESSION (session);
-  CHECK_TXN_FREE_ROUTE_ALLOWED();
+  CHECK_EXPLICIT_SAVEPOINT_TXN_FREE_ROUTE_ALLOWED(sp_name);
   OZ (get_tx_service(session, txs), *session);
   OZ (acquire_tx_if_need_(txs, *session));
   bool start_hook = false;

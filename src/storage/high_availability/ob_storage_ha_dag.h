@@ -193,12 +193,14 @@ class ObStorageHATaskUtils
 public:
   static int check_need_copy_sstable(
       const ObMigrationSSTableParam &param,
+      const bool &is_restore,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
 
 private:
   static int check_major_sstable_need_copy_(
       const ObMigrationSSTableParam &param,
+      const bool &is_restore,
       ObTabletHandle &tablet_handle,
       bool &need_copy);
 

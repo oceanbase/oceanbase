@@ -49,6 +49,10 @@ public:
   int get_fast_refresh_operators(const ObIArray<ObString> *&operators) const;
   int get_real_time_mv_expand_view(ObIAllocator &alloc, ObString &expand_view) const;
   int get_mv_dependency_infos(ObIArray<ObDependencyInfo> &dep_infos) const;
+  static int check_mview_dep_session_vars(const ObTableSchema &mv_schema,
+                                          const ObSQLSessionInfo &session,
+                                          const bool gen_error,
+                                          bool &is_vars_matched);
 private:
   int check_mv_column_type(const ObTableSchema *mv_schema, const ObSelectStmt *view_stmt);
   int check_mv_column_type(const ObColumnSchemaV2 &org_column, const ObColumnSchemaV2 &cur_column);

@@ -109,10 +109,6 @@ private:
                                   ObIArray<int64_t> &map,
                                   bool &is_valid);
 
-  int create_aggr_expr(ObItemType type,
-                       ObAggFunRawExpr *&agg_expr,
-                       ObRawExpr *child_expr);
-
   int adjust_agg_to_win(ObSelectStmt *view_stmt);
 
   int adjust_view_for_trans(ObDMLStmt *main_stmt, 

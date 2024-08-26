@@ -63,15 +63,13 @@ int ObExprCase::calc_result_typeN(ObExprResType &type,
      */
     const int64_t cond_type_count = param_num / 2;
     const int64_t val_type_count = param_num - cond_type_count;
-    const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
 
     if (OB_FAIL(aggregate_result_type_for_case(
                   type,
                   types_stack + cond_type_count,
                   val_type_count,
-                  type_ctx.get_coll_type(),
                   lib::is_oracle_mode(),
-                  default_length_semantics,
+                  type_ctx,
                   true, false,
                   is_called_in_sql_))) {
       LOG_WARN("failed to aggregate result type");

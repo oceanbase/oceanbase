@@ -71,6 +71,7 @@ int ObMVChecker::check_mv_refresh_type()
   } else if (OB_FAIL(check_mjv_refresh_type(stmt_, refresh_type_))) {
     LOG_WARN("failed to check mjv refresh type", K(ret));
   }
+  LOG_TRACE("finish check mv refresh type", K_(refresh_type));
   return ret;
 }
 
@@ -231,6 +232,9 @@ int ObMVChecker::check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool 
       } else if (OB_UNLIKELY(!table->is_basic_table())) {
         is_valid = false;
         append_fast_refreshable_note("basic table allowed only");
+      } else if (OB_NOT_NULL(table->flashback_query_expr_)) {
+        is_valid = false;
+        append_fast_refreshable_note("flashback query not support");
       } else if (OB_FAIL(sql_schema_guard->get_table_schema(table->ref_id_, table_schema))) {
         LOG_WARN("failed to get table schema", K(ret));
       } else if (OB_ISNULL(table_schema)) {
@@ -324,8 +328,12 @@ int ObMVChecker::check_mav_refresh_type(const ObSelectStmt &stmt, ObMVRefreshabl
     LOG_WARN("failed to check mav aggr valid", K(ret));
   } else if (!is_valid) {
     refresh_type = OB_MV_COMPLETE_REFRESH;
-  } else if (stmt.is_single_table_stmt()) { // only support single table MAV
+  } else if (stmt.is_single_table_stmt()) { // single table MAV
     refresh_type = OB_MV_FAST_REFRESH_SIMPLE_MAV;
+  } else if (OB_FAIL(check_join_mv_fast_refresh_valid(stmt, true, is_valid))) {
+    LOG_WARN("failed to check join mv fast refresh valid", K(ret));
+  } else if (is_valid) {  // join MAV
+    refresh_type = OB_MV_FAST_REFRESH_SIMPLE_JOIN_MAV;
   } else {
     append_fast_refreshable_note("group by with multi table not support now", OB_MV_FAST_REFRESH_SIMPLE_MAV);
     refresh_type = OB_MV_COMPLETE_REFRESH;
@@ -653,8 +661,26 @@ int ObMVChecker::check_mjv_refresh_type(const ObSelectStmt &stmt, ObMVRefreshabl
 {
   int ret = OB_SUCCESS;
   refresh_type = OB_MV_COMPLETE_REFRESH;
-  bool join_type_valid = true;
-  bool select_valid = true;
+  bool is_valid = false;
+  if (OB_FAIL(check_join_mv_fast_refresh_valid(stmt, false, is_valid))) {
+    LOG_WARN("failed to check join mv fast refresh valid", K(ret));
+  } else if (!is_valid) {
+    /* do nothing */
+  } else {
+    refresh_type = OB_MV_FAST_REFRESH_SIMPLE_MJV;
+  }
+  return ret;
+}
+
+int ObMVChecker::check_join_mv_fast_refresh_valid(const ObSelectStmt &stmt,
+                                                  const bool for_join_mav,
+                                                  bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  bool join_type_valid = false;
+  bool all_table_exists_rowkey = false;
+  bool select_valid = false;
   if (stmt.get_table_size() <= 1) {
     append_fast_refreshable_note("table size not support");
   // } else if (stmt.get_table_size() > 5) {
@@ -663,12 +689,18 @@ int ObMVChecker::check_mjv_refresh_type(const ObSelectStmt &stmt, ObMVRefreshabl
     LOG_WARN("failed to check mv join type", K(ret));
   } else if (!join_type_valid) {
     append_fast_refreshable_note("outer join not support");
-  } else if (OB_FAIL(check_select_contains_all_tables_primary_key(stmt, select_valid))) {
-    LOG_WARN("failed to check check select contains all tables primary key", K(ret));
-  } else if (!select_valid) {
-    append_fast_refreshable_note("base table primary key need in select for MJV");
+  } else if (OB_FAIL(check_select_contains_all_tables_primary_key(stmt, all_table_exists_rowkey, select_valid))) {
+    LOG_WARN("failed to check select contains all tables primary key", K(ret));
+  } else if (for_join_mav) {
+    if (all_table_exists_rowkey) {
+      is_valid = true;
+    } else {
+      append_fast_refreshable_note("base table need primary key for join MAV");
+    }
+  } else if (select_valid) {
+    is_valid = true;
   } else {
-    refresh_type = OB_MV_FAST_REFRESH_SIMPLE_MJV;
+    append_fast_refreshable_note("base table primary key need in select for MJV");
   }
   return ret;
 }
@@ -703,19 +735,22 @@ bool ObMVChecker::is_mv_join_type_valid(const TableItem *table)
 }
 
 int ObMVChecker::check_select_contains_all_tables_primary_key(const ObSelectStmt &stmt,
+                                                              bool &all_table_exists_rowkey,
                                                               bool &contain_all_rowkey)
 {
   int ret = OB_SUCCESS;
   contain_all_rowkey = false;
+  all_table_exists_rowkey = false;
   if (OB_ISNULL(stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(stmt.get_query_ctx()));
   } else {
     contain_all_rowkey = true;
+    all_table_exists_rowkey = true;
     int64_t all_rowkey_size = 0;
     ObSEArray<const ObRawExpr*, 8> rowkeys;
     ObSqlSchemaGuard &sql_schema_guard = stmt.get_query_ctx()->sql_schema_guard_;
-    for (int64_t i = 0; contain_all_rowkey && OB_SUCC(ret) && i < stmt.get_table_items().count(); ++i) {
+    for (int64_t i = 0; all_table_exists_rowkey && OB_SUCC(ret) && i < stmt.get_table_items().count(); ++i) {
       TableItem *table_item = NULL;
       const ObTableSchema *table_schema = NULL;
       if (OB_ISNULL(table_item = stmt.get_table_items().at(i))
@@ -728,13 +763,13 @@ int ObMVChecker::check_select_contains_all_tables_primary_key(const ObSelectStmt
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid table schema", K(ret), K(table_schema));
       } else if (table_schema->is_heap_table()) {
-        contain_all_rowkey = false;
+        all_table_exists_rowkey = false;
       } else {
         all_rowkey_size += table_schema->get_rowkey_info().get_size();
       }
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_select_items().count(); ++i) {
+    for (int64_t i = 0; all_table_exists_rowkey &&OB_SUCC(ret) && i < stmt.get_select_items().count(); ++i) {
       const ObRawExpr *expr = NULL;
       int64_t idx = OB_INVALID_INDEX;
       if (OB_ISNULL(expr = stmt.get_select_items().at(i).expr_)) {
@@ -747,8 +782,8 @@ int ObMVChecker::check_select_contains_all_tables_primary_key(const ObSelectStmt
       }
     }
 
-    if (OB_FAIL(ret) || !contain_all_rowkey) {
-      /* do nothing */
+    if (OB_FAIL(ret) || !all_table_exists_rowkey) {
+      contain_all_rowkey = false;
     } else if (all_rowkey_size > rowkeys.count()) {
       contain_all_rowkey = false;
     } else if (OB_UNLIKELY(rowkeys.count() != all_rowkey_size)) {

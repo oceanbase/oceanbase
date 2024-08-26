@@ -344,6 +344,8 @@
 # 499: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 500: __all_tenant_snapshot_job
 # 502: __all_trusted_root_certificate
+# 503: __all_audit_log_filter
+# 504: __all_audit_log_user
 # 505: __all_column_privilege
 # 506: __all_column_privilege_history
 # 506: __all_column_privilege  # BASE_TABLE_NAME
@@ -1099,6 +1101,10 @@
 # 12458: __all_virtual_ls_snapshot
 # 12459: __all_virtual_index_usage_info
 # 12459: __all_index_usage_info  # BASE_TABLE_NAME
+# 12460: __all_virtual_audit_log_filter
+# 12460: __all_audit_log_filter  # BASE_TABLE_NAME
+# 12461: __all_virtual_audit_log_user
+# 12461: __all_audit_log_user  # BASE_TABLE_NAME
 # 12462: __all_virtual_column_privilege
 # 12462: __all_column_privilege  # BASE_TABLE_NAME
 # 12463: __all_virtual_column_privilege_history
@@ -1757,6 +1763,9 @@
 # 20014: ENGINES
 # 20015: ROUTINES
 # 20016: PROFILING
+# 20017: OPTIMIZER_TRACE
+# 20018: PLUGINS
+# 20019: INNODB_SYS_COLUMNS
 # 20020: INNODB_FT_BEING_DELETED
 # 20021: INNODB_FT_CONFIG
 # 20022: INNODB_FT_DELETED
@@ -2134,6 +2143,8 @@
 # 21511: role_edges
 # 21512: default_roles
 # 21513: CDB_INDEX_USAGE
+# 21514: audit_log_filter
+# 21515: audit_log_user
 # 21516: columns_priv
 # 21517: GV$OB_LS_SNAPSHOTS
 # 21518: V$OB_LS_SNAPSHOTS
@@ -2187,6 +2198,9 @@
 # 21579: INNODB_METRICS
 # 21580: EVENTS
 # 21581: V$OB_NIC_INFO
+# 21582: ROLE_TABLE_GRANTS
+# 21583: ROLE_COLUMN_GRANTS
+# 21584: ROLE_ROUTINE_GRANTS
 # 21585: func
 # 21586: GV$OB_NIC_INFO
 # 21589: DBA_SCHEDULER_JOB_RUN_DETAILS

@@ -1247,7 +1247,15 @@ int ObMediumCompactionScheduleFunc::init_tablet_filters(share::ObTabletReplicaFi
       const ObTabletReplicaChecksumItem &curr_item = checksum_items.at(idx);
       bool is_cs_replica = false;
       ObLSReplicaUniItem ls_item(curr_item.ls_id_, curr_item.server_);
-      if (OB_FAIL(ls_cs_replica_cache.check_is_cs_replica(ls_item, is_cs_replica))) {
+      const ObLSReplica *replica = nullptr;
+      bool can_skip = false;
+
+      if (OB_FAIL(ls_cs_replica_cache.check_can_skip(ls_item, can_skip))) {
+        LOG_WARN("failed to check item can skip", K(ret), K(ls_item), K(ls_cs_replica_cache));
+      } else if (can_skip) {
+        LOG_INFO("curr ls item should skip check", K(ls_item), K(ls_cs_replica_cache));
+        continue;
+      } else if (OB_FAIL(ls_cs_replica_cache.check_is_cs_replica(ls_item, is_cs_replica))) {
         LOG_WARN("fail to check is column replica", K(ret), K(ls_item), K(ls_cs_replica_cache));
       } else if (OB_ISNULL(prev_item)) {
       } else if (!curr_item.is_same_tablet(*prev_item)) {
@@ -1256,8 +1264,16 @@ int ObMediumCompactionScheduleFunc::init_tablet_filters(share::ObTabletReplicaFi
       } else if (OB_TMP_FAIL(data_checksum_checker.check_data_checksum(curr_item, is_cs_replica))
               || OB_TMP_FAIL(curr_item.verify_column_checksum(*prev_item))) {
         if (OB_CHECKSUM_ERROR == tmp_ret) {
+          ObLSColumnReplicaCache dump_cache;
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(dump_cache.init())) {
+            LOG_WARN_RET(tmp_ret, "failed to init dump cache", K(MTL_ID()));
+          } else if (OB_TMP_FAIL(dump_cache.update(curr_item.ls_id_))) {
+            LOG_WARN_RET(tmp_ret, "failed to force refresh ls locality", K(curr_item));
+          }
+
           LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "checksum error in tablet replica checksum", KR(tmp_ret),
-                        K(curr_item), KPC(prev_item), K(is_cs_replica), K(data_checksum_checker));
+                        K(curr_item), KPC(prev_item), K(ls_cs_replica_cache), K(is_cs_replica), K(dump_cache), K(data_checksum_checker));
           check_ret = OB_CHECKSUM_ERROR;
           if (curr_item.ls_id_ != prev_error_ls_id) {
             prev_error_ls_id = curr_item.ls_id_;

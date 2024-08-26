@@ -97,9 +97,10 @@ int ObExprLeft::calc_result_type2(ObExprResType &type,
       type.set_length(int_obj.get_int());
     }
 
-    OZ(aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type()));
+    OZ(aggregate_charsets_for_string_result(type, &type1, 1, type_ctx));
     OX(type1.set_calc_type(ObVarcharType));
     OX(type1.set_calc_collation_type(type.get_collation_type()));
+    OX(type1.set_calc_collation_level(type.get_collation_level()));
   }
   return ret;
 }
