@@ -120,6 +120,10 @@ _ASCII                       { REPUT_TOKEN_NEG_SIGN(_ASCII); }
 _TIS620                       { REPUT_TOKEN_NEG_SIGN(_TIS620); }
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
+_UJIS                         { REPUT_TOKEN_NEG_SIGN(_UJIS); }
+_EUCKR                        { REPUT_TOKEN_NEG_SIGN(_EUCKR);}
+_EUCJPMS                      { REPUT_TOKEN_NEG_SIGN(_EUCJPMS);}
+_CP932                        { REPUT_TOKEN_NEG_SIGN(_CP932);}
 NOT {
   int32_t token_ret = NOT; /*fast parameterize don't care NOT or NOT2*/
   if (!(IS_FAST_PARAMETERIZE)) {

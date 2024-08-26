@@ -35,6 +35,7 @@
 #define OB_LATIN1_SWEDISH_CI OB_LATIN1 "_swedish_ci"
 #define OB_LATIN1_BIN OB_LATIN1 "_bin"
 
+
 /* wm_wc and wc_mb return codes */
 #define OB_CS_ILSEQ	0     /* Wrong by sequence: wb_wc                   */
 #define OB_CS_ILUNI	0     /* Cannot encode Unicode to charset: wc_mb    */
@@ -475,6 +476,14 @@ extern ObCharsetInfo ob_charset_ascii;
 extern ObCharsetInfo ob_charset_ascii_bin;
 extern ObCharsetInfo ob_charset_tis620_thai_ci;
 extern ObCharsetInfo ob_charset_tis620_bin;
+extern ObCharsetInfo ob_charset_ujis_japanese_ci;
+extern ObCharsetInfo ob_charset_ujis_bin;
+extern ObCharsetInfo ob_charset_euckr_korean_ci;
+extern ObCharsetInfo ob_charset_euckr_bin;
+extern ObCharsetInfo ob_charset_eucjpms_bin;
+extern ObCharsetInfo ob_charset_eucjpms_japanese_ci;
+extern ObCharsetInfo ob_charset_cp932_japanese_ci;
+extern ObCharsetInfo ob_charset_cp932_bin;
 extern ObCollationHandler ob_collation_mb_bin_handler;
 extern ObCharsetHandler ob_charset_utf8mb4_handler;
 extern ObCharsetHandler ob_charset_utf16_handler;
