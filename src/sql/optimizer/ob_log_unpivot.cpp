@@ -57,6 +57,25 @@ int ObLogUnpivot::generate_access_exprs()
   return ret;
 }
 
+bool ObLogUnpivot::is_in_old_columns(const ObSelectStmt &select_stmt,
+                                     const ObUnpivotInfo &unpivot_info,
+                                     ObRawExpr *expr)
+{
+  int ret = OB_SUCCESS;
+  bool is_in = false;
+  if (0 == unpivot_info.old_column_count_) {
+    //do nothing
+  } else {
+    for (int64_t j = 0; OB_SUCC(ret) && j < unpivot_info_.old_column_count_; ++j) {
+      if (expr == select_stmt.get_select_item(j).expr_) {
+        is_in = true;
+        break;
+      }
+    }
+  }
+  return is_in;
+}
+
 int ObLogUnpivot::allocate_expr_post(ObAllocExprContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -239,7 +258,7 @@ int ObLogUnpivot::est_cost()
 int ObLogUnpivot::compute_op_ordering()
 {
   int ret = OB_SUCCESS;
-  ObArray<ObRawExpr*> select_exprs;
+  ObSEArray<ObRawExpr *, 4> ordering_exprs;
   if (OB_ISNULL(get_stmt())
       || OB_UNLIKELY(!get_stmt()->is_select_stmt())
       || OB_UNLIKELY(!get_stmt()->is_unpivot_select())) {
@@ -250,103 +269,137 @@ int ObLogUnpivot::compute_op_ordering()
     if (OB_ISNULL(child= get_child(ObLogicalOperator::first_child))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("operator does not have child", K(ret));
-    } else if (OB_FAIL(set_op_ordering(child->get_op_ordering()))) {
-      LOG_WARN("failed to set op ordering", K(ret));
     }
+    bool found = true;
     const ObSelectStmt &select_stmt = *static_cast<const ObSelectStmt *>(get_stmt());
-    const ObUnpivotInfo unpivot_info = select_stmt.get_unpivot_info();
-    if (unpivot_info.old_column_count_ > 0) {
-      if (OB_FAIL(select_stmt.get_select_exprs(select_exprs, true))) {
-        LOG_WARN("failed to get select exprs", K(ret));
+    const ObUnpivotInfo &unpivot_info = select_stmt.get_unpivot_info();
+    for (int64_t j = 0; OB_SUCC(ret) && found && j < child->get_op_ordering().count(); ++j) {
+      if (is_in_old_columns(select_stmt, unpivot_info, child->get_op_ordering().at(j).expr_)) {
+        if (OB_FAIL(ordering_exprs.push_back(child->get_op_ordering().at(j).expr_))) {
+          LOG_WARN("failed to push back", K(ret));
+        }
       } else {
-        int64_t expr_count = select_exprs.count();
-        for (int64_t i = expr_count - 1;  OB_SUCC(ret)&& i >= unpivot_info.old_column_count_; i--) {
-          ret = select_exprs.remove(i);
-        }
-        expr_count = select_exprs.count();
-        for (int64_t i = expr_count - 1;  OB_SUCC(ret) && i >= 0; i--) {
-          bool found = false;
-          for (int64_t j = 0;  !found && j < child->get_op_ordering().count(); ++j) {
-            found = select_exprs.at(i) == child->get_op_ordering().at(j).expr_;
-          }
-          if (!found) {
-            ret = select_exprs.remove(i);
-          }
-        }
+        found = false;
       }
-
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(ObOptimizerUtil::make_sort_keys(select_exprs, get_op_ordering()))) {
-          LOG_WARN("failed to copy sort keys", K(ret));
-        }
-      }
-      LOG_DEBUG("finish compute_op_ordering", K(select_exprs.count()), K(unpivot_info),
-                K(get_op_ordering()), K(select_exprs));
-    } else {
-      //do nothing
     }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObOptimizerUtil::make_sort_keys(ordering_exprs, get_op_ordering()))) {
+        LOG_WARN("failed to copy sort keys", K(ret));
+      }
+    }
+    LOG_DEBUG("finish compute_op_ordering", K(unpivot_info), K(get_op_ordering()));
   }
   return ret;
 }
 
 int ObLogUnpivot::compute_fd_item_set()
 {
+
   int ret = OB_SUCCESS;
-  const ObLogicalOperator *child = NULL;
-  if (OB_ISNULL(child = get_child(ObLogicalOperator::first_child))
-      || OB_ISNULL(my_plan_)
-      || OB_ISNULL(get_stmt())
-      || OB_UNLIKELY(!get_stmt()->is_select_stmt())
-      || OB_UNLIKELY(!get_stmt()->is_unpivot_select())) {
+  set_fd_item_set(NULL);
+  return ret;
+}
+
+int ObLogUnpivot::compute_const_exprs()
+{
+  // output_const_exprs should be the intersection of 'const_expr of child' and 'old_columns'
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  if (OB_ISNULL(my_plan_) || OB_UNLIKELY(get_num_of_child() < 0) ||
+      OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt()) ||
+      OB_UNLIKELY(!get_stmt()->is_unpivot_select())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpect null", K(ret), K(child), K(my_plan_), K(get_stmt()));
+    LOG_WARN("operator is invalid", K(ret), K(get_num_of_child()), K(my_plan_));
+  } else if (OB_UNLIKELY(get_num_of_child() == 0)) {
+    /*do nothing*/
+  } else if (OB_ISNULL(child = get_child(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is null", K(ret), K(child));
   } else {
     const ObSelectStmt &select_stmt = static_cast<const ObSelectStmt &>(*get_stmt());
-    const ObUnpivotInfo unpivot_info = select_stmt.get_unpivot_info();
-    ObFdItemSet *fd_item_set = NULL;
-    const ObFdItemSet &child_fd_item_set = child->get_fd_item_set();
-    if (0 == unpivot_info.old_column_count_ || child_fd_item_set.empty()) {
+    const ObUnpivotInfo &unpivot_info = select_stmt.get_unpivot_info();
+    const ObIArray<ObRawExpr *> &child_output_const_exprs= child->get_output_const_exprs();
+    if (0 == unpivot_info.old_column_count_ || child_output_const_exprs.empty()) {
       //do nothing
     } else {
-      ObSEArray<ObRawExpr *, 1> value_exprs;
-      for (int64_t i = 0;  OB_SUCC(ret) && i < child_fd_item_set.count(); i++) {
-        ObRawExpr *expr = NULL;
-        if (OB_NOT_NULL(child_fd_item_set[i])
-            && OB_NOT_NULL(child_fd_item_set[i]->get_parent_exprs())
-            && child_fd_item_set[i]->get_parent_exprs()->count() == 1
-            && OB_NOT_NULL(expr = child_fd_item_set[i]->get_parent_exprs()->at(0))) {
-          for (int64_t i = 0; OB_SUCC(ret) && i < unpivot_info.old_column_count_; ++i) {
-            if (expr == select_stmt.get_select_item(i).expr_) {
-              ObTableFdItem *fd_item = NULL;
-              value_exprs.reuse();
-              if (OB_FAIL(value_exprs.push_back(expr))) {
-                LOG_WARN("failed to push back expr", K(ret));
-              } else if (OB_FAIL(my_plan_->get_fd_item_factory().create_table_fd_item(fd_item,
-                  true, value_exprs, get_table_set()))) {
-                LOG_WARN("failed to create fd item", K(ret));
-              } else if (NULL == fd_item_set) {
-                if (OB_FAIL(my_plan_->get_fd_item_factory().create_fd_item_set(fd_item_set))) {
-                  LOG_WARN("failed to create fd item set", K(ret));
-                }
-              }
-
-              if (OB_FAIL(ret)) {
-              } else if (OB_FAIL(fd_item_set->push_back(fd_item))) {
-                LOG_WARN("failed to push back fd item", K(ret));
-              }
-            }
+      for (int64_t i = 0; OB_SUCC(ret) && i < child_output_const_exprs.count(); ++i) {
+        if (is_in_old_columns(select_stmt, unpivot_info, child_output_const_exprs.at(i))) {
+          if (OB_FAIL(output_const_exprs_.push_back(child_output_const_exprs.at(i)))) {
+            LOG_WARN("failed to push back", K(ret));
           }
         }
       }
     }
-
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || filter_exprs_.empty()) {
       /*do nothing*/
-    } else if (OB_NOT_NULL(fd_item_set) && // rollup 时 fd_item_set is null
-               OB_FAIL(deduce_const_exprs_and_ft_item_set(*fd_item_set))) {
-      LOG_WARN("failed to deduce fd item set", K(ret));
+    } else if (OB_FAIL(ObOptimizerUtil::compute_const_exprs(filter_exprs_, output_const_exprs_))) {
+      LOG_WARN("failed to compute const conditionexprs", K(ret));
+    } else {/*do nothing*/}
+  }
+  return ret;
+}
+
+int ObLogUnpivot::compute_equal_set()
+{
+  int ret = OB_SUCCESS;
+  ObLogicalOperator *child = NULL;
+  EqualSets *ordering_esets = NULL;
+  EqualSets *old_col_esets = NULL;
+  if (OB_ISNULL(my_plan_) || OB_UNLIKELY(get_num_of_child() < 0) ||
+      OB_ISNULL(get_stmt()) || OB_UNLIKELY(!get_stmt()->is_select_stmt()) ||
+      OB_UNLIKELY(!get_stmt()->is_unpivot_select())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("operator is invalid", K(ret), K(get_num_of_child()), K(my_plan_));
+  } else if (OB_UNLIKELY(get_num_of_child() == 0)) {
+    // do nothing
+  } else if (OB_ISNULL(child = get_child(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("child is null", K(ret), K(child));
+  } else if (OB_ISNULL(old_col_esets = get_plan()->create_equal_sets())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create equal sets", K(ret));
+  } else {
+    // get old_col_esets (equal set of old columns)
+    const EqualSets &child_esets = child->get_output_equal_sets();
+    const ObSelectStmt &select_stmt = static_cast<const ObSelectStmt &>(*get_stmt());
+    const ObUnpivotInfo &unpivot_info = select_stmt.get_unpivot_info();
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_esets.count(); ++i) {
+      ObSEArray<ObRawExpr *, 4> eset_builder;
+      EqualSet *child_eset = child_esets.at(i);
+      if (OB_ISNULL(child_eset)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), K(child_eset));
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < child_eset->count(); ++j) {
+        if (is_in_old_columns(select_stmt, unpivot_info, child_eset->at(j))) {
+          if (OB_FAIL(eset_builder.push_back(child_eset->at(j)))) {
+            LOG_WARN("failed to push back", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(ObRawExprSetUtils::add_expr_set(
+              &get_plan()->get_allocator(), eset_builder, *old_col_esets))) {
+        LOG_WARN("failed to add expr set", K(ret));
+      }
+    }
+
+    // compute equal set of unpivot log plan
+    if (OB_FAIL(ret)) {
+    } else if (filter_exprs_.empty()) {
+      // inherit equal sets from old_col_esets
+      set_output_equal_sets(old_col_esets);
+    } else if (OB_ISNULL(ordering_esets = get_plan()->create_equal_sets())) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create equal sets", K(ret));
+    } else if (OB_FAIL(ObEqualAnalysis::compute_equal_set(
+                        &my_plan_->get_allocator(),
+                        filter_exprs_,
+                        *old_col_esets,
+                        *ordering_esets))) {
+      LOG_WARN("failed to compute ordering output equal set", K(ret));
     } else {
-      set_fd_item_set(fd_item_set);
+      set_output_equal_sets(ordering_esets);
     }
   }
   return ret;

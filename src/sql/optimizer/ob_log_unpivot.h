@@ -44,11 +44,16 @@ public:
   inline common::ObIArray<ObRawExpr *> &get_access_exprs() { return access_exprs_; }
   virtual int compute_op_ordering() override;
   virtual int compute_fd_item_set() override;
+  virtual int compute_const_exprs() override;
+  virtual int compute_equal_set() override;
   virtual int compute_one_row_info() override;
   virtual int get_plan_item_info(PlanText &plan_text,
                                 ObSqlPlanItem &plan_item) override;
 private:
   int generate_access_exprs();
+  bool is_in_old_columns(const ObSelectStmt &select_stmt,
+                         const ObUnpivotInfo &unpivot_info,
+                         ObRawExpr *expr);
 public:
   uint64_t subquery_id_;
   common::ObString subquery_name_;
