@@ -4459,8 +4459,7 @@ int ObSchemaPrinter::print_routine_definition(
     } else if (routine_info->get_routine_body().prefix_match_ci("procedure")
                || routine_info->get_routine_body().prefix_match_ci("function")) {
       use_v1 = false;
-
-      pl::ObPLParser parser(allocator, ObCharsets4Parser(), exec_env.get_sql_mode());
+      ObSQLMode sql_mode = exec_env.get_sql_mode();
 
       if (lib::is_mysql_mode()) {
         const char prefix[] = "CREATE\n";
@@ -4475,13 +4474,17 @@ int ObSchemaPrinter::print_routine_definition(
           MEMCPY(stmt_buf + prefix_len, routine_body.ptr(), routine_body.length());
 
           routine_stmt.assign_ptr(stmt_buf, buf_sz);
+          sql_mode &= ~SMO_ORACLE;
         }
       } else { // oracle mode
         routine_stmt = routine_body;
       }
       CK(!routine_stmt.empty());
 
-      OZ (parser.parse(routine_stmt, routine_stmt, parse_result, true));
+      if (OB_SUCC(ret)) {
+        pl::ObPLParser parser(allocator, ObCharsets4Parser(), sql_mode);
+        OZ (parser.parse(routine_stmt, routine_stmt, parse_result, true));
+      }
     }
 
     if (OB_SUCC(ret) && !use_v1) {
