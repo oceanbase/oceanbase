@@ -5148,7 +5148,7 @@ int ObLSTabletService::check_row_locked_by_myself(
         K(relative_table), K(store_ctx), K(rowkey));
   } else {
     ObStorageTableGuard guard(tablet, store_ctx, true);
-    if (OB_FAIL(guard.refresh_and_protect_table(relative_table))) {
+    if (OB_FAIL(guard.refresh_and_protect_memtable_for_write(relative_table))) {
       LOG_WARN("fail to protect table", K(ret), K(tablet_handle));
     } else if (OB_FAIL(tablet->check_row_locked_by_myself(relative_table, store_ctx, rowkey, locked))) {
       LOG_WARN("fail to check row locked, ", K(ret), K(rowkey));
