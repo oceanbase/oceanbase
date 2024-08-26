@@ -220,7 +220,7 @@ public:
   ~ConsumerGroupIdGuard()
   {
     if (group_changed_) {
-      // SET_GROUP_ID(thread_group_id_);
+      SET_GROUP_ID(thread_group_id_);
     }
   }
   int get_ret()
@@ -241,7 +241,7 @@ public:
   ConsumerGroupFuncGuard(uint8_t func_type)
     : thread_group_id_(GET_GROUP_ID()), thread_func_type_(GET_FUNC_TYPE()), group_changed_(false), ret_(OB_SUCCESS)
   {
-    // THIS_WORKER.set_func_type_(func_type);
+    THIS_WORKER.set_func_type_(func_type);
     uint64_t group_id = 0;
     ret_ = CONVERT_FUNCTION_TYPE_TO_GROUP_ID(func_type, group_id);
     if (OB_SUCCESS == ret_ && is_user_group(group_id) && group_id != thread_group_id_) {
@@ -252,8 +252,8 @@ public:
   ~ConsumerGroupFuncGuard()
   {
     if (group_changed_) {
-      // SET_GROUP_ID(thread_group_id_);
-      // THIS_WORKER.set_func_type_(thread_func_type_);
+      SET_GROUP_ID(thread_group_id_);
+      THIS_WORKER.set_func_type_(thread_func_type_);
     }
   }
   int get_ret()
