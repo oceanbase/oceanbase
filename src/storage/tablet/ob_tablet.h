@@ -714,6 +714,7 @@ private:
 
   int check_medium_list() const;
   int check_sstable_column_checksum() const;
+  int check_no_backup_data() const;
   int get_finish_medium_scn(int64_t &finish_medium_scn) const;
 
   int inner_get_mds_sstables(ObTableStoreIterator &table_store_iter) const;

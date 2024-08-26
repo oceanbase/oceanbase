@@ -952,6 +952,10 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_LABEL_SE_SESSION_LABEL == type_
       || T_FUN_LABEL_SE_SESSION_ROW_LABEL == type_
       || T_FUN_SYS_LAST_REFRESH_SCN == type_
+      || T_FUN_SYS_AUDIT_LOG_SET_FILTER == type_
+      || T_FUN_SYS_AUDIT_LOG_REMOVE_FILTER == type_
+      || T_FUN_SYS_AUDIT_LOG_SET_USER == type_
+      || T_FUN_SYS_AUDIT_LOG_REMOVE_USER == type_
       || (T_FUN_UDF == type_
           && !static_cast<const ObUDFRawExpr*>(this)->is_deterministic())
       || T_FUN_SYS_GET_LOCK == type_
@@ -1062,7 +1066,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_IS_USED_LOCK == type_
           || T_FUN_SYS_RELEASE_LOCK == type_
           || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
-          || T_FUN_SYS_CURRENT_ROLE == type_) {
+          || T_FUN_SYS_CURRENT_ROLE == type_
+          || T_FUN_SYS_IS_ENABLED_ROLE == type_) {
       is_non_pure = true;
     }
   }
@@ -1084,11 +1089,11 @@ bool ObRawExpr::is_specified_pseudocolumn_expr() const
   return false;
 }
 
-int ObRawExpr::extract_local_session_vars_recursively(ObIArray<const share::schema::ObSessionSysVar *> &var_array)
+int ObRawExpr::extract_local_session_vars_recursively(ObIArray<const ObSessionSysVar *> &var_array)
 {
   int ret = OB_SUCCESS;
   if (get_local_session_var().get_var_count() > 0) {
-    ObSEArray<const share::schema::ObSessionSysVar *, 4> local_vars;
+    ObSEArray<const ObSessionSysVar *, 4> local_vars;
     if (OB_FAIL(get_local_session_var().get_local_vars(local_vars))) {
       LOG_WARN("fail to append session var array", K(ret));
     } else if (OB_FAIL(append(var_array, local_vars))) {
@@ -1102,6 +1107,25 @@ int ObRawExpr::extract_local_session_vars_recursively(ObIArray<const share::sche
         LOG_WARN("unexpected null", K(ret));
       } else if (OB_FAIL(SMART_CALL(get_param_expr(i)->extract_local_session_vars_recursively(var_array)))) {
         LOG_WARN("fail to extract sysvar from params", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRawExpr::get_expr_dep_session_vars_recursively(const ObBasicSessionInfo *session,
+                                                     ObLocalSessionVar &dep_vars)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(get_expr_dep_session_vars(session, dep_vars))) {
+    LOG_WARN("fail to get expr dep session vars", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_param_count(); ++i) {
+      if (OB_ISNULL(get_param_expr(i))){
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret));
+      } else if (OB_FAIL(SMART_CALL(get_param_expr(i)->get_expr_dep_session_vars_recursively(session, dep_vars)))) {
+        LOG_WARN("fail to get expr dep session vars recursively", K(ret));
       }
     }
   }
@@ -1314,7 +1338,7 @@ bool ObConstRawExpr::inner_same_as(
   return bool_ret;
 }
 
-int ObConstRawExpr::set_local_session_vars(const share::schema::ObLocalSessionVar *local_sys_vars,
+int ObConstRawExpr::set_local_session_vars(const ObLocalSessionVar *local_sys_vars,
                                             const ObBasicSessionInfo *session,
                                             int64_t ctx_array_idx)
 {
@@ -1329,6 +1353,21 @@ int ObConstRawExpr::set_local_session_vars(const share::schema::ObLocalSessionVa
       LOG_WARN("fail to add sql mode", K(ret));
     } else if (OB_FAIL(ObExprOperator::add_local_var_to_expr(SYS_VAR_COLLATION_CONNECTION, local_sys_vars,
                                                              session, local_session_var_))) {
+      LOG_WARN("fail to add collation connection", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObConstRawExpr::get_expr_dep_session_vars(const ObBasicSessionInfo *session,
+                                              ObLocalSessionVar &dep_vars) {
+  int ret = OB_SUCCESS;
+  if (ob_is_string_type(get_result_type().get_type())) {
+    //solidify vars for parser
+    if (OB_FAIL(ObExprOperator::add_local_var_to_expr(SYS_VAR_SQL_MODE, NULL, session, dep_vars))) {
+      LOG_WARN("fail to add sql mode", K(ret));
+    } else if (OB_FAIL(ObExprOperator::add_local_var_to_expr(SYS_VAR_COLLATION_CONNECTION, NULL,
+                                                             session, dep_vars))) {
       LOG_WARN("fail to add collation connection", K(ret));
     }
   }
@@ -2369,6 +2408,38 @@ int ObNonTerminalRawExpr::replace_expr(const ObIArray<ObRawExpr *> &other_exprs,
   return ret;
 }
 
+int ObNonTerminalRawExpr::set_local_session_vars(const ObLocalSessionVar *local_var_info,
+                                                 const ObBasicSessionInfo *session,
+                                                 int64_t ctx_array_idx) {
+  int ret = OB_SUCCESS;
+  ObExprOperator * op = get_op();
+  local_session_var_id_ = ctx_array_idx;
+  local_session_var_.reset();
+  if (T_OP_ROW == get_expr_type()) {
+    /* do nothing */
+  } else if (OB_ISNULL(op = get_op())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(op));
+  } else if (OB_FAIL(op->set_local_session_vars(this, local_var_info, session, local_session_var_))) {
+    LOG_WARN("fail to set local session info for expr operators", K(ret));
+  }
+  return ret;
+}
+
+int ObNonTerminalRawExpr::get_expr_dep_session_vars(const ObBasicSessionInfo *session,
+                                                    ObLocalSessionVar &dep_vars) {
+  int ret = OB_SUCCESS;
+  ObExprOperator *op = NULL;
+  if (T_OP_ROW == get_expr_type()) {
+    /* do nothing */
+  } else if (OB_ISNULL(op = get_op())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(op));
+  } else if (OB_FAIL(op->set_local_session_vars(this, NULL, session, dep_vars))) {
+    LOG_WARN("fail to set local session info for expr operators", K(ret));
+  }
+  return ret;
+}
 
 ////////////////////////////////////////////////////////////////
 ObOpRawExpr::ObOpRawExpr(ObRawExpr *first_expr,
@@ -4706,22 +4777,6 @@ int ObSysFunRawExpr::get_autoinc_nextval_name(char *buf, int64_t buf_len, int64_
     if (OB_FAIL(BUF_PRINTF("%s.", autoinc_qualified_name.ptr()))) {
       LOG_WARN("fail to BUF_PRINTF", K(ret));
     }
-  }
-  return ret;
-}
-
-int ObSysFunRawExpr::set_local_session_vars(const share::schema::ObLocalSessionVar *local_var_info,
-                                            const ObBasicSessionInfo *session,
-                                            int64_t ctx_array_idx) {
-  int ret = OB_SUCCESS;
-  ObExprOperator * op = get_op();
-  local_session_var_id_ = ctx_array_idx;
-  local_session_var_.reset();
-  if (OB_ISNULL(op)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(op));
-  } else if (OB_FAIL(op->set_local_session_vars(this, local_var_info, session, local_session_var_))) {
-    LOG_WARN("fail to set local session info for expr operators", K(ret));
   }
   return ret;
 }

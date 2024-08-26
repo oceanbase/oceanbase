@@ -692,6 +692,7 @@ private:
                               ObIArray<TableItem*> &flattened_tables,
                               ObLeadingTable &leading_table);
   int construct_leaf_leading_table(ObDMLStmt *stmt, TableItem *table, ObLeadingTable *&leading_table);
+  int reset_view_base_item(ObDMLStmt *stmt);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTransformPreProcess);

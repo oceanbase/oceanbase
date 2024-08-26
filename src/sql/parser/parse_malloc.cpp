@@ -120,11 +120,13 @@ char *replace_invalid_character(const struct ObCharsetInfo* src_cs, const struct
                                 const char *str, int64_t *out_len, void *malloc_pool, int *extra_errno)
 {
   char *out_str = NULL;
-  if (OB_ISNULL(str) || OB_ISNULL(extra_errno) || OB_ISNULL(out_len)) {
+  if (OB_ISNULL(str) || OB_ISNULL(extra_errno) || OB_ISNULL(out_len) || OB_ISNULL(src_cs)) {
   } else if (NULL == oracle_db_cs) {
     out_str = const_cast<char *>(str);
   } else {
-    ob_wc_t replace_char = !!(oracle_db_cs->state & OB_CS_UNICODE) ? 0xFFFD : '?';
+    ob_wc_t replace_char = (!!(oracle_db_cs->state & OB_CS_UNICODE)) &&
+                           (!!(src_cs->state & OB_CS_UNICODE))
+                           ? 0xFFFD : '?';
     uint errors = 0;
     size_t str_len = STRLEN(str);
     char *temp_str = NULL;
@@ -269,8 +271,10 @@ char *parse_strdup_with_replace_multi_byte_char(const char *str, int *connection
         case 46/*CS_TYPE_UTF8MB4_BIN*/:
         case 63/*CS_TYPE_BINARY*/:
         case 224/*CS_TYPE_UTF8MB4_UNICODE_CI*/:
-        //case 8/*CS_TYPE_LATIN1_SWEDISH_CI*/:
-        //case 47/*CS_TYPE_LATIN1_BIN*/:
+        case 245/*CS_TYPE_UTF8MB4_CROATIAN_CI*/:
+        case 246/*CS_TYPE_UTF8MB4_UNICODE_520_CI*/:
+        case 234/*CS_TYPE_UTF8MB4_CZECH_CI*/:
+        case 255/*CS_TYPE_UTF8MB4_0900_AI_CI*/:
         {
           if (i + 2 < dup_len) {
             if (str[i] == (char)0xe3 && str[i+1] == (char)0x80 && str[i+2] == (char)0x80) {

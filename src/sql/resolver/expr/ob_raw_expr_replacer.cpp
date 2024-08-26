@@ -429,6 +429,19 @@ int ObRawExprReplacer::try_init_expr_map(int64_t bucket_size)
   return ret;
 }
 
+bool ObRawExprReplacer::is_existed(const ObRawExpr *target) const
+{
+  bool bret = false;
+  if (OB_LIKELY(expr_replace_map_.created())) {
+    uint64_t key = reinterpret_cast<uint64_t>(target);
+    uint64_t val = 0;
+    if (OB_SUCCESS == expr_replace_map_.get_refactored(key, val)) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
 int ObRawExprReplacer::check_from_expr_existed(const ObRawExpr *from_expr,
                                                const ObRawExpr *to_expr,
                                                const bool overwrite,

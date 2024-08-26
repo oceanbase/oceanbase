@@ -326,7 +326,7 @@ int ObExternalTableFileManager::get_genarated_expr_from_partition_column(const O
       expected_type.set_meta(column_schema->get_meta_type());
       expected_type.set_accuracy(column_schema->get_accuracy());
       expected_type.set_result_flag(ObRawExprUtils::calc_column_result_flag(*column_schema));
-      if (ObRawExprUtils::need_column_conv(expected_type, *gen_expr)) {
+      if (ObRawExprUtils::need_column_conv(expected_type, *gen_expr, true)) {
         if (OB_FAIL(ObRawExprUtils::build_column_conv_expr(*expr_factory, column_schema, gen_expr, session_info))) {
           LOG_WARN("create cast expr failed", K(ret));
         }

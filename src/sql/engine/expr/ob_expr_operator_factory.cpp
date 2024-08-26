@@ -252,7 +252,7 @@
 #include "sql/engine/expr/ob_expr_plsql_variable.h"
 #include "sql/engine/expr/ob_expr_pl_associative_index.h"
 #include "sql/engine/expr/ob_expr_chr.h"
-#include "sql/engine/expr/ob_expr_aes_encrypt.h"
+#include "sql/engine/expr/ob_expr_symmetric_encrypt.h"
 #include "sql/engine/expr/ob_expr_timezone.h"
 #include "sql/engine/expr/ob_expr_sys_extract_utc.h"
 #include "sql/engine/expr/ob_expr_tz_offset.h"
@@ -453,11 +453,13 @@
 #include "sql/engine/expr/ob_expr_st_numpoints.h"
 #include "sql/engine/expr/ob_expr_st_pointn.h"
 #include "sql/engine/expr/ob_expr_st_pointfromtext.h"
-
 #include "sql/engine/expr/ob_expr_lock_func.h"
 #include "sql/engine/expr/ob_expr_decode_trace_id.h"
 #include "sql/engine/expr/ob_expr_topn_filter.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
+#include "sql/engine/expr/ob_expr_transaction_id.h"
+#include "sql/engine/expr/ob_expr_audit_log_func.h"
+#include "sql/engine/expr/ob_expr_can_access_trigger.h"
 
 using namespace oceanbase::common;
 namespace oceanbase
@@ -992,6 +994,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprTimestampToScn);
     REG_OP(ObExprScnToTimestamp);
     REG_OP(ObExprSqlModeConvert);
+    REG_OP(ObExprCanAccessTrigger);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
     // convert input value into an OceanBase error number and throw out as exception
     REG_OP(ObExprErrno);
@@ -1121,6 +1124,14 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprRbFromString);
     REG_OP(ObExprGetPath);
     REG_OP(ObExprDecodeTraceId);
+    REG_OP(ObExprAuditLogSetFilter);
+    REG_OP(ObExprAuditLogRemoveFilter);
+    REG_OP(ObExprAuditLogSetUser);
+    REG_OP(ObExprAuditLogRemoveUser);
+    REG_OP(ObExprIsEnabledRole);
+    REG_OP(ObExprSm3);
+    REG_OP(ObExprSm4Encrypt);
+    REG_OP(ObExprSm4Decrypt);
     REG_OP(ObExprSTNumPoints);
     REG_OP(ObExprSTPointN);
     REG_OP(ObExprSTPointFromText);

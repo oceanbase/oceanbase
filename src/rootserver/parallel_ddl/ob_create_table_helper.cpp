@@ -1942,7 +1942,9 @@ int ObCreateTableHelper::generate_sequence_object_()
           orig_default_value.set_collation_type(ObCharset::get_system_collation());
           orig_default_value.set_collation_level(CS_LEVEL_IMPLICIT);
           orig_default_value.set_param_meta();
-          if (OB_FAIL(column_schema->set_cur_default_value(cur_default_value))) {
+          if (OB_FAIL(column_schema->set_cur_default_value(
+                cur_default_value,
+                column_schema->is_default_expr_v2_column()))) {
             LOG_WARN("set current default value fail", KR(ret));
           } else if (OB_FAIL(column_schema->set_orig_default_value(orig_default_value))) {
             LOG_WARN("set origin default value fail", KR(ret), K(column_schema));

@@ -42,6 +42,7 @@ public:
   static int get_table_schema(share::schema::ObSchemaGetterGuard &schema_guard,
                               uint64_t tenant_id, uint64_t table_id,
                               const share::schema::ObTableSchema *&table_schema);
+
   static int get_user_column_schemas(const share::schema::ObTableSchema *table_schema,
                                      ObIArray<const share::schema::ObColumnSchemaV2 *> &column_schemas);
   static int get_user_column_schemas(share::schema::ObSchemaGetterGuard &schema_guard,
@@ -59,10 +60,7 @@ public:
   static int get_user_column_id_and_names(const share::schema::ObTableSchema *table_schema,
                                           common::ObIArray<uint64_t> &column_ids,
                                           common::ObIArray<common::ObString> &column_names);
-  static int get_user_column_count(share::schema::ObSchemaGetterGuard &schema_guard,
-                                   uint64_t tenant_id,
-                                   uint64_t table_id,
-                                   int64_t &column_count);
+
   static int get_column_ids(const share::schema::ObTableSchema *table_schema,
                             common::ObIArray<uint64_t> &column_ids,
                             bool contain_hidden_pk_column = false);
@@ -71,14 +69,15 @@ public:
                             uint64_t table_id,
                             common::ObIArray<uint64_t> &column_ids,
                             bool contain_hidden_pk_column = false);
+
   static int check_has_udt_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
   static int check_has_invisible_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_unused_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_roaringbitmap_column(const share::schema::ObTableSchema *table_schema, bool &bret);
   static int check_has_lob_column(const share::schema::ObTableSchema *table_schema, bool &bret);
-  static int get_table_compressor_type(uint64_t tenant_id, uint64_t table_id,
-                                       ObCompressorType &compressor_type);
+
+  static int get_tenant_optimizer_gather_stats_on_load(const uint64_t tenant_id, bool &value);
+
 public:
   ObTableLoadSchema();
   ~ObTableLoadSchema();

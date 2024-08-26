@@ -1498,7 +1498,7 @@ question_mask_size: 0
           "children": [
              {
               "type":"T_OP_AND",
-              "int_val":9223372036854775807,
+              "int_val":2,
               "str_len":0,
               "str_val":"",
               "children": [
@@ -1902,7 +1902,7 @@ question_mask_size: 0
           "children": [
              {
               "type":"T_OP_AND",
-              "int_val":9223372036854775807,
+              "int_val":2,
               "str_len":0,
               "str_val":"",
               "children": [
@@ -2281,7 +2281,7 @@ question_mask_size: 0
           "children": [
              {
               "type":"T_OP_AND",
-              "int_val":9223372036854775807,
+              "int_val":2,
               "str_len":0,
               "str_val":"",
               "children": [
@@ -17051,7 +17051,7 @@ question_mask_size: 0
               "children": [
                  {
                   "type":"T_EXPR_LIST",
-                  "int_val":9223372036854775807,
+                  "int_val":2,
                   "str_len":0,
                   "str_val":"",
                   "children": [
@@ -17324,7 +17324,7 @@ question_mask_size: 0
               "children": [
                  {
                   "type":"T_EXPR_LIST",
-                  "int_val":9223372036854775807,
+                  "int_val":2,
                   "str_len":0,
                   "str_val":"",
                   "children": [

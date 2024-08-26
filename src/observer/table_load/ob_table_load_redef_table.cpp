@@ -72,6 +72,7 @@ int ObTableLoadRedefTable::start(const ObTableLoadRedefTableStartArg &arg,
                                       session_info.get_local_nls_timestamp_format(),
                                       session_info.get_local_nls_timestamp_tz_format(),
                                       session_info.get_tz_info_wrap(),
+                                      arg.tablet_ids_,
                                       need_reorder_column_id))) {
       LOG_WARN("fail to init create hidden table arg", KR(ret));
     } else if (OB_FAIL(ObDDLServerClient::create_hidden_table(create_table_arg, create_table_res,

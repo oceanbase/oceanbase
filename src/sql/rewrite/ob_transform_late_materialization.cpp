@@ -449,7 +449,8 @@ int ObTransformLateMaterialization::check_index_match_late_materialization(
   return ret;
 }
 
-int ObTransformLateMaterialization::evaluate_stmt_cost(ObDMLStmt *&stmt,
+int ObTransformLateMaterialization::evaluate_stmt_cost(ObIArray<ObParentDMLStmt> &parent_stmts,
+                                                       ObDMLStmt *&stmt,
                                                        bool is_trans_stmt,
                                                        double &plan_cost,
                                                        bool &is_expected,
@@ -457,6 +458,7 @@ int ObTransformLateMaterialization::evaluate_stmt_cost(ObDMLStmt *&stmt,
 {
   int ret = OB_SUCCESS;
   ObEvalCostHelper eval_cost_helper;
+  ObDMLStmt *root_stmt = NULL;
   is_expected = true;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_UNLIKELY(!ctx_->is_valid()) ||
       OB_ISNULL(ctx_->exec_ctx_->get_physical_plan_ctx()) ||
@@ -467,16 +469,9 @@ int ObTransformLateMaterialization::evaluate_stmt_cost(ObDMLStmt *&stmt,
   } else if (OB_FAIL(eval_cost_helper.fill_helper(*ctx_->exec_ctx_->get_physical_plan_ctx(),
                                                   *stmt->get_query_ctx(), *ctx_))) {
     LOG_WARN("failed to fill eval cost helper", K(ret));
-  } else if (!is_trans_stmt) {
-    /* do nothing */
-  } else if (OB_FAIL(construct_transform_hint(*stmt, NULL))) {
-    LOG_WARN("failed to construct transform hint", K(ret));
-  } else if (OB_FAIL(stmt->adjust_qb_name(ctx_->allocator_,
-                                          ctx_->src_qb_name_,
-                                          ctx_->src_hash_val_))) {
-    LOG_WARN("failed to adjust qb name", K(ret));
-  }
-  if (OB_SUCC(ret)) {
+  } else if (OB_FAIL(prepare_eval_cost_stmt(parent_stmts, *stmt, root_stmt, is_trans_stmt))) {
+    LOG_WARN("failed to prepare eval cost stmt", K(ret));
+  } else {
     ctx_->eval_cost_ = true;
     lib::ContextParam param;
     param.set_mem_attr(ctx_->session_info_->get_effective_tenant_id(),
@@ -496,14 +491,14 @@ int ObTransformLateMaterialization::evaluate_stmt_cost(ObDMLStmt *&stmt,
                &ctx_->exec_ctx_->get_physical_plan_ctx()->get_param_store(),
                *ctx_->self_addr_,
                GCTX.srv_rpc_proxy_,
-               stmt->get_query_ctx()->get_global_hint(),
+               root_stmt->get_query_ctx()->get_global_hint(),
                tmp_expr_factory,
-               stmt,
+               root_stmt,
                false,
                ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx()) {
         ObOptimizer optimizer(optctx);
         ObLogPlan *plan = NULL;
-        if (OB_FAIL(optimizer.get_optimization_cost(*stmt, plan, plan_cost))) {
+        if (OB_FAIL(optimizer.get_optimization_cost(*root_stmt, plan, plan_cost))) {
           LOG_WARN("failed to get optimization cost", K(ret));
         } else if (OB_FAIL(is_expected_plan(plan, &check_ctx, is_trans_stmt, is_expected))) {
           LOG_WARN("failed to check transformed plan", K(ret));
@@ -512,6 +507,8 @@ int ObTransformLateMaterialization::evaluate_stmt_cost(ObDMLStmt *&stmt,
                                               *ctx_->exec_ctx_->get_stmt_factory()->get_query_ctx(),
                                               *ctx_))) {
           LOG_WARN("failed to recover context", K(ret));
+        } else if (OB_FAIL(ObTransformUtils::free_stmt(*ctx_->stmt_factory_, root_stmt))) {
+          LOG_WARN("failed to free stmt", K(ret));
         }
       }
     }
@@ -553,12 +550,14 @@ int ObTransformLateMaterialization::inner_accept_transform(ObIArray<ObParentDMLS
       } else if (force_accept && stmt->get_stmt_hint().query_hint_->has_outline_data()) {
         trans_happened = true;
         LOG_TRACE("force accept to use late materialization");
-      } else if (OB_FAIL(evaluate_stmt_cost(trans_stmt, true, trans_stmt_cost, is_expected, check_ctx))) {
+      } else if (OB_FAIL(evaluate_stmt_cost(parent_stmts, trans_stmt, true, trans_stmt_cost,
+                                            is_expected, check_ctx))) {
         LOG_WARN("failed to evaluate cost for the transformed stmt", K(ret));
       } else if (!is_expected) {
         trans_happened = false;
-      } else if (!force_accept && OB_FAIL(evaluate_stmt_cost(stmt, false, base_stmt_cost,
-                                                             is_base_expected, check_ctx))) {
+      } else if (!force_accept && OB_FAIL(evaluate_stmt_cost(parent_stmts, stmt, false,
+                                                             base_stmt_cost, is_base_expected,
+                                                             check_ctx))) {
         LOG_WARN("failed to evaluate cost of select_stmt");
       } else {
         trans_happened = force_accept ||

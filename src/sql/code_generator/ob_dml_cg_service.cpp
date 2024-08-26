@@ -351,6 +351,91 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
   return ret;
 }
 
+int ObDmlCgService::check_is_update_uk(ObLogDelUpd &op,
+                                       const IndexDMLInfo &index_dml_info,
+                                       ObIArray<uint64_t> &update_cids,
+                                       ObDASUpdCtDef &das_upd_ctdef)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
+  ObSEArray<uint64_t, 8> rowkey_cids;
+  bool is_update_uk = false;
+
+  ObLogPlan *log_plan = op.get_plan();
+  if (OB_ISNULL(log_plan) ||
+      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_dml_info.ref_table_id_, table_schema))) {
+    LOG_WARN("fail to get unique index schema", K(ret), K(index_dml_info));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (index_dml_info.is_primary_index_) {
+    // 主表
+    if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_cids))) {
+      LOG_WARN("fail to get rowkey cids", K(ret));
+    }
+  } else if (!table_schema->is_global_unique_index_table()) {
+    // 非global unique index，不需要检查
+  } else if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_cids))) {
+    LOG_WARN("fail to get rowkey cids", K(ret));
+  }
+
+  if (OB_SUCC(ret)) {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_update_uk && i < update_cids.count(); i++) {
+      if (has_exist_in_array(rowkey_cids, update_cids.at(i))) {
+        is_update_uk = true;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    das_upd_ctdef.is_update_uk_ = is_update_uk;
+  }
+
+  return ret;
+}
+
+int ObDmlCgService::check_is_update_local_unique_index(ObLogDelUpd &op,
+                                                       uint64_t index_tid,
+                                                       ObIArray<uint64_t> &update_cids,
+                                                       ObDASUpdCtDef &das_upd_ctdef)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaGetterGuard *schema_guard = NULL;
+  const ObTableSchema *unique_index_schema = NULL;
+  ObSEArray<uint64_t, 8> rowkey_cids;
+  ObLogPlan *log_plan = op.get_plan();
+
+  bool is_update_uk = false;
+  if (OB_ISNULL(log_plan) ||
+      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected status", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_tid, unique_index_schema))) {
+    LOG_WARN("fail to get unique index schema", K(ret), K(index_tid));
+  } else if (OB_ISNULL(unique_index_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!unique_index_schema->is_local_unique_index_table()) {
+    // not need check it
+  } else if (OB_FAIL(unique_index_schema->get_rowkey_column_ids(rowkey_cids))) {
+    LOG_WARN("fail to get rowkey column_ids", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !is_update_uk && i < update_cids.count(); i++) {
+      if (has_exist_in_array(rowkey_cids, update_cids.at(i))) {
+        is_update_uk = true;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    das_upd_ctdef.is_update_uk_ = is_update_uk;
+  }
+  return ret;
+}
 int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                           const IndexDMLInfo &index_dml_info,
                                           ObUpdCtDef &upd_ctdef)
@@ -359,6 +444,7 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
   ObSEArray<ObRawExpr*, 64> old_row;
   ObSEArray<ObRawExpr*, 64> new_row;
   ObSEArray<ObRawExpr*, 64> full_row;
+  bool is_update_uk = false;
   const ObAssignments &assigns = index_dml_info.assignments_;
   bool gen_expand_ctdef = false;
   LOG_TRACE("begin to generate update ctdef", K(index_dml_info));
@@ -402,6 +488,11 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                             new_row,
                                             full_row))) {
     LOG_WARN("generate das update ctdef failed", K(ret));
+  } else if (OB_FAIL(check_is_update_uk(op,
+                                        index_dml_info,
+                                        upd_ctdef.dupd_ctdef_.updated_column_ids_,
+                                        upd_ctdef.dupd_ctdef_))) {
+    LOG_WARN("fail to check is update uk", K(ret), K(upd_ctdef.dupd_ctdef_));
   } else if (OB_FAIL(generate_related_upd_ctdef(op,
                                                 index_dml_info.related_index_ids_,
                                                 index_dml_info,
@@ -2189,6 +2280,11 @@ int ObDmlCgService::generate_related_upd_ctdef(ObLogDelUpd &op,
                                               new_row,
                                               full_row))) {
       LOG_WARN("generate das ins ctdef failed", K(ret));
+    } else if (OB_FAIL(check_is_update_local_unique_index(op,
+                                                          related_tid,
+                                                          related_ctdef->updated_column_ids_,
+                                                          *related_ctdef))) {
+      LOG_WARN("fail to check is update uk", K(ret), K(related_tid));
     } else if (related_ctdef->updated_column_ids_.empty()) {
       //ignore invalid update ctdef
     } else if (OB_FAIL(upd_ctdefs.push_back(related_ctdef))) {

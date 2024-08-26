@@ -1629,7 +1629,7 @@ int ObJoinOrder::will_use_das(const uint64_t table_id,
   }
   if (OB_SUCC(ret) && get_plan()->get_stmt()->is_select_stmt()) {
     const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_plan()->get_stmt());
-    const SampleInfo *sample_info = stmt->get_sample_info_by_table_id(table_id);
+    const SampleInfo *sample_info = table_item->sample_info_;
     if (sample_info != NULL && !sample_info->is_no_sample()) {
       is_sample_stmt = true;
     }
@@ -1778,8 +1778,9 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
     ap->use_skip_scan_ = use_skip_scan;
     ap->use_column_store_ = use_column_store;
     ap->est_cost_info_.use_column_store_ = use_column_store;
+
     ap->contain_das_op_ = ap->use_das_;
-    if (OB_FAIL(init_sample_info_for_access_path(ap, table_id))) {
+    if (OB_FAIL(init_sample_info_for_access_path(ap, table_id, table_item))) {
       LOG_WARN("failed to init sample info", K(ret));
     } else if (OB_FAIL(add_access_filters(ap,
                                           ordering_info.get_index_keys(),
@@ -1852,7 +1853,8 @@ int ObJoinOrder::create_one_access_path(const uint64_t table_id,
 }
 
 int ObJoinOrder::init_sample_info_for_access_path(AccessPath *ap,
-                                                  const uint64_t table_id)
+                                                  const uint64_t table_id,
+                                                  const TableItem *table_item)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_stmt())) {
@@ -1863,7 +1865,8 @@ int ObJoinOrder::init_sample_info_for_access_path(AccessPath *ap,
     // sample scan doesn't support DML other than SELECT.
   } else {
     const ObSelectStmt *stmt = static_cast<const ObSelectStmt *>(get_plan()->get_stmt());
-    const SampleInfo *sample_info = stmt->get_sample_info_by_table_id(table_id);
+    const SampleInfo *sample_info = table_item->sample_info_;
+
     if (sample_info != NULL) {
       ap->sample_info_ = *sample_info;
       ap->sample_info_.table_id_ = ap->get_index_table_id();
@@ -2891,12 +2894,13 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
   use_skip_scan = OptSkipScanState::SS_UNSET;
   IndexInfoEntry *index_info_entry = NULL;
   const ObQueryRange *query_range = NULL;
+  ObQueryCtx *query_ctx = NULL;
   bool hint_force_skip_scan = false;
   bool hint_force_no_skip_scan = false;
   if (OB_UNLIKELY(OB_INVALID_ID == ref_id) || OB_UNLIKELY(OB_INVALID_ID == index_id) ||
-      OB_ISNULL(get_plan())) {
+      OB_ISNULL(get_plan()) || OB_ISNULL(query_ctx = get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ref_id), K(index_id), K(get_plan()), K(ret));
+    LOG_WARN("get unexpected null", K(ref_id), K(index_id), K(get_plan()), K(query_ctx), K(ret));
   } else if (is_virtual_table(ref_id)) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (OB_FAIL(index_info_cache.get_index_info_entry(table_id, index_id,
@@ -2917,7 +2921,7 @@ int ObJoinOrder::will_use_skip_scan(const uint64_t table_id,
     use_skip_scan = OptSkipScanState::SS_HINT_ENABLE;
   } else if (hint_force_no_skip_scan) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
-  } else if (!session_info->is_index_skip_scan_enabled()) {
+  } else if (!OPT_CTX.get_is_skip_scan_enabled()) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
   } else if (helper.is_inner_path_ || get_tables().is_subset(get_plan()->get_subq_pdfilter_tset())) {
     use_skip_scan = OptSkipScanState::SS_DISABLE;
@@ -3816,6 +3820,7 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
         LOG_WARN("failed to check in range optimization enabled", K(ret));
       } else if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, range_predicates,
                                                           dtc_params, opt_ctx->get_exec_ctx(),
+                                                          opt_ctx->get_query_ctx(),
                                                           &expr_constraints,
                                                           params, false, true,
                                                           is_in_range_optimization_enabled,
@@ -3840,17 +3845,18 @@ int ObJoinOrder::check_enable_better_inlist(int64_t table_id, bool &enable)
   int ret = OB_SUCCESS;
   enable = false;
   ObOptimizerContext *opt_ctx = NULL;
+  ObQueryCtx *query_ctx = NULL;
   ObSQLSessionInfo *session_info = NULL;
   OptTableMeta *table_meta = NULL;
   if (OB_ISNULL(get_plan()) ||
       OB_ISNULL(opt_ctx = &get_plan()->get_optimizer_context()) ||
-      OB_ISNULL(session_info = opt_ctx->get_session_info())) {
+      OB_ISNULL(session_info = opt_ctx->get_session_info()) ||
+      OB_ISNULL(query_ctx = get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(ret));
+    LOG_WARN("get unexpected null", K(get_plan()), K(opt_ctx), K(session_info), K(query_ctx), K(ret));
   } else if (!session_info->is_user_session()) {
     enable = false;
-  } else if (session_info->is_better_inlist_enabled(enable)) {
-    LOG_WARN("failed to check better inlist enabled", K(ret));
+  } else if (OB_FALSE_IT(enable = opt_ctx->get_enable_better_inlist_costing())) {
   } else if (!enable) {
     //do nothing
   } else if (OB_ISNULL(table_meta=get_plan()->get_basic_table_metas().
@@ -3902,6 +3908,7 @@ int ObJoinOrder::extract_geo_preliminary_query_range(const ObIArray<ColumnItem> 
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
                                                                  dtc_params, opt_ctx->get_exec_ctx(),
+                                                                 opt_ctx->get_query_ctx(),
                                                                  NULL, params))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
       }
@@ -3949,6 +3956,7 @@ int ObJoinOrder::extract_multivalue_preliminary_query_range(const ObIArray<Colum
         LOG_WARN("failed to check in range optimization enabled", K(ret));
       } else if (OB_FAIL(tmp_qr->preliminary_extract_query_range(range_columns, predicates,
                                                                  dtc_params, opt_ctx->get_exec_ctx(),
+                                                                 opt_ctx->get_query_ctx(),
                                                                  NULL, params, false, true,
                                                                  is_in_range_optimization_enabled))) {
         LOG_WARN("failed to preliminary extract query range", K(ret));
@@ -5996,6 +6004,7 @@ int AccessPath::check_adj_index_cost_valid(double &stats_phy_query_range_row_cou
   ObLogPlan *plan = NULL;
   ObOptimizerContext *opt_ctx = NULL;
   ObSQLSessionInfo *session_info = NULL;
+  ObQueryCtx *query_ctx = NULL;
   const OptTableMeta* table_meta = NULL;
   bool enable_adj_index_cost = false;
   opt_stats_cost_percent = 0;
@@ -6003,12 +6012,12 @@ int AccessPath::check_adj_index_cost_valid(double &stats_phy_query_range_row_cou
   if (OB_ISNULL(parent_) || OB_ISNULL(plan = parent_->get_plan()) ||
       OB_ISNULL(opt_ctx = &plan->get_optimizer_context()) ||
       OB_ISNULL(session_info = opt_ctx->get_session_info()) ||
+      OB_ISNULL(query_ctx = opt_ctx->get_query_ctx()) ||
       OB_ISNULL(table_meta = plan->get_basic_table_metas().get_table_meta_by_table_id(table_id_))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get unexpected null", K(plan), K(opt_ctx), K(ret));
-  } else if (session_info->is_adj_index_cost_enabled(enable_adj_index_cost, opt_stats_cost_percent)) {
-    LOG_WARN("failed to check adjust scan enabled", K(ret));
-  } else if (!enable_adj_index_cost || //session disable adjust
+    LOG_WARN("get unexpected null", K(plan), K(opt_ctx), K(query_ctx), K(ret));
+  } else if (OB_FALSE_IT(opt_stats_cost_percent = opt_ctx->get_optimizer_index_cost_adj())) {
+  } else if (0 == opt_stats_cost_percent || //session disable adjust
              est_cost_info_.prefix_filters_.empty() || //not have query range
              !est_cost_info_.pushdown_prefix_filters_.empty() ||  //can not use storage estimate
              table_meta->use_default_stat()) {  //not have optimzier stats
@@ -6890,16 +6899,17 @@ int JoinPath::can_use_batch_nlj(bool &use_batch_nlj)
   int ret = OB_SUCCESS;
   const ParamStore *params = NULL;
   ObSQLSessionInfo *session_info = NULL;
-  bool enable_use_batch_nlj = false;
   const AccessPath *access_path = NULL;
   const SubQueryPath *subq_path = NULL;
   ObLogPlan *plan = NULL;
+  ObQueryCtx *query_ctx = NULL;
   use_batch_nlj = false;
   if (OB_ISNULL(parent_) || OB_ISNULL(plan = parent_->get_plan()) || OB_ISNULL(right_path_) ||
       OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info()) ||
-      OB_ISNULL(params = plan->get_optimizer_context().get_params())) {
+      OB_ISNULL(params = plan->get_optimizer_context().get_params()) ||
+      OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(session_info), K(ret));
+    LOG_WARN("invalid argument", K(session_info), K(params), K(query_ctx), K(ret));
   } else if (NESTED_LOOP_JOIN == join_algo_
       && CONNECT_BY_JOIN != join_type_
       && (!IS_SEMI_ANTI_JOIN(join_type_))
@@ -6920,9 +6930,7 @@ int JoinPath::can_use_batch_nlj(bool &use_batch_nlj)
     } else {
       right_has_gi_or_exchange = true;
     }
-    if (OB_FAIL(session_info->get_nlj_batching_enabled(enable_use_batch_nlj))) {
-      LOG_WARN("failed to get join cache size variable", K(ret));
-    } else if (!enable_use_batch_nlj) {
+    if (!plan->get_optimizer_context().get_nlj_batching_enabled()) {
       //do nothing
     } else if ((!right_path_->is_access_path() && !right_path_->is_subquery_path()) ||
                right_has_gi_or_exchange) {

@@ -977,8 +977,8 @@ int ObTransformSimplifySubquery::do_transform_any_all_as_min_max(ObSelectStmt *s
     if (OB_FAIL(stmt->add_agg_item(*aggr_expr))) {
       LOG_WARN("fail to add agg_item", K(ret));
     } else if (is_with_all) {
-      ObOpRawExpr *is_not_expr = NULL;
-      if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, stmt, aggr_expr, is_not_expr))) {
+      ObRawExpr *is_not_expr = NULL;
+      if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, aggr_expr, is_not_expr))) {
         LOG_WARN("failed to add is not null", K(ret));
       } else if (OB_FAIL(stmt->add_having_expr(is_not_expr))) {
         LOG_WARN("failed to add having expr", K(ret));

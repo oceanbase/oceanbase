@@ -181,6 +181,7 @@ public:
                                                                    load_param.method_,
                                                                    load_param.insert_mode_,
                                                                    load_param.load_mode_,
+                                                                   load_param.load_level_,
                                                                    column_ids))) {
       LOG_WARN("fail to check support direct load", KR(ret));
     }
@@ -290,6 +291,7 @@ public:
       load_param.load_mode_ = ObDirectLoadMode::TABLE_LOAD;
       load_param.compressor_type_ = compressor_type;
       load_param.online_sample_percent_ = online_sample_percent;
+      load_param.load_level_ = ObDirectLoadLevel::TABLE;
     }
     return ret;
   }

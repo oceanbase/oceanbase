@@ -1402,6 +1402,13 @@ int ObTabletTableStore::check_and_build_new_major_tables(
                 new_sst_meta_hdl.get_sstable_meta(), old_sst_meta_hdl.get_sstable_meta()))) {
               LOG_WARN("failed to check sstable meta", K(ret), KPC(new_sstable), KPC(old_sstable));
             } else {
+              if (new_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_no_backup()
+                && old_sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()) {
+                // if new sstable has no backup macro block and old sstable has backup macro block
+                // replace the old sstable with the new one
+                FLOG_INFO("replace major sstable with new one", KPC(new_sstable), KPC(old_sstable));
+                major_tables.at(j) = new_table;
+              }
               need_add = false;
             }
           }

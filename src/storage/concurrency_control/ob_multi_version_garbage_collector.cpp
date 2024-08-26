@@ -1355,7 +1355,7 @@ bool GetMinActiveSnapshotVersionFunctor::operator()(sql::ObSQLSessionMgr::Key ke
     sql::ObSQLSessionInfo::LockGuard data_lock_guard(sess_info->get_thread_data_lock());
     share::SCN snapshot_version(share::SCN::max_scn());
 
-    if (sess_info->is_in_transaction()) {
+    if (OB_NOT_NULL(sess_info->get_tx_desc())) {
       share::SCN desc_snapshot;
       transaction::ObTxDesc *tx_desc = nullptr;
       share::SCN sess_snapshot = sess_info->get_reserved_snapshot_version();

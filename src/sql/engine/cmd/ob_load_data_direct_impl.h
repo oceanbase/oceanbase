@@ -95,7 +95,9 @@ private:
                  "method", storage::ObDirectLoadMethod::get_type_string(method_),
                  "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
                  K_(data_access_param),
-                 K_(column_ids));
+                 K_(column_ids),
+                 K_(compressor_type),
+                 K_(online_sample_percent));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
@@ -116,6 +118,8 @@ private:
     storage::ObDirectLoadInsertMode::Type insert_mode_;
     DataAccessParam data_access_param_;
     ObArray<uint64_t> column_ids_;
+    ObCompressorType compressor_type_;
+    double online_sample_percent_;
   };
 
   struct LoadExecuteContext

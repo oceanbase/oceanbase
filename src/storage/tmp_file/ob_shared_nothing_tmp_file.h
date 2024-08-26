@@ -78,7 +78,9 @@ public:
         data_finished_continuous_flush_info_num_(0),
         meta_finished_continuous_flush_info_num_(0),
         data_flush_infos_(),
-        meta_flush_infos_()
+        meta_flush_infos_(),
+        need_to_wait_for_the_previous_data_flush_req_to_complete_(false),
+        need_to_wait_for_the_previous_meta_flush_req_to_complete_(false)
         {
           data_flush_infos_.set_attr(ObMemAttr(MTL_ID(), "TmpFileFInfo"));
           meta_flush_infos_.set_attr(ObMemAttr(MTL_ID(), "TmpFileFInfo"));
@@ -100,12 +102,16 @@ public:
     }
     TO_STRING_KV(K(flush_seq_), K(data_flush_infos_.size()), K(meta_flush_infos_.size()),
                  K(data_finished_continuous_flush_info_num_),
-                 K(meta_finished_continuous_flush_info_num_));
+                 K(meta_finished_continuous_flush_info_num_),
+                 K(need_to_wait_for_the_previous_data_flush_req_to_complete_),
+                 K(need_to_wait_for_the_previous_meta_flush_req_to_complete_));
     int64_t flush_seq_;
     int64_t data_finished_continuous_flush_info_num_;
     int64_t meta_finished_continuous_flush_info_num_;
     ObArray<InnerFlushInfo> data_flush_infos_;
     ObArray<InnerFlushInfo> meta_flush_infos_;
+    bool need_to_wait_for_the_previous_data_flush_req_to_complete_;
+    bool need_to_wait_for_the_previous_meta_flush_req_to_complete_;
   };
 public:
   ObSharedNothingTmpFile();
@@ -263,6 +269,17 @@ private:
                                     const int64_t end_pos,
                                     const int64_t flushed_data_page_num);
   int update_meta_tree_after_flush_(const int64_t start_pos, const int64_t end_pos);
+
+  int generate_data_flush_info_(ObTmpFileFlushTask &flush_task,
+                                ObTmpFileFlushInfo &info,
+                                ObTmpFileDataFlushContext &data_flush_context,
+                                const int64_t flush_sequence,
+                                const bool need_flush_tail);
+  int generate_meta_flush_info_(ObTmpFileFlushTask &flush_task,
+                                ObTmpFileFlushInfo &info,
+                                ObTmpFileTreeFlushContext &meta_flush_context,
+                                const int64_t flush_sequence,
+                                const bool need_flush_tail);
 private:
   int reinsert_flush_node_(const bool is_meta);
   OB_INLINE bool has_unfinished_page_() const { return file_size_ % ObTmpFileGlobal::PAGE_SIZE != 0; }

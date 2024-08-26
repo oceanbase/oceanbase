@@ -384,6 +384,28 @@ ParseNode *new_non_terminal_node(void *malloc_pool, ObItemType node_tag, int num
   return ret_node;
 }
 
+ParseNode *new_list_node(void *malloc_pool, ObItemType node_tag, int capacity, int num, ...)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_UNLIKELY(capacity <= 0 || num <= 0 || num > capacity)) {
+    (void)fprintf(stderr, "ERROR invalid num:%d capacity:%d\n", num, capacity);
+  } else {
+    int32_t i = 0;
+    va_list va;
+    ret_node = new_node(malloc_pool, node_tag, capacity);
+    if (OB_LIKELY(NULL != ret_node)) {
+      ret_node->value_ = capacity;
+      ret_node->num_child_ = num;
+      va_start(va, num);
+      for (; i < num; ++i) {
+        ret_node->children_[i] = va_arg(va, ParseNode *);
+      }
+      va_end(va);
+    }
+  }
+  return ret_node;
+}
+
 char *copy_expr_string(ParseResult *p, int expr_start, int expr_end)
 {
   char *expr_string = NULL;
@@ -824,6 +846,129 @@ extern bool nodename_is_sdo_geometry_type(const ParseNode *node)
     result = false;
   }
   return result;
+}
+
+int64_t get_need_reserve_capacity(int64_t n)
+{
+  int64_t capacity = 0;
+   // equal to OB_MALLOC_BIG_BLOCK_SIZE in ob_define.h
+  const int64_t max_delta_capacity = (1LL << 21) / sizeof(ParseNode*); // 2MB
+  if (n <= 2) {
+    capacity = 2;
+  } else if ((n & (n - 1)) == 0) {
+    capacity = n;
+  } else if (n > max_delta_capacity) {
+    int64_t i = n / max_delta_capacity;
+    capacity = max_delta_capacity * (i + 1);
+  } else {
+    capacity = 4;
+    while (capacity < n) {
+      capacity <<= 1;
+    }
+  }
+  return capacity;
+}
+
+// (A OR B) OR C --> OR (A, B, C)
+ParseNode *push_back_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *node)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_ISNULL(malloc_pool) || OB_ISNULL(error_code)) {
+    (void)fprintf(stderr, "ERROR parser result is NULL\n");
+  } else if (NULL == left_node || NULL == node) {
+    /* do nothing */
+  } else if ((left_node->type_ != T_OP_OR &&
+              left_node->type_ != T_OP_AND &&
+              left_node->type_ != T_EXPR_LIST) ||
+             left_node->value_ == INT64_MAX) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else {
+    int64_t capacity = get_need_reserve_capacity(left_node->num_child_ + 1);
+    if (left_node->value_ < capacity) {
+      ParseNode *new_op = new_node(malloc_pool, left_node->type_, capacity);
+      if (OB_ISNULL(new_op)) {
+        *error_code = OB_PARSER_ERR_NO_MEMORY;
+      } else {
+        MEMCPY(new_op->children_, left_node->children_, sizeof(ParseNode*) * left_node->num_child_);
+        new_op->children_[left_node->num_child_] = node;
+        new_op->num_child_ = left_node->num_child_ + 1;
+        new_op->value_ = capacity;
+        ret_node = new_op;
+      }
+    } else {
+      left_node->children_[left_node->num_child_] = node;
+      left_node->num_child_ += 1;
+      ret_node = left_node;
+    }
+  }
+  return ret_node;
+}
+
+// A OR (B OR C) --> OR (A, B, C)
+ParseNode *push_front_child(void *malloc_pool, int *error_code, ParseNode *right_node, ParseNode *node)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_ISNULL(malloc_pool) || OB_ISNULL(error_code)) {
+    (void)fprintf(stderr, "ERROR parser result is NULL\n");
+  } else if (NULL == right_node || NULL == node) {
+    /* do nothing */
+  } else if ((right_node->type_ != T_OP_OR &&
+              right_node->type_ != T_OP_AND &&
+              right_node->type_ != T_EXPR_LIST) ||
+             right_node->value_ == INT64_MAX) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else {
+    int64_t capacity = get_need_reserve_capacity(right_node->num_child_ + 1);
+    ParseNode *new_op = new_node(malloc_pool, right_node->type_, capacity);
+    if (OB_ISNULL(new_op)) {
+      *error_code = OB_PARSER_ERR_NO_MEMORY;
+    } else {
+      new_op->children_[0] = node;
+      MEMCPY(new_op->children_ + 1, right_node->children_, sizeof(ParseNode*) * right_node->num_child_);
+      new_op->value_ = capacity;
+      new_op->num_child_ = right_node->num_child_ + 1;
+      ret_node = new_op;
+    }
+  }
+  return ret_node;
+}
+
+// (A OR B) OR (C OR D) --> OR (A, B, C, D)
+ParseNode *append_child(void *malloc_pool, int *error_code, ParseNode *left_node, ParseNode *right_node)
+{
+  ParseNode *ret_node = NULL;
+  if (OB_ISNULL(malloc_pool) || OB_ISNULL(error_code)) {
+    (void)fprintf(stderr, "ERROR parser result is NULL\n");
+  } else if (NULL == left_node || NULL == right_node) {
+    /* do nothing */
+  } else if (left_node->type_ != right_node->type_ ||
+             (left_node->type_ != T_OP_OR &&
+              left_node->type_ != T_OP_AND &&
+              left_node->type_ != T_EXPR_LIST) ||
+             left_node->value_ == INT64_MAX ||
+             right_node->value_ == INT64_MAX) {
+    *error_code = OB_PARSER_ERR_UNEXPECTED;
+  } else {
+    int64_t num_child = left_node->num_child_ + right_node->num_child_;
+    int64_t capacity = get_need_reserve_capacity(num_child);
+    if (left_node->value_ < capacity) {
+      ParseNode *new_op = new_node(malloc_pool, left_node->type_, capacity);
+      if (OB_ISNULL(new_op)) {
+        *error_code = OB_PARSER_ERR_NO_MEMORY;
+      } else {
+        MEMCPY(new_op->children_, left_node->children_, sizeof(ParseNode*) * left_node->num_child_);
+        MEMCPY(new_op->children_ + left_node->num_child_, right_node->children_, sizeof(ParseNode*) * right_node->num_child_);
+        new_op->num_child_ = num_child;
+        new_op->value_ = capacity;
+        ret_node = new_op;
+      }
+    } else {
+      MEMCPY(left_node->children_ + left_node->num_child_, right_node->children_, sizeof(ParseNode*) * right_node->num_child_);
+      left_node->num_child_ = num_child;
+      ret_node = left_node;
+    }
+  }
+  return ret_node;
 }
 
 ParseNode *adjust_inner_join_inner(int *error_code, ParseNode *inner_join, ParseNode *table_node)

@@ -137,9 +137,6 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     } else if (!insert_stmt->value_from_select()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite with values");
-    } else if (!tmp_table_item->access_all_part()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with partitions");
     }
   }
 
@@ -507,16 +504,6 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
                                            false))) {
       LOG_WARN("failed to generate insert table info", K(ret));
     } else { /*do nothing*/ }
-  }
-
-  if (OB_SUCC(ret) && 2 == insert_into.num_child_) {
-    ParseNode *tmp_node = insert_into.children_[1];
-    if (OB_NOT_NULL(tmp_node) && T_COLUMN_LIST == tmp_node->type_) {
-      if (insert_stmt->is_overwrite()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with column list");
-      }
-    }
   }
 
   if (OB_SUCC(ret) && 2 == insert_into.num_child_ &&
