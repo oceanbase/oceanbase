@@ -1858,12 +1858,12 @@ int ObCreateTableResolver::set_nullable_for_cta_column(ObSelectStmt *select_stmt
             T_WIN_FUN_ROW_NUMBER == win_expr->get_func_type()) {
           ObObj temp_default;
           temp_default.set_uint64(0);
-          column.set_cur_default_value(temp_default);
+          column.set_cur_default_value(temp_default, false);
         } else if (T_WIN_FUN_CUME_DIST == win_expr->get_func_type() ||
                    T_WIN_FUN_PERCENT_RANK == win_expr->get_func_type()) {
           ObObj temp_default;
           temp_default.set_double(0);
-          column.set_cur_default_value(temp_default);
+          column.set_cur_default_value(temp_default, false);
         } else {}
       } else {}
       column.set_nullable(!is_not_null);
@@ -2046,7 +2046,9 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 if (NULL != org_column &&
                     !org_column->is_generated_column() &&
                     !org_column->get_cur_default_value().is_null()) {
-                    column.set_cur_default_value(org_column->get_cur_default_value());
+                  column.set_cur_default_value(
+                      org_column->get_cur_default_value(),
+                      org_column->is_default_expr_v2_column());
                   }
               }
             } else if (new_table_item == NULL &&
@@ -2057,7 +2059,7 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
               common::ObObjType result_type = expr->get_result_type().get_obj_meta().get_type();
               if (ob_is_numeric_type(result_type) || ob_is_string_tc(result_type) || ob_is_time_tc(result_type)) {
                 common::ObObj zero_obj(0);
-                if (OB_FAIL(column.set_cur_default_value(zero_obj))) {
+                if (OB_FAIL(column.set_cur_default_value(zero_obj, false))) {
                   LOG_WARN("set default value failed", K(ret));
                 }
               }

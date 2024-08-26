@@ -760,3 +760,27 @@ int ObDelUpdStmt::check_dml_source_from_join()
   }
   return ret;
 }
+
+int ObDelUpdStmt::get_modified_materialized_view_id(uint64_t &mview_id) const
+{
+  int ret = OB_SUCCESS;
+  mview_id = OB_INVALID_ID;
+  const ObIArray<TableItem*> &tables = get_table_items();
+  const TableItem *table_item = NULL;
+  bool is_modified = false;
+  for (int64_t i = 0; OB_INVALID_ID == mview_id && OB_SUCC(ret) && i < tables.count(); ++i) {
+    if (OB_ISNULL(table_item = tables.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpect null", K(ret), K(table_item));
+    } else if (MATERIALIZED_VIEW != table_item->table_type_) {
+      /* do nothing */
+    } else if (OB_FAIL(check_table_be_modified(table_item->ref_id_, is_modified))) {
+      LOG_WARN("fail to check table be modified", K(ret));
+    } else if (!is_modified) {
+      /* do nothing */
+    } else {
+      mview_id = table_item->mview_id_;
+    }
+  }
+  return ret;
+}

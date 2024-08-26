@@ -495,7 +495,6 @@ typedef enum ObItemType
   T_FUN_SYS_DES_ENCRYPT = 763,
   T_FUN_SYS_ENCRYPT = 764,
   T_FUN_SYS_ICU_VERSION = 765,
-
   T_FUN_SYS_CURRENT_USER_PRIV = 766,
   T_FUN_SYS_CURRENT_ROLE = 767,
   T_FUN_SYS_EXTRACT_CERT_EXPIRED_TIME = 768,
@@ -2727,7 +2726,7 @@ typedef enum ObOutlineType
 
 #define IS_DML_STMT(op)  \
   ((op) == T_SELECT || (op) == T_DELETE || (op) == T_INSERT || (op) == T_MERGE || (op) == T_UPDATE || (op) == T_MULTI_INSERT)
-#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS)
+#define IS_SHOW_STMT(op) (((op) >= T_SHOW_TABLES && (op) <= T_SHOW_GRANTS) || (op) == T_SHOW_TRIGGERS || (op) == T_SHOW_CREATE_USER)
 
 #define EXPR_OP_NUM (T_MAX_OP-T_MIN_OP-1)
 extern const char *get_type_name(int type);

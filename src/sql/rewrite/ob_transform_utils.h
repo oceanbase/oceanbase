@@ -417,12 +417,12 @@ public:
   /**
    * @brief add_is_not_null
    * 增加对 child_expr 结果的 not null 判断
-   * @param stmt
    * @param child_expr
    * @return
    */
-  static int add_is_not_null(ObTransformerCtx *ctx, const ObDMLStmt *stmt,
-                             ObRawExpr *child_expr, ObOpRawExpr *&is_not_expr);
+  static int add_is_not_null(ObTransformerCtx *ctx,
+                             ObRawExpr *child_expr,
+                             ObRawExpr *&is_not_expr);
 
   static int is_column_nullable(const ObDMLStmt *stmt,
                                 ObSchemaChecker *schema_checker,
@@ -1778,6 +1778,11 @@ public:
                                 ObIArray<ObRawExpr *> *having_exprs = NULL,
                                 ObIArray<OrderItem> *order_items = NULL);
 
+  static int create_aggr_expr(ObTransformerCtx *ctx,
+                              ObItemType type,
+                              ObAggFunRawExpr *&agg_expr,
+                              ObRawExpr *child_expr);
+
   /* Push all content of the parent stmt into an inline view,
      and keep the ptr of the parent stmt  */
   static int pack_stmt(ObTransformerCtx *ctx,
@@ -1918,7 +1923,8 @@ public:
                                                    ObSQLSessionInfo *session_info,
                                                    bool &has_fts_or_multivalue_index);
   static int add_aggr_winfun_expr(ObSelectStmt *stmt,
-                                  ObRawExpr *expr);
+                                  ObRawExpr *expr,
+                                  bool need_strict_check = true);
   static int expand_mview_table(ObTransformerCtx *ctx, ObDMLStmt *upper_stmt, TableItem *rt_mv_table);
   static int adjust_col_and_sel_for_expand_mview(ObTransformerCtx *ctx,
                                                  ObIArray<ColumnItem> &uppper_col_items,

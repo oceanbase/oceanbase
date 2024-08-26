@@ -340,6 +340,9 @@ int ObTransformPreProcess::transform_one_stmt(common::ObIArray<ObParentDMLStmt> 
       LOG_WARN("disable complex dml for fulltext index", K(ret));
       // jinmao TODO: table scan 能吐出正确的 doc_id 后，可删除此限制
     }
+    if (OB_SUCC(ret) && OB_FAIL(reset_view_base_item(stmt))) {
+      LOG_WARN("failed to reset view base item", K(ret));
+    }
     if (OB_SUCC(ret)) {
       LOG_DEBUG("transform pre process succ", K(*stmt));
      if (OB_FAIL(stmt->formalize_stmt(ctx_->session_info_))) {
@@ -10889,6 +10892,27 @@ int ObTransformPreProcess::construct_leaf_leading_table(ObDMLStmt *stmt,
   } else {
     leading_table->table_->db_name_ = table->database_name_;
     leading_table->table_->table_name_ = table->table_name_;
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::reset_view_base_item(ObDMLStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else {
+    ObIArray<TableItem*> &tables = stmt->get_table_items();
+    TableItem *table_item = NULL;
+    for (int64_t i = 0; OB_SUCC(ret) && i < tables.count(); ++i) {
+      if (OB_ISNULL(table_item = tables.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null", K(ret), KP(table_item));
+      } else {
+        table_item->view_base_item_ = NULL;
+      }
+    }
   }
   return ret;
 }

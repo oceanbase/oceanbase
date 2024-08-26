@@ -90,6 +90,8 @@ void ObSharedNothingTmpFile::InnerFlushContext::reset()
   meta_flush_infos_.reset();
   data_flush_infos_.reset();
   flush_seq_ = ObTmpFileGlobal::INVALID_FLUSH_SEQUENCE;
+  need_to_wait_for_the_previous_data_flush_req_to_complete_ = false;
+  need_to_wait_for_the_previous_meta_flush_req_to_complete_ = false;
 }
 
 int ObSharedNothingTmpFile::InnerFlushContext::update_finished_continuous_flush_info_num(const bool is_meta, const int64_t end_pos)
@@ -1991,6 +1993,11 @@ int ObSharedNothingTmpFile::update_meta_after_flush(const int64_t info_idx, cons
       LOG_WARN("fail to update file meta", KR(ret), K(start_pos), K(end_pos), K(flushed_data_page_num), KPC(this));
     } else {
       reset_ctx = true;
+      if (is_meta) {
+        inner_flush_ctx_.need_to_wait_for_the_previous_meta_flush_req_to_complete_ = true;
+      } else {
+        inner_flush_ctx_.need_to_wait_for_the_previous_data_flush_req_to_complete_ = true;
+      }
     }
     LOG_DEBUG("update meta based a set of flush info over", KR(ret), K(info_idx), K(start_pos),
               K(end_pos), K(inner_flush_ctx_), KPC(this));
@@ -2004,11 +2011,13 @@ int ObSharedNothingTmpFile::update_meta_after_flush(const int64_t info_idx, cons
       if (OB_ISNULL(data_flush_node_.get_next()) && OB_TMP_FAIL(reinsert_flush_node_(false /*is_meta*/))) {
         LOG_ERROR("fail to reinsert data flush node", KR(tmp_ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
       }
+      inner_flush_ctx_.need_to_wait_for_the_previous_data_flush_req_to_complete_ = false;
     }
     if (inner_flush_ctx_.is_meta_finished()) {
       if (OB_ISNULL(meta_flush_node_.get_next()) && OB_TMP_FAIL(reinsert_flush_node_(true /*is_meta*/))) {
         LOG_ERROR("fail to reinsert meta flush node", KR(tmp_ret), K(is_meta), K(inner_flush_ctx_), KPC(this));
       }
+      inner_flush_ctx_.need_to_wait_for_the_previous_meta_flush_req_to_complete_ = false;
     }
 
     if (inner_flush_ctx_.is_all_finished()) {
@@ -2042,7 +2051,7 @@ int ObSharedNothingTmpFile::remove_useless_page_in_data_flush_infos_(const int64
   } else {
     // skip truncated flush infos
     for (int64_t i = start_pos; OB_SUCC(ret) && i < end_pos; i++) {
-      int64_t flushed_start_offset = get_page_begin_offset_by_virtual_id_(flush_infos_[start_pos].flush_virtual_page_id_);
+      int64_t flushed_start_offset = get_page_begin_offset_by_virtual_id_(flush_infos_[i].flush_virtual_page_id_);
       int64_t flushed_end_offset = flushed_start_offset +
                                    flush_infos_[i].flush_data_page_num_ * ObTmpFileGlobal::PAGE_SIZE;
       if (truncated_offset_ <= flushed_start_offset) {
@@ -2255,6 +2264,54 @@ int ObSharedNothingTmpFile::update_meta_tree_after_flush_(const int64_t start_po
   return ret;
 }
 
+int ObSharedNothingTmpFile::generate_data_flush_info_(
+    ObTmpFileFlushTask &flush_task,
+    ObTmpFileFlushInfo &info,
+    ObTmpFileDataFlushContext &data_flush_context,
+    const int64_t flush_sequence,
+    const bool need_flush_tail)
+{
+  int ret = OB_SUCCESS;
+
+  uint32_t copy_begin_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
+  int64_t copy_begin_page_virtual_id = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
+
+  uint32_t copy_end_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
+  if (OB_FAIL(cal_next_flush_page_id_from_flush_ctx_or_file_(data_flush_context,
+                                                             copy_begin_page_id,
+                                                             copy_begin_page_virtual_id))) {
+    LOG_WARN("fail to calculate next_flush_page_id", KR(ret),
+        K(flush_task), K(info), K(data_flush_context), KPC(this));
+  } else if (ObTmpFileGlobal::INVALID_PAGE_ID == copy_begin_page_id) {
+    ret = OB_ITER_END;
+    LOG_DEBUG("no more data to flush", KR(ret), K(fd_), KPC(this));
+  } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID == copy_begin_page_virtual_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("next_flush_page_virtual_id is invalid", KR(ret), K(fd_), K(copy_begin_page_id),
+             K(copy_begin_page_virtual_id), K(flush_task), K(info), K(data_flush_context),
+             K(flush_sequence), K(need_flush_tail), KPC(this));
+  } else if (OB_FAIL(get_flush_end_page_id_(copy_end_page_id, need_flush_tail))) {
+    LOG_WARN("fail to get_flush_end_page_id_", KR(ret),
+        K(flush_task), K(info), K(data_flush_context), KPC(this));
+  } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_FLUSH_SEQUENCE != inner_flush_ctx_.flush_seq_
+              && flush_sequence != inner_flush_ctx_.flush_seq_
+              && flush_sequence != flush_task.get_flush_seq())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("flush sequence not match",
+        KR(ret), K(inner_flush_ctx_.flush_seq_), K(flush_task), KPC(this));
+  } else if (OB_FAIL(copy_flush_data_from_wbp_(flush_task, info, data_flush_context,
+                                               copy_begin_page_id, copy_begin_page_virtual_id,
+                                               copy_end_page_id,
+                                               flush_sequence, need_flush_tail))) {
+    LOG_WARN("fail to copy flush data from wbp", KR(ret),
+        K(flush_task), K(info), K(data_flush_context), KPC(this));
+  }
+
+  LOG_DEBUG("generate_data_flush_info_ end",
+      KR(ret), K(fd_), K(data_flush_context), K(info), K(flush_task), KPC(this));
+  return ret;
+}
+
 int ObSharedNothingTmpFile::generate_data_flush_info(
     ObTmpFileFlushTask &flush_task,
     ObTmpFileFlushInfo &info,
@@ -2270,45 +2327,19 @@ int ObSharedNothingTmpFile::generate_data_flush_info(
     LOG_WARN("fail to get truncate lock", KR(ret), K(fd_), KPC(this));
   } else {
     common::TCRWLock::RLockGuard guard(meta_lock_);
-    uint32_t copy_begin_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-    int64_t copy_begin_page_virtual_id = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
-
-    uint32_t copy_end_page_id = ObTmpFileGlobal::INVALID_PAGE_ID;
-    if (OB_FAIL(cal_next_flush_page_id_from_flush_ctx_or_file_(data_flush_context,
-                                                               copy_begin_page_id,
-                                                               copy_begin_page_virtual_id))) {
-      LOG_WARN("fail to calculate next_flush_page_id", KR(ret),
-          K(flush_task), K(info), K(data_flush_context), KPC(this));
-    } else if (ObTmpFileGlobal::INVALID_PAGE_ID == copy_begin_page_id) {
+    if (inner_flush_ctx_.need_to_wait_for_the_previous_data_flush_req_to_complete_) {
       ret = OB_ITER_END;
-      LOG_DEBUG("no more data to flush", KR(ret), K(fd_), KPC(this));
-    } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID == copy_begin_page_virtual_id)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("next_flush_page_virtual_id is invalid", KR(ret), K(fd_), K(copy_begin_page_id),
-               K(copy_begin_page_virtual_id), K(flush_task), K(info), K(data_flush_context),
-               K(flush_sequence), K(need_flush_tail), KPC(this));
-    } else if (OB_FAIL(get_flush_end_page_id_(copy_end_page_id, need_flush_tail))) {
-      LOG_WARN("fail to get_flush_end_page_id_", KR(ret),
-          K(flush_task), K(info), K(data_flush_context), KPC(this));
-    } else if (OB_UNLIKELY(ObTmpFileGlobal::INVALID_FLUSH_SEQUENCE != inner_flush_ctx_.flush_seq_
-                && flush_sequence != inner_flush_ctx_.flush_seq_
-                && flush_sequence != flush_task.get_flush_seq())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("flush sequence not match",
-          KR(ret), K(inner_flush_ctx_.flush_seq_), K(flush_task), KPC(this));
-    } else if (OB_FAIL(copy_flush_data_from_wbp_(flush_task, info, data_flush_context,
-                                                 copy_begin_page_id, copy_begin_page_virtual_id,
-                                                 copy_end_page_id,
-                                                 flush_sequence, need_flush_tail))) {
-      LOG_WARN("fail to copy flush data from wbp", KR(ret),
-          K(flush_task), K(info), K(data_flush_context), KPC(this));
+      LOG_INFO("need_to_wait_for_the_previous_data_flush_req_to_complete_", KR(ret), K(fd_), KPC(this));
+    } else if (OB_FAIL(generate_data_flush_info_(flush_task, info,
+                                                 data_flush_context, flush_sequence, need_flush_tail))) {
+      STORAGE_LOG(WARN, "fail to generate_data_flush_info_", KR(ret), K(flush_task),
+                  K(info), K(data_flush_context), K(flush_sequence), K(need_flush_tail), KPC(this));
     }
     if (OB_FAIL(ret)) {
       truncate_lock_.unlock();
     }
-    LOG_DEBUG("generate flush data info end", KR(ret), K(fd_),
-        K(data_flush_context), K(info), K(flush_task), KPC(this));
   }
+
   return ret;
 }
 
@@ -2435,7 +2466,7 @@ int ObSharedNothingTmpFile::copy_flush_data_from_wbp_(
   return ret;
 }
 
-int ObSharedNothingTmpFile::generate_meta_flush_info(
+int ObSharedNothingTmpFile::generate_meta_flush_info_(
     ObTmpFileFlushTask &flush_task,
     ObTmpFileFlushInfo &info,
     ObTmpFileTreeFlushContext &meta_flush_context,
@@ -2443,9 +2474,7 @@ int ObSharedNothingTmpFile::generate_meta_flush_info(
     const bool need_flush_tail)
 {
   int ret = OB_SUCCESS;
-  info.reset();
 
-  common::TCRWLock::RLockGuard guard(meta_lock_);
   ObArray<InnerFlushInfo> &flush_infos_ = inner_flush_ctx_.meta_flush_infos_;
   int64_t origin_info_num = flush_infos_.size();
 
@@ -2497,8 +2526,31 @@ int ObSharedNothingTmpFile::generate_meta_flush_info(
     }
   }
 
-  LOG_INFO("generate flush meta info end", KR(ret), K(fd_), K(need_flush_tail),
+  LOG_INFO("generate_meta_flush_info_ end", KR(ret), K(fd_), K(need_flush_tail),
            K(inner_flush_ctx_), K(meta_flush_context), K(info), K(flush_task), KPC(this));
+  return ret;
+}
+
+int ObSharedNothingTmpFile::generate_meta_flush_info(
+    ObTmpFileFlushTask &flush_task,
+    ObTmpFileFlushInfo &info,
+    ObTmpFileTreeFlushContext &meta_flush_context,
+    const int64_t flush_sequence,
+    const bool need_flush_tail)
+{
+  int ret = OB_SUCCESS;
+  info.reset();
+
+  common::TCRWLock::RLockGuard guard(meta_lock_);
+  if (inner_flush_ctx_.need_to_wait_for_the_previous_meta_flush_req_to_complete_) {
+    ret = OB_ITER_END;
+    LOG_INFO("need_to_wait_for_the_previous_meta_flush_req_to_complete_", KR(ret), K(fd_), KPC(this));
+  } else if (OB_FAIL(generate_meta_flush_info_(flush_task, info,
+                                               meta_flush_context, flush_sequence, need_flush_tail))) {
+    STORAGE_LOG(WARN, "fail to generate_meta_flush_info_", KR(ret), K(flush_task),
+                K(info), K(meta_flush_context), K(flush_sequence), K(need_flush_tail), KPC(this));
+  }
+
   return ret;
 }
 

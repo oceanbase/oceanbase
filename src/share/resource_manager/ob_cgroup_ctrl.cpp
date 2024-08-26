@@ -303,8 +303,8 @@ int ObCgroupCtrl::get_group_path(
   char meta_tenant_path[PATH_BUFSIZE] = "";
   char group_name_path[PATH_BUFSIZE] = "";
   // gen root_cgroup_path
-  if (is_server_tenant(tenant_id)) {
-    // if tenant_id is 500, return "other"
+  if (!is_valid_tenant_id(tenant_id) || is_server_tenant(tenant_id)) {
+    // if tenant_id is invalid or 500, return "other"
     snprintf(root_cgroup_path, path_bufsize, "%s", other_cgroup_);
   } else {
     snprintf(root_cgroup_path, path_bufsize, "%s", root_cgroup_);

@@ -123,7 +123,10 @@ private:
 #ifdef OB_BUILD_AUDIT_SECURITY
   int check_audit_user(const uint64_t tenant_id, ObString &user_name);
 #endif
-
+  int load_audit_log_filter(const uint64_t tenant_id,
+                            ObString &user_name,
+                            ObString &client_ip,
+                            sql::ObSQLSessionInfo &session);
   int set_proxy_version(ObSMConnection &conn);
   int set_client_version(ObSMConnection &conn);
   int extract_service_name(ObSMConnection &conn, ObString &service_name, bool &failover_mode);

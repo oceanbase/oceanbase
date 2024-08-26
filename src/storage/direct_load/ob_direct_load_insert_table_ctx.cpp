@@ -178,39 +178,72 @@ int ObDirectLoadInsertTabletContext::open()
     lib::ObMutexGuard guard(mutex_);
     if (OB_FAIL(open_err_)) {
       LOG_WARN("open has error", KR(ret), K(origin_tablet_id_), K(tablet_id_));
-    } else if (!is_open_) {
-      ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
-      ObTabletDirectLoadInsertParam direct_load_param;
-      direct_load_param.is_replay_ = false;
-      direct_load_param.common_param_.direct_load_type_ =
-          param_->is_incremental_ ? ObDirectLoadType::DIRECT_LOAD_INCREMENTAL
-                                  : ObDirectLoadType::DIRECT_LOAD_LOAD_DATA;
-      direct_load_param.common_param_.data_format_version_ = param_->data_version_;
-      direct_load_param.common_param_.read_snapshot_ = param_->snapshot_version_;
-      direct_load_param.common_param_.ls_id_ = ls_id_;
-      direct_load_param.common_param_.tablet_id_ = tablet_id_;
-      direct_load_param.runtime_only_param_.exec_ctx_ = nullptr;
-      direct_load_param.runtime_only_param_.task_id_ = param_->ddl_task_id_;
-      direct_load_param.runtime_only_param_.table_id_ = param_->table_id_;
-      direct_load_param.runtime_only_param_.schema_version_ = param_->schema_version_;
-      direct_load_param.runtime_only_param_.task_cnt_ = 1; // default value.
-      direct_load_param.runtime_only_param_.parallel_ = param_->parallel_;
-      direct_load_param.runtime_only_param_.tx_desc_ = param_->trans_param_.tx_desc_;
-      direct_load_param.runtime_only_param_.trans_id_ = param_->trans_param_.tx_id_;
-      direct_load_param.runtime_only_param_.seq_no_ = param_->trans_param_.tx_seq_.cast_to_int();
-      if (OB_FAIL(sstable_insert_mgr->create_tablet_direct_load(
-          context_id_, context_id_ /*execution_id*/, direct_load_param))) {
-        LOG_WARN("create tablet manager failed", KR(ret), K(direct_load_param));
-      } else if (FALSE_IT(is_create_ = true)) {
-      } else if (OB_FAIL(sstable_insert_mgr->open_tablet_direct_load(
-          !param_->is_incremental_, ls_id_, tablet_id_, context_id_, start_scn_, handle_))) {
-        LOG_WARN("fail to open tablet direct load", KR(ret), K(tablet_id_));
-      } else {
-        is_open_ = true;
-      }
-      if (OB_FAIL(ret) && !param_->is_incremental_) {
-        open_err_ = ret; // avoid open repeatedly when failed
-      }
+    } else if (is_open_) {
+      // do nothing
+    } else if (OB_FAIL(create_tablet_direct_load())) {
+      LOG_WARN("fail to create tablet direct load", KR(ret));
+    } else if (OB_FAIL(open_tablet_direct_load())) {
+      LOG_WARN("fail to open tablet direct load", KR(ret));
+    }
+    if (OB_FAIL(ret) && !param_->is_incremental_) {
+      open_err_ = ret; // avoid open repeatedly when failed
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTabletContext::create_tablet_direct_load()
+{
+  int ret = OB_SUCCESS;
+  if (is_create_) {
+    // do nothing
+  } else {
+    ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
+    ObTabletDirectLoadInsertParam direct_load_param;
+    direct_load_param.is_replay_ = false;
+    direct_load_param.common_param_.direct_load_type_ =
+      param_->is_incremental_ ? ObDirectLoadType::DIRECT_LOAD_INCREMENTAL
+                              : ObDirectLoadType::DIRECT_LOAD_LOAD_DATA;
+    direct_load_param.common_param_.data_format_version_ = param_->data_version_;
+    direct_load_param.common_param_.read_snapshot_ = param_->snapshot_version_;
+    direct_load_param.common_param_.ls_id_ = ls_id_;
+    direct_load_param.common_param_.tablet_id_ = tablet_id_;
+    direct_load_param.runtime_only_param_.exec_ctx_ = nullptr;
+    direct_load_param.runtime_only_param_.task_id_ = param_->ddl_task_id_;
+    direct_load_param.runtime_only_param_.table_id_ = param_->table_id_;
+    direct_load_param.runtime_only_param_.schema_version_ = param_->schema_version_;
+    direct_load_param.runtime_only_param_.task_cnt_ = 1; // default value.
+    direct_load_param.runtime_only_param_.parallel_ = param_->parallel_;
+    direct_load_param.runtime_only_param_.tx_desc_ = param_->trans_param_.tx_desc_;
+    direct_load_param.runtime_only_param_.trans_id_ = param_->trans_param_.tx_id_;
+    direct_load_param.runtime_only_param_.seq_no_ = param_->trans_param_.tx_seq_.cast_to_int();
+    if (OB_FAIL(sstable_insert_mgr->create_tablet_direct_load(context_id_,
+                                                              context_id_ /*execution_id*/,
+                                                              direct_load_param))) {
+      LOG_WARN("create tablet manager failed", KR(ret), K(direct_load_param));
+    } else {
+      is_create_ = true;
+    }
+  }
+  return ret;
+}
+
+int ObDirectLoadInsertTabletContext::open_tablet_direct_load()
+{
+  int ret = OB_SUCCESS;
+  if (is_open_) {
+    // do nothing
+  } else {
+    ObTenantDirectLoadMgr *sstable_insert_mgr = MTL(ObTenantDirectLoadMgr *);
+    if (OB_FAIL(sstable_insert_mgr->open_tablet_direct_load(!param_->is_incremental_,
+                                                            ls_id_,
+                                                            tablet_id_,
+                                                            context_id_,
+                                                            start_scn_,
+                                                            handle_))) {
+      LOG_WARN("fail to open tablet direct load", KR(ret), K(tablet_id_));
+    } else {
+      is_open_ = true;
     }
   }
   return ret;
@@ -233,6 +266,7 @@ int ObDirectLoadInsertTabletContext::close()
       LOG_WARN("fail to close tablet direct load", KR(ret), K(ls_id_), K(tablet_id_));
     } else {
       is_open_ = false;
+      is_create_ = false;
       handle_.reset();
     }
   }

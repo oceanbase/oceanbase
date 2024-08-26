@@ -2643,6 +2643,7 @@ int ObTabletRestoreTask::check_need_copy_sstable_(
     LOG_WARN("failed to get table info", K(ret), KPC(tablet_restore_ctx_), K(table_key));
   } else if (!ObTabletRestoreAction::is_restore_replace_remote_sstable(restore_action)) {
     if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_sstable(*copy_table_info,
+                                                              tablet_restore_ctx_->is_leader_ /* is_restore */,
                                                               tablet_restore_ctx_->tablet_handle_,
                                                               need_copy))) {
       LOG_WARN("failed to check need copy sstable", K(ret), KPC(tablet_restore_ctx_), K(table_key));

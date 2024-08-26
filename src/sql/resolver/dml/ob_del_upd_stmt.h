@@ -480,6 +480,7 @@ public:
   int check_dml_source_from_join();
   bool is_pdml_disabled() const { return pdml_disabled_; }
   void set_pdml_disabled() { pdml_disabled_ = true; }
+  int get_modified_materialized_view_id(uint64_t &mview_id) const;
 protected:
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_exprs_;
   common::ObSEArray<ObRawExpr*, common::OB_PREALLOCATED_NUM, common::ModulePageAllocator, true> returning_into_exprs_;

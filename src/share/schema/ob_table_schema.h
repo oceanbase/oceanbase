@@ -1800,8 +1800,8 @@ public:
   }
   void set_mlog_tid(const uint64_t& table_id) { mlog_tid_ = table_id; }
   uint64_t get_mlog_tid() const { return mlog_tid_; }
-  inline ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
-  inline const ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
+  inline sql::ObLocalSessionVar &get_local_session_var() { return local_session_vars_; }
+  inline const sql::ObLocalSessionVar &get_local_session_var() const { return local_session_vars_; }
   DECLARE_VIRTUAL_TO_STRING;
 
 protected:
@@ -2004,7 +2004,7 @@ protected:
   CgIdHashArray *cg_id_hash_arr_;
   CgNameHashArray *cg_name_hash_arr_;
   uint64_t mlog_tid_;
-  ObLocalSessionVar local_session_vars_;
+  sql::ObLocalSessionVar local_session_vars_;
   // vector index
   common::ObString index_params_;
 };

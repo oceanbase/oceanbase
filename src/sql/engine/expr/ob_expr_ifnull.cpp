@@ -47,15 +47,13 @@ int ObExprIfNull::calc_result_type2(ObExprResType &type,
   } else if (OB_FAIL(ObExprPromotionUtil::get_nvl_type(type, type1, type2))) {
     LOG_WARN("failed to get nvl type", K(ret));
   } else if (ob_is_string_type(type.get_type()) || ob_is_json_tc(type.get_type())) {
-    ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
-    ObCollationType res_cs_type = CS_TYPE_INVALID;
-    if (OB_FAIL(ObCharset::aggregate_collation(type1.get_collation_level(), type1.get_collation_type(),
-                                          type2.get_collation_level(), type2.get_collation_type(),
-                                          res_cs_level, res_cs_type))) {
-      LOG_WARN("failed to calc collation", K(ret));
-    } else {
-      type.set_collation_level(res_cs_level);
-      type.set_collation_type(res_cs_type);
+    ObExprResTypes res_types;
+    if (OB_FAIL(res_types.push_back(type1))) {
+      LOG_WARN("fail to push back res type", K(ret));
+    } else if (OB_FAIL(res_types.push_back(type2))) {
+      LOG_WARN("fail to push back res type", K(ret));
+    } else if (OB_FAIL(aggregate_charsets_for_string_result(type, &res_types.at(0), 2, type_ctx))) {
+      LOG_WARN("failed to aggregate_charsets_for_comparison", K(ret));
     }
   } else if (ob_is_roaringbitmap_tc(type.get_type())) {
     type.set_collation_level(CS_LEVEL_IMPLICIT);

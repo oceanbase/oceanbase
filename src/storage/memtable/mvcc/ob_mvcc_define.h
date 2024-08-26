@@ -44,6 +44,8 @@ struct ObTxNodeArg
   int64_t memstore_version_;
   // seq_no_ is the sequence no of the executing sql
   transaction::ObTxSEQ seq_no_;
+  // parallel write epoch no
+  int64_t write_epoch_;
   // scn_ is thee log ts of the redo log
   share::SCN scn_;
   int64_t column_cnt_;
@@ -55,6 +57,7 @@ struct ObTxNodeArg
                K_(acc_checksum),
                K_(memstore_version),
                K_(seq_no),
+               K_(write_epoch),
                K_(scn),
                K_(column_cnt));
 
@@ -64,6 +67,7 @@ struct ObTxNodeArg
               const ObRowData *old_row,
               const int64_t memstore_version,
               const transaction::ObTxSEQ seq_no,
+              const int64_t write_epoch,
               const int64_t column_cnt)
     : tx_id_(tx_id),
     data_(data),
@@ -72,6 +76,7 @@ struct ObTxNodeArg
     acc_checksum_(0),
     memstore_version_(memstore_version),
     seq_no_(seq_no),
+    write_epoch_(write_epoch),
     scn_(share::SCN::max_scn()),
     column_cnt_(column_cnt) {}
 
@@ -92,6 +97,7 @@ struct ObTxNodeArg
     acc_checksum_(acc_checksum),
     memstore_version_(memstore_version),
     seq_no_(seq_no),
+    write_epoch_(0),
     scn_(scn),
     column_cnt_(column_cnt) {}
 
@@ -103,6 +109,7 @@ struct ObTxNodeArg
     acc_checksum_ = 0;
     memstore_version_ = 0;
     seq_no_.reset();
+    write_epoch_ = 0;
     scn_ = share::SCN::min_scn();
     column_cnt_ = 0;
   }

@@ -43,10 +43,12 @@ public:
                               ObIArray<ObAggFunRawExpr*> &new_aggr_items);
 
   static int add_aggr_item(common::ObIArray<ObAggFunRawExpr*> &new_aggr_items,
-                           ObAggFunRawExpr *&aggr_expr);
+                           ObAggFunRawExpr *&aggr_expr,
+                           const bool need_strict_check = true);
 
   static int add_win_expr(common::ObIArray<ObWinFunRawExpr*> &new_win_exprs,
-                          ObWinFunRawExpr *&win_expr);
+                          ObWinFunRawExpr *&win_expr,
+                          const bool need_strict_check = true);
 
 private:
   int extract_candi_aggr(ObDMLStmt *select_stmt,

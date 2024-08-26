@@ -1533,7 +1533,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b, t1.__substr5_17)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.a)], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b)], [column_conv(VARCHAR,
-      utf8mb4_general_ci,length:5,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b), 1, 5))])
+      utf8mb4_general_ci,length:5,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:5,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b),
+       1, 5)))])
   1 - output([__values.a], [__values.b]), filter(nil)
       values({1, 'abcd1e'})
 insert into t1 values ( 1, 'abcd1e');
@@ -1550,7 +1551,8 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b, t1.__substr5_17)})}]), 
       column_values([T_HIDDEN_PK], [column_conv(INT,PS:(11,0),NULL,__values.a)], [column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b)], [column_conv(VARCHAR,
-      utf8mb4_general_ci,length:5,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b), 1, 5))])
+      utf8mb4_general_ci,length:5,NULL,column_conv(VARCHAR,utf8mb4_general_ci,length:5,NULL,substr(column_conv(VARCHAR,utf8mb4_general_ci,length:10,NULL,__values.b),
+       1, 5)))])
   1 - output([__values.a], [__values.b]), filter(nil)
       values({2, 'abcd2e'})
 insert into t1 values ( 2, 'abcd2e');
@@ -1601,9 +1603,9 @@ Outputs & filters:
   0 - output(nil), filter(nil)
       table_columns([{t1: ({t1: (t1.__pk_increment, t1.a, t1.b, t1.__substr5_17)}), hash_distinct}]),
       update([t1.a=column_conv(INT,PS:(11,0),NULL,t2.a)])
-  1 - output([t1.__pk_increment], [t1.a], [t1.b], [substr(t1.b, 1, 5)], [t2.a]), filter(nil), rowset=16
+  1 - output([t1.__pk_increment], [t1.a], [t1.b], [column_conv(VARCHAR,utf8mb4_general_ci,length:5,NULL,substr(t1.b, 1, 5))], [t2.a]), filter(nil), rowset=16
       equal_conds([t2.b = t1.b]), other_conds(nil)
-  2 - output([t1.__pk_increment], [t1.b], [substr(t1.b, 1, 5)], [t1.a]), filter(nil), rowset=16
+  2 - output([t1.__pk_increment], [t1.b], [column_conv(VARCHAR,utf8mb4_general_ci,length:5,NULL,substr(t1.b, 1, 5))], [t1.a]), filter(nil), rowset=16
       access([t1.__pk_increment], [t1.b], [t1.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true

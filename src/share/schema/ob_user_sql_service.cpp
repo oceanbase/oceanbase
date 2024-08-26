@@ -1070,12 +1070,16 @@ int ObUserSqlService::gen_user_dml(
   }
   int64_t priv_others = 0;
   if (OB_SUCC(ret)) {
-    if ((user.get_priv_set() & OB_PRIV_EXECUTE) != 0) { priv_others |= 1; }
-    if ((user.get_priv_set() & OB_PRIV_ALTER_ROUTINE) != 0) { priv_others |= 2; }
-    if ((user.get_priv_set() & OB_PRIV_CREATE_ROUTINE) != 0) { priv_others |= 4; }
-    if ((user.get_priv_set() & OB_PRIV_CREATE_TABLESPACE) != 0) { priv_others |= 8; }
-    if ((user.get_priv_set() & OB_PRIV_SHUTDOWN) != 0) { priv_others |= 16; }
-    if ((user.get_priv_set() & OB_PRIV_RELOAD) != 0) { priv_others |= 32; }
+    if ((user.get_priv_set() & OB_PRIV_EXECUTE) != 0) { priv_others |= OB_PRIV_OTHERS_EXECUTE; }
+    if ((user.get_priv_set() & OB_PRIV_ALTER_ROUTINE) != 0) { priv_others |= OB_PRIV_OTHERS_ALTER_ROUTINE; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_ROUTINE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_ROUTINE; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_TABLESPACE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_TABLESPACE; }
+    if ((user.get_priv_set() & OB_PRIV_SHUTDOWN) != 0) { priv_others |= OB_PRIV_OTHERS_SHUTDOWN; }
+    if ((user.get_priv_set() & OB_PRIV_RELOAD) != 0) { priv_others |= OB_PRIV_OTHERS_RELOAD; }
+    if ((user.get_priv_set() & OB_PRIV_REFERENCES) != 0) { priv_others |= OB_PRIV_OTHERS_REFERENCES; }
+    if ((user.get_priv_set() & OB_PRIV_CREATE_ROLE) != 0) { priv_others |= OB_PRIV_OTHERS_CREATE_ROLE; }
+    if ((user.get_priv_set() & OB_PRIV_DROP_ROLE) != 0) { priv_others |= OB_PRIV_OTHERS_DROP_ROLE; }
+    if ((user.get_priv_set() & OB_PRIV_TRIGGER) != 0) { priv_others |= OB_PRIV_OTHERS_TRIGGER; }
   }
   if (OB_FAIL(ret)) {
   } else if (!sql::ObSQLUtils::is_data_version_ge_422_or_431(compat_version)) {

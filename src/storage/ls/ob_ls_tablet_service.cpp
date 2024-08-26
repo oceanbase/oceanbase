@@ -1682,7 +1682,9 @@ int ObLSTabletService::update_tablet_ha_data_status(
     } else if (OB_FAIL(tablet->tablet_meta_.ha_status_.set_data_status(data_status))) {
       LOG_WARN("failed to set data status", K(ret), KPC(tablet), K(data_status));
     } else {
-      if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle))) {
+      if (OB_FAIL(tablet->check_valid())) {
+        LOG_WARN("failed to check tablet valid", K(ret), K(data_status), KPC(tablet));
+      } else if (OB_FAIL(ObTabletPersister::persist_and_transform_tablet(*tablet, new_tablet_handle))) {
         LOG_WARN("fail to persist and transform tablet", K(ret), KPC(tablet), K(new_tablet_handle));
       } else if (FALSE_IT(time_guard.click("Persist"))) {
       } else if (FALSE_IT(disk_addr = new_tablet_handle.get_obj()->tablet_addr_)) {

@@ -913,6 +913,7 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           LOG_TRACE("can't find ls_info from ls_locality_cache", KR(ret), K(ls_id), K_(tenant_id));
+          continue;
         } else {
           LOG_WARN("fail to get ls_info from ls_locality_cache", KR(ret), K(ls_id), K_(tenant_id));
         }

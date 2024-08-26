@@ -1087,7 +1087,7 @@ public:
     ObThreadCondGuard guard(scheduler_sync_);
     return work_thread_num_;
   }
-  int64_t get_dag_limit() const { return dag_limit_; }
+  int64_t get_dag_limit(const ObDagPrio::ObDagPrioEnum dag_prio);
   bool is_empty()
   {
     bool bret = true;
@@ -1180,6 +1180,7 @@ private:
   int try_reclaim_threads();
   void destroy_all_workers();
   int set_thread_score(const int64_t priority, const int64_t concurrency);
+  int set_compaction_dag_limit(const int64_t new_val);
   void inner_get_suggestion_reason(const ObDagType::ObDagTypeEnum type, int64_t &reason);
   void dump_dag_status(const bool force_dump = false);
   void diagnose_for_suggestion();
@@ -1197,6 +1198,7 @@ private:
   int tg_id_;
   int64_t dag_cnt_;              // atomic value
   int64_t dag_limit_;            // only set in init/destroy
+  int64_t compaction_dag_limit_;
   int64_t check_period_;         // only set in init/destroy
   int64_t loop_waiting_dag_list_period_;  // only set in init/destroy
   int64_t total_worker_cnt_; // lock by scheduler_sync_

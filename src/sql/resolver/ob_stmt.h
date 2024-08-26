@@ -175,7 +175,8 @@ public:
   static inline bool is_show_stmt(stmt::StmtType stmt_type)
   {
     return (stmt_type >= stmt::T_SHOW_TABLES && stmt_type <= stmt::T_SHOW_GRANTS)
-           || stmt_type == stmt::T_SHOW_TRIGGERS;
+           || stmt_type == stmt::T_SHOW_TRIGGERS
+           || stmt_type == stmt::T_SHOW_CREATE_USER;
   }
 
   static inline bool is_dml_write_stmt(stmt::StmtType stmt_type)
