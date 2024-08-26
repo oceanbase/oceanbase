@@ -349,12 +349,18 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
     trans_param.ja_query_ref_ = static_cast<ObQueryRefRawExpr*>(child_expr);
     ObSelectStmt *subquery = trans_param.ja_query_ref_->get_ref_stmt();
     bool is_valid = false;
+    bool ja_query_ref_valid = false;
     bool hint_allowed = false;
     int64_t limit_value = 0;
     OPT_TRACE("try to pullup JA subquery", child_expr);
-    if (ObOptimizerUtil::find_item(no_rewrite_exprs_, child_expr)) {
+    // check ja query ref's exec param
+    if (OB_FAIL(check_ja_query_ref_param_validity(*trans_param.ja_query_ref_, ja_query_ref_valid))) {
+      LOG_WARN("failed to check ja query ref param validity", K(ret));
+    } else if (!ja_query_ref_valid) {
+      OPT_TRACE("exec param expr of ja query ref is not valid, can not transform");
+    } else if (ObOptimizerUtil::find_item(no_rewrite_exprs_, child_expr)) {
       LOG_TRACE("subquery in select expr and can use index");
-      OPT_TRACE("subquery in select expr and can use index, no need transfrom");
+      OPT_TRACE("subquery in select expr and can use index, no need transform");
     } else if (OB_FAIL(check_hint_allowed_unnest(stmt, *subquery,
                                                  ctx_->trans_list_loc_ + transform_params.count(),
                                                  pullup_strategy,
@@ -419,6 +425,29 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
           LOG_WARN("failed to gather transform params", K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformAggrSubquery::check_ja_query_ref_param_validity(ObQueryRefRawExpr &ja_query_ref, bool &is_valid) {
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  const ObIArray<ObExecParamRawExpr *> &params = ja_query_ref.get_exec_params();
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < params.count(); ++i) {
+    ObExecParamRawExpr *exec_param = params.at(i);
+    ObRawExpr *outer_expr = NULL;
+    if (OB_ISNULL(exec_param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec param expr is null", K(ret));
+    } else if (OB_ISNULL(outer_expr = exec_param->get_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("outer expr is null", K(ret));
+    } else if (outer_expr->has_flag(CNT_WINDOW_FUNC) ||
+               outer_expr->has_flag(CNT_ROWNUM) ||
+               outer_expr->has_flag(CNT_RAND_FUNC) ||
+               outer_expr->has_flag(CNT_STATE_FUNC)) {
+      is_valid = false;
     }
   }
   return ret;
