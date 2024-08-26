@@ -81,8 +81,7 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
       if (3 == param_num) {
         types_array[2].set_calc_type(ObVarcharType);
       }
-      OZ(ObExprOperator::aggregate_charsets_for_string_result_with_comparison(
-              type, types_array, param_num, type_ctx.get_coll_type()));
+      OZ(ObExprOperator::aggregate_charsets_for_string_result_with_comparison(type, types_array, 1, type_ctx));
       for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
         types_array[i].set_calc_meta(type);
       }

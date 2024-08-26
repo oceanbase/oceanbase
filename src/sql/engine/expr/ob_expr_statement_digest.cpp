@@ -126,7 +126,7 @@ int ObExprStatementDigest::calc_result_type1(ObExprResType &type,
   type.set_collation_level(CS_LEVEL_COERCIBLE);
   type.set_length(OB_MAX_SQL_ID_LENGTH);
   type1.set_calc_type(ObVarcharType);
-  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx.get_coll_type()));
+  OZ (aggregate_charsets_for_string_result(tmp_type, &type1, 1, type_ctx));
   OX (type1.set_calc_collation_type(tmp_type.get_collation_type()));
   OX (type1.set_calc_collation_level(tmp_type.get_collation_level()));
   return ret;
@@ -190,7 +190,7 @@ int ObExprStatementDigestText::calc_result_type1(ObExprResType &type,
   int ret = OB_SUCCESS;
   type.set_clob();
   type1.set_calc_type(ObVarcharType);
-  OZ (aggregate_charsets_for_string_result(type, &type1, 1, type_ctx.get_coll_type()));
+  OZ (aggregate_charsets_for_string_result(type, &type1, 1, type_ctx));
   OX (type1.set_calc_collation_type(type.get_collation_type()));
   OX (type1.set_calc_collation_level(type.get_collation_level()));
   type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);

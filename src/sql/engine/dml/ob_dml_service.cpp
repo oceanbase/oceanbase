@@ -1223,6 +1223,9 @@ int ObDMLService::init_dml_param(const ObDASDMLBaseCtDef &base_ctdef,
   if (base_rtdef.is_for_foreign_key_check_) {
     dml_param.write_flag_.set_check_row_locked();
   }
+  if (base_ctdef.is_update_uk_) {
+    dml_param.write_flag_.set_update_uk();
+  }
   return ret;
 }
 

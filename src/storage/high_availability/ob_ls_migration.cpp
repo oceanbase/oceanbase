@@ -3084,7 +3084,7 @@ int ObTabletMigrationTask::check_need_copy_sstable_(
     LOG_WARN("check need copy sstable get invlaid argument", K(ret), K(table_key));
   } else if (OB_FAIL(ctx_->ha_table_info_mgr_.get_table_info(copy_tablet_ctx_->tablet_id_, table_key, copy_table_info))) {
     LOG_WARN("failed to get table info", K(ret), KPC(copy_tablet_ctx_), K(table_key));
-  } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_sstable(*copy_table_info, copy_tablet_ctx_->tablet_handle_, need_copy))) {
+  } else if (OB_FAIL(ObStorageHATaskUtils::check_need_copy_sstable(*copy_table_info, false /* is_restore */, copy_tablet_ctx_->tablet_handle_, need_copy))) {
     LOG_WARN("failed to check need copy sstable", K(ret), KPC(copy_tablet_ctx_), K(table_key));
   }
   return ret;

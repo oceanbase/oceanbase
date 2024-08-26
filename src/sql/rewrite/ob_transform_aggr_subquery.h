@@ -131,6 +131,8 @@ private:
                               const bool is_select_item_expr,
                               ObIArray<TransformParam> &params);
 
+  int check_ja_query_ref_param_validity(ObQueryRefRawExpr &ja_query_ref, bool &is_valid);
+
   int check_aggr_first_validity(ObDMLStmt &stmt,
                                 ObQueryRefRawExpr &query_ref,
                                 const bool is_vector_assign,

@@ -194,6 +194,8 @@ int ObExprCoercibility::calc_result_type1(ObExprResType &type,
   type.set_int();
   type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].precision_);
   type.set_scale(ObAccuracy::DDL_DEFAULT_ACCURACY[ObIntType].scale_);
+  type.set_collation_type(CS_TYPE_BINARY);
+  type.set_collation_level(CS_LEVEL_NUMERIC);
   return ret;
 }
 

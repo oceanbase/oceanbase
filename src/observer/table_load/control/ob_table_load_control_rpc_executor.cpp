@@ -70,6 +70,7 @@ int ObDirectLoadControlPreBeginExecutor::process()
     param.load_mode_ = arg_.load_mode_;
     param.compressor_type_ = arg_.compressor_type_;
     param.online_sample_percent_ = arg_.online_sample_percent_;
+    param.load_level_ = ObDirectLoadLevel::TABLE;
     if (OB_FAIL(create_table_ctx(param, arg_.ddl_param_, table_ctx))) {
       LOG_WARN("fail to create table ctx", KR(ret));
     }

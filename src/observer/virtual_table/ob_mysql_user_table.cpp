@@ -128,7 +128,7 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(PROCESS);
                   EXIST_PRIV_CASE(FILE);
                   EXIST_PRIV_CASE(GRANT);
-                  NO_EXIST_PRIV_CASE(REFERENCES);
+                  EXIST_PRIV_CASE(REFERENCES);
                   EXIST_PRIV_CASE(INDEX);
                   EXIST_PRIV_CASE(ALTER);
                   EXIST_PRIV_CASE(SHOW_DB);
@@ -146,10 +146,10 @@ int ObMySQLUserTable::inner_get_next_row(common::ObNewRow *&row)
                   EXIST_PRIV_CASE(ALTER_ROUTINE);
                   EXIST_PRIV_CASE(CREATE_USER);
                   NO_EXIST_PRIV_CASE(EVENT);
-                  NO_EXIST_PRIV_CASE(TRIGGER);
+                  EXIST_PRIV_CASE(TRIGGER);
                   EXIST_PRIV_CASE(CREATE_TABLESPACE);
-                  NO_EXIST_PRIV_CASE(CREATE_ROLE);
-                  NO_EXIST_PRIV_CASE(DROP_ROLE);
+                  EXIST_PRIV_CASE(CREATE_ROLE);
+                  EXIST_PRIV_CASE(DROP_ROLE);
                   COLUMN_SET_WITH_TYPE(SSL_TYPE, varchar, ssl_type_str);
                   COLUMN_SET_WITH_TYPE(SSL_CIPHER, varchar, user_info->get_ssl_cipher());
                   COLUMN_SET_WITH_TYPE(X509_ISSUER, varchar, user_info->get_x509_issuer());

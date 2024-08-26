@@ -1930,7 +1930,7 @@ public:
            const ObSQLMode sql_mode, const ObTimeZoneInfo &tz_info,
            const common::ObString &local_nls_date, const common::ObString &local_nls_timestamp,
            const common::ObString &local_nls_timestamp_tz, const ObTimeZoneInfoWrap &tz_info_wrap,
-           const bool need_reorder_column_id);
+           const common::ObIArray<common::ObTabletID> &tablet_ids, const bool need_reorder_column_id);
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_table_id() const { return table_id_; }
   int64_t get_consumer_group_id() const { return consumer_group_id_; }
@@ -1944,6 +1944,7 @@ public:
   common::ObTimeZoneInfo get_tz_info() const { return tz_info_; }
   const common::ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
   const common::ObString *get_nls_formats() const { return nls_formats_; }
+  const common::ObIArray<common::ObTabletID> &get_tablet_ids() const { return tablet_ids_; }
   bool get_need_reorder_column_id() const { return need_reorder_column_id_; }
 private:
   uint64_t tenant_id_;
@@ -2324,7 +2325,7 @@ public:
   bool foreign_key_checks_;
   bool is_add_to_scheduler_;
   common::ObAddr inner_sql_exec_addr_;
-  ObLocalSessionVar local_session_var_;
+  sql::ObLocalSessionVar local_session_var_;
   ObMViewRefreshInfo mview_refresh_info_;
   AlterAlgorithm alter_algorithm_;
   bool alter_auto_partition_attr_;
@@ -2772,7 +2773,7 @@ public:
   ObSQLMode sql_mode_;
   common::ObAddr inner_sql_exec_addr_;
   common::ObArenaAllocator allocator_;
-  ObLocalSessionVar local_session_var_;
+  sql::ObLocalSessionVar local_session_var_;
   bool exist_all_column_group_;
   common::ObSEArray<ObIndexColumnGroupItem, 1/*each*/> index_cgs_;
   share::schema::ObVectorIndexRefreshInfo vidx_refresh_info_;

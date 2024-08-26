@@ -44,7 +44,7 @@ int ObExprElt::calc_result_typeN(
   } else {
     type.set_varchar();
     ret = aggregate_charsets_for_string_result(
-      type, types_stack + 1, param_num - 1, type_ctx.get_coll_type());
+      type, types_stack + 1, param_num - 1, type_ctx);
     if (OB_SUCC(ret)) {
       int32_t length = 0;
       for (int64_t i = 1; i < param_num; ++i) {

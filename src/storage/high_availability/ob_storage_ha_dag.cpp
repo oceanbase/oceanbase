@@ -733,6 +733,7 @@ int ObHATabletGroupMgr::get_tablet_group_ctx(
 /******************ObStorageHATaskUtils*********************/
 int ObStorageHATaskUtils::check_need_copy_sstable(
     const ObMigrationSSTableParam &param,
+    const bool &is_restore,
     ObTabletHandle &tablet_handle,
     bool &need_copy)
 {
@@ -742,7 +743,7 @@ int ObStorageHATaskUtils::check_need_copy_sstable(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check need copy sstable get invalid argument", K(ret), K(param));
   } else if (param.table_key_.is_major_sstable()) {
-    if (OB_FAIL(check_major_sstable_need_copy_(param, tablet_handle, need_copy))) {
+    if (OB_FAIL(check_major_sstable_need_copy_(param, is_restore, tablet_handle, need_copy))) {
       LOG_WARN("failed to check major sstable need copy", K(ret), K(param), K(tablet_handle));
     }
   } else if (param.table_key_.is_minor_sstable()) {
@@ -764,6 +765,7 @@ int ObStorageHATaskUtils::check_need_copy_sstable(
 
 int ObStorageHATaskUtils::check_major_sstable_need_copy_(
     const ObMigrationSSTableParam &param,
+    const bool &is_restore,
     ObTabletHandle &tablet_handle,
     bool &need_copy)
 {
@@ -793,6 +795,11 @@ int ObStorageHATaskUtils::check_major_sstable_need_copy_(
       LOG_WARN("failed to get sstable meta handle", K(ret));
     } else if (OB_FAIL(ObSSTableMetaChecker::check_sstable_meta(param, sst_meta_hdl.get_sstable_meta()))) {
       LOG_WARN("failed to check sstable meta", K(ret), K(param), K(sstable_wrapper));
+    } else if (!is_restore && sst_meta_hdl.get_sstable_meta().get_basic_meta().table_backup_flag_.has_backup()
+        && param.basic_meta_.table_backup_flag_.has_no_backup()) {
+      // when migration or rebuild, if dst sstable has backup macro and the corresponding src sstable has no backup macro, need copy
+      need_copy = true;
+      FLOG_INFO("dst sstable has backup macro and src sstable has no backup macro, need copy", K(need_copy), K(sst_meta_hdl), K(param.basic_meta_));
     } else {
       need_copy = false;
     }

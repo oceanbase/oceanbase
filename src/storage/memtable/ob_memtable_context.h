@@ -475,7 +475,7 @@ public: // callback
   void set_for_replay(const bool for_replay) { trans_mgr_.set_for_replay(for_replay); }
   void inc_pending_log_size(const int64_t size) { trans_mgr_.inc_pending_log_size(size); }
   void inc_flushed_log_size(const int64_t size) { trans_mgr_.inc_flushed_log_size(size); }
-
+  int64_t get_write_epoch() const { return trans_mgr_.get_write_epoch(); }
 public:
   // tx_status
   enum ObTxStatus {

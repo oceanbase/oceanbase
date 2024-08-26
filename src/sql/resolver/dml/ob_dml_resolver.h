@@ -487,7 +487,7 @@ protected:
                          const share::schema::ObTableSchema &table_schema,
                          TableItem &table_item);
   int resolve_sample_clause(const ParseNode *part_node,
-                            const uint64_t table_id);
+                            TableItem &table_item);
 
   int check_pivot_aggr_expr(ObRawExpr *expr) const;
   int resolve_transpose_table(const ParseNode *transpose_node, TableItem *&table_item);
@@ -1036,6 +1036,7 @@ private:
   int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
   int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
   int compute_values_table_row_count(ObValuesTableDef &table_def);
+  bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

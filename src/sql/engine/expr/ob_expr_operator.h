@@ -40,7 +40,7 @@
 #include "sql/engine/expr/ob_expr_extra_info_factory.h"
 #include "sql/engine/expr/ob_i_expr_extra_info.h"
 #include "lib/hash/ob_hashset.h"
-#include "share/schema/ob_schema_struct.h"
+#include "sql/session/ob_local_session_var.h"
 
 
 #define GET_EXPR_CTX(ClassType, ctx, id) static_cast<ClassType *>((ctx).get_expr_op_ctx(id))
@@ -290,15 +290,15 @@ protected:
 
 #define DECLARE_SET_LOCAL_SESSION_VARS \
   virtual int set_local_session_vars(ObRawExpr *raw_expr, \
-                                    const share::schema::ObLocalSessionVar *local_session_vars, \
+                                    const ObLocalSessionVar *local_session_vars, \
                                     const ObBasicSessionInfo *session, \
-                                    share::schema::ObLocalSessionVar &local_vars)
+                                    ObLocalSessionVar &local_vars)
 
 #define DEF_SET_LOCAL_SESSION_VARS(TypeName, raw_expr) \
   int TypeName::set_local_session_vars(ObRawExpr *raw_expr, \
-                                      const share::schema::ObLocalSessionVar *local_session_vars, \
+                                      const ObLocalSessionVar *local_session_vars, \
                                       const ObBasicSessionInfo *session, \
-                                      share::schema::ObLocalSessionVar &local_vars)
+                                      ObLocalSessionVar &local_vars)
 
 class ObExprOperator : public common::ObDLinkBase<ObExprOperator>
 {
@@ -515,29 +515,36 @@ public:
     common::ObObjMeta &type,
     const common::ObObjMeta *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
   static int aggregate_charsets_for_comparison(
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
 
   /*
     Aggregate arguments for string result, e.g: CONCAT(a,b)
     - convert to @@character_set_connection if all arguments are numbers
     - allow DERIVATION_NONE
   */
+  static int enable_old_charset_aggregation(const ObBasicSessionInfo *session, uint32_t &flags);
   static int aggregate_charsets_for_string_result(
     common::ObObjMeta &type,
     const common::ObObjMeta *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
   static int aggregate_charsets_for_string_result(
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
-
+    common::ObExprTypeCtx &type_ctx);
+  static int aggregate_two_collation(const ObCollationLevel level1,
+                                    const ObCollationType type1,
+                                    const ObCollationLevel level2,
+                                    const ObCollationType type2,
+                                    ObCollationLevel &res_level,
+                                    ObCollationType &res_type,
+                                    uint32_t flags);
   static int aggregate_max_length_for_string_result(ObExprResType &type,
                                              const ObExprResType *types,
                                              int64_t param_num,
@@ -558,20 +565,19 @@ public:
     common::ObObjMeta &type,
     const common::ObObjMeta *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
   static int aggregate_charsets_for_string_result_with_comparison(
     common::ObObjMeta &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type);
+    common::ObExprTypeCtx &type_ctx);
   //skip_null for expr COALESCE
   static int aggregate_result_type_for_merge(
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type,
     bool is_oracle_mode,
-    const common::ObLengthSemantics default_length_semantics,
+    common::ObExprTypeCtx &type_ctx,
     bool need_merge_type = TRUE,
     bool skip_null = FALSE,
     bool is_called_in_sql = TRUE);
@@ -579,9 +585,8 @@ public:
     ObExprResType &type,
     const ObExprResType *types,
     int64_t param_num,
-    const common::ObCollationType conn_coll_type,
     bool is_oracle_mode,
-    const common::ObLengthSemantics default_length_semantics,
+    common::ObExprTypeCtx &type_ctx,
     bool need_merge_type = TRUE,
     bool skip_null = FALSE,
     bool is_called_in_sql = TRUE);
@@ -656,7 +661,7 @@ public:
   int calc_cmp_type2(ObExprResType &type,
                     const ObExprResType &type1,
                     const ObExprResType &type2,
-                    const common::ObCollationType coll_type,
+                    common::ObExprTypeCtx &type_ctx,
                     const bool left_is_const = false,
                     const bool right_is_const = false) const;
 
@@ -664,7 +669,7 @@ public:
                      const ObExprResType &type1,
                      const ObExprResType &type2,
                      const ObExprResType &type3,
-                     const common::ObCollationType coll_type) const;
+                     common::ObExprTypeCtx &type_ctx) const;
   int calc_trig_function_result_type1(ObExprResType &type,
                                       ObExprResType &type1,
                                       common::ObExprTypeCtx &type_ctx) const;
@@ -678,7 +683,7 @@ public:
   static int check_first_param_not_time(const common::ObIArray<ObRawExpr *> &exprs, bool &not_time);
   //Extract the info of sys vars which need to be used in resolving or excuting into local_sys_vars.
   DECLARE_SET_LOCAL_SESSION_VARS;
-  static int add_local_var_to_expr(share::ObSysVarClassType var_type, const share::schema::ObLocalSessionVar *local_session_var, const ObBasicSessionInfo *session, share::schema::ObLocalSessionVar &local_vars);
+  static int add_local_var_to_expr(share::ObSysVarClassType var_type, const ObLocalSessionVar *local_session_var, const ObBasicSessionInfo *session, ObLocalSessionVar &local_vars);
 protected:
   ObExpr *get_rt_expr(const ObRawExpr &raw_expr) const;
 
@@ -715,9 +720,6 @@ private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprOperator);
   // types and constants
-
-  static const uint32_t OB_COLL_DISALLOW_NONE = 1;
-  static const uint32_t OB_COLL_ALLOW_NUMERIC_CONV = 2;
 
 protected:
   static int aggregate_collations(
@@ -1231,7 +1233,7 @@ public:
                            ObExprResType *types,
                            const int64_t param_num,
                            const bool has_lower,
-                           const sql::ObSQLSessionInfo &my_session);
+                          common::ObExprTypeCtx &type_ctx);
 
   // vector comparison, e.g. (a,b,c) > (1,2,3)
   virtual int calc_result_typeN(ObExprResType &type,
@@ -2071,8 +2073,7 @@ protected:
   int calc_result_meta_for_comparison(ObExprResType &type,
                                       ObExprResType *types,
                                       int64_t param_num,
-                                      const common::ObCollationType coll_type,
-                                      const common::ObLengthSemantics default_length_semantics,
+                                      common::ObExprTypeCtx &type_ctx,
                                       const bool enable_decimal_int) const;
 
 protected:

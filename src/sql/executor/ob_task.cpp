@@ -307,15 +307,21 @@ OB_DEF_SERIALIZE(ObRemoteTask)
   int ret = OB_SUCCESS;
   int64_t tenant_id = OB_INVALID_ID;
   ParamStore *ps_params = nullptr;
+  ParamStore empty_param_store;
   //for serialize ObObjParam' param_meta_
   int64_t param_meta_count = 0;
   if (OB_ISNULL(remote_sql_info_)
       || OB_ISNULL(session_info_)
-      || OB_ISNULL(ps_params = remote_sql_info_->ps_params_)) {
+      || OB_ISNULL(remote_sql_info_->ps_params_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("remote task not init", K(ret), K_(remote_sql_info), K_(session_info), K(ps_params));
   } else {
     tenant_id = session_info_->get_effective_tenant_id();
+    if (!remote_sql_info_->use_ps_) {
+      ps_params = &empty_param_store;
+    } else {
+      ps_params = remote_sql_info_->ps_params_;
+    }
     param_meta_count = ps_params->count();
   }
   LST_DO_CODE(OB_UNIS_ENCODE,
@@ -348,13 +354,19 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
 {
   int64_t len = 0;
   ParamStore *ps_params = nullptr;
+  ParamStore empty_param_store;
   int64_t param_meta_count = 0;
   if (OB_ISNULL(remote_sql_info_)
       || OB_ISNULL(session_info_)
-      || OB_ISNULL(ps_params = remote_sql_info_->ps_params_)) {
+      || OB_ISNULL(remote_sql_info_->ps_params_)) {
     LOG_WARN_RET(OB_NOT_INIT, "remote task not init", K_(remote_sql_info), K_(session_info), K(ps_params));
   } else {
     int64_t tenant_id = session_info_->get_effective_tenant_id();
+    if (!remote_sql_info_->use_ps_) {
+      ps_params = &empty_param_store;
+    } else {
+      ps_params = remote_sql_info_->ps_params_;
+    }
     LST_DO_CODE(OB_UNIS_ADD_LEN,
                 tenant_schema_version_,
                 sys_schema_version_,

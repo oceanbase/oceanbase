@@ -253,6 +253,7 @@ public:
   int acquire_callback_list(const bool new_epoch);
   void revert_callback_list();
   int get_tx_seq_replay_idx(const transaction::ObTxSEQ seq) const;
+  int64_t get_write_epoch() const { return write_epoch_; }
   common::SpinRWLock& get_rwlock() { return rwlock_; }
 private:
   void wakeup_waiting_txns_();

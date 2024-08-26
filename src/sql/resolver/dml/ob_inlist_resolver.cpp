@@ -334,8 +334,6 @@ int ObInListResolver::resolve_access_param_values_table(const ParseNode &in_list
     LOG_WARN("got unexpected NULL ptr", K(ret));
   } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
     LOG_WARN("fail to get collation_connection", K(ret));
-  } else {
-    length_semantics = session_info->get_actual_nls_length_semantics();
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < row_cnt; i++) {
@@ -360,13 +358,14 @@ int ObInListResolver::resolve_access_param_values_table(const ParseNode &in_list
         ObExprResType new_res_type;
         ObExprVersion dummy_op(*allocator);
         ObSEArray<ObExprResType, 2> tmp_res_types;
+        ObExprTypeCtx type_ctx;
+        ObSQLUtils::init_type_ctx(session_info, type_ctx);
         if (OB_FAIL(tmp_res_types.push_back(table_def.column_types_.at(j)))) {
           LOG_WARN("failed to push back res type", K(ret));
         } else if (OB_FAIL(tmp_res_types.push_back(res_type))) {
           LOG_WARN("failed to push back res type", K(ret));
         } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
-                           &tmp_res_types.at(0), 2, coll_type, lib::is_oracle_mode(), length_semantics,
-                           session_info))) {
+                           &tmp_res_types.at(0), 2, lib::is_oracle_mode(), type_ctx))) {
           LOG_WARN("failed to aggregate result type for merge", K(ret));
         } else {
           table_def.column_types_.at(j) = new_res_type;
@@ -462,13 +461,15 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
           ObExprResType new_res_type;
           ObExprVersion dummy_op(*allocator);
           ObSEArray<ObExprResType, 2> tmp_res_types;
+          ObExprTypeCtx type_ctx;
+          ObSQLUtils::init_type_ctx(session_info, type_ctx);
           if (OB_FAIL(tmp_res_types.push_back(table_def.column_types_.at(j)))) {
             LOG_WARN("failed to push back res type", K(ret));
           } else if (OB_FAIL(tmp_res_types.push_back(res_type))) {
             LOG_WARN("failed to push back res type", K(ret));
           } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
-                            &tmp_res_types.at(0), 2, coll_type, is_oracle_mode, length_semantics,
-                            session_info))) {
+                            &tmp_res_types.at(0), 2, is_oracle_mode,
+                            type_ctx))) {
             LOG_WARN("failed to aggregate result type for merge", K(ret));
           } else {
             table_def.column_types_.at(j) = new_res_type;

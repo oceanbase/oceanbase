@@ -596,13 +596,21 @@ int ObDbmsCursorInfo::parse(const ObString &sql_stmt, ObSQLSessionInfo &session)
       session.get_warnings_buffer().set_error_line_column(0, error_offset);
     }
     OZ (ObResolverUtils::resolve_stmt_type(parse_result, stmt_type_), sql_stmt);
-    // cann't execute multi select stmt
-    if (OB_SUCC(ret)
-          && !parser.is_pl_stmt(sql_stmt)
-          && !parser.is_single_stmt(sql_stmt)) {
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (!parser.is_pl_stmt(sql_stmt)
+                 && !parser.is_single_stmt(sql_stmt)) {
+      // cann't execute multi select stmt
       ret = OB_ERR_CMD_NOT_PROPERLY_ENDED;
       LOG_WARN("execute immdeidate only support one stmt", K(ret));
+    } else if (0 < parse_result.question_mark_ctx_.count_
+                &&!parse_result.question_mark_ctx_.by_name_) {
+      ret = OB_ERR_INVALID_CHARACTER;
+      LOG_WARN("use '?' in DBMS_SQL.PARSE is not supported",
+               K(ret), K(sql_stmt));
     }
+
     OX (param_names = parse_result.question_mark_ctx_.name_);
     OX (param_count = parse_result.question_mark_ctx_.count_);
     // 取出所有绑定变量名

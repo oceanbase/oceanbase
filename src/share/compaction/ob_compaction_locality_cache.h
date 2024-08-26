@@ -54,19 +54,23 @@ public:
   int init();
   void destroy();
   void reuse();
+  int update(const ObLSID &ls_id);
+  int update_with_ls_info(const ObLSInfo &ls_info);
+  int check_is_cs_replica(const ObLSReplicaUniItem &ls_item, bool &is_cs_replica) const;
+  int check_can_skip(const ObLSReplicaUniItem &ls_item, bool &can_skip) const;
+  TO_STRING_KV(K_(is_inited), K_(ls_id_set), K_(ls_replica_set), K_(ls_infos));
+private:
   int check_contains_ls(const ObLSID &ls_id, bool &contained) const;
   int mark_ls_finished(const ObLSID &ls_id);
   int add_cs_replica(const ObLSReplicaUniItem &ls_item);
-  int update(const ObLSID &ls_id, const ObAddr &server);
-  int check_is_cs_replica(const ObLSReplicaUniItem &ls_item, bool &is_cs_replica) const;
-  TO_STRING_KV(K_(is_inited), K_(ls_id_set), K_(ls_replica_set));
 private:
   const static int64_t BUCKET_NUM_OF_LS_ID_SET = 15;
   const static int64_t BUCKET_NUM_OF_LS_REPLICA_SET = 31;
 private:
   bool is_inited_;
-  hash::ObHashSet<ObLSID, hash::NoPthreadDefendMode> ls_id_set_; // pre-wamred ls id, unused
+  hash::ObHashSet<ObLSID, hash::NoPthreadDefendMode> ls_id_set_; // record looped ls id
   hash::ObHashSet<ObLSReplicaUniItem, hash::NoPthreadDefendMode> ls_replica_set_; // cs-prelica ls
+  common::ObSEArray<ObLSInfo, 4> ls_infos_; // used for check member list and learner list
 };
 
 class ObCompactionLocalityCache
@@ -81,7 +85,6 @@ public:
   int get_ls_info(const share::ObLSID &ls_id, share::ObLSInfo &ls_info);
   const share::ObLSColumnReplicaCache& get_cs_replica_cache() const { return ls_cs_replica_cache_; }
   TO_STRING_KV(K_(is_inited), K_(tenant_id));
-
 private:
   const int64_t CHECK_LS_LOCALITY_INTERVAL = 5 * 60 * 1000 * 1000L; // 5 mins
   int get_zone_list_from_inner_table(ObIArray<common::ObZone> &zone_list);

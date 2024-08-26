@@ -46,6 +46,9 @@ int ObTriggerResolver::resolve(const ParseNode &parse_tree)
     ObDropTriggerStmt *stmt = create_stmt<ObDropTriggerStmt>();
     OV (OB_NOT_NULL(stmt), OB_ALLOCATE_MEMORY_FAILED);
     OZ (resolve_drop_trigger_stmt(parse_tree, stmt->get_trigger_arg()));
+    if (lib::is_mysql_mode()) {
+      OZ (get_drop_trigger_stmt_table_name(stmt));
+    }
     break;
   }
   case T_TG_ALTER: {
@@ -57,6 +60,75 @@ int ObTriggerResolver::resolve(const ParseNode &parse_tree)
   default:
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid stmt type", K(ret), K(stmt_type));
+  }
+  return ret;
+}
+
+int ObTriggerResolver::get_drop_trigger_stmt_table_name(ObDropTriggerStmt *stmt)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("drop trigger stmt is NULL", K(ret));
+  } else {
+    const obrpc::ObDropTriggerArg &arg = stmt->get_trigger_arg();
+    uint64_t tenant_id = arg.tenant_id_;
+    const ObString &trigger_database = arg.trigger_database_;
+    const ObString &trigger_name = arg.trigger_name_;
+    ObSchemaGetterGuard *schema_guard = NULL;
+    const ObDatabaseSchema *db_schema = NULL;
+    uint64_t trigger_database_id = OB_INVALID_ID;
+    const ObTriggerInfo *trigger_info = NULL;
+    const ObTableSchema *table = NULL;
+
+    CK (OB_NOT_NULL(schema_checker_));
+    CK (OB_NOT_NULL(schema_checker_->get_schema_guard()));
+    OX (schema_guard = schema_checker_->get_schema_guard());
+    if (OB_SUCC(ret)) {
+      if(OB_FAIL(schema_guard->get_database_schema(tenant_id, trigger_database, db_schema))) {
+        LOG_WARN("get database schema failed", K(ret));
+      } else if (NULL == db_schema) {
+        ret = OB_ERR_BAD_DATABASE;
+        LOG_USER_ERROR(OB_ERR_BAD_DATABASE, trigger_database.length(), trigger_database.ptr());
+      } else if (db_schema->is_or_in_recyclebin()) {
+        ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+        LOG_WARN("Can't not operate db in recyclebin",
+                 K(tenant_id), K(trigger_database), K(trigger_database_id), K(*db_schema), K(ret));
+      } else if (OB_INVALID_ID == (trigger_database_id = db_schema->get_database_id())) {
+        ret = OB_ERR_BAD_DATABASE;
+        LOG_WARN("database id is invalid",
+                 K(tenant_id), K(trigger_database), K(trigger_database_id), K(*db_schema), K(ret));
+      } else if (OB_FAIL(schema_guard->get_trigger_info(tenant_id, trigger_database_id,
+                                                       trigger_name, trigger_info))) {
+        LOG_WARN("get trigger info failed", K(ret), K(trigger_database), K(trigger_name));
+      } else if (OB_ISNULL(trigger_info)) {
+        ret = OB_ERR_TRIGGER_NOT_EXIST;
+      } else if (trigger_info->is_in_recyclebin()) {
+        ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
+        LOG_WARN("trigger is in recyclebin", K(ret),
+                 K(trigger_info->get_trigger_id()), K(trigger_info->get_trigger_name()));
+      } else if (OB_FAIL(schema_guard->get_table_schema(tenant_id,
+                                                  trigger_info->get_base_object_id(),
+                                                  table))) {
+       LOG_WARN("Failed to get table schema", K(tenant_id),
+                   K(trigger_info->get_base_object_id()), K(ret));
+      } else if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Table schema should not be NULL", K(ret));
+      } else {
+        stmt->trigger_table_name_ = table->get_table_name_str();
+      }
+      if (OB_ERR_TRIGGER_NOT_EXIST == ret || OB_ERR_BAD_DATABASE == ret) {
+        ret = OB_ERR_TRIGGER_NOT_EXIST;
+        stmt->is_exist = false;
+        if (arg.if_exist_) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_MYSQL_USER_ERROR(OB_ERR_TRIGGER_NOT_EXIST);
+        }
+        LOG_WARN("trigger not exist", K(arg.trigger_database_), K(arg.trigger_name_), K(ret));
+      }
+    }
   }
   return ret;
 }

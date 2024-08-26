@@ -65,6 +65,7 @@ private:
                                            bool &is_multi_part_dml,
                                            ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs);
   int check_update_insert_sharding_basic(ObLogicalOperator &top,
+                                         uint64_t table_id,
                                          ObShardingInfo *insert_sharding,
                                          ObShardingInfo *update_sharding,
                                          bool &is_basic,
@@ -72,6 +73,7 @@ private:
   bool match_same_partition(const ObShardingInfo &l_sharding_info,
                             const ObShardingInfo &r_sharding_info);
   int generate_equal_constraint(ObLogicalOperator &top,
+                                uint64_t table_id,
                                 ObShardingInfo &insert_sharding,
                                 bool &can_gen_cons,
                                 ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs);

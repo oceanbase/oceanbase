@@ -281,7 +281,12 @@ int ObTmpFileFlushManager::flush(ObSpLinkQueue &flushing_queue,
         } while (OB_SUCC(ret) && FlushState::TFFT_WAIT != next_state);
 
         STORAGE_LOG(DEBUG, "drive flush task finished", KR(ret), K(fast_flush_meta), KPC(flush_task), K(flush_ctx_));
-        flush_ctx_.update_ctx_by_flush_task(*flush_task);
+        bool recorded_as_prepare_finished = false;
+        flush_ctx_.update_actual_flush_size(*flush_task);
+        flush_ctx_.try_update_prepare_finished_cnt(*flush_task, recorded_as_prepare_finished);
+        if (recorded_as_prepare_finished) {
+          flush_task->mark_recorded_as_prepare_finished();
+        }
         if (ObTmpFileFlushTask::TFFT_FILL_BLOCK_BUF < flush_task->get_state()) {
           flush_ctx_.record_flush_task(flush_task->get_data_length()); // maintain statistics
         }
@@ -707,9 +712,21 @@ int ObTmpFileFlushManager::retry(ObTmpFileFlushTask &flush_task)
     }
   } while (OB_SUCC(ret) && FlushState::TFFT_WAIT != next_state);
 
-  flush_ctx_.update_ctx_by_flush_task(flush_task);
-  if (flush_ctx_.can_clear_flush_ctx()) {
-    flush_ctx_.clear_flush_ctx(flush_priority_mgr_);
+  if (!flush_task.get_recorded_as_prepare_finished()) {
+    if (flush_task.get_flush_seq() != flush_ctx_.get_flush_sequence()) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(ERROR, "flush_seq in flush_task is not equal to flush_seq in flush_ctx",
+          KR(ret), K(flush_task), K(flush_ctx_));
+    } else {
+      bool recorded_as_prepare_finished = false;
+      flush_ctx_.try_update_prepare_finished_cnt(flush_task, recorded_as_prepare_finished);
+      if (recorded_as_prepare_finished) {
+        flush_task.mark_recorded_as_prepare_finished();
+        if (flush_ctx_.can_clear_flush_ctx()) {
+          flush_ctx_.clear_flush_ctx(flush_priority_mgr_);
+        }
+      }
+    }
   }
   return ret;
 }
@@ -948,15 +965,17 @@ int ObTmpFileFlushManager::update_meta_data_after_flush_for_files_(ObTmpFileFlus
       } else if (OB_FAIL(file->update_meta_after_flush(flush_info.batch_flush_idx_, is_meta, reset_ctx))){
         STORAGE_LOG(WARN, "fail to update meta data", KR(ret), K(is_meta), K(flush_info));
       } else {
-        int tmp_ret = OB_SUCCESS;
-        // reset data/meta flush ctx after file update meta complete to prevent
-        // flush use stale flushed_page_id to copy data after the page is evicted.
-        // use empty ctx here because we have inserted ctx for every file when flushing begins.
-        ResetFlushCtxOp reset_op(is_meta);
-        ObTmpFileSingleFlushContext empty_ctx;
-        if (flush_task.get_flush_seq() == flush_ctx_.get_flush_sequence() &&
-            OB_TMP_FAIL(flush_ctx_.get_file_ctx_hash().set_or_update(file->get_fd(), empty_ctx, reset_op))) {
-          STORAGE_LOG(WARN, "fail to clean file ctx from hash", KR(tmp_ret), K(file));
+        if (reset_ctx) {
+          int tmp_ret = OB_SUCCESS;
+          // reset data/meta flush ctx after file update meta complete to prevent
+          // flush use stale flushed_page_id to copy data after the page is evicted.
+          // use empty ctx here because we have inserted ctx for every file when flushing begins.
+          ResetFlushCtxOp reset_op(is_meta);
+          ObTmpFileSingleFlushContext empty_ctx;
+          if (flush_task.get_flush_seq() == flush_ctx_.get_flush_sequence() &&
+              OB_TMP_FAIL(flush_ctx_.get_file_ctx_hash().set_or_update(file->get_fd(), empty_ctx, reset_op))) {
+            STORAGE_LOG(ERROR, "fail to clean file ctx from hash", KR(tmp_ret), K(file));
+          }
         }
         flush_info.update_meta_data_done_ = true;
       }

@@ -962,6 +962,7 @@ static ObCollationHandler ob_collation_cs_handler =
 };
 
 static ObCharsetHandler ob_charset_gb18030_handler = {
+    NULL,
     ob_ismbchar_gb18030,
     ob_mbcharlen_gb18030,
     ob_numchars_mb,
@@ -1005,8 +1006,8 @@ ObCharsetInfo ob_charset_gb18030_chinese_ci = {
     to_upper_gb18030,                                /* UPPER         */
     sort_order_gb18030_ci,                              /* sort          */
     NULL,                                            /* uca           */
-    // NULL,                                            /* tab_to_uni    */
-    // NULL,                                            /* tab_from_uni  */
+    NULL,                                            /* tab_to_uni    */
+    NULL,                                            /* tab_from_uni  */
     &ob_caseinfo_gb18030,                            /* caseinfo      */
     NULL,                                            /* state_map     */
     NULL,                                            /* ident_map     */
@@ -1041,8 +1042,8 @@ ObCharsetInfo ob_charset_gb18030_chinese_cs = {
     to_upper_gb18030,                                /* UPPER         */
     sort_order_gb18030,                              /* sort          */
     NULL,                                            /* uca           */
-    // NULL,                                            /* tab_to_uni    */
-    // NULL,                                            /* tab_from_uni  */
+    NULL,                                            /* tab_to_uni    */
+    NULL,                                            /* tab_from_uni  */
     &ob_caseinfo_gb18030,                            /* caseinfo      */
     NULL,                                            /* state_map     */
     NULL,                                            /* ident_map     */
@@ -1077,8 +1078,8 @@ ObCharsetInfo ob_charset_gb18030_bin = {
     to_upper_gb18030,
     NULL,
     NULL,
-
-
+    NULL,
+    NULL,
     &ob_caseinfo_gb18030,
     NULL,
     NULL,
@@ -1599,6 +1600,7 @@ static ObCollationHandler ob_collation_2022_stroke_cs_handler =
 
 static ObCharsetHandler ob_charset_gb18030_2022_handler =
 {
+  NULL,
   ob_ismbchar_gb18030,
   ob_mbcharlen_gb18030,
   ob_numchars_mb,
@@ -1637,6 +1639,8 @@ ObCharsetInfo ob_charset_gb18030_2022_bin =
   to_upper_gb18030,               /* UPPER         */
   NULL,                           /* sort order    */
   NULL,                           /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,           /* caseinfo      */
   NULL,                           /* state_map     */
   NULL,                           /* ident_map     */
@@ -1673,6 +1677,8 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_ci =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030_ci,                           /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1709,6 +1715,8 @@ ObCharsetInfo ob_charset_gb18030_2022_pinyin_cs =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030,                              /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1745,6 +1753,8 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_ci =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030_ci,                           /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1781,6 +1791,8 @@ ObCharsetInfo ob_charset_gb18030_2022_radical_cs =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030,                              /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1817,6 +1829,8 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_ci =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030_ci,                           /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */
@@ -1853,6 +1867,8 @@ ObCharsetInfo ob_charset_gb18030_2022_stroke_cs =
   to_upper_gb18030,                                /* UPPER         */
   sort_order_gb18030,                              /* sort order    */
   NULL,                                            /* uca           */
+  NULL,
+  NULL,
   &ob_caseinfo_gb18030,                            /* caseinfo      */
   NULL,                                            /* state_map     */
   NULL,                                            /* ident_map     */

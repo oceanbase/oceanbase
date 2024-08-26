@@ -38,7 +38,6 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
                                       ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  const ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session()) ? type_ctx.get_session()->get_actual_nls_length_semantics() : LS_BYTE);
   if (OB_ISNULL(types)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null types", K(ret));
@@ -49,9 +48,8 @@ int ObExprCoalesce::calc_result_typeN(ObExprResType &type,
                        type,
                        types,
                        param_num,
-                       type_ctx.get_coll_type(),
                        lib::is_oracle_mode(),
-                       default_length_semantics,
+                       type_ctx,
                        true,
                        true,
                        is_called_in_sql_))) {

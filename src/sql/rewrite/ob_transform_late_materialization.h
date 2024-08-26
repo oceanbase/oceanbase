@@ -132,7 +132,8 @@ private:
                                     ObCostBasedLateMaterializationCtx &ctx,
                                     bool &is_valid);
   int get_index_of_base_stmt_path(ObLogicalOperator* top, ObCostBasedLateMaterializationCtx &ctx);
-  int evaluate_stmt_cost(ObDMLStmt *&stmt,
+  int evaluate_stmt_cost(ObIArray<ObParentDMLStmt> &parent_stmts,
+                         ObDMLStmt *&stmt,
                          bool is_trans_stmt,
                          double &plan_cost,
                          bool &is_expected,

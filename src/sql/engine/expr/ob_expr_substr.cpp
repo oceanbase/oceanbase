@@ -254,19 +254,20 @@ int ObExprSubstr::calc_result_typeN(ObExprResType &type,
         type.set_varchar();
       }
     }
-    OZ(aggregate_charsets_for_string_result(type, types_array, 1, type_ctx.get_coll_type()));
+    OZ(aggregate_charsets_for_string_result(type, types_array, 1, type_ctx));
     if (OB_SUCC(ret)) {
       if (is_mysql_mode() && (types_array[0].is_text() || types_array[0].is_blob())) {
         // do nothing
       } else {
         types_array[0].set_calc_type(ObVarcharType);
+        types_array[0].set_calc_collation_level(type.get_collation_level());
+        types_array[0].set_calc_collation_type(type.get_collation_type());
       }
-      types_array[0].set_calc_collation_level(type.get_calc_collation_level());
-      types_array[0].set_calc_collation_type(type.get_collation_type());
     }
     if (OB_SUCC(ret)) {
       for (int i = 1; i < param_num; i++) {
         types_array[i].set_calc_type(ObIntType);
+        types_array[i].set_calc_collation_level(type.get_collation_level());
       }
     }
     if (OB_SUCC(ret) && !ob_is_text_tc(type.get_type())) {
