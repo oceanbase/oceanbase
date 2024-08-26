@@ -556,6 +556,7 @@ int ObDataDictStorage::submit_to_palf_()
   const bool allow_compression = true;
   palf::LSN lsn;
   SCN submit_scn;
+  int64_t proposal_id = 0;
 
   if (OB_ISNULL(palf_buf_)
       || OB_ISNULL(log_handler_)
@@ -568,11 +569,11 @@ int ObDataDictStorage::submit_to_palf_()
     DDLOG(WARN, "log_handler_ is not valid", KR(ret));
   } else if (OB_UNLIKELY(palf_pos_ == 0)) {
     DDLOG(INFO, "empty palf_buf, do nothing", K_(palf_buf_len), K_(palf_pos));
-  } else if (OB_FAIL(check_ls_leader(log_handler_, is_leader))) {
-    DDLOG(WARN, "check_ls_leader failed", KR(ret), K(is_leader));
+  } else if (OB_FAIL(check_ls_leader(log_handler_, is_leader, proposal_id))) {
+    DDLOG(WARN, "check_ls_leader failed", KR(ret), K(is_leader), K(proposal_id));
   } else if (OB_UNLIKELY(! is_leader)) {
     ret = OB_STATE_NOT_MATCH;
-    DDLOG(INFO, "do-nothing on non-leader logstream.", KR(ret), K(is_leader));
+    DDLOG(INFO, "do-nothing on non-leader logstream.", KR(ret), K(is_leader), K(proposal_id));
   } else if (OB_FAIL(alloc_palf_cb_(callback))) {
     DDLOG(WARN, "alloc_palf_cb_ failed", KR(ret));
   } else if (OB_FAIL(log_handler_->append(

@@ -18,6 +18,7 @@
 #include "share/scheduler/ob_sys_task_stat.h"
 #include "share/backup/ob_backup_clean_struct.h"
 #include "rootserver/ob_transfer_partition_command.h"
+#include "share/ob_service_name_proxy.h"
 
 namespace oceanbase
 {
@@ -400,6 +401,18 @@ public:
   TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
 private:
   obrpc::ObAdminMigrateUnitArg rpc_arg_;
+};
+
+class ObAlterLSReplicaStmt : public ObSystemCmdStmt
+{
+public:
+  ObAlterLSReplicaStmt() : ObSystemCmdStmt(stmt::T_ALTER_LS_REPLICA) {}
+  virtual ~ObAlterLSReplicaStmt() {}
+
+  obrpc::ObAdminAlterLSReplicaArg &get_rpc_arg() { return rpc_arg_; }
+  TO_STRING_KV(N_STMT_TYPE, ((int)stmt_type_), K_(rpc_arg));
+private:
+  obrpc::ObAdminAlterLSReplicaArg rpc_arg_;
 };
 
 class ObAddArbitrationServiceStmt : public ObSystemCmdStmt
@@ -1376,6 +1389,16 @@ public:
   rootserver::ObTransferPartitionArg &get_arg() { return arg_; }
 private:
   rootserver::ObTransferPartitionArg arg_;
+};
+
+class ObServiceNameStmt : public ObSystemCmdStmt
+{
+public:
+  ObServiceNameStmt() : ObSystemCmdStmt(stmt::T_SERVICE_NAME), arg_() {}
+  virtual ~ObServiceNameStmt() {}
+  share::ObServiceNameArg &get_arg() { return arg_; }
+private:
+  share::ObServiceNameArg arg_;
 };
 
 } // end namespace sql

@@ -259,7 +259,6 @@ private:
   int post_upgrade_for_spm();
   int post_upgrade_for_online_estimate_percent();
 };
-
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 3, 2, 1)
 
 class ObUpgradeFor4330Processor : public ObBaseUpgradeProcessor
@@ -271,6 +270,8 @@ public:
   virtual int post_upgrade() override;
 private:
   int post_upgrade_for_external_table_flag();
+  int post_upgrade_for_service_name();
+  int post_upgrade_for_optimizer_stats();
 };
 /* =========== special upgrade processor end   ============= */
 

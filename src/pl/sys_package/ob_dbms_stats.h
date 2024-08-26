@@ -50,6 +50,7 @@ struct MethodOptSizeConf
   inline bool is_repeat() const { return mode_ == 0 && val_ == 1; }
   inline bool is_skewonly() const { return mode_ == 0 && val_ == 2; }
   inline bool is_manual() const {return mode_ == 1; }
+  inline void set_manual(int32_t bucket_size) { mode_ = 1; val_ = bucket_size; }
 
   int32_t mode_;
   int32_t val_;
@@ -246,14 +247,20 @@ public:
                                  sql::ParamStore &params,
                                  common::ObObj &result);
 
+  static int async_gather_stats_job_proc(sql::ObExecContext &ctx,
+                                         sql::ParamStore &params,
+                                         common::ObObj &result);
+
   static int parse_method_opt(sql::ObExecContext &ctx,
                               ObIAllocator *allocator,
                               ObIArray<ObColumnStatParam> &column_params,
                               const ObString &method_opt,
+                              const bool is_async_gather,
                               bool &use_size_auto);
 
   static int parser_for_all_clause(const ParseNode *for_all_node,
                                    ObIArray<ObColumnStatParam> &column_params,
+                                   const bool is_async_gather,
                                    bool &use_size_auto);
 
   static int parser_for_columns_clause(const ParseNode *for_col_node,
@@ -340,10 +347,11 @@ public:
                                        const ObObjParam &cascade,
                                        const ObObjParam &no_invalidate,
                                        const ObObjParam &force,
+                                       const ObObjParam *hist_est_percent,
+                                       const ObObjParam *hist_block_sample,
                                        ObTableStatParam &param);
 
   static int use_default_gather_stat_options(ObExecContext &ctx,
-                                             const StatTable &stat_table,
                                              ObTableStatParam &param);
 
   static int get_default_stat_options(ObExecContext &ctx,
@@ -394,6 +402,10 @@ public:
 
   static int update_stat_cache(const uint64_t rpc_tenant_id,
                                const ObTableStatParam &param,
+                               ObOptStatRunningMonitor *running_monitor = NULL);
+
+  static int update_stat_cache(const uint64_t tenant_id,
+                               obrpc::ObUpdateStatCacheArg &stat_arg,
                                ObOptStatRunningMonitor *running_monitor = NULL);
 
   static int parse_set_table_stat_options(ObExecContext &ctx,
@@ -499,7 +511,7 @@ public:
                                    int64_t task_table_count,
                                    ObOptStatTaskInfo &task_info);
 
-  static int get_table_stale_percent_threshold(sql::ObExecContext &ctx,
+  static int get_table_stale_percent_threshold(ObMySQLProxy *mysql_proxy,
                                                const uint64_t tenant_id,
                                                const uint64_t table_id,
                                                double &stale_percent_threshold);
@@ -626,6 +638,21 @@ private:
 
   static int check_system_stat_table_ready(int64_t tenant_id);
 
+  static int async_gather_table_stats(sql::ObExecContext &ctx,
+                                      const int64_t duration_time,
+                                      int64_t &succeed_cnt,
+                                      ObOptStatTaskInfo &task_info);
+
+  static int do_async_gather_table_stats(sql::ObExecContext &ctx,
+                                         const uint64_t tenant_id,
+                                         const AsyncStatTable &async_table,
+                                         const int64_t duration_time,
+                                         int64_t &succeed_cnt,
+                                         ObOptStatTaskInfo &task_info);
+
+  static int adjust_async_gather_stat_option(ObExecContext &ctx,
+                                             const ObIArray<int64_t> &async_partition_ids,
+                                             ObTableStatParam &param);
 };
 
 }

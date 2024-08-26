@@ -1378,7 +1378,9 @@ int ObVariableSetExecutor::is_support(const share::ObSetVar &set_var)
  if(SYS_VAR_INVALID == (var_id = ObSysVarFactory::find_sys_var_id_by_name(set_var.var_name_))) {
     ret = OB_ERR_SYS_VARIABLE_UNKNOWN;
     LOG_WARN("unknown variable", K(set_var.var_name_), K(ret));
-  } else if (SYS_VAR_DEBUG <= var_id && SYS_VAR_STORED_PROGRAM_CACHE >= var_id) {
+  } else if ((SYS_VAR_DEBUG <= var_id && SYS_VAR_STORED_PROGRAM_CACHE >= var_id) ||
+             (SYS_VAR_INSERT_ID <= var_id && SYS_VAR_MAX_WRITE_LOCK_COUNT >= var_id) ||
+             (SYS_VAR_BIG_TABLES <= var_id && SYS_VAR_DELAYED_INSERT_LIMIT >= var_id)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("This variable not support, just mock", K(set_var.var_name_), K(var_id), K(ret));
   }

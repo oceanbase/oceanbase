@@ -25,7 +25,10 @@
 #include "observer/mysql/obsm_handler.h"
 #include "rpc/obmysql/obsm_struct.h"
 #include "observer/ob_server_struct.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/monitor/ob_security_audit_utils.h"
+#include "sql/audit/ob_audit_log_utils.h"
+#endif
 #include "sql/session/ob_user_resource_mgr.h"
 #include "sql/monitor/flt/ob_flt_control_info_mgr.h"
 #include "storage/concurrency_control/ob_multi_version_garbage_collector.h"
@@ -590,6 +593,7 @@ int ObSQLSessionMgr::free_session(const ObFreeSessionCtx &ctx)
                                                   ObString::make_string("DISCONNECT"),
                                                   empty_comment_text,
                                                   ret);
+      ObAuditLogUtils::hanlde_connect_audit_log(*sess_info, "LOGOFF");
       THIS_WORKER.set_timeout_ts(cur_timeout_backup);
     }
 #endif

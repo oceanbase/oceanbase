@@ -116,6 +116,7 @@ private:
   int update_tenant_restore_data_mode_to_remote_(const uint64_t tenant_id);
   int update_tenant_restore_data_mode_to_normal_(const uint64_t tenant_id);
   int update_tenant_restore_data_mode_(const uint64_t tenant_id, const share::ObRestoreDataMode &new_restore_data_mode);
+  int wait_sys_job_ready_(const ObPhysicalRestoreJob &job, bool &is_ready);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;

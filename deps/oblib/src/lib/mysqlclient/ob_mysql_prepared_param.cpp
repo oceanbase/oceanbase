@@ -49,10 +49,11 @@ int ObMySQLPreparedParam::init()
     ret = OB_ERR_SQL_CLIENT;
   } else if (0 == param_count_) {
     // insert or replace that do not produce result sets
-  } else if (OB_ISNULL(bind_ = reinterpret_cast<MYSQL_BIND *>(alloc_.alloc(sizeof(MYSQL_BIND) * param_count_)))) {
+  } else if (OB_ISNULL(bind_ = reinterpret_cast<MYSQL_BIND *>(alloc_->alloc(sizeof(MYSQL_BIND) * param_count_)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("out of memory, alloc mem for mysql_bind error", K(ret));
   } else {
+    MEMSET(bind_, 0, sizeof(MYSQL_BIND) * param_count_);
     LOG_DEBUG("statement field", K(param_count_));
   }
   return ret;
@@ -75,8 +76,10 @@ int ObMySQLPreparedParam::bind_param()
 void ObMySQLPreparedParam::close()
 {
   if (OB_LIKELY(NULL != bind_)) {
-    alloc_.free(bind_);
+    alloc_->free(bind_);
     bind_ = NULL;
+    param_count_ = 0;
+    alloc_ = NULL;
   }
 }
 
@@ -93,6 +96,10 @@ int ObMySQLPreparedParam::bind_param(ObBindParam &param)
     bind_[param.col_idx_].length = &param.length_;
     bind_[param.col_idx_].is_null = &param.is_null_;
     bind_[param.col_idx_].is_unsigned = param.is_unsigned_;
+    bind_[param.col_idx_].long_data_used = 0;
+#ifdef OB_BUILD_ORACLE_PL
+    bind_[param.col_idx_].mysql = stmt_.get_conn_handler();
+#endif
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid index", K(param), K(param_count_));

@@ -15,9 +15,9 @@
 
 #include "lib/allocator/ob_vslice_alloc.h"
 #include "share/throttle/ob_share_throttle_define.h"
+#include "share/ob_ls_id.h"
 
 namespace oceanbase {
-
 namespace share {
 
 OB_INLINE int64_t &mds_throttled_alloc()
@@ -64,10 +64,11 @@ struct ObTenantBufferCtxAllocator : public ObIAllocator// for now, it is just a 
 class ObMdsThrottleGuard
 {
 public:
-  ObMdsThrottleGuard(const bool for_replay, const int64_t abs_expire_time);
+  ObMdsThrottleGuard(const share::ObLSID ls_id, const bool for_replay, const int64_t abs_expire_time);
   ~ObMdsThrottleGuard();
 
 private:
+  const share::ObLSID ls_id_;
   bool for_replay_;
   int64_t abs_expire_time_;
   share::TxShareThrottleTool *throttle_tool_;

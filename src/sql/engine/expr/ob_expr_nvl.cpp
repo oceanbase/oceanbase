@@ -27,7 +27,6 @@ namespace sql
 {
 
 int ObExprNvlUtil::calc_result_type(ObExprResType &type,
-
                                      ObExprResType &type1,
                                      ObExprResType &type2,
                                      ObExprTypeCtx &type_ctx)
@@ -49,10 +48,16 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
         res_cs_type = type_ctx.get_session()->get_dtc_params().nls_collation_;
       }
     } else {
-      if (OB_FAIL(ObCharset::aggregate_collation(type1.get_collation_level(), type1.get_collation_type(),
-                                            type2.get_collation_level(), type2.get_collation_type(),
-                                            res_cs_level, res_cs_type))) {
-        LOG_WARN("aggregate collation failed", K(ret), K(type1), K(type2));
+      ObExprResTypes res_types;
+      if (OB_FAIL(res_types.push_back(type1))) {
+        LOG_WARN("fail to push back res type", K(ret));
+      } else if (OB_FAIL(res_types.push_back(type2))) {
+        LOG_WARN("fail to push back res type", K(ret));
+      } else if (OB_FAIL(ObExprOperator::aggregate_charsets_for_comparison(type, &res_types.at(0), 2, type_ctx))) {
+        LOG_WARN("failed to aggregate_charsets_for_comparison", K(ret));
+      } else {
+        res_cs_type = type.get_calc_collation_type();
+        res_cs_level = type.get_calc_collation_level();
       }
     }
     if (OB_SUCC(ret)) {

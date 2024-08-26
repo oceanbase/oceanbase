@@ -133,6 +133,15 @@ public:
                            bool agent_mode,
                            ObSQLMode sql_mode) const;
 
+  int print_materialized_view_definition(const uint64_t tenant_id,
+                                         const uint64_t table_id,
+                                         char *buf,
+                                         const int64_t &buf_len,
+                                         int64_t &pos,
+                                         const ObTimeZoneInfo *tz_info,
+                                         bool agent_mode,
+                                         ObSQLMode sql_mode) const;
+
   int print_database_definiton(const uint64_t tenant_id,
                                const uint64_t database_id,
                                bool if_not_exists,
@@ -455,7 +464,8 @@ public:
                             char *buf,
                             const int64_t &buf_len,
                             int64_t &pos,
-                            bool is_role);
+                            bool is_role,
+                            bool print_password_secret = false);
   int print_synonym_definition(const ObSynonymInfo &synonym_info,
                                 char *buf,
                                 const int64_t &buf_len,

@@ -111,7 +111,7 @@ TEST(ObObjectStorageInfo, cos)
   storage_info = "host=xxx.com&access_id=111&access_key=222";
   ASSERT_EQ(OB_INVALID_BACKUP_DEST, info1.set(uri, storage_info));
 
-  storage_info = "host=xxx.com&access_id=111&access_key=222&checksum_type=md5&appid=333";
+  storage_info = "host=xxx.com&access_id=111&access_key=222&appid=333&checksum_type=md5";
   ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
 
   char buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
@@ -153,15 +153,15 @@ TEST(ObObjectStorageInfo, s3)
   ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
   info1.reset();
 
-  storage_info = "host=xxx.com&access_id=111&access_key=222&checksum_type=md5&s3_region=333";
+  storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&checksum_type=md5";
   ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
-  ASSERT_EQ(0, ::strcmp("s3_region=333", info1.extension_));
+  ASSERT_EQ(0, ::strcmp("s3_region=333&checksum_type=md5", info1.extension_));
 
   char buf[OB_MAX_BACKUP_STORAGE_INFO_LENGTH] = { 0 };
   ASSERT_EQ(OB_SUCCESS, info1.get_storage_info_str(buf, sizeof(buf)));
   ASSERT_STREQ(storage_info, buf);
 
-  storage_info = "host=xxx.com&access_id=111&access_key=222&checksum_type=md5&s3_region=333&delete_mode=delete";
+  storage_info = "host=xxx.com&access_id=111&access_key=222&s3_region=333&delete_mode=delete&checksum_type=md5";
   info1.reset();
   ASSERT_EQ(OB_SUCCESS, info1.set(uri, storage_info));
   ASSERT_EQ(OB_SUCCESS, info1.get_storage_info_str(buf, sizeof(buf)));

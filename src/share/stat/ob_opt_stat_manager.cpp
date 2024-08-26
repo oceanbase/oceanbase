@@ -637,6 +637,7 @@ int ObOptStatManager::get_table_stat(const uint64_t tenant_id,
              opt_stat.get_micro_block_num() * scale_ratio);
     stat.set_last_analyzed(opt_stat.get_last_analyzed());
     stat.set_stat_locked(opt_stat.is_locked());
+    stat.set_stale_stats(opt_stat.is_stat_expired());
   }
   return ret;
 }

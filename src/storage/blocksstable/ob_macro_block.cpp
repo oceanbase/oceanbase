@@ -357,21 +357,10 @@ int ObMacroBlock::flush(ObMacroBlockHandle &macro_handle,
     macro_header_.fixed_header_.data_checksum_ = 0;
   }
 #endif
-
+  const bool need_flush_macro = spec_->get_need_submit_io();
   if (OB_FAIL(write_macro_header())) {
     STORAGE_LOG(WARN, "fail to write macro header", K(ret), K_(macro_header));
-  } else {
-    const int64_t common_header_size = common_header_.get_serialize_size();
-    const char *payload_buf = data_.data() + common_header_size;
-    const int64_t payload_size = data_.length() - common_header_size;
-    common_header_.set_payload_size(static_cast<int32_t>(payload_size));
-    common_header_.set_payload_checksum(static_cast<int32_t>(ob_crc64(payload_buf, payload_size)));
-  }
-  if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (OB_FAIL(common_header_.build_serialized_header(data_.data(), data_.capacity()))) {
-    STORAGE_LOG(WARN, "Fail to build common header, ", K(ret), K_(common_header));
-  } else {
+  } else if (need_flush_macro) {
     ObMacroBlockWriteInfo write_info;
     write_info.buffer_ = data_.data();
     if (backup::ObBackupDeviceMacroBlockId::is_backup_block_file(macro_handle.get_macro_id().first_id())) {
@@ -486,7 +475,18 @@ int ObMacroBlock::write_macro_header()
   int64_t pos = 0;
   if (OB_FAIL(macro_header_.serialize(data_.data() + common_header_size, buf_len, pos))) {
     STORAGE_LOG(WARN, "fail to serialize macro block", K(ret), K(macro_header_));
+  } else {
+    const int64_t common_header_size = common_header_.get_serialize_size();
+    const char *payload_buf = data_.data() + common_header_size;
+    const int64_t payload_size = data_.length() - common_header_size;
+    common_header_.set_payload_size(static_cast<int32_t>(payload_size));
+    common_header_.set_payload_checksum(static_cast<int32_t>(ob_crc64(payload_buf, payload_size)));
+
+    if (OB_FAIL(common_header_.build_serialized_header(data_.data(), data_.capacity()))) {
+      STORAGE_LOG(WARN, "Fail to build common header, ", K(ret), K_(common_header));
+    }
   }
+
   return ret;
 }
 

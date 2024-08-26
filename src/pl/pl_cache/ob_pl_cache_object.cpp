@@ -169,7 +169,7 @@ int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
 int ObPLCacheObject::update_execute_time(int64_t exec_time)
 {
   int ret = OB_SUCCESS;
-  ATOMIC_STORE(&(stat_.elapsed_time_), exec_time);
+  ATOMIC_AAF(&(stat_.elapsed_time_),exec_time);
   ATOMIC_INC(&(stat_.execute_times_));
   int64_t slowest_usec = ATOMIC_LOAD(&stat_.slowest_exec_usec_);
   if (slowest_usec < exec_time) {

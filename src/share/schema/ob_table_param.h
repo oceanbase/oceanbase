@@ -292,7 +292,8 @@ public:
               const common::ObIArray<uint64_t> &output_column_ids,
               const sql::ObStoragePushdownFlag &pd_pushdown_flag,
               const common::ObIArray<uint64_t> *tsc_out_cols = NULL,
-              const bool force_mysql_mode = false);
+              const bool force_mysql_mode = false,
+              const bool query_cs_replica = false);
 
   // convert aggregate column projector from 'aggregate_column_ids' and 'output_projector_'
   // convert group by column projector from 'group_by_column_ids' and 'output_projector_'
@@ -344,7 +345,8 @@ private:
                                       const common::ObIArray<uint64_t> &output_column_ids,
                                       const common::ObIArray<uint64_t> *tsc_out_cols,
                                       const bool force_mysql_mode,
-                                      const sql::ObStoragePushdownFlag &pd_pushdown_flag);
+                                      const sql::ObStoragePushdownFlag &pd_pushdown_flag,
+                                      const bool query_cs_replica = false);
 
   int filter_common_columns(const common::ObIArray<const ObColumnSchemaV2 *> &columns,
                             common::ObIArray<const ObColumnSchemaV2 *> &new_columns);

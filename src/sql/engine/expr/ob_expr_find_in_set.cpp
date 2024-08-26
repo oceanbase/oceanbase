@@ -47,14 +47,13 @@ int ObExprFindInSet::calc_result_type2(ObExprResType &type,
     ObObjMeta coll_types[2];
     coll_types[0] = type1.get_obj_meta();
     coll_types[1] = type2.get_obj_meta();
-    if (OB_FAIL(aggregate_charsets_for_comparison(type.get_calc_meta(),
-                 coll_types, 2, type_ctx.get_coll_type()))) {
+    if (OB_FAIL(aggregate_charsets_for_comparison(type.get_calc_meta(), coll_types, 2, type_ctx))) {
       LOG_WARN("failed to aggregate_charsets_for_comparison", K(ret));
     } else {
       type1.set_calc_type(ObVarcharType);
-      type1.set_calc_collation_type(type.get_calc_collation_type());
+      type1.set_calc_collation(type);
       type2.set_calc_type(ObVarcharType);
-      type2.set_calc_collation_type(type.get_calc_collation_type());
+      type2.set_calc_collation(type);
     }
 	} else {
 		ret = OB_ERR_INVALID_TYPE_FOR_OP;

@@ -227,11 +227,32 @@ int ObTableLockOwnerID::serialize(char* buf, const int64_t buf_len, int64_t& pos
 int ObTableLockOwnerID::deserialize(const char* buf, const int64_t data_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
+  const int64_t origin_pos = pos;
+  int64_t magic_num = 0;
   if (OB_ISNULL(buf) || OB_UNLIKELY(data_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), KP(buf), K(data_len));
-  } else if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &pack_))) {
-    LOG_WARN("deserialize ID failed", KR(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_FAIL(serialization::decode(buf, data_len, pos, magic_num))) {
+    LOG_WARN("deserialize magic num failed", KR(ret), KP(buf), K(data_len), K(pos));
+  } else {
+    pos = origin_pos;
+    // new type
+    if (magic_num == ObNewTableLockOwnerID::MAGIC_NUM) {
+      unsigned char type = 0;
+      int64_t id = 0;
+      LST_DO_CODE(OB_UNIS_DECODE,
+                  magic_num,
+                  type,
+                  id);
+      if (OB_SUCC(ret)) {
+        type_ = type;
+        id_ = id;
+      }
+    } else {
+      if (OB_FAIL(serialization::decode_vi64(buf, data_len, pos, &pack_))) {
+        LOG_WARN("deserialize ID failed", KR(ret), KP(buf), K(data_len), K(pos));
+      }
+    }
   }
   return ret;
 }

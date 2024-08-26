@@ -23,7 +23,6 @@
 #include "lib/random/ob_random.h"
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "share/ob_simple_mem_limit_getter.h"
-#include "storage/blocksstable/ob_tmp_file.h"
 #include "storage/lob/ob_lob_piece.h"
 #include "sql/engine/ob_exec_context.h"
 #include "lib/objectpool/ob_server_object_pool.h"

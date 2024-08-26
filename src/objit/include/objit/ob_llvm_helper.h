@@ -365,7 +365,7 @@ public:
   void dump_module();
   void dump_debuginfo();
   int verify_module();
-  uint64_t get_function_address(const common::ObString &name);
+  int get_function_address(const common::ObString &name, uint64_t &addr);
   static void add_symbol(const common::ObString &name, void *value);
 
   ObDIRawData get_debug_info() const;

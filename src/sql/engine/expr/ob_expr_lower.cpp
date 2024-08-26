@@ -77,8 +77,9 @@ int ObExprLowerUpper::calc_result_type1(ObExprResType &type, ObExprResType &text
       const common::ObLengthSemantics default_length_semantics = (OB_NOT_NULL(type_ctx.get_session())
           ? type_ctx.get_session()->get_actual_nls_length_semantics()
           : common::LS_BYTE);
-      ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx.get_coll_type());
+      ret = aggregate_charsets_for_string_result(type, &text, 1, type_ctx);
       OX(text.set_calc_collation_type(type.get_collation_type()));
+      OX(text.set_calc_collation_level(type.get_collation_level()));
       OX(type.set_length(text.get_length()));
     }
   }

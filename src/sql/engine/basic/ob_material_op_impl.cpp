@@ -53,8 +53,8 @@ void ObMaterialOpImpl::reset()
 {
   sql_mem_processor_.unregister_profile();
   io_event_observer_ = nullptr;
-  datum_store_.reset();
   datum_store_it_.reset();
+  datum_store_.reset();
   got_first_row_ = false;
   inited_ = false;
   // can not destroy mem_entify here, the memory may hold by %iter_ or %datum_store_

@@ -69,11 +69,6 @@ int ObTableLoadTableCtx::init(const ObTableLoadParam &param, const ObTableLoadDD
     if (OB_FAIL(schema_.init(param_.tenant_id_, param_.table_id_))) {
       LOG_WARN("fail to init table load schema", KR(ret), K(param_.tenant_id_),
                K(param_.table_id_));
-    } else if (OB_UNLIKELY(param.column_count_ != (schema_.is_heap_table_
-                                                     ? (schema_.store_column_count_ - 1)
-                                                     : schema_.store_column_count_))) {
-      ret = OB_SCHEMA_NOT_UPTODATE;
-      LOG_WARN("unexpected column count", KR(ret), K(param.column_count_), K(schema_.store_column_count_), K(schema_.is_heap_table_));
     } else if (OB_FAIL(task_allocator_.init("TLD_TaskPool", param_.tenant_id_))) {
       LOG_WARN("fail to init allocator", KR(ret));
     } else if (OB_FAIL(trans_ctx_allocator_.init("TLD_TCtxPool", param_.tenant_id_))) {

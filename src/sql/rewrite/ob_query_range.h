@@ -87,6 +87,7 @@ private:
   struct ObQueryRangeCtx
   {
     ObQueryRangeCtx(ObExecContext *exec_ctx,
+                    ObQueryCtx *query_ctx,
                     ExprConstrantArray *expr_constraints,
                     const ParamsIArray *params)
       : need_final_extract_(false),
@@ -96,6 +97,7 @@ private:
         ignore_calc_failure_(false),
         range_optimizer_max_mem_size_(100*1024*1024),
         exec_ctx_(exec_ctx),
+        query_ctx_(query_ctx),
         expr_constraints_(expr_constraints),
         params_(params),
         use_in_optimization_(false),
@@ -119,6 +121,7 @@ private:
     int64_t range_optimizer_max_mem_size_;
     common::ObSEArray<ObRangeExprItem, 4, common::ModulePageAllocator, true> precise_range_exprs_;
     ObExecContext *exec_ctx_;
+    ObQueryCtx *query_ctx_;
     ExprConstrantArray *expr_constraints_;
     const ParamsIArray *params_;
     common::ObSEArray<const ObRawExpr *, 16> final_exprs_;
@@ -387,6 +390,7 @@ public:
                                       const ObRawExpr *expr_root,
                                       const common::ObDataTypeCastParams &dtc_params,
                                       ObExecContext *exec_ctx,
+                                      ObQueryCtx *query_ctx,
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamsIArray *params = NULL,
                                       const bool use_in_optimization = false,
@@ -409,6 +413,7 @@ public:
                                       const ExprIArray &root_exprs,
                                       const common::ObDataTypeCastParams &dtc_params,
                                       ObExecContext *exec_ctx,
+                                      ObQueryCtx *query_ctx,
                                       ExprConstrantArray *expr_constraints = NULL,
                                       const ParamsIArray *params = NULL,
                                       const bool phy_rowid_for_table_loc = false,
@@ -529,6 +534,7 @@ private:
   int init_query_range_ctx(common::ObIAllocator &allocator,
                            const ColumnIArray &range_columns,
                            ObExecContext *exec_ctx,
+                           ObQueryCtx *query_ctx,
                            ExprConstrantArray *expr_constraints,
                            const ParamsIArray *params,
                            const bool phy_rowid_for_table_loc,

@@ -421,7 +421,20 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
         REGISTER_STMT_RESOLVER(FlushDagWarnings);
         break;
       }
-      case T_FLUSH_PRIVILEGES: {
+      case T_FLUSH_PRIVILEGES:
+      case T_INSTALL_PLUGIN:
+      case T_UNINSTALL_PLUGIN:
+      case T_FLUSH_MOCK:
+      case T_HANDLER_MOCK:
+      case T_FLUSH_MOCK_LIST:
+      case T_SHOW_PLUGINS:
+      case T_CREATE_SERVER:
+      case T_ALTER_SERVER:
+      case T_DROP_SERVER:
+      case T_CREATE_LOGFILE_GROUP:
+      case T_ALTER_LOGFILE_GROUP:
+      case T_DROP_LOGFILE_GROUP:
+      {
         REGISTER_STMT_RESOLVER(Mock);
         break;
       }
@@ -531,6 +544,30 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_MIGRATE_UNIT: {
         REGISTER_STMT_RESOLVER(MigrateUnit);
+        break;
+      }
+      case T_ADD_LS_REPLICA: {
+        REGISTER_STMT_RESOLVER(AddLSReplica);
+        break;
+      }
+      case T_REMOVE_LS_REPLICA: {
+        REGISTER_STMT_RESOLVER(RemoveLSReplica);
+        break;
+      }
+      case T_MIGRATE_LS_REPLICA: {
+        REGISTER_STMT_RESOLVER(MigrateLSReplica);
+        break;
+      }
+      case T_MODIFY_LS_REPLICA_TYPE: {
+        REGISTER_STMT_RESOLVER(ModifyLSReplica);
+        break;
+      }
+      case T_MODIFY_LS_PAXOS_REPLICA_NUM: {
+        REGISTER_STMT_RESOLVER(ModifyLSPaxosReplicaNum);
+        break;
+      }
+      case T_CANCEL_LS_REPLICA_TASK: {
+        REGISTER_STMT_RESOLVER(CancelLSReplicaTask);
         break;
       }
       case T_ADD_ARBITRATION_SERVICE: {
@@ -723,7 +760,9 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       case T_SHOW_CREATE_TRIGGER:
       case T_SHOW_ENGINE:
       case T_SHOW_OPEN_TABLES:
-      case T_SHOW_SEQUENCES: {
+      case T_SHOW_SEQUENCES:
+      case T_SHOW_CHECK_TABLE:
+      case T_SHOW_CREATE_USER: {
         REGISTER_STMT_RESOLVER(Show);
         break;
       }
@@ -1211,6 +1250,10 @@ int ObResolver::resolve(IsPrepared if_prepared, const ParseNode &parse_tree, ObS
       }
       case T_CANCEL_BALANCE_JOB: {
         REGISTER_STMT_RESOLVER(TransferPartition);
+        break;
+      }
+      case T_SERVICE_NAME: {
+        REGISTER_STMT_RESOLVER(ServiceName);
         break;
       }
       case T_REPAIR_TABLE: {

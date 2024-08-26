@@ -896,7 +896,9 @@ int ObTenantIOManager::inner_aio(const ObIOInfo &info, ObIOHandle &handle)
     LOG_WARN("schedule request failed", K(ret), KPC(req));
   }
   if (OB_FAIL(ret)) {
-    req->free();
+    if (OB_NOT_NULL(req)) {
+      req->free();
+    }
     handle.reset();
   }
   return ret;
@@ -950,7 +952,9 @@ int ObTenantIOManager::detect_aio(const ObIOInfo &info, ObIOHandle &handle)
     LOG_INFO("submit_detect_request cost too much time", K(ret), K(time_guard), K(req));
   }
   if (OB_FAIL(ret)) {
-    req->free();
+    if (OB_NOT_NULL(req)) {
+      req->free();
+    }
     handle.reset();
   }
   return ret;

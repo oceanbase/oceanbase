@@ -1835,6 +1835,12 @@ void ObTenantSchema::reset_zone_replica_attr_array()
         free(encryption_logonly_attr_set.get_base_address());
         encryption_logonly_attr_set.reset();
       }
+      SchemaReplicaAttrArray &columnstore_attr_set
+        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_columnstore_replica_attr_array());
+      if (nullptr != columnstore_attr_set.get_base_address()) {
+        free(columnstore_attr_set.get_base_address());
+        columnstore_attr_set.reset();
+      }
     }
     free(zone_replica_attr_array_.get_base_address());
     zone_replica_attr_array_.reset();
@@ -1906,6 +1912,10 @@ int ObTenantSchema::set_zone_replica_attr_array(
               static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_encryption_logonly_replica_attr_array()),
               src_replica_attr_set.replica_attr_set_.get_encryption_logonly_replica_attr_array()))) {
         LOG_WARN("fail to set specific replica attr array", K(ret));
+      } else if (OB_FAIL(set_specific_replica_attr_array(
+              static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_columnstore_replica_attr_array()),
+              src_replica_attr_set.replica_attr_set_.get_columnstore_replica_attr_array()))) {
+        LOG_WARN("fail to set specific replica attr array", K(ret));
       } else if (OB_FAIL(deep_copy_string_array(src_replica_attr_set.zone_set_, this_schema_set->zone_set_))) {
         LOG_WARN("fail to copy schema replica attr set zone set", K(ret));
       } else {
@@ -1951,6 +1961,10 @@ int ObTenantSchema::set_zone_replica_attr_array(
       } else if (OB_FAIL(set_specific_replica_attr_array(
               static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_encryption_logonly_replica_attr_array()),
               src_replica_attr_set.replica_attr_set_.get_encryption_logonly_replica_attr_array()))) {
+        LOG_WARN("fail to set specific replica attr array", K(ret));
+      } else if (OB_FAIL(set_specific_replica_attr_array(
+              static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_columnstore_replica_attr_array()),
+              src_replica_attr_set.replica_attr_set_.get_columnstore_replica_attr_array()))) {
         LOG_WARN("fail to set specific replica attr array", K(ret));
       } else {
         common::ObArray<common::ObString> zone_set_ptrs;
@@ -2608,294 +2622,18 @@ int ObDatabaseSchema::get_primary_zone_inherit(
     ObPrimaryZone &primary_zone) const
 {
   int ret = OB_SUCCESS;
-  bool use_tenant_primary_zone = GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id_;
   primary_zone.reset();
-  if (!use_tenant_primary_zone) {
-    const share::schema::ObSimpleTenantSchema *simple_tenant = nullptr;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_primary_zone = simple_tenant->is_restore();
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else {
-    const ObTenantSchema *tenant_schema = NULL;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
-      LOG_WARN("fail to get tenant schema", K(ret), K(database_id_), K(tenant_id_));
-    } else if (OB_UNLIKELY(NULL == tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant schema null", K(ret), K(database_id_), K(tenant_id_), KP(tenant_schema));
-    } else if (OB_FAIL(tenant_schema->get_primary_zone_inherit(schema_guard, primary_zone))) {
-      LOG_WARN("fail to get primary zone array", K(ret), K(database_id_), K(tenant_id_));
-    }
-  }
-  return ret;
-}
-/*-------------------------------------------------------------------------------------------------
- * ------------------------------ObLocality-------------------------------------------
- ----------------------------------------------------------------------------------------------------*/
-void ObLocality::reset_zone_replica_attr_array()
-{
-  if (NULL != schema_ && NULL != zone_replica_attr_array_.get_base_address()) {
-    for (int64_t i = 0; i < zone_replica_attr_array_.count(); ++i) {
-      SchemaZoneReplicaAttrSet &zone_locality = zone_replica_attr_array_.at(i);
-      schema_->reset_string_array(zone_locality.zone_set_);
-      SchemaReplicaAttrArray &full_attr_set
-        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_full_replica_attr_array());
-      if (nullptr != full_attr_set.get_base_address()) {
-        schema_->free(full_attr_set.get_base_address());
-        full_attr_set.reset();
-      }
-      SchemaReplicaAttrArray &logonly_attr_set
-        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_logonly_replica_attr_array());
-      if (nullptr != logonly_attr_set.get_base_address()) {
-        schema_->free(logonly_attr_set.get_base_address());
-        logonly_attr_set.reset();
-      }
-      SchemaReplicaAttrArray &readonly_attr_set
-        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_readonly_replica_attr_array());
-      if (nullptr != readonly_attr_set.get_base_address()) {
-        schema_->free(readonly_attr_set.get_base_address());
-        readonly_attr_set.reset();
-      }
-      SchemaReplicaAttrArray &encryption_logonly_attr_set
-        = static_cast<SchemaReplicaAttrArray &>(zone_locality.replica_attr_set_.get_encryption_logonly_replica_attr_array());
-      if (nullptr != encryption_logonly_attr_set.get_base_address()) {
-        schema_->free(encryption_logonly_attr_set.get_base_address());
-        encryption_logonly_attr_set.reset();
-      }
-    }
-    schema_->free(zone_replica_attr_array_.get_base_address());
-    zone_replica_attr_array_.reset();
-  }
-}
-
-int ObLocality::set_specific_replica_attr_array(
-    SchemaReplicaAttrArray &this_schema_set,
-    const common::ObIArray<ReplicaAttr> &src)
-{
-  int ret = OB_SUCCESS;
-  const int64_t count = src.count();
-  if (count > 0) {
-    const int64_t size = count * static_cast<int64_t>(sizeof(share::ReplicaAttr));
-    void *ptr = nullptr;
-    if (nullptr == (ptr = schema_->alloc(size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc failed", K(ret), K(size));
-    } else if (FALSE_IT(this_schema_set.init(count, static_cast<ReplicaAttr *>(ptr), count))) {
-      // shall never by here
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); ++i) {
-        const share::ReplicaAttr &src_replica_attr = src.at(i);
-        ReplicaAttr *dst_replica_attr = &this_schema_set.at(i);
-        if (nullptr == (dst_replica_attr = new (dst_replica_attr) ReplicaAttr(
-                src_replica_attr.num_, src_replica_attr.memstore_percent_))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("placement new return nullptr", K(ret));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocality::set_zone_replica_attr_array(const common::ObIArray<SchemaZoneReplicaAttrSet> &src)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_));
-  } else {
-    reset_zone_replica_attr_array();
-    const int64_t alloc_size = src.count() * static_cast<int64_t>(sizeof(SchemaZoneReplicaAttrSet));
-    void *buf = NULL;
-    if (src.count() <= 0) {
-      // do nothing
-    } else if (NULL == (buf = schema_->alloc(alloc_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc failed", K(ret), K(alloc_size));
-    } else {
-      zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
-      // call construct func in advance to avoid core status
-      //
-      ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
-      for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
-        const SchemaZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
-        SchemaZoneReplicaAttrSet *this_schema_set = &zone_replica_attr_array_.at(i);
-        if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_logonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_logonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_readonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_readonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_encryption_logonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_encryption_logonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(schema_->deep_copy_string_array(
-                src_replica_attr_set.zone_set_, this_schema_set->zone_set_))) {
-          LOG_WARN("fail to copy schema replica attr set zone set", K(ret));
-        } else {
-          this_schema_set->zone_ = src_replica_attr_set.zone_;
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocality::set_zone_replica_attr_array(const common::ObIArray<share::ObZoneReplicaAttrSet> &src)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_));
-  } else {
-    reset_zone_replica_attr_array();
-    const int64_t alloc_size = src.count() * static_cast<int64_t>(sizeof(SchemaZoneReplicaAttrSet));
-    void *buf = NULL;
-    if (src.count() <= 0) {
-      // do nothing
-    } else if (NULL == (buf = schema_->alloc(alloc_size))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc failed", K(ret), K(alloc_size));
-    } else {
-      zone_replica_attr_array_.init(src.count(), static_cast<SchemaZoneReplicaAttrSet *>(buf), src.count());
-      // call construct func in advance to avoid core status
-      //
-      ARRAY_NEW_CONSTRUCT(SchemaZoneReplicaAttrSet, zone_replica_attr_array_);
-      for (int64_t i = 0; i < src.count() && OB_SUCC(ret); ++i) {
-        const share::ObZoneReplicaAttrSet &src_replica_attr_set = src.at(i);
-        SchemaZoneReplicaAttrSet *this_schema_set = &zone_replica_attr_array_.at(i);
-        if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_full_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_full_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_logonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_logonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_readonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_readonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else if (OB_FAIL(set_specific_replica_attr_array(
-                static_cast<SchemaReplicaAttrArray &>(this_schema_set->replica_attr_set_.get_encryption_logonly_replica_attr_array()),
-                src_replica_attr_set.replica_attr_set_.get_encryption_logonly_replica_attr_array()))) {
-          LOG_WARN("fail to set specific replica attr array", K(ret));
-        } else {
-          common::ObArray<common::ObString> zone_set_ptrs;
-          for (int64_t j = 0; OB_SUCC(ret) && j < src_replica_attr_set.zone_set_.count(); ++j) {
-            const common::ObZone &zone = src_replica_attr_set.zone_set_.at(j);
-            if (OB_FAIL(zone_set_ptrs.push_back(common::ObString(zone.size(), zone.ptr())))) {
-               LOG_WARN("fail to push back", K(ret));
-            } else {} // no more to do
-          }
-          if (OB_FAIL(ret)) {
-          } else if (OB_FAIL(schema_->deep_copy_string_array(zone_set_ptrs, this_schema_set->zone_set_))) {
-            LOG_WARN("fail to copy schema replica attr set zone set", K(ret));
-          } else {
-            this_schema_set->zone_ = src_replica_attr_set.zone_;
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocality::assign(const ObLocality &other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_));
-  } else if (OB_FAIL(schema_->deep_copy_str(other.locality_str_, locality_str_))) {
-    LOG_WARN("fail to assign locality info", K(ret));
-  } else if (OB_FAIL(set_zone_replica_attr_array(other.zone_replica_attr_array_))) {
-    LOG_WARN("set zone replica attr array failed", K(ret));
-  }
-  return ret;
-}
-
-int ObLocality::set_locality_str(const ObString &other)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(schema_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(schema_));
-  } else if (OB_FAIL(schema_->deep_copy_str(other, locality_str_))) {
-    LOG_WARN("fail to assign locality info", K(ret));
-  }
-  return ret;
-}
-
-int64_t ObLocality::get_convert_size() const
-{
-  int64_t convert_size = sizeof(*this);
-  convert_size += zone_replica_attr_array_.count() * static_cast<int64_t>(sizeof(SchemaZoneReplicaAttrSet));
-  for (int64_t i = 0; i < zone_replica_attr_array_.count(); ++i) {
-    convert_size += zone_replica_attr_array_.at(i).get_convert_size();
-  }
-  convert_size += locality_str_.length() + 1;
-  return convert_size;
-}
-
-void ObLocality::reset()
-{
-  if (OB_ISNULL(schema_)) {
-    LOG_ERROR_RET(OB_ERR_UNEXPECTED, "invalid schema info", K(schema_));
-  } else {
-    reset_zone_replica_attr_array();
-    if (!OB_ISNULL(locality_str_.ptr())) {
-      schema_->free(locality_str_.ptr());
-    }
-    locality_str_.reset();
-  }
-}
-
-OB_DEF_SERIALIZE(ObLocality)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, locality_str_);
-  if (OB_FAIL(ret)) {
-    LOG_WARN("func_SERIALIZE failed", K(ret));
-  } else {} // no more to do
-  return ret;
-}
-
-OB_DEF_DESERIALIZE(ObLocality)
-{
-  int ret = OB_SUCCESS;
-  ObString locality;
-  LST_DO_CODE(OB_UNIS_DECODE, locality);
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(schema_)) {
+  const ObTenantSchema *tenant_schema = NULL;
+  if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", K(ret), K(database_id_), K(tenant_id_));
+  } else if (OB_UNLIKELY(NULL == tenant_schema)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get invalid schema_ info", K(ret), K(schema_));
-  } else if (OB_FAIL(schema_->deep_copy_str(locality, locality_str_))) {
-    LOG_WARN("fail to deep copy str", K(ret));
+    LOG_WARN("tenant schema null", K(ret), K(database_id_), K(tenant_id_), KP(tenant_schema));
+  } else if (OB_FAIL(tenant_schema->get_primary_zone_inherit(schema_guard, primary_zone))) {
+    LOG_WARN("fail to get primary zone array", K(ret), K(database_id_), K(tenant_id_));
   }
   return ret;
 }
-
-OB_DEF_SERIALIZE_SIZE(ObLocality)
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, locality_str_);
-  return len;
-}
-
 
 /*-------------------------------------------------------------------------------------------------
  * ------------------------------ObPrimaryZone-------------------------------------------
@@ -5004,30 +4742,15 @@ int ObTablegroupSchema::get_zone_replica_attr_array_inherit(
     ZoneLocalityIArray &locality) const
 {
   int ret = OB_SUCCESS;
-  bool use_tenant_locality = GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id_;
   locality.reset();
-  if (!use_tenant_locality) {
-    const share::schema::ObSimpleTenantSchema *simple_tenant = nullptr;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_locality = simple_tenant->is_restore();
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else {
-   const ObTenantSchema *tenant_schema = NULL;
-    if (OB_FAIL(schema_guard.get_tenant_info(get_tenant_id(), tenant_schema))) {
-      LOG_WARN("fail to get tenant schema", K(ret), K(tablegroup_id_), K(tenant_id_));
-    } else if (OB_UNLIKELY(NULL == tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant schema null", K(ret), K(tablegroup_id_), K(tenant_id_), KP(tenant_schema));
-    } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array_inherit(schema_guard, locality))) {
-      LOG_WARN("fail to get zone replica num array", K(ret), K(tablegroup_id_), K(tenant_id_));
-    }
+  const ObTenantSchema *tenant_schema = NULL;
+  if (OB_FAIL(schema_guard.get_tenant_info(get_tenant_id(), tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", K(ret), K(tablegroup_id_), K(tenant_id_));
+  } else if (OB_UNLIKELY(NULL == tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant schema null", K(ret), K(tablegroup_id_), K(tenant_id_), KP(tenant_schema));
+  } else if (OB_FAIL(tenant_schema->get_zone_replica_attr_array_inherit(schema_guard, locality))) {
+    LOG_WARN("fail to get zone replica num array", K(ret), K(tablegroup_id_), K(tenant_id_));
   }
   return ret;
 }
@@ -5037,33 +4760,17 @@ int ObTablegroupSchema::get_locality_str_inherit(
     const common::ObString *&locality_str) const
 {
   int ret = OB_SUCCESS;
-  bool use_tenant_locality = OB_SYS_TENANT_ID != tenant_id_ && GCTX.is_standby_cluster();
   locality_str = nullptr;
-  if (!use_tenant_locality) {
-    const share::schema::ObSimpleTenantSchema *simple_tenant = nullptr;
-    if (OB_FAIL(guard.get_tenant_info(tenant_id_, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_locality = simple_tenant->is_restore();
-    }
+  const ObSimpleTenantSchema *tenant_schema = nullptr;
+  if (OB_FAIL(guard.get_tenant_info(get_tenant_id(), tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", K(ret), "tenant_id", get_tenant_id());
+  } else if (OB_UNLIKELY(nullptr == tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get tenant schema", K(ret), "tenant_id", get_tenant_id());
+  } else {
+    locality_str = &tenant_schema->get_locality_str();
   }
-  if (OB_FAIL(ret)) {
-  } else if (use_tenant_locality
-             || nullptr == locality_str
-             || locality_str->empty()) {
-    const ObSimpleTenantSchema *tenant_schema = nullptr;
-    if (OB_FAIL(guard.get_tenant_info(get_tenant_id(), tenant_schema))) {
-      LOG_WARN("fail to get tenant schema", K(ret), "tenant_id", get_tenant_id());
-    } else if (OB_UNLIKELY(nullptr == tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("fail to get tenant schema", K(ret), "tenant_id", get_tenant_id());
-    } else {
-      locality_str = &tenant_schema->get_locality_str();
-    }
-  }
+
   if (OB_SUCC(ret)) {
     if (OB_UNLIKELY(nullptr == locality_str || locality_str->empty())) {
       ret = OB_ERR_UNEXPECTED;
@@ -5078,30 +4785,15 @@ int ObTablegroupSchema::get_primary_zone_inherit(
     ObPrimaryZone &primary_zone) const
 {
   int ret = OB_SUCCESS;
-  bool use_tenant_primary_zone = GCTX.is_standby_cluster() && OB_SYS_TENANT_ID != tenant_id_;
   primary_zone.reset();
-  if (!use_tenant_primary_zone) {
-    const share::schema::ObSimpleTenantSchema *simple_tenant = nullptr;
-    if (OB_FAIL(schema_guard.get_tenant_info(tenant_id_, simple_tenant))) {
-      LOG_WARN("fail to get tenant info", K(ret), K_(tenant_id));
-    } else if (OB_UNLIKELY(nullptr == simple_tenant)) {
-      ret = OB_TENANT_NOT_EXIST;
-      LOG_WARN("tenant schema ptr is null", K(ret), KPC(simple_tenant));
-    } else {
-      use_tenant_primary_zone = simple_tenant->is_restore();
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else {
-    const ObTenantSchema *tenant_schema = NULL;
-    if (OB_FAIL(schema_guard.get_tenant_info(get_tenant_id(), tenant_schema))) {
-      LOG_WARN("fail to get tenant schema", K(ret), K(tablegroup_id_), K(tenant_id_));
-    } else if (OB_UNLIKELY(NULL == tenant_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant schema null", K(ret), K(tablegroup_id_), K(tenant_id_), KP(tenant_schema));
-    } else if (OB_FAIL(tenant_schema->get_primary_zone_inherit(schema_guard, primary_zone))) {
-      LOG_WARN("fail to get primary zone array", K(ret), K(tablegroup_id_), K(tenant_id_));
-    }
+  const ObTenantSchema *tenant_schema = NULL;
+  if (OB_FAIL(schema_guard.get_tenant_info(get_tenant_id(), tenant_schema))) {
+    LOG_WARN("fail to get tenant schema", K(ret), K(tablegroup_id_), K(tenant_id_));
+  } else if (OB_UNLIKELY(NULL == tenant_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant schema null", K(ret), K(tablegroup_id_), K(tenant_id_), KP(tenant_schema));
+  } else if (OB_FAIL(tenant_schema->get_primary_zone_inherit(schema_guard, primary_zone))) {
+    LOG_WARN("fail to get primary zone array", K(ret), K(tablegroup_id_), K(tenant_id_));
   }
   return ret;
 }
@@ -8379,6 +8071,15 @@ DEF_TO_STRING(ObPrintPrivSet)
   }
   if ((priv_set_ & OB_PRIV_RELOAD) && OB_SUCCESS == ret) {
     ret = BUF_PRINTF(" RELOAD,");
+  }
+  if ((priv_set_ & OB_PRIV_CREATE_ROLE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" CREATE ROLE,");
+  }
+  if ((priv_set_ & OB_PRIV_DROP_ROLE) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" DROP ROLE,");
+  }
+  if ((priv_set_ & OB_PRIV_TRIGGER) && OB_SUCCESS == ret) {
+    ret = BUF_PRINTF(" TRIGGER,");
   }
   if (OB_SUCCESS == ret && pos > 1) {
     pos--; //Delete last ','
@@ -14879,387 +14580,6 @@ int ObIndexNameInfo::init(
     }
   }
   return ret;
-}
-
-template<class T>
-int ObLocalSessionVar::set_local_vars(T &var_array)
-{
-  int ret = OB_SUCCESS;
-  if (!local_session_vars_.empty()) {
-    local_session_vars_.reset();
-  }
-  if (OB_FAIL(local_session_vars_.reserve(var_array.count()))) {
-    LOG_WARN("fail to reserve for local_session_vars", K(ret));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < var_array.count(); ++i) {
-      if (OB_FAIL(add_local_var(var_array.at(i)))) {
-        LOG_WARN("fail to add session var", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::add_local_var(const ObSessionSysVar *var)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(var)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(var));
-  } else if (OB_FAIL(add_local_var(var->type_, var->val_))) {
-    LOG_WARN("fail to add local session var", K(ret));
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::add_local_var(ObSysVarClassType var_type, const ObObj &value)
-{
-  int ret = OB_SUCCESS;
-  ObSessionSysVar *cur_var = NULL;
-  if (OB_ISNULL(alloc_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(alloc_));
-  } else if (OB_FAIL(get_local_var(var_type, cur_var))) {
-    LOG_WARN("get local var failed", K(ret));
-  } else if (NULL == cur_var) {
-    ObSessionSysVar *new_var = OB_NEWx(ObSessionSysVar, alloc_);
-    if (OB_ISNULL(new_var)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("alloc new var failed.", K(ret));
-    } else if (OB_FAIL(local_session_vars_.push_back(new_var))) {
-      LOG_WARN("push back new var failed", K(ret));
-    } else if (OB_FAIL(deep_copy_obj(*alloc_, value, new_var->val_))) {
-      LOG_WARN("fail to deep copy obj", K(ret));
-    } else {
-      new_var->type_ = var_type;
-    }
-  } else if (!cur_var->is_equal(value)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("local session var added before is not equal to the new var", K(ret), KPC(cur_var), K(value));
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::get_local_var(ObSysVarClassType var_type, ObSessionSysVar *&sys_var) const
-{
-  int ret = OB_SUCCESS;
-  sys_var = NULL;
-  for (int64_t i = 0; OB_SUCC(ret) && NULL == sys_var && i < local_session_vars_.count(); ++i) {
-    if (OB_ISNULL(local_session_vars_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret), K(local_session_vars_));
-    } else if (local_session_vars_.at(i)->type_ == var_type) {
-      sys_var = local_session_vars_.at(i);
-    }
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::get_local_vars(ObIArray<const ObSessionSysVar *> &var_array) const
-{
-  int ret = OB_SUCCESS;
-  var_array.reset();
-  for (int64_t i = 0; OB_SUCC(ret) && i < local_session_vars_.count(); ++i){
-    if (OB_FAIL(var_array.push_back(local_session_vars_.at(i)))) {
-      LOG_WARN("push back local session vars failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::remove_vars_same_with_session(const sql::ObBasicSessionInfo *session)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), KP(session));
-  } else {
-    ObSEArray<share::schema::ObSessionSysVar *, 4> new_var_array;
-    for (int64_t i = 0; OB_SUCC(ret) && i < local_session_vars_.count(); ++i) {
-      ObSessionSysVar *local_var = local_session_vars_.at(i);
-      ObObj session_val;
-      if (OB_ISNULL(local_var)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret), KP(local_var));
-      } else if (SYS_VAR_SQL_MODE == local_var->type_) {
-        if (local_var->val_.get_uint64() != session->get_sql_mode()
-            && OB_FAIL(new_var_array.push_back(local_var))) {
-          LOG_WARN("fail to push into new var array", K(ret));
-        }
-      } else if (OB_FAIL(session->get_sys_variable(local_var->type_, session_val))) {
-        LOG_WARN("fail to get session variable", K(ret));
-      } else if (!local_var->is_equal(session_val) &&
-                  OB_FAIL(new_var_array.push_back(local_var))) {
-        LOG_WARN("fail to push into new var array", K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(local_session_vars_.assign(new_var_array))) {
-        LOG_WARN("fail to set local session vars.", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::deep_copy(const ObLocalSessionVar &other)
-{
-  int ret = OB_SUCCESS;
-  local_session_vars_.reset();
-  if (this == &other) {
-    //do nothing
-  } else if (NULL != other.alloc_) {
-    if (NULL == alloc_) {
-      alloc_ = other.alloc_;
-      local_session_vars_.set_allocator(other.alloc_);
-    }
-  }
-  if (OB_FAIL(set_local_vars(other.local_session_vars_))) {
-    LOG_WARN("fail to add session var", K(ret));
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::deep_copy_self()
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(alloc_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null allocator", K(ret));
-  } else {
-    ObSEArray<const share::schema::ObSessionSysVar *, 4> var_array;
-    if (OB_FAIL(get_local_vars(var_array))) {
-      LOG_WARN("get local vars failed", K(ret));
-    } else if (OB_FAIL(set_local_vars(var_array))) {
-      LOG_WARN("set local vars failed", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::assign(const ObLocalSessionVar &other)
-{
-  int ret = OB_SUCCESS;
-  local_session_vars_.reset();
-  if (NULL != other.alloc_) {
-    if (NULL == alloc_) {
-      alloc_ = other.alloc_;
-      local_session_vars_.set_allocator(other.alloc_);
-    }
-    if (OB_FAIL(local_session_vars_.reserve(other.local_session_vars_.count()))) {
-      LOG_WARN("reserve failed", K(ret));
-    } else if (OB_FAIL(local_session_vars_.assign(other.local_session_vars_))) {
-      LOG_WARN("fail to push back local var", K(ret));
-    }
-  } else {
-    //do nothing, other is not inited
-  }
-  return ret;
-}
-
-void ObLocalSessionVar::reset()
-{
-  local_session_vars_.reset();
-}
-
-int ObLocalSessionVar::set_local_var_capacity(int64_t sz)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(local_session_vars_.reserve(sz))) {
-    LOG_WARN("reserve failed", K(ret), K(sz));
-  }
-  return ret;
-}
-
-bool ObLocalSessionVar::operator == (const ObLocalSessionVar& other) const
-{
-  bool is_equal = local_session_vars_.count() == other.local_session_vars_.count();
-  if (is_equal) {
-    int tmp_ret = OB_SUCCESS;
-    for (int64_t i = 0; is_equal && i < local_session_vars_.count(); ++i) {
-      ObSessionSysVar *var = local_session_vars_.at(i);
-      ObSessionSysVar *other_val = NULL; ;
-      if (OB_ISNULL(var)) {
-       is_equal = false;
-      } else if ((tmp_ret = other.get_local_var(var->type_, other_val)) != OB_SUCCESS) {
-        is_equal = false;
-      } else if (other_val == NULL) {
-        is_equal = false;
-      } else {
-        is_equal = var->is_equal(other_val->val_);
-      }
-    }
-  }
-  return is_equal;
-}
-
-int64_t ObLocalSessionVar::get_deep_copy_size() const
-{
-  int64_t sz = sizeof(*this) + local_session_vars_.count() * sizeof(ObSessionSysVar *);
-  for (int64_t i = 0; i < local_session_vars_.count(); ++i) {
-    if (OB_NOT_NULL(local_session_vars_.at(i))) {
-      sz += local_session_vars_.at(i)->get_deep_copy_size();
-    }
-  }
-  return sz;
-}
-
-bool ObSessionSysVar::is_equal(const ObObj &other) const
-{
-  bool bool_ret = false;
-  if (val_.get_meta() != other.get_meta()) {
-    bool_ret = false;
-    if (ob_is_string_type(val_.get_type())
-        && val_.get_type() == other.get_type()
-        && val_.get_collation_type() != other.get_collation_type()) {
-      //the collation type of string system variables will be set to the current connection collation type after updating values.
-      //return true if the string values are equal.
-      bool_ret = common::ObCharset::case_sensitive_equal(val_.get_string(), other.get_string());
-    }
-  } else if (val_.is_equal(other, CS_TYPE_BINARY)) {
-    bool_ret = true;
-  }
-  return bool_ret;
-}
-
-OB_DEF_SERIALIZE(ObSessionSysVar)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, type_, val_);
-  return ret;
-}
-
-OB_DEF_SERIALIZE_SIZE(ObSessionSysVar)
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, type_, val_);
-  return len;
-}
-
-OB_DEF_DESERIALIZE(ObSessionSysVar)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_DECODE, type_, val_);
-  return ret;
-}
-
-int64_t ObSessionSysVar::get_deep_copy_size() const {
-  int64_t sz = sizeof(*this) + val_.get_deep_copy_size();
-  return sz;
-}
-
-const ObSysVarClassType ObLocalSessionVar::ALL_LOCAL_VARS[] = {
-  SYS_VAR_TIME_ZONE,
-  SYS_VAR_SQL_MODE,
-  SYS_VAR_NLS_DATE_FORMAT,
-  SYS_VAR_NLS_TIMESTAMP_FORMAT,
-  SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT,
-  SYS_VAR_COLLATION_CONNECTION,
-  SYS_VAR_MAX_ALLOWED_PACKET
-};
-
-//add all vars that can be solidified
-int ObLocalSessionVar::load_session_vars(const sql::ObBasicSessionInfo *session) {
-  int ret = OB_SUCCESS;
-  int64_t var_num = sizeof(ALL_LOCAL_VARS) / sizeof(ObSysVarClassType);
-  if (OB_ISNULL(session)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null session", K(ret));
-  } else if (!local_session_vars_.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("local_session_vars can only be inited once", K(ret));
-  } else if (OB_FAIL(local_session_vars_.reserve(var_num))) {
-    LOG_WARN("reserve failed", K(ret), K(var_num));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < var_num; ++i) {
-      ObObj var;
-      if (OB_FAIL(session->get_sys_variable(ALL_LOCAL_VARS[i], var))) {
-        LOG_WARN("fail to get session variable", K(ret));
-      } else if (OB_FAIL(add_local_var(ALL_LOCAL_VARS[i], var))) {
-        LOG_WARN("fail to add session var", K(ret), K(var));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLocalSessionVar::update_session_vars_with_local(sql::ObBasicSessionInfo &session) const {
-  int ret = OB_SUCCESS;
-  for (int64_t i = 0; OB_SUCC(ret) && i < local_session_vars_.count(); ++i) {
-    if (OB_ISNULL(local_session_vars_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (OB_FAIL(session.update_sys_variable(local_session_vars_.at(i)->type_, local_session_vars_.at(i)->val_))) {
-      LOG_WARN("fail to update sys variable", K(ret));
-    }
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE(ObLocalSessionVar)
-{
-  int ret = OB_SUCCESS;
-  LST_DO_CODE(OB_UNIS_ENCODE, local_session_vars_.count());
-  for (int64_t i = 0; OB_SUCC(ret) && i < local_session_vars_.count(); ++i) {
-    if (OB_ISNULL(local_session_vars_.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else {
-      LST_DO_CODE(OB_UNIS_ENCODE, *local_session_vars_.at(i));
-    }
-  }
-  return ret;
-}
-
-OB_DEF_SERIALIZE_SIZE(ObLocalSessionVar)
-{
-  int64_t len = 0;
-  LST_DO_CODE(OB_UNIS_ADD_LEN, local_session_vars_.count());
-  for (int64_t i = 0; i < local_session_vars_.count(); ++i) {
-    if (OB_NOT_NULL(local_session_vars_.at(i))) {
-      LST_DO_CODE(OB_UNIS_ADD_LEN, *local_session_vars_.at(i));
-    }
-  }
-  return len;
-}
-
-OB_DEF_DESERIALIZE(ObLocalSessionVar)
-{
-  int ret = OB_SUCCESS;
-  int64_t cnt = 0;
-  OB_UNIS_DECODE(cnt);
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(local_session_vars_.reserve(cnt))) {
-      LOG_WARN("reserve failed", K(ret));
-    }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
-    ObSessionSysVar var;
-    LST_DO_CODE(OB_UNIS_DECODE, var);
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(add_local_var(&var))) {
-        LOG_WARN("fail to add local session var", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-DEF_TO_STRING(ObLocalSessionVar)
-{
-  int64_t pos = 0;
-  J_OBJ_START();
-  for (int64_t i = 0; i < local_session_vars_.count(); ++i) {
-    if (i > 0) {
-      J_COMMA();
-    }
-    if (OB_NOT_NULL(local_session_vars_.at(i))) {
-      J_KV("type", local_session_vars_.at(i)->type_,
-            "val", local_session_vars_.at(i)->val_);
-    }
-  }
-  J_OBJ_END();
-  return pos;
 }
 
 //

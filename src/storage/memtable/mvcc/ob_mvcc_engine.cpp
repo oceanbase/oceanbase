@@ -326,8 +326,6 @@ int ObMvccEngine::mvcc_write(storage::ObStoreCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = NULL;
-  ObMemtableCtx *mem_ctx = ctx.mvcc_acc_ctx_.get_mem_ctx();
-
   if (OB_FAIL(build_tx_node_(arg, node))) {
     TRANS_LOG(WARN, "build tx node failed", K(ret), K(ctx), K(arg));
   } else if (OB_FAIL(value.mvcc_write(ctx,
@@ -336,10 +334,10 @@ int ObMvccEngine::mvcc_write(storage::ObStoreCtx &ctx,
                                       res))) {
     if (OB_TRY_LOCK_ROW_CONFLICT != ret &&
         OB_TRANSACTION_SET_VIOLATION != ret) {
-      TRANS_LOG(WARN, "mvcc write failed", K(ret), KPC(mem_ctx), K(arg));
+      TRANS_LOG(WARN, "mvcc write failed", K(ret), K(arg));
     }
   } else {
-    TRANS_LOG(DEBUG, "mvcc write succeed", K(ret), KPC(mem_ctx), K(arg), K(*node));
+    TRANS_LOG(DEBUG, "mvcc write succeed", K(ret), K(arg), K(*node));
   }
 
   return ret;
@@ -350,7 +348,6 @@ int ObMvccEngine::mvcc_replay(const ObTxNodeArg &arg,
 {
   int ret = OB_SUCCESS;
   ObMvccTransNode *node = NULL;
-
   if (OB_FAIL(build_tx_node_(arg, node))) {
     TRANS_LOG(WARN, "build tx node failed", K(ret), K(arg));
   } else {
@@ -374,6 +371,7 @@ int ObMvccEngine::build_tx_node_(const ObTxNodeArg &arg,
     node->version_ = arg.memstore_version_;
     node->scn_ = arg.scn_;
     node->seq_no_ = arg.seq_no_;
+    node->write_epoch_ = arg.write_epoch_;
     node->prev_ = NULL;
     node->next_ = NULL;
 

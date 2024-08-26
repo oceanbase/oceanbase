@@ -16,6 +16,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "lib/container/ob_fixed_array.h"
 #include "sql/das/ob_das_define.h"
+#include "sql/optimizer/ob_route_policy.h"
 namespace oceanbase
 {
 namespace common
@@ -346,7 +347,8 @@ private:
                          share::ObLSLocation &location);
   int nonblock_get_readable_replica(const uint64_t tenant_id,
                                     const common::ObTabletID &tablet_id,
-                                    ObDASTabletLoc &tablet_loc);
+                                    ObDASTabletLoc &tablet_loc,
+                                    const ObRoutePolicyType route_policy);
 private:
   int last_errno_;
   int cur_errno_;

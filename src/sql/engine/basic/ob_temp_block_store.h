@@ -20,7 +20,7 @@
 #include "sql/engine/basic/ob_sql_mem_callback.h"
 #include "lib/checksum/ob_crc64.h"
 #include "sql/engine/basic/chunk_store/ob_chunk_block_compressor.h"
-#include "storage/blocksstable/ob_tmp_file.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h"
 
 namespace oceanbase
 {
@@ -289,7 +289,7 @@ public:
     inline int64_t get_block_cnt() const { return store_->get_block_cnt(); }
     void set_iteration_age(IterationAge *age) { age_ = age; }
     void set_blk_holder(BlockHolder *holder) { blk_holder_ptr_ = holder; }
-    blocksstable::ObTmpFileIOHandle& get_read_io_handler() { return read_io_handle_; }
+    tmp_file::ObTmpFileIOHandle& get_read_io_handler() { return read_io_handle_; }
     inline bool is_async() const { return is_async_; }
     void reset();
     void reuse();
@@ -329,7 +329,7 @@ public:
     IterationAge inner_age_;
     // to optimize performance, record the last_extent_id to avoid do binary search every time
     // calling read.
-    blocksstable::ObTmpFileIOHandle read_io_handle_;
+    tmp_file::ObTmpFileIOHandle read_io_handle_;
     int64_t cur_file_offset_;
     bool is_async_;
     int aio_buf_idx_;
@@ -507,7 +507,7 @@ private:
   int ensure_reader_buffer(BlockReader &reader, ShrinkBuffer &buf, const int64_t size);
   int write_file(BlockIndex &bi, void *buf, int64_t size);
   int read_file(void *buf, const int64_t size, const int64_t offset,
-                blocksstable::ObTmpFileIOHandle &handle, const bool is_async);
+                tmp_file::ObTmpFileIOHandle &handle, const bool is_async);
   int dump_block_if_need(const int64_t extra_size);
   bool need_dump(const int64_t extra_size);
   int write_compressed_block(Block *blk, BlockIndex *bi);
@@ -590,8 +590,8 @@ private:
   ObSqlMemoryCallback *mem_stat_;
   ObChunkBlockCompressor compressor_;
   ObIOEventObserver *io_observer_;
-  blocksstable::ObTmpFileIOHandle write_io_handle_;
-  blocksstable::ObTmpFileIOInfo io_;
+  tmp_file::ObTmpFileIOHandle write_io_handle_;
+  tmp_file::ObTmpFileIOInfo io_;
   bool last_block_on_disk_;
   int64_t cur_file_offset_;
 

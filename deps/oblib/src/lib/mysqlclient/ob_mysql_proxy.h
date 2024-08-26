@@ -91,8 +91,8 @@ struct ObSessionParam final
 {
 public:
   ObSessionParam()
-    : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false), use_external_session_(false), consumer_group_id_(0), nls_formats_{}
-  {}
+      : sql_mode_(nullptr), tz_info_wrap_(nullptr), ddl_info_(), is_load_data_exec_(false),
+        use_external_session_(false), consumer_group_id_(0), nls_formats_{}, enable_pl_cache_(true) {}
   ~ObSessionParam() = default;
 public:
   int64_t *sql_mode_;
@@ -102,6 +102,7 @@ public:
   bool use_external_session_; // need init remote inner sql conn with sess getting from sess mgr
   int64_t consumer_group_id_;
   common::ObString nls_formats_[common::ObNLSFormatEnum::NLS_MAX];
+  bool enable_pl_cache_;
 };
 
 // thread safe sql proxy
@@ -212,14 +213,19 @@ public:
                           const share::schema::ObRoutineInfo &routine_info,
                           const common::ObIArray<const pl::ObUserDefinedType *> &udts,
                           const ObTimeZoneInfo *tz_info,
-                          ObObj *result);
-  int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn, const char *sql);
+                          ObObj *result,
+                          bool is_sql);
+  int dblink_prepare(sqlclient::ObISQLConnection *dblink_conn,
+                     const char *sql,
+                     int64_t param_count,
+                     ObIAllocator *allocator = NULL);
   int dblink_bind_basic_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
                                     uint64_t position,
                                     void *param,
                                     int64_t param_size,
                                     int32_t datatype,
-                                    int32_t &indicator);
+                                    int32_t &indicator,
+                                    bool is_out_param);
   int dblink_bind_array_type_by_pos(sqlclient::ObISQLConnection *dblink_conn,
                                     uint64_t position,
                                     void *array,

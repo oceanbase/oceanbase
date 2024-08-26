@@ -74,7 +74,7 @@ void fill_column_schema(ObColumnSchemaV2 &column, uint64_t id, const char *name,
   value.set_int(100);
   column.set_orig_default_value(value);
   value.set_int(101);
-  column.set_cur_default_value(value);
+  column.set_cur_default_value(value, false);
   column.set_comment("black gives me black eyes");
 }
 

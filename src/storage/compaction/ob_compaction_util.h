@@ -17,7 +17,7 @@ namespace oceanbase
 {
 namespace compaction
 {
-enum ObMergeType : uint8_t
+enum ObMergeType
 {
   INVALID_MERGE_TYPE = 0,
   MINOR_MERGE,  // minor merge, compaction several mini sstable into one larger mini sstable
@@ -30,6 +30,7 @@ enum ObMergeType : uint8_t
   BACKFILL_TX_MERGE,
   MDS_MINI_MERGE,
   MDS_MINOR_MERGE,
+  CONVERT_CO_MAJOR_MERGE, // convert row store major into columnar store cg sstables
   // add new merge type here
   // fix merge_type_to_str & ObPartitionMergePolicy::get_merge_tables
   MERGE_TYPE_MAX
@@ -48,9 +49,13 @@ inline bool is_medium_merge(const ObMergeType &merge_type)
 {
   return MEDIUM_MERGE == merge_type;
 }
+inline bool is_convert_co_major_merge(const ObMergeType &merge_type)
+{
+  return CONVERT_CO_MAJOR_MERGE == merge_type;
+}
 inline bool is_major_merge_type(const ObMergeType &merge_type)
 {
-  return is_medium_merge(merge_type) || is_major_merge(merge_type);
+  return is_convert_co_major_merge(merge_type) || is_medium_merge(merge_type) || is_major_merge(merge_type);
 }
 inline bool is_mini_merge(const ObMergeType &merge_type)
 {

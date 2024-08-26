@@ -397,7 +397,7 @@ struct ObLogPlanHint
 {
   ObLogPlanHint() { reset(); }
   void reset();
-  int init_normal_hints(const ObIArray<ObHint*> &normal_hints);
+  int init_normal_hints(const ObIArray<ObHint*> &normal_hints, const ObQueryCtx &query_ctx);
 #ifndef OB_BUILD_SPM
   int init_log_plan_hint(ObSqlSchemaGuard &schema_guard,
                          const ObDMLStmt &stmt,
@@ -470,7 +470,15 @@ struct ObLogPlanHint
   int get_aggregation_info(bool &force_use_hash,
                            bool &force_use_merge,
                            bool &force_part_sort,
-                           bool &force_normal_sort) const;
+                           bool &force_normal_sort,
+                           bool &force_basic,
+                           bool &force_partition_wise,
+                           bool &force_dist_hash) const;
+  int get_distinct_info(bool &force_use_hash,
+                        bool &force_use_merge,
+                        bool &force_basic,
+                        bool &force_partition_wise,
+                        bool &force_dist_hash) const;
   int get_valid_pq_subquery_hint(const ObIArray<ObString> &sub_qb_names,
                                     const ObPQSubqueryHint *&explicit_hint,
                                     const ObPQSubqueryHint *&implicit_hint) const;
@@ -482,12 +490,8 @@ struct ObLogPlanHint
 
   bool use_late_material() const { return has_enable_hint(T_USE_LATE_MATERIALIZATION); }
   bool no_use_late_material() const { return has_disable_hint(T_USE_LATE_MATERIALIZATION); }
-  bool use_hash_aggregate() const { return has_enable_hint(T_USE_HASH_AGGREGATE); }
-  bool use_merge_aggregate() const { return has_disable_hint(T_USE_HASH_AGGREGATE); }
   bool pushdown_group_by() const { return has_enable_hint(T_GBY_PUSHDOWN); }
   bool no_pushdown_group_by() const { return has_disable_hint(T_GBY_PUSHDOWN); }
-  bool use_hash_distinct() const { return has_enable_hint(T_USE_HASH_DISTINCT); }
-  bool use_merge_distinct() const { return has_disable_hint(T_USE_HASH_DISTINCT); }
   bool pushdown_distinct() const { return has_enable_hint(T_DISTINCT_PUSHDOWN); }
   bool no_pushdown_distinct() const { return has_disable_hint(T_DISTINCT_PUSHDOWN); }
   bool use_distributed_dml() const { return has_enable_hint(T_USE_DISTRIBUTED_DML); }
@@ -497,7 +501,7 @@ struct ObLogPlanHint
 
   TO_STRING_KV(K_(is_outline_data), K_(join_order),
                K_(table_hints), K_(join_hints),
-               K_(normal_hints), K_(enable_index_prefix));
+               K_(normal_hints), K_(optimizer_features_enable_version));
 
   bool is_outline_data_;
 #ifdef OB_BUILD_SPM
@@ -507,7 +511,7 @@ struct ObLogPlanHint
   common::ObSEArray<LogTableHint, 4, common::ModulePageAllocator, true> table_hints_;
   common::ObSEArray<LogJoinHint, 8, common::ModulePageAllocator, true> join_hints_;
   common::ObSEArray<const ObHint*, 8, common::ModulePageAllocator, true> normal_hints_;
-  bool enable_index_prefix_;
+  uint64_t optimizer_features_enable_version_;
 };
 
 }

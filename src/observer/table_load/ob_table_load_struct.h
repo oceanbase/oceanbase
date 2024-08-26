@@ -115,7 +115,8 @@ public:
       insert_mode_(storage::ObDirectLoadInsertMode::INVALID_INSERT_MODE),
       load_mode_(storage::ObDirectLoadMode::INVALID_MODE),
       compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
-      online_sample_percent_(1.)
+      online_sample_percent_(1.),
+      load_level_(storage::ObDirectLoadLevel::INVALID_LEVEL)
   {
   }
 
@@ -151,7 +152,8 @@ public:
            (storage::ObDirectLoadInsertMode::INC_REPLACE == insert_mode_
               ? sql::ObLoadDupActionType::LOAD_REPLACE == dup_action_
               : true) &&
-           ObCompressorType::INVALID_COMPRESSOR != compressor_type_;
+           ObCompressorType::INVALID_COMPRESSOR != compressor_type_ &&
+           storage::ObDirectLoadLevel::is_type_valid(load_level_);
   }
 
   TO_STRING_KV(K_(tenant_id),
@@ -173,7 +175,8 @@ public:
                "insert_mode", storage::ObDirectLoadInsertMode::get_type_string(insert_mode_),
                "direct_load_mode", storage::ObDirectLoadMode::get_type_string(load_mode_),
                K_(compressor_type),
-               K_(online_sample_percent));
+               K_(online_sample_percent),
+               "direct_load_level", storage::ObDirectLoadLevel::get_type_string(load_level_));
 
 public:
   uint64_t tenant_id_;
@@ -196,6 +199,7 @@ public:
   storage::ObDirectLoadMode::Type load_mode_;
   ObCompressorType compressor_type_;
   double online_sample_percent_;
+  storage::ObDirectLoadLevel::Type load_level_;
 };
 
 struct ObTableLoadDDLParam

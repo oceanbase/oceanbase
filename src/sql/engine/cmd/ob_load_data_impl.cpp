@@ -2468,7 +2468,7 @@ int ObLoadDataSPImpl::ToolBox::release_resources()
 
   //release file reader
   if (OB_NOT_NULL(file_reader)) {
-    file_reader->~ObFileReader();
+    ObFileReader::destroy(file_reader);
     file_reader = NULL;
   }
 
@@ -2776,7 +2776,10 @@ int ObLoadDataSPImpl::ToolBox::init(ObExecContext &ctx, ObLoadDataStmt &load_stm
     file_read_param.filename_           = load_args.file_name_;
     file_read_param.compression_format_ = load_args.compression_format_;
     file_read_param.access_info_        = load_args.access_info_;
-    file_read_param.packet_handle_      = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
+    file_read_param.packet_handle_      = nullptr;
+    if (OB_NOT_NULL(ctx.get_my_session()) && OB_NOT_NULL(ctx.get_my_session()->get_pl_query_sender())) {
+      file_read_param.packet_handle_ = &ctx.get_my_session()->get_pl_query_sender()->get_packet_sender();
+    }
     file_read_param.session_            = ctx.get_my_session();
     file_read_param.timeout_ts_         = THIS_WORKER.get_timeout_ts();
 

@@ -269,7 +269,13 @@ private:
       const ObIArray<ObITable *> &tables_array,
       const int64_t multi_version_start,
       const bool allow_duplicate_sstable,
-      int64_t &inc_base_snapshot_version);
+      int64_t &inc_base_snapshot_version,
+      bool replace_old_row_store_major = false);
+  int check_and_build_new_major_tables(
+      const ObTabletTableStore &old_store,
+      const ObIArray<ObITable *> &tables_array,
+      const bool allow_duplicate_sstable,
+      ObIArray<ObITable *> &major_tables) const;
   int inner_replace_remote_major_sstable_(
       common::ObArenaAllocator &allocator,
       const ObTabletTableStore &old_store,

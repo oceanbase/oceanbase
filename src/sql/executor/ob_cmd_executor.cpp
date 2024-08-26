@@ -574,7 +574,19 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_CHECKSUM_TABLE:
       case stmt::T_CACHE_INDEX:
       case stmt::T_LOAD_INDEX_INTO_CACHE:
-      case stmt::T_FLUSH_PRIVILEGES: {
+      case stmt::T_FLUSH_PRIVILEGES:
+      case stmt::T_INSTALL_PLUGIN:
+      case stmt::T_UNINSTALL_PLUGIN:
+      case stmt::T_FLUSH_MOCK:
+      case stmt::T_FLUSH_MOCK_LIST:
+      case stmt::T_HANDLER_MOCK:
+      case stmt::T_SHOW_PLUGINS:
+      case stmt::T_CREATE_SERVER:
+      case stmt::T_ALTER_SERVER:
+      case stmt::T_DROP_SERVER:
+      case stmt::T_CREATE_LOGFILE_GROUP:
+      case stmt::T_ALTER_LOGFILE_GROUP:
+      case stmt::T_DROP_LOGFILE_GROUP: {
         DEFINE_EXECUTE_CMD(ObMockStmt, ObMockExecutor);
         break;
       }
@@ -652,6 +664,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_MIGRATE_UNIT: {
         DEFINE_EXECUTE_CMD(ObMigrateUnitStmt, ObMigrateUnitExecutor);
+        break;
+      }
+      case stmt::T_ALTER_LS_REPLICA: {
+        DEFINE_EXECUTE_CMD(ObAlterLSReplicaStmt, ObAlterLSReplicaExecutor);
         break;
       }
       case stmt::T_ADD_ARBITRATION_SERVICE: {
@@ -1050,6 +1066,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       }
       case stmt::T_CLONE_TENANT: {
         DEFINE_EXECUTE_CMD(ObCloneTenantStmt, ObCloneTenantExecutor);
+        break;
+      }
+      case stmt::T_SERVICE_NAME: {
+        DEFINE_EXECUTE_CMD(ObServiceNameStmt, ObServiceNameExecutor);
         break;
       }
       case stmt::T_ALTER_SYSTEM_RESET_PARAMETER: {

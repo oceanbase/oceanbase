@@ -311,6 +311,20 @@ int ObTabletReplicaChecksumItem::verify_checksum(const ObTabletReplicaChecksumIt
   return ret;
 }
 
+int ObTabletReplicaChecksumItem::verify_column_checksum(const ObTabletReplicaChecksumItem &other) const
+{
+  int ret = OB_SUCCESS;
+  if (compaction_scn_ == other.compaction_scn_) {
+    bool column_meta_equal = false;
+    if (OB_FAIL(column_meta_.check_equal(other.column_meta_, column_meta_equal))) {
+      LOG_WARN("fail to check column meta equal", KR(ret), K(other), K(*this));
+    } else if (!column_meta_equal) {
+      ret = OB_CHECKSUM_ERROR;
+    }
+  }
+  return ret;
+}
+
 int ObTabletReplicaChecksumItem::assign_key(const ObTabletReplicaChecksumItem &other)
 {
   int ret = OB_SUCCESS;
@@ -897,6 +911,46 @@ int ObTabletReplicaChecksumOperator::get_hex_column_meta(
     LOG_WARN("encode error", KR(ret), K(hex_pos), K(hex_size));
   } else {
     column_meta_hex_str.assign_ptr(hex_buf, static_cast<int32_t>(hex_size));
+  }
+  return ret;
+}
+
+// ----------------------- ObTabletDataChecksumChecker -----------------------
+ObTabletDataChecksumChecker::ObTabletDataChecksumChecker()
+  : normal_ckm_item_(nullptr),
+    cs_replica_ckm_item_(nullptr)
+{}
+
+ObTabletDataChecksumChecker::~ObTabletDataChecksumChecker()
+{
+  reset();
+}
+
+void ObTabletDataChecksumChecker::reset()
+{
+  normal_ckm_item_ = nullptr;
+  cs_replica_ckm_item_ = nullptr;
+}
+
+int ObTabletDataChecksumChecker::check_data_checksum(const ObTabletReplicaChecksumItem& curr_item, bool is_cs_replica)
+{
+  int ret = OB_SUCCESS;
+  if (is_cs_replica) {
+    if (OB_ISNULL(cs_replica_ckm_item_)) {
+      cs_replica_ckm_item_ = &curr_item;
+    } else if (cs_replica_ckm_item_->compaction_scn_ != curr_item.compaction_scn_) {
+      LOG_INFO("no need to check data checksum", K(curr_item), KPC(this));
+    } else if (cs_replica_ckm_item_->data_checksum_ != curr_item.data_checksum_) {
+      ret = OB_CHECKSUM_ERROR;
+    }
+  } else {
+    if (OB_ISNULL(normal_ckm_item_)) {
+      normal_ckm_item_ = &curr_item;
+    } else if (normal_ckm_item_->compaction_scn_ != curr_item.compaction_scn_) {
+      LOG_INFO("no need to check data checksum", K(curr_item), KPC(this));
+    } else if (normal_ckm_item_->data_checksum_ != curr_item.data_checksum_) {
+      ret = OB_CHECKSUM_ERROR;
+    }
   }
   return ret;
 }

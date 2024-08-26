@@ -80,6 +80,7 @@ public:
     client_sessid_ = INVALID_SESSID;
     client_addr_port_ = 0;
     client_create_time_ = 0;
+    has_service_name_ = false;
   }
 
   obmysql::ObCompressType get_compress_type() {
@@ -215,6 +216,7 @@ public:
   uint32_t client_sessid_;
   int32_t client_addr_port_;
   int64_t client_create_time_;
+  bool has_service_name_;
 };
 } // end of namespace observer
 } // end of namespace oceanbase

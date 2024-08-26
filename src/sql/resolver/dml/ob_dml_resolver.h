@@ -487,7 +487,7 @@ protected:
                          const share::schema::ObTableSchema &table_schema,
                          TableItem &table_item);
   int resolve_sample_clause(const ParseNode *part_node,
-                            const uint64_t table_id);
+                            TableItem &table_item);
 
   int check_pivot_aggr_expr(ObRawExpr *expr) const;
   int resolve_transpose_table(const ParseNode *transpose_node, TableItem *&table_item);
@@ -919,9 +919,9 @@ private:
                                            bool &has_part_key);
 
   //This funcion used to optimize Bypass Import scenario so far
-  int check_insert_into_select_need_column_convert(const ObColumnRefRawExpr *target_expr,
-                                                   const ObRawExpr *source_expr,
-                                                   bool &need_column_convert);
+  int check_insert_into_select_use_fast_column_convert(const ObColumnRefRawExpr *target_expr,
+                                                       const ObRawExpr *source_expr,
+                                                       bool &fast_calc);
 
   ///////////functions for sql hint/////////////
   int resolve_global_hint(const ParseNode &hint_node,
@@ -946,6 +946,7 @@ private:
   int resolve_pq_distribute_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_pq_set_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_pq_subquery_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
+  int resolve_normal_pq_hint(const ParseNode &hint_node, ObOptHint *&opt_hint);
   int resolve_join_filter_hint(const ParseNode &join_node, ObOptHint *&opt_hint);
   int resolve_aggregation_hint(const ParseNode &hint_node, ObOptHint *&hint);
   int resolve_normal_transform_hint(const ParseNode &hint_node, ObTransHint *&hint);
@@ -1035,6 +1036,7 @@ private:
   int add_udt_dependency(const pl::ObUserDefinedType &udt_type);
   int add_obj_to_llc_bitmap(const ObObj &obj, char *llc_bitmap, double &num_null);
   int compute_values_table_row_count(ObValuesTableDef &table_def);
+  bool is_update_for_mv_fast_refresh(const ObDMLStmt &stmt);
 protected:
   struct GenColumnExprInfo {
     GenColumnExprInfo():

@@ -29,7 +29,6 @@ namespace oceanbase
 namespace share
 {
 class ObIServerTrace;
-class ObCompactionTabletMetaIterator;
 namespace schema
 {
 class ObSchemaGetterGuard;
@@ -110,7 +109,6 @@ private:
     const uint64_t data_table_id,
     const int64_t finish_index_cnt,
     const compaction::ObTableCkmItems &data_table_ckm);
-  int deal_with_validated_data_table(const uint64_t data_table_id);
   bool should_ignore_cur_table(const ObSimpleTableSchemaV2 *simple_schema);
   int deal_with_rest_data_table();
   bool is_extra_check_round() const { return 0 == (loop_cnt_ % 8); } // check every 8 rounds
@@ -127,7 +125,6 @@ private:
   int handle_fts_checksum();
 private:
   static const int64_t ADD_RS_EVENT_INTERVAL = 10L * 60 * 1000 * 1000; // 10m
-  static const int64_t PRINT_LOG_INTERVAL = 2 * 60 * 1000 * 1000; // 2m
   static const int64_t DEAL_REST_TABLE_CNT_THRESHOLD = 100;
   static const int64_t DEAL_REST_TABLE_INTERVAL = 10 * 60 * 1000 * 1000L; // 10m
   static const int64_t ASSGIN_FAILURE_RETRY_TIMES = 10;
@@ -152,10 +149,10 @@ private:
   // record each table compaction/verify status
   compaction::ObTableCompactionInfoMap table_compaction_map_; // <table_id, compaction_info>
   ObFTSGroupArray fts_group_array_;
+  share::ObCompactionLocalityCache ls_locality_cache_;
   ObChecksumValidator ckm_validator_;
   compaction::ObUncompactInfo uncompact_info_;
   // cache of ls_infos in __all_ls_meta_table
-  share::ObCompactionLocalityCache ls_locality_cache_;
   // statistics section
   compaction::ObRSCompactionTimeGuard total_time_guard_;
   compaction::ObCkmValidatorStatistics validator_statistics_;

@@ -266,7 +266,7 @@ public:
       K_(data_column_cnt), K_(data_column_checksums),
       K_(row_count), K_(max_merged_trans_version), K_(contain_uncommitted_row),
       K_(occupy_size), K_(original_size), K_(data_checksum), K_(use_old_macro_block_count),
-      K_(compressor_type), K_(root_row_store_type), K_(nested_offset), K_(nested_size), K_(table_flag),
+      K_(compressor_type), K_(root_row_store_type), K_(nested_offset), K_(nested_size), K_(table_backup_flag),
       K_(encrypt_id), K_(master_key_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)));
 public:
   ObIndexTreeRootBlockDesc root_desc_;
@@ -290,7 +290,7 @@ public:
   int64_t master_key_id_;
   int64_t nested_offset_;
   int64_t nested_size_;
-  ObTableFlag table_flag_;
+  ObTableBackupFlag table_backup_flag_;
   ObRowStoreType root_row_store_type_;
   char encrypt_key_[share::OB_MAX_TABLESPACE_ENCRYPT_KEY_LENGTH];
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMergeRes);

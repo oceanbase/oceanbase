@@ -532,6 +532,14 @@ int ObLogGroupBy::print_outline_data(PlanText &plan_text)
         LOG_WARN("failed to print hint", K(ret), K(hint));
       }
     }
+    if (OB_SUCC(ret) && T_DISTRIBUTE_BASIC != dist_method_) {
+      ObPQHint hint(T_PQ_GBY_HINT);
+      hint.set_qb_name(qb_name);
+      hint.set_dist_method(dist_method_);
+      if (OB_FAIL(hint.print_hint(plan_text))) {
+        LOG_WARN("failed to print hint", K(ret), K(hint));
+      }
+    }
   }
   return ret;
 }
@@ -552,6 +560,10 @@ int ObLogGroupBy::print_used_hint(PlanText &plan_text)
   } else if (NULL != (hint = get_plan()->get_log_plan_hint().get_normal_hint(T_USE_HASH_AGGREGATE))
              && hint->is_enable_hint() == use_hash_aggr_
              && static_cast<const ObAggHint*>(hint)->force_partition_sort() == use_part_sort_
+             && OB_FAIL(hint->print_hint(plan_text))) {
+    LOG_WARN("failed to print used hint for group by", K(ret), K(*hint));
+  } else if (NULL != (hint = get_plan()->get_log_plan_hint().get_normal_hint(T_PQ_GBY_HINT))
+             && static_cast<const ObPQHint*>(hint)->is_dist_method_match(dist_method_)
              && OB_FAIL(hint->print_hint(plan_text))) {
     LOG_WARN("failed to print used hint for group by", K(ret), K(*hint));
   }

@@ -85,7 +85,7 @@
 #include "storage/tenant_snapshot/ob_tenant_snapshot_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "share/ob_rpc_struct.h"
-#include "rootserver/ob_recovery_ls_service.h"
+#include "rootserver/standby/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
 #include "rootserver/ob_admin_drtask_util.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
@@ -141,55 +141,35 @@ int ObRpcCheckBackupSchuedulerWorkingP::process()
   return ret;
 }
 
+int ObRpcLSCancelReplicaP::process()
+{
+  int ret = OB_SUCCESS;
+  bool is_exist = false;
+  uint64_t tenant_id = arg_.get_tenant_id();
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  if (tenant_id != MTL_ID()) {
+    if (OB_FAIL(guard.switch_to(tenant_id))) {
+      LOG_WARN("failed to switch to tenant", K(ret), K(tenant_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObStorageHACancelDagNetUtils::cancel_task(arg_.get_ls_id(), arg_.get_task_id()))) {
+      LOG_WARN("failed to cancel task", K(ret), K(arg_));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    SERVER_EVENT_ADD("storage_ha", "cancel storage ha task failed",
+                     "tenant_id", tenant_id,
+                     "ls_id", arg_.get_ls_id().id(),
+                     "task_id", arg_.get_task_id(),
+                     "result", ret);
+  }
+  return ret;
+}
 
 int ObRpcLSMigrateReplicaP::process()
 {
-  int ret = OB_SUCCESS;
-  uint64_t tenant_id = arg_.tenant_id_;
-  ObLSService *ls_service = nullptr;
-  bool is_exist = false;
-  ObMigrationOpArg migration_op_arg;
-
-  if (tenant_id != MTL_ID()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("ObRpcLSMigrateReplicaP::proces tenant not match", K(tenant_id), K(ret));
-  }
-  ObCurTraceId::set(arg_.task_id_);
-  if (OB_SUCC(ret)) {
-    SERVER_EVENT_ADD("storage_ha", "schedule_ls_migration start", "tenant_id", arg_.tenant_id_, "ls_id", arg_.ls_id_.id(),
-                     "data_src", arg_.data_source_.get_server(), "dest", arg_.dst_.get_server());
-
-    ls_service = MTL(ObLSService*);
-    if (OB_ISNULL(ls_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      COMMON_LOG(ERROR, "mtl ObLSService should not be null", K(ret));
-    } else if (OB_FAIL(ls_service->check_ls_exist(arg_.ls_id_, is_exist))) {
-      COMMON_LOG(WARN, "failed to check ls exist", K(ret), K(arg_));
-    } else if (is_exist) {
-      ret = OB_LS_EXIST;
-      COMMON_LOG(WARN, "can not migrate ls which local ls is exist", K(ret), K(arg_), K(is_exist));
-    } else {
-      migration_op_arg.cluster_id_ = GCONF.cluster_id;
-      migration_op_arg.data_src_ = arg_.force_data_source_;
-      migration_op_arg.dst_ = arg_.dst_;
-      migration_op_arg.ls_id_ = arg_.ls_id_;
-      //TODO(muwei.ym) need check priority in 4.2 RC3
-      migration_op_arg.priority_ = ObMigrationOpPriority::PRIO_HIGH;
-      migration_op_arg.paxos_replica_number_ = arg_.paxos_replica_number_;
-      migration_op_arg.src_ = arg_.src_;
-      migration_op_arg.type_ = ObMigrationOpType::MIGRATE_LS_OP;
-
-      if (OB_FAIL(ls_service->create_ls_for_ha(arg_.task_id_, migration_op_arg))) {
-        COMMON_LOG(WARN, "failed to create ls for ha", K(ret), K(arg_), K(migration_op_arg));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-    SERVER_EVENT_ADD("storage_ha", "schedule_ls_migration failed", "ls_id", arg_.ls_id_.id(), "result", ret);
-  }
-
-  return ret;
+  return observer::ObService::do_migrate_ls_replica(arg_);
 }
 
 int ObRpcLSAddReplicaP::process()
@@ -1317,6 +1297,8 @@ int ObFlushCacheP::process()
             for (uint64_t i=0; i<arg_.db_ids_.count(); i++) {
               if (is_evict_by_schema_id) {
                 ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryBySchemaIdOp, uint64_t>(arg_.db_ids_.at(i), arg_.schema_id_);
+              } else if (OB_ISNULL(arg_.sql_id_)) {
+                ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryByDbIdOp, uint64_t>(arg_.db_ids_.at(i), arg_.schema_id_);
               } else {
                 ret = plan_cache->flush_pl_cache_single_cache_obj<pl::ObGetPLKVEntryBySQLIDOp, ObString>(arg_.db_ids_.at(i), arg_.sql_id_);
               }
@@ -3326,6 +3308,17 @@ int ObForceDumpServerUsageP::process()
   return ret;
 }
 
+int ObRefreshServiceNameP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    COMMON_LOG(WARN, "ob_service is null", KR(ret));
+  } else if (OB_FAIL(gctx_.ob_service_->refresh_service_name(arg_, result_))) {
+    COMMON_LOG(WARN, "fail to refresh_service_name", KR(ret), K(arg_));
+  }
+  return ret;
+}
 int ObResourceLimitCalculatorP::process()
 {
   int ret = OB_SUCCESS;

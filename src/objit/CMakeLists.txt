@@ -20,7 +20,6 @@ message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
-add_definitions(-Wno-deprecated)
 add_definitions(-D_GLIBCXX_USE_CXX11_ABI=0 -g -O2 -frtti)
 
 # Find the libraries that correspond to the LLVM components

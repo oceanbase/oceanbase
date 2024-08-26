@@ -81,22 +81,24 @@ ObAsyncTask *ObEventTableClearTask::deep_copy(char *buf, const int64_t buf_size)
 
 ////////////////////////////////////////////////////////////////
 ObEventHistoryTableOperator::ObEventTableUpdateTask::ObEventTableUpdateTask(
-    ObEventHistoryTableOperator &table_operator, const bool is_delete, const int64_t create_time)
+    ObEventHistoryTableOperator &table_operator, const bool is_delete,
+    const int64_t create_time, const uint64_t exec_tenant_id)
   : IObDedupTask(T_RS_ET_UPDATE), table_operator_(table_operator), is_delete_(is_delete),
-  create_time_(create_time)
+  create_time_(create_time), exec_tenant_id_(exec_tenant_id)
 {
 }
 
 
 int ObEventHistoryTableOperator::ObEventTableUpdateTask::init(const char *ptr,
-    const int64_t buf_size)
+    const int64_t buf_size, const uint64_t exec_tenant_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(ptr) || buf_size <= 0) {
-    LOG_WARN("invalid argument", KP(ptr), K(buf_size));
+  if (OB_ISNULL(ptr) || OB_UNLIKELY(buf_size <= 0 || !is_valid_tenant_id(exec_tenant_id))) {
+    LOG_WARN("invalid argument", KP(ptr), K(buf_size), K(exec_tenant_id));
     ret = OB_INVALID_ARGUMENT;
   } else {
     sql_.assign_ptr(ptr, static_cast<int32_t>(buf_size));
+    exec_tenant_id_ = exec_tenant_id;
   }
 
   return ret;
@@ -105,7 +107,7 @@ int ObEventHistoryTableOperator::ObEventTableUpdateTask::init(const char *ptr,
 
 bool ObEventHistoryTableOperator::ObEventTableUpdateTask::is_valid() const
 {
-  return table_operator_.is_inited() && !sql_.empty();
+  return table_operator_.is_inited() && !sql_.empty() && is_valid_tenant_id(exec_tenant_id_);
 }
 
 int64_t ObEventHistoryTableOperator::ObEventTableUpdateTask::hash() const
@@ -135,8 +137,9 @@ bool ObEventHistoryTableOperator::ObEventTableUpdateTask::operator==(
       is_equal = true;
     } else {
       is_equal = (&(this->table_operator_) == &(o.table_operator_))
-          && this->sql_ == o.sql_ && this->is_delete_ == o.is_delete_;
-      //no need take care of create_time
+          && this->sql_ == o.sql_ && this->is_delete_ == o.is_delete_
+          && this->exec_tenant_id_ == o.exec_tenant_id_;
+          //no need take care of create_time
     }
   }
   return is_equal;
@@ -152,7 +155,7 @@ IObDedupTask *ObEventHistoryTableOperator::ObEventTableUpdateTask::deep_copy(
     LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid argument", "buf", reinterpret_cast<int64_t>(buf), K(buf_size),
         "need size", get_deep_copy_size());
   } else {
-    task = new (buf) ObEventTableUpdateTask(table_operator_, is_delete_, create_time_);
+    task = new (buf) ObEventTableUpdateTask(table_operator_, is_delete_, create_time_, exec_tenant_id_);
     char *ptr = buf + sizeof(ObEventTableUpdateTask);
     MEMCPY(ptr, sql_.ptr(), sql_.length());
     task->assign_ptr(ptr, sql_.length());
@@ -166,8 +169,8 @@ int ObEventHistoryTableOperator::ObEventTableUpdateTask::process()
   if (!this->is_valid()) {
     ret = OB_INNER_STAT_ERROR;
     LOG_WARN("invalid event task update task", "task", *this, K(ret));
-  } else if (OB_FAIL(table_operator_.process_task(sql_, is_delete_, create_time_))) {
-      LOG_WARN("process_task failed", K_(sql), K_(is_delete), KR(ret), K(create_time_));
+  } else if (OB_FAIL(table_operator_.process_task(sql_, is_delete_, create_time_, exec_tenant_id_))) {
+      LOG_WARN("process_task failed", KR(ret), K_(sql), K_(is_delete), K(create_time_), K_(exec_tenant_id));
   }
   return ret;
 }
@@ -269,25 +272,27 @@ int ObEventHistoryTableOperator::default_async_delete()
   return ret;
 }
 
-int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_delete, const int64_t create_time)
+int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_delete,
+    const int64_t create_time, const uint64_t exec_tenant_id)
 {
   int ret = OB_SUCCESS;
   if (!inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (sql.empty()) {
+    LOG_WARN("not iget_deep_copy_sizenit", K(ret));
+  } else if (OB_UNLIKELY(sql.empty() || !is_valid_tenant_id(exec_tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sql is empty", K(sql), K(ret));
+    LOG_WARN("sql is empty", K(sql), K(exec_tenant_id), K(ret));
   } else if (stopped_) {
     ret = OB_CANCELED;
     LOG_WARN("observer is stopped, cancel task", K(sql), K(is_delete), K(ret));
   } else {
     int64_t new_create_time = OB_INVALID_TIMESTAMP == create_time ?
       ObTimeUtility::current_time() : create_time;
-    ObEventTableUpdateTask task(*this, is_delete, new_create_time);
-    if (OB_FAIL(task.init(sql.ptr(), sql.length() + 1))) { // extra byte for '\0'
+    ObEventTableUpdateTask task(*this, is_delete, new_create_time, exec_tenant_id);
+    if (OB_FAIL(task.init(sql.ptr(), sql.length() + 1, exec_tenant_id))) { // extra byte for '\0'
       LOG_WARN("task init error", K(ret));
-    } else if (OB_FAIL(event_queue_.add_task(task))) {
+    }
+    if (FAILEDx(event_queue_.add_task(task))) {
       if (OB_EAGAIN == ret) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("duplicated task is not expected to exist", K(task), K(ret));
@@ -298,11 +303,11 @@ int ObEventHistoryTableOperator::add_task(const ObSqlString &sql, const bool is_
       // do nothing
     }
   }
-
   return ret;
 }
 
-int ObEventHistoryTableOperator::process_task(const ObString &sql, const bool is_delete, const int64_t create_time)
+int ObEventHistoryTableOperator::process_task(const ObString &sql, const bool is_delete,
+    const int64_t create_time, const uint64_t exec_tenant_id)
 {
   int ret = OB_SUCCESS;
 
@@ -310,9 +315,9 @@ int ObEventHistoryTableOperator::process_task(const ObString &sql, const bool is
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (sql.empty()) {
+  } else if (OB_UNLIKELY(sql.empty() || !is_valid_tenant_id(exec_tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sql is empty", K(sql), K(ret));
+    LOG_WARN("sql is empty", K(sql), K(exec_tenant_id), K(ret));
   } else {
     if (stopped_) {
       ret = OB_CANCELED;
@@ -320,7 +325,7 @@ int ObEventHistoryTableOperator::process_task(const ObString &sql, const bool is
     } else {
       int64_t affected_rows = 0;
       if (!is_delete) {
-        if (OB_FAIL(proxy_->write(sql.ptr(), affected_rows))) {
+        if (OB_FAIL(proxy_->write(exec_tenant_id, sql.ptr(), affected_rows))) {
           LOG_WARN("execute sql failed", K(sql), K(ret));
         } else if (!is_single_row(affected_rows)) {
           ret = OB_ERR_UNEXPECTED;

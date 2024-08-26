@@ -71,7 +71,6 @@ private:
   uint64_t dispatch_idx_;
   uint64_t tenant_id_;
 };
-extern int sql_nio_add_cgroup(const uint64_t tenant_id);
 }; // end namespace obmysql
 }; // end namespace oceanbase
 

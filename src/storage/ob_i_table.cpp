@@ -890,7 +890,7 @@ int ObTablesHandleArray::get_all_remote_major_sstables(common::ObIArray<ObITable
       // do nothing
     } else if (OB_FAIL(sstable->get_meta(sst_meta_hdl))) {
       STORAGE_LOG(WARN, "failed to get sstable meta handle", K(ret), K(i));
-    } else if (!sst_meta_hdl.get_sstable_meta().get_table_flag().has_backup()) {
+    } else if (!sst_meta_hdl.get_sstable_meta().get_table_backup_flag().has_backup()) {
       // do nothing
     } else if (OB_FAIL(tables.push_back(table))) {
       STORAGE_LOG(WARN, "failed to add remote major sstable", K(ret), K(i));

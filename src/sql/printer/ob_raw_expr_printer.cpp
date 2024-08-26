@@ -2967,6 +2967,28 @@ int ObRawExprPrinter::print(ObSysFunRawExpr *expr)
         }
         break;
       }
+      case T_OP_GET_SYS_VAR: {
+        int64_t param_num = expr->get_param_count();
+        ObRawExpr *name_expr = NULL;
+        ObRawExpr *scope_expr = NULL;
+        if (OB_UNLIKELY(2 != param_num) ||
+            OB_ISNULL(name_expr = expr->get_param_expr(0)) ||
+            OB_ISNULL(scope_expr = expr->get_param_expr(1))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid param count", K(ret), K(expr->get_param_count()));
+        } else if (OB_UNLIKELY(!name_expr->is_const_raw_expr()) ||
+                   OB_UNLIKELY(!static_cast<ObConstRawExpr*>(name_expr)->get_value().is_varchar()) ||
+                   OB_UNLIKELY(!scope_expr->is_const_raw_expr()) ||
+                   OB_UNLIKELY(!static_cast<ObConstRawExpr*>(scope_expr)->get_value().is_int())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid user variable name", K(ret));
+        } else {
+          DATA_PRINTF("@@");
+          func_name = static_cast<ObConstRawExpr*>(expr->get_param_expr(0))->get_value().get_varchar();
+          DATA_PRINTF("%.*s", LEN_AND_PTR(func_name));
+        }
+        break;
+      }
       case T_FUN_COLUMN_CONV: {
         int64_t param_num = expr->get_param_count();
         if ((param_num != ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO
@@ -3463,7 +3485,12 @@ int ObRawExprPrinter::print(ObUDFRawExpr *expr)
     LOG_WARN("stmt_ is NULL of buf_ is NULL or pos_ is NULL or expr is NULL", K(ret));
   } else {
     if (!print_params_.for_dblink_) {
-      if (!expr->get_database_name().empty()) {
+      if (expr->is_dblink_sys_func()) {
+        if (!expr->get_database_name().empty()) {
+          PRINT_IDENT_WITH_QUOT(expr->get_database_name());
+          DATA_PRINTF(".");
+        }
+      } else if (!expr->get_database_name().empty()) {
         if (expr->get_database_name().case_compare("oceanbase") != 0) {
           PRINT_IDENT_WITH_QUOT(expr->get_database_name());
           DATA_PRINTF(".");
@@ -3516,6 +3543,12 @@ do { \
       }
 
 #undef PRINT_IMPLICIT_DATABASE_NAME
+    } else {
+      if (!expr->get_dblink_name().empty()
+          && !expr->get_database_name().empty()) {
+        PRINT_IDENT_WITH_QUOT(expr->get_database_name());
+        DATA_PRINTF(".");
+      }
     }
 
     if (!expr->get_package_name().empty() &&

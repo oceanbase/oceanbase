@@ -91,20 +91,19 @@ void ObITabletMemtable::unset_logging_blocked_for_active_memtable_()
   }
 }
 
-void ObITabletMemtable::resolve_left_boundary_for_active_memtable_()
+int ObITabletMemtable::resolve_left_boundary_for_active_memtable_()
 {
   int ret = OB_SUCCESS;
   storage::ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr();
   const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
 
   if (OB_NOT_NULL(memtable_mgr)) {
-    do {
-      if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, new_start_scn))) {
-        TRANS_LOG(ERROR, "fail to set start log ts for active memtable", K(ret), K(ls_id_), KPC(this));
-        ob_usleep(100);
-      }
-    } while (OB_FAIL(ret));
+    if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, new_start_scn))) {
+      TRANS_LOG(WARN, "fail to resolve left boundary for active memtable", K(ret), K(ls_id_), KPC(this));
+    }
   }
+
+  return ret;
 }
 
 int ObITabletMemtable::get_ls_current_right_boundary_(SCN &current_right_boundary)

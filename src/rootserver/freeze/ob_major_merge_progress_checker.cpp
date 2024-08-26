@@ -50,11 +50,11 @@ ObMajorMergeProgressChecker::ObMajorMergeProgressChecker(
       loop_cnt_(0), last_errno_(OB_SUCCESS), tenant_id_(tenant_id),
       compaction_scn_(), expected_epoch_(OB_INVALID_ID), sql_proxy_(nullptr),
       schema_service_(nullptr), server_trace_(nullptr), progress_(),
-      tablet_status_map_(), table_compaction_map_(), fts_group_array_(),
+      tablet_status_map_(), table_compaction_map_(), fts_group_array_(), ls_locality_cache_(),
       ckm_validator_(tenant_id, stop_, tablet_ls_pair_cache_, tablet_status_map_,
                      table_compaction_map_, idx_ckm_validate_array_, validator_statistics_,
-                     finish_tablet_ls_pair_array_, finish_tablet_ckm_array_, uncompact_info_, fts_group_array_),
-      uncompact_info_(), ls_locality_cache_(), total_time_guard_(), validator_statistics_(), batch_size_mgr_() {}
+                     finish_tablet_ls_pair_array_, finish_tablet_ckm_array_, uncompact_info_, fts_group_array_, ls_locality_cache_),
+      uncompact_info_(), total_time_guard_(), validator_statistics_(), batch_size_mgr_() {}
 
 int ObMajorMergeProgressChecker::init(
     const bool is_primary_service,
@@ -437,13 +437,11 @@ int ObMajorMergeProgressChecker::prepare_check_progress(
   bool &exist_uncompacted_table)
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   exist_uncompacted_table = true;
   table_ids_.start_looping();
-  if (OB_TMP_FAIL(ls_locality_cache_.refresh_ls_locality(first_loop_in_cur_round_ /*force_refresh*/))) {
-    LOG_WARN("failed to refresh ls locality", K(tmp_ret));
-  }
-  if (first_loop_in_cur_round_) {
+  if (OB_FAIL(ls_locality_cache_.refresh_ls_locality(first_loop_in_cur_round_ /*force_refresh*/))) {
+    LOG_WARN("failed to refresh ls locality", K(ret));
+  } else if (first_loop_in_cur_round_) {
     total_time_guard_.reuse();
     if (OB_FAIL(prepare_unfinish_table_ids())) {
       LOG_WARN("fail to prepare table_id_map", KR(ret), K_(tenant_id));
@@ -915,6 +913,7 @@ int ObMajorMergeProgressChecker::generate_tablet_status_map()
         if (OB_HASH_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           LOG_TRACE("can't find ls_info from ls_locality_cache", KR(ret), K(ls_id), K_(tenant_id));
+          continue;
         } else {
           LOG_WARN("fail to get ls_info from ls_locality_cache", KR(ret), K(ls_id), K_(tenant_id));
         }

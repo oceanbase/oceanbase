@@ -467,7 +467,6 @@ public:
   inline const RefObjVersionMap &get_ref_obj_table() const { return ref_obj_version_table_; }
   static int batch_execute_insert_or_update_obj_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const int64_t new_schema_version,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObMySQLTransaction &trans,
@@ -475,7 +474,6 @@ public:
     rootserver::ObDDLOperator &ddl_operator);
   static int batch_execute_delete_obj_dependency(
     const uint64_t tenant_id,
-    const bool is_standby,
     const ObReferenceObjTable::DependencyObjKeyItemPairs &dep_objs,
     ObMySQLTransaction &trans);
   static int update_max_dependency_version(

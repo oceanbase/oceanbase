@@ -20,6 +20,7 @@
 #include "sql/session/ob_basic_session_info.h"
 #include "observer/omt/ob_tenant_timezone_mgr.h"
 #include "lib/timezone/ob_timezone_info.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_table_operator.h"
 
 #define ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME  "tenant_id, " \
                                               "job_name, " \
@@ -64,6 +65,8 @@ const char *windows_name[DAY_OF_WEEK] = {"MONDAY_WINDOW",
                                          "SATURDAY_WINDOW",
                                          "SUNDAY_WINDOW"};
 const char *opt_stats_history_manager = "OPT_STATS_HISTORY_MANAGER";
+const char *async_gather_stats_job_proc = "ASYNC_GATHER_STATS_JOB_PROC";
+const int64_t OPT_STATS_HISTORY_MANAGER_JOB_ID = 8;
 
 int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const ObSysVariableSchema &sys_variable,
                                                                         const uint64_t tenant_id,
@@ -148,6 +151,27 @@ int ObDbmsStatsMaintenanceWindow::get_stats_maintenance_window_jobs_sql(const Ob
         if (OB_FAIL(get_stats_history_manager_job_sql(is_oracle_mode, tenant_id,
                                                       0, exec_env, tmp_sql))) {
           LOG_WARN("failed to get stats history manager job sql", K(ret));
+        } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
+          LOG_WARN("failed to append sql", K(ret));
+        } else {
+          ++ expected_affected_rows;
+          tmp_sql.reset();
+        }
+      }
+
+      //set async gather stats job
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(get_async_gather_stats_job_sql(is_oracle_mode, tenant_id,
+                                                 job_id++, exec_env, tmp_sql))) {
+        LOG_WARN("failed to get async gather stats job sql", K(ret));
+      } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
+        LOG_WARN("failed to append sql", K(ret));
+      } else {
+        ++ expected_affected_rows;
+        tmp_sql.reset();
+        if (OB_FAIL(get_async_gather_stats_job_sql(is_oracle_mode, tenant_id,
+                                                   0, exec_env, tmp_sql))) {
+          LOG_WARN("failed to get async gather stats job sql", K(ret));
         } else if (OB_FAIL(raw_sql.append_fmt(", (%s)", tmp_sql.ptr()))) {
           LOG_WARN("failed to append sql", K(ret));
         } else {
@@ -264,6 +288,51 @@ int ObDbmsStatsMaintenanceWindow::get_stats_history_manager_job_sql(const bool i
   return ret;
 }
 
+int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_sql(const bool is_oracle_mode,
+                                                                 const uint64_t tenant_id,
+                                                                 const int64_t job_id,
+                                                                 const ObString &exec_env,
+                                                                 ObSqlString &raw_sql)
+{
+  int ret = OB_SUCCESS;
+  int64_t interval_ts = DEFAULT_ASYNC_GATHER_STATS_INTERVAL_USEC;
+  int64_t end_date = 64060560000000000;//4000-01-01 00:00:00.000000
+  int64_t current = ObTimeUtility::current_time() + DEFAULT_ASYNC_GATHER_STATS_INTERVAL_USEC;
+  share::ObDMLSqlSplicer dml;
+  OZ (dml.add_pk_column("tenant_id", share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id)));
+  OZ (dml.add_column("job_name", ObHexEscapeSqlStr(ObString(async_gather_stats_job_proc))));
+  OZ (dml.add_pk_column("job", job_id));
+  OZ (dml.add_column("lowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
+  OZ (dml.add_column("powner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("root@%")));
+  OZ (dml.add_column("cowner", is_oracle_mode ? ObHexEscapeSqlStr("SYS") : ObHexEscapeSqlStr("oceanbase")));
+  OZ (dml.add_time_column("next_date", current));
+  OZ (dml.add_column("total", 0));
+  OZ (dml.add_column("`interval#`", ObHexEscapeSqlStr(ObString("FREQ=MINUTELY; INTERVAL=15"))));
+  OZ (dml.add_column("flag", 0));
+  OZ (dml.add_column("what", ObHexEscapeSqlStr("DBMS_STATS.ASYNC_GATHER_STATS_JOB_PROC(600000000)")));
+  OZ (dml.add_column("nlsenv", ObHexEscapeSqlStr(ObString(""))));
+  OZ (dml.add_column("field1", ObHexEscapeSqlStr(ObString(""))));
+  OZ (dml.add_column("exec_env", ObHexEscapeSqlStr(exec_env)));
+  OZ (dml.add_column("job_style", ObHexEscapeSqlStr(ObString("REGULER"))));
+  OZ (dml.add_column("program_name", ObHexEscapeSqlStr(ObString(""))));
+  OZ (dml.add_column("job_type", ObHexEscapeSqlStr(ObString("STORED_PROCEDURE"))));
+  OZ (dml.add_column("job_action", ObHexEscapeSqlStr("DBMS_STATS.ASYNC_GATHER_STATS_JOB_PROC(600000000)")));
+  OZ (dml.add_column("number_of_argument", 0));
+  OZ (dml.add_raw_time_column("start_date", current));
+  OZ (dml.add_column("repeat_interval", ObHexEscapeSqlStr(ObString("FREQ=MINUTELY; INTERVAL=15"))));
+  OZ (dml.add_raw_time_column("end_date", end_date));
+  OZ (dml.add_column("job_class", ObHexEscapeSqlStr(ObString("DEFAULT_JOB_CLASS"))));
+  OZ (dml.add_column("enabled", true));
+  OZ (dml.add_column("auto_drop", false));
+  OZ (dml.add_column("comments", ObHexEscapeSqlStr(ObString("used to async gather stats"))));
+  OZ (dml.add_column("credential_name", ObHexEscapeSqlStr(ObString(""))));
+  OZ (dml.add_column("destination_name", ObHexEscapeSqlStr(ObString(""))));
+  OZ (dml.add_column("interval_ts", interval_ts));
+  OZ (dml.add_column("max_run_duration", DEFAULT_ASYNC_GATHER_STATS_DURATION_SEC));
+  OZ (dml.splice_values(raw_sql));
+  return ret;
+}
+
 //this dummy guard job is used to make sure the job id is monotonically increaseing
 int ObDbmsStatsMaintenanceWindow::get_dummy_guard_job_sql(const uint64_t tenant_id,
                                                           const int64_t job_id,
@@ -372,28 +441,30 @@ int ObDbmsStatsMaintenanceWindow::is_stats_maintenance_window_attr(const sql::Ob
   } else if (is_stats_job(job_name)) {
     //now we just support modify job_action、start_date
     if (0 == attr_name.case_compare("job_action")) {
-      if (0 == job_name.case_compare(opt_stats_history_manager)) {
-        const char *job_action_name = "DBMS_STATS.PURGE_STATS(";
-        if (!val_name.empty() && 0 == strncasecmp(val_name.ptr(), job_action_name, strlen(job_action_name))) {
-          if (OB_FAIL(dml.add_column("job_action", ObHexEscapeSqlStr(val_name)))) {
-            LOG_WARN("failed to add column", K(ret));
-          } else if (OB_FAIL(dml.add_column("what", ObHexEscapeSqlStr(val_name)))) {
-            LOG_WARN("failed to add column", K(ret));
-          } else {
-            is_window_attr = true;
-          }
-        } else {/*do nothing*/}
+      const char *history_stats_job = "DBMS_STATS.PURGE_STATS(";
+      const char *async_gather_stats_job = "DBMS_STATS.ASYNC_GATHER_STATS_JOB_PROC(";
+      const char *maintenance_window_job = "DBMS_STATS.GATHER_DATABASE_STATS_JOB_PROC(";
+      if ((0 == job_name.case_compare(opt_stats_history_manager) &&
+           !val_name.empty() &&
+           0 == strncasecmp(val_name.ptr(), history_stats_job, strlen(history_stats_job))) ||
+          (0 == job_name.case_compare(async_gather_stats_job_proc) &&
+           !val_name.empty() &&
+           0 == strncasecmp(val_name.ptr(), async_gather_stats_job, strlen(async_gather_stats_job))) ||
+          (0 != job_name.case_compare(opt_stats_history_manager) &&
+           0 != job_name.case_compare(async_gather_stats_job_proc) &&
+           !val_name.empty() &&
+           0 == strncasecmp(val_name.ptr(), maintenance_window_job, strlen(maintenance_window_job)))) {
+        if (OB_FAIL(dml.add_column("job_action", ObHexEscapeSqlStr(val_name)))) {
+          LOG_WARN("failed to add column", K(ret));
+        } else if (OB_FAIL(dml.add_column("what", ObHexEscapeSqlStr(val_name)))) {
+          LOG_WARN("failed to add column", K(ret));
+        } else {
+          is_window_attr = true;
+        }
       } else {
-        const char *job_action_name = "DBMS_STATS.GATHER_DATABASE_STATS_JOB_PROC(";
-        if (!val_name.empty() && 0 == strncasecmp(val_name.ptr(), job_action_name, strlen(job_action_name))) {
-          if (OB_FAIL(dml.add_column("job_action", ObHexEscapeSqlStr(val_name)))) {
-            LOG_WARN("failed to add column", K(ret));
-          } else if (OB_FAIL(dml.add_column("what", ObHexEscapeSqlStr(val_name)))) {
-            LOG_WARN("failed to add column", K(ret));
-          } else {
-            is_window_attr = true;
-          }
-        } else {/*do nothing*/}
+        ret = OB_ERR_DBMS_STATS_PL;
+        LOG_WARN("the hour of interval must be between 0 and 24", K(ret));
+        LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "the hour of interval must be between 0 and 24");
       }
     } else if (0 == attr_name.case_compare("next_date")) {
       ObObj time_obj;
@@ -477,7 +548,8 @@ bool ObDbmsStatsMaintenanceWindow::is_stats_job(const ObString &job_name)
     }
   }
   if (!is_true) {
-    is_true = (0 == job_name.case_compare(opt_stats_history_manager));
+    is_true = (0 == job_name.case_compare(opt_stats_history_manager) ||
+               0 == job_name.case_compare(async_gather_stats_job_proc));
   }
   return is_true;
 }
@@ -550,7 +622,8 @@ int ObDbmsStatsMaintenanceWindow::check_date_validate(const ObString &job_name,
     LOG_WARN("get unexpected error", K(ret), K(specify_time));
   } else if (current_time > specify_time) {
     is_valid = false;
-  } else if (0 == job_name.case_compare(opt_stats_history_manager)) {
+  } else if (0 == job_name.case_compare(opt_stats_history_manager) ||
+             0 == job_name.case_compare(async_gather_stats_job_proc)) {
     is_valid = true;
   } else if (OB_FAIL(ObTimeConverter::usec_to_ob_time(specify_time, ob_time))) {
     LOG_WARN("failed to usec to ob time", K(ret), K(specify_time));
@@ -564,6 +637,172 @@ int ObDbmsStatsMaintenanceWindow::check_date_validate(const ObString &job_name,
     }
   }
 
+  return ret;
+}
+
+int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_for_upgrade(common::ObMySQLProxy *sql_proxy,
+                                                                         const uint64_t tenant_id,
+                                                                         ObSqlString &sql)
+{
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  int64_t job_id = 0;
+  ObString exec_env;
+  ObSqlString values_list;
+  sql.reset();
+  bool is_join_exists = false;
+  //bug:
+  ObArenaAllocator allocator("AsyncStatsJob");
+  if (OB_FAIL(check_async_gather_job_exists(sql_proxy, tenant_id, is_join_exists))) {
+    LOG_WARN("failed to check async gather job exists", K(ret));
+  } else if (is_join_exists) {
+    //do nothing
+  } else if (OB_FAIL(get_async_gather_stats_job_id_and_exec_env(sql_proxy, allocator, tenant_id, job_id, exec_env))) {
+    LOG_WARN("failed to get async gather stats job id and exec env", K(ret));
+  } else if (OB_UNLIKELY(job_id > dbms_scheduler::ObDBMSSchedTableOperator::JOB_ID_OFFSET ||
+                         exec_env.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(job_id), K(exec_env));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
+    LOG_WARN("failed to get tenant compat mode", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(get_async_gather_stats_job_sql(lib::Worker::CompatMode::ORACLE == compat_mode,
+                                                    tenant_id, job_id, exec_env, values_list))) {
+    LOG_WARN("failed to get async gather stats job sql", K(ret));
+  } else if (OB_FAIL(sql.append_fmt("REPLACE INTO %s( "ALL_TENANT_SCHEDULER_JOB_COLUMN_NAME") VALUES (%s)",
+                                     share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                                     values_list.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    values_list.reset();
+    if (OB_FAIL(get_async_gather_stats_job_sql(lib::Worker::CompatMode::ORACLE == compat_mode,
+                                               tenant_id, 0, exec_env, values_list))) {
+      LOG_WARN("failed to get async gather stats job sql", K(ret));
+    } else if (OB_FAIL(sql.append_fmt(", (%s);", values_list.ptr()))) {
+      LOG_WARN("failed to append fmt", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDbmsStatsMaintenanceWindow::get_async_gather_stats_job_id_and_exec_env(common::ObMySQLProxy *sql_proxy,
+                                                                             ObIAllocator &allocator,
+                                                                             const uint64_t tenant_id,
+                                                                             int64_t &job_id,
+                                                                             ObString &exec_env)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString select_sql;
+  if (OB_FAIL(select_sql.append_fmt("SELECT tt.job, t.exec_env FROM"\
+                                    " %s t, (SELECT max(job) + 1 AS job FROM %s"\
+                                             " WHERE tenant_id = %ld and job <= %ld AND job > 0) tt"\
+                                    " WHERE t.tenant_id = %ld and t.job_name = '%s' AND t.job = %ld;",
+                                    share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                                    share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                                    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                    dbms_scheduler::ObDBMSSchedTableOperator::JOB_ID_OFFSET,
+                                    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                    opt_stats_history_manager,
+                                    OPT_STATS_HISTORY_MANAGER_JOB_ID))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, select_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(select_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else {
+        int64_t get_rows = 0;
+        //expected only get one row.
+        while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
+          int64_t fisrt_col = 0;
+          int64_t second_col = 1;
+          ObObj obj;
+          ObString tmp_exec_env;
+          if (get_rows > 0) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error, expected only one row", K(ret));
+          } else if (OB_FAIL(client_result->get_obj(fisrt_col, obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(obj.get_int(job_id))) {
+            LOG_WARN("failed to get int", K(ret), K(obj));
+          } else if (OB_FAIL(client_result->get_obj(second_col, obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(obj.get_varchar(tmp_exec_env))) {
+            LOG_WARN("failed to get int", K(ret), K(obj));
+          } else if (OB_FAIL(ob_write_string(allocator, tmp_exec_env, exec_env))) {
+            LOG_WARN("failed to ob write string", K(ret));
+          } else {
+            ++ get_rows;
+          }
+        }
+        ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+    LOG_INFO("succeed to get async gather stats job id and exec env", K(ret), K(select_sql), K(job_id), K(exec_env));
+  }
+  return ret;
+}
+
+int ObDbmsStatsMaintenanceWindow::check_async_gather_job_exists(common::ObMySQLProxy *sql_proxy,
+                                                                const uint64_t tenant_id,
+                                                                bool &is_join_exists)
+{
+  int ret = OB_SUCCESS;
+  is_join_exists = false;
+  ObSqlString select_sql;
+  int64_t row_count = 0;
+  if (OB_FAIL(select_sql.append_fmt("SELECT count(*) FROM %s WHERE tenant_id = %ld and job_name = '%s';",
+                                    share::OB_ALL_TENANT_SCHEDULER_JOB_TNAME,
+                                    share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                    async_gather_stats_job_proc))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(sql_proxy);
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, select_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(select_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else {
+        //expected only get one row.
+        while (OB_SUCC(ret) && OB_SUCC(client_result->next())) {
+          int64_t idx = 0;
+          ObObj obj;
+          if (OB_FAIL(client_result->get_obj(idx, obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(obj.get_int(row_count))) {
+            LOG_WARN("failed to get int", K(ret), K(obj));
+          } else if (OB_UNLIKELY(row_count != 2 && row_count != 0)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get unexpected error", K(ret), K(row_count));
+          } else {
+            is_join_exists = row_count > 0;
+          }
+        }
+        ret = OB_ITER_END == ret ? OB_SUCCESS : ret;
+      }
+      int tmp_ret = OB_SUCCESS;
+      if (NULL != client_result) {
+        if (OB_SUCCESS != (tmp_ret = client_result->close())) {
+          LOG_WARN("close result set failed", K(ret), K(tmp_ret));
+          ret = COVER_SUCC(tmp_ret);
+        }
+      }
+    }
+    LOG_INFO("succeed to check async gather job exists", K(ret), K(select_sql), K(is_join_exists), K(row_count));
+  }
   return ret;
 }
 

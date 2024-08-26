@@ -33,6 +33,8 @@ class ObSQLSessionInfo;
 class ObSqlExpression;
 class ObBasicSessionInfo;
 class ObSessionVariable;
+class ObRawExprFactory;
+class ObRawExpr;
 }
 
 namespace share
@@ -63,10 +65,12 @@ class ObPLCursor;
 class ObPLCacheCtx;
 
 struct ObSysPackageFile {
-  const char *package_name;
-  const char *package_spec_file_name;
-  const char *package_body_file_name;
+  const char *const package_name;
+  const char *const package_spec_file_name;
+  const char *const package_body_file_name;
 };
+
+class ObCharStream;
 
 class ObPLPackageManager
 {
@@ -91,6 +95,8 @@ public:
 
   int get_package_expr(const ObPLResolveCtx &resolve_ctx,
                        uint64_t package_id, int64_t expr_idx, sql::ObSqlExpression *&expr);
+  int get_package_expr(const ObPLResolveCtx &resolve_ctx, sql::ObRawExprFactory &expr_factory,
+                       uint64_t package_id, int64_t expr_idx, sql::ObRawExpr *&expr);
 
   int get_package_cursor(const ObPLResolveCtx &resolve_ctx,
                          uint64_t package_id,
@@ -139,28 +145,24 @@ public:
                         uint64_t package_id,
                         ObPLPackageState *&package_state,
                         bool for_static_member = false);
-  static int read_package_sql(FILE *file, char* buf, int64_t buf_len, bool &eof);
-  static int read_and_exec_package_sql(
-    common::ObMySQLProxy &sql_proxy, const char* package_full_path, ObCompatibilityMode compa_mode);
-  static int load_sys_package(
-    common::ObMySQLProxy &sql_proxy, const char *package_spec_name, const char *package_body_name, ObCompatibilityMode compa_mode);
-  static int load_sys_package(common::ObMySQLProxy &sql_proxy, common::ObString &package_name, ObCompatibilityMode compa_mode);
-  static int load_all_common_sys_package(common::ObMySQLProxy &sql_proxy, ObCompatibilityMode compa_mode);
+
+  static int load_sys_package(common::ObMySQLProxy &sql_proxy,
+                              common::ObString &package_name,
+                              ObCompatibilityMode compa_mode,
+                              bool from_file);
   static int load_all_common_sys_package(common::ObMySQLProxy &sql_proxy,
-                                         const ObSysPackageFile *package_file,
-                                         int sys_package_count,
-                                         ObCompatibilityMode compa_mode);
-  static int load_all_special_sys_package(common::ObMySQLProxy &sql_proxy);
+                                         ObCompatibilityMode compa_mode,
+                                         bool from_file);
   static int load_all_sys_package(common::ObMySQLProxy &sql_proxy);
+
   static int add_package_to_plan_cache(const ObPLResolveCtx &resolve_ctx, ObPLPackage *package);
   static int get_package_from_plan_cache(const ObPLResolveCtx &resolve_ctx, 
                 uint64_t package_id, 
                 ObPLPackage *&package);
-  static int get_package_schema_info(
-  share::schema::ObSchemaGetterGuard &schema_guard,
-  uint64_t package_id,
-  const share::schema::ObPackageInfo *&package_spec_info,
-  const share::schema::ObPackageInfo *&package_body_info);
+  static int get_package_schema_info(share::schema::ObSchemaGetterGuard &schema_guard,
+                                     uint64_t package_id,
+                                     const share::schema::ObPackageInfo *&package_spec_info,
+                                     const share::schema::ObPackageInfo *&package_body_info);
   static int destory_package_state(sql::ObSQLSessionInfo &session_info, uint64_t package_id);
   int check_version(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                     const ObPackageStateVersion &state_version, bool &match);
@@ -173,6 +175,22 @@ public:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLPackageManager);
+
+  static int read_package_sql(ObCharStream &stream, char* buf, int64_t buf_len, bool &eos);
+  static int read_and_exec_package_sql(common::ObMySQLProxy &sql_proxy,
+                                       ObCharStream &stream,
+                                       ObCompatibilityMode compa_mode);
+  static int get_syspack_source_file_content(const char *file_name, const char *&content);
+  static int load_sys_package(ObMySQLProxy &sql_proxy,
+                              const ObSysPackageFile &pack_file_info,
+                              ObCompatibilityMode compa_mode,
+                              bool from_file);
+  static int load_sys_package_list(common::ObMySQLProxy &sql_proxy,
+                                   const ObSysPackageFile *sys_package_list,
+                                   int sys_package_count,
+                                   ObCompatibilityMode compa_mode,
+                                   bool from_file);
+  static int load_all_special_sys_package(common::ObMySQLProxy &sql_proxy);
 
   int get_cached_package_spec(const ObPLResolveCtx &resolve_ctx, uint64_t package_id,
                               ObPLPackage *&package_spec);

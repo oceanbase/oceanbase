@@ -44,7 +44,7 @@ namespace oceanbase
 
 namespace omt
 {
-int create_worker(ObThWorker* &worker, ObTenant *tenant, int32_t group_id,
+int create_worker(ObThWorker* &worker, ObTenant *tenant, uint64_t group_id,
                   int32_t level, bool force, ObResourceGroup *group)
 {
   int ret = OB_SUCCESS;
@@ -65,7 +65,7 @@ int create_worker(ObThWorker* &worker, ObTenant *tenant, int32_t group_id,
   } else {
     worker->reset();
     worker->set_tenant(tenant);
-    worker->set_group_id(group_id);
+    worker->set_group_id_(group_id);
     worker->set_worker_level(level);
     worker->set_group(group);
     if (OB_FAIL(worker->start())) {
@@ -101,12 +101,12 @@ int destroy_worker(ObThWorker *worker)
 ObThWorker::ObThWorker()
     : procor_(ObServer::get_instance().get_net_frame().get_xlator(), ObServer::get_instance().get_self()),
       is_inited_(false), tenant_(nullptr),
-      group_(nullptr), run_cond_(),
+      run_cond_(),
       pause_flag_(false), large_query_(false),
       priority_limit_(RQ_LOW), is_lq_yield_(false),
       query_start_time_(0), last_check_time_(0),
       can_retry_(true), need_retry_(false),
-      has_add_to_cgroup_(false), last_wakeup_ts_(0), blocking_ts_(nullptr),
+      last_wakeup_ts_(0), blocking_ts_(nullptr),
       idle_us_(0)
 {
 }
@@ -125,6 +125,7 @@ int ObThWorker::init()
   } else if (OB_FAIL(run_cond_.init(ObWaitEventIds::TH_WORKER_COND_WAIT))) {
     LOG_ERROR("init run cond fail, ", K(ret));
   } else {
+    set_is_th_worker(true);
     is_inited_ = true;
   }
 
@@ -305,7 +306,7 @@ void ObThWorker::set_th_worker_thread_name()
   char buf[32];
   if (serving_tenant_id != tenant_->id()) {
     serving_tenant_id = tenant_->id();
-    snprintf(buf, 32, "L%d_G%d", get_worker_level(), get_group_id());
+    snprintf(buf, sizeof(buf), "L%d_G%ld", get_worker_level(), get_group_id());
     lib::set_thread_name(buf);
   }
 }
@@ -331,11 +332,6 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
       worker_level = get_worker_level();
       if (OB_NOT_NULL(tenant_)) {
         tenant_id = tenant_->id();
-      }
-      if (OB_NOT_NULL(GCTX.cgroup_ctrl_) && OB_LIKELY(GCTX.cgroup_ctrl_->is_valid()) && !has_add_to_cgroup_) {
-        if (OB_SUCC(GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_->id(), get_group_id()))) {
-          has_add_to_cgroup_ = true;
-        }
       }
       if (OB_NOT_NULL(pm)) {
         if (pm->get_used() != 0) {
@@ -411,10 +407,11 @@ void ObThWorker::worker(int64_t &tenant_id, int64_t &req_recv_timestamp, int32_t
             if (this->get_worker_level() != 0) {
               // nesting workers not allowed to calling check_worker_count
             } else if (this->get_group() == nullptr) {
-              tenant_->check_worker_count(*this);
               tenant_->lq_end(*this);
+              tenant_->check_worker_count(*this);
             } else {
-              group_->check_worker_count(*this);
+              ObResourceGroup *group = static_cast<ObResourceGroup *>(group_);
+              group->check_worker_count(*this);
             }
           }
         }

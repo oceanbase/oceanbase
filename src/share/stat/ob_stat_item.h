@@ -223,6 +223,8 @@ public:
 
 class ObStatTopKHist : public ObStatColItem
 {
+  const static int64_t MIN_BUCKET_SIZE = 256;
+  const static int64_t MAX_BUCKET_SIZE = 2048;
 public:
   ObStatTopKHist() : ObStatColItem(), tab_stat_(NULL), max_disuse_cnt_(0) {}
   ObStatTopKHist(const ObColumnStatParam *param,
@@ -259,6 +261,8 @@ public:
   virtual bool is_needed() const override;
   virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
   virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
+  static int64_t get_window_size(int64_t bucket_num) {
+    return 1000 * (bucket_num < MIN_BUCKET_SIZE ? 1 : bucket_num / MIN_BUCKET_SIZE); }
 protected:
   ObOptTableStat *tab_stat_;
   int64_t max_disuse_cnt_;
@@ -301,7 +305,7 @@ public:
   ObGlobalTableStat()
     : row_count_(0), row_size_(0), data_size_(0),
       macro_block_count_(0), micro_block_count_(0), part_cnt_(0), last_analyzed_(0),
-      cg_macro_cnt_arr_(), cg_micro_cnt_arr_(), stat_locked_(false),
+      cg_macro_cnt_arr_(), cg_micro_cnt_arr_(), stat_locked_(false), stale_stats_(false),
       sstable_row_cnt_(0), memtable_row_cnt_(0)
   {}
 
@@ -321,6 +325,8 @@ public:
   void set_last_analyzed(int64_t last_analyzed) { last_analyzed_ = last_analyzed; }
   void set_stat_locked(bool locked) { stat_locked_ = locked; }
   bool get_stat_locked() const { return stat_locked_; }
+  void set_stale_stats(bool stale_stats) { stale_stats_ = stale_stats; }
+  bool get_stale_stats() const { return stale_stats_; }
   int64_t get_sstable_row_cnt() const { return sstable_row_cnt_; }
   int64_t get_memtable_row_cnt() const { return memtable_row_cnt_; }
 
@@ -335,6 +341,7 @@ public:
                K(cg_macro_cnt_arr_),
                K(cg_micro_cnt_arr_),
                K(stat_locked_),
+               K(stale_stats_),
                K(sstable_row_cnt_),
                K(memtable_row_cnt_));
 
@@ -349,6 +356,7 @@ private:
   ObArray<int64_t> cg_macro_cnt_arr_;
   ObArray<int64_t> cg_micro_cnt_arr_;
   bool stat_locked_;
+  bool stale_stats_;
   int64_t sstable_row_cnt_;
   int64_t memtable_row_cnt_;
 };

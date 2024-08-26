@@ -124,11 +124,9 @@ protected:
           } else if (OB_INVALID_TENANT_ID == ddl_arg_->exec_tenant_id_) {
             ret = OB_INVALID_ARGUMENT;
             RS_LOG(WARN, "exec tenant id is invalid", K(ret), "arg", *ddl_arg_);
-          } else if (common::STANDBY_CLUSTER == ObClusterInfoGetter::get_cluster_role_v2()
-                     && !ddl_arg_->is_allow_in_standby()) {
-            ret = OB_OP_NOT_ALLOW;
-            RS_LOG(WARN, "ddl operation not allow in standby", KR(ret), KPC(ddl_arg_));
           } else {
+            // TODO (linqiucen.lqc): check whether the tenant is standby
+            //                       it will be done after DDL is executed by the tenant itself rather than sys tenant
             auto *tsi_value = GET_TSI(share::schema::TSIDDLVar);
             // used for parallel ddl
             auto *tsi_generator = GET_TSI(share::schema::TSISchemaVersionGenerator);
@@ -479,6 +477,7 @@ DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_RELOAD_SERVER, ObRpcAdminReloadServerP, 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_RELOAD_ZONE, ObRpcAdminReloadZoneP, admin_reload_zone());
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_CLEAR_MERGE_ERROR, ObRpcAdminClearMergeErrorP, admin_clear_merge_error(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_MIGRATE_UNIT, ObRpcAdminMigrateUnitP, admin_migrate_unit(arg_));
+DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_ALTER_LS_REPLICA, ObRpcAdminAlterLSReplicaP, admin_alter_ls_replica(arg_));
 #ifdef OB_BUILD_ARBITRATION
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_ADD_ARBITRATION_SERVICE, ObRpcAdminAddArbitrationServiceP, admin_add_arbitration_service(arg_));
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_ADMIN_REMOVE_ARBITRATION_SERVICE, ObRpcAdminRemoveArbitrationServiceP, admin_remove_arbitration_service(arg_));

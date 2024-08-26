@@ -39,6 +39,7 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     is_schema_changed_(false),
     need_parallel_minor_merge_(true),
     is_tenant_major_merge_(false),
+    is_cs_replica_(false),
     is_backfill_(false),
     merge_level_(MICRO_BLOCK_MERGE_LEVEL),
     merge_reason_(ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE),
@@ -62,7 +63,8 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     report_(nullptr),
     snapshot_info_(),
     tx_id_(0),
-    multi_version_column_descs_()
+    multi_version_column_descs_(),
+    tablet_schema_guard_()
 {
   merge_scn_.set_max();
 }
@@ -76,6 +78,7 @@ void ObStaticMergeParam::reset()
   multi_version_column_descs_.reset();
   ls_handle_.reset(); // ls_handle could release before tablet_handle
   tx_id_ = 0;
+  tablet_schema_guard_.reset();
 }
 
 bool ObStaticMergeParam::is_valid() const
@@ -1095,7 +1098,9 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
     ObStorageSchema *storage_schema = nullptr;
     if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(mem_ctx_.get_allocator(), storage_schema))) {
       LOG_WARN("failed to alloc storage schema", K(ret));
-    } else if (OB_FAIL(storage_schema->init(mem_ctx_.get_allocator(), medium_info->storage_schema_))) {
+    } else if (OB_FAIL(storage_schema->init(mem_ctx_.get_allocator(), medium_info->storage_schema_,
+                                            false /*skip_column_info*/, nullptr /*column_group_schema*/,
+                                            medium_info->storage_schema_.is_row_store() && medium_info->storage_schema_.is_user_data_table() && static_param_.is_cs_replica_))) {
       LOG_WARN("failed to init storage schema from current medium info", K(ret), K(medium_info));
       ObStorageSchemaUtil::free_storage_schema(mem_ctx_.get_allocator(), storage_schema);
     } else {
@@ -1112,7 +1117,9 @@ int ObBasicTabletMergeCtx::get_medium_compaction_info()
       static_param_.is_schema_changed_ = medium_info->is_schema_changed_;
     }
     static_param_.merge_reason_ = (ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_info->medium_merge_reason_;
-    static_param_.co_major_merge_type_ = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(medium_info->co_major_merge_type_);
+    if (!static_param_.is_cs_replica_) {
+      static_param_.co_major_merge_type_ = static_cast<ObCOMajorMergePolicy::ObCOMajorMergeType>(medium_info->co_major_merge_type_);
+    }
     FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC(medium_info));
   }
 
@@ -1184,7 +1191,7 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   } else if (OB_FAIL(tablet->get_schema_version_from_storage_schema(schema_version))){
     LOG_WARN("failed to get schema version from tablet", KR(ret), KPC(tablet));
   } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
-        *schema_service, *tablet, schema_version, ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V3, mem_ctx_.get_allocator(), *storage_schema))) {
+        *schema_service, *tablet, schema_version, ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_LATEST, mem_ctx_.get_allocator(), *storage_schema))) {
     if (OB_TABLE_IS_DELETED != ret) {
       LOG_WARN("failed to get table schema", KR(ret), KPC(this));
     }
@@ -1210,6 +1217,38 @@ int ObBasicTabletMergeCtx::get_meta_compaction_info()
   if (OB_FAIL(ret) && OB_NOT_NULL(storage_schema)) {
     ObStorageSchemaUtil::free_storage_schema(mem_ctx_.get_allocator(), storage_schema);
     static_param_.schema_ = nullptr;
+  }
+  return ret;
+}
+
+int ObBasicTabletMergeCtx::get_convert_compaction_info()
+{
+  int ret = OB_SUCCESS;
+  ObTablet *tablet = get_tablet();
+  ObStorageSchema *schema_on_tablet = nullptr;
+  ObStorageSchema *schema_for_merge = nullptr;
+  if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
+    LOG_WARN("failed to load schema on tablet", K(ret), KPC(tablet));
+  } else if (OB_UNLIKELY(!is_convert_co_major_merge(get_merge_type()) || OB_ISNULL(schema_on_tablet) || !schema_on_tablet->is_row_store())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected static param", K(ret), KPC(schema_on_tablet), K_(static_param));
+  } else if (OB_FAIL(ObStorageSchemaUtil::alloc_storage_schema(mem_ctx_.get_allocator(), schema_for_merge))) {
+    LOG_WARN("failed to alloc storage schema", K(ret));
+  } else if (OB_FAIL(schema_for_merge->init(mem_ctx_.get_allocator(), *schema_on_tablet,
+                        false /*skip_column_info*/, nullptr /*column_group_schema*/, true /*generate_cs_replica_cg_array*/))) {
+    LOG_WARN("failed to init storage schema for convert co major merge", K(ret), K(tablet), KPC(schema_on_tablet));
+  } else {
+    static_param_.schema_ = schema_for_merge;
+    static_param_.schema_version_ = static_param_.schema_->schema_version_;
+    static_param_.data_version_ = DATA_CURRENT_VERSION;
+    static_param_.is_rebuild_column_store_ = true;
+    static_param_.is_schema_changed_ = true; // use MACRO_BLOCK_MERGE_LEVEL
+    static_param_.merge_reason_ = ObAdaptiveMergePolicy::REBUILD_COLUMN_GROUP;
+    FLOG_INFO("[CS-Replica] get storage schema to convert co merge", "param", get_dag_param(), KPC_(static_param_.schema));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(schema_for_merge)) {
+    ObStorageSchemaUtil::free_storage_schema(mem_ctx_.get_allocator(), schema_for_merge);
   }
   return ret;
 }

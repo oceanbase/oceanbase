@@ -124,6 +124,16 @@ int ObLogTempTableTransformation::compute_op_parallel_and_server_info()
   return ret;
 }
 
+int ObLogTempTableTransformation::est_ambient_card()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(inner_est_ambient_card_by_child(get_num_of_child() - 1))) {
+    LOG_WARN("failed to est ambient cards by last child", K(ret), K(get_type()));
+  }
+  return ret;
+}
+
+
 int ObLogTempTableTransformation::do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost)
 {
   int ret = OB_SUCCESS;

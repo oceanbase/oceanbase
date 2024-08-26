@@ -71,10 +71,11 @@ public:
   virtual ~ObStorageHATabletsBuilder();
   int init(const ObStorageHATabletsBuilderParam &param);
   // Create all tablets with remote tablet meta.
-  int create_or_update_tablets();
+  int create_or_update_tablets(ObIDagNet *dag_net);
   int create_all_tablets(
       const bool need_check_tablet_limit,
       ObICopyLSViewInfoReader *reader,
+      ObIDagNet *dag_net,
       common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
       common::ObIArray<ObLogicTabletID> &data_tablet_id_list,
       CopyTabletSimpleInfoMap &simple_info_map);
@@ -83,8 +84,9 @@ public:
   // If that tablet meta identified uniquely by transfer sequence exists, replace and update the restore status to EMPTY.
   // Otherwise, just update it to UNDEFINED.
   int update_pending_tablets_with_remote();
-  int build_tablets_sstable_info();
+  int build_tablets_sstable_info(ObIDagNet *dag_net);
   int create_all_tablets_with_4_1_rpc(
+      ObIDagNet *dag_net,
       CopyTabletSimpleInfoMap &simple_info_map,
       common::ObIArray<ObLogicTabletID> &sys_tablet_id_list,
       common::ObIArray<ObLogicTabletID> &data_tablet_id_list);
@@ -152,6 +154,11 @@ private:
   int hold_local_tablet_(
       common::ObIArray<ObTabletHandle> &tablet_handle_array);
 private:
+  struct MajorSSTableSnapshotVersionCmp
+  {
+    bool operator()(const ObSSTableWrapper &lhs, const ObSSTableWrapper &rhs) const;
+  };
+
   bool is_inited_;
   ObStorageHATabletsBuilderParam param_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHATabletsBuilder);

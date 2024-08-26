@@ -79,8 +79,8 @@ int ObTableDirectInsertCtx::init(
       LOG_WARN("fail to new ObTableLoadInstance", KR(ret));
     } else {
       load_exec_ctx_->exec_ctx_ = exec_ctx;
+      const ObTableSchema *table_schema = nullptr;
       ObArray<uint64_t> column_ids;
-      omt::ObTenant *tenant = nullptr;
       ObCompressorType compressor_type = ObCompressorType::NONE_COMPRESSOR;
       ObDirectLoadMethod::Type method = (is_incremental ? ObDirectLoadMethod::INCREMENTAL : ObDirectLoadMethod::FULL);
       ObDirectLoadInsertMode::Type insert_mode = ObDirectLoadInsertMode::INVALID_INSERT_MODE;
@@ -93,35 +93,39 @@ int ObTableDirectInsertCtx::init(
       }
       ObDirectLoadMode::Type load_mode = is_insert_overwrite ? ObDirectLoadMode::INSERT_OVERWRITE : ObDirectLoadMode::INSERT_INTO;
       bool is_heap_table = false;
-      if (OB_FAIL(GCTX.omt_->get_tenant(MTL_ID(), tenant))) {
-        LOG_WARN("fail to get tenant handle", KR(ret), K(MTL_ID()));
+      ObDirectLoadLevel::Type load_level = ObDirectLoadLevel::INVALID_LEVEL;
+      if (OB_FAIL(get_direct_load_level(phy_plan, table_id, load_level))) {
+        LOG_WARN("failed to get direct load level", KR(ret), K(phy_plan), K(table_id));
+      } else if (OB_FAIL(ObTableLoadSchema::get_table_schema(*schema_guard, tenant_id, table_id, table_schema))) {
+        LOG_WARN("fail to get table schema", KR(ret));
+      } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema->get_compressor_type(),
+                                                                 parallel,
+                                                                 compressor_type))) {
+        LOG_WARN("fail to get tmp store compressor type", KR(ret));
+      } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, column_ids))) {
+        LOG_WARN("failed to init store column idxs", KR(ret));
       } else if (OB_FAIL(ObTableLoadService::check_support_direct_load(*schema_guard,
-                                                                       table_id,
+                                                                       table_schema,
                                                                        method,
                                                                        insert_mode,
-                                                                       load_mode))) {
+                                                                       load_mode,
+                                                                       load_level,
+                                                                       column_ids))) {
         LOG_WARN("fail to check support direct load", KR(ret));
-      } else if (OB_FAIL(get_compressor_type(MTL_ID(), table_id, parallel, compressor_type))) {
-        LOG_WARN("fail to get compressor type", KR(ret));
-      } else if (OB_FAIL(ObTableLoadSchema::get_column_ids(*schema_guard,
-                                                           tenant_id,
-                                                           table_id,
-                                                           column_ids))) {
-        LOG_WARN("failed to init store column idxs", KR(ret));
-      } else if(OB_FAIL(get_is_heap_table(*schema_guard, tenant_id, table_id, is_heap_table))) {
-        LOG_WARN("failed to get is heap table", KR(ret), K(tenant_id), K(table_id));
       } else {
         ObTableLoadParam param;
+        ObArray<ObTabletID> tablet_ids;
+        tablet_ids.reset();
         param.tenant_id_ = MTL_ID();
         param.table_id_ = table_id;
-        param.batch_size_ = 100;
         param.parallel_ = parallel;
         param.session_count_ = parallel;
+        param.batch_size_ = 100;
+        param.max_error_row_count_ = 0;
         param.column_count_ = column_ids.count();
+        param.need_sort_ = table_schema->is_heap_table() ? phy_plan.get_direct_load_need_sort() : true;
         param.px_mode_ = true;
         param.online_opt_stat_gather_ = is_online_gather_statistics_;
-        param.need_sort_ = is_heap_table ? phy_plan.get_direct_load_need_sort() : true;
-        param.max_error_row_count_ = 0;
         param.dup_action_ = (enable_inc_replace ? sql::ObLoadDupActionType::LOAD_REPLACE
                                                 : sql::ObLoadDupActionType::LOAD_STOP_ON_DUP);
         param.method_ = method;
@@ -129,8 +133,12 @@ int ObTableDirectInsertCtx::init(
         param.load_mode_ = load_mode;
         param.compressor_type_ = compressor_type;
         param.online_sample_percent_ = online_sample_percent;
-        if (OB_FAIL(table_load_instance_->init(param, column_ids, load_exec_ctx_))) {
-          LOG_WARN("failed to init direct loader", KR(ret));
+        param.load_level_ = load_level;
+        if ((ObDirectLoadLevel::PARTITION == param.load_level_)
+            && OB_FAIL(get_tablet_ids(*(exec_ctx->get_sql_ctx()), table_id, tablet_ids))) {
+          LOG_WARN("failed to get tablet ids", KR(ret), K(table_id));
+        } else if (OB_FAIL(table_load_instance_->init(param, column_ids, tablet_ids, load_exec_ctx_))) {
+          LOG_WARN("failed to init direct loader", KR(ret), K(param), K(column_ids), K(tablet_ids));
         } else {
           phy_plan.set_ddl_task_id(table_load_instance_->get_table_ctx()->ddl_param_.task_id_);
           is_inited_ = true;
@@ -185,25 +193,50 @@ void ObTableDirectInsertCtx::destroy()
   is_online_gather_statistics_ = false;
 }
 
-int ObTableDirectInsertCtx::get_compressor_type(const uint64_t tenant_id,
-                                                const uint64_t table_id,
-                                                const int64_t parallel,
-                                                ObCompressorType &compressor_type)
+int ObTableDirectInsertCtx::get_direct_load_level(
+    const ObPhysicalPlan &phy_plan,
+    const uint64_t table_id,
+    ObDirectLoadLevel::Type &load_level)
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = nullptr;
-  if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id,
-                                                                                  schema_guard))) {
-    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("table not exist", KR(ret), K(tenant_id), K(table_id));
-  } else if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(table_schema->get_compressor_type(),
-                                                             parallel, compressor_type))) {
-    LOG_WARN("fail to get tmp store compressor type", KR(ret));
+  const ObIArray<ObTableLocation> &table_locs = phy_plan.get_table_locations();
+  load_level = ObDirectLoadLevel::TABLE;
+  for (int64_t i = 0; OB_SUCC(ret) && (i < table_locs.count()); ++i) {
+    const ObTableLocation &table_loc = table_locs.at(i);
+    if (table_loc.get_ref_table_id() == table_id) {
+      if (table_loc.get_part_hint_ids().count() > 0) {
+        load_level = ObDirectLoadLevel::PARTITION;
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+int ObTableDirectInsertCtx::get_tablet_ids(
+    const ObSqlCtx &sql_ctx,
+    const uint64_t table_id,
+    ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  const ObTablePartitionInfo *table_part_info = nullptr;
+  const ObIArray<ObTablePartitionInfo *> &partition_infos = sql_ctx.partition_infos_;
+  for (int64_t i = 0; OB_SUCC(ret) && (i < partition_infos.count()); ++i) {
+    const ObTablePartitionInfo *part_info = partition_infos.at(i);
+    if (part_info->get_ref_table_id() == table_id) {
+      table_part_info = part_info;
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(table_part_info)) {
+    const ObCandiTableLoc &loc = table_part_info->get_phy_tbl_location_info();
+    const ObCandiTabletLocIArray &tablet_locs = loc.get_phy_part_loc_info_list();
+    for (int64_t i = 0; OB_SUCC(ret) && (i < tablet_locs.count()); ++i) {
+      const ObTabletID tablet_id = tablet_locs.at(i).get_partition_location().get_tablet_id();
+      if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
+        LOG_WARN("failed to add tablet id", KR(ret), K(tablet_id));
+      }
+    }
   }
   return ret;
 }

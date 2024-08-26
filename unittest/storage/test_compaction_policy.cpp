@@ -423,6 +423,7 @@ int TestCompactionPolicy::mock_tablet(
   ObArenaAllocator arena_allocator;
   ObCreateTabletSchema create_tablet_schema;
   bool need_empty_major_table = false;
+  bool need_generate_cs_replica_cg_array = false;
 
   if (OB_ISNULL(t3m)) {
     ret = OB_ERR_UNEXPECTED;
@@ -439,8 +440,9 @@ int TestCompactionPolicy::mock_tablet(
   } else if (OB_FAIL(create_tablet_schema.init(arena_allocator, table_schema, compat_mode,
          false/*skip_column_info*/, ObCreateTabletSchema::STORAGE_SCHEMA_VERSION_V3))) {
     LOG_WARN("failed to init storage schema", KR(ret), K(table_schema));
+  } else if (FALSE_IT(need_generate_cs_replica_cg_array = ls_handle.get_ls()->is_cs_replica() && create_tablet_schema.is_row_store() && create_tablet_schema.is_user_data_table())) {
   } else if (OB_FAIL(tablet->init_for_first_time_creation(allocator, ls_id, tablet_id, tablet_id,
-      SCN::min_scn(), snapshot_version, create_tablet_schema, need_empty_major_table, ls_handle.get_ls()->get_freezer()))) {
+      SCN::min_scn(), snapshot_version, create_tablet_schema, need_empty_major_table, need_generate_cs_replica_cg_array, ls_handle.get_ls()->get_freezer()))) {
     LOG_WARN("failed to init tablet", K(ret), K(ls_id), K(tablet_id), K(snapshot_version),
               K(table_schema), K(compat_mode));
   } else {

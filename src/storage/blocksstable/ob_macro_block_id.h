@@ -89,6 +89,7 @@ public:
   bool operator <(const MacroBlockId &other) const;
 
   NEED_SERIALIZE_AND_DESERIALIZE;
+  static MacroBlockId mock_valid_macro_id() { return MacroBlockId(0, AUTONOMIC_BLOCK_INDEX, 0); }
 
 public:
   static const int64_t MACRO_BLOCK_ID_VERSION = 0;

@@ -1386,6 +1386,19 @@ int ObTableLocation::get_is_weak_read(const ObDMLStmt &dml_stmt,
       is_weak_read = (ObTxConsistencyType::BOUNDED_STALENESS_READ == trans_consistency_type);
     }
   }
+  if (OB_SUCC(ret) && !is_weak_read) {
+    int64_t route_policy_type = 0;
+    if (OB_FAIL(session->get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy_type))) {
+      LOG_WARN("fail to get sys variable", K(ret));
+    } else if (COLUMN_STORE_ONLY == static_cast<ObRoutePolicyType>(route_policy_type)) {
+      if (dml_stmt.get_query_ctx()->is_contain_inner_table_) {
+        is_weak_read = true;
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "when route policy is COLUMN_STORE_ONLY, weak read request");
+      }
+    }
+  }
   return ret;
 }
 
@@ -2050,9 +2063,10 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
   ObSEArray<ColumnItem, 5> part_columns;
   ObSEArray<ColumnItem, 3> gen_cols;
   const ObRawExpr *part_raw_expr = NULL;
-  if (OB_ISNULL(exec_ctx)) {
+  ObQueryCtx *query_ctx = NULL;
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(exec_ctx), K(ret));
+    LOG_WARN("unexpected null", K(exec_ctx), K(query_ctx), K(ret));
   } else if (OB_FAIL(get_partition_column_info(stmt,
                                                part_level,
                                                part_columns,
@@ -2074,6 +2088,7 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                             is_range_get,
                                             dtc_params,
                                             exec_ctx,
+                                            query_ctx,
                                             is_in_range_optimization_enabled))) {
     LOG_WARN("Failed to get location calc node", K(ret));
   } else if (gen_cols.count() > 0) {
@@ -2086,6 +2101,7 @@ int ObTableLocation::set_location_calc_node(const ObDMLStmt &stmt,
                                      gen_col_node,
                                      dtc_params,
                                      exec_ctx,
+                                     query_ctx,
                                      is_in_range_optimization_enabled))) {
       LOG_WARN("Get query range node error", K(ret));
     } else if (always_true) {
@@ -2471,6 +2487,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                             bool &is_range_get,
                                             const ObDataTypeCastParams &dtc_params,
                                             ObExecContext *exec_ctx,
+                                            ObQueryCtx *query_ctx,
                                             const bool is_in_range_optimization_enabled)
 {
   int ret = OB_SUCCESS;
@@ -2500,6 +2517,7 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
                                      calc_node,
                                      dtc_params,
                                      exec_ctx,
+                                     query_ctx,
                                      is_in_range_optimization_enabled))) {
       LOG_WARN("Get query range node error", K(ret));
     } else if (always_true) {
@@ -2543,7 +2561,8 @@ int ObTableLocation::get_location_calc_node(const ObPartitionLevel part_level,
       if (normal_filters.count() > 0) {
         column_always_true = false;
         if (OB_FAIL(get_query_range_node(part_level, partition_columns, filter_exprs, column_always_true,
-                                         column_node, dtc_params, exec_ctx, is_in_range_optimization_enabled))) {
+                                         column_node, dtc_params, exec_ctx, query_ctx,
+                                         is_in_range_optimization_enabled))) {
           LOG_WARN("Failed to get query range node", K(ret));
         } else if (OB_NOT_NULL(column_node)) {
           is_column_range_get = static_cast<ObPLQueryRangeNode*>(column_node)->pre_query_range_.is_precise_get();
@@ -2574,6 +2593,7 @@ int ObTableLocation::get_query_range_node(const ObPartitionLevel part_level,
                                           ObPartLocCalcNode *&calc_node,
                                           const ObDataTypeCastParams &dtc_params,
                                           ObExecContext *exec_ctx,
+                                          ObQueryCtx *query_ctx,
                                           const bool is_in_range_optimization_enabled)
 {
   int ret = OB_SUCCESS;
@@ -2590,6 +2610,7 @@ int ObTableLocation::get_query_range_node(const ObPartitionLevel part_level,
                                                                        filter_exprs,
                                                                        dtc_params,
                                                                        exec_ctx,
+                                                                       query_ctx,
                                                                        NULL,
                                                                        NULL,
                                                                        phy_rowid_for_table_loc,

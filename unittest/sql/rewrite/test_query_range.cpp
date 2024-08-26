@@ -224,7 +224,7 @@ public:
     int64_t pos = 0;
     int64_t data_len = 0;
     resolve_condition(range_columns, condition, expr);
-    OK(enc_query_range.preliminary_extract_query_range(range_columns, expr, NULL, &exec_ctx_));
+    OK(enc_query_range.preliminary_extract_query_range(range_columns, expr, NULL, &exec_ctx_, &query_ctx_));
     OK(enc_query_range.serialize(buf, sizeof(buf), pos));
     data_len = pos;
     pos = 0;
@@ -261,7 +261,7 @@ public:
     split_and_condition(expr, and_exprs);
 //    OK(multi_query_range.preliminary_extract_query_range(range_columns, and_exprs, NULL));
 //    OK(multi_query_range.final_extract_query_range(params, NULL));
-    OK(multi_query_range.preliminary_extract_query_range(range_columns, and_exprs, dtc_params, &exec_ctx_));
+    OK(multi_query_range.preliminary_extract_query_range(range_columns, and_exprs, dtc_params, &exec_ctx_, &query_ctx_));
     OK(multi_query_range.final_extract_query_range(exec_ctx_, dtc_params));
     OK(multi_query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
     _OB_LOG(DEBUG, "and_exprs_count: %ld, ranges: %s, except_range: %s",
@@ -293,6 +293,7 @@ protected:
   ObArray<ColumnItem> extra_range_columns_;
   ObColumnRefRawExpr ref_col_; //a
   ObQueryRange query_range;
+  ObQueryCtx query_ctx_;
   void get_query_range(const char *expr, const char *&json_expr);
   void get_query_range_filter(const char *sql_expr, const char *&json_expr, char *buf, int64_t &pos, const int64_t cols_num);
   void get_query_range_collation(const char *expr, const char *&json_expr, char *buf, int64_t &pos);
@@ -516,7 +517,7 @@ void ObQueryRangeTest::get_query_range(const char *sql_expr, const char *&json_e
   _OB_LOG(INFO, "expr: %s", CSJ(expr));
   query_range.reset();
   OB_LOG(INFO, "get query range sql", K(final_sql));
-  OK(pre_query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &exec_ctx_));
+  OK(pre_query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &exec_ctx_, &query_ctx_));
   char *ser_buf = NULL;
   int64_t ser_len = pre_query_range.get_serialize_size();
   int64_t pos = 0;
@@ -583,7 +584,7 @@ void ObQueryRangeTest::get_query_range_filter(const char *sql_expr, const char *
   OB_ASSERT(expr);
   query_range.reset();
   OB_LOG(INFO, "get query range sql", K(final_sql));
-  OK(query_range.preliminary_extract_query_range(range_columns, exprs, dtc_params, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(range_columns, exprs, dtc_params, &exec_ctx_, &query_ctx_));
   databuff_printf(buf, BUF_LEN, pos, "\n**rowkey num = %ld**  \n", cols_num);
   databuff_printf(buf, BUF_LEN, pos, "**filter count = %ld**\n", query_range.get_range_exprs().count());
 
@@ -639,7 +640,7 @@ void ObQueryRangeTest::get_query_range_collation(const char *sql_expr, const cha
       // each result_type of expr is deduced by param_obj_type and column_type
       databuff_printf(buf, BUF_LEN, pos, "%s--------------connection_collation = %d col_type = %d\n",sql_expr, conn_type, col_type);
       OB_ASSERT(expr);
-      OK(query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &exec_ctx_));
+      OK(query_range.preliminary_extract_query_range(range_columns, expr, dtc_params, &exec_ctx_, &query_ctx_));
       OK(query_range.final_extract_query_range(exec_ctx_, NULL));
       OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
       bool flag = is_min_to_max_range(ranges);
@@ -820,7 +821,7 @@ TEST_F(ObQueryRangeTest, single_filed_key_whole_range1)
 
   ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
   params.reset();
-  OK(query_range.preliminary_extract_query_range(single_range_columns_, NULL, NULL, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(single_range_columns_, NULL, NULL, &exec_ctx_, &query_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, NULL));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
   ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)\"}]"));
@@ -837,7 +838,7 @@ TEST_F(ObQueryRangeTest, single_filed_key_whole_range2)
 
   ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
   params.reset();
-  OK(query_range.preliminary_extract_query_range(single_range_columns_, exprs, dtc_params, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(single_range_columns_, exprs, dtc_params, &exec_ctx_, &query_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
   ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN;MAX)\"}]"));
@@ -853,7 +854,7 @@ TEST_F(ObQueryRangeTest, double_filed_key_whole_range1)
 
   ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
   params.reset();
-  OK(query_range.preliminary_extract_query_range(double_range_columns_, NULL, dtc_params, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(double_range_columns_, NULL, dtc_params, &exec_ctx_, &query_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
   ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)\"}]"));
@@ -870,7 +871,7 @@ TEST_F(ObQueryRangeTest, double_filed_key_whole_range2)
 
   ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
   params.reset();
-  OK(query_range.preliminary_extract_query_range(double_range_columns_, exprs, dtc_params, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(double_range_columns_, exprs, dtc_params, &exec_ctx_, &query_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
   ASSERT_EQ(0, strcmp(to_cstring(ranges), "[{\"range\":\"table_id:3003,group_idx:0,index_ordered_idx:0,(MIN,MIN;MAX,MAX)\"}]"));
@@ -889,9 +890,9 @@ TEST_F(ObQueryRangeTest, range_column_with_like)
 
   ParamStore &params = exec_ctx_.get_physical_plan_ctx()->get_param_store_for_update();
   params.reset();
-  ASSERT_EQ(OB_INVALID_ARGUMENT, query_range.preliminary_extract_query_range(single_range_columns, expr, dtc_params, &exec_ctx_));
+  ASSERT_EQ(OB_INVALID_ARGUMENT, query_range.preliminary_extract_query_range(single_range_columns, expr, dtc_params, &exec_ctx_, &query_ctx_));
   resolve_expr("f like 'abc%'", expr, single_range_columns, params, CS_TYPE_UTF8MB4_GENERAL_CI, CS_TYPE_UTF8MB4_GENERAL_CI);
-  OK(query_range.preliminary_extract_query_range(single_range_columns, expr, dtc_params, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(single_range_columns, expr, dtc_params, &exec_ctx_, &query_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
   _OB_LOG(INFO, "range: %s", to_cstring(ranges));
@@ -901,14 +902,14 @@ TEST_F(ObQueryRangeTest, range_column_with_like)
   ObObj escape_obj;
   escape_obj.set_null();
   escape_expr->set_value(escape_obj);
-  OK(query_range.preliminary_extract_query_range(single_range_columns, expr, dtc_params, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(single_range_columns, expr, dtc_params, &exec_ctx_, &query_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
   _OB_LOG(INFO, "range: %s", to_cstring(ranges));
 
   query_range.reset();
   resolve_condition(single_range_columns, "'a' like 'a'", expr);
-  OK(query_range.preliminary_extract_query_range(single_range_columns, expr, dtc_params, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(single_range_columns, expr, dtc_params, &exec_ctx_, &query_ctx_));
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   OK(query_range.get_tablet_ranges(ranges, all_single_value_ranges, dtc_params));
   _OB_LOG(INFO, "range: %s", to_cstring(ranges));
@@ -973,7 +974,7 @@ TEST_F(ObQueryRangeTest, range_column_with_triple_key)
   const ObDataTypeCastParams dtc_params;
   resolve_condition(triple_range_columns_, sql_str, expr, &params);
   int64_t time1 = ObTimeUtility::current_time();
-  OK(query_range.preliminary_extract_query_range(triple_range_columns_, expr, dtc_params, &exec_ctx_));
+  OK(query_range.preliminary_extract_query_range(triple_range_columns_, expr, dtc_params, &exec_ctx_, &query_ctx_));
   int64_t time2 = ObTimeUtility::current_time();
   OK(query_range.final_extract_query_range(exec_ctx_, dtc_params));
   int64_t time3 = ObTimeUtility::current_time();
@@ -1089,7 +1090,7 @@ TEST_F(ObQueryRangeTest, single_key_cost_time)
   const ObDataTypeCastParams dtc_params;
 
   ObQueryRange pre_query_range;
-  OK(pre_query_range.preliminary_extract_query_range(single_range_columns_, expr, dtc_params, &exec_ctx_));
+  OK(pre_query_range.preliminary_extract_query_range(single_range_columns_, expr, dtc_params, &exec_ctx_, &query_ctx_));
 
   int64_t deep_copy_cost = 0;
   int64_t extract_cost = 0;
@@ -1113,7 +1114,7 @@ TEST_F(ObQueryRangeTest, single_key_cost_time)
           (float)deep_copy_cost / (float)1000, (float)extract_cost / (float)1000, (float)get_range_cost / (float)1000);
 
   ObQueryRange query_range2;
-  OK(query_range2.preliminary_extract_query_range(single_range_columns_, expr, dtc_params, &exec_ctx_));
+  OK(query_range2.preliminary_extract_query_range(single_range_columns_, expr, dtc_params, &exec_ctx_, &query_ctx_));
   get_range_cost = 0;
   for (int64_t i = 0; i < 1000; ++i) {
     ObQueryRangeArray ranges;

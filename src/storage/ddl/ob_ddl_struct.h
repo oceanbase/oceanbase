@@ -176,6 +176,18 @@ public:
   ~ObDDLMacroBlockRedoInfo() = default;
   bool is_valid() const;
   bool is_column_group_info_valid() const;
+  /*
+   * For tow conditions:
+   *   1. column store table, unnessasery to generate double redo clog.
+   *   2. row store table, but unnessasery to process cs replica.
+   *     (a) cs replica not exist, may not be created or is creating.
+   *     (b) table is not user data table.
+   */
+  bool is_not_compat_cs_replica() const;
+  // If cs replica exist, this redo clog is suitable for F/R replica.
+  bool is_cs_replica_row_store() const;
+  // If cs replica exist, this redo clog is suitable for C replica.
+  bool is_cs_replica_column_store() const;
   void reset();
   TO_STRING_KV(K_(table_key),
                K_(data_buffer),
@@ -186,7 +198,10 @@ public:
                K_(end_row_id),
                K_(type),
                K_(trans_id),
-               K_(with_cs_replica));
+               K_(with_cs_replica),
+               K_(macro_block_id),
+               K_(parallel_cnt),
+               K_(cg_cnt));
 public:
   storage::ObITable::TableKey table_key_;
   ObString data_buffer_;
@@ -198,6 +213,11 @@ public:
   storage::ObDirectLoadType type_;
   transaction::ObTransID trans_id_; // for incremental direct load only
   bool with_cs_replica_;
+
+  blocksstable::MacroBlockId macro_block_id_; // for shared storage mode
+  // for shared storage gc occupy info
+  int64_t parallel_cnt_;
+  int64_t cg_cnt_;
 };
 
 class ObTabletDirectLoadMgr;

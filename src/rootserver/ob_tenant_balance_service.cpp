@@ -305,14 +305,25 @@ int ObTenantBalanceService::is_ls_balance_finished(const uint64_t &tenant_id, bo
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (ObAllTenantInfoProxy::is_primary_tenant(GCTX.sql_proxy_, tenant_id, is_primary)) {
     LOG_WARN("fail to execute is_primary_tenant", KR(ret), K(tenant_id));
-  } else if (is_primary && ObShareUtil::is_tenant_enable_transfer(tenant_id)) {
-    if (OB_FAIL(is_primary_tenant_ls_balance_finished_(tenant_id, is_finished))) {
-      LOG_WARN("fail to execute is_primary_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
+  } else if (is_primary) {
+    if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id)) {
+      // enable_rebalance = false
+      is_finished = true;
+    } else if (ObShareUtil::is_tenant_enable_transfer(tenant_id)) {
+      // primary tenant and enable_rebalance = true and enable_transfer = true
+      if (OB_FAIL(is_primary_tenant_ls_balance_finished_(tenant_id, is_finished))) {
+        LOG_WARN("fail to execute is_primary_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
+      }
+    } else {
+      // primary tenant and enable_rebalance = true and enable_transfer = false
+      if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
+        LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id), K(is_primary));
+      }
     }
   } else {
-    // standby & restore & primary tenant and enable_transfer=false
+    // standby & restore
     if (OB_FAIL(is_standby_tenant_ls_balance_finished_(tenant_id, is_finished))) {
-      LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id));
+      LOG_WARN("fail to execute is_standby_tenant_ls_balance_finished_", KR(ret), K(tenant_id), K(is_primary));
     }
   }
   LOG_TRACE("check whether the tenant has balanced ls", K(ret), K(tenant_id), K(is_primary), K(is_finished));
@@ -660,25 +671,27 @@ int ObTenantBalanceService::check_ls_job_need_cancel_(const share::ObBalanceJob 
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("job is invalid", KR(ret), K(job));
   } else if (job.get_job_type().is_transfer_partition()) {
-    //手动transfer partition任务只需要看enable_transfer即可
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
-    if (OB_UNLIKELY(!tenant_config.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tenant config is invalid", K(tenant_id_));
-    } else if (!tenant_config->enable_transfer) {
+    //手动transfer partition任务只需要看 enable_transfer 和 没有在升级状态中 即可
+    if (!ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
       need_cancel = true;
-      if (OB_TMP_FAIL(comment.assign("Canceled due to tenant transfer being disabled"))) {
+      if (OB_TMP_FAIL(comment.assign("Canceled due to tenant transfer being disabled or tenant being in upgrade mode"))) {
         LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job));
       }
-      ISTAT("tenant transfer is disabled, need cancel current job", K(job), K(comment));
+      ISTAT("tenant transfer is disabled or tenant is in upgrade mode; need cancel current job", K(job), K(comment));
     }
-  } else if (!ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
+  } else if (!ObShareUtil::is_tenant_enable_rebalance(tenant_id_)) {
     need_cancel = true;
-    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to tenant balance or transfer being disabled"))) {
+    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to tenant balance being disabled"))) {
       LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job));
     }
-    ISTAT("tenant balance or transfer is disabled, need cancel current job", K(job), K(comment),
-        "enable_balance", ObShareUtil::is_tenant_enable_transfer(tenant_id_),
+    ISTAT("tenant balance is disabled; need cancel current job", K(job), K(comment),
+        "enable_rebalance", ObShareUtil::is_tenant_enable_rebalance(tenant_id_));
+  } else if (!ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
+    need_cancel = true;
+    if (OB_TMP_FAIL(comment.assign_fmt("Canceled due to tenant transfer being disabled or tenant being in upgrade mode"))) {
+      LOG_WARN("failed to assign fmt", KR(tmp_ret), K(job));
+    }
+    ISTAT("tenant transfer is disabled or tenant is in upgrade mode; need cancel current job", K(job), K(comment),
         "enable_transfer", ObShareUtil::is_tenant_enable_transfer(tenant_id_));
   } else if (job.get_primary_zone_num() != primary_zone_num_) {
     need_cancel = true;
@@ -975,7 +988,6 @@ int ObTenantBalanceService::transfer_partition_(int64_t &job_cnt)
   int ret = OB_SUCCESS;
   job_cnt = 0;
   uint64_t data_version = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
   if (OB_UNLIKELY(!inited_ || !ATOMIC_LOAD(&loaded_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(inited_), K(loaded_));
@@ -985,11 +997,8 @@ int ObTenantBalanceService::transfer_partition_(int64_t &job_cnt)
       //trasnsfer partition 功能提交到了4220分支，所以4220之后的42x分支不用判断兼容性
       || (data_version >= DATA_VERSION_4_3_0_0 && DATA_VERSION_4_3_1_0 > data_version)) {
     LOG_TRACE("no need do transfer partition", K(data_version));
-  } else if (OB_UNLIKELY(!tenant_config.is_valid())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant config is invalid", K(tenant_id_));
-  } else if (!tenant_config->enable_transfer) {
-    LOG_TRACE("can not transfer partition while can not transfer");
+  } else if (!ObShareUtil::is_tenant_enable_transfer(tenant_id_)) {
+    LOG_TRACE("can not transfer partition due to transfer being disabled or tenant being in upgrade mode.");
   } else {
     ObTransferPartitionHelper tp_help(tenant_id_, GCTX.sql_proxy_);
     int64_t unit_num = 0;
@@ -1028,7 +1037,7 @@ int ObTenantBalanceService::transfer_partition_(int64_t &job_cnt)
   }
 
   ISTAT("finish transfer partition", KR(ret), K(job_cnt),
-        "enable transfer", tenant_config->enable_transfer);
+      "enable transfer", ObShareUtil::is_tenant_enable_transfer(tenant_id_));
   return ret;
 
 }

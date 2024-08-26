@@ -979,7 +979,7 @@ int ObTransService::register_mds_into_ctx_(ObTxDesc &tx_desc,
     TRANS_LOG(WARN, "get store ctx failed", KR(ret), K(tx_desc), K(ls_id));
   } else {
     ObPartTransCtx *ctx = store_ctx.mvcc_acc_ctx_.tx_ctx_;
-    ObMdsThrottleGuard mds_throttle_guard(false/* for_replay */, ctx->get_trans_expired_time());
+    ObMdsThrottleGuard mds_throttle_guard(ls_id, false /* for_replay */, ctx->get_trans_expired_time());
     if (OB_ISNULL(ctx)) {
       ret = OB_ERR_UNEXPECTED;
       TRANS_LOG(WARN, "unexpected null ptr", KR(ret), K(tx_desc), K(ls_id), K(type));

@@ -363,6 +363,7 @@ private:
   int check_aggr_in_select_scope(ObSelectStmt *select_stmt);
   int mark_aggr_in_select_scope(ObSelectStmt *select_stmt);
 
+  int check_audit_log_stmt(ObSelectStmt *select_stmt);
 protected:
   // data members
   /*these member is only for with clause*/

@@ -515,8 +515,8 @@ int ObTransformWinMagic::sanity_check_and_init(ObDMLStmt *stmt,
   } else if (view->get_table_size() != map_info.table_map_.count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table size does not match to table map count", K(ret));
-  } else if (FALSE_IT(context.init(view, stmt, map_info, nullptr))) {
-    //nvr
+  } else if (OB_FAIL(context.init(view, stmt, map_info, nullptr))) {
+    LOG_WARN("failed to init", K(ret));
   }
   return ret;
 }
@@ -938,8 +938,8 @@ int ObTransformWinMagic::remove_dup_condition(ObDMLStmt *stmt) {
           LOG_WARN("push back failed", K(ret));
         }
       } else {
-        ObOpRawExpr *is_not_null = NULL;
-        if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, stmt, expr->get_param_expr(0), is_not_null))) {
+        ObRawExpr *is_not_null = NULL;
+        if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, expr->get_param_expr(0), is_not_null))) {
           LOG_WARN("failed to add is not null expr", K(ret));
         } else if (OB_FAIL(new_conditions.push_back(is_not_null))) {
           LOG_WARN("failed to append is not null exprs to where conditions", K(ret));
@@ -1101,32 +1101,6 @@ int ObTransformWinMagic::check_select_expr_validity(ObSelectStmt &subquery, bool
     }
   }
 
-  return ret;
-}
-
-int ObTransformWinMagic::create_aggr_expr(ObItemType type, 
-                                          ObAggFunRawExpr *&agg_expr, 
-                                          ObRawExpr *child_expr) 
-{
-  int ret = OB_SUCCESS;
-  ObRawExprFactory *expr_factory = NULL;
-  if (OB_ISNULL(ctx_) || OB_ISNULL(expr_factory = ctx_->expr_factory_) ||
-      OB_ISNULL(ctx_->session_info_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), K(ctx_), K(expr_factory), K(agg_expr));
-  } else if (OB_FAIL(expr_factory->create_raw_expr(type,
-                                                   agg_expr))) {
-    LOG_WARN("create window function expr failed", K(ret));
-  } else if (OB_ISNULL(agg_expr)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid argument", K(ret), K(agg_expr));
-  } else if (OB_FAIL(agg_expr->add_real_param_expr(child_expr))) {
-    LOG_WARN("fail to set partition exprs", K(ret));
-  } else if (OB_FAIL(agg_expr->formalize(ctx_->session_info_))) {
-    LOG_WARN("failed to formalize windown function", K(ret));
-  } else if (OB_FAIL(agg_expr->pull_relation_id())) {
-    LOG_WARN("failed to pull relation id and levels", K(ret));
-  }
   return ret;
 }
 
@@ -1318,11 +1292,11 @@ int ObTransformWinMagic::adjust_column_and_table(ObDMLStmt *main_stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_group_expr_size(); i++) {
     ObRawExpr *expr = view_stmt->get_group_exprs().at(i);
     ObSEArray<ObRawExpr *, 1> is_not_null_exprs;
-    ObOpRawExpr *is_not_null = NULL;
+    ObRawExpr *is_not_null = NULL;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gourp by expr is null", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, view_stmt, expr, is_not_null))) {
+    } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, expr, is_not_null))) {
       LOG_WARN("failed to add is not null expr", K(ret));
     } else if (OB_FAIL(is_not_null_exprs.push_back(is_not_null))) {
       LOG_WARN("failed to push is not null expr into array", K(ret));
@@ -1634,11 +1608,11 @@ int ObTransformWinMagic::change_agg_to_win_func(ObDMLStmt *main_stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < partition_exprs.count(); i++) {
     ObRawExpr *expr = partition_exprs.at(i);
     ObSEArray<ObRawExpr *, 1> is_not_null_exprs;
-    ObOpRawExpr *is_not_null = NULL;
+    ObRawExpr *is_not_null = NULL;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("gourp by expr is null", K(ret));
-    } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, transed_stmt, expr, is_not_null))) {
+    } else if (OB_FAIL(ObTransformUtils::add_is_not_null(ctx_, expr, is_not_null))) {
       LOG_WARN("failed to add is not null expr", K(ret));
     } else if (OB_FAIL(is_not_null_exprs.push_back(is_not_null))) {
       LOG_WARN("failed to push is not null expr into array", K(ret));
@@ -1684,7 +1658,7 @@ int ObTransformWinMagic::change_agg_to_win_func(ObDMLStmt *main_stmt,
                (agg_expr->get_expr_type() == T_FUN_COUNT ? 
                                              T_FUN_COUNT_SUM : agg_expr->get_expr_type())))) {
       //never reach
-    } else if (OB_FAIL(create_aggr_expr(type, new_agg_expr, col_expr))) {
+    } else if (OB_FAIL(ObTransformUtils::create_aggr_expr(ctx_, type, new_agg_expr, col_expr))) {
       LOG_WARN("creat aggr expr failed", K(ret));
     } else if (OB_ISNULL(new_agg_expr)) {
       ret = OB_ERR_UNEXPECTED;

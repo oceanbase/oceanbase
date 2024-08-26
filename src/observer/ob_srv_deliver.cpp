@@ -188,24 +188,20 @@ int get_user_tenant(ObRequest &req, char *user_name_buf, char *tenant_name_buf)
   char *endpoint_tenant_mapping_buf = nullptr;
 
   obmysql::OMPKHandshakeResponse hsr = static_cast<const obmysql::OMPKHandshakeResponse &>(req.get_packet());
-  if (OB_FAIL(hsr.decode())) {
-    LOG_WARN("decode hsr fail", K(ret));
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(hsr.decode())) {
     // ignore error and handle in ObMPConnect
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(extract_user_tenant(hsr.get_username(), user_name, tenant_name))) {
+    LOG_WARN("decode hsr fail", K(tmp_ret));
+  } else if (OB_TMP_FAIL(extract_user_tenant(hsr.get_username(), user_name, tenant_name))) {
+    // ignore error and handle in ObMPConnect
     LOG_WARN("parse user@tenant fail", K(ret), "str", hsr.get_username());
-    // ignore error and handle in ObMPConnect
-    ret = OB_SUCCESS;
-  } else if (OB_FAIL(ObVTOAUtility::get_virtual_addr(fd, is_slb, vid, vaddr))) {
-    LOG_WARN("failed to get virtual addr", K(ret), K(fd));
+  } else if (!tenant_name.empty()) {
+    // use this tenant_name
   } else {
-    if (!is_slb) {
-      // not from LB, do nothing
-    } else if (!tenant_name.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_DBA_WARN_V2(OB_SERVER_TENANT_NAME_NOT_EMPTY, OB_INVALID_CONFIG,
-                  "The connections from the load balancer cannot have tenant names.");
-    } else {
+    if (OB_TMP_FAIL(ObVTOAUtility::get_virtual_addr(fd, is_slb, vid, vaddr))) {
+      LOG_WARN("failed to get virtual addr", K(tmp_ret), K(fd));
+    }
+    if (is_slb) {
       const int64_t endpoint_tenant_mapping_buf_len = STRLEN(GCONF._endpoint_tenant_mapping.str());
       endpoint_tenant_mapping_buf =
           static_cast<char *>(common::ob_malloc(sizeof(char) * (endpoint_tenant_mapping_buf_len + 1), "EndpointTenant"));

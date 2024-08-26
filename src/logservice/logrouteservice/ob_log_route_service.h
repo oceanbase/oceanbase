@@ -77,7 +77,7 @@ public:
       const bool is_across_cluster,
       logfetcher::IObLogErrHandler *err_handler,
       const char *external_server_blacklist = "|",
-      const int64_t background_refresh_time_sec = 10,
+      const int64_t background_refresh_time_sec = 1200,
       const int64_t all_server_cache_update_interval_sec = 5,
       const int64_t all_zone_cache_update_interval_sec = 5,
       const int64_t blacklist_survival_time_sec = 30,
@@ -364,12 +364,10 @@ private:
     int init(int tg_id);
     void destroy();
     virtual void runTimerTask() override;
-    static const int64_t REFRESH_INTERVAL = 5 * _SEC_;
   private:
     bool is_inited_;
     ObLogRouteService &log_route_service_;
   };
-  int schedule_ls_timer_task_();
 
 private:
   bool is_inited_;
@@ -396,6 +394,7 @@ private:
   int64_t blacklist_survival_time_penalty_period_min_;
   int64_t blacklist_history_overdue_time_min_;
   int64_t blacklist_history_clear_interval_min_;
+  int64_t ls_svr_list_last_update_time_;
 
   DISALLOW_COPY_AND_ASSIGN(ObLogRouteService);
 };

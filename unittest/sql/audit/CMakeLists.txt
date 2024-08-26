@@ -1,0 +1,1 @@
+sql_unittest(test_audit_log_utils)

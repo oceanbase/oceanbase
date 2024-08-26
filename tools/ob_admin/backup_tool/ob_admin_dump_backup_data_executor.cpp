@@ -2505,7 +2505,7 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_backup_set_infos_(const ObIArray<
                                               OB_MAX_TIME_STR_LENGTH,
                                               pos))) {
         STORAGE_LOG(WARN, "fail to convert scn to str", K(ret), K(time_zone_wrap), K(backup_set_desc));
-      } else if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+      } else if (OB_FAIL(databuff_printf(buf, OB_MAX_INTEGER_DISPLAY_WIDTH, "%ld", i+1))) {
         STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
       } else if (OB_FALSE_IT(backup_set_desc.to_string(min_restore_scn_str_buf, str_buf, OB_MAX_TEXT_LENGTH))) {
       } else {
@@ -2522,9 +2522,9 @@ int ObAdminDumpBackupDataExecutor::dump_backup_ls_meta_infos_file_(const storage
   PrintHelper::print_dump_title("ls meta infos");
   ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i , cnt, OB_SUCC(ret)) {
     const storage::ObLSMetaPackage &meta_package = ls_meta_infos.ls_meta_packages_.at(i);
-    char buf[OB_MAX_CHAR_LEN] = { 0 };
+    char buf[OB_MAX_INTEGER_DISPLAY_WIDTH] = { 0 };
     char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
-    if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+    if (OB_FAIL(databuff_printf(buf, OB_MAX_INTEGER_DISPLAY_WIDTH, "%ld", i+1))) {
       STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
     } else if (OB_FALSE_IT(meta_package.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
     } else {
@@ -2647,9 +2647,9 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_archive_piece_infos_file_(const s
   PrintHelper::print_dump_line("path", piece_infos_file.path_.ptr());
   ARRAY_FOREACH_X(piece_infos_file.his_frozen_pieces_, i , cnt, OB_SUCC(ret)) {
     const ObTenantArchivePieceAttr &piece = piece_infos_file.his_frozen_pieces_.at(i);
-    char buf[OB_MAX_CHAR_LEN] = { 0 };
+    char buf[OB_MAX_INTEGER_DISPLAY_WIDTH] = { 0 };
     char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
-    if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+    if (OB_FAIL(databuff_printf(buf, OB_MAX_INTEGER_DISPLAY_WIDTH, "%ld", i+1))) {
       STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
     } else if (OB_FALSE_IT(piece.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
     } else {
@@ -2991,9 +2991,9 @@ int ObAdminDumpBackupDataExecutor::dump_tenant_archive_path_()
     PrintHelper::print_dump_title("tenant archive round infos");
     ARRAY_FOREACH_X(rounds, i , cnt, OB_SUCC(ret)) {
       const ObTenantArchiveRoundAttr &round = rounds.at(i);
-      char buf[OB_MAX_CHAR_LEN] = { 0 };
+      char buf[OB_MAX_INTEGER_DISPLAY_WIDTH] = { 0 };
       char str_buf[OB_MAX_TEXT_LENGTH] = { 0 };
-      if (OB_FAIL(databuff_printf(buf, OB_MAX_CHAR_LEN, "%ld", i+1))) {
+      if (OB_FAIL(databuff_printf(buf, OB_MAX_INTEGER_DISPLAY_WIDTH, "%ld", i+1))) {
         STORAGE_LOG(WARN, "fail to printf buf", K(ret), K(i));
       } else if (OB_FALSE_IT(round.to_string(str_buf, OB_MAX_TEXT_LENGTH))) {
       } else {

@@ -278,6 +278,8 @@ public:
   ExprFixedArray adaptive_hj_scan_cols_;
   ExprFixedArray adaptive_nlj_scan_cols_;
   bool is_adaptive_;
+  // placeholder
+  ExprFixedArray left_join_row_;
 };
 
 // hash join has no expression result overwrite problem:

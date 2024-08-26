@@ -44,18 +44,34 @@ int __attribute__((weak)) common_yield()
   return OB_SUCCESS;
 }
 
-}
+int __attribute__((weak)) SET_GROUP_ID(uint64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  THIS_WORKER.set_group_id_(group_id);
+  return ret;
 }
 
+int __attribute__((weak)) CONVERT_FUNCTION_TYPE_TO_GROUP_ID(const uint8_t function_type, uint64_t &group_id)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(function_type);
+  group_id = GET_GROUP_ID();
+  return ret;
+}
+
+}  // namespace lib
+}  // namespace oceanbase
 __thread Worker *Worker::self_;
 
 Worker::Worker()
-    : allocator_(nullptr),
+    : group_(nullptr),
+      allocator_(nullptr),
       st_current_priority_(0),
       session_(nullptr),
       cur_request_(nullptr),
       worker_level_(INT32_MAX),
       curr_request_level_(0),
+      is_th_worker_(false),
       group_id_(0),
       rpc_stat_srv_(nullptr),
       timeout_ts_(INT64_MAX),
@@ -83,15 +99,6 @@ Worker::Status Worker::check_wait()
     ret_status = WS_INVALID;
   }
   return ret_status;
-}
-
-void Worker::set_group_id(int32_t group_id)
-{
-  if (OBCG_DEFAULT_GROUP_ID == group_id_ || (is_user_group(group_id_) && is_valid_resource_group(group_id))) {
-    group_id_ = group_id;
-  } else {
-    LOG_ERROR_RET(OB_INNER_STAT_ERROR, "group_id is unexpected", K(group_id_), K(group_id));
-  }
 }
 
 bool Worker::sched_wait()

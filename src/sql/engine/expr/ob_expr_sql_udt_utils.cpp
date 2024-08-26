@@ -1504,7 +1504,7 @@ int ObSqlUdtMetaUtils::generate_udt_meta_from_schema(ObSchemaGetterGuard *schema
     udt_meta.udt_id_ = udt_id;
     if (root_udt_info->is_object_type()) {
       pl_type = static_cast<int32_t>(pl::PL_RECORD_TYPE);
-      child_attrs_cnt = root_udt_info->get_local_attrs();
+      child_attrs_cnt = root_udt_info->get_attributes();
     } else if (root_udt_info->is_varray()) {
       pl_type = static_cast<int32_t>(pl::PL_VARRAY_TYPE);
       if (OB_NOT_NULL(root_udt_info->get_coll_info())) {

@@ -41,6 +41,10 @@ public:
   int init(ObTableLoadParam &param,
            const common::ObIArray<uint64_t> &column_ids,
            ObTableLoadExecCtx *execute_ctx);
+  int init(ObTableLoadParam &param,
+           const common::ObIArray<uint64_t> &column_ids,
+           const common::ObIArray<common::ObTabletID> &tablet_ids,
+           ObTableLoadExecCtx *execute_ctx);
   int commit();
   int px_commit_data();
   int px_commit_ddl();
@@ -49,7 +53,8 @@ public:
   sql::ObLoadDataStat *get_job_stat() const { return job_stat_; }
   const table::ObTableLoadResultInfo &get_result_info() const { return result_info_; }
 private:
-  int start_stmt(const ObTableLoadParam &param);
+  int start_stmt(const ObTableLoadParam &param,
+                 const common::ObIArray<common::ObTabletID> &tablet_ids);
   int end_stmt(const bool commit);
   // incremental
   static int64_t get_stmt_expire_ts(sql::ObSQLSessionInfo *session_info);
@@ -59,7 +64,8 @@ private:
   int lock_table_in_tx();
   int init_ddl_param_for_inc_direct_load();
   // full
-  int start_redef_table(const ObTableLoadParam &param);
+  int start_redef_table(const ObTableLoadParam &param,
+                        const common::ObIArray<common::ObTabletID> &tablet_ids);
   int commit_redef_table();
   int abort_redef_table();
 private:
@@ -88,6 +94,7 @@ public:
                   const table::ObTableLoadObjRowArray &obj_rows);
 private:
   int check_trans_committed(TransCtx &trans_ctx);
+  bool is_valid_tablet_ids(const common::ObIArray<common::ObTabletID> &tablet_ids);
 
 private:
   struct StmtCtx

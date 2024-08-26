@@ -91,6 +91,7 @@ class ObCOSSTableV2;
 class ObMacroInfoIterator;
 class ObMdsRowIterator;
 class ObMdsMiniMergeOperator;
+struct ObTabletDirectLoadInsertParam;
 
 struct ObTableStoreCache
 {
@@ -114,6 +115,7 @@ public:
   int64_t recycle_version_;
   int64_t last_major_column_count_;
   bool is_row_store_;
+  // TODO(chengkong): add bool is_user_tablet_;
   common::ObCompressorType last_major_compressor_type_;
   common::ObRowStoreType last_major_latest_row_store_type_;
 };
@@ -179,6 +181,7 @@ public:
       const int64_t snapshot_version,
       const ObCreateTabletSchema &storage_schema,
       const bool need_create_empty_major_sstable,
+      const bool need_generate_cs_replica_cg_array,
       ObFreezer *freezer);
   // dump/merge build new multi version tablet
   int init_for_merge(
@@ -428,7 +431,13 @@ public:
       const ObTabletMeta &src_tablet_meta,
       const ObStorageSchema &src_storage_schema,
       ObMigrationTabletParam &param) const;
-
+  // transfer use storage schema from ls leader to create tablet, need specially process in cs replica
+  int inner_alloc_and_init_storage_schema(
+      common::ObArenaAllocator &allocator,
+      const share::ObLSID &ls_id,
+      const ObTabletID &tablet_id,
+      const ObStorageSchema &input_storage_schema,
+      bool &need_process_cs_replica);
   int get_ddl_kv_mgr(ObDDLKvMgrHandle &ddl_kv_mgr_handle, bool try_create = false);
   int set_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
   int remove_ddl_kv_mgr(const ObDDLKvMgrHandle &ddl_kv_mgr_handle);
@@ -439,6 +448,10 @@ public:
   int get_table(const ObITable::TableKey &table_key, ObTableHandleV2 &handle) const;
   int get_recycle_version(const int64_t multi_version_start, int64_t &recycle_version) const;
   int get_migration_sstable_size(int64_t &data_size);
+
+  // column store replica
+  int check_cs_replica_compat_schema(bool &is_cs_replica_compat);
+  int pre_process_cs_replica(ObTabletDirectLoadInsertParam &direct_load_param);
 
   // other
   const ObMetaDiskAddr &get_tablet_addr() const { return tablet_addr_; }
@@ -560,6 +573,10 @@ protected:// for MDS use
                                     const bool create_if_not_exist) const override final;
   virtual ObTabletPointer *get_tablet_pointer_() const override final;
 private:
+  int check_tablet_schema_mismatch(
+      const ObTablet &old_tablet,
+      const ObStorageSchema &storage_schema,
+      const bool is_convert_co_major_merge);
   int update_meta_last_persisted_committed_tablet_status_from_sstable(
       const ObUpdateTableStoreParam &param,
       const ObTabletCreateDeleteMdsUserData &last_tablet_status);
@@ -597,6 +614,15 @@ private:
   int inner_release_memtables(const share::SCN scn);
   int calc_sstable_occupy_size(int64_t &occupy_size, int64_t &pure_backup_sstable_occupy_size);
   inline void set_space_usage_(const ObTabletSpaceUsage &space_usage) { tablet_meta_.set_space_usage_(space_usage); }
+
+  int inner_init_compat_normal_tablet(
+      common::ObArenaAllocator &allocator,
+      const ObTablet &old_tablet,
+      ObTableHandleV2 &mds_mini_sstable);
+  int inner_init_compat_empty_shell(
+      common::ObArenaAllocator &allocator,
+      const ObTablet &old_tablet,
+      ObTableHandleV2 &mds_mini_sstable);
 private:
   static bool ignore_ret(const int ret);
   int inner_check_valid(const bool ignore_ha_status = false) const;
@@ -688,6 +714,7 @@ private:
 
   int check_medium_list() const;
   int check_sstable_column_checksum() const;
+  int check_no_backup_data() const;
   int get_finish_medium_scn(int64_t &finish_medium_scn) const;
 
   int inner_get_mds_sstables(ObTableStoreIterator &table_store_iter) const;

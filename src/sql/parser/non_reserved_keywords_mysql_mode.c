@@ -192,6 +192,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"data_table_id", DATA_TABLE_ID},
   {"database", DATABASE},
   {"databases", DATABASES},
+  {"data_source", DATA_SOURCE},
   {"date", DATE},
   {"date_add", DATE_ADD},
   {"date_sub", DATE_SUB},
@@ -635,6 +636,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"path", PATH},
   {"pattern", PATTERN},
   {"pause", PAUSE},
+  {"paxos_replica_num", PAXOS_REPLICA_NUM},
   {"percentage", PERCENTAGE},
   {"percent_rank", PERCENT_RANK},
   {"performance", PERFORMANCE},
@@ -907,6 +909,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"tablet_id", TABLET_ID},
   {"tablet_max_size", TABLET_MAX_SIZE},
   {"task", TASK},
+  {"task_id", TASK_ID},
   {"template", TEMPLATE},
   {"temporary", TEMPORARY},
   {"temptable", TEMPTABLE},
@@ -1054,6 +1057,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"rb_build_agg", RB_BUILD_AGG},
   {"rb_or_agg", RB_OR_AGG},
   {"rb_and_agg", RB_AND_AGG},
+  {"optimizer_costs", OPTIMIZER_COSTS}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

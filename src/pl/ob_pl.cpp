@@ -48,6 +48,7 @@
 #include "pl/debug/ob_pl_debugger_manager.h"
 #include "pl/opaque/ob_pl_json_type.h"
 #include "pl/ob_pl_profiler.h"
+#include "pl/ob_pl_call_stack_trace.h"
 #endif
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "sql/engine/dml/ob_trigger_handler.h"
@@ -68,6 +69,12 @@ extern int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_
 }
 namespace pl
 {
+
+
+#ifdef ERRSIM
+ERRSIM_POINT_DEF(OBPLCONTEXT_INIT);
+#endif // ERRSIM
+
 int ObPL::init(common::ObMySQLProxy &sql_proxy)
 {
   int ret = OB_SUCCESS;
@@ -125,6 +132,8 @@ int ObPL::init(common::ObMySQLProxy &sql_proxy)
                                 (void*)(sql::ObSPIService::spi_clear_diagnostic_area));
   jit::ObLLVMHelper::add_symbol(ObString("spi_end_trans"),
                                 (void*)(sql::ObSPIService::spi_end_trans));
+  jit::ObLLVMHelper::add_symbol(ObString("spi_update_location"),
+                                (void*)(sql::ObSPIService::spi_update_location));
   jit::ObLLVMHelper::add_symbol(ObString("spi_set_pl_exception_code"),
                                 (void*)(sql::ObSPIService::spi_set_pl_exception_code));
   jit::ObLLVMHelper::add_symbol(ObString("spi_get_pl_exception_code"),
@@ -605,6 +614,11 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
                        const bool is_dblink)
 {
   int ret = OB_SUCCESS;
+
+  // to mark what session status we need to do to rollback if init failed
+  bool need_remove_top_stack = false;
+  bool need_debug_stop = false;
+
   int64_t pl_block_timeout = 0;
   int64_t query_start_time = session_info.get_query_start_time();
   if (!is_dblink) {
@@ -645,7 +659,6 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
       }
     }
     if (lib::is_oracle_mode()) {
-      OZ (ObPLContext::debug_start(&session_info));
       if (OB_SUCC(ret) && !in_nested_sql_ctrl()) {
         /*!
          * 如果已经开始了STMT, 说明在嵌套语句中, 此时不需要设置SAVEPOINT,
@@ -684,9 +697,10 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
 
     OZ (ob_write_string(allocator != NULL ? *allocator
                         : ctx.get_allocator(), session_info.get_current_query_string(), cur_query_));
-
+    OZ (session_info.store_top_query_string(cur_query_));
     OZ (recursion_ctx_.init(session_info));
     OX (session_info.set_pl_stack_ctx(this));
+    OX (need_remove_top_stack = true);
     OX (session_info.set_pl_can_retry(true));
   } else if (is_function_or_trigger && lib::is_mysql_mode()) {
     //mysql模式, 内层function或者trigger不需要创建隐式savepoint, 只需要重置ac
@@ -720,6 +734,14 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
   if (OB_SUCC(ret) && is_function_or_trigger && lib::is_mysql_mode()) {
     last_insert_id_ = session_info.get_local_last_insert_id();
   }
+#ifdef ERRSIM
+  OX (ret = OBPLCONTEXT_INIT);
+#endif // ERRSIM
+  OZ (ObPLContext::debug_start(&session_info));
+  OX (need_debug_stop = true);
+#ifdef ERRSIM
+  OX (ret = OBPLCONTEXT_INIT);
+#endif // ERRSIM
   if (OB_SUCC(ret) && is_autonomous_) {
     has_inner_dml_write_ = session_info.has_exec_inner_dml();
     session_info.set_has_exec_inner_dml(false);
@@ -729,10 +751,52 @@ int ObPLContext::init(ObSQLSessionInfo &session_info,
     OZ (session_info.begin_autonomous_session(saved_session_));
     OX (saved_has_implicit_savepoint_ = session_info.has_pl_implicit_savepoint());
     OX (session_info.clear_pl_implicit_savepoint());
-    OZ (ObSqlTransControl::explicit_start_trans(ctx, false));
-    (void) register_after_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(ObSqlTransControl::explicit_start_trans(ctx, false))) {
+      LOG_WARN("failed to ObSqlTransControl::explicit_start_trans", K(ret));
+      int tmp_ret = session_info.end_autonomous_session(saved_session_);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to end_autonomous_session after explicit_start_trans failed, will ignore this error",
+                 K(tmp_ret), K(ret));
+      }
+    } else {
+      (void) register_after_begin_autonomous_session_for_deadlock_(session_info, last_trans_id);
+    }
   }
-  OX (session_info_ = &session_info);
+
+  // add any code may fail before this line.
+  // if it should fail, the side-effect must be cleared by its own, or after this line.
+
+  if (OB_SUCC(ret)) {
+    // this marks init succeed
+    session_info_ = &session_info;
+  } else {  // failed to init, do some clean up work
+    // restore autocommit
+    if (reset_autocommit_) {
+      session_info.set_autocommit(true);
+    }
+
+    // restore timeout
+    if (old_worker_timeout_ts_ != 0) {
+      THIS_WORKER.set_timeout_ts(old_worker_timeout_ts_);
+      if (OB_NOT_NULL(ctx.get_physical_plan_ctx())) {
+        ctx.get_physical_plan_ctx()->set_timeout_timestamp(old_phy_plan_timeout_ts_);
+      }
+    }
+
+    // remove top stack
+    if (need_remove_top_stack) {
+      session_info.set_pl_stack_ctx(nullptr);
+    }
+
+    // stop debugger
+    if (need_debug_stop) {
+      IGNORE_RETURN ObPLContext::debug_stop(&session_info);
+    }
+  }
+
   return ret;
 }
 
@@ -947,6 +1011,7 @@ void ObPLContext::destory(
         LOG_WARN("failed to restore query string", K(ret), K(cur_query_));
         ret = OB_SUCCESS == ret ? tmp_ret : ret;
       }
+      session_info.reset_top_query_string();
     }
     // 无论如何恢复session上的状态
     session_info.set_pl_stack_ctx(NULL);
@@ -1441,41 +1506,25 @@ int ObPLContext::set_subprogram_var_from_local(
 }
 
 #ifdef OB_BUILD_ORACLE_PL
-int ObPLContext::get_exact_error_msg(ObIArray<DbmsUtilityHelper::BtInfo*> &error_trace,
-                                       ObIArray<DbmsUtilityHelper::BtInfo*> &call_stack,
-                                       common::ObSqlString &err_msg)
+ObPLCallStackTrace* ObPLContext::get_call_stack_trace()
 {
   int ret = OB_SUCCESS;
-  err_msg.reuse();
-  if (0 == call_stack.count() || 0 == error_trace.count()) {
-    LOG_INFO("error message is incomplete. ", K(call_stack.count()), K(error_trace.count()));
-  } else {
-    int64_t i = call_stack.count() - 1;
-    for (; OB_SUCC(ret) && i>=0 && OB_NOT_NULL(call_stack.at(i)); i--) {
-      int64_t line = call_stack.at(i)->get_line_number();
-      int64_t col  = call_stack.at(i)->get_column_number();
-      for (int64_t j = 0 ; j < error_trace.count(); j++) {
-        if (OB_NOT_NULL(error_trace.at(j))
-             && call_stack.at(i)->handler == error_trace.at(j)->handler) {
-          line = error_trace.at(j)->get_line_number();
-          col  = error_trace.at(j)->get_column_number();
-          break;
-        }
-      }
-      if (OB_FAIL(err_msg.append_fmt("\nat "))) {
-        LOG_WARN("fail to get call stack name.", K(ret));
-      } else if (OB_FAIL(err_msg.append_fmt("%.*s , line : %ld, col : %ld",
-                                      call_stack.at(i)->object_name.length(),
-                                      call_stack.at(i)->object_name.ptr(), line, col))) {
-        LOG_WARN("fail to get call stack name.", K(ret),
-                    K(call_stack.at(i)->object_name), K(line), K(col));
-      } else {
-        LOG_DEBUG("exact error msg: ", K(call_stack.at(i)->object_name),
-                  K(line), K(col));
-      }
+  if (OB_ISNULL(call_stack_trace_)) {
+    ObIAllocator *allocator = nullptr;
+    ObPLCallStackTrace *call_stack_trace = nullptr;
+    CK (get_exec_stack().count() > 0);
+    CK (OB_NOT_NULL(get_exec_stack().at(0)));
+    CK (OB_NOT_NULL(allocator = get_exec_stack().at(0)->get_allocator()));
+    OX (call_stack_trace = reinterpret_cast<ObPLCallStackTrace *>(allocator->alloc(sizeof(ObPLCallStackTrace))));
+    if (OB_SUCC(ret) && OB_ISNULL(call_stack_trace)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for call stack trace", K(ret));
+    } else {
+      new (call_stack_trace) ObPLCallStackTrace();
+      call_stack_trace_ = call_stack_trace;
     }
   }
-  return ret;
+  return call_stack_trace_;
 }
 #endif
 
@@ -2184,7 +2233,8 @@ int ObPL::execute(ObExecContext &ctx,
           db_name = db_schema->get_database_name_str();
         }
       }
-      if (OB_SUCC(ret) && !ObUDTObjectType::is_object_id(package_id)) {
+      if (OB_SUCC(ret) && !ObUDTObjectType::is_object_id(package_id) && !is_valid_id(dblink_id)
+         && !ObTriggerInfo::is_trigger_package_id(package_id)) {
         OZ (check_exec_priv(ctx, db_name, routine));
       }
     }
@@ -3670,6 +3720,16 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
 
   // init params may use exec stack, need append to pl context first
   CK (OB_NOT_NULL(top_context_ = ctx_.exec_ctx_->get_my_session()->get_pl_context()));
+  if (OB_SUCC(ret)
+      && !is_called_from_sql_
+      && !is_anonymous
+      && !ObTriggerInfo::is_trigger_package_id(func_.get_package_id())
+      && top_context_->get_exec_stack().count() > 0) {
+    ObPLExecState *parent = top_context_->get_exec_stack().at(top_context_->get_exec_stack().count() - 1);
+    CK (OB_NOT_NULL(parent));
+    OX (parent->set_loc(this->get_loc()));
+    OX (this->set_loc(0));
+  }
   OZ (top_context_->get_exec_stack().push_back(this));
 
   OZ (init_params(params, is_anonymous));
@@ -3820,6 +3880,7 @@ int ObPL::check_exec_priv(
   uint64_t func_id = OB_INVALID_ID;
   uint64_t db_id = OB_INVALID_ID;
   uint64_t tenant_id = OB_INVALID_ID;
+  bool need_check = false;
 
   CK (OB_NOT_NULL(routine));
   OX (pkg_id = routine->get_package_id());
@@ -3889,6 +3950,38 @@ int ObPL::check_exec_priv(
       }
     }
   }
+  // add check trigger priv
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && ObTriggerInfo::is_trigger_package_id(pkg_id) &&
+      OB_FAIL(exec_ctx.get_my_session()->check_feature_enable(
+      ObCompatFeatureType::MYSQL_TRIGGER_PRIV_CHECK, need_check))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (OB_SUCC(ret) && need_check) {
+    share::schema::ObSessionPrivInfo session_priv;
+    const ObTableSchema *table = NULL;
+    if (OB_FAIL(guard->get_session_priv_info(
+                                    exec_ctx.get_my_session()->get_priv_tenant_id(),
+                                    exec_ctx.get_my_session()->get_priv_user_id(),
+                                    exec_ctx.get_my_session()->get_database_name(),
+                                    session_priv))) {
+      LOG_WARN("fail to get_session_priv_info", K(ret));
+    } else if (OB_UNLIKELY(!session_priv.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("Session priv is invalid", "tenant_id", session_priv.tenant_id_,
+              "user_id", session_priv.user_id_, K(ret));
+    } else {
+      ObNeedPriv need_priv;
+      need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
+      need_priv.db_ = database_name;
+      need_priv.priv_set_ = OB_PRIV_TRIGGER;
+      const ObTriggerInfo *trigger_info = NULL;
+      OZ (guard->get_trigger_info(tenant_id, ObTriggerInfo::get_package_trigger_id(pkg_id), trigger_info));
+      CK (OB_NOT_NULL(trigger_info));
+      OZ (guard->get_table_schema(tenant_id, trigger_info->get_base_object_id(), table));
+      CK (OB_NOT_NULL(table));
+      OX (need_priv.table_ = table->get_table_name());
+      OZ (guard->check_single_table_priv(session_priv, need_priv));
+    }
+  }
   return ret;
 }
 
@@ -3942,7 +4035,9 @@ int ObPL::simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv)
     ObIArray<ObPLSqlInfo> &sql_infos = func->get_sql_infos();
     for (int64_t i = 0; OB_SUCC(ret) && i < sql_infos.count(); ++i) {
       ObPLSqlInfo &sql_info = sql_infos.at(i);
-      if (sql_info.params_.empty()) {
+      OZ (ObSPIService::spi_update_location(ctx, sql_info.loc_));
+      if (OB_FAIL(ret)) {
+      } else if (sql_info.params_.empty()) {
         OZ (ObSPIService::spi_query(
           ctx, sql_infos.at(i).sql_.ptr(), sql_infos.at(i).stmt_type_,
           sql_info.into_.get_data(), sql_info.into_.count(),
@@ -3968,7 +4063,9 @@ int ObPL::simple_execute(ObPLExecCtx *ctx, int64_t argc, int64_t *argv)
       }
 
  #ifdef OB_BUILD_ORACLE_PL
-      ObPLEH::eh_adjust_call_stack(func, ctx->pl_ctx_, sql_infos.at(i).loc_, ret);
+      if (OB_NOT_NULL(ctx->pl_ctx_)) {
+        ObPLEH::eh_adjust_call_stack(*ctx->pl_ctx_, sql_info.loc_, ret);
+      }
  #endif
 
     }
@@ -4201,29 +4298,19 @@ int ObPLExecState::execute()
       }
     }
 
-    if (OB_SUCC(ret)) {
-      ObSQLSessionInfo *session_info = ctx_.exec_ctx_->get_my_session();
 #ifdef OB_BUILD_ORACLE_PL
-      int64_t call_cnt = top_context_->get_call_stack().count();
-      int64_t err_cnt = top_context_->get_error_trace().count();
-      if (OB_SUCC(ret) && err_cnt > 0) {
-        DbmsUtilityHelper::BtInfo* top_error = top_context_->get_error_trace().at(err_cnt - 1);
-        if (func_.get_action() == top_error->handler) {
-          OX (top_context_->get_error_trace().pop_back());
+    if (OB_FAIL(ret)&& top_call_ && OB_NOT_NULL(ctx_.exec_ctx_->get_my_session()) && OB_NOT_NULL(top_context_)) {
+      ObSQLSessionInfo *session_info = ctx_.exec_ctx_->get_my_session();
+      if (OB_ISNULL(top_context_->get_call_stack_trace())) {
+        LOG_WARN("call stack trace is null when pl exception found.", K(ret));
+      } else {
+        int tmp_ret = top_context_->get_call_stack_trace()->format_exception_stack(session_info->get_pl_exact_err_msg(), true);
+        if (tmp_ret != OB_SUCCESS) {
+          LOG_WARN("failed to format exception stack for session info", K(ret), K(tmp_ret));
         }
       }
-      if (OB_SUCC(ret) && call_cnt > 0) {
-        DbmsUtilityHelper::BtInfo* top_call = top_context_->get_call_stack().at(call_cnt - 1);
-        if (func_.get_action() == top_call->handler) {
-          OX (top_context_->get_call_stack().pop_back());
-        }
-      }
-    } else if (!inner_call_) {
-      ObPLContext::get_exact_error_msg(top_context_->get_error_trace(),
-                                       top_context_->get_call_stack(),
-                                       ctx_.exec_ctx_->get_my_session()->get_pl_exact_err_msg());
-#endif
     }
+#endif
   }
   return ret;
 }
@@ -4761,8 +4848,13 @@ int ObPL::check_session_alive(const ObBasicSessionInfo &session) {
 int ObPLFunction::gen_action_from_precompiled(const ObString &name, size_t length,
                                        const char *ptr) {
   int ret = OB_SUCCESS;
+
+  uint64_t addr = 0;
+
   OZ (helper_.add_compiled_object(length, ptr));
-  OX (set_action(helper_.get_function_address(name)));
+  OZ (helper_.get_function_address(name, addr));
+  OX (set_action(addr));
+
   return ret;
 }
 

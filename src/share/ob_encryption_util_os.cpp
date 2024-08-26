@@ -416,6 +416,40 @@ bool ObEncryptionUtil::is_sm4_encryption(const ObCipherOpMode opmode) {
          (opmode >= ObCipherOpMode::ob_sm4_cbc && opmode <= ObCipherOpMode::ob_sm4_gcm);
 }
 
+bool ObEncryptionUtil::is_ecb_mode(const ObCipherOpMode opmode)
+{
+  return (opmode >= ObCipherOpMode::ob_aes_128_ecb && opmode <= ob_aes_256_ecb) ||
+         (opmode == ObCipherOpMode::ob_sm4_ecb);
+}
+
+int ObEncryptionUtil::get_cipher_op_mode(ObCipherOpMode &op_mode, ObSQLSessionInfo *session)
+{
+  int ret = OB_SUCCESS;
+  int64_t encryption = -1;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (OB_FAIL(session->get_sys_variable(SYS_VAR_BLOCK_ENCRYPTION_MODE, encryption))) {
+    LOG_WARN("fail to get block encryption variable", K(ret));
+  } else if (encryption >= 0 && encryption <= 17) {
+    encryption++;
+    op_mode = static_cast<ObCipherOpMode>(encryption);
+  } else if (18 == encryption) {
+    op_mode = ObCipherOpMode::ob_sm4_ecb;
+  } else if (19 == encryption) {
+    op_mode = ObCipherOpMode::ob_sm4_cbc;
+  } else if (20 == encryption) {
+    op_mode = ObCipherOpMode::ob_sm4_cfb128;
+  } else if (21 == encryption) {
+    op_mode = ObCipherOpMode::ob_sm4_ofb;
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "Variable block_encryption_mode used");
+    LOG_WARN("got unsupported block encryption mode", K(ret), K(encryption));
+  }
+  return ret;
+}
+
 bool ObBackupEncryptionMode::is_valid(const EncryptionMode &mode)
 {
   return mode >= NONE && mode < MAX_MODE;
@@ -562,6 +596,9 @@ int ObHashUtil::get_hash_output_len(const ObHashAlgorithm algo, int64_t &output_
     case OB_HASH_SH512:
       output_len = SHA512_DIGEST_LENGTH;
       break;
+    case OB_HASH_SM3:
+      output_len = OB_SM3_DIGEST_LENGTH;
+      break;
     default:
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "cipher type passed");
@@ -606,6 +643,7 @@ const EVP_MD* ObHashUtil::get_hash_evp_md(const ObHashAlgorithm algo)
     case OB_HASH_SH256: return EVP_sha256();
     case OB_HASH_SH384: return EVP_sha384();
     case OB_HASH_SH512: return EVP_sha512();
+    case OB_HASH_SM3: return EVP_sm3();
     default: return NULL;
   }
 }

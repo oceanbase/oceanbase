@@ -172,7 +172,10 @@ namespace sql
     pushdown_filter_table_(),
     in_current_dfo_(true),
     skip_subpart_(false),
-    use_column_store_(false) {}
+    use_column_store_(false),
+    is_right_contain_pk_(false),
+    is_right_union_pk_(false),
+    right_origin_rows_(1.0) {}
 
   TO_STRING_KV(
     K_(lexprs),
@@ -191,7 +194,10 @@ namespace sql
     K_(force_part_filter),
     K_(in_current_dfo),
     K_(skip_subpart),
-    K_(use_column_store)
+    K_(use_column_store),
+    K_(is_right_contain_pk),
+    K_(is_right_union_pk),
+    K_(right_origin_rows)
   );
 
   common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> lexprs_;
@@ -215,6 +221,10 @@ namespace sql
   // If the table is a 1-level partition, this value is false.
   bool skip_subpart_;
   bool use_column_store_;
+  bool is_right_contain_pk_;
+  bool is_right_union_pk_;
+  double right_origin_rows_;
+
 };
 
 struct EstimateCostInfo {
@@ -428,6 +438,8 @@ struct EstimateCostInfo {
     }
     int compute_path_property_from_log_op();
     int set_parallel_and_server_info_for_match_all();
+    ObIArray<double> &get_ambient_card() { return ambient_card_; }
+    const ObIArray<double> &get_ambient_card() const { return ambient_card_; }
     TO_STRING_KV(K_(is_local_order),
                  K_(ordering),
                  K_(interesting_order_info),
@@ -442,7 +454,8 @@ struct EstimateCostInfo {
                  K_(phy_plan_type),
                  K_(location_type),
                  K_(is_pipelined_path),
-                 K_(is_nl_style_pipelined_path));
+                 K_(is_nl_style_pipelined_path),
+                 K_(ambient_card));
   public:
     /**
      * 表示当前join order最终的父join order节点
@@ -483,6 +496,7 @@ struct EstimateCostInfo {
     common::ObSEArray<common::ObAddr, 8, common::ModulePageAllocator, true> server_list_;
     bool is_pipelined_path_;
     bool is_nl_style_pipelined_path_;
+    common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
 
   private:
     DISALLOW_COPY_AND_ASSIGN(Path);
@@ -730,7 +744,10 @@ struct EstimateCostInfo {
                               EstimateCostInfo &right_param,
                               bool re_est_for_op);
     int try_set_batch_nlj_for_right_access_path(bool enable);
-    int re_estimate_rows(double left_output_rows, double right_output_rows, double &row_count);
+    int re_estimate_rows(ObIArray<JoinFilterInfo> &pushdown_join_filter_infos,
+                         double left_output_rows,
+                         double right_output_rows,
+                         double &row_count);
     int cost_nest_loop_join(int64_t join_parallel,
                             double left_output_rows,
                             double left_cost,
@@ -1214,6 +1231,8 @@ struct NullAwareAntiJoinInfo {
 
       ObSEArray<ObExprConstraint, 4> expr_constraints_;
       ObBaseTableEstMethod est_method_;
+      // include nl params and onetime params
+      ObSEArray<ObExecParamRawExpr *, 2> exec_params_;
     };
 
     struct DeducedExprInfo {
@@ -1497,7 +1516,8 @@ struct NullAwareAntiJoinInfo {
                                OptSkipScanState use_skip_scan);
 
     int init_sample_info_for_access_path(AccessPath *ap,
-                                         const uint64_t table_id);
+                                         const uint64_t table_id,
+                                         const TableItem *table_item);
 
     int init_filter_selectivity(ObCostTableScanInfo &est_cost_info);
 
@@ -1697,6 +1717,8 @@ struct NullAwareAntiJoinInfo {
      * @return
      */
     int init_base_join_order(const TableItem *table_item);
+
+    int init_ambient_card();
 
     int generate_base_paths();
 
@@ -1984,6 +2006,11 @@ struct NullAwareAntiJoinInfo {
                                     JoinFilterInfo& info,
                                     double &join_filter_selectivity);
 
+    int calc_join_filter_sel_for_pk_join_fk(const Path& left_path,
+                                            JoinFilterInfo& info,
+                                            double &join_filter_selectivity,
+                                            bool &is_valid);
+
     int find_shuffle_join_filter(const Path& path, bool &find);
 
     int check_partition_join_filter_valid(const DistAlgo join_dist_algo,
@@ -2026,7 +2053,8 @@ struct NullAwareAntiJoinInfo {
                                     const JoinAlgo join_algo,
                                     const bool is_push_down,
                                     const bool is_naaj,
-                                    int64_t &distributed_types);
+                                    int64_t &distributed_types,
+                                    bool &can_slave_mapping);
 
     bool is_partition_wise_valid(const Path &left_path,
                                  const Path &right_path);
@@ -2118,6 +2146,9 @@ struct NullAwareAntiJoinInfo {
 
     InnerPathInfos &get_inner_path_infos() { return inner_path_infos_; }
     const InnerPathInfos &get_inner_path_infos() const { return inner_path_infos_; }
+
+    ObIArray<double> &get_ambient_card() { return ambient_card_; }
+    const ObIArray<double> &get_ambient_card() const { return ambient_card_; }
 
     int64_t get_name(char *buf, const int64_t buf_len)
     {
@@ -2358,7 +2389,35 @@ struct NullAwareAntiJoinInfo {
                                      const JoinInfo &join_info,
                                      double &new_rows,
                                      double &selectivity,
-                                     EqualSets &equal_sets);
+                                     const EqualSets &equal_sets);
+    static int merge_ambient_card(const ObIArray<double> &left_ambient_card,
+                                   const ObIArray<double> &right_ambient_card,
+                                   ObIArray<double> &cur_ambient_card);
+    static int scale_ambient_card(const double origin_rows,
+                                  const double new_rows,
+                                  const ObIArray<double> &origin_ambient_card,
+                                  ObIArray<double> &ambient_card);
+    static int calc_join_ambient_card(ObLogPlan *plan,
+                                      const ObJoinOrder &left_tree,
+                                      const ObJoinOrder &right_tree,
+                                      const double join_output_rows,
+                                      const JoinInfo &join_info,
+                                      EqualSets &equal_sets,
+                                      ObIArray<double> &ambient_card);
+    static int calc_table_ambient_card(ObLogPlan *plan,
+                                       uint64_t table_index,
+                                       const ObJoinOrder &left_ids,
+                                       const ObJoinOrder &right_ids,
+                                       double input_rows,
+                                       double right_rows,
+                                       const JoinInfo &join_info,
+                                       EqualSets &equal_sets,
+                                       const ObIArray<double> &ambient_card,
+                                       double &new_ambient_card,
+                                       const ObJoinType assumption_type);
+    int revise_cardinality(const ObJoinOrder *left_tree,
+                           const ObJoinOrder *right_tree,
+                           const JoinInfo &join_info);
     inline void set_cnt_rownum(const bool cnt_rownum) { cnt_rownum_ = cnt_rownum; }
     inline bool get_cnt_rownum() const { return cnt_rownum_; }
     inline void increase_total_path_num() { total_path_num_ ++; }
@@ -2375,6 +2434,12 @@ struct NullAwareAntiJoinInfo {
                                              ObIArray<ObRawExpr*> &normal_quals,
                                              bool &left_has_is_null,
                                              bool &right_has_is_null);
+
+    static int check_direct_join_condition(ObRawExpr *expr,
+                                           const EqualSets &equal_sets,
+                                           const ObRelIds &table_id,
+                                           const ObRelIds &exclusion_ids,
+                                           bool &is_valid);
 
     int get_cached_inner_paths(const ObIArray<ObRawExpr *> &join_conditions,
                                ObJoinOrder &left_tree,
@@ -2556,6 +2621,7 @@ struct NullAwareAntiJoinInfo {
     common::ObSEArray<DeducedExprInfo, 4, common::ModulePageAllocator, true> deduced_exprs_info_;
     bool cnt_rownum_;
     uint64_t total_path_num_;
+    common::ObSEArray<double, 8, common::ModulePageAllocator, true> ambient_card_;
   private:
     DISALLOW_COPY_AND_ASSIGN(ObJoinOrder);
   };

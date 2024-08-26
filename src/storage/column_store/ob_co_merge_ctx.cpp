@@ -152,17 +152,70 @@ int ObCOTabletMergeCtx::init_tablet_merge_info(const bool need_check)
   return ret;
 }
 
+int ObCOTabletMergeCtx::prepare_cs_replica_param()
+{
+  int ret = OB_SUCCESS;
+  static_param_.is_cs_replica_ = false;
+  ObStorageSchema *schema_on_tablet = nullptr;
+  ObSSTable *sstable = nullptr;
+  if (static_param_.ls_handle_.get_ls()->is_cs_replica()) {
+    if (OB_FAIL(static_param_.tablet_schema_guard_.init(tablet_handle_, mem_ctx_))) {
+      LOG_WARN("failed to init cs replica schema guard", K(ret), KPC(this));
+    } else if (OB_FAIL(static_param_.tablet_schema_guard_.load(schema_on_tablet))) {
+      LOG_WARN("failed to load schema on tablet", K(ret));
+    } else if (schema_on_tablet->is_cs_replica_compat()) {
+      static_param_.is_cs_replica_ = true;
+    } else if (is_convert_co_major_merge(get_merge_type())) {
+      static_param_.is_cs_replica_ = true;
+    } else {
+      static_param_.is_cs_replica_ = static_param_.get_tablet_id().is_user_tablet()
+                                  && schema_on_tablet->is_user_data_table()
+                                  && schema_on_tablet->is_row_store();
+    }
+
+    if (OB_FAIL(ret) || !static_param_.is_cs_replica_) {
+    } else if (OB_ISNULL(sstable = static_cast<ObSSTable *>(get_tables_handle().get_table(0)))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get sstable", K(ret), K(sstable), K(static_param_.tables_handle_));
+    } else if (OB_UNLIKELY(!sstable->is_co_sstable())) {
+      // may be column store replica rebuild from full/read only row store replica
+      if (sstable->is_major_sstable()) {
+        static_param_.major_sstable_status_ = ObCOMajorSSTableStatus::COL_REPLICA_MAJOR;
+        static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::USE_RS_BUILD_SCHEMA_MATCH_MERGE;
+        LOG_INFO("[CS-Replica] Decide rebuild column store from row major for cs replica", K(ret), KPC(sstable), K_(static_param));
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("first table should be major in cs replica", K(ret), KPC(sstable), K_(static_param));
+      }
+    } else {
+      static_param_.co_major_merge_type_ = ObCOMajorMergePolicy::BUILD_COLUMN_STORE_MERGE;
+    }
+  }
+  LOG_INFO("[CS-Replica] prepare_cs_replica_param", K(ret), "merge_type", get_merge_type(),
+           "co_merge_type", ObCOMajorMergePolicy::co_major_merge_type_to_str(static_param_.co_major_merge_type_),
+           "is_cs_replica",static_param_.is_cs_replica_, KPC(schema_on_tablet));
+  return ret;
+}
+
 int ObCOTabletMergeCtx::prepare_schema()
 {
   int ret = OB_SUCCESS;
-
-  if (is_meta_major_merge(get_merge_type())) {
+  if (OB_FAIL(prepare_cs_replica_param())) {
+    LOG_WARN("failed to prepare cs replica param", K(ret), K_(static_param));
+  } else if (is_meta_major_merge(get_merge_type())) {
     if (OB_FAIL(get_meta_compaction_info())) {
       LOG_WARN("failed to get meta compaction info", K(ret), KPC(this));
+    }
+  } else if (is_convert_co_major_merge(get_merge_type())) {
+    if (OB_FAIL(get_convert_compaction_info())) {
+      LOG_WARN("failed to get convert compaction info", K(ret), KPC(this));
     }
   } else if (OB_FAIL(get_medium_compaction_info())) {
     // have checked medium info inside
     LOG_WARN("failed to get medium compaction info", K(ret), KPC(this));
+  } else {
+    LOG_INFO("[CS-Replica] finish prepare schema for co merge", K(ret),
+             "is_cs_replica", static_param_.is_cs_replica_, KPC(this));
   }
   return ret;
 }
@@ -665,9 +718,11 @@ int ObCOTabletMergeCtx::init_major_sstable_status()
 {
   int ret = OB_SUCCESS;
   ObSSTable *sstable = static_cast<ObSSTable *>(get_tables_handle().get_table(0));
-  if (OB_ISNULL(sstable) || OB_UNLIKELY(!sstable->is_co_sstable())) {
+  if (OB_ISNULL(sstable)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get sstable", K(ret), K(sstable), K(static_param_.tables_handle_));
+  } else if (OB_UNLIKELY(!sstable->is_co_sstable())) {
+    // maybe cs replica, processed in ObCOTabletMergeCtx::prepare_cs_replica_param
   } else if (OB_FAIL(ObCOMajorMergePolicy::decide_co_major_sstable_status(
                       *static_cast<ObCOSSTableV2 *>(sstable),
                       *get_schema(),

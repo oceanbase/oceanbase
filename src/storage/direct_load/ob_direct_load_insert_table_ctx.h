@@ -189,6 +189,9 @@ public:
                K_(is_create),
                K_(is_cancel));
 private:
+  int create_tablet_direct_load();
+  int open_tablet_direct_load();
+
   int get_pk_interval(uint64_t count, share::ObTabletCacheInterval &pk_interval);
   int get_lob_pk_interval(uint64_t count, share::ObTabletCacheInterval &pk_interval);
   int refresh_pk_cache(const common::ObTabletID &tablet_id, share::ObTabletCacheInterval &pk_cache);

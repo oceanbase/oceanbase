@@ -1343,6 +1343,7 @@ int ObPlanCache::foreach_cache_evict(CallBack &cb)
 template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryOp>(pl::ObGetPLKVEntryOp &);
 template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryBySchemaIdOp>(pl::ObGetPLKVEntryBySchemaIdOp &);
 template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryBySQLIDOp>(pl::ObGetPLKVEntryBySQLIDOp &);
+template int ObPlanCache::foreach_cache_evict<pl::ObGetPLKVEntryByDbIdOp>(pl::ObGetPLKVEntryByDbIdOp &);
 
 // Remove all cache object in the lib cache
 int ObPlanCache::cache_evict_all_obj()
@@ -2632,6 +2633,7 @@ int ObPlanCache::flush_pl_cache_single_cache_obj(uint64_t db_id, EvictAttr &attr
 }
 
 template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySchemaIdOp, uint64_t>(uint64_t db_id, uint64_t &schema_id);
+template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryByDbIdOp, uint64_t>(uint64_t db_id, uint64_t &schema_id);
 template int ObPlanCache::flush_pl_cache_single_cache_obj<ObGetPLKVEntryBySQLIDOp, common::ObString>(uint64_t db_id, common::ObString &sql_id);
 
 int ObPlanCache::flush_pl_cache()

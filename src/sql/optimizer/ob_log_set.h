@@ -77,6 +77,7 @@ public:
   virtual int est_cost() override;
   virtual int est_width() override;
   virtual int do_re_est_cost(EstimateCostInfo &param, double &card, double &op_cost, double &cost) override;
+  virtual int est_ambient_card() override;
   int get_re_est_cost_infos(const EstimateCostInfo &param,
                             ObIArray<ObBasicCostInfo> &cost_infos,
                             double &child_cost,

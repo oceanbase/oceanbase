@@ -15,8 +15,6 @@
 #include "lib/utility/ob_print_utils.h"
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
-
-volatile int64_t ObMallocTimeMonitor::WARN_THRESHOLD = 100000;
 void ObMallocTimeMonitor::print()
 {
   char buf[1024] = {'\0'};
@@ -29,8 +27,8 @@ void ObMallocTimeMonitor::print()
     int64_t avg_cost_time = (0 == delta_count ? 0 : delta_total_cost_time / delta_count);
     last_total_cost_times_[i] = total_cost_time;
     last_counts_[i] = count;
-    int64_t left = (0 == i ? 0 : TIME_SLOT[i-1]);
-    int64_t right = TIME_SLOT[i];
+    int64_t left = TIME_SLOT[i];
+    int64_t right = TIME_SLOT[i + 1];
     databuff_printf(buf, sizeof(buf), pos, "[MALLOC_TIME_MONITOR] [%8ld,%20ld): delta_total_cost_time=%15ld, delta_count=%15ld, avg_cost_time=%8ld\n",
                     left, right, delta_total_cost_time, delta_count, avg_cost_time);
 

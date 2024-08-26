@@ -110,7 +110,7 @@
 #include "rootserver/ob_tenant_info_loader.h"//ObTenantInfoLoader
 #include "rootserver/ob_create_standby_from_net_actor.h" // ObCreateStandbyFromNetActor
 #include "rootserver/ob_primary_ls_service.h"//ObLSService
-#include "rootserver/ob_recovery_ls_service.h"//ObRecoveryLSService
+#include "rootserver/standby/ob_recovery_ls_service.h"//ObRecoveryLSService
 #include "rootserver/ob_common_ls_service.h"//ObCommonLSService
 #include "rootserver/restore/ob_restore_service.h" //ObRestoreService
 #include "rootserver/ob_tenant_transfer_service.h" // ObTenantTransferService
@@ -165,7 +165,12 @@
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "share/resource_limit_calculator/ob_resource_limit_calculator.h"
 #include "storage/checkpoint/ob_checkpoint_diagnose.h"
+#include "storage/tmp_file/ob_tmp_file_manager.h" // ObTenantTmpFileManager
 #include "storage/restore/ob_tenant_restore_info_mgr.h"
+#ifdef OB_BUILD_AUDIT_SECURITY
+#include "sql/audit/ob_audit_logger.h"
+#include "sql/audit/ob_audit_log_mgr.h"
+#endif
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
@@ -186,6 +191,7 @@ using namespace oceanbase::archive;
 using namespace oceanbase::observer;
 using namespace oceanbase::rootserver;
 using namespace oceanbase::blocksstable;
+using namespace oceanbase::tmp_file;
 
 #define OB_TENANT_LOCK_BUCKET_NUM 10000L
 
@@ -382,7 +388,8 @@ static int start_mysql_queue(QueueThread *&qthread)
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   if (is_sys_tenant(tenant_id) || is_user_tenant(tenant_id)) {
-    qthread = OB_NEW(QueueThread, ObMemAttr(tenant_id, ObModIds::OB_RPC), "MysqlQueueTh", tenant_id);
+    qthread = OB_NEW(QueueThread, ObMemAttr(tenant_id, ObModIds::OB_RPC),
+                      "MysqlQueueTh", tenant_id, share::OBCG_MYSQL_LOGIN);
     if (OB_ISNULL(qthread)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to new qthread", K(ret), K(tenant_id));
@@ -447,6 +454,7 @@ int ObMultiTenant::init(ObAddr myaddr,
 
   if (OB_SUCC(ret) && mtl_bind_flag) {
     MTL_BIND2(ObTenantIOManager::mtl_new, ObTenantIOManager::mtl_init, mtl_start_default, mtl_stop_default, nullptr, ObTenantIOManager::mtl_destroy);
+    MTL_BIND2(mtl_new_default, tmp_file::ObTenantTmpFileManager::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
 
     // base mtl
     MTL_BIND2(mtl_new_default, storage::mds::ObTenantMdsService::mtl_init, storage::mds::ObTenantMdsService::mtl_start, storage::mds::ObTenantMdsService::mtl_stop, storage::mds::ObTenantMdsService::mtl_wait, mtl_destroy_default);
@@ -588,6 +596,10 @@ int ObMultiTenant::init(ObAddr myaddr,
 #endif
     MTL_BIND2(mtl_new_default, storage::ObTenantRestoreInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObGlobalIteratorPool::mtl_init, nullptr, nullptr, nullptr, ObGlobalIteratorPool::mtl_destroy);
+#ifdef OB_BUILD_AUDIT_SECURITY
+    MTL_BIND2(mtl_new_default, ObAuditLogger::mtl_init, ObAuditLogger::mtl_start, ObAuditLogger::mtl_stop, ObAuditLogger::mtl_wait, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, ObAuditLogUpdater::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
+#endif
   }
 
   if (OB_SUCC(ret)) {
@@ -1340,6 +1352,9 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_checkpoint_diagnose_config())) {
         LOG_WARN("failed to update tenant ddl config", K(tmp_ret), K(tenant_id));
       }
+      if (OB_TMP_FAIL(update_tenant_audit_log_config())) {
+        LOG_WARN("failed to update tenant audit log config", K(tmp_ret), K(tenant_id));
+      }
     }
   }
   LOG_INFO("update_tenant_config success", K(tenant_id));
@@ -1468,6 +1483,23 @@ int ObMultiTenant::update_tenant_decode_resource(const uint64_t tenant_id)
   } else if (OB_FAIL(decode_resource_pool->reload_config())) {
     LOG_WARN("fail to update tenant decode resource", K(ret), K(tenant_id));
   }
+  return ret;
+}
+
+int ObMultiTenant::update_tenant_audit_log_config()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_AUDIT_SECURITY
+  ObAuditLogger *audit_logger = MTL(ObAuditLogger*);
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (OB_ISNULL(audit_logger)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("audit logger should not be null", K(ret));
+  } else {
+    audit_logger->reload_config();
+  }
+#endif
   return ret;
 }
 
@@ -2462,17 +2494,6 @@ int ObMultiTenant::check_if_unit_id_exist(const uint64_t unit_id, bool &exist)
       exist = true;
       break;
     }
-  }
-  return ret;
-}
-
-int obmysql::sql_nio_add_cgroup(const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-  if (GCONF._enable_new_sql_nio && GCONF._enable_tenant_sql_net_thread &&
-      nullptr != GCTX.cgroup_ctrl_ &&
-      OB_LIKELY(GCTX.cgroup_ctrl_->is_valid())) {
-    ret = GCTX.cgroup_ctrl_->add_self_to_cgroup(tenant_id, OBCG_SQL_NIO);
   }
   return ret;
 }

@@ -431,10 +431,10 @@ public:
   static int extract_column_exprs(const ObRawExpr *expr,
                                   ObIArray<const ObRawExpr*> &column_exprs);
   static int extract_column_exprs(ObRawExpr* expr,
-                                  ObRelIds &rel_ids,
+                                  const ObRelIds &rel_ids,
                                   ObIArray<ObRawExpr*> &column_exprs);
   static int extract_column_exprs(ObIArray<ObRawExpr*> &exprs,
-                                  ObRelIds &rel_ids,
+                                  const ObRelIds &rel_ids,
                                   ObIArray<ObRawExpr*> &column_exprs);
   static int extract_contain_exprs(ObRawExpr *raw_expr,
                                    const common::ObIArray<ObRawExpr*> &src_exprs,
@@ -602,7 +602,6 @@ public:
 
   static int replace_qual_param_if_need(ObRawExpr* qual, int64_t qual_idx, ObColumnRefRawExpr *col_expr);
 
-  static bool need_column_conv(const ColumnItem &column, ObRawExpr &expr);
   static int build_pad_expr(ObRawExprFactory &expr_factory,
                             bool is_char,
                             const share::schema::ObColumnSchemaV2 *column_schema,
@@ -610,7 +609,9 @@ public:
                             const sql::ObSQLSessionInfo *session_info,
                             const ObLocalSessionVar *local_vars = NULL,
                             int64_t local_var_id = OB_INVALID_INDEX_INT64);
-  static bool need_column_conv(const ObExprResType &expected_type, const ObRawExpr &expr);
+  static bool need_column_conv(const ObExprResType &expected_type,
+                               const ObRawExpr &expr,
+                               bool strict_type_check);
   static bool check_exprs_type_collation_accuracy_equal(const ObRawExpr *expr1, const ObRawExpr *expr2);
   // 此方法请谨慎使用,会丢失enum类型的 enum_set_values
   static int build_column_conv_expr(ObRawExprFactory &expr_factory,
@@ -1251,6 +1252,16 @@ public:
                                            const ObSQLMode sql_mode,
                                            ObColumnSchemaV2 &gen_col);
   static int check_contain_op_row_expr(const ObRawExpr *raw_expr, bool &contain);
+  /*
+    in mysql mode: ret left_expr <=> right_expr
+    in oracle mode: ret (left_expr = right_expr) or (left_expr is null and right_expr is null)
+  */
+  static int create_null_safe_equal_expr(ObRawExprFactory &expr_factory,
+                                         const ObSQLSessionInfo *session_info,
+                                         const bool is_mysql_mode,
+                                         ObRawExpr *left_expr,
+                                         ObRawExpr *right_expr,
+                                         ObRawExpr *&expr);
 
   static int copy_and_formalize(ObRawExpr *&expr,
                                 ObRawExprCopier *copier,

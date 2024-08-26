@@ -18,6 +18,7 @@
 #include "observer/ob_server.h"
 #include "storage/ob_storage_schema.h"
 #include "storage/access/ob_table_read_info.h"
+#include "storage/column_store/ob_column_store_replica_util.h"
 #include "share/ob_lob_access_utils.h"
 
 namespace oceanbase
@@ -916,7 +917,8 @@ int ObTableParam::construct_columns_and_projector(
     const common::ObIArray<uint64_t> & output_column_ids,
     const common::ObIArray<uint64_t> *tsc_out_cols,
     const bool force_mysql_mode,
-    const sql::ObStoragePushdownFlag &pd_pushdown_flag)
+    const sql::ObStoragePushdownFlag &pd_pushdown_flag,
+    const bool query_cs_replica /*=false*/)
 {
   int ret = OB_SUCCESS;
   static const int64_t COMMON_COLUMN_NUM = 16;
@@ -933,22 +935,19 @@ int ObTableParam::construct_columns_and_projector(
   bool is_cs = false;
   bool has_all_column_group = false;
   int64_t rowkey_count = 0;
+  is_column_replica_table_ = false; // row store table schema does not contains cg, if true, need calculate cg idx by designed rules
 
-  if (OB_SUCC(ret)) {
-    bool is_table_row_store = false;
-    if (OB_FAIL(table_schema.get_is_row_store(is_table_row_store))) {
-      LOG_WARN("fail to get is talbe row store", K(ret));
-    } else {
-      is_cs = !is_table_row_store;
-    }
+  if (OB_FAIL(table_schema.get_is_column_store(is_cs))) {
+    LOG_WARN("fail to get is table column store", K(ret), K(table_schema));
+  } else if (!is_cs && query_cs_replica) {
+    is_cs = true;
+    is_column_replica_table_ = true;
   }
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(table_schema.has_all_column_group(has_all_column_group))) {
     LOG_WARN("Failed to check if has all column group", K(ret));
-  }
-
-  if (OB_SUCC(ret)) {
+  } else {
     // column array
     const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
     rowkey_count = rowkey_info.get_size();
@@ -992,7 +991,7 @@ int ObTableParam::construct_columns_and_projector(
         } else if (OB_FAIL(tmp_access_cols_extend.push_back(tmp_col_extend))) {
           LOG_WARN("fail to push_back tmp_access_cols_extend", K(ret));
         } else if (is_cs) {
-          if (OB_FAIL(table_schema.get_column_group_index(*column, cg_idx))) {
+          if (OB_FAIL(table_schema.get_column_group_index(*column, is_column_replica_table_, cg_idx))) {
             LOG_WARN("Fail to get column group index", K(ret));
           } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
             LOG_WARN("Fail to push back cg idx", K(ret));
@@ -1066,7 +1065,7 @@ int ObTableParam::construct_columns_and_projector(
         } else if (OB_FAIL(tmp_access_cols_extend.push_back(tmp_col_extend))) {
           LOG_WARN("fail to push_back tmp_access_cols_extend", K(ret));
         } else if (is_cs) {
-          if (OB_FAIL(table_schema.get_column_group_index(*column, cg_idx))) {
+          if (OB_FAIL(table_schema.get_column_group_index(*column, is_column_replica_table_, cg_idx))) {
             LOG_WARN("Fail to get column group index", K(ret));
           } else if (OB_FAIL(tmp_cg_idxs.push_back(cg_idx))) {
             LOG_WARN("Fail to push back cg idx", K(ret));
@@ -1248,7 +1247,8 @@ int ObTableParam::convert(const ObTableSchema &table_schema,
                           const ObIArray<uint64_t> &access_column_ids,
                           const sql::ObStoragePushdownFlag &pd_pushdown_flag,
                           const common::ObIArray<uint64_t> *tsc_out_cols,
-                          const bool force_mysql_mode)
+                          const bool force_mysql_mode,
+                          const bool query_cs_replica /*=false*/)
 {
   int ret = OB_SUCCESS;
     // if mocked rowid index is used
@@ -1256,7 +1256,8 @@ int ObTableParam::convert(const ObTableSchema &table_schema,
   table_id_ = table_schema.get_table_id();
   bool is_oracle_mode = false;
   const common::ObIArray<ObColumnParam *> *cols_param = nullptr;
-  if (OB_FAIL(construct_columns_and_projector(table_schema, access_column_ids, tsc_out_cols, force_mysql_mode, pd_pushdown_flag))) {
+
+  if (OB_FAIL(construct_columns_and_projector(table_schema, access_column_ids, tsc_out_cols, force_mysql_mode, pd_pushdown_flag, query_cs_replica))) {
     LOG_WARN("construct failed", K(ret));
   } else if (OB_ISNULL(cols_param = main_read_info_.get_columns())) {
     ret = OB_ERR_UNEXPECTED;
@@ -1546,7 +1547,8 @@ int64_t ObTableParam::to_string(char *buf, const int64_t buf_len) const
        K_(rowid_projector),
        K_(enable_lob_locator_v2),
        K_(is_fts_index),
-       K_(parser_name));
+       K_(parser_name),
+       K_(is_column_replica_table));
   J_OBJ_END();
 
   return pos;

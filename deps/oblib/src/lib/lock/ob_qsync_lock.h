@@ -32,6 +32,7 @@ public:
   void rdunlock();
   int wrlock();
   void wrunlock();
+  int try_wrlock();
   int try_rdlock();
 private:
   static const int64_t TRY_SYNC_COUNT = 16;

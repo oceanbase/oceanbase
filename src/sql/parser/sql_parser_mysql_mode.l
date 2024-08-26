@@ -65,7 +65,7 @@ comment          ({sql_comment})
 start_identifier        (([A-Za-z0-9$_]*[A-Za-z$_][A-Za-z0-9$_]*|{NOTASCII_GB_CHAR})+)
 identifier        (([A-Za-z0-9$_]|{NOTASCII_GB_CHAR})+)
 system_variable  (@@[A-Za-z_][A-Za-z0-9_]*)|(@@[`][`A-Za-z_][`A-Za-z_]*)
-user_variable    (@[A-Za-z0-9_\.$]*)|(@[`'\"][`'\"A-Za-z0-9_\.$/%]*)
+user_variable    (@([A-Za-z0-9_\.$]|{NOTASCII_GB_CHAR})*)|(@[`'\"]([`'\"A-Za-z0-9_\.$/%]|{NOTASCII_GB_CHAR})*)
 version_num      ([0-9]+\.+[0-9]*)
 int_num          [0-9]+
 client_version   \([0-9]+(\.[0-9]+)*\)
@@ -112,10 +112,13 @@ INTERVAL {
 
 _UTF8                         { REPUT_TOKEN_NEG_SIGN(_UTF8); }
 _UTF8MB4                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB4); }
+_UTF8MB3                      { REPUT_TOKEN_NEG_SIGN(_UTF8MB3); }
 _GBK                          { REPUT_TOKEN_NEG_SIGN(_GBK); }
 _GB18030                      { REPUT_TOKEN_NEG_SIGN(_GB18030); }
 _GB18030_2022                 { REPUT_TOKEN_NEG_SIGN(_GB18030_2022); }
 _LATIN1                       { REPUT_TOKEN_NEG_SIGN(_LATIN1); }
+_ASCII                       { REPUT_TOKEN_NEG_SIGN(_ASCII); }
+_TIS620                       { REPUT_TOKEN_NEG_SIGN(_TIS620); }
 _BINARY                       { REPUT_TOKEN_NEG_SIGN(_BINARY); }
 _UTF16                        { REPUT_TOKEN_NEG_SIGN(_UTF16); }
 NOT {
@@ -1086,6 +1089,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>BC2HOST { return BC2HOST; }
 <hint>RANGE { return RANGE; }
 <hint>LIST { return LIST; }
+<hint>BASIC { return BASIC; }
 <hint>[-] { return NEG_SIGN; }
 <hint>MERGE { return MERGE_HINT; }
 <hint>NO_MERGE { return NO_MERGE_HINT; }
@@ -1171,6 +1175,8 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PUSHDOWN { return PUSHDOWN; }
 <hint>DECORRELATE { return DECORRELATE; }
 <hint>NO_DECORRELATE { return NO_DECORRELATE; }
+<hint>PQ_GBY { return PQ_GBY; }
+<hint>PQ_DISTINCT { return PQ_DISTINCT; }
 <hint>{identifier} {
   if (!(IS_FAST_PARAMETERIZE)) {
     check_value(yylval);

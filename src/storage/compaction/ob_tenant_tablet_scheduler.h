@@ -257,7 +257,13 @@ public:
       const share::ObLSID &ls_id,
       const storage::ObTablet &tablet,
       const ObMergeType merge_type,
-      const int64_t &merge_snapshot_version);
+      const int64_t &merge_snapshot_version,
+      const ObDagId *dag_net_id = nullptr);
+  static int schedule_convert_co_merge_dag_net(
+      const ObLSID &ls_id,
+      const ObTablet &tablet,
+      const int64_t retry_times,
+      const ObDagId& curr_dag_net_id);
   static int schedule_tablet_ddl_major_merge(
       ObLSHandle &ls_handle,
       ObTabletHandle &tablet_handle);

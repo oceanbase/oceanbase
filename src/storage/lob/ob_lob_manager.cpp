@@ -1576,17 +1576,13 @@ int ObLobManager::check_need_out_row(
         } else {
           // init lob data and alloc lob id(when not init)
           ObLobData *new_lob_data = new(new_lob_common->buffer_)ObLobData();
-          if (param.spec_lob_id_.is_valid()) {
-            new_lob_data->id_ = param.spec_lob_id_;
-          } else if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
+          if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
             LOG_WARN("get lob id failed.", K(ret), K(param));
           } else if (! param.lob_meta_tablet_id_.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("lob_meta_tablet_id is invalid", K(ret), K(param));
           } else {
             new_lob_data->id_.tablet_id_ = param.lob_meta_tablet_id_.id();
-          }
-          if (OB_SUCC(ret)) {
             transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
             new_lob_common->is_init_ = true;
           }
@@ -2049,6 +2045,7 @@ int ObLobManager::prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside
   alloc_inside = false;
   if (OB_ISNULL(param.lob_common_)) {
     // alloc new lob_data
+    // here just fake a lob locator
     void *tbuf = param.allocator_->alloc(LOB_OUTROW_FULL_SIZE);
     if (OB_ISNULL(tbuf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -2057,10 +2054,6 @@ int ObLobManager::prepare_lob_common(ObLobAccessParam& param, bool &alloc_inside
       // init full out row
       param.lob_common_ = new(tbuf)ObLobCommon();
       param.lob_data_ = new(param.lob_common_->buffer_)ObLobData();
-      param.lob_data_->id_.tablet_id_ = param.tablet_id_.id();
-      if (param.spec_lob_id_.is_valid()) {
-        param.lob_data_->id_ = param.spec_lob_id_;
-      }
       ObLobDataOutRowCtx *outrow_ctx = new(param.lob_data_->buffer_)ObLobDataOutRowCtx();
       outrow_ctx->chunk_size_ = param.get_schema_chunk_size() / ObLobDataOutRowCtx::OUTROW_LOB_CHUNK_SIZE_UNIT;
       // init char len
@@ -2236,17 +2229,13 @@ int ObLobManager::prepare_for_write(
         } else {
           // init lob data and alloc lob id(when not init)
           ObLobData *new_lob_data = new(new_lob_common->buffer_)ObLobData();
-          if (param.spec_lob_id_.is_valid()) {
-            new_lob_data->id_ = param.spec_lob_id_;
-          } else if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
+          if (OB_FAIL(lob_ctx_.lob_meta_mngr_->fetch_lob_id(param, new_lob_data->id_.lob_id_))) {
             LOG_WARN("get lob id failed.", K(ret), K(param));
           } else if (! param.lob_meta_tablet_id_.is_valid()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("lob_meta_tablet_id is invalid", K(ret), K(param));
           } else {
             new_lob_data->id_.tablet_id_ = param.lob_meta_tablet_id_.id();
-          }
-          if (OB_SUCC(ret)) {
             transform_lob_id(new_lob_data->id_.lob_id_, new_lob_data->id_.lob_id_);
             new_lob_common->is_init_ = true;
           }

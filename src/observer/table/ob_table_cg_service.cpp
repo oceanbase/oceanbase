@@ -340,7 +340,7 @@ int ObTableExprCgService::build_generated_column_expr(ObTableCtx &ctx,
       if (OB_SUCC(ret)) {
         if (OB_FAIL(gen_expr->formalize(&sess_info))) {
           LOG_WARN("fail to formailize column reference expr", K(ret));
-        } else if (ObRawExprUtils::need_column_conv(item.expr_->get_result_type(), *gen_expr)
+        } else if (ObRawExprUtils::need_column_conv(item.expr_->get_result_type(), *gen_expr, true)
             && OB_FAIL(ObRawExprUtils::build_column_conv_expr(expr_factory,
                                                               ctx.get_allocator(),
                                                               *item.expr_,
@@ -688,6 +688,7 @@ int ObTableLocCgService::generate_table_loc_meta(const ObTableCtx &ctx,
                                                  bool is_lookup)
 {
   int ret = OB_SUCCESS;
+  int64_t route_policy = 0;
   const ObTableSchema *table_schema = ctx.get_table_schema();
   const ObTableSchema *index_schema = ctx.get_index_schema();
 
@@ -697,8 +698,11 @@ int ObTableLocCgService::generate_table_loc_meta(const ObTableCtx &ctx,
   } else if (ctx.is_index_scan() && OB_ISNULL(index_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("index schema is null", K(ret));
+  } else if (OB_FAIL(ctx.get_session_info().get_sys_variable(SYS_VAR_OB_ROUTE_POLICY, route_policy))) {
+    LOG_WARN("fail to get route policy from session", K(ret));
   } else {
     loc_meta.reset();
+    loc_meta.route_policy_ = route_policy;
     // is_lookup 有什么用？好像都是 false
     loc_meta.ref_table_id_ = is_lookup ? ctx.get_ref_table_id() : ctx.get_index_table_id();
     loc_meta.table_loc_id_ = ctx.get_ref_table_id();
@@ -2541,7 +2545,8 @@ int ObTableTscCgService::generate_das_result_output(ObDASScanCtDef &das_tsc_ctde
 // 主表/索引回表/索引扫描不需要回表: select column ids
 // 索引表: rowkey column ids
 int ObTableTscCgService::generate_table_param(const ObTableCtx &ctx,
-                                              ObDASScanCtDef &das_tsc_ctdef)
+                                              ObDASScanCtDef &das_tsc_ctdef,
+                                              const bool query_cs_replica /*=false*/)
 {
   int ret = OB_SUCCESS;
   ObSEArray<uint64_t, 64> tsc_out_cols;
@@ -2595,7 +2600,9 @@ int ObTableTscCgService::generate_table_param(const ObTableCtx &ctx,
   } else if (OB_FAIL(das_tsc_ctdef.table_param_.convert(*table_schema,
                                                         das_tsc_ctdef.access_column_ids_,
                                                         das_tsc_ctdef.pd_expr_spec_.pd_storage_flag_,
-                                                        &tsc_out_cols))) {
+                                                        &tsc_out_cols,
+                                                        false /*force_mysql_mode*/,
+                                                        query_cs_replica))) {
     LOG_WARN("fail to convert schema", K(ret), K(*table_schema));
   } else if (OB_FAIL(generate_das_result_output(das_tsc_ctdef, tsc_out_cols))) {
     LOG_WARN("fail to generate das result outpur", K(ret), K(tsc_out_cols));
@@ -2606,7 +2613,8 @@ int ObTableTscCgService::generate_table_param(const ObTableCtx &ctx,
 
 int ObTableTscCgService::generate_das_tsc_ctdef(const ObTableCtx &ctx,
                                                 ObIAllocator &allocator,
-                                                ObDASScanCtDef &das_tsc_ctdef)
+                                                ObDASScanCtDef &das_tsc_ctdef,
+                                                const bool query_cs_replica /*=false*/)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard &schema_guard = (const_cast<ObTableCtx&>(ctx)).get_schema_guard();
@@ -2616,7 +2624,7 @@ int ObTableTscCgService::generate_das_tsc_ctdef(const ObTableCtx &ctx,
 
   if (OB_FAIL(generate_access_ctdef(ctx, allocator, das_tsc_ctdef))) { // init access_column_ids_,pd_expr_spec_.access_exprs_
     LOG_WARN("fail to generate asccess ctdef", K(ret));
-  } else if (OB_FAIL(generate_table_param(ctx, das_tsc_ctdef))) { // init table_param_, result_output_
+  } else if (OB_FAIL(generate_table_param(ctx, das_tsc_ctdef, query_cs_replica))) { // init table_param_, result_output_
     LOG_WARN("fail to generate table param", K(ret));
   }
 
@@ -2663,7 +2671,7 @@ int ObTableTscCgService::generate_tsc_ctdef(const ObTableCtx &ctx,
   int ret = OB_SUCCESS;
   ObStaticEngineCG cg(ctx.get_cur_cluster_version());
   const int64_t filter_exprs_cnt = ctx.get_filter_exprs().count();
-
+  bool query_cs_replica = false;
   // init scan_ctdef_.ref_table_id_
   tsc_ctdef.scan_ctdef_.ref_table_id_ = ctx.get_index_table_id();
   if (OB_FAIL(tsc_ctdef.output_exprs_.init(ctx.get_select_exprs().count()))) {
@@ -2674,7 +2682,9 @@ int ObTableTscCgService::generate_tsc_ctdef(const ObTableCtx &ctx,
     LOG_WARN("fail to generate output exprs", K(ret));
   } else if (OB_FAIL(cg.generate_rt_exprs(ctx.get_filter_exprs(), tsc_ctdef.filter_exprs_))) {
     LOG_WARN("fail to generate filter rt exprs ", K(ret));
-  } else if (OB_FAIL(generate_das_tsc_ctdef(ctx, allocator, tsc_ctdef.scan_ctdef_))) { // init scan_ctdef_
+  } else if (OB_FAIL(ctx.check_is_cs_replica_query(query_cs_replica))) {
+    LOG_WARN("fail to check is cs replica query", K(ret));
+  } else if (OB_FAIL(generate_das_tsc_ctdef(ctx, allocator, tsc_ctdef.scan_ctdef_, query_cs_replica))) { // init scan_ctdef_
     LOG_WARN("fail to generate das scan ctdef", K(ret));
   } else if (ctx.is_index_back()) {
     // init lookup_ctdef_,lookup_loc_meta_

@@ -20,6 +20,44 @@ namespace oceanbase
 namespace sql
 {
 
+struct SimpleRange
+{
+public:
+  SimpleRange()
+  {
+    set_whole_range();
+  }
+
+  void set_whole_range();
+
+  void set_false_range();
+
+  int compare_with_end(const SimpleRange &r, int &cmp) const;
+
+  int compare_with_start(const SimpleRange &r, int &cmp) const;
+
+  bool intersect(const SimpleRange &r);
+
+  void set_bound(ObItemType item_type, ObObj bound);
+
+  void set_bound(ObItemType item_type, double bound);
+
+  bool is_valid_range();
+
+  bool is_superset(const SimpleRange &r) const;
+
+  void multiply_double(double coff);
+
+  TO_STRING_KV(K_(start), K_(end),
+               K_(inclusive_start),
+               K_(inclusive_end));
+
+  ObObj start_;
+  ObObj end_;
+  bool inclusive_start_;
+  bool inclusive_end_;
+};
+
 enum class ObSelEstType
 {
   INVALID = 0,
@@ -34,9 +72,10 @@ enum class ObSelEstType
   EQUAL,
   LIKE,
   BOOL_OP,
-  RANGE,
+  COLUMN_RANGE,
   SIMPLE_JOIN,
   INEQUAL_JOIN,
+  UNIFORM_RANGE,
 };
 
 class ObSelEstimatorFactory;
@@ -73,16 +112,21 @@ private:
 class ObSelEstimatorFactory
 {
 public:
-  explicit ObSelEstimatorFactory(common::ObIAllocator &alloc)
-    : allocator_(alloc),
-      estimator_store_(alloc)
+  explicit ObSelEstimatorFactory()
+    : allocator_("ObOptSel"),
+      estimator_store_(allocator_)
+  {}
+
+  explicit ObSelEstimatorFactory(int64_t tenant_id)
+    : allocator_("ObOptSel", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id),
+      estimator_store_(allocator_)
   {}
 
   ~ObSelEstimatorFactory() {
     destory();
   }
 
-  inline common::ObIAllocator &get_allocator() { return allocator_; }
+  inline common::ObArenaAllocator &get_allocator() { return allocator_; }
   inline void destory()
   {
     DLIST_FOREACH_NORET(node, estimator_store_.get_obj_list()) {
@@ -96,6 +140,9 @@ public:
   int create_estimator(const OptSelectivityCtx &ctx,
                        const ObRawExpr *expr,
                        ObSelEstimator *&new_estimator);
+  int create_estimators(const OptSelectivityCtx &ctx,
+                        ObIArray<ObRawExpr *> &exprs,
+                        ObIArray<ObSelEstimator *> &estimators);
 
   template <typename EstimatorType>
   inline int create_estimator_inner(EstimatorType *&new_estimator)
@@ -121,7 +168,7 @@ public:
                                       const ObRawExpr &, ObSelEstimator *&);
 
 private:
-  common::ObIAllocator &allocator_;
+  common::ObArenaAllocator allocator_;
   common::ObObjStore<ObSelEstimator *, common::ObIAllocator&, true> estimator_store_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObSelEstimatorFactory);
@@ -421,40 +468,31 @@ private:
 class ObIsSelEstimator : public ObIndependentSelEstimator
 {
 public:
-  ObIsSelEstimator() : ObIndependentSelEstimator(ObSelEstType::IS) {}
+  ObIsSelEstimator() :
+    ObIndependentSelEstimator(ObSelEstType::IS),
+    can_calc_sel_(false),
+    left_expr_(NULL),
+    right_const_obj_()
+  {}
   virtual ~ObIsSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
-                              ObSelEstimator *&estimator)
-  {
-    return create_simple_estimator<ObIsSelEstimator>(factory, ctx, expr, estimator);
-  }
-  virtual bool tend_to_use_ds() override { return false; }
+                              ObSelEstimator *&estimator);
+
+  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
-                      ObIArray<ObExprSelPair> &all_predicate_sel) override
-  {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", KPC(this));
-    } else {
-      ret = get_is_sel(table_metas, ctx, *expr_, selectivity);
-    }
-    return ret;
-  }
+                      ObIArray<ObExprSelPair> &all_predicate_sel) override;
   inline static bool check_expr_valid(const ObRawExpr &expr) {
     return T_OP_IS == expr.get_expr_type() || T_OP_IS_NOT == expr.get_expr_type();
   }
 private:
-  static int get_is_sel(const OptTableMetas &table_metas,
-                        const OptSelectivityCtx &ctx,
-                        const ObRawExpr &qual,
-                        double &selectivity);
-private:
+  bool can_calc_sel_;
+  const ObRawExpr *left_expr_;
+  common::ObObj right_const_obj_;
   DISABLE_COPY_ASSIGN(ObIsSelEstimator);
 };
 
@@ -463,40 +501,28 @@ private:
 class ObBtwSelEstimator : public ObIndependentSelEstimator
 {
 public:
-  ObBtwSelEstimator() : ObIndependentSelEstimator(ObSelEstType::BTW) {}
+  ObBtwSelEstimator() :
+    ObIndependentSelEstimator(ObSelEstType::BTW),
+    can_calc_sel_(false),
+    col_expr_(NULL)
+  {}
   virtual ~ObBtwSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
-                              ObSelEstimator *&estimator)
-  {
-    return create_simple_estimator<ObBtwSelEstimator>(factory, ctx, expr, estimator);
-  }
-  virtual bool tend_to_use_ds() override { return false; }
+                              ObSelEstimator *&estimator);
+  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
-                      ObIArray<ObExprSelPair> &all_predicate_sel) override
-  {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", KPC(this));
-    } else {
-      ret = get_btw_sel(table_metas, ctx, *expr_, selectivity);
-    }
-    return ret;
-  }
+                      ObIArray<ObExprSelPair> &all_predicate_sel) override;
   inline static bool check_expr_valid(const ObRawExpr &expr) {
     return T_OP_BTW == expr.get_expr_type() || T_OP_NOT_BTW == expr.get_expr_type();
   }
 private:
-  static int get_btw_sel(const OptTableMetas &table_metas,
-                         const OptSelectivityCtx &ctx,
-                         const ObRawExpr &qual,
-                         double &selectivity);
-private:
+  bool can_calc_sel_;
+  const ObColumnRefRawExpr *col_expr_;
   DISABLE_COPY_ASSIGN(ObBtwSelEstimator);
 };
 
@@ -506,40 +532,28 @@ private:
 class ObCmpSelEstimator : public ObIndependentSelEstimator
 {
 public:
-  ObCmpSelEstimator() : ObIndependentSelEstimator(ObSelEstType::CMP) {}
+  ObCmpSelEstimator() :
+    ObIndependentSelEstimator(ObSelEstType::CMP),
+    can_calc_sel_(false),
+    col_expr_(NULL)
+  {}
   virtual ~ObCmpSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
-                              ObSelEstimator *&estimator)
-  {
-    return create_simple_estimator<ObCmpSelEstimator>(factory, ctx, expr, estimator);
-  }
-  virtual bool tend_to_use_ds() override { return false; }
+                              ObSelEstimator *&estimator);
+  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
-                      ObIArray<ObExprSelPair> &all_predicate_sel) override
-  {
-    int ret = OB_SUCCESS;
-    if (OB_ISNULL(expr_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", KPC(this));
-    } else {
-      ret = get_range_cmp_sel(table_metas, ctx, *expr_, selectivity);
-    }
-    return ret;
-  }
+                      ObIArray<ObExprSelPair> &all_predicate_sel) override;
   inline static bool check_expr_valid(const ObRawExpr &expr) {
     return IS_RANGE_CMP_OP(expr.get_expr_type());
   }
 private:
-  static int get_range_cmp_sel(const OptTableMetas &table_metas,
-                               const OptSelectivityCtx &ctx,
-                               const ObRawExpr &qual,
-                               double &selectivity);
-private:
+  bool can_calc_sel_;
+  const ObColumnRefRawExpr *col_expr_;
   DISABLE_COPY_ASSIGN(ObCmpSelEstimator);
 };
 
@@ -549,17 +563,16 @@ class ObEqualSelEstimator : public ObIndependentSelEstimator
 {
 public:
   ObEqualSelEstimator() :
-    ObIndependentSelEstimator(ObSelEstType::EQUAL) {}
+    ObIndependentSelEstimator(ObSelEstType::EQUAL),
+    can_calc_sel_(false)
+  {}
   virtual ~ObEqualSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
-                              ObSelEstimator *&estimator)
-  {
-    return create_simple_estimator<ObEqualSelEstimator>(factory, ctx, expr, estimator);
-  }
-  virtual bool tend_to_use_ds() override { return false; }
+                              ObSelEstimator *&estimator);
+  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
@@ -625,7 +638,12 @@ private:
                                       const ObRawExpr &input_right_expr,
                                       ObItemType op_type,
                                       double &selectivity);
+
+  static int check_can_calc_sel(const ObRawExpr &l_expr,
+                                const ObRawExpr &r_expr,
+                                bool &can_calc_sel);
 private:
+  bool can_calc_sel_;
   DISABLE_COPY_ASSIGN(ObEqualSelEstimator);
 };
 
@@ -643,7 +661,7 @@ public:
     variable_(NULL),
     pattern_(NULL),
     escape_(NULL),
-    can_calc_sel_(false),
+    can_calc_sel_by_prefix_(false),
     match_all_str_(false) {}
   virtual ~ObLikeSelEstimator() = default;
 
@@ -651,18 +669,21 @@ public:
                               const OptSelectivityCtx &ctx,
                               const ObRawExpr &expr,
                               ObSelEstimator *&estimator);
-  virtual bool tend_to_use_ds() override { return !can_calc_sel_; }
+  virtual bool tend_to_use_ds() override { return !can_calc_sel_by_prefix_; }
   virtual int get_sel(const OptTableMetas &table_metas,
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
   static int can_calc_like_sel(const OptSelectivityCtx &ctx, const ObRawExpr &expr, bool &can_calc_sel);
-
+  int get_wildcard_length(const OptSelectivityCtx &ctx, double &wildcard_length);
+  int calculate_like_sel_by_substr(const OptTableMetas &table_metas,
+                                   const OptSelectivityCtx &ctx,
+                                   double &selectivity);
 private:
   const ObRawExpr *variable_;
   const ObRawExpr *pattern_;
   const ObRawExpr *escape_;
-  bool can_calc_sel_;
+  bool can_calc_sel_by_prefix_;
   bool match_all_str_;
 private:
   DISABLE_COPY_ASSIGN(ObLikeSelEstimator);
@@ -687,6 +708,7 @@ public:
                       const OptSelectivityCtx &ctx,
                       double &selectivity,
                       ObIArray<ObExprSelPair> &all_predicate_sel) override;
+  VIRTUAL_TO_STRING_KV(K_(type), K_(child_estimators));
 
 private:
   common::ObSEArray<ObSelEstimator *, 4, common::ModulePageAllocator, true> child_estimators_;
@@ -701,7 +723,7 @@ private:
 class ObRangeSelEstimator : public ObSelEstimator
 {
 public:
-  ObRangeSelEstimator() : ObSelEstimator(ObSelEstType::RANGE), column_expr_(NULL) {}
+  ObRangeSelEstimator() : ObSelEstimator(ObSelEstType::COLUMN_RANGE), column_expr_(NULL) {}
   virtual ~ObRangeSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
@@ -792,6 +814,7 @@ private:
 
   const ObRelIds *left_rel_ids_;
   const ObRelIds *right_rel_ids_;
+  const ObRelIds *join_rel_ids_;
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> join_conditions_;
 
 private:
@@ -820,13 +843,7 @@ public:
 
 public:
   ObInequalJoinSelEstimator() :
-    ObSelEstimator(ObSelEstType::INEQUAL_JOIN),
-    has_lower_bound_(false),
-    has_upper_bound_(false),
-    include_lower_bound_(false),
-    include_upper_bound_(false),
-    lower_bound_(0),
-    upper_bound_(0) {}
+    ObSelEstimator(ObSelEstType::INEQUAL_JOIN) {}
   virtual ~ObInequalJoinSelEstimator() = default;
 
   static int create_estimator(ObSelEstimatorFactory &factory,
@@ -843,10 +860,7 @@ public:
 
   virtual bool tend_to_use_ds() override { return false; }
 
-  VIRTUAL_TO_STRING_KV(K_(type), K_(term),
-                       K_(has_lower_bound), K_(has_upper_bound),
-                       K_(include_lower_bound), K_(include_upper_bound),
-                       K_(lower_bound), K_(upper_bound));
+  VIRTUAL_TO_STRING_KV(K_(type), K_(term), K_(range));
 
 private:
 
@@ -863,14 +877,6 @@ private:
                                    Term &term,
                                    double &offset);
 
-  static bool is_higher_lower_bound(double bound1, bool include1, double bound2, bool include2)
-  {
-    return bound1 > bound2 || (bound1 == bound2 && !include1 && include2);
-  }
-  static bool is_higher_upper_bound(double bound1, bool include1, double bound2, bool include2)
-  {
-    return bound1 > bound2 || (bound1 == bound2 && include1 && !include2);
-  }
   // c1 in [min1, max1], c2 in [min2, max2]
   // calc the sel of `c1 + c2 > offset`;
   static double get_gt_sel(double min1,
@@ -902,23 +908,69 @@ private:
                               double offset,
                               bool is_semi);
 
-  double get_sel_for_point(double point1, double point2);
-
-  void reverse();
-  void update_lower_bound(double bound, bool include);
-  void update_upper_bound(double bound, bool include);
-  void set_bound(ObItemType item_type, double bound);
+  double get_sel_for_point(double point);
 
   Term term_;
-  bool has_lower_bound_;
-  bool has_upper_bound_;
-  bool include_lower_bound_;
-  bool include_upper_bound_;
-  double lower_bound_;
-  double upper_bound_;
+  SimpleRange range_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObInequalJoinSelEstimator);
+};
+
+class ObNormalRangeSelEstimator : public ObSelEstimator
+{
+public:
+  ObNormalRangeSelEstimator(ObSelEstType type) :
+      ObSelEstimator(type),
+      expr_(NULL),
+      is_not_op_(false) {}
+  virtual ~ObNormalRangeSelEstimator() = default;
+  static int get_expr_range(const OptSelectivityCtx &ctx,
+                            const ObRawExpr &qual,
+                            const ObRawExpr *&expr,
+                            SimpleRange &range,
+                            bool &is_not_op,
+                            bool &is_valid);
+
+  virtual int merge(const ObSelEstimator &other, bool &is_success) override;
+  virtual bool is_independent() const override { return is_not_op_; }
+  void set_is_not_op(bool is_not) { is_not_op_ = is_not; }
+
+  VIRTUAL_TO_STRING_KV(K_(type), KPC_(expr), K_(range), K_(is_not_op));
+protected:
+  const ObRawExpr *expr_;
+  SimpleRange range_;
+  bool is_not_op_; // not between
+};
+
+class ObUniformRangeSelEstimator : public ObNormalRangeSelEstimator
+{
+public:
+  ObUniformRangeSelEstimator() :
+      ObNormalRangeSelEstimator(ObSelEstType::UNIFORM_RANGE) {}
+  virtual ~ObUniformRangeSelEstimator() = default;
+
+  static int create_estimator(ObSelEstimatorFactory &factory,
+                              const OptSelectivityCtx &ctx,
+                              const ObRawExpr &expr,
+                              ObSelEstimator *&estimator);
+
+  virtual int get_sel(const OptTableMetas &table_metas,
+                      const OptSelectivityCtx &ctx,
+                      double &selectivity,
+                      ObIArray<ObExprSelPair> &all_predicate_sel) override;
+
+  int refine_out_of_bounds_sel(const OptTableMetas &table_metas,
+                               const OptSelectivityCtx &ctx,
+                               const ObObj &min_value,
+                               const ObObj &max_value,
+                               const double min_scalar,
+                               const double max_scalar,
+                               const double start_scalar,
+                               const double end_scalar,
+                               double &selectivity);
+
+  virtual bool tend_to_use_ds() override { return true; }
 };
 
 }

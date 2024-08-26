@@ -1092,8 +1092,10 @@ int ObLSRebuildMgr::generate_rebuild_task_()
       DEBUG_SYNC(BEFOR_EXEC_REBUILD_TASK);
       ObTaskId task_id;
       task_id.init(GCONF.self_addr_);
-      ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp);
-      ObReplicaMember src_replica_member(GCONF.self_addr_, timestamp);
+      ObReplicaMember dst_replica_member(GCONF.self_addr_, timestamp,
+                                         REPLICA_TYPE_FULL/*dummy_replica_type*/);
+      ObReplicaMember src_replica_member(GCONF.self_addr_, timestamp,
+                                         REPLICA_TYPE_FULL/*dummy_replica_type*/);
       ObMigrationOpArg arg;
       arg.cluster_id_ = GCONF.cluster_id;
       arg.data_src_ = src_replica_member;

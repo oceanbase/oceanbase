@@ -76,46 +76,61 @@ int PCVPlSchemaObj::deep_copy_column_infos(const ObTableSchema *schema)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("unexpected null argument", K(ret), K(schema), K(inner_alloc_));
   } else {
-    void *obj_buf = nullptr;
-    ObPLTableColumnInfo *column_info = nullptr;
-    column_cnt_ = schema->get_column_count();
-    column_infos_.set_allocator(inner_alloc_);
-    if (OB_FAIL(column_infos_.init(column_cnt_))) {
-      LOG_WARN("failed to init column_infos", K(ret));
-    } else {
-      ObTableSchema::const_column_iterator cs_iter = schema->column_begin();
-      ObTableSchema::const_column_iterator cs_iter_end = schema->column_end();
-      for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
-        const ObColumnSchemaV2 &column_schema = **cs_iter;
-        if (nullptr == (obj_buf = inner_alloc_->alloc(sizeof(ObPLTableColumnInfo)))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory", K(ret));
-        } else if (FALSE_IT(column_info = new(obj_buf)ObPLTableColumnInfo(inner_alloc_))) {
-          // do nothing
-        } else {
-          column_info->column_id_ = column_schema.get_column_id();
-          column_info->meta_type_ = column_schema.get_meta_type();
-          column_info->charset_type_ = column_schema.get_charset_type();
-          column_info->accuracy_ = column_schema.get_accuracy();
-          OZ (column_info->deep_copy_type_info(column_schema.get_extended_type_info()));
-
-          if (OB_SUCC(ret)) {
-            char *name_buf = NULL;
-            const ObString &column_name = column_schema.get_column_name_str();
-            if (OB_ISNULL(name_buf =
-                static_cast<char*>(inner_alloc_->alloc(column_name.length() + 1)))) {
+    ObTableSchema::const_column_iterator cs_iter = schema->column_begin();
+    ObTableSchema::const_column_iterator cs_iter_end = schema->column_end();
+    int64_t real_column_cnt = 0;
+    for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
+      const ObColumnSchemaV2 &column_schema = **cs_iter;
+      if (!column_schema.is_hidden()) {
+        real_column_cnt++;
+      }
+    }
+    if (OB_SUCC(ret)) {
+      column_cnt_ = real_column_cnt;
+      column_infos_.set_allocator(inner_alloc_);
+      if (OB_FAIL(column_infos_.init(column_cnt_))) {
+        LOG_WARN("failed to init column_infos", K(ret));
+      } else {
+        void *obj_buf = nullptr;
+        ObPLTableColumnInfo *column_info = nullptr;
+        cs_iter = schema->column_begin();
+        cs_iter_end = schema->column_end();
+        for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
+          const ObColumnSchemaV2 &column_schema = **cs_iter;
+          if (column_schema.is_hidden()) {
+            // do nothing
+          } else {
+            if (nullptr == (obj_buf = inner_alloc_->alloc(sizeof(ObPLTableColumnInfo)))) {
               ret = OB_ALLOCATE_MEMORY_FAILED;
-              LOG_WARN("failed to alloc column name buf", K(ret), K(column_name));
+              LOG_WARN("failed to allocate memory", K(ret));
+            } else if (FALSE_IT(column_info = new(obj_buf)ObPLTableColumnInfo(inner_alloc_))) {
+              // do nothing
             } else {
-              MEMCPY(name_buf, column_name.ptr(), column_name.length());
-              ObString deep_copy_name(column_name.length(), name_buf);
-              column_info->column_name_ = deep_copy_name;
-              OZ (column_infos_.push_back(column_info));
+              column_info->column_id_ = column_schema.get_column_id();
+              column_info->meta_type_ = column_schema.get_meta_type();
+              column_info->charset_type_ = column_schema.get_charset_type();
+              column_info->accuracy_ = column_schema.get_accuracy();
+              OZ (column_info->deep_copy_type_info(column_schema.get_extended_type_info()));
+
+              if (OB_SUCC(ret)) {
+                char *name_buf = NULL;
+                const ObString &column_name = column_schema.get_column_name_str();
+                if (OB_ISNULL(name_buf =
+                    static_cast<char*>(inner_alloc_->alloc(column_name.length() + 1)))) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("failed to alloc column name buf", K(ret), K(column_name));
+                } else {
+                  MEMCPY(name_buf, column_name.ptr(), column_name.length());
+                  ObString deep_copy_name(column_name.length(), name_buf);
+                  column_info->column_name_ = deep_copy_name;
+                  OZ (column_infos_.push_back(column_info));
+                }
+              }
             }
           }
         }
+        CK (column_cnt_ == column_infos_.count());
       }
-      CK (column_cnt_ == column_infos_.count());
     }
   }
 
@@ -400,13 +415,17 @@ int ObPLObjectValue::obtain_new_column_infos(share::schema::ObSchemaGetterGuard 
     ObTableSchema::const_column_iterator cs_iter_end = table_schema->column_end();
     for (; OB_SUCC(ret) && cs_iter != cs_iter_end; cs_iter++) {
       const ObColumnSchemaV2 &column_schema = **cs_iter;
-      column_info.column_id_ = column_schema.get_column_id();
-      column_info.meta_type_ = column_schema.get_meta_type();
-      column_info.charset_type_ = column_schema.get_charset_type();
-      column_info.accuracy_ = column_schema.get_accuracy();
-      OZ (column_info.type_info_.assign(column_schema.get_extended_type_info()));
-      OX (column_info.column_name_ = column_schema.get_column_name_str());
-      OZ (column_infos.push_back(column_info));
+      if (column_schema.is_hidden()) {
+        // do nothing
+      } else {
+        column_info.column_id_ = column_schema.get_column_id();
+        column_info.meta_type_ = column_schema.get_meta_type();
+        column_info.charset_type_ = column_schema.get_charset_type();
+        column_info.accuracy_ = column_schema.get_accuracy();
+        OZ (column_info.type_info_.assign(column_schema.get_extended_type_info()));
+        OX (column_info.column_name_ = column_schema.get_column_name_str());
+        OZ (column_infos.push_back(column_info));
+      }
     }
   }
 
@@ -637,36 +656,10 @@ int ObPLObjectValue::get_all_dep_schema(ObPLCacheCtx &pc_ctx,
           }
         }
       } else if (lib::is_oracle_mode()) {
-        if (pcv_schema->is_explicit_db_name_) {
-          //In oracle mode, if mark database name，use table id search schema directly.
           if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
                       pcv_schema->schema_id_, table_schema))) {
             LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
           } else { /* do nothing */ }
-        } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-                                                                database_id,
-                                                                pcv_schema->table_name_,
-                                                                false,
-                                                                table_schema))) {
-          LOG_WARN("failed to get table schema", K(pcv_schema->schema_id_), K(ret));
-        } else if (nullptr == table_schema && OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-                                                                pcv_schema->database_id_,
-                                                                pcv_schema->table_name_,
-                                                                false,
-                                                                table_schema))) {
-          LOG_WARN("failed to get table schema",
-                  K(ret), K(pcv_schema->tenant_id_), K(pcv_schema->database_id_),
-                  K(pcv_schema->table_name_));
-        } else if (nullptr == table_schema && OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
-                                                                                           common::OB_ORA_SYS_DATABASE_ID,
-                                                                                           pcv_schema->table_name_,
-                                                                                           false,
-                                                                                           table_schema))) { // finaly,find sys tenand
-          LOG_WARN("failed to get table schema", K(ret), K(tenant_id),
-                   K(pcv_schema->table_name_));
-        } else {
-          // do nothing
-        }
       } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id,
                                                               pcv_schema->database_id_,
                                                               pcv_schema->table_name_,

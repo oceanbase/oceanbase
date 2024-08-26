@@ -429,8 +429,7 @@ int ObServerTraceMap::get_alive_and_not_stopped_servers(const ObZone &zone, ObIA
       const ObAddr &server = server_info.get_server();
       if ((server_info.get_zone() == zone || zone.is_empty())
            && !server_info.is_stopped()
-           && server_info.is_alive()
-           && server_info.in_service()) {
+           && server_info.is_alive()) {
         if (OB_FAIL(server_list.push_back(server))) {
           LOG_WARN("fail to push an element into server_list", KR(ret), K(server));
         }

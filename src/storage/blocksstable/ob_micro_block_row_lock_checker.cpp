@@ -36,6 +36,19 @@ ObMicroBlockRowLockChecker::~ObMicroBlockRowLockChecker()
 {
 }
 
+void ObMicroBlockRowLockChecker::inc_empty_read(int64_t empty_read_prefix)
+{
+  if (OB_NOT_NULL(context_) && OB_NOT_NULL(sstable_) &&
+       !context_->query_flag_.is_index_back() && context_->query_flag_.is_use_bloomfilter_cache() &&
+       !sstable_->is_small_sstable()) {
+     (void) OB_STORE_CACHE.get_bf_cache().inc_empty_read(
+              MTL_ID(),
+              param_->table_id_,
+              macro_id_,
+              empty_read_prefix);
+  }
+}
+
 int ObMicroBlockRowLockChecker::inner_get_next_row(
     bool &row_lock_checked,
     int64_t &current,

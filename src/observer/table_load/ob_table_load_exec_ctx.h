@@ -17,6 +17,13 @@
 
 namespace oceanbase
 {
+namespace share
+{
+namespace schema
+{
+class ObSchemaGetterGuard;
+} // namespace schema
+} // namespace share
 namespace sql
 {
 class ObExecContext;
@@ -36,6 +43,7 @@ public:
   virtual ~ObTableLoadExecCtx() = default;
   common::ObIAllocator *get_allocator();
   sql::ObSQLSessionInfo *get_session_info();
+  share::schema::ObSchemaGetterGuard *get_schema_guard();
   virtual int check_status();
   bool is_valid() const { return nullptr != exec_ctx_; }
   TO_STRING_KV(KP_(exec_ctx), KP_(tx_desc));
@@ -54,8 +62,10 @@ public:
   }
   virtual ~ObTableLoadClientExecCtx() = default;
   virtual int check_status();
+  void init_heart_beat(const int64_t heartbeat_timeout_us);
+  void heart_beat();
   TO_STRING_KV(KP_(exec_ctx), KP_(tx_desc), K_(heartbeat_timeout_us), K_(last_heartbeat_time));
-public:
+private:
   int64_t heartbeat_timeout_us_;
   int64_t last_heartbeat_time_;
 };

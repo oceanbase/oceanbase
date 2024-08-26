@@ -52,7 +52,7 @@ static int ob_valid_mbcharlen_utf8mb3(const uchar *s, const uchar *e)
   return 3;
 }
 
-static int ob_valid_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)), const uchar *s, const uchar *e)
+static inline int ob_valid_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused)), const uchar *s, const uchar *e)
 {
   uchar c;
   if (s >= e)
@@ -97,7 +97,7 @@ static uint ob_mbcharlen_utf8mb4(const ObCharsetInfo *cs __attribute__((unused))
   return 0; /* Illegal mb head */;
 }
 
-static size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
+static inline size_t ob_well_formed_len_utf8mb4(const ObCharsetInfo *cs,
                                          const char *b, const char *e,
                                          size_t pos, int *error)
 {
@@ -443,6 +443,7 @@ void ob_strnxfrm_unicode_help(uchar **dst,
   if ((flags & OB_STRXFRM_PAD_TO_MAXLEN) && *dst < *de)
     *dst += ob_strxfrm_pad_unicode(*dst, *de);
 }
+
 size_t ob_strnxfrm_unicode(const ObCharsetInfo *cs,
                     uchar *dst, size_t dstlen, uint nweights,
                     const uchar *src, size_t srclen, uint flags, bool *is_valid_unicode)
@@ -944,6 +945,7 @@ int ob_mb_wc_utf8mb4_thunk(const ObCharsetInfo *cs __attribute__((unused)),
 
 ObCharsetHandler ob_charset_utf8mb4_handler=
 {
+  NULL,
   ob_ismbchar_utf8mb4,
   ob_mbcharlen_utf8mb4,
   ob_numchars_mb,
@@ -1015,6 +1017,8 @@ ObCharsetInfo ob_charset_utf8mb4_general_ci=
   to_upper_utf8mb4,
   to_upper_utf8mb4,
   NULL,
+  NULL,
+  NULL,
   &ob_unicase_default,
   NULL,
   NULL,
@@ -1048,6 +1052,8 @@ ObCharsetInfo ob_charset_utf8mb4_bin=
   ctype_utf8mb4,
   to_lower_utf8mb4,
   to_upper_utf8mb4,
+  NULL,
+  NULL,
   NULL,
   NULL,
   &ob_unicase_default,

@@ -110,7 +110,8 @@ ObHashJoinSpec::ObHashJoinSpec(common::ObIAllocator &alloc, const ObPhyOperatorT
   is_ns_equal_cond_(alloc),
   adaptive_hj_scan_cols_(alloc),
   adaptive_nlj_scan_cols_(alloc),
-  is_adaptive_(false)
+  is_adaptive_(false),
+  left_join_row_(alloc)
 {
 }
 
@@ -125,7 +126,8 @@ OB_SERIALIZE_MEMBER((ObHashJoinSpec, ObJoinSpec),
                     is_ns_equal_cond_,
                     adaptive_hj_scan_cols_,
                     adaptive_nlj_scan_cols_,
-                    is_adaptive_);
+                    is_adaptive_,
+                    left_join_row_);
 
 int ObHashJoinOp::PartHashJoinTable::init(ObIAllocator &alloc)
 {

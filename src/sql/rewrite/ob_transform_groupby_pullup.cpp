@@ -304,14 +304,13 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
     ObString dummy_str;
     const ObViewMergeHint *myhint = NULL;
     ObSQLSessionInfo *session_info = NULL;
-    bool enable_group_by_placement_transform = false;
+    ObQueryCtx *query_ctx = NULL;
     OPT_TRACE("try", table);
     if (OB_ISNULL(ctx_) ||
-        OB_ISNULL(session_info = ctx_->session_info_)) {
+        OB_ISNULL(session_info = ctx_->session_info_) ||
+        OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpect null param", K(ctx_), K(ret));
-    } else if (OB_FAIL(session_info->is_groupby_placement_transformation_enabled(enable_group_by_placement_transform))) {
-      LOG_WARN("failed to check group by placement transform enabled", K(ret));
+      LOG_WARN("unexpect null param", K(ctx_), K(session_info), K(query_ctx), K(ret));
     } else if (OB_ISNULL(sub_stmt = table->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid generated table item", K(ret), K(*table));
@@ -321,7 +320,7 @@ int ObTransformGroupByPullup::check_groupby_pullup_validity(ObDMLStmt *stmt,
       // can not set is_valid as false, may pullup other table
       OPT_TRACE("hint reject transform");
     } else if (OB_FALSE_IT(myhint = static_cast<const ObViewMergeHint*>(sub_stmt->get_stmt_hint().get_normal_hint(T_MERGE_HINT)))) {
-    } else if (!enable_group_by_placement_transform && (NULL == myhint || myhint->enable_no_group_by_pull_up())) {
+    } else if (!ctx_->is_groupby_placement_enabled_ && (NULL == myhint || myhint->enable_no_group_by_pull_up())) {
       OPT_TRACE("system var disable group by placemebt");
     } else if (ignore_tables.has_member(stmt->get_table_bit_index(table->table_id_))) {
       // skip the generated table
@@ -1193,7 +1192,7 @@ int ObTransformGroupByPullup::calc_group_exprs_ndv(const ObIArray<ObRawExpr*> &g
     LOG_WARN("unexpect null logical operator", K(ret));
   } else {
     card = child_op->get_card();
-    plan->get_selectivity_ctx().init_op_ctx(&child_op->get_output_equal_sets(), card);
+    plan->get_selectivity_ctx().init_op_ctx(child_op);
     if (group_exprs.empty()) {
       group_ndv = 1.0;
     } else if (OB_FAIL(ObOptSelectivity::calculate_distinct(plan->get_update_table_metas(),
