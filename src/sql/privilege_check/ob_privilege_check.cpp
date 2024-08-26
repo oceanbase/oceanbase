@@ -383,10 +383,15 @@ int add_col_priv_to_need_priv(
   visitor.remove_scope(SCOPE_DML_CONSTRAINT);
   visitor.remove_scope(SCOPE_DMLINFOS);
   ObSEArray<ObRawExpr *, 4> col_exprs;
+  bool has_dml_info = false;
   if (OB_ISNULL(basic_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("basic_stmt is NULL", K(ret));
-  } else {
+  } else if (basic_stmt->is_dml_write_stmt() &&
+             OB_FAIL(static_cast<const ObDelUpdStmt*>(basic_stmt)->has_dml_table_info(
+                                                            table_item.table_id_, has_dml_info))) {
+    LOG_WARN("failed to check has dml table info", K(ret));
+  } else if (has_dml_info) {
     stmt::StmtType stmt_type = basic_stmt->get_stmt_type();
     switch (stmt_type) {
       case stmt::T_DELETE: {
@@ -502,39 +507,39 @@ int add_col_priv_to_need_priv(
         break;
       }
     }
-    if (OB_SUCC(ret)) {
-      ObSEArray<ObRawExpr *, 4> rel_exprs;
-      need_priv.priv_set_ = OB_PRIV_SELECT;
-      if (OB_FAIL(static_cast<const ObDMLStmt *>(basic_stmt)->get_relation_exprs(rel_exprs, visitor))) {
-        LOG_WARN("get rel exprs failed", K(ret));
-      } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(rel_exprs, col_exprs))) {
-        LOG_WARN("extract column exprs failed", K(ret));
-      } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {
-          if (OB_ISNULL(col_exprs.at(i)) || OB_UNLIKELY(!col_exprs.at(i)->is_column_ref_expr())) {
+  }
+  if (OB_SUCC(ret)) {
+    ObSEArray<ObRawExpr *, 4> rel_exprs;
+    need_priv.priv_set_ = OB_PRIV_SELECT;
+    if (OB_FAIL(static_cast<const ObDMLStmt *>(basic_stmt)->get_relation_exprs(rel_exprs, visitor))) {
+      LOG_WARN("get rel exprs failed", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(rel_exprs, col_exprs))) {
+      LOG_WARN("extract column exprs failed", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < col_exprs.count(); i++) {
+        if (OB_ISNULL(col_exprs.at(i)) || OB_UNLIKELY(!col_exprs.at(i)->is_column_ref_expr())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected error", K(ret));
+        } else {
+          ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(col_exprs.at(i));
+          if (OB_ISNULL(col_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected error", K(ret));
-          } else {
-            ObColumnRefRawExpr *col_expr = static_cast<ObColumnRefRawExpr *>(col_exprs.at(i));
-            if (OB_ISNULL(col_expr)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected error", K(ret));
-            } else if (col_expr->get_table_id() == table_id && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
-              OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
-            }
+          } else if (col_expr->get_table_id() == table_id && col_expr->get_column_id() >= OB_APP_MIN_COLUMN_ID) {
+            OZ (need_priv.columns_.push_back(col_expr->get_column_name()));
           }
         }
-        if (OB_SUCC(ret)) {
-          if (need_priv.columns_.empty()) {
-            if (basic_stmt->is_select_stmt()) {
-              need_priv.check_any_column_priv_ = true;
-              ADD_NEED_PRIV(need_priv);
-              need_priv.check_any_column_priv_ = false;
-            }
-          } else {
+      }
+      if (OB_SUCC(ret)) {
+        if (need_priv.columns_.empty()) {
+          if (basic_stmt->is_select_stmt()) {
+            need_priv.check_any_column_priv_ = true;
             ADD_NEED_PRIV(need_priv);
-            need_priv.columns_.reuse();
+            need_priv.check_any_column_priv_ = false;
           }
+        } else {
+          ADD_NEED_PRIV(need_priv);
+          need_priv.columns_.reuse();
         }
       }
     }
@@ -1168,7 +1173,6 @@ int get_dml_stmt_need_privs(
             || table_item->is_view_table_) {
             need_priv.db_ = table_item->database_name_;
             need_priv.table_ = table_item->table_name_;
-            need_priv.priv_set_ = priv_set;
             need_priv.is_sys_table_ = table_item->is_system_table_;
             need_priv.is_for_update_ = table_item->for_update_;
             need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
@@ -1183,6 +1187,17 @@ int get_dml_stmt_need_privs(
                                session_priv.user_name_.length(), session_priv.user_name_.ptr(),
                                session_priv.host_name_.length(),session_priv.host_name_.ptr(),
                                table_item->table_name_.length(), table_item->table_name_.ptr());
+              }
+            }
+            if (OB_SUCC(ret)) {
+              bool has = false;
+              if (stmt::T_SELECT == dml_stmt->get_stmt_type()) {
+                need_priv.priv_set_ = priv_set;
+              } else if (OB_FAIL(static_cast<const ObDelUpdStmt*>(dml_stmt)->has_dml_table_info(
+                                                              table_item->table_id_, has))) {
+                LOG_WARN("failed to check has dml table info", K(ret));
+              } else {
+                need_priv.priv_set_ = has ? priv_set : OB_PRIV_SELECT;
               }
             }
             if (OB_SUCC(ret)) {
