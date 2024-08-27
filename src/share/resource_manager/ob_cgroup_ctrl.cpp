@@ -176,13 +176,17 @@ int ObCgroupCtrl::which_type_dir_(const char *curr_path, int &type)
   return ret;
 }
 
-int ObCgroupCtrl::remove_dir_(const char *curr_dir)
+int ObCgroupCtrl::remove_dir_(const char *curr_dir, bool is_delete_group)
 {
   int ret = OB_SUCCESS;
   char group_task_path[PATH_BUFSIZE];
-  char parent_task_path[PATH_BUFSIZE];
+  char target_task_path[PATH_BUFSIZE];
   snprintf(group_task_path, PATH_BUFSIZE, "%s/tasks", curr_dir);
-  snprintf(parent_task_path, PATH_BUFSIZE, "%s/../tasks", curr_dir);
+  if (is_delete_group) {
+    snprintf(target_task_path, PATH_BUFSIZE, "%s/../tasks", curr_dir);
+  } else {
+    snprintf(target_task_path, PATH_BUFSIZE, "%s/../OBCG_DEFAULT/tasks", curr_dir);
+  }
   FILE* group_task_file = nullptr;
   if (OB_ISNULL(group_task_file = fopen(group_task_path, "r"))) {
     ret = OB_IO_ERROR;
@@ -191,8 +195,8 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir)
     char tid_buf[VALUE_BUFSIZE];
     int tmp_ret = OB_SUCCESS;
     while (fgets(tid_buf, VALUE_BUFSIZE, group_task_file)) {
-      if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(parent_task_path, tid_buf))) {
-        LOG_WARN("remove tenant task failed", K(tmp_ret), K(parent_task_path));
+      if (OB_TMP_FAIL(ObCgroupCtrl::write_string_to_file_(target_task_path, tid_buf))) {
+        LOG_WARN("remove tenant task failed", K(tmp_ret), K(target_task_path));
       }
     }
     fclose(group_task_file);
@@ -266,13 +270,18 @@ int ObCgroupCtrl::recursion_process_group_(const char *curr_path, DirProcessor *
 int ObCgroupCtrl::remove_cgroup(const uint64_t tenant_id, uint64_t group_id, const char *base_path)
 {
   int ret = OB_SUCCESS;
-  char tenant_path[PATH_BUFSIZE];
-  if (OB_FAIL(get_group_path(tenant_path, PATH_BUFSIZE, tenant_id, group_id, base_path))) {
+  char group_path[PATH_BUFSIZE];
+  if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, base_path))) {
     LOG_WARN("fail get group path", K(tenant_id), K(ret));
-  } else if (OB_FAIL(recursion_remove_group_(tenant_path))) {
-    LOG_WARN("remove cgroup directory failed", K(ret), K(tenant_path), K(tenant_id));
+  } else if (is_valid_group(group_id)) {
+    ret = remove_dir_(group_path, true /* is_delete_group */);
   } else {
-    LOG_INFO("remove cgroup directory success", K(tenant_path), K(tenant_id));
+    ret = recursion_remove_group_(group_path);
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("remove cgroup directory failed", K(ret), K(group_path), K(tenant_id));
+  } else {
+    LOG_INFO("remove cgroup directory success", K(group_path), K(tenant_id));
   }
   return ret;
 }
