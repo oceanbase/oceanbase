@@ -194,8 +194,9 @@ int ObTableApiModifyExecutor::init_related_das_rtdef(const DASDMLCtDefArray &das
 int ObTableApiModifyExecutor::calc_local_tablet_loc(ObDASTabletLoc *&tablet_loc)
 {
   int ret = OB_SUCCESS;
-  ObTableID table_loc_id = get_table_ctx().get_ref_table_id();
-  ObTableID ref_table_id = get_table_ctx().get_ref_table_id();;
+  ObTableID table_loc_id = tb_ctx_.get_ref_table_id();
+  ObTableID ref_table_id = tb_ctx_.get_ref_table_id();
+  ObTabletID tablet_id = tb_ctx_.get_tablet_id();
   ObDASCtx &das_ctx = exec_ctx_.get_das_ctx();
   ObDASTableLoc *table_loc = nullptr;
 
@@ -203,8 +204,18 @@ int ObTableApiModifyExecutor::calc_local_tablet_loc(ObDASTabletLoc *&tablet_loc)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get table location by table id failed", K(ret),
               K(table_loc_id), K(ref_table_id), K(das_ctx.get_table_loc_list()));
-  } else {
-    tablet_loc = table_loc->get_first_tablet_loc();
+  } else if (!tablet_id.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet id is invalid", K(ret));
+  } else if (OB_FAIL(table_loc->get_tablet_loc_by_id(tablet_id, tablet_loc))) {
+    LOG_WARN("fail to get tablet loc", K(ret), K(tablet_id));
+  } else if (OB_ISNULL(tablet_loc)) {
+    // extend tablet loc
+    if (OB_FAIL(tb_ctx_.init_related_tablet_map(das_ctx))) {
+      LOG_WARN("fail to init released_tablet_map", K(ret), K(tablet_id), K(ref_table_id), KPC(table_loc));
+    } else if (OB_FAIL(das_ctx.extended_tablet_loc(*table_loc, tablet_id, tablet_loc))) {
+      LOG_WARN("fail to extend and get tablet loc", K(ret), K(tablet_id), KPC(table_loc));
+    }
   }
 
   return ret;
@@ -914,9 +925,21 @@ int ObTableApiModifyExecutor::stored_row_to_exprs(const ObChunkDatumStore::Store
   return ret;
 }
 
+void ObTableApiModifyExecutor::clear_all_evaluated_flag()
+{
+  ObExprFrameInfo *expr_info = const_cast<ObExprFrameInfo *>(tb_ctx_.get_expr_frame_info());
+  if (OB_NOT_NULL(expr_info)) {
+    for (int64_t i = 0; i < expr_info->rt_exprs_.count(); i++) {
+      expr_info->rt_exprs_.at(i).clear_evaluated_flag(eval_ctx_);;
+    }
+  }
+}
+
 void ObTableApiModifyExecutor::reset_new_row_datum(const ObExprPtrIArray &new_row_exprs)
 {
-  clear_evaluated_flag();
+  // reset all rt_exprs evaluated flag (including autoincrment column);
+  // In batch operation, we need to do it after executing each operation to ensure the next operation rt_exprs is not disturbed
+  clear_all_evaluated_flag();
   // reset ptr in ObDatum to reserved buf
   for (int64_t i = 0; i < new_row_exprs.count(); ++i) {
     if (OB_NOT_NULL(new_row_exprs.at(i))) {

@@ -2005,9 +2005,16 @@ DEF_INT(max_partition_num, OB_TENANT_PARAMETER, "8192", "[8192, 65536]",
         "set max partition num in mysql mode",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 // obkv group commit
-DEF_BOOL(enable_kv_group_commit, OB_TENANT_PARAMETER, "False",
-    "Enable or disable group commit",
-    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(kv_group_commit_batch_size, OB_TENANT_PARAMETER, "1", "(0,)",
+        "Used to specify the batch size of each group commit batch in OBKV."
+        " Values: 1 means sinlge operaion in each batch, equally to disable group commit."
+        " When batch size is greater than 1, it means group commit is enable and used as its batch size. ",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(kv_group_commit_rw_mode, OB_TENANT_PARAMETER, "ALL",
+        common::ObConfigKvGroupCommitRWModeChecker,
+        "Used to specify the read/write operation types when group commit is enable. "
+        "Values: 'ALL' means enable all operations, 'READ' mean only enable read operation in group commit, 'WRITE'  means only write operations in group commit.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_CAP(lob_enable_block_cache_threshold, OB_TENANT_PARAMETER, "256K", "[0B, 512M]",
         "For outrow-stored LOBs, if the length is less than or equal to that threshold, "
         "they can be admitted into the block cache to speed up the next query.",

@@ -152,6 +152,63 @@ int ObTableApiScanExecutor::prepare_das_task()
   return ret;
 }
 
+int ObTableApiScanExecutor::prepare_batch_das_task()
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObTableOperation> *ops = tb_ctx_.get_batch_operation();
+  ObDASTableLoc *table_loc = tsc_rtdef_.scan_rtdef_.table_loc_;
+  if (OB_ISNULL(ops)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("batch ops is NULL", K(ret));
+  } else {
+    const ObIArray<ObTabletID> *tablet_ids = tb_ctx_.get_batch_tablet_ids();
+    bool has_multi_tablets = tablet_ids != nullptr;
+    if (has_multi_tablets && OB_UNLIKELY(tablet_ids->count() != ops->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet ids count is not equal to operation count", K(ret), K(ops->count()), K(tablet_ids->count()));
+    }
+    for (int64_t i = 0; i < ops->count() && OB_SUCC(ret); i++) {
+      ObDASScanOp *scan_op = nullptr;
+      ObDASTabletLoc *tablet_loc = nullptr;
+      ObTabletID tablet_id = has_multi_tablets ? tablet_ids->at(i) : tb_ctx_.get_tablet_id();
+      if (OB_FAIL(table_loc->get_tablet_loc_by_id(tablet_id, tablet_loc))) {
+        LOG_WARN("fail to get tablet loc", K(ret), K(tablet_id));
+      } else if (OB_ISNULL(tablet_loc) &&
+                 OB_FAIL(DAS_CTX(exec_ctx_).extended_tablet_loc(*table_loc, tablet_id, tablet_loc))) {
+          LOG_WARN("failt to extend tablet loc", K(ret), K(tablet_id));
+      } else if (!has_das_scan_task(tablet_loc, scan_op)) {
+        ObIDASTaskOp *tmp_op = nullptr;
+        if (OB_FAIL(das_ref_.create_das_task(tablet_loc, DAS_OP_TABLE_SCAN, tmp_op))) {
+          LOG_WARN("prepare das task failed", K(ret));
+        } else if (OB_ISNULL(tmp_op)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("tmp op is NULL", K(ret));
+        } else {
+          scan_op = static_cast<ObDASScanOp*>(tmp_op);
+          scan_op->set_scan_ctdef(&scan_spec_.get_ctdef().scan_ctdef_);
+          scan_op->set_scan_rtdef(&tsc_rtdef_.scan_rtdef_);
+          scan_op->set_can_part_retry(false);
+        }
+      }
+
+      // add key range
+      if (OB_SUCC(ret)) {
+        ObIArray<ObNewRange> &scan_ranges = scan_op->get_scan_param().key_ranges_;
+        const ObTableOperation &op = ops->at(i);
+        const ObITableEntity &entity = op.entity();
+        ObRowkey rowkey = entity.get_rowkey();
+        ObNewRange range;
+        if (OB_FAIL(range.build_range(tb_ctx_.get_ref_table_id(), rowkey))) {
+          LOG_WARN("fail to build key range", K(ret), K(rowkey));
+        } else if (OB_FAIL(scan_ranges.push_back(range))) {
+          LOG_WARN("fail to push back key range", K(ret), K(range));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTableApiScanExecutor::do_table_scan()
 {
   int ret = OB_SUCCESS;
@@ -171,11 +228,21 @@ int ObTableApiScanExecutor::do_table_scan()
 int ObTableApiScanExecutor::do_init_before_get_row()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(prepare_das_task())) {
-    LOG_WARN("fail to prepare das task", K(ret));
-  } else if (OB_FAIL(do_table_scan())) {
-    if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
-      LOG_WARN("fail to do table scan", K(ret));
+  if (tb_ctx_.is_multi_tablet_get()) {
+    if (OB_FAIL(prepare_batch_das_task())) {
+      LOG_WARN("fail to prepare das task", K(ret));
+    }
+  } else {
+    if (OB_FAIL(prepare_das_task())) {
+      LOG_WARN("fail to prepare das task", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(do_table_scan())) {
+      if (OB_TRY_LOCK_ROW_CONFLICT != ret) {
+        LOG_WARN("fail to do table scan", K(ret));
+      }
     }
   }
 

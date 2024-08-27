@@ -50,8 +50,10 @@ public:
                K_(returning_affected_entity),
                K_(returning_rowkey),
                K_(return_one_result),
+               K_(op_type),
                K_(entity_type),
                K_(consistency_level),
+               KPC_(tablet_ids),
                KPC_(result_entity),
                KPC_(credential));
 public:
@@ -71,8 +73,10 @@ public:
     is_same_properties_names_ = false;
     use_put_ = false;
     returning_affected_entity_ = false;
+    tablet_ids_ = nullptr;
     returning_rowkey_ = false;
     return_one_result_ = false;
+    op_type_ = ObTableOperationType::INVALID;
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     consistency_level_ = ObTableConsistencyLevel::EVENTUAL;
     entity_factory_ = nullptr;
@@ -98,6 +102,8 @@ public:
   bool returning_affected_entity_;
   bool returning_rowkey_;
   bool return_one_result_;
+  ObTableOperationType::Type op_type_;
+  ObIArray<ObTabletID> *tablet_ids_;
   ObTableEntityType entity_type_;
   ObTableConsistencyLevel consistency_level_;
   ObITableEntityFactory *entity_factory_;

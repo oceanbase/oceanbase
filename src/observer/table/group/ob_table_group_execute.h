@@ -38,8 +38,10 @@ public:
   void reset()
   {
     key_ = nullptr;
+    add_group_success_ = false;
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
-    tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
+    ls_id_ = share::ObLSID::INVALID_LS_ID;
+    is_get_ = false;
     timeout_ts_ = 0;
     trans_param_ = nullptr;
     schema_guard_ = nullptr;
@@ -52,9 +54,11 @@ public:
     retry_count_ = 0;
   }
   TO_STRING_KV(KPC_(key),
+               K_(add_group_success),
                K_(entity_type),
                K_(credential),
-               K_(tablet_id),
+               K_(ls_id),
+               K_(is_get),
                K_(timeout_ts),
                KPC_(trans_param),
                KPC_(sess_guard),
@@ -66,10 +70,12 @@ public:
                K_(user_client_addr),
                K_(audit_ctx));
 public:
-  const ObTableGroupCommitKey *key_;
+  ObTableGroupCommitKey *key_;
+  bool add_group_success_;
   ObTableEntityType entity_type_;
   ObTableApiCredential credential_;
-  common::ObTabletID tablet_id_;
+  share::ObLSID ls_id_;
+  bool is_get_;
   int64_t timeout_ts_;
   ObTableTransParam *trans_param_;
   share::schema::ObSchemaGetterGuard *schema_guard_;
@@ -90,16 +96,15 @@ public:
 class ObTableGroupCommitEndTransCb: public ObTableAPITransCb
 {
 public:
-  explicit ObTableGroupCommitEndTransCb(ObTableGroupCommitOps *group,
+  explicit ObTableGroupCommitEndTransCb(ObTableGroupCommitOps &group,
                                         bool add_failed_group,
                                         ObTableFailedGroups *failed_groups,
                                         ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
                                         ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory)
       : is_inited_(false),
         allocator_("TbGroupCb", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-        group_(group),
         entity_factory_("TbGroupCbEntFac", MTL_ID()),
-        results_(allocator_),
+        group_(group),
         add_failed_group_(add_failed_group),
         failed_groups_(failed_groups),
         group_factory_(group_factory),
@@ -116,12 +121,16 @@ public:
   virtual sql::ObEndTransCallbackType get_callback_type() const override { return sql::ASYNC_CALLBACK_TYPE; }
 public:
   int init();
+private:
+  int add_failed_groups();
+  int response();
+  int response_failed_results(int ret_code);
 public:
   bool is_inited_;
   common::ObArenaAllocator allocator_;
-  ObTableGroupCommitOps *group_;
   ObTableEntity result_entity_;
   ObTableEntityFactory<ObTableEntity> entity_factory_;
+  ObTableGroupCommitOps &group_;
   ResultFixedArray results_;
   bool add_failed_group_;
   ObTableFailedGroups *failed_groups_;
@@ -135,8 +144,7 @@ class ObTableGroupCommitCreateCbFunctor : public ObTableCreateCbFunctor
 {
 public:
   ObTableGroupCommitCreateCbFunctor()
-      : group_(nullptr),
-        add_failed_group_(false),
+      : add_failed_group_(false),
         failed_groups_(nullptr),
         group_factory_(nullptr),
         op_factory_(nullptr),
@@ -163,20 +171,14 @@ class ObTableGroupExecuteService final
 {
 public:
   static const int64_t DEFAULT_TRANS_TIMEOUT = 3 * 1000 * 1000L; // 3s
-  static int execute(const ObTableGroupCtx &ctx,
+  static int execute(ObTableGroupCtx &ctx,
                      ObTableGroupCommitOps &group,
-                     bool add_failed_group,
-                     bool &had_do_response);
+                     bool add_failed_group = true);
   static int execute(ObTableGroupCommitOps &group,
                      ObTableFailedGroups *failed_groups,
                      ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
                      ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory,
-                     bool add_failed_group,
-                     bool &had_do_response);
-  static int execute_one_by_one(ObTableGroupCommitOps &group,
-                                ObTableFailedGroups *failed_groups,
-                                ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
-                                ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory);
+                     bool add_failed_group = true);
   static int response(ObTableGroupCommitOps &group,
                       ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
                       ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory,
@@ -185,6 +187,10 @@ public:
                                      ObTableGroupCommitOps &group,
                                      ObTableGroupFactory<ObTableGroupCommitOps> *group_factory,
                                      ObTableGroupFactory<ObTableGroupCommitSingleOp> *op_factory);
+  static int generate_failed_results(int ret_code,
+                                     ObITableEntity &result_entity,
+                                     ObTableGroupCommitOps &group,
+                                     common::ObIArray<ObTableOperationResult> &results);
 private:
   static int start_trans(ObTableBatchCtx &batch_ctx);
   static int end_trans(const ObTableBatchCtx &batch_ctx,
@@ -194,18 +200,12 @@ private:
   static int init_batch_ctx(ObTableGroupCommitOps &group, ObTableBatchCtx &batch_ctx);
   static void free_ops(ObTableGroupCommitOps &group,
                        ObTableGroupFactory<ObTableGroupCommitSingleOp> &op_factory);
-  static int execute_read(const ObTableGroupCtx &ctx,
+  static int execute_read(ObTableGroupCtx &ctx,
                           ObTableGroupCommitOps &group,
-                          bool add_failed_group,
-                          bool &had_do_response);
-  static int execute_dml(const ObTableGroupCtx &ctx,
+                          bool add_failed_group);
+  static int execute_dml(ObTableGroupCtx &ctx,
                          ObTableGroupCommitOps &group,
-                         bool add_failed_group,
-                         bool &had_do_response);
-  static int generate_failed_results(int ret_code,
-                                     ObITableEntity &result_entity,
-                                     ObTableGroupCommitOps &group,
-                                     common::ObIArray<ObTableOperationResult> &results);
+                         bool add_failed_group);
 };
 
 } // end namespace table

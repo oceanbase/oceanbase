@@ -1074,6 +1074,7 @@
 # 12482: __all_virtual_tenant_resource_limit_detail
 # 12488: __all_virtual_scheduler_job_run_detail_v2
 # 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
+# 12493: __all_virtual_kv_group_commit_status
 # 12500: __all_virtual_kv_client_info
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
@@ -2139,6 +2140,8 @@
 # 21588: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 # 21589: DBA_SCHEDULER_JOB_RUN_DETAILS
 # 21590: CDB_SCHEDULER_JOB_RUN_DETAILS
+# 21601: GV$OB_KV_GROUP_COMMIT_STATUS
+# 21602: V$OB_KV_GROUP_COMMIT_STATUS
 # 21603: INNODB_SYS_FIELDS
 # 21604: INNODB_SYS_FOREIGN
 # 21605: INNODB_SYS_FOREIGN_COLS

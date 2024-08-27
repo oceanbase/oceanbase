@@ -352,7 +352,9 @@ struct ObTableOperationType
   };
   static bool is_group_support_type(ObTableOperationType::Type type)
   {
-    return type == PUT || type == GET;
+    return type == PUT || type == GET || type == INSERT ||
+        type == DEL || type == UPDATE || type == INSERT_OR_UPDATE ||
+        type == REPLACE || type == INCREMENT || type == APPEND;
   }
 };
 

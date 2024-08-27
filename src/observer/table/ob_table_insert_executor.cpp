@@ -129,8 +129,8 @@ int ObTableApiInsertExecutor::get_next_row()
 int ObTableApiInsertExecutor::process_single_operation(const ObTableEntity *entity)
 {
   int ret = OB_SUCCESS;
-
-  clear_evaluated_flag();
+  // clean all rt_exprs evaluated flag before each operation refresh value
+  clear_all_evaluated_flag();
   if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("entity is null", K(ret));
@@ -168,11 +168,23 @@ int ObTableApiInsertExecutor::get_next_row_from_child()
       }
     }
   } else { // batch operation
+    const ObIArray<ObTabletID> *tablet_ids = tb_ctx_.get_batch_tablet_ids();
     if (cur_idx_ >= ops->count()) {
       ret = OB_ITER_END;
     } else {
       const ObTableEntity *entity = static_cast<const ObTableEntity *>(&ops->at(cur_idx_).entity());
-      if (OB_FAIL(process_single_operation(entity))) {
+      if (OB_NOT_NULL(tablet_ids)) {
+        if (OB_UNLIKELY(tablet_ids->count() != ops->count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("use multi tablets batch but tablet ids is not equal to ops", K(tablet_ids->count()), K(ops->count()));
+        } else {
+          ObTabletID tablet_id= tablet_ids->at(cur_idx_);
+          tb_ctx_.set_tablet_id(tablet_id);
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(process_single_operation(entity))) {
         LOG_WARN("fail to process single insert operation", K(ret));
       }
     }

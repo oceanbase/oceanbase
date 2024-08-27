@@ -94,7 +94,6 @@ enable_dblink
 enable_ddl
 enable_early_lock_release
 enable_global_background_resource_isolation
-enable_kv_group_commit
 enable_kv_ttl
 enable_major_freeze
 enable_monotonic_weak_read
@@ -129,6 +128,8 @@ index_block_cache_priority
 internal_sql_execute_timeout
 job_queue_processes
 json_document_max_depth
+kv_group_commit_batch_size
+kv_group_commit_rw_mode
 kv_transport_compress_func
 kv_transport_compress_threshold
 kv_ttl_duty_duration

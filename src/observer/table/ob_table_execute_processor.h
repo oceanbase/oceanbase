@@ -50,7 +50,7 @@ protected:
   virtual bool is_kv_processor() override { return true; }
 private:
   int init_tb_ctx();
-  int init_group_ctx(table::ObTableGroupCtx &ctx);
+  int init_group_ctx(table::ObTableGroupCtx &ctx, share::ObLSID ls_id);
   ObTableProccessType get_stat_event_type();
   int check_arg2() const;
   int process_group_commit();

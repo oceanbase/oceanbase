@@ -85,10 +85,16 @@ private:
   int do_init_before_get_row();
   int prepare_scan_range();
   int prepare_das_task();
+  int prepare_batch_das_task();
   int do_table_scan();
   int get_next_row_with_das();
   int check_filter(bool &filter);
   int get_next_row_for_tsc();
+  bool has_das_scan_task(const ObDASTabletLoc *tablet_loc, ObDASScanOp *&das_op)
+  {
+    das_op = static_cast<ObDASScanOp*>(das_ref_.find_das_task( tablet_loc, DAS_OP_TABLE_SCAN));
+    return das_op != nullptr;
+  }
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableApiScanExecutor);
 };

@@ -1316,7 +1316,7 @@ int ObMultiTenant::update_tenant_config(uint64_t tenant_id)
       if (OB_TMP_FAIL(update_tenant_audit_log_config())) {
         LOG_WARN("failed to update tenant audit log config", K(tmp_ret), K(tenant_id));
       }
-      if (tenant_config->enable_kv_group_commit && OB_TMP_FAIL(start_kv_group_commit_timer())) {
+      if (tenant_config->kv_group_commit_batch_size > 1 && OB_TMP_FAIL(start_kv_group_commit_timer())) {
         LOG_WARN("failed to start kv group commit timer", K(tmp_ret), K(tenant_id));
       }
       if (OB_TMP_FAIL(update_throttle_config_(tenant_id))) {

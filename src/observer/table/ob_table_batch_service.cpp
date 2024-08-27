@@ -60,7 +60,8 @@ int ObTableBatchService::execute(ObTableBatchCtx &ctx)
       ret = batch_execute(ctx);
     }
   } else if (ctx.is_same_type_) {
-    ObTableOperationType::Type op_type = ctx.ops_->at(0).type();
+    ObTableOperationType::Type op_type = ctx.op_type_ == ObTableOperationType::INVALID ?
+                                    ctx.ops_->at(0).type() : ctx.op_type_;
     switch(op_type) {
       case ObTableOperationType::INSERT:
         *ctx.stat_event_type_ = ObTableProccessType::TABLE_API_MULTI_INSERT;
@@ -131,7 +132,7 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx, ObTableApiSp
   ObTableApiExecutor *executor = nullptr;
   const ObIArray<ObTableOperation> &ops = *ctx.ops_;
   tb_ctx.set_batch_operation(&ops);
-
+  tb_ctx.set_batch_tablet_ids(ctx.tablet_ids_);
   if (OB_FAIL(adjust_entities(ctx))) {
     LOG_WARN("fail to adjust entities", K(ret), K(ctx));
   } else if (OB_FAIL(spec.create_executor(tb_ctx, executor))) {
@@ -156,7 +157,7 @@ int ObTableBatchService::multi_op_in_executor(ObTableBatchCtx &ctx, ObTableApiSp
     } else if (!ctx.return_one_result_) {
       for (int64_t i = 0; i < ops.count() && OB_SUCC(ret); ++i) {
         op_result.set_err(ret);
-        op_result.set_type(tb_ctx.get_opertion_type());
+        op_result.set_type(ops.at(i).type());
         op_result.set_affected_rows(affected_rows);
         op_result.set_entity(*result_entity);
         if (OB_FAIL(ctx.results_->push_back(op_result))) {
@@ -248,25 +249,17 @@ int ObTableBatchService::multi_get_fuse_key_range(ObTableBatchCtx &ctx,
   } else if (OB_FAIL(ctx.results_->prepare_allocate(op_size))) {
     LOG_WARN("fail to prepare allocate results", K(ret), K(op_size));
   } else {
-    // 1. generate scan range with all rowkeys
-    // 2. init result with empty result entity
+    // init result with empty result entity
     ObITableEntity *result_entity = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < op_size; ++i) {
       const ObTableOperation &op = ops.at(i);
-      const ObITableEntity &entity = op.entity();
-      ObRowkey rowkey = entity.get_rowkey();
-      ObNewRange range;
-      if (OB_FAIL(range.build_range(tb_ctx.get_ref_table_id(), rowkey))) {
-        LOG_WARN("fail to build key range", K(ret), K(rowkey));
-      } else if (OB_FAIL(tb_ctx.get_key_ranges().push_back(range))) {
-        LOG_WARN("fail to push back key range", K(ret), K(range));
-      } else if (OB_ISNULL(result_entity = ctx.entity_factory_->alloc())) {
+      if (OB_ISNULL(result_entity = ctx.entity_factory_->alloc())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to alloc result entity", K(ret));
       } else {
         ObTableOperationResult op_result;
         op_result.set_err(OB_SUCCESS);
-        op_result.set_type(tb_ctx.get_opertion_type());
+        op_result.set_type(op.type());
         op_result.set_entity(result_entity);
         ctx.results_->at(i) = op_result;
       }
@@ -348,6 +341,8 @@ int ObTableBatchService::multi_get(ObTableBatchCtx &ctx)
   ObTableCtx &tb_ctx = ctx.tb_ctx_;
   tb_ctx.set_read_latest(false);
   tb_ctx.set_batch_operation(&ops);
+  tb_ctx.set_is_multi_tablet_get(true);
+  tb_ctx.set_batch_tablet_ids(ctx.tablet_ids_);
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
@@ -385,6 +380,11 @@ int ObTableBatchService::multi_insert(ObTableBatchCtx &ctx)
       LOG_WARN("fail to do multi operarion in executor", K(ret));
     }
   } else {
+    bool use_multi_tablets = ctx.tablet_ids_ == nullptr ? false : true;
+    if (use_multi_tablets && OB_UNLIKELY(ctx.tablet_ids_->count() != ctx.ops_->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablets id count is not equal to ops count", K(ctx.tablet_ids_->count()), K(ctx.ops_->count()));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx.ops_->count(); ++i) {
       const ObTableOperation &op = ctx.ops_->at(i);
       tb_ctx.set_entity(&op.entity());
@@ -396,6 +396,7 @@ int ObTableBatchService::multi_insert(ObTableBatchCtx &ctx)
       } else if (i > 0 && OB_FAIL(tb_ctx.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
         LOG_WARN("fail to adjust entity", K(ret));
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
+      } else if (use_multi_tablets && FALSE_IT(tb_ctx.set_tablet_id(ctx.tablet_ids_->at(i)))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
         ObTableApiUtil::replace_ret_code(ret);
@@ -447,6 +448,11 @@ int ObTableBatchService::multi_delete(ObTableBatchCtx &ctx)
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_DELETE>(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
+    bool use_multi_tablets = ctx.tablet_ids_ == nullptr ? false : true;
+    if (use_multi_tablets && OB_UNLIKELY(ctx.tablet_ids_->count() != ctx.ops_->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablets id count is not equal to ops count", K(ctx.tablet_ids_->count()), K(ctx.ops_->count()));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx.ops_->count(); ++i) {
       const ObTableOperation &op = ctx.ops_->at(i);
       tb_ctx.set_entity(&op.entity());
@@ -459,6 +465,7 @@ int ObTableBatchService::multi_delete(ObTableBatchCtx &ctx)
       } else if (i > 0 && OB_FAIL(tb_ctx.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
         LOG_WARN("fail to adjust entity", K(ret));
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
+      } else if (use_multi_tablets && FALSE_IT(tb_ctx.set_tablet_id(ctx.tablet_ids_->at(i)))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
         ObTableApiUtil::replace_ret_code(ret);
@@ -510,6 +517,11 @@ int ObTableBatchService::multi_replace(ObTableBatchCtx &ctx)
   } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_REPLACE>(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create spec", K(ret));
   } else {
+    bool use_multi_tablets = ctx.tablet_ids_ == nullptr ? false : true;
+    if (use_multi_tablets && OB_UNLIKELY(ctx.tablet_ids_->count() != ctx.ops_->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablets id count is not equal to ops count", K(ctx.tablet_ids_->count()), K(ctx.ops_->count()));
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx.ops_->count(); ++i) {
       const ObTableOperation &op = ctx.ops_->at(i);
       tb_ctx.set_entity(&op.entity());
@@ -521,6 +533,7 @@ int ObTableBatchService::multi_replace(ObTableBatchCtx &ctx)
       } else if (i > 0 && OB_FAIL(tb_ctx.adjust_entity())) { // first entity adjust in init_single_op_tb_ctx
         LOG_WARN("fail to adjust entity", K(ret));
       } else if (FALSE_IT(op_result.set_entity(*result_entity))) {
+      } else if (use_multi_tablets && FALSE_IT(tb_ctx.set_tablet_id(ctx.tablet_ids_->at(i)))) {
       } else if (OB_FAIL(ObTableOpWrapper::process_op_with_spec(tb_ctx, spec, op_result))) {
         LOG_WARN("fail to process insert with spec", K(ret), K(i));
         ObTableApiUtil::replace_ret_code(ret);
@@ -569,7 +582,7 @@ int ObTableBatchService::multi_put(ObTableBatchCtx &ctx)
 
   if (OB_FAIL(check_arg2(ctx.returning_rowkey_, ctx.returning_affected_entity_))) {
     LOG_WARN("fail to check arg", K(ret), K(ctx.returning_rowkey_), K(ctx.returning_affected_entity_));
-  } else if (OB_FAIL(ObTableOpWrapper::get_insert_spec(tb_ctx, cache_guard, spec))) {
+  } else if (OB_FAIL(ObTableOpWrapper::get_or_create_spec<TABLE_API_EXEC_INSERT>(tb_ctx, cache_guard, spec))) {
     LOG_WARN("fail to get or create insert spec", K(ret));
   } else if (ctx.is_atomic_) {
     if (OB_FAIL(multi_op_in_executor(ctx, *spec))) {
@@ -1175,7 +1188,13 @@ int ObTableBatchService::process_increment_or_append(ObTableCtx &tb_ctx, ObTable
 int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx)
 {
   int ret = OB_SUCCESS;
-
+  bool is_multi_tablets_batch = ctx.tablet_ids_ == nullptr ? false : true;
+  if (is_multi_tablets_batch) {
+    if (OB_UNLIKELY(ctx.tablet_ids_->count() != ctx.ops_->count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tablet ids count != ops count", K(ctx.tablet_ids_->count()), K(ctx.ops_->count()));
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && i < ctx.ops_->count(); ++i) {
     const ObTableOperation &op = ctx.ops_->at(i);
     ObTableOperationResult op_result;
@@ -1183,6 +1202,8 @@ int ObTableBatchService::batch_execute(ObTableBatchCtx &ctx)
     if (OB_ISNULL(result_entity)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc entity", K(ret));
+    } else if (is_multi_tablets_batch) {
+      ctx.tablet_id_ = ctx.tablet_ids_->at(i);
     }
 
     SMART_VAR(ObTableCtx, tb_ctx, ctx.allocator_) {

@@ -197,6 +197,7 @@ public:
 protected:
   virtual void set_req_has_wokenup() override;
   int64_t get_timeout_ts() const;
+  int64_t get_timeout() const;
   virtual uint64_t get_request_checksum() = 0;
 };
 
@@ -208,6 +209,16 @@ int64_t ObTableRpcProcessor<T>::get_timeout_ts() const
     ts = RpcProcessor::get_receive_timestamp() + RpcProcessor::rpc_pkt_->get_timeout();
   }
   return ts;
+}
+
+template<class T>
+int64_t ObTableRpcProcessor<T>::get_timeout() const
+{
+  int64_t timeout = 0;
+  if (NULL != RpcProcessor::rpc_pkt_) {
+    timeout = RpcProcessor::rpc_pkt_->get_timeout();
+  }
+  return timeout;
 }
 } // end namespace observer
 } // end namespace oceanbase

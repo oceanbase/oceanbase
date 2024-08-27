@@ -1147,11 +1147,12 @@ int ObTableCtx::init_insert()
   return init_dml_index_info();
 }
 
-int ObTableCtx::init_put()
+int ObTableCtx::init_put(bool allow_insup)
 {
   int ret = OB_SUCCESS;
 
-  if (ObTableOperationType::PUT != operation_type_) {
+  if (ObTableOperationType::PUT != operation_type_ &&
+      (allow_insup && ObTableOperationType::INSERT_OR_UPDATE != operation_type_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid operation type use put");
     LOG_WARN("invalid operation type", K(ret), K_(operation_type));
@@ -2070,45 +2071,67 @@ int ObTableCtx::get_related_tablet_id(const share::schema::ObTableSchema &index_
 int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
 {
   int ret = OB_SUCCESS;
-  use_put = false;
-  bool can_use_put = true;
-
-  if (is_inc_or_append()) { // increment or append operarion need old value to calculate, can not use put
-    can_use_put = false;
-  } else if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
+  if (ObTableOperationType::INSERT_OR_UPDATE != operation_type_) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid operation type", K(ret), K_(operation_type));
-  } else if (is_client_set_put_ && has_secondary_index()) {
+  } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema cache guard is NULL or not inited", K(ret), KP(schema_cache_guard_));
+  } else if (OB_FAIL(check_insert_up_can_use_put(*schema_cache_guard_,
+                                                 entity_,
+                                                 is_client_set_put_,
+                                                 is_htable(),
+                                                 is_total_quantity_log(),
+                                                 use_put))) {
+    LOG_WARN("fail to check insert up if can use put", K(ret));
+  }
+  return ret;
+}
+
+int ObTableCtx::check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_guard,
+                                            const ObITableEntity *entity,
+                                            bool is_client_set_put,
+                                            bool is_htable,
+                                            bool is_full_binlog_image,
+                                            bool &use_put)
+{
+  int ret = OB_SUCCESS;
+  use_put = false;
+  bool can_use_put = true;
+  ObTableSchemaFlags flags = schema_cache_guard.get_schema_flags();
+  bool has_secondary_index = flags.has_local_index_ || flags.has_global_index_;
+  bool has_lob_column = flags.has_lob_column_;
+  if (OB_ISNULL(entity)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("entity is NULL", K(ret));
+  } else if (is_client_set_put && has_secondary_index) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "table with index use put");
     LOG_WARN("client set use_put flag, but has local index is not support", K(ret));
-  } else if (has_secondary_index()) {
+  } else if (has_secondary_index) {
     /* has index, can not use put:
        for local/global index: insert a new row insert of covering the old row
        when the assign value of index column is new. */
     can_use_put = false;
-  } else if (has_lob_column()) {
+  } else if (has_lob_column) {
     // has lob column cannot use put: may cause lob storeage leak when put row to lob meta table
     can_use_put = false;
-  } else if (is_htable()) { // htable has no index and alway full filled.
+  } else if (is_htable) { // htable has no index and alway full filled.
     can_use_put = true;
-  } else if (OB_ISNULL(schema_cache_guard_) || !schema_cache_guard_->is_inited()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema cache guard is NULL or not init", K(ret));
   } else {
     bool is_all_columns_filled = false;
     int64_t column_count;
     int64_t rowkey_column_num;
-    if (OB_ISNULL(entity_)) {
+    if (OB_ISNULL(entity)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("entity is null", K(ret));
-    } else if (OB_FAIL(schema_cache_guard_->get_column_count(column_count))) {
+    } else if (OB_FAIL(schema_cache_guard.get_column_count(column_count))) {
       LOG_WARN("get column count failed", K(ret));
-    } else if (OB_FAIL(schema_cache_guard_->get_rowkey_column_num(rowkey_column_num))) {
+    } else if (OB_FAIL(schema_cache_guard.get_rowkey_column_num(rowkey_column_num))) {
       LOG_WARN("get rowkey column num failed", K(ret));
     } else if (FALSE_IT(is_all_columns_filled = column_count - rowkey_column_num <=
-                entity_->get_properties_count())) {  // all columns are filled
-    } else if (is_client_set_put_ || is_all_columns_filled) {
+                entity->get_properties_count())) {  // all columns are filled
+    } else if (is_client_set_put || is_all_columns_filled) {
       can_use_put = true;
     } else { // some columns are missing
       can_use_put = false;
@@ -2117,11 +2140,10 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
 
   if (OB_SUCC(ret) && can_use_put) {
     use_put = true;
-    if (!is_htable() && is_total_quantity_log()) { // tableapi with full binlog image can not use put
+    if (!is_htable && is_full_binlog_image) { // tableapi with full binlog image can not use put
       use_put = false;
     }
   }
-
   return ret;
 }
 

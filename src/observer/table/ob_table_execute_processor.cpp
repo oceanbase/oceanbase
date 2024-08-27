@@ -220,17 +220,8 @@ int ObTableApiExecuteP::before_process()
     is_group_trigger_ = true;
     audit_ctx_.need_audit_ = false; // no need audit when packet is group commit trigger packet
   } else {
-    // check group commit
-    ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-    if (tenant_config.is_valid()) {
-      if (tenant_config->enable_kv_group_commit) {
-        is_group_config_enable = true;
-      }
-    }
-
-    if (is_group_config_enable) {
+    if (ObTableGroupUtils::is_group_commit_config_enable(op_type)) {
       TABLEAPI_GROUP_COMMIT_MGR->get_ops_counter().inc(op_type); // statistics OPS
-      TABLEAPI_GROUP_COMMIT_MGR->set_queue_time(ObTimeUtility::fast_current_time() - get_enqueue_timestamp()); // statistics queue time
       if (!TABLEAPI_GROUP_COMMIT_MGR->is_group_commit_disable()) {
         is_group_commit_enable = true;
       }
@@ -247,12 +238,17 @@ int ObTableApiExecuteP::before_process()
         group_single_op_->op_.set_entity(group_single_op_->entity_);
         group_single_op_->req_ = req_;
         group_single_op_->timeout_ts_ = get_timeout_ts();
+        group_single_op_->timeout_ = get_timeout();
         is_group_commit_ = true;
       }
     }
   }
 
-  return ParentType::before_process();
+  if (OB_SUCC(ret)) {
+    ret = ParentType::before_process();
+  }
+
+  return ret;
 }
 
 int ObTableApiExecuteP::process()
@@ -262,13 +258,14 @@ int ObTableApiExecuteP::process()
   return ret;
 }
 
-int ObTableApiExecuteP::init_group_ctx(ObTableGroupCtx &ctx)
+int ObTableApiExecuteP::init_group_ctx(ObTableGroupCtx &ctx, ObLSID ls_id)
 {
   int ret = OB_SUCCESS;
 
+  ctx.is_get_ = (arg_.table_operation_.type() == ObTableOperationType::Type::GET);
+  ctx.ls_id_ = ls_id;
   ctx.entity_type_ = arg_.entity_type_;
   ctx.credential_ = credential_;
-  ctx.tablet_id_ = tablet_id_;
   ctx.timeout_ts_ = get_timeout_ts();
   ctx.trans_param_ = &trans_param_;
   ctx.schema_cache_guard_ = &schema_cache_guard_;
@@ -298,6 +295,9 @@ int ObTableApiExecuteP::process_group_commit()
   if (!tablet_id_.is_valid()) {
     tablet_id_ = simple_table_schema_->get_tablet_id();
   }
+  if (OB_NOT_NULL(group_single_op_)) {
+    group_single_op_->tablet_id_ = tablet_id_;
+  }
 
   if (OB_FAIL(GCTX.location_service_->get(tenant_id,
                                           tablet_id_,
@@ -310,16 +310,43 @@ int ObTableApiExecuteP::process_group_commit()
   } else if (OB_FAIL(schema_guard.get_schema_version(TABLE_SCHEMA, tenant_id, table_id_, schema_version))) {
     LOG_WARN("fail to get schema version", K(ret), K(tenant_id), K_(table_id));
   } else {
-    ObTableGroupCommitKey key(ls_id, tablet_id_, table_id_, schema_version, op.type());
+    ObTableGroupCommitKey key(ls_id, table_id_, schema_version, op.type());
     ObTableGroupCtx ctx;
+    bool is_insup_use_put = false;
+    int64_t binlog_row_image_type = ObBinlogRowImage::FULL;
     ctx.key_ = &key;
-    if (OB_FAIL(init_group_ctx(ctx))) {
-      LOG_WARN("fail to init group ctx", K(ret), K(ctx));
-    } else if (OB_FAIL(ObTableGroupService::process(ctx, group_single_op_))) {
-      LOG_WARN("fail to process group commit", K(ret), K(ctx), KPC_(group_single_op));
+    if (arg_.table_operation_.type() == ObTableOperationType::Type::INSERT_OR_UPDATE) {
+      if (OB_FAIL(sess_guard_.get_sess_info().get_binlog_row_image(binlog_row_image_type))) {
+        LOG_WARN("fail to get binlog row image", K(ret));
+      } else if (OB_FAIL(ObTableCtx::check_insert_up_can_use_put(schema_cache_guard_,
+                                                                &arg_.table_operation_.entity(),
+                                                                arg_.use_put(),
+                                                                arg_.entity_type_ == ObTableEntityType::ET_HKV,
+                                                                binlog_row_image_type == ObBinlogRowImage::FULL,
+                                                                is_insup_use_put))) {
+        LOG_WARN("fail to check insert up can use put", K(ret), K(arg_.use_put()),
+                K(arg_.entity_type_), K(binlog_row_image_type));
+      } else if (is_insup_use_put) {
+        group_single_op_->is_insup_use_put_ = is_insup_use_put;
+        key.is_insup_use_put_ = is_insup_use_put;
+        key.op_type_ = ObTableOperationType::Type::PUT;
+      }
     }
 
-    this->set_req_has_wokenup(); // do not response packet
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ctx.key_->init())) {
+      LOG_WARN("fail to init group commit key", K(ret));
+    } else if (OB_FAIL(init_group_ctx(ctx, ls_id))) {
+      LOG_WARN("fail to init group ctx", K(ret), K(ctx));
+    } else if (OB_FAIL(ObTableGroupService::process(ctx, group_single_op_))) {
+      LOG_WARN("fail to process group commit", K(ret)); // can not K(ctx) or KPC_(group_single_op), cause req may have been free
+    }
+
+    if (ctx.add_group_success_) {
+      this->set_req_has_wokenup(); // do not response packet
+    } else {
+      LOG_WARN("group commit op is not added success", K(ret), KPC(group_single_op_), K(ctx));
+    }
   }
 
   return ret;

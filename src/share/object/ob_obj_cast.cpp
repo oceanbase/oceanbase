@@ -12925,15 +12925,22 @@ int string_length_check_only(const ObAccuracy &accuracy, const ObCollationType c
   const ObLength max_len_char = accuracy.get_length();
   const char *str = obj.get_string_ptr();
   const int32_t str_len_byte = obj.get_string_len();
-  const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
   if (OB_UNLIKELY(max_len_char <= 0)) {
     if (OB_UNLIKELY(0 == max_len_char && str_len_byte > 0)) {
+      const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
       ret = OB_ERR_DATA_TOO_LONG;
       OB_LOG(WARN, "char type length is too long", K(obj), K(max_len_char), K(str_len_char));
     }
-  } else if (OB_UNLIKELY(str_len_char > max_len_char)) {
-    ret = OB_ERR_DATA_TOO_LONG;
-    LOG_WARN("string length is too long", K(max_len_char), K(str_len_char), K(obj));
+  } else {
+    if (str_len_byte <= max_len_char) {
+      // do nonthing
+    } else {
+      const int32_t str_len_char = static_cast<int32_t>(ObCharset::strlen_char(cs_type, str, str_len_byte));
+      if (OB_UNLIKELY(str_len_char > max_len_char)) {
+        ret = OB_ERR_DATA_TOO_LONG;
+        LOG_WARN("string length is too long", K(max_len_char), K(str_len_char), K(obj));
+      }
+    }
   }
   return ret;
 }

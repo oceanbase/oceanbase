@@ -13,6 +13,7 @@
 #ifndef OCEANBASE_OBSERVER_OB_TABLE_GROUP_SERVICE_H_
 #define OCEANBASE_OBSERVER_OB_TABLE_GROUP_SERVICE_H_
 
+#include <unordered_map>
 #include "ob_table_tenant_group.h"
 #include "ob_table_group_execute.h"
 #include "observer/table/ob_table_batch_service.h"
@@ -26,11 +27,13 @@ namespace table
 class ObTableGroupService final
 {
 public:
-  static int process(const ObTableGroupCtx &ctx, ObTableGroupCommitSingleOp *op);
+  static int process(ObTableGroupCtx &ctx, ObTableGroupCommitSingleOp *op);
   static int process_trigger();
+  static int process_one_by_one(ObTableGroupCommitOps &group);
 private:
   static int process_failed_group();
   static int process_other_group();
+  static int process_expired_group();
   static int check_legality(const ObTableGroupCtx &ctx);
   static int start_trans(ObTableBatchCtx &batch_ctx);
   static int end_trans(const ObTableBatchCtx &batch_ctx,

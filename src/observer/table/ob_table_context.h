@@ -214,6 +214,7 @@ public:
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     entity_ = nullptr;
     ops_ = nullptr;
+    batch_tablet_ids_ = nullptr;
     inc_append_stage_ = ObTableIncAppendStage::TABLE_INCR_APPEND_INVALID;
     return_affected_entity_ = false;
     return_rowkey_ = false;
@@ -226,6 +227,7 @@ public:
     is_tablegroup_req_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
+    is_multi_tablet_get_ = false;
     column_items_.set_attr(ObMemAttr(MTL_ID(), "KvColItm"));
     assigns_.set_attr(ObMemAttr(MTL_ID(), "KvAssigns"));
     select_exprs_.set_attr(ObMemAttr(MTL_ID(), "KvSelExprs"));
@@ -283,6 +285,7 @@ public:
     entity_type_ = ObTableEntityType::ET_DYNAMIC;
     entity_ = nullptr;
     ops_ = nullptr;
+    batch_tablet_ids_ = nullptr;
     inc_append_stage_ = ObTableIncAppendStage::TABLE_INCR_APPEND_INVALID;
     return_affected_entity_ = false;
     return_rowkey_ = false;
@@ -295,6 +298,7 @@ public:
     is_tablegroup_req_ = false;
     binlog_row_image_type_ = ObBinlogRowImage::FULL;
     is_full_table_scan_ = false;
+    is_multi_tablet_get_ = false;
     // others
     agg_cell_proj_.reset();
     all_exprs_.reuse();
@@ -354,7 +358,8 @@ public:
                K_(is_client_set_put),
                K_(binlog_row_image_type),
                K_(need_dist_das),
-               KPC_(credential));
+               KPC_(credential),
+               K_(is_multi_tablet_get));
 public:
   //////////////////////////////////////// getter ////////////////////////////////////////////////
   // for common
@@ -502,6 +507,8 @@ public:
   OB_INLINE ObTableIncAppendStage get_inc_append_stage() const { return inc_append_stage_; }
   OB_INLINE bool is_inc_append_update() const { return is_inc_or_append() && inc_append_stage_ == ObTableIncAppendStage::TABLE_INCR_APPEND_UPDATE; }
   OB_INLINE bool is_inc_append_insert() const { return is_inc_or_append() && inc_append_stage_ == ObTableIncAppendStage::TABLE_INCR_APPEND_INSERT; }
+  OB_INLINE const common::ObIArray<common::ObTabletID>* get_batch_tablet_ids() const { return batch_tablet_ids_; }
+  OB_INLINE bool is_multi_tablet_get() const { return is_multi_tablet_get_; }
   //////////////////////////////////////// setter ////////////////////////////////////////////////
   // for common
   OB_INLINE void set_init_flag(bool is_init) { is_init_ = is_init; }
@@ -514,6 +521,7 @@ public:
   OB_INLINE void set_schema_cache_guard(ObKvSchemaCacheGuard *schema_cache_guard) { schema_cache_guard_ = schema_cache_guard; }
   OB_INLINE void set_ls_id(share::ObLSID &ls_id) { ls_id_ = ls_id; }
   OB_INLINE void set_audit_ctx(ObTableAuditCtx *ctx) { audit_ctx_ = ctx; }
+  OB_INLINE void set_tablet_id(common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
   // for scan
   OB_INLINE void set_scan(const bool &is_scan) { is_scan_ = is_scan; }
   OB_INLINE void set_scan_order(const common::ObQueryFlag::ScanOrder scan_order) {  scan_order_ = scan_order; }
@@ -525,6 +533,8 @@ public:
   OB_INLINE void set_operation_type(const ObTableOperationType::Type op_type) { operation_type_ = op_type; }
   // for htable
   OB_INLINE void set_batch_operation(const ObIArray<table::ObTableOperation> *ops) { ops_ = ops; }
+  // for multi tablets batch
+  OB_INLINE void set_batch_tablet_ids(const ObIArray<common::ObTabletID> *tablet_ids) { batch_tablet_ids_ = tablet_ids; }
   // for auto inc
   OB_INLINE bool need_auto_inc_expr()
   {
@@ -561,6 +571,7 @@ public:
     inc_append_stage_ = inc_append_stage;
   }
   OB_INLINE void set_need_dist_das(bool need_dist_das) { need_dist_das_ = need_dist_das; }
+  OB_INLINE void set_is_multi_tablet_get(bool is_multi_tablet_get) { is_multi_tablet_get_ = is_multi_tablet_get; }
 public:
   // 基于 table name 初始化common部分(不包括expr_info_, exec_ctx_)
   int init_common(ObTableApiCredential &credential,
@@ -569,7 +580,7 @@ public:
   // 初始化 insert 相关
   int init_insert();
   // init put
-  int init_put();
+  int init_put(bool allow_insup = false);
   // 初始化scan相关(不包括表达分类)
   int init_scan(const ObTableQuery &query,
                 const bool &is_wead_read,
@@ -626,6 +637,12 @@ public:
   // read lob的allocator需要保证obj序列化到rpc buffer后才能析构
   static int read_real_lob(common::ObIAllocator &allocator, ObObj &obj);
   int adjust_entity();
+  static int check_insert_up_can_use_put(ObKvSchemaCacheGuard &schema_cache_guard,
+                                         const ObITableEntity *entity,
+                                         bool is_client_set_put,
+                                         bool is_htable,
+                                         bool is_full_binlog_image,
+                                         bool &use_put);
 private:
   // for scan
   int generate_column_infos(common::ObIArray<const ObTableColumnInfo*> &columns_infos);
@@ -732,6 +749,8 @@ private:
   ObTableIncAppendStage inc_append_stage_;
   bool return_affected_entity_;
   bool return_rowkey_;
+  // for multi tablets batch
+  const ObIArray<common::ObTabletID> *batch_tablet_ids_;
   // for dml
   bool is_for_insertup_;
   ObTableEntityType entity_type_;
@@ -761,6 +780,7 @@ private:
   bool need_dist_das_; // used for init das_ref
   ObTableApiCredential *credential_;
   ObTableAuditCtx *audit_ctx_;
+  bool is_multi_tablet_get_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTableCtx);
 };

@@ -912,6 +912,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigMigrationChooseSourceChecker);
 };
 
+class ObConfigKvGroupCommitRWModeChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigKvGroupCommitRWModeChecker() {}
+  virtual ~ObConfigKvGroupCommitRWModeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigKvGroupCommitRWModeChecker);
+};
+
 typedef __ObConfigContainer<ObConfigStringKey,
                             ObConfigItem, OB_MAX_CONFIG_NUMBER> ObConfigContainer;
 } // namespace common

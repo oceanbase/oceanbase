@@ -27,6 +27,8 @@ namespace oceanbase
 
 namespace table
 {
+
+class ObTableGroupCommitOps;
 typedef common::ObFixedArray<ObTableOperation, common::ObIAllocator> OpFixedArray;
 typedef common::ObFixedArray<ObTableOperationResult, common::ObIAllocator> ResultFixedArray;
 
@@ -35,31 +37,45 @@ struct ObTableGroupCommitSingleOp : public common::ObDLinkBase<ObTableGroupCommi
 public:
   ObTableGroupCommitSingleOp()
       : req_(nullptr),
-        timeout_ts_(0)
+        timeout_ts_(0),
+        timeout_(0),
+        tablet_id_(ObTabletID::INVALID_TABLET_ID),
+        is_insup_use_put_(false)
   {}
   virtual ~ObTableGroupCommitSingleOp() {}
   TO_STRING_KV(K_(entity),
                K_(op),
                KPC_(req),
-               K_(timeout_ts));
+               K_(timeout_ts),
+               K_(timeout),
+               K_(tablet_id),
+               K_(is_insup_use_put));
 public:
   OB_INLINE bool is_valid() const { return OB_NOT_NULL(req_) && timeout_ts_ != 0; }
+  OB_INLINE bool is_get() const { return op_.type() == ObTableOperationType::Type::GET; }
+  OB_INLINE bool is_insup_use_put() const { return is_insup_use_put_; }
   void reset()
   {
     entity_.reset();
     op_.reset();
     req_ = nullptr;
     timeout_ts_ = 0;
+    timeout_ = 0;
+    tablet_id_ = ObTabletID::INVALID_TABLET_ID;
+    is_insup_use_put_ = false;
   }
   void reuse()
   {
-   reset();
+    reset();
   }
 public:
   ObTableEntity entity_; // value is shaddow copy from rpc packet
   ObTableOperation op_; // single operation
   rpc::ObRequest *req_; // rpc request
   int64_t timeout_ts_;
+  int64_t timeout_;
+  ObTabletID tablet_id_;
+  bool is_insup_use_put_;
 };
 
 // @note thread-safe
@@ -151,26 +167,90 @@ void ObTableGroupFactory<T>::free_all()
 struct ObTableGroupCommitKey final
 {
 public:
-  explicit ObTableGroupCommitKey(share::ObLSID ls_id,
-                                 common::ObTabletID tablet_id,
-                                 common::ObTableID table_id,
-                                 int64_t schema_version,
-                                 ObTableOperationType::Type op_type);
+  ObTableGroupCommitKey(share::ObLSID ls_id,
+                      ObTableID table_id,
+                      int64_t schema_version,
+                      ObTableOperationType::Type op_type)
+    : is_inited_(false),
+      ls_id_(ls_id),
+      table_id_(table_id),
+      schema_version_(schema_version),
+      op_type_(op_type),
+      is_insup_use_put_(false),
+      is_fail_group_key_(false)
+  {}
+
+  ObTableGroupCommitKey()
+    : is_inited_(false),
+      ls_id_(),
+      table_id_(OB_INVALID_ID),
+      schema_version_(OB_INVALID_VERSION),
+      op_type_(ObTableOperationType::Type::INVALID),
+      is_insup_use_put_(false),
+      is_fail_group_key_(false)
+  {}
   virtual ~ObTableGroupCommitKey() {}
-  TO_STRING_KV(K_(ls_id),
-               K_(tablet_id),
+  int init();
+  TO_STRING_KV(K_(is_inited),
+               K_(ls_id),
                K_(table_id),
                K_(schema_version),
                K_(op_type),
-               K_(hash));
+               K_(hash),
+               K_(is_insup_use_put),
+               K_(is_fail_group_key));
 public:
+  bool is_inited_;
   share::ObLSID ls_id_;
-  common::ObTabletID tablet_id_;
   common::ObTableID table_id_;
   int64_t schema_version_;
   ObTableOperationType::Type op_type_;
+  bool is_insup_use_put_;  // just for marked the source op_type
+  bool is_fail_group_key_;
   uint64_t hash_;
   DISALLOW_COPY_AND_ASSIGN(ObTableGroupCommitKey);
+};
+
+struct ObTableGroupMeta final
+{
+public:
+  ObTableGroupMeta()
+  {
+    reset();
+  }
+  virtual ~ObTableGroupMeta() = default;
+  TO_STRING_KV(K_(is_inited),
+               K_(is_get),
+               K_(is_same_type),
+               K_(credential),
+               K_(ls_id),
+               K_(table_id),
+               K_(entity_type));
+public:
+  int init(bool is_get,
+           bool is_same_type,
+           const ObTableApiCredential &credential,
+           const share::ObLSID &ls_id,
+           uint64_t table_id,
+           ObTableEntityType entity_type);
+  int init(const ObTableGroupMeta &other);
+  void reset()
+  {
+    is_inited_ = false;
+    is_get_ = false;
+    is_same_type_ = true;
+    ls_id_.reset();
+    table_id_ = common::OB_INVALID_ID;
+    entity_type_ = ObTableEntityType::ET_DYNAMIC;
+  }
+public:
+  bool is_inited_;
+  bool is_get_;
+  bool is_same_type_;
+  ObTableApiCredential credential_;
+  share::ObLSID ls_id_;
+  uint64_t table_id_;
+  ObTableEntityType entity_type_;
 };
 
 struct ObTableGroupCommitOps : public common::ObDLinkBase<ObTableGroupCommitOps>
@@ -179,72 +259,86 @@ public:
   static const int64_t DEFAULT_OP_SIZE = 200;
   ObTableGroupCommitOps()
   {
+    ops_.set_attr(ObMemAttr(MTL_ID(), "KvTbGroup"));
     reset();
   }
   virtual ~ObTableGroupCommitOps() = default;
   TO_STRING_KV(K_(is_inited),
-               K_(credential),
-               K_(ls_id),
-               K_(table_id),
-               K_(tablet_id),
-               K_(entity_type),
+               K_(meta),
                K_(timeout),
                K_(timeout_ts),
-               K_(ops));
+               K_(ops),
+               K_(tablet_ids));
 public:
   void reset()
   {
     is_inited_ = false;
-    ls_id_ = share::ObLSID::INVALID_LS_ID;
-    table_id_ = common::OB_INVALID_ID;
-    tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
-    entity_type_ = ObTableEntityType::ET_DYNAMIC;
+    meta_.reset();
     timeout_ = 0;
     timeout_ts_ = INT64_MAX;
     ops_.reset();
-    ops_.set_attr(ObMemAttr(MTL_ID(), "KvTbGroup"));
+    tablet_ids_.reset();
   }
   void reuse()
   {
-    ls_id_ = share::ObLSID::INVALID_LS_ID;
-    table_id_ = common::OB_INVALID_ID;
-    tablet_id_ = common::ObTabletID::INVALID_TABLET_ID;
-    entity_type_ = ObTableEntityType::ET_DYNAMIC;
+    is_inited_ = false;
+    meta_.reset();
     timeout_ = 0;
     timeout_ts_ = INT64_MAX;
     ops_.reuse();
+    tablet_ids_.reuse();
   }
-  int init(ObTableApiCredential credential,
-           const share::ObLSID &ls_id,
-           uint64_t table_id,
-           common::ObTabletID tablet_id,
-           ObTableEntityType entity_type,
+  int init(const ObTableGroupMeta &meta, ObIArray<ObTableGroupCommitSingleOp *> &ops);
+  int init(const ObTableGroupMeta &meta,
+           ObTableGroupCommitSingleOp *op,
+           int64_t timeout,
            int64_t timeout_ts);
-  int add_op(ObTableGroupCommitSingleOp *op);
-  OB_INLINE bool need_execute(int64_t execute_size)
-  {
-    return ((execute_size != 0) && ops_.count() >= execute_size) || is_timeout();
-  }
-
-  OB_INLINE bool is_timeout() const
-  {
-    return ObTimeUtility::fast_current_time() - timeout_ts_ >= 0;
-  }
-  OB_INLINE bool is_get() const
-  {
-    return !ops_.empty() && ops_.at(0)->op_.type() == ObTableOperationType::Type::GET;
-  }
+  OB_INLINE bool is_get() const { return meta_.is_get_; }
+  OB_INLINE bool is_same_type() const { return meta_.is_same_type_; }
   int get_ops(common::ObIArray<ObTableOperation> &ops);
 public:
   bool is_inited_;
-  ObTableApiCredential credential_; // for session info
-  share::ObLSID ls_id_;
-  uint64_t table_id_;
-  common::ObTabletID tablet_id_;
-  ObTableEntityType entity_type_;
-  int64_t timeout_; // use in execute failed or timeout group
+  ObTableGroupMeta meta_;
+  int64_t timeout_;
   int64_t timeout_ts_;
   common::ObSEArray<ObTableGroupCommitSingleOp *, DEFAULT_OP_SIZE> ops_;
+  common::ObSEArray<ObTabletID, DEFAULT_OP_SIZE> tablet_ids_;
+};
+
+struct ObTableLsGroup final
+{
+public:
+  int64_t MAX_SLOT_SIZE = 30000;
+  int8_t EXECUTABLE_BATCH_SIZE_FACTOR = 2;
+public:
+  ObTableLsGroup()
+      : is_inited_(false),
+        last_active_ts_(0),
+        allocator_("TbLsGroup", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+        queue_()
+  {}
+  virtual ~ObTableLsGroup()
+  {
+    queue_.destroy();
+    allocator_.reset();
+  }
+  TO_STRING_KV(K_(is_inited), K_(last_active_ts), K_(meta));
+public:
+  int init(const ObTableApiCredential &credential,
+           const share::ObLSID &ls_id,
+           uint64_t table_id,
+           ObTableEntityType entity_type,
+           ObTableOperationType::Type op_type);
+  int get_executable_batch(int64_t batch_size, ObIArray<ObTableGroupCommitSingleOp*> &batch_ops, bool check_queue_size = true);
+  int add_op_to_queue(ObTableGroupCommitSingleOp *op, bool &add_op_success);
+  bool has_executable_ops() { return queue_.get_curr_total() > 0;}
+  int64_t get_queue_size() { return queue_.get_curr_total(); }
+public:
+  bool is_inited_;
+  int64_t last_active_ts_;
+  ObArenaAllocator allocator_;
+  ObTableGroupMeta meta_;
+  ObFixedQueue<ObTableGroupCommitSingleOp> queue_;
 };
 
 typedef ObTableOperationResult ObTableGroupTriggerResult;
@@ -304,6 +398,99 @@ private:
   common::ObList<ObTableGroupCommitOps*, common::ObIAllocator> failed_ops_;
 };
 
+class ObTableExpiredGroups final
+{
+public:
+  static const int64_t DEFAULT_EXPIRED_LS_GROUP_SIZE = 100;
+   ObTableExpiredGroups()
+      : is_inited_(false),
+        allocator_(MTL_ID()),
+        expired_groups_(allocator_),
+        clean_groups_(allocator_)
+  {}
+  virtual ~ObTableExpiredGroups() {}
+  TO_STRING_KV(K_(expired_groups), K_(clean_groups));
+public:
+  OB_INLINE int init()
+  {
+    int ret = OB_SUCCESS;
+    const ObMemAttr attr(MTL_ID(), "TbGrpExpAlloc");
+    if (is_inited_) {
+      ret = OB_INIT_TWICE;
+      COMMON_LOG(WARN, "init twice", K(ret));
+    } else if (OB_FAIL(allocator_.init(ObMallocAllocator::get_instance(), OB_MALLOC_MIDDLE_BLOCK_SIZE, attr))) {
+      COMMON_LOG(WARN, "fail to init allocator", K(ret));
+    } else {
+      is_inited_ = true;
+    }
+    return ret;
+  }
+
+  OB_INLINE bool is_groups_empty() const { return expired_groups_.empty() && clean_groups_.empty(); }
+
+  OB_INLINE int add_expired_group(ObTableLsGroup *ls_group)
+  {
+    int ret = OB_SUCCESS;
+    ObLockGuard<ObSpinLock> guard(lock_);
+    if (!is_inited_) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG(WARN, "ObTableExpiredGroups not inited", K(ret));
+    } else if (OB_FAIL(expired_groups_.push_back(ls_group))) {
+      COMMON_LOG(WARN, "fail to push back ls group", K(ret));
+    }
+    return ret;
+  }
+
+  OB_INLINE int add_clean_group(ObTableLsGroup *ls_group)
+  {
+    int ret = OB_SUCCESS;
+    ObLockGuard<ObSpinLock> guard(lock_);
+    if (!is_inited_) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG(WARN, "ObTableExpiredGroups not inited", K(ret));
+    } else if (OB_FAIL(clean_groups_.push_back(ls_group))) {
+      COMMON_LOG(WARN, "fail to push back ls group", K(ret));
+    }
+    return ret;
+  }
+
+  OB_INLINE int pop_expired_group(ObTableLsGroup *&ls_group)
+  {
+    int ret = OB_SUCCESS;
+    ObLockGuard<ObSpinLock> guard(lock_);
+    if (!is_inited_) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG(WARN, "ObTableExpiredGroups not inited", K(ret));
+    } else if (OB_FAIL(expired_groups_.pop_front(ls_group))) {
+      COMMON_LOG(WARN, "fail to pop front group", K(ret));
+    }
+    return ret;
+  }
+
+  OB_INLINE int pop_clean_group(ObTableLsGroup *&ls_group)
+  {
+    int ret = OB_SUCCESS;
+    ObLockGuard<ObSpinLock> guard(lock_);
+    if (!is_inited_) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG(WARN, "ObTableExpiredGroups not inited", K(ret));
+    } else if (OB_FAIL(clean_groups_.pop_front(ls_group))) {
+      COMMON_LOG(WARN, "fail to pop front group", K(ret));
+    }
+    return ret;
+  }
+
+  OB_INLINE int64_t get_clean_group_counts() const { return clean_groups_.size(); }
+  OB_INLINE const common::ObList<ObTableLsGroup *, common::ObIAllocator>& get_expired_groups() const { return expired_groups_; }
+  OB_INLINE const common::ObList<ObTableLsGroup *, common::ObIAllocator>& get_clean_groups() const { return clean_groups_; }
+private:
+  bool is_inited_;
+  common::ObSpinLock lock_;
+  common::ObFIFOAllocator allocator_;
+  common::ObList<ObTableLsGroup *, common::ObIAllocator> expired_groups_; // store the expired ls_group moved from group map
+  common::ObList<ObTableLsGroup *, common::ObIAllocator> clean_groups_; // store the ls_group ready to clean, moved from expired_groups_
+};
+
 class ObTableGroupUtils final
 {
 public:
@@ -315,6 +502,30 @@ public:
                                      ObKvSchemaCacheGuard &cache_guard,
                                      const share::schema::ObSimpleTableSchemaV2 *&simple_schema);
   static int trigger(const ObTableGroupTriggerRequest &request);
+  OB_INLINE static bool is_hybird_op(ObTableOperationType::Type op_type)
+  {
+    return op_type == ObTableOperationType::Type::UPDATE ||
+      op_type == ObTableOperationType::Type::INSERT_OR_UPDATE ||
+      op_type == ObTableOperationType::Type::INCREMENT ||
+      op_type == ObTableOperationType::Type::APPEND;
+  }
+  OB_INLINE static bool is_write_op(ObTableOperationType::Type type) {
+    return type == ObTableOperationType::Type::PUT ||
+           type == ObTableOperationType::Type::INSERT ||
+           type == ObTableOperationType::Type::INSERT_OR_UPDATE ||
+           type == ObTableOperationType::Type::UPDATE ||
+           type == ObTableOperationType::Type::DEL ||
+           type == ObTableOperationType::Type::REPLACE ||
+           type == ObTableOperationType::Type::INCREMENT ||
+           type == ObTableOperationType::Type::APPEND;
+  }
+  OB_INLINE static bool is_read_op(ObTableOperationType::Type type) {
+    return type == ObTableOperationType::Type::GET;
+  }
+  // only judge by config: kv_group_commit_batch_size
+  static bool is_group_commit_config_enable();
+  // judge by config: kv_group_commit_batch_size && kv_group_commit_rw_mode
+  static bool is_group_commit_config_enable(ObTableOperationType::Type op_type);
 };
 
 template <typename T>
@@ -367,32 +578,87 @@ class ObTableGroupOpsCounter
 {
 public:
   ObTableGroupOpsCounter()
-      : get_ops_(0),
-        put_ops_(0)
+      : read_ops_(0),
+        write_ops_(0)
   {}
   ~ObTableGroupOpsCounter() = default;
-  TO_STRING_KV(K_(get_ops),
-               K_(put_ops));
+  TO_STRING_KV(K_(read_ops),
+               K_(write_ops));
 public:
   OB_INLINE void inc(ObTableOperationType::Type type)
   {
-    if (type == ObTableOperationType::Type::PUT) {
-      ATOMIC_INC(&put_ops_);
-    } else if (type == ObTableOperationType::Type::GET) {
-      ATOMIC_INC(&get_ops_);
+    if (ObTableGroupUtils::is_write_op(type)) {
+      ATOMIC_INC(&write_ops_);
+    } else if (ObTableGroupUtils::is_read_op(type)) {
+      ATOMIC_INC(&read_ops_);
     }
   }
-  OB_INLINE int64_t get_ops() const { return ATOMIC_LOAD(&get_ops_) + ATOMIC_LOAD(&put_ops_); }
-  OB_INLINE int64_t get_get_op_ops() const { return ATOMIC_LOAD(&get_ops_); }
-  OB_INLINE int64_t get_put_op_ops() const { return ATOMIC_LOAD(&put_ops_); }
+  OB_INLINE int64_t get_ops() const { return ATOMIC_LOAD(&read_ops_) + ATOMIC_LOAD(&write_ops_); }
+  OB_INLINE int64_t get_read_ops() const { return ATOMIC_LOAD(&read_ops_); }
+  OB_INLINE int64_t get_write_ops() const { return ATOMIC_LOAD(&write_ops_); }
   OB_INLINE void reset_ops()
   {
-    ATOMIC_STORE(&get_ops_, 0);
-    ATOMIC_STORE(&put_ops_, 0);
+    ATOMIC_STORE(&read_ops_, 0);
+    ATOMIC_STORE(&write_ops_, 0);
   }
 private:
-  int64_t get_ops_;
-  int64_t put_ops_;
+  int64_t read_ops_;
+  int64_t write_ops_;
+};
+
+struct ObTableLsGroupInfo final
+{
+public:
+  enum GroupType: uint8_t {
+    GET = 0,
+    PUT,
+    DEL,
+    REPLACE,
+    INSERT,
+    HYBIRD,
+    FAIL,
+    INVALID
+  };
+public:
+  ObTableLsGroupInfo()
+    : client_addr_(),
+      tenant_id_(OB_INVALID_TENANT_ID),
+      table_id_(OB_INVALID_ID),
+      group_type_(GroupType::INVALID),
+      ls_id_(),
+      schema_version_(OB_INVALID_VERSION),
+      queue_size_(-1),
+      batch_size_(-1),
+      gmt_created_(0),
+      gmt_modified_(0)
+  {}
+  ~ObTableLsGroupInfo() {}
+  int init(ObTableGroupCommitKey &commit_key);
+  bool is_read_group() { return group_type_ == GroupType::GET; }
+  bool is_fail_group() { return group_type_ == GroupType::FAIL; }
+  bool is_normal_group() { return group_type_ != GroupType::INVALID && group_type_ != GroupType::FAIL; }
+  const char* get_group_type_str();
+  TO_STRING_KV(K_(client_addr),
+              K_(tenant_id),
+              K_(table_id),
+              K_(schema_version),
+              K_(table_id),
+              K_(ls_id),
+              K_(queue_size),
+              K_(batch_size),
+              K_(gmt_created),
+              K_(gmt_modified));
+public:
+  common::ObAddr client_addr_;
+  int64_t tenant_id_;
+  common::ObTableID table_id_;
+  GroupType group_type_;
+  share::ObLSID ls_id_;
+  int64_t schema_version_;
+  int64_t queue_size_;
+  int64_t batch_size_;
+  int64_t gmt_created_;
+  int64_t gmt_modified_;
 };
 
 } // end namespace table

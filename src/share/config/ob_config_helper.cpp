@@ -1436,5 +1436,13 @@ bool ObConfigArchiveLagTargetChecker::check(const uint64_t tenant_id, const ObAd
   return is_valid;
 }
 
+bool ObConfigKvGroupCommitRWModeChecker::check(const ObConfigItem &t) const
+{
+  ObString v_str(t.str());
+  return 0 == v_str.case_compare("all")
+    || 0 == v_str.case_compare("read")
+    || 0 == v_str.case_compare("write");
+}
+
 } // end of namepace common
 } // end of namespace oceanbase
