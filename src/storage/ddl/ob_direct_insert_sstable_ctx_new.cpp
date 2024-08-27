@@ -1801,28 +1801,32 @@ int ObTabletDirectLoadMgr::notify_all()
 struct CSSliceEndkeyCompareFunctor
 {
 public:
-  CSSliceEndkeyCompareFunctor(const ObStorageDatumUtils &datum_utils) : datum_utils_(datum_utils), ret_code_(OB_SUCCESS) {}
+  CSSliceEndkeyCompareFunctor(const ObStorageDatumUtils &datum_utils, int &ret_code) : datum_utils_(datum_utils), ret_code_(ret_code) {}
   bool operator ()(const ObDirectLoadSliceWriter *left, const ObDirectLoadSliceWriter *right)
   {
     bool bret = false;
     int ret = ret_code_;
     if (OB_FAIL(ret)) {
-    } else if (OB_ISNULL(left) || OB_ISNULL(right) || !left->need_column_store()
-               || !right->need_column_store() || left->get_writer_type() != right->get_writer_type()) {
+    } else if (OB_ISNULL(left) || OB_ISNULL(right)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), KPC(left), KPC(right));
     } else if (!left->is_empty() && !right->is_empty()) {
-      const ObChunkSliceStore *left_slice_store = left->is_cs_replica_write()
-                                                  ? static_cast<const ObMultiSliceStore *>(left->get_slice_store())->get_column_slice_store()
-                                                  : static_cast<const ObChunkSliceStore *>(left->get_slice_store());
-      const ObChunkSliceStore *right_slice_store = right->is_cs_replica_write()
-                                                  ? static_cast<const ObMultiSliceStore *>(right->get_slice_store())->get_column_slice_store()
-                                                  : static_cast<const ObChunkSliceStore *>(right->get_slice_store());
-      int cmp_ret = 0;
-      if (OB_FAIL(left_slice_store->endkey_.compare(right_slice_store->endkey_, datum_utils_, cmp_ret))) {
-        LOG_WARN("endkey compare failed", K(ret));
+      if (!left->need_column_store() || !right->need_column_store() || left->get_writer_type() != right->get_writer_type()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid cs slice writer", K(ret), KPC(left), KPC(right));
       } else {
-        bret = cmp_ret < 0;
+        const ObChunkSliceStore *left_slice_store = left->is_cs_replica_write()
+                                                    ? static_cast<const ObMultiSliceStore *>(left->get_slice_store())->get_column_slice_store()
+                                                    : static_cast<const ObChunkSliceStore *>(left->get_slice_store());
+        const ObChunkSliceStore *right_slice_store = right->is_cs_replica_write()
+                                                    ? static_cast<const ObMultiSliceStore *>(right->get_slice_store())->get_column_slice_store()
+                                                    : static_cast<const ObChunkSliceStore *>(right->get_slice_store());
+        int cmp_ret = 0;
+        if (OB_FAIL(left_slice_store->endkey_.compare(right_slice_store->endkey_, datum_utils_, cmp_ret))) {
+          LOG_WARN("endkey compare failed", K(ret));
+        } else {
+          bret = cmp_ret < 0;
+        }
       }
     } else if (left->is_empty() && right->is_empty()) {
       // both empty, compare pointer
@@ -1836,7 +1840,7 @@ public:
   }
 public:
   const ObStorageDatumUtils &datum_utils_;
-  int ret_code_;
+  int &ret_code_; // is not use reference, the ret_code_ will lose when use ob_sort
 };
 
 int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
@@ -1874,9 +1878,8 @@ int ObTabletDirectLoadMgr::calc_range(const int64_t thread_cnt)
       }
     }
     if (OB_SUCC(ret)) {
-      CSSliceEndkeyCompareFunctor cmp(tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils());
+      CSSliceEndkeyCompareFunctor cmp(tablet_handle.get_obj()->get_rowkey_read_info().get_datum_utils(), ret);
       lib::ob_sort(sorted_slices.begin(), sorted_slices.end(), cmp);
-      ret = cmp.ret_code_;
       if (OB_FAIL(ret)) {
         LOG_WARN("sort slice failed", K(ret), K(sorted_slices));
       }

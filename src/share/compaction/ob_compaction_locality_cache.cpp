@@ -174,6 +174,52 @@ int ObLSColumnReplicaCache::add_cs_replica(const ObLSReplicaUniItem &ls_item)
   return ret;
 }
 
+int ObLSColumnReplicaCache::assign(const ObLSColumnReplicaCache &other)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_FAIL(other.deep_fetch(ls_id_set_, ls_replica_set_, ls_infos_))) {
+    LOG_WARN("fail to assign", K(ret), K(other));
+  }
+  return ret;
+}
+
+int ObLSColumnReplicaCache::deep_fetch(
+    hash::ObHashSet<ObLSID> &target_ls_id_set,
+    hash::ObHashSet<ObLSReplicaUniItem> &target_ls_replica_set,
+    common::ObIArray<ObLSInfo> &target_ls_infos) const
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else {
+    target_ls_id_set.reuse();
+    target_ls_replica_set.reuse();
+    target_ls_infos.reuse();
+
+    for (hash::ObHashSet<ObLSID>::const_iterator it = ls_id_set_.begin(); OB_SUCC(ret) && it != ls_id_set_.end(); ++it) {
+      if (OB_FAIL(target_ls_id_set.set_refactored(it->first))) {
+        LOG_WARN("fail to add ls id", K(ret));
+      }
+    }
+    for (hash::ObHashSet<ObLSReplicaUniItem>::const_iterator it = ls_replica_set_.begin(); OB_SUCC(ret) && it != ls_replica_set_.end(); ++it) {
+      if (OB_FAIL(target_ls_replica_set.set_refactored(it->first))) {
+        LOG_WARN("fail to add ls replica", K(ret));
+      }
+    }
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < ls_infos_.count(); ++idx) {
+      if (OB_FAIL(target_ls_infos.push_back(ls_infos_.at(idx)))) {
+        LOG_WARN("fail to push back ls info", K(ret), K(idx), K_(ls_infos));
+      }
+    }
+  }
+  return ret;
+}
+
+
 int ObLSColumnReplicaCache::update(const ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
