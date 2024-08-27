@@ -641,6 +641,8 @@ public:
   void set_log_level(const int32_t level, int64_t version = 0)
   {set_log_level(static_cast<int8_t>(level), version);}
   void set_log_level(const int8_t level, int64_t version = 0);
+  void set_alert_log_level(const char *level, int64_t version = 0);
+  void set_alert_log_level(const int8_t level, int64_t version = 0);
   int set_mod_log_levels(const char* level_str, int64_t version = 0);
 
   void down_log_level(int64_t version = 0) {set_log_level(id_level_map_.get_level() + 1, version);}
@@ -656,7 +658,7 @@ public:
   void disable_thread_log_level() { disable_thread_log_level_ = true; }
 
   //@brief Get the int8_t type representing the level in string.
-  int level_str2int(const char *level_name, int8_t &level_int);
+  int level_str2int(const char *level_name, int8_t &level_int, bool is_alert_log = false);
 
   int parse_check(const char *str, const int32_t str_length);
   int parse_check_alert(const char *str, const int32_t str_length);

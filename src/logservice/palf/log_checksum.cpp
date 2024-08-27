@@ -101,6 +101,7 @@ int LogChecksum::verify_accum_checksum(const int64_t old_accum_checksum,
     ret = common::OB_CHECKSUM_ERROR;
     LOG_DBA_ERROR(OB_CHECKSUM_ERROR, "msg", "log checksum error", "ret", ret, K(data_checksum),
         K(expected_accum_checksum), K(old_accum_checksum), K(new_accum_checksum));
+    LOG_DBA_ERROR_V2(OB_LOG_CHECKSUM_MISMATCH, ret, "log checksum error");
   } else {
     PALF_LOG(TRACE, "verify_accum_checksum success", K(ret), K(data_checksum),
         K(expected_accum_checksum), K(old_accum_checksum), K(new_accum_checksum));

@@ -183,7 +183,17 @@ int ObTabletAutoincMgr::fetch_new_range(const ObTabletAutoincParam &param,
         LOG_WARN("failed to get autoinc cache", K(ret));
       } else if (tablet_id.is_user_normal_rowid_table_tablet() && node.cache_end_ > OB_MAX_AUTOINC_SEQ_VALUE) {
         ret = OB_HEAP_TABLE_EXAUSTED;
-        LOG_DBA_ERROR(OB_HEAP_TABLE_EXAUSTED, "msg", "The hidden primary key sequence has exhausted", K(tablet_id), "current_seq", node.cache_end_);
+        LOG_DBA_ERROR_V2(OB_SHARE_PRIMARY_KEY_SEQUENCE_EXHAUSTED, OB_HEAP_TABLE_EXAUSTED,
+                         "The hidden primary key sequence has exhausted. ",
+                         "tablet_id is ", tablet_id.id(), " and current_seq is ", node.cache_end_, ". ",
+                         "[suggestion] If you need a larger key range, ",
+                         "you can connect cluster by current tenant and execute sql command: ",
+                         "alter table {database_name}.{table_name} set enable_extended_rowid = true; ",
+                         "If you don't know the {database_name} or {table_name}, you can get them by executing sql command: ",
+                         "(Mysql mode): ",
+                         "select distinct database_name, table_name from oceanbase.DBA_OB_TABLE_LOCATIONS where tablet_id = ", tablet_id.id(), "; ",
+                         "(Oracle mode): ",
+                         "select distinct database_name, table_name from sys.DBA_OB_TABLE_LOCATIONS where tablet_id = ", tablet_id.id(), "; ");
         LOG_WARN("tablet autoinc seq has reached max", K(ret), K(node));
       } else {
         LOG_INFO("fetch new range success", K(tablet_id), K(node));

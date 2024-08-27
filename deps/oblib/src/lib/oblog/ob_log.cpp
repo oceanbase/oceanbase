@@ -587,6 +587,28 @@ void ObLogger::set_log_level(const int8_t level, int64_t version)
   update_easy_log_level();
 }
 
+void ObLogger::set_alert_log_level(const char *level, int64_t version)
+{
+  int ret = OB_SUCCESS;
+  if (check_and_set_level_version(version)) {
+    if (NULL != level) {
+      int8_t level_int = OB_LOG_LEVEL_INFO;
+      if (OB_SUCC(level_str2int(level, level_int))) {
+        set_log_level(level_int);
+      }
+    }
+  }
+}
+
+void ObLogger::set_alert_log_level(const int8_t level, int64_t version)
+{
+  if (check_and_set_level_version(version)) {
+    if (level >= OB_LOG_LEVEL_DBA_ERROR && level < OB_LOG_LEVEL_DBA_INFO) {
+      alert_log_level_ = level;
+    }
+  }
+}
+
 void ObLogger::set_file_name(const char *filename,
                              const bool no_redirect_flag,
                              const bool open_wf,
@@ -1130,7 +1152,7 @@ int ObLogger::parse_check_alert(const char *str, const int32_t str_length)
     } else {
       str_copy_trim(buffer, OB_MAX_CONFIG_VALUE_LEN, str, str_length);
       int8_t level_int = 0;
-      if (OB_FAIL(level_str2int(buffer, level_int))) {
+      if (OB_FAIL(level_str2int(buffer, level_int, true))) {
         OB_LOG(WARN, "failed to get level_int", KCSTRING(buffer), K(str_length), K(ret));
       } else if (level_int >= OB_LOG_LEVEL_DBA_ERROR && level_int <= OB_LOG_LEVEL_DBA_INFO) {
         alert_log_level_ = level_int;
@@ -1234,7 +1256,7 @@ int ObLogger::get_mod_set(const char *par_mod, const char *sub_mod, const char *
   return ret;
 }
 
-int ObLogger::level_str2int(const char *level_name, int8_t &level_int)
+int ObLogger::level_str2int(const char *level_name, int8_t &level_int, bool is_alert_log)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(level_name)) {
@@ -1252,7 +1274,7 @@ int ObLogger::level_str2int(const char *level_name, int8_t &level_int)
     if (!find_level) {
       ret = OB_LOG_LEVEL_INVALID;
       LOG_WARN("Invalid log level", K(ret));
-    } else if (OB_LOG_LEVEL_INFO == level_int && info_as_wdiag_) {
+    } else if (OB_LOG_LEVEL_INFO == level_int && info_as_wdiag_ && !is_alert_log) {
       level_int = OB_LOG_LEVEL_WARN;
     }
   }
@@ -1983,8 +2005,10 @@ void ObLogger::issue_dba_error(const int errcode, const char *file, const int li
 {
   const char *base_file_name = strrchr(file, '/');
   base_file_name = (NULL != base_file_name) ? base_file_name + 1 : file;
-  LOG_DBA_ERROR(OB_UNEXPECT_INTERNAL_ERROR,
-                "errcode", errcode, "file", base_file_name, "line_no", line, "info", info_str);
+  LOG_DBA_FORCE_PRINT(ERROR, OB_COMMON_UNEXPECT_INTERNAL_ERROR, OB_UNEXPECT_INTERNAL_ERROR,
+                      "An unexpected error(", errcode, ") occurred at ", base_file_name, ":", line, ". ",
+                      "Error info:\"", info_str, "\" ",
+                      "[suggestion] You can seek help from official technical personnel.");
 }
 
 bool ObLogger::is_svr_file_opened()

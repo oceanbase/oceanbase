@@ -91,6 +91,12 @@ TEST(ObDbaLog, test_1)
 {
   int ret = OB_SUCCESS;
   ObClockGenerator::get_instance().init();
+
+  // 0. alert log level test
+  ASSERT_EQ(OB_SUCCESS, ObLogger::get_logger().parse_check_alert("WARN", 5));
+  ASSERT_EQ(OB_SUCCESS, ObLogger::get_logger().parse_check_alert("ERROR", 5));
+  ASSERT_EQ(OB_SUCCESS, ObLogger::get_logger().parse_check_alert("INFO", 5));
+
   // 1. base test
   LOG_DBA_INFO_("TEST_EVENT", "print dba log only");
   LOG_DBA_INFO_V2("TEST_EVENT", "print both rd and dba log");

@@ -15,6 +15,7 @@
 #include "lib/utility/ob_print_utils.h"
 #include "common/ob_common_utility.h"
 #include "lib/utility/utility.h"
+#include "common/ob_clock_generator.h"
 
 extern "C" {
 void right_to_die_or_duty_to_live_c()
@@ -46,7 +47,7 @@ void right_to_die_or_duty_to_live()
   set_fatal_error_thread_id(GETTID());
   while (true) {
     const char *info = (NULL == extra_info) ? NULL : to_cstring(*extra_info);
-    LOG_DBA_ERROR(OB_ERR_THREAD_PANIC, "msg", "Trying so hard to die", KCSTRING(info), KCSTRING(lbt()));
+    LOG_DBA_ERROR_V2(OB_SERVER_THREAD_PANIC, OB_ERR_THREAD_PANIC, "Trying so hard to die, info= ", info, ", lbt= ", lbt());
   #ifndef FATAL_ERROR_HANG
     if (in_try_stmt) {
       throw OB_EXCEPTION<OB_ERR_UNEXPECTED>();

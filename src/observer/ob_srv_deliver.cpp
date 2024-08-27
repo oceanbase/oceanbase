@@ -277,7 +277,11 @@ int dispatch_req(const uint64_t tenant_id, ObRequest &req, QueueThread *global_m
       } else if (!mysql_queue->queue_.push(&req, MAX_QUEUE_LEN)) {  // MAX_QUEUE_LEN = 10000;
         ret = OB_QUEUE_OVERFLOW;
         EVENT_INC(MYSQL_DELIVER_FAIL);
-        LOG_ERROR("deliver request fail", K(ret), K(tenant_id), K(req));
+        LOG_ERROR("deliver mysql login request fail", K(ret), K(tenant_id), K(req));
+        LOG_DBA_ERROR_V2(OB_TENANT_REQUEST_QUEUE_FULL, ret,
+                "tenant: ", tenant_id, " mysql login request queue is full. ",
+                " [suggestion] check T", tenant_id, "_MysqlQueueTh thread stack to see which"
+                " procedure is taking too long or is blocked.");
       } else {
         LOG_INFO("succeed to dispatch to tenant mysql queue", K(tenant_id));
       }
@@ -748,11 +752,16 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
         LOG_WARN("tenant is stopped", K(ret), K(tenant->id()));
       } else if (OB_FAIL(tenant->recv_request(req))) {
         EVENT_INC(MYSQL_DELIVER_FAIL);
-        LOG_ERROR("deliver request fail", K(req), K(*tenant));
+        LOG_ERROR("deliver request fail", K(req), K(ret), K(*tenant));
+        if (OB_SIZE_OVERFLOW == ret) {
+          LOG_DBA_ERROR_V2(OB_TENANT_REQUEST_QUEUE_FULL, ret,
+            "deliver mysql request to tenant: ", tenant->id(), " queue failed, the queue is full. ",
+            "[suggestion] check T", tenant->id(), "_L0_G0 thread stack to see which "
+            "procedure is taking too long or is blocked or check __all_virtual_thread view.");
+        }
       }
     }
   }
-
   return ret;
 }
 

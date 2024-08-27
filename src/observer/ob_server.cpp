@@ -260,9 +260,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 {
   FLOG_INFO("[OBSERVER_NOTICE] start to init observer");
   DBA_STEP_RESET(server_start);
-  LOG_DBA_INFO_V2(OB_SERVER_INIT_BEGIN,
-                  DBA_STEP_INC_INFO(server_start),
-                  "observer init begin.");
   int ret = OB_SUCCESS;
   opts_ = opts;
   scramble_rand_.init(static_cast<uint64_t>(start_time_), static_cast<uint64_t>(start_time_ / 2));
@@ -271,6 +268,12 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   if (OB_FAIL(init_config())) {
     LOG_ERROR("init config failed", KR(ret));
   }
+  // set alert log level earlier
+  OB_LOGGER.set_alert_log_level(config_.alert_log_level);
+  LOG_DBA_INFO_V2(OB_SERVER_INIT_BEGIN,
+                  DBA_STEP_INC_INFO(server_start),
+                  "observer init begin.");
+
   //check os params
   if (OB_SUCC(ret) && OB_FAIL(check_os_params(GCONF.strict_check_os_params))) {
     LOG_ERROR("check OS params failed", K(GCONF.strict_check_os_params));
@@ -1958,16 +1961,22 @@ int ObServer::init_config()
     bool has_found = false;
     if (OB_SUCCESS != obsys::ObNetUtil::get_ifname_by_addr(config_.local_ip, if_name, sizeof(if_name), has_found)) {
       // if it is incorrect, then ObServer start but log a error.
-      LOG_DBA_WARN(OB_ERR_OBSERVER_START, "get ifname by local_ip failed, local_ip", config_.local_ip.get_value());
+      LOG_DBA_WARN_V2(OB_SERVER_GET_IFNAME_FAIL, OB_ERR_OBSERVER_START,
+                        "get ifname by local_ip failed. ",
+                        "local_ip is ", config_.local_ip.get_value(),
+                        ". [suggestion] Verify if your local IP address is a virtual one.");
     } else if (false == has_found) {
-      LOG_DBA_ERROR(OB_ERR_OBSERVER_START, "local_ip set failed, please check your local_ip", config_.local_ip.get_value());
+      LOG_DBA_ERROR_V2(OB_SERVER_SET_LOCAL_IP_FAIL, OB_ERR_OBSERVER_START,
+                        "local_ip set failed, please check your local_ip. ",
+                        "local_ip is ", config_.local_ip.get_value(),
+                        ". [suggestion] Verify if your local IP is right. ");
     } else if (0 != strcmp(config_.devname, if_name)) {
       config_.devname.set_value(if_name);
       config_.devname.set_version(start_time_);
       // this is done to ensure the consistency of local_ip and devname.
-      LOG_DBA_WARN(OB_ITEM_NOT_MATCH, "the devname has been rewritten, and the new value comes from local_ip, old value",
-                  config_.devname.get_value(), "new value", if_name, "local_ip", config_.local_ip.get_value());
-                        // unconditionally call set_value to ensure that devname is written to the configuration file.
+      LOG_DBA_WARN_V2(OB_SERVER_DEVICE_NAME_MISMATCH, OB_ITEM_NOT_MATCH,
+          "the devname has been rewritten, and the new value comes from local_ip, old value: ",
+          config_.devname.get_value(), " new value: ", if_name, " local_ip: ", config_.local_ip.get_value());
     }
   } else {
     if (config_.use_ipv6) {
