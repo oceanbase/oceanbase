@@ -4221,11 +4221,16 @@ int ObDDLService::check_can_drop_primary_key(const ObTableSchema &origin_table_s
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
   const ObIArray<ObForeignKeyInfo> &fk_infos = origin_table_schema.get_foreign_key_infos();
+  ObPartitionFuncType part_func_type = origin_table_schema.get_part_option().get_part_func_type();
+  // disallow to drop pk if the table is implicit key partition table.
   if (origin_table_schema.is_heap_table()) {
     const ObString pk_name = "PRIMAY";
     ret = OB_ERR_CANT_DROP_FIELD_OR_KEY;
     LOG_WARN("can't DROP 'PRIMARY', check primary key exists", K(ret), K(origin_table_schema));
     LOG_USER_ERROR(OB_ERR_CANT_DROP_FIELD_OR_KEY, pk_name.length(), pk_name.ptr());
+  } else if (share::schema::PARTITION_FUNC_TYPE_KEY_IMPLICIT == part_func_type) {
+    ret = OB_ERR_FIELD_NOT_FOUND_PART;
+    LOG_WARN("can't drop primary key if table is implicit key partition table to be compatible with mysql mode", K(ret));
   } else if (fk_infos.empty()) {
     // allowed to drop primary key.
   } else if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -7714,6 +7719,35 @@ int ObDDLService::refill_columns_id_for_check_constraint(
               LOG_WARN("assign column ids failed", K(ret));
             }
           }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLService::refill_column_id_array_for_constraint(
+    const ObAlterTableArg::AlterConstraintType op_type,
+    const ObTableSchema &new_table_schema,
+    AlterTableSchema &alter_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (obrpc::ObAlterTableArg::ADD_CONSTRAINT == op_type) {
+    ObTableSchema::constraint_iterator cst_iter = alter_table_schema.constraint_begin_for_non_const_iter();
+    for (; OB_SUCC(ret) && cst_iter != alter_table_schema.constraint_end_for_non_const_iter(); cst_iter++) {
+      if (OB_ISNULL(*cst_iter)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("error unexpected", K(ret));
+      } else if (CONSTRAINT_TYPE_NOT_NULL == (*cst_iter)->get_constraint_type()) {
+        ObString cst_col_name;
+        const ObColumnSchemaV2 *column = nullptr;
+        if (OB_FAIL((*cst_iter)->get_not_null_column_name(cst_col_name))) {
+          LOG_WARN("get not null cst column name failed", K(ret), KPC(*cst_iter));
+        } else if (OB_ISNULL(column = new_table_schema.get_column_schema(cst_col_name))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("no column in new table schema", K(ret), K(cst_col_name));
+        } else if (OB_FAIL((*cst_iter)->assign_not_null_cst_column_id(column->get_column_id()))) {
+          LOG_WARN("failed to assign not null cst column id", K(ret), KPC(column));
         }
       }
     }
@@ -12271,7 +12305,9 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           obrpc::ObAlterTableArg::CONSTRAINT_NO_OPERATION) {
         if (ObDDLType::DDL_TABLE_REDEFINITION == ddl_type
             || ObDDLType::DDL_MODIFY_COLUMN == ddl_type) {
-          if (OB_FAIL(alter_table_constraints(
+          if (OB_FAIL(refill_column_id_array_for_constraint(alter_table_arg.alter_constraint_type_, new_table_schema, alter_table_schema))) {
+            LOG_WARN("failed to refill columns id", K(ret));
+          } else if (OB_FAIL(alter_table_constraints(
               alter_table_arg.alter_constraint_type_,
               schema_guard,
               *orig_table_schema,
@@ -12291,18 +12327,6 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                          ddl_operator,
                                          trans))) {
           LOG_WARN("failed to convert to character", K(ret));
-        }
-      }
-      if (OB_SUCC(ret) && need_redistribute_column_id) {
-        if (OB_FAIL(redistribute_column_ids(new_table_schema))) {
-          LOG_WARN("failed to redistribute column ids", K(ret));
-        } else {
-          // do nothing
-        }
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(new_table_schema.sort_column_array_by_column_id())) {
-          LOG_WARN("failed to sort column", K(ret), K(new_table_schema));
         }
       }
       if (OB_SUCC(ret)) {
@@ -12673,6 +12697,9 @@ int ObDDLService::create_hidden_table(
                                                            ObTableLockOwnerID(task_id),
                                                            trans))) {
           LOG_WARN("failed to lock ddl lock", K(ret));
+        } else if (OB_UNLIKELY(orig_table_schema->is_offline_ddl_table())) {
+          ret = OB_SCHEMA_EAGAIN;
+          LOG_WARN("table in offline ddl or direct load, retry", K(ret), K(orig_table_schema->get_table_id()), K(orig_table_schema->get_table_mode()));
         } else if (OB_FAIL(create_user_hidden_table(
                   *orig_table_schema,
                   new_table_schema,
@@ -12719,9 +12746,6 @@ int ObDDLService::create_hidden_table(
                                         task_id);
               if (OB_FAIL(root_service->get_ddl_scheduler().create_ddl_task(param, trans, task_record))) {
                 LOG_WARN("submit ddl task failed", K(ret));
-              } else if (orig_table_schema->get_table_state_flag() == ObTableStateFlag::TABLE_STATE_OFFLINE_DDL) {
-                ret = OB_OP_NOT_ALLOW;
-                LOG_WARN("offline ddl is being executed, other ddl operations are not allowed, create hidden table fail", K(ret), K(create_hidden_table_arg));
               } else {
                 res.tenant_id_ = tenant_id;
                 res.table_id_ = table_id;
@@ -15394,6 +15418,10 @@ int ObDDLService::prepare_hidden_table_schema(const ObTableSchema &orig_table_sc
       hidden_table_schema.set_association_table_id(orig_table_schema.get_table_id());
       // set the hidden attributes of the table
       hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
+      if (orig_table_schema.get_tenant_id() != hidden_table_schema.get_tenant_id()) {
+        // recover restore table, do not sync log to cdc.
+        hidden_table_schema.set_ddl_ignore_sync_cdc_flag(ObDDLIgnoreSyncCdcFlag::DONT_SYNC_LOG_FOR_CDC);
+      }
       // in oracle mode, need to add primary key constraints
       if (is_oracle_mode && !hidden_table_schema.is_heap_table()) {
         uint64_t new_cst_id = OB_INVALID_ID;
@@ -18112,6 +18140,7 @@ int ObDDLService::make_recover_restore_tables_visible(obrpc::ObAlterTableArg &al
           tmp_schema.set_association_table_id(OB_INVALID_ID);
           tmp_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_NORMAL);
           tmp_schema.set_in_offline_ddl_white_list(true);
+          tmp_schema.set_ddl_ignore_sync_cdc_flag(ObDDLIgnoreSyncCdcFlag::DO_SYNC_LOG_FOR_CDC); // reset.
           ObArray<ObSchemaType> conflict_schema_types;
           uint64_t synonym_id = OB_INVALID_ID;
           bool object_exist = false;

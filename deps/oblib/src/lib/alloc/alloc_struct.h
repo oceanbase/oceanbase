@@ -141,9 +141,10 @@ struct ObMemAttr
   int64_t to_string(char* buf, const int64_t buf_len) const;
   bool use_500() const { return use_500_; }
   bool expect_500() const { return expect_500_; }
-private:
+public:
   bool use_500_ = false;
   bool expect_500_ = true;
+  bool alloc_extra_info_ = false;
 };
 
 inline ObMemAttr DoNotUseMe(ObMemAttr &attr, bool expect_500)
@@ -259,6 +260,7 @@ struct AObject {
   OB_INLINE ABlock *block() const;
   OB_INLINE uint64_t hold(uint32_t cells_per_block) const;
   OB_INLINE ObLabel label() const;
+  OB_INLINE char *bt();
 
   // members
   union {
@@ -311,6 +313,12 @@ static const uint32_t AOBJECT_HEADER_SIZE = offsetof(AObject, data_);
 static const uint32_t AOBJECT_META_SIZE = AOBJECT_HEADER_SIZE + AOBJECT_TAIL_SIZE;
 static const uint32_t INTACT_NORMAL_AOBJECT_SIZE = 8L << 10;
 static const uint32_t INTACT_MIDDLE_AOBJECT_SIZE = 64L << 10;
+
+static const int32_t AOBJECT_BACKTRACE_COUNT = 16;
+static const int32_t AOBJECT_BACKTRACE_SIZE = sizeof(void*) * AOBJECT_BACKTRACE_COUNT;
+static const int32_t AOBJECT_EXTRA_INFO_SIZE = AOBJECT_BACKTRACE_SIZE;
+
+static const int32_t MAX_BACKTRACE_LENGTH = 512;
 
 static const uint32_t ABLOCK_HEADER_SIZE = sizeof(ABlock);
 static const uint32_t ABLOCK_SIZE = INTACT_NORMAL_AOBJECT_SIZE;
@@ -568,6 +576,10 @@ ObLabel AObject::label() const
 {
   return ObLabel(label_);
 }
+char *AObject::bt()
+{
+  return &data_[alloc_bytes_ + AOBJECT_TAIL_SIZE];
+}
 
 class Label
 {
@@ -609,6 +621,33 @@ private:
   ObMemAttr old_attr_;
 };
 
+class ObLightBacktraceGuard
+{
+public:
+  ObLightBacktraceGuard(const bool enable)
+    : last_(tl_enable())
+  {
+    tl_enable() = enable;
+  }
+  ~ObLightBacktraceGuard()
+  {
+    tl_enable() = last_;
+  }
+public:
+  static bool is_enabled()
+  {
+    return tl_enable();
+  }
+private:
+  static bool &tl_enable()
+  {
+    static __thread bool enable = false;
+    return enable;
+  }
+private:
+  const bool last_;
+};
+
 extern void inc_divisive_mem_size(const int64_t size);
 extern void dec_divisive_mem_size(const int64_t size);
 extern int64_t get_divisive_mem_size();
@@ -616,6 +655,9 @@ extern int64_t get_divisive_mem_size();
 extern void set_ob_mem_mgr_path();
 extern void unset_ob_mem_mgr_path();
 extern bool is_ob_mem_mgr_path();
+
+extern void enable_memleak_light_backtrace(const bool);
+extern bool is_memleak_light_backtrace_enabled();
 
 #define FORCE_EXPLICT_500_MALLOC() \
   OB_UNLIKELY(oceanbase::lib::ObMallocAllocator::get_instance()->force_explict_500_malloc_)

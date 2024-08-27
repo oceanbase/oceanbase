@@ -603,7 +603,6 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
         ObGlobalNdvEval ndv_eval;
         ObGlobalAvglenEval avglen_eval;
         ObSEArray<ObHistogram, 4> all_part_histograms;
-        bool can_try_derive_hist = need_derive_hist;
         int64_t max_bucket_num = param.column_params_.at(i).bucket_num_;
         for (int64_t j = 0; OB_SUCC(ret) && j < part_cnt; ++j) {
           ObOptColumnStat *opt_col_stat = NULL;
@@ -630,7 +629,6 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
                      OB_FAIL(all_part_histograms.push_back(opt_col_stat->get_histogram()))) {
             LOG_WARN("failed to push back histogram", K(ret));
           } else {
-            can_try_derive_hist &= (opt_col_stat->get_num_distinct() == 0 || opt_col_stat->get_histogram().is_valid());
             null_eval.add(opt_col_stat->get_num_null());
             if (opt_col_stat->get_num_distinct() != 0) {
               min_eval.add(opt_col_stat->get_min_value());
@@ -667,7 +665,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
           } else if (OB_FAIL(col_stats.push_back(col_stat))) {
             LOG_WARN("failed to push back", K(ret));
           } else if (need_derive_hist) {
-            if (can_try_derive_hist && col_stat->get_num_distinct() > 0) {
+            if (col_stat->get_num_distinct() > 0 && !all_part_histograms.empty()) {
               if (OB_FAIL(derive_global_histogram(all_part_histograms,
                                                   alloc,
                                                   max_bucket_num,
@@ -678,15 +676,16 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
                                                   need_gather_hist))) {
                 LOG_WARN("failed to derive global histogram from part histogram", K(ret));
               }
-            } else if (max_bucket_num > 1 &&
+            } else if (approx_level == PARTITION_LEVEL &&
+                       max_bucket_num > 1 &&
                        param.column_params_.at(i).need_basic_stat() &&
                        col_stat->get_num_distinct() > 0) {
               need_gather_hist = true;
-              int64_t max_disuse_cnt = std::ceil(col_stat->get_num_not_null() * 1.0 / max_bucket_num);
               //After testing, the error of using hyperloglog to estimate ndv is within %5.
+              //In order to improve the gathering efficiency, it is required that ndv cannot be less than the number of buckets
               const double MAX_LLC_NDV_ERR_RATE = !param.need_approx_ndv_ ? 0.0 : 0.05;
               const int64_t fault_tolerance_cnt = std::ceil(col_stat->get_num_distinct() * MAX_LLC_NDV_ERR_RATE);
-              if (col_stat->get_num_distinct() >= max_bucket_num + max_disuse_cnt + fault_tolerance_cnt) {
+              if (col_stat->get_num_distinct() >= max_bucket_num + fault_tolerance_cnt) {
                 //directly gather hybrid histogram
                 col_stat->get_histogram().set_type(ObHistType::HYBIRD);
               } else {
@@ -694,7 +693,7 @@ int ObIncrementalStatEstimator::derive_global_col_stat(ObExecContext &ctx,
                 col_stat->get_histogram().set_type(ObHistType::TOP_FREQUENCY);
               }
             }
-            LOG_TRACE("succeed to derive global col stat", K(*col_stat));
+            LOG_TRACE("succeed to derive global col stat", K(*col_stat), K(need_gather_hist));
           }
         }
       }
@@ -754,8 +753,8 @@ int ObIncrementalStatEstimator::derive_global_histogram(ObIArray<ObHistogram> &a
     LOG_WARN("failed to allocate memory", K(ret), K(ptr));
   } else {
     ObTopKFrequencyHistograms *top_k_fre_hist = new (ptr) ObTopKFrequencyHistograms();
-    top_k_fre_hist->set_window_size(1000);
-    top_k_fre_hist->set_item_size(256);
+    top_k_fre_hist->set_window_size(ObStatTopKHist::get_window_size(max_bucket_num));
+    top_k_fre_hist->set_item_size(max_bucket_num);
     top_k_fre_hist->set_is_topk_hist_need_des_row(true);
     top_k_fre_hist->set_max_disuse_cnt(std::ceil(not_null_count * 1.0 / max_bucket_num));
     for (int64_t i = 0; OB_SUCC(ret) && i < all_part_histograms.count(); ++i) {

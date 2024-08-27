@@ -198,17 +198,18 @@ int ObSelectLogPlan::get_groupby_rollup_exprs(const ObLogicalOperator *top,
                                                   reduce_exprs,
                                                   group_by_exprs))) {
         LOG_WARN("failed to simplify group exprs", K(ret));
-      } else if (OB_FAIL(ObOptimizerUtil::find_stmt_expr_direction(*stmt,
-                                                                   group_by_exprs,
-                                                                   top->get_output_equal_sets(),
-                                                                   group_directions))) {
       } else if (OB_FAIL(rollup_exprs.assign(stmt->get_rollup_exprs()))) {
         LOG_WARN("failed to assign to rollup exprs.", K(ret));
       } else if (rollup_exprs.count() > 0) {
         bool has_rollup_dir = stmt->has_rollup_dir();
+        ObSEArray<ObRawExpr *, 4> tmp_exprs;
         if (OB_UNLIKELY(has_rollup_dir && (stmt->get_rollup_dir_size() != rollup_exprs.count()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to check rollup exprs and directions count.", K (ret));
+        } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(rollup_exprs, reduce_exprs, tmp_exprs))) {
+          LOG_WARN("failed to get intersect exprs", K (ret));
+        } else if (OB_FAIL(append_array_no_dup(group_by_exprs, tmp_exprs))) {
+          LOG_WARN("failed to append array no dup", K (ret));
         } else {/* do nothing. */}
         for (int64_t i = 0; OB_SUCC(ret) && i < rollup_exprs.count(); i++) {
           ObOrderDirection dir = has_rollup_dir ? stmt->get_rollup_dirs().at(i) : default_asc_direction();
@@ -218,7 +219,14 @@ int ObSelectLogPlan::get_groupby_rollup_exprs(const ObLogicalOperator *top,
         }
       } // do nothing
     }
-    if (OB_SUCC(ret)) {
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObOptimizerUtil::find_stmt_expr_direction(*stmt,
+                                                                 group_by_exprs,
+                                                                 top->get_output_equal_sets(),
+                                                                 group_directions))) {
+      LOG_WARN("failed to find stmt expr direction", K (ret));
+    } else {
       LOG_TRACE("succeed to get group by exprs and rollup exprs", K(reduce_exprs), K(group_by_exprs), K(rollup_exprs));
     }
   }
@@ -4486,9 +4494,12 @@ int ObSelectLogPlan::allocate_plan_top()
     if (OB_SUCC(ret)) {
       if (OB_FAIL(candi_allocate_subplan_filter_for_select_item())) {
         LOG_WARN("failed to allocate subplan filter for subquery in select item", K(ret));
+      } else if (!order_items.empty() &&
+                 OB_FAIL(candi_allocate_order_by_if_losted(order_items))) {
+        LOG_WARN("failed to adjust order by if losted", K(ret), K(order_items));
       } else {
         LOG_TRACE("succeed to allocate subplan filter for subquery in select item",
-            K(candidates_.candidate_plans_.count()));
+                  K(candidates_.candidate_plans_.count()));
       }
     }
 
@@ -7493,6 +7504,37 @@ int ObSelectLogPlan::contain_enum_set_rowkeys(const ObLogTableScan &table_scan, 
       } else if (ob_is_enumset_tc(table_keys.at(i)->get_result_type().get_type())) {
         contain = true;
       }
+    }
+  }
+  return ret;
+}
+
+int ObSelectLogPlan::candi_allocate_order_by_if_losted(ObIArray<OrderItem> &order_items)
+{
+  int ret = OB_SUCCESS;
+  bool re_allocate_happened = false;
+  ObSEArray<CandidatePlan, 4> order_by_plans;
+  if (!order_items.empty()) {
+    candidates_.is_final_sort_ = true;
+    for (int64_t i = 0; OB_SUCC(ret) && i < candidates_.candidate_plans_.count(); i++) {
+      ObLogicalOperator *top = candidates_.candidate_plans_.at(i).plan_tree_;
+      CandidatePlan &plan = candidates_.candidate_plans_.at(i);
+      if (OB_FAIL(create_order_by_plan(plan.plan_tree_, order_items, NULL, false))) {
+        LOG_WARN("failed to create order by plan", K(ret));
+      } else if (OB_FAIL(order_by_plans.push_back(plan))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else if (top != candidates_.candidate_plans_.at(i).plan_tree_) {
+        re_allocate_happened = true;
+      }
+    }
+    candidates_.is_final_sort_ = false;
+    if (OB_SUCC(ret) && re_allocate_happened) {
+      int64_t check_scope = OrderingCheckScope::CHECK_SET;
+      if (OB_FAIL(update_plans_interesting_order_info(order_by_plans, check_scope))) {
+        LOG_WARN("failed to update plans interesting order info", K(ret));
+      } else if (OB_FAIL(prune_and_keep_best_plans(order_by_plans))) {
+        LOG_WARN("failed to prune and keep best plans", K(ret));
+      } else { /*do nothing*/ }
     }
   }
   return ret;

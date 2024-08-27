@@ -666,6 +666,7 @@ public:
    * @param second_exprs            第二个表的连接列
    * @param is_foreign_primary_join 是否为主外键连接
    * @param is_first_table_parent   first_table是否为父表
+   * @param allow_partial_join      是否允许连接条件只匹配外键关系的非空子集（只用于判定连接无损）
    */
   static int check_foreign_primary_join(const TableItem *first_table,
                                         const TableItem * second_table,
@@ -673,6 +674,7 @@ public:
                                         const ObIArray<const ObRawExpr *> &second_exprs,
                                         ObSchemaChecker *schema_checker,
                                         ObSQLSessionInfo *session_info,
+                                        bool allow_partial_join,
                                         bool &is_foreign_primary_join,
                                         bool &is_first_table_parent,
                                         share::schema::ObForeignKeyInfo *&foreign_key_info);
@@ -682,6 +684,7 @@ public:
                                         const ObIArray< ObRawExpr *> &second_exprs,
                                         ObSchemaChecker *schema_checker,
                                         ObSQLSessionInfo *session_info,
+                                        bool allow_partial_join,
                                         bool &is_foreign_primary_join,
                                         bool &is_first_table_parent,
                                         share::schema::ObForeignKeyInfo *&foreign_key_info);
@@ -696,14 +699,17 @@ public:
    *          或child_exprs = [c3, c4] 且 parent_exprs = [c1, c2]
    *
    * @param is_all_involved       是否包含了主外键约束中一一对应的所有的键
+   * @param allow_partial_join    是否允许只包含主外键约束中的部分键
    */
   static int is_all_foreign_key_involved(const ObIArray<const ObRawExpr *> &child_exprs,
                                          const ObIArray<const ObRawExpr *> &parent_exprs,
                                          const share::schema::ObForeignKeyInfo &info,
+                                         bool allow_partial_join,
                                          bool &is_all_involved);
   static int is_all_foreign_key_involved(const ObIArray< ObRawExpr *> &child_exprs,
                                          const ObIArray< ObRawExpr *> &parent_exprs,
                                          const share::schema::ObForeignKeyInfo &info,
+                                         bool allow_partial_join,
                                          bool &is_all_involved);
 
   /**

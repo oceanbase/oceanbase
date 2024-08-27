@@ -474,6 +474,7 @@ private:
   //    int process_subplan();
   int candi_allocate_subplan_filter_for_select_item();
 
+  int candi_allocate_order_by_if_losted(ObIArray<OrderItem> &order_items);
   struct WinFuncOpHelper
   {
     WinFuncOpHelper(const ObIArray<ObWinFunRawExpr*> &all_win_func_exprs,

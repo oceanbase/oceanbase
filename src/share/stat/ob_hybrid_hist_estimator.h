@@ -109,6 +109,8 @@ private:
                             bool &is_done);
 
   int compute_estimate_percent(int64_t total_row_count,
+                               int64_t micro_block_num,
+                               bool sstable_rows_more,
                                int64_t max_num_buckets,
                                const ObAnalyzeSampleInfo &sample_info,
                                bool &need_sample,

@@ -249,11 +249,11 @@ int ObTableApiExecuteP::try_process()
         break;
       case ObTableOperationType::INCREMENT:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_INCREMENT;
-        ret = process_insert_up();
+        ret = process_incr_or_append_op();
         break;
       case ObTableOperationType::APPEND:
         stat_event_type_ = ObTableProccessType::TABLE_API_SINGLE_APPEND;
-        ret = process_insert_up();
+        ret = process_incr_or_append_op();
         break;
       default:
         ret = OB_INVALID_ARGUMENT;
@@ -425,6 +425,31 @@ ObTableAPITransCb *ObTableApiExecuteP::new_callback(rpc::ObRequest *req)
     }
   }
   return cb;
+}
+
+int ObTableApiExecuteP::process_incr_or_append_op()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(start_trans(false, /* is_readonly */
+                          sql::stmt::T_INSERT,
+                          arg_.consistency_level_,
+                          tb_ctx_.get_ls_id(),
+                          get_timeout_ts(),
+                          tb_ctx_.need_dist_das()))) {
+    SERVER_LOG(WARN, "fail to start transaction", K(ret), K_(tb_ctx));
+  } else if (OB_FAIL(tb_ctx_.init_trans(get_trans_desc(), get_tx_snapshot()))) {
+    SERVER_LOG(WARN, "fail to init trans", K(ret));
+  } else if (OB_FAIL(table::ObTableOpWrapper::process_incr_or_append_op(tb_ctx_, result_))) {
+    SERVER_LOG(WARN, "fail to process op", K(ret));
+  }
+
+  int tmp_ret = ret;
+  if (OB_FAIL(end_trans(OB_SUCCESS != ret, req_, get_timeout_ts()))) {
+    SERVER_LOG(WARN, "fail to end trans", K(ret));
+  }
+
+  ret = (OB_SUCCESS == tmp_ret) ? ret : tmp_ret;
+  return ret;
 }
 
 int ObTableApiExecuteP::before_response(int error_code)

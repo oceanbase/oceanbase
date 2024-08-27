@@ -171,41 +171,47 @@ int ObTxTableGuards::lock_for_read(
     ObReCheckOp &recheck_op)
 {
   int ret = OB_SUCCESS;
-  bool dest_succ = false;
   can_read = false;
+
   if (!is_valid() || !lock_for_read_arg.scn_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tx table guard is invalid", K(ret), KPC(this), K(lock_for_read_arg));
-  } else if (OB_SUCC(tx_table_guard_.lock_for_read(lock_for_read_arg,
-      can_read, trans_version, is_determined_state, cleanout_op, recheck_op))) {
-    dest_succ = true;
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(lock_for_read_arg.scn_)) {
-    LOG_WARN("failed to lock for read", K(ret), "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
-  } else {
-    ret = OB_SUCCESS;
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if ((dest_succ && !can_read) || !is_need_read_src(lock_for_read_arg.scn_)) {
-    // do nothing
-  } else {
-    // Both tx_table_guard need to be checked
-    bool src_can_read = false;
-    share::SCN src_trans_version = share::SCN::invalid_scn();
-    bool src_is_determined_state = false;
-    if (OB_FAIL(src_tx_table_guard_.lock_for_read(lock_for_read_arg,
-        src_can_read, src_trans_version, src_is_determined_state, cleanout_op, recheck_op))) {
-      if (dest_succ && OB_TRANS_CTX_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("trans ctx is not exist", K(lock_for_read_arg));
-      } else {
-        LOG_WARN("failed to lock for read from source tx table", K(ret), "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
+  } else if (!is_need_read_src(lock_for_read_arg.scn_)) {
+    if (OB_FAIL(tx_table_guard_.lock_for_read(lock_for_read_arg,
+                                              can_read,
+                                              trans_version,
+                                              is_determined_state,
+                                              cleanout_op,
+                                              recheck_op))) {
+      if (OB_TRANS_CTX_NOT_EXIST != ret) {
+        LOG_WARN("failed to lock for read from tx table", K(ret),
+                 "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
       }
-    } else {
-      can_read = src_can_read;
-      trans_version = src_trans_version;
-      is_determined_state = src_is_determined_state;
     }
+  } else {
+    if (OB_FAIL(src_tx_table_guard_.lock_for_read(lock_for_read_arg,
+                                                  can_read,
+                                                  trans_version,
+                                                  is_determined_state,
+                                                  cleanout_op,
+                                                  recheck_op))) {
+      if (OB_TRANS_CTX_NOT_EXIST != ret) {
+        LOG_WARN("failed to lock for read from source tx table", K(ret),
+                 "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
+      }
+    } else if (lock_for_read_arg.data_trans_id_ ==
+                 lock_for_read_arg.mvcc_acc_ctx_.tx_id_
+               // trans must abort
+               && is_determined_state
+               && !can_read
+               && trans_version.is_min()) {
+      // It is just an urgly fix for 4_2_1, and we have already fix it in the
+      // 4_2_x, 4_3_x and future master
+      ret = OB_TRANS_KILLED;
+      TRANS_LOG(WARN, "tx read itself as aborted", KPC(this), K(lock_for_read_arg),
+                K(is_determined_state), K(can_read), K(trans_version));
+    }
+
     PRINT_ERROR_LOG(lock_for_read_arg.data_trans_id_, ret, this);
   }
 
@@ -219,39 +225,35 @@ int ObTxTableGuards::lock_for_read(
     bool &is_determined_state)
 {
   int ret = OB_SUCCESS;
-  bool dest_succ = false;
-  if (!tx_table_guard_.is_valid()) {
+  can_read = false;
+
+  if (!is_valid() || !lock_for_read_arg.scn_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("tx table guard is invalid", K(ret), K(tx_table_guard_));
-  } else if (OB_SUCC(tx_table_guard_.lock_for_read(lock_for_read_arg,
-      can_read, trans_version, is_determined_state))) {
-    dest_succ = true;
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(lock_for_read_arg.scn_)) {
-    LOG_WARN("failed to lock for read", K(ret), "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
-  } else {
-    ret = OB_SUCCESS;
-  }
-  if (OB_FAIL(ret)) {
-  } else if ((dest_succ && !can_read) || !is_need_read_src(lock_for_read_arg.scn_)) {
-  } else {
-    bool src_can_read = false;
-    share::SCN src_trans_version = share::SCN::invalid_scn();
-    bool src_is_determined_state = false;
-    if (OB_FAIL(src_tx_table_guard_.lock_for_read(lock_for_read_arg,
-        src_can_read, src_trans_version, src_is_determined_state))) {
-      if (dest_succ && OB_TRANS_CTX_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("trans ctx is not exist", K(lock_for_read_arg));
-      } else {
-        LOG_WARN("failed to lock for read from source tx table", K(ret), "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
+    LOG_WARN("tx table guard is invalid", K(ret), KPC(this), K(lock_for_read_arg));
+  } else if (!is_need_read_src(lock_for_read_arg.scn_)) {
+    if (OB_FAIL(tx_table_guard_.lock_for_read(lock_for_read_arg,
+                                              can_read,
+                                              trans_version,
+                                              is_determined_state))) {
+      if (OB_TRANS_CTX_NOT_EXIST != ret) {
+        LOG_WARN("failed to lock for read from tx table", K(ret),
+                 "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
       }
-    } else {
-      can_read = src_can_read;
-      trans_version = src_trans_version;
-      is_determined_state = src_is_determined_state;
     }
+  } else {
+    if (OB_FAIL(src_tx_table_guard_.lock_for_read(lock_for_read_arg,
+                                                  can_read,
+                                                  trans_version,
+                                                  is_determined_state))) {
+      if (OB_TRANS_CTX_NOT_EXIST != ret) {
+        LOG_WARN("failed to lock for read from source tx table", K(ret),
+                 "tx_id", lock_for_read_arg.data_trans_id_, K(*this));
+      }
+    }
+
     PRINT_ERROR_LOG(lock_for_read_arg.data_trans_id_, ret, this);
   }
+
   return ret;
 }
 
@@ -262,31 +264,33 @@ int ObTxTableGuards::cleanout_tx_node(
     const bool need_row_latch)
 {
   int ret = OB_SUCCESS;
-  bool dest_succ = false;
-  if (!is_valid()) {
+
+  if (!is_valid() || !tnode.get_scn().is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tx table guard is invalid", K(ret), KPC(this), K(tx_id));
-  } else if (OB_SUCC(tx_table_guard_.cleanout_tx_node(tx_id, value, tnode, need_row_latch))) {
-    dest_succ = true;
-  } else if (OB_TRANS_CTX_NOT_EXIST != ret || !is_need_read_src(tnode.get_scn())) {
-    LOG_WARN("failed to cleanout tx node", K(ret), K(tx_id), K(*this));
-  } else {
-    ret = OB_SUCCESS;
-  }
-  if (OB_FAIL(ret)) {
   } else if (!is_need_read_src(tnode.get_scn())) {
-    // do nothing
+    if (OB_FAIL(tx_table_guard_.cleanout_tx_node(tx_id,
+                                                 value,
+                                                 tnode,
+                                                 need_row_latch))) {
+      if (OB_TRANS_CTX_NOT_EXIST != ret) {
+        LOG_WARN("failed to cleanout tx node from tx table",
+                 K(ret), K(tx_id), K(*this));
+      }
+    }
   } else {
-    if (OB_FAIL(src_tx_table_guard_.cleanout_tx_node(tx_id, value, tnode, need_row_latch))) {
-      if (dest_succ && OB_TRANS_CTX_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-        LOG_INFO("trans ctx is not exist", K(tx_id));
-      } else {
-        LOG_WARN("failed to cleanout tx nod from source tx table", K(ret), K(tx_id), K(*this));
+    if (OB_FAIL(src_tx_table_guard_.cleanout_tx_node(tx_id,
+                                                     value,
+                                                     tnode,
+                                                     need_row_latch))) {
+      if (OB_TRANS_CTX_NOT_EXIST != ret) {
+        LOG_WARN("failed to cleanout tx node from source tx table",
+                 K(ret), K(tx_id), K(*this));
       }
     }
     PRINT_ERROR_LOG(tx_id, ret, this);
   }
+
   return ret;
 }
 

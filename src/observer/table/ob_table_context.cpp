@@ -94,6 +94,9 @@ int ObTableCtx::init_common(ObTableApiCredential &credential,
   } else if (OB_ISNULL(table_schema_)) {
     ret = OB_ERR_UNKNOWN_TABLE;
     LOG_WARN("fail get table schema by table id", K(ret), K(tenant_id), K(database_id), K(table_id));
+  } else if (table_schema_->is_in_recyclebin()) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("table is dropped and in recyclebin", K(ret), K(table_id));
   } else if (OB_FAIL(inner_init_common(credential, arg_tablet_id, table_schema_->get_table_name(), timeout_ts))) {
     LOG_WARN("fail to inner init common", KR(ret), K(credential), K(arg_tablet_id), K(timeout_ts));
   }
@@ -436,11 +439,12 @@ int ObTableCtx::inner_init_common(ObTableApiCredential &credential,
     } else { // dml场景使用rowkey计算出tablet id
       if (!table_schema_->is_partitioned_table()) {
         tablet_id = table_schema_->get_tablet_id();
-      } else if (OB_ISNULL(entity_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("entity is null", K(ret));
-      } else if (OB_FAIL(get_tablet_by_rowkey(entity_->get_rowkey(), tablet_id))) {
-        LOG_WARN("fail to get tablet id by rowkey", K(ret), K(entity_->get_rowkey()));
+      } else {
+        // trigger client to refresh table entry
+        // maybe drop a non-partitioned table and create a
+        // partitioned table with same name
+        ret = OB_SCHEMA_ERROR;
+        LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
       }
     }
   }
@@ -593,6 +597,7 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
   } else if (obj.is_null() || is_inc_or_append()) { // increment or append check in init_increment() and init_append()
     if (is_append() && ob_is_string_type(obj.get_type())) {
       obj.set_type(column_type.get_type()); // set obj to column type to add lob header when column type is lob, obj is varchar(varchar will not add lob header).
+      obj.set_collation_type(cs_type);
     }
   } else if (column_type.get_type() != obj.get_type()
              && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))) {
@@ -1011,9 +1016,11 @@ int ObTableCtx::init_scan(const ObTableQuery &query,
   if (index_name.empty() || 0 == index_name.case_compare(ObIndexHint::PRIMARY_KEY)) { // scan with primary key
     index_table_id_ = ref_table_id_;
     if (!index_tablet_id_.is_valid()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "invalid tablet id in partition table when do scan");
-      LOG_WARN("query by primary index, but tablet id is invalid", K(ret), K(index_tablet_id_));
+      // trigger client to refresh table entry
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
     }
     is_index_back_ = false;
   } else {
@@ -1557,7 +1564,7 @@ int ObTableCtx::init_append(bool return_affected_entity, bool return_rowkey)
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
 
-  if (OB_FAIL(init_insert_up(false))) {
+  if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init insert up", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
@@ -1629,7 +1636,7 @@ int ObTableCtx::init_increment(bool return_affected_entity, bool return_rowkey)
   return_affected_entity_ = return_affected_entity;
   return_rowkey_ = return_rowkey;
 
-  if (OB_FAIL(init_insert_up(false))) {
+  if (OB_FAIL(init_update())) {
     LOG_WARN("fail to init insert up", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < assigns_.count(); i++) {
@@ -1928,8 +1935,11 @@ int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_t
             if (!index_schema_->is_partitioned_table()) {
               index_tablet_id_ = index_schema_->get_tablet_id();
             } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("tablet id is invalid", K(ret));
+              // trigger client to refresh table entry
+              // maybe drop a non-partitioned table and create a
+              // partitioned table with same name
+              ret = OB_SCHEMA_ERROR;
+              LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
             }
           }
         }
@@ -2186,6 +2196,30 @@ int ObTableCtx::check_insert_up_can_use_put(bool &use_put)
     }
   }
 
+  return ret;
+}
+
+int ObTableCtx::init_insert_when_inc_append()
+{
+  int ret = OB_SUCCESS;
+  inc_append_stage_ = ObTableIncAppendStage::TABLE_INCR_APPEND_INSERT;
+  // from init_update
+  is_for_update_ = false;
+  is_get_ = false;
+  assigns_.reset();
+  // from generate_exprs
+  all_exprs_.reuse();
+  select_exprs_.reset();
+  rowkey_exprs_.reset();
+  index_exprs_.reset();
+  filter_exprs_.reset();
+  related_index_ids_.reset();
+  table_index_info_.reset();
+  select_col_ids_.reset();
+  expr_info_ = nullptr;
+  if (OB_FAIL(init_insert_up(is_client_set_put_))) {
+    LOG_WARN("fail to init ttl insert", K(ret));
+  }
   return ret;
 }
 

@@ -5076,8 +5076,6 @@ int ObSQLUtils::handle_plan_baseline(const ObAuditRecordData &audit_record,
     if (OB_FAIL(ObSpmController::accept_new_plan_as_baseline(sql_ctx.spm_ctx_, audit_record))) {
       LOG_WARN("failed to accept new plan as baseline", K(ret));
     }
-  } else if (OB_FAIL(ObSpmController::deny_new_plan_as_baseline(sql_ctx.spm_ctx_))) {
-    LOG_WARN("failed to deny new plan as baseline", K(ret));
   }
   return ret;
 }

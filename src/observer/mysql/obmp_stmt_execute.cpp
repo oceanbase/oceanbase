@@ -253,9 +253,7 @@ int ObMPStmtExecute::init_for_arraybinding(ObIAllocator &alloc)
   return ret;
 }
 
-int ObMPStmtExecute::check_param_type_for_arraybinding(
-    ObSQLSessionInfo *session_info,
-    ParamTypeInfoArray &param_type_infos)
+int ObMPStmtExecute::check_precondition_for_arraybinding(const ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   if (!ObStmt::is_dml_write_stmt(stmt_type_)
@@ -264,11 +262,18 @@ int ObMPStmtExecute::check_param_type_for_arraybinding(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arraybinding only support write dml", K(ret), K(stmt_type_));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "arraybinding got no write dml");
-  } else if (session_info->get_local_autocommit()) {
+  } else if (session_info.get_local_autocommit()) {  // read system variable after session info synchronized
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arraybinding must in autocommit off", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "arraybinding has autocommit = on");
-  } else if (OB_UNLIKELY(param_type_infos.count() <= 0)) {
+  }
+  return ret;
+}
+
+int ObMPStmtExecute::check_param_type_for_arraybinding(ParamTypeInfoArray &param_type_infos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(param_type_infos.count() <= 0)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("arraybinding must has parameters", K(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "arraybinding has no parameter");
@@ -278,8 +283,7 @@ int ObMPStmtExecute::check_param_type_for_arraybinding(
       if (type_info.is_basic_type_ || !type_info.is_elem_type_) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("arraybinding parameter must be anonymous array", K(ret));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                       "arraybinding parameter is not anonymous array");
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "arraybinding parameter is not anonymous array");
       }
     }
   }
@@ -929,7 +933,7 @@ int ObMPStmtExecute::request_params(ObSQLSessionInfo *session,
       }
 
       if (OB_SUCC(ret) && is_arraybinding_) {
-        OZ (check_param_type_for_arraybinding(session, param_type_infos));
+        OZ (check_param_type_for_arraybinding(param_type_infos));
       }
       if (OB_SUCC(ret)
           && (stmt::T_CALL_PROCEDURE == ps_session_info->get_stmt_type()
@@ -1103,7 +1107,12 @@ int ObMPStmtExecute::execute_response(ObSQLSessionInfo &session,
     if (OB_SUCC(ret)) {
       ObPLExecCtx pl_ctx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
                         NULL/*result*/, &ret, NULL/*func*/, true);
-      if (OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))) {
+      int64_t orc_max_ret_rows = INT64_MAX;
+      if (lib::is_oracle_mode()
+          && OB_FAIL(session.get_oracle_sql_select_limit(orc_max_ret_rows))) {
+        LOG_WARN("failed to get sytem variable _oracle_sql_select_limit", K(ret));
+      } else if (OB_FAIL(ObSPIService::dbms_dynamic_open(
+                     &pl_ctx, *cursor, false, orc_max_ret_rows))) {
         LOG_WARN("open cursor fail. ", K(ret), K(stmt_id_));
         if (!THIS_WORKER.need_retry()) {
           int cli_ret = OB_SUCCESS;
@@ -1879,6 +1888,8 @@ int ObMPStmtExecute::process()
       LOG_WARN("failed to init flt extra info", K(ret));
     } else if (OB_FAIL(session.gen_configs_in_pc_str())) {
       LOG_WARN("fail to generate configuration string that can influence execution plan", K(ret));
+    } else if (is_arraybinding_ && OB_FAIL(check_precondition_for_arraybinding(session))) {
+      LOG_WARN("precondition for arraybinding is not satisfied", K(ret));
     } else {
       FLTSpanGuard(ps_execute);
       FLT_SET_TAG(log_trace_id, ObCurTraceId::get_trace_id_str(),

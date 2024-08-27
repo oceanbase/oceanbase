@@ -104,7 +104,6 @@ public:
                          int64_t &baseline_affected);
   int load_baseline(ObBaselineKey &key, ObPhysicalPlan* plan, const bool fixed, const bool enabled);
   int purge_baselines(const uint64_t tenant_id, int64_t baseline_affected);
-  int evict_plan_baseline(ObSpmCacheCtx& spm_ctx);
   int check_evolution_task();
 private:
   int init(uint64_t tenant_id);

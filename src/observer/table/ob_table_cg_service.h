@@ -53,14 +53,12 @@ public:
                                          const ObTableEntity &entity);
   static int refresh_ttl_exprs_frame(ObTableCtx &ctx,
                                      const common::ObIArray<sql::ObExpr *> &ins_new_row,
-                                     const common::ObIArray<sql::ObExpr *> &delta_exprs,
                                      const ObTableEntity &entity);
   static int refresh_update_exprs_frame(ObTableCtx &ctx,
                                         const common::ObIArray<sql::ObExpr *> &new_row,
                                         const ObTableEntity &entity);
   static int refresh_insert_up_exprs_frame(ObTableCtx &ctx,
                                            const common::ObIArray<sql::ObExpr *> &ins_new_row,
-                                           const common::ObIArray<sql::ObExpr *> &delta_row,
                                            const ObTableEntity &entity);
 private:
   static int refresh_exprs_frame(ObTableCtx &ctx,

@@ -410,10 +410,13 @@ int ObTableApiProcessorBase::get_tablet_by_rowkey(uint64_t table_id, const ObIAr
       LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
     } else if (!table_schema->is_partitioned_table()) {
       tablet_ids.push_back(table_schema->get_tablet_id());
-    } else if (OB_FAIL(location_calc.calculate_partition_ids_by_rowkey(
-                           session(), schema_guard, table_id, rowkeys, tablet_ids, part_ids))) {
-      LOG_WARN("failed to calc partition id", K(ret));
-    } else {}
+    } else {
+      // trigger client to refresh table entry
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
+    }
   }
   return ret;
 }
@@ -1100,9 +1103,11 @@ int ObTableApiProcessorBase::get_tablet_id(const ObTabletID &arg_tablet_id, uint
     } else if (!table_schema->is_partitioned_table()) {
       tablet_id = table_schema->get_tablet_id();
     } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partitioned table not pass tablet id");
-      LOG_WARN("partitioned table must pass tablet id", K(ret), K(table_id));
+      // trigger client to refresh table entry
+      // maybe drop a non-partitioned table and create a
+      // partitioned table with same name
+      ret = OB_SCHEMA_ERROR;
+      LOG_WARN("partitioned table should pass right tablet id from client", K(ret), K(table_id));
     }
   }
   return ret;

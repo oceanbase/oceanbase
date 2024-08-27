@@ -1073,6 +1073,10 @@ int ObDbmsStatsUtils::prepare_gather_stat_param(const ObTableStatParam &param,
   gather_param.data_table_name_ = param.data_table_name_;
   gather_param.global_part_id_ = param.global_part_id_;
   gather_param.gather_vectorize_ = gather_vectorize;
+  gather_param.hist_sample_info_.is_sample_ = param.hist_sample_info_.is_sample_;
+  gather_param.hist_sample_info_.is_block_sample_ = param.hist_sample_info_.is_block_sample_;
+  gather_param.hist_sample_info_.sample_type_ = param.hist_sample_info_.sample_type_;
+  gather_param.hist_sample_info_.sample_value_ = param.hist_sample_info_.sample_value_;
   return ret;
 }
 

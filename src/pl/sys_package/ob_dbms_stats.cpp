@@ -57,8 +57,8 @@ namespace pl {
  *      12. no_invalidate BOOLEAN     DEFAULT to_no_invalidate_type(get_param('NO_INVALIDATE')),
  *      13. stattype      VARCHAR2    DEFAULT 'DATA',
  *      14. force         BOOLEAN     DEFAULT false,
- *      15. context       DBMS_STATS.CONTEXT DEFAULT NULL,
- *      16. options       VARCHAR2    DEFAULT 'GATHER'
+ *      15. hist_est_percent NUMBER   DEFAULT AUTO_SAMPLE_SIZE
+ *      16. hist_block_sample BOOLEAN DEFAULT FALSE,
  * @param result
  * @return
  */
@@ -99,6 +99,8 @@ int ObDbmsStats::gather_table_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                                 params.at(8),
                                                 params.at(12),
                                                 params.at(14),
+                                                params.count() > 15 ? &params.at(15) : NULL,
+                                                params.count() > 16 ? &params.at(16) : NULL,
                                                 stat_param))) {
       LOG_WARN("failed to parse stat optitions", K(ret));
     } else if (OB_FAIL(running_monitor.add_table_info(stat_param))) {
@@ -205,15 +207,17 @@ int ObDbmsStats::gather_schema_stats(ObExecContext &ctx, ParamStore &params, ObO
       } else if (OB_FAIL(parse_table_part_info(ctx, stat_table, stat_param))) {
         LOG_WARN("failed to parse table part info", K(ret));
       } else if (OB_FAIL(parse_gather_stat_options(ctx,
-                                                  params.at(1),
-                                                  params.at(2),
-                                                  params.at(3),
-                                                  params.at(4),
-                                                  params.at(5),
-                                                  params.at(6),
-                                                  params.at(10),
-                                                  params.at(12),
-                                                  stat_param))) {
+                                                   params.at(1),
+                                                   params.at(2),
+                                                   params.at(3),
+                                                   params.at(4),
+                                                   params.at(5),
+                                                   params.at(6),
+                                                   params.at(10),
+                                                   params.at(12),
+                                                   NULL/*hist_est_percent*/,
+                                                   NULL/*hist_block_sample*/,
+                                                   stat_param))) {
         LOG_WARN("failed to parse stat optitions", K(ret));
       } else if (OB_FAIL(running_monitor.add_table_info(stat_param))) {
         LOG_WARN("failed to add table info", K(ret));
@@ -323,6 +327,8 @@ int ObDbmsStats::gather_index_stats(ObExecContext &ctx, ParamStore &params, ObOb
                                                empty_cascade,
                                                params.at(9),
                                                params.at(10),
+                                               NULL/*hist_est_percent*/,
+                                               NULL/*hist_block_sample*/,
                                                ind_stat_param))) {
     LOG_WARN("failed to parse stat optitions", K(ret));
   } else if (ObDbmsStatsUtils::is_virtual_index_table(ind_stat_param.table_id_)) {//not gather virtual table index.
@@ -3821,6 +3827,8 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
                                            const ObObjParam &cascade,
                                            const ObObjParam &no_invalidate,
                                            const ObObjParam &force,
+                                           const ObObjParam *hist_est_percent,
+                                           const ObObjParam *hist_block_sample,
                                            ObTableStatParam &param)
 {
   int ret = OB_SUCCESS;
@@ -3921,6 +3929,41 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
       stat_options |= StatOptionFlags::OPT_FORCE;
     } else if (OB_FAIL(force.get_bool(param.force_))) {
       LOG_WARN("failed to get force", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (hist_est_percent != NULL) {
+      double percent = 0.0;
+      number::ObNumber num_hist_est_percent;
+      if (hist_est_percent->is_null()) {
+        param.hist_sample_info_.set_percent(100.0);
+      } else if (OB_FAIL(hist_est_percent->get_number(num_hist_est_percent))) {
+        LOG_WARN("failed to get number", K(ret));
+      } else if (OB_FAIL(ObDbmsStatsUtils::cast_number_to_double(num_hist_est_percent, percent))) {
+        LOG_WARN("failed to cast number to double" , K(ret));
+      } else if (percent == 0.0) {
+        stat_options |= StatOptionFlags::OPT_HIST_EST_PERCENT;
+      } else if (OB_UNLIKELY(percent < 0.000001 || percent > 100.0)) {
+        ret = OB_ERR_DBMS_STATS_PL;
+        LOG_WARN("Illegal sample percent: must be in the range[0.000001,100]", K(ret));
+        LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal sample percent: must be in the range[0.000001,100]");
+      } else {
+        param.hist_sample_info_.set_percent(percent);
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (hist_block_sample != NULL) {
+      bool is_block_sample = false;
+      if (hist_block_sample->is_null()) {
+        stat_options |= StatOptionFlags::OPT_HIST_BLOCK_SAMPLE;
+      } else if (OB_FAIL(hist_block_sample->get_bool(is_block_sample))) {
+        LOG_WARN("failed to get block sample", K(ret));
+      } else {
+        param.hist_sample_info_.set_is_block_sample(is_block_sample);
+      }
     }
   }
 
@@ -4039,6 +4082,22 @@ int ObDbmsStats::get_default_stat_options(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_ESTIMATE_BLOCK) {
     ObEstimateBlockPrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(*param.allocator_, ctx.get_my_session(), ObString(), tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_HIST_EST_PERCENT) {
+    ObHistEstPercentPrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(*param.allocator_, ctx.get_my_session(), ObString(), tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_HIST_BLOCK_SAMPLE) {
+    ObHistBlockSamplePrefs *tmp_pref = NULL;
     if (OB_FAIL(new_stat_prefs(*param.allocator_, ctx.get_my_session(), ObString(), tmp_pref))) {
       LOG_WARN("failed to new stat prefs", K(ret));
     } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
@@ -5436,7 +5495,7 @@ int ObDbmsStats::get_common_table_stale_percent(sql::ObExecContext &ctx,
   uint64_t table_id = share::is_oracle_mapping_real_virtual_table(table_schema.get_table_id()) ?
                                    share::get_real_table_mappings_tid(table_schema.get_table_id()) :
                                    table_schema.get_table_id();
-  const int64_t part_id = PARTITION_LEVEL_ZERO == table_schema.get_part_level() ? table_id : -1;
+  const int64_t part_id = PARTITION_LEVEL_ZERO == table_schema.get_part_level() ? table_schema.get_table_id() : -1;
   int64_t inc_modified_count = 0;
   int64_t row_cnt = 0;
   if (OB_UNLIKELY(table_schema.is_user_table() && -1 == part_id)) {
@@ -5703,14 +5762,29 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
     } else {
       stat_pref = tmp_pref;
     }
+  } else if (0 == opt_name.case_compare("HIST_EST_PERCENT")) {
+    ObHistEstPercentPrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(allocator, ctx.get_my_session(), opt_value, tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else {
+      stat_pref = tmp_pref;
+    }
+  } else if (0 == opt_name.case_compare("HIST_BLOCK_SAMPLE")) {
+    ObHistBlockSamplePrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(allocator, ctx.get_my_session(), opt_value, tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else {
+      stat_pref = tmp_pref;
+    }
   } else {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Invalid input values for pname", K(ret), K(opt_name));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Invalid input values for pname, Only Support CASCADE |"\
-                                          "DEGREE | ESTIMATE_PERCENT | GRANULARITY | INCREMENTAL |"\
-                                          "INCREMENTAL_LEVEL | METHOD_OPT | NO_INVALIDATE | OPTIONS |"\
-                                          "STALE_PERCENT | ESTIMATE_BLOCK | BLOCK_SAMPLE |"\
-                                          "APPROXIMATE_NDV(global prefs unique) prefs");
+                                       "DEGREE | ESTIMATE_PERCENT | GRANULARITY | INCREMENTAL |"\
+                                       "INCREMENTAL_LEVEL | METHOD_OPT | NO_INVALIDATE | OPTIONS |"\
+                                       "STALE_PERCENT | ESTIMATE_BLOCK | BLOCK_SAMPLE  |"\
+                                       "HIST_EST_PERCENT | HIST_BLOCK_SAMPLE |"\
+                                       "APPROXIMATE_NDV(global prefs unique) prefs");
   }
   return ret;
 }

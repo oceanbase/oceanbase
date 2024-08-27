@@ -123,6 +123,7 @@ public:
         EVENT_ADD(TABLEAPI_DELETE_TIME, elapsed_us);
         SET_AUDIT_SQL_STRING(single_delete);
         audit_record.stmt_type_ = sql::stmt::T_KV_DELETE;
+        break;
       case ObTableProccessType::TABLE_API_SINGLE_UPDATE:
         EVENT_INC(TABLEAPI_UPDATE_COUNT);
         EVENT_ADD(TABLEAPI_UPDATE_TIME, elapsed_us);

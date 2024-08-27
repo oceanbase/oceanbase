@@ -75,6 +75,8 @@ int ObLogJoinFilter::inner_replace_op_exprs(ObRawExprReplacer &replacer)
   } else if (OB_NOT_NULL(calc_tablet_id_expr_)
       && OB_FAIL(replace_expr_action(replacer, calc_tablet_id_expr_))) {
     LOG_WARN("failed to replace calc_tablet_id_expr_", K(ret));
+  } else if (!is_create_ && OB_FAIL(replace_exprs_action(replacer, join_filter_exprs_))) {
+    LOG_WARN("failed to replace join_filter_exprs_", K(ret));
   }
   return ret;
 }

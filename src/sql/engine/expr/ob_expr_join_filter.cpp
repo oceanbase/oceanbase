@@ -120,7 +120,7 @@ int ObExprJoinFilter::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
     }
     default: {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected raw expr type", K(ret));
+      LOG_WARN("unexpected runtime filter type", K(ret), K(raw_expr.get_runtime_filter_type()));
     }
   }
 
@@ -139,9 +139,11 @@ int ObExprJoinFilter::check_rf_ready(
       while (!join_filter_ctx->is_ready() && OB_SUCC(exec_ctx.fast_check_status())) {
         if (OB_NOT_NULL(rf_msg)) {
 #ifdef ERRSIM
-          if (OB_FAIL(OB_E(EventTable::EN_PX_JOIN_FILTER_HOLD_MSG) OB_SUCCESS)) {
+          int ecode = EventTable::EN_PX_JOIN_FILTER_HOLD_MSG;
+          if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
             LOG_WARN("join filter hold msg by design", K(ret));
             ob_usleep(80000000);
+            ret = ecode;
           }
 #endif
           if (rf_msg->check_ready()) {

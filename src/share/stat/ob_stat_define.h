@@ -51,7 +51,12 @@ enum StatOptionFlags
   OPT_FORCE            = 1 << 11,
   OPT_APPROXIMATE_NDV  = 1 << 12,
   OPT_ESTIMATE_BLOCK   = 1 << 13,
-  OPT_STAT_OPTION_ALL  = (1 << 14) -1
+  OPT_ASYNC_GATHER_STALE_RATION = 1 << 14,//not used in 421
+  OPT_ASYNC_GATHER_SAMPLE_SIZE  = 1 << 15,//not used in 421
+  OPT_ASYNC_GATHER_FULL_TABLE_SIZE = 1 << 16,//not used in 421
+  OPT_HIST_EST_PERCENT = 1 << 17,
+  OPT_HIST_BLOCK_SAMPLE = 1 << 18,
+  OPT_STAT_OPTION_ALL  = (1 << 19) -1
 };
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
@@ -66,6 +71,9 @@ const int64_t MAX_OPT_STATS_PROCESS_RPC_TIMEOUT = 300000000;//one optimizer stat
 const static int64_t MAX_NUM_OF_WRITE_STATS = 2000;
 const static int64_t DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE = 256;
 const static int64_t MIN_GATHER_WORK_ARANA_SIZE = 10 * 1024L * 1024L; //10M
+const int64_t MAXIMUM_BLOCK_CNT_OF_ROW_SAMPLE_GATHER_HYBRID_HIST = 100000;
+const int64_t MAXIMUM_ROWS_OF_ROW_SAMPLE_GATHER_HYBRID_HIST = 10000000;
+const int64_t MINIMUM_BLOCK_CNT_OF_BLOCK_SAMPLE_HYBRID_HIST = 16;
 
 enum StatLevel
 {
@@ -444,7 +452,8 @@ struct ObTableStatParam {
     need_estimate_block_(true),
     is_temp_table_(false),
     allocator_(NULL),
-    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE)
+    ref_table_type_(share::schema::ObTableType::MAX_TABLE_TYPE),
+    hist_sample_info_()
   {}
 
   int assign(const ObTableStatParam &other);
@@ -523,6 +532,7 @@ struct ObTableStatParam {
   bool is_temp_table_;
   common::ObIAllocator *allocator_;
   share::schema::ObTableType ref_table_type_;
+  ObAnalyzeSampleInfo hist_sample_info_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -565,7 +575,8 @@ struct ObTableStatParam {
                K(data_table_id_),
                K(need_estimate_block_),
                K(is_temp_table_),
-               K(ref_table_type_));
+               K(ref_table_type_),
+               K(hist_sample_info_));
 };
 
 struct ObOptStatGatherParam {
@@ -591,7 +602,8 @@ struct ObOptStatGatherParam {
     global_part_id_(-1),
     gather_vectorize_(DEFAULT_STAT_GATHER_VECTOR_BATCH_SIZE),
     sepcify_scn_(0),
-    is_specify_partition_(false)
+    is_specify_partition_(false),
+    hist_sample_info_()
   {}
   int assign(const ObOptStatGatherParam &other);
   int64_t get_need_gather_column() const;
@@ -617,6 +629,7 @@ struct ObOptStatGatherParam {
   int64_t gather_vectorize_;
   uint64_t sepcify_scn_;
   bool is_specify_partition_;
+  ObAnalyzeSampleInfo hist_sample_info_;
 
   TO_STRING_KV(K(tenant_id_),
                K(db_name_),
@@ -637,7 +650,8 @@ struct ObOptStatGatherParam {
                K(global_part_id_),
                K(gather_vectorize_),
                K(sepcify_scn_),
-               K(is_specify_partition_));
+               K(is_specify_partition_),
+               K(hist_sample_info_));
 };
 
 struct ObOptStat

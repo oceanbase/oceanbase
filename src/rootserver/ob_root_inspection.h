@@ -210,8 +210,7 @@ private:
                                   const share::schema::ObTableSchema &hard_code_table);
   static int check_column_schema_(const common::ObString &table_name,
                                   const share::schema::ObColumnSchemaV2 &column,
-                                  const share::schema::ObColumnSchemaV2 &hard_code_column,
-                                  const bool ignore_column_id);
+                                  const share::schema::ObColumnSchemaV2 &hard_code_column);
 
   int check_data_version_();
   int check_data_version_(const uint64_t tenant_id);

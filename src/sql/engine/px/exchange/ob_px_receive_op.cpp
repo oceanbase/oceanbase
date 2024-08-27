@@ -460,6 +460,7 @@ int ObPxReceiveOp::wrap_get_next_batch(const int64_t max_row_cnt)
 {
   const int64_t max_cnt = std::min(max_row_cnt, spec_.max_batch_size_);
   int ret = OB_SUCCESS;
+  clear_evaluated_flag();
   int64_t idx = 0;
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(eval_ctx_);
   batch_info_guard.set_batch_size(max_cnt);
@@ -522,11 +523,9 @@ int ObPxReceiveOp::erase_dtl_interm_result()
 {
   int ret = OB_SUCCESS;
 #ifdef ERRSIM
-  ObSQLSessionInfo *session = ctx_.get_my_session();
-  int64_t query_timeout = 0;
-  session->get_query_timeout(query_timeout);
-  if (OB_FAIL(OB_E(EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT) OB_SUCCESS)) {
-    LOG_WARN("ObPxCoordOp not erase_dtl_interm_result by design", K(ret), K(query_timeout));
+  int ecode = EventTable::EN_PX_SINGLE_DFO_NOT_ERASE_DTL_INTERM_RESULT;
+  if (OB_SUCCESS != ecode && OB_SUCC(ret)) {
+    LOG_WARN("ObPxCoordOp not erase_dtl_interm_result by design", K(ret));
     return OB_SUCCESS;
   }
 #endif

@@ -70,7 +70,7 @@ public:
   inline int64_t get_normal_hold() const;
   inline int64_t get_normal_used() const;
   inline int64_t get_normal_alloc() const;
-  bool check_has_unfree(char *first_label);
+  bool check_has_unfree(char *first_label, char *first_bt);
 
 private:
   AObject *alloc_normal_object(const uint32_t cls, const ObMemAttr &attr);

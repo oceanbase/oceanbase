@@ -930,7 +930,6 @@ int get_dml_stmt_need_privs(
             || table_item->is_view_table_) {
             need_priv.db_ = table_item->database_name_;
             need_priv.table_ = table_item->table_name_;
-            need_priv.priv_set_ = priv_set;
             need_priv.is_sys_table_ = table_item->is_system_table_;
             need_priv.is_for_update_ = table_item->for_update_;
             need_priv.priv_level_ = OB_PRIV_TABLE_LEVEL;
@@ -945,6 +944,17 @@ int get_dml_stmt_need_privs(
                                session_priv.user_name_.length(), session_priv.user_name_.ptr(),
                                session_priv.host_name_.length(),session_priv.host_name_.ptr(),
                                table_item->table_name_.length(), table_item->table_name_.ptr());
+              }
+            }
+            if (OB_SUCC(ret)) {
+              bool has = false;
+              if (stmt::T_SELECT == dml_stmt->get_stmt_type()) {
+                need_priv.priv_set_ = priv_set;
+              } else if (OB_FAIL(static_cast<const ObDelUpdStmt*>(dml_stmt)->has_dml_table_info(
+                                                              table_item->table_id_, has))) {
+                LOG_WARN("failed to check has dml table info", K(ret));
+              } else {
+                need_priv.priv_set_ = has ? priv_set : OB_PRIV_SELECT;
               }
             }
             if (OB_SUCC(ret)) {

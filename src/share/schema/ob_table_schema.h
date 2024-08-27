@@ -207,6 +207,12 @@ enum ObViewColumnFilledFlag
   FILLED = 1,
 };
 
+enum ObDDLIgnoreSyncCdcFlag
+{
+  DO_SYNC_LOG_FOR_CDC = 0,
+  DONT_SYNC_LOG_FOR_CDC = 1,
+};
+
 struct ObTableMode {
   OB_UNIS_VERSION_V(1);
 private:
@@ -226,7 +232,9 @@ private:
   static const int32_t TM_TABLE_ROWID_MODE_BITS = 1;
   static const int32_t TM_VIEW_COLUMN_FILLED_OFFSET = 23;
   static const int32_t TM_VIEW_COLUMN_FILLED_BITS = 1;
-  static const int32_t TM_RESERVED = 8;
+  static const int32_t TM_DDL_IGNORE_SYNC_CDC_OFFSET = 29;
+  static const int32_t TM_DDL_IGNORE_SYNC_CDC_BITS = 1;
+  static const int32_t TM_RESERVED = 7;
 
   static const uint32_t MODE_FLAG_MASK = (1U << TM_MODE_FLAG_BITS) - 1;
   static const uint32_t PK_MODE_MASK = (1U << TM_PK_MODE_BITS) - 1;
@@ -236,6 +244,7 @@ private:
   static const uint32_t AUTO_INCREMENT_MODE_MASK = (1U << TM_TABLE_AUTO_INCREMENT_MODE_BITS) - 1;
   static const uint32_t ROWID_MODE_MASK = (1U << TM_TABLE_ROWID_MODE_BITS) - 1;
   static const uint32_t VIEW_COLUMN_FILLED_MASK = (1U << TM_VIEW_COLUMN_FILLED_BITS) - 1;
+  static const uint32_t DDL_IGNORE_SYNC_CDC_MASK = (1U << TM_DDL_IGNORE_SYNC_CDC_BITS) - 1;
 public:
   ObTableMode() { reset(); }
   virtual ~ObTableMode() { reset(); }
@@ -289,7 +298,8 @@ public:
                "table_organization_mode", organization_mode_,
                "auto_increment_mode", auto_increment_mode_,
                "rowid_mode", rowid_mode_,
-               "view_column_filled_flag", view_column_filled_flag_);
+               "view_column_filled_flag", view_column_filled_flag_,
+               "ddl_table_ignore_sync_cdc_flag", ddl_table_ignore_sync_cdc_flag_);
   union {
     int32_t mode_;
     struct {
@@ -301,6 +311,7 @@ public:
       uint32_t auto_increment_mode_: TM_TABLE_AUTO_INCREMENT_MODE_BITS;
       uint32_t rowid_mode_: TM_TABLE_ROWID_MODE_BITS;
       uint32_t view_column_filled_flag_ : TM_VIEW_COLUMN_FILLED_BITS;
+      uint32_t ddl_table_ignore_sync_cdc_flag_ : TM_DDL_IGNORE_SYNC_CDC_BITS;
       uint32_t reserved_ :TM_RESERVED;
     };
   };
@@ -632,6 +643,10 @@ public:
   inline void set_view_column_filled_flag(const ObViewColumnFilledFlag flag)
   { table_mode_.view_column_filled_flag_ = flag; }
 
+  inline void set_ddl_ignore_sync_cdc_flag(const ObDDLIgnoreSyncCdcFlag flag)
+  { table_mode_.ddl_table_ignore_sync_cdc_flag_ = flag; }
+  inline bool is_ddl_table_ignored_to_sync_cdc() const
+  { return DONT_SYNC_LOG_FOR_CDC == table_mode_.ddl_table_ignore_sync_cdc_flag_; }
 
   inline void set_session_id(const uint64_t id)  { session_id_ = id; }
   inline uint64_t get_session_id() const { return session_id_; }

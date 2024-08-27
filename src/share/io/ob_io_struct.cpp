@@ -832,26 +832,21 @@ void ObIOTuner::destroy()
 void ObIOTuner::run1()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret), K(is_inited_));
-  } else {
-    const int64_t thread_id = get_thread_idx();
-    set_thread_name("IO_TUNING", thread_id);
-    LOG_INFO("io tuner thread started");
-    while (!has_set_stop()) {
-      // print interval must <= 1s, for ensuring real_iops >= 1 in gv$ob_io_quota.
-      if (REACH_TIME_INTERVAL(1000L * 1000L * 1L)) {
-        print_io_status();
-        print_sender_status();
-        if (OB_FAIL(send_detect_task())) {
-          LOG_WARN("fail to send detect task", K(ret));
-        }
+  const int64_t thread_id = get_thread_idx();
+  set_thread_name("IO_TUNING", thread_id);
+  LOG_INFO("io tuner thread started");
+  while (!has_set_stop()) {
+    // print interval must <= 1s, for ensuring real_iops >= 1 in gv$ob_io_quota.
+    if (REACH_TIME_INTERVAL(1000L * 1000L * 1L)) {
+      print_io_status();
+      print_sender_status();
+      if (OB_FAIL(send_detect_task())) {
+        LOG_WARN("fail to send detect task", K(ret));
       }
-      ob_usleep(100 * 1000); // 100ms
     }
-    LOG_INFO("io tuner thread stopped");
+    ob_usleep(100 * 1000); // 100ms
   }
+  LOG_INFO("io tuner thread stopped");
 }
 
 int64_t ObIOTuner::to_string(char *buf, const int64_t len) const
@@ -2570,9 +2565,10 @@ int ObIORunner::init(const int64_t queue_capacity, ObIAllocator &allocator)
     LOG_WARN("init queue failed", K(ret), K(queue_capacity), KP(buf));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::IO_CALLBACK, tg_id_))) {
     LOG_WARN("create runner thread failed", K(ret));
-  } else if (FALSE_IT(is_inited_ = true)) {
   } else if (OB_FAIL(TG_SET_RUNNABLE_AND_START(tg_id_, *this))) {
     LOG_WARN("start runner thread failed", K(ret), K(tg_id_));
+  } else {
+    is_inited_ = true;
   }
   if (OB_UNLIKELY(!is_inited_)) {
     destroy();
@@ -2617,29 +2613,24 @@ void ObIORunner::destroy()
 void ObIORunner::run1()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!is_inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret), K(is_inited_));
-  } else {
-    lib::set_thread_name("DiskCB");
-    LOG_INFO("io callback thread started");
-    while (!has_set_stop()) {
-      ObIORequest *req = nullptr;
-      if (OB_FAIL(pop(req))) {
-        if (OB_ENTRY_NOT_EXIST == ret) {
-          ret = OB_SUCCESS;
-        } else {
-          LOG_WARN("pop request failed", K(ret));
-        }
+  lib::set_thread_name("DiskCB");
+  LOG_INFO("io callback thread started");
+  while (!has_set_stop()) {
+    ObIORequest *req = nullptr;
+    if (OB_FAIL(pop(req))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
       } else {
-        RequestHolder holder(req);
-        if (OB_FAIL(handle(req))) {
-          LOG_WARN("handle request failed", K(ret), KPC(req));
-        }
+        LOG_WARN("pop request failed", K(ret));
+      }
+    } else {
+      RequestHolder holder(req);
+      if (OB_FAIL(handle(req))) {
+        LOG_WARN("handle request failed", K(ret), KPC(req));
       }
     }
-    LOG_INFO("io callback thread stopped");
   }
+  LOG_INFO("io callback thread stopped");
 }
 
 int ObIORunner::push(ObIORequest &req)

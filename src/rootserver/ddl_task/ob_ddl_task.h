@@ -283,7 +283,8 @@ public:
       const uint64_t tenant_id,
       const int64_t task_id,
       const int64_t snapshot_version,
-      const common::ObAddr &sql_exec_addr);
+      const common::ObAddr &sql_exec_addr,
+      common::ObIArray<int64_t> &killed_sessions);
 
 private:
   static int fill_task_record(
@@ -631,6 +632,7 @@ protected:
   int64_t data_format_version_;
   int64_t consumer_group_id_;
   ObDDLWaitTransEndCtx wait_trans_ctx_;
+  ObArray<int64_t> killed_sessions_;
 };
 
 enum ColChecksumStat

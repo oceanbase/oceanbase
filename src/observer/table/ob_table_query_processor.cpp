@@ -95,36 +95,6 @@ ObTableAPITransCb *ObTableQueryP::new_callback(rpc::ObRequest *req)
   return nullptr;
 }
 
-int ObTableQueryP::get_tablet_ids(uint64_t table_id, ObIArray<ObTabletID> &tablet_ids)
-{
-  int ret = OB_SUCCESS;
-  ObTabletID tablet_id = arg_.tablet_id_;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  const ObTableSchema *table_schema = NULL;
-  if (!tablet_id.is_valid()) {
-    const uint64_t tenant_id = MTL_ID();
-    if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-      LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
-    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-      LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id), K(table_schema));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_TABLE_NOT_EXIST;
-      LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(table_id));
-    } else if (!table_schema->is_partitioned_table()) {
-      tablet_id = table_schema->get_tablet_id();
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("partitioned table not supported", K(ret), K(table_id));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(tablet_ids.push_back(tablet_id))) {
-      LOG_WARN("failed to push back", K(ret));
-    }
-  }
-  return ret;
-}
-
 int ObTableQueryP::init_tb_ctx(ObTableApiCacheGuard &cache_guard)
 {
   int ret = OB_SUCCESS;

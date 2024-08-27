@@ -198,13 +198,16 @@ int ObMPStmtPrexecute::before_process()
           } else {
             oceanbase::lib::Thread::WaitGuard guard(oceanbase::lib::Thread::WAIT_FOR_LOCAL_RETRY);
             do {
+              // reset `ret` explicitly before local retry
+              ret = OB_SUCCESS;
               SMART_VAR(ObMySQLResultSet, result, *session, THIS_WORKER.get_allocator()) {
                 result.set_has_more_result(false);
                 share::schema::ObSchemaGetterGuard schema_guard;
                 const uint64_t tenant_id = session->get_effective_tenant_id();
                 ObVirtualTableIteratorFactory vt_iter_factory(*gctx_.vt_iter_creator_);
                 retry_ctrl_.clear_state_before_each_retry(session->get_retry_info_for_update());
-                if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+                if (OB_FAIL(ret)) {
+                } else if (OB_FAIL(gctx_.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
                   LOG_WARN("get schema guard failed", K(ret));
                 } else if (OB_FAIL(schema_guard.get_schema_version(
                                     session->get_effective_tenant_id(), tenant_version))) {
@@ -466,7 +469,12 @@ int ObMPStmtPrexecute::execute_response(ObSQLSessionInfo &session,
       ObPLExecCtx pl_ctx(cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
                         NULL/*result*/, &ret, NULL/*func*/, true);
       get_ctx().cur_sql_ = sql_;
-      if (OB_FAIL(ObSPIService::dbms_dynamic_open(&pl_ctx, *cursor))) {
+      int64_t orc_max_ret_rows = INT64_MAX;
+      if (lib::is_oracle_mode()
+          && OB_FAIL(session.get_oracle_sql_select_limit(orc_max_ret_rows))) {
+        LOG_WARN("failed to get sytem variable _oracle_sql_select_limit", K(ret));
+      } else if (OB_FAIL(ObSPIService::dbms_dynamic_open(
+                     &pl_ctx, *cursor, false, orc_max_ret_rows))) {
         LOG_WARN("cursor open faild.", K(cursor->get_id()));
         // select do not support arraybinding
         if (!THIS_WORKER.need_retry()) {

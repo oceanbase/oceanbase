@@ -128,7 +128,8 @@ enum ObExprInfoFlag
   IS_ROWID,
   IS_ROWID_SIMPLE_COND, // rowid = const
   IS_ROWID_RANGE_COND,   // rowid belongs to a range
-  IS_TABLE_ASSIGN // update t1 set c1 = const
+  IS_TABLE_ASSIGN, // update t1 set c1 = const
+  IS_EXISTS,
 };
 
 #define IS_INFO_MASK_BEGIN  IS_CONST
@@ -237,6 +238,7 @@ inline const char* get_expr_info_flag_str(const ObExprInfoFlag flag)
     case IS_ROWID_SIMPLE_COND: { ret = "IS_ROWID_SIMPLE_COND"; break; }
     case IS_ROWID_RANGE_COND: { ret = "IS_ROWID_RANGE_COND"; break; }
     case IS_TABLE_ASSIGN: { ret = "IS_TABLE_ASSIGN"; break; }
+    case IS_EXISTS: { ret = "IS_EXISTS"; break; }
     default:
       break;
   }
