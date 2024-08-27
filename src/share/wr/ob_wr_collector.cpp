@@ -229,7 +229,7 @@ int ObWrCollector::collect_ash()
     SMART_VAR(ObISQLClient::ReadResult, res)
     {
       // iterate every partition
-      for (int64_t i = 0; i < OB_SUCC(ret) && i < part_locations.count(); i++) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_locations.count(); i++) {
         ObMySQLResult *result = nullptr;
         res.reuse();
         sql.reuse();
@@ -1101,7 +1101,7 @@ int ObWrCollector::update_last_snapshot_end_time()
       ret = OB_TIMEOUT;
       LOG_WARN("wr snapshot timeout", KR(ret), K_(timeout_ts));
     } else if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", tenant_id))) {
-      LOG_WARN("failed to add tenant_id", KR(ret), K(-1));
+      LOG_WARN("failed to add tenant_id", KR(ret), K(tenant_id));
     } else if (OB_FAIL(dml_splicer.add_pk_column("cluster_id", -1))) {
       LOG_WARN("failed to add column cluster_id", KR(ret), K(-1));
     } else if (OB_FAIL(dml_splicer.add_pk_column("snap_id", -1))) {
@@ -1459,8 +1459,8 @@ int ObWrCollector::get_begin_interval_time(int64_t &begin_interval_time)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("GCTX.sql_proxy_ is null", K(ret));
     } else if (OB_FAIL(sql.assign_fmt("SELECT /*+ WORKLOAD_REPOSITORY */ time_to_usec(END_INTERVAL_TIME) FROM %s where "
-                                      "tenant_id=%ld order by snap_id desc limit 1",
-                   OB_WR_SNAPSHOT_TNAME, tenant_id))) {
+                                      "tenant_id=%ld and snap_id != %ld order by snap_id desc limit 1",
+                   OB_WR_SNAPSHOT_TNAME, tenant_id, snap_id_))) {
       LOG_WARN("failed to format sql", KR(ret));
     } else if (OB_FAIL(
                    GCTX.sql_proxy_->read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
@@ -1471,10 +1471,10 @@ int ObWrCollector::get_begin_interval_time(int64_t &begin_interval_time)
     } else if (OB_FAIL(result->next())) {
       if (OB_ITER_END == ret) {
         // no record in __wr_snapshot table. this is the first time we take snapshot in this
-        // cluster.
+        // cluster, just use snapshot_begin_time_ in wr request.
         ret = OB_SUCCESS;
-        begin_interval_time = 0;
-        LOG_WARN("first time to take wr snapshot in this cluster", K(tenant_id), K(begin_interval_time));
+        begin_interval_time = snapshot_begin_time_;
+        LOG_WARN("no scheduled wr snapshot in this cluster", K(tenant_id), K(begin_interval_time));
       } else {
         LOG_WARN("get next result failed", KR(ret), K(sql));
       }
