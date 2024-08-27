@@ -1039,7 +1039,9 @@ int RollbackMaskSet::merge_part(const share::ObLSID add_ls_id, const int64_t exe
         break;
       }
     }
-    if (!is_exist && OB_FAIL(rollback_parts_->push_back(ObTxExecPart(add_ls_id, exec_epoch, transfer_epoch)))) {
+    if (!is_exist && OB_FAIL(rollback_parts_->push_back(ObTxExecPart(add_ls_id,
+                                                                     exec_epoch,
+                                                                     transfer_epoch)))) {
       TRANS_LOG(WARN, "push part to array failed", KR(ret), K(add_ls_id));
     }
   }
@@ -1048,6 +1050,7 @@ int RollbackMaskSet::merge_part(const share::ObLSID add_ls_id, const int64_t exe
 
 int RollbackMaskSet::find_part(const share::ObLSID ls_id,
                                const int64_t orig_epoch,
+                               const int64_t transfer_epoch,
                                ObTxExecPart &part)
 {
   int ret = OB_SUCCESS;
@@ -1063,6 +1066,8 @@ int RollbackMaskSet::find_part(const share::ObLSID ls_id,
           ret = OB_ERR_UNEXPECTED;
           TRANS_LOG(WARN, "check rollback part failed", K(ret), K(rollback_parts_), K(orig_epoch));
         } else {
+          rollback_parts_->at(idx).transfer_epoch_ =
+            MAX(transfer_epoch, rollback_parts_->at(idx).transfer_epoch_);
           part = rollback_parts_->at(idx);
           is_exist = true;
         }
@@ -1074,7 +1079,7 @@ int RollbackMaskSet::find_part(const share::ObLSID ls_id,
     ret = OB_ENTRY_NOT_EXIST;
   }
   if (OB_FAIL(ret)) {
-    TRANS_LOG(WARN, "find part", K(ret), K(ls_id), K(orig_epoch), K(rollback_parts_));
+    TRANS_LOG(WARN, "find part", K(ret), K(ls_id), K(orig_epoch), K(rollback_parts_), K(transfer_epoch));
   }
   return ret;
 }

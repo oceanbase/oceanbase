@@ -487,6 +487,7 @@ public:
                  const int64_t transfer_epoch);
   int find_part(const share::ObLSID ls_id,
                 const int64_t orig_epoch,
+                const int64_t transfer_epoch,
                 ObTxExecPart &part);
 private:
   ObSpinLock lock_;
