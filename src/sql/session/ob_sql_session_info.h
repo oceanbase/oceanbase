@@ -639,37 +639,47 @@ public:
         } else { /*do nothing*/ }
         return ret;
       }
+
       int close_all(sql::ObSQLSessionInfo &session)
       {
         int ret = OB_SUCCESS;
-        common::ObSEArray<uint64_t, 32> cursor_ids;
         ObSessionStatEstGuard guard(session.get_effective_tenant_id(), session.get_sessid());
-        for (CursorMap::iterator iter = pl_cursor_map_.begin();  //ignore ret
-            iter != pl_cursor_map_.end();
-            ++iter) {
-          pl::ObPLCursorInfo *cursor_info = iter->second;
-          if (OB_ISNULL(cursor_info)) {
+        while (pl_cursor_map_.size() > 0) { // ignore error, just log, try to close all cursor in this loop.
+          int ret = OB_SUCCESS;
+          CursorMap::iterator iter = pl_cursor_map_.begin();
+          pl::ObPLCursorInfo *cursor = NULL;
+          if (iter == pl_cursor_map_.end()) {
             ret = OB_ERR_UNEXPECTED;
-            SQL_ENG_LOG(WARN, "cursor info is NULL", K(cursor_info), K(ret));
+            SQL_ENG_LOG(ERROR, "unexpected hashmap iter", K(ret));
+            break;
+          } else if (OB_ISNULL(cursor = iter->second)) {
+            ret = OB_ERR_UNEXPECTED;
+            SQL_ENG_LOG(WARN, "unexpected nullptr cursor info", K(ret), K(iter->first));
+            if (OB_FAIL(pl_cursor_map_.erase_refactored(iter->first))) {
+              SQL_ENG_LOG(ERROR, "failed to erase hash map", K(ret), K(iter->first));
+              break;
+            }
+          } else if (OB_FAIL(session.close_cursor(cursor->get_id()))) {
+            SQL_ENG_LOG(WARN, "failed to close session cursor", K(ret), K(cursor->get_id()));
           } else {
-            cursor_ids.push_back(cursor_info->get_id());
+            SQL_ENG_LOG(INFO, "clsoe session cursor implicit successed!", K(cursor->get_id()));
           }
         }
-        for (int64_t i = 0; i < cursor_ids.count() && OB_SUCC(ret); i++) {
-          uint64_t cursor_id = cursor_ids.at(i);
-          if (OB_FAIL(session.close_cursor(cursor_id))) {
-            SQL_ENG_LOG(WARN, "failed to close cursor",
-                        K(cursor_id), K(session.get_sessid()), K(ret));
-          } else {
-            SQL_ENG_LOG(INFO, "NOTICE: cursor is closed unexpectedly",
-                        K(cursor_id), K(session.get_sessid()), K(ret));
-          }
+        if (pl_cursor_map_.size() > 0) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_ENG_LOG(ERROR, "failed to close all cursor", K(ret), K(pl_cursor_map_.size()));
         }
         return ret;
       }
+
       inline bool is_inited() const { return NULL != mem_context_; }
       void reset()
       {
+        int ret = OB_SUCCESS;
+        if (pl_cursor_map_.size() != 0) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_ENG_LOG(ERROR, "session cursor map not empty, cursor leaked", K(pl_cursor_map_.size()));
+        }
         pl_cursor_map_.reuse();
         next_cursor_id_ = 1LL << 31;
         if (NULL != mem_context_) {
