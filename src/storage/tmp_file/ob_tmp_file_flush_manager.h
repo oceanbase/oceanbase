@@ -106,6 +106,7 @@ private:
   int handle_finish_(ObTmpFileFlushTask &flush_task);
 private:
   int update_meta_data_after_flush_for_files_(ObTmpFileFlushTask &flush_task);
+  int reset_flush_ctx_for_file_(const ObSharedNothingTmpFile *file, const bool is_meta);
   int get_or_create_file_in_ctx_(const int64_t fd, ObTmpFileSingleFlushContext &file_flush_ctx);
   int evict_pages_and_retry_insert_(ObTmpFileFlushTask &flush_task,
                                     ObTmpFileFlushInfo &flush_info,

@@ -990,20 +990,46 @@ int ObTmpFileFlushManager::update_meta_data_after_flush_for_files_(ObTmpFileFlus
       } else if (OB_FAIL(file->update_meta_after_flush(flush_info.batch_flush_idx_, is_meta, reset_ctx))){
         STORAGE_LOG(WARN, "fail to update meta data", KR(ret), K(is_meta), K(flush_info));
       } else {
-        if (reset_ctx) {
+        if (reset_ctx && flush_task.get_flush_seq() == flush_ctx_.get_flush_sequence()) {
           int tmp_ret = OB_SUCCESS;
-          // reset data/meta flush ctx after file update meta complete to prevent
-          // flush use stale flushed_page_id to copy data after the page is evicted.
-          // use empty ctx here because we have inserted ctx for every file when flushing begins.
-          ResetFlushCtxOp reset_op(is_meta);
-          ObTmpFileSingleFlushContext empty_ctx;
-          if (flush_task.get_flush_seq() == flush_ctx_.get_flush_sequence() &&
-              OB_TMP_FAIL(flush_ctx_.get_file_ctx_hash().set_or_update(file->get_fd(), empty_ctx, reset_op))) {
-            STORAGE_LOG(ERROR, "fail to clean file ctx from hash", KR(tmp_ret), K(file));
+          if (OB_TMP_FAIL(reset_flush_ctx_for_file_(file, is_meta))) {
+            STORAGE_LOG(WARN, "fail to reset flush ctx", KR(tmp_ret), K(file));
           }
         }
         flush_info.update_meta_data_done_ = true;
       }
+    }
+  }
+  return ret;
+}
+
+// reset data/meta flush ctx after file update meta complete to prevent
+// flush use stale flushed_page_id to copy data after the page is evicted
+int ObTmpFileFlushManager::reset_flush_ctx_for_file_(const ObSharedNothingTmpFile *file, const bool is_meta)
+{
+  int ret = OB_SUCCESS;
+  ObTmpFileSingleFlushContext update_ctx;
+  if (OB_ISNULL(file)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "tmp file ptr is null", KR(ret), K(file));
+  } else if (OB_FAIL(flush_ctx_.get_file_ctx_hash().get_refactored(file->get_fd(), update_ctx))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      // do nothing
+    } else {
+      STORAGE_LOG(WARN, "fail to get file ctx from hash", KR(ret), K(file));
+    }
+  } else if (OB_ISNULL(update_ctx.file_handle_.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "file handle in flush context is null", KR(ret), K(file));
+  } else {
+    if (is_meta) {
+      update_ctx.meta_ctx_.reset();
+    } else {
+      update_ctx.data_ctx_.reset();
+    }
+
+    if (OB_FAIL(flush_ctx_.get_file_ctx_hash().set_refactored(file->get_fd(), update_ctx, 1/*cover_object*/))) {
+      STORAGE_LOG(ERROR, "fail to set file ctx into hash", KR(ret), K(file));
     }
   }
   return ret;
