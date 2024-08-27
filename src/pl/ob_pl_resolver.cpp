@@ -6724,12 +6724,22 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
             ObPLConditionType actual_type = INVALID_TYPE;
             if (OB_FAIL(resolve_handler_condition(handler_list->children_[i], value, func))) {
               LOG_WARN("failed to resolve condition value", K(handler_list->children_[i]), K(ret));
-            } else if (OB_FAIL(check_duplicate_condition(*stmt, value, dup, desc))) {
+            } else if (OB_FAIL(check_duplicate_condition(*stmt, value, dup))) {
               LOG_WARN("failed to check duplication", K(value), K(ret));
             } else if (dup) {
               ret = OB_ERR_SP_DUP_HANDLER;
               LOG_USER_ERROR(OB_ERR_SP_DUP_HANDLER);
               LOG_WARN("Duplicate handler declared in the same block", K(value), K(dup), K(ret));
+            } else if (OB_FAIL(check_duplicate_condition(value, *desc, dup))) {
+              LOG_WARN("failed to check duplication", K(ret), K(value), KPC(desc));
+            } else if (dup) {
+              if (lib::is_mysql_mode()) {
+                ret = OB_ERR_SP_DUP_HANDLER;
+                LOG_USER_ERROR(OB_ERR_SP_DUP_HANDLER);
+                LOG_WARN("Duplicate handler declared in the same block", K(value), K(dup), K(ret));
+              } else {
+                // continue, Oracle same Condition on same handle is legal. such as WHEN NO_DATA_FOUND or NO_DATA_FOUND
+              }
             } else if (OB_FAIL(ObPLResolver::analyze_actual_condition_type(value, actual_type))) {
               LOG_WARN("failed to analyze actual condition type", K(value), K(ret));
             } else if (lib::is_oracle_mode()
@@ -15589,10 +15599,25 @@ int ObPLResolver::resolve_condition_value(const ObStmtNodeTree *parse_tree,
   return ret;
 }
 
+int ObPLResolver::check_duplicate_condition(const ObPLConditionValue &value,
+                                            ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc& cur_desc,
+                                            bool &dup)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t j = 0; !dup && j < cur_desc.get_conditions().count(); ++j) {
+    if (value.type_ == cur_desc.get_condition(j).type_ &&
+        value.error_code_ == cur_desc.get_condition(j).error_code_ &&
+        value.str_len_ == cur_desc.get_condition(j).str_len_ &&
+        0 == STRNCMP(value.sql_state_, cur_desc.get_condition(j).sql_state_, value.str_len_)) {
+      dup = true;
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
                                             const ObPLConditionValue &value,
-                                            bool &dup,
-                                            ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc* cur_desc)
+                                            bool &dup)
 {
   int ret = OB_SUCCESS;
   dup = false;
@@ -15633,16 +15658,6 @@ int ObPLResolver::check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt,
       }
     } else {
       break;
-    }
-  }
-  if (OB_NOT_NULL(cur_desc) && lib::is_mysql_mode()) {
-    for (int64_t j = 0; !dup && j < cur_desc->get_conditions().count(); ++j) {
-      if (value.type_ == cur_desc->get_condition(j).type_ &&
-          value.error_code_ == cur_desc->get_condition(j).error_code_ &&
-          value.str_len_ == cur_desc->get_condition(j).str_len_ &&
-          0 == STRNCMP(value.sql_state_, cur_desc->get_condition(j).sql_state_, value.str_len_)) {
-        dup = true;
-      }
     }
   }
   return ret;
