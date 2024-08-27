@@ -91,6 +91,7 @@
 #include "storage/tablet/ob_tablet_mds_table_mini_merger.h"
 #include "storage/blocksstable/ob_shared_macro_block_manager.h"
 #include "storage/ob_direct_load_table_guard.h"
+#include "storage/blocksstable/ob_datum_row_utils.h"
 
 namespace oceanbase
 {
@@ -3639,7 +3640,8 @@ int ObTablet::check_schema_version_for_bounded_staleness_read(
 int ObTablet::lock_row(
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
-    const common::ObNewRow &row)
+    ObColDescArray &col_desc,
+    blocksstable::ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   ObStorageTableGuard guard(this, store_ctx, true);
@@ -3669,7 +3671,7 @@ int ObTablet::lock_row(
       LOG_WARN("prepare write memtable fail", K(ret), K(relative_table));
     } else if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
       LOG_WARN("prepare param ctx fail, ", K(ret));
-    } else if (OB_FAIL(write_memtable->lock(param, context, row))) {
+    } else if (OB_FAIL(write_memtable->lock(param, context, col_desc, row))) {
       LOG_WARN("failed to lock write_memtable", K(ret), K(row));
     }
   }
@@ -4101,8 +4103,8 @@ int ObTablet::update_row(
     storage::ObStoreCtx &store_ctx,
     const common::ObIArray<share::schema::ObColDesc> &col_descs,
     const ObIArray<int64_t> &update_idx,
-    const storage::ObStoreRow &old_row,
-    const storage::ObStoreRow &new_row,
+    const blocksstable::ObDatumRow &old_row,
+    blocksstable::ObDatumRow &new_row,
     const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
 {
   int ret = OB_SUCCESS;
@@ -4159,7 +4161,7 @@ int ObTablet::update_row(
 int ObTablet::insert_rows(
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
-    ObStoreRow *rows,
+    ObDatumRow *rows,
     ObRowsInfo &rows_info,
     const bool check_exist,
     const ObColDescIArray &col_descs,
@@ -4209,7 +4211,7 @@ int ObTablet::insert_row_without_rowkey_check(
     ObStoreCtx &store_ctx,
     const bool check_exist,
     const common::ObIArray<share::schema::ObColDesc> &col_descs,
-    const storage::ObStoreRow &row,
+    blocksstable::ObDatumRow &row,
     const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
 {
   int ret = OB_SUCCESS;
@@ -4373,7 +4375,8 @@ int ObTablet::do_rowkeys_exist(
 int ObTablet::rowkey_exists(
     ObRelativeTable &relative_table,
     ObStoreCtx &store_ctx,
-    const common::ObNewRow &row,
+    const ObColDescIArray &col_descs,
+    ObDatumRow &row,
     bool &exists)
 {
   int ret = OB_SUCCESS;
@@ -4399,24 +4402,22 @@ int ObTablet::rowkey_exists(
     }
 
     if (OB_SUCC(ret)) {
-      ObStoreRowkey rowkey;
       ObDatumRowkey datum_rowkey;
       ObDatumRowkeyHelper rowkey_helper;
       ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), "rowkey_acc_ctx"));
       ObTableIterParam param;
       ObTableAccessContext context;
 
-      if (OB_FAIL(rowkey.assign(row.cells_, relative_table.get_rowkey_column_num()))) {
-        LOG_WARN("Failed to assign rowkey", K(ret), K(row));
-      } else if (OB_FAIL(rowkey_helper.convert_datum_rowkey(rowkey.get_rowkey(), datum_rowkey))) {
-        LOG_WARN("Failed to transfer datum rowkey", K(ret), K(rowkey));
+      if (OB_FAIL(rowkey_helper.prepare_datum_rowkey(row, relative_table.get_rowkey_column_num(),
+              col_descs, datum_rowkey))) {
+        LOG_WARN("Failed to prepare rowkey", K(ret), K(row));
       } else if (OB_FAIL(prepare_param_ctx(allocator, relative_table, store_ctx, param, context))) {
-        LOG_WARN("Failed to prepare param ctx, ", K(ret), K(rowkey));
+        LOG_WARN("Failed to prepare param ctx, ", K(ret), K(row));
       } else if (OB_FAIL(relative_table.tablet_iter_.get_tablet()->do_rowkey_exists(
               param, context, datum_rowkey, exists))) {
-        LOG_WARN("do rowkey exist fail", K(ret), K(rowkey));
+        LOG_WARN("do rowkey exist fail", K(ret), K(row), K(datum_rowkey));
       }
-      LOG_DEBUG("chaser debug row", K(ret), K(row), K(rowkey));
+      LOG_DEBUG("chaser debug row", K(ret), K(row));
     }
   }
   return ret;

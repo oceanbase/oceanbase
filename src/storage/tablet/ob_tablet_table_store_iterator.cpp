@@ -96,6 +96,7 @@ void ObTableStoreIterator::reset()
   table_ptr_array_.reset();
   sstable_handle_array_.reset();
   table_store_handle_.reset();
+
   if (nullptr != transfer_src_table_store_handle_) {
     transfer_src_table_store_handle_->~ObStorageMetaHandle();
     ob_free(transfer_src_table_store_handle_);

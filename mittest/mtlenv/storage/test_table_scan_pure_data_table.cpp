@@ -97,7 +97,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   ASSERT_NE(nullptr, tablet);
 
   // insert rows
-  ObMockNewRowIterator mock_iter;
+  ObMockDatumRowIterator mock_iter;
   ObSEArray<uint64_t, 512> column_ids;
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 0); // pk
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 1); // c1
@@ -105,7 +105,7 @@ void TestTableScanPureDataTable::insert_data_to_tablet(MockObAccessService *acce
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 3); // c3
   column_ids.push_back(OB_APP_MIN_COLUMN_ID + 4); // c4
 
-  ASSERT_EQ(OB_SUCCESS, mock_iter.from(TestDmlCommon::data_row_str));
+  ASSERT_EQ(OB_SUCCESS, mock_iter.from_for_datum(TestDmlCommon::data_row_str));
 
   transaction::ObTransService *tx_service = MTL(transaction::ObTransService*);
   // 1. get tx desc

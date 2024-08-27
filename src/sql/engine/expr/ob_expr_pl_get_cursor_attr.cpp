@@ -292,7 +292,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
           } else if (OB_UNLIKELY(rowid.empty())) {
             expr_datum.set_null();
           } else {
-            expr_datum.set_urowid(rowid.ptr(), rowid.length());
+            expr_datum.set_string(rowid.ptr(), rowid.length());
           }
         }
         break;

@@ -199,7 +199,8 @@ struct ObTableAccessContext
   int init(const common::ObQueryFlag &query_flag,
            ObStoreCtx &ctx,
            common::ObIAllocator &allocator,
-           const common::ObVersionRange &trans_version_range);
+           const common::ObVersionRange &trans_version_range,
+           CachedIteratorNode *cached_iter_node = nullptr);
   int alloc_iter_pool(const bool use_column_store);
   void inc_micro_access_cnt();
   int init_scan_allocator(ObTableScanParam &scan_param);

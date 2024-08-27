@@ -418,15 +418,14 @@ int ObPersistentLobApator::erase_lob_piece_tablet(ObLobAccessParam& param, ObLob
 
       // construct insert data
       int64_t affected_rows = 0;
-      ObObj cell[ObLobPieceUtil::LOB_PIECE_COLUMN_CNT];
       char serialize_buf[32] = {0};
       // make insert iterator
-      ObNewRow new_row;
+      ObDatumRow new_row;
+      blocksstable::ObSingleDatumRowIteratorWrapper single_iter;
 
-      common::ObSingleRowIteratorWrapper single_iter;
-      single_iter.set_row(&new_row);
-
-      if (OB_FAIL(set_lob_piece_row(serialize_buf, 32, cell, new_row, &single_iter, in_row))) {
+      if (OB_FAIL(new_row.init(ObLobPieceUtil::LOB_PIECE_COLUMN_CNT))) {
+        LOG_WARN("failed to init new datum row", K(ret));
+      } else if (OB_FAIL(set_lob_piece_row(serialize_buf, 32, new_row, &single_iter, in_row))) {
         LOG_WARN("failed to set insert piece row.", K(ret), K(in_row));
       } else if (OB_FAIL(oas->delete_rows(param.ls_id_,
                                     lob_piece_tablet.get_obj()->get_tablet_meta().tablet_id_,
@@ -534,15 +533,14 @@ int ObPersistentLobApator::write_lob_piece_tablet(ObLobAccessParam& param, ObLob
 
       // construct insert data
       int64_t affected_rows = 0;
-      ObObj cell[ObLobPieceUtil::LOB_PIECE_COLUMN_CNT];
       char serialize_buf[32] = {0};
       // make insert iterator
-      ObNewRow new_row;
+      ObDatumRow new_row;
+      blocksstable::ObSingleDatumRowIteratorWrapper single_iter;
 
-      common::ObSingleRowIteratorWrapper single_iter;
-      single_iter.set_row(&new_row);
-
-      if (OB_FAIL(set_lob_piece_row(serialize_buf, 32, cell, new_row, &single_iter, in_row))) {
+      if (OB_FAIL(new_row.init(ObLobPieceUtil::LOB_PIECE_COLUMN_CNT))) {
+        LOG_WARN("failed to init new datum row", K(ret));
+      } else if (OB_FAIL(set_lob_piece_row(serialize_buf, 32, new_row, &single_iter, in_row))) {
         LOG_WARN("failed to set insert piece row.", K(ret), K(in_row));
       } else if (OB_FAIL(oas->insert_rows(param.ls_id_,
                                     lob_piece_tablet.get_obj()->get_tablet_meta().tablet_id_,
@@ -604,15 +602,14 @@ int ObPersistentLobApator::update_lob_piece_tablet(ObLobAccessParam& param, ObLo
 
       // construct insert data
       int64_t affected_rows = 0;
-      ObObj cell[ObLobPieceUtil::LOB_PIECE_COLUMN_CNT];
       char serialize_buf[32] = {0};
       // make insert iterator
-      ObNewRow new_row;
+      ObDatumRow new_row;
+      blocksstable::ObSingleDatumRowIteratorWrapper single_iter;
 
-      common::ObSingleRowIteratorWrapper single_iter;
-      single_iter.set_row(&new_row);
-
-      if (OB_FAIL(set_lob_piece_row(serialize_buf, 32, cell, new_row, &single_iter, in_row))) {
+      if (OB_FAIL(new_row.init(ObLobPieceUtil::LOB_PIECE_COLUMN_CNT))) {
+        LOG_WARN("failed to init new datum row", K(ret));
+      } else if (OB_FAIL(set_lob_piece_row(serialize_buf, 32, new_row, &single_iter, in_row))) {
         LOG_WARN("failed to set insert piece row.", K(ret), K(in_row));
       } else if (OB_FAIL(oas->update_rows(param.ls_id_,
                                     lob_piece_tablet.get_obj()->get_tablet_meta().tablet_id_,
@@ -824,43 +821,32 @@ int ObPersistentLobApator::inner_get_tablet(
 }
 
 void ObPersistentLobApator::set_lob_meta_row(
-    ObObj* cell,
-    ObNewRow& new_row,
+    blocksstable::ObDatumRow& datum_row,
     ObLobMetaInfo& in_row)
 {
-  for (int64_t i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
-    cell[i].reset();
-    cell[i].set_nop_value();
-  }
-  cell[ObLobMetaUtil::LOB_ID_COL_ID].set_varchar(reinterpret_cast<char*>(&in_row.lob_id_), sizeof(ObLobId));
-  cell[ObLobMetaUtil::LOB_ID_COL_ID].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
-  cell[ObLobMetaUtil::SEQ_ID_COL_ID].set_varchar(in_row.seq_id_);
-  cell[ObLobMetaUtil::SEQ_ID_COL_ID].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
-  cell[ObLobMetaUtil::BYTE_LEN_COL_ID].set_uint32(in_row.byte_len_);
-  cell[ObLobMetaUtil::CHAR_LEN_COL_ID].set_uint32(in_row.char_len_);
-  cell[ObLobMetaUtil::PIECE_ID_COL_ID].set_uint64(in_row.piece_id_);
-
-  cell[ObLobMetaUtil::LOB_DATA_COL_ID].set_varchar(in_row.lob_data_);
-  cell[ObLobMetaUtil::LOB_DATA_COL_ID].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
-
-  new_row.assign(cell, ObLobMetaUtil::LOB_META_COLUMN_CNT);
+  datum_row.reuse();
+  datum_row.storage_datums_[ObLobMetaUtil::LOB_ID_COL_ID].set_string(reinterpret_cast<char*>(&in_row.lob_id_), sizeof(ObLobId));
+  // TODO: if we need set collation type to be common::ObCollationType::CS_TYPE_BINARY@xuanxi
+  datum_row.storage_datums_[ObLobMetaUtil::SEQ_ID_COL_ID].set_string(in_row.seq_id_);
+  // TODO: if we need set collation type to be common::ObCollationType::CS_TYPE_BINARY@xuanxi
+  datum_row.storage_datums_[ObLobMetaUtil::BYTE_LEN_COL_ID].set_uint32(in_row.byte_len_);
+  datum_row.storage_datums_[ObLobMetaUtil::CHAR_LEN_COL_ID].set_uint32(in_row.char_len_);
+  datum_row.storage_datums_[ObLobMetaUtil::PIECE_ID_COL_ID].set_uint(in_row.piece_id_);
+  datum_row.storage_datums_[ObLobMetaUtil::LOB_DATA_COL_ID].set_string(in_row.lob_data_);
+  // TODO: if we need set collation type to be common::ObCollationType::CS_TYPE_BINARY@xuanxi
 }
 
 int ObPersistentLobApator::set_lob_piece_row(
     char* buf,
     size_t buf_len,
-    ObObj* cell,
-    ObNewRow& new_row,
-    common::ObSingleRowIteratorWrapper* new_row_iter,
+    ObDatumRow& datum_row,
+    blocksstable::ObSingleDatumRowIteratorWrapper* new_row_iter,
     ObLobPieceInfo& in_row)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < ObLobPieceUtil::LOB_PIECE_COLUMN_CNT; ++i) {
-    cell[i].reset();
-    cell[i].set_nop_value();
-  }
-  cell[0].set_uint64(in_row.piece_id_);
-  cell[1].set_uint32(in_row.len_);
+  datum_row.reuse();
+  datum_row.storage_datums_[0].set_uint(in_row.piece_id_);
+  datum_row.storage_datums_[1].set_uint32(in_row.len_);
 
   int64_t pos = 0;
   if (!in_row.macro_id_.is_valid()) {
@@ -868,11 +854,9 @@ int ObPersistentLobApator::set_lob_piece_row(
   } else if (OB_FAIL(in_row.macro_id_.serialize(buf, buf_len, pos))) {
     LOG_WARN("failed to serialize macro id", K(ret), K(buf_len), K(pos));
   } else {
-    cell[2].set_varchar(buf, pos);
-    cell[2].set_collation_type(common::ObCollationType::CS_TYPE_BINARY);
-
-    new_row.assign(cell, ObLobPieceUtil::LOB_PIECE_COLUMN_CNT);
-    new_row_iter->set_row(&new_row);
+    datum_row.storage_datums_[2].set_string(buf, pos);
+    // TODO: if we need set collation type to be common::ObCollationType::CS_TYPE_BINARY@xuanxi
+    new_row_iter->set_row(&datum_row);
   }
 
   return ret;
@@ -928,20 +912,20 @@ int ObPersistentLobApator::do_scan_lob_meta(
   ObTabletHandle lob_meta_tablet;
   ObTabletHandle lob_piece_tablet;
   if (OB_FAIL(get_lob_tablets(param, data_tablet, lob_meta_tablet, lob_piece_tablet))) {
-    LOG_WARN("failed to get tablets.", K(ret), K(param));
+    LOG_WARN("failed to get tablets", K(ret), K(param));
   } else {
     ObAccessService *oas = MTL(ObAccessService*);
     scan_param.tablet_id_ = param.lob_meta_tablet_id_;
     scan_param.schema_version_ = lob_meta_tablet.get_obj()->get_tablet_meta().max_sync_storage_schema_version_;
     if (OB_ISNULL(oas)) {
       ret = OB_ERR_INTERVAL_INVALID;
-      LOG_WARN("get access service failed.", K(ret));
+      LOG_WARN("get access service failed", K(ret));
     } else if (OB_FAIL(build_common_scan_param(param, param.has_single_chunk(), ObLobMetaUtil::LOB_META_COLUMN_CNT, scan_param))) {
-      LOG_WARN("build common scan param failed.", K(ret), K(param));
+      LOG_WARN("build common scan param failed", K(ret), K(param));
     } else if (OB_FAIL(prepare_table_param(param, scan_param, true/*is_meta*/))) {
-      LOG_WARN("prepare lob meta table param failed.", K(ret), K(param));
+      LOG_WARN("prepare lob meta table param failed", K(ret), K(param));
     } else if (OB_FAIL(oas->table_scan(scan_param, meta_iter))) {
-      LOG_WARN("do table scan falied.", K(ret), K(scan_param), K(param));
+      LOG_WARN("do table scan falied", K(ret), K(scan_param), K(param));
     }
   }
   return ret;
@@ -967,7 +951,7 @@ int ObPersistentLobApator::scan_lob_meta(
   } else if (OB_FAIL(param.get_rowkey_range(rowkey_objs, range))) {
     LOG_WARN("get_rowkey_range fail", K(ret));
   } else if (OB_FAIL(scan_param.key_ranges_.push_back(range))) {
-    LOG_WARN("failed to push key range.", K(ret), K(scan_param), K(range));
+    LOG_WARN("failed to push key range", K(ret), K(scan_param), K(range));
   } else if (OB_FAIL(do_scan_lob_meta(param, scan_param, meta_iter))) {
     LOG_WARN("do_scan_lob_meta fail", K(ret));
   }
@@ -1004,28 +988,28 @@ int ObPersistentLobApator::set_dml_seq_no(ObLobAccessParam &param)
       LOG_DEBUG("dml lob meta with seq no", K(param.dml_base_param_->spec_seq_no_));
     } else {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("failed to get seq no from param.", K(ret), K(param));
+      LOG_WARN("failed to get seq no from param", K(ret), K(param));
     }
   } else {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid seq no from param.", K(ret), K(param));
+    LOG_WARN("invalid seq no from param", K(ret), K(param));
   }
   return ret;
 }
 
-int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObNewRowIterator& row_iter)
+int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObDatumRowIterator& row_iter)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   ObAccessService *oas = MTL(ObAccessService*);
   if (OB_ISNULL(oas)) {
     ret = OB_ERR_INTERVAL_INVALID;
-    LOG_WARN("get access service failed.", K(ret), KP(oas));
+    LOG_WARN("get access service failed", K(ret), KP(oas));
   } else if (OB_ISNULL(param.tx_desc_)) {
     ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("get tx desc null.", K(ret), K(param));
+    LOG_WARN("get tx desc null", K(ret), K(param));
   } else if (OB_FAIL(prepare_lob_tablet_id(param))) {
-    LOG_WARN("failed to get tablets.", K(ret), K(param));
+    LOG_WARN("failed to get tablets", K(ret), K(param));
   } else if (OB_FAIL(prepare_lob_meta_dml(param))) {
     LOG_WARN("failed to prepare lob meta dml", K(ret));
   } else if (OB_FAIL(oas->delete_rows(
@@ -1041,19 +1025,19 @@ int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObNewRowItera
   return ret;
 }
 
-int ObPersistentLobApator::write_lob_meta(ObLobAccessParam& param, ObNewRowIterator& row_iter)
+int ObPersistentLobApator::write_lob_meta(ObLobAccessParam& param, ObDatumRowIterator& row_iter)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   ObAccessService *oas = MTL(ObAccessService*);
   if (OB_ISNULL(oas)) {
     ret = OB_ERR_INTERVAL_INVALID;
-    LOG_WARN("get access service failed.", K(ret), KP(oas));
+    LOG_WARN("get access service failed", K(ret), KP(oas));
   } else if (OB_ISNULL(param.tx_desc_)) {
     ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("get tx desc null.", K(ret), K(param));
+    LOG_WARN("get tx desc null", K(ret), K(param));
   } else if (OB_FAIL(prepare_lob_tablet_id(param))) {
-    LOG_WARN("failed to get tablets.", K(ret), K(param));
+    LOG_WARN("failed to get tablets", K(ret), K(param));
   } else if (OB_FAIL(prepare_lob_meta_dml(param))) {
     LOG_WARN("failed to prepare lob meta dml", K(ret));
   } else if (OB_FAIL(oas->insert_rows(
@@ -1069,26 +1053,26 @@ int ObPersistentLobApator::write_lob_meta(ObLobAccessParam& param, ObNewRowItera
   return ret;
 }
 
-int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObNewRowIterator &row_iter)
+int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObDatumRowIterator &row_iter)
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
   ObAccessService *oas = MTL(ObAccessService*);
   if (OB_ISNULL(oas)) {
     ret = OB_ERR_INTERVAL_INVALID;
-    LOG_WARN("get access service failed.", K(ret), KP(oas));
+    LOG_WARN("get access service failed", K(ret), KP(oas));
   } else if (OB_ISNULL(param.tx_desc_)) {
     ret = OB_ERR_NULL_VALUE;
-    LOG_WARN("get tx desc null.", K(ret), K(param));
+    LOG_WARN("get tx desc null", K(ret), K(param));
   } else if (OB_FAIL(prepare_lob_tablet_id(param))) {
-    LOG_WARN("failed to get tablets.", K(ret), K(param));
+    LOG_WARN("failed to get tablets", K(ret), K(param));
   } else if (OB_FAIL(prepare_lob_meta_dml(param))) {
     LOG_WARN("failed to prepare lob meta dml", K(ret));
   } else {
     ObSEArray<uint64_t, 6> update_column_ids;
     for (int i = 2; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
       if (OB_FAIL(update_column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
-        LOG_WARN("push column ids failed.", K(ret), K(i));
+        LOG_WARN("push column ids failed", K(ret), K(i));
       }
     }
     if (OB_FAIL(ret)) {
@@ -1110,11 +1094,12 @@ int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObNewRowIter
 int ObPersistentLobApator::write_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info)
 {
   int ret = OB_SUCCESS;
-  ObObj cell[ObLobMetaUtil::LOB_META_COLUMN_CNT];
-  ObNewRow new_row;
+  ObDatumRow new_row;
   ObLobPersistInsertSingleRowIter single_iter;
-  set_lob_meta_row(cell, new_row, row_info);
-  if (OB_FAIL(single_iter.init(&param, &new_row))) {
+  if (OB_FAIL(new_row.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+    LOG_WARN("failed to init datum row", K(ret));
+  } else if (FALSE_IT(set_lob_meta_row(new_row, row_info))) {
+  } else if (OB_FAIL(single_iter.init(&param, &new_row))) {
     LOG_WARN("single_iter init fail", K(ret));
   } else if (OB_FAIL(write_lob_meta(param, single_iter))) {
     LOG_WARN("write_lob_meta fail", K(ret));
@@ -1125,11 +1110,12 @@ int ObPersistentLobApator::write_lob_meta(ObLobAccessParam &param, ObLobMetaInfo
 int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo& row_info)
 {
   int ret = OB_SUCCESS;
-  ObObj cell[ObLobMetaUtil::LOB_META_COLUMN_CNT];
-  ObNewRow new_row;
+  ObDatumRow new_row;
   ObLobPersistDeleteSingleRowIter single_iter;
-  set_lob_meta_row(cell, new_row, row_info);
-  if (OB_FAIL(single_iter.init(&param, &new_row))) {
+  if (OB_FAIL(new_row.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+    LOG_WARN("failed to init datum row", K(ret));
+  } else if (FALSE_IT(set_lob_meta_row(new_row, row_info))) {
+  } else if (OB_FAIL(single_iter.init(&param, &new_row))) {
     LOG_WARN("single_iter init fail", K(ret));
   } else if (OB_FAIL(erase_lob_meta(param, single_iter))) {
     LOG_WARN("erase_lob_meta fail", K(ret));
@@ -1140,14 +1126,16 @@ int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo
 int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row)
 {
   int ret = OB_SUCCESS;
-  ObObj new_row_cell[ObLobMetaUtil::LOB_META_COLUMN_CNT];
-  ObNewRow new_tbl_row;
-  set_lob_meta_row(new_row_cell, new_tbl_row, new_row);
-  ObObj old_row_cell[ObLobMetaUtil::LOB_META_COLUMN_CNT];
-  ObNewRow old_tbl_row;
-  set_lob_meta_row(old_row_cell, old_tbl_row, old_row);
+  ObDatumRow new_datum_row;
+  ObDatumRow old_datum_row;
   ObLobPersistUpdateSingleRowIter upd_iter;
-  if (OB_FAIL(upd_iter.init(&param, &old_tbl_row, &new_tbl_row))) {
+  if (OB_FAIL(new_datum_row.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+    LOG_WARN("failed to init new datum row", K(ret));
+  } else if (OB_FAIL(old_datum_row.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+    LOG_WARN("failed to init old datum row", K(ret));
+  } else if (FALSE_IT(set_lob_meta_row(new_datum_row, new_row))) {
+  } else if (FALSE_IT(set_lob_meta_row(old_datum_row, old_row))) {
+  } else if (OB_FAIL(upd_iter.init(&param, &old_datum_row, &new_datum_row))) {
     LOG_WARN("upd_iter init fail", K(ret));
   } else if (OB_FAIL(update_lob_meta(param, upd_iter))) {
     LOG_WARN("update_lob_meta fail", K(ret));

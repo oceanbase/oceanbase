@@ -972,7 +972,7 @@ int ObLobMetaManager::write(ObLobAccessParam& param, ObLobMetaInfo& in_row)
   return ret;
 }
 
-int ObLobMetaManager::batch_insert(ObLobAccessParam& param, ObNewRowIterator &iter)
+int ObLobMetaManager::batch_insert(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(persistent_lob_adapter_.write_lob_meta(param, iter))) {
@@ -981,7 +981,7 @@ int ObLobMetaManager::batch_insert(ObLobAccessParam& param, ObNewRowIterator &it
   return ret;
 }
 
-int ObLobMetaManager::batch_delete(ObLobAccessParam& param, ObNewRowIterator &iter)
+int ObLobMetaManager::batch_delete(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &iter)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(persistent_lob_adapter_.erase_lob_meta(param, iter))) {

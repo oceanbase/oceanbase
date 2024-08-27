@@ -283,7 +283,7 @@ public:
 private:
   common::ObStoreRowkey *rowkey_;
   mutable uint64_t hash_val_; // Perf optimization.
-  DISALLOW_COPY_AND_ASSIGN(ObMemtableKey);
+  //DISALLOW_COPY_AND_ASSIGN(ObMemtableKey);
 };
 
 class ObStoreRowkeyWrapper
@@ -308,31 +308,38 @@ public:
   const common::ObStoreRowkey *rowkey_;
 };
 
-
-// this is for multi_set pre alloc memory to generate memtable key
-class ObMemtableKeyGenerator {// RAII
-  static constexpr int64_t STACK_BUFFER_SIZE = 32;
+// TODO(xuanxi): remove it later
+class ObMemtableKeyGenerator {
 public:
-  ObMemtableKeyGenerator() : p_extra_store_row_keys_(nullptr), p_extra_memtable_keys_(nullptr), size_(0) {}
-  ~ObMemtableKeyGenerator();
-  int init(const storage::ObStoreRow *rows,
-           const int64_t row_count,
-           const int64_t schema_rowkey_count,
-           const common::ObIArray<share::schema::ObColDesc> &columns);
-  void reset();
-  int64_t count() const { return size_; }
-  ObMemtableKey &operator[](int64_t idx);
-  const ObMemtableKey &operator[](int64_t idx) const;
+  using ObMemtableKeyBuffer = common::ObSEArray<ObMemtableKey, 16>;
+public:
+  ObMemtableKeyGenerator(
+    const int64_t rowkey_cnt,
+    const common::ObIArray<share::schema::ObColDesc> &columns,
+    ObMemtableKeyBuffer *memtable_key_buffer = nullptr)
+    : allocator_(common::ObMemAttr(MTL_ID(), "ObMemtableKey")),
+      rowkey_cnt_(rowkey_cnt),
+      columns_(columns),
+      memtable_key_buffer_(memtable_key_buffer),
+      is_inited_(false)
+  {}
+  ~ObMemtableKeyGenerator() = default;
+  int init();
+  int generate_memtable_key(const blocksstable::ObDatumRow &datum_row);
+  ObMemtableKey &get_memtable_key() { return memtable_key_; }
+  ObMemtableKeyBuffer *get_key_buffer() { return memtable_key_buffer_; }
 private:
-  // this is for avoid memory allocation when rows not so much
-  ObStoreRowkey store_row_key_buffer_[STACK_BUFFER_SIZE];
-  ObMemtableKey memtable_key_buffer_[STACK_BUFFER_SIZE];
-  ObStoreRowkey *p_extra_store_row_keys_;
-  ObMemtableKey *p_extra_memtable_keys_;
-  int64_t size_;
+  ObArenaAllocator allocator_;
+  int64_t rowkey_cnt_;
+  const common::ObIArray<share::schema::ObColDesc> &columns_;
+  storage::ObObjBufArray obj_buf_;
+  ObStoreRowkey store_rowkey_;
+  ObMemtableKey memtable_key_;
+  ObMemtableKeyBuffer *memtable_key_buffer_;
+  bool is_inited_;
 };
 
-}
-}
+} // namespace memtable
+} // namespace oceanbase
 
 #endif // OCEANBASE_MEMTABLE_OB_MEMTABLE_KEY2_

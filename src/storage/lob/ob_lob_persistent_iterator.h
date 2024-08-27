@@ -12,19 +12,22 @@
 
 #ifndef OCEABASE_STORAGE_OB_LOB_PERSISTENT_ITERATOR_
 #define OCEABASE_STORAGE_OB_LOB_PERSISTENT_ITERATOR_
+#include "storage/blocksstable/ob_datum_row_iterator.h"
+#include "storage/lob/ob_lob_util.h"
+#include "storage/lob/ob_lob_meta.h"
 
 namespace oceanbase
 {
 namespace storage
 {
 
-class ObLobPersistWriteIter : public ObNewRowIterator
+class ObLobPersistWriteIter : public blocksstable::ObDatumRowIterator
 {
 public:
     ObLobPersistWriteIter(): param_(nullptr) {}
     virtual ~ObLobPersistWriteIter() {}
 
-    virtual int get_next_row() override { return OB_NOT_IMPLEMENT; }
+    virtual int get_next_row(blocksstable::ObDatumRow *&row) override { return OB_NOT_IMPLEMENT; }
 
 protected:
   int update_seq_no();
@@ -44,10 +47,10 @@ public:
     row_(nullptr),
     iter_end_(false)
   {}
-  int init(ObLobAccessParam *param, ObNewRow *row);
+  int init(ObLobAccessParam *param, blocksstable::ObDatumRow *row);
 
   virtual ~ObLobPersistInsertSingleRowIter() {}
-  virtual int get_next_row(ObNewRow *&row);
+  virtual int get_next_row(blocksstable::ObDatumRow *&row);
 	virtual void reset() { iter_end_ = false; }
 
 private:
@@ -55,7 +58,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLobPersistInsertSingleRowIter);
 private:
   // data members
-  ObNewRow *row_;
+  blocksstable::ObDatumRow *row_;
   bool iter_end_;
 };
 
@@ -67,10 +70,10 @@ public:
     row_(nullptr),
     iter_end_(false)
   {}
-  int init(ObLobAccessParam *param, ObNewRow *row);
+  int init(ObLobAccessParam *param, blocksstable::ObDatumRow *row);
 
   virtual ~ObLobPersistDeleteSingleRowIter() {}
-  virtual int get_next_row(ObNewRow *&row);
+  virtual int get_next_row(blocksstable::ObDatumRow *&row);
 	virtual void reset() { iter_end_ = false; }
 
 private:
@@ -78,7 +81,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLobPersistDeleteSingleRowIter);
 private:
   // data members
-  ObNewRow *row_;
+  blocksstable::ObDatumRow *row_;
   bool iter_end_;
 };
 
@@ -94,9 +97,9 @@ public:
 
   virtual ~ObLobPersistUpdateSingleRowIter() {}
 
-  int init(ObLobAccessParam *param, ObNewRow *old_row, ObNewRow *new_row);
+  int init(ObLobAccessParam *param, blocksstable::ObDatumRow *old_row, blocksstable::ObDatumRow *new_row);
 
-  virtual int get_next_row(ObNewRow *&row) override;
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
   virtual void reset() override {}
 
 private:
@@ -104,8 +107,8 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObLobPersistUpdateSingleRowIter);
 
 private:
-  ObNewRow *old_row_;
-  ObNewRow *new_row_;
+  blocksstable::ObDatumRow *old_row_;
+  blocksstable::ObDatumRow *new_row_;
   bool got_old_row_;
   bool is_iter_end_;
 };
@@ -114,10 +117,10 @@ private:
 class ObLobPersistInsertIter: public ObLobPersistWriteIter
 {
 public:
-  ObLobPersistInsertIter() : meta_iter_(nullptr), new_row_(), row_cell_(), result_() {}
+  ObLobPersistInsertIter() : meta_iter_(nullptr), new_row_(), result_() {}
   int init(ObLobAccessParam *param, ObLobMetaWriteIter *meta_iter);
   virtual ~ObLobPersistInsertIter() {}
-  virtual int get_next_row(ObNewRow *&row);
+  virtual int get_next_row(blocksstable::ObDatumRow *&row);
 	virtual void reset() { new_row_.reset(); }
 
 private:
@@ -126,8 +129,7 @@ private:
 private:
   // data members
   ObLobMetaWriteIter *meta_iter_;
-  ObNewRow new_row_;
-  ObObj row_cell_[ObLobMetaUtil::LOB_META_COLUMN_CNT];
+  blocksstable::ObDatumRow new_row_;
   ObLobMetaWriteResult result_;
 };
 
@@ -135,10 +137,10 @@ private:
 class ObLobPersistDeleteIter: public ObLobPersistWriteIter
 {
 public:
-  ObLobPersistDeleteIter() : meta_iter_(nullptr), new_row_(), row_cell_(), result_() {}
+  ObLobPersistDeleteIter() : meta_iter_(nullptr), new_row_(), result_() {}
   int init(ObLobAccessParam *param, ObLobMetaScanIter *meta_iter);
   virtual ~ObLobPersistDeleteIter() {}
-  virtual int get_next_row(ObNewRow *&row);
+  virtual int get_next_row(blocksstable::ObDatumRow *&row);
 	virtual void reset() { new_row_.reset(); }
 
 
@@ -148,8 +150,7 @@ private:
 private:
   // data members
   ObLobMetaScanIter *meta_iter_;
-  ObNewRow new_row_;
-  ObObj row_cell_[ObLobMetaUtil::LOB_META_COLUMN_CNT];
+  blocksstable::ObDatumRow new_row_;
   ObLobMetaScanResult result_;
 };
 

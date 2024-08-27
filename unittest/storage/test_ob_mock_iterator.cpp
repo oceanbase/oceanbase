@@ -429,17 +429,17 @@ TEST_F(TestObMockIteratorBuilder, equals)
 
 TEST_F(TestObMockIteratorBuilder, test_new_row)
 {
-  ObMockNewRowIterator iter1;
+  ObMockDatumRowIterator iter1;
   const char *input1 =
       "int var num\n"
       "1   2   3\n";
-  ASSERT_EQ(OB_SUCCESS, iter1.from(input1));
+  ASSERT_EQ(OB_SUCCESS, iter1.from_for_datum(input1));
 
-  ObMockNewRowIterator iter2;
+  ObMockDatumRowIterator iter2;
   const char *input2 =
       "int var num\n"
       "1   2   4\n";
-  EXPECT_EQ(OB_SUCCESS, iter2.from(input2));
+  EXPECT_EQ(OB_SUCCESS, iter2.from_for_datum(input2));
   EXPECT_FALSE(iter2.equals(iter1));
 }
 

@@ -65,7 +65,7 @@ int ObLobPersistWriteIter::dec_lob_size(ObLobMetaInfo &info)
   return ret;
 }
 
-int ObLobPersistUpdateSingleRowIter::init(ObLobAccessParam *param, ObNewRow *old_row, ObNewRow *new_row)
+int ObLobPersistUpdateSingleRowIter::init(ObLobAccessParam *param, blocksstable::ObDatumRow *old_row, blocksstable::ObDatumRow *new_row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param) || OB_ISNULL(old_row) || OB_ISNULL(new_row)) {
@@ -79,7 +79,7 @@ int ObLobPersistUpdateSingleRowIter::init(ObLobAccessParam *param, ObNewRow *old
   return ret;
 }
 
-int ObLobPersistUpdateSingleRowIter::get_next_row(ObNewRow *&row)
+int ObLobPersistUpdateSingleRowIter::get_next_row(blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(old_row_) || OB_ISNULL(new_row_)) {
@@ -100,7 +100,7 @@ int ObLobPersistUpdateSingleRowIter::get_next_row(ObNewRow *&row)
   return ret;
 }
 
-int ObLobPersistInsertSingleRowIter::init(ObLobAccessParam *param, ObNewRow *row)
+int ObLobPersistInsertSingleRowIter::init(ObLobAccessParam *param, blocksstable::ObDatumRow *row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param) || OB_ISNULL(row)) {
@@ -113,7 +113,7 @@ int ObLobPersistInsertSingleRowIter::init(ObLobAccessParam *param, ObNewRow *row
   return ret;
 }
 
-int ObLobPersistInsertSingleRowIter::get_next_row(ObNewRow *&row)
+int ObLobPersistInsertSingleRowIter::get_next_row(blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param_) || OB_ISNULL(row_)) {
@@ -130,7 +130,7 @@ int ObLobPersistInsertSingleRowIter::get_next_row(ObNewRow *&row)
   return ret;
 }
 
-int ObLobPersistDeleteSingleRowIter::init(ObLobAccessParam *param, ObNewRow *row)
+int ObLobPersistDeleteSingleRowIter::init(ObLobAccessParam *param, blocksstable::ObDatumRow *row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param) || OB_ISNULL(row)) {
@@ -143,7 +143,7 @@ int ObLobPersistDeleteSingleRowIter::init(ObLobAccessParam *param, ObNewRow *row
   return ret;
 }
 
-int ObLobPersistDeleteSingleRowIter::get_next_row(ObNewRow *&row)
+int ObLobPersistDeleteSingleRowIter::get_next_row(blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(param_) || OB_ISNULL(row_)) {
@@ -166,6 +166,8 @@ int ObLobPersistInsertIter::init(ObLobAccessParam *param, ObLobMetaWriteIter *me
   if (OB_ISNULL(param) || OB_ISNULL(meta_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param or meta_iter is null", K(ret), KP(param), KP(meta_iter));
+  } else if (OB_FAIL(new_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+    LOG_WARN("init new datum row failed", K(ret));
   } else {
     param_ = param;
     meta_iter_ = meta_iter;
@@ -173,7 +175,7 @@ int ObLobPersistInsertIter::init(ObLobAccessParam *param, ObLobMetaWriteIter *me
   return ret;
 }
 
-int ObLobPersistInsertIter::get_next_row(ObNewRow *&row)
+int ObLobPersistInsertIter::get_next_row(blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(meta_iter_->get_next_row(result_))) {
@@ -188,7 +190,7 @@ int ObLobPersistInsertIter::get_next_row(ObNewRow *&row)
   } else if (OB_FAIL(inc_lob_size(result_.info_))) {
     LOG_WARN("inc_lob_size fail", K(ret));
   } else {
-    ObPersistentLobApator::set_lob_meta_row(row_cell_, new_row_, result_.info_);
+    ObPersistentLobApator::set_lob_meta_row(new_row_, result_.info_);
     row = &new_row_;
   }
   return ret;
@@ -200,6 +202,8 @@ int ObLobPersistDeleteIter::init(ObLobAccessParam *param, ObLobMetaScanIter *met
   if (OB_ISNULL(param) || OB_ISNULL(meta_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param or meta_iter is null", K(ret), KP(param), KP(meta_iter));
+  } else if (OB_FAIL(new_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+    LOG_WARN("init new datum row failed", K(ret));
   } else {
     param_ = param;
     meta_iter_ = meta_iter;
@@ -207,7 +211,7 @@ int ObLobPersistDeleteIter::init(ObLobAccessParam *param, ObLobMetaScanIter *met
   return ret;
 }
 
-int ObLobPersistDeleteIter::get_next_row(ObNewRow *&row)
+int ObLobPersistDeleteIter::get_next_row(blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(meta_iter_->get_next_row(result_))) {
@@ -221,7 +225,7 @@ int ObLobPersistDeleteIter::get_next_row(ObNewRow *&row)
   } else if (OB_FAIL(dec_lob_size(result_.info_))) {
     LOG_WARN("dec_lob_size fail", K(ret));
   } else {
-    ObPersistentLobApator::set_lob_meta_row(row_cell_, new_row_, result_.info_);
+    ObPersistentLobApator::set_lob_meta_row(new_row_, result_.info_);
     row = &new_row_;
   }
   return ret;
