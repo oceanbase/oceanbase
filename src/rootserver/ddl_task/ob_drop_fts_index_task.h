@@ -63,8 +63,6 @@ public:
       int64_t &pos) override;
   virtual int64_t get_serialize_param_size() const override;
 
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
   virtual int on_child_task_finish(const uint64_t child_task_key, const int ret_code) override { return OB_SUCCESS; }
 
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask, K_(rowkey_doc), K_(doc_rowkey), K_(domain_index), K_(fts_doc_word));

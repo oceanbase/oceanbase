@@ -673,39 +673,3 @@ int64_t ObModifyAutoincTask::get_serialize_param_size() const
 {
   return alter_table_arg_.get_serialize_size() + ObDDLTask::get_serialize_param_size();
 }
-
-void ObModifyAutoincTask::flt_set_task_span_tag() const
-{
-  FLT_SET_TAG(ddl_task_id, task_id_, ddl_parent_task_id, parent_task_id_,
-              ddl_data_table_id, object_id_, ddl_schema_version, schema_version_,
-              ddl_snapshot_version, snapshot_version_, ddl_ret_code, ret_code_);
-}
-
-void ObModifyAutoincTask::flt_set_status_span_tag() const
-{
-  switch (task_status_) {
-  case ObDDLTaskStatus::WAIT_TRANS_END: {
-    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::OBTAIN_SNAPSHOT: {
-    FLT_SET_TAG(ddl_data_table_id, object_id_, ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::MODIFY_AUTOINC: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::FAIL: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  case ObDDLTaskStatus::SUCCESS: {
-    FLT_SET_TAG(ddl_ret_code, ret_code_);
-    break;
-  }
-  default: {
-    break;
-  }
-  }
-}

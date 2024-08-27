@@ -39,8 +39,6 @@ public:
       const int64_t snapshot_version = 0);
   int init(const ObDDLTaskRecord &task_record);
   virtual int process() override;
-  virtual void flt_set_task_span_tag() const override;
-  virtual void flt_set_status_span_tag() const override;
   virtual int cleanup_impl() override;
   virtual bool is_valid() const override;
   virtual int collect_longops_stat(share::ObLongopsValue &value) override;
