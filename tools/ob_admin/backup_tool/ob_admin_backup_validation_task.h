@@ -158,17 +158,17 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAdminBackupSetMetaValidationDag);
 };
 
-class ObAdminBackupTabletValidationDag final : public share::ObIDag
+class ObAdminBackupTabletGroupValidationDag final : public share::ObIDag
 {
 public:
-  ObAdminBackupTabletValidationDag()
-      : share::ObIDag(ObDagType::DAG_TYPE_BACKUP_TABLET_VALIDATION), is_inited_(false), id_(0),
-        ctx_(nullptr), generate_sibling_dag_(true), lock_(ObLatchIds::BACKUP_LOCK),
+  ObAdminBackupTabletGroupValidationDag()
+      : share::ObIDag(ObDagType::DAG_TYPE_BACKUP_TABLET_GROUP_VALIDATION), is_inited_(false),
+        id_(0), ctx_(nullptr), generate_sibling_dag_(true), lock_(ObLatchIds::BACKUP_LOCK),
         time_identifier_(common::ObTimeUtility::fast_current_time()), scheduled_tablet_cnt_(0),
         stat_()
   {
   }
-  ~ObAdminBackupTabletValidationDag();
+  ~ObAdminBackupTabletGroupValidationDag();
   int init(int64_t id, ObAdminBackupValidationCtx *ctx, bool generate_sibling_dag = true);
   virtual int create_first_task() override;
   virtual int generate_next_dag(ObIDag *&next_dag) override;
@@ -200,10 +200,10 @@ public:
   ObArray<ObArray<ObAdminBackupTabletValidationAttr *>> processing_tablet_group_;
   int64_t scheduled_tablet_cnt_;
   ObArray<ObArray<std::pair<backup::ObBackupMacroBlockIDPair, share::ObBackupDataType>>>
-      processing_macro_block_array_;
+      processing_macro_block_group_;
   ObAdminBackupValidationStat stat_;
 
-  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupTabletValidationDag);
+  DISALLOW_COPY_AND_ASSIGN(ObAdminBackupTabletGroupValidationDag);
 };
 
 class ObAdminFinishDataBackupValidationDag final : public share::ObIDag

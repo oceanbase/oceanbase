@@ -124,7 +124,7 @@ static constexpr ObDiagnoseInfoStruct OB_DAG_WARNING_INFO_TYPES[] = {
   {1, false, "DAG_FINISH_LOG_ARCHIVE_VALIDATION", {"tenant_id"}},
   {1, false, "DAG_PREPARE_DATA_BACKUP_VALIDATION", {"tenant_id"}},
   {2, false, "DAG_BACKUP_SET_META_VALIDATION", {"tenant_id", "backup_set_id"}},
-  {3, false, "DAG_BACKUP_TABLET_VALIDATION", {"tenant_id", "backup_set_id", "time_identifier"}},
+  {3, false, "DAG_BACKUP_TABLET_GROUP_VALIDATION", {"tenant_id", "backup_set_id", "time_identifier"}},
   {1, false, "DAG_FINISH_DATA_BACKUP_VALIDATION", {"tenant_id"}},
 
 

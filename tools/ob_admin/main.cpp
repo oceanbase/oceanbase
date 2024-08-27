@@ -79,10 +79,8 @@ int get_log_base_directory(char *log_file_name, const int64_t log_file_name_len,
       fprintf(stderr, "\nThe OB_ADMIN_LOG_DIR environment variable not found, we will not generate ob_admin.log\n"
                       "If log files are required, please notice that log files should not be outputted to\n"
                       "OceanBase's clog directory.(for example, export OB_ADMIN_LOG_DIR=/tmp)\n");
-      fprintf(stderr, "\nBy default, OB_ADMIN_LOG_DIR will be set to current directory\n");
-      ob_admin_log_dir = ".";
-    }
-    if (FALSE_IT(ob_admin_log_dir_len = strlen(ob_admin_log_dir))) {
+      ret = OB_ENTRY_NOT_EXIST;
+    } else if (FALSE_IT(ob_admin_log_dir_len = strlen(ob_admin_log_dir))) {
     } else if (OB_FAIL(FileDirectoryUtils::is_directory(ob_admin_log_dir, is_directory))) {
       fprintf(stderr, "\nCheck is_directory failed, we will not generate ob_admin.log(errno:%d)\n", ret);
     } else if (!is_directory) {

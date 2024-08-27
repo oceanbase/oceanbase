@@ -156,7 +156,6 @@ int ObAdminLogArchiveValidationDagNet::start_running()
   ObAdminFinishLogArchiveValidationDag *finish_log_archive_validation_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   // TODO: if schedule dag failure, ob_admin process will exit. No need to cancel and recovery state
-  // here create dag and connections
   if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "scheduler is null", K(ret));
@@ -1971,11 +1970,10 @@ int ObAdminDataBackupValidationDagNet::start_running()
   int ret = OB_SUCCESS;
   ObAdminPrepareDataBackupValidationDag *prepare_data_backup_validation_dag = nullptr;
   ObAdminBackupSetMetaValidationDag *backup_set_meta_validation_dag = nullptr;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   ObAdminFinishDataBackupValidationDag *finish_data_backup_validation_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   // TODO: if schedule dag failure, ob_admin process will exit. No need to cancel and recovery state
-  // here create dag and connections
   if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "scheduler is null", K(ret));
@@ -3766,7 +3764,8 @@ int ObAdminBackupSetMetaValidationTask::check_tenant_tablet_meta_index()
     }
   }
   if (OB_SUCC(ret) && missing_tablet.count() > 0) {
-    // TODO: check if tablet is deleted instead of missing.
+    // TODO: check if tablet is deleted instead of missing. compare two tablet id array will just
+    // enough
     STORAGE_LOG(WARN, "missing tablet", K(ret), K(missing_tablet));
     if (OB_FAIL(ctx_->global_stat_.add_scheduled_tablet_count_(-missing_tablet.count()
                                                                * 2 /*major+minor*/))) {
@@ -3820,9 +3819,9 @@ void ObAdminBackupSetMetaValidationTask::post_process_(int ret)
 }
 ////////////////ObAdminBackupSetMetaValidationTask End////////////////
 
-////////////////ObAdminBackupTabletValidationDag Start////////////////
-ObAdminBackupTabletValidationDag::~ObAdminBackupTabletValidationDag() {}
-bool ObAdminBackupTabletValidationDag::operator==(const ObIDag &other) const
+////////////////ObAdminBackupTabletGroupValidationDag Start////////////////
+ObAdminBackupTabletGroupValidationDag::~ObAdminBackupTabletGroupValidationDag() {}
+bool ObAdminBackupTabletGroupValidationDag::operator==(const ObIDag &other) const
 {
   bool bret = false;
   if (this == &other) {
@@ -3830,16 +3829,16 @@ bool ObAdminBackupTabletValidationDag::operator==(const ObIDag &other) const
   } else if (get_type() != other.get_type()) {
     bret = false;
   } else {
-    const ObAdminBackupTabletValidationDag &other_dag
-        = static_cast<const ObAdminBackupTabletValidationDag &>(other);
+    const ObAdminBackupTabletGroupValidationDag &other_dag
+        = static_cast<const ObAdminBackupTabletGroupValidationDag &>(other);
     if (id_ == other_dag.id_ && time_identifier_ == other_dag.time_identifier_) {
       bret = true;
     }
   }
   return bret;
 }
-int ObAdminBackupTabletValidationDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param,
-                                                      ObIAllocator &allocator) const
+int ObAdminBackupTabletGroupValidationDag::fill_info_param(
+    compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
   int64_t backup_set_id = -1;
@@ -3854,7 +3853,7 @@ int ObAdminBackupTabletValidationDag::fill_info_param(compaction::ObIBasicInfoPa
   }
   return ret;
 }
-int ObAdminBackupTabletValidationDag::fill_dag_key(char *buf, const int64_t buf_len) const
+int ObAdminBackupTabletGroupValidationDag::fill_dag_key(char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -3874,7 +3873,7 @@ int ObAdminBackupTabletValidationDag::fill_dag_key(char *buf, const int64_t buf_
   }
   return ret;
 }
-int64_t ObAdminBackupTabletValidationDag::hash() const
+int64_t ObAdminBackupTabletGroupValidationDag::hash() const
 {
   uint64_t hash_value = 0;
   int64_t ptr = reinterpret_cast<int64_t>(this);
@@ -3884,8 +3883,8 @@ int64_t ObAdminBackupTabletValidationDag::hash() const
   hash_value = common::murmurhash(&ptr, sizeof(ptr), hash_value);
   return hash_value;
 }
-int ObAdminBackupTabletValidationDag::init(int64_t id, ObAdminBackupValidationCtx *ctx,
-                                           bool generate_sibling_dag)
+int ObAdminBackupTabletGroupValidationDag::init(int64_t id, ObAdminBackupValidationCtx *ctx,
+                                                bool generate_sibling_dag)
 {
   int ret = OB_SUCCESS;
   if (IS_INIT) {
@@ -3902,7 +3901,7 @@ int ObAdminBackupTabletValidationDag::init(int64_t id, ObAdminBackupValidationCt
   }
   return ret;
 }
-int ObAdminBackupTabletValidationDag::create_first_task()
+int ObAdminBackupTabletGroupValidationDag::create_first_task()
 {
   int ret = OB_SUCCESS;
   ObAdminPrepareTabletValidationTask *prepare_task = nullptr;
@@ -3948,11 +3947,11 @@ int ObAdminBackupTabletValidationDag::create_first_task()
 
   return ret;
 }
-int ObAdminBackupTabletValidationDag::generate_next_dag(ObIDag *&next_dag)
+int ObAdminBackupTabletGroupValidationDag::generate_next_dag(ObIDag *&next_dag)
 {
   int ret = OB_SUCCESS;
   ObTenantDagScheduler *scheduler = nullptr;
-  ObAdminBackupTabletValidationDag *sibling_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *sibling_dag = nullptr;
   int64_t next_id = id_ + 1;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -3983,30 +3982,30 @@ int ObAdminBackupTabletValidationDag::generate_next_dag(ObIDag *&next_dag)
   }
   return ret;
 }
-int ObAdminBackupTabletValidationDag::add_macro_block(
+int ObAdminBackupTabletGroupValidationDag::add_macro_block(
     const backup::ObBackupMacroBlockIDPair &macro_block_id_pair,
     const share::ObBackupDataType &data_type)
 {
   ObSpinLockGuard guard(lock_);
   int ret = OB_SUCCESS;
-  if (0 == processing_macro_block_array_.count()
+  if (0 == processing_macro_block_group_.count()
       || ObAdminBackupValidationExecutor::MAX_MACRO_BLOCK_BATCH_COUNT
-             == processing_macro_block_array_.at(processing_macro_block_array_.count() - 1)
+             == processing_macro_block_group_.at(processing_macro_block_group_.count() - 1)
                     .count()) {
-    if (OB_FAIL(processing_macro_block_array_.push_back(
+    if (OB_FAIL(processing_macro_block_group_.push_back(
             ObArray<std::pair<backup::ObBackupMacroBlockIDPair, share::ObBackupDataType>>()))) {
       STORAGE_LOG(WARN, "failed to push back", K(ret));
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(processing_macro_block_array_.at(processing_macro_block_array_.count() - 1)
+    if (OB_FAIL(processing_macro_block_group_.at(processing_macro_block_group_.count() - 1)
                     .push_back({macro_block_id_pair, data_type}))) {
       STORAGE_LOG(WARN, "failed to push back", K(ret));
     }
   }
   return ret;
 }
-////////////////ObAdminBackupTabletValidationDag End////////////////
+////////////////ObAdminBackupTabletGroupValidationDag End////////////////
 
 ////////////////ObAdminPrepareTabletValidationTask Start////////////////
 ObAdminPrepareTabletValidationTask::~ObAdminPrepareTabletValidationTask() {}
@@ -4057,14 +4056,14 @@ int ObAdminPrepareTabletValidationTask::collect_tablet_group_()
   int ret = OB_SUCCESS;
   int64_t backup_set_id = -1;
   ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(ctx_->processing_backup_set_id_array_.at(task_id_, backup_set_id))) {
     STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(task_id_));
   } else if (OB_ISNULL(tablet_validation_dag
-                       = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else if (OB_FAIL(ctx_->get_backup_set_attr(backup_set_id, backup_set_attr))) {
@@ -4096,15 +4095,16 @@ int ObAdminPrepareTabletValidationTask::schedule_next_dag_()
   int64_t backup_set_id = -1;
   ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
   ObAdminDataBackupValidationDagNet *dag_net = nullptr;
-  ObAdminBackupTabletValidationDag *currect_dag = nullptr;
-  ObAdminBackupTabletValidationDag *cloned_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *currect_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *cloned_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_FAIL(ctx_->processing_backup_set_id_array_.at(task_id_, backup_set_id))) {
     STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(task_id_));
-  } else if (OB_ISNULL(currect_dag = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+  } else if (OB_ISNULL(currect_dag
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else if (OB_ISNULL(dag_net = static_cast<ObAdminDataBackupValidationDagNet *>(
@@ -4185,13 +4185,13 @@ int ObAdminTabletMetaValidationTask::generate_next_task(ObITask *&next_task)
   int ret = OB_SUCCESS;
   next_task = nullptr;
   int64_t next_task_id = task_id_ + 1;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   ObAdminTabletMetaValidationTask *sibling_task = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_ISNULL(tablet_validation_dag
-                       = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else if (next_task_id >= tablet_validation_dag->processing_tablet_group_.count()) {
@@ -4232,14 +4232,14 @@ int ObAdminTabletMetaValidationTask::collect_tablet_meta_info_()
 {
   int ret = OB_SUCCESS;
   void *alc_ptr = nullptr;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
   ObArray<ObAdminBackupTabletValidationAttr *> current_group;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_ISNULL(tablet_validation_dag
-                       = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else if (OB_FAIL(tablet_validation_dag->processing_tablet_group_.at(task_id_, current_group))) {
@@ -4330,13 +4330,13 @@ int ObAdminTabletMetaValidationTask::collect_sstable_meta_info_()
 {
   int ret = OB_SUCCESS;
   void *alc_ptr = nullptr;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   ObArray<ObAdminBackupTabletValidationAttr *> current_group;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_ISNULL(tablet_validation_dag
-                       = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else {
@@ -4409,13 +4409,13 @@ int ObAdminTabletMetaValidationTask::collect_sstable_meta_info_()
 int ObAdminTabletMetaValidationTask::check_sstable_meta_info_and_prepare_macro_block_()
 {
   int ret = OB_SUCCESS;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   ObArray<ObAdminBackupTabletValidationAttr *> current_group;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_ISNULL(tablet_validation_dag
-                       = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else if (OB_FAIL(tablet_validation_dag->processing_tablet_group_.at(task_id_, current_group))) {
@@ -4566,16 +4566,16 @@ int ObAdminMacroBlockDataValidationTask::generate_next_task(ObITask *&next_task)
   int ret = OB_SUCCESS;
   next_task = nullptr;
   int64_t next_task_id = task_id_ + 1;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   ObAdminMacroBlockDataValidationTask *sibling_task = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_ISNULL(tablet_validation_dag
-                       = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
-  } else if (next_task_id >= tablet_validation_dag->processing_macro_block_array_.count()) {
+  } else if (next_task_id >= tablet_validation_dag->processing_macro_block_group_.count()) {
     ret = OB_ITER_END;
     next_task = nullptr;
     STORAGE_LOG(INFO, "no more sibling task", K(ret), K(next_task_id));
@@ -4609,7 +4609,7 @@ int ObAdminMacroBlockDataValidationTask::process()
 int ObAdminMacroBlockDataValidationTask::check_macro_block_data_()
 {
   int ret = OB_SUCCESS;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   blocksstable::ObBufferReader data_buffer;
   char *buf = nullptr;
   common::ObArenaAllocator tmp_allocator("ObAdmBakVal");
@@ -4621,7 +4621,7 @@ int ObAdminMacroBlockDataValidationTask::check_macro_block_data_()
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
   } else if (OB_ISNULL(tablet_validation_dag
-                       = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else if (OB_ISNULL(buf
@@ -4629,11 +4629,11 @@ int ObAdminMacroBlockDataValidationTask::check_macro_block_data_()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "failed to alloc buf", K(ret));
   } else if (FALSE_IT(data_buffer.assign(buf, OB_DEFAULT_MACRO_BLOCK_SIZE))) {
-  } else if (task_id_ >= tablet_validation_dag->processing_macro_block_array_.count()) {
+  } else if (task_id_ >= tablet_validation_dag->processing_macro_block_group_.count()) {
     STORAGE_LOG(INFO, "tablet group is all empty tablet, no sstable", K(ret), K(task_id_));
   } else {
     ObArray<std::pair<backup::ObBackupMacroBlockIDPair, share::ObBackupDataType>>
-        &macro_block_id_pairs = tablet_validation_dag->processing_macro_block_array_.at(task_id_);
+        &macro_block_id_pairs = tablet_validation_dag->processing_macro_block_group_.at(task_id_);
     int64_t start_time = common::ObTimeUtility::current_time();
     FOREACH_X(macro_block_id_pair_iter, macro_block_id_pairs, OB_SUCC(ret))
     {
@@ -4734,7 +4734,7 @@ int ObAdminFinishTabletValidationTask::check_and_update_stat_()
 {
   int ret = OB_SUCCESS;
   int64_t backup_set_id = -1;
-  ObAdminBackupTabletValidationDag *tablet_validation_dag = nullptr;
+  ObAdminBackupTabletGroupValidationDag *tablet_validation_dag = nullptr;
   ObAdminBackupSetValidationAttr *backup_set_attr = nullptr;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -4742,7 +4742,7 @@ int ObAdminFinishTabletValidationTask::check_and_update_stat_()
   } else if (OB_FAIL(ctx_->processing_backup_set_id_array_.at(task_id_, backup_set_id))) {
     STORAGE_LOG(WARN, "failed to get backup set id", K(ret), K(task_id_));
   } else if (OB_ISNULL(tablet_validation_dag
-                       = static_cast<ObAdminBackupTabletValidationDag *>(get_dag()))) {
+                       = static_cast<ObAdminBackupTabletGroupValidationDag *>(get_dag()))) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "failed to get tablet validation dag", K(ret));
   } else if (OB_FAIL(ctx_->get_backup_set_attr(backup_set_id, backup_set_attr))) {

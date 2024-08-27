@@ -111,7 +111,8 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
   void *alc_ptr = nullptr;
   int opt = 0;
   int index = -1;
-  int64_t concurrency_ = 1; // default concurrency
+  int64_t concurrency_ = 1;  // default concurrency
+  int64_t memory_limit_ = 4; // default memory limit
   common::ObArenaAllocator tmp_allocator("ObAdmBakVal");
 
   struct option longopts[] = {{"help", 0, NULL, 0},
@@ -124,6 +125,7 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
                               {"check_level", 1, NULL, 8},
                               {"concurrency", 1, NULL, 9},
                               {"io_bandwidth_limit", 1, NULL, 10},
+                              {"memory_limit", 1, NULL, 11},
                               {NULL, 0, NULL, 0}};
 
   char *log_archive_dest_str = nullptr;
@@ -358,6 +360,20 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
         }
         break;
       }
+      case 11: {
+        char *endptr = nullptr;
+        int64_t tmp_memory_limit = 0;
+        if (OB_FAIL(ob_strtoll(optarg, endptr, tmp_memory_limit))) {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "invalid argument", K(ret));
+        } else if (tmp_memory_limit <= 0) {
+          ret = OB_INVALID_ARGUMENT;
+          STORAGE_LOG(WARN, "invalid argument", K(ret));
+        } else {
+          memory_limit_ = OB_MAX(memory_limit_, tmp_memory_limit);
+        }
+        break;
+      }
       default: {
         STORAGE_LOG(WARN, "unknown option", K(opt));
         print_usage_();
@@ -368,12 +384,13 @@ int ObAdminBackupValidationExecutor::parse_cmd_(int argc, char *argv[])
   }
   if (OB_SUCC(ret)) {
     // reload memory limit
-    int64_t memory_limit = OB_MAX(4 * 1024 * 1024 * 1024LL, concurrency_ * 256L * 1024 * 1024LL);
-    lib::set_memory_limit(memory_limit);
-    lib::set_tenant_memory_limit(OB_SERVER_TENANT_ID, memory_limit);
-    STORAGE_LOG(INFO, "succeed to set memory limit", K(memory_limit));
+    memory_limit_
+        = OB_MAX(memory_limit_ * 1024 * 1024 * 1024LL, concurrency_ * 256L * 1024 * 1024LL);
+    lib::set_memory_limit(memory_limit_);
+    lib::set_tenant_memory_limit(OB_SERVER_TENANT_ID, memory_limit_);
+    STORAGE_LOG(INFO, "succeed to set memory limit", K(memory_limit_));
     printf("Memory limit set to \033[1;32m%.2lf GB\033[0m\n",
-           memory_limit / 1024.0 / 1024.0 / 1024.0);
+           memory_limit_ / 1024.0 / 1024.0 / 1024.0);
     fflush(stdout);
     // reload currency
     omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
