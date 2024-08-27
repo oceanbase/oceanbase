@@ -548,13 +548,14 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
   }
 
   if (OB_FAIL(ret)) {
-    set_stop();
-    destroy();
     LOG_ERROR("[OBSERVER_NOTICE] fail to init observer", KR(ret));
     LOG_DBA_FORCE_PRINT(DBA_ERROR, OB_SERVER_INIT_FAIL, ret,
                         DBA_STEP_INC_INFO(server_start),
                         "observer init fail. "
                         "you may find solutions in previous error logs or seek help from official technicians.");
+    raise(SIGKILL);
+    set_stop();
+    destroy();
   } else {
     FLOG_INFO("[OBSERVER_NOTICE] success to init observer", "cluster_id", obrpc::ObRpcNetHandler::CLUSTER_ID,
         "lib::g_runtime_enabled", lib::g_runtime_enabled);
@@ -1163,6 +1164,7 @@ int ObServer::start()
                         DBA_STEP_INC_INFO(server_start),
                         "observer start fail, the stop status is ", stop_, ". "
                         "you may find solutions in previous error logs or seek help from official technicians.");
+    raise(SIGKILL);
     set_stop();
     wait();
   } else if (!stop_) {
