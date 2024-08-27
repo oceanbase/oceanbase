@@ -66,6 +66,7 @@ int ObTxTable::init(ObLS *ls)
     read_tx_data_table_cnt_ = 0;
     recycle_scn_cache_.reset();
     LOG_INFO("init tx table successfully", K(ret), K(ls->get_ls_id()));
+    calc_upper_trans_is_disabled_ = false;
     is_inited_ = true;
   }
   if (OB_FAIL(ret)) {
@@ -182,6 +183,7 @@ int ObTxTable::online()
     recycle_scn_cache_.reset();
     (void)reset_ctx_min_start_scn_info_();
     ATOMIC_STORE(&state_, ObTxTable::ONLINE);
+    ATOMIC_STORE(&calc_upper_trans_is_disabled_, false);
     LOG_INFO("tx table online succeed", K(ls_id_), KPC(this));
   }
 
@@ -1000,6 +1002,12 @@ int ObTxTable::get_uncommitted_tx_min_start_scn(share::SCN &min_start_scn, share
 
 void ObTxTable::update_min_start_scn_info(const SCN &max_decided_scn)
 {
+  if (true == ATOMIC_LOAD(&calc_upper_trans_is_disabled_)) {
+    // quit updating if calculate upper trans versions disabled
+    STORAGE_LOG(INFO, "skip update min start scn", K(max_decided_scn), KPC(this));
+    return;
+  }
+
   int64_t cur_ts = ObClockGenerator::getClock();
   SpinWLockGuard lock_guard(ctx_min_start_scn_info_.lock_);
 
@@ -1037,23 +1045,38 @@ void ObTxTable::update_min_start_scn_info(const SCN &max_decided_scn)
       }
     }
   }
+
+  STORAGE_LOG(INFO, "finish update min start scn", K(max_decided_scn), K(ctx_min_start_scn_info_));
 }
 
 int ObTxTable::get_upper_trans_version_before_given_scn(const SCN sstable_end_scn, SCN &upper_trans_version)
 {
-  return tx_data_table_.get_upper_trans_version_before_given_scn(sstable_end_scn, upper_trans_version);
+  int ret = OB_SUCCESS;
+  if (ATOMIC_LOAD(&calc_upper_trans_is_disabled_)) {
+    // cannot calculate upper trans version right now
+    if (REACH_TIME_INTERVAL(1LL * 1000LL * 1000LL)) {
+      STORAGE_LOG(INFO, "calc upper trans version is disabled", K(calc_upper_trans_is_disabled_), K(sstable_end_scn));
+    }
+  } else {
+    ret = tx_data_table_.get_upper_trans_version_before_given_scn(sstable_end_scn, upper_trans_version);
+  }
+  return ret;
 }
 
 void ObTxTable::disable_upper_trans_calculation()
 {
+  ATOMIC_STORE(&calc_upper_trans_is_disabled_, true);
   (void)tx_data_table_.disable_upper_trans_calculation();
   reset_ctx_min_start_scn_info_();
+  FLOG_INFO("disable upper trans version calculation", KPC(this));
 }
 
 void ObTxTable::enable_upper_trans_calculation(const share::SCN latest_transfer_scn)
 {
   reset_ctx_min_start_scn_info_();
   (void)tx_data_table_.enable_upper_trans_calculation(latest_transfer_scn);
+  ATOMIC_STORE(&calc_upper_trans_is_disabled_, false);
+  FLOG_INFO("enable upper trans version calculation", KPC(this));
 }
 
 int ObTxTable::get_start_tx_scn(SCN &start_tx_scn)

@@ -154,6 +154,7 @@ public:
   void reset();
 
   int try_submit_log(const share::SCN &min_start_scn, MinStartScnStatus status);
+  void clear_keep_alive_smaller_scn_info();
   void print_stat_info();
 public:
 
