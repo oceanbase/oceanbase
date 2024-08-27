@@ -12,7 +12,6 @@
 
 #ifndef _MEMORY_SANITY_H_
 #define _MEMORY_SANITY_H_
-#include "sanity/sanity.h"
 
 #ifndef ENABLE_SANITY
 #define SANITY_DISABLE_CHECK_RANGE()
@@ -26,6 +25,7 @@
 #define SANITY_MMAP(args...) NULL
 #define SANITY_MUNMAP(args...)
 #else
+#include "sanity/sanity.h"
 #define _DEFINE_SANITY_GUARD(var_name) SanityDisableCheckRangeGuard var_name;
 #define SANITY_DISABLE_CHECK_RANGE() _DEFINE_SANITY_GUARD(CONCAT(sanity_guard, __COUNTER__))
 #define SANITY_POISON(args...) sanity_poison(args)
