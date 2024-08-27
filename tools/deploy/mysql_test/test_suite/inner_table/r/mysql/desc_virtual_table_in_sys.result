@@ -9236,6 +9236,7 @@ destination_owner	varchar(128)	YES		NULL
 destination	varchar(128)	YES		NULL	
 credential_owner	varchar(30)	YES		NULL	
 credential_name	varchar(30)	YES		NULL	
+job_class	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_running_job;
 IF(count(*) >= 0, 1, 0)
 1

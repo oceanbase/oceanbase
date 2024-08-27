@@ -14370,6 +14370,7 @@ def_table_schema(
     ('destination', 'varchar:128', 'true'),
     ('credential_owner', 'varchar:30', 'true'),
     ('credential_name', 'varchar:30', 'true'),
+    ('job_class', 'varchar:128', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
