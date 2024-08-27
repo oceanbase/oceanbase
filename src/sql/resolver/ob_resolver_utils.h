@@ -774,6 +774,15 @@ public:
                                           int64_t column_idx,
                                           const ObString &expr_name);
   static int calc_file_column_idx(const ObString &column_name, uint64_t &file_column_idx);
+  static int build_file_column_expr_for_odps(
+    ObRawExprFactory &expr_factory,
+    const ObSQLSessionInfo &session_info,
+    const uint64_t table_id,
+    const common::ObString &table_name,
+    const common::ObString &column_name,
+    int64_t column_idx,
+    const ObColumnSchemaV2 *column_schema,
+    ObRawExpr *&expr);
   static int build_file_column_expr_for_csv(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
@@ -879,6 +888,8 @@ public:
 
   static int64_t get_mysql_max_partition_num(const uint64_t tenant_id);
   static int check_schema_valid_for_mview(const share::schema::ObTableSchema &table_schema);
+  static bool is_external_pseudo_column(const ObRawExpr &expr);
+  static int cnt_external_pseudo_column(const ObRawExpr &expr, bool &contain);
 private:
   static int try_convert_to_unsiged(const ObExprResType restype,
                                     ObRawExpr& src_expr,

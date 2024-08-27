@@ -1529,7 +1529,6 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       } else if (OB_FAIL(deep_copy_str(src_schema.external_properties_, external_properties_))) {
         LOG_WARN("deep copy external_properties failed", K(ret));
       }
-
       //view schema
       if (OB_SUCC(ret)) {
         view_schema_ = src_schema.view_schema_;

@@ -2592,8 +2592,22 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
+      case T_EXTERNAL_PROPERTIES:
       case T_EXTERNAL_FILE_FORMAT: {
-        if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
+        uint64_t data_version = 0;
+        uint64_t tenant_id = OB_INVALID_ID;
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexcepted null ptr", K(ret));
+        } else if (FALSE_IT(tenant_id = session_info_->get_effective_tenant_id())) {
+        } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+          LOG_WARN("failed to get data version", K(ret));
+        } else if (T_EXTERNAL_PROPERTIES == option_node->type_ &&
+                   data_version < DATA_VERSION_4_3_2_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not support odps external table under CLUSTER_VERSION_4_3_2_1", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "odps external table");
+        } else if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid file format option", K(ret));
         } else {
@@ -2623,7 +2637,9 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
               LOG_USER_ERROR(OB_NOT_SUPPORTED, "format");
             }
             // 2. resolve other format value
+            ObString masked_sql = params_.session_info_->get_current_query_string(); // that's create table operation stmt which has properties
             for (int i = 0; OB_SUCC(ret) && i < option_node->num_child_; ++i) {
+              ObString temp_masked_sql;
               if (OB_ISNULL(option_node->children_[i])) {
                 ret = OB_ERR_UNEXPECTED;
                 LOG_WARN("failed. get unexpected NULL ptr", K(ret), K(option_node->num_child_));
@@ -2631,11 +2647,17 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                          T_CHARSET == option_node->children_[i]->type_) {
               } else if (OB_FAIL(resolve_file_format(option_node->children_[i], format))) {
                 LOG_WARN("fail to resolve file format", K(ret));
+              } else if (OB_FAIL(mask_properties_sensitive_info(option_node->children_[i], masked_sql, temp_masked_sql))) {
+                LOG_WARN("failed to mask properties sensitive info", K(ret), K(i), K(option_node->num_child_));
+              } else if (!temp_masked_sql.empty()) {
+                masked_sql = temp_masked_sql;
               }
             }
             if (OB_SUCC(ret)) {
               bool is_valid = true;
-              if (OB_FAIL(check_format_valid(format, is_valid))) {
+              if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_ && OB_FAIL(format.odps_format_.encrypt())) {
+                LOG_WARN("failed to encrypt odps format", K(ret));
+              } else if (OB_FAIL(check_format_valid(format, is_valid))) {
                 LOG_WARN("check format valid failed", K(ret));
               } else if (!is_valid) {
                 ret = OB_NOT_SUPPORTED;
@@ -2654,9 +2676,21 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
                   }
                 } while (OB_SUCC(ret) && pos >= buf_len);
                 if (OB_SUCC(ret)) {
-                  arg.schema_.set_external_file_format(ObString(pos, buf));
-                  LOG_DEBUG("debug external file format",
-                            K(arg.schema_.get_external_file_format()));
+                  if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+                    ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+                    if (OB_ISNULL(create_table_stmt)) {
+                      ret = OB_ERR_UNEXPECTED;
+                      LOG_WARN("unexcepted null ptr", K(ret));
+                    } else {
+                      create_table_stmt->set_masked_sql(masked_sql);
+                      arg.schema_.set_external_properties(ObString(pos, buf));
+                    }
+
+                  } else {
+                    arg.schema_.set_external_file_format(ObString(pos, buf));
+                    LOG_DEBUG("debug external file format",
+                              K(arg.schema_.get_external_file_format()));
+                  }
                 }
               }
             }
@@ -2875,6 +2909,46 @@ int ObDDLResolver::resolve_file_format(const ParseNode *node, ObExternalFileForm
     LOG_WARN("invalid parse node", K(ret));
   } else {
     switch (node->type_) {
+      case ObItemType::T_ACCESSTYPE: {
+        format.odps_format_.access_type_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_ACCESSID: {
+        format.odps_format_.access_id_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_ACCESSKEY: {
+        format.odps_format_.access_key_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_STSTOKEN: {
+        format.odps_format_.sts_token_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_ENDPOINT: {
+        format.odps_format_.endpoint_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_PROJECT: {
+        format.odps_format_.project_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_SCHEMA: {
+        format.odps_format_.schema_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_TABLE: {
+        format.odps_format_.table_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_QUOTA: {
+        format.odps_format_.quota_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
+      case ObItemType::T_COMPRESSION_CODE: {
+        format.odps_format_.compression_code_ = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
+        break;
+      }
       case T_EXTERNAL_FILE_FORMAT_TYPE: {
         ObString string_v = ObString(node->children_[0]->str_len_, node->children_[0]->str_value_).trim_space_only();
         for (int i = 0; i < ObExternalFileFormat::MAX_FORMAT; i++) {
@@ -3030,6 +3104,31 @@ int ObDDLResolver::resolve_file_format(const ParseNode *node, ObExternalFileForm
   return ret;
 }
 
+int ObDDLResolver::mask_properties_sensitive_info(const ParseNode *node, ObString &ddl_sql, ObString &masked_sql)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node) || node->num_child_ != 1 || OB_ISNULL(node->children_[0]) ||
+      OB_ISNULL(params_.session_info_) || OB_ISNULL(params_.expr_factory_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid parse node", K(ret));
+  } else {
+    switch (node->type_) {
+      case ObItemType::T_ENDPOINT:
+      case ObItemType::T_STSTOKEN:
+      case ObItemType::T_ACCESSKEY:
+      case ObItemType::T_ACCESSID: {
+        if (OB_FAIL(ObDCLResolver::mask_password_for_passwd_node(params_.allocator_, ddl_sql, node->children_[0], masked_sql, true))) {
+          LOG_WARN("fail to gen masked sql", K(ret));
+        }
+        break;
+      }
+      default: {
+        // do nothing
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDDLResolver::resolve_column_definition_ref(ObColumnSchemaV2 &column,
                                                   ParseNode *node /* column_definition_def */,
@@ -3088,30 +3187,34 @@ int ObDDLResolver::resolve_column_definition_ref(ObColumnSchemaV2 &column,
 int ObDDLResolver::check_format_valid(const ObExternalFileFormat &format, bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  if (!format.csv_format_.line_term_str_.empty() && !format.csv_format_.field_term_str_.empty()) {
-    if (0 == MEMCMP(format.csv_format_.field_term_str_.ptr(),
-                    format.csv_format_.line_term_str_.ptr(),
-                    std::min(format.csv_format_.field_term_str_.length(),
-                             format.csv_format_.line_term_str_.length()))) {
-      is_valid = false;
-      LOG_USER_WARN(OB_NOT_SUPPORTED,
-          "LINE_DELIMITER or FIELD_DELIMITER cannot be a substring of the delimiter for the other");
-      LOG_WARN("LINE_DELIMITER or FIELD_DELIMITER cann't be a substring of the other's", K(ret),
-               K(format.csv_format_.line_term_str_), K(format.csv_format_.field_term_str_));
+  if (ObExternalFileFormat::ODPS_FORMAT == format.format_type_) {
+    is_valid = true;
+  } else {
+    if (!format.csv_format_.line_term_str_.empty() && !format.csv_format_.field_term_str_.empty()) {
+      if (0 == MEMCMP(format.csv_format_.field_term_str_.ptr(),
+                      format.csv_format_.line_term_str_.ptr(),
+                      std::min(format.csv_format_.field_term_str_.length(),
+                              format.csv_format_.line_term_str_.length()))) {
+        is_valid = false;
+        LOG_USER_WARN(OB_NOT_SUPPORTED,
+            "LINE_DELIMITER or FIELD_DELIMITER cannot be a substring of the delimiter for the other");
+        LOG_WARN("LINE_DELIMITER or FIELD_DELIMITER cann't be a substring of the other's", K(ret),
+                K(format.csv_format_.line_term_str_), K(format.csv_format_.field_term_str_));
+      }
     }
-  }
-  if (OB_SUCC(ret)) {
-     if (!format.csv_format_.line_term_str_.empty()
-         && (format.csv_format_.line_term_str_[0] == format.csv_format_.field_escaped_char_
-             || format.csv_format_.line_term_str_[0] == format.csv_format_.field_enclosed_char_)) {
-       ret = OB_WRONG_FIELD_TERMINATORS;
-       LOG_WARN("invalid line terminator", K(ret));
-     } else if (!format.csv_format_.field_term_str_.empty()
-                && (format.csv_format_.field_term_str_[0] == format.csv_format_.field_escaped_char_
-                    || format.csv_format_.field_term_str_[0] == format.csv_format_.field_enclosed_char_)) {
-       ret = OB_WRONG_FIELD_TERMINATORS;
-       LOG_WARN("invalid field terminator", K(ret));
-     }
+    if (OB_SUCC(ret)) {
+      if (!format.csv_format_.line_term_str_.empty()
+          && (format.csv_format_.line_term_str_[0] == format.csv_format_.field_escaped_char_
+              || format.csv_format_.line_term_str_[0] == format.csv_format_.field_enclosed_char_)) {
+        ret = OB_WRONG_FIELD_TERMINATORS;
+        LOG_WARN("invalid line terminator", K(ret));
+      } else if (!format.csv_format_.field_term_str_.empty()
+                  && (format.csv_format_.field_term_str_[0] == format.csv_format_.field_escaped_char_
+                      || format.csv_format_.field_term_str_[0] == format.csv_format_.field_enclosed_char_)) {
+        ret = OB_WRONG_FIELD_TERMINATORS;
+        LOG_WARN("invalid field terminator", K(ret));
+      }
+    }
   }
   return ret;
 }

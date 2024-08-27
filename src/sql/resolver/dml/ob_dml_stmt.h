@@ -290,10 +290,8 @@ struct TableItem
                K_(is_view_table), K_(part_ids), K_(part_names), K_(cte_type),
                KPC_(function_table_expr),
                K_(flashback_query_type), KPC_(flashback_query_expr), K_(table_type),
-               K_(exec_params),
-               KPC_(sample_info),
-               K_(mview_id),
-               K_(need_expand_rt_mv));
+               K_(exec_params), KPC_(sample_info), K_(mview_id), K_(need_expand_rt_mv),
+               K_(external_table_partition));
 
   enum TableType
   {
@@ -307,7 +305,6 @@ struct TableItem
     TEMP_TABLE,
     LINK_TABLE,
     JSON_TABLE,
-    EXTERNAL_TABLE,
     VALUES_TABLE,
     LATERAL_TABLE,
   };
@@ -442,6 +439,8 @@ struct TableItem
   ObJsonTableDef *json_table_def_;
   // values table
   ObValuesTableDef *values_table_def_;
+  // external table
+  common::ObString external_table_partition_;
   // sample scan infos
   SampleInfo *sample_info_;
 };

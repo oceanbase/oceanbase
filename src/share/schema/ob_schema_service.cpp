@@ -424,6 +424,8 @@ int AlterTableSchema::assign(const ObTableSchema &src_schema)
         LOG_WARN("deep copy external_file_format failed", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.external_file_pattern_, external_file_pattern_))) {
         LOG_WARN("deep copy external_file_pattern failed", K(ret));
+      } else if (OB_FAIL(deep_copy_str(src_schema.external_properties_, external_properties_))) {
+        LOG_WARN("deep copy external_properties failed", K(ret));
       }
 
       //view schema

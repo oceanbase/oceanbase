@@ -53,6 +53,7 @@
 #include "lib/charset/ob_charset.h"
 #include "pl/ob_pl_user_type.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "sql/engine/cmd/ob_load_data_parser.h"
 #ifdef OB_BUILD_SPM
 #include "sql/spm/ob_spm_controller.h"
 #endif
@@ -1400,6 +1401,50 @@ int ObSQLUtils::check_and_copy_column_alias_name(const ObCollationType cs_type, 
         LOG_USER_WARN(OB_ERR_REMOVED_SPACES, origin_name.length(), origin_name.ptr());
       }
     }
+  }
+  return ret;
+}
+
+int ObSQLUtils::extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list)
+{
+  int ret = OB_SUCCESS;
+  if (all_part_spec.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty odps part spec", K(ret));
+  } else {
+    const char* start = all_part_spec.ptr();
+    const char* end = start + all_part_spec.length();
+    const char* ptr = NULL;
+    while (start < end && OB_SUCC(ret)) {
+      if (ptr == NULL && *start == '\'') {
+        ptr = start;
+      } else if (ptr != NULL && *start == '\'') {
+        int64_t len = start - ptr - 1;
+        if (0 == len) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected part spec", K(ret), K(all_part_spec));
+        } else if (OB_FAIL(part_spec_list.push_back(ObString(len, ptr + 1)))) {
+          LOG_WARN("failed to push back part_spec", K(ret));
+        }
+        ptr = NULL;
+      }
+      ++start;
+    }
+  }
+  return ret;
+}
+
+int ObSQLUtils::is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps)
+{
+  int ret = OB_SUCCESS;
+  is_odps = false;
+  ObExternalFileFormat format;
+  if (properties.empty()) {
+    // do nothing
+  } else if (OB_FAIL(format.load_from_string(properties, allocator))) {
+    LOG_WARN("fail to load from properties string", K(ret), K(properties));
+  } else {
+    is_odps = ObExternalFileFormat::FormatType::ODPS_FORMAT == format.format_type_;
   }
   return ret;
 }
@@ -5417,7 +5462,7 @@ void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
 
 bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
 {
-  return url.prefix_match_ci(OB_FILE_PREFIX);
+  return url.empty() ? false : url.prefix_match_ci(OB_FILE_PREFIX);
 }
 
 int ObSQLUtils::split_remote_object_storage_url(ObString &url, ObBackupStorageInfo &storage_info)
