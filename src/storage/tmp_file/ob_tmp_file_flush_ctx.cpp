@@ -233,6 +233,7 @@ ObTmpFileFlushTask::ObTmpFileFlushTask()
   : inst_handle_(),
     kvpair_(nullptr),
     block_handle_(),
+    write_block_ret_code_(OB_SUCCESS),
     ret_code_(OB_SUCCESS),
     data_length_(0),
     block_index_(-1),
@@ -254,6 +255,7 @@ void ObTmpFileFlushTask::destroy()
   block_handle_.reset();
   inst_handle_.reset();
   kvpair_ = nullptr;
+  write_block_ret_code_ = OB_SUCCESS;
   ret_code_ = OB_SUCCESS;
   data_length_ = 0;
   block_index_ = -1;
@@ -298,6 +300,8 @@ int ObTmpFileFlushTask::write_one_block()
       true/*update_to_max_time)*/))){ // update to max time to skip bad block inspect
     LOG_WARN("failed to update write time", KR(ret), K(handle_));
   }
+  atomic_set_write_block_ret_code(ret);
+
   return ret;
 }
 

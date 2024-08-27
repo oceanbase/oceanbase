@@ -256,6 +256,12 @@ public:
   OB_INLINE char *get_data_buf() const { return block_handle_.value_ == nullptr ? nullptr : block_handle_.value_->get_buffer(); }
   OB_INLINE void atomic_set_ret_code(int ret_code) { ATOMIC_SET(&ret_code_, ret_code); }
   OB_INLINE int atomic_get_ret_code() const { return ATOMIC_LOAD(&ret_code_); }
+  OB_INLINE void atomic_set_write_block_ret_code(int write_block_ret_code) {
+    ATOMIC_SET(&write_block_ret_code_, write_block_ret_code);
+  }
+  OB_INLINE int atomic_get_write_block_ret_code() const {
+    return ATOMIC_LOAD(&write_block_ret_code_);
+  }
   OB_INLINE void set_data_length(const int64_t len) { data_length_ = len; }
   OB_INLINE int64_t get_data_length() const { return data_length_; }
   OB_INLINE void set_block_index(const int64_t block_index) { block_index_ = block_index; }
@@ -283,13 +289,14 @@ public:
     return buffer != nullptr && get_data_buf() != nullptr &&
            buffer >= get_data_buf() && buffer + length <= get_data_buf() + OB_SERVER_BLOCK_MGR.get_macro_block_size();
   }
-  TO_STRING_KV(KP(this), KP(kvpair_), K(ret_code_), K(data_length_),
+  TO_STRING_KV(KP(this), KP(kvpair_), K(write_block_ret_code_), K(ret_code_), K(data_length_),
                K(block_index_), K(flush_seq_), K(create_ts_), K(is_io_finished_),
                K(fast_flush_tree_page_), K(recorded_as_prepare_finished_), K(task_state_), K(tmp_file_block_handle_), K(flush_infos_));
 private:
   ObKVCacheInstHandle inst_handle_;
   ObKVCachePair *kvpair_;
   ObTmpBlockValueHandle block_handle_;
+  int write_block_ret_code_;
   int ret_code_;
   int64_t data_length_;       // data length (including padding to make length upper align to page size)
   int64_t block_index_;       // tmp file block logical index in ObTmpFileBlockManager
