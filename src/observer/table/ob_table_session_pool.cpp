@@ -554,6 +554,10 @@ int ObTableApiSessPool::create_and_add_node_safe(ObTableApiCredential &credentia
       LOG_WARN("fail to add sess node to hash map", K(ret), K(credential), K(*node));
     } else {
       ret = OB_SUCCESS; // replace error code
+      // other thread has set_refactored, free current node
+      node->~ObTableApiSessNode();
+      allocator_.free(node);
+      node = nullptr;
     }
   }
 
