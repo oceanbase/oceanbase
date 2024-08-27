@@ -6396,6 +6396,45 @@ def_table_schema(
   ],
 )
 
+def_table_schema(
+  owner = 'fyy280124',
+  table_name     = '__all_scheduler_job_run_detail_v2',
+  table_id       = '519',
+  table_type     = 'SYSTEM_TABLE',
+  gm_columns     = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('job_name', 'varchar:128', 'false'),
+    ('time', 'timestamp', 'false'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+    ('job', 'int', 'true', '0'),
+    ('log_id', 'int', 'true', '0'),
+    ('log_date', 'timestamp', 'true'),
+    ('owner', 'varchar:128', 'true'),
+    ('job_subname', 'varchar:128', 'true'),
+    ('job_class', 'varchar:128', 'true'),
+    ('operation', 'varchar:OB_MAX_SQL_LENGTH', 'true'),
+    ('status', 'varchar:128', 'true'),
+    ('code', 'int', 'true', '0'),
+    ('req_start_date', 'timestamp', 'true'),
+    ('actual_start_date', 'timestamp', 'true'),
+    ('run_duration', 'int', 'true'),
+    ('instance_id', 'varchar:128', 'true'),
+    ('session_id', 'uint', 'true'),
+    ('slave_pid', 'varchar:128', 'true'),
+    ('cpu_used', 'int', 'true'),
+    ('user_name', 'varchar:128', 'true'),
+    ('client_id', 'varchar:128', 'true'),
+    ('global_uid', 'varchar:128', 'true'),
+    ('credential_owner', 'varchar:128', 'true'),
+    ('credential_name', 'varchar:128', 'true'),
+    ('destination_owner', 'varchar:128', 'true'),
+    ('destination', 'varchar:128', 'true'),
+    ('message', 'varchar:4000'),
+  ],
+)
 #
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -12961,6 +13000,11 @@ def_table_schema(**gen_iterate_private_virtual_table_def(
   in_tenant_space = True,
   keywords = all_def_keywords['__all_ls_replica_task_history']))
 
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12488',
+  table_name = '__all_virtual_scheduler_job_run_detail_v2',
+  keywords = all_def_keywords['__all_scheduler_job_run_detail_v2']))
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -13335,6 +13379,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15305', all_def_keyword
 # 15374: idx_rls_group_table_id_real_agent
 # 15375: idx_rls_context_table_id_real_agent
 
+
 #######################################################################
 # end for oracle agent table index
 #######################################################################
@@ -13402,6 +13447,7 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15443', all_def_keywords['__all_virtual_ls_replica_task_history'])))
 
 def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15457', all_def_keywords['__all_virtual_query_response_time'])))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15458', all_def_keywords['__all_scheduler_job_run_detail_v2']))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -30453,6 +30499,147 @@ def_table_schema(
 """.replace("\n", " "),
 )
 
+
+def_table_schema(
+  owner = 'fyy280124',
+  table_name      = 'DBA_SCHEDULER_JOB_RUN_DETAILS',
+  table_id        = '21589',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+  (
+  SELECT
+                        CAST(NULL AS NUMBER) AS LOG_ID,
+                        CAST(NULL AS DATETIME) AS LOG_DATE,
+                        CAST(NULL AS CHAR(128)) AS OWNER,
+                        CAST(NULL AS CHAR(128)) AS JOB_NAME,
+                        CAST(NULL AS CHAR(128)) AS JOB_SUBNAME,
+                        CAST(NULL AS CHAR(128)) AS STATUS,
+                        CODE,
+                        CAST(NULL AS DATETIME) AS REQ_START_DATE,
+                        CAST(NULL AS DATETIME) AS ACTUAL_START_DATE,
+                        CAST(NULL AS NUMBER) AS RUN_DURATION,
+                        CAST(NULL AS CHAR(128)) AS INSTANCE_ID,
+                        CAST(NULL AS NUMBER) AS SESSION_ID,
+                        CAST(NULL AS CHAR(128)) AS SLAVE_PID,
+                        CAST(NULL AS NUMBER) AS CPU_USED,
+                        CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,
+                        CAST(NULL AS CHAR(128)) AS CREDENTIAL_NAME,
+                        CAST(NULL AS CHAR(128)) AS DESTINATION_OWNER,
+                        CAST(NULL AS CHAR(128)) AS DESTINATION,
+                        MESSAGE,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM OCEANBASE.__ALL_TENANT_SCHEDULER_JOB_RUN_DETAIL
+)
+UNION ALL
+(
+SELECT
+                        LOG_ID,
+                        LOG_DATE,
+                        OWNER,
+                        JOB_NAME,
+                        JOB_SUBNAME,
+                        STATUS,
+                        CODE,
+                        REQ_START_DATE,
+                        ACTUAL_START_DATE,
+                        RUN_DURATION,
+                        INSTANCE_ID,
+                        SESSION_ID,
+                        SLAVE_PID,
+                        CPU_USED,
+                        CREDENTIAL_OWNER,
+                        CREDENTIAL_NAME,
+                        DESTINATION_OWNER,
+                        DESTINATION,
+                        MESSAGE,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM OCEANBASE.__ALL_SCHEDULER_JOB_RUN_DETAIL_V2
+)
+""".replace("\n", " ")
+)
+
+def_table_schema(
+  owner = 'fyy280124',
+  table_name      = 'CDB_SCHEDULER_JOB_RUN_DETAILS',
+  table_id        = '21590',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """
+  (
+  SELECT
+                        CAST(NULL AS NUMBER) AS LOG_ID,
+                        CAST(NULL AS DATETIME) AS LOG_DATE,
+                        CAST(NULL AS CHAR(128)) AS OWNER,
+                        CAST(NULL AS CHAR(128)) AS JOB_NAME,
+                        CAST(NULL AS CHAR(128)) AS JOB_SUBNAME,
+                        CAST(NULL AS CHAR(128)) AS STATUS,
+                        CODE,
+                        CAST(NULL AS DATETIME) AS REQ_START_DATE,
+                        CAST(NULL AS DATETIME) AS ACTUAL_START_DATE,
+                        CAST(NULL AS NUMBER) AS RUN_DURATION,
+                        CAST(NULL AS CHAR(128)) AS INSTANCE_ID,
+                        CAST(NULL AS NUMBER) AS SESSION_ID,
+                        CAST(NULL AS CHAR(128)) AS SLAVE_PID,
+                        CAST(NULL AS NUMBER) AS CPU_USED,
+                        CAST(NULL AS CHAR(128)) AS CREDENTIAL_OWNER,
+                        CAST(NULL AS CHAR(128)) AS CREDENTIAL_NAME,
+                        CAST(NULL AS CHAR(128)) AS DESTINATION_OWNER,
+                        CAST(NULL AS CHAR(128)) AS DESTINATION,
+                        MESSAGE,
+                        TENANT_ID,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM OCEANBASE.__ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL
+)
+UNION ALL
+(
+SELECT
+                        LOG_ID,
+                        LOG_DATE,
+                        OWNER,
+                        JOB_NAME,
+                        JOB_SUBNAME,
+                        STATUS,
+                        CODE,
+                        REQ_START_DATE,
+                        ACTUAL_START_DATE,
+                        RUN_DURATION,
+                        INSTANCE_ID,
+                        SESSION_ID,
+                        SLAVE_PID,
+                        CPU_USED,
+                        CREDENTIAL_OWNER,
+                        CREDENTIAL_NAME,
+                        DESTINATION_OWNER,
+                        DESTINATION,
+                        MESSAGE,
+                        TENANT_ID,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM OCEANBASE.__ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2
+)
+""".replace("\n", " ")
+)
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -49038,7 +49225,64 @@ def_table_schema(
   normal_columns  = [],
   gm_columns      = [],
   in_tenant_space = True,
-  view_definition = """SELECT * FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT T
+  view_definition = """
+  (
+  SELECT
+                        CAST(NULL AS NUMBER) AS LOG_ID,
+                        CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS LOG_DATE,
+                        CAST(NULL AS VARCHAR(128)) AS OWNER,
+                        CAST(NULL AS VARCHAR(128)) AS JOB_NAME,
+                        CAST(NULL AS VARCHAR(128)) AS JOB_SUBNAME,
+                        CAST(NULL AS VARCHAR(128)) AS STATUS,
+                        CODE,
+                        CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS REQ_START_DATE,
+                        CAST(NULL AS TIMESTAMP(6) WITH TIME ZONE) AS ACTUAL_START_DATE,
+                        CAST(NULL AS NUMBER) AS RUN_DURATION,
+                        CAST(NULL AS VARCHAR(128)) AS INSTANCE_ID,
+                        CAST(NULL AS NUMBER) AS SESSION_ID,
+                        CAST(NULL AS VARCHAR(128)) AS SLAVE_PID,
+                        CAST(NULL AS NUMBER) AS CPU_USED,
+                        CAST(NULL AS VARCHAR(128)) AS CREDENTIAL_OWNER,
+                        CAST(NULL AS VARCHAR(128)) AS CREDENTIAL_NAME,
+                        CAST(NULL AS VARCHAR(128)) AS DESTINATION_OWNER,
+                        CAST(NULL AS VARCHAR(128)) AS DESTINATION,
+                        MESSAGE,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM SYS.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_RUN_DETAIL_REAL_AGENT
+)
+UNION ALL
+(
+SELECT
+                        LOG_ID,
+                        LOG_DATE,
+                        OWNER,
+                        JOB_NAME,
+                        JOB_SUBNAME,
+                        STATUS,
+                        CODE,
+                        REQ_START_DATE,
+                        ACTUAL_START_DATE,
+                        RUN_DURATION,
+                        INSTANCE_ID,
+                        SESSION_ID,
+                        SLAVE_PID,
+                        CPU_USED,
+                        CREDENTIAL_OWNER,
+                        CREDENTIAL_NAME,
+                        DESTINATION_OWNER,
+                        DESTINATION,
+                        MESSAGE,
+                        JOB,
+                        TIME,
+                        JOB_CLASS,
+                        GMT_CREATE,
+                        GMT_MODIFIED
+                       FROM SYS.ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT
+)
 """.replace("\n", " ")
 )
 
@@ -56660,6 +56904,22 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_UNIQUE_LOCAL',
   keywords = all_def_keywords['__all_transfer_partition_task'])
 
+def_sys_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_time',
+  index_table_id = 101105,
+  index_columns = ['time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
+
+def_sys_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_job_class_time',
+  index_table_id = 101106,
+  index_columns = ['job_class', 'time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  keywords = all_def_keywords['__all_scheduler_job_run_detail_v2'])
+
 #
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
@@ -57427,6 +57687,26 @@ def_agent_index_table(
   real_table_name = '__all_dbms_lock_allocated' ,
   real_index_name = 'idx_dbms_lock_allocated_expiration',
   keywords = all_def_keywords['ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_time_real_agent',
+  index_table_id = 15460,
+  index_columns = ['time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_scheduler_job_run_detail_v2' ,
+  real_index_name = 'idx_scheduler_job_run_detail_v2_time',
+  keywords = all_def_keywords['ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA'])
+
+def_agent_index_table(
+  index_name = 'idx_scheduler_job_run_detail_v2_job_class_time_real_agent',
+  index_table_id = 15463,
+  index_columns = ['job_class', 'time'],
+  index_using_type = 'USING_BTREE',
+  index_type = 'INDEX_TYPE_NORMAL_LOCAL',
+  real_table_name = '__all_scheduler_job_run_detail_v2' ,
+  real_index_name = 'idx_scheduler_job_run_detail_v2_job_class_time',
+  keywords = all_def_keywords['ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT_ORA'])
 
 # End Oracle Agent table Index
 ################################################################################

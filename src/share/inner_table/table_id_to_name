@@ -317,6 +317,7 @@
 # 499: __all_transfer_partition_task_history
 # 499: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 508: __all_ls_replica_task_history
+# 519: __all_scheduler_job_run_detail_v2
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -998,6 +999,8 @@
 # 12452: __all_transfer_partition_task_history  # BASE_TABLE_NAME1
 # 12467: __all_virtual_ls_replica_task_history
 # 12467: __all_ls_replica_task_history  # BASE_TABLE_NAME
+# 12488: __all_virtual_scheduler_job_run_detail_v2
+# 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1565,6 +1568,8 @@
 # 15443: __all_virtual_ls_replica_task_history  # BASE_TABLE_NAME1
 # 15457: ALL_VIRTUAL_QUERY_RESPONSE_TIME
 # 15457: __all_virtual_query_response_time  # BASE_TABLE_NAME
+# 15458: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT
+# 15458: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -1943,6 +1948,8 @@
 # 21580: EVENTS
 # 21587: GV$OB_QUERY_RESPONSE_TIME_HISTOGRAM
 # 21588: V$OB_QUERY_RESPONSE_TIME_HISTOGRAM
+# 21589: DBA_SCHEDULER_JOB_RUN_DETAILS
+# 21590: CDB_SCHEDULER_JOB_RUN_DETAILS
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2747,6 +2754,12 @@
 # 101098: __idx_498_idx_transfer_partition_key
 # 101098: idx_transfer_partition_key  # INDEX_NAME
 # 101098: __all_transfer_partition_task  # DATA_BASE_TABLE_NAME
+# 101105: __idx_519_idx_scheduler_job_run_detail_v2_time
+# 101105: idx_scheduler_job_run_detail_v2_time  # INDEX_NAME
+# 101105: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
+# 101106: __idx_519_idx_scheduler_job_run_detail_v2_job_class_time
+# 101106: idx_scheduler_job_run_detail_v2_job_class_time  # INDEX_NAME
+# 101106: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
 # 15306: __idx_15120_idx_data_table_id_real_agent
 # 15306: idx_data_table_id_real_agent  # INDEX_NAME
 # 15306: __all_table  # DATA_BASE_TABLE_NAME
@@ -3035,3 +3048,11 @@
 # 15416: idx_dbms_lock_allocated_expiration_real_agent  # INDEX_NAME
 # 15416: __all_dbms_lock_allocated  # DATA_BASE_TABLE_NAME
 # 15416: ALL_VIRTUAL_DBMS_LOCK_ALLOCATED_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15460: __idx_15458_idx_scheduler_job_run_detail_v2_time_real_agent
+# 15460: idx_scheduler_job_run_detail_v2_time_real_agent  # INDEX_NAME
+# 15460: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
+# 15460: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT  # DATA_BASE_TABLE_NAME1
+# 15463: __idx_15458_idx_scheduler_job_run_detail_v2_job_class_time_real_agent
+# 15463: idx_scheduler_job_run_detail_v2_job_class_time_real_agent  # INDEX_NAME
+# 15463: __all_scheduler_job_run_detail_v2  # DATA_BASE_TABLE_NAME
+# 15463: ALL_VIRTUAL_SCHEDULER_JOB_RUN_DETAIL_V2_REAL_AGENT  # DATA_BASE_TABLE_NAME1

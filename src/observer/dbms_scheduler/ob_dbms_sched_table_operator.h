@@ -68,8 +68,6 @@ public:
   int update_for_timeout(ObDBMSSchedJobInfo &job_info);
   int update_for_end(ObDBMSSchedJobInfo &job_info, int err, const common::ObString &errmsg);
 
-  int seperate_job_id_from_name(common::ObString &job_name, int64_t &job_id);
-
   int get_dbms_sched_job_info(
     uint64_t tenant_id, bool is_oracle_tenant, uint64_t job_id, const common::ObString &job_name,
     common::ObIAllocator &allocator, ObDBMSSchedJobInfo &job_info);
