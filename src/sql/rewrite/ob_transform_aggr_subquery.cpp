@@ -358,12 +358,18 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
     trans_param.ja_query_ref_ = static_cast<ObQueryRefRawExpr*>(child_expr);
     ObSelectStmt *subquery = trans_param.ja_query_ref_->get_ref_stmt();
     bool is_valid = false;
+    bool ja_query_ref_valid = false;
     bool hint_allowed = false;
     int64_t limit_value = 0;
     OPT_TRACE("try to pullup JA subquery", child_expr);
-    if (ObOptimizerUtil::find_item(no_rewrite_exprs_, child_expr)) {
+    // check ja query ref's exec param
+    if (OB_FAIL(check_ja_query_ref_param_validity(*trans_param.ja_query_ref_, ja_query_ref_valid))) {
+      LOG_WARN("failed to check ja query ref param validity", K(ret));
+    } else if (!ja_query_ref_valid) {
+      OPT_TRACE("exec param expr of ja query ref is not valid, can not transform");
+    } else if (ObOptimizerUtil::find_item(no_rewrite_exprs_, child_expr)) {
       LOG_TRACE("subquery in select expr and can use index");
-      OPT_TRACE("subquery in select expr and can use index, no need transfrom");
+      OPT_TRACE("subquery in select expr and can use index, no need transform");
     } else if (OB_FAIL(check_hint_allowed_unnest(stmt, *subquery,
                                                  ctx_->trans_list_loc_ + transform_params.count(),
                                                  pullup_strategy,
@@ -440,6 +446,29 @@ int ObTransformAggrSubquery::gather_transform_params(ObDMLStmt &stmt,
           LOG_WARN("failed to gather transform params", K(ret));
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObTransformAggrSubquery::check_ja_query_ref_param_validity(ObQueryRefRawExpr &ja_query_ref, bool &is_valid) {
+  int ret = OB_SUCCESS;
+  is_valid = true;
+  const ObIArray<ObExecParamRawExpr *> &params = ja_query_ref.get_exec_params();
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < params.count(); ++i) {
+    ObExecParamRawExpr *exec_param = params.at(i);
+    ObRawExpr *outer_expr = NULL;
+    if (OB_ISNULL(exec_param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("exec param expr is null", K(ret));
+    } else if (OB_ISNULL(outer_expr = exec_param->get_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("outer expr is null", K(ret));
+    } else if (outer_expr->has_flag(CNT_WINDOW_FUNC) ||
+               outer_expr->has_flag(CNT_ROWNUM) ||
+               outer_expr->has_flag(CNT_RAND_FUNC) ||
+               outer_expr->has_flag(CNT_STATE_FUNC)) {
+      is_valid = false;
     }
   }
   return ret;
@@ -562,23 +591,16 @@ int ObTransformAggrSubquery::check_aggr_first_validity(ObDMLStmt &stmt,
     LOG_TRACE("select list is invalid", K(is_valid));
     OPT_TRACE("subquery select item contain subquery");
     // 3. check from list is not correlated
-  } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(query_ref.get_exec_params(),
-                                                                *subquery,
-                                                                is_correlated))) {
-    LOG_WARN("failed to check table item correlated or not", K(ret));
+    // 4. check correlated join on conditions
+    // 5. check correlated semi conditions
+  } else if (OB_FAIL(ObTransformUtils::is_from_item_correlated(query_ref.get_exec_params(),
+                                                               *subquery,
+                                                               is_correlated))) {
+    LOG_WARN("failed to check from item correlated or not", K(ret));
   } else if (is_correlated) {
     is_valid = false;
-    OPT_TRACE("subquery`s table item is correlated");
-    // 4. check correlated join on contiditons
-    // 5. check correlated semi contiditons
-  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(query_ref.get_exec_params(),
-                                                                     subquery,
-                                                                     is_correlated))) {
-    LOG_WARN("failed to check is join condition correlated", K(ret));
-  } else if (is_correlated) {
-    is_valid = false;
-    OPT_TRACE("subquery`s outer/semi join condition is correlated");
-    // 6. check correlated join contiditons
+    OPT_TRACE("subquery's table item is correlated");
+    // 6. check correlated subquery conditions
   } else if (OB_FALSE_IT(hint_allowed_transform = (subquery->get_stmt_hint().has_enable_hint(T_UNNEST) ||
                                         subquery->get_stmt_hint().has_enable_hint(T_AGGR_FIRST_UNNEST)))) {
   } else if (OB_FALSE_IT(check_match_index = hint_allowed_transform ? false :
@@ -1554,24 +1576,18 @@ int ObTransformAggrSubquery::check_join_first_validity(ObQueryRefRawExpr &query_
     LOG_TRACE("aggr item is invalid", K(is_valid));
     OPT_TRACE("exists COUNT(NULL)");
     // never reach
-  // 3. check from list is not correlated
-  } else if (OB_FAIL(ObTransformUtils::is_table_item_correlated(
+    // 3. check from list is not correlated
+    // 4. check correlated join on conditions
+    // 5. check correlated semi conditions
+  } else if (OB_FAIL(ObTransformUtils::is_from_item_correlated(
                        query_ref.get_exec_params(), *subquery, is_correlated))) {
-    LOG_WARN("failed to check subquery table item is correlated", K(ret));
+    LOG_WARN("failed to check if from item is correlated", K(ret));
   } else if (is_correlated) {
     is_valid = false;
-    OPT_TRACE("subquery`s table item is correlated");
-    // 4. check correlated join on contiditons
-    // 5. check correlated semi contiditons
-  } else if (OB_FAIL(ObTransformUtils::is_join_conditions_correlated(query_ref.get_exec_params(),
-                                                                     subquery,
-                                                                     is_correlated))) {
-    LOG_WARN("failed to check join condition correlated", K(ret));
-  } else if (is_correlated) {
-    is_valid = false;
-    OPT_TRACE("subquery`s outer/semi join on condition is correlated");
+    OPT_TRACE("subquery's table item is correlated");
+
   }
-  // 5. check correlated join contiditons
+  // 5. check correlated subquery conditions
   for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < subquery->get_condition_size(); ++i) {
     ObRawExpr *cond = subquery->get_condition_expr(i);
     if (OB_ISNULL(cond)) {

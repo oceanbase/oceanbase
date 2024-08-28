@@ -247,11 +247,12 @@ int ObServiceNameProxy::select_all_service_names_with_epoch(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.sql_proxy_ is null", KR(ret), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(sql.assign_fmt("SELECT s.*, e.value as epoch FROM %s AS s "
-      "JOIN %s AS e ON s.tenant_id = e.tenant_id WHERE s.tenant_id = %lu and e.name='%s' ORDER BY s.gmt_create",
+      "RIGHT JOIN %s AS e ON s.tenant_id = e.tenant_id WHERE e.tenant_id = %lu and e.name='%s' ORDER BY s.gmt_create",
       OB_ALL_SERVICE_TNAME, OB_ALL_SERVICE_EPOCH_TNAME, tenant_id, ObServiceEpochProxy::SERVICE_NAME_EPOCH))) {
     // join the two tables to avoid add a row lock on __all_service_epoch
     // otherwise there might be conflicts and too many retries in tenant_info_loader thread
     // when the number of observers is large
+    // use right join instead of join, otherwise we cannot see service_name being deleted in the cache
     LOG_WARN("sql assign_fmt failed", KR(ret), K(sql));
   } else if (OB_FAIL(select_service_name_sql_helper_(*GCTX.sql_proxy_, tenant_id, EXTRACT_EPOCH,
       sql, epoch, all_service_names))) {
@@ -316,7 +317,7 @@ int ObServiceNameProxy::select_service_name_sql_helper_(
             }
           } else if (OB_FAIL(build_service_name_(*result, service_name))) {
             LOG_WARN("fail to build server status", KR(ret));
-          } else if (OB_FAIL(all_service_names.push_back(service_name))) {
+          } else if (service_name.is_valid() && OB_FAIL(all_service_names.push_back(service_name))) {
             LOG_WARN("fail to build service_name", KR(ret));
           } else if (extract_epoch) {
             // epoch can only be extracted when __all_service_epoch table is joined
@@ -578,16 +579,20 @@ int ObServiceNameProxy::build_service_name_(
   ObString service_name_str;
   ObString service_status_str;
   service_name.reset();
-  EXTRACT_VARCHAR_FIELD_MYSQL(res, "service_name", service_name_str);
-  EXTRACT_VARCHAR_FIELD_MYSQL(res, "service_status", service_status_str);
-  EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
   EXTRACT_INT_FIELD_MYSQL(res, "service_name_id", service_name_id, uint64_t);
-  if (FAILEDx(service_name.init(tenant_id, service_name_id, service_name_str, service_status_str))) {
-    LOG_WARN("fail to init service_name", KR(ret), K(tenant_id), K(service_name_id), K(service_name_str),
-        K(service_status_str));
-  } else if (OB_UNLIKELY(!service_name.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("build invalid service_name", KR(ret), K(service_name));
+  if (OB_ERR_NULL_VALUE == ret) {
+    ret = OB_SUCCESS; // __all_service table is empty, overwrite ret
+  } else {
+    EXTRACT_VARCHAR_FIELD_MYSQL(res, "service_name", service_name_str);
+    EXTRACT_VARCHAR_FIELD_MYSQL(res, "service_status", service_status_str);
+    EXTRACT_INT_FIELD_MYSQL(res, "tenant_id", tenant_id, uint64_t);
+    if (FAILEDx(service_name.init(tenant_id, service_name_id, service_name_str, service_status_str))) {
+      LOG_WARN("fail to init service_name", KR(ret), K(tenant_id), K(service_name_id), K(service_name_str),
+          K(service_status_str));
+    } else if (OB_UNLIKELY(!service_name.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("build invalid service_name", KR(ret), K(service_name));
+    }
   }
   return ret;
 }

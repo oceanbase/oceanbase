@@ -443,6 +443,7 @@ int ObMergeLogPlan::check_merge_need_multi_partition_dml(ObLogicalOperator &top,
   } else if (!merge_stmt->has_insert_clause() || is_one_part_table) {
     is_multi_part_dml = false;
   } else if (OB_FAIL(check_update_insert_sharding_basic(top,
+                                                        index_dml_infos_.at(0)->loc_table_id_,
                                                         insert_sharding,
                                                         update_sharding,
                                                         is_basic,
@@ -467,6 +468,7 @@ int ObMergeLogPlan::check_merge_need_multi_partition_dml(ObLogicalOperator &top,
 }
 
 int ObMergeLogPlan::check_update_insert_sharding_basic(ObLogicalOperator &top,
+                                                       uint64_t table_id,
                                                        ObShardingInfo *insert_sharding,
                                                        ObShardingInfo *update_sharding,
                                                        bool &is_basic,
@@ -493,7 +495,7 @@ int ObMergeLogPlan::check_update_insert_sharding_basic(ObLogicalOperator &top,
     /* insert_sharding and update_sharding match basic,
        but the partition is different, need multi part merge */
     is_basic = false;
-  } else if (OB_FAIL(generate_equal_constraint(top, *insert_sharding, can_gen_cons, equal_pairs))) {
+  } else if (OB_FAIL(generate_equal_constraint(top, table_id, *insert_sharding, can_gen_cons, equal_pairs))) {
     LOG_WARN("failed to generate equal constraint", K(ret));
   } else if (can_gen_cons) {
     is_basic = true;
@@ -526,6 +528,7 @@ bool ObMergeLogPlan::match_same_partition(const ObShardingInfo &l_sharding_info,
 // When insert_sharding and update_sharding match same partition,
 // need add equal constraints for const params in sharding conditions which equal to part key.
 int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
+                                              uint64_t table_id,
                                               ObShardingInfo &insert_sharding,
                                               bool &can_gen_cons,
                                               ObIArray<std::pair<ObRawExpr*, ObRawExpr*>> &equal_pairs)
@@ -538,16 +541,11 @@ int ObMergeLogPlan::generate_equal_constraint(ObLogicalOperator &top,
   ObSEArray<ObRawExpr*, 4> right_part_keys;
   ObSEArray<ObRawExpr*, 4> right_conds;
   const ObMergeStmt *stmt = NULL;
-  const TableItem *target_table = NULL;
   if (OB_ISNULL(stmt = get_stmt())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(stmt));
-  } else if (OB_ISNULL(target_table = stmt->get_table_item_by_id(stmt->get_target_table_id()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get target table", K(ret));
-  } else if (OB_FAIL(get_target_table_scan(target_table->get_base_table_item().table_id_,
-                                           &top, target_table_scan))) {
-    LOG_WARN("get target table scan failed", K(ret), K(*target_table));
+  } else if (OB_FAIL(get_target_table_scan(table_id, &top, target_table_scan))) {
+    LOG_WARN("get target table scan failed", K(ret), K(table_id));
   } else if (OB_ISNULL(target_table_scan) || OB_ISNULL(target_table_scan->get_sharding())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(target_table_scan));

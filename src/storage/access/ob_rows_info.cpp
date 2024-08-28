@@ -14,6 +14,7 @@
 #include "storage/ob_storage_struct.h"
 #include "storage/ob_relative_table.h"
 #include "storage/ob_storage_schema.h"
+#include "storage/blocksstable/ob_datum_row_utils.h"
 #include "ob_store_row_iterator.h"
 
 namespace oceanbase
@@ -93,6 +94,7 @@ ObRowsInfo::ObRowsInfo()
     tablet_id_(),
     datum_utils_(nullptr),
     min_key_(),
+    col_descs_(nullptr),
     conflict_rowkey_idx_(-1),
     error_code_(0),
     delete_count_(0),
@@ -124,9 +126,11 @@ void ObRowsInfo::reset()
   error_code_ = 0;
   conflict_rowkey_idx_ = -1;
   is_inited_ = false;
+  col_descs_ = nullptr;
 }
 
 int ObRowsInfo::init(
+    const ObColDescIArray &column_descs,
     const ObRelativeTable &table,
     ObStoreCtx &store_ctx,
     const ObITableReadInfo &rowkey_read_info)
@@ -139,6 +143,7 @@ int ObRowsInfo::init(
   } else if (OB_FAIL(exist_helper_.init(table, store_ctx, rowkey_read_info, exist_allocator_, scan_mem_allocator_))) {
     STORAGE_LOG(WARN, "Failed to init exist helper", K(ret));
   } else {
+    col_descs_ = &column_descs;
     datum_utils_ = &rowkey_read_info.get_datum_utils();
     tablet_id_ = table.get_tablet_id();
     rowkey_column_num_ = table.get_rowkey_column_num();
@@ -160,7 +165,7 @@ void ObRowsInfo::reuse()
 }
 
 //not only checking duplicate, but also assign rowkeys
-int ObRowsInfo::check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRelativeTable &table)
+int ObRowsInfo::check_duplicate(ObDatumRow *rows, const int64_t row_count, ObRelativeTable &table)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -192,10 +197,9 @@ int ObRowsInfo::check_duplicate(ObStoreRow *rows, const int64_t row_count, ObRel
       } else {
         ObMarkedRowkeyAndLockState marked_rowkey_and_lock_state;
         marked_rowkey_and_lock_state.row_idx_ = i;
-        ObRowkey rowkey(rows_[i].row_val_.cells_, rowkey_column_num_);
-        if (OB_FAIL(marked_rowkey_and_lock_state.marked_rowkey_.get_rowkey().from_rowkey(rowkey,
-                                                                                         key_allocator_))) {
-          STORAGE_LOG(WARN, "Failed to transfer rowkey", K(ret), K(rowkey));
+        ObDatumRowkey &datum_rowkey = marked_rowkey_and_lock_state.marked_rowkey_.get_rowkey();
+        if (OB_FAIL(blocksstable::ObDatumRowUtils::prepare_rowkey(rows[i], rowkey_column_num_, *col_descs_, key_allocator_, datum_rowkey))) {
+          STORAGE_LOG(WARN, "Failed to prepare rowkey", K(ret), K(rowkey_column_num_), K(rows_[i]));
         } else if (OB_FAIL(rowkeys_.push_back(marked_rowkey_and_lock_state))) {
           STORAGE_LOG(WARN, "Failed to push back rowkey", K(ret), K(marked_rowkey_and_lock_state));
         }

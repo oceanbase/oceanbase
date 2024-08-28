@@ -28,14 +28,16 @@ const char *ObValuesTableCompression::lower_[ObParser::S_MAX] = {
   "", "", "", "", "", "", "", "", "", "", /* 0 ~9 */
   "", "", "", "update", "", "", "", "", "", "", /* 10 ~19 */
   "", "", "", "", "", "", "", "", "", "", /* 20 ~29 */
-  "", "", "", "select", "insert", "delete", "values", "table", "into" /* 30 ~38 */
+  "", "", "", "select", "insert", "delete", "values", "table", "into", "", /* 30 ~39 */
+  "", "" /* 40 ~41 */
 };
 
 const char *ObValuesTableCompression::upper_[ObParser::S_MAX] = {
   "", "", "", "", "", "", "", "", "", "", /* 0 ~9 */
   "", "", "", "UPDATE", "", "", "", "", "", "", /* 10 ~19 */
   "", "", "", "", "", "", "", "", "", "", /* 20 ~29 */
-  "", "", "", "SELECT", "INSERT", "DELETE", "VALUES", "TABLE", "INTO" /* 30 ~38 */
+  "", "", "", "SELECT", "INSERT", "DELETE", "VALUES", "TABLE", "INTO", "", /* 30 ~39 */
+  "", "" /* 40 ~41 */
 };
 
 #define ISSPACE(c) ((c) == ' ' || (c) == '\n' || (c) == '\r' || (c) == '\t' || (c) == '\f' || (c) == '\v')
@@ -505,16 +507,13 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
           if (OB_SUCC(ret) && !is_same) {
             new_res_type.reset();
             ObExprVersion dummy_op(pc_ctx.allocator_);
-            const ObLengthSemantics length_semantics = session->get_actual_nls_length_semantics();
-            ObCollationType coll_type = CS_TYPE_INVALID;
-            if (OB_FAIL(session->get_collation_connection(coll_type))) {
-              LOG_WARN("fail to get_collation_connection", K(ret));
-            } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
+            ObExprTypeCtx type_ctx;
+            ObSQLUtils::init_type_ctx(session, type_ctx);
+            if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
                                                                         &res_types.at(0),
                                                                         res_types.count(),
-                                                                        coll_type,
                                                                         false,
-                                                                        length_semantics))) {
+                                                                        type_ctx))) {
               LOG_WARN("failed to aggregate result type for merge", K(ret));
             }
           }
@@ -657,16 +656,13 @@ int ObValuesTableCompression::resolve_params_for_values_clause(ObPlanCacheCtx &p
           if (OB_SUCC(ret) && !is_same) {
             new_res_type.reset();
             ObExprVersion dummy_op(pc_ctx.allocator_);
-            const ObLengthSemantics length_semantics = session->get_actual_nls_length_semantics();
-            ObCollationType coll_type = CS_TYPE_INVALID;
-            if (OB_FAIL(session->get_collation_connection(coll_type))) {
-              LOG_WARN("fail to get_collation_connection", K(ret));
-            } else if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
+            ObExprTypeCtx type_ctx;
+            ObSQLUtils::init_type_ctx(session, type_ctx);
+            if (OB_FAIL(dummy_op.aggregate_result_type_for_merge(new_res_type,
                                                                         &res_types.at(0),
                                                                         res_types.count(),
-                                                                        coll_type,
                                                                         false,
-                                                                        length_semantics))) {
+                                                                        type_ctx))) {
               LOG_WARN("failed to aggregate result type for merge", K(ret));
             } else {
               LOG_TRACE("get result type", K(new_res_type), K(res_types));

@@ -140,26 +140,39 @@ struct ObOptParamHint
 {
   ObOptParamHint() {};
 
-  #define OPT_PARAM_TYPE_DEF(DEF)         \
-    DEF(INVALID_OPT_PARAM_TYPE, = 0)      \
-    DEF(HIDDEN_COLUMN_VISIBLE,)           \
-    DEF(ROWSETS_ENABLED,)                 \
-    DEF(ROWSETS_MAX_ROWS,)                \
-    DEF(DDL_EXECUTION_ID,)                \
-    DEF(DDL_TASK_ID,)                     \
-    DEF(ENABLE_NEWSORT,)                  \
-    DEF(USE_PART_SORT_MGB,)               \
-    DEF(USE_DEFAULT_OPT_STAT,)            \
-    DEF(ENABLE_IN_RANGE_OPTIMIZATION,)    \
-    DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)    \
-    DEF(WORKAREA_SIZE_POLICY,)         \
-    DEF(ENABLE_RICH_VECTOR_FORMAT,)    \
-    DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)   \
-    DEF(PRESERVE_ORDER_FOR_PAGINATION,)   \
-    DEF(ENABLE_DAS_KEEP_ORDER,)           \
-    DEF(SPILL_COMPRESSION_CODEC,)   \
-    DEF(INLIST_REWRITE_THRESHOLD,)        \
-    DEF(PUSHDOWN_STORAGE_LEVEL,)          \
+  #define OPT_PARAM_TYPE_DEF(DEF)                   \
+    DEF(INVALID_OPT_PARAM_TYPE, = 0)                \
+    DEF(HIDDEN_COLUMN_VISIBLE,)                     \
+    DEF(ROWSETS_ENABLED,)                           \
+    DEF(ROWSETS_MAX_ROWS,)                          \
+    DEF(DDL_EXECUTION_ID,)                          \
+    DEF(DDL_TASK_ID,)                               \
+    DEF(ENABLE_NEWSORT,)                            \
+    DEF(USE_PART_SORT_MGB,)                         \
+    DEF(USE_DEFAULT_OPT_STAT,)                      \
+    DEF(ENABLE_IN_RANGE_OPTIMIZATION,)              \
+    DEF(XSOLAPI_GENERATE_WITH_CLAUSE,)              \
+    DEF(WORKAREA_SIZE_POLICY,)                      \
+    DEF(ENABLE_RICH_VECTOR_FORMAT,)                 \
+    DEF(_ENABLE_STORAGE_CARDINALITY_ESTIMATION,)    \
+    DEF(PRESERVE_ORDER_FOR_PAGINATION,)             \
+    DEF(ENABLE_DAS_KEEP_ORDER,)                     \
+    DEF(SPILL_COMPRESSION_CODEC,)                   \
+    DEF(INLIST_REWRITE_THRESHOLD,)                  \
+    DEF(PUSHDOWN_STORAGE_LEVEL,)                    \
+    DEF(HASH_JOIN_ENABLED,)                         \
+    DEF(OPTIMIZER_SORTMERGE_JOIN_ENABLED,)          \
+    DEF(NESTED_LOOP_JOIN_ENABLED,)                  \
+    DEF(ENABLE_RANGE_EXTRACTION_FOR_NOT_IN,)        \
+    DEF(OPTIMIZER_INDEX_COST_ADJ,)                  \
+    DEF(OPTIMIZER_SKIP_SCAN_ENABLED,)               \
+    DEF(OPTIMIZER_BETTER_INLIST_COSTING,)           \
+    DEF(OPTIMIZER_GROUP_BY_PLACEMENT,)              \
+    DEF(WITH_SUBQUERY,)                             \
+    DEF(ENABLE_SPF_BATCH_RESCAN,)                   \
+    DEF(NLJ_BATCHING_ENABLED,)                      \
+    DEF(RUNTIME_FILTER_TYPE,)                       \
+    DEF(BLOOM_FILTER_RATIO,)                        \
     DEF(CORRELATION_FOR_CARDINALITY_ESTIMATION,) \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
@@ -172,10 +185,12 @@ struct ObOptParamHint
   int get_opt_param(const OptParamType param_type, ObObj &val) const;
   int has_enable_opt_param(const OptParamType param_type, bool &enabled) const;
   int print_opt_param_hint(PlanText &plan_text) const;
-  int get_bool_opt_param(const OptParamType param_type, bool &val, bool& is_exists) const;
+  int get_bool_opt_param(const OptParamType param_type, bool &val, bool &is_exists) const;
   // if the corresponding opt_param is specified, the `val` will be overwritten
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
+  int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;
   bool empty() const { return param_types_.empty();  }

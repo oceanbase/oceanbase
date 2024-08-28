@@ -320,9 +320,6 @@ public:
   int sort_pwj_constraint(ObLocationConstraintContext &location_constraint) const;
   int resolve_dup_tab_constraint(ObLocationConstraintContext &location_constraint) const;
 
-  int get_from_table_items(const ObIArray<FromItem> &from_items,
-                          ObIArray<TableItem *> &table_items);
-
   int get_current_semi_infos(const ObIArray<SemiInfo*> &semi_infos,
                              const ObIArray<TableItem*> &table_items,
                              ObIArray<SemiInfo*> &current_semi_infos);
@@ -992,7 +989,10 @@ public:
 
   int allocate_select_into_as_top(ObLogicalOperator *&old_top);
 
-  int check_select_into(bool &has_select_into, bool &is_single, bool &has_order_by);
+  int check_select_into(bool &has_select_into,
+                        bool &is_single,
+                        bool &has_order_by,
+                        ObRawExpr *&file_partition_expr);
 
   int allocate_expr_values_as_top(ObLogicalOperator *&top,
                                   const ObIArray<ObRawExpr*> *filter_exprs = NULL);
@@ -1533,35 +1533,16 @@ protected:
                                 bool &is_valid_join,
                                 ObJoinOrder *&join_tree);
 
-  int is_detector_used(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      ObConflictDetector *detector,
-                      bool &is_used);
-
-  int choose_join_info(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      ObIArray<ObConflictDetector*> &valid_detectors,
-                      bool delay_cross_product,
-                      bool &is_strict_order);
-
-  int check_join_info(const ObIArray<ObConflictDetector*> &valid_detectors,
-                      ObJoinType &join_type,
-                      bool &is_valid);
-
-  int merge_join_info(ObJoinOrder *left_tree,
-                      ObJoinOrder *right_tree,
-                      const ObIArray<ObConflictDetector*> &valid_detectors,
-                      JoinInfo &join_info);
-
   int check_detector_valid(ObJoinOrder *left_tree,
                           ObJoinOrder *right_tree,
                           const ObIArray<ObConflictDetector*> &valid_detectors,
                           ObJoinOrder *cur_tree,
                           bool &is_valid);
 
-  int remove_redundancy_pred(ObJoinOrder *left_tree,
-                            ObJoinOrder *right_tree,
-                            JoinInfo &join_info);
+  int process_join_pred(ObJoinOrder *left_tree,
+                        ObJoinOrder *right_tree,
+                        JoinInfo &join_info);
+
 
   int try_keep_pred_join_same_tables(ObJoinOrder *left_tree,
                                      ObJoinOrder *right_tree,
@@ -1700,6 +1681,8 @@ protected:
 
   int init_lateral_table_depend_info(const ObIArray<TableItem*> &table_items);
 private: // member functions
+  static int distribute_filters_to_baserels(ObIArray<ObJoinOrder*> &base_level,
+                                            ObIArray<ObSEArray<ObRawExpr*,4>> &baserel_filters);
   static int strong_select_replicas(const common::ObAddr &local_server,
                                     common::ObIArray<ObCandiTableLoc*> &phy_tbl_loc_info_list,
                                     bool &is_hit_partition,
@@ -1909,6 +1892,46 @@ private:
   common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> new_or_quals_;
 
   ObSelectLogPlan *nonrecursive_plan_for_fake_cte_;
+
+  // has_allocated_range_shuffle_ is a flag for select into
+  // when flag = true, logical plan is like
+  // select into
+  //     |
+  //    sort
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(range)
+  // condition: partition expr is null or const expr, single is false, has order by without limit
+  //
+  // when flag = false, logical plan is like
+  // select into
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(random)
+  // condition: single is false, no order by, partition expr is null or const expr
+  //
+  // or
+  //
+  // select into
+  //     |
+  // exchange in distr
+  //     |
+  // exchange out distr(hash)
+  // condition: single is false, no order by, partition expr is not const expr
+  //
+  // or
+  //
+  // select into
+  //     |
+  // px coordinator
+  //     |
+  // exchange out distr
+  // condition: single is true / parallel = 1 / has limit / has order by and partition by
+  //
+  // 为select into分配了range shuffle后, 在分配select into算子时不应再分配exchange算子
+  bool has_allocated_range_shuffle_;
   DISALLOW_COPY_AND_ASSIGN(ObLogPlan);
 };
 

@@ -852,6 +852,27 @@ private:
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];  // lock by dag_net_map_lock_
 };
 
+class ObReclaimUtil
+{
+
+public:
+  ObReclaimUtil()
+    : total_periodic_running_worker_cnt_(0),
+      check_worker_loop_times_(0)
+  {}
+  ~ObReclaimUtil(){}
+  int64_t compute_expected_reclaim_worker_cnt(
+    const int64_t total_running_task_cnt,
+    const int64_t free_worker_cnt,
+    const int64_t total_worker_cnt);
+  void reset();
+
+public:
+  int64_t total_periodic_running_worker_cnt_;
+  int64_t check_worker_loop_times_;
+  static const int64_t CHECK_USING_WOKRER_INTERVAL = 60 * 1000L* 1000L; // 1min
+};
+
 class ObDagPrioScheduler
 {
 public:
@@ -1087,7 +1108,7 @@ public:
     ObThreadCondGuard guard(scheduler_sync_);
     return work_thread_num_;
   }
-  int64_t get_dag_limit() const { return dag_limit_; }
+  int64_t get_dag_limit(const ObDagPrio::ObDagPrioEnum dag_prio);
   bool is_empty()
   {
     bool bret = true;
@@ -1180,6 +1201,7 @@ private:
   int try_reclaim_threads();
   void destroy_all_workers();
   int set_thread_score(const int64_t priority, const int64_t concurrency);
+  int set_compaction_dag_limit(const int64_t new_val);
   void inner_get_suggestion_reason(const ObDagType::ObDagTypeEnum type, int64_t &reason);
   void dump_dag_status(const bool force_dump = false);
   void diagnose_for_suggestion();
@@ -1197,11 +1219,11 @@ private:
   int tg_id_;
   int64_t dag_cnt_;              // atomic value
   int64_t dag_limit_;            // only set in init/destroy
+  int64_t compaction_dag_limit_;
   int64_t check_period_;         // only set in init/destroy
   int64_t loop_waiting_dag_list_period_;  // only set in init/destroy
   int64_t total_worker_cnt_; // lock by scheduler_sync_
   int64_t work_thread_num_; // lock by scheduler_sync_
-  int64_t default_work_thread_num_; // only set in init/destroy
   int64_t total_running_task_cnt_;  // atomic value
   int64_t scheduled_task_cnt_; // atomic value // interval scheduled task count
   int64_t dag_cnts_[ObDagType::DAG_TYPE_MAX]; // just for showing // atomic value
@@ -1210,6 +1232,7 @@ private:
   int64_t scheduled_dag_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled dag count
   int64_t scheduled_task_cnts_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled task count
   int64_t scheduled_data_size_[ObDagType::DAG_TYPE_MAX]; // atomic value // interval scheduled data size
+  ObReclaimUtil reclaim_util_;  // util to help adaptively reclaim worker
   common::ObThreadCond scheduler_sync_;  // Make sure the lock is inside if there are nested locks
   lib::MemoryContext mem_context_;
   lib::MemoryContext ha_mem_context_;

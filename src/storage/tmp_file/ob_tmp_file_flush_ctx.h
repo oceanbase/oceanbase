@@ -122,7 +122,8 @@ public:
   void destroy();
   void record_flush_stage();
   void record_flush_task(const int64_t data_length);
-  void update_ctx_by_flush_task(const ObTmpFileFlushTask &flush_task);
+  void update_actual_flush_size(const ObTmpFileFlushTask &flush_task);
+  void try_update_prepare_finished_cnt(const ObTmpFileFlushTask &flush_task, bool& recorded);
 public:
   static const int64_t MAX_COPY_FAIL_COUNT = 512;
   typedef hash::ObHashMap<int64_t,
@@ -140,11 +141,11 @@ public:
   };
   struct FlushSequenceContext
   {
-    FlushSequenceContext() : create_flush_task_cnt_(0), send_io_succ_cnt_(0), flush_sequence_(0) {}
+    FlushSequenceContext() : create_flush_task_cnt_(0), prepare_finished_cnt_(0), flush_sequence_(0) {}
     int64_t create_flush_task_cnt_; // created flush task number in one round
-    int64_t send_io_succ_cnt_;
+    int64_t prepare_finished_cnt_;
     int64_t flush_sequence_;  // increate flush seq only when all task in this round send io succ
-    TO_STRING_KV(K(create_flush_task_cnt_), K(send_io_succ_cnt_), K(flush_sequence_));
+    TO_STRING_KV(K(create_flush_task_cnt_), K(prepare_finished_cnt_), K(flush_sequence_));
   };
   struct RemoveFileOp
   {
@@ -156,8 +157,8 @@ public:
   };
   bool can_clear_flush_ctx() const
   {
-    return flush_seq_ctx_.send_io_succ_cnt_ == flush_seq_ctx_.create_flush_task_cnt_ &&
-           flush_seq_ctx_.send_io_succ_cnt_ > 0;
+    return flush_seq_ctx_.prepare_finished_cnt_ == flush_seq_ctx_.create_flush_task_cnt_ &&
+           flush_seq_ctx_.prepare_finished_cnt_ > 0;
   }
   OB_INLINE void set_fail_too_many(const bool fail_too_many) { fail_too_many_ = fail_too_many; }
   OB_INLINE bool is_fail_too_many() { return fail_too_many_; }
@@ -239,6 +240,7 @@ public:
     TFFT_ASYNC_WRITE = 5,
     TFFT_WAIT = 6,
     TFFT_FINISH = 7,
+    TFFT_ABORT = 8,
   };
 public:
   void destroy();
@@ -254,6 +256,12 @@ public:
   OB_INLINE char *get_data_buf() const { return block_handle_.value_ == nullptr ? nullptr : block_handle_.value_->get_buffer(); }
   OB_INLINE void atomic_set_ret_code(int ret_code) { ATOMIC_SET(&ret_code_, ret_code); }
   OB_INLINE int atomic_get_ret_code() const { return ATOMIC_LOAD(&ret_code_); }
+  OB_INLINE void atomic_set_write_block_ret_code(int write_block_ret_code) {
+    ATOMIC_SET(&write_block_ret_code_, write_block_ret_code);
+  }
+  OB_INLINE int atomic_get_write_block_ret_code() const {
+    return ATOMIC_LOAD(&write_block_ret_code_);
+  }
   OB_INLINE void set_data_length(const int64_t len) { data_length_ = len; }
   OB_INLINE int64_t get_data_length() const { return data_length_; }
   OB_INLINE void set_block_index(const int64_t block_index) { block_index_ = block_index; }
@@ -266,6 +274,8 @@ public:
   OB_INLINE bool atomic_get_io_finished() const { return ATOMIC_LOAD(&is_io_finished_); }
   OB_INLINE void set_is_fast_flush_tree(const bool is_fast_flush_tree) { fast_flush_tree_page_ = is_fast_flush_tree; }
   OB_INLINE bool get_is_fast_flush_tree() const { return fast_flush_tree_page_; }
+  OB_INLINE void mark_recorded_as_prepare_finished() { recorded_as_prepare_finished_ = true; }
+  OB_INLINE bool get_recorded_as_prepare_finished() const { return recorded_as_prepare_finished_; }
   OB_INLINE void set_state(const ObTmpFileFlushTaskState state) { task_state_ = state; }
   OB_INLINE ObTmpFileFlushTaskState get_state() const { return task_state_; }
   OB_INLINE void set_tmp_file_block_handle(const ObTmpFileBlockHandle &tfb_handle) { tmp_file_block_handle_ = tfb_handle; }
@@ -279,13 +289,14 @@ public:
     return buffer != nullptr && get_data_buf() != nullptr &&
            buffer >= get_data_buf() && buffer + length <= get_data_buf() + OB_SERVER_BLOCK_MGR.get_macro_block_size();
   }
-  TO_STRING_KV(KP(this), KP(kvpair_), K(ret_code_), K(data_length_),
+  TO_STRING_KV(KP(this), KP(kvpair_), K(write_block_ret_code_), K(ret_code_), K(data_length_),
                K(block_index_), K(flush_seq_), K(create_ts_), K(is_io_finished_),
-               K(fast_flush_tree_page_), K(task_state_), K(tmp_file_block_handle_), K(flush_infos_));
+               K(fast_flush_tree_page_), K(recorded_as_prepare_finished_), K(task_state_), K(tmp_file_block_handle_), K(flush_infos_));
 private:
   ObKVCacheInstHandle inst_handle_;
   ObKVCachePair *kvpair_;
   ObTmpBlockValueHandle block_handle_;
+  int write_block_ret_code_;
   int ret_code_;
   int64_t data_length_;       // data length (including padding to make length upper align to page size)
   int64_t block_index_;       // tmp file block logical index in ObTmpFileBlockManager
@@ -293,6 +304,7 @@ private:
   int64_t create_ts_;
   bool is_io_finished_;
   bool fast_flush_tree_page_; // indicate the task requires fast flush tree pages
+  bool recorded_as_prepare_finished_;
   ObTmpFileFlushTaskState task_state_;
   ObTmpFileBlockHandle tmp_file_block_handle_;// hold a reference to the corresponding tmp file block to prevent it from being released
   blocksstable::ObMacroBlockHandle handle_;

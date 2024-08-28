@@ -333,7 +333,9 @@ int ObExprSubAddtime::calc_result_type2(ObExprResType &type,
     type.set_varchar();
     type.set_length(DATETIME_MAX_LENGTH);
     type.set_scale(-1);
-    ret = aggregate_charsets_for_string_result(type, &date_arg, 1, type_ctx.get_coll_type());
+    ret = aggregate_charsets_for_string_result(type, &date_arg, 1, type_ctx);
+    date_arg.set_calc_collation_type(type.get_collation_type());
+    date_arg.set_calc_collation_level(type.get_collation_level());
   }
   if (OB_SUCC(ret)) {
     // date_arg无法设置calc_type的原因是，date_arg类型是varchar时，设置calc_type为time和datetime都不合适

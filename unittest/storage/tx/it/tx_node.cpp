@@ -658,12 +658,13 @@ int ObTxNode::write(ObTxDesc &tx,
                               write_store_ctx));
   write_store_ctx.mvcc_acc_ctx_.tx_table_guards_.tx_table_guard_.init(&fake_tx_table_);
   ObArenaAllocator allocator;
-  ObStoreRow row;
-  ObObj cols[2] = {ObObj(key), ObObj(value)};
-  row.capacity_ = 2;
-  row.row_val_.cells_ = cols;
-  row.row_val_.count_ = 2;
-  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
+  ObDatumRow row;
+  ObStorageDatum cols[2] = {ObStorageDatum(), ObStorageDatum()};
+  cols[0].set_int(key);
+  cols[1].set_int(value);
+  row.count_ = 2;
+  row.storage_datums_ = cols;
+  row.row_flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
   row.trans_id_.reset();
 
   ObTableIterParam param;
@@ -723,11 +724,13 @@ int ObTxNode::write_one_row(ObStoreCtx& write_store_ctx, const int64_t key, cons
   const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
   const int64_t schema_version = 100;
   read_info.init(allocator, 2, 1, false, columns_, nullptr/*storage_cols_index*/);
-  ObStoreRow row;
-  ObObj cols[2] = {ObObj(key), ObObj(value)};
-  row.flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
-  row.row_val_.cells_ = cols;
-  row.row_val_.count_ = 2;
+  ObDatumRow row;
+  ObStorageDatum cols[2] = {ObStorageDatum(), ObStorageDatum()};
+  cols[0].set_int(key);
+  cols[1].set_int(value);
+  row.row_flag_ = blocksstable::ObDmlFlag::DF_UPDATE;
+  row.storage_datums_ = cols;
+  row.count_ = 2;
 
   ObTableIterParam param;
   ObTableAccessContext context;

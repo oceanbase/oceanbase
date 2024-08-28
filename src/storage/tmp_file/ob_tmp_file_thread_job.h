@@ -29,6 +29,7 @@ public:
   static const uint32_t DEFAULT_TIMEOUT_MS = 10 * 1000;
   ObTmpFileSwapJob()
     : is_inited_(false),
+      ret_code_(OB_SUCCESS),
       is_finished_(false),
       timeout_ms_(DEFAULT_TIMEOUT_MS),
       create_ts_(0),
@@ -39,16 +40,18 @@ public:
   int init(int64_t expect_swap_size, uint32_t timeout_ms = DEFAULT_TIMEOUT_MS);
   void reset();
   int wait_swap_complete();
-  int signal_swap_complete();
+  int signal_swap_complete(int ret_code);
   OB_INLINE int64_t get_create_ts() const { return create_ts_; }
   OB_INLINE int64_t get_abs_timeout_ts() const { return abs_timeout_ts_; }
   OB_INLINE int64_t get_expect_swap_size() const { return expect_swap_size_; }
   OB_INLINE bool is_valid() { return ATOMIC_LOAD(&is_inited_) && swap_cond_.is_inited(); }
   OB_INLINE bool is_finished() const { return ATOMIC_LOAD(&is_finished_); }
   OB_INLINE bool is_inited() const { return ATOMIC_LOAD(&is_inited_); }
+  OB_INLINE int get_ret_code() const { return ATOMIC_LOAD(&ret_code_); }
   TO_STRING_KV(KP(this), K(is_inited_), K(is_finished_), K(create_ts_), K(timeout_ms_), K(abs_timeout_ts_), K(expect_swap_size_));
 private:
   bool is_inited_;
+  int ret_code_;
   bool is_finished_;
   uint32_t timeout_ms_;
   int64_t create_ts_;

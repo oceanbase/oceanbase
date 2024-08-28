@@ -83,6 +83,22 @@ public:
   OB_INLINE ObTmpFileBlockManager &get_tmp_file_block_manager() { return tmp_file_block_manager_; }
   OB_INLINE ObTmpFilePageCacheController &get_page_cache_controller() { return page_cache_controller_; }
 
+public:
+  //for virtual table to show
+  int get_tmp_file_fds(ObIArray<int64_t> &fd_arr);
+  int get_tmp_file_info(const int64_t fd, ObSNTmpFileInfo &tmp_file_info);
+private:
+  class CollectTmpFileKeyFunctor final
+  {
+  public:
+    CollectTmpFileKeyFunctor(ObIArray<int64_t> &fds)
+        : fds_(fds) {}
+    bool operator()(const ObTmpFileKey &key, const ObTmpFileHandle &tmp_file_handle);
+
+  private:
+    ObIArray<int64_t> &fds_;
+  };
+
 private:
   static const int64_t REFRESH_CONFIG_INTERVAL = 5 * 60 * 1000 * 1000L; // 5min
   static const int64_t META_DEFAULT_LIMIT = 15 * 1024L * 1024L * 1024L;

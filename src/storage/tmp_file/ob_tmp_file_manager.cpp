@@ -307,6 +307,9 @@ int ObTenantTmpFileManager::aio_read(const ObTmpFileIOInfo &io_info, ObTmpFileIO
     LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info));
+  } else {
+    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx().is_unaligned_read(),
+                                               io_info.size_);
   }
 
   LOG_DEBUG("aio_read a tmp file over", KR(ret), K(io_info), K(io_handle), KPC(tmp_file_handle.get()));
@@ -336,6 +339,9 @@ int ObTenantTmpFileManager::aio_pread(const ObTmpFileIOInfo &io_info,
     LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info));
+  } else {
+    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx().is_unaligned_read(),
+                                               io_info.size_);
   }
 
   LOG_DEBUG("aio_pread a tmp file over", KR(ret), K(io_info), K(offset), K(io_handle), KPC(tmp_file_handle.get()));
@@ -363,6 +369,9 @@ int ObTenantTmpFileManager::read(const ObTmpFileIOInfo &io_info, ObTmpFileIOHand
     LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info));
+  } else {
+    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx().is_unaligned_read(),
+                                               io_info.size_);
   }
 
   if (OB_SUCC(ret) || OB_ITER_END == ret) {
@@ -398,6 +407,9 @@ int ObTenantTmpFileManager::pread(const ObTmpFileIOInfo &io_info, const int64_t 
     LOG_WARN("fail to init io handle", KR(ret), K(io_info));
   } else if (OB_FAIL(tmp_file_handle.get()->aio_pread(io_handle.get_io_ctx()))) {
     LOG_WARN("fail to aio pread", KR(ret), K(io_info));
+  } else {
+    tmp_file_handle.get()->set_read_stats_vars(io_handle.get_io_ctx().is_unaligned_read(),
+                                               io_info.size_);
   }
 
   if (OB_SUCC(ret) || OB_ITER_END == ret) {
@@ -480,7 +492,7 @@ int ObTenantTmpFileManager::get_tmp_file(const int64_t fd, ObTmpFileHandle &file
   int ret = OB_SUCCESS;
 
   if (OB_FAIL(files_.get(ObTmpFileKey(fd), file_handle))) {
-    if (OB_HASH_NOT_EXIST == ret) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
       LOG_WARN("tmp file does not exist", KR(ret), K(fd));
     } else {
       LOG_WARN("fail to get tmp file", KR(ret), K(fd));
@@ -535,6 +547,58 @@ int ObTenantTmpFileManager::get_macro_block_count(int64_t &macro_block_count)
   }
 
   LOG_INFO("get tmp file macro block count", KR(ret), K(macro_block_count));
+  return ret;
+}
+
+bool ObTenantTmpFileManager::CollectTmpFileKeyFunctor::operator()(
+     const ObTmpFileKey &key, const ObTmpFileHandle &tmp_file_handle)
+{
+  int ret = OB_SUCCESS;
+  ObSharedNothingTmpFile *tmp_file_ptr = NULL;
+
+  if (OB_ISNULL(tmp_file_handle.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid tmp file pointer", KR(ret), K(key), KP(tmp_file_handle.get()));
+  } else if (OB_FAIL(fds_.push_back(key.fd_))) {
+    LOG_WARN("failed to push back", KR(ret), K(key));
+  }
+  return OB_SUCCESS == ret;
+}
+
+int ObTenantTmpFileManager::get_tmp_file_fds(ObIArray<int64_t> &fd_arr)
+{
+  int ret = OB_SUCCESS;
+  CollectTmpFileKeyFunctor func(fd_arr);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(files_.for_each(func))) {
+    LOG_WARN("fail to collect tmp file fds", KR(ret));
+  }
+
+  return ret;
+}
+
+int ObTenantTmpFileManager::get_tmp_file_info(const int64_t fd, ObSNTmpFileInfo &tmp_file_info)
+{
+  int ret = OB_SUCCESS;
+  ObTmpFileHandle file_handle;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTenantTmpFileManager has not been inited", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(get_tmp_file(fd, file_handle))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      LOG_INFO("tmp file not exist", KR(ret), K(fd));
+    } else {
+      LOG_WARN("fail to get tmp file", KR(ret), K(fd));
+    }
+  } else if (OB_ISNULL(file_handle.get())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid tmp file pointer", KR(ret), K(fd), KP(file_handle.get()));
+  } else if (OB_FAIL(file_handle.get()->copy_info_for_virtual_table(tmp_file_info))) {
+    LOG_WARN("failed to copy info for virtual table", KR(ret), K(fd), KPC(file_handle.get()));
+  }
+
   return ret;
 }
 

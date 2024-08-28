@@ -520,17 +520,17 @@ public:
 
   static void init_type_ctx(const ObSQLSessionInfo *session, ObExprTypeCtx &type_ctx);
   static int merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
-                                                 const share::schema::ObLocalSessionVar &session_vars_snapshot);
-  static int merge_solidified_var_into_dtc_params(const share::schema::ObLocalSessionVar *local_vars,
+                                                 const ObLocalSessionVar &session_vars_snapshot);
+  static int merge_solidified_var_into_dtc_params(const ObLocalSessionVar *local_vars,
                                             const ObTimeZoneInfo *local_timezone,
                                             ObDataTypeCastParams &dtc_param);
-  static int merge_solidified_var_into_sql_mode(const share::schema::ObLocalSessionVar *local_vars,
+  static int merge_solidified_var_into_sql_mode(const ObLocalSessionVar *local_vars,
                                                 ObSQLMode &sql_mode);
-  static int merge_solidified_var_into_collation(const share::schema::ObLocalSessionVar &session_vars_snapshot,
+  static int merge_solidified_var_into_collation(const ObLocalSessionVar &session_vars_snapshot,
                                                   ObCollationType &cs_type);
-  static int merge_solidified_var_into_max_allowed_packet(const share::schema::ObLocalSessionVar *local_vars,
+  static int merge_solidified_var_into_max_allowed_packet(const ObLocalSessionVar *local_vars,
                                                           int64_t &max_allowed_packet);
-  static int merge_solidified_var_into_compat_version(const share::schema::ObLocalSessionVar *local_vars,
+  static int merge_solidified_var_into_compat_version(const ObLocalSessionVar *local_vars,
                                                       uint64_t &compat_version);
 
   static bool is_oracle_sys_view(const ObString &table_name);
@@ -715,6 +715,8 @@ public:
   static int64_t combine_server_id(int64_t ts, uint64_t server_id) {
     return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
   }
+  static int extract_odps_part_spec(const ObString &all_part_spec, ObIArray<ObString> &part_spec_list);
+  static int is_external_odps_table(const ObString &properties, ObIAllocator &allocator, bool &is_odps);
   static int check_ident_name(const common::ObCollationType cs_type, common::ObString &name,
                               const bool check_for_path_char, const int64_t max_ident_len);
 
@@ -722,6 +724,7 @@ public:
   static bool is_data_version_ge_422_or_431(uint64_t data_version);
   static bool is_data_version_ge_423_or_431(uint64_t data_version);
   static bool is_data_version_ge_423_or_432(uint64_t data_version);
+  static bool is_data_version_ge_424_or_433(uint64_t data_version);
 
   static int get_proxy_can_activate_role(const ObIArray<uint64_t> &role_id_array,
                                             const ObIArray<uint64_t> &role_id_option_array,

@@ -140,7 +140,6 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
   hash::ObHashMap<uint64_t, ObParentDMLStmt> parent_map;
   trans_happened = false;
   bool enable_temp_table_transform = false;
-  bool force_temp_table_inline = false;
   bool has_hint = false;
   bool is_hint_enabled = false;
   ObSQLSessionInfo *session_info = NULL;
@@ -150,8 +149,6 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
     LOG_WARN("unexpect null param", K(ctx_), K(ret));
   } else if (OB_FAIL(session_info->is_temp_table_transformation_enabled(enable_temp_table_transform))) {
     LOG_WARN("failed to check temp table transform enabled", K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_inline(force_temp_table_inline))) {
-    LOG_WARN("failed to check temp table force inline", K(ret));
   } else if (OB_FAIL(stmt->get_query_ctx()->get_global_hint().opt_params_.get_bool_opt_param(
               ObOptParamHint::XSOLAPI_GENERATE_WITH_CLAUSE, is_hint_enabled, has_hint))) {
     LOG_WARN("failed to check has opt param", K(ret));
@@ -161,7 +158,7 @@ int ObTransformTempTable::generate_with_clause(ObDMLStmt *&stmt, bool &trans_hap
   if (OB_FAIL(ret)) {
   } else if (ctx_->is_set_stmt_oversize_) {
     OPT_TRACE("stmt containt oversize set stmt");
-  } else if (!enable_temp_table_transform || force_temp_table_inline) {
+  } else if (!enable_temp_table_transform || ctx_->is_force_inline_) {
     OPT_TRACE("session variable disable temp table transform");
   } else if (stmt->has_for_update()) {
     OPT_TRACE("stmt has for update, can not extract CTE");
@@ -192,18 +189,12 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
 {
   int ret = OB_SUCCESS;
   trans_happened = false;
-  bool system_force_inline_cte = false;
-  bool system_force_materialize_cte = false;
   ObSQLSessionInfo *session_info = NULL;
   if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) ||
       OB_ISNULL(ctx_->allocator_) || OB_ISNULL(ctx_->expr_factory_) ||
       OB_ISNULL(session_info = ctx_->session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null param", K(ctx_), K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_inline(system_force_inline_cte))) {
-    LOG_WARN("failed to check temp table force inline", K(ret));
-  } else if (OB_FAIL(session_info->is_force_temp_table_materialize(system_force_materialize_cte))) {
-    LOG_WARN("failed to check temp table force materialize", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_info.count(); ++i) {
     TempTableInfo &helper = temp_table_info.at(i);
@@ -244,10 +235,10 @@ int ObTransformTempTable::expand_temp_table(ObIArray<TempTableInfo> &temp_table_
     } else if (is_oversize_stmt) {
       //do nothing
       OPT_TRACE("CTE too large to expand");
-    } else if (system_force_materialize_cte) {
+    } else if (ctx_->is_force_materialize_) {
       //do nothing
       OPT_TRACE("system variable force materialize CTE");
-    } else if (system_force_inline_cte) {
+    } else if (ctx_->is_force_inline_) {
       need_expand = true;
       OPT_TRACE("system variable force inline CTE");
     } else if (1 == helper.table_items_.count()) {

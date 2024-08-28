@@ -70,9 +70,10 @@ void ObMemtableCtx::free_mvcc_row_callback(ObITransCallback *cb)
   }
 }
 
-int ObMvccRow::check_double_insert_(const share::SCN ,
-                                    ObMvccTransNode &,
-                                    ObMvccTransNode *)
+int ObMvccRow::mvcc_sanity_check_(const share::SCN ,
+                                  const concurrent_control::ObWriteFlag ,
+                                  ObMvccTransNode &,
+                                  ObMvccTransNode *)
 {
   return OB_SUCCESS;
 }
@@ -466,7 +467,7 @@ public:
   void write_tx(ObStoreCtx *wtx,
                 ObMemtable *memtable,
                 const int64_t snapshot,
-                const ObStoreRow &write_row,
+                ObDatumRow &write_row,
                 const int expect_ret = OB_SUCCESS,
                 const int64_t expire_time = 10000000000)
   {
@@ -736,20 +737,23 @@ public:
   int mock_row(const int64_t key,
                const int64_t value,
                ObDatumRowkey &rowkey,
-               ObStoreRow &row)
+               ObDatumRow &row)
   {
     rowkey_datums_[0].set_int(key);
     rowkey_datums_[1].set_int(value);
     rowkey.assign(rowkey_datums_, 1);
 
+    ObStorageDatum *datum = new ObStorageDatum[2];
+    datum[0].set_int(key);
+    datum[1].set_int(value);
+
     ObObj *obj = new ObObj[2];
     obj[0].set_int(key);
     obj[1].set_int(value);
 
-    row.row_val_.cells_ = obj;
-    row.row_val_.count_ = 2;
-    row.row_val_.projector_ = NULL;
-    row.flag_.set_flag(ObDmlFlag::DF_INSERT);
+    row.storage_datums_ = datum;
+    row.count_ = 2;
+    row.row_flag_.set_flag(ObDmlFlag::DF_INSERT);
     rowkey.store_rowkey_.assign(obj, 1);
 
     return OB_SUCCESS;
@@ -757,18 +761,20 @@ public:
 
   int mock_delete(const int64_t key,
                   ObDatumRowkey &rowkey,
-                  ObStoreRow &row)
+                  ObDatumRow &row)
   {
     rowkey_datums_[0].set_int(key);
     rowkey.assign(rowkey_datums_, 1);
 
+    ObStorageDatum *datum = new ObStorageDatum[1];
+    datum[0].set_int(key);
+
     ObObj *obj = new ObObj[1];
     obj[0].set_int(key);
 
-    row.row_val_.cells_ = obj;
-    row.row_val_.count_ = 2;
-    row.row_val_.projector_ = NULL;
-    row.flag_.set_flag(ObDmlFlag::DF_DELETE);
+    row.storage_datums_ = datum;
+    row.count_ = 2;
+    row.row_flag_.set_flag(ObDmlFlag::DF_DELETE);
     rowkey.store_rowkey_.assign(obj, 1);
 
     return OB_SUCCESS;
@@ -1239,7 +1245,7 @@ TEST_F(TestMemtableV2, test_write_read_conflict)
 
   TRANS_LOG(INFO, "######## CASE1: write row into memtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -1383,7 +1389,7 @@ TEST_F(TestMemtableV2, test_tx_abort)
 
   TRANS_LOG(INFO, "######## CASE1: write row into memtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -1496,7 +1502,7 @@ TEST_F(TestMemtableV2, test_write_write_conflict)
 
   TRANS_LOG(INFO, "######## CASE1: txn1 write row into memtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -1541,7 +1547,7 @@ TEST_F(TestMemtableV2, test_write_write_conflict)
 
   TRANS_LOG(INFO, "######## CASE2: txn2 write row into memtable, lock for write failed");
   ObDatumRowkey rowkey2;
-  ObStoreRow write_row2;
+  ObDatumRow write_row2;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  3, /*value*/
                                  rowkey2,
@@ -1563,7 +1569,7 @@ TEST_F(TestMemtableV2, test_write_write_conflict)
 
   TRANS_LOG(INFO, "######## CASE3: txn1 write row into memtable, lock for write succeed");
   ObDatumRowkey rowkey3;
-  ObStoreRow write_row3;
+  ObDatumRow write_row3;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  4, /*value*/
                                  rowkey3,
@@ -1712,7 +1718,7 @@ TEST_F(TestMemtableV2, test_lock)
 
   TRANS_LOG(INFO, "######## CASE1: txn1 lock row in memtable");
   ObDatumRowkey rowkey;
-  ObStoreRow tmp_row;
+  ObDatumRow tmp_row;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -1767,7 +1773,7 @@ TEST_F(TestMemtableV2, test_lock)
 
   TRANS_LOG(INFO, "######## CASE3: txn2 write row in memtable with lock for write failed");
   ObDatumRowkey rowkey2;
-  ObStoreRow write_row2;
+  ObDatumRow write_row2;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  3, /*value*/
                                  rowkey2,
@@ -1888,7 +1894,7 @@ TEST_F(TestMemtableV2, test_lock)
   ObTransID write_tx_id3 = ObTransID(3);
   ObStoreCtx *wtx3 = start_tx(write_tx_id3);
   ObDatumRowkey rowkey3;
-  ObStoreRow write_row3;
+  ObDatumRow write_row3;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  4, /*value*/
                                  rowkey3,
@@ -1974,7 +1980,7 @@ TEST_F(TestMemtableV2, test_sstable_lock)
   is_sstable_contains_lock_ = true;
 
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -2006,8 +2012,8 @@ TEST_F(TestMemtableV2, test_rollback_to)
 
   TRANS_LOG(INFO, "######## CASE1: write row into memtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
-  ObStoreRow write_row2;
+  ObDatumRow write_row;
+  ObDatumRow write_row2;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -2069,7 +2075,7 @@ TEST_F(TestMemtableV2, test_rollback_to)
                   wtx_seq_no1 + 1 /*to*/);
 
   ObDatumRowkey rowkey3;
-  ObStoreRow write_row3;
+  ObDatumRow write_row3;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  4, /*value*/
                                  rowkey3,
@@ -2098,11 +2104,11 @@ TEST_F(TestMemtableV2, test_replay)
 
   TRANS_LOG(INFO, "######## CASE1: txn1 and txn3 write row in lmemtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   ObDatumRowkey rowkey2;
-  ObStoreRow write_row2;
+  ObDatumRow write_row2;
   ObDatumRowkey rowkey3;
-  ObStoreRow write_row3;
+  ObDatumRow write_row3;
 
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
@@ -2285,9 +2291,9 @@ TEST_F(TestMemtableV2, test_replay)
 
 //   TRANS_LOG(INFO, "######## CASE1: txn1 write row in lmemtable");
 //   ObDatumRowkey rowkey;
-//   ObStoreRow write_row;
+//   ObDatumRow write_row;
 //   ObDatumRowkey rowkey2;
-//   ObStoreRow write_row2;
+//   ObDatumRow write_row2;
 
 //   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
 //                                  2, /*value*/
@@ -2420,11 +2426,11 @@ TEST_F(TestMemtableV2, test_compact)
 
   TRANS_LOG(INFO, "######## CASE1: txn1 and txn3 write row in lmemtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   ObDatumRowkey rowkey2;
-  ObStoreRow write_row2;
+  ObDatumRow write_row2;
   ObDatumRowkey rowkey3;
-  ObStoreRow write_row3;
+  ObDatumRow write_row3;
 
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
@@ -2652,11 +2658,11 @@ TEST_F(TestMemtableV2, test_compact_v2)
 
   TRANS_LOG(INFO, "######## CASE1: txn1 write two rows and txn3 write a row in memtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   ObDatumRowkey rowkey2;
-  ObStoreRow write_row2;
+  ObDatumRow write_row2;
   ObDatumRowkey rowkey3;
-  ObStoreRow write_row3;
+  ObDatumRow write_row3;
 
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
@@ -2819,13 +2825,13 @@ TEST_F(TestMemtableV2, test_compact_v3)
 
   TRANS_LOG(INFO, "######## CASE1: txn1 write two row and txn2 write row in lmemtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   ObDatumRowkey rowkey2;
-  ObStoreRow write_row2;
+  ObDatumRow write_row2;
   ObDatumRowkey rowkey3;
-  ObStoreRow write_row3;
+  ObDatumRow write_row3;
   ObDatumRowkey rowkey4;
-  ObStoreRow write_row4;
+  ObDatumRow write_row4;
 
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
@@ -2957,11 +2963,11 @@ TEST_F(TestMemtableV2, test_dml_flag)
 
   TRANS_LOG(INFO, "######## CASE1: txns write and row in lmemtable, test its dml flag");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row1;
+  ObDatumRow write_row1;
   ObDatumRowkey rowkey2;
-  ObStoreRow write_row2;
+  ObDatumRow write_row2;
   ObDatumRowkey rowkey3;
-  ObStoreRow write_row3;
+  ObDatumRow write_row3;
 
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
@@ -3120,7 +3126,7 @@ TEST_F(TestMemtableV2, test_fast_commit)
 
   TRANS_LOG(INFO, "######## CASE1: write row into memtable and fast commit, then check result is ok");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -3240,7 +3246,7 @@ TEST_F(TestMemtableV2, test_fast_commit_with_no_delay_cleanout)
 
   TRANS_LOG(INFO, "######## CASE1: write row into memtable and not fast commit, then check result is ok");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -3368,8 +3374,8 @@ TEST_F(TestMemtableV2, test_seq_set_violation)
 
   TRANS_LOG(INFO, "######## CASE1: write row into memtable");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
-  ObStoreRow write_row2;
+  ObDatumRow write_row;
+  ObDatumRow write_row2;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -3426,7 +3432,7 @@ TEST_F(TestMemtableV2, test_parallel_lock_with_same_txn)
 
   TRANS_LOG(INFO, "######## CASE1: lock row into memtable parallelly");
   ObDatumRowkey rowkey;
-  ObStoreRow write_row;
+  ObDatumRow write_row;
   EXPECT_EQ(OB_SUCCESS, mock_row(1, /*key*/
                                  2, /*value*/
                                  rowkey,
@@ -3489,14 +3495,14 @@ TEST_F(TestMemtableV2, test_sync_log_fail_on_frozen_memtable)
   ObStoreCtx *tx_1 = start_tx(txid_1);
   int i = 1;
   for (; i <= 10; i++) {
-    ObStoreRow row1;
+    ObDatumRow row1;
     EXPECT_EQ(OB_SUCCESS, mock_row(i, i*2, rowkey, row1));
     write_tx(tx_1, memtable, 10000, row1);
   }
   ObTransID txid_2 = ObTransID(2);
   ObStoreCtx *tx_2 = start_tx(txid_2);
   for (; i <= 20; i++) {
-    ObStoreRow row1;
+    ObDatumRow row1;
     EXPECT_EQ(OB_SUCCESS, mock_row(i, i*4, rowkey, row1));
     write_tx(tx_2, memtable, 10000, row1);
   }

@@ -523,15 +523,17 @@ int ObLogSubPlanFilter::check_and_set_das_group_rescan()
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
+  ObQueryCtx *query_ctx = NULL;
   ObLogPlan *plan = NULL;
   if (OB_ISNULL(plan = get_plan())
-      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())) {
+      || OB_ISNULL(session_info = plan->get_optimizer_context().get_session_info())
+      || OB_ISNULL(query_ctx = plan->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret));
-  } else if (!session_info->is_spf_mlj_group_rescan_enabled()) {
+    LOG_WARN("get unexpected null", K(ret), K(plan), K(session_info), K(query_ctx));
+  } else if (!plan->get_optimizer_context().get_enable_spf_batch_rescan()) {
     enable_das_group_rescan_ = false;
-  } else if (OB_FAIL(session_info->get_nlj_batching_enabled(enable_das_group_rescan_))) {
-    LOG_WARN("failed to get enable batch variable", K(ret));
+  } else {
+    enable_das_group_rescan_ = plan->get_optimizer_context().get_nlj_batching_enabled();
   }
   // check use batch
   for (int64_t i = 1; OB_SUCC(ret) && enable_das_group_rescan_ && i < get_num_of_child(); i++) {

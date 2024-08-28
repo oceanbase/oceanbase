@@ -41,6 +41,8 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
   ObIAllocator &allocator = ctx.get_allocator();
   obrpc::ObGrantArg &arg = static_cast<obrpc::ObGrantArg &>(stmt.get_ddl_arg());
   const bool is_role = arg.roles_.count() > 0;
+  ObSchemaGetterGuard schema_guard;
+  const ObUserInfo *user_info = NULL;
 
   if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
@@ -147,6 +149,28 @@ int ObGrantExecutor::execute(ObExecContext &ctx, ObGrantStmt &stmt)
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_user_info(tenant_id,
+                                                  session_info->get_priv_user_id(),
+                                                  user_info))) {
+      LOG_WARN("failed to get user info", K(ret));
+    } else if (OB_ISNULL(user_info)) {
+      // ignore ret
+      LOG_WARN("user info is unexpected null", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator, user_info->get_user_name_str(), arg.grantor_))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else if (OB_FAIL(ob_write_string(allocator, user_info->get_host_name_str(), arg.grantor_host_))) {
+      LOG_WARN("failed to write string", K(ret));
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(schema_guard.reset())) {
+      LOG_WARN("failed to reset schema guard", K(tmp_ret));
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(common_rpc_proxy->grant(arg))) {
       LOG_WARN("Grant privileges to user error", K(ret), K(arg));
     }
@@ -183,13 +207,13 @@ int ObRevokeExecutor::execute(ObExecContext &ctx, ObRevokeStmt &stmt)
         break;
       }
       case OB_PRIV_TABLE_LEVEL: {
-        if (OB_FAIL(revoke_table(common_rpc_proxy, stmt))) {
+        if (OB_FAIL(revoke_table(common_rpc_proxy, stmt, ctx))) {
           LOG_WARN("grant_revoke_user error", K(ret));
         }
         break;
       }
       case OB_PRIV_ROUTINE_LEVEL: {
-        if (OB_FAIL(revoke_routine(common_rpc_proxy, stmt))) {
+        if (OB_FAIL(revoke_routine(common_rpc_proxy, stmt, ctx))) {
           LOG_WARN("grant_revoke_user error", K(ret));
         }
         break;
@@ -273,12 +297,20 @@ int ObRevokeExecutor::revoke_db(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt
   return ret;
 }
 
-int ObRevokeExecutor::revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt &stmt)
+int ObRevokeExecutor::revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy,
+                                   ObRevokeStmt &stmt,
+                                   ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  ObSchemaGetterGuard schema_guard;
+  const ObUserInfo *user_info = NULL;
   if (OB_ISNULL(rpc_proxy) || OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input argument error", K(rpc_proxy), K(ret));
+  } else if (OB_ISNULL(session_info = ctx.get_my_session())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Get my session error");
   } else {
     obrpc::ObRevokeTableArg &arg = static_cast<obrpc::ObRevokeTableArg &>(stmt.get_ddl_arg());
     arg.tenant_id_ = stmt.get_tenant_id();
@@ -306,6 +338,28 @@ int ObRevokeExecutor::revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeS
     } else {
       //todo: pl routine and others
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(arg.tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_user_info(arg.tenant_id_,
+                                                  session_info->get_priv_user_id(),
+                                                  user_info))) {
+      LOG_WARN("failed to get user info", K(ret));
+    } else if (OB_ISNULL(user_info)) {
+      // ignore ret
+      LOG_WARN("user info is unexpected null", K(ret));
+    } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), user_info->get_user_name_str(), arg.grantor_))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), user_info->get_host_name_str(), arg.grantor_host_))) {
+      LOG_WARN("failed to write string", K(ret));
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(schema_guard.reset())) {
+      LOG_WARN("failed to reset schema guard", K(tmp_ret));
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    }
     const ObIArray<uint64_t> &user_ids = stmt.get_users();
     if (OB_FAIL(ret)) {
     } else if (0 == user_ids.count()) {
@@ -323,12 +377,20 @@ int ObRevokeExecutor::revoke_table(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeS
   return ret;
 }
 
-int ObRevokeExecutor::revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevokeStmt &stmt)
+int ObRevokeExecutor::revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy,
+                                     ObRevokeStmt &stmt,
+                                     ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
+  ObSQLSessionInfo *session_info = NULL;
+  ObSchemaGetterGuard schema_guard;
+  const ObUserInfo *user_info = NULL;
   if (OB_ISNULL(rpc_proxy)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Input argument error", K(rpc_proxy), K(ret));
+  } else if (OB_ISNULL(session_info = ctx.get_my_session())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("Get my session error");
   } else {
     obrpc::ObRevokeRoutineArg &arg = static_cast<obrpc::ObRevokeRoutineArg &>(stmt.get_ddl_arg());
     arg.tenant_id_ = stmt.get_tenant_id();
@@ -339,9 +401,31 @@ int ObRevokeExecutor::revoke_routine(obrpc::ObCommonRpcProxy *rpc_proxy, ObRevok
     arg.obj_type_ = static_cast<uint64_t>(stmt.get_object_type());
     arg.grantor_id_ = stmt.get_grantor_id();
     arg.revoke_all_ora_ = stmt.get_revoke_all_ora();
-
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(arg.tenant_id_, schema_guard))) {
+      LOG_WARN("failed to get tenant schema guard", K(ret));
+    } else if (OB_FAIL(schema_guard.get_user_info(arg.tenant_id_,
+                                                  session_info->get_priv_user_id(),
+                                                  user_info))) {
+      LOG_WARN("failed to get user info", K(ret));
+    } else if (OB_ISNULL(user_info)) {
+      // ignore ret
+      LOG_WARN("user info is unexpected null", K(ret));
+    } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), user_info->get_user_name_str(), arg.grantor_))) {
+      LOG_WARN("failed to write string", K(ret));
+    } else if (OB_FAIL(ob_write_string(ctx.get_allocator(), user_info->get_host_name_str(), arg.grantor_host_))) {
+      LOG_WARN("failed to write string", K(ret));
+    }
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(schema_guard.reset())) {
+      LOG_WARN("failed to reset schema guard", K(tmp_ret));
+      if (OB_SUCC(ret)) {
+        ret = tmp_ret;
+      }
+    }
     const ObIArray<uint64_t> &user_ids = stmt.get_users();
-    if (0 == user_ids.count()) {
+    if (OB_FAIL(ret)) {
+    } else if (0 == user_ids.count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("User ids is empty, resolver may be error", K(ret));
     } else {

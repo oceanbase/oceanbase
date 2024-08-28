@@ -16,6 +16,7 @@
 #include "sql/optimizer/ob_log_plan.h"
 #include "common/ob_smart_call.h"
 #include "sql/monitor/ob_sql_plan.h"
+#include "share/config/ob_config_helper.h"
 
 namespace oceanbase
 {
@@ -784,12 +785,26 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
 {
   bool is_valid = false;
   switch (param_type) {
-    case HIDDEN_COLUMN_VISIBLE: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case ROWSETS_ENABLED: {
+    case HIDDEN_COLUMN_VISIBLE:
+    case ROWSETS_ENABLED:
+    case ENABLE_NEWSORT:
+    case USE_PART_SORT_MGB:
+    case USE_DEFAULT_OPT_STAT:
+    case ENABLE_IN_RANGE_OPTIMIZATION:
+    case XSOLAPI_GENERATE_WITH_CLAUSE:
+    case ENABLE_RICH_VECTOR_FORMAT:
+    case _ENABLE_STORAGE_CARDINALITY_ESTIMATION:
+    case PRESERVE_ORDER_FOR_PAGINATION:
+    case ENABLE_DAS_KEEP_ORDER:
+    case HASH_JOIN_ENABLED:
+    case OPTIMIZER_SORTMERGE_JOIN_ENABLED:
+    case NESTED_LOOP_JOIN_ENABLED:
+    case ENABLE_RANGE_EXTRACTION_FOR_NOT_IN:
+    case OPTIMIZER_SKIP_SCAN_ENABLED:
+    case OPTIMIZER_BETTER_INLIST_COSTING:
+    case OPTIMIZER_GROUP_BY_PLACEMENT:
+    case ENABLE_SPF_BATCH_RESCAN:
+    case NLJ_BATCHING_ENABLED: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
@@ -798,61 +813,26 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 <= val.get_int() && 65535 >= val.get_int());
       break;
     }
+    case OPTIMIZER_INDEX_COST_ADJ:
+    case BLOOM_FILTER_RATIO: {
+      is_valid = val.is_int() && (0 <= val.get_int() && 100 >= val.get_int());
+      break;
+    }
+    case WITH_SUBQUERY: {
+      is_valid = val.is_int() && (0 <= val.get_int() && 2 >= val.get_int());
+      break;
+    }
     case DDL_EXECUTION_ID: {
       is_valid = val.is_int() && (0 <= val.get_int());
       break;
     }
-    case DDL_TASK_ID: {
+    case DDL_TASK_ID:
+    case INLIST_REWRITE_THRESHOLD: {
       is_valid = val.is_int() && (0 < val.get_int());
-      break;
-    }
-    case ENABLE_NEWSORT: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case USE_PART_SORT_MGB: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case USE_DEFAULT_OPT_STAT: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case ENABLE_IN_RANGE_OPTIMIZATION: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case XSOLAPI_GENERATE_WITH_CLAUSE: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
       break;
     }
     case WORKAREA_SIZE_POLICY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANULE"));
-      break;
-    }
-    case ENABLE_RICH_VECTOR_FORMAT: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                     || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case _ENABLE_STORAGE_CARDINALITY_ESTIMATION: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case PRESERVE_ORDER_FOR_PAGINATION: {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
-      break;
-    }
-    case ENABLE_DAS_KEEP_ORDER : {
-      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
-                                      || 0 == val.get_varchar().case_compare("false"));
       break;
     }
     case SPILL_COMPRESSION_CODEC: {
@@ -868,8 +848,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       }
       break;
     }
-    case INLIST_REWRITE_THRESHOLD: {
-      is_valid = val.is_int() && (0 < val.get_int());
+    case RUNTIME_FILTER_TYPE: {
+      is_valid = false;
+      if (!val.is_varchar()) {
+        // do nothing
+      } else {
+        ObString str_val = val.get_varchar();
+        int64_t rf_type = ObConfigRuntimeFilterChecker::get_runtime_filter_type(str_val.ptr(),
+                                                                                str_val.length());
+        is_valid = rf_type >= 0;
+      }
       break;
     }
     case PUSHDOWN_STORAGE_LEVEL: {
@@ -934,7 +922,7 @@ int ObOptParamHint::get_bool_opt_param(const OptParamType param_type, bool &val,
   is_exists = false;
   ObObj obj;
   if (OB_FAIL(get_opt_param(param_type, obj))) {
-    LOG_WARN("fail to get rowsets_enabled opt_param", K(ret));
+    LOG_WARN("fail to get bool opt_param", K(ret));
   } else if (obj.is_nop_value()) {
     // do nothing
   } else if (!obj.is_varchar()) {
@@ -953,12 +941,13 @@ int ObOptParamHint::get_bool_opt_param(const OptParamType param_type, bool &val)
   return get_bool_opt_param(param_type, val, is_exists);
 }
 
-int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t &val) const
+int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const
 {
   int ret = OB_SUCCESS;
+  is_exists = false;
   ObObj obj;
   if (OB_FAIL(get_opt_param(param_type, obj))) {
-    LOG_WARN("fail to get rowsets_enabled opt_param", K(ret));
+    LOG_WARN("fail to get integer opt_param", K(ret));
   } else if (obj.is_nop_value()) {
     // do nothing
   } else if (!obj.is_int()) {
@@ -966,6 +955,32 @@ int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t
     LOG_WARN("param obj is invalid", K(ret), K(obj));
   } else {
     val = obj.get_int();
+    is_exists = true;
+  }
+  return ret;
+}
+
+int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t &val) const
+{
+  bool is_exists = false;
+  return get_integer_opt_param(param_type, val, is_exists);
+}
+
+int ObOptParamHint::get_opt_param_runtime_filter_type(int64_t &rf_type) const
+{
+  int ret = OB_SUCCESS;
+  ObObj obj;
+  if (OB_FAIL(get_opt_param(OptParamType::RUNTIME_FILTER_TYPE, obj))) {
+    LOG_WARN("fail to get runtime filter opt param", K(ret));
+  } else if (obj.is_nop_value()) {
+    // do nothing
+  } else if (!obj.is_varchar()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("runtime filter opt param obj is invalid", K(ret), K(obj));
+  } else {
+    ObString str_val = obj.get_varchar();
+    rf_type = ObConfigRuntimeFilterChecker::get_runtime_filter_type(str_val.ptr(),
+                                                                    str_val.length());
   }
   return ret;
 }

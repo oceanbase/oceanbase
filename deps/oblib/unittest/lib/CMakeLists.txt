@@ -6,6 +6,7 @@
 # oblib_addtest(time/test_ob_time_utility.cpp)
 # oblib_addtest(timezone/test_ob_timezone_utils.cpp)
 oblib_addtest(parquet/test_parquet.cpp)
+# oblib_addtest(orc/test_orc.cpp)
 oblib_addtest(alloc/test_alloc_struct.cpp)
 oblib_addtest(alloc/test_block_set.cpp)
 oblib_addtest(alloc/test_chunk_mgr.cpp)

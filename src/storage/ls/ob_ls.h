@@ -926,6 +926,7 @@ public:
   // ObDataCheckpoint interface:
   DELEGATE_WITH_RET(data_checkpoint_, get_freezecheckpoint_info, int);
   DELEGATE_WITH_RET(keep_alive_ls_handler_, get_min_start_scn, void);
+  DELEGATE_WITH_RET(keep_alive_ls_handler_, clear_keep_alive_smaller_scn_info, void);
 
   // update tablet table store here do not using Macro because need lock ls and tablet
   // update table store for tablet

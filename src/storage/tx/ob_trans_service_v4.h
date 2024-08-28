@@ -107,6 +107,7 @@ int handle_sp_rollback_resp(const share::ObLSID &ls_id,
                             const int64_t request_id,
                             const int64_t ret_epoch,
                             const ObAddr &ret_addr,
+                            const int64_t transfer_epoch,
                             const ObIArray<ObTxLSEpochPair> &downstream_parts);
 int handle_trans_msg_callback(const share::ObLSID &sender_ls_id,
                               const share::ObLSID &receiver_ls_id,
@@ -369,7 +370,8 @@ int ls_rollback_to_savepoint_(const ObTransID &tx_id,
                               const ObTxDesc *tx,
                               const bool for_transfer,
                               const ObTxSEQ from_scn,
-                              const int64_t request_id,
+                              const int64_t input_transfer_epoch,
+                              int64_t &output_transfer_epoch,
                               ObIArray<ObTxLSEpochPair> &downstream_parts,
                               int64_t expire_ts = -1);
 int sync_rollback_savepoint__(ObTxDesc &tx,
@@ -397,7 +399,8 @@ int ls_sync_rollback_savepoint__(ObPartTransCtx *part_ctx,
                                  const int64_t tx_seq_base,
                                  const int64_t expire_ts,
                                  const ObTxSEQ specified_from_scn,
-                                 const int64_t request_id,
+                                 const int64_t input_transfer_epoch,
+                                 int64_t &output_transfer_epoch,
                                  ObIArray<ObTxLSEpochPair> &downstream_parts);
 void tx_post_terminate_(ObTxDesc &tx);
 int start_epoch_(ObTxDesc &tx);

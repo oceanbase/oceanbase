@@ -973,6 +973,7 @@ private:
                              bool &is_range_get,
                              const common::ObDataTypeCastParams &dtc_params,
                              ObExecContext *exec_ctx,
+                             ObQueryCtx *query_ctx,
                              const bool is_in_range_optimization_enabled);
 
   int analyze_filter(const common::ObIArray<ColumnItem> &partition_columns,
@@ -992,6 +993,7 @@ private:
                            ObPartLocCalcNode *&calc_node,
                            const common::ObDataTypeCastParams &dtc_params,
                            ObExecContext *exec_ctx,
+                           ObQueryCtx *query_ctx,
                            const bool is_in_range_optimization_enabled);
 
   int extract_eq_op(ObExecContext *exec_ctx,
@@ -1129,6 +1131,11 @@ private:
                                          const uint64_t tenant_id,
                                          const ObTabletID src_tablet_id,
                                          const int64_t idx) const;
+public:
+  inline const ObIArray<common::ObObjectID> &get_part_hint_ids() const
+  {
+    return part_hint_ids_;
+  }
 private:
   bool inited_;
   bool is_partitioned_;

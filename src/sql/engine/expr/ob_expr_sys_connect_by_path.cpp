@@ -45,9 +45,9 @@ int ObExprSysConnectByPath::calc_result_type2(ObExprResType &type,
     type2.set_calc_type(ObVarcharType);
     types[0] = type1;
     types[1] = type2;
-    if (OB_FAIL(aggregate_charsets_for_string_result(type, types, 2, type_ctx.get_coll_type()))) {
+    if (OB_FAIL(aggregate_charsets_for_string_result(type, types, 2, type_ctx))) {
       LOG_WARN("fail to aggregate charset", K(type1), K(type2), K(ret));
-    } else if (OB_FAIL(aggregate_charsets_for_comparison(type, types, 2, type_ctx.get_coll_type()))) {
+    } else if (OB_FAIL(aggregate_charsets_for_comparison(type, types, 2, type_ctx))) {
       LOG_WARN("fail to aggregate charset", K(type1), K(type2), K(ret));
     }
   }

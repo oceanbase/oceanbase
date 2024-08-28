@@ -49,8 +49,8 @@ class ObSrsCacheSnapShot
 {
 public:
   static const uint32_t SRS_ITEM_BUCKET_NUM = 6144;
-  explicit ObSrsCacheSnapShot(common::ObIAllocator *allocator, ObSrsCacheType srs_type)
-    : allocator_(allocator), srs_type_(srs_type), srs_version_(0), ref_count_(0) {}
+  explicit ObSrsCacheSnapShot(ObSrsCacheType srs_type)
+    : allocator_("SrsSnapShot", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), srs_type_(srs_type), srs_version_(0), ref_count_(0) {}
   virtual ~ObSrsCacheSnapShot() { srs_item_map_.destroy(); }
   int init() { return srs_item_map_.create(SRS_ITEM_BUCKET_NUM, "SrsSnapShot", "SrsSnapShot", MTL_ID()); }
   int add_srs_item(uint64_t srid, const common::ObSrsItem* srs_item) { return srs_item_map_.set_refactored(srid, srs_item); }
@@ -66,7 +66,7 @@ public:
   int add_pg_reserved_srs_item(const common::ObString &pg_wkt, const uint32_t srs_id);
 
 private:
-  common::ObIAllocator *allocator_;
+  common::ObArenaAllocator allocator_;
   ObSrsCacheType srs_type_;
   uint64_t srs_version_;
   volatile int64_t ref_count_;

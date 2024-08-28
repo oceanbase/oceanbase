@@ -165,7 +165,7 @@ TABLE_ROWS	bigint(20) unsigned	NO
 AVG_ROW_LENGTH	bigint(21) unsigned	NO			
 DATA_LENGTH	bigint(20) unsigned	NO			
 MAX_DATA_LENGTH	bigint(0) unsigned	NO			
-INDEX_LENGTH	bigint(0) unsigned	NO			
+INDEX_LENGTH	bigint(21) unsigned	NO			
 DATA_FREE	bigint(0) unsigned	NO			
 AUTO_INCREMENT	bigint(0) unsigned	NO			
 CREATE_TIME	datetime	NO			
@@ -294,6 +294,42 @@ SOURCE_FUNCTION	varchar(30)	NO
 SOURCE_FILE	varchar(20)	NO			
 SOURCE_LINE	bigint(20)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.PROFILING limit 1);
+cnt
+1
+desc information_schema.OPTIMIZER_TRACE;
+Field	Type	Null	Key	Default	Extra
+QUERY	varchar(200)	NO			
+TRACE	varchar(200)	NO			
+MISSING_BYTES_MAX_MEM_SIZE	bigint(20)	NO			
+INSUFFICIENT_PRIVILEGES	bigint(1)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.OPTIMIZER_TRACE limit 1);
+cnt
+1
+desc information_schema.PLUGINS;
+Field	Type	Null	Key	Default	Extra
+PLUGIN_NAME	varchar(64)	NO			
+PLUGIN	varchar(20)	NO			
+PLUGIN_STATUS	varchar(10)	NO			
+PLUGIN_TYPE	varchar(80)	NO			
+PLUGIN_TYPE_VERSION	varchar(20)	NO			
+PLUGIN_LIBRARY	varchar(64)	NO			
+PLUGIN_LIBRARY_VERSION	varchar(20)	NO			
+PLUGIN_AUTHOR	varchar(64)	NO			
+PLUGIN_DESCRIPTION	varchar(200)	NO			
+PLUGIN_LICENSE	varchar(80)	NO			
+LOAD_OPTION	varchar(64)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.PLUGINS limit 1);
+cnt
+1
+desc information_schema.INNODB_SYS_COLUMNS;
+Field	Type	Null	Key	Default	Extra
+TABLE_ID	bigint(21) unsigned	NO			
+NAME	varchar(193)	NO			
+POS	bigint(21) unsigned	NO			
+MTYPE	bigint(11)	NO			
+PRTYPE	bigint(11)	NO			
+LEN	bigint(11)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_COLUMNS limit 1);
 cnt
 1
 desc information_schema.INNODB_FT_BEING_DELETED;
@@ -6203,6 +6239,10 @@ PRIV_CREATE_ROUTINE	varchar(3)	NO
 PRIV_CREATE_TABLESPACE	varchar(3)	NO			
 PRIV_SHUTDOWN	varchar(3)	NO			
 PRIV_RELOAD	varchar(3)	NO			
+PRIV_REFERENCES	varchar(3)	NO			
+PRIV_CREATE_ROLE	varchar(3)	NO			
+PRIV_DROP_ROLE	varchar(3)	NO			
+PRIV_TRIGGER	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_USERS limit 1);
 cnt
 1
@@ -6254,6 +6294,10 @@ PRIV_CREATE_ROUTINE	varchar(3)	NO
 PRIV_CREATE_TABLESPACE	varchar(3)	NO			
 PRIV_SHUTDOWN	varchar(3)	NO			
 PRIV_RELOAD	varchar(3)	NO			
+PRIV_REFERENCES	varchar(3)	NO			
+PRIV_CREATE_ROLE	varchar(3)	NO			
+PRIV_DROP_ROLE	varchar(3)	NO			
+PRIV_TRIGGER	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_USERS limit 1);
 cnt
 1
@@ -6278,6 +6322,8 @@ PRIV_SHOW_VIEW	varchar(3)	NO
 PRIV_EXECUTE	varchar(3)	NO			
 PRIV_ALTER_ROUTINE	varchar(3)	NO			
 PRIV_CREATE_ROUTINE	varchar(3)	NO			
+PRIV_REFERENCES	varchar(3)	NO			
+PRIV_TRIGGER	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_DATABASE_PRIVILEGE limit 1);
 cnt
 1
@@ -6303,6 +6349,8 @@ PRIV_SHOW_VIEW	varchar(3)	NO
 PRIV_EXECUTE	varchar(3)	NO			
 PRIV_ALTER_ROUTINE	varchar(3)	NO			
 PRIV_CREATE_ROUTINE	varchar(3)	NO			
+PRIV_REFERENCES	varchar(3)	NO			
+PRIV_TRIGGER	varchar(3)	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_DATABASE_PRIVILEGE limit 1);
 cnt
 1
@@ -6605,9 +6653,9 @@ PARTITION_DESCRIPTION	text	NO
 SUBPARTITION_DESCRIPTION	text	NO			
 TABLE_ROWS	bigint(20) unsigned	NO		NULL	
 AVG_ROW_LENGTH	bigint(21) unsigned	NO		NULL	
-DATA_LENGTH	bigint(0) unsigned	NO			
+DATA_LENGTH	bigint(20) unsigned	NO			
 MAX_DATA_LENGTH	bigint(0) unsigned	NO			
-INDEX_LENGTH	bigint(0) unsigned	NO			
+INDEX_LENGTH	bigint(21) unsigned	NO			
 DATA_FREE	bigint(0) unsigned	NO			
 CREATE_TIME	timestamp(6)	YES		NULL	
 UPDATE_TIME	datetime	NO			
@@ -8352,7 +8400,7 @@ Db	varchar(64)	NO		NULL
 User	varchar(32)	NO		NULL	
 Routine_name	varchar(64)	NO		NULL	
 Routine_type	varchar(9)	NO			
-Grantor	varchar(93)	YES		NULL	
+Grantor	varchar(93)	NO			
 Proc_priv	varchar(27)	NO			
 Timestamp	date	YES			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.procs_priv limit 1);
@@ -8549,6 +8597,21 @@ BUCKET_1000_PLUS_ACCESS_COUNT	bigint(20)	NO		NULL
 BUCKET_1000_PLUS_ROWS_RETURNED	bigint(20)	NO		NULL	
 LAST_USED	varchar(128)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_INDEX_USAGE limit 1);
+cnt
+1
+desc mysql.audit_log_filter;
+Field	Type	Null	Key	Default	Extra
+NAME	varchar(64)	NO			
+FILTER	longtext	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.audit_log_filter limit 1);
+cnt
+1
+desc mysql.audit_log_user;
+Field	Type	Null	Key	Default	Extra
+USER	varchar(128)	NO			
+HOST	varchar(128)	NO		NULL	
+FILTERNAME	varchar(64)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from mysql.audit_log_user limit 1);
 cnt
 1
 desc mysql.columns_priv;
@@ -9469,6 +9532,52 @@ SPEED_MBPS	bigint(20)	NO
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_NIC_INFO limit 1);
 cnt
 1
+desc information_schema.ROLE_TABLE_GRANTS;
+Field	Type	Null	Key	Default	Extra
+GRANTOR	varchar(97)	YES		NULL	
+GRANTOR_HOST	varchar(256)	YES		NULL	
+GRANTEE	varchar(32)	NO		NULL	
+GRANTEE_HOST	varchar(255)	NO			
+TABLE_CATALOG	varchar(3)	NO			
+TABLE_SCHEMA	varchar(64)	NO		NULL	
+TABLE_NAME	varchar(64)	NO		NULL	
+PRIVILEGE_TYPE	varchar(90)	NO			
+IS_GRANTABLE	varchar(3)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROLE_TABLE_GRANTS limit 1);
+cnt
+1
+desc information_schema.ROLE_COLUMN_GRANTS;
+Field	Type	Null	Key	Default	Extra
+GRANTOR	null	NO			
+GRANTOR_HOST	null	NO			
+GRANTEE	varchar(32)	NO		NULL	
+GRANTEE_HOST	varchar(255)	NO			
+TABLE_CATALOG	varchar(3)	NO			
+TABLE_SCHEMA	varchar(64)	NO		NULL	
+TABLE_NAME	varchar(64)	NO		NULL	
+COLUMN_NAME	varchar(64)	NO		NULL	
+PRIVILEGE_TYPE	varchar(31)	NO			
+IS_GRANTABLE	varchar(3)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROLE_COLUMN_GRANTS limit 1);
+cnt
+1
+desc information_schema.ROLE_ROUTINE_GRANTS;
+Field	Type	Null	Key	Default	Extra
+GRANTOR	varchar(97)	YES		NULL	
+GRANTOR_HOST	varchar(256)	YES		NULL	
+GRANTEE	varchar(32)	NO		NULL	
+GRANTEE_HOST	varchar(255)	NO			
+SPECIFIC_CATALOG	varchar(3)	NO			
+SPECIFIC_SCHEMA	varchar(64)	NO		NULL	
+SPECIFIC_NAME	varchar(64)	NO		NULL	
+ROUTINE_CATALOG	varchar(3)	NO			
+ROUTINE_SCHEMA	varchar(64)	NO		NULL	
+ROUTINE_NAME	varchar(64)	NO		NULL	
+PRIVILEGE_TYPE	varchar(27)	NO			
+IS_GRANTABLE	varchar(3)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.ROLE_ROUTINE_GRANTS limit 1);
+cnt
+1
 desc mysql.func;
 Field	Type	Null	Key	Default	Extra
 name	varchar(64)	NO		NULL	
@@ -9571,6 +9680,47 @@ FOR_COL_NAME	varchar(0)	NO
 REF_COL_NAME	varchar(0)	NO			
 POS	bigint(0) unsigned	NO			
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from information_schema.INNODB_SYS_FOREIGN_COLS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_TEMP_FILES;
+Field	Type	Null	Key	Default	Extra
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+FILE_ID	bigint(20)	NO		NULL	
+TRACE_ID	varchar(64)	NO		NULL	
+DIR_ID	bigint(20)	NO		NULL	
+BYTES	bigint(20)	NO		NULL	
+START_OFFSET	bigint(20)	NO		NULL	
+TOTAL_WRITES	bigint(20)	NO		NULL	
+UNALIGNED_WRITES	bigint(20)	NO		NULL	
+TOTAL_READS	bigint(20)	NO		NULL	
+UNALIGNED_READS	bigint(20)	NO		NULL	
+TOTAL_READ_BYTES	bigint(20)	NO		NULL	
+LAST_ACCESS_TIME	timestamp(6)	NO		NULL	
+LAST_MODIFY_TIME	timestamp(6)	NO		NULL	
+BIRTH_TIME	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_TEMP_FILES limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_TEMP_FILES;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+SVR_IP	varchar(46)	NO		NULL	
+SVR_PORT	bigint(20)	NO		NULL	
+FILE_ID	bigint(20)	NO		NULL	
+TRACE_ID	varchar(64)	NO		NULL	
+DIR_ID	bigint(20)	NO		NULL	
+BYTES	bigint(20)	NO		NULL	
+START_OFFSET	bigint(20)	NO		NULL	
+TOTAL_WRITES	bigint(20)	NO		NULL	
+UNALIGNED_WRITES	bigint(20)	NO		NULL	
+TOTAL_READS	bigint(20)	NO		NULL	
+UNALIGNED_READS	bigint(20)	NO		NULL	
+TOTAL_READ_BYTES	bigint(20)	NO		NULL	
+LAST_ACCESS_TIME	timestamp(6)	NO		NULL	
+LAST_MODIFY_TIME	timestamp(6)	NO		NULL	
+BIRTH_TIME	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_TEMP_FILES limit 1);
 cnt
 1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from

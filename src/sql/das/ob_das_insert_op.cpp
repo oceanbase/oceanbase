@@ -149,7 +149,7 @@ int ObDASInsertOp::insert_rows()
 }
 int ObDASInsertOp::insert_index_with_fetch(ObDMLBaseParam &dml_param,
                                            ObAccessService *as,
-                                           ObNewRowIterator &dml_iter,
+                                           ObDatumRowIterator &dml_iter,
                                            ObDASConflictIterator *result_iter,
                                            const ObDASInsCtDef *ins_ctdef,
                                            ObDASInsRtDef *ins_rtdef,
@@ -158,7 +158,7 @@ int ObDASInsertOp::insert_index_with_fetch(ObDMLBaseParam &dml_param,
                                            common::ObTabletID tablet_id)
 {
   int ret = OB_SUCCESS;
-  ObNewRow *insert_row = NULL;
+  blocksstable::ObDatumRow *insert_row = NULL;
   int64_t affected_rows = 0;
   if (OB_FAIL(ObDMLService::init_dml_param(*ins_ctdef,
                                            *ins_rtdef,
@@ -170,7 +170,7 @@ int ObDASInsertOp::insert_index_with_fetch(ObDMLBaseParam &dml_param,
     LOG_WARN("init index dml param failed", K(ret), KPC(ins_ctdef), KPC(ins_rtdef));
   }
   while (OB_SUCC(ret) && OB_SUCC(dml_iter.get_next_row(insert_row))) {
-    ObNewRowIterator *duplicated_rows = NULL;
+    blocksstable::ObDatumRowIterator *duplicated_rows = NULL;
     if (OB_ISNULL(insert_row)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("insert_row is null", K(ret));
@@ -297,7 +297,7 @@ int ObDASInsertOp::insert_row_with_fetch()
       LOG_WARN("rewind dml iter failed", K(ret));
     } else {
       ObDASMLogDMLIterator mlog_iter(index_tablet_id, dml_param, &dml_iter, DAS_OP_TABLE_INSERT);
-      ObNewRowIterator *new_iter = nullptr;
+      ObDatumRowIterator *new_iter = nullptr;
       if (index_ins_ctdef->table_param_.get_data_table().is_mlog_table()
           && !index_ins_ctdef->is_access_mlog_as_master_table_) {
         new_iter = &mlog_iter;
@@ -331,7 +331,7 @@ int ObDASInsertOp::store_conflict_row(ObDASInsertResult &ins_result)
 {
   int ret = OB_SUCCESS;
   bool added = false;
-  ObNewRow *dup_row = nullptr;
+  ObDatumRow *dup_row = nullptr;
   ObDASWriteBuffer &result_buffer = ins_result.get_result_buffer();
   ObDASWriteBuffer::DmlShadowRow ssr;
   if (OB_ISNULL(result_)) {
@@ -483,10 +483,10 @@ ObDASInsertResult::~ObDASInsertResult()
 {
 }
 
-int ObDASInsertResult::get_next_row(ObNewRow *&row)
+int ObDASInsertResult::get_next_row(ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
-  ObNewRow *result_row = NULL;
+  ObDatumRow *result_row = NULL;
   if (OB_FAIL(result_newrow_iter_.get_next_row(result_row))) {
     if (OB_ITER_END != ret) {
       LOG_WARN("get next row from result iter failed", K(ret));
@@ -495,19 +495,6 @@ int ObDASInsertResult::get_next_row(ObNewRow *&row)
     row = result_row;
   }
   return ret;
-}
-
-int ObDASInsertResult::get_next_rows(int64_t &count, int64_t capacity)
-{
-  UNUSED(count);
-  UNUSED(capacity);
-  return OB_NOT_IMPLEMENT;
-}
-
-int ObDASInsertResult::get_next_row()
-{
-int ret = OB_NOT_IMPLEMENT;
-return ret;
 }
 
 int ObDASInsertResult::link_extra_result(ObDASExtraData &extra_result)
@@ -585,11 +572,11 @@ void ObDASConflictIterator::reset()
   duplicated_iter_list_.reset();
 }
 
-int ObDASConflictIterator::get_next_row(common::ObNewRow *&row)
+int ObDASConflictIterator::get_next_row(ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   bool find_next_iter = false;
-  ObNewRow *dup_row = NULL;
+  ObDatumRow *dup_row = NULL;
   do {
     if (find_next_iter) {
       ++curr_iter_;
@@ -599,7 +586,7 @@ int ObDASConflictIterator::get_next_row(common::ObNewRow *&row)
       ret = OB_ITER_END;
       LOG_DEBUG("fetch conflict row iterator end");
     } else {
-      ObNewRowIterator *dup_row_iter = *curr_iter_;
+      blocksstable::ObDatumRowIterator *dup_row_iter = *curr_iter_;
       if (OB_ISNULL(dup_row_iter)) {
         find_next_iter = true;
       } else if (OB_FAIL(dup_row_iter->get_next_row(dup_row))) {
@@ -621,12 +608,6 @@ int ObDASConflictIterator::get_next_row(common::ObNewRow *&row)
   if (OB_SUCC(ret)) {
     row = dup_row;
   }
-  return ret;
-}
-
-int ObDASConflictIterator::get_next_row()
-{
-  int ret = OB_NOT_IMPLEMENT;
   return ret;
 }
 

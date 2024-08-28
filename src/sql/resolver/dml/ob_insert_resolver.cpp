@@ -137,9 +137,6 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     } else if (!insert_stmt->value_from_select()) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite with values");
-    } else if (!tmp_table_item->access_all_part()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with partitions");
     }
   }
 
@@ -183,6 +180,9 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     if (OB_FAIL(check_view_insertable())) {
       LOG_WARN("view not insertable", K(ret));
     }
+  }
+  if (OB_SUCC(ret) && OB_FAIL(check_insert_into_external_table())) {
+    LOG_WARN("check insert into external table failed", K(ret));
   }
 
   return ret;
@@ -507,16 +507,6 @@ int ObInsertResolver::resolve_insert_field(const ParseNode &insert_into, TableIt
                                            false))) {
       LOG_WARN("failed to generate insert table info", K(ret));
     } else { /*do nothing*/ }
-  }
-
-  if (OB_SUCC(ret) && 2 == insert_into.num_child_) {
-    ParseNode *tmp_node = insert_into.children_[1];
-    if (OB_NOT_NULL(tmp_node) && T_COLUMN_LIST == tmp_node->type_) {
-      if (insert_stmt->is_overwrite()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite stmt with column list");
-      }
-    }
   }
 
   if (OB_SUCC(ret) && 2 == insert_into.num_child_ &&
@@ -993,7 +983,11 @@ int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
   bool is_generated_column = false;
   const ObIArray<ObColumnRefRawExpr*> &values_desc = insert_stmt.get_values_desc();
   ObSelectStmt *ref_stmt = NULL;
-  if (OB_ISNULL(session_info_)) {
+  TableItem *insert_table = NULL;
+  if (OB_ISNULL(insert_table = insert_stmt.get_table_item_by_id(insert_stmt.get_insert_table_info().table_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("insert target table is unexpected null", K(ret));
+  } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid session_info_", K(ret));
   } else if (values_desc.count() != select_stmt.get_select_item_size()) {
@@ -1019,7 +1013,7 @@ int ObInsertResolver::check_insert_select_field(ObInsertStmt &insert_stmt,
                                                                    &insert_stmt,
                                                                    is_generated_column))) {
           LOG_WARN("check basic column generated failed", K(ret));
-    } else if (is_generated_column) {
+    } else if (is_generated_column && schema::EXTERNAL_TABLE != insert_table->table_type_) {
       if (select_stmt.get_table_size() == 1 &&
           select_stmt.get_table_item(0) != NULL &&
           select_stmt.get_table_item(0)->is_values_table()) {
@@ -1176,6 +1170,31 @@ int ObInsertResolver::check_returning_validity()
     LOG_WARN("insert into returning into does not allow group function", K(ret));
   } else if (OB_FAIL(ObDelUpdResolver::check_returning_validity())) {
     LOG_WARN("check returning validity failed", K(ret));
+  }
+  return ret;
+}
+
+int ObInsertResolver::check_insert_into_external_table()
+{
+  int ret = OB_SUCCESS;
+  ObInsertStmt *insert_stmt = get_insert_stmt();
+  TableItem *table = NULL;
+  if (OB_ISNULL(insert_stmt) || insert_stmt->get_table_items().empty()
+      || OB_ISNULL(table = insert_stmt->get_table_item(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid stmt", K(ret), K(insert_stmt));
+  } else if (schema::EXTERNAL_TABLE != table->table_type_) {
+    // do nothing
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_2_1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support to insert into external table during updating", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table during updating");
+  } else if (!insert_stmt->value_from_select() || insert_stmt->is_replace()
+             || insert_stmt->is_ignore() || insert_stmt->is_returning()
+             || insert_stmt->is_insert_up()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support insert into external table with values, replace, ignore, returning, update", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert into external table with values, replace, ignore, returning, update");
   }
   return ret;
 }

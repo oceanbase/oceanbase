@@ -148,8 +148,6 @@ public:
       const uint64_t child_task_key,
       const int ret_code) override;
   int notify_update_autoinc_finish(const uint64_t autoinc_val, const int ret_code);
-  virtual void flt_set_task_span_tag() const = 0;
-  virtual void flt_set_status_span_tag() const = 0;
   virtual int cleanup_impl() override;
   int reap_old_replica_build_task(bool &need_exec_new_inner_sql);
   INHERIT_TO_STRING_KV("ObDDLTask", ObDDLTask,

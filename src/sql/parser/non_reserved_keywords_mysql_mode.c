@@ -101,6 +101,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"buckets", BUCKETS},
   {"backup_copies", BACKUP_COPIES},
   {"badfile", BADFILE},
+  {"buffer_size", BUFFER_SIZE},
   {"cache", CACHE},
   {"calibration", CALIBRATION},
   {"calibration_info", CALIBRATION_INFO},
@@ -594,6 +595,13 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"obconfig_url", OBCONFIG_URL},
   {"object", OBJECT},
   {"object_id", OBJECT_ID},
+  {"accessid", ACCESSID},
+  {"accesskey", ACCESSKEY},
+  {"accesstype", ACCESSTYPE},
+  {"endpoint", ENDPOINT},
+  {"project_name", PROJECT_NAME},
+  {"quota_name", QUOTA_NAME},
+  {"compression_code", COMPRESSION_CODE},
   {"of", OF},
   {"off", OFF},
   {"offset", OFFSET},
@@ -668,6 +676,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"profiles", PROFILES},
   {"progressive_merge_num", PROGRESSIVE_MERGE_NUM},
   {"protection", PROTECTION},
+  {"properties", PROPERTIES},
   {"proxy", PROXY},
   {"public", PUBLIC},
   {"purge", PURGE},
@@ -852,6 +861,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"ssl", SSL},
   {"stacked", STACKED},
   {"standby", STANDBY},
+  {"ststoken", STSTOKEN},
   {"start", START},
   {"starts", STARTS},
   {"starting", STARTING},
@@ -1057,6 +1067,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"rb_build_agg", RB_BUILD_AGG},
   {"rb_or_agg", RB_OR_AGG},
   {"rb_and_agg", RB_AND_AGG},
+  {"optimizer_costs", OPTIMIZER_COSTS}
 };
 
 /** https://dev.mysql.com/doc/refman/5.7/en/sql-syntax-prepared-statements.html

@@ -31,6 +31,7 @@ ObTmpFileFlushTG::ObTmpFileFlushTG(
   : is_inited_(false),
     mode_(RUNNING_MODE::INVALID),
     last_flush_timestamp_(0),
+    flush_io_finished_ret_(OB_SUCCESS),
     flush_io_finished_round_(0),
     flushing_block_num_(0),
     is_fast_flush_meta_(false),
@@ -62,6 +63,7 @@ int ObTmpFileFlushTG::init()
     is_inited_ = true;
     mode_ = RUNNING_MODE::NORMAL;
     last_flush_timestamp_ = 0;
+    flush_io_finished_ret_ = OB_SUCCESS;
     flush_io_finished_round_ = 0;
     flushing_block_num_ = 0;
 
@@ -84,6 +86,7 @@ void ObTmpFileFlushTG::destroy()
     clean_up_lists();
     mode_ = RUNNING_MODE::INVALID;
     last_flush_timestamp_ = 0;
+    flush_io_finished_ret_ = OB_SUCCESS;
     flush_io_finished_round_ = 0;
     flushing_block_num_ = 0;
 
@@ -168,14 +171,20 @@ void ObTmpFileFlushTG::notify_doing_flush()
   last_flush_timestamp_ = 0;
 }
 
-void ObTmpFileFlushTG::signal_io_finish()
+void ObTmpFileFlushTG::signal_io_finish(int flush_io_finished_ret)
 {
+  flush_io_finished_ret_ = flush_io_finished_ret;
   ++flush_io_finished_round_;
 }
 
 int64_t ObTmpFileFlushTG::get_flush_io_finished_round()
 {
   return flush_io_finished_round_;
+}
+
+int64_t ObTmpFileFlushTG::get_flush_io_finished_ret()
+{
+  return flush_io_finished_ret_;
 }
 
 int64_t ObTmpFileFlushTG::cal_idle_time()
@@ -320,6 +329,10 @@ int ObTmpFileFlushTG::handle_generated_flush_tasks_(ObSpLinkQueue &flushing_list
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("fail to switch state after data copied from tmp file", KR(ret), KPC(flush_task));
       } else if (FlushState::TFFT_FILL_BLOCK_BUF < state) {
+        if (FlushState::TFFT_ASYNC_WRITE == state &&
+            flush_task->atomic_get_write_block_ret_code() == OB_SERVER_OUTOF_DISK_SPACE) {
+          signal_io_finish(OB_SERVER_OUTOF_DISK_SPACE);
+        }
         push_retry_list_(flush_task);
         ATOMIC_INC(&flushing_block_num_);
         STORAGE_LOG(DEBUG, "push flush task to retry list", KPC(flush_task));
@@ -349,7 +362,7 @@ int ObTmpFileFlushTG::wash_(const int64_t expect_flush_size, const RUNNING_MODE 
 
   bool idle_loop = flushing_task_cnt == 0;
   if (idle_loop && wbp_.get_dirty_page_percentage() < ObTmpFileFlushManager::FLUSH_WATERMARK_F5) {
-    signal_io_finish();
+    signal_io_finish(OB_SUCCESS);
   }
 
   if (RUNNING_MODE::NORMAL == mode) {
@@ -382,9 +395,16 @@ int ObTmpFileFlushTG::retry_task_()
       }
       // push task into wait_list_/retry_list_ according to task state, ignore error code
       FlushState state = flush_task->get_state();
-      if (FlushState::TFFT_WAIT == state) {
+      if (FlushState::TFFT_ABORT == state) {
+        STORAGE_LOG(INFO, "free abort flush task", KPC(flush_task));
+        flush_task_finished_(flush_task);
+      } else if (FlushState::TFFT_WAIT == state) {
         push_wait_list_(flush_task);
       } else if (FlushState::TFFT_FILL_BLOCK_BUF < state) {
+        if (FlushState::TFFT_ASYNC_WRITE == state &&
+            flush_task->atomic_get_write_block_ret_code() == OB_SERVER_OUTOF_DISK_SPACE) {
+          signal_io_finish(OB_SERVER_OUTOF_DISK_SPACE);
+        }
         push_retry_list_(flush_task);
         if (FlushState::TFFT_INSERT_META_TREE == state && OB_ALLOCATE_TMP_FILE_PAGE_FAILED == ret) {
           STORAGE_LOG(WARN, "fail to retry insert meta item in TFFT_INSERT_META_TREE", KPC(flush_task));
@@ -455,27 +475,35 @@ int ObTmpFileFlushTG::check_flush_task_io_finished_()
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "flush task is nullptr", KR(ret));
     } else {
-      bool is_flush_tree_page = flush_task->get_is_fast_flush_tree();
       STORAGE_LOG(DEBUG, "flush task io complete", K(flushing_block_num_), KPC(flush_task));
       // if the update fails, it will be retried during the next wakeup
       if (OB_FAIL(flush_mgr_.update_file_meta_after_flush(*flush_task))) {
         STORAGE_LOG(WARN, "fail to drive flush state machine", KR(ret), KPC(flush_task));
         push_finished_list_(flush_task);
       } else {
-        flush_mgr_.free_flush_task(flush_task);
-        ATOMIC_DEC(&flushing_block_num_);
-        fast_flush_meta_task_cnt_ -= is_flush_tree_page ? 1 : 0;
-        if (fast_flush_meta_task_cnt_ == 0) {
-          // reset is_fast_flush_meta_ flag to resume retry task and flush
-          is_fast_flush_meta_ = false;
-        } else if (OB_UNLIKELY(fast_flush_meta_task_cnt_ < 0)) {
-          STORAGE_LOG(ERROR, "fast_flush_meta_task_cnt_ is negative", KPC(this));
-        }
-        signal_io_finish();
+        flush_task_finished_(flush_task);
       }
     }
   }
   return ret;
+}
+
+void ObTmpFileFlushTG::flush_task_finished_(ObTmpFileFlushTask *flush_task)
+{
+  int ret = OB_SUCCESS;
+
+  bool is_flush_tree_page = flush_task->get_is_fast_flush_tree();
+  flush_mgr_.free_flush_task(flush_task);
+  ATOMIC_DEC(&flushing_block_num_);
+  fast_flush_meta_task_cnt_ -= is_flush_tree_page ? 1 : 0;
+  if (fast_flush_meta_task_cnt_ == 0) {
+    // reset is_fast_flush_meta_ flag to resume retry task and flush
+    is_fast_flush_meta_ = false;
+  } else if (OB_UNLIKELY(fast_flush_meta_task_cnt_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(ERROR, "fast_flush_meta_task_cnt_ is negative", KR(ret), KPC(this));
+  }
+  signal_io_finish(OB_SUCCESS);
 }
 
 int ObTmpFileFlushTG::push_wait_list_(ObTmpFileFlushTask *flush_task)
@@ -775,7 +803,7 @@ void ObTmpFileSwapTG::clean_up_lists_()
     ObTmpFileSwapJob *swap_job = nullptr;
     if (OB_FAIL(swap_job_dequeue(swap_job))) {
       STORAGE_LOG(WARN, "fail dequeue swap job or swap job is nullptr", KR(ret), KP(swap_job));
-    } else if (OB_FAIL(swap_job->signal_swap_complete())){
+    } else if (OB_FAIL(swap_job->signal_swap_complete(OB_SUCCESS))){
       STORAGE_LOG(WARN, "fail to signal swap complete", KR(ret));
     }
   }
@@ -785,7 +813,7 @@ void ObTmpFileSwapTG::clean_up_lists_()
     ObTmpFileSwapJob *swap_job = nullptr;
     if (OB_FAIL(pop_working_job_(swap_job))) {
       STORAGE_LOG(WARN, "fail to pop working job or ptr is null", KR(ret), KP(swap_job));
-    } else if (OB_FAIL(swap_job->signal_swap_complete())){
+    } else if (OB_FAIL(swap_job->signal_swap_complete(OB_SUCCESS))){
       STORAGE_LOG(WARN, "fail to signal swap complete", KR(ret));
     }
   }
@@ -887,6 +915,10 @@ int ObTmpFileSwapTG::swap_fast_()
     int64_t wakeup_job_cnt = 0;
     wakeup_satisfied_jobs_(wakeup_job_cnt);
     wakeup_timeout_jobs_();
+    int io_finished_ret = flush_tg_ref_.get_flush_io_finished_ret();
+    if (OB_SERVER_OUTOF_DISK_SPACE == io_finished_ret) {
+      wakeup_all_jobs_(OB_SERVER_OUTOF_DISK_SPACE);
+    }
 
     // do flush if could not evict enough pages
     if (OB_SUCC(ret) && !working_list_.is_empty() && wakeup_job_cnt < PROCCESS_JOB_NUM_PER_BATCH) {
@@ -942,7 +974,7 @@ int ObTmpFileSwapTG::wakeup_satisfied_jobs_(int64_t& wakeup_job_cnt)
       wbp_free_page_cnt -= min(wbp_free_page_cnt, single_job_swap_page_cnt);
       int64_t response_time = ObTimeUtility::current_time() - swap_job->get_create_ts();
       swap_monitor_.record_swap_response_time(response_time);
-      if (OB_FAIL(swap_job->signal_swap_complete())) {
+      if (OB_FAIL(swap_job->signal_swap_complete(OB_SUCCESS))) {
         STORAGE_LOG(WARN, "fail to signal swap complete", KR(ret), KPC(swap_job));
       } else {
         ++wakeup_job_cnt;
@@ -963,7 +995,7 @@ int ObTmpFileSwapTG::wakeup_timeout_jobs_()
       // timeout, wake it up
       int64_t response_time = ObTimeUtility::current_time() - swap_job->get_create_ts();
       swap_monitor_.record_swap_response_time(response_time);
-      if (OB_FAIL(swap_job->signal_swap_complete())) {
+      if (OB_FAIL(swap_job->signal_swap_complete(OB_TIMEOUT))) {
         STORAGE_LOG(WARN, "fail to signal swap complete", KR(ret), KP(swap_job));
       }
     } else {
@@ -973,6 +1005,23 @@ int ObTmpFileSwapTG::wakeup_timeout_jobs_()
     }
   }
   return ret;
+}
+
+void ObTmpFileSwapTG::wakeup_all_jobs_(int ret_code)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = working_list_size_; OB_SUCC(ret) && i > 0 && !working_list_.is_empty(); --i) {
+    ObTmpFileSwapJob *swap_job = nullptr;
+    if (OB_FAIL(pop_working_job_(swap_job))) {
+      STORAGE_LOG(WARN, "fail to pop working job or ptr is null", KR(ret), KP(swap_job));
+    } else {
+      int64_t response_time = ObTimeUtility::current_time() - swap_job->get_create_ts();
+      swap_monitor_.record_swap_response_time(response_time);
+      if (OB_FAIL(swap_job->signal_swap_complete(ret_code))) {
+        STORAGE_LOG(WARN, "fail to signal swap complete", KR(ret), KP(swap_job));
+      }
+    }
+  }
 }
 
 int ObTmpFileSwapTG::push_working_job_(ObTmpFileSwapJob *swap_job)

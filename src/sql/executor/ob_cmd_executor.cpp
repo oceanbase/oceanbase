@@ -152,6 +152,8 @@
 #include "sql/engine/cmd/ob_tenant_snapshot_executor.h"
 #include "sql/resolver/cmd/ob_tenant_clone_stmt.h"
 #include "sql/engine/cmd/ob_clone_executor.h"
+#include "sql/resolver/cmd/ob_olap_async_job_stmt.h"
+#include "sql/engine/cmd/ob_olap_async_job_executor.h"
 #ifdef OB_BUILD_TDE_SECURITY
 #include "sql/resolver/ddl/ob_create_keystore_stmt.h"
 #include "sql/resolver/ddl/ob_alter_keystore_stmt.h"
@@ -574,7 +576,19 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
       case stmt::T_CHECKSUM_TABLE:
       case stmt::T_CACHE_INDEX:
       case stmt::T_LOAD_INDEX_INTO_CACHE:
-      case stmt::T_FLUSH_PRIVILEGES: {
+      case stmt::T_FLUSH_PRIVILEGES:
+      case stmt::T_INSTALL_PLUGIN:
+      case stmt::T_UNINSTALL_PLUGIN:
+      case stmt::T_FLUSH_MOCK:
+      case stmt::T_FLUSH_MOCK_LIST:
+      case stmt::T_HANDLER_MOCK:
+      case stmt::T_SHOW_PLUGINS:
+      case stmt::T_CREATE_SERVER:
+      case stmt::T_ALTER_SERVER:
+      case stmt::T_DROP_SERVER:
+      case stmt::T_CREATE_LOGFILE_GROUP:
+      case stmt::T_ALTER_LOGFILE_GROUP:
+      case stmt::T_DROP_LOGFILE_GROUP: {
         DEFINE_EXECUTE_CMD(ObMockStmt, ObMockExecutor);
         break;
       }
@@ -1070,6 +1084,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
        }
       case stmt::T_TRANSFER_PARTITION: {
         DEFINE_EXECUTE_CMD(ObTransferPartitionStmt, ObTransferPartitionExecutor);
+        break;
+      }
+      case stmt::T_OLAP_ASYNC_JOB_CANCEL: {
+        DEFINE_EXECUTE_CMD(ObOLAPAsyncCancelJobStmt, ObOLAPAsyncCancelJobExecutor);
         break;
       }
       case stmt::T_CS_DISKMAINTAIN:

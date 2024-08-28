@@ -135,7 +135,7 @@ public:
   ObSchemaGetterGuard &get_schema_guard() { return schema_guard_; }
 public:
   //table id
-  hash::ObHashMap<uint64_t,uint64_t> next_user_table_id_map_;
+  oceanbase::common::hash::ObHashMap<uint64_t,uint64_t> next_user_table_id_map_;
   //user_id
   uint64_t sys_user_id_;
   uint64_t next_user_id_;

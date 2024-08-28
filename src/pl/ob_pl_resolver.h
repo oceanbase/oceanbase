@@ -949,8 +949,11 @@ private:
                                    ObPLFunctionAST &func,
                                    ObIArray<ObObjAccessIdx> &access_idxs);
 private:
+  int check_duplicate_condition(const ObPLConditionValue &value,
+                                ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc &cur_desc,
+                                bool &dup);
   int check_duplicate_condition(const ObPLDeclareHandlerStmt &stmt, const ObPLConditionValue &value,
-                                bool &dup, ObPLDeclareHandlerStmt::DeclareHandler::HandlerDesc* cur_desc);
+                                bool &dup);
   int analyze_actual_condition_type(const ObPLConditionValue &value, ObPLConditionType &type);
 #ifdef OB_BUILD_ORACLE_PL
   int check_collection_constructor(const ParseNode *node, const common::ObString &type_name, bool &is_constructor);

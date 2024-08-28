@@ -186,7 +186,7 @@ int ObTableLoadStoreTransPXWriter::check_status()
   return ret;
 }
 
-int ObTableLoadStoreTransPXWriter::write(const ObNewRow &row)
+int ObTableLoadStoreTransPXWriter::write(const blocksstable::ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -199,11 +199,13 @@ int ObTableLoadStoreTransPXWriter::write(const ObNewRow &row)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(row), K(column_count_));
   } else {
-    ObNewRow new_row;
+    ObDatumRow new_row;
     if (is_heap_table_) {
-      new_row.assign(row.cells_ + 1, row.count_ - 1);
+      new_row.storage_datums_ = row.storage_datums_ + 1;
+      new_row.count_ = row.count_ - 1;
     } else {
-      new_row.assign(row.cells_, row.count_);
+      new_row.storage_datums_ = row.storage_datums_;
+      new_row.count_ = row.count_;
     }
     if (OB_FAIL(writer_->px_write(tablet_id_, new_row))) {
       LOG_WARN("fail to px write", KR(ret), K(row), K(new_row));

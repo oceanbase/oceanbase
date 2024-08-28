@@ -86,6 +86,16 @@ struct SampleInfo
     force_block_ = false;
   }
 
+  bool same_as(const SampleInfo &oth) const {
+    return table_id_ == oth.table_id_
+           && method_ == oth.method_
+           && scope_ == oth.scope_
+           && percent_ == oth.percent_
+           && seed_ == oth.seed_
+           && force_block_ == oth.force_block_
+           && seed_ != -1;
+  }
+
   uint64_t table_id_;
   SampleMethod method_;
   SampleScope scope_;

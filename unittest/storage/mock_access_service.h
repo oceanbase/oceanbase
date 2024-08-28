@@ -33,7 +33,7 @@ public:
       transaction::ObTxDesc &tx_desc,
       const ObDMLBaseParam &dml_param,
       const common::ObIArray<uint64_t> &column_ids,
-      common::ObNewRowIterator *row_iter,
+      blocksstable::ObDatumRowIterator *row_iter,
       int64_t &affected_rows);
 public:
   ObLSTabletService *tablet_service_; // different kinds of mock ls tablet service

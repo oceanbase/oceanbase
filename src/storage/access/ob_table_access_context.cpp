@@ -266,10 +266,12 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
   }
   return ret;
 }
+
 int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
                                ObStoreCtx &ctx,
                                common::ObIAllocator &allocator,
-                               const common::ObVersionRange &trans_version_range)
+                               const common::ObVersionRange &trans_version_range,
+                               CachedIteratorNode *cached_iter_node)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
@@ -288,6 +290,7 @@ int ObTableAccessContext::init(const common::ObQueryFlag &query_flag,
     ls_id_ = ctx.ls_id_;
     tablet_id_ = ctx.tablet_id_;
     lob_locator_helper_ = nullptr;
+    cached_iter_node_ = cached_iter_node;
     if (!micro_block_handle_mgr_.is_valid()
         && OB_FAIL(micro_block_handle_mgr_.init(enable_limit, table_store_stat_, query_flag_))) {
       LOG_WARN("Fail to init micro block handle mgr", K(ret));

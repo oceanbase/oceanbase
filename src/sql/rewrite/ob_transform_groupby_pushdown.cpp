@@ -663,12 +663,13 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
   ObSqlBitSet<> outer_table_set;
   trans_happend = false;
   ObSQLSessionInfo *session_info = NULL;
-  bool enable_group_by_placement_transform = false;
+  ObQueryCtx *query_ctx = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
       OB_ISNULL(ctx_->stmt_factory_) || OB_ISNULL(ctx_->expr_factory_) ||
-      OB_ISNULL(session_info = ctx_->session_info_)) {
+      OB_ISNULL(session_info = ctx_->session_info_) ||
+      OB_ISNULL(query_ctx = stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params are invalid", K(ret), K(ctx_), K(stmt));
+    LOG_WARN("params are invalid", K(ret), K(ctx_), K(stmt), K(query_ctx));
   } else if (OB_FAIL(ctx_->stmt_factory_->create_stmt(trans_stmt))) {
     LOG_WARN("failed to create stmt", K(ret));
   } else if (OB_FAIL(trans_stmt->deep_copy(*ctx_->stmt_factory_,
@@ -729,8 +730,6 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
     LOG_TRACE("push down params", K(ret));
     bool hint_force_pushdown = false;
     if (OB_FAIL(ret) || !is_valid) {
-    } else if (OB_FAIL(session_info->is_groupby_placement_transformation_enabled(enable_group_by_placement_transform))) {
-      LOG_WARN("failed to check group by placement transform enabled", K(ret));
     } else if (OB_FAIL(check_hint_valid(static_cast<ObDMLStmt &>(*stmt),
                                         params,
                                         hint_force_pushdown,
@@ -738,7 +737,7 @@ int ObTransformGroupByPushdown::do_groupby_push_down(ObSelectStmt *stmt,
       LOG_WARN("check hint failed", K(ret));
     } else if (!is_valid) {
       OPT_TRACE("hint disable group by pushdown");
-    } else if (!enable_group_by_placement_transform && !hint_force_pushdown) {
+    } else if (!ctx_->is_groupby_placement_enabled_ && !hint_force_pushdown) {
       OPT_TRACE("system variable disable group by pushdown");
     } else if (OB_FAIL(transform_groupby_push_down(trans_stmt,
                                                    flattern_joined_tables,

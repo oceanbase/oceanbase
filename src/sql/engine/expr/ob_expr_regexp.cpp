@@ -66,8 +66,6 @@ int ObExprRegexp::calc_result_type2(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   ObRawExpr * raw_expr = type_ctx.get_raw_expr();
-  ObCollationType res_cs_type = CS_TYPE_INVALID;
-  ObCollationLevel res_cs_level = CS_LEVEL_INVALID;
   CK(NULL != type_ctx.get_raw_expr());
   if (type1.is_null() || type2.is_null()) {
     type.set_int32();
@@ -85,41 +83,43 @@ int ObExprRegexp::calc_result_type2(ObExprResType &type,
     ret = OB_ERR_MYSQL_CHARACTER_SET_MISMATCH;
     LOG_USER_ERROR(OB_ERR_MYSQL_CHARACTER_SET_MISMATCH, collation1.length(), collation1.ptr(), collation2.length(), collation2.ptr());
     LOG_WARN("If one of the params is binary string, all of the params should be implicitly castable to binary charset.", K(ret), K(type1), K(type2));
-  } else if (OB_FAIL(ObCharset::aggregate_collation(type1.get_collation_level(),
-                                              type1.get_collation_type(),
-                                              type2.get_collation_level(),
-                                              type2.get_collation_type(),
-                                              res_cs_level,
-                                              res_cs_type))) {
-      LOG_WARN("fail to aggregate collation", K(ret), K(type1), K(type2));
   } else {
-    type.set_int32();
-    type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
-    type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
-    //why we set the calc collation type is utf16, because the ICU regexp engine is used uft16,
-    //we need convert it the need collation in advance, and no need to think about in regexp.
-    bool is_case_sensitive = ObCharset::is_bin_sort(res_cs_type);
-    bool need_utf8 = false;
-    type1.set_calc_type(ObVarcharType);
-    type1.set_calc_collation_level(type.get_collation_level());
-    type2.set_calc_type(ObVarcharType);
-    type2.set_calc_collation_level(type.get_collation_level());
-    if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(1), need_utf8))) {
-      LOG_WARN("fail to check need utf8", K(ret));
-    } else if (need_utf8) {
-      type2.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
+    ObExprResTypes res_types;
+    if (OB_FAIL(res_types.push_back(type1))) {
+      LOG_WARN("fail to push back res type", K(ret));
+    } else if (OB_FAIL(res_types.push_back(type2))) {
+      LOG_WARN("fail to push back res type", K(ret));
+    } else if (OB_FAIL(aggregate_charsets_for_comparison(type, &res_types.at(0), 2, type_ctx))) {
+      LOG_WARN("failed to aggregate_charsets_for_comparison", K(ret));
     } else {
-      type2.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
-    }
+      //why we set the calc collation type is utf16, because the ICU regexp engine is used uft16,
+      //we need convert it the need collation in advance, and no need to think about in regexp.
+      bool is_case_sensitive = ObCharset::is_bin_sort(type.get_calc_collation_type());
+      type.set_int32();
+      type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
+      type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+      bool need_utf8 = false;
+      type1.set_calc_type(ObVarcharType);
+      type1.set_calc_collation_level(type.get_collation_level());
+      type2.set_calc_type(ObVarcharType);
+      type2.set_calc_collation_level(type.get_collation_level());
+      if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(1), need_utf8))) {
+        LOG_WARN("fail to check need utf8", K(ret));
+      } else if (need_utf8) {
+        type2.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
+      } else {
+        type2.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
+      }
 
-    need_utf8 = false;
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(0), need_utf8))) {
-      LOG_WARN("fail to check need utf8", K(ret));
-    } else if (need_utf8) {
-      type1.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
-    } else {
-      type1.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
+      need_utf8 = false;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ObExprRegexContext::check_need_utf8(raw_expr->get_param_expr(0), need_utf8))) {
+        LOG_WARN("fail to check need utf8", K(ret));
+      } else if (need_utf8) {
+        type1.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF8MB4_BIN : CS_TYPE_UTF8MB4_GENERAL_CI);
+      } else {
+        type1.set_calc_collation_type(is_case_sensitive ? CS_TYPE_UTF16_BIN : CS_TYPE_UTF16_GENERAL_CI);
+      }
     }
   }
   return ret;

@@ -705,6 +705,16 @@ public:
             foreach_char_prototype<CHARSET_LATIN1, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
           : foreach_char_prototype<CHARSET_LATIN1, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
       break;
+    case CHARSET_ASCII:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_ASCII, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_ASCII, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+      break;
+    case CHARSET_TIS620:
+      ret = convert_unicode ?
+            foreach_char_prototype<CHARSET_TIS620, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)
+          : foreach_char_prototype<CHARSET_TIS620, HANDLE_FUNC, false>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len);
+    break;
     case CHARSET_BINARY:
       ret = convert_unicode ?
             foreach_char_prototype<CHARSET_BINARY, HANDLE_FUNC, true>(str, func, ignore_convert_failed, stop_when_truncated, truncated_len)

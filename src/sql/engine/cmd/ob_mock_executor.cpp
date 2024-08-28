@@ -21,14 +21,40 @@ namespace sql
 int ObMockExecutor::execute(ObExecContext &exec_ctx, ObMockStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  if (stmt::T_FLUSH_PRIVILEGES == stmt.get_stmt_type()) {
-    LOG_USER_WARN(OB_NOT_SUPPORTED, "After executing the GRANT and REVOKE statements, "
-                                    "the permissions will be automatically applied and take effect. "
-                                    "There is no need to execute the FLUSH PRIVILEGES command. FLUSH PRIVILEGES");
+
+  if (stmt::T_INSTALL_PLUGIN == stmt.get_stmt_type()
+      || stmt::T_UNINSTALL_PLUGIN == stmt.get_stmt_type()
+      || stmt::T_FLUSH_MOCK == stmt.get_stmt_type()
+      || stmt::T_HANDLER_MOCK == stmt.get_stmt_type()
+      || stmt::T_SHOW_PLUGINS == stmt.get_stmt_type()
+      || stmt::T_CREATE_SERVER == stmt.get_stmt_type()
+      || stmt::T_ALTER_SERVER == stmt.get_stmt_type()
+      || stmt::T_DROP_SERVER == stmt.get_stmt_type()
+      || stmt::T_CREATE_LOGFILE_GROUP == stmt.get_stmt_type()
+      || stmt::T_ALTER_LOGFILE_GROUP == stmt.get_stmt_type()
+      || stmt::T_DROP_LOGFILE_GROUP == stmt.get_stmt_type()) {
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "This statement is");
+  } else if (stmt::T_FLUSH_MOCK_LIST == stmt.get_stmt_type()) {
+    const ObIArray<stmt::StmtType> &type_list = stmt.get_stmt_type_list();
+    for (int64_t i = 0; OB_SUCC(ret) && i < type_list.count(); ++i) {
+      if (stmt::T_FLUSH_MOCK == type_list.at(i)) {
+        LOG_USER_WARN(OB_NOT_SUPPORTED, "This statement is");
+      } else if (stmt::T_FLUSH_PRIVILEGES == type_list.at(i)) {
+        LOG_USER_WARN(OB_NOT_SUPPORTED, "After executing the GRANT and REVOKE statements, "
+                                        "the permissions will be automatically applied and take effect. "
+                                        "There is no need to execute the FLUSH PRIVILEGES command. FLUSH PRIVILEGES");
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_USER_WARN(OB_NOT_SUPPORTED, "unknown stmt type");
+      }
+    }
   } else if (stmt::T_REPAIR_TABLE == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "Repair table Statement just mocks the syntax of MySQL without supporting specific realization");
   } else if (stmt::T_CHECKSUM_TABLE == stmt.get_stmt_type()) {
     LOG_USER_WARN(OB_NOT_SUPPORTED, "Checksum table Statement just mocks the syntax of MySQL without supporting specific realization");
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_USER_WARN(OB_NOT_SUPPORTED, "unknown stmt type");
   }
   return ret;
 }

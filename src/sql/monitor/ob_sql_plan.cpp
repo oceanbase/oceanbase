@@ -886,7 +886,7 @@ int ObSqlPlan::get_plan_other_info(PlanText &plan_text,
     } else if (OB_FAIL(BUF_PRINTF("  Parameters:"))) {
     } else if (OB_FAIL(BUF_PRINTF(NEW_LINE))) {
     } else { /* Do nothing */ }
-    for (int64_t i = 0; OB_SUCC(ret) && NULL != params && i < params->count(); i++) {
+    for (int64_t i = 0; OB_SUCC(ret) && NULL != params && i < params->count() && i < 100; i++) {
       if (OB_FAIL(BUF_PRINTF(OUTPUT_PREFIX))) {
       } else if (OB_FAIL(BUF_PRINTF(":%ld => ", i))) {
       } else {

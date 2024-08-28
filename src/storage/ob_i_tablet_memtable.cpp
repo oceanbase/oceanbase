@@ -95,10 +95,9 @@ int ObITabletMemtable::resolve_left_boundary_for_active_memtable_()
 {
   int ret = OB_SUCCESS;
   storage::ObTabletMemtableMgr *memtable_mgr = get_memtable_mgr();
-  const SCN new_start_scn = MAX(get_end_scn(), get_migration_clog_checkpoint_scn());
 
   if (OB_NOT_NULL(memtable_mgr)) {
-    if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, new_start_scn))) {
+    if (OB_FAIL(memtable_mgr->resolve_left_boundary_for_active_memtable(this, get_end_scn()))) {
       TRANS_LOG(WARN, "fail to resolve left boundary for active memtable", K(ret), K(ls_id_), KPC(this));
     }
   }
@@ -139,23 +138,6 @@ int ObITabletMemtable::set_freezer(ObFreezer *handler)
   } else {
     freezer_ = handler;
   }
-  return ret;
-}
-
-int ObITabletMemtable::set_migration_clog_checkpoint_scn(const SCN &clog_checkpoint_scn)
-{
-  int ret = OB_SUCCESS;
-
-  if (OB_UNLIKELY(!is_inited())) {
-    ret = OB_NOT_INIT;
-    TRANS_LOG(WARN, "not inited", K(ret));
-  } else if (clog_checkpoint_scn <= ObScnRange::MIN_SCN) {
-    ret = OB_SCN_OUT_OF_BOUND;
-    TRANS_LOG(WARN, "invalid clog_checkpoint_ts", K(ret));
-  } else {
-    (void)migration_clog_checkpoint_scn_.atomic_store(clog_checkpoint_scn);
-  }
-
   return ret;
 }
 

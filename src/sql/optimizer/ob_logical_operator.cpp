@@ -2678,6 +2678,8 @@ int ObLogicalOperator::gen_location_constraint(void *ctx)
           LOG_WARN("failed to push back location constraint", K(ret));
         } else if (OB_FAIL(loc_cons_ctx->base_table_constraints_.push_back(loc_cons))) {
           LOG_WARN("failed to push back location constraint", K(ret));
+        } else if (EXTERNAL_TABLE == log_scan_op->get_table_type()) {
+          // do not add pwj constraints for external table
         } else if (OB_FAIL(strict_pwj_constraint_.push_back(
                     loc_cons_ctx->base_table_constraints_.count() - 1))) {
           LOG_WARN("failed to push back location constraint offset", K(ret));

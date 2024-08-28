@@ -190,6 +190,10 @@ int ObOutlineExecutor::generate_logical_plan(ObExecContext &ctx,
   ObPhysicalPlan *phy_plan = NULL;
   ObOptimizer optimizer(opt_ctx);
   ObCacheObjGuard guard(OUTLINE_EXEC_HANDLE);
+  ObStmtNeedPrivs mock_stmt_need_privs;
+  ObStmtOraNeedPrivs mock_stmt_ora_need_privs;
+  mock_stmt_need_privs.need_privs_.set_allocator(&opt_ctx.get_allocator());
+  mock_stmt_ora_need_privs.need_privs_.set_allocator(&opt_ctx.get_allocator());
   if (OB_ISNULL(session_info) || OB_ISNULL(outline_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parameter", K(session_info), K(outline_stmt));
@@ -211,7 +215,9 @@ int ObOutlineExecutor::generate_logical_plan(ObExecContext &ctx,
                                            &opt_ctx.get_local_server_addr(),
                                            phy_plan,
                                            ctx,
-                                           outline_stmt))) {
+                                           outline_stmt,
+                                           mock_stmt_need_privs,
+                                           mock_stmt_ora_need_privs))) {
     LOG_WARN("fail to transform outline stmt", K(ret));
   } else if (FALSE_IT(opt_ctx.set_root_stmt(outline_stmt))) {
     /*do nothing*/

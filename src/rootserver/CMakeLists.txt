@@ -195,6 +195,10 @@ ob_set_subtarget(ob_rootserver mview
   mview/ob_mview_dependency_service.cpp
 )
 
+ob_set_subtarget(ob_rootserver direct_load
+  direct_load/ob_direct_load_partition_exchange.cpp
+)
+
 ob_set_subtarget(ob_rootserver standby
   standby/ob_standby_service.cpp
   standby/ob_recovery_ls_service.cpp

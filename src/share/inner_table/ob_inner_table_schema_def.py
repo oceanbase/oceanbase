@@ -4435,7 +4435,8 @@ def_table_schema(
     ('destination_name', 'varchar:128', 'true'),
     ('interval_ts', 'int', 'true'),
     ('user_id', 'int', 'true', 'OB_INVALID_ID'),
-    ('database_id', 'int', 'true', 'OB_INVALID_ID')
+    ('database_id', 'int', 'true', 'OB_INVALID_ID'),
+    ('max_failures', 'int', 'true', '0')
   ],
 )
 
@@ -7136,8 +7137,43 @@ def_table_schema(
   ],
 )
 
-# 503 : __all_audit_log_filter
-# 504 : __all_audit_log_user
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name = '__all_audit_log_filter',
+  table_id = '503',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('filter_name', 'varbinary:MAX_AUDIT_FILTER_NAME_LENGTH_BYTE'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+      ('definition', 'longtext'),
+      ('is_deleted', 'int'),
+  ],
+)
+
+def_table_schema(
+  owner = 'sean.yyj',
+  table_name = '__all_audit_log_user',
+  table_id = '504',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('user_name', 'varbinary:MAX_AUDIT_USER_NAME_LENGTH_BYTE'),
+      ('host', 'varchar:OB_MAX_HOST_NAME_LENGTH'),
+  ],
+  in_tenant_space = True,
+
+  normal_columns = [
+      ('filter_name', 'varbinary:MAX_AUDIT_FILTER_NAME_LENGTH_BYTE'),
+      ('is_deleted', 'int'),
+  ],
+)
+
 all_column_privilege_def = dict(
     owner = 'mingye.swj',
     table_name    = '__all_column_privilege',
@@ -14334,6 +14370,7 @@ def_table_schema(
     ('destination', 'varchar:128', 'true'),
     ('credential_owner', 'varchar:30', 'true'),
     ('credential_name', 'varchar:30', 'true'),
+    ('job_class', 'varchar:128', 'true'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -14443,6 +14480,16 @@ def_table_schema(**gen_iterate_virtual_table_def(
 
 # 12460: __all_virtual_audit_log_filter
 # 12461: __all_virtual_audit_log_user
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12460',
+  table_name = '__all_virtual_audit_log_filter',
+  keywords = all_def_keywords['__all_audit_log_filter']))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12461',
+  table_name = '__all_virtual_audit_log_user',
+  keywords = all_def_keywords['__all_audit_log_user']))
+
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12462',
   table_name = '__all_virtual_column_privilege',
@@ -14684,7 +14731,43 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12502: __all_virtual_wr_res_mgr_sysstat
 # 12503: __all_virtual_kv_redis_table
 # 12504: __all_virtual_function_io_stat
-# 12505: __all_virtual_temp_file
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name     = '__all_virtual_temp_file',
+  table_id       = '12505',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns     = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('file_id', 'int'),
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'false'),
+    ('dir_id', 'int'),
+    ('bytes', 'int'),
+    ('start_offset', 'int'),
+    ('is_deleting', 'bool'),
+    ('cached_page_num', 'int'),
+    ('write_back_page_num', 'int'),
+    ('flushed_page_num', 'int'),
+    ('ref_cnt', 'int'),
+    ('total_writes', 'int'),
+    ('unaligned_writes', 'int'),
+    ('total_reads', 'int'),
+    ('unaligned_reads', 'int'),
+    ('total_read_bytes', 'int'),
+    ('last_access_time', 'timestamp'),
+    ('last_modify_time', 'timestamp'),
+    ('birth_time', 'timestamp'),
+  ],
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -15192,7 +15275,9 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_real_virtual_table_def('1
 # 15482: __all_virtual_res_mgr_sysstat
 # 15483: __all_virtual_wr_res_mgr_sysstat
 # 15484: __all_virtual_function_io_stat
-# 15485: __all_virtual_temp_file
+
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15485', all_def_keywords['__all_virtual_temp_file']))
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -15619,7 +15704,7 @@ def_table_schema(
                     cast( coalesce(ts.avg_row_len,0) as unsigned) as AVG_ROW_LENGTH,
                     cast( coalesce(ts.data_size,0) as unsigned) as DATA_LENGTH,
                     cast(NULL as unsigned) as MAX_DATA_LENGTH,
-                    cast(NULL as unsigned) as INDEX_LENGTH,
+                    cast( coalesce(idx_stat.index_length, 0) as unsigned) as INDEX_LENGTH,
                     cast(NULL as unsigned) as DATA_FREE,
                     cast(NULL as unsigned) as AUTO_INCREMENT,
                     cast(a.gmt_create as datetime) as CREATE_TIME,
@@ -15673,6 +15758,15 @@ def_table_schema(
                       where partition_id = -1 or partition_id = table_id) ts
                     on a.table_id = ts.table_id
                     and a.tenant_id = ts.tenant_id
+                    left join (
+                      select e.tenant_id as tenant_id,
+                             e.data_table_id as data_table_id,
+                             SUM(f.macro_blk_cnt * 2 * 1024 * 1024) AS index_length
+                      FROM oceanbase.__all_table e JOIN oceanbase.__all_table_stat f
+                            ON e.tenant_id = f.tenant_id and e.table_id = f.table_id and (f.partition_id = -1 or f.partition_id = e.table_id)
+                      WHERE e.index_type in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12) and e.table_type = 5
+                            group by tenant_id, data_table_id
+                    ) idx_stat on idx_stat.tenant_id = a.tenant_id and idx_stat.data_table_id = a.table_id
                     where a.tenant_id = 0
                     and a.table_type in (0, 1, 2, 3, 4, 14, 15)
                     and b.database_name != '__recyclebin'
@@ -15965,6 +16059,8 @@ def_table_schema(
                         WHEN 5 THEN 'gb18030'
                         WHEN 6 THEN 'latin1'
                         WHEN 7 THEN 'gb18030_2022'
+                        WHEN 8 THEN 'ascii'
+                        WHEN 9 THEN 'tis620'
                         ELSE NULL
                         END
                           AS CHAR(64)
@@ -16079,6 +16175,77 @@ def_table_schema(
     FROM DUAL limit 0;
 """.replace("\n", " ")
 )
+
+
+def_table_schema(
+  owner           = 'sanquan.qz',
+  tablegroup_id   = 'OB_INVALID_ID',
+  database_id     = 'OB_INFORMATION_SCHEMA_ID',
+  table_name      = 'OPTIMIZER_TRACE',
+  table_id        = '20017',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST('query'              as CHAR(200)) as QUERY,
+           CAST('trace'              as CHAR(200)) as TRACE,
+           CAST(00000000000000000000 as SIGNED) as MISSING_BYTES_MAX_MEM_SIZE,
+           CAST(0 as SIGNED) as INSUFFICIENT_PRIVILEGES
+    FROM DUAL limit 0;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner         = 'sanquan.qz',
+  tablegroup_id = 'OB_INVALID_ID',
+  database_id   = 'OB_INFORMATION_SCHEMA_ID',
+  table_name    = 'PLUGINS',
+  table_id      = '20018',
+  table_type    = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST('plugin name'    as CHAR(64)) as PLUGIN_NAME,
+           CAST('version'        as CHAR(20)) as PLUGIN,
+           CAST('plugin status'  as CHAR(10)) as PLUGIN_STATUS,
+           CAST('type'           as CHAR(80)) as PLUGIN_TYPE,
+           CAST('version'        as CHAR(20)) as PLUGIN_TYPE_VERSION,
+           CAST('library'        as CHAR(64)) as PLUGIN_LIBRARY,
+           CAST('lib version'    as CHAR(20)) as PLUGIN_LIBRARY_VERSION,
+           CAST('author'         as CHAR(64)) as PLUGIN_AUTHOR,
+           CAST('description'    as CHAR(200)) as PLUGIN_DESCRIPTION,
+           CAST('license'        as CHAR(80)) as PLUGIN_LICENSE,
+           CAST('load option'    as CHAR(64)) as LOAD_OPTION
+    FROM DUAL limit 0;
+  """.replace("\n", " ")
+)
+
+def_table_schema(
+  owner         = 'sanquan.qz',
+  tablegroup_id = 'OB_INVALID_ID',
+  database_id   = 'OB_INFORMATION_SCHEMA_ID',
+  table_name    = 'INNODB_SYS_COLUMNS',
+  table_id      = '20019',
+  table_type    = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(000000000000000000000 as UNSIGNED) AS TABLE_ID,
+           CAST('name'               as CHAR(193)) AS NAME,
+           CAST(000000000000000000000 as UNSIGNED) AS POS,
+           CAST(00000000000 as SIGNED) AS MTYPE,
+           CAST(00000000000 as SIGNED) AS PRTYPE,
+           CAST(00000000000 as SIGNED) AS LEN
+    FROM DUAL limit 0;
+  """.replace("\n", " ")
+)
+
 
 def_table_schema(
   owner           = 'sanquan.qz',
@@ -28915,7 +29082,11 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE,
           (CASE WHEN (PRIV_OTHERS & (1 << 3)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TABLESPACE,
           (CASE WHEN (PRIV_OTHERS & (1 << 4)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_SHUTDOWN,
-          (CASE WHEN (PRIV_OTHERS & (1 << 5)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_RELOAD
+          (CASE WHEN (PRIV_OTHERS & (1 << 5)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_RELOAD,
+          (CASE WHEN (PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
+          (CASE WHEN (PRIV_OTHERS & (1 << 7)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROLE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 8)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DROP_ROLE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER
   FROM OCEANBASE.__all_user;
   """.replace("\n", " ")
 )
@@ -28975,7 +29146,11 @@ def_table_schema(
           (CASE WHEN (PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE,
           (CASE WHEN (PRIV_OTHERS & (1 << 3)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_TABLESPACE,
           (CASE WHEN (PRIV_OTHERS & (1 << 4)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_SHUTDOWN,
-          (CASE WHEN (PRIV_OTHERS & (1 << 5)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_RELOAD
+          (CASE WHEN (PRIV_OTHERS & (1 << 5)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_RELOAD,
+          (CASE WHEN (PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
+          (CASE WHEN (PRIV_OTHERS & (1 << 7)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROLE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 8)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_DROP_ROLE,
+          (CASE WHEN (PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER
   FROM OCEANBASE.__all_virtual_user;
   """.replace("\n", " ")
 )
@@ -29032,7 +29207,9 @@ def_table_schema(
           (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
-          (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER
   FROM DB_PRIV A INNER JOIN OCEANBASE.__all_user B
         ON A.TENANT_ID = B.TENANT_ID AND A.USER_ID = B.USER_ID;
   """.replace("\n", " ")
@@ -29089,7 +29266,9 @@ def_table_schema(
           (CASE WHEN A.PRIV_SHOW_VIEW = 0 THEN 'NO' ELSE 'YES' END) AS PRIV_SHOW_VIEW,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 0)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_EXECUTE,
           (CASE WHEN (A.PRIV_OTHERS & (1 << 1)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_ALTER_ROUTINE,
-          (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 2)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_CREATE_ROUTINE,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 6)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_REFERENCES,
+          (CASE WHEN (A.PRIV_OTHERS & (1 << 9)) != 0 THEN 'YES' ELSE 'NO' END) AS PRIV_TRIGGER
   FROM DB_PRIV A INNER JOIN OCEANBASE.__all_virtual_user B
         ON A.USER_ID = B.USER_ID AND A.TENANT_ID = B.TENANT_ID;
   """.replace("\n", " ")
@@ -29343,6 +29522,8 @@ def_table_schema(
                           WHEN 5 THEN 'gb18030'
                           WHEN 6 THEN 'latin1'
                           WHEN 7 THEN 'gb18030_2022'
+                          WHEN 8 THEN 'ascii'
+                          WHEN 9 THEN 'tis620'
                           ELSE NULL
                         END AS CHAR(64)) AS CHARACTER_SET_NAME,
                         CAST(CASE rp.param_coll_type
@@ -29502,6 +29683,10 @@ def_table_schema(
                      AND TP.PRIV_CREATE_VIEW = 1 THEN 'CREATE VIEW'
                 WHEN V1.C1 = 12
                      AND TP.PRIV_SHOW_VIEW = 1 THEN 'SHOW VIEW'
+                WHEN V1.C1 = 22
+                     AND (TP.PRIV_OTHERS & (1 << 6)) != 0 THEN 'REFERENCES'
+                WHEN V1.C1 = 44
+                     AND (TP.PRIV_OTHERS & (1 << 9)) != 0 THEN 'TRIGGER'
                 ELSE NULL
             END PRIVILEGE_TYPE ,
             CASE
@@ -29519,7 +29704,9 @@ def_table_schema(
         UNION ALL SELECT 9 AS C1
         UNION ALL SELECT 10 AS C1
         UNION ALL SELECT 11 AS C1
-        UNION ALL SELECT 12 AS C1) V1,
+        UNION ALL SELECT 12 AS C1
+        UNION ALL SELECT 22 AS C1
+        UNION ALL SELECT 44 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -29592,6 +29779,8 @@ def_table_schema(
                      AND U.PRIV_PROCESS = 1 THEN 'PROCESS'
                 WHEN V1.C1 = 17
                      AND U.PRIV_CREATE_SYNONYM = 1 THEN 'CREATE SYNONYM'
+                WHEN V1.C1 = 22
+                     AND (U.PRIV_OTHERS & (1 << 6)) != 0 THEN 'REFERENCES'
                 WHEN V1.C1 = 23
                      AND (U.PRIV_OTHERS & (1 << 0)) != 0 THEN 'EXECUTE'
                 WHEN V1.C1 = 27
@@ -29622,6 +29811,12 @@ def_table_schema(
                      AND (U.PRIV_OTHERS & (1 << 4)) != 0 THEN 'SHUTDOWN'
                 WHEN V1.C1 = 41
                      AND (U.PRIV_OTHERS & (1 << 5)) != 0 THEN 'RELOAD'
+                WHEN V1.C1 = 42
+                     AND (U.PRIV_OTHERS & (1 << 7)) != 0 THEN 'CREATE ROLE'
+                WHEN V1.C1 = 43
+                     AND (U.PRIV_OTHERS & (1 << 8)) != 0 THEN 'DROP ROLE'
+                WHEN V1.C1 = 44
+                     AND (U.PRIV_OTHERS & (1 << 9)) != 0 THEN 'TRIGGER'
                 WHEN V1.C1 = 0
                      AND U.PRIV_ALTER = 0
                      AND U.PRIV_CREATE = 0
@@ -29695,6 +29890,7 @@ def_table_schema(
         UNION ALL SELECT 14 AS C1
         UNION ALL SELECT 15 AS C1
         UNION ALL SELECT 17 AS C1
+        UNION ALL SELECT 22 AS C1
         UNION ALL SELECT 23 AS C1
         UNION ALL SELECT 27 AS C1
         UNION ALL SELECT 28 AS C1
@@ -29709,7 +29905,10 @@ def_table_schema(
         UNION ALL SELECT 38 AS C1
         UNION ALL SELECT 39 AS C1
         UNION ALL SELECT 40 AS C1
-        UNION ALL SELECT 41 AS C1) V1,
+        UNION ALL SELECT 41 AS C1
+        UNION ALL SELECT 42 AS C1
+        UNION ALL SELECT 43 AS C1
+        UNION ALL SELECT 44 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID = 0
@@ -29792,12 +29991,16 @@ def_table_schema(
                      AND DP.PRIV_CREATE_VIEW = 1 THEN 'CREATE VIEW'
                 WHEN V1.C1 = 12
                      AND DP.PRIV_SHOW_VIEW = 1 THEN 'SHOW VIEW'
-                WHEN V1.C1 = 13
-                     AND (U.PRIV_OTHERS & (1 << 0)) != 0 THEN 'EXECUTE'
-                WHEN V1.C1 = 14
-                     AND (U.PRIV_OTHERS & (1 << 1)) != 0 THEN 'ALTER ROUTINE'
-                WHEN V1.C1 = 15
-                     AND (U.PRIV_OTHERS & (1 << 2)) != 0 THEN 'CREATE ROUTINE'
+                WHEN V1.C1 = 22
+                     AND (DP.PRIV_OTHERS & (1 << 6)) != 0 THEN 'REFERENCES'
+                WHEN V1.C1 = 23
+                     AND (DP.PRIV_OTHERS & (1 << 0)) != 0 THEN 'EXECUTE'
+                WHEN V1.C1 = 37
+                     AND (DP.PRIV_OTHERS & (1 << 1)) != 0 THEN 'ALTER ROUTINE'
+                WHEN V1.C1 = 38
+                     AND (DP.PRIV_OTHERS & (1 << 2)) != 0 THEN 'CREATE ROUTINE'
+                WHEN V1.C1 = 44
+                     AND (DP.PRIV_OTHERS & (1 << 9)) != 0 THEN 'TRIGGER'
                 ELSE NULL
             END PRIVILEGE_TYPE ,
             CASE
@@ -29816,9 +30019,11 @@ def_table_schema(
         UNION ALL SELECT 10 AS C1
         UNION ALL SELECT 11 AS C1
         UNION ALL SELECT 12 AS C1
-        UNION ALL SELECT 13 AS C1
-        UNION ALL SELECT 14 AS C1
-        UNION ALL SELECT 15 AS C1) V1,
+        UNION ALL SELECT 22 AS C1
+        UNION ALL SELECT 23 AS C1
+        UNION ALL SELECT 37 AS C1
+        UNION ALL SELECT 38 AS C1
+        UNION ALL SELECT 44 AS C1) V1,
        (SELECT USER_ID
         FROM oceanbase.__all_user
         WHERE TENANT_ID= 0
@@ -30213,6 +30418,7 @@ def_table_schema(
           JOIN oceanbase.__all_table t on trg.base_object_id = t.table_id
       WHERE db.database_name != '__recyclebin' and db.in_recyclebin = 0
       and t.table_mode >> 12 & 15 in (0,1)
+      and can_access_trigger(db.database_name, t.table_name)
 """.replace("\n", " "),
 )
 
@@ -30285,9 +30491,9 @@ def_table_schema(
        END AS CHAR(4096)) AS SUBPARTITION_DESCRIPTION,
   CAST(TS.ROW_CNT AS UNSIGNED) AS TABLE_ROWS,
   CAST(TS.AVG_ROW_LEN AS UNSIGNED) AS AVG_ROW_LENGTH,
-  CAST(NULL AS UNSIGNED) AS DATA_LENGTH,
+  CAST(COALESCE(TS.MACRO_BLK_CNT * 2 * 1024 * 1024, 0) AS UNSIGNED) AS DATA_LENGTH,
   CAST(NULL AS UNSIGNED) AS MAX_DATA_LENGTH,
-  CAST(NULL AS UNSIGNED) AS INDEX_LENGTH,
+  CAST(COALESCE(IDX_STAT.INDEX_LENGTH, 0) AS UNSIGNED) AS INDEX_LENGTH,
   CAST(NULL AS UNSIGNED) AS DATA_FREE,
   CASE T.PART_LEVEL
     WHEN 0 THEN T.GMT_CREATE
@@ -30318,6 +30524,7 @@ FROM
         TABLESPACE_ID,
         GMT_CREATE,
         COMMENT,
+        PART_IDX,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID ORDER BY PART_IDX) AS PART_POSITION
       FROM OCEANBASE.__ALL_PART
   ) P ON T.TABLE_ID = P.TABLE_ID AND T.TENANT_ID = P.TENANT_ID
@@ -30333,12 +30540,26 @@ FROM
         TABLESPACE_ID,
         GMT_CREATE,
         COMMENT,
+        SUB_PART_IDX,
         ROW_NUMBER() OVER(PARTITION BY TENANT_ID,TABLE_ID,PART_ID ORDER BY SUB_PART_IDX) AS SUB_PART_POSITION
     FROM OCEANBASE.__ALL_SUB_PART
   ) SP ON T.TABLE_ID = SP.TABLE_ID AND P.PART_ID = SP.PART_ID AND T.TENANT_ID = SP.TENANT_ID
 
   LEFT JOIN OCEANBASE.__ALL_TENANT_TABLESPACE TP ON TP.TABLESPACE_ID = IFNULL(SP.TABLESPACE_ID, P.TABLESPACE_ID) AND TP.TENANT_ID = T.TENANT_ID
   LEFT JOIN OCEANBASE.__ALL_TABLE_STAT TS ON T.TENANT_ID = TS.TENANT_ID AND TS.TABLE_ID = T.TABLE_ID AND TS.PARTITION_ID = CASE T.PART_LEVEL WHEN 0 THEN T.TABLE_ID WHEN 1 THEN P.PART_ID WHEN 2 THEN SP.SUB_PART_ID END
+  LEFT JOIN (
+    SELECT E.TENANT_ID AS TENANT_ID,
+           E.DATA_TABLE_ID AS DATA_TABLE_ID,
+           F.PART_IDX AS PART_IDX,
+           SF.SUB_PART_IDX AS SUB_PART_IDX,
+           SUM(G.macro_blk_cnt * 2 * 1024 * 1024) AS INDEX_LENGTH
+    FROM OCEANBASE.__ALL_TABLE E LEFT JOIN OCEANBASE.__ALL_PART F ON E.TENANT_ID = F.TENANT_ID AND E.TABLE_ID = F.TABLE_ID
+                                 LEFT JOIN OCEANBASE.__ALL_SUB_PART SF ON E.TENANT_ID = SF.TENANT_ID AND E.TABLE_ID = SF.TABLE_ID AND F.PART_ID = SF.PART_ID
+         JOIN OCEANBASE.__ALL_TABLE_STAT G ON E.TENANT_ID = G.TENANT_ID AND E.TABLE_ID = G.TABLE_ID AND G.PARTITION_ID = CASE E.PART_LEVEL WHEN 0 THEN E.TABLE_ID WHEN 1 THEN F.PART_ID WHEN 2 THEN SF.SUB_PART_ID END
+    WHERE E.INDEX_TYPE in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12) AND E.TABLE_TYPE = 5 GROUP BY TENANT_ID, DATA_TABLE_ID, PART_IDX, SUB_PART_IDX
+  ) IDX_STAT ON IDX_STAT.TENANT_ID = T.TENANT_ID AND
+                IDX_STAT.DATA_TABLE_ID = T.TABLE_ID AND
+                CASE T.PART_LEVEL WHEN 0 THEN 1 WHEN 1 THEN P.PART_IDX = IDX_STAT.PART_IDX WHEN 2 THEN P.PART_IDX = IDX_STAT.PART_IDX AND SP.SUB_PART_IDX = IDX_STAT.SUB_PART_IDX END
 WHERE T.TABLE_TYPE IN (3,6,8,9,14,15)
   """.replace("\n", " "),
 
@@ -33404,16 +33625,13 @@ def_table_schema(
            cast(b.user_name as char(32)) as User,
            cast(a.routine_name as char(64)) as Routine_name,
            case when a.routine_type = 1 then 'PROCEDURE' else 'FUNCTION' end as Routine_type,
-           cast(c.priv_user as char(93)) as Grantor,
+           cast(concat(a.grantor, '@', a.grantor_host) as char(93)) as Grantor,
            substr(concat(case when (a.all_priv & 1) > 0 then ',Execute' else '' end,
                           case when (a.all_priv & 2) > 0 then ',Alter Routine' else '' end,
                           case when (a.all_priv & 4) > 0 then ',Grant' else '' end), 2) as Proc_priv,
            cast(a.gmt_modified as date) as Timestamp
-    FROM oceanbase.__all_routine_privilege a, oceanbase.__all_user b, oceanbase.__all_routine c, oceanbase.__all_database d
-    WHERE a.tenant_id = b.tenant_id AND a.user_id = b.user_id
-    AND a.tenant_id = d.tenant_id and a.database_name = d.database_name
-    AND a.tenant_id = c.tenant_id AND a.routine_name = c.routine_name
-    AND a.routine_type = c.routine_type AND c.database_id = d.database_id AND c.package_id = -1;
+    FROM oceanbase.__all_routine_privilege a, oceanbase.__all_user b
+    WHERE a.tenant_id = 0 and a.tenant_id = b.tenant_id AND a.user_id = b.user_id;
 """.replace("\n", " ")
 )
 
@@ -33786,6 +34004,40 @@ def_table_schema(
 
 #21514: audit_log_filter
 #21515: audit_log_user
+def_table_schema(
+  owner = 'sean.yyj',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name      = 'audit_log_filter',
+  table_id        = '21514',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(filter_name AS CHAR(64)) collate utf8mb4_bin as NAME,
+           definition as FILTER
+    FROM oceanbase.__all_audit_log_filter WHERE tenant_id = 0 and is_deleted = 0;
+""".replace("\n", " "),
+)
+def_table_schema(
+  owner = 'sean.yyj',
+  database_id    = 'OB_MYSQL_SCHEMA_ID',
+  table_name      = 'audit_log_user',
+  table_id        = '21515',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT CAST(user_name AS CHAR(128)) collate utf8mb4_bin as USER,
+           host as HOST,
+           CAST(filter_name AS CHAR(64)) collate utf8mb4_bin as FILTERNAME
+    FROM oceanbase.__all_audit_log_user WHERE tenant_id = 0 and is_deleted = 0;
+""".replace("\n", " "),
+)
+
 def_table_schema(
   owner = 'mingye.swj',
   database_id    = 'OB_MYSQL_SCHEMA_ID',
@@ -35783,9 +36035,156 @@ def_table_schema(
   """.replace("\n", " ")
 )
 
-# 21582: ROLE_TABLE_GRANTS
-# 21583: ROLE_COLUMN_GRANTS
-# 21584: ROLE_ROUTINE_GRANTS
+def_table_schema(
+  owner = 'linyi.cl',
+  database_id    = 'OB_INFORMATION_SCHEMA_ID',
+  table_name     = 'ROLE_TABLE_GRANTS',
+  table_id       = '21582',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  view_definition = """
+  with recursive role_graph (from_user, from_host, to_user, to_host, is_enabled)
+  as (
+      select user_name, host, cast('' as char(128)), cast('' as char(128)), false
+      from oceanbase.__all_user
+      where tenant_id=0 and concat(user_name, '@', host)=current_user()
+      union all
+      select role_edges.from_user, role_edges.from_host, role_edges.to_user, role_edges.to_host,
+             if ((role_graph.is_enabled
+                  or is_enabled_role(role_edges.from_user, role_edges.from_host)),
+                  true,
+                  false)
+      from mysql.role_edges role_edges join role_graph
+      on role_edges.to_user = role_graph.from_user and role_edges.to_host = role_graph.from_host
+  )
+  select distinct
+    cast(tp.grantor as char(97)) as GRANTOR,
+    cast(tp.grantor_host as char(256)) as GRANTOR_HOST,
+    cast(u.user_name as char(32)) as GRANTEE,
+    cast(u.host as char(255)) as GRANTEE_HOST,
+    cast('def' as char(3)) as TABLE_CATALOG,
+    cast(tp.database_name as char(64)) as TABLE_SCHEMA,
+    cast(tp.table_name as char(64)) as TABLE_NAME,
+    substr(concat(case when tp.priv_alter > 0 then ',Alter' else '' end,
+            case when tp.priv_create > 0 then ',Create' else '' end,
+            case when tp.priv_delete > 0 then ',Delete' else '' end,
+            case when tp.priv_drop > 0 then ',Drop' else '' end,
+            case when tp.priv_grant_option > 0 then ',Grant' else '' end,
+            case when tp.priv_insert > 0 then ',Insert' else '' end,
+            case when tp.priv_update > 0 then ',Update' else '' end,
+            case when tp.priv_select > 0 then ',Select' else '' end,
+            case when tp.priv_index > 0 then ',Index' else '' end,
+            case when tp.priv_create_view > 0 then ',Create View' else '' end,
+            case when tp.priv_show_view > 0 then ',Show View' else '' end,
+            case when (tp.priv_others & 64) > 0 then ',References' else '' end),2) as PRIVILEGE_TYPE,
+    cast(if (tp.priv_grant_option > 0,'YES','NO') as char(3)) AS IS_GRANTABLE
+  from (select distinct from_user, from_host, to_user, to_host, is_enabled from role_graph) rg
+      join oceanbase.__all_table_privilege tp join oceanbase.__all_user u
+  on tp.user_id = u.user_id and rg.from_user = u.user_name and rg.from_host = u.host
+  where rg.is_enabled and rg.to_user <> '' and tp.tenant_id = 0 and u.tenant_id = 0
+  """.replace("\n", " "),
+
+  normal_columns = [],
+)
+
+def_table_schema(
+  owner = 'linyi.cl',
+  database_id    = 'OB_INFORMATION_SCHEMA_ID',
+  table_name     = 'ROLE_COLUMN_GRANTS',
+  table_id       = '21583',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  view_definition = """
+  with recursive role_graph (from_user, from_host, to_user, to_host, is_enabled)
+  as (
+      select user_name, host, cast('' as char(128)), cast('' as char(128)), false
+      from oceanbase.__all_user
+      where tenant_id=0 and concat(user_name, '@', host)=current_user()
+      union all
+      select role_edges.from_user, role_edges.from_host, role_edges.to_user, role_edges.to_host,
+            if ((role_graph.is_enabled or is_enabled_role(role_edges.from_user, role_edges.from_host)), true, false)
+      from mysql.role_edges role_edges join role_graph
+      on role_edges.to_user = role_graph.from_user and role_edges.to_host = role_graph.from_host
+  )
+  select distinct
+    NULL as GRANTOR,
+    NULL as GRANTOR_HOST,
+    cast(u.user_name as char(32)) as GRANTEE,
+    cast(u.host as char(255)) as GRANTEE_HOST,
+    cast('def' as char(3)) as TABLE_CATALOG,
+    cast(cp.database_name as char(64)) as TABLE_SCHEMA,
+    cast(cp.table_name as char(64)) as TABLE_NAME,
+    cast(cp.column_name as char(64)) as COLUMN_NAME,
+    substr(concat(case when (cp.all_priv & 1) > 0 then ',Select' else '' end,
+                  case when (cp.all_priv & 2) > 0 then ',Insert' else '' end,
+                  case when (cp.all_priv & 4) > 0 then ',Update' else '' end,
+                  case when (cp.all_priv & 8) > 0 then ',References' else '' end), 2) as PRIVILEGE_TYPE,
+    cast(if (tp.priv_grant_option > 0,'YES','NO') as char(3)) AS IS_GRANTABLE
+  from  ((select distinct from_user, from_host, to_user, to_host, is_enabled from role_graph) rg
+        join oceanbase.__all_user u join oceanbase.__all_column_privilege cp
+        on cp.user_id = u.user_id and rg.from_user = u.user_name and rg.from_host = u.host
+            and rg.is_enabled and rg.to_user <> '' and cp.tenant_id = 0 and u.tenant_id = 0)
+        left join
+        oceanbase.__all_table_privilege tp
+        on cp.database_name = tp.database_name and cp.table_name = tp.table_name
+            and cp.user_id = tp.user_id and tp.tenant_id = 0
+  """.replace("\n", " "),
+
+  normal_columns = [],
+)
+
+def_table_schema(
+  owner = 'linyi.cl',
+  database_id    = 'OB_INFORMATION_SCHEMA_ID',
+  table_name     = 'ROLE_ROUTINE_GRANTS',
+  table_id       = '21584',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  in_tenant_space = True,
+
+  view_definition = """
+  with recursive role_graph (from_user, from_host, to_user, to_host, is_enabled)
+  as (
+    select user_name, host, cast('' as char(128)), cast('' as char(128)), false
+    from oceanbase.__all_user
+    where tenant_id=0 and concat(user_name, '@', host)=current_user()
+    union all
+    select role_edges.from_user, role_edges.from_host, role_edges.to_user, role_edges.to_host,
+          if ((role_graph.is_enabled or is_enabled_role(role_edges.from_user, role_edges.from_host)), true, false)
+    from mysql.role_edges role_edges join role_graph
+    on role_edges.to_user = role_graph.from_user and role_edges.to_host = role_graph.from_host
+  )
+  select distinct
+    cast(rp.grantor as char(97)) as GRANTOR,
+    cast(rp.grantor_host as char(256)) as GRANTOR_HOST,
+    cast(u.user_name as char(32)) as GRANTEE,
+    cast(u.host as char(255)) as GRANTEE_HOST,
+    cast('def' as char(3)) AS SPECIFIC_CATALOG,
+    cast(rp.database_name as char(64)) AS SPECIFIC_SCHEMA,
+    cast(rp.routine_name as char(64)) AS SPECIFIC_NAME,
+    cast('def' as char(3))  AS ROUTINE_CATALOG,
+    cast(rp.database_name as char(64)) AS ROUTINE_SCHEMA,
+    cast(rp.routine_name as char(64)) AS ROUTINE_NAME,
+    substr(concat(case when (rp.all_priv & 1) > 0 then ',Execute' else '' end,
+                  case when (rp.all_priv & 2) > 0 then ',Alter Routine' else '' end,
+                  case when (rp.all_priv & 4) > 0 then ',Grant' else '' end), 2) AS PRIVILEGE_TYPE,
+    cast(if ((rp.all_priv & 4) > 0,'YES','NO') as char(3)) AS `IS_GRANTABLE`
+  from   (select distinct from_user, from_host, to_user, to_host, is_enabled from role_graph) rg
+         join oceanbase.__all_routine_privilege rp join oceanbase.__all_user u
+  on     rp.user_id = u.user_id and rg.from_user = u.user_name and rg.from_host = u.host
+  where  rg.to_user <> '' and rg.is_enabled and u.tenant_id = 0 and rp.tenant_id = 0
+  """.replace("\n", " "),
+
+  normal_columns = [],
+)
+
 def_table_schema(
   owner = 'wangbai.wx',
   database_id    = 'OB_MYSQL_SCHEMA_ID',
@@ -36067,8 +36466,66 @@ def_table_schema(
 # 21619: CDB_OB_KV_REDIS_TABLE
 # 21620: GV$OB_FUNCTION_IO_STAT
 # 21621: V$OB_FUNCTION_IO_STAT
-# 21622: DBA_OB_TEMP_FILES
-# 21623: CDB_OB_TEMP_FILES
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'DBA_OB_TEMP_FILES',
+  table_id        = '21622',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+    SVR_IP,
+    SVR_PORT,
+    FILE_ID,
+    TRACE_ID,
+    DIR_ID,
+    BYTES,
+    START_OFFSET,
+    TOTAL_WRITES,
+    UNALIGNED_WRITES,
+    TOTAL_READS,
+    UNALIGNED_READS,
+    TOTAL_READ_BYTES,
+    LAST_ACCESS_TIME,
+    LAST_MODIFY_TIME,
+    BIRTH_TIME
+  FROM oceanbase.__all_virtual_temp_file
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'CDB_OB_TEMP_FILES',
+  table_id        = '21623',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  view_definition = """SELECT
+    TENANT_ID,
+    SVR_IP,
+    SVR_PORT,
+    FILE_ID,
+    TRACE_ID,
+    DIR_ID,
+    BYTES,
+    START_OFFSET,
+    TOTAL_WRITES,
+    UNALIGNED_WRITES,
+    TOTAL_READS,
+    UNALIGNED_READS,
+    TOTAL_READ_BYTES,
+    LAST_ACCESS_TIME,
+    LAST_MODIFY_TIME,
+    BIRTH_TIME
+  FROM oceanbase.__all_virtual_temp_file
+""".replace("\n", " ")
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -64206,7 +64663,39 @@ left join
 # 28261: DBA_OB_SPM_EVO_RESULT
 # 28262: GV$OB_FUNCTION_IO_STAT
 # 28263: V$OB_FUNCTION_IO_STAT
-# 28264: DBA_OB_TEMP_FILES
+
+def_table_schema(
+  owner = 'wuyuefei.wyf',
+  table_name      = 'DBA_OB_TEMP_FILES',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28264',
+  table_type      = 'SYSTEM_VIEW',
+  rowkey_columns  = [],
+  normal_columns  = [],
+  gm_columns      = [],
+  in_tenant_space = True,
+  view_definition = """SELECT
+    SVR_IP,
+    SVR_PORT,
+    FILE_ID,
+    TRACE_ID,
+    DIR_ID,
+    BYTES,
+    START_OFFSET,
+    TOTAL_WRITES,
+    UNALIGNED_WRITES,
+    TOTAL_READS,
+    UNALIGNED_READS,
+    TOTAL_READ_BYTES,
+    LAST_ACCESS_TIME,
+    LAST_MODIFY_TIME,
+    BIRTH_TIME
+  FROM SYS.ALL_VIRTUAL_TEMP_FILE
+  WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+""".replace("\n", " "),
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################

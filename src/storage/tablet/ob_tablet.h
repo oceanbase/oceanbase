@@ -314,7 +314,7 @@ public:
   int insert_rows(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
-      ObStoreRow *rows,
+      blocksstable::ObDatumRow *rows,
       ObRowsInfo &rows_info,
       const bool check_exist,
       const ObColDescIArray &col_descs,
@@ -325,20 +325,21 @@ public:
       ObStoreCtx &store_ctx,
       const bool check_exist,
       const ObColDescIArray &col_descs,
-      const storage::ObStoreRow &row,
+      blocksstable::ObDatumRow &row,
       const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
   int update_row(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
       const ObColDescIArray &col_descs,
       const ObIArray<int64_t> &update_idx,
-      const storage::ObStoreRow &old_row,
-      const storage::ObStoreRow &new_row,
+      const blocksstable::ObDatumRow &old_row,
+      blocksstable::ObDatumRow &new_row,
       const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr);
   int lock_row(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
-      const common::ObNewRow &row);
+      ObColDescArray &col_desc,
+      blocksstable::ObDatumRow &row);
   int lock_row(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
@@ -399,7 +400,8 @@ public:
   int rowkey_exists(
       ObRelativeTable &relative_table,
       ObStoreCtx &store_ctx,
-      const common::ObNewRow &row,
+      const ObColDescIArray &col_descs,
+      blocksstable::ObDatumRow &row,
       bool &exists);
   int rowkeys_exists(
       ObStoreCtx &store_ctx,
@@ -714,6 +716,7 @@ private:
 
   int check_medium_list() const;
   int check_sstable_column_checksum() const;
+  int check_no_backup_data() const;
   int get_finish_medium_scn(int64_t &finish_medium_scn) const;
 
   int inner_get_mds_sstables(ObTableStoreIterator &table_store_iter) const;

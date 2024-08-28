@@ -97,7 +97,7 @@ def parse_json(json_file_name):
   # If it is true, it means it is a placeholder variable.
   filtered_json = filter(lambda d: 'placeholder' not in d[1] or d[1]['placeholder'] is False, json_Dict.iteritems())
   filtered_dict = dict(filtered_json)
-  list_sorted_by_name= sorted(filtered_dict.iteritems(), key=lambda d:d[0])
+  list_sorted_by_name= sorted(filtered_dict.iteritems(), key=lambda d:d[0].lower())
   list_sorted_by_id= sorted(filtered_dict.iteritems(), key=lambda d:d[1]['id'])
   json_file.close()
   return (json_Dict, list_sorted_by_name, list_sorted_by_id)
@@ -502,7 +502,10 @@ public:
   static ObSysVarClassType find_sys_var_id_by_name(const common::ObString &sys_var_name, bool is_from_sys_table = false); //二分查找
   static int get_sys_var_name_by_id(ObSysVarClassType sys_var_id, common::ObString &sys_var_name);
   static const common::ObString get_sys_var_name_by_id(ObSysVarClassType sys_var_id);
+private:
+  int try_init_store_mem();
 
+public:
   const static int64_t MYSQL_SYS_VARS_COUNT = """)
   wfile.write(str(mysql_sys_var_names_count) + ";")
   wfile.write("""
@@ -525,8 +528,8 @@ private:
   const static ObSysVarClassType SYS_VAR_IDS_SORTED_BY_NAME[ALL_SYS_VARS_COUNT];
   const static char *SYS_VAR_NAMES_SORTED_BY_ID[ALL_SYS_VARS_COUNT];
   common::ObArenaAllocator allocator_;
-  ObBasicSysVar *store_[ALL_SYS_VARS_COUNT];
-  ObBasicSysVar *store_buf_[ALL_SYS_VARS_COUNT];
+  ObBasicSysVar **store_;
+  ObBasicSysVar **store_buf_;
   bool all_sys_vars_created_;
 };
 """)
@@ -842,10 +845,34 @@ const ObString ObSysVarFactory::get_sys_var_name_by_id(ObSysVarClassType sys_var
 
 ObSysVarFactory::ObSysVarFactory(const int64_t tenant_id)
   : allocator_(ObMemAttr(tenant_id, ObModIds::OB_COMMON_SYS_VAR_FAC)),
-    all_sys_vars_created_(false)
+    store_(nullptr), store_buf_(nullptr), all_sys_vars_created_(false)
 {
-  MEMSET(store_, 0, sizeof(store_));
-  MEMSET(store_buf_, 0, sizeof(store_buf_));
+}
+
+int ObSysVarFactory::try_init_store_mem()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(store_)) {
+    void *store_ptr = NULL;
+    if (OB_ISNULL(store_ptr = allocator_.alloc(sizeof(ObBasicSysVar *) * ALL_SYS_VARS_COUNT))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc store_.", K(ret));
+    } else {
+      store_ = static_cast<ObBasicSysVar **>(store_ptr);
+      MEMSET(store_, 0, sizeof(ObBasicSysVar *) * ALL_SYS_VARS_COUNT);
+    }
+  }
+  if (OB_ISNULL(store_buf_)) {
+    void *store_buf_ptr = NULL;
+    if (OB_ISNULL(store_buf_ptr = allocator_.alloc(sizeof(ObBasicSysVar *) * ALL_SYS_VARS_COUNT))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to alloc store_buf_.", K(ret));
+    } else {
+      store_buf_ = static_cast<ObBasicSysVar **>(store_buf_ptr);
+      MEMSET(store_buf_, 0, sizeof(ObBasicSysVar *) * ALL_SYS_VARS_COUNT);
+    }
+  }
+  return ret;
 }
 
 ObSysVarFactory::~ObSysVarFactory()
@@ -856,15 +883,23 @@ ObSysVarFactory::~ObSysVarFactory()
 void ObSysVarFactory::destroy()
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < ALL_SYS_VARS_COUNT; ++i) {
-    if (OB_NOT_NULL(store_[i])) {
-      store_[i]->~ObBasicSysVar();
-      store_[i] = nullptr;
+  if (OB_NOT_NULL(store_)) {
+    for (int64_t i = 0; i < ALL_SYS_VARS_COUNT; ++i) {
+      if (OB_NOT_NULL(store_[i])) {
+        store_[i]->~ObBasicSysVar();
+        store_[i] = nullptr;
+      }
     }
-    if (OB_NOT_NULL(store_buf_[i])) {
-      store_buf_[i]->~ObBasicSysVar();
-      store_buf_[i] = nullptr;
+    store_ = nullptr;
+  }
+  if (OB_NOT_NULL(store_buf_)) {
+    for (int64_t i = 0; i < ALL_SYS_VARS_COUNT; ++i) {
+      if (OB_NOT_NULL(store_buf_[i])) {
+        store_buf_[i]->~ObBasicSysVar();
+        store_buf_[i] = nullptr;
+      }
     }
+    store_buf_ = nullptr;
   }
   allocator_.reset();
   all_sys_vars_created_ = false;
@@ -873,24 +908,28 @@ void ObSysVarFactory::destroy()
 int ObSysVarFactory::free_sys_var(ObBasicSysVar *sys_var, int64_t sys_var_idx)
 {
   int ret = OB_SUCCESS;
-  OV (OB_NOT_NULL(sys_var));
-  OV (is_valid_sys_var_store_idx(sys_var_idx));
-  OV (sys_var == store_[sys_var_idx], OB_ERR_UNEXPECTED, sys_var, sys_var_idx);
-  if (OB_NOT_NULL(store_buf_[sys_var_idx])) {
-    OX (store_buf_[sys_var_idx]->~ObBasicSysVar());
-    OX (allocator_.free(store_buf_[sys_var_idx]));
-    OX (store_buf_[sys_var_idx] = nullptr);
+  if (OB_NOT_NULL(store_) && OB_NOT_NULL(store_buf_)) {
+    OV (OB_NOT_NULL(sys_var));
+    OV (is_valid_sys_var_store_idx(sys_var_idx));
+    OV (sys_var == store_[sys_var_idx], OB_ERR_UNEXPECTED, sys_var, sys_var_idx);
+    if (OB_NOT_NULL(store_buf_[sys_var_idx])) {
+      OX (store_buf_[sys_var_idx]->~ObBasicSysVar());
+      OX (allocator_.free(store_buf_[sys_var_idx]));
+      OX (store_buf_[sys_var_idx] = nullptr);
+    }
+    OX (store_buf_[sys_var_idx] = store_[sys_var_idx]);
+    OX (store_buf_[sys_var_idx]->clean_value());
+    OX (store_[sys_var_idx] = nullptr);
   }
-  OX (store_buf_[sys_var_idx] = store_[sys_var_idx]);
-  OX (store_buf_[sys_var_idx]->clean_value());
-  OX (store_[sys_var_idx] = nullptr);
   return ret;
 }
 
 int ObSysVarFactory::create_all_sys_vars()
 {
   int ret = OB_SUCCESS;
-  if (!all_sys_vars_created_) {
+  if (OB_FAIL(try_init_store_mem())) {
+    LOG_WARN("Fail to init", K(ret));
+  } else if (!all_sys_vars_created_) {
     int64_t store_idx = -1;
     ObBasicSysVar *sys_var_ptr = NULL;
     int64_t total_mem_size = 0
@@ -967,7 +1006,9 @@ int ObSysVarFactory::create_sys_var(ObSysVarClassType sys_var_id, ObBasicSysVar 
   int ret = OB_SUCCESS;
   int64_t store_idx = -1;
   ObBasicSysVar *sys_var_ptr = NULL;
-  if (OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
+  if (OB_FAIL(try_init_store_mem())) {
+    LOG_WARN("fail to init", K(ret));
+  } else if (OB_FAIL(calc_sys_var_store_idx(sys_var_id, store_idx))) {
     LOG_WARN("fail to calc sys var store idx", K(ret), K(sys_var_id));
   } else if (store_idx < 0 || store_idx >= ALL_SYS_VARS_COUNT) {
     ret = OB_ERR_UNEXPECTED;

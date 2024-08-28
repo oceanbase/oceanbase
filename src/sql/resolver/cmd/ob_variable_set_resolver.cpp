@@ -194,10 +194,6 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
                 LOG_USER_ERROR(OB_NOT_SUPPORTED, "Not support oracle mode");
               }
 #endif
-              if (OB_SUCC(ret) &&
-                  OB_FAIL(ObResolverUtils::resolve_const_expr(params_, value_node, var_node.value_expr_, NULL))) {
-                LOG_WARN("resolve variable value failed", K(ret));
-              }
             }
             if (OB_SUCC(ret)) {
               if (0 == var_node.variable_name_.case_compare("_enable_mysql_pl_priv_check")) {
@@ -208,6 +204,11 @@ int ObVariableSetResolver::resolve(const ParseNode &parse_tree)
                   ret = OB_NOT_SUPPORTED;
                   LOG_USER_ERROR(OB_NOT_SUPPORTED, "turn _enable_mysql_pl_priv_check without on");
                 }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              if (OB_FAIL(resolve_value_expr(value_node, var_node.value_expr_))) {
+                LOG_WARN("failed to resolve value expr", K(ret));
               }
             }
           } else {

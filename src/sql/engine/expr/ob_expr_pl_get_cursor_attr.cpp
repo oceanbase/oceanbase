@@ -211,6 +211,12 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
     if (info->pl_cursor_info_.is_explicit_cursor()) {
       CK (ObExtendType == datum_meta.type_);
       OX (datum->to_obj(obj, obj_meta));
+      if (OB_SUCC(ret)
+          && obj.get_meta().get_extend_type() != pl::PL_CURSOR_TYPE
+          && obj.get_meta().get_extend_type() != pl::PL_REF_CURSOR_TYPE) {
+        ret = OB_ERR_CURSOR_ATTR_APPLY;
+        LOG_WARN("cursor attribute may not applied to non-cursor", K(ret), K(obj.get_meta()));
+      }
       OX (cursor = reinterpret_cast<const pl::ObPLCursorInfo*>(obj.get_ext()));
     } else {
       if (OB_ISNULL(cursor = session->get_pl_implicit_cursor())) {
@@ -292,7 +298,7 @@ int ObExprPLGetCursorAttr::calc_pl_get_cursor_attr(
           } else if (OB_UNLIKELY(rowid.empty())) {
             expr_datum.set_null();
           } else {
-            expr_datum.set_urowid(rowid.ptr(), rowid.length());
+            expr_datum.set_string(rowid.ptr(), rowid.length());
           }
         }
         break;

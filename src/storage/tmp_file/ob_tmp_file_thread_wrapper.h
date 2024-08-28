@@ -50,7 +50,8 @@ public:
   int try_work();
   void set_running_mode(const RUNNING_MODE mode);
   void notify_doing_flush();
-  void signal_io_finish();
+  void signal_io_finish(int flush_io_finished_ret);
+  int64_t get_flush_io_finished_ret();
   int64_t get_flush_io_finished_round();
   int64_t cal_idle_time();
   void clean_up_lists();
@@ -74,10 +75,12 @@ private:
   int pop_retry_list_(ObTmpFileFlushTask *&flush_task);
   int push_finished_list_(ObTmpFileFlushTask *flush_task);
   int pop_finished_list_(ObTmpFileFlushTask *&flush_task);
+  void flush_task_finished_(ObTmpFileFlushTask *flush_task);
 private:
   bool is_inited_;
   RUNNING_MODE mode_;
   int64_t last_flush_timestamp_;
+  int flush_io_finished_ret_;
   int64_t flush_io_finished_round_;
 
   int64_t flushing_block_num_;      // maintain it when ObTmpFileFlushTask is created and freed
@@ -132,6 +135,7 @@ private:
   int calculate_swap_page_num_(const int64_t batch_size, int64_t &expect_swap_cnt);
   int wakeup_satisfied_jobs_(int64_t& wakeup_job_cnt);
   int wakeup_timeout_jobs_();
+  void wakeup_all_jobs_(int ret_code);
 private:
   bool is_inited_;
   int tg_id_;

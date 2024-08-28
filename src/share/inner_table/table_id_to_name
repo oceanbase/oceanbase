@@ -344,6 +344,8 @@
 # 499: __all_transfer_partition_task  # BASE_TABLE_NAME
 # 500: __all_tenant_snapshot_job
 # 502: __all_trusted_root_certificate
+# 503: __all_audit_log_filter
+# 504: __all_audit_log_user
 # 505: __all_column_privilege
 # 506: __all_column_privilege_history
 # 506: __all_column_privilege  # BASE_TABLE_NAME
@@ -1099,6 +1101,10 @@
 # 12458: __all_virtual_ls_snapshot
 # 12459: __all_virtual_index_usage_info
 # 12459: __all_index_usage_info  # BASE_TABLE_NAME
+# 12460: __all_virtual_audit_log_filter
+# 12460: __all_audit_log_filter  # BASE_TABLE_NAME
+# 12461: __all_virtual_audit_log_user
+# 12461: __all_audit_log_user  # BASE_TABLE_NAME
 # 12462: __all_virtual_column_privilege
 # 12462: __all_column_privilege  # BASE_TABLE_NAME
 # 12463: __all_virtual_column_privilege_history
@@ -1131,6 +1137,7 @@
 # 12488: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 12490: __all_virtual_spatial_reference_systems
 # 12490: __all_spatial_reference_systems  # BASE_TABLE_NAME
+# 12505: __all_virtual_temp_file
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -1742,6 +1749,8 @@
 # 15458: __all_scheduler_job_run_detail_v2  # BASE_TABLE_NAME
 # 15459: ALL_VIRTUAL_SPATIAL_REFERENCE_SYSTEMS_REAL_AGENT
 # 15459: __all_spatial_reference_systems  # BASE_TABLE_NAME
+# 15485: ALL_VIRTUAL_TEMP_FILE
+# 15485: __all_virtual_temp_file  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -1757,6 +1766,9 @@
 # 20014: ENGINES
 # 20015: ROUTINES
 # 20016: PROFILING
+# 20017: OPTIMIZER_TRACE
+# 20018: PLUGINS
+# 20019: INNODB_SYS_COLUMNS
 # 20020: INNODB_FT_BEING_DELETED
 # 20021: INNODB_FT_CONFIG
 # 20022: INNODB_FT_DELETED
@@ -2134,6 +2146,8 @@
 # 21511: role_edges
 # 21512: default_roles
 # 21513: CDB_INDEX_USAGE
+# 21514: audit_log_filter
+# 21515: audit_log_user
 # 21516: columns_priv
 # 21517: GV$OB_LS_SNAPSHOTS
 # 21518: V$OB_LS_SNAPSHOTS
@@ -2187,6 +2201,9 @@
 # 21579: INNODB_METRICS
 # 21580: EVENTS
 # 21581: V$OB_NIC_INFO
+# 21582: ROLE_TABLE_GRANTS
+# 21583: ROLE_COLUMN_GRANTS
+# 21584: ROLE_ROUTINE_GRANTS
 # 21585: func
 # 21586: GV$OB_NIC_INFO
 # 21589: DBA_SCHEDULER_JOB_RUN_DETAILS
@@ -2194,6 +2211,8 @@
 # 21603: INNODB_SYS_FIELDS
 # 21604: INNODB_SYS_FOREIGN
 # 21605: INNODB_SYS_FOREIGN_COLS
+# 21622: DBA_OB_TEMP_FILES
+# 21623: CDB_OB_TEMP_FILES
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -2661,6 +2680,7 @@
 # 28230: GV$OB_NIC_INFO
 # 28231: V$OB_NIC_INFO
 # 28234: DBA_OB_SPATIAL_COLUMNS
+# 28264: DBA_OB_TEMP_FILES
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

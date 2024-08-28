@@ -17,6 +17,7 @@
 #include "storage/blocksstable/ob_macro_block_id.h"
 #include "ob_i_lob_adaptor.h"
 #include "common/row/ob_row_iterator.h"
+#include "storage/blocksstable/ob_datum_row_iterator.h"
 
 namespace oceanbase
 {
@@ -25,22 +26,20 @@ namespace storage
 
 class ObStoreCtxGuard;
 
-class ObLobUpdIterator : public ObNewRowIterator
+class ObLobUpdIterator : public blocksstable::ObDatumRowIterator
 {
 public:
-  ObLobUpdIterator(ObNewRow *old_row,
-                   ObNewRow *new_row)
+  ObLobUpdIterator(blocksstable::ObDatumRow *old_row,
+                   blocksstable::ObDatumRow *new_row)
     : old_row_(old_row),
       new_row_(new_row),
       got_old_row_(false),
       is_iter_end_(false)
   {}
-  virtual int get_next_row(ObNewRow *&row) override;
-  virtual int get_next_row() override { return OB_NOT_IMPLEMENT; }
-  virtual void reset() override {}
+  virtual int get_next_row(blocksstable::ObDatumRow *&row) override;
 private:
-  ObNewRow *old_row_;
-  ObNewRow *new_row_;
+  blocksstable::ObDatumRow *old_row_;
+  blocksstable::ObDatumRow *new_row_;
   bool got_old_row_;
   bool is_iter_end_;
 };
@@ -94,13 +93,12 @@ public:
   virtual int update_lob_meta(ObLobAccessParam& param, ObLobMetaInfo& old_row, ObLobMetaInfo& new_row) override;
 
   static void set_lob_meta_row(
-      ObObj* cell,
-      ObNewRow& new_row,
+      blocksstable::ObDatumRow& datum_row,
       ObLobMetaInfo& in_row);
 
-  int write_lob_meta(ObLobAccessParam &param, ObNewRowIterator& row_iter);
-  int erase_lob_meta(ObLobAccessParam &param, ObNewRowIterator& row_iter);
-  int update_lob_meta(ObLobAccessParam& param, ObNewRowIterator &row_iter);
+  int write_lob_meta(ObLobAccessParam &param, blocksstable::ObDatumRowIterator& row_iter);
+  int erase_lob_meta(ObLobAccessParam &param, blocksstable::ObDatumRowIterator& row_iter);
+  int update_lob_meta(ObLobAccessParam& param, blocksstable::ObDatumRowIterator &row_iter);
 
   int build_common_scan_param(
       const ObLobAccessParam &param,
@@ -159,9 +157,8 @@ private:
   int set_lob_piece_row(
       char* buf,
       size_t buf_len,
-      ObObj* cell, 
-      ObNewRow& new_row,
-      common::ObSingleRowIteratorWrapper* new_row_iter,
+      blocksstable::ObDatumRow& datum_row,
+      blocksstable::ObSingleDatumRowIteratorWrapper* new_row_iter,
       ObLobPieceInfo& in_row);
 
   int init_table_param();

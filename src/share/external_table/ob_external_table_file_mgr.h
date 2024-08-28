@@ -21,6 +21,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "src/sql/resolver/ob_stmt_resolver.h"
+#include "sql/engine/table/ob_odps_table_row_iter.h"
 
 namespace oceanbase {
 namespace sql {
@@ -104,6 +105,7 @@ public:
 
   const char* auto_refresh_job_name = "auto_refresh_external_table_job";
   const char ip_delimiter = '%';
+  const char equals_delimiter = '=';
 
   ObExternalTableFileManager() {}
 
@@ -200,7 +202,7 @@ private:
       const uint64_t partition_id,
       const ObIArray<ObExternalFileInfoTmp> &file_infos);
 
-    int update_inner_table_files_list_by_table(
+  int update_inner_table_files_list_by_table(
     sql::ObExecContext &exec_ctx,
     ObMySQLTransaction &trans,
     const uint64_t tenant_id,
@@ -251,6 +253,11 @@ private:
                                 ObIArray<ObTempExpr *> &temp_exprs);
   int get_all_partition_list_val(const ObTableSchema *table_schema, ObIArray<ObNewRow> &part_vals, ObIArray<int64_t> &part_ids);
   int calculate_file_part_val_by_file_name(const ObTableSchema *table_schema,
+                                          const ObIArray<ObExternalFileInfoTmp> &file_infos,
+                                          ObIArray<ObNewRow> &part_vals,
+                                          share::schema::ObSchemaGetterGuard &schema_guard,
+                                          ObExecContext &exec_ctx);
+  int calculate_odps_part_val_by_part_spec(const ObTableSchema *table_schema,
                                           const ObIArray<ObExternalFileInfoTmp> &file_infos,
                                           ObIArray<ObNewRow> &part_vals,
                                           share::schema::ObSchemaGetterGuard &schema_guard,

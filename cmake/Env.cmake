@@ -117,6 +117,8 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_ORACLE_PL ON)
   # dblink
   ob_define(OB_BUILD_DBLINK ON)
+  # odps
+  ob_define(OB_BUILD_CPP_ODPS ON)
   # 仲裁功能
   ob_define(OB_BUILD_ARBITRATION ON)
 
@@ -170,6 +172,10 @@ endif()
 
 if(OB_BUILD_DBLINK)
   add_definitions(-DOB_BUILD_DBLINK)
+endif()
+
+if(OB_BUILD_CPP_ODPS)
+  add_definitions(-DOB_BUILD_CPP_ODPS)
 endif()
 
 # should not use initial-exec for tls-model if building OBCDC.

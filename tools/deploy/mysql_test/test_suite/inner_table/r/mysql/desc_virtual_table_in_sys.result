@@ -6073,6 +6073,7 @@ destination_name	varchar(128)	YES		NULL
 interval_ts	bigint(20)	YES		NULL	
 user_id	bigint(20)	YES		-1	
 database_id	bigint(20)	YES		-1	
+max_failures	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9235,6 +9236,7 @@ destination_owner	varchar(128)	YES		NULL
 destination	varchar(128)	YES		NULL	
 credential_owner	varchar(30)	YES		NULL	
 credential_name	varchar(30)	YES		NULL	
+job_class	varchar(128)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_scheduler_running_job;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9429,6 +9431,29 @@ bucket_1000_plus_rows_returned	bigint(20)	NO		NULL
 last_used	timestamp(6)	NO		NULL	
 last_flush_time	timestamp(6)	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_index_usage_info;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_audit_log_filter;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+filter_name	varbinary(256)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+definition	longtext	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_audit_log_filter;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_audit_log_user;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+user_name	varbinary(512)	NO	PRI	NULL	
+host	varchar(128)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+filter_name	varbinary(256)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_audit_log_user;
 IF(count(*) >= 0, 1, 0)
 1
 desc oceanbase.__all_virtual_column_privilege;
@@ -9724,5 +9749,34 @@ maxY	decimal(38,10)	YES		NULL
 proj4text	varchar(2048)	YES		NULL	
 description	varchar(2048)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_spatial_reference_systems;
+IF(count(*) >= 0, 1, 0)
+1
+desc oceanbase.__all_virtual_temp_file;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO		NULL	
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+file_id	bigint(20)	NO		NULL	
+trace_id	varchar(64)	NO		NULL	
+dir_id	bigint(20)	NO		NULL	
+bytes	bigint(20)	NO		NULL	
+start_offset	bigint(20)	NO		NULL	
+is_deleting	tinyint(4)	NO		NULL	
+cached_page_num	bigint(20)	NO		NULL	
+write_back_page_num	bigint(20)	NO		NULL	
+flushed_page_num	bigint(20)	NO		NULL	
+ref_cnt	bigint(20)	NO		NULL	
+total_writes	bigint(20)	NO		NULL	
+unaligned_writes	bigint(20)	NO		NULL	
+total_reads	bigint(20)	NO		NULL	
+unaligned_reads	bigint(20)	NO		NULL	
+total_read_bytes	bigint(20)	NO		NULL	
+last_access_time	timestamp(6)	NO		NULL	
+last_modify_time	timestamp(6)	NO		NULL	
+birth_time	timestamp(6)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_temp_file;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_temp_file runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
