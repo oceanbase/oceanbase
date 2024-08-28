@@ -1745,7 +1745,7 @@ int ObLobManager::update_out_ctx(
   int ret = OB_SUCCESS;
   ObLobDataOutRowCtx *out_row_ctx = reinterpret_cast<ObLobDataOutRowCtx*>(param.lob_data_->buffer_);
 
-  if (ObLobDataOutRowCtx::OpType::DIFF == out_row_ctx->op_) {
+  if (out_row_ctx->is_diff()) {
   } else {
     // update seq no
     out_row_ctx->seq_no_cnt_ = param.used_seq_cnt_;

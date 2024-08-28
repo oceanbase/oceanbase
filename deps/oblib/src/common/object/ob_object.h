@@ -551,6 +551,9 @@ struct ObLobDataOutRowCtx
     ERASE,
     EMPTY_SQL, // lob col not change in full sql update, out row ctx is empty
     DIFF,
+    EXT_INFO_LOG,
+    VALID_OLD_VALUE_EXT_INFO_LOG,
+    VALID_OLD_VALUE,
   };
   ObLobDataOutRowCtx()
     : is_full_(0), op_(0), offset_(0), check_sum_(0), seq_no_st_(0), seq_no_cnt_(0),
@@ -572,7 +575,12 @@ struct ObLobDataOutRowCtx
   // and this field is added later when bug is found, and may be a random value
   uint32_t reserved_;
 
+  bool is_empty_sql() const { return OpType::EMPTY_SQL == op_; }
   bool is_diff() const { return OpType::DIFF == op_; }
+  bool is_ext_info_log() const { return OpType::EXT_INFO_LOG == op_; }
+  bool is_valid_old_value_ext_info_log() const { return OpType::VALID_OLD_VALUE_EXT_INFO_LOG == op_; }
+  bool is_valid_old_value() const { return OpType::VALID_OLD_VALUE == op_; }
+
   int64_t get_real_chunk_size() const;
 };
 
