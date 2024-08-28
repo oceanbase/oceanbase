@@ -316,7 +316,7 @@ static ObCharsetHandler ob_charset_latin1_handler=
   ob_charpos_8bit,
   ob_max_bytes_charpos_8bit,
   ob_well_formed_len_8bit,
-  ob_lengthsp_binary,
+  ob_lengthsp_8bit,
   //ob_numcells_8bit,
   ob_mb_wc_latin1,
   ob_wc_mb_latin1,
