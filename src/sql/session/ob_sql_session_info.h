@@ -635,6 +635,10 @@ public:
         } else if (!pl_cursor_map_.created() &&
                    OB_FAIL(pl_cursor_map_.create(common::hash::cal_next_prime(32),
                                                  ObModIds::OB_HASH_BUCKET, ObModIds::OB_HASH_NODE))) {
+          if (NULL != mem_context_) {
+            DESTROY_CONTEXT(mem_context_);
+            mem_context_ = NULL;
+          }
           SQL_ENG_LOG(WARN, "create sequence current value map failed", K(ret));
         } else { /*do nothing*/ }
         return ret;
