@@ -121,6 +121,7 @@ ob_set_subtarget(oblib_lib roaringbitmap
   roaringbitmap/ob_roaringbitmap.cpp
   roaringbitmap/ob_rb_utils.cpp
   roaringbitmap/ob_rb_bin.cpp
+  roaringbitmap/ob_rb_memory_mgr.cpp
 )
 
 ob_set_subtarget(oblib_lib encode

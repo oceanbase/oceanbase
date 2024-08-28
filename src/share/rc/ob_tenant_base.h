@@ -35,6 +35,7 @@ namespace common {
   template<typename T> class ObServerObjectPool;
   class ObDetectManager;
   class ObOptStatMonitorManager;
+  class ObRbMemMgr;
 }
 namespace omt {
  class ObPxPools;
@@ -374,6 +375,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObStorageHADiagMgr*,                  \
       common::sqlclient::ObTenantDblinkKeeper*,      \
       storage::ObGlobalIteratorPool*,                \
+      common::ObRbMemMgr*,                           \
       storage::ObTenantRestoreInfoMgr*,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*                        \

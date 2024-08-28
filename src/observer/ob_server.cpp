@@ -128,6 +128,7 @@
 #endif
 #include "lib/xml/ob_libxml2_sax_handler.h"
 #include "ob_check_params.h"
+#include "lib/roaringbitmap/ob_rb_memory_mgr.h"
 #ifdef OB_BUILD_AUDIT_SECURITY
 #include "sql/audit/ob_audit_log_mgr.h"
 #endif
@@ -2718,6 +2719,12 @@ int ObServer::init_sql()
 
   if (OB_SUCC(ret)) {
     ObLibXml2SaxHandler::init();
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ObRbMemMgr::init_memory_hook())) {
+      LOG_ERROR("fail initialize roaring memory hook", KR(ret));
+    }
   }
 
   if (OB_SUCC(ret)) {

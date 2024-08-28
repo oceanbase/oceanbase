@@ -8432,7 +8432,7 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
       } else {
         // get obj
         uint64_t val = 0;
-        bool null_val = false;
+        bool is_null_val = false;
         if (!inited_tmp_obj
             && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -8441,7 +8441,7 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
         } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
           LOG_WARN("failed to convert datum to obj", K(ret));
         } else if (tmp_obj->is_null()) {
-          null_val = true;
+          is_null_val = true;
         } else if (tmp_obj->is_unsigned_integer()) {
           val = tmp_obj->get_uint64();
         } else if (tmp_obj->is_signed_integer())  {
@@ -8460,7 +8460,7 @@ int ObAggregateProcessor::get_rb_build_agg_result(const ObAggrInfo &aggr_info,
           ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
           LOG_WARN("invalid data type for roaringbitmap build agg");
         }
-        if (OB_FAIL(ret) || null_val) {
+        if (OB_FAIL(ret) || is_null_val) {
         } else if (OB_ISNULL(rb) && OB_ISNULL(rb = OB_NEWx(ObRoaringBitmap, &tmp_alloc, (&tmp_alloc)))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to create alloc memory to roaringbitmap", K(ret));
@@ -8522,13 +8522,16 @@ int ObAggregateProcessor::get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
     bool inited_tmp_obj = false;
     ObObj *tmp_obj = NULL;
     ObRoaringBitmap *rb = NULL;
+    bool calc_finished = false;
 
-    while (OB_SUCC(ret) && OB_SUCC(extra->get_next_row(storted_row))) {
+    while (OB_SUCC(ret) && !calc_finished && OB_SUCC(extra->get_next_row(storted_row))) {
       if (OB_ISNULL(storted_row)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(storted_row));
       } else {
         ObString tmp_bin;
+        ObString tmp_rb_bin;
+        bool is_null_obj = false;
         // get obj
         if (!inited_tmp_obj
             && OB_ISNULL(tmp_obj = static_cast<ObObj*>(tmp_alloc.alloc(sizeof(ObObj) * (storted_row->cnt_))))) {
@@ -8538,27 +8541,38 @@ int ObAggregateProcessor::get_rb_calc_agg_result(const ObAggrInfo &aggr_info,
         } else if (OB_FAIL(convert_datum_to_obj(aggr_info, *storted_row, tmp_obj, storted_row->cnt_))) {
           LOG_WARN("failed to convert datum to obj", K(ret));
         } else if (tmp_obj->is_null()) {
-          // do noting for null
-        } else if (!(tmp_obj->is_roaringbitmap()
-                      || tmp_obj->is_roaringbitmap()
-                      || tmp_obj->is_hex_string())) {
+          is_null_obj = true;
+        } else if (!(tmp_obj->is_roaringbitmap() || tmp_obj->is_hex_string())) {
           ret = OB_ERR_INVALID_TYPE_FOR_ARGUMENT;
           LOG_WARN("invalid data type for roaringbitmap agg");
         } else if (OB_FALSE_IT(tmp_bin = tmp_obj->get_string())) {
         } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_alloc, *tmp_obj, tmp_bin))) {
           LOG_WARN("failed to get real data.", K(ret), K(tmp_bin));
+        } else if (!tmp_obj->is_roaringbitmap()) {
+          if (OB_FAIL(ObRbUtils::build_binary(tmp_alloc, tmp_bin, tmp_rb_bin))) {
+            LOG_WARN("failed to build roaringbitmap from binary", K(ret), K(tmp_bin));
+          }
+        } else {
+          tmp_rb_bin = tmp_bin;
+        }
+
+        if (OB_FAIL(ret) || is_null_obj) {
         } else if (OB_ISNULL(rb)) {
-          if (OB_FAIL(ObRbUtils::rb_deserialize(tmp_alloc, tmp_bin, rb))) {
+          if (OB_FAIL(ObRbUtils::rb_deserialize(tmp_alloc, tmp_rb_bin, rb))) {
             LOG_WARN("failed to deserialize roaringbitmap", K(ret));
+          } else if (calc_op == ObRbOperation::AND && rb->get_cardinality() == 0) {
+            calc_finished = true;
           }
         } else {
           ObRoaringBitmap *tmp_rb = NULL;
-          if (OB_FAIL(ObRbUtils::rb_deserialize(tmp_alloc, tmp_bin, tmp_rb))){
+          if (OB_FAIL(ObRbUtils::rb_deserialize(tmp_alloc, tmp_rb_bin, tmp_rb))){
             LOG_WARN("failed to deserialize roaringbitmap", K(ret));
-          } else if (OB_FAIL(rb->value_calc(tmp_rb, calc_op))) {
+          } else if (OB_FAIL(ObRbUtils::calc_inplace(rb, tmp_rb, calc_op))) {
             LOG_WARN("failed to calculate roaringbitmap", K(ret));
-          } else if (OB_FALSE_IT(ObRbUtils::rb_destroy(tmp_rb))) {
+          } else if (calc_op == ObRbOperation::AND && rb->get_cardinality() == 0) {
+            calc_finished = true;
           }
+          ObRbUtils::rb_destroy(tmp_rb);
         }
       }
     }//end of while
