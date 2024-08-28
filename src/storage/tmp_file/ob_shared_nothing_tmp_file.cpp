@@ -1263,6 +1263,11 @@ int ObSharedNothingTmpFile::append_write_memory_tail_page_(ObTmpFileIOCtx &io_ct
         // for the last page, if the status of flushed_page_id_ page is not cached,
         // we will treat this page as a non-flushed page
         flushed_data_page_num_--;
+        if (0 == flushed_data_page_num_) {
+          LOG_INFO("flushed_page_id_ has been written", KPC(this));
+          flushed_page_id_ = ObTmpFileGlobal::INVALID_PAGE_ID;
+          flushed_page_virtual_id_ = ObTmpFileGlobal::INVALID_VIRTUAL_PAGE_ID;
+        }
       } else if (is_write_back) {
         write_back_data_page_num_--;
       }
