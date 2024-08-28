@@ -635,8 +635,12 @@ ObHTableRowIterator::ObHTableRowIterator(const ObTableQuery &query)
       cell_count_(0),
       count_per_row_(0),
       has_more_cells_(true),
-      is_first_result_(true)
-{}
+      is_first_result_(true),
+      allow_partial_results_(false),
+      is_cache_block_(true),
+      scanner_context_(NULL)
+{
+}
 
 ObHTableRowIterator::~ObHTableRowIterator()
 {
@@ -736,11 +740,15 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
   one_hbase_row_.reset();
   ObIArray<common::ObNewRow>& same_kq_cells = get_same_kq_cells();
   ObHTableMatchCode match_code = ObHTableMatchCode::DONE_SCAN;  // initialize
+  bool has_filter_row = (NULL != hfilter_) && (hfilter_->has_filter_row());
   if (ObQueryFlag::Reverse == scan_order_ && (-1 != limit_per_row_per_cf_ || 0 != offset_per_row_per_cf_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "set limit_per_row_per_cf_ and offset_per_row_per_cf_ in reverse scan");
     LOG_WARN("server don't support set limit_per_row_per_cf_ and offset_per_row_per_cf_ in reverse scan yet",
               K(ret), K(scan_order_), K(limit_per_row_per_cf_), K(offset_per_row_per_cf_));
+  } else if (scanner_context_ == nullptr) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("scanner_context_ meet unexecpted nullptr", K(ret));
   }
   if (OB_SUCC(ret) && NULL == column_tracker_) {
     // first iteration
@@ -771,6 +779,15 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
   if (OB_SUCC(ret) && matcher_->is_curr_row_empty()) {
     count_per_row_ = 0;
     ret = matcher_->set_to_new_row(curr_cell_);
+  }
+  if (OB_SUCC(ret)) {
+    if (has_filter_row) {
+      scanner_context_->limits_.set_size_scope(LimitScope::Scope::BETWEEN_ROWS);
+      scanner_context_->limits_.set_time_scope(LimitScope::Scope::BETWEEN_ROWS);
+    } else if (allow_partial_results_) {
+      scanner_context_->limits_.set_size_scope(LimitScope::Scope::BETWEEN_CELLS);
+      scanner_context_->limits_.set_time_scope(LimitScope::Scope::BETWEEN_CELLS);
+    }
   }
   bool loop = true;
   if (OB_SUCC(ret)) {
@@ -865,6 +882,8 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
                 if (OB_FAIL(out_result->add_row(*(curr_cell_.get_ob_row())))) {
                   LOG_WARN("failed to add row to result", K(ret));
                 } else {
+                  scanner_context_->increment_batch_progress(1);
+                  scanner_context_->increment_size_progress(curr_cell_.get_ob_row()->get_serialize_size());
                   ++cell_count_;
                   LOG_DEBUG("[yzfdebug] add cell", K_(cell_count), K_(curr_cell),
                             K_(count_per_row), K_(offset_per_row_per_cf));
@@ -909,7 +928,7 @@ int ObHTableRowIterator::get_next_result(ObTableQueryResult *&out_result)
               }
             }
             if (OB_SUCC(ret)) {
-              if (reach_batch_limit() || reach_size_limit()) {
+              if (scanner_context_->check_any_limit(LimitScope::Scope::BETWEEN_CELLS)) {
                 loop = false;
               }
             } else if (OB_ITER_END == ret) {
@@ -1037,20 +1056,54 @@ void ObHTableRowIterator::set_ttl(int32_t ttl_value)
 ObHTableFilterOperator::ObHTableFilterOperator(const ObTableQuery &query,
                                                table::ObTableQueryResult &one_result)
     : ObTableQueryResultIterator(&query),
+      is_inited_(false),
       row_iterator_(query),
       one_result_(&one_result),
       hfilter_(NULL),
-      batch_size_(query.get_batch()),
+      ob_kv_params_(query.get_ob_params()),
+      caching_(-1),
+      batch_(query.get_batch()),
       max_result_size_(std::min(query.get_max_result_size(),
                                 static_cast<int64_t>(ObTableQueryResult::get_max_packet_buffer_length() - 1024))),
-      is_first_result_(true)
+      is_first_result_(true),
+      check_existence_only_(false),
+      scanner_context_()
 {
+}
+
+int ObHTableFilterOperator::init_ob_params(){
+  int ret = OB_SUCCESS;
+  const ObHBaseParams* hbase_params = nullptr;
+  if (ob_kv_params_.ob_params_ != nullptr && !is_inited_) {
+    if (OB_FAIL(ob_kv_params_.init_ob_params_for_hfilter(hbase_params))) {
+      LOG_WARN("init_ob_params fail", K(ret));
+    } else {
+      caching_ = hbase_params->caching_;
+      scanner_context_.limits_.set_fields(batch_, max_result_size_, hbase_params->call_timeout_, LimitScope(LimitScope::Scope::BETWEEN_ROWS));
+      check_existence_only_ = hbase_params->check_existence_only_;
+      row_iterator_.set_allow_partial_results(hbase_params->allow_partial_results_);
+      row_iterator_.set_is_cache_block(hbase_params->is_cache_block_);
+    }
+  }
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
+    row_iterator_.set_scanner_context(&scanner_context_);
+  }
+  return ret;
+}
+
+bool ObHTableFilterOperator::reach_caching_limit(int num_of_row)
+{
+  return caching_ >= 0 && num_of_row >= caching_;
 }
 
 // @param one_result for one batch
 int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
 {
   int ret = OB_SUCCESS;
+  if (OB_FAIL(init_ob_params())) {
+    LOG_WARN("init ob params fail", K(ret), K(ob_kv_params_));
+  }
   one_result_->reset_except_property();
   bool has_filter_row = (NULL != hfilter_) && (hfilter_->has_filter_row());
   next_result = one_result_;
@@ -1059,8 +1112,12 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
   // ObObj first_entity_cells[4];
   // first_entity.cells_ = first_entity_cells;
   // first_entity.count_ = 4;
+  int num_of_row = 0;
+  scanner_context_.progress_.reset();
   while (OB_SUCC(ret) && row_iterator_.has_more_result()
-      && OB_SUCC(row_iterator_.get_next_result(htable_row))) {
+      && !reach_caching_limit(num_of_row)
+      && OB_SUCC(row_iterator_.get_next_result(htable_row) 
+      )) {
     LOG_DEBUG("[yzfdebug] got one row", "cells_count", htable_row->get_row_count());
     bool is_empty_row = (htable_row->get_row_count() == 0);
     if (is_empty_row) {
@@ -1107,6 +1164,10 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
     }
     /* @todo check batch limit and size limit */
     // We have got one hbase row, store it to this batch
+    if (check_existence_only_) {
+      one_result_->save_row_count_only(1);
+      break;
+    }
     if (OB_FAIL(one_result_->add_all_row(*htable_row))) {
       LOG_WARN("failed to add cells to row", K(ret));
     }
@@ -1114,7 +1175,9 @@ int ObHTableFilterOperator::get_next_result(ObTableQueryResult *&next_result)
       hfilter_->reset();
     }
     if (OB_SUCC(ret)) {
-      if (one_result_->reach_batch_size_or_result_size(batch_size_, max_result_size_)) {
+      num_of_row += 1;
+      scanner_context_.increment_size_progress(htable_row->get_serialize_size_());
+      if (scanner_context_.check_any_limit(LimitScope::Scope::BETWEEN_ROWS)) {
         break;
       }
     }
@@ -1151,4 +1214,69 @@ int ObHTableFilterOperator::parse_filter_string(common::ObIAllocator* allocator)
     row_iterator_.set_hfilter(hfilter_);
   }
   return ret;
+}
+
+void ObHTableFilterOperator::init_properties(const ObHBaseParams* params, const ObTableQuery &query)
+{
+  if (params != nullptr) {
+    caching_ = params->caching_;
+    scanner_context_.limits_.set_fields(query.get_batch(), max_result_size_, params->call_timeout_, LimitScope(LimitScope::Scope::BETWEEN_ROWS));
+    check_existence_only_ = params->check_existence_only_;
+  }
+  row_iterator_.set_scanner_context(&scanner_context_);
+}
+
+ScannerContext::ScannerContext() 
+{
+  limits_.set_fields(LIMIT_DEFAULT_VALUE, LIMIT_DEFAULT_VALUE, LIMIT_DEFAULT_VALUE, LimitScope::Scope::BETWEEN_ROWS);
+  progress_.set_fields(PROGRESS_DEFAULT_VALUE, PROGRESS_DEFAULT_VALUE, PROGRESS_DEFAULT_VALUE, LimitScope::Scope::BETWEEN_ROWS);
+}
+
+ScannerContext::ScannerContext(int32_t batch, int64_t size, int64_t time, LimitScope limit_scope)
+{
+  limits_.set_fields(batch, size, time, limit_scope);
+}
+
+void ScannerContext::increment_batch_progress(int32_t batch)
+{
+  int32_t current_batch = progress_.get_batch();
+  progress_.set_batch(current_batch + batch);
+}
+
+void ScannerContext::increment_size_progress(int64_t size)
+{
+  int64_t current_size = progress_.get_size();
+  progress_.set_size(current_size + size);
+}
+
+bool ScannerContext::check_batch_limit(LimitScope checker_scope)
+{
+  bool ret = false;
+  if (limits_.can_enforce_batch_from_scope(checker_scope) && limits_.get_batch() > 0) {
+    ret = progress_.get_batch() >= limits_.get_batch();
+  }
+  return ret;
+}
+
+bool ScannerContext::check_size_limit(LimitScope checker_scope)
+{
+  bool ret = false;
+  if (limits_.can_enforce_size_from_scope(checker_scope) && limits_.get_size() >0 ) {
+    ret = progress_.get_size() >= limits_.get_size();
+  }
+  return ret;
+}
+
+bool ScannerContext::check_time_limit(LimitScope checker_scope)
+{
+  bool ret = false;
+  if (limits_.can_enforce_time_from_scope(checker_scope) && limits_.get_time() > 0) {
+    ret = progress_.get_time() >= limits_.get_time();
+  }
+  return ret;
+}
+
+bool ScannerContext::check_any_limit(LimitScope checker_scope)
+{
+  return check_batch_limit(checker_scope) || check_size_limit(checker_scope) || check_time_limit(checker_scope);
 }

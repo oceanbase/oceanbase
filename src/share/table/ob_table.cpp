@@ -1053,7 +1053,7 @@ int ObTableQuery::deep_copy(ObIAllocator &allocator, ObTableQuery &dst) const
     LOG_WARN("fail to deep copy index name", K(ret), K_(index_name));
   } else if (OB_FAIL(htable_filter_.deep_copy(allocator, dst.htable_filter_))) {
     LOG_WARN("fail to deep copy htable filter", K(ret), K_(htable_filter));
-  } else if (OB_FAIL(ob_params_.deep_copy(dst.ob_params_))){
+  } else if (OB_FAIL(ob_params_.deep_copy(allocator, dst.ob_params_))){
     LOG_WARN("fail to deep copy htable filter", K(ret), K_(ob_params));
   } else {
     dst.deserialize_allocator_ = deserialize_allocator_;
@@ -1122,6 +1122,8 @@ OB_DEF_DESERIALIZE(ObTableQuery,)
           LOG_WARN("fail to deep copy range", K(ret));
         } else if (OB_FAIL(key_ranges_.push_back(key_range))) {
           LOG_WARN("fail to add key range to array", K(ret));
+        } else {
+          ob_params_.set_allocator(deserialize_allocator_);
         }
       }
     }
@@ -1780,149 +1782,106 @@ OB_SERIALIZE_MEMBER(ObTableMoveResult,
                     replica_info_,
                     reserved_);
 
-int8_t ObHBaseParams::bool_to_byte() const {
-  int8_t flag = 0; // Initialize to 0
+OB_SERIALIZE_MEMBER_INHERIT(ObHBaseParams, 
+                            EmptyParent,
+                            caching_,
+                            call_timeout_,
+                            flag_);
 
-  if (is_raw_) {
-    flag |= 0x01; // 00000001
-  }
-  if (allow_partial_results_) {
-    flag |= 0x02; // 00000010
-  }
-  if (is_cache_block_) {
-    flag |= 0x04; // 00000100
-  }
-  if (check_existence_only_) {
-    flag |= 0x08; // 00001000
-  }
-  return flag;
-}
-
-void ObHBaseParams::byte_to_bool(int8_t flag) {
-  is_raw_ = (flag & 0x01) != 0;
-  allow_partial_results_ = (flag & 0x02) != 0;
-  is_cache_block_ = (flag & 0x04) != 0;
-  check_existence_only_ = (flag & 0x08) != 0;
-}
-
-int ObHBaseParams::serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
-  int ret = OK_;
-  OB_UNIS_ENCODE(UNIS_VERSION);
-  if (OB_SUCC(ret)) {
-    int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
-    int64_t pos_bak = (pos += size_nbytes);
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(serialization::encode(buf, buf_len, pos, param_type_))) {
-        RPC_WARN("serialize fail", K(ret));
-      }
-    }
-    if (!OB_FAIL(ret)) {
-      if (OB_FAIL(serialization::encode(buf, buf_len, pos, caching_))){
-        RPC_WARN("serialize fail", K(buf), K(buf_len), K(pos), K(caching_));
-      } else if (!OB_FAIL(serialization::encode(buf, buf_len, pos, call_timeout_))) {
-        RPC_WARN("serialize fail", K(buf), K(buf_len), K(pos), K(call_timeout_));
-      }else {
-        int8_t flag = bool_to_byte();
-        if (!OB_FAIL(serialization::encode(buf, buf_len, pos, flag))) {
-          RPC_WARN("serialize fail", K(buf), K(buf_len), K(pos), K(call_timeout_));
-        }
-      }
-    }
-    int64_t serial_size = pos - pos_bak;
-    int64_t tmp_pos = 0;
-    CHECK_SERIALIZE_SIZE(ObHBaseParams, serial_size);
-    if (OB_SUCC(ret)) {
-      ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, size_nbytes, tmp_pos, serial_size);
-    }
+int ObHBaseParams::deep_copy(ObKVParamsBase *hbase_params) const
+{
+  int ret = OB_SUCCESS;
+  if (hbase_params == nullptr || hbase_params->get_param_type() != ParamType::HBase) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected hbase adress", K(ret), KPC(hbase_params));
+  } else {
+    ObHBaseParams *param = static_cast<ObHBaseParams*>(hbase_params);
+    param->caching_ = caching_;
+    param->call_timeout_ = call_timeout_;
+    param->is_cache_block_ = is_cache_block_;
+    param->allow_partial_results_ = allow_partial_results_;
+    param->check_existence_only_ = check_existence_only_;
   }
   return ret;
 }
 
-int ObHBaseParams::deserialize(const char *buf, const int64_t data_len, int64_t &pos) {
-  int ret = EmptyUnisStruct::deserialize(buf, data_len, pos);
+OB_DEF_DESERIALIZE(ObKVParams)
+{
+  int ret = OB_SUCCESS;
+  int8_t param_type = -1;
+  LST_DO_CODE(OB_UNIS_DECODE, param_type);
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(serialization::decode(buf, data_len, pos, caching_))) {
-      RPC_WARN("deserialize fail", K(buf), K(data_len), K(pos), K(caching_));
-    } else if (OB_FAIL(serialization::decode(buf, data_len, pos, call_timeout_))) {
-      RPC_WARN("deserialize fail", K(buf), K(data_len), K(pos), K(call_timeout_));
-    } else {
-      int8_t flag = 0;
-      if (OB_FAIL(serialization::decode(buf, data_len, pos, flag))){
-        RPC_WARN("deserialize fail", K(buf), K(data_len), K(pos), K(flag));
-      } else {
-        byte_to_bool(flag);
-      }
-    }
-  }
-  return ret;
-}
-
-int64_t ObHBaseParams::get_serialize_size() const {
-  int64_t len = ::oceanbase::lib::EmptyUnisStruct::get_serialize_size();
-  len += 1; // param_type;
-  len += serialization::encoded_length(caching_);
-  len += ::oceanbase::common::serialization::encoded_length(call_timeout_);
-  len += serialization::encoded_length(bool_to_byte());
-  OB_UNIS_ADD_LEN(UNIS_VERSION);
-  len += NS_::OB_SERIALIZE_SIZE_NEED_BYTES;
-  return len;
-}
-
-int ObHBaseParams::deep_copy(ObParamsBase *hbase_params) const {
-  ObHBaseParams *param = dynamic_cast<ObHBaseParams*>(hbase_params);
-  param->caching_ = caching_;
-  param->call_timeout_ = call_timeout_;
-  param->is_raw_ = is_raw_;
-  param->is_cache_block_ = is_cache_block_;
-  param->allow_partial_results_ = allow_partial_results_;
-  param->check_existence_only_ = check_existence_only_;
-  return OB_SUCCESS;
-}
-
-int ObParams::deserialize(const char *buf, const int64_t data_len, int64_t &pos){
-  int ret = OK_;
-  int64_t version = 0;
-  int64_t len = 0;
-  if (OB_SUCC(ret)) {
-    OB_UNIS_DECODE(version);
-    OB_UNIS_DECODE(len);
-    CHECK_VERSION_LENGTH(ObParams, version, len);
-  }
-  int8_t param_type = 0;
-  if (OB_SUCC(ret)) {
-    int64_t pos_orig = pos;
-    pos = 0;
-    int8_t param_type = -1;
-    if (OB_FAIL(serialization::decode(buf + pos_orig, len, pos, param_type))) {
-      RPC_WARN("decode object fail", "name", MSTR(param_type), K(data_len), K(pos), K(ret));
-    }
     if (param_type == static_cast<int8_t>(ParamType::HBase)) {
-      ob_params_ = get_ob_params(ParamType::HBase);
+      if (OB_FAIL(alloc_ob_params(ParamType::HBase, ob_params_))) {
+        RPC_WARN("alloc ob_params_ memory failed", K(ret));
+      }
     } else if (param_type == static_cast<int8_t>(ParamType::Redis)) {
-      ob_params_ = get_ob_params(ParamType::Redis);
+      if (OB_FAIL(alloc_ob_params(ParamType::Redis, ob_params_))) {
+        RPC_WARN("alloc ob_params_ memory failed", K(ret));
+      }
     } else {
       ret = OB_NOT_SUPPORTED;
     }
-    if (OB_FAIL(ob_params_->deserialize(buf + pos_orig, len, pos))) {
-      RPC_WARN("deserialize fail");
-    }
-    pos = pos_orig + len;
   }
-  
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ob_params_->deserialize(buf, data_len, pos))) {
+      RPC_WARN("ob_params deserialize fail");
+    }
+  }
   return ret;
 }
 
-int ObParams::serialize(char *buf, const int64_t buf_len, int64_t &pos) const {
-  return ob_params_->serialize(buf, buf_len, pos);
-}
-
-int64_t ObParams::get_serialize_size() const {
-  return ob_params_->get_serialize_size();
-}
-
-int ObParams::deep_copy(ObParams &ob_params) const {
+OB_DEF_SERIALIZE(ObKVParams)
+{
   int ret = OB_SUCCESS;
-  ob_params.ob_params_ = ob_params.get_ob_params(ob_params_->get_param_type());
-  ob_params_->deep_copy(ob_params.ob_params_);
+  if (ob_params_ == nullptr) {
+    ret = OB_BAD_NULL_ERROR;
+    RPC_WARN("unexpected ob_params_ nullptr", K(ret));
+  } else if (OB_FAIL(ob_params_->serialize(buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize obkv prarms", K(ret), K(buf), K(buf_len), K(pos));
+  }
+  return ret;
+}
+
+OB_DEF_SERIALIZE_SIZE(ObKVParams)
+{
+  int64_t len = 0;
+  if (ob_params_ != nullptr) {
+    len = ob_params_->get_serialize_size();
+  }
+  return len;
+}
+
+int ObKVParams::deep_copy(ObIAllocator &allocator, ObKVParams &ob_params) const
+{
+  int ret = OB_SUCCESS;
+  ob_params.set_allocator(&allocator);
+  if (ob_params_ == nullptr) {
+    ret = OB_BAD_NULL_ERROR;
+    LOG_WARN("unexpected ob_params nullptr", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(ob_params.alloc_ob_params(ob_params_->get_param_type(), ob_params.ob_params_))) {
+      LOG_WARN("alloc ob params error", K(ob_params_->get_param_type()), K(ret));
+    } else if (OB_FAIL(ob_params_->deep_copy(ob_params.ob_params_))) {
+      LOG_WARN("ob_params_ deep_copy error", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObKVParams::init_ob_params_for_hfilter(const ObHBaseParams*& params) const
+{
+  int ret = OB_SUCCESS;
+  if (ob_params_ == nullptr || ob_params_->get_param_type() != ParamType::HBase) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ob_params_ adress");
+  } else {
+    params = static_cast<ObHBaseParams*>(ob_params_);
+    if (params == nullptr) {
+      ret = OB_BAD_NULL_ERROR;
+      LOG_WARN("unexpected nullptr after static_cast");
+    }
+  }
   return ret;
 }

@@ -166,6 +166,86 @@ private:
   int32_t current_count_;
 };
 
+
+class LimitScope
+{
+public:
+  enum class Scope
+  {
+    BETWEEN_ROWS = 0,
+    BETWEEN_CELLS = 1
+  };
+  LimitScope() : scope_(Scope::BETWEEN_ROWS), depth_(0) {}
+  LimitScope(Scope scope) : scope_(scope), depth_(static_cast<int>(scope)) {}
+  ~LimitScope() {};
+  OB_INLINE int depth() const { return depth_; }
+  OB_INLINE void set_scope(Scope scope) {scope_ = scope; depth_ = static_cast<int>(scope);}
+  OB_INLINE bool can_enforce_limit_from_scope(const LimitScope& checker_scope) const { return checker_scope.depth() <= depth_; }
+  TO_STRING_KV(K_(scope), K_(depth));
+private:
+  Scope scope_;
+  int depth_;
+};
+
+class LimitFields
+{
+public:
+  LimitFields(): batch_(-1), size_(-1), time_(-1), size_scope_(LimitScope::Scope::BETWEEN_ROWS), time_scope_(LimitScope::Scope::BETWEEN_ROWS) {}
+  LimitFields(int32_t batch, int64_t size, int64_t time, LimitScope limit_scope) { set_fields(batch, size, time, limit_scope); }
+  void set_fields(int32_t batch, int64_t size, int64_t time, LimitScope limit_scope) {
+    set_batch(batch); 
+    set_size_scope(limit_scope); 
+    set_time_scope(limit_scope);
+    set_size(size);
+    set_time(time);
+  }
+  ~LimitFields() {};
+  void reset() { batch_ = 0; size_ =0; time_ = 0; size_scope_.set_scope(LimitScope::Scope::BETWEEN_ROWS);}
+  void set_batch(int32_t batch) { batch_ = batch; }
+  void set_size(int64_t size) { size_ = size; }
+  void set_time(int64_t time) { time_ = time; }
+  void set_time_scope(LimitScope scope) { time_scope_ = scope; }
+  void set_size_scope(LimitScope scope) { size_scope_ = scope; }
+  int32_t get_batch() { return batch_; }
+  int64_t get_size() { return size_; }
+  int64_t get_time() { return time_; }
+  LimitScope get_size_scope() { return size_scope_; }
+  LimitScope get_time_scope() { return time_scope_; }
+  bool can_enforce_batch_from_scope(LimitScope checker_scope) { return LimitScope(LimitScope::Scope::BETWEEN_CELLS).can_enforce_limit_from_scope(checker_scope);}
+  bool can_enforce_size_from_scope(LimitScope checker_scope) { return size_scope_.can_enforce_limit_from_scope(checker_scope); }
+  bool can_enforce_time_from_scope(LimitScope checker_scope) { return time_scope_.can_enforce_limit_from_scope(checker_scope); }
+  TO_STRING_KV(K_(batch), K_(size), K_(time), K_(size_scope), K_(time_scope));
+private:
+  int32_t batch_;
+  int64_t size_;
+  int64_t time_;
+  LimitScope size_scope_;
+  LimitScope time_scope_;
+};
+
+class ScannerContext
+{
+public:
+  ScannerContext();
+  ~ScannerContext() {};
+  ScannerContext(int32_t batch, int64_t size, int64_t time, LimitScope limit_scope);
+  void increment_batch_progress(int32_t batch);
+  void increment_size_progress(int64_t size);
+  void update_time_progress() { progress_.set_time(ObTimeUtility::current_time()); }
+  bool check_batch_limit(LimitScope checker_scope);
+  bool check_size_limit(LimitScope checker_scope);
+  bool check_time_limit(LimitScope checker_scope);
+  bool check_any_limit(LimitScope checker_scope);
+
+  LimitFields limits_;
+  LimitFields progress_;
+  TO_STRING_KV(K_(limits),
+                K_(progress));
+private:
+  static const int LIMIT_DEFAULT_VALUE = -1;
+  static const int PROGRESS_DEFAULT_VALUE = 0;
+};
+
 class ObHTableScanMatcher
 {
 public:
@@ -224,6 +304,9 @@ public:
                          ObTableQueryResult *&out_result);
   ObIArray<common::ObNewRow> &get_same_kq_cells() { return same_kq_cells_; }
   void set_max_version(int32_t max_version) { max_version_ = max_version; }
+  void set_scanner_context(ScannerContext *scanner_context) { scanner_context_ = scanner_context; }
+  void set_allow_partial_results(bool allow_partial_result) { allow_partial_results_ = allow_partial_result; }
+  void set_is_cache_block(bool is_cache_block) { is_cache_block_ = is_cache_block; }
 private:
   int next_cell();
   int reverse_next_cell(ObIArray<common::ObNewRow> &same_kq_cells,
@@ -257,6 +340,9 @@ private:
   int32_t count_per_row_;
   bool has_more_cells_;
   bool is_first_result_;
+  bool allow_partial_results_;
+  bool is_cache_block_;
+  ScannerContext *scanner_context_;
 };
 
 // entry class
@@ -266,6 +352,8 @@ public:
   ObHTableFilterOperator(const ObTableQuery &query, table::ObTableQueryResult &one_result);
   virtual ~ObHTableFilterOperator() {}
   /// Fetch next batch result
+  bool reach_caching_limit(int num_of_row);
+  int init_ob_params();
   virtual int get_next_result(ObTableQueryResult *&one_result) override;
   virtual bool has_more_result() const override { return row_iterator_.has_more_result(); }
   virtual table::ObTableQueryResult *get_one_result() override { return one_result_; }
@@ -278,15 +366,22 @@ public:
   void set_max_version(int32_t max_version_value) { row_iterator_.set_max_version(max_version_value); }
   // parse the filter string
   int parse_filter_string(common::ObIAllocator* allocator);
+  void init_properties(const ObHBaseParams* params, const ObTableQuery &query);
   OB_INLINE table::hfilter::Filter *get_hfiter() { return hfilter_; }
 private:
+  bool is_inited_;
   ObHTableRowIterator row_iterator_;
   table::ObTableQueryResult *one_result_;
   table::ObHTableFilterParser filter_parser_;
   table::hfilter::Filter *hfilter_;
-  int32_t batch_size_;
+  const ObKVParams& ob_kv_params_;
+  int32_t caching_;
+  int32_t batch_;
+  int time_limit_delta;
   int64_t max_result_size_;
   bool is_first_result_;
+  bool check_existence_only_;
+  ScannerContext scanner_context_;
 };
 
 } // end namespace table
