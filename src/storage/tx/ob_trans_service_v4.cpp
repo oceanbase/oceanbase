@@ -3700,18 +3700,16 @@ int ObTransService::handle_trans_ask_state(const ObAskStateMsg &msg,
     revert_tx_ctx_(ctx);
   }
   if (OB_SUCC(ret)) {
-    if (OB_ISNULL(ctx) || is_root) {
-      if (!resp.state_info_array_.empty()) {
-        build_tx_ask_state_resp_(resp, msg);
-        ObAddr send_to_addr; // for msg compat
-        if (msg.ori_addr_.is_valid()) {
-          send_to_addr = msg.ori_addr_;
-        } else {
-          send_to_addr = msg.sender_addr_;
-        }
-        if (OB_FAIL(rpc_->post_msg(send_to_addr, resp))) {
-          TRANS_LOG(WARN, "post ask state msg fail", K(ret), K(resp));
-        }
+    if (!resp.state_info_array_.empty()) {
+      build_tx_ask_state_resp_(resp, msg);
+      ObAddr send_to_addr; // for msg compat
+      if (msg.ori_addr_.is_valid()) {
+        send_to_addr = msg.ori_addr_;
+      } else {
+        send_to_addr = msg.sender_addr_;
+      }
+      if (OB_FAIL(rpc_->post_msg(send_to_addr, resp))) {
+        TRANS_LOG(WARN, "post ask state msg fail", K(ret), K(resp));
       }
     }
   }
