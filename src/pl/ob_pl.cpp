@@ -3295,7 +3295,7 @@ int ObPLExecState::init_complex_obj(ObIAllocator &allocator,
   if (OB_FAIL(ret)) {
   } else if (real_pl_type->is_ref_cursor_type() || real_pl_type->is_sys_refcursor_type()) {
     OX (obj.set_is_ref_cursor_type(true));
-    OX (obj.set_extend(0, real_pl_type->get_type()));
+    OX (obj.set_extend(0, PL_REF_CURSOR_TYPE));
   } else if (real_pl_type->is_udt_type()) {
     ObPLUDTNS ns(*schema_guard);
     OZ (ns.init_complex_obj(allocator, get_exec_ctx().expr_alloc_, *real_pl_type, obj, false, set_null));
@@ -3332,8 +3332,9 @@ int ObPLExecState::defend_stored_routine_change(const ObObjParam &actual_param, 
       LOG_WARN("incorrect argument type, expected complex, but get basic type",
                K(ret), K(formal_param_type), K(actual_param));
     }
-  } else if ((PL_REF_CURSOR_TYPE == actual_param.get_meta().get_extend_type()
-              || PL_CURSOR_TYPE == actual_param.get_meta().get_extend_type())
+  } else if ((actual_param.is_ref_cursor_type()                                  /* refcursor */
+              || PL_REF_CURSOR_TYPE == actual_param.get_meta().get_extend_type() /* also refcursor */
+              || PL_CURSOR_TYPE == actual_param.get_meta().get_extend_type()     /* cursor */)
              && formal_param_type.is_cursor_type()) {
     // skip check
   } else {  // user defined type
@@ -3592,6 +3593,7 @@ int ObPLExecState::init_params(const ParamStore *params, bool is_anonymous)
       }
     } else if (func_.get_variables().at(i).is_ref_cursor_type()) {
       OX (param.set_is_ref_cursor_type(true));
+      OX (param.set_extend(0, PL_REF_CURSOR_TYPE));
       // CURSOR初始化为NULL
     } else if (func_.get_variables().at(i).is_cursor_type()) {
       // leave obj as null type, spi_init wil init it.
@@ -3803,7 +3805,9 @@ do {                                                                  \
             // same type, we already check this on resolve stage, here directly assign value to symbol.
             if (get_params().at(i).is_ref_cursor_type()) {
               get_params().at(i) = params->at(i);
-              get_params().at(i).set_is_ref_cursor_type(true);
+              get_params().at(i).set_is_ref_cursor_type(true);  // last assignment statement could clear this flag
+              get_params().at(i).set_extend(
+                  get_params().at(i).get_ext(), PL_REF_CURSOR_TYPE, get_params().at(i).get_val_len());
             } else if (pl_type.is_collection_type() && OB_INVALID_ID == params->at(i).get_udt_id()) {
               ObPLComposite *composite = NULL;
               get_params().at(i) = params->at(i);
