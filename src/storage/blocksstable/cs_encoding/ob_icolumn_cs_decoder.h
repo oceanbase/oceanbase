@@ -32,6 +32,7 @@ class ObGroupByCell;
 }
 namespace blocksstable
 {
+class ObNoneExistColumnCSDecoder;
 class ObIColumnCSDecoder
 {
 public:
@@ -132,20 +133,6 @@ public:
   }
 };
 
-class ObNoneExistColumnCSDecoder : public ObIColumnCSDecoder
-{
-public:
-  static const ObCSColumnHeader::Type type_ = ObCSColumnHeader::MAX_TYPE;
-
-  virtual int decode(const ObColumnCSDecoderCtx &ctx, const int32_t row_id, common::ObDatum &datum) const override
-  {
-    datum.set_ext();
-    datum.no_cv(datum.extend_obj_)->set_ext(common::ObActionFlag::OP_NOP);
-    return common::OB_SUCCESS;
-  }
-  virtual ObCSColumnHeader::Type get_type() const { return type_; }
-  virtual bool can_vectorized() const override { return false; }
-};
 
 
 } // end namespace blocksstable

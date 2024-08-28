@@ -96,7 +96,7 @@ private:
   common::ObFixedArray<blocksstable::ObSqlDatumInfo, common::ObIAllocator> datum_infos_;
   common::ObFixedArray<const share::schema::ObColumnParam*, common::ObIAllocator> col_params_;
   sql::ObExpr *group_idx_expr_;
-  blocksstable::ObDatumRow default_row_;
+  common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> default_datums_;
   ObGroupByCell *group_by_cell_;
   const ObTableIterParam *iter_param_;
 };

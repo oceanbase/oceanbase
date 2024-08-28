@@ -88,6 +88,7 @@ ob_set_subtarget(ob_storage blocksstable_encoding
   blocksstable/encoding/ob_string_prefix_encoder.cpp
   blocksstable/encoding/neon/ob_dict_decoder_neon.cpp
   blocksstable/encoding/neon/ob_raw_decoder_neon.cpp
+  blocksstable/encoding/ob_none_exist_decoder.cpp
 )
 
 ob_set_subtarget(ob_storage blocksstable_cs_encoding
@@ -122,6 +123,7 @@ ob_set_subtarget(ob_storage blocksstable_cs_encoding
   blocksstable/cs_encoding/ob_integer_stream_vector_decoder.cpp
   blocksstable/cs_encoding/ob_string_stream_vector_decoder.cpp
   blocksstable/cs_encoding/ob_cs_vector_decoding_util.cpp
+  blocksstable/cs_encoding/ob_none_exist_cs_decoder.cpp
 )
 
 ob_set_subtarget(ob_storage blocksstable_index_block
