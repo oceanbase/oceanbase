@@ -579,6 +579,7 @@ int ObExternalTableAccessService::table_scan(
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
       LOG_WARN("not support to read odps in opensource", K(ret));
 #endif
+      break;
     case ObExternalFileFormat::ORC_FORMAT:
       // if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
       //   ret = OB_ALLOCATE_MEMORY_FAILED;
