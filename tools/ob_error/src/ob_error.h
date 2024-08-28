@@ -174,7 +174,7 @@ public:
 };
 
 // The length of the second dimension, in order to solve the conflict of multiple identical error codes
-constexpr int OB_MAX_SAME_ERROR_COUNT = 10;
+constexpr int OB_MAX_SAME_ERROR_COUNT = 11;
 constexpr int ORACLE_SPECIAL_ERROR_CODE = 600;
 constexpr int ORACLE_MAX_ERROR_CODE = 65535;
 constexpr int ORACLE_MSG_PREFIX = 11;  // strlen("OBE-00000: ")
