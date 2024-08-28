@@ -522,6 +522,7 @@ private: // member functions
   int get_mbr_column_exprs(const uint64_t table_id, ObIArray<ObRawExpr *> &mbr_exprs);
   int allocate_lookup_trans_info_expr();
   int find_nearest_rcte_op(ObLogSet *&rcte_op);
+  bool use_query_range() const;
 protected: // memeber variables
   // basic info
   uint64_t table_id_; //table id or alias table id

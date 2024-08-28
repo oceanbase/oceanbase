@@ -46,7 +46,7 @@ const char *ObLogTableScan::get_name() const
     if (OB_FAIL(pre_range->is_get(is_get))) {
       // is_get always return true
       LOG_WARN("failed to get is_get", K(ret));
-    } else if (range_conds_.count() > 0) {
+    } else if (use_query_range()) {
       is_range = true;
     }
   }
@@ -74,6 +74,24 @@ const char *ObLogTableScan::get_name() const
     }
   }
   return name;
+}
+
+bool ObLogTableScan::use_query_range() const
+{
+  bool res = false;
+  if (range_conds_.count() > 0) {
+    res = true;
+  } else if (OB_NOT_NULL(get_pre_graph())) {
+    const ObIArray<ObRawExpr*> &unprecise_exprs = get_pre_graph()->get_unprecise_range_exprs();
+    bool found = false;
+    for (int64_t i = 0; !found && i < unprecise_exprs.count(); ++i) {
+      if (ObOptimizerUtil::find_equal_expr(filter_exprs_, unprecise_exprs.at(i))) {
+        found = true;
+      }
+    }
+    res = found;
+  }
+  return res;
 }
 
 void ObLogTableScan::set_ref_table_id(uint64_t ref_table_id)
