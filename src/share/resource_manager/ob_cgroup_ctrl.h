@@ -149,7 +149,7 @@ public:
   // 删除租户cgroup规则
   int remove_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
   int remove_both_cgroup(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const char *base_path = "");
-  static int remove_dir_(const char *curr_dir);
+  static int remove_dir_(const char *curr_dir, bool is_delete_group = false);
 
   int add_self_to_cgroup(const uint64_t tenant_id, uint64_t group_id = OBCG_DEFAULT, const char *base_path = "");
 
