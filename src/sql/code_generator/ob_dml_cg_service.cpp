@@ -1331,6 +1331,7 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
   } else {
     das_dml_ctdef.tz_info_ = *session->get_tz_info_wrap().get_time_zone_info();
     das_dml_ctdef.is_total_quantity_log_ = (ObBinlogRowImage::FULL == binlog_row_image);
+    das_dml_ctdef.is_update_partition_key_ = index_dml_info.is_update_part_key_;
   }
 #ifdef OB_BUILD_TDE_SECURITY
   // generate encrypt_meta for table
