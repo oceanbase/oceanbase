@@ -4554,6 +4554,9 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
     LOG_WARN("Argument passed in is NULL", K(ctx), K(collection_expr), K(column_count), K(n_expr), K(i_expr), K(ret));
   } else {
     ObObjParam result;
+    ObObjParam n_result;
+    ObObjParam i_result;
+    bool do_nothing = false;
     ObPLCollection *table = NULL;
     int64_t n = OB_INVALID_SIZE;
     int64_t i = OB_INVALID_INDEX;
@@ -4578,28 +4581,36 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
     }
 
     if (OB_SUCC(ret)) {
-      OZ (spi_calc_expr(ctx, n_expr, OB_INVALID_INDEX, &result));
-      GET_INTEGER_FROM_OBJ(result, n);
+      OZ (spi_calc_expr(ctx, n_expr, OB_INVALID_INDEX, &n_result));
+      OX (do_nothing = n_result.is_null());
+    }
+
+    if (OB_SUCC(ret) && NULL != i_expr) {
+      OZ (spi_calc_expr(ctx, i_expr, OB_INVALID_INDEX, &i_result));
+      OX (do_nothing = do_nothing || i_result.is_null());
+    }
+
+    bool is_deleted = false;
+    if (OB_FAIL(ret) || do_nothing) {
+    } else {
+      GET_INTEGER_FROM_OBJ(n_result, n);
       if (OB_SUCC(ret) && n < 0) {
         ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
         LOG_WARN("get a invalid table", K(result), K(ret));
       }
-    }
-
-    if (OB_SUCC(ret) && NULL != i_expr) {
-      OZ (spi_calc_expr(ctx, i_expr, OB_INVALID_INDEX, &result));
-      GET_INTEGER_FROM_OBJ(result, i);
-      if (OB_SUCC(ret) && (i < 0 || i > table->get_count())) {
-        ret = OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT;
-        LOG_WARN("get a invalid table", K(result), K(ret));
+      if (NULL != i_expr) {
+        GET_INTEGER_FROM_OBJ(i_result, i);
+        if (OB_SUCC(ret) && (i <= 0 || i > table->get_count())) {
+          ret = OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT;
+          LOG_WARN("get a invalid table", K(result), K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && i != OB_INVALID_INDEX) {
+        OZ (table->is_elem_deleted(i - 1, is_deleted));
       }
     }
 
-    bool is_deleted = false;
-    if (OB_SUCC(ret) && i != OB_INVALID_INDEX) {
-      OZ (table->is_elem_deleted(i - 1, is_deleted));
-    }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || do_nothing) {
     } else if (is_deleted) {
       ret = OB_READ_NOTHING;
       LOG_WARN("element already deleted!", K(ret), K(i), K(is_deleted));
@@ -4919,7 +4930,10 @@ int ObSPIService::spi_trim_collection(pl::ObPLExecCtx *ctx,
     if (OB_SUCC(ret)) {
       if (OB_NOT_NULL(n_expr)) {
         OZ (spi_calc_expr(ctx, n_expr, OB_INVALID_INDEX, &result));
-        if (OB_SUCC(ret)) {
+        if (OB_FAIL(ret)) {
+        } else if (result.is_null()) {
+          n = 0;
+        } else {
           GET_INTEGER_FROM_OBJ(result, n);
         }
       } else {
@@ -4929,6 +4943,8 @@ int ObSPIService::spi_trim_collection(pl::ObPLExecCtx *ctx,
       if (OB_SUCC(ret)) {
         if (0 > n) {
           ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
+        } else if (0 == n) {
+          // do nothing ...
         } else if (n > table->get_count()) {
           // raise exception
           ret = OB_ERR_SUBSCRIPT_BEYOND_COUNT;
@@ -8038,11 +8054,11 @@ int ObSPIService::store_result(ObPLExecCtx *ctx,
                                                *(table->get_allocator()),
                                                table->get_element_desc().get_pl_type(),
                                                table->get_element_desc().get_udt_id()));
-                } else if (current_obj.is_null() && !table->get_element_desc().is_obj_type()) {
+                } else if (current_obj.is_null() && table->get_element_desc().is_composite_type()) {
                   const ObUserDefinedType *type = NULL;
                   int64_t ptr = 0;
                   int64_t init_size = OB_INVALID_SIZE;
-                  OZ (ctx->get_user_type(table->get_element_desc().get_udt_id(), type));
+                  OZ (ctx->get_user_type(table->get_element_desc().get_udt_id(), type), K(table->get_element_desc().get_udt_id()));
                   CK (OB_NOT_NULL(type));
                   OZ (type->newx(*(table->get_allocator()), ctx, ptr));
                   OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));

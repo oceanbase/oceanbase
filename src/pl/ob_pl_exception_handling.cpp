@@ -192,7 +192,10 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
 
 #ifdef OB_BUILD_ORACLE_PL
     CK (OB_NOT_NULL(pl_ctx));
-    OZ (eh_adjust_call_stack(*pl_ctx, loc, value->error_code_));
+    OZ (eh_adjust_call_stack(*pl_ctx, loc,
+      value->error_code_ < 0
+        ? value->error_code_
+        :(value->error_code_ & ~(UINT64_MAX << OB_PACKAGE_ID_SHIFT))));
 #endif
 
   }
