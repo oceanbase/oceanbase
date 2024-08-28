@@ -44,9 +44,10 @@ int __attribute__((weak)) common_yield()
   return OB_SUCCESS;
 }
 
-int __attribute__((weak)) SET_GROUP_ID(uint64_t group_id)
+int __attribute__((weak)) SET_GROUP_ID(uint64_t group_id, bool is_background)
 {
   int ret = OB_SUCCESS;
+  UNUSED(is_background);
   THIS_WORKER.set_group_id_(group_id);
   return ret;
 }

@@ -211,8 +211,8 @@ private:
 
 private:
   friend class oceanbase::share::ObTenantBase;
-  friend int oceanbase::lib::SET_GROUP_ID(uint64_t group_id);
-  int add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT);
+  friend int oceanbase::lib::SET_GROUP_ID(uint64_t group_id, bool is_background);
+  int add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT, const bool is_background = false);
   int init_cgroup_root_dir_(const char *cgroup_path);
   static int init_dir_(const char *curr_dir);
   static int init_full_dir_(const char *curr_path);

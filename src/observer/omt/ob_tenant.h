@@ -279,8 +279,6 @@ public:
   int64_t min_worker_cnt() const;
   int64_t max_worker_cnt() const;
   ObTenant *get_tenant() { return tenant_; }
-  WList &get_workers() { return workers_; }
-  lib::ObMutex &get_workers_lock() { return workers_lock_; }
   share::ObCgroupCtrl *get_cgroup_ctrl() { return cgroup_ctrl_; }
   bool is_job_group(int64_t group_id) { return share::OBCG_OLAP_ASYNC_JOB == group_id; }
 

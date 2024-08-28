@@ -38,7 +38,7 @@ namespace oceanbase
 namespace lib
 {
 
-int SET_GROUP_ID(uint64_t group_id)
+int SET_GROUP_ID(uint64_t group_id, bool is_background)
 {
   int ret = OB_SUCCESS;
 
@@ -47,7 +47,7 @@ int SET_GROUP_ID(uint64_t group_id)
   THIS_WORKER.set_group_id_(group_id);
   int tmp_ret = OB_SUCCESS;
   if (OB_NOT_NULL(GCTX.cgroup_ctrl_)
-      && OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(MTL_ID(), group_id))) {
+      && OB_TMP_FAIL(GCTX.cgroup_ctrl_->add_self_to_cgroup_(MTL_ID(), group_id, is_background))) {
     LOG_WARN("add self to cgroup fail", K(ret), K(MTL_ID()), K(group_id));
   }
   return ret;
@@ -397,24 +397,13 @@ int ObCgroupCtrl::get_group_path(
   return ret;
 }
 
-int ObCgroupCtrl::add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id)
+int ObCgroupCtrl::add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id, const bool is_background)
 {
   int ret = OB_SUCCESS;
   if (is_valid()) {
-    ResourceGroupType group_type = ResourceGroupType::INVALID_GROUP;
-    if (is_user_group(group_id) &&
-        OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_type_by_id(tenant_id, group_id, group_type))) {
-      if (OB_HASH_NOT_EXIST == ret) {
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("get group type by id failed", K(ret), K(tenant_id), K(group_id), K(group_type));
-      }
-    }
 
     const char *base_path =
-        (GCONF.enable_global_background_resource_isolation && ResourceGroupType::FUNCTION_GROUP == group_type)
-            ? BACKGROUND_CGROUP
-            : "";
+        (GCONF.enable_global_background_resource_isolation && is_background) ? BACKGROUND_CGROUP : "";
     char group_path[PATH_BUFSIZE];
     char tid_value[VALUE_BUFSIZE + 1];
 
