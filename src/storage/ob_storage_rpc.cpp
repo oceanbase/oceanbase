@@ -3209,7 +3209,7 @@ int ObStorageGetTransferDestPrepareSCNP::process()
     } else if (OB_FAIL(ls->get_transfer_status().get_transfer_prepare_status(enable, scn))) {
       LOG_WARN("failed to get wrs handler transfer_prepare status", K(ret));
     } else if (!enable) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_EAGAIN;
       LOG_WARN("wrs handler not enter transfer_prepare status", K(ret), K_(arg));
     } else {
       result_ = scn;
