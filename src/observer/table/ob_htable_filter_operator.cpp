@@ -913,6 +913,7 @@ int ObHTableReversedRowIterator::seek_first_cell_on_row(const ObNewRow *ob_row)
     if (OB_FAIL(rescan_and_get_next_row(&forward_child_op_, first_cell_on_row))) {
       LOG_WARN("failed to rescan and get next row", K(ret));
     } else {
+      curr_cell_.reset(allocator_);
       if (OB_FAIL(curr_cell_.deep_copy_ob_row(first_cell_on_row, allocator_))) {
         LOG_WARN("failed to deep copy ob row", K(ret), K(first_cell_on_row));
       }
@@ -987,6 +988,7 @@ int ObHTableReversedRowIterator::next_cell()
   } else if (OB_SUCC(ret) && (0 == ObHTableUtils::compare_rowkey(curr_cell_.get_rowkey(),
                                        ob_row->get_cell(ObHTableConstants::COL_IDX_K).get_varchar()))) {
     // same rowkey
+    curr_cell_.reset(allocator_);
     if (OB_FAIL(curr_cell_.deep_copy_ob_row(ob_row, allocator_))) {
       LOG_WARN("failed to deep copy ob row", K(ret));
     }
@@ -1102,6 +1104,7 @@ int ObHTableReversedRowIterator::seek_or_skip_to_next_col(const ObHTableCell &ce
       }
     } else if (0 == ObHTableUtils::compare_rowkey(
                         cell.get_rowkey(), ob_next_column_row->get_cell(ObHTableConstants::COL_IDX_K).get_varchar())) {
+      curr_cell_.reset(allocator_);
       if (OB_FAIL(curr_cell_.deep_copy_ob_row(ob_next_column_row, allocator_))) {
         LOG_WARN("failed to deep copy ob row", K(ret));
       }
@@ -1195,7 +1198,7 @@ int ObHTableReversedRowIterator::create_forward_child_op()
         LOG_WARN("fail to init trans", K(ret), K(forward_tb_ctx_));
       } else if (OB_FAIL(spec_->create_executor(forward_tb_ctx_, api_executor))) {
         LOG_WARN("fail to generate executor", K(ret), K(forward_tb_ctx_));
-      } else if (forward_child_op_.open(static_cast<ObTableApiScanExecutor *>(api_executor))) {
+      } else if (OB_FAIL(forward_child_op_.open(static_cast<ObTableApiScanExecutor *>(api_executor)))) {
         LOG_WARN("fail to open forward child op", K(ret));
       }
     }

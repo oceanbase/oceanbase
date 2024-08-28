@@ -46,12 +46,9 @@ ObString ObHTableCellEntity::get_rowkey() const
 int ObHTableCellEntity::deep_copy_ob_row(const common::ObNewRow *ob_row, common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(ob_row_)) {
-    allocator.free(ob_row_);
-  }
   if (OB_ISNULL(ob_row)) {
-    LOG_INFO("param ob_row is null", K(ret));
-    ob_row_ = NULL;
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("deep copy param ob_row is null", K(ret));
   } else {
     int64_t buf_size = ob_row->get_deep_copy_size() + sizeof(ObNewRow);
     char *tmp_row_buf = static_cast<char *>(allocator.alloc(buf_size));
