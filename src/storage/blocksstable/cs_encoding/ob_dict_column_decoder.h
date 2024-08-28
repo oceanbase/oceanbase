@@ -228,9 +228,10 @@ protected:
     int64_t &matched_ref_cnt,
     const bool is_const_result_set);
 
+  template <typename ObFilterExecutor>
   static int in_operator_hash_search(
     const ObDictColumnDecoderCtx &ctx,
-    const sql::ObWhiteFilterExecutor &filter,
+    const ObFilterExecutor &filter,
     sql::ObBitVector *ref_bitset,
     int64_t &matched_ref_cnt,
     const bool is_const_result_set);

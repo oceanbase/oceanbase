@@ -74,6 +74,7 @@ public:
   virtual int get_next_row(common::ObNewRow *&row);
   virtual int inner_get_next_row(common::ObNewRow *&row) = 0;
   virtual int get_next_row() override; // interface for static typing engine.
+  virtual int get_next_rows(int64_t &count, int64_t capacity) override;
   virtual int close();
   virtual int inner_close() { return common::OB_SUCCESS; }
   virtual inline void set_session(sql::ObSQLSessionInfo *session) { session_ = session; }

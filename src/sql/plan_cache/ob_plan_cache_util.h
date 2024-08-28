@@ -1028,6 +1028,8 @@ public:
     enable_var_assign_use_das_(false),
     enable_das_keep_order_(false),
     bloom_filter_ratio_(0),
+    enable_hyperscan_regexp_engine_(false),
+    realistic_runtime_bloom_filter_size_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1073,6 +1075,8 @@ public:
   bool enable_var_assign_use_das_;
   bool enable_das_keep_order_;
   int bloom_filter_ratio_;
+  bool enable_hyperscan_regexp_engine_;
+  bool realistic_runtime_bloom_filter_size_;
 
 private:
   // current cluster config version_

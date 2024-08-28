@@ -1773,6 +1773,9 @@ DEF_TIME(_balance_wait_killing_transaction_end_threshold, OB_TENANT_PARAMETER, "
          "the threshold for waiting time after killing transactions until they end."
          "Range: [10ms, 60s]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_hgby_skew_detection, OB_TENANT_PARAMETER, "True",
+         "specifies whether hgby skew detection is enabled",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_px_fast_reclaim, OB_CLUSTER_PARAMETER, "True",
         "Enable the fast reclaim function through PX tasks deteting for survival by detect manager. The default value is True.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -2083,6 +2086,17 @@ DEF_STR_WITH_CHECKER(sql_plan_management_mode, OB_TENANT_PARAMETER, "Disable",
                      "\"Disable\" represent disable spm (default value)."
                      "\"OnlineEvolve\" represent evolve plan online.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+// regexp engine
+DEF_STR_WITH_CHECKER(_regex_engine, OB_TENANT_PARAMETER, "ICU",
+                     common::ObConfigRegexpEngineChecker,
+                     "specifies the regexp engine. Values: ICU(International Components for Unicode), Hyperscan",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_preset_runtime_bloom_filter_size, OB_CLUSTER_PARAMETER, "False",
+         "Whether build runtime bloom filter with row count estimated by optimizor."
+         "Value:  True:turned on  False: turned off",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_check_trigger_const_variables_assign, OB_TENANT_PARAMETER, "True",
         "Used to control whether an error is reported when assigning a value to a const variable in a trigger under an Oracle tenant",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

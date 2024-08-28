@@ -6944,181 +6944,6 @@ int ObDMLResolver::resolve_where_clause(const ParseNode *node)
                                                    stmt->get_condition_exprs()));
     }
     OZ(generate_outer_join_tables());
-    OZ(check_equal_conditions_for_resource_group(stmt->get_condition_exprs()));
-  }
-  return ret;
-}
-
-int ObDMLResolver::check_equal_conditions_for_resource_group(const ObIArray<ObRawExpr*> &filters)
-{
-  int ret = OB_SUCCESS;
-  LOG_TRACE("check_equal_conditions_for_resource_group", K(filters), K(session_info_->is_inner()),
-            K(params_.enable_res_map_), K(stmt_->get_query_ctx()->res_map_rule_id_),
-            K(session_info_->get_current_query_string()), K(session_info_->get_current_query_string().length()));
-  if (OB_ISNULL(session_info_) || OB_ISNULL(schema_checker_) ||
-      OB_ISNULL(stmt_->get_query_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session info or schema checker is null", K(ret), K(session_info_), K(schema_checker_));
-  } else if (!session_info_->is_inner() && params_.enable_res_map_) {
-    for (int64_t i = 0; i < filters.count() && OB_SUCC(ret)
-          && OB_INVALID_ID == stmt_->get_query_ctx()->res_map_rule_id_; i++) {
-      const ObRawExpr *expr = filters.at(i);
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(ret));
-      } else if (expr->has_flag(CNT_CONST) && expr->has_flag(CNT_COLUMN) &&
-                OB_FAIL(recursive_check_equal_condition(*expr))) {
-        LOG_WARN("recursive check equal condition failed", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-
-int ObDMLResolver::recursive_check_equal_condition(const ObRawExpr &expr)
-{
-  int ret = OB_SUCCESS;
-  ObResourceColMappingRuleManager &rule_cache = G_RES_MGR.get_col_mapping_rule_mgr();
-  if (T_OP_EQ == expr.get_expr_type()) {
-    const ObRawExpr *left = NULL;
-    const ObRawExpr *right = NULL;
-    if (OB_UNLIKELY(2 != expr.get_param_count()) ||
-        OB_ISNULL(left = expr.get_param_expr(0)) ||
-        OB_ISNULL(right = expr.get_param_expr(1))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("expr is null", K(ret));
-    } else {
-      const ObColumnRefRawExpr *col_expr = NULL;
-      const ObConstRawExpr *const_expr = NULL;
-      if (T_REF_COLUMN == left->get_expr_type()) {
-        col_expr = static_cast<const ObColumnRefRawExpr*>(left);
-      } else if (T_FUN_SYS_CAST == left->get_expr_type()
-                && T_REF_COLUMN == left->get_param_expr(0)->get_expr_type()) {
-        col_expr = static_cast<const ObColumnRefRawExpr*>(left->get_param_expr(0));
-      } else if (left->has_flag(IS_CONST)) {
-        const_expr = static_cast<const ObConstRawExpr *>(left);
-      } else if (T_FUN_SYS_CAST == left->get_expr_type()
-                && left->get_param_expr(0)->has_flag(IS_CONST)) {
-        const_expr = static_cast<const ObConstRawExpr *>(left->get_param_expr(0));
-      }
-      if (NULL != col_expr) {
-        if (right->has_flag(IS_CONST)) {
-          const_expr = static_cast<const ObConstRawExpr *>(right);
-        } else if (T_FUN_SYS_CAST == right->get_expr_type()
-                  && right->get_param_expr(0)->has_flag(IS_CONST)) {
-          const_expr = static_cast<const ObConstRawExpr *>(right->get_param_expr(0));
-        }
-      } else if (NULL != const_expr) {
-        if (T_REF_COLUMN == right->get_expr_type()) {
-          col_expr = static_cast<const ObColumnRefRawExpr*>(right);
-        } else if (T_FUN_SYS_CAST == right->get_expr_type()
-                  && T_REF_COLUMN == right->get_param_expr(0)->get_expr_type()) {
-          col_expr = static_cast<const ObColumnRefRawExpr*>(right->get_param_expr(0));
-        }
-      }
-      if (NULL != col_expr && NULL != const_expr
-          && OB_FAIL(check_column_with_res_mapping_rule(col_expr, const_expr))) {
-        LOG_WARN("check column with resource mapping rule failed", K(ret), KPC(col_expr), KPC(const_expr));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    for (int64_t i = 0; i < expr.get_param_count() && OB_SUCC(ret)
-          && OB_INVALID_ID == stmt_->get_query_ctx()->res_map_rule_id_; i++) {
-      const ObRawExpr *child = expr.get_param_expr(i);
-      if (OB_ISNULL(child)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null", K(ret));
-      } else if (child->has_flag(CNT_CONST) && child->has_flag(CNT_COLUMN) &&
-                OB_FAIL(SMART_CALL(recursive_check_equal_condition(*child)))) {
-        LOG_WARN("recursive check equal condition failed", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDMLResolver::check_column_with_res_mapping_rule(const ObColumnRefRawExpr *col_expr,
-                                                      const ObConstRawExpr *const_expr)
-{
-  int ret = OB_SUCCESS;
-  share::ObResourceColMappingRuleManager &col_rule_mgr = G_RES_MGR.get_col_mapping_rule_mgr();
-  uint64_t db_id = session_info_->get_database_id();
-  uint64_t tenant_id = session_info_->get_effective_tenant_id();
-  const ObObj &value = const_expr->get_value();
-  ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
-  const TableItem *table_item = NULL;
-  LOG_TRACE("check_column_with_res_mapping_rule", K(value), KPC(col_expr));
-  if (!value.is_unknown()) {
-    // do nothing.
-  } else if (!col_expr->get_database_name().empty() && OB_FAIL(schema_checker_->get_database_id(
-        tenant_id, col_expr->get_database_name(), db_id))) {
-    LOG_WARN("get database id failed", K(ret));
-  } else if (OB_FAIL(session_info_->get_name_case_mode(case_mode))) {
-    LOG_WARN("get name case mode faield", K(ret));
-  } else if (FALSE_IT(table_item = static_cast<ObDMLStmt*>(stmt_)->get_table_item_by_id(col_expr->get_table_id()))) {
-  } else if (OB_NOT_NULL(table_item)) {
-    uint64_t rule_id = col_rule_mgr.get_column_mapping_rule_id(
-          tenant_id, db_id, table_item->table_name_, col_expr->get_column_name(),
-          case_mode);
-    LOG_TRACE("get_column_mapping_rule_id", K(stmt_->get_query_ctx()->res_map_rule_id_), K(rule_id));
-    if (OB_INVALID_ID == stmt_->get_query_ctx()->res_map_rule_id_ && OB_INVALID_ID != rule_id) {
-      const ParamStore *param_store = params_.param_list_;
-      if (OB_NOT_NULL(param_store) && OB_LIKELY(value.get_unknown() < param_store->count())) {
-        const ObObjParam &param = param_store->at(value.get_unknown());
-        const ObString raw_sql = session_info_->get_current_query_string();
-        ObString param_text;
-        ObCollationType cs_type = CS_TYPE_INVALID;
-        if (OB_ISNULL(allocator_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("allocator is null", K(ret));
-        } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
-          LOG_WARN("get collation connection failed", K(ret));
-        } else if (OB_FAIL(ObObjCaster::get_obj_param_text(param, raw_sql, *allocator_,
-                                                           cs_type, param_text))) {
-          LOG_WARN("get obj param text failed", K(ret));
-        } else if (!param_text.empty()) {
-          // Resource manager works only if param is string or numeric type.
-          // For example, there is a mapping rule on t.c1.
-          // When execute select * from t where c1 = date '2020-01-01', rule_id in the plan is INVALID.
-
-          // Set rule_id and param_idx only if get non-empty param text.
-          // get_param_text return non-empty text when param is string or numeric type.
-          // This logic works because c1 = '2020-01-01', and c1 = date '2020-01-01' match different plans.
-          stmt_->get_query_ctx()->res_map_rule_id_ = rule_id;
-          stmt_->get_query_ctx()->res_map_rule_param_idx_ = value.get_unknown();
-          uint64_t group_id = G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_group_id(
-                                tenant_id, rule_id, session_info_->get_user_name(), param_text);
-          if (OB_INVALID_ID == group_id) {
-              // OB_INVALID_ID means current user+param_value is not defined in mapping rule,
-              // get group_id according to current user.
-            if (OB_FAIL(G_RES_MGR.get_mapping_rule_mgr().get_group_id_by_user(
-                          tenant_id, session_info_->get_user_id(), group_id))) {
-              LOG_WARN("get group id by user failed", K(ret));
-            } else if (OB_INVALID_ID == group_id) {
-              // if not set consumer_group for current user, use OTHER_GROUP by default.
-              group_id = 0;
-            }
-          }
-          if (OB_SUCC(ret)) {
-            session_info_->set_expect_group_id(group_id);
-            if (group_id == THIS_WORKER.get_group_id()) {
-              // do nothing if equals to current group id.
-            } else if (session_info_->get_is_in_retry()
-                        && OB_NEED_SWITCH_CONSUMER_GROUP
-                            == session_info_->get_retry_info().get_last_query_retry_err()) {
-              LOG_ERROR("use unexpected group when retry, maybe set packet retry failed before",
-                        K(group_id), K(THIS_WORKER.get_group_id()), K(rule_id));
-            } else {
-              ret = OB_NEED_SWITCH_CONSUMER_GROUP;
-            }
-          }
-        }
-      }
-    }
-  } else {
-    LOG_TRACE("table item is null", KPC(stmt_));
   }
   return ret;
 }
@@ -14467,6 +14292,17 @@ int ObDMLResolver::resolve_global_hint(const ParseNode &hint_node,
       }
       break;
     }
+    case T_RESOURCE_GROUP: {
+      CHECK_HINT_PARAM(hint_node, 1) {
+        if (NULL != child0->str_value_) {
+          ObString resource_group;
+          resource_group.assign_ptr(child0->str_value_, static_cast<int32_t>(child0->str_len_));
+          global_hint.merge_resource_group_hint(resource_group);
+        }
+      }
+      break;
+    }
+
     default: {
       resolved_hint = false;
       break;

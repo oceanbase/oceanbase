@@ -7,6 +7,7 @@ ob_set_subtarget(ob_share ALONE
   aggregate/single_row.cpp
   aggregate/sum.cpp
   aggregate/sys_bit.cpp
+  aggregate/aggr_extra.cpp
   datum/ob_datum_funcs.cpp
   ob_rpc_struct.cpp
   ob_tenant_mgr.cpp
@@ -561,6 +562,7 @@ ob_set_subtarget(ob_share wr
 
 ob_set_subtarget(ob_share vector
   vector/ob_vector_base.cpp
+  vector/vector_basic_op.cpp
   vector/ob_fixed_length_vector.cpp
   vector/ob_continuous_vector.cpp
   vector/ob_discrete_vector.cpp

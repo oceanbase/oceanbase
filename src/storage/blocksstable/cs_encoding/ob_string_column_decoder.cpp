@@ -581,7 +581,7 @@ int ObStringColumnDecoder::in_operator(
       int tmp_ret = OB_SUCCESS;
       bool is_exist = false;
       if (cur_datum.is_null()) {
-      } else if (OB_TMP_FAIL(filter.exist_in_datum_set(cur_datum, is_exist))) {
+      } else if (OB_TMP_FAIL(filter.exist_in_set(cur_datum, is_exist))) {
         LOG_WARN("fail to check datum in hashset", KR(tmp_ret), K(cur_datum));
       } else if (is_exist) {
         if (OB_TMP_FAIL(result_bitmap.set(idx))) {

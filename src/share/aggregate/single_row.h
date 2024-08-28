@@ -193,6 +193,32 @@ public:
     }
     return ret;
   }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    const char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
+    const NotNullBitVector &curr_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (OB_LIKELY(curr_not_nulls.at(agg_col_idx))) {
+      rollup_not_nulls.set(agg_col_idx);
+      if (helper::is_var_len_agg_cell(in_tc)) {
+        *reinterpret_cast<int64_t *>(rollup_agg_cell) =
+          *reinterpret_cast<const int64_t *>(curr_agg_cell);
+        *reinterpret_cast<int32_t *>(rollup_agg_cell + sizeof(char *)) = curr_agg_cell_len;
+      } else {
+        MEMCPY(rollup_agg_cell, curr_agg_cell, curr_agg_cell_len);
+      }
+    }
+    return ret;
+  }
+
   void set_first_row(bool is_first_row) { is_first_row_ = is_first_row; }
   TO_STRING_KV("aggregate", "single_row", K(in_tc), K(out_tc), K(is_first_row_), K(agg_func));
 private:

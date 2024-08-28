@@ -28,6 +28,8 @@
 #include "sql/engine/px/datahub/components/ob_dh_sample.h"
 #include "sql/engine/px/datahub/components/ob_dh_init_channel.h"
 #include "sql/engine/px/datahub/components/ob_dh_second_stage_reporting_wf.h"
+#include "sql/engine/px/datahub/components/ob_dh_join_filter_count_row.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -150,6 +152,7 @@ private:
   ObOptStatsGatherPieceMsgP opt_stats_gather_piece_msg_proc_;
   ObSPWinFuncPXPieceMsgP sp_winfunc_px_piece_msg_proc_;
   ObRDWinFuncPXPieceMsgP rd_winfunc_px_piece_msg_proc_;
+  ObJoinFilterCountRowPieceMsgP join_filter_count_row_piece_msg_proc_;
   ObReceiveRowReader *readers_;
   ObOrderedReceiveFilter receive_order_;
   int64_t reader_cnt_;

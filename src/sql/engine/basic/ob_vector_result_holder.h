@@ -44,7 +44,12 @@ public:
   int init(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx);
   int save(const int64_t batch_size);
   int restore() const;
-  void reset() {  }
+  void reset()
+  {
+    saved_ = false;
+    saved_size_ = 0;
+  }
+  void destroy();
   static int calc_backup_size(const common::ObIArray<ObExpr *> &exprs, ObEvalCtx &eval_ctx, int32_t &mem_size);
 private:
   template<VectorFormat>
@@ -59,6 +64,7 @@ private:
                                                 expr_(expr), frame_nulls_(nullptr), frame_datums_(nullptr),
                                                 frame_data_(nullptr), frame_lens_(nullptr), frame_ptrs_(nullptr),
                                                 frame_offsets_(nullptr), frame_continuous_data_(nullptr) {}
+    void reset(common::ObIAllocator &alloc);
     int copy_vector_base(const ObVectorBase &vec);
     int copy_bitmap_null_base(const ObBitmapNullVectorBase &vec,
                               common::ObIAllocator &alloc,

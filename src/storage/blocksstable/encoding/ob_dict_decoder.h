@@ -222,11 +222,12 @@ private:
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 
+  template <typename ObFilterExecutor>
   int in_operator(
       const sql::ObPushdownFilterExecutor *parent,
       const ObColumnDecoderCtx &col_ctx,
       const unsigned char* col_data,
-      const sql::ObWhiteFilterExecutor &filter,
+      const ObFilterExecutor &filter,
       const sql::PushdownFilterInfo &pd_filter_info,
       ObBitmap &result_bitmap) const;
 

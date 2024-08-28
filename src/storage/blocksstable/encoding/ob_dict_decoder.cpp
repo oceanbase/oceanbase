@@ -866,9 +866,16 @@ int ObDictDecoder::pushdown_operator(
       break;
     }
     case sql::WHITE_OP_IN: {
-      if (OB_FAIL(in_operator(parent, col_ctx, col_data,
-          filter, pd_filter_info, result_bitmap))) {
-        LOG_WARN("Failed to run IN operator", K(ret), K(col_ctx));
+      if (filter.is_filter_dynamic_node()) {
+        if (OB_FAIL(in_operator<sql::ObDynamicFilterExecutor>(parent, col_ctx, col_data,
+            static_cast<const sql::ObDynamicFilterExecutor &>(filter), pd_filter_info, result_bitmap))) {
+          LOG_WARN("Failed to run IN operator", K(ret), K(col_ctx));
+        }
+      } else {
+        if (OB_FAIL(in_operator<sql::ObWhiteFilterExecutor>(parent, col_ctx, col_data,
+            filter, pd_filter_info, result_bitmap))) {
+          LOG_WARN("Failed to run IN operator", K(ret), K(col_ctx));
+        }
       }
       break;
     }
@@ -1314,11 +1321,12 @@ int ObDictDecoder::bt_operator(
 }
 
 // TODO(@wenye): optimize in operator
+template <typename ObFilterExecutor>
 int ObDictDecoder::in_operator(
     const sql::ObPushdownFilterExecutor *parent,
     const ObColumnDecoderCtx &col_ctx,
     const unsigned char* col_data,
-    const sql::ObWhiteFilterExecutor &filter,
+    const ObFilterExecutor &filter,
     const sql::PushdownFilterInfo &pd_filter_info,
     ObBitmap &result_bitmap) const
 {
@@ -1342,7 +1350,7 @@ int ObDictDecoder::in_operator(
       int64_t dict_ref = 0;
       bool is_exist = false;
       while (OB_SUCC(ret) && traverse_it != end_it) {
-        if (OB_FAIL(filter.exist_in_datum_set(*traverse_it, is_exist))) {
+        if (OB_FAIL(filter.exist_in_set(*traverse_it, is_exist))) {
           LOG_WARN("Failed to check object in hashset", K(ret), K(*traverse_it));
         } else if (is_exist) {
           found = true;

@@ -500,8 +500,7 @@ void TestRawDecoder::init_in_filter(
                 return cmp_ret < 0;
             });
   filter.cmp_func_ = cmp_func;
-  filter.cmp_func_rev_ = cmp_func;
-  filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, filter.cmp_func_rev_);
+  filter.param_set_.set_hash_and_cmp_func(basic_funcs->murmur_hash_v2_, filter.cmp_func_);
 }
 
 int TestRawDecoder::test_filter_pushdown(

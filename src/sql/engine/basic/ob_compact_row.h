@@ -41,6 +41,7 @@ public:
       uint32_t reserved_      : 28;
     };
     uint32_t flag_;
+    uint32_t cnt_; // used for hashgby data skew
   };
 };
 
@@ -59,7 +60,7 @@ public:
   }
   int init(const ObExprPtrIArray &exprs, const int32_t extra_size,
            const bool reorder_fixed_expr = true);
-  int init (const RowMeta &row_meta);
+  int assign(const RowMeta &row_meta);
   void reset();
   int32_t get_row_fixed_size() const { return sizeof(RowHeader) + var_data_off_; }
   int32_t get_var_col_cnt() const { return col_cnt_ - fixed_cnt_; }
@@ -137,6 +138,7 @@ public:
  */
 struct ObCompactRow
 {
+  friend class LastCompactRow;
   ObCompactRow() : header_() {}
 
   // alloc row buf and init offset_len_
@@ -389,9 +391,9 @@ typedef ToStrCompactRow CompactRow2STR;
 class LastCompactRow
 {
 public:
-  explicit LastCompactRow(ObIAllocator &alloc)
-    : alloc_(alloc), row_meta_(&alloc), compact_row_(nullptr), max_size_(0), reuse_(true),
-      is_first_row_(true), pre_alloc_row1_(nullptr), pre_alloc_row2_(nullptr)
+  explicit LastCompactRow(ObIAllocator &alloc) :
+    alloc_(alloc), ref_row_meta_(nullptr), compact_row_(nullptr), max_size_(0), reuse_(true),
+    is_first_row_(true), row_meta_(&alloc), pre_alloc_row1_(nullptr), pre_alloc_row2_(nullptr)
   {}
   ~LastCompactRow() { reset(); }
   int save_store_row(const common::ObIArray<ObExpr*> &exprs,
@@ -401,23 +403,34 @@ public:
                      const bool reorder_fixed_expr = true)
   {
     int ret = OB_SUCCESS;
-    int64_t row_size = 0;
-    if (OB_UNLIKELY(0 == exprs.count())) {
-    } else if (OB_UNLIKELY(extra_size < 0 || extra_size > INT32_MAX)) {
+    if (OB_UNLIKELY(extra_size < 0 || extra_size > INT32_MAX)) {
       ret = OB_INVALID_ARGUMENT;
       SQL_ENG_LOG(ERROR, "invalid extra size", K(ret), K(extra_size));
     } else if (OB_FAIL(init_row_meta(exprs, extra_size, reorder_fixed_expr))) {
       SQL_ENG_LOG(WARN, "fail to init row meta", K(ret));
-    } else if (OB_FAIL(ObCompactRow::calc_row_size(row_meta_, exprs, brs, ctx, row_size))) {
+    } else if (OB_FAIL(save_store_row(exprs, brs, ctx, row_meta_))) {
+      SQL_ENG_LOG(WARN, "fail to save store row", K(ret));
+    }
+    return ret;
+  }
+  int save_store_row(const common::ObIArray<ObExpr *> &exprs, const ObBatchRows &brs,
+                     ObEvalCtx &ctx, RowMeta &row_meta)
+  {
+    int ret = OB_SUCCESS;
+    int64_t row_size = 0;
+    ref_row_meta_ = &row_meta;
+    is_first_row_ = false;
+    if (OB_UNLIKELY(0 == exprs.count())) {
+    } else if (OB_FAIL(ObCompactRow::calc_row_size(row_meta, exprs, brs, ctx, row_size))) {
       SQL_ENG_LOG(WARN, "failed to calc copy size", K(ret));
     } else if (OB_FAIL(ensure_compact_row_buffer(row_size))) {
       SQL_ENG_LOG(WARN, "fail to ensure compact row buffer", K(ret));
     } else {
-      compact_row_->init(row_meta_);
+      compact_row_->init(row_meta);
       compact_row_->set_row_size(static_cast<uint32_t>(row_size));
       for (int64_t col_idx = 0; col_idx < exprs.count() && OB_SUCC(ret); ++col_idx) {
         ObIVector *vec = exprs.at(col_idx)->get_vector(ctx);
-        vec->to_row(row_meta_, compact_row_, ctx.get_batch_idx(), col_idx);
+        vec->to_row(row_meta, compact_row_, ctx.get_batch_idx(), col_idx);
       }
     }
     return ret;
@@ -435,11 +448,26 @@ public:
         } else {
           const char *payload = NULL;
           ObLength len;
-          compact_row_->get_cell_payload(row_meta_, i, payload, len);
+          compact_row_->get_cell_payload(*ref_row_meta_, i, payload, len);
           vec->set_payload_shallow(ctx.get_batch_idx(), payload, len);
         }
         exprs.at(i)->set_evaluated_projected(ctx);
       }
+    }
+    return ret;
+  }
+  // For performance reasons, row meta is not deeply copied and is only used by merge group by.
+  int deep_copy_last_compact_row(const LastCompactRow &last_row)
+  {
+    int ret = OB_SUCCESS;
+    bool reuse = reuse_;
+    const int64_t row_size = last_row.compact_row_->get_row_size();
+    ref_row_meta_ = last_row.ref_row_meta_;
+    if (OB_FAIL(ensure_compact_row_buffer(row_size))) {
+      SQL_ENG_LOG(WARN, "fail to ensure compact row buffer", K(ret));
+    } else {
+      is_first_row_ = false;
+      MEMCPY(compact_row_, reinterpret_cast<const char *>(last_row.compact_row_), row_size);
     }
     return ret;
   }
@@ -459,13 +487,22 @@ public:
     }
     return ret;
   }
-
+  bool is_empty()
+  {
+    return is_first_row_;
+  }
+  void reuse()
+  {
+    is_first_row_ = true;
+    ref_row_meta_ = nullptr;
+  }
   void reset()
   {
     compact_row_ = nullptr;
     max_size_ = 0;
     is_first_row_ = true;
     row_meta_.reset();
+    ref_row_meta_ = nullptr;
     if (NULL != pre_alloc_row1_) {
       alloc_.free(pre_alloc_row1_);
       pre_alloc_row1_ = NULL;
@@ -475,7 +512,26 @@ public:
       pre_alloc_row2_ = NULL;
     }
   }
-  ObDatum get_datum(const int64_t col_idx) const { return compact_row_->get_datum(row_meta_, col_idx); }
+  void set_null(const int64_t col_idx) {
+    compact_row_->nulls()->set(col_idx);
+    compact_row_->header_.has_null_ = true;
+  }
+  ObDatum get_datum(const int64_t col_idx) const
+  {
+    return compact_row_->get_datum(*ref_row_meta_, col_idx);
+  }
+  bool is_null(const int64_t col_idx) const
+  {
+    return compact_row_->is_null(col_idx);
+  }
+  void get_cell_payload(const int64_t col_idx, const char *&payload, ObLength &len) const
+  {
+    return compact_row_->get_cell_payload(*ref_row_meta_, col_idx, payload, len);
+  }
+  void *get_extra_payload() const
+  {
+    return compact_row_->get_extra_payload(*ref_row_meta_);
+  }
 
   inline int init_row_meta(const common::ObIArray<ObExpr *> &exprs, const int32_t extra_size,
                            const bool reorder_fixed_expr)
@@ -483,6 +539,7 @@ public:
     int ret = OB_SUCCESS;
     if (is_first_row_) {
       ret = row_meta_.init(exprs, extra_size, reorder_fixed_expr);
+      ref_row_meta_ = &row_meta_;
       is_first_row_ = false;
     }
     return ret;
@@ -529,12 +586,14 @@ private:
 public:
   TO_STRING_KV(K_(max_size), K_(reuse), KP_(compact_row), K_(is_first_row));
   ObIAllocator &alloc_;
-  RowMeta row_meta_;
+  // Reference to external row meta, memory cannot be released
+  RowMeta *ref_row_meta_;
   ObCompactRow *compact_row_;
   int64_t max_size_;
   bool reuse_;
 private:
   bool is_first_row_;
+  RowMeta row_meta_;
   //To avoid writing memory overwrite, alloc 2 row for alternate writing
   ObCompactRow *pre_alloc_row1_;
   ObCompactRow *pre_alloc_row2_;

@@ -115,6 +115,11 @@ message(STATUS "This is SOURCE dir " ${PROJECT_SOURCE_DIR})
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
+set(HYPERSCAN_LIB "")
+if (${ARCHITECTURE} STREQUAL "x86_64")
+  set(HYPERSCAN_LIB "${DEP_DIR}/lib/libhs.a")
+endif()
+
 if(EXISTS ${CMAKE_SOURCE_DIR}/close_modules)
   message(STATUS "will add close_modules sub directory")
   add_subdirectory(close_modules)

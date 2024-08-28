@@ -117,7 +117,7 @@ group_concat(c2, c3)
 abc,abc,a2b3,a1b3,a3b2
 select group_concat(distinct c2, c3) from t1;
 group_concat(distinct c2, c3)
-abc,a1b3,a2b3,a3b2,abc
+abc,abc,a2b3,a1b3,a3b2
 select group_concat(c2, c3 order by c2) from t1;
 group_concat(c2, c3 order by c2)
 abc,a1b3,a2b3,a3b2,abc
@@ -139,7 +139,7 @@ a2b3,a3b2,a1b3
 abc,abc
 select group_concat(distinct c2, c3) from t1 group by c5;
 group_concat(distinct c2, c3)
-a1b3,a2b3,a3b2
+a2b3,a3b2,a1b3
 abc,abc
 select group_concat(c2, c3 order by c1) from t1 group by c5;
 group_concat(c2, c3 order by c1)
@@ -314,7 +314,7 @@ group_concat(c3 order by c3)
 a,A,B,b
 select group_concat(distinct c2) from t4;
 group_concat(distinct c2)
-A,B,a,b
+a,A,B,b
 select group_concat(distinct c3) from t4;
 group_concat(distinct c3)
 a,B

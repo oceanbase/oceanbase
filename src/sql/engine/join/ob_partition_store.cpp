@@ -12,26 +12,76 @@
 
 #define USING_LOG_PREFIX SQL_ENG
 
-#include "sql/engine/join/hash_join/ob_hj_partition.h"
+#include "sql/engine/join/ob_partition_store.h"
 
 namespace oceanbase
 {
 namespace sql
 {
 
-ObHJPartition::~ObHJPartition()
+ObPartitionStore::~ObPartitionStore()
 {
-  close();
+  store_iter_.reset();
+  row_store_.destroy();
 }
 
-int ObHJPartition::rescan()
+int ObPartitionStore::init(const ObExprPtrIArray &exprs, const int64_t max_batch_size,
+                           const ObCompressorType compressor_type, uint32_t extra_size)
+{
+  int ret = OB_SUCCESS;
+  extra_size_ = extra_size;
+  ObMemAttr mem_attr(tenant_id_, common::ObModIds::OB_ARENA_HASH_JOIN, ObCtxIds::WORK_AREA);
+  if (OB_FAIL(row_store_.init(exprs,
+                              max_batch_size,
+                              mem_attr,
+                              0/*mem limit*/,
+                              true,
+                              extra_size_,
+                              compressor_type))) {
+    LOG_WARN("failed to init chunk row store", K(ret));
+  }
+  return ret;
+}
+
+int ObPartitionStore::open()
+{
+  return begin_iterator();
+}
+
+void ObPartitionStore::close()
+{
+  store_iter_.reset();
+  row_store_.reset();
+}
+
+int ObPartitionStore::rescan()
 {
   int ret = OB_SUCCESS;
   store_iter_.reset();
   return ret;
 }
 
-int ObHJPartition::finish_dump(bool memory_need_dump)
+int ObPartitionStore::add_batch(const common::IVectorPtrs &vectors,
+                             const uint16_t selector[],
+                             const int64_t size,
+                             ObCompactRow **stored_rows /*= nullptr*/)
+{
+  return row_store_.add_batch(vectors, selector, size, stored_rows);
+                            //   reinterpret_cast<ObCompactRow **>(stored_rows));
+}
+
+int ObPartitionStore::dump(bool all_dump, int64_t dumped_size)
+{
+  int ret = OB_SUCCESS;
+  if (0 >= row_store_.get_mem_used()) {
+    // do nothing
+  } else if (OB_FAIL(row_store_.dump(all_dump, dumped_size))) {
+    LOG_WARN("failed to dump data to chunk row store", K(ret));
+  }
+  return ret;
+}
+
+int ObPartitionStore::finish_dump(bool memory_need_dump)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(row_store_.finish_add_row(memory_need_dump))) {
@@ -43,36 +93,26 @@ int ObHJPartition::finish_dump(bool memory_need_dump)
   return ret;
 }
 
-int ObHJPartition::dump(bool all_dump, int64_t dumped_size)
+int ObPartitionStore::finish_add_row(bool need_dump)
 {
   int ret = OB_SUCCESS;
-  if (0 >= row_store_.get_mem_used()) {
-    // ret = OB_ERR_UNEXPECTED;
-    // LOG_WARN("unexpect chunk row store use memory", K(ret), K(row_store_.get_mem_used()));
-  } else if (OB_FAIL(row_store_.dump(all_dump, dumped_size))) {
-    LOG_WARN("failed to dump data to chunk row store", K(ret));
+  if (OB_FAIL(row_store_.finish_add_row(need_dump))) {
+    LOG_WARN("failed to finish chunk row store", K(ret));
+  } else if (need_dump && 0 != row_store_.get_mem_used()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expect memroy is 0", K(ret), K(row_store_.get_mem_used()));
   }
   return ret;
 }
 
-int ObHJPartition::add_batch(const common::IVectorPtrs &vectors,
-                             const uint16_t selector[],
-                             const int64_t size,
-                             ObHJStoredRow **stored_rows /*= nullptr*/)
-{
-  n_add_rows_ += size;
-  return row_store_.add_batch(vectors, selector, size,
-                              reinterpret_cast<ObCompactRow **>(stored_rows));
-}
-
-int ObHJPartition::get_next_batch(const common::ObIArray<ObExpr*> &exprs,
+int ObPartitionStore::get_next_batch(const common::ObIArray<ObExpr*> &exprs,
                                   ObEvalCtx &ctx,
                                   const int64_t max_rows,
                                   int64_t &read_rows,
-                                  const ObHJStoredRow **stored_row)
+                                  const ObCompactRow **stored_rows)
 {
   int ret = OB_SUCCESS;
-  const ObCompactRow **inner_stored_row = reinterpret_cast<const ObCompactRow **>(stored_row);
+  const ObCompactRow **inner_stored_row = reinterpret_cast<const ObCompactRow **>(stored_rows);
   read_rows = 0;
   while (OB_SUCC(ret) && 0 == read_rows) {
     if (OB_FAIL(store_iter_.get_next_batch(exprs, ctx, max_rows, read_rows,
@@ -92,13 +132,13 @@ int ObHJPartition::get_next_batch(const common::ObIArray<ObExpr*> &exprs,
   return ret;
 }
 
-int ObHJPartition::get_next_batch(const ObHJStoredRow **stored_row,
+int ObPartitionStore::get_next_batch(const ObCompactRow **stored_rows,
                                   const int64_t max_rows,
                                   int64_t &read_rows)
 {
   int ret = OB_SUCCESS;
 
-  const ObCompactRow **inner_stored_row = reinterpret_cast<const ObCompactRow **>(stored_row);
+  const ObCompactRow **inner_stored_row = reinterpret_cast<const ObCompactRow **>(stored_rows);
   read_rows = 0;
   // here read empty once after iter end
   while (OB_SUCC(ret) && 0 == read_rows) {
@@ -119,19 +159,8 @@ int ObHJPartition::get_next_batch(const ObHJStoredRow **stored_row,
   return ret;
 }
 
-int ObHJPartition::init_progressive_iterator()
-{
-  int ret = OB_SUCCESS;
-  store_iter_.reset();
-  if (OB_FAIL(row_store_.begin(store_iter_))) {
-    LOG_WARN("failed to set row store iterator", K(ret));
-  }
-  n_get_rows_ = 0;
-  return ret;
-}
-
 // 可能会读多次，所以每次都应该set iterator，同时reset
-int ObHJPartition::begin_iterator()
+int ObPartitionStore::begin_iterator()
 {
   int ret = OB_SUCCESS;
   store_iter_.reset();
@@ -140,34 +169,6 @@ int ObHJPartition::begin_iterator()
   }
   n_get_rows_ = 0;
   return ret;
-}
-
-int ObHJPartition::init(const ObExprPtrIArray &exprs, const int64_t max_batch_size,
-                        const ObCompressorType compressor_type)
-{
-  int ret = OB_SUCCESS;
-  ObMemAttr mem_attr(tenant_id_, common::ObModIds::OB_ARENA_HASH_JOIN, ObCtxIds::WORK_AREA);
-  if (OB_FAIL(row_store_.init(exprs,
-                              max_batch_size,
-                              mem_attr,
-                              0/*mem limit*/,
-                              true,
-                              8/*extra_size*/,
-                              compressor_type))) {
-    LOG_WARN("failed to init chunk row store", K(ret));
-  }
-  return ret;
-}
-
-int ObHJPartition::open()
-{
-  return begin_iterator();
-}
-
-void ObHJPartition::close()
-{
-  store_iter_.reset();
-  row_store_.reset();
 }
 
 } // end namespace sql

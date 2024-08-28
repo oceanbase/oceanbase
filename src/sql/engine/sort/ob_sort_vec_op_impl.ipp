@@ -275,9 +275,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
     addon_collations_ = ctx.addon_collations_;
     sk_collations_ = ctx.prefix_pos_ > 0 ? ctx.base_sk_collations_ : ctx.sk_collations_;
     sk_exprs_ = ctx.sk_exprs_;
-    addon_exprs_ = ctx.addon_exprs_;
-    cmp_sk_exprs_ = enable_encode_sortkey_ ? addon_exprs_ : sk_exprs_;
-    cmp_sort_collations_ = enable_encode_sortkey_ ? addon_collations_ : sk_collations_;
+    addon_exprs_ = has_addon ? ctx.addon_exprs_ : nullptr;
+    cmp_sk_exprs_ = (enable_encode_sortkey_  && has_addon) ? addon_exprs_ : sk_exprs_;
+    cmp_sort_collations_ = (enable_encode_sortkey_  && has_addon) ? addon_collations_ : sk_collations_;
     eval_ctx_ = ctx.eval_ctx_;
     exec_ctx_ = ctx.exec_ctx_;
     part_cnt_ = ctx.part_cnt_;

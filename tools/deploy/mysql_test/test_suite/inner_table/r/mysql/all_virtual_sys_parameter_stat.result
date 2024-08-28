@@ -320,6 +320,7 @@ _enable_enhanced_cursor_validation
 _enable_hash_join_hasher
 _enable_hash_join_processor
 _enable_hgby_llc_ndv_adaptive
+_enable_hgby_skew_detection
 _enable_in_range_optimization
 _enable_kv_feature
 _enable_log_cache
@@ -428,6 +429,7 @@ _parallel_server_sleep_time
 _pdml_thread_cache_size
 _pipelined_table_function_memory_limit
 _preserve_order_for_pagination
+_preset_runtime_bloom_filter_size
 _print_sample_ppm
 _private_buffer_size
 _publish_schema_mode
@@ -443,6 +445,7 @@ _px_object_sampling
 _query_record_size_limit
 _rebuild_replica_log_lag_threshold
 _recyclebin_object_purge_frequency
+_regex_engine
 _resource_limit_max_session_num
 _resource_limit_spec
 _restore_idle_time

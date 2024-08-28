@@ -2199,6 +2199,19 @@ int ObTableScanOp::inner_get_next_batch(const int64_t max_row_cnt)
     LOG_WARN("failed to get next batch", K(ret));
   }
 
+  if (OB_SUCC(ret) && MY_SPEC.is_vt_mapping_) {
+    ObEvalCtx::BatchInfoScopeGuard convert_guard(eval_ctx_);
+    convert_guard.set_batch_size(brs_.size_);
+    for (int i = 0; OB_SUCC(ret) && i < brs_.size_; i++) {
+      if (brs_.skip_->at(i)) { continue; }
+      convert_guard.set_batch_idx(i);
+      if (OB_FAIL(vt_result_converter_->convert_output_row(
+            eval_ctx_, MY_CTDEF.get_das_output_exprs(), MY_SPEC.agent_vt_meta_.access_exprs_))) {
+        LOG_WARN("convert output row failed", K(ret));
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && enable_random_output && !brs_.end_
       && brs_.skip_->accumulate_bit_cnt(brs_.size_) == 0) {
     if (OB_UNLIKELY(brs_.size_ > max_row_cnt || rand_append_bits + brs_.size_ > max_row_cnt)) {

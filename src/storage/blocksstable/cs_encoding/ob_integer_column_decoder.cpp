@@ -544,7 +544,7 @@ int ObIntegerColumnDecoder::in_operator(
         {
           int tmp_ret = OB_SUCCESS;
           bool is_exist = false;
-          if (OB_TMP_FAIL(filter.exist_in_datum_set(cur_datum, is_exist))) {
+          if (OB_TMP_FAIL(filter.exist_in_set(cur_datum, is_exist))) {
             LOG_WARN("fail to check datum in hashset", KR(tmp_ret), K(cur_datum));
           } else if (is_exist) {
             if (OB_TMP_FAIL(result_bitmap.set(idx))) {
@@ -617,13 +617,13 @@ int ObIntegerColumnDecoder::tranverse_integer_in_op(
 
     if (use_null_replace_val) {
       if (OB_FAIL(ObCSFilterFunctionFactory::instance().integer_in_tranverse_with_null(ctx.data_, store_width_size,
-          null_replaced_val, filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, parent, result_bitmap))) {
+          null_replaced_val, filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, parent, result_bitmap, &filter))) {
         LOG_WARN("fail to handle integer in tranverse with null", KR(ret), K(store_width_size));
       }
     } else {
       const bool exist_null_bitmap = ctx.has_null_bitmap();
       if (OB_FAIL(ObCSFilterFunctionFactory::instance().integer_in_tranverse(ctx.data_, store_width_size,
-          filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, exist_null_bitmap, parent, result_bitmap))) {
+          filter_vals_valid, filter_vals, datum_cnt, row_start, row_cnt, base_value, exist_null_bitmap, parent, result_bitmap, &filter))) {
         LOG_WARN("fail to handle integer in tranverse", KR(ret), K(exist_null_bitmap), K(store_width_size));
       }
     }

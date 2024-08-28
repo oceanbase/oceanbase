@@ -206,7 +206,7 @@ public:
     return static_cast<int64_t>(SumCalcInfo(agg_cell_len, scale));
   }
 
-  int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+  OB_INLINE int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
                   const bool is_null, const char *data, const int32_t data_len, int32_t agg_col_idx,
                   char *agg_cell) override
   {
@@ -233,6 +233,47 @@ public:
     }
     return ret;
   }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const NotNullBitVector &curr_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx) && rollup_not_nulls.at(agg_col_idx)) {
+      const ResultType *curr_param = reinterpret_cast<const ResultType *>(curr_agg_cell);
+      const ResultType &rollup_param = *reinterpret_cast<const ResultType *>(rollup_agg_cell);
+      if ((is_decint_vec(in_tc) && is_decint_vec(out_tc))             // sum(int64/int32) -> int128
+          || (in_tc == VEC_TC_INTEGER && out_tc == VEC_TC_INTEGER)) { // count_sum
+        ret = add_values(*curr_param, rollup_param, rollup_agg_cell, sizeof(ResultType));
+      } else {
+        SumCalcInfo calc_info = get_batch_calc_info(agg_ctx, agg_col_idx, rollup_agg_cell);
+
+        if (OB_FAIL(add_to_result(*curr_param, rollup_param, calc_info.scale_, rollup_agg_cell,
+                                  calc_info.agg_cell_len_))) {
+          SQL_LOG(WARN, "add_to_result failed", K(ret), K(*this), K(*curr_param), K(rollup_param));
+        }
+      }
+    } else if (curr_not_nulls.at(agg_col_idx)) {
+      int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
+      agg_ctx.set_agg_cell(curr_agg_cell, curr_agg_cell_len, agg_col_idx, rollup_agg_cell);
+      rollup_not_nulls.set(agg_col_idx);
+
+      const ResultType &curr_param = *reinterpret_cast<const ResultType *>(curr_agg_cell);
+      const ResultType &rollup_param = *reinterpret_cast<const ResultType *>(rollup_agg_cell);
+    } else {
+      // do nothing
+    }
+    return ret;
+  }
+
   TO_STRING_KV("aggregate", "sum", K(in_tc), K(out_tc));
 private:
   int add_to_result(const ParamType &lparam, const ResultType &rparam, const ObScale scale,
@@ -334,7 +375,7 @@ public:
     return ret;
   }
 
-  int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
+  OB_INLINE int add_one_row(RuntimeContext &agg_ctx, int64_t batch_idx, int64_t batch_size,
                   const bool is_null, const char *data, const int32_t data_len, int32_t agg_col_idx,
                   char *agg_cell) override
   {
@@ -585,6 +626,34 @@ public:
           &(wide::ObDecimalIntConstValue::MYSQL_DEC_INT_MAX_AVAILABLE));
         res_vec->set_payload_shallow(output_idx, max_available_val, sizeof(int512_t));
         ret = OB_SUCCESS; // reset ret to SUCCESS, just log user warnings
+      }
+    }
+    return ret;
+  }
+
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const NotNullBitVector &curr_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls =
+      agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx)) {
+      int32_t rollup_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, rollup_row);
+      ResultType *cur_cell = reinterpret_cast<ResultType *>(curr_agg_cell);
+      ResultType *rollup_cell = reinterpret_cast<ResultType *>(rollup_agg_cell);
+      ret =
+        add_values(*cur_cell, *rollup_cell, reinterpret_cast<char *>(rollup_cell), rollup_cell_len);
+      if (OB_FAIL(ret)) {
+        SQL_LOG(WARN, "do addition failed", K(ret));
+      } else {
+        rollup_not_nulls.set(agg_col_idx);
       }
     }
     return ret;

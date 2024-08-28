@@ -172,6 +172,7 @@ ob_set_subtarget(ob_sql engine_aggregate
   engine/aggregate/ob_groupby_vec_op.cpp
   engine/aggregate/ob_hash_agg_variant.cpp
   engine/aggregate/ob_scalar_aggregate_vec_op.cpp
+  engine/aggregate/ob_merge_groupby_vec_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_basic
@@ -220,6 +221,8 @@ ob_set_subtarget(ob_sql engine_basic
   #engine/basic/chunk_store/ob_encoded_block_writer.cpp
   #engine/basic/chunk_store/ob_encoded_block_reader.cpp
   engine/basic/ob_values_table_access_op.cpp
+  engine/basic/ob_hp_infrastructure_manager.ipp
+  engine/basic/ob_hp_infras_vec_mgr.cpp
 )
 
 ob_set_subtarget(ob_sql engine_cmd
@@ -774,7 +777,7 @@ ob_set_subtarget(ob_sql engine_join
   engine/join/hash_join/hash_table.cpp
   engine/join/hash_join/ob_hash_join_struct.cpp
   engine/join/hash_join/join_hash_table.cpp
-  engine/join/hash_join/ob_hj_partition.cpp
+  engine/join/ob_partition_store.cpp
   engine/join/hash_join/ob_hj_partition_mgr.cpp
   engine/join/ob_join_vec_op.cpp
   engine/join/hash_join/ob_hash_join_vec_op.cpp
@@ -785,7 +788,9 @@ ob_set_subtarget(ob_sql engine_join
   engine/join/ob_join_op.cpp
   engine/join/ob_merge_join_op.cpp
   engine/join/ob_nested_loop_join_op.cpp
+  engine/join/ob_join_filter_partition_splitter.cpp
   engine/join/ob_join_filter_material_control_info.cpp
+  engine/join/ob_merge_join_vec_op.cpp
 )
 
 ob_set_subtarget(ob_sql engine_pdml
@@ -854,6 +859,7 @@ ob_set_subtarget(ob_sql engine_px
   engine/px/datahub/components/ob_dh_init_channel.cpp
   engine/px/datahub/components/ob_dh_second_stage_reporting_wf.cpp
   engine/px/datahub/components/ob_dh_opt_stats_gather.cpp
+  engine/px/datahub/components/ob_dh_join_filter_count_row.cpp
   engine/px/p2p_datahub/ob_p2p_dh_mgr.cpp
   engine/px/p2p_datahub/ob_p2p_dh_rpc_proxy.cpp
   engine/px/p2p_datahub/ob_p2p_dh_msg.cpp

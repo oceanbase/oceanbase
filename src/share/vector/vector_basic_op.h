@@ -32,6 +32,9 @@ namespace common
                       uint64_t seed,                \
                       uint64_t &res
 
+typedef int (*HashFuncTypeForTc) (HASH_ARG_LIST);
+typedef int (*NullHashFuncTypeForTc) (uint64_t seed, uint64_t &res);
+
 template<VecValueTypeClass value_tc, typename HashMethod, bool hash_v2>
 struct VecTCHashCalc {
   inline static int hash(HASH_ARG_LIST) {
@@ -1061,6 +1064,11 @@ struct VecTCCmpCalc<VEC_TC_LOB, VEC_TC_STRING>
   }
 };
 
+#ifndef HashFuncTypeForTcFlag
+#define HashFuncTypeForTcFlag
+HashFuncTypeForTc get_hashfunc_by_tc(VecValueTypeClass tc) ;
+NullHashFuncTypeForTc get_null_hashfunc_by_tc(VecValueTypeClass tc);
+#endif // HashFuncTypeForTcFlag
 } // end namespace common
 } // end namespace oceanbase
 

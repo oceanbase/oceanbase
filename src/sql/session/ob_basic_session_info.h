@@ -2479,6 +2479,8 @@ private:
 
   common::ObSEArray<uint64_t, 4> enable_role_ids_;
   uint64_t sys_var_config_hash_val_;
+public:
+  bool get_enable_hyperscan_regexp_engine() const;
 };
 
 

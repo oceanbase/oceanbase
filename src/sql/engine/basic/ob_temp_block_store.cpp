@@ -49,7 +49,7 @@ int ObTempBlockStore::ShrinkBuffer::init(char *buf, const int64_t buf_size)
 ObTempBlockStore::ObTempBlockStore(common::ObIAllocator *alloc /* = NULL */)
   : inited_(false), allocator_(NULL == alloc ? &inner_allocator_ : alloc), blk_(NULL), blk_buf_(),
     block_id_cnt_(0), saved_block_id_cnt_(0), dumped_block_id_cnt_(0), enable_dump_(true),
-    enable_trunc_(false), last_trunc_offset_(0),
+    backup_enable_dump_(true), enable_trunc_(false), last_trunc_offset_(0),
     tenant_id_(0), label_(), ctx_id_(0), mem_limit_(0), mem_hold_(0), mem_used_(0),
     file_size_(0), block_cnt_(0), index_block_cnt_(0), block_cnt_on_disk_(0),
     alloced_mem_size_(0), max_block_size_(0), max_hold_mem_(0), idx_blk_(NULL), mem_stat_(NULL),
@@ -71,6 +71,7 @@ int ObTempBlockStore::init(int64_t mem_limit,
   int ret = OB_SUCCESS;
   mem_limit_ = mem_limit;
   enable_dump_ = enable_dump;
+  backup_enable_dump_ = enable_dump_;
   tenant_id_ = tenant_id;
   ctx_id_ = mem_ctx_id;
   const int label_len = MIN(lib::AOBJECT_LABEL_SIZE, strlen(label));
@@ -307,7 +308,12 @@ int ObTempBlockStore::new_block(const int64_t mem_size,
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
-  } else if (OB_UNLIKELY(NULL == blk_)) {
+  } else if (OB_UNLIKELY(NULL == blk_ || blk_->is_empty())) {
+    if (NULL != blk_) {
+      free_blk_mem(blk_buf_.data(), blk_buf_.capacity());
+      blk_ = NULL;
+      blk_buf_.reset();
+    }
     if (OB_FAIL(alloc_block(blk_, min_blk_size, strict_mem_size))) {
       LOG_WARN("alloc block failed", K(ret), KPC(this));
     }
@@ -410,8 +416,11 @@ int ObTempBlockStore::decompr_block(BlockReader &reader, const Block *&blk)
   if (OB_ISNULL(reader.buf_.data()) || OB_ISNULL(blk)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpeteced null pointer", K(ret), KP(blk), KP(reader.buf_.data()));
+  } else if (OB_ISNULL(reader.read_io_handle_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected value read_io_handle_", K(ret), K(reader.read_io_handle_));
   } else {
-    int64_t comp_size = reader.read_io_handle_.get_done_size() - sizeof(Block);
+    int64_t comp_size = reader.read_io_handle_->get_done_size() - sizeof(Block);
     int64_t decomp_size = blk->raw_size_ - sizeof(Block);
     int64_t actual_uncomp_size = 0;
     if (OB_FAIL(ensure_reader_buffer(reader, reader.decompr_buf_, blk->raw_size_))) {
@@ -825,20 +834,25 @@ int ObTempBlockStore::load_block(BlockReader &reader, const int64_t block_id,
       blk = bi->blk_;
       on_disk = false;
     } else {
+      tmp_file::ObTmpFileIOHandle *read_io_handler_ptr = nullptr;
       if (reader.is_async()) {
         int aio_buf_idx = reader.aio_buf_idx_ % BlockReader::AIO_BUF_CNT;
         if (OB_FAIL(ensure_reader_buffer(reader, reader.aio_buf_[aio_buf_idx],
                                          bi->length_))) {
           LOG_WARN("ensure reader buffer failed", K(ret));
+        } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
+          LOG_WARN("get read io handler failed", K(ret));
         } else if (OB_FAIL(read_file(reader.aio_buf_[aio_buf_idx].data(), bi->length_, bi->offset_,
-                            reader.get_read_io_handler(), reader.is_async()))) {
+                            *read_io_handler_ptr, reader.is_async()))) {
           LOG_WARN("read block from file failed", K(ret), K(bi));
         }
       } else {
         if (OB_FAIL(ensure_reader_buffer(reader, reader.buf_, bi->length_))) {
           LOG_WARN("ensure reader buffer failed", K(ret));
+        } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
+          LOG_WARN("get read io handler failed", K(ret));
         } else if (OB_FAIL(read_file(reader.buf_.data(), bi->length_, bi->offset_,
-                            reader.get_read_io_handler(), reader.is_async()))) {
+                            *read_io_handler_ptr, reader.is_async()))) {
           LOG_WARN("read block from file failed", K(ret), K(bi));
         }
       }
@@ -942,14 +956,17 @@ int ObTempBlockStore::load_idx_block(BlockReader &reader, IndexBlock *&ib, const
     if (!bi.on_disk_) {
       ib = bi.idx_blk_;
     } else {
+      tmp_file::ObTmpFileIOHandle *read_io_handler_ptr = nullptr;
       if (OB_UNLIKELY(bi.length_ > IndexBlock::INDEX_BLOCK_SIZE)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid argument", K(ret), K(bi));
       } else if (OB_FAIL(ensure_reader_buffer(
           reader, reader.idx_buf_, IndexBlock::INDEX_BLOCK_SIZE))) {
         LOG_WARN("ensure reader buffer failed", K(ret));
+      } else if (OB_FAIL(reader.get_read_io_handler(read_io_handler_ptr))) {
+          LOG_WARN("get read io handler failed", K(ret));
       } else if (OB_FAIL(read_file(
-          reader.idx_buf_.data(), bi.length_, bi.offset_, reader.get_read_io_handler(), false))) {
+          reader.idx_buf_.data(), bi.length_, bi.offset_, *read_io_handler_ptr, false))) {
         LOG_WARN("read block index from file failed", K(ret), K(bi));
       } else {
         ib = reinterpret_cast<IndexBlock *>(reader.idx_buf_.data());
@@ -1045,7 +1062,10 @@ int ObTempBlockStore::BlockReader::aio_wait()
   int64_t timeout_ms = 0;
   OZ(get_timeout(timeout_ms));
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(read_io_handle_.wait())) {
+    if (OB_ISNULL(read_io_handle_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected value read_io_handle_", K(ret), K(read_io_handle_));
+    } else if (OB_FAIL(read_io_handle_->wait())) {
       LOG_WARN("aio wait failed", K(ret), K(timeout_ms));
     }
   }
@@ -1397,8 +1417,10 @@ void ObTempBlockStore::BlockReader::reset()
      * 1. do not need to free decompr_buf_, since it's data_ is same as buf.
      * 2. aio_buf_[N].data() may have same ptr as buf_.data(); shoudn't free twice
      */
+    if (read_io_handle_ != NULL) {
+      read_io_handle_->reset();
+    }
   }
-  read_io_handle_.reset();
 }
 
 void ObTempBlockStore::BlockReader::reuse()

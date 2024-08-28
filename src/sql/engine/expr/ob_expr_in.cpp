@@ -656,8 +656,9 @@ int ObExprInOrNotIn::cg_expr_without_row(ObExprCGCtx &expr_cg_ctx,
       if (is_param_can_vectorized()) {
         //目前认为右边参数 <= 2时， nest_loop算法的效果一定比hash更好
         int tmp_in_ret = OB_E(EventTable::EN_ENABLE_VECTOR_IN) OB_SUCCESS;
-        if (rt_expr.inner_func_cnt_ <= 2 ||
-            ob_is_urowid(left_type) || ob_is_urowid(right_type)) {
+        if (rt_expr.inner_func_cnt_ <= 2 || (!is_reverse_cmp_func && is_string_text_cmp) ||
+            (ob_is_json(left_type) || ob_is_json(right_type)) ||
+            (ob_is_urowid(left_type) || ob_is_urowid(right_type))) {
           rt_expr.eval_batch_func_ = &ObExprInOrNotIn::eval_batch_in_without_row_fallback;
           rt_expr.eval_vector_func_ = tmp_in_ret == OB_SUCCESS ?
                                       &ObExprInOrNotIn::eval_vector_in_without_row_fallback :

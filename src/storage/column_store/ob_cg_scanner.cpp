@@ -393,7 +393,6 @@ int ObCGScanner::inner_filter(
         }
       }
     }
-
     if (OB_SUCC(ret)) {
       ObMicroIndexInfo &index_info = prefetcher_.current_micro_info();
       const ObCSRange &row_range = index_info.get_row_range();

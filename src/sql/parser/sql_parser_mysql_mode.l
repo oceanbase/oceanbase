@@ -1175,6 +1175,7 @@ Timestamp{whitespace}?\"[^\"]*\" {
 <hint>PUSHDOWN { return PUSHDOWN; }
 <hint>DECORRELATE { return DECORRELATE; }
 <hint>NO_DECORRELATE { return NO_DECORRELATE; }
+<hint>RESOURCE_GROUP { return RESOURCE_GROUP; }
 <hint>PQ_GBY { return PQ_GBY; }
 <hint>PQ_DISTINCT { return PQ_DISTINCT; }
 <hint>{identifier} {

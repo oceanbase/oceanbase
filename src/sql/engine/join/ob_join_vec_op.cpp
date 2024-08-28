@@ -24,6 +24,16 @@ namespace sql
 OB_SERIALIZE_MEMBER((ObJoinVecSpec, ObOpSpec),
                     join_type_, other_join_conds_);
 
+#define VEC_FORMAT_SWITCH_CASE(VEC_FORMAT, vec_ptr, brs)          \
+  case VEC_FORMAT: {                                              \
+    for (int64_t i = 0; i < brs.size_; ++i) {                     \
+        if (vec_ptr->is_null(i) || !vec_ptr->get_bool(i)) {       \
+          brs.set_skip(i);                                        \
+        }                                                         \
+      }                                                           \
+    break;                                                        \
+  }
+
 int ObJoinVecOp::inner_rescan()
 {
   return ObOperator::inner_rescan();
@@ -81,6 +91,30 @@ int ObJoinVecOp::calc_other_conds(bool &is_match)
     }
   }
 
+  return ret;
+}
+
+int ObJoinVecOp::batch_calc_other_conds(ObBatchRows &brs)
+{
+  int ret = OB_SUCCESS;
+  const ObIArray<ObExpr *> &conds = get_spec().other_join_conds_;
+  ARRAY_FOREACH(conds, i) {
+    if (OB_FAIL(conds.at(i)->eval_vector(eval_ctx_, brs))) {
+      LOG_WARN("fail to calc other join condition", K(ret), K(*conds.at(i)));
+    } else {
+      VectorHeader &vec_header = conds.at(i)->get_vector_header(eval_ctx_);
+      common::ObIVector *vec = conds.at(i)->get_vector(eval_ctx_);
+      switch(vec_header.format_) {
+        VEC_FORMAT_SWITCH_CASE(VEC_FIXED, static_cast<ObFixedLengthBase *>(vec), brs);
+        VEC_FORMAT_SWITCH_CASE(VEC_UNIFORM, static_cast<ObUniformFormat<false> *>(vec), brs);
+        VEC_FORMAT_SWITCH_CASE(VEC_UNIFORM_CONST, static_cast<ObUniformFormat<true> *>(vec), brs);
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected vector format", K(ret), K(vec_header.format_));
+      }
+      }
+    }
+  }
   return ret;
 }
 

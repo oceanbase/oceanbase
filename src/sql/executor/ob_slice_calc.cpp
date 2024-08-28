@@ -1149,6 +1149,22 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*> 
   } else if (OB_FAIL(setup_slice_indexes(eval_ctx))) {
     LOG_WARN("setup slice indexes failed", K(ret));
   } else {
+    if (use_special_null_dist()) {
+      if (nullptr == malloc_alloc_ && OB_FAIL(eval_ctx.exec_ctx_.get_malloc_allocator(malloc_alloc_))) {
+        LOG_WARN("failed to get alloc", K(ret));
+      } else if (nullptr == null_bitmap_) {
+        void *mem = nullptr;
+        if (OB_ISNULL(mem = malloc_alloc_->alloc(ObBitVector::memory_size(eval_ctx.max_batch_size_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc bitmap", K(ret), K(eval_ctx.max_batch_size_));
+        } else {
+          null_bitmap_ = to_bit_vector(mem);
+          null_bitmap_->reset(batch_size);
+        }
+      } else {
+        null_bitmap_->reset(batch_size);
+      }
+    }
     uint64_t *hash_val = reinterpret_cast<uint64_t *>(slice_indexes_);
     uint64_t default_seed = SLICE_CALC_HASH_SEED;
     for (int64_t i = 0; OB_SUCC(ret) && i < n_keys_; i++) {
@@ -1157,19 +1173,39 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<false>(const ObIArray<ObExpr*> 
         LOG_WARN("eval batch failed", K(ret));
       } else {
         const bool is_batch_seed = i > 0;
+        ObDatum *datums = e->locate_batch_datums(eval_ctx);
         hash_funcs_->at(i).batch_hash_func_(hash_val,
-                                            e->locate_batch_datums(eval_ctx),
+                                            datums,
                                             e->is_batch_result(),
                                             skip,
                                             batch_size,
                                             is_batch_seed ? hash_val : &default_seed,
                                             is_batch_seed);
+        for (int64_t i = 0; use_special_null_dist() && i < batch_size; ++i) {
+          if (datums[i].is_null()) {
+            null_bitmap_->set(i);
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      for (int64_t i = 0; i < batch_size; i++) {
-        if (!skip.at(i)) {
-          slice_indexes_[i] = hash_val[i] % task_cnt_;
+      if (!use_special_null_dist()) {
+        for (int64_t i = 0; i < batch_size; i++) {
+          if (!skip.at(i)) {
+            slice_indexes_[i] = hash_val[i] % task_cnt_;
+          }
+        }
+      } else {
+        for (int64_t i = 0; i < batch_size; i++) {
+          if (!skip.at(i)) {
+            if (!null_bitmap_->at(i)) {
+              slice_indexes_[i] = hash_val[i] % task_cnt_;
+            } else {
+              slice_indexes_[i] = ObNullDistributeMethod::DROP == null_row_dist_method_
+                                  ? ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW
+                                    : (round_robin_idx_++ % task_cnt_);
+            }
+          }
         }
       }
       indexes = slice_indexes_;
@@ -1196,6 +1232,23 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> &
     ObIVector *vec = NULL;
     const bool all_rows_active = false;
     EvalBound eval_bound(batch_size, all_rows_active);
+    bool has_null = false;
+    if (use_special_null_dist()) {
+      if (nullptr == malloc_alloc_ && OB_FAIL(eval_ctx.exec_ctx_.get_malloc_allocator(malloc_alloc_))) {
+        LOG_WARN("failed to get alloc", K(ret));
+      } else if (nullptr == null_bitmap_) {
+        void *mem = nullptr;
+        if (OB_ISNULL(mem = malloc_alloc_->alloc(ObBitVector::memory_size(eval_ctx.max_batch_size_)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to alloc bitmap", K(ret), K(eval_ctx.max_batch_size_));
+        } else {
+          null_bitmap_ = to_bit_vector(mem);
+          null_bitmap_->reset(batch_size);
+        }
+      } else {
+        null_bitmap_->reset(batch_size);
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && i < n_keys_; i++) {
       ObExpr *e = hash_dist_exprs_->at(i);
       const bool is_batch_seed = i > 0;
@@ -1206,12 +1259,46 @@ int ObHashSliceIdCalc::get_slice_idx_batch_inner<true>(const ObIArray<ObExpr*> &
                                              is_batch_seed ? hash_val : &default_seed,
                                              is_batch_seed))) {
         LOG_WARN("calc murmur hash failed", K(ret));
+      } else if (use_special_null_dist()) {
+        if (vec->has_null()) {
+          if (vec->get_format() == VEC_UNIFORM_CONST) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("get invalid foramt", K(ret));
+          } else if (vec->get_format() == VEC_UNIFORM) {
+            ObUniformBase *vec_base = static_cast<ObUniformBase *> (vec);
+            ObDatum *datums = vec_base->get_datums();
+            for (int64_t i = 0; i < batch_size; ++i) {
+              if (datums[i].is_null()) {
+                has_null = true;
+                null_bitmap_->set(i);
+              }
+            }
+          } else {
+            has_null = true;
+            ObBitmapNullVectorBase *vec_base = static_cast<ObBitmapNullVectorBase *> (vec);
+            null_bitmap_->bit_or(*vec_base->get_nulls(), 0, batch_size);
+          }
+        }
       }
     }
     if (OB_SUCC(ret)) {
-      for (int64_t i = 0; i < batch_size; i++) {
-        if (!skip.at(i)) {
-          slice_indexes_[i] = hash_val[i] % task_cnt_;
+      if (!use_special_null_dist() || !has_null) {
+        for (int64_t i = 0; i < batch_size; i++) {
+          if (!skip.at(i)) {
+            slice_indexes_[i] = hash_val[i] % task_cnt_;
+          }
+        }
+      } else {
+        for (int64_t i = 0; i < batch_size; i++) {
+          if (!skip.at(i)) {
+            if (!null_bitmap_->at(i)) {
+              slice_indexes_[i] = hash_val[i] % task_cnt_;
+            } else {
+              slice_indexes_[i] = ObNullDistributeMethod::DROP == null_row_dist_method_
+                                  ? ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW
+                                    : (round_robin_idx_++ % task_cnt_);
+            }
+          }
         }
       }
       indexes = slice_indexes_;

@@ -192,6 +192,34 @@ public:
     return OB_SUCCESS;
   }
 
+  virtual int rollup_aggregation(RuntimeContext &agg_ctx, const int32_t agg_col_idx,
+                                 AggrRowPtr group_row, AggrRowPtr rollup_row,
+                                 int64_t cur_rollup_group_idx,
+                                 int64_t max_group_cnt = INT64_MIN) override
+  {
+    int ret = OB_SUCCESS;
+    UNUSEDx(cur_rollup_group_idx, max_group_cnt);
+    char *curr_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, group_row);
+    char *rollup_agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_idx, rollup_row);
+    const NotNullBitVector &curr_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, curr_agg_cell);
+    NotNullBitVector &rollup_not_nulls = agg_ctx.locate_notnulls_bitmap(agg_col_idx, rollup_agg_cell);
+    if (curr_not_nulls.at(agg_col_idx)) {
+      rollup_not_nulls.set(agg_col_idx);
+    }
+    int32_t curr_agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_idx, group_row);
+    if (OB_LIKELY(curr_not_nulls.at(agg_col_idx) && curr_agg_cell_len != INT32_MAX)) {
+      const char *curr_payload = (const char *)(*reinterpret_cast<const int64_t *>(curr_agg_cell));
+      if (curr_agg_cell_len > 0) {
+        agg_ctx.set_agg_cell(curr_payload, curr_agg_cell_len, agg_col_idx, rollup_agg_cell);
+      } else {
+        agg_ctx.set_agg_cell(nullptr, curr_agg_cell_len, agg_col_idx, rollup_agg_cell);
+      }
+    } else {
+      agg_ctx.set_agg_cell(nullptr, INT32_MAX, agg_col_idx, rollup_agg_cell);
+    }
+    return ret;
+  }
+
   TO_STRING_KV("aggregate", "first_row");
 };
 

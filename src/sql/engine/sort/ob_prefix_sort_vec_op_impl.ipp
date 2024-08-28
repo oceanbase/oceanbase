@@ -84,9 +84,11 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext 
                  *sk_exprs_, INT64_MAX, batch_size, false, false /*enable dump*/,
                  Store_Row::get_extra_size(true /*is_sort_key*/), NONE_COMPRESSOR, im_sk_store_))) {
       SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
-    } else if (OB_FAIL(init_temp_row_store(
-                 *addon_exprs_, INT64_MAX, batch_size, false, false /*enable dump*/,
-                 Store_Row::get_extra_size(false /*is_sort_key*/), NONE_COMPRESSOR, im_addon_store_))) {
+    } else if (ctx.has_addon_
+               && OB_FAIL(init_temp_row_store(*addon_exprs_, INT64_MAX, batch_size, false,
+                                              false /*enable dump*/,
+                                              Store_Row::get_extra_size(false /*is_sort_key*/),
+                                              NONE_COMPRESSOR, im_addon_store_))) {
       SQL_ENG_LOG(WARN, "failed to init temp row store", K(ret));
     } else {
       selector_ =
@@ -291,7 +293,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::fetch_rows_batch()
     selector_size_ = 0;
   }
   immediate_pos_ = 0;
-  if (im_sk_store_.get_row_cnt() > 0 || im_addon_store_.get_row_cnt() > 0) {
+  if (im_sk_store_.get_row_cnt() > 0) {
     im_sk_store_.reset();
     im_addon_store_.reset();
   }

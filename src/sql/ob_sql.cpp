@@ -2988,21 +2988,6 @@ int ObSql::generate_stmt(ParseResult &parse_result,
     resolver_ctx.statement_id_ = context.statement_id_;
     resolver_ctx.param_list_ = &plan_ctx->get_param_store();
     resolver_ctx.sql_proxy_ = GCTX.sql_proxy_;
-    // disable sql resouce management in:
-    // 1. remote query
-    // 2. inner sql
-    // 3. prepare in ps
-    // 4. multi stmt
-    if (NULL != GCTX.cgroup_ctrl_ && GCTX.cgroup_ctrl_->is_valid()
-        && context.enable_sql_resource_manage_
-        && !context.is_remote_sql_
-        && !result.get_session().is_inner()
-        && !(context.is_prepare_protocol_ && context.is_prepare_stage_)
-        && !(context.multi_stmt_item_.is_part_of_multi_stmt() && context.multi_stmt_item_.get_seq_num() > 0)) {
-      resolver_ctx.enable_res_map_ = true;
-      context.res_map_rule_version_ = G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_version(
-        result.get_session().get_effective_tenant_id());
-    }
   }
 
   if (OB_FAIL(ret)) {
@@ -3044,6 +3029,12 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       } else {
         ret = resolver.resolve(ObResolver::IS_NOT_PREPARED_STMT, *parse_result.result_tree_->children_[0], stmt);
       }
+
+      //check if current sql is using expected resource group
+      //if not, retry sql
+      ObPCResourceMapRule resource_map_rule;
+      OZ(ObSQLUtils::check_sql_map_expected_resource_group(context, result, &resolver_ctx, stmt, resource_map_rule));
+
       // set const param constraint after resolving
       context.all_plan_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_plan_const_param_constraints_);
       context.all_possible_const_param_constraints_ = &(resolver_ctx.query_ctx_->all_possible_const_param_constraints_);
@@ -3054,12 +3045,14 @@ int ObSql::generate_stmt(ParseResult &parse_result,
       context.need_match_all_params_ = resolver_ctx.query_ctx_->need_match_all_params_;
       context.all_local_session_vars_ = &(resolver_ctx.query_ctx_->all_local_session_vars_);
       context.cur_stmt_ = stmt;
-      context.res_map_rule_id_ = resolver_ctx.query_ctx_->res_map_rule_id_;
-      context.res_map_rule_param_idx_ = resolver_ctx.query_ctx_->res_map_rule_param_idx_;
+      context.res_map_rule_version_ =
+        G_RES_MGR.get_col_mapping_rule_mgr().get_column_mapping_version(
+          result.get_session().get_effective_tenant_id());
+      context.resource_map_rule_.shadow_copy(resource_map_rule);
       LOG_DEBUG("got plan const param constraints", K(resolver_ctx.query_ctx_->all_plan_const_param_constraints_));
       LOG_DEBUG("got all const param constraints", K(resolver_ctx.query_ctx_->all_possible_const_param_constraints_));
-      LOG_TRACE("set sql context rule id", K(ret), K(context.res_map_rule_id_), K(context.res_map_rule_param_idx_),
-                K(&context), K(&resolver_ctx), K(context.is_prepare_stage_), K(context.is_prepare_protocol_),
+      LOG_TRACE("set sql context rule id", K(ret), K(context.resource_map_rule_), K(&context),
+                K(&resolver_ctx), K(context.is_prepare_stage_), K(context.is_prepare_protocol_),
                 K(NULL != GCTX.cgroup_ctrl_ && GCTX.cgroup_ctrl_->is_valid()),
                 K(result.get_session().is_inner()),
                 K(context.multi_stmt_item_.is_part_of_multi_stmt()),

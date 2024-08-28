@@ -17,8 +17,9 @@
 #include "sql/optimizer/ob_log_join.h"
 #include "sql/resolver/dml/ob_sql_hint.h"
 #include "sql/engine/px/ob_px_basic_info.h"
-#include "sql/engine/join/ob_join_filter_op.h"
 #include "sql/engine/expr/ob_expr_join_filter.h"
+#include "sql/engine/join/ob_join_filter_material_control_info.h"
+
 namespace oceanbase
 {
 namespace sql
@@ -42,7 +43,9 @@ public:
       skip_subpart_(false),
       rf_prefix_col_idxs_(),
       probe_table_id_(OB_INVALID_ID),
-      range_column_cnt_(-1)
+      range_column_cnt_(-1),
+      jf_material_control_info_(),
+      rf_max_wait_time_(0)
   { }
   virtual ~ObLogJoinFilter() = default;
   const char *get_name() const;
@@ -127,6 +130,27 @@ common::ObIArray<ObRawExpr *> &get_join_filter_exprs_for_update()
     range_column_cnt_ = range_column_cnt;
   }
   inline int64_t get_range_column_cnt() const { return range_column_cnt_; }
+  inline bool use_realistic_runtime_bloom_filter_size()
+  {
+    return jf_material_control_info_.enable_material_;
+  }
+
+  inline const ObJoinFilterMaterialControlInfo &get_jf_material_control_info() const
+  {
+    return jf_material_control_info_;
+  }
+
+  inline ObJoinFilterMaterialControlInfo &get_jf_material_control_info()
+  {
+    return jf_material_control_info_;
+  }
+  inline int64_t get_rf_max_wait_time() const {
+    return rf_max_wait_time_;
+  }
+  inline void set_rf_max_wait_time(int64_t rf_max_wait_time) {
+    rf_max_wait_time_ = rf_max_wait_time;
+  }
+
 private:
   bool is_create_;   //判断是否是create算子
   int64_t filter_id_; //设置filter_id
@@ -152,6 +176,8 @@ private:
   ObSEArray<int64_t, 4, common::ModulePageAllocator, true> rf_prefix_col_idxs_;
   int64_t probe_table_id_;
   int64_t range_column_cnt_;
+  ObJoinFilterMaterialControlInfo jf_material_control_info_;
+  int64_t rf_max_wait_time_;
   DISALLOW_COPY_AND_ASSIGN(ObLogJoinFilter);
 };
 

@@ -278,6 +278,7 @@ struct ObGlobalHint {
   void merge_osg_hint(int8_t flag);
   void merge_dynamic_sampling_hint(int64_t dynamic_sampling);
   void merge_direct_load_hint(const ObDirectLoadHint &other);
+  void merge_resource_group_hint(const ObString &resource_group);
 
   bool has_hint_exclude_concurrent() const;
   int print_global_hint(PlanText &plan_text) const;
@@ -302,6 +303,7 @@ struct ObGlobalHint {
   void set_flashback_read_tx_uncommitted(bool v) { flashback_read_tx_uncommitted_ = v; }
   bool get_xa_trans_stop_check_lock() const { return dblink_hints_.hint_xa_trans_stop_check_lock_; }
   void set_xa_trans_stop_check_lock(bool v) { dblink_hints_.hint_xa_trans_stop_check_lock_ = v; }
+  inline const common::ObString& get_resource_group() const { return resource_group_; }
   bool has_append() const {
     return (osg_hint_.flags_ & ObOptimizerStatisticsGatheringHint::OB_APPEND_HINT) ? true : false;
   }
@@ -401,6 +403,7 @@ struct ObGlobalHint {
   common::ObSArray<ObAllocOpHint> alloc_op_hints_;
   ObDirectLoadHint direct_load_hint_;
   ObDBLinkHit dblink_hints_;
+  common::ObString resource_group_;
 };
 
 // used in physical plan

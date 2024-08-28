@@ -24,6 +24,7 @@ namespace oceanbase
 namespace sql
 {
 
+class BatchTempRowStoresMgr;
 template<bool RA>
 class ObTempRowStoreBase : public ObTempBlockStore
 {
@@ -227,11 +228,14 @@ public:
   };
 
 public:
+  friend class BatchTempRowStoresMgr;
+  friend class BatchTempRowStoresDisableDumpGuard;
   explicit ObTempRowStoreBase(common::ObIAllocator *alloc = NULL);
 
   virtual ~ObTempRowStoreBase();
   void destroy();
   void reset();
+  void reuse();
 
   int init(const ObExprPtrIArray &exprs,
            const int64_t max_batch_size,
@@ -352,6 +356,106 @@ private:
 
 using ObRATempRowStore = ObTempRowStoreBase<true>;
 using ObTempRowStore = ObTempRowStoreBase<false>;
+class BatchTempRowStoresDisableDumpGuard
+{
+public:
+  BatchTempRowStoresDisableDumpGuard(common::ObIArray<ObTempRowStore *> &stores,
+                                     const bool need_guard)
+                                     : stores_(stores), need_guard_(need_guard)
+  {
+    if (need_guard_) {
+      for (int64_t i = 0; i < stores_.count(); ++i) {
+        if (nullptr != stores_.at(i)) {
+          stores_.at(i)->enable_dump_ = false;
+        }
+      }
+    }
+  }
+  ~BatchTempRowStoresDisableDumpGuard()
+  {
+    if (need_guard_) {
+      for (int64_t i = 0; i < stores_.count(); ++i) {
+        if (nullptr != stores_.at(i)) {
+          stores_.at(i)->enable_dump_ = stores_.at(i)->backup_enable_dump_;
+        }
+      }
+    }
+  }
+private:
+  ObIArray<ObTempRowStore *> &stores_;
+  bool need_guard_;
+};
+
+class BatchTempRowStoresMgr
+{
+public:
+  BatchTempRowStoresMgr() : inited_(false), alloc_(nullptr),
+                            stores_(), row_size_array_(nullptr),
+                            selector_array_(nullptr), blocks_(nullptr),
+                            buffers_(nullptr), return_rows_(nullptr),
+                            part_cnt_(0) {}
+  ~BatchTempRowStoresMgr() { reset(); }
+  int init(const int64_t max_batch_size,
+           const int64_t part_cnt,
+           ObIAllocator &alloc);
+  bool inited() const { return inited_; }
+  inline int set_temp_store(const int64_t part_idx, ObTempRowStore *store)
+  {
+    int ret = OB_SUCCESS;
+    stores_.at(part_idx) = store;
+    if (OB_FAIL(store->init_batch_ctx())) {
+      SQL_ENG_LOG(WARN, "failed to init ctx", K(ret));
+    }
+    return ret;
+  }
+  void reset()
+  {
+    inited_ = false;
+    part_cnt_ = 0;
+    stores_.destroy();
+    if (nullptr != alloc_) {
+      if (nullptr != row_size_array_) {
+        alloc_->free(row_size_array_);
+        row_size_array_ = nullptr;
+      }
+      if (nullptr != selector_array_) {
+        alloc_->free(selector_array_);
+        selector_array_ = nullptr;
+      }
+      if (nullptr != blocks_) {
+        alloc_->free(blocks_);
+        blocks_ = nullptr;
+      }
+      if (nullptr != buffers_) {
+        alloc_->free(buffers_);
+        buffers_ = nullptr;
+      }
+      if (nullptr != return_rows_) {
+        alloc_->free(return_rows_);
+        return_rows_ = nullptr;
+      }
+    }
+    alloc_ = nullptr;
+  }
+  inline void prepare_one_row(const int64_t idx,
+                              const int64_t batch_idx,
+                              ObCompactRow **stored_rows);
+  int add_batch(const int64_t *idxes,
+                const IVectorPtrs &vectors,
+                const ObBatchRows &brs,
+                ObCompactRow **stored_rows);
+private:
+  bool inited_;
+  ObIAllocator *alloc_;
+  common::ObFixedArray<ObTempRowStore *, common::ObIAllocator> stores_;
+  uint32_t *row_size_array_;
+  uint16_t *selector_array_;
+  ObTempBlockStore::Block **blocks_;
+  ObTempBlockStore::ShrinkBuffer **buffers_;
+  ObCompactRow **return_rows_;
+  int64_t selector_cnt_;
+  int64_t part_cnt_;
+};
 
 } // end namespace sql
 } // end namespace oceanbase

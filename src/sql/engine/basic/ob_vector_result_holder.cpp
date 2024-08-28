@@ -27,6 +27,24 @@ using namespace common;
 namespace sql
 {
 
+void ObVectorsResultHolder::ObColResultHolder::reset(common::ObIAllocator &alloc)
+{
+#define SAFE_DELETE(ptr)  \
+if (nullptr != ptr) {     \
+  alloc.free(ptr);        \
+  ptr = nullptr;          \
+}
+
+  LST_DO_CODE(SAFE_DELETE,
+              frame_nulls_,
+              frame_datums_,
+              frame_data_,
+              frame_lens_,
+              frame_ptrs_,
+              frame_offsets_,
+              frame_continuous_data_);
+}
+
 int ObVectorsResultHolder::ObColResultHolder::copy_vector_base(const ObVectorBase &vec)
 {
   int ret = OB_SUCCESS;
@@ -70,7 +88,7 @@ copy_fixed_base(const ObFixedLengthBase &vec,
   int ret = OB_SUCCESS;
   if (OB_FAIL(copy_bitmap_null_base(vec, alloc, batch_size, eval_ctx))) {
     LOG_WARN("failed to copy bitmap null base", K(ret));
-  } else if (nullptr == data_) {
+  } else if (nullptr == frame_data_) {
     len_ = vec.get_length();
     if (OB_ISNULL(frame_data_ = static_cast<char *> (alloc.alloc(len_ * max_row_cnt_)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -147,8 +165,9 @@ int ObVectorsResultHolder::ObColResultHolder::copy_uniform_base(
     const int64_t batch_size) {
   int ret = OB_SUCCESS;
   int64_t copy_size = is_const ? 1 : max_row_cnt_;
-  bool need_copy_rev_buf = expr->is_fixed_length_data_
-                           || ObNumberTC == ob_obj_type_class(expr->datum_meta_.get_type());
+  bool need_copy_rev_buf = expr->res_buf_len_ > 0 &&
+                           (expr->is_fixed_length_data_ ||
+                           ObNumberTC == ob_obj_type_class(expr->datum_meta_.get_type()));
   if (OB_FAIL(copy_vector_base(vec))) {
     LOG_WARN("failed to copy vector base", K(ret));
   } else {
@@ -234,8 +253,9 @@ void ObVectorsResultHolder::ObColResultHolder::restore_uniform_base(
     ObEvalCtx &eval_ctx,
     const int64_t batch_size) const {
   int ret = OB_SUCCESS;
-  bool need_copy_rev_buf = expr->is_fixed_length_data_
-                           || ObNumberTC == ob_obj_type_class(expr->datum_meta_.get_type());
+  bool need_copy_rev_buf = expr->res_buf_len_ > 0 &&
+                           (expr->is_fixed_length_data_ ||
+                           ObNumberTC == ob_obj_type_class(expr->datum_meta_.get_type()));
   int64_t copy_size = is_const ? 1 : max_row_cnt_;
   restore_vector_base(vec);
   vec.set_datums(datums_);
@@ -271,6 +291,16 @@ int ObVectorsResultHolder::init(const common::ObIArray<ObExpr *> &exprs, ObEvalC
   return ret;
 }
 
+void ObVectorsResultHolder::destroy()
+{
+  if (tmp_alloc_ != nullptr && exprs_ != nullptr && backup_cols_ != nullptr) {
+    for (int64_t i = 0; i < exprs_->count(); ++i) {
+      backup_cols_[i].reset(*tmp_alloc_);
+    }
+    tmp_alloc_->free(backup_cols_);
+    backup_cols_ = nullptr;
+  }
+}
 
 int ObVectorsResultHolder::save(const int64_t batch_size)
 {

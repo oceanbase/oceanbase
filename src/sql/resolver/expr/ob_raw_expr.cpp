@@ -3094,7 +3094,7 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
   } else if (with_null_equal_cond()) {
     // <=> join is not allowed to pushdown as white filter
     bool_ret = false;
-  } else if (RANGE == runtime_filter_type_ /*|| IN == runtime_filter_type_*/) {
+  } else if (RANGE == runtime_filter_type_) {
     for (int i = 0; i < exprs_.count(); ++i) {
       if (T_REF_COLUMN != exprs_.at(i)->get_expr_type()) {
         bool_ret = false;
@@ -3109,6 +3109,13 @@ bool ObOpRawExpr::is_white_runtime_filter_expr() const
     // for now, storage pushdown filter can not process both a < 10 and a is null in one filter
     // so disable white topn runtime filter
     // LOG_TRACE("[TopN Filter] push topn filter as white filter");
+    bool_ret = false;
+  } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0 && IN == runtime_filter_type_) {
+    if (exprs_.count() != 1) {
+      bool_ret = false;
+    } else if(T_REF_COLUMN != exprs_.at(0)->get_expr_type()) {
+      bool_ret = false;
+    }
     bool_ret = false;
   } else {
     bool_ret = false;

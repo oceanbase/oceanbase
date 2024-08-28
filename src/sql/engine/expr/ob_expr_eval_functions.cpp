@@ -1236,12 +1236,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprVecData::generate_vec_data,                          /* 740 */
   NULL, // ObExprVecType::generate_vec_type,                          /* 741 */
   NULL, // ObExprVecVector::generate_vec_vector,                      /* 742 */
-  NULL, // ObExprRegexp::eval_hs_regexp,                              /* 743 */
-  NULL, // ObExprRegexpCount::eval_hs_regexp_count,                   /* 744 */
-  NULL, // ObExprRegexpInstr::eval_hs_regexp_instr,                   /* 745 */
-  NULL, // ObExprRegexpLike::eval_hs_regexp_like,                     /* 746 */
-  NULL, // ObExprRegexpReplace::eval_hs_regexp_replace,               /* 747 */
-  NULL, // ObExprRegexpSubstr::eval_hs_regexp_substr,                 /* 748 */
+  ObExprRegexp::eval_hs_regexp,                                       /* 743 */
+  ObExprRegexpCount::eval_hs_regexp_count,                            /* 744 */
+  ObExprRegexpInstr::eval_hs_regexp_instr,                            /* 745 */
+  ObExprRegexpLike::eval_hs_regexp_like,                              /* 746 */
+  ObExprRegexpReplace::eval_hs_regexp_replace,                        /* 747 */
+  ObExprRegexpSubstr::eval_hs_regexp_substr,                          /* 748 */
   ObExprColumnConv::column_convert_fast,                              /* 749 */
   NULL, //ObExprArrayContains::eval_array_contains_int64_t,           /* 750 */
   NULL, //ObExprArrayContains::eval_array_contains_float,             /* 751 */
@@ -1514,13 +1514,13 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL,//ObRelationalExprOperator::eval_vector_min_max_compare, /* 113 */
   ObExprCeilFloor::calc_ceil_floor_vector,                      /* 114 */
   ObExprRepeat::eval_repeat_vector,                             /* 115 */
-  NULL, // ObExprRegexpReplace::eval_hs_regexp_replace_vector,  /* 116 */
+  ObExprRegexpReplace::eval_hs_regexp_replace_vector,           /* 116 */
   NULL, // ObExprArrayContains::eval_array_contains_vector_int64_t,      /* 117 */
   NULL, // ObExprArrayContains::eval_array_contains_vector_float,        /* 118 */
   NULL, // ObExprArrayContains::eval_array_contains_vector_double,       /* 119 */
   NULL, // ObExprArrayContains::eval_array_contains_vector_ObString,     /* 120 */
   NULL, // ObExprArrayContains::eval_array_contains_array_vector,        /* 121 */
-  NULL, // ObExprCalcPartitionBase::fast_calc_partition_level_one_vector,  /* 122 */
+  ObExprCalcPartitionBase::fast_calc_partition_level_one_vector,         /* 122 */
   NULL, // ObExprTrim::eval_trim_vector                         /* 123 */
 };
 

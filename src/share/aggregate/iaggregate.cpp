@@ -56,6 +56,9 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
   for (int i = 0; OB_SUCC(ret) && i < agg_ctx.aggr_infos_.count(); i++) {
     ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
     IAggregate *aggregate = nullptr;
+    if (aggr_info.has_distinct_) {
+      ++agg_ctx.distinct_count_;
+    }
     if (aggr_info.is_implicit_first_aggr()) {
       if (OB_FAIL(init_first_row_aggregate(agg_ctx, i, allocator, aggregate))) {
         SQL_LOG(WARN, "init first row aggregate failed", K(ret));
@@ -189,44 +192,6 @@ static int32_t reserved_agg_col_size(RuntimeContext &agg_ctx, int64_t agg_col_id
   ret_size += agg_cell_tmp_res_size(agg_ctx, agg_col_id);
   return ret_size;
 }
-
-inline bool has_extra_info(ObAggrInfo &info)
-{
-  bool has = false;
-  switch (info.get_expr_type()) {
-  case T_FUN_GROUP_CONCAT:
-  case T_FUN_GROUP_RANK:
-  case T_FUN_GROUP_DENSE_RANK:
-  case T_FUN_GROUP_PERCENT_RANK:
-  case T_FUN_GROUP_CUME_DIST:
-  case T_FUN_MEDIAN:
-  case T_FUN_GROUP_PERCENTILE_CONT:
-  case T_FUN_GROUP_PERCENTILE_DISC:
-  case T_FUN_KEEP_MAX:
-  case T_FUN_KEEP_MIN:
-  case T_FUN_KEEP_SUM:
-  case T_FUN_KEEP_COUNT:
-  case T_FUN_KEEP_WM_CONCAT:
-  case T_FUN_WM_CONCAT:
-  case T_FUN_PL_AGG_UDF:
-  case T_FUN_JSON_ARRAYAGG:
-  case T_FUN_ORA_JSON_ARRAYAGG:
-  case T_FUN_JSON_OBJECTAGG:
-  case T_FUN_ORA_JSON_OBJECTAGG:
-  case T_FUN_ORA_XMLAGG:
-  case T_FUN_HYBRID_HIST:
-  case T_FUN_TOP_FRE_HIST:
-  case T_FUN_AGG_UDF: {
-    has = true;
-    break;
-  }
-  default: {
-    break;
-  }
-  }
-  has = has || info.has_distinct_;
-  return has;
-}
 } // end namespace helper
 
 int RuntimeContext::init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator &alloc)
@@ -236,7 +201,7 @@ int RuntimeContext::init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator
   agg_row_meta_.col_cnt_ = aggr_infos.count();
   agg_row_meta_.extra_cnt_ = 0;
   int32_t offset = 0;
-  bool has_extra = false;
+  has_extra_ = false;
   int64_t bit_vec_size =
     ((aggr_infos.count() + AggBitVector::word_bits() - 1) / AggBitVector::word_bits())
     * AggBitVector::word_size();
@@ -278,13 +243,13 @@ int RuntimeContext::init_row_meta(ObIArray<ObAggrInfo> &aggr_infos, ObIAllocator
       agg_row_meta_.use_var_len_->set(i);
     }
     if (helper::has_extra_info(info)) {
-      has_extra = true;
+      has_extra_ = true;
       agg_row_meta_.extra_idxes_[i] = agg_extra_id++;
     }
   }
   agg_row_meta_.extra_cnt_ = agg_extra_id;
   agg_row_meta_.col_offsets_[aggr_infos.count()] = agg_row_meta_.row_size_;
-  if (has_extra) {
+  if (has_extra_) {
     agg_row_meta_.row_size_ += sizeof(int32_t);
     agg_row_meta_.extra_idx_offset_ = offset;
     offset = agg_row_meta_.row_size_;

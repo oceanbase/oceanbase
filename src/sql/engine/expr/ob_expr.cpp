@@ -1144,7 +1144,7 @@ int ObExpr::eval_vector(ObEvalCtx &ctx,
   ObEvalInfo &info = get_eval_info(ctx);
   char *frame = ctx.frames_[frame_idx_];
   int64_t const_skip = 1;
-  if (skip.accumulate_bit_cnt(bound) < bound.range_size()) {
+  if (!batch_result_ && skip.accumulate_bit_cnt(bound) < bound.range_size()) {
     const_skip = 0;
   }
   const ObBitVector *rt_skip = batch_result_ ? &skip : to_bit_vector(&const_skip);

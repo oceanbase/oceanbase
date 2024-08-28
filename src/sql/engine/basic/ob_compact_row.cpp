@@ -46,6 +46,9 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
       }
     }
   }
+  if (!use_local_allocator() && nullptr == allocator_) {
+    fixed_cnt_ = 0;
+  }
   const int64_t var_col_cnt = get_var_col_cnt();
   extra_off_ = var_offsets_off_;
   if (var_col_cnt > 0) {
@@ -97,6 +100,46 @@ int RowMeta::init(const ObExprPtrIArray &exprs,
   return ret;
 }
 
+int RowMeta::assign(const RowMeta &row_meta)
+{
+  int ret = OB_SUCCESS;
+  allocator_ = row_meta.allocator_;
+  col_cnt_ = row_meta.col_cnt_;
+  extra_size_ = row_meta.extra_size_;
+
+  fixed_cnt_ = row_meta.fixed_cnt_;
+  nulls_off_ = row_meta.nulls_off_;
+  var_offsets_off_ = row_meta.var_offsets_off_;
+  extra_off_ = row_meta.extra_off_;
+  fix_data_off_ = row_meta.fix_data_off_;
+  var_data_off_ = row_meta.var_data_off_;
+
+  if (fixed_cnt_ > 0) {
+    ObDataBuffer local_alloc(buf_, MAX_LOCAL_BUF_LEN);
+    ObIAllocator *alloc = use_local_allocator() ? &local_alloc : allocator_;
+    if (OB_ISNULL(alloc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("allocator is null", K(ret), K(lbt()));
+    } else if (OB_ISNULL(projector_ =
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * col_cnt_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc projector failed", K(ret), K(col_cnt_));
+    } else if (OB_ISNULL(fixed_offsets_ =
+        static_cast<int32_t *>(alloc->alloc(sizeof(int32_t) * (fixed_cnt_ + 1))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc fixed_offsets_ failed", K(ret), K(col_cnt_));
+    } else {
+      memcpy(projector_, row_meta.projector_, sizeof(int32_t) * col_cnt_);
+      memcpy(fixed_offsets_, row_meta.fixed_offsets_, sizeof(int32_t) * (fixed_cnt_ + 1));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_ERROR("row meta assgin failed", K(ret));
+      reset();
+    }
+  }
+  return ret;
+}
+
 void RowMeta::reset()
 {
   if (!use_local_allocator() && NULL != allocator_) {
@@ -107,6 +150,7 @@ void RowMeta::reset()
       allocator_->free(projector_);
     }
   }
+  col_cnt_ = 0;
   fixed_offsets_ = NULL;
   projector_ = NULL;
 }

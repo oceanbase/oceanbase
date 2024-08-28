@@ -1402,7 +1402,7 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         op_monitor_info_.skipped_rows_count_ += skipped_rows_count; // for batch
         ++op_monitor_info_.output_batches_; // for batch
         if (!got_first_row_ && !brs_.end_) {
-          op_monitor_info_.first_row_time_ = ObClockGenerator::getClock();;
+          op_monitor_info_.first_row_time_ = ObClockGenerator::getClock();
           got_first_row_ = true;
         }
         if (brs_.end_) {

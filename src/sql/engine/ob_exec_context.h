@@ -192,6 +192,7 @@ public:
   void reset_expr_op();
   inline bool is_expr_op_ctx_inited() { return expr_op_size_ > 0 && NULL != expr_op_ctx_store_; }
   int get_convert_charset_allocator(common::ObArenaAllocator *&allocator);
+  int get_malloc_allocator(ObIAllocator *&allocator);
   void try_reset_convert_charset_allocator();
 
   void destroy_eval_allocator();
@@ -653,6 +654,8 @@ protected:
 
   // just for convert charset in query response result
   lib::MemoryContext convert_allocator_;
+  lib::MemoryContext mem_context_;
+  PWJTabletIdMap* pwj_map_;
   GroupPWJTabletIdMap *group_pwj_map_;
   // the following two parameters only used in calc_partition_id expr
   PartitionIdCalcType calc_type_;

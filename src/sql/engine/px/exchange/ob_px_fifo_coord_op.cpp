@@ -53,7 +53,8 @@ ObPxFifoCoordOp::ObPxFifoCoordOp(ObExecContext &exec_ctx, const ObOpSpec &spec, 
     reporting_wf_piece_msg_proc_(exec_ctx, msg_proc_),
     opt_stats_gather_piece_msg_proc_(exec_ctx, msg_proc_),
     sp_winfunc_px_piece_msg_proc_(exec_ctx, msg_proc_),
-    rd_winfunc_px_piece_msg_proc_(exec_ctx, msg_proc_)
+    rd_winfunc_px_piece_msg_proc_(exec_ctx, msg_proc_),
+    join_filter_count_row_piece_msg_proc_(exec_ctx, msg_proc_)
   {}
 
 int ObPxFifoCoordOp::inner_open()
@@ -106,6 +107,7 @@ int ObPxFifoCoordOp::setup_loop_proc()
       .register_processor(opt_stats_gather_piece_msg_proc_)
       .register_processor(sp_winfunc_px_piece_msg_proc_)
       .register_processor(rd_winfunc_px_piece_msg_proc_)
+      .register_processor(join_filter_count_row_piece_msg_proc_)
       .register_interrupt_processor(interrupt_proc_);
   return ret;
 }
@@ -237,6 +239,7 @@ int ObPxFifoCoordOp::fetch_rows(const int64_t row_cnt)
         case ObDtlMsgType::DH_OPT_STATS_GATHER_PIECE_MSG:
         case ObDtlMsgType::DH_SP_WINFUNC_PX_PIECE_MSG:
         case ObDtlMsgType::DH_RD_WINFUNC_PX_PIECE_MSG:
+        case ObDtlMsgType::DH_JOIN_FILTER_COUNT_ROW_PIECE_MSG:
           // all message processed in callback
           break;
         default:

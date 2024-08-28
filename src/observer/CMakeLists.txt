@@ -461,7 +461,7 @@ add_library(oceanbase_static
   ${CMAKE_CURRENT_BINARY_DIR}/ob_version.cpp)
 
 target_link_libraries(oceanbase_static
-  PUBLIC ob_base "${ob_objects}" ob_sql_static ob_storage_static ob_share_static ${ob_close_modules_static_name} oblib objit)
+  PUBLIC ob_base "${ob_objects}" ob_sql_static ob_storage_static ob_share_static ${ob_close_modules_static_name} oblib objit ${HYPERSCAN_LIB})
 
 if (OB_GPERF_MODE)
   target_link_libraries(oceanbase_static

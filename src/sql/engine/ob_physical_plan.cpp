@@ -34,6 +34,7 @@
 #include "sql/spm/ob_spm_evolution_plan.h"
 #include "sql/engine/ob_exec_feedback_info.h"
 #include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/code_generator/ob_static_engine_cg.h"
 
 namespace oceanbase
 {
@@ -1063,11 +1064,28 @@ int ObPhysicalPlan::alloc_op_spec(const ObPhyOperatorType type,
     op->use_rich_format_ = use_rich_format_
                            && op->is_vectorized()
                            && ObOperatorFactory::support_rich_format(type);
-    LOG_TRACE("alloc op spec", K(use_rich_format_), K(*op));
+    LOG_TRACE("alloc op spec", K(use_rich_format_), K(op->max_batch_size_), K(op->use_rich_format_), K(*op));
   }
   return ret;
 }
 
+int ObPhysicalPlan::alloc_op_spec_for_cg(ObLogicalOperator *op, ObSqlSchemaGuard *schema_guard,
+                                         const ObPhyOperatorType type, const int64_t child_cnt,
+                                         ObOpSpec *&spec, const uint64_t op_id)
+{
+  int ret = OB_SUCCESS;
+  bool disable_vectorize = false;
+  if (OB_FAIL(alloc_op_spec(type, child_cnt, spec, op_id))) {
+    LOG_WARN("alloc op spec failed", K(ret));
+  } else if (OB_FAIL(ObStaticEngineCG::check_op_vectorization(op, schema_guard, type, disable_vectorize))) {
+    LOG_WARN("check op vectorization failed", K(ret));
+  } else if (disable_vectorize) {
+    spec->max_batch_size_ = 0;
+    spec->use_rich_format_ = false;
+  }
+  LOG_TRACE("alloc op spec for cg", K(disable_vectorize), K(spec->max_batch_size_), K(spec->use_rich_format_), K(*spec));
+  return ret;
+}
 int ObPhysicalPlan::get_encrypt_meta(const uint64_t table_id,
                                      ObIArray<transaction::ObEncryptMetaCache> &metas,
                                      const ObIArray<transaction::ObEncryptMetaCache> *&ret_ptr) const

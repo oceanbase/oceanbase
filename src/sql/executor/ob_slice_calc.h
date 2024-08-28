@@ -686,9 +686,9 @@ public:
       : ObSliceIdxCalc(alloc, null_row_dist_method), expr_ctx_(&expr_ctx),
         hash_dist_columns_(&hash_dist_columns), dist_exprs_(&dist_exprs), task_cnt_(task_cnt),
         round_robin_idx_(0), obj_casted_(false), hash_dist_exprs_(NULL), hash_funcs_(NULL),
-        n_keys_(0), null_dist_value_exist_(true)
+        n_keys_(0), null_dist_value_exist_(true), null_bitmap_(nullptr), malloc_alloc_(nullptr)
   {
-    support_vectorized_calc_ = ObNullDistributeMethod::NONE == null_row_dist_method;
+    support_vectorized_calc_ = true;
   }
 
   ObHashSliceIdCalc(ObIAllocator &alloc,
@@ -699,9 +699,17 @@ public:
       : ObSliceIdxCalc(alloc, null_row_dist_method), expr_ctx_(NULL),
         hash_dist_columns_(NULL), dist_exprs_(NULL), task_cnt_(task_cnt), round_robin_idx_(0),
         obj_casted_(false), hash_dist_exprs_(dist_exprs), hash_funcs_(hash_funcs),
-        n_keys_(dist_exprs->count()), null_dist_value_exist_(true)
+        n_keys_(dist_exprs->count()), null_dist_value_exist_(true), null_bitmap_(nullptr), malloc_alloc_(nullptr)
   {
-    support_vectorized_calc_ = ObNullDistributeMethod::NONE == null_row_dist_method;
+    support_vectorized_calc_ = true;
+  }
+  virtual ~ObHashSliceIdCalc()
+  {
+    if (nullptr != malloc_alloc_ && nullptr != null_bitmap_) {
+      malloc_alloc_->free(null_bitmap_);
+      null_bitmap_ = nullptr;
+      malloc_alloc_ = nullptr;
+    }
   }
   template <bool USE_VEC>
   int calc_hash_value(ObEvalCtx &eval_ctx, uint64_t &hash_val, ObBitVector *skip = NULL);
@@ -720,6 +728,7 @@ public:
   int get_slice_idx_batch_vec(const ObIArray<ObExpr*> &exprs, ObEvalCtx &eval_ctx,
                                   ObBitVector &skip, const int64_t batch_size,
                                   int64_t *&indexes);
+  OB_INLINE bool use_special_null_dist() const { return ObNullDistributeMethod::NONE != null_row_dist_method_; }
   common::ObExprCtx *expr_ctx_;
   const common::ObIArray<ObHashColumn> *hash_dist_columns_;
   const common::ObIArray<ObSqlExpression *> *dist_exprs_;
@@ -736,6 +745,8 @@ public:
   const ObIArray<ObHashFunc> *hash_funcs_;
   int64_t n_keys_;
   bool null_dist_value_exist_;
+  ObBitVector *null_bitmap_;
+  ObIAllocator *malloc_alloc_;
 };
 
 class ObHybridHashSliceIdCalcBase

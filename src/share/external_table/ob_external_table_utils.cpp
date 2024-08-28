@@ -400,7 +400,7 @@ int ObExternalPathFilter::is_filtered(const ObString &path, bool &is_filtered)
                                                    CS_TYPE_UTF16_BIN,
                                                    temp_allocator_))) {
     LOG_WARN("convert charset failed", K(ret));
-  } else if (OB_FAIL(regex_ctx_.match(temp_allocator_, out_text, 0, match))) {
+  } else if (OB_FAIL(regex_ctx_.match(temp_allocator_, out_text, CS_TYPE_UTF16_BIN, 0, match))) {
     LOG_WARN("regex match failed", K(ret));
   }
   is_filtered = !match;
@@ -418,7 +418,7 @@ int ObExternalPathFilter::init(const ObString &pattern,
   } else {
     uint32_t flags = 0;
     ObString match_string;
-    if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_string, true, flags))) {
+    if (OB_FAIL(ObExprRegexContext::get_regexp_flags(match_string, true, false, false, flags))) {
       LOG_WARN("failed to get regexp flags", K(ret));
     } else if (OB_FAIL(regex_ctx_.init(allocator_, regexp_vars,
                                        pattern, flags, true, CS_TYPE_UTF8MB4_BIN))) {

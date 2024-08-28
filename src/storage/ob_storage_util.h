@@ -304,10 +304,11 @@ inline static common::ObDatumCmpFuncType get_datum_cmp_func(const common::ObObjM
 struct ObDatumComparator
 {
 public:
-  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal)
+  ObDatumComparator(const ObDatumCmpFuncType cmp_func, int &ret, bool &equal, bool reverse=false)
     : cmp_func_(cmp_func),
       ret_(ret),
-      equal_(equal)
+      equal_(equal),
+      reverse_(reverse)
   {}
   ~ObDatumComparator() {}
   OB_INLINE bool operator() (const ObDatum &datum1, const ObDatum &datum2)
@@ -316,17 +317,20 @@ public:
     int cmp_ret = 0;
     if (OB_FAIL(ret)) {
       // do nothing
-    } else if (OB_FAIL(cmp_func_(datum1, datum2, cmp_ret))) {
+    } else if (!reverse_ && OB_FAIL(cmp_func_(datum1, datum2, cmp_ret))) {
+      STORAGE_LOG(WARN, "Failed to compare datum", K(ret), K(datum1), K(datum2), K_(cmp_func));
+    } else if (reverse_ && OB_FAIL(cmp_func_(datum2, datum1, cmp_ret))) {
       STORAGE_LOG(WARN, "Failed to compare datum", K(ret), K(datum1), K(datum2), K_(cmp_func));
     } else if (0 == cmp_ret && !equal_) {
       equal_ = true;
     }
-    return cmp_ret < 0;
+    return reverse_ ? cmp_ret > 0 : cmp_ret < 0;
   }
 private:
   ObDatumCmpFuncType cmp_func_;
   int &ret_;
   bool &equal_;
+  bool reverse_;
 };
 
 enum class ObFilterInCmpType {

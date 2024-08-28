@@ -687,8 +687,7 @@ int ObPlanSet::init_new_set(const ObPlanCacheCtx &pc_ctx,
     params_info_.reset();
     // set variables for resource map rule
     // if rule changed, plan cache will be flush.
-    res_map_rule_id_ = pc_ctx.sql_ctx_.res_map_rule_id_;
-    res_map_rule_param_idx_ = pc_ctx.sql_ctx_.res_map_rule_param_idx_;
+    resource_map_rule_.deep_copy(pc_ctx.sql_ctx_.resource_map_rule_, alloc_);
 
     if (OB_FAIL(init_pre_calc_exprs(plan, pc_alloc_))) {
       LOG_WARN("failed to init pre calc exprs", K(ret));
